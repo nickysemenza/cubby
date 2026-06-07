@@ -1,31 +1,35 @@
 {
   "entry": [
-    "src/start.ts",
-    "src/router.tsx",
-    "src/routes/**/*.tsx",
-    "src/routes/**/*.ts",
+    "src/start.ts!",
+    "src/router.tsx!",
+    "src/routes/**/*.tsx!",
+    "src/routes/**/*.ts!",
     "src/styles.css",
-    "src/server.ts",
-    "src/lib/recipebridge-cf.ts",
-    "src/integrations/**/*.{ts,tsx}",
+    "src/server.ts!",
+    "src/lib/recipebridge-cf.ts!",
+    "src/integrations/**/*.{ts,tsx}!",
     "drizzle.config.ts",
-    "instrument.server.mjs"
+    "instrument.server.mjs!"
   ],
-  "project": ["src/**/*.{ts,tsx}"],
+  "project": ["src/**/*.{ts,tsx}!"],
+  "paths": {
+    "~/*": ["./src/*"],
+    "tooling/*": ["./tooling/*"]
+  },
   "ignore": [
     "wasm/**",
     "types.ts",
     "src/components/ui/**",
     "scripts/**",
     "tests/**",
-    "tooling/**",
-    "src/routeTree.gen.ts"
+    "tooling/**"
   ],
   "ignoreDependencies": [
     "@cubby/.+",
     "@testing-library/.+",
     "@vitest/.+",
     "@tailwindcss/postcss",
+    "@tailwindcss/vite",
     "postcss",
     "@opentelemetry/.+",
     "@tanstack/router-plugin",
