@@ -32,13 +32,13 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.23.1",
-    "@cloudflare/workers-types": "^4.20260207.0",
-    "@tailwindcss/vite": "^4.1.18",
+    "@cloudflare/workers-types": "^4.20260607.1",
+    "@tailwindcss/vite": "^4.3.0",
     "drizzle-kit": "^0.31.9",
-    "tailwindcss": "^4.1.18",
+    "tailwindcss": "^4.3.0",
     "vite": "^7.3.0",
     "vite-ssr-components": "^0.6.0",
     "vitest": "^4.0.18",
-    "wrangler": "^4.63.0"
+    "wrangler": "^4.98.0"
   }
 }
