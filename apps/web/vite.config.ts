@@ -138,6 +138,14 @@ export default defineConfig(async () => {
       wasm(),
       devtools({
         injectSource: { enabled: false },
+        // Disable the devtools server→browser console pipe (re-logs server output
+        // in the browser console tagged [Server]). Vite 8's forwardConsole already
+        // does browser→terminal (auto-on for coding agents), and the two opposite
+        // pipes form an infinite server→browser→terminal→server loop seeded by any
+        // server console.error (e.g. pg's "SSL modes" warning). We keep
+        // forwardConsole — agents need client-side errors in the CLI — and drop
+        // this leg; server logs are already visible directly in the terminal.
+        consolePiping: { enabled: false },
       }),
       viteTsConfigPaths({
         projects: ["./tsconfig.json"],
