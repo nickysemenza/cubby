@@ -64,18 +64,30 @@ export const findOrCreateRecipeLinkIngredient = async (
   return newIngredient.id;
 };
 
+type ProcessedIngredient = {
+  ingredientId: string;
+  amounts: z.infer<typeof amount>[];
+  rawLine: string | null;
+  modifier: string | null;
+};
+
 const processIngredient = async (
   tx: DrizzleTransaction,
   ingredientInput: z.infer<typeof recipeIngredientInput>,
-): Promise<{
-  ingredientId: string;
-  amounts: z.infer<typeof amount>[];
-}> => {
+): Promise<ProcessedIngredient> => {
+  // Provenance (raw import line + parser modifier) rides along on both branches;
+  // null when the input came from a manual/UI edit rather than an import.
+  const provenance = {
+    rawLine: ingredientInput.rawLine ?? null,
+    modifier: ingredientInput.modifier ?? null,
+  };
+
   // For ingredient types, just use the ingredient ID directly
   if (ingredientInput.type === "ingredient") {
     return {
       ingredientId: ingredientInput.ingredientId as string,
       amounts: ingredientInput.amounts,
+      ...provenance,
     };
   }
 
@@ -86,6 +98,7 @@ const processIngredient = async (
       ingredientInput.recipeId,
     ),
     amounts: ingredientInput.amounts,
+    ...provenance,
   };
 };
 
@@ -95,11 +108,33 @@ const processIngredient = async (
 export const processIngredients = async (
   tx: DrizzleTransaction,
   ingredients: z.infer<typeof recipeIngredientInput>[],
-): Promise<{ ingredientId: string; amounts: z.infer<typeof amount>[] }[]> => {
+): Promise<ProcessedIngredient[]> => {
   return await Promise.all(
     ingredients.map((ing) => processIngredient(tx, ing)),
   );
 };
+
+/**
+ * The single source of truth for a `RecipeSectionIngredient` insert row. Every
+ * insert site (create, replace-all, section add) goes through here, so the
+ * column set — notably the `rawLine`/`modifier` provenance — lives in one place
+ * and a new column can't be silently dropped by a missed call site.
+ */
+export const sectionIngredientValues = (
+  recipeSectionId: string,
+  ing: {
+    ingredientId: string | null;
+    amounts: z.infer<typeof amount>[];
+    rawLine?: string | null;
+    modifier?: string | null;
+  },
+) => ({
+  recipeSectionId,
+  ingredientId: ing.ingredientId as string,
+  amounts: ing.amounts,
+  rawLine: ing.rawLine ?? null,
+  modifier: ing.modifier ?? null,
+});
 
 /**
  * Update recipe name and source metadata.
@@ -232,13 +267,13 @@ async function createSectionWithIngredients(
   });
 
   if (processedIngredients.length > 0) {
-    await tx.insert(recipeSectionIngredient).values(
-      processedIngredients.map((ing) => ({
-        recipeSectionId: createdSection.id,
-        ingredientId: ing.ingredientId as string,
-        amounts: ing.amounts,
-      })),
-    );
+    await tx
+      .insert(recipeSectionIngredient)
+      .values(
+        processedIngredients.map((ing) =>
+          sectionIngredientValues(createdSection.id, ing),
+        ),
+      );
   }
 }
 
@@ -257,11 +292,7 @@ async function updateSectionIngredients(
   const processedIngredients = await processIngredients(tx, ingredientUpdates);
 
   // Separate new vs existing ingredients for batch operations
-  const newIngredients: Array<{
-    recipeSectionId: string;
-    ingredientId: string;
-    amounts: (typeof processedIngredients)[number]["amounts"];
-  }> = [];
+  const newIngredients: ReturnType<typeof sectionIngredientValues>[] = [];
   const updatePromises: Promise<unknown>[] = [];
 
   for (let i = 0; i < ingredientUpdates.length; i++) {
@@ -270,11 +301,9 @@ async function updateSectionIngredients(
 
     if (!ingredientUpdate.id) {
       // Collect new ingredients for batch insert
-      newIngredients.push({
-        recipeSectionId: sectionId,
-        ingredientId: processedIngredient.ingredientId,
-        amounts: processedIngredient.amounts,
-      });
+      newIngredients.push(
+        sectionIngredientValues(sectionId, processedIngredient),
+      );
     } else {
       // Queue update for parallel execution
       updatePromises.push(
@@ -283,6 +312,10 @@ async function updateSectionIngredients(
           .set({
             ingredientId: processedIngredient.ingredientId,
             amounts: processedIngredient.amounts,
+            // Omit (undefined) rather than null so a manual edit doesn't erase
+            // the provenance captured at import time.
+            rawLine: processedIngredient.rawLine ?? undefined,
+            modifier: processedIngredient.modifier ?? undefined,
           })
           .where(eq(recipeSectionIngredient.id, ingredientUpdate.id)),
       );

@@ -52,6 +52,10 @@ const sectioningredientOut = z
   .object({
     id: z.uuid(),
     amounts: z.array(amount),
+    // Provenance from import: the original unparsed line and the parser-derived
+    // modifier. Null for rows created before capture, or manual/UI edits.
+    rawLine: z.string().nullish(),
+    modifier: z.string().nullish(),
   })
   .extend(dbTimestampsOut.shape);
 
@@ -105,6 +109,14 @@ export type SectionIngredientType = z.infer<
 >["type"];
 
 // Schema for recipe mutations
+// Raw, unparsed source line + the parser-derived modifier (e.g. "finely
+// chopped"). Optional provenance carried through from import so it can be
+// persisted on RecipeSectionIngredient; absent on manual/UI edits.
+const ingredientProvenance = {
+  rawLine: z.string().nullish(),
+  modifier: z.string().nullish(),
+};
+
 export const recipeIngredientInput = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("ingredient"),
@@ -112,6 +124,7 @@ export const recipeIngredientInput = z.discriminatedUnion("type", [
     recipeId: z.null(),
     amounts: z.array(amount),
     id: id.optional(),
+    ...ingredientProvenance,
   }),
   z.object({
     type: z.literal("recipe"),
@@ -119,6 +132,7 @@ export const recipeIngredientInput = z.discriminatedUnion("type", [
     ingredientId: z.null(),
     amounts: z.array(amount),
     id: id.optional(),
+    ...ingredientProvenance,
   }),
 ]);
 export type RecipeIngredientInput = z.infer<typeof recipeIngredientInput>;

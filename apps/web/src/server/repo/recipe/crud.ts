@@ -60,6 +60,7 @@ import {
   deleteAllSections,
   handleSectionUpdates,
   processIngredients,
+  sectionIngredientValues,
   updateRecipeBasicProperties,
   updateRecipeImages,
 } from "./update-helpers";
@@ -346,11 +347,9 @@ export const createRecipe = async (
         await batchInsert(
           tx,
           recipeSectionIngredient,
-          section.processedIngredients.map((ing) => ({
-            recipeSectionId: createdSection.id,
-            ingredientId: ing.ingredientId as string,
-            amounts: ing.amounts,
-          })),
+          section.processedIngredients.map((ing) =>
+            sectionIngredientValues(createdSection.id, ing),
+          ),
         );
       }
     }
@@ -420,11 +419,9 @@ const replaceRecipeSections = async (
       await batchInsert(
         tx,
         recipeSectionIngredient,
-        section.ingredients.map((ing) => ({
-          recipeSectionId: createdSection.id,
-          ingredientId: ing.ingredientId as string,
-          amounts: ing.amounts,
-        })),
+        section.ingredients.map((ing) =>
+          sectionIngredientValues(createdSection.id, ing),
+        ),
       );
     }
   }

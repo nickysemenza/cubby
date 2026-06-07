@@ -163,6 +163,13 @@ export const recipeSectionIngredient = pgTable(
       .notNull()
       .$type<Amount[]>()
       .default(sql`'[]'::jsonb`),
+    // Raw, unparsed ingredient line as it arrived from the scraper/cookbook
+    // import, plus the parser-derived modifier (e.g. "finely chopped") that is
+    // otherwise discarded. Retained so a future parser upgrade can be re-applied
+    // to existing rows without re-importing the source. Nullable: only populated
+    // for rows created after this column was added.
+    rawLine: text("rawLine"),
+    modifier: text("modifier"),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updatedAt", { mode: "date" })
       .notNull()

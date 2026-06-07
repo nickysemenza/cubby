@@ -25,6 +25,7 @@ import RTable from "../data-table/Table";
 import { EntityPillLink } from "../EntityPill";
 import { tryFormatAmount } from "../inventory/format-amount";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
+import { CopyCorpusButton } from "./copy-corpus-button";
 import { getIngredientName } from "./recipe-utils";
 
 export const RecipeIngredientList: React.FC<{
@@ -68,7 +69,32 @@ export const RecipeIngredientList: React.FC<{
       id: "ing name",
       header: "Ingredient",
       meta: { className: "min-w-0 truncate" },
-      cell: (info) => info.getValue(),
+      cell: (info) => {
+        const row = info.row.original;
+        const rawLine = row.rawLine;
+        const name = info.getValue();
+        return (
+          <div className="min-w-0">
+            <div className="truncate">{name}</div>
+            {rawLine && rawLine !== name && (
+              <div
+                className="truncate text-muted-foreground/70 text-xs italic"
+                title={rawLine}
+              >
+                {rawLine}
+              </div>
+            )}
+            {rawLine && (
+              <CopyCorpusButton
+                rawLine={rawLine}
+                name={name}
+                amounts={row.amounts}
+                modifier={row.modifier}
+              />
+            )}
+          </div>
+        );
+      },
     }),
     columnHelper.accessor("amounts", {
       header: "Amounts",

@@ -25,7 +25,17 @@ export const NYTView: React.FC<{
                     .map((a) => wasm.format_amount(a))
                     .join(" / ")}
                 </div>
-                <div className="w-1/2">{getIngredientName(i)}</div>
+                <div className="w-1/2">
+                  {getIngredientName(i)}
+                  {i.rawLine && i.rawLine !== getIngredientName(i) && (
+                    <div
+                      className="text-muted-foreground/70 text-xs italic"
+                      title="Original line from the source"
+                    >
+                      {i.rawLine}
+                    </div>
+                  )}
+                </div>
               </div>
             )),
           )}

@@ -15,11 +15,13 @@ const compactRecipeYield = z.object({
   unit: z.string(),
 });
 
-// A single ingredient after WASM parsing (name + structured amounts).
+// A single ingredient after WASM parsing (name + structured amounts). `rawLine`
+// keeps the original unparsed string so a future parser upgrade can be re-applied.
 const parsedIngredient = z.object({
   name: z.string(),
   amounts: z.array(amount),
   modifier: z.string().optional(),
+  rawLine: z.string().optional(),
 });
 
 // Section names must be 2+ chars to satisfy recipeSectionInput validation

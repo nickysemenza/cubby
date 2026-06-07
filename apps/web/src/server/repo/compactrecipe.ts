@@ -78,6 +78,8 @@ const convertParsedCompactToRecipeInput = async (
               ),
               recipeId: null,
               amounts: ingredient.amounts,
+              rawLine: ingredient.rawLine ?? null,
+              modifier: ingredient.modifier ?? null,
             })),
           ),
         })),
@@ -152,6 +154,8 @@ const cookbookRecipeToRecipeInput = async (
                 recipeId: null,
                 // Copy out of the readonly cached result into the mutable input.
                 amounts: parsed.amounts.map((a) => ({ ...a })),
+                rawLine: line,
+                modifier: parsed.modifier ?? null,
               };
             }),
           ),

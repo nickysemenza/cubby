@@ -13,6 +13,8 @@ export const parseCompactRecipe = (raw: CompactRecipe): ParsedCompactRecipe => {
           name: parsed.name,
           // Copy out of the readonly cached result into the mutable codec shape.
           amounts: parsed.amounts.map((a) => ({ ...a })),
+          modifier: parsed.modifier,
+          rawLine: ingredient,
         };
       }),
       instructions: section.instructions,
