@@ -7,7 +7,6 @@ import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import { defineConfig, type Plugin, type PluginOption } from "vite";
 import wasm from "vite-plugin-wasm";
-import viteTsConfigPaths from "vite-tsconfig-paths";
 
 const isCloudflare = process.env.DEPLOY_TARGET === "cloudflare";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -104,6 +103,9 @@ export default defineConfig(async () => {
 
   return {
     envDir: ".", // Explicitly load .env from this directory
+    // Resolve tsconfig `paths` (~/*, tooling/*) natively — Vite 8 replaces the
+    // vite-tsconfig-paths plugin with this built-in option.
+    resolve: { tsconfigPaths: true },
     // CF Workers build-time flag for dead code elimination in db.ts
     define: {
       __GIT_COMMIT__: JSON.stringify(gitCommit),
@@ -146,9 +148,6 @@ export default defineConfig(async () => {
         // forwardConsole — agents need client-side errors in the CLI — and drop
         // this leg; server logs are already visible directly in the terminal.
         consolePiping: { enabled: false },
-      }),
-      viteTsConfigPaths({
-        projects: ["./tsconfig.json"],
       }),
       tailwindcss(),
       // tanstackStart must come BEFORE viteReact per TanStack Router plugin
