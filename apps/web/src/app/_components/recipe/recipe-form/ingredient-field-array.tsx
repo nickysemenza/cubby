@@ -12,6 +12,7 @@ import { EntityPillLink } from "../../EntityPill";
 import { ComboboxField } from "../../form-utils";
 import { AmountFieldArray } from "./amount-field-array";
 import { FieldArrayItemControls } from "./field-array-item-controls";
+import { IngredientReparse } from "./ingredient-reparse";
 import type { RecipeFormValues } from "./types";
 
 interface IngredientFieldArrayProps {
@@ -175,6 +176,12 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                   className="ml-4 flex flex-col space-y-1"
                 />
               </div>
+              <IngredientReparse
+                form={form}
+                sectionIndex={sectionIndex}
+                ingredientIndex={ingredientIndex}
+                onApply={(row) => update(ingredientIndex, row)}
+              />
             </div>
           ))}
         </div>

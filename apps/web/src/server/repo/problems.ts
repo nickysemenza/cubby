@@ -774,6 +774,7 @@ const findStaleIngredientParses = async (
       rawLine: recipeSectionIngredient.rawLine,
       ingredientId: ingredient.id,
       storedName: ingredient.name,
+      storedAliases: ingredient.aliases,
       recipeId: recipe.id,
       recipeName: recipe.name,
     })
@@ -796,14 +797,19 @@ const findStaleIngredientParses = async (
       ),
     );
 
-  // Match findOrCreateIngredient's case-insensitive comparison so a case-only
-  // difference isn't reported as drift.
+  // Match findOrCreateIngredient's matching: case-insensitive, and a hit on any
+  // alias counts (so "large eggs" parsing to the "large brown eggs" ingredient
+  // that aliases it is NOT drift). Only a name the stored ingredient wouldn't
+  // answer to is real drift.
   const normalize = (s: string) => s.trim().toLowerCase();
   const stale: StaleIngredientParse[] = [];
   for (const row of rows) {
     if (!row.rawLine) continue; // isNotNull already filtered; narrow the type
     const parsedName = wasm.parse_ingredient(row.rawLine).name;
-    if (normalize(parsedName) !== normalize(row.storedName)) {
+    const known = new Set(
+      [row.storedName, ...row.storedAliases].map(normalize),
+    );
+    if (!known.has(normalize(parsedName))) {
       stale.push({
         recipeSectionIngredientId: row.recipeSectionIngredientId,
         recipeId: row.recipeId,

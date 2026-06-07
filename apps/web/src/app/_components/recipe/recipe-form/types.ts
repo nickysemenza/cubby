@@ -16,6 +16,14 @@ import type { PendingImage } from "../../PendingImageUpload";
 const ingItemBase = z.object({
   id: z.string().uuid().optional(),
   amounts: z.array(amount),
+  // Import provenance: the original unparsed line and the parser-derived modifier.
+  // Carried read-only through the form so editing a recipe doesn't drop them, and
+  // so a row can offer "re-parse this line".
+  rawLine: z.string().nullish(),
+  modifier: z.string().nullish(),
+  // The current ingredient's aliases, so the "re-parse" check can tell real drift
+  // from a parse that just matches one of its aliases. Display-only, not submitted.
+  aliases: z.array(z.string()).optional(),
 });
 
 const ingItem = z.discriminatedUnion("type", [

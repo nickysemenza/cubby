@@ -127,6 +127,8 @@ const mapIngredientToApiFormat = (ing: IngItem): RecipeIngredientInput => {
       recipeId: null,
       amounts: ing.amounts,
       id: ing.id,
+      rawLine: ing.rawLine ?? undefined,
+      modifier: ing.modifier ?? undefined,
     };
   } else if (ing.type === "recipe" && ing.recipe) {
     return {
@@ -135,6 +137,8 @@ const mapIngredientToApiFormat = (ing: IngItem): RecipeIngredientInput => {
       ingredientId: null,
       amounts: ing.amounts,
       id: ing.id,
+      rawLine: ing.rawLine ?? undefined,
+      modifier: ing.modifier ?? undefined,
     };
   }
   throw new Error(
@@ -251,6 +255,9 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                   },
                   recipe: null,
                   amounts: ing.amounts,
+                  rawLine: ing.rawLine ?? null,
+                  modifier: ing.modifier ?? null,
+                  aliases: ing.ingredient.aliases ?? [],
                 };
               } else {
                 return {
@@ -262,6 +269,8 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                     name: ing.recipe.name,
                   },
                   amounts: ing.amounts,
+                  rawLine: ing.rawLine ?? null,
+                  modifier: ing.modifier ?? null,
                 };
               }
             }),
