@@ -3,7 +3,6 @@ import {
   type InventoryId,
   inventoryId as inventoryIdSchema,
   type LocationId,
-  locationId as locationIdSchema,
   type ProductId,
   productId as productIdSchema,
   unsafeUserId,
@@ -112,30 +111,35 @@ const remapDBConfig = (
   return databaseConfig;
 };
 
-import type {
-  CSVImportResult,
-  InventoryCSVRow,
-} from "@cubby/schemas/inventory";
 // NOTE: We use dynamic imports for repo modules to avoid loading env.js
 // during vitest globalSetup phase (before test.env variables are applied)
 
 export interface SeedResult {
-  /** Import result with counts and per-row details */
-  result: CSVImportResult;
   /** Lookup product ID by name */
   productIds: Map<string, ProductId>;
   /** Lookup location ID by name (leaf name, not full path) */
   locationIds: Map<string, LocationId>;
-  /** Lookup inventory entry ID by "productName@locationPath" */
+  /** Lookup inventory entry ID by "productName@locationName" */
   inventoryIds: Map<string, InventoryId>;
 }
 
+/** Minimal row shape for seeding inventory test data. */
+export interface SeedRow {
+  product_name: string;
+  manufacturer?: string;
+  location_name?: string;
+  quantity?: number;
+  unit?: string;
+  price?: number;
+  expected_qty?: number | null;
+  upc?: string;
+}
+
 /**
- * Seed test data using CSV import
+ * Seed inventory test data via direct repo calls.
  *
- * This is a convenience wrapper around importInventoryFromCSV that:
- * 1. Runs the import (not dry-run)
- * 2. Returns lookup maps for created entity IDs
+ * Creates products (deduped by name), auto-creates any referenced locations,
+ * and places inventory. Returns lookup maps of the created entity IDs.
  *
  * @example
  * ```ts
@@ -151,86 +155,69 @@ export interface SeedResult {
  */
 export async function seedFromCSV(
   db: Database,
-  rows: Array<Partial<InventoryCSVRow> & { product_name: string }>,
+  rows: SeedRow[],
   actor: ActorContext,
 ): Promise<SeedResult> {
   // Dynamic import to avoid loading env.js during globalSetup
-  const { importInventoryFromCSV, inventoryentryList } = await import(
+  const { createInventoryEntry, inventoryentryList } = await import(
     "../src/server/repo/inventory"
   );
+  const { quickCreateProduct } = await import("../src/server/repo/product");
   const { findOrCreateLocationByName } = await import(
     "../src/server/repo/location"
   );
 
-  // Auto-create any locations referenced in the rows
-  const uniqueLocationNames = [
-    ...new Set(
-      rows.map((r) => r.location_name).filter((name): name is string => !!name),
-    ),
-  ];
-  for (const locationName of uniqueLocationNames) {
-    await findOrCreateLocationByName(
-      db,
-      locationName,
-      null, // parentId - test locations are roots
-      "room", // type - default to room for test locations
-    );
-  }
-
-  // Apply defaults for convenience
-  const normalizedRows: InventoryCSVRow[] = rows.map((row) => ({
-    product_name: row.product_name,
-    manufacturer: row.manufacturer ?? "(unspecified)",
-    upc: row.upc,
-    model: row.model,
-    ndb_number: row.ndb_number,
-    location_name: row.location_name ?? "",
-    quantity: row.quantity ?? 1,
-    unit: row.unit ?? "each",
-    expected_qty: row.expected_qty,
-    price: row.price,
-    unit_mappings: row.unit_mappings,
-    ingredient_name: row.ingredient_name,
-    ingredient: row.ingredient,
-    aliases: row.aliases,
-  }));
-
-  const result = await importInventoryFromCSV(db, normalizedRows, {
-    dryRun: false,
-    actor,
-  });
-
-  // Check for errors
-  if (result.errors > 0) {
-    const errorMessages = result.items
-      .filter((item) => item.action === "error")
-      .map((item) => `Row ${item.rowIndex}: ${item.message}`)
-      .join("\n");
-    throw new Error(`seedFromCSV failed with errors:\n${errorMessages}`);
-  }
-
-  // Build lookup maps
   const productIds = new Map<string, ProductId>();
   const locationIds = new Map<string, LocationId>();
   const inventoryIds = new Map<string, InventoryId>();
 
-  for (const item of result.items) {
-    // Product ID by name
-    if (item.productId && item.productName) {
-      productIds.set(item.productName, productIdSchema.parse(item.productId));
+  for (const row of rows) {
+    // Create each unique product once (keyed by name)
+    let productId = productIds.get(row.product_name);
+    if (!productId) {
+      const created = await quickCreateProduct(
+        db,
+        {
+          name: row.product_name,
+          manufacturer: row.manufacturer ?? "(unspecified)",
+          upc: row.upc ?? null,
+          expectedQuantity: row.expected_qty ?? null,
+          price: row.price ?? null,
+        },
+        actor,
+      );
+      productId = productIdSchema.parse(created.id);
+      productIds.set(row.product_name, productId);
     }
 
-    // Location ID by name
-    if (item.locationId && item.locationName) {
-      locationIds.set(
-        item.locationName,
-        locationIdSchema.parse(item.locationId),
+    // Place inventory only when a location is given (else it's a product-only row)
+    if (row.location_name) {
+      let locationId = locationIds.get(row.location_name);
+      if (!locationId) {
+        const loc = await findOrCreateLocationByName(
+          db,
+          row.location_name,
+          null, // parentId - test locations are roots
+          "room", // type - default to room for test locations
+        );
+        locationId = loc.locationId;
+        locationIds.set(row.location_name, locationId);
+      }
+
+      await createInventoryEntry(
+        db,
+        {
+          productId,
+          locationId,
+          amount: { value: row.quantity ?? 1, unit: row.unit ?? "each" },
+        },
+        actor,
       );
     }
   }
 
-  // Query for inventory entries to get their IDs
-  // (import doesn't return inventoryEntryId for created entries)
+  // Query created inventory entries to build the "productName@locationName" map
+  // (createInventoryEntry doesn't return a name-keyed lookup)
   const inventoryEntries = await inventoryentryList(
     db,
     {},
@@ -239,13 +226,9 @@ export async function seedFromCSV(
   );
 
   for (const entry of inventoryEntries.data) {
-    const productName = entry.product.name;
-    const locationName = entry.location.name;
-    const key = `${productName}@${locationName}`;
+    const key = `${entry.product.name}@${entry.location.name}`;
     inventoryIds.set(key, inventoryIdSchema.parse(entry.id));
   }
 
-  return { result, productIds, locationIds, inventoryIds };
+  return { productIds, locationIds, inventoryIds };
 }
-// Re-export types for convenience
-export type { InventoryCSVRow } from "@cubby/schemas/inventory";

@@ -52,7 +52,7 @@ import {
   updateAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { createOrUpdatePriceMapping } from "~/server/repo/inventory/csv-import/index";
+import { createOrUpdatePriceMapping } from "~/server/repo/inventory/unit-mapping-handler";
 import { generateUniqueProductShortcode } from "~/server/repo/shortcode-utils";
 
 import { dbProductToAPI } from "./helpers";

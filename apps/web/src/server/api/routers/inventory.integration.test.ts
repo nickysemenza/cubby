@@ -685,7 +685,7 @@ describe("inventory router", () => {
         locationId: nonExistentId,
         amount: { value: 1, unit: "piece" },
       }),
-    ).rejects.toThrow(/Failed query/);
+    ).rejects.toThrow(/doesn't exist/);
 
     // Seed a valid entry
     const seed = await seedFromCSV(
@@ -709,7 +709,7 @@ describe("inventory router", () => {
         id: entryId,
         data: { productId: nonExistentId },
       }),
-    ).rejects.toThrow(/Failed query/);
+    ).rejects.toThrow(/doesn't exist/);
   });
 
   describe("backfillInventoryValuations", () => {

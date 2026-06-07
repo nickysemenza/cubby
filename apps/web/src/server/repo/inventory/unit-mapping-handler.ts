@@ -1,7 +1,7 @@
 /**
  * Price mapping handling for products (canonical: 1 each <-> $X).
  *
- * Used by CSV import and product quick-create.
+ * Used by product quick-create.
  */
 
 import type { Amount } from "@cubby/schemas/codec";
@@ -31,7 +31,7 @@ export const createOrUpdatePriceMapping = async (
   db: Database | DrizzleTransaction,
   productId: ProductId,
   price: Amount,
-  source: string = "csv-import",
+  source: string = "manual",
 ): Promise<void> => {
   const client = unwrapDb(db);
   const existingMappings = await client.query.productUnitMappings.findMany({

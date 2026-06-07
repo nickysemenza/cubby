@@ -15,6 +15,3 @@ export {
   inventoryentryList,
   updateInventoryEntry,
 } from "./crud";
-
-// CSV operations
-export { importInventoryFromCSV } from "./csv-import/index";

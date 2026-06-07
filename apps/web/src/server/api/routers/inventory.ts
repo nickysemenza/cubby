@@ -11,14 +11,11 @@ import {
   type InventoryId,
   inventoryId,
   locationId,
-  unsafeProductId,
 } from "@cubby/schemas/identifiers";
 import {
   bulkMovePayload,
-  csvImportResult,
   inventoryBulkOperationPayload,
   inventoryCreatePayloadData,
-  inventoryCSVRow,
   inventoryUpdateInput,
 } from "@cubby/schemas/inventory";
 import { z } from "zod";
@@ -34,12 +31,10 @@ import {
   getInventoryByLocationIds,
   getInventoryCountsByLocations,
   getInventoryEntryByID,
-  importInventoryFromCSV,
   inventoryentryList,
   updateInventoryEntry,
 } from "~/server/repo/inventory";
 import { findDuplicateUniqueProducts } from "~/server/repo/product";
-import { importImageFromUPC } from "~/server/services/image-import";
 import {
   createDeleteProcedure,
   createEntityCrudProcedures,
@@ -178,46 +173,6 @@ const findDuplicates = protectedProcedure
     }));
   });
 
-// CSV import procedure (used by scripts/load-data.ts)
-const importCSV = protectedProcedure
-  .input(z.object({ rows: z.array(inventoryCSVRow) }))
-  .output(csvImportResult)
-  .mutation(async ({ ctx, input }) => {
-    const result = await importInventoryFromCSV(ctx.db, input.rows, {
-      dryRun: false,
-      actor: { ...ctx.actorContext, source: "csv_import" },
-    });
-
-    // Import UPC images for newly created products after successful import
-    const productsToImportImages = result.items.filter(
-      (item) =>
-        item.productId &&
-        item.upc &&
-        (item.action === "created" || item.action === "product_only"),
-    );
-
-    // Process image imports in parallel but don't block on failures
-    await Promise.allSettled(
-      productsToImportImages.map(async (item) => {
-        try {
-          await importImageFromUPC(
-            ctx.db,
-            ctx.upcLookupClient,
-            item.upc!,
-            unsafeProductId(item.productId!),
-          );
-        } catch (error) {
-          console.error(
-            `[importCSV] Image import failed for UPC ${item.upc}:`,
-            error,
-          );
-        }
-      }),
-    );
-
-    return result;
-  });
-
 // Get count of inventory entries with stale/missing valuations
 const getStaleValuationsCount = protectedProcedure
   .output(z.number())
@@ -263,7 +218,6 @@ export const inventoryRouter = createTRPCRouter({
   bulkProcess,
   bulkMove,
   findDuplicates,
-  importCSV,
   getStaleValuationsCount,
   backfillInventoryValuations: backfillInventoryValuationsEndpoint,
   getCountsByLocations,
