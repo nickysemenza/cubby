@@ -4,10 +4,8 @@ import {
   type RecipeCreateInput,
   type RecipeOut,
   type RecipeUpdateInput,
-  recipeMeta,
   recipeServings,
   recipeTags,
-  recipeYieldSchema,
 } from "@cubby/schemas/recipe";
 import { z } from "zod";
 import { ComboboxItem } from "../../combobox/combobox-types";
@@ -34,11 +32,43 @@ const ingItem = z.discriminatedUnion("type", [
 ]);
 
 export type IngItem = z.infer<typeof ingItem>;
+
+// Draft shape for the optional meta. The URL input + useWatch register `meta.url`,
+// which makes react-hook-form materialize `meta` into { url: undefined } even when
+// the field is left blank. The strict recipeMeta (url must be a valid URL or null,
+// not undefined) would reject that and silently block the form, so accept a nullish
+// url here and let handleSubmit normalize to null when empty.
+const recipeMetaDraft = z.object({ url: z.url().nullish() }).nullable();
+
+// Draft shape for the optional yield, edited via two separate inputs. Either part
+// may be blank (nullish) so an untouched yield doesn't block submission; the refine
+// requires a unit once a value is entered. handleSubmit normalizes this to the
+// strict recipeYieldSchema (or null) before sending to the API.
+const recipeYieldDraft = z
+  .object({
+    value: z.number().positive().nullish(),
+    unit: z.string().nullish(),
+  })
+  .nullable()
+  .refine((y) => y == null || y.value == null || !!y.unit, {
+    error: "Enter a unit for the yield",
+    path: ["unit"],
+  });
+
 // Form schema for recipe form
 export const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  meta: recipeMeta,
-  yield: recipeYieldSchema.nullable(),
+  meta: recipeMetaDraft,
+  // Yield is edited as two separate optional inputs, and react-hook-form
+  // materializes `yield` into an object ({ value: undefined, unit: undefined }) the
+  // moment those inputs render — even when left blank. Modeling it with the strict
+  // recipeYieldSchema would fail that value-less object and silently block the
+  // whole form. So hold a "draft" shape where either part may be blank (kept
+  // transform-free so z.input === z.output and the form generics stay simple), and
+  // normalize it to the strict API shape in handleSubmit. The refine still requires
+  // a unit once a value is entered, so a partial yield surfaces an error instead of
+  // being silently dropped.
+  yield: recipeYieldDraft,
   servings: recipeServings.nullable(),
   tags: recipeTags.nullable(),
   sections: z.array(

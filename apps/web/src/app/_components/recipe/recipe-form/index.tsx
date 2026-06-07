@@ -142,6 +142,22 @@ const mapIngredientToApiFormat = (ing: IngItem): RecipeIngredientInput => {
   );
 };
 
+// Map a form section to the API shape. recipeSectionInput marks ingredients and
+// instructions as `.min(1).optional()`, so a present-but-empty array is rejected
+// by the server (a section with ingredients but no steps, or vice versa, is
+// valid). Omit empty arrays — the create/replace repo paths tolerate missing ones.
+const mapSectionToApiFormat = (
+  section: RecipeFormValues["sections"][number],
+): z.infer<typeof recipeSectionInput> => {
+  const ingredients = section.ingredients.map(mapIngredientToApiFormat);
+  return {
+    name: section.name,
+    ingredients: ingredients.length > 0 ? ingredients : undefined,
+    instructions:
+      section.instructions.length > 0 ? section.instructions : undefined,
+  };
+};
+
 export const RecipeForm: FC<RecipeFormProps> = (props) => {
   const { mode, isPending, error, onCancel } = props;
   const api = useTRPC();
@@ -404,32 +420,35 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
   };
 
   const handleSubmit = (values: RecipeFormValues) => {
+    // The yield/meta inputs materialize an object even when blank, so collapse a
+    // value-less (or unit-less) yield and a url-less meta to null. This matches the
+    // strict API schema and avoids registering a phantom change in edit mode.
+    const normalizedYield =
+      values.yield?.value != null && values.yield.unit
+        ? { value: values.yield.value, unit: values.yield.unit }
+        : null;
+    const normalizedMeta = values.meta?.url ? { url: values.meta.url } : null;
+
     if (mode === "create") {
       // For creation, transform the form values to the API format
       const createData: RecipeCreateInput = {
         name: values.name,
-        meta: values.meta,
-        yield: values.yield,
+        meta: normalizedMeta,
+        yield: normalizedYield,
         servings: values.servings,
         tags: values.tags,
-        sections: values.sections.map((section) => ({
-          name: section.name,
-          ingredients: section.ingredients.map(mapIngredientToApiFormat),
-          instructions: section.instructions,
-        })),
+        sections: values.sections.map(mapSectionToApiFormat),
         ...getImageData(true), // Apply pending images for creation
       };
 
       props.onCreate(createData);
     } else if (mode === "edit" && recipe) {
       // In edit mode, determine which fields have changed
-      const basicUpdates = buildUpdateObject(recipe, values, [
-        "name",
-        "meta",
-        "yield",
-        "servings",
-        "tags",
-      ]);
+      const basicUpdates = buildUpdateObject(
+        recipe,
+        { ...values, yield: normalizedYield, meta: normalizedMeta },
+        ["name", "meta", "yield", "servings", "tags"],
+      );
 
       // Handle section updates - this is more complex since we need to track IDs
       const sectionUpdates = values.sections.map((section, idx) => {
@@ -437,11 +456,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
 
         // For a new section or completely changed section
         if (!originalSection || !section.id) {
-          return {
-            name: section.name,
-            ingredients: section.ingredients.map(mapIngredientToApiFormat),
-            instructions: section.instructions,
-          };
+          return mapSectionToApiFormat(section);
         }
 
         // For existing section, include ID and track changes

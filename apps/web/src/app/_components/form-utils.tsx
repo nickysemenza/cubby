@@ -8,6 +8,7 @@ import {
   type PathValue,
   type UseFormReturn,
 } from "react-hook-form";
+import { toast } from "sonner";
 import { Button, type buttonVariants } from "~/components/ui/button";
 import { FilterableCombobox } from "~/components/ui/combobox";
 import { Field, FieldError, FieldLabel } from "~/components/ui/field";
@@ -94,7 +95,17 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
           // https://github.com/orgs/react-hook-form/discussions/7038#discussioncomment-11376398
           e.stopPropagation();
           e.preventDefault();
-          form.handleSubmit(onSubmit)(e);
+          // Pass an invalid handler so failed validation isn't swallowed silently
+          // (react-hook-form otherwise no-ops the submit). Custom inputs don't all
+          // receive RHF's auto-focus, so scroll the first invalid field into view.
+          form.handleSubmit(onSubmit, () => {
+            toast.error("Some fields need attention before you can save.");
+            requestAnimationFrame(() => {
+              document
+                .querySelector('[aria-invalid="true"]')
+                ?.scrollIntoView({ block: "center", behavior: "smooth" });
+            });
+          })(e);
         }}
         className="space-y-4"
       >
