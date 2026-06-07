@@ -43,7 +43,7 @@ import {
   createDeleteProcedure,
   createEntityCrudProcedures,
 } from "../crud-factory";
-import { createTRPCRouter, protectedProcedure, systemProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 // Define filters schema for recipes
 const recipeFiltersSchema = z.object({
@@ -82,11 +82,6 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
   entityName: "recipe",
 });
 
-const seed = systemProcedure.mutation(async ({ ctx }) => {
-  // Dynamic import to avoid bundling test data in production
-  const { seedRealRecipes } = await import("~/testdata/seed");
-  return await seedRealRecipes(ctx.db, ctx.actorContext);
-});
 const scrape = protectedProcedure
   .input(z.url())
   .output(compactRecipeSchema)
@@ -203,7 +198,6 @@ export const recipeRouter = createTRPCRouter({
   deleteByCookbook,
   extractCookbookChunk: extractCookbookChunkProc,
   scrape,
-  seed,
   getByID,
   getByShortcode,
   getManyByIDs,

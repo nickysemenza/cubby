@@ -312,13 +312,6 @@ export const publicProcedure = t.procedure
 export const protectedProcedure = publicProcedure.use(isAuthed);
 
 /**
- * System procedure for operations that can be authenticated with API key
- * Used for scripts and system-level operations
- * API keys automatically create sessions via better-auth plugin
- */
-export const systemProcedure = publicProcedure.use(isAuthed);
-
-/**
  * Helper to create a minimal auth object for testing
  */
 const createTestAuth = (userId: UserId) => ({
