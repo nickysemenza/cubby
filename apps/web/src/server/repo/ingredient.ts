@@ -101,6 +101,16 @@ export const mergeIngredients = async (
       })
       .where(inArray(recipeSectionIngredient.ingredientId, aliases));
 
+    // Re-point any products linked to the alias ingredients onto the target.
+    // Otherwise the FK from Product.ingredientId blocks the hard delete below
+    // (this is the whole point of merging: the surviving ingredient inherits the
+    // others' products — e.g. "share this USDA food / price"). Covers
+    // soft-deleted products too, since the FK applies to every row.
+    await tx
+      .update(product)
+      .set({ ingredientId: target })
+      .where(inArray(product.ingredientId, aliases));
+
     // delete stale
     await tx.delete(ingredient).where(inArray(ingredient.id, aliases));
   });

@@ -41,6 +41,13 @@ export const AppErrors = {
   // Conflict/duplicate
   PRODUCT_ALREADY_EXISTS: "CONFLICT",
 
+  // Generic database constraint violations (translated centrally from Postgres
+  // error codes — see server/errors/db-errors.ts)
+  DUPLICATE_RECORD: "CONFLICT",
+  REFERENCED_RECORD_MISSING: "BAD_REQUEST",
+  REQUIRED_FIELD_MISSING: "BAD_REQUEST",
+  CONSTRAINT_VIOLATION: "BAD_REQUEST",
+
   // Image operations
   IMAGE_LIST_FAILED: "INTERNAL_SERVER_ERROR",
   IMAGE_UPLOAD_FAILED: "INTERNAL_SERVER_ERROR",

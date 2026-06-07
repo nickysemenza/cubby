@@ -33,6 +33,7 @@ import { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import { db } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
+import { translateDatabaseError } from "~/server/errors/db-errors";
 import { findProductsByFoodIdentifier } from "~/server/repo/product";
 import { AvailabilityService } from "~/server/services/availability.service";
 import { IngredientService } from "~/server/services/ingredient.service";
@@ -262,6 +263,21 @@ const tracingMiddleWare = t.middleware(async (opts) => {
   );
 });
 
+/**
+ * Translate raw Postgres constraint errors (unique, FK, not-null, check) into
+ * clear TRPCErrors for ALL procedures. Runs as the outermost layer so tracing
+ * still records the original error to Sentry, while the client receives the
+ * friendly message. No-op for non-database errors.
+ */
+const dbErrorMiddleware = t.middleware(async (opts) => {
+  const result = await opts.next();
+  if (!result.ok) {
+    const translated = translateDatabaseError(result.error);
+    if (translated) throw translated;
+  }
+  return result;
+});
+
 // Check if the user is signed in and has actorContext
 // Otherwise, throw an UNAUTHORIZED code
 const isAuthed = t.middleware(({ next, ctx }) => {
@@ -289,7 +305,9 @@ const isAuthed = t.middleware(({ next, ctx }) => {
  * guarantee that a user querying is authorized, but you can still access user session data if they
  * are logged in.
  */
-export const publicProcedure = t.procedure.use(tracingMiddleWare);
+export const publicProcedure = t.procedure
+  .use(dbErrorMiddleware)
+  .use(tracingMiddleWare);
 
 export const protectedProcedure = publicProcedure.use(isAuthed);
 

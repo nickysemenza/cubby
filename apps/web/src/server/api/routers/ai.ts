@@ -1,12 +1,14 @@
 import {
   categoryAuditSchema,
   categorySuggestionSchema,
+  confidence,
   detectedInventorySchema,
   locationDescriptionSchema,
   locationTypeSuggestionSchema,
   parsedSearchSchema,
   productIdentificationSchema,
 } from "@cubby/schemas/ai";
+import { foodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
 import { locationId } from "@cubby/schemas/identifiers";
 import { z } from "zod";
 import {
@@ -19,6 +21,7 @@ import {
   backfillLocationDescriptions,
   describeLocation,
   detectInventoryItems,
+  suggestUsdaFood,
 } from "~/server/services/ai-enrichment.service";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 
@@ -90,6 +93,20 @@ export const aiRouter = createTRPCRouter({
     .mutation(async ({ input }) => {
       const client = getAnthropicClient();
       return client.identifyProduct(input.imageUrls);
+    }),
+  // Agentic USDA matcher: the model searches USDA itself, then picks the best
+  // food for a stub ingredient. Returns the full chosen food (or null).
+  suggestUsdaFood: protectedProcedure
+    .input(z.object({ ingredientName: z.string().min(1) }))
+    .output(
+      z.object({
+        food: foodSummaryWithLinkedProducts.nullable(),
+        confidence,
+        reasoning: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      return suggestUsdaFood(ctx.usdaService, input.ingredientName);
     }),
   parseSearch: protectedProcedure
     .input(z.object({ query: z.string().min(1) }))

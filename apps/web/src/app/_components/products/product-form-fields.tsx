@@ -1,9 +1,10 @@
+import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
 import type { ExternalIdInput } from "@cubby/schemas/external-id";
 import { hasFoodIndicators } from "@cubby/schemas/product";
 import type { UnitMappingInput } from "@cubby/schemas/unitmapping";
 import { isMiscProduct } from "@cubby/shared";
 import { Search } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
 import { ArrayFieldManager } from "~/components/forms/array-field-manager";
 import { Button } from "~/components/ui/button";
@@ -11,6 +12,7 @@ import { Image } from "~/components/ui/image";
 import { Spinner } from "~/components/ui/spinner";
 import type { useImageState } from "~/hooks/useImageState";
 import { useTRPCClient } from "~/trpc/react";
+import { UsdaFoodSearchField } from "../combobox/with-usda-food-search";
 import {
   ComboboxFieldWithSearch,
   NullableNumericField,
@@ -23,6 +25,31 @@ import { CategoryFieldWithAI } from "./category-field-with-ai";
 import { IdentifyProductButton } from "./identify-product-with-ai";
 
 const EMPTY_PENDING_IMAGES: PendingImage[] = [];
+
+/**
+ * Visual grouping for the product form. In `compact` mode (QuickInventoryAdd) it
+ * renders children flat — the compact card is already small. In the full form it
+ * adds a small section header so the long field list reads as labeled groups.
+ */
+function FormSection({
+  title,
+  compact,
+  children,
+}: {
+  title: string;
+  compact?: boolean;
+  children: ReactNode;
+}) {
+  if (compact) return <>{children}</>;
+  return (
+    <section className="space-y-4">
+      <h4 className="font-semibold text-muted-foreground text-xs uppercase tracking-wide">
+        {title}
+      </h4>
+      {children}
+    </section>
+  );
+}
 
 type ImageHandlers = Pick<
   ReturnType<typeof useImageState>,
@@ -125,38 +152,62 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
     }
   };
 
+  // Pick a USDA food by name → fill ndb_number (or upc for branded foods). The
+  // linked food then supplies nutrition + portion conversions at read time, so we
+  // don't store those mappings.
+  const handleUsdaSelect = (food: FoodSummaryWithLinkedProducts) => {
+    if (food.legacyFoodInfo?.ndb_number != null) {
+      form.setValue(
+        "ndb_number" as Path<TFieldValues>,
+        food.legacyFoodInfo.ndb_number as TFieldValues[Path<TFieldValues>],
+      );
+    } else if (food.brandedFoodInfo?.gtin_upc) {
+      form.setValue(
+        "upc" as Path<TFieldValues>,
+        food.brandedFoodInfo.gtin_upc as TFieldValues[Path<TFieldValues>],
+      );
+    }
+    const currentName = form.getValues("name" as Path<TFieldValues>) as string;
+    if (!currentName) {
+      form.setValue(
+        "name" as Path<TFieldValues>,
+        food.foodInfo.description as TFieldValues[Path<TFieldValues>],
+      );
+    }
+  };
+
   const content = (
     <>
-      {!hideNameField && (
-        <SideBySideFields>
-          <UnifiedTextField
-            form={form}
-            name={"model" as Path<TFieldValues>}
-            label="Model Number"
-            placeholder="Enter model number"
-            nullable={true}
-          />
-          <UnifiedTextField
-            form={form}
-            name={"name" as Path<TFieldValues>}
-            label="Product Name"
-            placeholder="Enter product name"
-            nullable={false}
-          />
-        </SideBySideFields>
-      )}
+      <FormSection title="Product details" compact={compact}>
+        {!hideNameField && (
+          <SideBySideFields>
+            <UnifiedTextField
+              form={form}
+              name={"model" as Path<TFieldValues>}
+              label="Model Number"
+              placeholder="Enter model number"
+              nullable={true}
+            />
+            <UnifiedTextField
+              form={form}
+              name={"name" as Path<TFieldValues>}
+              label="Product Name"
+              placeholder="Enter product name"
+              nullable={false}
+            />
+          </SideBySideFields>
+        )}
 
-      <UnifiedTextField
-        form={form}
-        name={"notes" as Path<TFieldValues>}
-        label="Notes"
-        placeholder="Notes, URLs, etc."
-        nullable={true}
-      />
+        <UnifiedTextField
+          form={form}
+          name={"notes" as Path<TFieldValues>}
+          label="Notes"
+          placeholder="Notes, URLs, etc."
+          nullable={true}
+        />
 
-      {!isMisc && (
-        <>
-          {compact ? (
+        {!isMisc &&
+          (compact ? (
             <SideBySideFields>
               <UnifiedTextField
                 form={form}
@@ -200,33 +251,38 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
                 }
               />
             </>
-          )}
+          ))}
+      </FormSection>
 
-          {hidePrice ? (
-            <SideBySideFields>
-              <NullableNumericField
-                form={form}
-                step="1"
-                name={"expectedQuantity" as Path<TFieldValues>}
-                label={
-                  compact
-                    ? "Expected Qty"
-                    : "Expected Quantity (1 for unique items)"
-                }
-                placeholder={
-                  compact ? "Unlimited" : "Leave empty for unlimited"
-                }
-              />
-              <NullableNumericField
-                form={form}
-                step="1"
-                name={"ndb_number" as Path<TFieldValues>}
-                label={compact ? "NDB Number" : "NDB Number (Optional)"}
-                placeholder={compact ? "1000-99999" : "NDB number (1000-99999)"}
-              />
-            </SideBySideFields>
-          ) : (
-            <>
+      {!isMisc && (
+        <>
+          <FormSection title="Quantity & price" compact={compact}>
+            {hidePrice ? (
+              <SideBySideFields>
+                <NullableNumericField
+                  form={form}
+                  step="1"
+                  name={"expectedQuantity" as Path<TFieldValues>}
+                  label={
+                    compact
+                      ? "Expected Qty"
+                      : "Expected Quantity (1 for unique items)"
+                  }
+                  placeholder={
+                    compact ? "Unlimited" : "Leave empty for unlimited"
+                  }
+                />
+                <NullableNumericField
+                  form={form}
+                  step="1"
+                  name={"ndb_number" as Path<TFieldValues>}
+                  label={compact ? "NDB Number" : "NDB Number (Optional)"}
+                  placeholder={
+                    compact ? "1000-99999" : "NDB number (1000-99999)"
+                  }
+                />
+              </SideBySideFields>
+            ) : (
               <SideBySideFields>
                 <NullableNumericField
                   form={form}
@@ -244,6 +300,11 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
                   prefix="$"
                 />
               </SideBySideFields>
+            )}
+          </FormSection>
+
+          <FormSection title="USDA & nutrition" compact={compact}>
+            {!hidePrice && (
               <NullableNumericField
                 form={form}
                 step="1"
@@ -251,68 +312,78 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
                 label="NDB Number (Optional)"
                 placeholder="NDB number (1000-99999)"
               />
-            </>
-          )}
-
-          <div className="space-y-2">
-            <div className="flex items-end gap-2">
-              <div className="flex-1">
-                <UnifiedTextField
-                  form={form}
-                  name={"upc" as Path<TFieldValues>}
-                  label="UPC (Optional)"
-                  placeholder="12-digit UPC code"
-                  nullable={true}
-                />
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleUpcLookup}
-                disabled={
-                  isLookingUp || !form.watch("upc" as Path<TFieldValues>)
-                }
-                className="mb-[2px]"
-              >
-                {isLookingUp ? <Spinner /> : <Search className="h-4 w-4" />}
-                <span className="ml-1">Lookup</span>
-              </Button>
-            </div>
-            {lookupImageUrl && (
-              <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                <Image
-                  src={lookupImageUrl}
-                  alt="Product from UPC lookup"
-                  width={64}
-                  height={64}
-                  className="rounded border object-contain"
-                />
-                <span>Image will be imported on save</span>
-              </div>
             )}
-          </div>
 
-          <ComboboxFieldWithSearch
-            form={form}
-            name={"ingredient" as Path<TFieldValues>}
-            label="Ingredient"
-            searchType="ingredient"
-          />
+            {!compact && (
+              <UsdaFoodSearchField
+                initialQuery={nameValue}
+                onSelect={handleUsdaSelect}
+              />
+            )}
+
+            <div className="space-y-2">
+              <div className="flex items-end gap-2">
+                <div className="flex-1">
+                  <UnifiedTextField
+                    form={form}
+                    name={"upc" as Path<TFieldValues>}
+                    label="UPC (Optional)"
+                    placeholder="12-digit UPC code"
+                    nullable={true}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleUpcLookup}
+                  disabled={
+                    isLookingUp || !form.watch("upc" as Path<TFieldValues>)
+                  }
+                  className="mb-[2px]"
+                >
+                  {isLookingUp ? <Spinner /> : <Search className="h-4 w-4" />}
+                  <span className="ml-1">Lookup</span>
+                </Button>
+              </div>
+              {lookupImageUrl && (
+                <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                  <Image
+                    src={lookupImageUrl}
+                    alt="Product from UPC lookup"
+                    width={64}
+                    height={64}
+                    className="rounded border object-contain"
+                  />
+                  <span>Image will be imported on save</span>
+                </div>
+              )}
+            </div>
+          </FormSection>
+
+          <FormSection title="Ingredient" compact={compact}>
+            <ComboboxFieldWithSearch
+              form={form}
+              name={"ingredient" as Path<TFieldValues>}
+              label="Ingredient"
+              searchType="ingredient"
+            />
+          </FormSection>
         </>
       )}
 
-      <PendingImageUpload
-        entityType="PRODUCT"
-        onImagesChange={imageHandlers.handlePendingImagesChange}
-        existingImages={existingImages}
-        onExistingImagesRemove={imageHandlers.handleRemovedImagesChange}
-        className="mt-4"
-      />
+      <FormSection title="Images" compact={compact}>
+        <PendingImageUpload
+          entityType="PRODUCT"
+          onImagesChange={imageHandlers.handlePendingImagesChange}
+          existingImages={existingImages}
+          onExistingImagesRemove={imageHandlers.handleRemovedImagesChange}
+        />
 
-      {pendingImages.length > 0 && (
-        <IdentifyProductButton form={form} pendingImages={pendingImages} />
-      )}
+        {pendingImages.length > 0 && (
+          <IdentifyProductButton form={form} pendingImages={pendingImages} />
+        )}
+      </FormSection>
 
       {!isMisc && (
         <ArrayFieldManager<UnitMappingInput, TFieldValues>
@@ -420,5 +491,6 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
     );
   }
 
-  return content;
+  // Extra spacing between the labeled sections so the form reads as groups.
+  return <div className="space-y-6">{content}</div>;
 }

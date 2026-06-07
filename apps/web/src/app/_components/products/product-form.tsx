@@ -63,6 +63,8 @@ interface CreateProductFormProps extends CreateModeProps<ProductCreateInput> {
   product?: never;
   initialName?: string;
   initialExpectedQuantity?: number | null;
+  /** Pre-link the new product to an ingredient (used by the enrichment queue). */
+  initialIngredient?: ComboboxItem | null;
 }
 
 // Define a custom type for product with ingredient and unit mappings
@@ -100,6 +102,8 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
   const initialName = mode === "create" ? props.initialName : undefined;
   const initialExpectedQuantity =
     mode === "create" ? props.initialExpectedQuantity : undefined;
+  const initialIngredient =
+    mode === "create" ? props.initialIngredient : undefined;
 
   // Initialize form with default values or existing product data
   const form = useForm<ProductFormValues>({
@@ -116,7 +120,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
         ? product.expectedQuantity
         : (initialExpectedQuantity ?? null),
       price: null, // Will be set async in useEffect
-      ingredient: product?.ingredient || null,
+      ingredient: product?.ingredient || initialIngredient || null,
       unitMappings: product?.unitMappings ?? [],
       externalIds: product?.externalIds ?? [],
     },

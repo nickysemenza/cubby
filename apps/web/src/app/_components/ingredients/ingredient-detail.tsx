@@ -1,7 +1,15 @@
 import type { IngredientUpdateInput } from "@cubby/schemas/ingredient";
-import { Apple, ChefHat, Info, Scale, ShoppingCart } from "lucide-react";
-import type { FC } from "react";
+import {
+  Apple,
+  ChefHat,
+  Info,
+  Scale,
+  ShoppingCart,
+  Sparkles,
+} from "lucide-react";
+import { type FC, useState } from "react";
 import { MutedBox } from "~/components/layout/muted-box";
+import { Button } from "~/components/ui/button";
 import { getIngredientMappings } from "~/lib/unit-mapping-utils";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { useTRPC } from "~/trpc/react";
@@ -10,6 +18,7 @@ import { EntityPillLinkList } from "../EntityPillLinkList";
 import { useEntityDetail } from "../hooks/useEntityDetail";
 import { UnitMappingsTable } from "../units/unitmappingstable";
 import { NutritionInfoTable } from "../usda/nutrition";
+import { EnrichIngredientDialog } from "./enrich-ingredient-dialog";
 import { IngredientBasicInfo } from "./ingredient-basic-info";
 import { IngredientForm } from "./ingredient-form";
 
@@ -19,6 +28,7 @@ interface IngredientDetailProps {
 
 export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
   const api = useTRPC();
+  const [isEnriching, setIsEnriching] = useState(false);
 
   const { commonSections, editMode, mappings } = useEntityDetail<
     IngredientWithFoodOut,
@@ -73,7 +83,24 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
       title: "Related Products",
       icon: ShoppingCart,
       content: (
-        <EntityPillLinkList entity="product" items={ingredient.product} />
+        <div className="space-y-3">
+          {ingredient.product.length > 0 ? (
+            <EntityPillLinkList entity="product" items={ingredient.product} />
+          ) : (
+            <p className="text-muted-foreground text-sm">
+              No products linked yet — enrich this ingredient to add pricing and
+              nutrition.
+            </p>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsEnriching(true)}
+          >
+            <Sparkles className="h-4 w-4" />
+            Enrich
+          </Button>
+        </div>
       ),
     },
     // Custom section: Unit Mappings (uses UnitMappingsTable, not UnitMappingDisplay)
@@ -98,11 +125,21 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
   ];
 
   return (
-    <DetailPage
-      sections={sections}
-      entity="ingredient"
-      name={ingredient.name}
-      rawData={ingredient}
-    />
+    <>
+      <DetailPage
+        sections={sections}
+        entity="ingredient"
+        name={ingredient.name}
+        rawData={ingredient}
+      />
+      <EnrichIngredientDialog
+        ingredient={
+          isEnriching ? { id: ingredient.id, name: ingredient.name } : null
+        }
+        onOpenChange={(open) => {
+          if (!open) setIsEnriching(false);
+        }}
+      />
+    </>
   );
 };

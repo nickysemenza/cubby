@@ -25,6 +25,7 @@ import { dedupe } from "~/misc/array-helpers";
 import type { Database } from "~/server/db";
 import {
   image,
+  ingredient,
   inventoryEntry,
   product,
   productExternalId,
@@ -172,6 +173,107 @@ export const productList = async (
   return { data: products, count: totalCount };
 };
 
+/**
+ * Walk an error's `cause` chain looking for a Postgres unique-violation (23505).
+ * Drizzle wraps the driver error as "Failed query: …" and hides the real cause,
+ * so the raw message never says "duplicate" — we dig it out here.
+ */
+function findUniqueViolation(
+  error: unknown,
+): { constraint: string; detail: string } | null {
+  let current: unknown = error;
+  for (let depth = 0; depth < 6 && current != null; depth++) {
+    if (
+      typeof current === "object" &&
+      (current as { code?: unknown }).code === "23505"
+    ) {
+      const e = current as { constraint?: unknown; detail?: unknown };
+      return {
+        constraint: typeof e.constraint === "string" ? e.constraint : "",
+        detail: typeof e.detail === "string" ? e.detail : "",
+      };
+    }
+    current = (current as { cause?: unknown })?.cause;
+  }
+  return null;
+}
+
+/**
+ * Translate a Product unique-constraint violation into a clear, actionable
+ * CONFLICT error (naming the conflicting product/ingredient where possible).
+ * No-op if the error isn't a unique violation, so callers can rethrow.
+ */
+async function throwIfDuplicateProduct(
+  db: Database,
+  data: Pick<ProductCreateInput, "name" | "manufacturer"> & {
+    ndb_number?: number | null;
+    upc?: string | null;
+  },
+  error: unknown,
+): Promise<void> {
+  const violation = findUniqueViolation(error);
+  if (!violation) return;
+  const { constraint } = violation;
+
+  if (constraint.includes("ndb_number") && data.ndb_number != null) {
+    const existing = await getDb(db).query.product.findFirst({
+      where: and(eq(product.ndb_number, data.ndb_number), notDeleted(product)),
+      columns: { name: true, ingredientId: true },
+    });
+    const ownerName = existing?.ingredientId
+      ? (
+          await getDb(db).query.ingredient.findFirst({
+            where: eq(ingredient.id, existing.ingredientId),
+            columns: { name: true },
+          })
+        )?.name
+      : null;
+    throw createAppError(
+      "PRODUCT_ALREADY_EXISTS",
+      `USDA food (NDB ${data.ndb_number}) is already linked to ${
+        existing ? `product “${existing.name}”` : "another product"
+      }${ownerName ? ` on ingredient “${ownerName}”` : ""}. A USDA food can ` +
+        `belong to only one product${
+          ownerName
+            ? ` — merge this ingredient into “${ownerName}” to share it.`
+            : "."
+        }`,
+      error,
+    );
+  }
+
+  if (constraint.includes("upc") && data.upc) {
+    const existing = await getDb(db).query.product.findFirst({
+      where: and(eq(product.upc, data.upc), notDeleted(product)),
+      columns: { name: true },
+    });
+    throw createAppError(
+      "PRODUCT_ALREADY_EXISTS",
+      `UPC ${data.upc} is already used by ${
+        existing ? `product “${existing.name}”` : "another product"
+      }.`,
+      error,
+    );
+  }
+
+  if (constraint.includes("name_manufacturer")) {
+    throw createAppError(
+      "PRODUCT_ALREADY_EXISTS",
+      `A product named “${data.name}” by “${data.manufacturer}” already exists.`,
+      error,
+    );
+  }
+
+  // Unknown unique violation — still clearer than the raw SQL dump.
+  throw createAppError(
+    "PRODUCT_ALREADY_EXISTS",
+    `This product duplicates an existing one${
+      constraint ? ` (constraint ${constraint})` : ""
+    }.`,
+    error,
+  );
+}
+
 // Create a new product
 export const createProduct = async (
   db: Database,
@@ -194,88 +296,95 @@ export const createProduct = async (
   // Generate unique shortcode
   const shortcode = await generateUniqueProductShortcode(db);
 
-  // Use a transaction to ensure atomicity
-  return await withTransaction(db, async (tx) => {
-    // Create the product first
-    const newProduct = await insertAndReturn(tx, product, {
-      ...productData,
-      category,
-      shortcode,
-      ingredientId: ingredientId ?? null,
+  // Use a transaction to ensure atomicity. On a unique violation (e.g. another
+  // product already links this USDA food/UPC), translate the raw DB error into a
+  // clear CONFLICT message — the lookups run on `db` because the tx is aborted.
+  try {
+    return await withTransaction(db, async (tx) => {
+      // Create the product first
+      const newProduct = await insertAndReturn(tx, product, {
+        ...productData,
+        category,
+        shortcode,
+        ingredientId: ingredientId ?? null,
+      });
+
+      // If there are unit mappings, create them and sync price
+      if (unitMappings && unitMappings.length > 0) {
+        await tx.insert(productUnitMappings).values(
+          unitMappings.map((mapping) => ({
+            productId: newProduct.id,
+            a: mapping.a,
+            b: mapping.b,
+            source: mapping.source,
+          })),
+        );
+
+        // Sync the product price from the newly created mappings
+        await syncProductPrice(tx, unsafeProductId(newProduct.id));
+      }
+
+      // If there are external IDs, create them
+      if (externalIds && externalIds.length > 0) {
+        await tx.insert(productExternalId).values(
+          externalIds.map((eid) => ({
+            productId: newProduct.id,
+            source: eid.source,
+            externalId: eid.externalId,
+            url: eid.url ?? null,
+          })),
+        );
+      }
+
+      // Associate images if provided
+      let images: Array<typeof image.$inferSelect> = [];
+      if (pendingImageIds && pendingImageIds.length > 0) {
+        await associatePendingImages(
+          tx,
+          productImage,
+          "productId",
+          newProduct.id,
+          pendingImageIds,
+        );
+
+        // Fetch the associated images
+        images = await tx
+          .select()
+          .from(image)
+          .where(inArray(image.id, pendingImageIds));
+      }
+
+      // Log audit entry
+      await logAuditEntry(tx, actor, {
+        entityType: "product",
+        entityId: newProduct.id,
+        action: "create",
+      });
+
+      // Fetch created external IDs for the response
+      const createdExternalIds =
+        externalIds && externalIds.length > 0
+          ? await tx.query.productExternalId.findMany({
+              where: eq(productExternalId.productId, newProduct.id),
+            })
+          : [];
+
+      // Construct and validate the response object
+      const result = {
+        ...newProduct,
+        images,
+        externalIds: createdExternalIds,
+      };
+
+      return parseWithContext(productTopLevelOut, result, {
+        entityType: "Product",
+        identifier: { id: newProduct.id, name: newProduct.name },
+      });
     });
-
-    // If there are unit mappings, create them and sync price
-    if (unitMappings && unitMappings.length > 0) {
-      await tx.insert(productUnitMappings).values(
-        unitMappings.map((mapping) => ({
-          productId: newProduct.id,
-          a: mapping.a,
-          b: mapping.b,
-          source: mapping.source,
-        })),
-      );
-
-      // Sync the product price from the newly created mappings
-      await syncProductPrice(tx, unsafeProductId(newProduct.id));
-    }
-
-    // If there are external IDs, create them
-    if (externalIds && externalIds.length > 0) {
-      await tx.insert(productExternalId).values(
-        externalIds.map((eid) => ({
-          productId: newProduct.id,
-          source: eid.source,
-          externalId: eid.externalId,
-          url: eid.url ?? null,
-        })),
-      );
-    }
-
-    // Associate images if provided
-    let images: Array<typeof image.$inferSelect> = [];
-    if (pendingImageIds && pendingImageIds.length > 0) {
-      await associatePendingImages(
-        tx,
-        productImage,
-        "productId",
-        newProduct.id,
-        pendingImageIds,
-      );
-
-      // Fetch the associated images
-      images = await tx
-        .select()
-        .from(image)
-        .where(inArray(image.id, pendingImageIds));
-    }
-
-    // Log audit entry
-    await logAuditEntry(tx, actor, {
-      entityType: "product",
-      entityId: newProduct.id,
-      action: "create",
-    });
-
-    // Fetch created external IDs for the response
-    const createdExternalIds =
-      externalIds && externalIds.length > 0
-        ? await tx.query.productExternalId.findMany({
-            where: eq(productExternalId.productId, newProduct.id),
-          })
-        : [];
-
-    // Construct and validate the response object
-    const result = {
-      ...newProduct,
-      images,
-      externalIds: createdExternalIds,
-    };
-
-    return parseWithContext(productTopLevelOut, result, {
-      entityType: "Product",
-      identifier: { id: newProduct.id, name: newProduct.name },
-    });
-  });
+  } catch (error) {
+    await throwIfDuplicateProduct(db, data, error);
+    throw error;
+  }
 };
 
 // Update an existing product
