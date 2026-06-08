@@ -16,6 +16,7 @@ import { Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { MobileCard } from "~/components/entity/mobile-card";
 import { MobileCardSkeletonList } from "~/components/feedback/mobile-card-skeleton";
+import { Image } from "~/components/ui/image";
 import { Input } from "~/components/ui/input";
 import { entities } from "~/entities/entities";
 import { useIsMobile } from "~/hooks/useMobile";
@@ -234,11 +235,13 @@ function MobileSearchResults({
                   subtitle={item.subtitle}
                   imageSlot={
                     item.imageUrl ? (
-                      <img
-                        src={item.imageUrl}
-                        alt=""
-                        className="h-11 w-11 rounded object-cover"
-                      />
+                      <div className="relative h-11 w-11 overflow-hidden rounded">
+                        <Image
+                          src={item.imageUrl}
+                          alt=""
+                          className="absolute inset-0 h-full w-full object-cover"
+                        />
+                      </div>
                     ) : (
                       <div className="flex h-11 w-11 items-center justify-center rounded bg-muted/50">
                         <SearchResultItemIcon

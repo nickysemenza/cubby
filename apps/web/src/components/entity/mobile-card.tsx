@@ -192,7 +192,9 @@ export function MobileCard({
     // biome-ignore lint/a11y/noStaticElementInteractions: role, tabIndex, and onKeyDown are conditionally set based on onClick
     <div
       className={cn(
-        "fade-in flex animate-in items-start gap-2.5 rounded-lg border border-l-4 bg-card p-2.5 shadow-sm transition-all duration-300 hover:shadow-md",
+        // No mount fade-in: the mobile list is virtualized, so a per-card
+        // fade-in replays every time a card scrolls back into view (flicker).
+        "flex items-start gap-2.5 rounded-lg border border-l-4 bg-card p-2.5 shadow-sm transition-all duration-300 hover:shadow-md",
         borderColor,
         // Touch devices have no :hover — give a pressed state so taps register.
         onClick && "cursor-pointer active:bg-muted/40",

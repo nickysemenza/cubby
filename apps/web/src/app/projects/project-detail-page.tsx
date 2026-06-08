@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
+import { Image } from "~/components/ui/image";
 import { Skeleton } from "~/components/ui/skeleton";
 import { formatCurrency } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
@@ -66,12 +67,13 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
     <div className="space-y-4">
       {/* Cover image */}
       {project.coverImage && (
-        <img
-          src={project.coverImage}
-          alt=""
-          className="-mx-4 -mt-4 mb-0 h-48 w-[calc(100%+2rem)] rounded-t-lg object-cover sm:-mx-6 sm:w-[calc(100%+3rem)] lg:-mx-8 lg:w-[calc(100%+4rem)]"
-          loading="lazy"
-        />
+        <div className="relative -mx-4 -mt-4 mb-0 h-48 w-[calc(100%+2rem)] overflow-hidden rounded-t-lg sm:-mx-6 sm:w-[calc(100%+3rem)] lg:-mx-8 lg:w-[calc(100%+4rem)]">
+          <Image
+            src={project.coverImage}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        </div>
       )}
 
       {/* Header */}

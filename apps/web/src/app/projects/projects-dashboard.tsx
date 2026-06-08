@@ -17,6 +17,7 @@ import {
   EmptyIcon,
   EmptyTitle,
 } from "~/components/ui/empty";
+import { Image } from "~/components/ui/image";
 import { Skeleton } from "~/components/ui/skeleton";
 import {
   ViewSwitcher,
@@ -502,12 +503,13 @@ function ProjectCard({ project }: { project: NotionProject }) {
         className="overflow-hidden transition-colors hover:bg-muted/50"
       >
         {project.coverImage && (
-          <img
-            src={project.coverImage}
-            alt=""
-            className="aspect-[16/9] w-full object-cover"
-            loading="lazy"
-          />
+          <div className="relative aspect-[16/9] w-full overflow-hidden">
+            <Image
+              src={project.coverImage}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+          </div>
         )}
         <CardHeader>
           <CardTitle className="flex items-center gap-2">

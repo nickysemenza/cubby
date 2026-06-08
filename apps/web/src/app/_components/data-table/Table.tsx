@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import {
   Fragment,
+  memo,
   type ReactNode,
   useCallback,
   useEffect,
@@ -101,6 +102,93 @@ interface TTableProps<TItem> {
   onGroupedChange?: (value: boolean) => void;
 }
 
+interface DataRowProps<TItem> {
+  row: Row<TItem>;
+  isSelected: boolean;
+  isFocused: boolean;
+  isDebugEnabled: boolean;
+  onRowClick?: (row: Row<TItem>) => void;
+  rowClassName: string;
+  cellClassName: string;
+  /** Signature of visible column ids — re-render rows when columns toggle/reorder */
+  columnsKey: string;
+  height?: string;
+}
+
+function DataRowInner<TItem>({
+  row,
+  isSelected,
+  isFocused,
+  isDebugEnabled,
+  onRowClick,
+  rowClassName,
+  cellClassName,
+  height,
+}: DataRowProps<TItem>) {
+  return (
+    <TableRow
+      data-state={isSelected && "selected"}
+      className={cn(
+        rowClassName,
+        onRowClick && "cursor-pointer",
+        isFocused && "ring-2 ring-primary/30 ring-inset",
+      )}
+      onClick={onRowClick ? () => onRowClick(row) : undefined}
+      style={height ? { height } : undefined}
+    >
+      {row.getVisibleCells().map((cell) => (
+        <TableCell
+          key={cell.id}
+          className={cn(cellClassName, cell.column.columnDef.meta?.className)}
+        >
+          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+        </TableCell>
+      ))}
+      {/* Add debug cell when debug mode is enabled */}
+      {isDebugEnabled && (
+        <TableCell className={cn(cellClassName)}>
+          <DebugDialog
+            data={row.original}
+            title={`Debug Data - Row ${row.id}`}
+            trigger={
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                <Bug className="h-4 w-4" />
+                <span className="sr-only">Debug row data</span>
+              </Button>
+            }
+          />
+        </TableCell>
+      )}
+    </TableRow>
+  );
+}
+
+// Skip re-rendering rows that haven't actually changed. The virtualizer
+// re-renders RTable on every scroll frame, so without this, flexRender runs for
+// every visible cell each frame. We compare row.original (TanStack reuses the
+// underlying data object across renders) plus the bits of table/UI state a row
+// reads. NOTE: cells that read table-level state beyond selection/focus/column
+// visibility won't re-render until row.original changes — none do today, so add
+// to this comparator if you introduce one.
+function rowPropsAreEqual<TItem>(
+  prev: DataRowProps<TItem>,
+  next: DataRowProps<TItem>,
+): boolean {
+  return (
+    prev.row.original === next.row.original &&
+    prev.isSelected === next.isSelected &&
+    prev.isFocused === next.isFocused &&
+    prev.isDebugEnabled === next.isDebugEnabled &&
+    prev.onRowClick === next.onRowClick &&
+    prev.rowClassName === next.rowClassName &&
+    prev.cellClassName === next.cellClassName &&
+    prev.columnsKey === next.columnsKey &&
+    prev.height === next.height
+  );
+}
+
+const DataRow = memo(DataRowInner, rowPropsAreEqual) as typeof DataRowInner;
+
 export default function RTable<TItem>(props: TTableProps<TItem>) {
   const {
     table,
@@ -159,15 +247,16 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
 
   // On desktop with infinite scroll, eagerly fetch all pages so client-side
   // pagination works over the complete dataset. Mobile uses scroll-to-load.
+  // Depend on primitives (not the `infiniteScroll` object, which is recreated
+  // every render) so this effect only re-runs when fetch state actually changes.
+  const hasNextPage = infiniteScroll?.hasNextPage ?? false;
+  const isFetchingNextPage = infiniteScroll?.isFetchingNextPage ?? false;
+  const fetchNextPage = infiniteScroll?.fetchNextPage;
   useEffect(() => {
-    if (
-      !isMobile &&
-      infiniteScroll?.hasNextPage &&
-      !infiniteScroll.isFetchingNextPage
-    ) {
-      infiniteScroll.fetchNextPage();
+    if (!isMobile && hasNextPage && !isFetchingNextPage) {
+      fetchNextPage?.();
     }
-  }, [isMobile, infiniteScroll]);
+  }, [isMobile, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const { rows } = table.getRowModel();
 
@@ -210,6 +299,13 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
 
   // Restore scroll position when data loads (rows become available)
   const hasRestoredRef = useRef(false);
+  // Reset the guard when the route changes so restore works again on the next
+  // list (the RTable instance can be reused across list routes). Declared before
+  // the restore effect so the flag is cleared before that effect re-evaluates.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pathname is the intended trigger; the body only writes a ref so the linter sees it as unused
+  useEffect(() => {
+    hasRestoredRef.current = false;
+  }, [pathname]);
   useEffect(() => {
     if (hasRestoredRef.current || isMobile) return;
     const savedPosition = scrollPositionCache.get(pathname);
@@ -232,44 +328,12 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     sortIcon: "h-3 w-3",
   };
 
-  // Render a single row (virtualized)
-  const renderRow = (row: Row<TItem>, style?: React.CSSProperties) => (
-    <TableRow
-      key={row.id}
-      data-state={row.getIsSelected() && "selected"}
-      className={cn(
-        styles.row,
-        onRowClick && "cursor-pointer",
-        focusedRowIndex === row.index && "ring-2 ring-primary/30 ring-inset",
-      )}
-      onClick={onRowClick ? () => onRowClick(row) : undefined}
-      style={style}
-    >
-      {row.getVisibleCells().map((cell) => (
-        <TableCell
-          key={cell.id}
-          className={cn(styles.cell, cell.column.columnDef.meta?.className)}
-        >
-          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-        </TableCell>
-      ))}
-      {/* Add debug cell when debug mode is enabled */}
-      {isDebugEnabled && (
-        <TableCell className={cn(styles.cell)}>
-          <DebugDialog
-            data={row.original}
-            title={`Debug Data - Row ${row.id}`}
-            trigger={
-              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                <Bug className="h-4 w-4" />
-                <span className="sr-only">Debug row data</span>
-              </Button>
-            }
-          />
-        </TableCell>
-      )}
-    </TableRow>
-  );
+  // Signature of currently-visible columns so memoized rows re-render when the
+  // user toggles or reorders columns (row.original alone wouldn't change).
+  const columnsKey = table
+    .getVisibleLeafColumns()
+    .map((c) => c.id)
+    .join(",");
 
   // Helper to render status rows (loading, error, empty)
   const renderStatusRow = (content: ReactNode, height = "h-16") => (
@@ -353,10 +417,36 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
               );
             }
             const row = rows[item.rowIndex];
-            return renderRow(row, { height: `${virtualRow.size}px` });
+            return (
+              <DataRow
+                key={row.id}
+                row={row}
+                isSelected={row.getIsSelected()}
+                isFocused={focusedRowIndex === row.index}
+                isDebugEnabled={isDebugEnabled}
+                onRowClick={onRowClick}
+                rowClassName={styles.row}
+                cellClassName={styles.cell}
+                columnsKey={columnsKey}
+                height={`${virtualRow.size}px`}
+              />
+            );
           }
           const row = rows[virtualRow.index];
-          return renderRow(row, { height: `${virtualRow.size}px` });
+          return (
+            <DataRow
+              key={row.id}
+              row={row}
+              isSelected={row.getIsSelected()}
+              isFocused={focusedRowIndex === row.index}
+              isDebugEnabled={isDebugEnabled}
+              onRowClick={onRowClick}
+              rowClassName={styles.row}
+              cellClassName={styles.cell}
+              columnsKey={columnsKey}
+              height={`${virtualRow.size}px`}
+            />
+          );
         })}
 
         {/* Bottom padding row for remaining scroll space */}
@@ -443,7 +533,16 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                       ? Math.min(focusedRowIndex + 1, rowCount - 1)
                       : Math.max(focusedRowIndex - 1, 0);
                 setFocusedRowIndex(next);
-                rowVirtualizer.scrollToIndex(next, { align: "auto" });
+                // When grouped, the virtualizer's index space includes header
+                // items, so map the flat row index to its groupedItems index.
+                const targetIndex = groupedItems
+                  ? groupedItems.findIndex(
+                      (it) => it.kind === "row" && it.rowIndex === next,
+                    )
+                  : next;
+                if (targetIndex >= 0) {
+                  rowVirtualizer.scrollToIndex(targetIndex, { align: "auto" });
+                }
               }
               if (e.key === "Escape") {
                 setFocusedRowIndex(null);
