@@ -55,10 +55,10 @@ export function SpendingHeatmap({
           to={to}
           emptyColor="var(--muted)"
           colors={[
-            "oklch(0.9 0.04 150)",
-            "oklch(0.78 0.07 150)",
-            "oklch(0.65 0.09 150)",
-            "oklch(0.52 0.1 150)",
+            "var(--chart-seq-2)",
+            "var(--chart-seq-3)",
+            "var(--chart-seq-4)",
+            "var(--chart-seq-5)",
           ]}
           margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
           yearSpacing={40}

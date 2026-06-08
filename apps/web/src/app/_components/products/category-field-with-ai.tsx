@@ -102,10 +102,8 @@ export function CategoryFieldWithAI<
               <Button
                 type="button"
                 variant="outline"
-                size="sm"
                 onClick={handleSuggest}
                 disabled={!canSuggest || isLoading}
-                className="mb-[2px]"
               />
             }
           >

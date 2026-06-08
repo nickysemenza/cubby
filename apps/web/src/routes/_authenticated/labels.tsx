@@ -460,7 +460,7 @@ function LabelsPage() {
                       },
                     })
                   }
-                  className="h-8 w-14 rounded-md border border-input bg-background px-2 text-center text-sm"
+                  className="h-7 w-14 rounded-md border-2 border-[var(--border-chunky)] bg-input/20 px-2 text-center text-sm shadow-[var(--shadow-chunky-sm)]"
                 />
               </label>
             )}
