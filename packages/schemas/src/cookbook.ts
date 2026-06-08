@@ -42,6 +42,13 @@ export const recipeRefSchema = z.object({
 });
 export type RecipeRef = z.infer<typeof recipeRefSchema>;
 
+// TODO(hero-photos): recipe-epub's assembled CookbookRecipe carries an optional
+// `image` (an `ImageRef` = in-archive `path` + `mime`, not bytes) for the recipe's
+// hero photo. recipebridge currently emits it as None (see assemble_recipes), and
+// cubby has no image-display wiring for cookbook imports, so it isn't modeled here
+// yet. When wiring it up, add an optional `image` field below + materialize the
+// bytes from the EPUB into a real URL on import.
+
 export const cookbookRecipeSchema = z.object({
   meta: cookbookRecipeMeta,
   sections: z.array(cookbookRecipeSection),
@@ -52,6 +59,7 @@ export const cookbookRecipeSchema = z.object({
   // Cross-recipe references (other recipes in the same book this one uses as
   // ingredients). Defaults to empty for older JSON without the field.
   references: z.array(recipeRefSchema).default([]),
+  // NOTE: no `image` field yet — see the hero-photos TODO above.
 });
 export type CookbookRecipe = z.infer<typeof cookbookRecipeSchema>;
 

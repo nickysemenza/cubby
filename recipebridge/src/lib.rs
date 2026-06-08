@@ -474,7 +474,7 @@ pub fn parse_unit_mapping(input: String) -> Result<WUnitMapping, String> {
 
 use recipe_epub::{
     assemble_recipes as assemble_recipes_internal, build_chunk_request,
-    chunk_epub as chunk_epub_internal, parse_recipes_payload, Link as EpubLink,
+    chunk_epub as chunk_epub_internal, parse_recipes_payload, Chunk as EpubChunk, Link as EpubLink,
 };
 use sha2::{Digest, Sha256};
 
@@ -598,13 +598,35 @@ pub fn assemble_recipes(
             Some(input) => parse_recipes_payload(input).map_err(|e| e.to_string())?,
             None => Vec::new(),
         };
-        per_chunk.push((c.doc_path, recipes));
-        for l in c.links {
-            links.push(EpubLink {
+        let chunk_links: Vec<EpubLink> = c
+            .links
+            .into_iter()
+            .map(|l| EpubLink {
                 text: l.text,
                 href: l.href,
-            });
-        }
+            })
+            .collect();
+        links.extend(chunk_links.iter().cloned());
+        // `assemble_recipes` takes the full `Chunk` so it can bind each recipe's
+        // hero photo (`hero_for` uses `text` + `images`). We deliberately pass empty
+        // `text`/`images`, leaving the resulting `CookbookRecipe.image` = None.
+        //
+        // TODO(hero-photos): wire EPUB hero photos to the UI. recipe-epub already
+        // computes a per-recipe `ImageRef` (an in-archive path + MIME, not bytes).
+        // To use it we'd need to: (1) carry `text` + the `(line, ImageRef)` images
+        // back across this boundary (re-add `text`/`images` to `WCookbookChunk` +
+        // `WImageRef`), (2) materialize the bytes from the still-in-memory EPUB and
+        // upload/persist them (R2) into a real image URL, and (3) surface `image` in
+        // the TS cookbook schema + import path. Cubby has no image-display wiring for
+        // cookbook imports today, so this is deferred.
+        let chunk = EpubChunk {
+            title_hint: c.title_hint,
+            text: String::new(),
+            doc_path: c.doc_path,
+            links: chunk_links,
+            images: Vec::new(),
+        };
+        per_chunk.push((chunk, recipes));
     }
     let recipes = assemble_recipes_internal(per_chunk, links, &source);
     to_js(&recipes, "assembled recipes")
