@@ -20,10 +20,10 @@ import { cn } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
 import { dedupe } from "~/misc/array-helpers";
 import { useTRPC } from "~/trpc/react";
+import { CopyJsonButton } from "../copy-debug-button";
 import { ParsedIngredientTable } from "../parsed-ingredient-table";
 import { formatRichText } from "../richtext";
 import { useIngredientMatches } from "../use-ingredient-matches";
-import { CopyRecipeJsonButton } from "./copy-recipe-json-button";
 import { normalize } from "./import-order";
 import type { Book, BookHandlers, ImportResult } from "./types";
 
@@ -381,7 +381,11 @@ function RecipeCardImpl({
             </span>
           )}
         </div>
-        <CopyRecipeJsonButton recipe={recipe} />
+        <CopyJsonButton
+          value={recipe}
+          title="Copy the full extracted recipe as JSON (for an ingredient-parser session)"
+          toastLabel="Copied recipe JSON"
+        />
         <ImportStatus result={result} />
       </div>
 

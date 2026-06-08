@@ -8,6 +8,7 @@ import {
 import { Edit, X } from "lucide-react";
 import { z } from "zod";
 import { useEntityDelete } from "~/app/_components/hooks/useEntityDelete";
+import { CopyRecipeParseButton } from "~/app/_components/recipe/copy-corpus-button";
 import EditRecipeForm from "~/app/_components/recipe/edit-recipe";
 import RecipeDetail, {
   type RecipeViewMode,
@@ -102,6 +103,7 @@ function RecipeDetailPage() {
         actions={
           !isEditing ? (
             <>
+              <CopyRecipeParseButton recipe={recipe} />
               <Button onClick={startEditing} variant="outline" size="sm">
                 <Edit className="mr-2 h-4 w-4" />
                 Edit Recipe
