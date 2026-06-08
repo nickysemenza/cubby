@@ -14,7 +14,7 @@ import { type CookbookId, unsafeCookbookId } from "@cubby/schemas/identifiers";
 import type { CookbookSummary } from "@cubby/schemas/recipe";
 import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
-import { cookbook, recipe } from "~/server/db/schema";
+import { cookbook, image, recipe } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { upsertCookbookRecipeFromCookbook } from "~/server/repo/compactrecipe";
@@ -36,6 +36,9 @@ export type CookbookUpsertInput = {
   author?: string[];
   subjects?: string[];
   sourceLabel: string;
+  // The uploaded cover Image id. Only set when provided — a metadata-only / re-open
+  // upsert (no cover) must never clear an existing cover.
+  coverImageId?: string;
 };
 
 /**
@@ -62,30 +65,36 @@ export const upsertCookbook = async (
       subjects: input.subjects ?? [],
       sourceLabel: input.sourceLabel,
       importedAt: new Date(),
+      // Omit when not provided so an update can't null out an existing cover.
+      ...(input.coverImageId ? { coverImageId: input.coverImageId } : {}),
     };
 
-    if (existing) {
-      const updated = await updateAndReturn(
-        tx,
-        cookbook,
-        values,
-        eq(cookbook.id, existing.id),
-      );
-      await logAuditEntry(tx, actor, {
-        entityType: "cookbook",
-        entityId: updated.id,
-        action: "update",
-      });
-      return { id: unsafeCookbookId(updated.id) };
+    const id = existing
+      ? (
+          await updateAndReturn(
+            tx,
+            cookbook,
+            values,
+            eq(cookbook.id, existing.id),
+          )
+        ).id
+      : (await insertAndReturn(tx, cookbook, values)).id;
+
+    // The cover image is now associated → mark it uploaded (it was PENDING from
+    // the presigned upload, like the recipe/product image flow).
+    if (input.coverImageId) {
+      await tx
+        .update(image)
+        .set({ status: "UPLOADED" })
+        .where(eq(image.id, input.coverImageId));
     }
 
-    const created = await insertAndReturn(tx, cookbook, values);
     await logAuditEntry(tx, actor, {
       entityType: "cookbook",
-      entityId: created.id,
-      action: "create",
+      entityId: id,
+      action: existing ? "update" : "create",
     });
-    return { id: unsafeCookbookId(created.id) };
+    return { id: unsafeCookbookId(id) };
   });
 };
 
@@ -119,16 +128,39 @@ export const listCookbooks = async (
       author: cookbook.author,
       subjects: cookbook.subjects,
       recipeCount: sql<number>`count(${recipe.id})::int`,
+      coverUrl: image.url,
+      sourceRecipeCount: sql<number>`coalesce(jsonb_array_length(${cookbook.rawJson}), 0)::int`,
     })
     .from(cookbook)
     .leftJoin(
       recipe,
       and(eq(recipe.cookbookId, cookbook.id), notDeleted(recipe)),
     )
+    .leftJoin(image, eq(image.id, cookbook.coverImageId))
     .where(notDeleted(cookbook))
-    .groupBy(cookbook.id)
+    .groupBy(cookbook.id, image.url)
     .orderBy(cookbook.name);
-  return rows.map((r) => ({ ...r, id: unsafeCookbookId(r.id) }));
+  return rows.map((r) => ({
+    ...r,
+    id: unsafeCookbookId(r.id),
+    coverUrl: r.coverUrl ?? null,
+  }));
+};
+
+/**
+ * The cookbook's stored extraction (`rawJson`) + identity, so the importer can
+ * re-open it for selective re-import. No recipe writes here — importing reuses
+ * the per-recipe `insertCookbook` path with these recipes.
+ */
+export const getCookbookSource = async (
+  db: Database,
+  id: CookbookId,
+): Promise<{ id: CookbookId; name: string; recipes: CookbookRecipe[] }> => {
+  const cb = await getCookbookById(db, id);
+  if (!cb) {
+    throw createAppError("COOKBOOK_NOT_FOUND", `Cookbook ${id} not found`);
+  }
+  return { id, name: cb.name, recipes: cb.rawJson };
 };
 
 /**

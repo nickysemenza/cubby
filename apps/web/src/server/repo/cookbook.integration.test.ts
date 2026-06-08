@@ -8,6 +8,7 @@ import type { Database } from "~/server/db";
 import { recipe } from "~/server/db/schema";
 import {
   getCookbookByName,
+  getCookbookSource,
   listCookbooks,
   reprocessCookbook,
   upsertCookbook,
@@ -83,6 +84,30 @@ describe("cookbook repository", () => {
     expect(entry).toBeDefined();
     // Only one of the two raw recipes was actually imported.
     expect(entry?.recipeCount).toBe(1);
+    // sourceRecipeCount reflects the full stored extraction (both recipes).
+    expect(entry?.sourceRecipeCount).toBe(2);
+    // No cover uploaded in this test.
+    expect(entry?.coverUrl).toBeNull();
+  });
+
+  it("getCookbookSource returns the stored extraction for selective re-import", async () => {
+    const raw = [
+      cookbookRecipe("Pancakes", ["2 cups flour"]),
+      cookbookRecipe("Waffles", ["1 cup flour"]),
+    ];
+    const { id } = await upsertCookbook(
+      db,
+      { name: "Book A", rawJson: raw, sourceLabel: "a.epub" },
+      TEST_ACTOR,
+    );
+
+    const src = await getCookbookSource(db, id);
+    expect(src.id).toBe(id);
+    expect(src.name).toBe("Book A");
+    expect(src.recipes.map((r) => r.meta.title)).toEqual([
+      "Pancakes",
+      "Waffles",
+    ]);
   });
 
   it("reprocessCookbook re-derives imported recipes and flags unimported extras", async () => {

@@ -1,7 +1,7 @@
 import { unsafeCookbookId } from "@cubby/schemas/identifiers";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { BookOpen, RefreshCw, Trash } from "lucide-react";
+import { BookOpen, Plus, RefreshCw, Trash } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { RecipeList } from "~/app/recipes/recipelist";
@@ -9,6 +9,7 @@ import { DeleteEntityDialog } from "~/components/dialogs/delete-entity-dialog";
 import { PageWrapper } from "~/components/layout/page-wrapper";
 import { PageHero } from "~/components/layouts/page-hero";
 import { Button } from "~/components/ui/button";
+import { Image } from "~/components/ui/image";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 import { queryKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
@@ -33,6 +34,12 @@ function CookbookDetailPage() {
   const cookbook = cookbooks?.find((c) => c.id === cookbookId);
   const name = cookbook?.book ?? "Cookbook";
   const recipeCount = cookbook?.recipeCount;
+  const coverUrl = cookbook?.coverUrl ?? null;
+  // How many recipes in the stored extraction aren't imported yet (gates the
+  // "Add from source" entry into the selective re-importer).
+  const notImported = cookbook
+    ? Math.max(cookbook.sourceRecipeCount - cookbook.recipeCount, 0)
+    : 0;
 
   useDocumentTitle(`Cookbook: ${name}`);
 
@@ -78,45 +85,72 @@ function CookbookDetailPage() {
 
   return (
     <PageWrapper fullWidth>
-      <PageHero
-        variant="detail"
-        title={name}
-        eyebrow="Cookbook"
-        meta={
-          recipeCount !== undefined
-            ? [
-                {
-                  icon: BookOpen,
-                  label: `${recipeCount} ${recipeCount === 1 ? "recipe" : "recipes"}`,
-                },
-              ]
-            : undefined
-        }
-        actions={
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => reprocessMutation.mutate({ cookbookId })}
-              disabled={reprocessMutation.isPending}
-              title="Re-derive recipes from the stored extraction (no AI)"
-            >
-              <RefreshCw
-                className={`mr-2 h-4 w-4 ${reprocessMutation.isPending ? "animate-spin" : ""}`}
-              />
-              Reprocess
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => setShowDelete(true)}
-            >
-              <Trash className="mr-2 h-4 w-4" />
-              Delete all recipes
-            </Button>
-          </div>
-        }
-      />
+      <div className="flex items-start gap-4">
+        {coverUrl && (
+          <Image
+            src={coverUrl}
+            alt={name}
+            className="h-24 w-16 shrink-0 rounded-md object-cover ring-1 ring-foreground/10"
+          />
+        )}
+        <div className="min-w-0 flex-1">
+          <PageHero
+            variant="detail"
+            title={name}
+            eyebrow="Cookbook"
+            meta={
+              recipeCount !== undefined
+                ? [
+                    {
+                      icon: BookOpen,
+                      label: `${recipeCount} ${recipeCount === 1 ? "recipe" : "recipes"}`,
+                    },
+                  ]
+                : undefined
+            }
+            actions={
+              <div className="flex items-center gap-2">
+                {notImported > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      navigate({
+                        to: "/recipes/import-cookbook",
+                        search: { from: cookbookId },
+                      })
+                    }
+                    title="Selectively import recipes from this cookbook's source (no AI)"
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add from source ({notImported})
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => reprocessMutation.mutate({ cookbookId })}
+                  disabled={reprocessMutation.isPending}
+                  title="Re-derive recipes from the stored extraction (no AI)"
+                >
+                  <RefreshCw
+                    className={`mr-2 h-4 w-4 ${reprocessMutation.isPending ? "animate-spin" : ""}`}
+                  />
+                  Reprocess
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setShowDelete(true)}
+                >
+                  <Trash className="mr-2 h-4 w-4" />
+                  Delete all recipes
+                </Button>
+              </div>
+            }
+          />
+        </div>
+      </div>
 
       <RecipeList cookbookIdFilter={cookbookId} />
 

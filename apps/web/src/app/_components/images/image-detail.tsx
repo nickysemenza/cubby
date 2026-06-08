@@ -15,7 +15,7 @@ interface ImageData {
   contentType: string;
   size: number;
   status: ImageStatus;
-  entityType: "PRODUCT" | "LOCATION" | "RECIPE" | null;
+  entityType: "PRODUCT" | "LOCATION" | "RECIPE" | "COOKBOOK" | null;
   entityId: string | null;
   entityName: string | null;
   createdAt: Date;
@@ -61,6 +61,18 @@ export function ImageDetail({ image }: ImageDetailProps) {
             entity="recipe"
             data={{ id: image.entityId, name: image.entityName }}
           />
+        );
+      case "COOKBOOK":
+        // Cookbook covers are tracked by FK, not the join-table ownership this
+        // view resolves, so entityId/entityName are unset and the guard above
+        // returns first — this case exists only for exhaustiveness.
+        return (
+          <a
+            href={`/cookbooks/${image.entityId}`}
+            className="font-medium text-sm hover:underline"
+          >
+            {image.entityName}
+          </a>
         );
       default:
         return assertNever(image.entityType);

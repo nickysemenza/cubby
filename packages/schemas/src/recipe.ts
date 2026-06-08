@@ -115,6 +115,11 @@ export const cookbookSummary = z.object({
   author: z.array(z.string()),
   subjects: z.array(z.string()),
   recipeCount: z.number().int().nonnegative(),
+  // Public URL of the cookbook's cover image, or null. Number of recipes in the
+  // stored extraction (rawJson) — `sourceRecipeCount - recipeCount` is how many
+  // could still be added from source.
+  coverUrl: z.string().nullable(),
+  sourceRecipeCount: z.number().int().nonnegative(),
 });
 export type CookbookSummary = z.infer<typeof cookbookSummary>;
 

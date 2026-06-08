@@ -474,8 +474,9 @@ pub fn parse_unit_mapping(input: String) -> Result<WUnitMapping, String> {
 
 use recipe_epub::{
     assemble_recipes as assemble_recipes_internal, build_chunk_request,
-    chunk_epub as chunk_epub_internal, epub_metadata as epub_metadata_internal, parse_recipes_payload,
-    Chunk as EpubChunk, EpubMeta, Link as EpubLink,
+    chunk_epub as chunk_epub_internal, cover_image_ref as cover_image_ref_internal,
+    epub_metadata as epub_metadata_internal, parse_recipes_payload, read_image as read_image_internal,
+    Chunk as EpubChunk, EpubMeta, ImageRef, Link as EpubLink,
 };
 use sha2::{Digest, Sha256};
 
@@ -661,4 +662,43 @@ pub fn assemble_recipes(
 #[wasm_bindgen]
 pub fn epub_metadata(bytes: &[u8]) -> Option<WEpubMeta> {
     epub_metadata_internal(bytes).map(WEpubMeta::from)
+}
+
+/// A reference to an image resource inside an EPUB (mirrors `recipe_epub::ImageRef`):
+/// its in-archive path + MIME, not the bytes. Pair with `read_image` to materialize.
+#[derive(Tsify, Serialize, Deserialize)]
+#[tsify(into_wasm_abi)]
+pub struct WImageRef {
+    pub path: String,
+    pub mime: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[tsify(optional)]
+    pub alt: Option<String>,
+}
+
+impl From<ImageRef> for WImageRef {
+    fn from(r: ImageRef) -> Self {
+        Self {
+            path: r.path,
+            mime: r.mime,
+            alt: r.alt,
+        }
+    }
+}
+
+/// The EPUB's cover image reference (in-archive path + MIME), or `undefined` if
+/// the book declares no cover. Pure (parses the OPF + resource map in memory).
+/// Pair with `read_image` to get the bytes.
+#[wasm_bindgen]
+pub fn cover_image_ref(bytes: &[u8]) -> Option<WImageRef> {
+    cover_image_ref_internal(bytes).map(WImageRef::from)
+}
+
+/// Read one image resource's bytes from an EPUB by its in-archive `path` (e.g. a
+/// cover's `path` from `cover_image_ref`). `undefined` if the path isn't in the
+/// archive. The MIME is already known from the ref, so only the bytes cross the
+/// boundary (returned as a `Uint8Array`).
+#[wasm_bindgen]
+pub fn read_image(bytes: &[u8], path: &str) -> Option<Vec<u8>> {
+    read_image_internal(bytes, path).map(|(data, _mime)| data)
 }

@@ -4,9 +4,14 @@ import {
   cookbookBundleSchema,
   cookbookRecipesSchema,
 } from "@cubby/schemas/cookbook";
-import { useMutation } from "@tanstack/react-query";
+import { unsafeCookbookId } from "@cubby/schemas/identifiers";
+import {
+  ALLOWED_IMAGE_TYPES,
+  type AllowedImageType,
+} from "@cubby/schemas/image";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Upload } from "lucide-react";
-import { useCallback, useId, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import { toast } from "sonner";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -94,7 +99,12 @@ const PREVIEW_THROTTLE_MS = 600;
  * `recipe.insertCookbook`, upserting by (book, title). A flat/bundled JSON file
  * is still accepted as a power-user path.
  */
-export function CookbookImport() {
+export function CookbookImport({
+  loadCookbookId,
+}: {
+  /** When set, re-open this cookbook's stored extraction for selective re-import. */
+  loadCookbookId?: string;
+}) {
   const api = useTRPC();
   const extractChunk = useMutation(
     api.recipe.extractCookbookChunk.mutationOptions(),
@@ -105,11 +115,74 @@ export function CookbookImport() {
   const insertCookbook = useMutation(
     api.recipe.insertCookbook.mutationOptions(),
   );
+  const uploadImageMut = useMutation(api.image.uploadImage.mutationOptions());
 
   const [books, setBooks] = useState<Book[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputId = useId();
   const jsonInputId = useId();
+
+  // Upload raw image bytes through the presigned-R2 flow (mirrors PendingImageUpload):
+  // initiate → PUT to the presigned URL → return the new (PENDING) image id.
+  const uploadImageBytes = useCallback(
+    async (
+      bytes: Uint8Array,
+      mime: string,
+      filename: string,
+    ): Promise<string> => {
+      const init = await uploadImageMut.mutateAsync({
+        filename,
+        contentType: mime as AllowedImageType,
+        size: bytes.byteLength,
+        entityType: "COOKBOOK",
+      });
+      // Copy into a fresh ArrayBuffer-backed buffer (a valid BodyInit, and sidesteps
+      // the Uint8Array<ArrayBufferLike> vs ArrayBuffer lib-type mismatch).
+      const buf = new ArrayBuffer(bytes.byteLength);
+      new Uint8Array(buf).set(bytes);
+      const res = await fetch(init.uploadUrl, {
+        method: "PUT",
+        body: buf,
+        headers: { "Content-Type": mime },
+      });
+      if (!res.ok) throw new Error(`Storage error (${res.status})`);
+      return init.imageId;
+    },
+    [uploadImageMut],
+  );
+
+  // "Add from source": re-open a cookbook's stored extraction as a ready Book so
+  // the user can selectively re-import (no EPUB, no LLM). The cookbookId marks it
+  // so importBook skips upsertCookbook; BookGroupCard flags already-imported titles.
+  const source = useQuery(
+    api.recipe.getCookbookSource.queryOptions(
+      { cookbookId: unsafeCookbookId(loadCookbookId ?? "") },
+      { enabled: !!loadCookbookId },
+    ),
+  );
+  const [seeded, setSeeded] = useState(false);
+  useEffect(() => {
+    if (!source.data || seeded) return;
+    const { id, name, recipes } = source.data;
+    setBooks((prev) =>
+      prev.some((b) => b.cookbookId === id)
+        ? prev
+        : [
+            ...prev,
+            {
+              source: name,
+              name,
+              cookbookId: id,
+              recipes,
+              selected: new Set<number>(),
+              results: new Map<number, ImportResult>(),
+              extract: { status: "ready", failedChunks: 0 },
+              expanded: true,
+            },
+          ],
+    );
+    setSeeded(true);
+  }, [source.data, seeded]);
 
   // Mutate one book in place by source key; always produces a new array so React
   // re-renders, and a new Set/Map where those change (no in-place mutation).
@@ -146,6 +219,26 @@ export function CookbookImport() {
         }
       } catch {
         // metadata is optional — proceed with the filename-derived name.
+      }
+
+      // Extract the cover image (path+mime via cover_image_ref, then bytes via
+      // read_image) while the EPUB bytes are in scope. Stored on the Book (one
+      // small image, not the EPUB) and uploaded at import time. Best-effort.
+      try {
+        const ref = wasm.cover_image_ref(bytes);
+        if (ref) {
+          const data = wasm.read_image(bytes, ref.path);
+          if (data) {
+            // Copy out of the WASM-owned buffer into a stable Uint8Array.
+            const copy = new Uint8Array(data);
+            updateBook(source, (b) => ({
+              ...b,
+              cover: { bytes: copy, mime: ref.mime },
+            }));
+          }
+        }
+      } catch {
+        // cover is optional — proceed without it.
       }
 
       let chunks: WCookbookChunk[];
@@ -444,21 +537,44 @@ export function CookbookImport() {
       // plain ingredient, no second pass.
       const orderedIndices = topoOrderSelected(book.recipes, indices);
 
-      // Persist the cookbook up-front: its raw JSON is the *full* extraction (not
-      // just the selected recipes) so reprocess/re-import-extras work later.
+      // Resolve the cookbook id. When re-opened from stored source the cookbook
+      // already exists — use its id and skip upsert (don't rewrite rawJson/cover).
+      // Otherwise persist the cookbook up-front: its raw JSON is the *full*
+      // extraction (not just the selected recipes) so reprocess / add-from-source
+      // work later, and the cover (best-effort) is uploaded + attached now.
       let cookbookId: string;
-      try {
-        const cookbook = await upsertCookbook.mutateAsync({
-          name: bookName,
-          rawJson: book.recipes,
-          author: book.epubMeta?.author ?? [],
-          subjects: book.epubMeta?.subjects ?? [],
-          sourceLabel: source,
-        });
-        cookbookId = cookbook.id;
-      } catch (error) {
-        toast.error(`Couldn't save cookbook: ${getErrorMessage(error)}`);
-        return;
+      if (book.cookbookId) {
+        cookbookId = book.cookbookId;
+      } else {
+        let coverImageId: string | undefined;
+        if (
+          book.cover &&
+          (ALLOWED_IMAGE_TYPES as readonly string[]).includes(book.cover.mime)
+        ) {
+          try {
+            coverImageId = await uploadImageBytes(
+              book.cover.bytes,
+              book.cover.mime,
+              `${bookName}-cover.${book.cover.mime.split("/")[1] ?? "jpg"}`,
+            );
+          } catch (error) {
+            console.warn("cookbook cover upload failed", error);
+          }
+        }
+        try {
+          const cookbook = await upsertCookbook.mutateAsync({
+            name: bookName,
+            rawJson: book.recipes,
+            author: book.epubMeta?.author ?? [],
+            subjects: book.epubMeta?.subjects ?? [],
+            sourceLabel: source,
+            coverImageId,
+          });
+          cookbookId = cookbook.id;
+        } catch (error) {
+          toast.error(`Couldn't save cookbook: ${getErrorMessage(error)}`);
+          return;
+        }
       }
 
       const setResult = (i: number, result: ImportResult) =>
@@ -484,7 +600,7 @@ export function CookbookImport() {
       }
       toast.success(`Imported ${succeeded.size} from ${bookName}`);
     },
-    [books, insertCookbook, upsertCookbook, updateBook],
+    [books, insertCookbook, upsertCookbook, updateBook, uploadImageBytes],
   );
 
   // Stable ref so memoized RecipeCards don't re-render every streaming pass just

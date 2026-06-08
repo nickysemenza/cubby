@@ -2,6 +2,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { BookOpen } from "lucide-react";
 import { NoneState } from "~/app/_components/NoneState";
+import { Image } from "~/components/ui/image";
 import { useTRPC } from "~/trpc/react";
 
 /**
@@ -28,16 +29,24 @@ export function CookbookList() {
 
   return (
     <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {cookbooks.map(({ id, book, author, recipeCount }) => (
+      {cookbooks.map(({ id, book, author, recipeCount, coverUrl }) => (
         <li key={id}>
           <Link
             to="/cookbooks/$cookbookId"
             params={{ cookbookId: id }}
             className="flex items-center gap-3 rounded-lg border border-border bg-card p-4 transition-colors hover:border-foreground/30 hover:bg-muted/50"
           >
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-plum/20 text-plum">
-              <BookOpen className="h-5 w-5" />
-            </span>
+            {coverUrl ? (
+              <Image
+                src={coverUrl}
+                alt={book}
+                className="h-14 w-10 shrink-0 rounded-md object-cover"
+              />
+            ) : (
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-plum/20 text-plum">
+                <BookOpen className="h-5 w-5" />
+              </span>
+            )}
             <span className="min-w-0 flex-1">
               <span className="block truncate font-medium">
                 {book || <NoneState />}

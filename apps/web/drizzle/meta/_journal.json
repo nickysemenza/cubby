@@ -57,6 +57,13 @@
       "when": 1780884812475,
       "tag": "0007_furry_la_nuit",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1780930650968,
+      "tag": "0008_slim_joseph",
+      "breakpoints": true
     }
   ]
 }

@@ -22,6 +22,14 @@ export type Book = {
   recipes: CookbookRecipe[];
   /** Book-level OPF metadata read from the EPUB (empty for the JSON path). */
   epubMeta?: { author: string[]; subjects: string[] };
+  /** Cover image extracted from the EPUB (empty for JSON / from-source paths). */
+  cover?: { bytes: Uint8Array; mime: string };
+  /**
+   * Set when this Book was re-opened from a cookbook's stored `rawJson` (the
+   * "add from source" path). The cookbook already exists, so `importBook` skips
+   * `upsertCookbook` and imports straight against this id.
+   */
+  cookbookId?: string;
   /** Selected recipe indices into `recipes`. */
   selected: Set<number>;
   /** Per-recipe import status, by index. */

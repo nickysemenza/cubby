@@ -108,6 +108,9 @@ export const cookbook = pgTable(
     sourceLabel: text("sourceLabel").notNull(),
     // The full assembled extraction — powers reprocess-without-LLM.
     rawJson: jsonb("rawJson").notNull().$type<CookbookRecipe[]>(),
+    // The book's cover, extracted from the EPUB on import. Nullable: older
+    // cookbooks / cover-less EPUBs have none.
+    coverImageId: uuid("coverImageId").references(() => image.id),
     importedAt: timestamp("importedAt", { mode: "date" })
       .notNull()
       .defaultNow(),
@@ -123,6 +126,7 @@ export const cookbook = pgTable(
       .on(table.name)
       .where(sql`${table.deletedAt} IS NULL`),
     createdAtIdx: index("Cookbook_createdAt_idx").on(table.createdAt),
+    coverImageIdIdx: index("Cookbook_coverImageId_idx").on(table.coverImageId),
     nameGinIdx: index("Cookbook_name_gin_idx").using(
       "gin",
       sql`${table.name} gin_trgm_ops`,
@@ -553,8 +557,12 @@ export const recipeRelations = relations(recipe, ({ one, many }) => ({
   images: many(recipeImage),
 }));
 
-export const cookbookRelations = relations(cookbook, ({ many }) => ({
+export const cookbookRelations = relations(cookbook, ({ one, many }) => ({
   recipes: many(recipe),
+  coverImage: one(image, {
+    fields: [cookbook.coverImageId],
+    references: [image.id],
+  }),
 }));
 
 export const recipeSectionRelations = relations(

@@ -1,6 +1,11 @@
 import { z } from "zod";
 
-export const entityImage = z.enum(["PRODUCT", "LOCATION", "RECIPE"]);
+export const entityImage = z.enum([
+  "PRODUCT",
+  "LOCATION",
+  "RECIPE",
+  "COOKBOOK",
+]);
 export type EntityImage = z.infer<typeof entityImage>;
 
 /** All entity types in the system */

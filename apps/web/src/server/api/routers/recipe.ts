@@ -31,6 +31,7 @@ import { z } from "zod";
 import { createAppError } from "~/server/errors/app-error";
 import {
   getCookbookByName,
+  getCookbookSource,
   listCookbooks,
   reprocessCookbook,
   upsertCookbook,
@@ -117,6 +118,7 @@ const upsertCookbookEndpoint = protectedProcedure
       author: z.array(z.string()).optional(),
       subjects: z.array(z.string()).optional(),
       sourceLabel: z.string(),
+      coverImageId: z.uuid().optional(),
     }),
   )
   .output(z.object({ id: cookbookId }))
@@ -125,6 +127,20 @@ const upsertCookbookEndpoint = protectedProcedure
       ...ctx.actorContext,
       source: "epub_import",
     });
+  });
+// Hand back a cookbook's stored extraction so the importer can re-open it for
+// selective re-import (no LLM, no EPUB). See the import flow's "from stored source".
+const getCookbookSourceEndpoint = protectedProcedure
+  .input(z.object({ cookbookId }))
+  .output(
+    z.object({
+      id: cookbookId,
+      name: z.string(),
+      recipes: cookbookRecipesSchema,
+    }),
+  )
+  .query(async ({ ctx, input }) => {
+    return await getCookbookSource(ctx.db, input.cookbookId);
   });
 // Import one recipe extracted from an EPUB cookbook, linked to a cookbook created
 // up-front via `upsertCookbook`. Re-imports upsert by (cookbookId, title) and
@@ -257,6 +273,7 @@ const deleteItem = createDeleteProcedure<RecipeId>(async (services, ids) => {
 export const recipeRouter = createTRPCRouter({
   insertCompact,
   upsertCookbook: upsertCookbookEndpoint,
+  getCookbookSource: getCookbookSourceEndpoint,
   insertCookbook,
   getCookbookTitles,
   listCookbooks: listCookbooksEndpoint,
