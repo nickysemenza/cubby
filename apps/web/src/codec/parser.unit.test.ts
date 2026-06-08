@@ -69,8 +69,10 @@ test("wasm amount_kind", () => {
   expect(amount_kind({ value: 1, unit: "second" })).toEqual("time");
   // expect(amount_kind({ value: 1, unit: "farenheit" })).toEqual("temperature");
   expect(amount_kind({ value: 1, unit: "inch" })).toEqual("length");
-  expect(amount_kind({ value: 1, unit: "foo" })).toEqual("other");
-  expect(amount_kind({ value: 1, unit: "whole" })).toEqual("other");
+  // `other`/`nutrient` kinds now carry their inner unit string so the value
+  // round-trips through MeasureKind::from_str (was a lossy bare "other").
+  expect(amount_kind({ value: 1, unit: "foo" })).toEqual("other:foo");
+  expect(amount_kind({ value: 1, unit: "whole" })).toEqual("other:whole");
 });
 
 test("wasm is_valid_unit", () => {
