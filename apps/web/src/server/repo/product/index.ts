@@ -36,6 +36,3 @@ export {
   findProductByUPC,
   findProductsByFoodIdentifier,
 } from "./lookup";
-
-// Pricing operations
-export { backfillProductPrices, findProductsWithStalePrices } from "./pricing";

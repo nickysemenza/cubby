@@ -1,4 +1,5 @@
 import type { WUnitMapping } from "@cubby/recipebridge";
+import type { ProductId } from "@cubby/schemas/identifiers";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import {
   type BrandedFoodServingSizeUnit,
@@ -169,15 +170,43 @@ export const unitMappingsFromFood = (food: FoodSummary): UnitMapping[] => {
 };
 
 /**
- * Gets all unit mappings from a product, including both direct unit mappings
- * and mappings derived from food data
+ * Builds the synthetic "1 each -> $price" costing edge from a product's price.
+ *
+ * Price is stored as the scalar `product.price` column (source of truth), not as
+ * a unit-mapping row. We project it into the conversion graph here at compute
+ * time — the same read-time synthesis pattern used for USDA food data — so recipe
+ * costing can still convert an ingredient amount through to money.
+ */
+const priceMappingFromProduct = (
+  price: number | null | undefined,
+  productId?: ProductId,
+): UnitMapping[] => {
+  if (price == null) return [];
+  return [
+    {
+      a: { value: 1, unit: "each" },
+      b: { value: price, unit: "dollar" },
+      source: "price",
+      sourceMetadata: productId
+        ? { type: "product", productId }
+        : { type: "manual" },
+    },
+  ];
+};
+
+/**
+ * Gets all unit mappings from a product: stored measurement conversions, plus
+ * conversions derived from food data, plus the synthesized price edge.
  */
 export const getAllUnitMappingsFromProduct = (product: {
+  id?: ProductId;
   unitMappings: UnitMapping[];
   food?: FoodSummary | null;
+  price?: number | null;
 }): UnitMapping[] => {
   const foodMappings = product.food ? unitMappingsFromFood(product.food) : [];
-  return [...product.unitMappings, ...foodMappings];
+  const priceMapping = priceMappingFromProduct(product.price, product.id);
+  return [...product.unitMappings, ...foodMappings, ...priceMapping];
 };
 
 /**

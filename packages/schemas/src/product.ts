@@ -57,6 +57,12 @@ export const productCreateInput = productBase
   .extend({
     category: productCategory.nullable().optional(),
     ingredientId: ingredientId.nullable(),
+    price: z
+      .number()
+      .positive()
+      .nullable()
+      .optional()
+      .describe("price per each ($), source of truth"),
     unitMappings: z.array(unitMappingInput).default([]),
     externalIds: z.array(externalIdInput).default([]),
   })
@@ -75,7 +81,7 @@ export const productTopLevelOut = z
     shortcode: productShortcode,
     images: z.array(imageOut).default([]),
     externalIds: z.array(externalIdOut).default([]),
-    price: z.number().nullable(), // Denormalized price from unit mappings
+    price: z.number().nullable(), // Price per each ($); source of truth (the 1 each -> $X costing edge is synthesized from this at compute time)
   })
   .extend(productBase.shape)
   .extend(dbTimestampsOut.shape);

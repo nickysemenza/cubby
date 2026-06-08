@@ -22,10 +22,8 @@ import { upc } from "@cubby/usda-schemas";
 import { z } from "zod";
 import {
   backfillFoodCategories,
-  backfillProductPrices,
   deleteProducts,
   findProductsNeedingFoodCategory,
-  findProductsWithStalePrices,
   getCategoryDistribution,
   getProductByShortcode,
   getProductsByShortcodes,
@@ -216,33 +214,6 @@ const backfillFoodCategoriesEndpoint = protectedProcedure
     return await backfillFoodCategories(ctx.db, ctx.actorContext);
   });
 
-// Get count of products with stale/missing prices
-const getStalePricesCount = protectedProcedure
-  .output(z.number())
-  .query(async ({ ctx }) => {
-    const staleProducts = await findProductsWithStalePrices(ctx.db);
-    return staleProducts.length;
-  });
-
-// Backfill product prices from unit mappings
-const backfillProductPricesEndpoint = protectedProcedure
-  .output(
-    z.object({
-      updated: z.number(),
-      products: z.array(
-        z.object({
-          id: z.string(),
-          name: z.string(),
-          oldPrice: z.number().nullable(),
-          newPrice: z.number().nullable(),
-        }),
-      ),
-    }),
-  )
-  .mutation(async ({ ctx }) => {
-    return await backfillProductPrices(ctx.db, ctx.actorContext);
-  });
-
 // Get category distribution for insights visualization
 const categoryDistribution = protectedProcedure
   .output(
@@ -299,7 +270,5 @@ export const productRouter = createTRPCRouter({
   getUPCImageBackfillCount,
   getFoodCategoryBackfillCount,
   backfillFoodCategories: backfillFoodCategoriesEndpoint,
-  getStalePricesCount,
-  backfillProductPrices: backfillProductPricesEndpoint,
   categoryDistribution,
 });

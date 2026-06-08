@@ -742,13 +742,8 @@ describe("inventory router", () => {
           ndb_number: null,
           expectedQuantity: null,
           ingredientId: null,
-          unitMappings: [
-            {
-              a: { value: 1, unit: "each" },
-              b: { value: 10.0, unit: "dollar" },
-              source: "manual",
-            },
-          ],
+          price: 10.0,
+          unitMappings: [],
           externalIds: [],
         },
         TEST_ACTOR,

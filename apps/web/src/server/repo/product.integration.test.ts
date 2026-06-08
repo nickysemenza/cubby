@@ -185,7 +185,7 @@ describe("product repository", () => {
         unitMappings: [
           {
             a: { value: 1, unit: "each" },
-            b: { value: 5.99, unit: "dollar" },
+            b: { value: 5.99, unit: "lb" },
             source: "test",
           },
         ],
@@ -214,7 +214,7 @@ describe("product repository", () => {
     });
     expect(retrievedProduct.unitMappings[0].b).toEqual({
       value: 5.99,
-      unit: "dollar",
+      unit: "lb",
     });
     expect(retrievedProduct.unitMappings[0].source).toEqual("test");
   });

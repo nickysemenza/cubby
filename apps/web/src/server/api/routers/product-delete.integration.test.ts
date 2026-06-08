@@ -203,8 +203,8 @@ describe("product deletion", () => {
         expectedQuantity: 1,
         unitMappings: [
           {
-            a: { value: 1, unit: "count" },
-            b: { value: 10, unit: "dollar" },
+            a: { value: 1, unit: "each" },
+            b: { value: 10, unit: "oz" },
             source: "manual",
           },
         ],
@@ -246,13 +246,13 @@ describe("product deletion", () => {
         expectedQuantity: 1,
         unitMappings: [
           {
-            a: { value: 1, unit: "count" },
-            b: { value: 5, unit: "dollar" },
+            a: { value: 1, unit: "each" },
+            b: { value: 5, unit: "oz" },
             source: "manual",
           },
           {
             a: { value: 1, unit: "pound" },
-            b: { value: 3, unit: "dollar" },
+            b: { value: 16, unit: "oz" },
             source: "manual",
           },
         ],

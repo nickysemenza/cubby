@@ -37,7 +37,6 @@ import { Collapsible, CollapsibleContent } from "~/components/ui/collapsible";
 import { Spinner } from "~/components/ui/spinner";
 import { useImageState } from "~/hooks/useImageState";
 import { getErrorMessage } from "~/lib/error-utils";
-import { syncPriceToMappings } from "~/lib/price-mapping-utils";
 import { queryKeys } from "~/lib/query-keys";
 import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
@@ -159,13 +158,6 @@ export function QuickInventoryAdd({
   const onCreateSubmit = async (values: CreateFormValues) => {
     setIsCreating(true);
     try {
-      // Sync price to unit mappings
-      const unitMappingsWithPrice = syncPriceToMappings(
-        values.unitMappings,
-        values.price !== null ? { value: values.price, unit: "dollar" } : null,
-        "quick-inventory-add",
-      );
-
       // Step 1: Create the product
       const newProduct = await productCreateMutation.mutateAsync({
         name: values.name,
@@ -175,8 +167,9 @@ export function QuickInventoryAdd({
         upc: values.upc,
         ndb_number: values.ndb_number,
         expectedQuantity: values.expectedQuantity,
+        price: values.price,
         ingredientId: getOptionalIngredientId(values.ingredient) ?? null,
-        unitMappings: unitMappingsWithPrice,
+        unitMappings: values.unitMappings,
         ...imageState.getImageData(true),
       });
 

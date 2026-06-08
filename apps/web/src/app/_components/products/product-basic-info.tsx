@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { syncPriceToMappings } from "~/lib/price-mapping-utils";
 import { queryKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import type { ProductWithFoodOut } from "~/server/services/product.service";
@@ -81,15 +80,9 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
         <EditableCell
           value={product.price}
           onSave={async (newPrice) => {
-            // Sync price to unitMappings (canonical way to set price)
-            const updatedMappings = syncPriceToMappings(
-              product.unitMappings,
-              newPrice !== null ? { value: newPrice, unit: "dollar" } : null,
-              "inline-edit",
-            );
             await updateProductMutation.mutateAsync({
               id: product.id,
-              data: { unitMappings: updatedMappings },
+              data: { price: newPrice },
             });
           }}
           config={{ type: "currency" }}

@@ -13,14 +13,14 @@ import {
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { ndb, upc } from "@cubby/usda-schemas";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { type FC, useEffect } from "react";
+import type { FC } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { getOptionalIngredientId } from "~/app/_components/form-fields";
 import { useImageState } from "~/hooks/useImageState";
 import {
-  extractPriceFromMappings,
-  syncPriceToMappings,
+  isCanonicalPriceMapping,
+  isMoneyUnit,
 } from "~/lib/price-mapping-utils";
 import { ComboboxItem } from "../combobox/combobox-types";
 import {
@@ -45,9 +45,25 @@ const productFormSchema = z
     upc: upc.nullable(), // Allow empty string and transform to null
     ndb_number: ndb.nullable(), // Allow empty string and transform to null
     expectedQuantity: z.number().int().positive().nullable(),
-    price: z.number().positive().nullable(), // Shortcut for 1 each → $X mapping
+    price: z.number().positive().nullable(), // Price per each ($); own field, not a mapping
     ingredient: ComboboxItem.nullable(), // Ingredient association
-    unitMappings: z.array(unitMappingInput),
+    // Per-each price has its own field, so a canonical "1 each = $X" conversion
+    // is forbidden (it would duplicate the price). Per-measure money mappings
+    // like "1 quart = $4" are allowed. Mirrors the server-side invariant so a
+    // duplicate per-each price is caught before submit.
+    unitMappings: z.array(unitMappingInput).superRefine((mappings, ctx) => {
+      mappings.forEach((m, i) => {
+        if (isCanonicalPriceMapping(m)) {
+          const moneySide = isMoneyUnit(m.b.unit) ? "b" : "a";
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message:
+              "Use the Price per Item field for the per-each price, not a conversion.",
+            path: [i, moneySide, "unit"],
+          });
+        }
+      });
+    }),
     externalIds: z.array(externalIdInput),
   })
   .transform((data) => ({
@@ -119,28 +135,14 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
       expectedQuantity: product
         ? product.expectedQuantity
         : (initialExpectedQuantity ?? null),
-      price: null, // Will be set async in useEffect
+      price: product?.price ?? null,
       ingredient: product?.ingredient || initialIngredient || null,
       unitMappings: product?.unitMappings ?? [],
       externalIds: product?.externalIds ?? [],
     },
   });
 
-  // Extract price from mappings
-  useEffect(() => {
-    const priceAmount = extractPriceFromMappings(product?.unitMappings ?? []);
-    form.setValue("price", priceAmount?.value ?? null);
-  }, [product?.unitMappings, form]);
-
   const handleSubmit = (values: ProductFormValues) => {
-    // Sync price field to unitMappings before saving
-    // Form uses numeric price (assumes dollar), convert to Amount
-    const unitMappingsWithPrice = syncPriceToMappings(
-      values.unitMappings,
-      values.price !== null ? { value: values.price, unit: "dollar" } : null,
-      "product-form",
-    );
-
     if (mode === "create") {
       // For creation, pass all fields
       const createData: ProductCreateInput = {
@@ -151,8 +153,9 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
         upc: values.upc,
         ndb_number: values.ndb_number,
         expectedQuantity: values.expectedQuantity,
+        price: values.price,
         ingredientId: getOptionalIngredientId(values.ingredient) ?? null,
-        unitMappings: unitMappingsWithPrice,
+        unitMappings: values.unitMappings,
         externalIds: values.externalIds,
         ...getImageData(true), // Apply pending images for creation
       };
@@ -174,6 +177,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
           "upc",
           "ndb_number",
           "expectedQuantity",
+          "price",
         ],
       );
 
@@ -187,12 +191,12 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
         updates.ingredientId = ingredientId;
       }
 
-      // Check for unit mapping changes (including price sync)
+      // Check for unit mapping changes (measurement conversions only; price is its own field)
       if (
         JSON.stringify(product.unitMappings) !==
-        JSON.stringify(unitMappingsWithPrice)
+        JSON.stringify(values.unitMappings)
       ) {
-        updates.unitMappings = unitMappingsWithPrice;
+        updates.unitMappings = values.unitMappings;
       }
 
       // Check for external ID changes

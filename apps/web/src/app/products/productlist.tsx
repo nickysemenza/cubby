@@ -11,7 +11,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
-import { syncPriceToMappings } from "~/lib/price-mapping-utils";
 import { queryKeys } from "~/lib/query-keys";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import type { ProductWithFoodOut } from "~/server/services/product.service";
@@ -185,15 +184,9 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
         mobile: { slot: "trailing", priority: 10 },
         editable: {
           onSave: async (newPrice, product) => {
-            // Sync price to unitMappings (canonical way to set price)
-            const updatedMappings = syncPriceToMappings(
-              product.unitMappings,
-              newPrice !== null ? { value: newPrice, unit: "dollar" } : null,
-              "inline-edit",
-            );
             await updateProductMutation.mutateAsync({
               id: product.id,
-              data: { unitMappings: updatedMappings },
+              data: { price: newPrice },
             });
           },
         },

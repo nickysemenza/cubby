@@ -389,8 +389,8 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
         <ArrayFieldManager<UnitMappingInput, TFieldValues>
           form={form}
           name={"unitMappings" as Path<TFieldValues>}
-          title="Unit Mappings"
-          addButtonText="Add Mapping"
+          title="Unit conversions"
+          addButtonText="Add conversion"
           titleClassName={compact ? "text-sm" : undefined}
           className={compact ? "space-y-2" : undefined}
           emptyValue={{

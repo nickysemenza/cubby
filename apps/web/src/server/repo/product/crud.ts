@@ -52,13 +52,13 @@ import {
   updateAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { createOrUpdatePriceMapping } from "~/server/repo/inventory/unit-mapping-handler";
+import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import { generateUniqueProductShortcode } from "~/server/repo/shortcode-utils";
 
 import { dbProductToAPI } from "./helpers";
-import { syncProductPrice } from "./pricing";
 import type { ProductDeepDB } from "./types";
 import {
+  assertNoCanonicalPriceMapping,
   syncProductExternalIds,
   syncProductImages,
   syncProductUnitMappings,
@@ -296,12 +296,16 @@ export const createProduct = async (
   // Generate unique shortcode
   const shortcode = await generateUniqueProductShortcode(db);
 
+  // Per-each price is the scalar `productData.price` column; a canonical
+  // "1 each = $X" mapping would duplicate it (per-measure money mappings are OK).
+  if (unitMappings) assertNoCanonicalPriceMapping(unitMappings);
+
   // Use a transaction to ensure atomicity. On a unique violation (e.g. another
   // product already links this USDA food/UPC), translate the raw DB error into a
   // clear CONFLICT message — the lookups run on `db` because the tx is aborted.
   try {
     return await withTransaction(db, async (tx) => {
-      // Create the product first
+      // Create the product first (price flows in via ...productData)
       const newProduct = await insertAndReturn(tx, product, {
         ...productData,
         category,
@@ -309,7 +313,7 @@ export const createProduct = async (
         ingredientId: ingredientId ?? null,
       });
 
-      // If there are unit mappings, create them and sync price
+      // Persist measurement conversions (money-free; price lives on the column)
       if (unitMappings && unitMappings.length > 0) {
         await tx.insert(productUnitMappings).values(
           unitMappings.map((mapping) => ({
@@ -319,9 +323,6 @@ export const createProduct = async (
             source: mapping.source,
           })),
         );
-
-        // Sync the product price from the newly created mappings
-        await syncProductPrice(tx, unsafeProductId(newProduct.id));
       }
 
       // If there are external IDs, create them
@@ -414,7 +415,10 @@ export const updateProduct = async (
       throw createAppError("PRODUCT_NOT_FOUND", `Product ${id} not found`);
     }
 
-    // Build update data
+    // A canonical "1 each = $X" mapping duplicates the price column; reject it.
+    if (unitMappings !== undefined) assertNoCanonicalPriceMapping(unitMappings);
+
+    // Build update data (price flows in via ...productData)
     const updateData: {
       name?: string;
       manufacturer?: string;
@@ -424,6 +428,7 @@ export const updateProduct = async (
       model?: string | null;
       expectedQuantity?: number | null;
       ingredientId?: string | null;
+      price?: number | null;
     } = { ...productData };
 
     // Handle ingredient relationship
@@ -452,8 +457,12 @@ export const updateProduct = async (
       eq(product.id, id),
     );
 
+    // When price changes, resync the dependent inventory valuations (amount × price).
+    if (data.price !== undefined) {
+      await syncInventoryValuationsForProduct(tx, id);
+    }
+
     // Reconcile child collections against the incoming desired state.
-    // (unit mappings also resync the denormalized price + inventory valuations)
     if (unitMappings !== undefined) {
       await syncProductUnitMappings(tx, id, unitMappings);
     }
@@ -480,6 +489,7 @@ export const updateProduct = async (
       "model",
       "expectedQuantity",
       "ingredientId",
+      "price",
     ]);
 
     if (changes) {
@@ -548,22 +558,13 @@ export const quickCreateProduct = async (
     model: data.model ?? null,
     expectedQuantity: data.expectedQuantity ?? null,
     ingredientId: data.ingredientId ?? null,
+    price: data.price ?? null,
     category,
     shortcode,
     // Preserve timestamps if provided (for sync restore)
     ...(data.createdAt && { createdAt: data.createdAt }),
     ...(data.updatedAt && { updatedAt: data.updatedAt }),
   });
-
-  // Create price unit mapping if price is provided
-  if (data.price != null) {
-    await createOrUpdatePriceMapping(
-      db,
-      unsafeProductId(newProduct.id),
-      { value: data.price, unit: "dollar" },
-      "quick-create",
-    );
-  }
 
   // Log audit entry
   await logAuditEntry(db, actor, {

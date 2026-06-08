@@ -20,7 +20,6 @@ import { LocationsWithoutAiDescriptionList } from "./components/locations-withou
 import { OrphanedProductsList } from "./components/orphaned-products-list";
 import { ProductsWithIslandedMappingsList } from "./components/products-with-islanded-mappings-list";
 import { ProductsWithNoImagesList } from "./components/products-with-no-images-list";
-import { ProductsWithStalePricesList } from "./components/products-with-stale-prices-list";
 import { ProductsWithWrongCategoryList } from "./components/products-with-wrong-category-list";
 import { ProductsWithoutMappingsList } from "./components/products-without-mappings-list";
 import { StaleIngredientParsesList } from "./components/stale-ingredient-parses-list";
@@ -79,11 +78,6 @@ export function ProblemsOverview() {
       id: "islands",
       label: "Disconnected Mappings",
       count: problems.productsWithIslandedMappings.length,
-    },
-    {
-      id: "stale-prices",
-      label: "Stale Prices",
-      count: problems.productsWithStalePrices.length,
     },
     {
       id: "stale-valuations",
@@ -200,15 +194,6 @@ export function ProblemsOverview() {
       >
         <ProductsWithoutMappingsList
           products={problems.productsWithoutMappings}
-        />
-      </div>
-      <div
-        ref={(el) => {
-          sectionRefs.current["stale-prices"] = el;
-        }}
-      >
-        <ProductsWithStalePricesList
-          products={problems.productsWithStalePrices}
         />
       </div>
       <div

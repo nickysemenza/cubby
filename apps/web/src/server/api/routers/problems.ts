@@ -73,15 +73,6 @@ const productWithWrongCategorySchema = z.object({
   indicator: z.enum(["ndb", "ingredient"]),
 });
 
-const productWithStalePriceSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  manufacturer: z.string(),
-  storedPrice: z.number().nullable(),
-  computedPrice: z.number().nullable(),
-  status: z.enum(["missing", "stale"]),
-});
-
 const inventoryWithStaleValuationSchema = z.object({
   id: z.string(),
   productName: z.string(),
@@ -126,7 +117,6 @@ const allProblemsSchema = z.object({
   orphanedProducts: z.array(orphanedProductSchema),
   invalidUPCs: z.array(invalidUPCSchema),
   productsWithoutMappings: z.array(productWithoutMappingsSchema),
-  productsWithStalePrices: z.array(productWithStalePriceSchema),
   inventoryWithStaleValuations: z.array(inventoryWithStaleValuationSchema),
   invalidInventoryAmounts: z.array(invalidInventoryAmountSchema),
   emptyLocations: z.array(emptyLocationSchema),
@@ -159,7 +149,6 @@ const getProblemsCount = protectedProcedure
         emptyLocations: z.number(),
         productsWithNoImages: z.number(),
         productsWithWrongCategory: z.number(),
-        productsWithStalePrices: z.number(),
         inventoryWithStaleValuations: z.number(),
         productsWithIslandedMappings: z.number(),
         locationsWithoutAiDescription: z.number(),

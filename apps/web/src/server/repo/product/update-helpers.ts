@@ -8,24 +8,46 @@ import type { ExternalIdInput } from "@cubby/schemas/external-id";
 import type { ProductId } from "@cubby/schemas/identifiers";
 import type { UnitMappingInput } from "@cubby/schemas/unitmapping";
 import { and, eq, inArray } from "drizzle-orm";
+import { isCanonicalPriceMapping } from "~/lib/price-mapping-utils";
 import type { DrizzleTransaction } from "~/server/db";
 import {
   productExternalId,
   productImage,
   productUnitMappings,
 } from "~/server/db/schema";
+import { createAppError } from "~/server/errors/app-error";
 import {
   associatePendingImages,
   notDeleted,
 } from "~/server/repo/database-helpers";
 
-import { syncProductPrice } from "./pricing";
+/**
+ * Reject a canonical "1 each <-> $X" price mapping in unit mappings.
+ *
+ * Per-each price lives solely on the `product.price` column (the canonical
+ * costing edge is synthesized from it at read time), so a canonical row would
+ * re-create the old "price is secretly a mapping" double-storage. We reject it
+ * outright rather than silently relocating it (keeps submitted shape == returned
+ * shape and surfaces conflicts). Per-measure money mappings (e.g. "1 quart = $4")
+ * are allowed — the scalar column can't express them. Applies to every write
+ * path: form, MCP tools, imports.
+ */
+export function assertNoCanonicalPriceMapping(
+  unitMappings: UnitMappingInput[],
+): void {
+  if (unitMappings.some(isCanonicalPriceMapping)) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "A '1 each = $X' mapping duplicates the price. Set the per-each price in the Price per Item field instead.",
+    );
+  }
+}
 
 /**
- * Reconcile a product's unit mappings against the desired set, then resync price.
+ * Reconcile a product's unit mappings against the desired set.
  * Mappings with no `id` are created, existing-but-absent ones are hard-deleted, and
- * matching ones are updated. Always calls syncProductPrice so the denormalized price
- * column (and dependent inventory valuations) stays consistent.
+ * matching ones are updated. Mappings are measurement-only (price is a separate
+ * column), so this no longer touches price or inventory valuations.
  */
 export async function syncProductUnitMappings(
   tx: DrizzleTransaction,
@@ -74,9 +96,6 @@ export async function syncProductUnitMappings(
       })
       .where(eq(productUnitMappings.id, mapping.id));
   }
-
-  // Resync the denormalized price after any unit mapping change.
-  await syncProductPrice(tx, productId);
 }
 
 /**

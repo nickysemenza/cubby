@@ -25,9 +25,7 @@ import {
   countProductsWithNoImages,
   findProductsNeedingFoodCategory,
   findProductsWithNoImages,
-  findProductsWithStalePrices,
 } from "~/server/repo/product";
-import { countProductsWithStalePrices } from "~/server/repo/product/pricing";
 
 // Interface for the complete problems result
 interface AllProblems {
@@ -39,7 +37,6 @@ interface AllProblems {
   emptyLocations: EmptyLocation[];
   productsWithNoImages: ProductWithNoImages[];
   productsWithWrongCategory: ProductWithWrongCategory[];
-  productsWithStalePrices: ProductWithStalePrice[];
   inventoryWithStaleValuations: InventoryWithStaleValuation[];
   productsWithIslandedMappings: ProductWithIslandedMappings[];
   locationsWithoutAiDescription: LocationWithoutAiDescription[];
@@ -116,15 +113,6 @@ export interface ProductWithWrongCategory {
   manufacturer: string;
   category: string | null;
   indicator: "ndb" | "ingredient";
-}
-
-export interface ProductWithStalePrice {
-  id: string;
-  name: string;
-  manufacturer: string;
-  storedPrice: number | null;
-  computedPrice: number | null;
-  status: "missing" | "stale";
 }
 
 export interface InventoryWithStaleValuation {
@@ -739,7 +727,6 @@ interface ProblemsCount {
     emptyLocations: number;
     productsWithNoImages: number;
     productsWithWrongCategory: number;
-    productsWithStalePrices: number;
     inventoryWithStaleValuations: number;
     productsWithIslandedMappings: number;
     locationsWithoutAiDescription: number;
@@ -840,7 +827,6 @@ export const findAllProblemsCount = async (
     emptyLocations,
     productsWithNoImages,
     productsNeedingFoodCategory,
-    productsWithStalePrices,
     inventoryWithStaleValuations,
     productsWithIslandedMappings,
     locationsWithoutAiDescription,
@@ -854,7 +840,6 @@ export const findAllProblemsCount = async (
     countEmptyLocations(db),
     countProductsWithNoImages(db, { excludeIngredients: true }),
     countProductsNeedingFoodCategory(db),
-    countProductsWithStalePrices(db),
     findInventoryWithStaleValuations(db).then((r) => r.length),
     countProductsWithIslandedMappings(db),
     countLocationsWithoutAiDescription(db),
@@ -870,7 +855,6 @@ export const findAllProblemsCount = async (
     emptyLocations,
     productsWithNoImages,
     productsWithWrongCategory: productsNeedingFoodCategory,
-    productsWithStalePrices,
     inventoryWithStaleValuations,
     productsWithIslandedMappings,
     locationsWithoutAiDescription,
@@ -886,7 +870,6 @@ export const findAllProblemsCount = async (
     emptyLocations +
     productsWithNoImages +
     productsNeedingFoodCategory +
-    productsWithStalePrices +
     inventoryWithStaleValuations +
     productsWithIslandedMappings +
     locationsWithoutAiDescription +
@@ -907,7 +890,6 @@ export const findAllProblems = async (db: Database): Promise<AllProblems> => {
     emptyLocations,
     productsWithNoImages,
     productsNeedingFoodCategory,
-    productsWithStalePricesRaw,
     inventoryWithStaleValuationsRaw,
     productsWithIslandedMappings,
     locationsWithoutAiDescription,
@@ -921,7 +903,6 @@ export const findAllProblems = async (db: Database): Promise<AllProblems> => {
     findEmptyLocations(db),
     findProductsWithNoImages(db, { excludeIngredients: true }),
     findProductsNeedingFoodCategory(db),
-    findProductsWithStalePrices(db),
     findInventoryWithStaleValuations(db),
     findProductsWithIslandedMappings(db),
     findLocationsWithoutAiDescription(db),
@@ -938,9 +919,6 @@ export const findAllProblems = async (db: Database): Promise<AllProblems> => {
       indicator: getFoodIndicator(p),
     }));
 
-  const productsWithStalePrices: ProductWithStalePrice[] =
-    productsWithStalePricesRaw;
-
   const inventoryWithStaleValuations: InventoryWithStaleValuation[] =
     inventoryWithStaleValuationsRaw;
 
@@ -953,7 +931,6 @@ export const findAllProblems = async (db: Database): Promise<AllProblems> => {
     emptyLocations.length +
     productsWithNoImages.length +
     productsWithWrongCategory.length +
-    productsWithStalePrices.length +
     inventoryWithStaleValuations.length +
     productsWithIslandedMappings.length +
     locationsWithoutAiDescription.length +
@@ -968,7 +945,6 @@ export const findAllProblems = async (db: Database): Promise<AllProblems> => {
     emptyLocations,
     productsWithNoImages,
     productsWithWrongCategory,
-    productsWithStalePrices,
     inventoryWithStaleValuations,
     productsWithIslandedMappings,
     locationsWithoutAiDescription,
