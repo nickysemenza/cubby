@@ -1,41 +1,9 @@
-import type { AppErrorReason } from "@cubby/shared";
-import type { TRPCClientErrorLike } from "@trpc/client";
-import type { AppRouter } from "~/server/api/root";
-
 // Re-export from shared for convenience (22+ consumers)
+
+export type { AppErrorDetails } from "@cubby/api-contract";
+
+// tRPC error helpers now live in the type-only contract package (so mobile can
+// reuse them). Re-exported here to keep the ~22 existing `~/lib/error-utils`
+// consumers untouched.
+export { getAppErrorDetails, isTRPCClientError } from "@cubby/api-contract";
 export { getErrorMessage } from "@cubby/shared";
-
-function isTRPCClientError(
-  err: unknown,
-): err is TRPCClientErrorLike<AppRouter> {
-  if (typeof err !== "object" || err === null) return false;
-  const obj = err as Record<string, unknown>;
-  const messageOk = typeof obj.message === "string";
-  const dataOk = typeof obj.data === "object" && obj.data !== null;
-  return messageOk && dataOk;
-}
-
-type AppErrorDetails = {
-  message: string;
-  code?: string;
-  reason?: AppErrorReason;
-};
-
-export function getAppErrorDetails(error: unknown): AppErrorDetails {
-  if (isTRPCClientError(error)) {
-    const code = error.data?.code as string | undefined;
-    const reason = (() => {
-      const d = error.data as Record<string, unknown> | undefined;
-      const r = d?.reason;
-      return typeof r === "string" ? (r as AppErrorReason) : undefined;
-    })();
-    return {
-      message: error.message,
-      code,
-      reason,
-    };
-  }
-  return {
-    message: typeof error === "string" ? error : "An error occurred",
-  };
-}

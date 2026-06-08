@@ -1,0 +1,11 @@
+{
+  "// purpose": "Shared tsconfig base for packages/apps that type a tRPC client against the web AppRouter. Deriving `typeof appRouter` compiles the web server graph, so consumers must mirror web's compile env: jsx (transitive .tsx), the `~` alias, and import.meta.env (via ../client-env.d.ts, included by each consumer). Extended-config `paths` resolve relative to THIS base file's dir (packages/), so `../apps/web/src/*` = apps/web/src for ANY extender (packages/* or apps/*).",
+  "extends": "./tsconfig.package.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM"],
+    "jsx": "react-jsx",
+    "paths": {
+      "~/*": ["../apps/web/src/*"]
+    }
+  }
+}
