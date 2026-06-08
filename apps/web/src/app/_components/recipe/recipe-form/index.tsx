@@ -81,7 +81,7 @@ const YieldServingsFields: FC<{
   const showServings = yieldUnit && yieldUnit !== "servings";
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2">
       <SideBySideFields>
         <NullableNumericField
           form={form}
@@ -616,9 +616,9 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
           )}
           Import from Text
         </CollapsibleTrigger>
-        <CollapsibleContent className="mt-2 space-y-4 rounded border border-border p-3">
+        <CollapsibleContent className="mt-2 space-y-2 rounded border border-border p-2">
           {/* Ingredients: textarea + pills preview */}
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
             <Field>
               <FieldLabel>Ingredients (one per line)</FieldLabel>
               <Textarea
@@ -630,14 +630,14 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
             </Field>
             <div>
               <FieldLabel>Parsed Ingredients</FieldLabel>
-              <div className="mt-1.5 min-h-[120px] rounded border border-border bg-muted/30 p-2">
+              <div className="mt-2 min-h-[120px] rounded border border-border bg-muted/30 p-2">
                 <IngredientPreviewTable ingredientLines={ingredientLines} />
               </div>
             </div>
           </div>
 
           {/* Instructions: textarea + preview */}
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
             <Field>
               <FieldLabel>Instructions (one per line)</FieldLabel>
               <Textarea
@@ -731,7 +731,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
         className="mt-4"
       />
 
-      <div className="space-y-3">
+      <div className="space-y-2">
         <div className="flex items-center justify-between">
           <h3 className="font-sans font-semibold text-foreground text-sm">
             Recipe Sections
@@ -741,7 +741,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
         {sectionFields.map((sectionField, sectionIndex) => (
           <div
             key={sectionField.id}
-            className="space-y-3 rounded border border-border p-3"
+            className="space-y-2 rounded border border-border p-2"
           >
             <div className="flex items-center justify-between">
               <h4 className="font-medium">
@@ -787,7 +787,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
             </div>
 
             {/* Ingredients and Instructions side by side */}
-            <div className="flex flex-col space-y-3 md:flex-row md:space-x-3 md:space-y-0">
+            <div className="flex flex-col space-y-2 md:flex-row md:space-x-2 md:space-y-0">
               {/* Ingredients */}
               <div className="md:w-1/2">
                 <h5 className="mb-2 font-medium text-sm">Ingredients</h5>

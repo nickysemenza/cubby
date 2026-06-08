@@ -30,7 +30,7 @@ function Home() {
       </section>
 
       {/* Two-column layout for Activity and Quick Actions */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         <RecentActivityFeed limit={6} />
         <QuickActionsCard />
       </div>

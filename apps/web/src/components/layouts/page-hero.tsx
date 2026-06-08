@@ -8,9 +8,9 @@ import { cn } from "~/lib/utils";
 const heroVariants = cva("flex flex-wrap items-start justify-between gap-3", {
   variants: {
     variant: {
-      list: "mb-6",
-      detail: "mb-6 sm:mb-8",
-      compact: "mb-4",
+      list: "mb-4",
+      detail: "mb-3 sm:mb-4",
+      compact: "mb-2",
     },
   },
   defaultVariants: { variant: "list" },

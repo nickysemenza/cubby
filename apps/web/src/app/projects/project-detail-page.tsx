@@ -63,7 +63,7 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
   const totalCost = purchases.reduce((sum, p) => sum + (p.cost ?? 0), 0);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       {/* Cover image */}
       {project.coverImage && (
         <img
@@ -117,7 +117,7 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
             rel="noopener noreferrer"
             className="shrink-0 text-muted-foreground hover:text-foreground"
           >
-            <ExternalLink className="h-5 w-5" />
+            <ExternalLink className="h-4 w-4" />
           </a>
         </div>
       </div>
@@ -144,7 +144,7 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
 
       {/* Category breakdown charts */}
       {purchases.length > 0 && (
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-2">
           <section className="space-y-3">
             <h2 className="font-heading font-semibold text-lg">
               Spending by Category
@@ -162,7 +162,7 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
 
       {/* Category treemap + trend */}
       {purchases.length > 0 && (
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-2">
           <section className="space-y-3">
             <h2 className="font-heading font-semibold text-lg">
               Category Treemap

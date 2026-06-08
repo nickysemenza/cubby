@@ -42,7 +42,7 @@ export const EntityHero: FC<EntityHeroProps> = ({ images }) => {
           <CardTitle className="text-base">Images</CardTitle>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-2">
         {/* Primary image */}
         <Link
           to="/images/$id"

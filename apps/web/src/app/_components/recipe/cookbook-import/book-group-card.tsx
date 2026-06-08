@@ -490,7 +490,7 @@ function ImportStatus({ result }: { result: ImportResult | undefined }) {
       <Link
         to="/recipes/$id"
         params={{ id: result.id }}
-        className="flex items-center gap-1 text-green-600 text-sm"
+        className="flex items-center gap-1 text-positive text-sm"
       >
         <Check className="h-4 w-4" /> Imported
       </Link>

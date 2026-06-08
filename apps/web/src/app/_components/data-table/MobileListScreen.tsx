@@ -84,7 +84,7 @@ export function MobileListScreen<TItem>({
         actions={actions}
         bulkActionBar={bulkActionBar}
         showViewOptions={false}
-        className="mb-3 flex-wrap overflow-x-hidden rounded-lg border border-border/50 bg-muted/30 px-3 py-2"
+        className="mb-2 flex-wrap overflow-x-hidden rounded-lg border border-border/50 bg-muted/30 px-3 py-2"
       />
 
       {isLoading ? (

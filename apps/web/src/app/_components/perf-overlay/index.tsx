@@ -135,7 +135,7 @@ export function PerfOverlay() {
         type="button"
         onClick={() => setMinimized(false)}
         className={cn(
-          "fixed z-[60] flex items-center gap-1.5 rounded-md border-2 border-[var(--border-chunky)] bg-card px-2 py-1 font-mono text-[11px] shadow-[var(--shadow-chunky)]",
+          "fixed z-[60] flex items-center gap-1.5 rounded-md border-2 border-[var(--border-chunky)] bg-card px-2 py-1 font-mono text-xs shadow-[var(--shadow-chunky)]",
           CORNER_CLASS[corner],
         )}
       >
@@ -148,7 +148,7 @@ export function PerfOverlay() {
   return (
     <div
       className={cn(
-        "fixed z-[60] flex max-h-[70vh] w-80 flex-col overflow-hidden rounded-lg border-2 border-[var(--border-chunky)] bg-card font-mono text-[11px] shadow-[var(--shadow-chunky-lg)]",
+        "fixed z-[60] flex max-h-[70vh] w-80 flex-col overflow-hidden rounded-lg border-2 border-[var(--border-chunky)] bg-card font-mono text-xs shadow-[var(--shadow-chunky-lg)]",
         CORNER_CLASS[corner],
       )}
     >
@@ -200,7 +200,7 @@ export function PerfOverlay() {
             type="button"
             onClick={() => setTab(t)}
             className={cn(
-              "flex-1 px-1 py-1 text-[10px] uppercase tracking-wide transition-colors",
+              "flex-1 px-1 py-1 text-2xs uppercase tracking-wide transition-colors",
               tab === t
                 ? "bg-primary/10 font-semibold text-primary"
                 : "text-muted-foreground hover:bg-muted/50",
@@ -288,7 +288,7 @@ function SlowTab({ snap }: { snap: PerfSnapshot }) {
           <tr key={`${e.at}-${i}`} className="border-border/30 border-t">
             <td className="py-0.5 pr-1 align-middle">
               <span
-                className="font-semibold text-[9px] uppercase"
+                className="font-semibold text-3xs uppercase"
                 style={{ color: `var(--chart-${SLOW_TONE[e.kind]})` }}
               >
                 {SLOW_TAG[e.kind]}
@@ -297,7 +297,7 @@ function SlowTab({ snap }: { snap: PerfSnapshot }) {
             <td className="truncate py-0.5" title={e.label}>
               {e.label}
             </td>
-            <td className="whitespace-nowrap pl-1 text-right text-[10px] text-muted-foreground">
+            <td className="whitespace-nowrap pl-1 text-right text-2xs text-muted-foreground">
               {Math.round((now - e.at) / 1000)}s
             </td>
             <td
@@ -323,11 +323,11 @@ function WasmTab({ snap }: { snap: PerfSnapshot }) {
     return <Empty label="No WASM calls yet — load a recipe." />;
   return (
     <div className="space-y-1">
-      <div className="px-1 text-[10px] text-muted-foreground">
+      <div className="px-1 text-2xs text-muted-foreground">
         cache: {snap.cacheSize} entries
       </div>
       <table className="w-full">
-        <thead className="text-[10px] text-muted-foreground">
+        <thead className="text-2xs text-muted-foreground">
           <tr className="text-left">
             <th className="font-normal">method</th>
             <th className="text-right font-normal">calls</th>
@@ -347,7 +347,7 @@ function WasmTab({ snap }: { snap: PerfSnapshot }) {
                   {name}
                   {s.throws > 0 && (
                     <span
-                      className="ml-1 text-[9px] text-destructive"
+                      className="ml-1 text-3xs text-destructive"
                       title={`${s.throws} executions threw (uncached, re-run each call)`}
                     >
                       ⚠{s.throws}
@@ -388,7 +388,7 @@ function QueriesTab({
   );
   return (
     <div className="space-y-1">
-      <div className="flex gap-2 px-1 text-[10px]">
+      <div className="flex gap-2 px-1 text-2xs">
         <span
           className={cn(
             live.inFlight > 0 ? "text-primary" : "text-muted-foreground",
@@ -405,7 +405,7 @@ function QueriesTab({
         <Empty label="No fetches recorded yet." />
       ) : (
         <table className="w-full">
-          <thead className="text-[10px] text-muted-foreground">
+          <thead className="text-2xs text-muted-foreground">
             <tr className="text-left">
               <th className="font-normal">procedure</th>
               <th className="text-right font-normal">n</th>
@@ -419,7 +419,7 @@ function QueriesTab({
                 <td className="truncate py-0.5">
                   {proc}
                   {s.fanout && (
-                    <span className="ml-1 rounded-sm bg-destructive/15 px-1 text-[9px] text-destructive">
+                    <span className="ml-1 rounded-sm bg-destructive/15 px-1 text-3xs text-destructive">
                       N+1
                     </span>
                   )}
@@ -463,7 +463,7 @@ function RendersTab({ snap }: { snap: PerfSnapshot }) {
   return (
     <div>
       <table className="w-full">
-        <thead className="text-[10px] text-muted-foreground">
+        <thead className="text-2xs text-muted-foreground">
           <tr className="text-left">
             <th className="font-normal">component</th>
             <th className="text-right font-normal">renders</th>
@@ -480,7 +480,7 @@ function RendersTab({ snap }: { snap: PerfSnapshot }) {
                   {s.lastPhase && (
                     <span
                       className={cn(
-                        "shrink-0 rounded-sm px-1 text-[9px]",
+                        "shrink-0 rounded-sm px-1 text-3xs",
                         s.lastPhase === "nested-update"
                           ? "bg-destructive/15 text-destructive"
                           : "text-muted-foreground",
@@ -506,7 +506,7 @@ function RendersTab({ snap }: { snap: PerfSnapshot }) {
           ))}
         </tbody>
       </table>
-      <div className="px-1 pt-1 text-[9px] text-muted-foreground">{caveat}</div>
+      <div className="px-1 pt-1 text-3xs text-muted-foreground">{caveat}</div>
     </div>
   );
 }

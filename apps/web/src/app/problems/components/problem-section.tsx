@@ -60,7 +60,7 @@ export function ProblemSection<T>({
 
   // Render icon based on whether we have an entity or a LucideIcon
   const IconElement = entity ? (
-    <EntityIcon entity={entity} className={`h-5 w-5 ${iconColor}`} />
+    <EntityIcon entity={entity} className={`h-4 w-4 ${iconColor}`} />
   ) : (
     (() => {
       const Icon = icon;

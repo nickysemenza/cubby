@@ -38,7 +38,7 @@ function SettingsPage() {
   const { flags, setFlag, resetFlags } = useFlags();
   return (
     <EntityLayout title="Settings">
-      <div className="mx-auto max-w-2xl space-y-6 pb-16">
+      <div className="mx-auto max-w-2xl space-y-4 pb-16">
         {GROUPS.map(({ group, blurb }) => {
           const keys = FLAG_KEYS.filter((k) => FLAGS[k].group === group);
           if (keys.length === 0) return null;
@@ -87,7 +87,7 @@ function FlagRow({
       <div className="space-y-0.5">
         <div className="flex items-center gap-2">
           <span className="font-medium text-sm">{def.label}</span>
-          <code className="font-mono text-[10px] text-muted-foreground">
+          <code className="font-mono text-2xs text-muted-foreground">
             {flagKey}
           </code>
         </div>

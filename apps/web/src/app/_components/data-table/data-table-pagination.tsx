@@ -22,9 +22,9 @@ export function DataTablePagination<TData>({
   timing,
 }: DataTablePaginationProps<TData>) {
   return (
-    <div className="flex flex-col space-y-3 px-2 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
+    <div className="flex flex-col space-y-2 px-2 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
       {/* Selected rows info + timing - hidden on mobile to save space */}
-      <div className="hidden items-center gap-4 text-muted-foreground text-sm sm:flex">
+      <div className="hidden items-center gap-2 text-muted-foreground text-sm sm:flex">
         <span>
           {table.getFilteredSelectedRowModel().rows.length} of{" "}
           {table.getFilteredRowModel().rows.length} row(s) selected.
@@ -33,7 +33,7 @@ export function DataTablePagination<TData>({
       </div>
 
       {/* Main pagination controls */}
-      <div className="flex flex-col space-y-3 sm:flex-row sm:items-center sm:space-x-4 sm:space-y-0 lg:space-x-6">
+      <div className="flex flex-col space-y-2 sm:flex-row sm:items-center sm:space-x-3 sm:space-y-0 lg:space-x-4">
         {/* Rows per page - simplified on mobile */}
         <div className="flex items-center justify-between space-x-2 sm:justify-start">
           <p className="font-medium text-sm">Rows per page</p>

@@ -82,7 +82,7 @@ function BlockList({ blocks }: { blocks: NotionBlock[] }) {
             // biome-ignore lint/suspicious/noArrayIndexKey: static parsed Notion content, never reordered; blocks have no id
             <div key={j} className="flex items-center gap-2">
               {item.checked ? (
-                <CheckSquare className="h-4 w-4 shrink-0 text-green-500" />
+                <CheckSquare className="h-4 w-4 shrink-0 text-positive" />
               ) : (
                 <Square className="h-4 w-4 shrink-0 text-muted-foreground" />
               )}

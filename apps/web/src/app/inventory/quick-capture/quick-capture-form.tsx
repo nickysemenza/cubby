@@ -432,7 +432,7 @@ export default function QuickCaptureForm({
       submitButtonText={getSubmitButtonText("create")}
     >
       {/* Persistent Scanner Mode Toggle */}
-      <Card className="mb-4">
+      <Card className="mb-3">
         <CardContent className="pt-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -458,7 +458,7 @@ export default function QuickCaptureForm({
 
           {/* Persistent Scanner */}
           {scannerEnabled && focusedLocationId && (
-            <div className="mt-4 space-y-3">
+            <div className="mt-3 space-y-2">
               <PersistentScanner
                 onScan={handlePersistentScan}
                 enabled={!isScannerPending}
@@ -482,7 +482,7 @@ export default function QuickCaptureForm({
                     {recentScans.slice(0, 5).map((item) => (
                       <div
                         key={item.id}
-                        className="flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-1 text-green-800 text-xs"
+                        className="flex items-center gap-1.5 rounded-full bg-positive/10 px-2.5 py-1 text-positive text-xs"
                       >
                         <Check className="h-3 w-3" />
                         <span className="max-w-[120px] truncate">
@@ -505,13 +505,13 @@ export default function QuickCaptureForm({
 
       {/* Location Context Section */}
       {focusedLocationId ? (
-        <Card className="mb-4">
+        <Card className="mb-3">
           <CardHeader className="pb-2">
             <CardTitle className="font-medium text-sm">
               Current Location Context
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-2">
             {isLoadingFocusedLocation ? (
               <div className="flex items-center justify-center py-4">
                 <Spinner />
@@ -558,7 +558,7 @@ export default function QuickCaptureForm({
           </CardContent>
         </Card>
       ) : (
-        <Card className="mb-4">
+        <Card className="mb-3">
           <CardContent className="pt-4">
             <RecentLocations
               onSelect={(location) => {
@@ -573,7 +573,7 @@ export default function QuickCaptureForm({
         </Card>
       )}
 
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-3 flex items-center justify-between">
         <h3 className="font-medium text-lg">
           {scannerEnabled ? "Manual Entry" : "Add Items"}
         </h3>
@@ -634,9 +634,7 @@ export default function QuickCaptureForm({
               </div>
 
               {/* Action buttons */}
-              <div
-                className={`flex items-center gap-2 ${index === 0 ? "md:mt-6" : ""}`}
-              >
+              <div className="flex items-center gap-2">
                 <BarcodeScannerButton
                   onScan={(barcode) => handleBarcodeScan(barcode, index)}
                   disabled={findOrCreateByUPCMutation.isPending}
@@ -666,7 +664,7 @@ export default function QuickCaptureForm({
 
       {/* Inventory at focused location */}
       {focusedLocationId && (
-        <Card className="mt-4">
+        <Card className="mt-3">
           <CardHeader className="pb-2">
             <button
               type="button"
@@ -709,7 +707,7 @@ export default function QuickCaptureForm({
         </Card>
       )}
 
-      <div className="mt-4 text-muted-foreground text-sm">
+      <div className="mt-3 text-muted-foreground text-sm">
         <p>Keyboard shortcuts:</p>
         <ul className="list-inside list-disc">
           <li>

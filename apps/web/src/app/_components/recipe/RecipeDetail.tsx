@@ -73,7 +73,7 @@ const RecipeSummaryCard: React.FC<{
 
   return (
     <Card>
-      <CardContent className="p-4">
+      <CardContent className="p-3">
         <div className="flex flex-wrap gap-6">
           {/* Yield info */}
           {hasYield && (
@@ -193,7 +193,7 @@ const RecipeDetailInner: React.FC<{
   return (
     <div className="space-y-6">
       {/* Tags and View Toggle */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         {recipe.tags && recipe.tags.length > 0 && (
           <RecipeTagList tags={recipe.tags} />
         )}
@@ -213,7 +213,7 @@ const RecipeDetailInner: React.FC<{
         <>
           {/* Images for table view */}
           {recipeImages.length > 0 && (
-            <div className="mb-6">
+            <div className="mb-2">
               <EntityImageList images={recipeImages} />
             </div>
           )}
@@ -238,12 +238,12 @@ const RecipeDetailInner: React.FC<{
           >
             <div className="grid gap-6 lg:grid-cols-2">
               <Card>
-                <CardHeader className="bg-muted/50 px-4 py-3">
+                <CardHeader className="bg-muted/50 px-4 py-2">
                   <CardTitle className="font-medium text-base">
                     Cost Breakdown
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="p-4">
+                <CardContent className="p-3">
                   {ingredientDataItems.length > 0 ? (
                     <RecipeCostTreemap
                       ingredients={ingredientDataItems}
@@ -257,12 +257,12 @@ const RecipeDetailInner: React.FC<{
                 </CardContent>
               </Card>
               <Card>
-                <CardHeader className="bg-muted/50 px-4 py-3">
+                <CardHeader className="bg-muted/50 px-4 py-2">
                   <CardTitle className="font-medium text-base">
                     Nutrition Breakdown
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="p-4">
+                <CardContent className="p-3">
                   {ingredientDataItems.length > 0 ? (
                     <MacroSunburst ingredients={ingredientDataItems} />
                   ) : (
@@ -280,10 +280,10 @@ const RecipeDetailInner: React.FC<{
       {/* Additional Images (for magazine view, if more than hero) */}
       {viewMode === "magazine" && recipeImages.length > 1 && (
         <Card>
-          <CardHeader className="bg-muted/50 px-4 py-3">
+          <CardHeader className="bg-muted/50 px-4 py-2">
             <CardTitle className="font-medium text-base">More Images</CardTitle>
           </CardHeader>
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <EntityImageList images={recipeImages.slice(1)} />
           </CardContent>
         </Card>
@@ -291,10 +291,10 @@ const RecipeDetailInner: React.FC<{
 
       {/* History Section */}
       <Card>
-        <CardHeader className="bg-muted/50 px-4 py-3">
+        <CardHeader className="bg-muted/50 px-4 py-2">
           <CardTitle className="font-medium text-base">History</CardTitle>
         </CardHeader>
-        <CardContent className="p-4">
+        <CardContent className="p-3">
           <AuditLogList
             entityType="recipe"
             entityId={recipe.id}

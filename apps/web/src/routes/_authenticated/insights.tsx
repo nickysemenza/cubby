@@ -12,7 +12,7 @@ export const Route = createFileRoute("/_authenticated/insights")({
 
 function InsightsPage() {
   return (
-    <div className="fade-in container mx-auto animate-in space-y-8 py-6 duration-300">
+    <div className="fade-in container mx-auto animate-in space-y-4 py-6 duration-300">
       <PageHero variant="list" title="Insights" />
 
       {/* Products by Category Section */}
@@ -32,7 +32,7 @@ function InsightsPage() {
         <h2 className="font-heading font-semibold text-xl">
           Inventory by Location
         </h2>
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-2">
           <div className="space-y-2">
             <h3 className="font-medium text-muted-foreground text-sm">
               Treemap View

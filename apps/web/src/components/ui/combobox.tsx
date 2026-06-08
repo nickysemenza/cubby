@@ -120,14 +120,14 @@ export function FilterableCombobox({
               "origin-(--transform-origin) duration-150",
             )}
           >
-            <ComboboxPrimitive.List className="max-h-60 overflow-y-auto overscroll-contain p-0.5">
+            <ComboboxPrimitive.List className="max-h-60 overflow-y-auto overscroll-contain p-1">
               {filteredItems.map((item) => (
                 <ComboboxPrimitive.Item
                   key={item.value}
                   value={item.value}
                   className={cn(
                     // Compact layout
-                    "relative flex items-center gap-2 rounded-sm px-2 py-1",
+                    "relative flex items-center gap-2 rounded-md px-2 py-1",
                     // Typography
                     "cursor-default text-xs outline-none select-none",
                     // Interactive states

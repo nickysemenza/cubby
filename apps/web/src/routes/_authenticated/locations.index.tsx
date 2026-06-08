@@ -67,7 +67,7 @@ function LocationsPage() {
         )}
 
         {view === "visualizations" && (
-          <div className="space-y-6">
+          <div className="space-y-4">
             {/* Treemap - full width */}
             <div>
               <h3 className="mb-2 font-semibold text-lg">
@@ -83,7 +83,7 @@ function LocationsPage() {
             </div>
 
             {/* Tree views side by side */}
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <div>
                 <h3 className="mb-2 font-semibold text-lg">Tree View</h3>
                 <Suspense

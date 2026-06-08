@@ -90,14 +90,14 @@ export function SpendingOverTime({
                   axis: "y",
                   value: costEstimate,
                   lineStyle: {
-                    stroke: "hsl(0, 65%, 50%)",
+                    stroke: "var(--destructive)",
                     strokeWidth: 2,
                     strokeDasharray: "8 4",
                   },
                   legend: `Estimate ${formatCurrency(costEstimate, 0)}`,
                   legendPosition: "top-right",
                   textStyle: {
-                    fill: "hsl(0, 65%, 50%)",
+                    fill: "var(--destructive)",
                     fontSize: 11,
                   },
                 },

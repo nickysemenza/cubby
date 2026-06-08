@@ -103,7 +103,7 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
       title: "Child Locations",
       icon: FolderTree,
       content: (
-        <div className="space-y-4">
+        <div className="space-y-2">
           <div className="flex gap-2">
             <Button
               variant="outline"
@@ -182,8 +182,8 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
       title: "Inventory Items",
       icon: Package,
       content: (
-        <div className="space-y-4">
-          <div className="space-y-3">
+        <div className="space-y-2">
+          <div className="space-y-2">
             <QuickInventoryAdd
               locationId={location.id}
               onSuccess={() => {

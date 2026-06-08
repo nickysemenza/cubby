@@ -37,7 +37,7 @@ export const DetailPage: FC<DetailPageProps> = ({
   const isMobile = useIsMobile();
 
   return (
-    <div className="space-y-3 sm:space-y-4">
+    <div className="space-y-2 sm:space-y-3">
       {/* Hero image gallery — mobile only */}
       {isMobile && heroImages && heroImages.length > 0 && (
         <div className="-mx-4 -mt-4">
@@ -55,7 +55,7 @@ export const DetailPage: FC<DetailPageProps> = ({
       </div>
 
       {/* Grid sections */}
-      <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
+      <div className="grid gap-2 sm:gap-3 md:grid-cols-2">
         {/* Image card — desktop only, first in grid */}
         {!isMobile && heroImages && heroImages.length > 0 && (
           <div
@@ -92,7 +92,7 @@ export const DetailPage: FC<DetailPageProps> = ({
       {/* Debug raw details section - full width */}
       {isDebugEnabled && (
         <Card className="fade-in slide-in-from-bottom-2 animate-in duration-300">
-          <CardHeader className="pb-3">
+          <CardHeader className="pb-2">
             <CardTitle className="text-base">Raw Details</CardTitle>
           </CardHeader>
           <CardContent>

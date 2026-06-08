@@ -10,7 +10,7 @@ export const NYTView: React.FC<{
       <div className="flex flex-col pt-2 md:flex-row">
         <div className="md:w-5/12">
           <hr className="border-black border-t-4" />
-          <div className="justify-end font-bold font-serif text-black text-m uppercase">
+          <div className="justify-end font-bold font-heading text-base text-black uppercase">
             Ingredients
           </div>
           {recipe.sections.map((section) =>
@@ -42,13 +42,13 @@ export const NYTView: React.FC<{
         </div>
         <div className="pl-8 md:w-9/12">
           <hr className="border-black border-t-4" />
-          <div className="font-bold font-serif text-black text-m uppercase">
+          <div className="font-bold font-heading text-base text-black uppercase">
             Instructions
           </div>
           {recipe.sections.map((section, x) =>
             section.instructions.map((i, y) => (
               <div key={`${section.id}-${y}`} className="py-2">
-                <div className="font-bold text-l">
+                <div className="font-bold text-lg">
                   Step {getGlobalInstructionNumber(recipe, x, y)}
                 </div>
                 {i.instruction}

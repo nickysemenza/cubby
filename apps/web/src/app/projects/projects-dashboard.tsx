@@ -214,7 +214,7 @@ function DashboardContent({
   }, [data, filters]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center gap-3">
         <Hammer className="h-8 w-8" />
         <h1 className="font-bold font-heading text-3xl">Projects</h1>
@@ -242,8 +242,8 @@ function DashboardContent({
 
         {view === "overview" && (
           <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
-            <div className="space-y-6 pt-4">
-              <div className="grid gap-6 lg:grid-cols-2">
+            <div className="space-y-4 pt-3">
+              <div className="grid gap-4 lg:grid-cols-2">
                 <section className="space-y-3">
                   <h2 className="font-heading font-semibold text-lg">
                     Cost vs Estimate
@@ -286,7 +286,7 @@ function DashboardContent({
 
         {view === "charts" && (
           <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
-            <div className="space-y-6 pt-4">
+            <div className="space-y-4 pt-3">
               <section className="space-y-3">
                 <h2 className="font-heading font-semibold text-lg">
                   Project Timeline
@@ -311,7 +311,7 @@ function DashboardContent({
                 <MonthlyTrend purchases={purchases} />
               </section>
 
-              <div className="grid gap-6 lg:grid-cols-2">
+              <div className="grid gap-4 lg:grid-cols-2">
                 <section className="space-y-3">
                   <h2 className="font-heading font-semibold text-lg">
                     Category Split
@@ -344,7 +344,7 @@ function DashboardContent({
         )}
 
         {view === "data" && (
-          <div className="space-y-6 pt-4">
+          <div className="space-y-4 pt-3">
             <section className="space-y-4">
               <h2 className="font-heading font-semibold text-xl">Projects</h2>
               <ProjectTable projects={projects} purchases={purchases} />
@@ -363,7 +363,7 @@ function DashboardContent({
         )}
 
         {view === "gallery" && (
-          <div className="pt-4">
+          <div className="pt-3">
             <ProjectCards projects={projects} />
           </div>
         )}
@@ -470,7 +470,7 @@ function ProjectCards({ projects }: { projects: NotionProject[] }) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {active.length > 0 && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {active.map((project) => (
@@ -557,7 +557,7 @@ function ProjectCard({ project }: { project: NotionProject }) {
 
 function DashboardSkeleton() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <Skeleton className="h-8 w-48" />
       <div className="grid gap-4 sm:grid-cols-3">
         {Array.from({ length: 3 }, (_, i) => (

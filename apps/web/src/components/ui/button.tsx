@@ -27,7 +27,7 @@ const buttonVariants = cva(
           "h-7 gap-1 px-2 text-xs/relaxed has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
         // Tiny sizes: thin border + small static offset, no hover-grow, so they
         // don't read as visually overweight at ~20px tall.
-        xs: "h-5 gap-1 rounded-sm border px-2 text-[0.625rem] hover:translate-x-0 hover:translate-y-0 hover:shadow-[var(--shadow-chunky-sm)] has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-2.5",
+        xs: "h-5 gap-1 rounded-sm border px-2 text-2xs hover:translate-x-0 hover:translate-y-0 hover:shadow-[var(--shadow-chunky-sm)] has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-2.5",
         sm: "h-6 gap-1 px-2 text-xs/relaxed has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
         lg: "h-8 gap-1 px-2.5 text-xs/relaxed has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 [&_svg:not([class*='size-'])]:size-4",
         icon: "size-7 [&_svg:not([class*='size-'])]:size-3.5",

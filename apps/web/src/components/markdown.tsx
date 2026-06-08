@@ -59,7 +59,7 @@ const components = {
   ),
   code: (props: ElementProps<"code">) => (
     <code
-      className="rounded bg-muted px-1 py-0.5 font-mono text-[0.85em]"
+      className="rounded bg-muted px-1 py-0.5 font-mono text-xs"
       {...clean(props)}
     />
   ),

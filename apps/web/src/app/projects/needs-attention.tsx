@@ -68,7 +68,7 @@ export function NeedsAttention({
 
       {overdueTasks.length > 0 && (
         <AttentionGroup
-          icon={<CalendarClock className="h-3.5 w-3.5 text-red-500" />}
+          icon={<CalendarClock className="h-3.5 w-3.5 text-destructive" />}
           title={`${overdueTasks.length} overdue task${overdueTasks.length !== 1 ? "s" : ""}`}
         >
           {overdueTasks.map((t) => {
@@ -85,7 +85,7 @@ export function NeedsAttention({
                 </a>
                 {proj && <ProjectPill project={proj} />}
                 {t.due && (
-                  <span className="shrink-0 text-red-500">
+                  <span className="shrink-0 text-destructive">
                     due {formatDate(t.due)}
                   </span>
                 )}

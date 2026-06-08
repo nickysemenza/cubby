@@ -64,7 +64,7 @@ export const densityConfig = {
   },
   dense: {
     rowHeight: 28,
-    cellClass: "h-7 px-1.5 py-0.5 text-[10px]",
+    cellClass: "h-7 px-1.5 py-0.5 text-2xs",
     rowClass: "h-7",
   },
 } as const;

@@ -154,7 +154,7 @@ function RecipeComparePage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {/* Comparison Table */}
           <Card>
             <CardHeader className="bg-muted/50 px-4 py-3">

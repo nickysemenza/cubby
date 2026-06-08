@@ -84,7 +84,7 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
       title: "Related Products",
       icon: ShoppingCart,
       content: (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {ingredient.product.length > 0 ? (
             <EntityPillLinkList entity="product" items={ingredient.product} />
           ) : (
@@ -111,7 +111,7 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
       title: "Unit Mappings",
       icon: Scale,
       content: (
-        <div className="space-y-4">
+        <div className="space-y-2">
           <ConversionCapabilities mappings={mappings} />
           <UnitMappingsTable mappings={mappings} />
         </div>

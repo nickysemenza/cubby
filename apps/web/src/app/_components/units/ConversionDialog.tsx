@@ -134,7 +134,7 @@ function ConversionDialogContent({
         </DialogDescription>
       </DialogHeader>
 
-      <div className="space-y-4 py-4">
+      <div className="space-y-2 py-2">
         {nutrientCount > 0 && (
           <div className="flex items-center gap-2">
             <Checkbox
@@ -148,7 +148,7 @@ function ConversionDialogContent({
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <ConversionCapabilities
             mappings={filteredMappings}
             hideConvertButton={true}
@@ -159,7 +159,7 @@ function ConversionDialogContent({
             <UnitMappingGraph unitMapping={filteredMappings} />
           </div>
         </div>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <div className="space-y-2">
             <h4 className="font-medium text-sm">Available Unit Mappings</h4>
             <UnitMappingsTable mappings={filteredMappings} />
@@ -183,7 +183,7 @@ function ConversionDialogContent({
             </FormWrapper>
 
             {Object.keys(conversions).length > 0 && (
-              <div className="mt-6 space-y-4">
+              <div className="mt-4 space-y-2">
                 <h4 className="font-medium text-sm">Conversion Results</h4>
                 <div className="space-y-2">
                   {amountKinds.map((kind) => {

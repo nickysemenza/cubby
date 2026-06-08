@@ -113,7 +113,7 @@ export function CaptureFlow() {
           type="button"
           onClick={() => fileInputRef.current?.click()}
           disabled={busy}
-          className="flex w-full flex-col items-center justify-center gap-3 rounded-xl border border-border border-dashed py-16 text-muted-foreground transition-colors hover:bg-muted/40"
+          className="flex w-full flex-col items-center justify-center gap-2 rounded-xl border border-border border-dashed py-16 text-muted-foreground transition-colors hover:bg-muted/40"
         >
           <Camera className="h-8 w-8" />
           <span className="font-medium text-sm">
@@ -132,7 +132,7 @@ export function CaptureFlow() {
 
       {/* Review */}
       {!busy && analyze.data && (
-        <div className="space-y-4">
+        <div className="space-y-2">
           <div className="flex items-center justify-between">
             <h2 className="font-heading font-semibold text-xl">
               {proposals.length} item{proposals.length === 1 ? "" : "s"} found
@@ -157,7 +157,7 @@ export function CaptureFlow() {
               No items detected in this photo.
             </p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {proposals.map((item, i) => (
                 <CaptureItemCard
                   // biome-ignore lint/suspicious/noArrayIndexKey: proposals are a stable positional list for this render
@@ -232,7 +232,7 @@ function CaptureItemCard({ proposal }: { proposal: ProposedItem }) {
   return (
     <form
       onSubmit={form.handleSubmit(onSubmit)}
-      className="space-y-2 rounded-lg border border-border/50 p-3"
+      className="space-y-2 rounded-lg border border-border/50 p-2"
     >
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">

@@ -71,9 +71,9 @@ export function TypeFieldWithAI<
   const canSuggest = aiStatus?.available && locationName.trim();
 
   const confidenceColor = {
-    high: "text-green-600",
+    high: "text-positive",
     medium: "text-yellow-600",
-    low: "text-red-600",
+    low: "text-destructive",
   };
 
   return (

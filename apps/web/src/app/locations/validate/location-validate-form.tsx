@@ -243,7 +243,7 @@ export function LocationValidateForm({
   // Phase 1: SELECT_LOCATION
   if (phase === "SELECT_LOCATION") {
     return (
-      <div className="space-y-4">
+      <div className="space-y-2">
         <ComboboxFieldWithSearch
           form={form}
           name="parentLocation"
@@ -252,7 +252,7 @@ export function LocationValidateForm({
         />
 
         {parentLocation && (
-          <div className="space-y-3">
+          <div className="space-y-2">
             <LocationBreadcrumb location={parentLocation} linkable />
             <p className="text-muted-foreground text-sm">
               {childCount} child location{childCount !== 1 ? "s" : ""} to
@@ -291,7 +291,7 @@ export function LocationValidateForm({
   // Phase 2: SCANNING
   if (phase === "SCANNING") {
     return (
-      <div className="space-y-4">
+      <div className="space-y-2">
         {parentLocation && (
           <LocationBreadcrumb location={parentLocation} linkable />
         )}
@@ -318,11 +318,11 @@ export function LocationValidateForm({
                 <div
                   key={child.id}
                   className={`flex items-center gap-2 text-sm ${
-                    isScanned ? "text-green-700" : "text-muted-foreground"
+                    isScanned ? "text-positive" : "text-muted-foreground"
                   }`}
                 >
                   {isScanned ? (
-                    <Check className="h-4 w-4 shrink-0 text-green-600" />
+                    <Check className="h-4 w-4 shrink-0 text-positive" />
                   ) : (
                     <Circle className="h-4 w-4 shrink-0 opacity-40" />
                   )}
@@ -338,14 +338,14 @@ export function LocationValidateForm({
         {/* Unexpected scans */}
         {unexpected.length > 0 && (
           <div className="space-y-2">
-            <h4 className="font-medium text-blue-700 text-sm">
+            <h4 className="font-medium text-primary text-sm">
               Unexpected ({unexpected.length})
             </h4>
             <div className="space-y-1">
               {unexpected.map((item) => (
                 <div
                   key={item.shortcode}
-                  className="flex items-center gap-2 text-blue-700 text-sm"
+                  className="flex items-center gap-2 text-primary text-sm"
                 >
                   <CircleHelp className="h-4 w-4 shrink-0" />
                   <LocationIcon type={item.location.type} size={14} />
@@ -371,7 +371,7 @@ export function LocationValidateForm({
 
   // Phase 3: RECONCILIATION
   return (
-    <div className="space-y-4">
+    <div className="space-y-2">
       {parentLocation && (
         <LocationBreadcrumb location={parentLocation} linkable />
       )}
@@ -383,10 +383,10 @@ export function LocationValidateForm({
 
       {/* Confirmed */}
       {confirmed.length > 0 && (
-        <Card className="border-green-300">
+        <Card className="border-positive/20">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 font-medium text-sm">
-              <Check className="h-4 w-4 text-green-600" />
+              <Check className="h-4 w-4 text-positive" />
               Confirmed ({confirmed.length})
             </CardTitle>
           </CardHeader>
@@ -416,7 +416,7 @@ export function LocationValidateForm({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
+            <div className="space-y-2">
               {missing.map((child) => (
                 <MissingLocationRow
                   key={child.id}
@@ -432,10 +432,10 @@ export function LocationValidateForm({
 
       {/* Unexpected */}
       {unexpected.length > 0 && (
-        <Card className="border-blue-300">
+        <Card className="border-primary/20">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 font-medium text-sm">
-              <CircleHelp className="h-4 w-4 text-blue-600" />
+              <CircleHelp className="h-4 w-4 text-primary" />
               Unexpected ({unexpected.length})
             </CardTitle>
           </CardHeader>

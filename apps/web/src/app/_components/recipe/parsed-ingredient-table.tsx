@@ -41,7 +41,7 @@ export function ParsedIngredientTable({
             ? matchMap.get(parsed.name.toLowerCase())
             : null;
           const isNew = matchReady && !match;
-          const tint = cn(match && "bg-green-50/40", isNew && "bg-amber-50/30");
+          const tint = cn(match && "bg-positive/10", isNew && "bg-amber-50/30");
           return (
             // biome-ignore lint/suspicious/noArrayIndexKey: fixed ordered list
             <Fragment key={i}>
@@ -95,7 +95,7 @@ export function ParsedIngredientTable({
               >
                 <td
                   colSpan={3}
-                  className="pb-0.5 text-[10px] text-muted-foreground/70 leading-tight"
+                  className="pb-0.5 text-2xs text-muted-foreground/70 leading-tight"
                 >
                   {line}
                 </td>

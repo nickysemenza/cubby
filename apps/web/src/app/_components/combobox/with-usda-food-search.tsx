@@ -31,9 +31,9 @@ interface UsdaFoodSearchFieldProps {
 }
 
 const CONFIDENCE_COLOR: Record<Confidence, string> = {
-  high: "text-green-600",
+  high: "text-positive",
   medium: "text-yellow-600",
-  low: "text-red-600",
+  low: "text-destructive",
 };
 
 /**

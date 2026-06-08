@@ -22,7 +22,7 @@ function ProjectsPage() {
 
 function ProjectsSkeleton() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="h-8 w-48 animate-pulse rounded bg-muted" />
       <div className="grid gap-4 sm:grid-cols-3">
         {["s1", "s2", "s3"].map((k) => (

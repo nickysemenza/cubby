@@ -207,7 +207,7 @@ function IngredientRow({
     <TableRow
       className={cn(
         isLoading && "text-muted-foreground",
-        isMatched && "bg-green-50/50",
+        isMatched && "bg-positive/10",
         !isMatched && !isLoading && "bg-amber-50/50",
       )}
     >

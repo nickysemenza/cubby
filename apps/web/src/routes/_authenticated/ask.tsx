@@ -39,7 +39,7 @@ function AskPage() {
   };
 
   return (
-    <PageWrapper className="space-y-6">
+    <PageWrapper className="space-y-4">
       <PageHero
         variant="list"
         title="Ask Cubby"

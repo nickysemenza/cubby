@@ -15,7 +15,7 @@ const toggleVariants = cva(
       },
       size: {
         default: "h-7 min-w-7 px-2",
-        sm: "h-6 min-w-6 rounded-[min(var(--radius-md),8px)] px-1.5 text-[0.625rem] [&_svg:not([class*='size-'])]:size-3",
+        sm: "h-6 min-w-6 rounded-md px-1.5 text-2xs [&_svg:not([class*='size-'])]:size-3",
         lg: "h-8 min-w-8 px-2",
       },
     },
