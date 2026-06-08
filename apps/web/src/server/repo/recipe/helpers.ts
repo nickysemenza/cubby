@@ -53,7 +53,10 @@ const sectionIngredientToAPI = (
 export const dbRecipeToAPIShallow: (
   recipeParam: RecipeSelect,
 ) => z.infer<typeof recipeTopLevel> = (recipeData) => {
-  const { SourceType, SourceData, ...restOfRecipe } = recipeData;
+  // cookbookId is the FK, not a top-level API field — pull it out of the row so it
+  // isn't spread into the output, but feed it to the source codec so a book
+  // recipe's `source` carries its cookbook id (for linking).
+  const { SourceType, SourceData, cookbookId, ...restOfRecipe } = recipeData;
   return {
     // The DB stores provenance as SourceType + SourceData; the API exposes a single
     // meta.url. This derivation is deliberately kept (rather than collapsing the two
@@ -61,9 +64,9 @@ export const dbRecipeToAPIShallow: (
     meta: {
       url: SourceType === "Website" ? SourceData : null,
     },
-    // Strong provenance union — surfaces the book name for cookbook recipes
-    // (meta.url only ever held web URLs).
-    source: recipeSourceFromDb({ SourceType, SourceData }),
+    // Strong provenance union — surfaces the book name + cookbook id for cookbook
+    // recipes (meta.url only ever held web URLs).
+    source: recipeSourceFromDb({ SourceType, SourceData, cookbookId }),
     ...restOfRecipe,
   };
 };
@@ -72,8 +75,14 @@ export const dbRecipeToAPIShallow: (
  * Convert a full recipe DB record to API type (with sections).
  */
 export const dbRecipeToAPI = (recipeData: RecipeDeepDB): RecipeOut => {
-  const { sections, SourceData, SourceType, images, ...restOfRecipe } =
-    recipeData;
+  const {
+    sections,
+    SourceData,
+    SourceType,
+    cookbookId,
+    images,
+    ...restOfRecipe
+  } = recipeData;
 
   return {
     ...restOfRecipe,
@@ -82,7 +91,7 @@ export const dbRecipeToAPI = (recipeData: RecipeDeepDB): RecipeOut => {
     meta: {
       url: SourceType === "Website" ? SourceData : null,
     },
-    source: recipeSourceFromDb({ SourceType, SourceData }),
+    source: recipeSourceFromDb({ SourceType, SourceData, cookbookId }),
     images: extractImagesFromJoinTable(images),
     sections: mapRelation(sections, (section) => {
       const { ingredients, instructions, ...restOfSection } = section;

@@ -6,9 +6,8 @@ import { useTRPC } from "~/trpc/react";
 
 /**
  * Browse-by-source index: every cookbook a recipe was imported from, with its
- * recipe count. Cookbooks aren't a DB entity — this is `recipe.listCookbooks`
- * grouping Book recipes by their `SourceData` name. Each card links to the
- * cookbook detail page, which lists that book's recipes.
+ * author and recipe count. Backed by the `Cookbook` table (`recipe.listCookbooks`).
+ * Each card links to the cookbook detail page, which lists that book's recipes.
  */
 export function CookbookList() {
   const api = useTRPC();
@@ -29,11 +28,11 @@ export function CookbookList() {
 
   return (
     <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {cookbooks.map(({ book, recipeCount }) => (
-        <li key={book}>
+      {cookbooks.map(({ id, book, author, recipeCount }) => (
+        <li key={id}>
           <Link
-            to="/cookbooks/$book"
-            params={{ book }}
+            to="/cookbooks/$cookbookId"
+            params={{ cookbookId: id }}
             className="flex items-center gap-3 rounded-lg border border-border bg-card p-4 transition-colors hover:border-foreground/30 hover:bg-muted/50"
           >
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-plum/20 text-plum">
@@ -43,6 +42,11 @@ export function CookbookList() {
               <span className="block truncate font-medium">
                 {book || <NoneState />}
               </span>
+              {author.length > 0 && (
+                <span className="block truncate text-muted-foreground text-sm">
+                  {author.join(", ")}
+                </span>
+              )}
               <span className="block text-muted-foreground text-sm">
                 {recipeCount} {recipeCount === 1 ? "recipe" : "recipes"}
               </span>

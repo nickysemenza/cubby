@@ -19,8 +19,8 @@ export const queryKeys = {
   recipe: {
     list: ["recipe", "list"] as const,
     getByID: ["recipe", "getByID"] as const,
-    // Cookbooks are derived from recipes (grouped by SourceData), so the browse
-    // index lives on the recipe router — its key mirrors that tRPC path.
+    // The cookbook browse index lives on the recipe router (`recipe.listCookbooks`),
+    // so its key mirrors that tRPC path.
     listCookbooks: ["recipe", "listCookbooks"] as const,
     all: ["recipe"] as const,
   },

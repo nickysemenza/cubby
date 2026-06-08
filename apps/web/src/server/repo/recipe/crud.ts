@@ -6,7 +6,11 @@
 import type { CompactRecipe } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { CookbookRecipe } from "@cubby/schemas/cookbook";
-import { type RecipeId, unsafeRecipeId } from "@cubby/schemas/identifiers";
+import {
+  type CookbookId,
+  type RecipeId,
+  unsafeRecipeId,
+} from "@cubby/schemas/identifiers";
 import {
   buildTakeSkip,
   type PaginationParams,
@@ -115,66 +119,35 @@ const findRecipeByShortcode = async (
 };
 
 /**
- * Titles of non-deleted recipes already imported from a given cookbook
- * (SourceType='Book', SourceData=book). Used by the import preview to flag
- * recipes that a re-import would update.
+ * Titles of non-deleted recipes already linked to a cookbook. Used by the import
+ * preview to flag recipes that a re-import would update, and by reprocess to tell
+ * already-imported recipes from importable extras.
  */
 export const getCookbookRecipeTitles = async (
   db: Database,
-  book: string,
+  cookbookId: CookbookId,
 ): Promise<string[]> => {
   const rows = await getDb(db).query.recipe.findMany({
-    where: and(
-      eq(recipe.SourceType, "Book"),
-      eq(recipe.SourceData, book),
-      notDeleted(recipe),
-    ),
+    where: and(eq(recipe.cookbookId, cookbookId), notDeleted(recipe)),
     columns: { name: true },
   });
   return rows.map((r) => r.name);
-};
-
-/**
- * Distinct cookbooks (by `SourceData`) with their non-deleted recipe count.
- * Powers the cookbook browse index. No `Cookbook` table — a Book recipe's
- * provenance is the `SourceData` string, so the list is a GROUP BY over it.
- */
-export const listCookbooks = async (
-  db: Database,
-): Promise<Array<{ book: string; recipeCount: number }>> => {
-  const rows = await getDb(db)
-    .select({
-      book: recipe.SourceData,
-      recipeCount: sql<number>`count(*)::int`,
-    })
-    .from(recipe)
-    .where(and(eq(recipe.SourceType, "Book"), notDeleted(recipe)))
-    .groupBy(recipe.SourceData)
-    .orderBy(recipe.SourceData);
-  // SourceData is non-null for Book rows in practice; guard the type anyway.
-  return rows.filter(
-    (r): r is { book: string; recipeCount: number } => r.book !== null,
-  );
 };
 
 // Normalize a title for cross-recipe reference matching (trim + lowercase).
 const normalizeTitle = (title: string): string => title.trim().toLowerCase();
 
 /**
- * Map of normalized title → recipe id for a book's non-deleted recipes. Used to
- * resolve cookbook cross-references (`RecipeRef.title`) to the recipe they point
- * at. A whole book is bounded, so one query over all its recipes is fine.
+ * Map of normalized title → recipe id for a cookbook's non-deleted recipes. Used
+ * to resolve cookbook cross-references (`RecipeRef.title`) to the recipe they
+ * point at. A whole book is bounded, so one query over all its recipes is fine.
  */
 export const getCookbookRecipeIdsByTitle = async (
   db: Database,
-  book: string,
+  cookbookId: CookbookId,
 ): Promise<Map<string, string>> => {
   const rows = await getDb(db).query.recipe.findMany({
-    where: and(
-      eq(recipe.SourceType, "Book"),
-      eq(recipe.SourceData, book),
-      notDeleted(recipe),
-    ),
+    where: and(eq(recipe.cookbookId, cookbookId), notDeleted(recipe)),
     columns: { id: true, name: true },
   });
   return new Map(rows.map((r) => [normalizeTitle(r.name), r.id]));
@@ -218,11 +191,16 @@ export const insertCompactRecipe = (
  */
 export const insertCookbookRecipe = (
   cookbookRecipe: CookbookRecipe,
-  bookName: string,
+  cookbookRef: CookbookRef,
   db: Database,
   actor: ActorContext,
 ) => {
-  return upsertCookbookRecipeFromCookbook(cookbookRecipe, bookName, db, actor);
+  return upsertCookbookRecipeFromCookbook(
+    cookbookRecipe,
+    cookbookRef,
+    db,
+    actor,
+  );
 };
 
 /**
@@ -236,17 +214,14 @@ export const recipeList = async (
 ) => {
   const dbClient = getDb(db);
 
-  // Build where conditions - always filter out deleted items
+  // Build where conditions - always filter out deleted items. Scope to one
+  // cookbook by FK id when browsing its detail page.
   const whereClause = buildSearchConditions(
     recipe,
     [{ column: recipe.name, term: filters.nameFilter }],
     [
-      // Scope to one cookbook when browsing by source.
-      filters.book
-        ? and(
-            eq(recipe.SourceType, "Book"),
-            eq(recipe.SourceData, filters.book),
-          )
+      filters.cookbookId
+        ? eq(recipe.cookbookId, filters.cookbookId)
         : undefined,
     ],
   );
@@ -279,10 +254,17 @@ export const recipeList = async (
 
 // Provenance override for recipes whose source isn't a website URL (e.g. EPUB
 // cookbooks → SourceType "Book"). When omitted, source derives from meta.url.
+// `cookbookId` is set only for Book recipes (the FK to their Cookbook); SourceData
+// is kept synced to the cookbook name so the source codec stays a pure row read.
 type RecipeProvenance = {
   sourceType: "Book" | "Website" | "Other";
   sourceData: string | null;
+  cookbookId?: CookbookId | null;
 };
+
+// A cookbook the importer is writing into: its FK id plus its name (stamped onto
+// each recipe's SourceData). Created up-front by `upsertCookbook` (cookbook repo).
+export type CookbookRef = { id: CookbookId; name: string };
 
 /**
  * Create a new recipe.
@@ -298,6 +280,7 @@ export const createRecipe = async (
   const sourceData = provenance
     ? provenance.sourceData
     : recipeInput.meta?.url || null;
+  const cookbookId = provenance?.cookbookId ?? null;
   const { pendingImageIds } = recipeInput;
 
   // Create the recipe in a transaction
@@ -326,6 +309,7 @@ export const createRecipe = async (
       shortcode,
       SourceType: sourceType,
       SourceData: sourceData,
+      cookbookId,
       yield: recipeInput.yield ?? null,
       servings: recipeInput.servings ?? null,
       tags: recipeInput.tags ?? null,
@@ -456,6 +440,7 @@ const upsertRecipeMatching = async (
       {
         SourceType: provenance.sourceType,
         SourceData: provenance.sourceData,
+        cookbookId: provenance.cookbookId ?? null,
         updatedAt: new Date(),
       },
       eq(recipe.id, existingRecipe.id),
@@ -468,7 +453,7 @@ const upsertRecipeMatching = async (
 /**
  * Upsert a recipe (create or update based on name match).
  *
- * Cookbook recipes are keyed by (book, title) via {@link upsertCookbookRecipe},
+ * Cookbook recipes are keyed by (cookbookId, title) via {@link upsertCookbookRecipe},
  * so they're excluded from the name match here — otherwise scraping a website
  * whose title matches a cookbook recipe would clobber the cookbook recipe.
  */
@@ -496,14 +481,15 @@ export const upsertRecipe = (
  * Upsert a recipe extracted from an EPUB cookbook.
  *
  * Unlike {@link upsertRecipe} (which keys on name alone and stamps Website/Other
- * provenance), a cookbook recipe's identity is **(book, title)**: we match on
- * SourceType="Book" AND SourceData=bookName AND name. This keeps the same title
- * in two different books distinct, never collides with a website-scraped recipe
- * of the same name, and makes re-importing a book idempotent for stable titles.
+ * provenance), a cookbook recipe's identity is **(cookbookId, title)**: we match
+ * on cookbookId AND name, stamp the FK, and sync SourceData to the cookbook name.
+ * This keeps the same title in two different books distinct, never collides with a
+ * website-scraped recipe of the same name, and makes re-importing a book
+ * idempotent for stable titles.
  */
 export const upsertCookbookRecipe = (
   input: RecipeCreateInput,
-  bookName: string,
+  cookbookRef: CookbookRef,
   db: Database,
   actor: ActorContext,
 ): Promise<{ id: string }> =>
@@ -513,11 +499,14 @@ export const upsertCookbookRecipe = (
     actor,
     and(
       eq(recipe.name, input.name),
-      eq(recipe.SourceType, "Book"),
-      eq(recipe.SourceData, bookName),
+      eq(recipe.cookbookId, cookbookRef.id),
       notDeleted(recipe),
     ),
-    { sourceType: "Book", sourceData: bookName },
+    {
+      sourceType: "Book",
+      sourceData: cookbookRef.name,
+      cookbookId: cookbookRef.id,
+    },
   );
 
 /**
@@ -708,22 +697,18 @@ export const deleteRecipes = async (
 };
 
 /**
- * Soft-delete every non-deleted recipe imported from a given cookbook
- * (SourceType='Book', SourceData=book). Delegates to {@link deleteRecipes} so
- * the section/ingredient/image cascade, transaction, and audit trail are shared.
- * Returns the number of recipes deleted.
+ * Soft-delete every non-deleted recipe linked to a cookbook. Delegates to
+ * {@link deleteRecipes} so the section/ingredient/image cascade, transaction, and
+ * audit trail are shared. Returns the number of recipes deleted. (The Cookbook
+ * row itself is left intact; deleting recipes doesn't delete the source.)
  */
 export const deleteRecipesByCookbook = async (
   db: Database,
-  book: string,
+  cookbookId: CookbookId,
   actor: ActorContext,
 ): Promise<{ deleted: number }> => {
   const rows = await getDb(db).query.recipe.findMany({
-    where: and(
-      eq(recipe.SourceType, "Book"),
-      eq(recipe.SourceData, book),
-      notDeleted(recipe),
-    ),
+    where: and(eq(recipe.cookbookId, cookbookId), notDeleted(recipe)),
     columns: { id: true },
   });
   const ids = rows.map((r) => unsafeRecipeId(r.id));

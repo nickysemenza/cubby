@@ -47,16 +47,22 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
           <span>Source</span>
         </a>
       )}
-      {recipe.source?.type === "book" && (
-        <Link
-          to="/cookbooks/$book"
-          params={{ book: recipe.source.book }}
-          className="flex items-center gap-1.5 hover:underline"
-        >
-          <BookOpen size={16} />
-          <span>{recipe.source.book}</span>
-        </Link>
-      )}
+      {recipe.source?.type === "book" &&
+        (recipe.source.cookbookId ? (
+          <Link
+            to="/cookbooks/$cookbookId"
+            params={{ cookbookId: recipe.source.cookbookId }}
+            className="flex items-center gap-1.5 hover:underline"
+          >
+            <BookOpen size={16} />
+            <span>{recipe.source.book}</span>
+          </Link>
+        ) : (
+          <span className="flex items-center gap-1.5">
+            <BookOpen size={16} />
+            <span>{recipe.source.book}</span>
+          </span>
+        ))}
     </div>
   );
 

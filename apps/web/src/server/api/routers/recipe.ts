@@ -7,8 +7,16 @@
  */
 
 import { compactRecipeSchema } from "@cubby/schemas/codec";
-import { cookbookRecipeSchema } from "@cubby/schemas/cookbook";
-import { type RecipeId, recipeId } from "@cubby/schemas/identifiers";
+import {
+  cookbookRecipeSchema,
+  cookbookRecipesSchema,
+} from "@cubby/schemas/cookbook";
+import {
+  cookbookId,
+  type RecipeId,
+  recipeId,
+  unsafeCookbookId,
+} from "@cubby/schemas/identifiers";
 import {
   type IngredientCooccurrence,
   ingredientCooccurrenceSchema,
@@ -22,6 +30,12 @@ import {
 import { z } from "zod";
 import { createAppError } from "~/server/errors/app-error";
 import {
+  getCookbookByName,
+  listCookbooks,
+  reprocessCookbook,
+  upsertCookbook,
+} from "~/server/repo/cookbook";
+import {
   createRecipe,
   deleteRecipes,
   deleteRecipesByCookbook,
@@ -33,7 +47,6 @@ import {
   getRecipesByIDs,
   insertCompactRecipe,
   insertCookbookRecipe,
-  listCookbooks,
   recipeList,
   updateRecipe,
 } from "~/server/repo/recipe";
@@ -48,8 +61,8 @@ import { createTRPCRouter, protectedProcedure } from "../trpc";
 // Define filters schema for recipes
 const recipeFiltersSchema = z.object({
   nameFilter: z.string().optional(),
-  // Scope the list to one cookbook (browse-by-source / cookbook detail page).
-  book: z.string().optional(),
+  // Scope the list to one cookbook by FK id (cookbook detail page).
+  cookbookId: cookbookId.optional(),
 });
 
 // Create standardized CRUD procedures using factory
@@ -92,24 +105,56 @@ const insertCompact = protectedProcedure
   .mutation(async ({ ctx, input }) => {
     return await insertCompactRecipe(input, ctx.db, ctx.actorContext);
   });
-// Import one recipe extracted from an EPUB cookbook, scoped to its book so
-// re-imports upsert by (book, title) and stamp "Book" provenance.
-const insertCookbook = protectedProcedure
-  .input(z.object({ recipe: cookbookRecipeSchema, book: z.string().min(1) }))
-  .output(z.object({ id: z.uuid() }))
+// Create/refresh a cookbook from a full EPUB extraction. Called once at the start
+// of an import (before any recipe insert) so the FK target exists and the raw JSON
+// + OPF metadata are stored for reprocessing. Returns the cookbook id the
+// per-recipe inserts attach to.
+const upsertCookbookEndpoint = protectedProcedure
+  .input(
+    z.object({
+      name: z.string().min(1),
+      rawJson: cookbookRecipesSchema,
+      author: z.array(z.string()).optional(),
+      subjects: z.array(z.string()).optional(),
+      sourceLabel: z.string(),
+    }),
+  )
+  .output(z.object({ id: cookbookId }))
   .mutation(async ({ ctx, input }) => {
-    return await insertCookbookRecipe(input.recipe, input.book, ctx.db, {
+    return await upsertCookbook(ctx.db, input, {
       ...ctx.actorContext,
       source: "epub_import",
     });
   });
+// Import one recipe extracted from an EPUB cookbook, linked to a cookbook created
+// up-front via `upsertCookbook`. Re-imports upsert by (cookbookId, title) and
+// stamp "Book" provenance + the FK.
+const insertCookbook = protectedProcedure
+  .input(
+    z.object({
+      recipe: cookbookRecipeSchema,
+      cookbookId,
+      book: z.string().min(1),
+    }),
+  )
+  .output(z.object({ id: z.uuid() }))
+  .mutation(async ({ ctx, input }) => {
+    return await insertCookbookRecipe(
+      input.recipe,
+      { id: input.cookbookId, name: input.book },
+      ctx.db,
+      { ...ctx.actorContext, source: "epub_import" },
+    );
+  });
 // Titles already imported from a given book, so the import preview can flag
-// recipes a re-import would update.
+// recipes a re-import would update. Empty when the cookbook doesn't exist yet.
 const getCookbookTitles = protectedProcedure
   .input(z.object({ book: z.string().min(1) }))
   .output(z.array(z.string()))
   .query(async ({ ctx, input }) => {
-    return await getCookbookRecipeTitles(ctx.db, input.book);
+    const cb = await getCookbookByName(ctx.db, input.book);
+    if (!cb) return [];
+    return await getCookbookRecipeTitles(ctx.db, unsafeCookbookId(cb.id));
   });
 
 // Distinct cookbooks with recipe counts, for the browse-by-source index.
@@ -119,13 +164,32 @@ const listCookbooksEndpoint = protectedProcedure
     return await listCookbooks(ctx.db);
   });
 
-// Bulk-delete every recipe imported from one cookbook (cascades to sections,
+// Bulk-delete every recipe linked to one cookbook (cascades to sections,
 // ingredients, and images via the shared deleteRecipes path).
 const deleteByCookbook = protectedProcedure
-  .input(z.object({ book: z.string().min(1) }))
+  .input(z.object({ cookbookId }))
   .output(z.object({ deleted: z.number().int().nonnegative() }))
   .mutation(async ({ ctx, input }) => {
-    return await deleteRecipesByCookbook(ctx.db, input.book, ctx.actorContext);
+    return await deleteRecipesByCookbook(
+      ctx.db,
+      input.cookbookId,
+      ctx.actorContext,
+    );
+  });
+
+// Re-derive a cookbook's recipes from its stored raw JSON (re-runs the WASM
+// ingredient parser, no LLM). Returns how many were reprocessed and any extracted
+// recipes that were never imported.
+const reprocessCookbookEndpoint = protectedProcedure
+  .input(z.object({ cookbookId }))
+  .output(
+    z.object({
+      reprocessed: z.number().int().nonnegative(),
+      importableExtras: z.array(z.string()),
+    }),
+  )
+  .mutation(async ({ ctx, input }) => {
+    return await reprocessCookbook(ctx.db, input.cookbookId, ctx.actorContext);
   });
 
 // LLM passthrough for the in-browser EPUB extractor: the client builds each
@@ -192,10 +256,12 @@ const deleteItem = createDeleteProcedure<RecipeId>(async (services, ids) => {
 
 export const recipeRouter = createTRPCRouter({
   insertCompact,
+  upsertCookbook: upsertCookbookEndpoint,
   insertCookbook,
   getCookbookTitles,
   listCookbooks: listCookbooksEndpoint,
   deleteByCookbook,
+  reprocessCookbook: reprocessCookbookEndpoint,
   extractCookbookChunk: extractCookbookChunkProc,
   scrape,
   getByID,

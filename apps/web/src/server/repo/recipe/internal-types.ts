@@ -3,6 +3,7 @@
  * Types used across recipe modules.
  */
 
+import type { CookbookId } from "@cubby/schemas/identifiers";
 import type {
   image,
   ingredient,
@@ -62,7 +63,6 @@ export type ExistingRecipeWithSections = typeof recipe.$inferSelect & {
  */
 export interface RecipeFilters {
   nameFilter?: string;
-  // Scope the list to a single cookbook (SourceType='Book', SourceData=book).
-  // Powers the cookbook detail / browse-by-source page.
-  book?: string;
+  // Scope the list to a single cookbook by FK id. Powers the cookbook detail page.
+  cookbookId?: CookbookId;
 }

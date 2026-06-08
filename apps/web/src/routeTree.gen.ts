@@ -59,7 +59,7 @@ import { Route as AuthenticatedIngredientsNewRouteImport } from './routes/_authe
 import { Route as AuthenticatedIngredientsEnrichRouteImport } from './routes/_authenticated/ingredients.enrich'
 import { Route as AuthenticatedIngredientsIdRouteImport } from './routes/_authenticated/ingredients.$id'
 import { Route as AuthenticatedImagesIdRouteImport } from './routes/_authenticated/images.$id'
-import { Route as AuthenticatedCookbooksBookRouteImport } from './routes/_authenticated/cookbooks.$book'
+import { Route as AuthenticatedCookbooksCookbookIdRouteImport } from './routes/_authenticated/cookbooks.$cookbookId'
 import { Route as AuthenticatedAccountAccountViewRouteImport } from './routes/_authenticated/account.$accountView'
 import { Route as AuthenticatedUsdaUpcCodeRouteImport } from './routes/_authenticated/usda.upc.$code'
 import { Route as AuthenticatedUsdaNdbCodeRouteImport } from './routes/_authenticated/usda.ndb.$code'
@@ -337,10 +337,10 @@ const AuthenticatedImagesIdRoute = AuthenticatedImagesIdRouteImport.update({
   path: '/images/$id',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedCookbooksBookRoute =
-  AuthenticatedCookbooksBookRouteImport.update({
-    id: '/cookbooks/$book',
-    path: '/cookbooks/$book',
+const AuthenticatedCookbooksCookbookIdRoute =
+  AuthenticatedCookbooksCookbookIdRouteImport.update({
+    id: '/cookbooks/$cookbookId',
+    path: '/cookbooks/$cookbookId',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedAccountAccountViewRoute =
@@ -379,7 +379,7 @@ export interface FileRoutesByFullPath {
   '/api/panel': typeof ApiPanelRoute
   '/auth/$authView': typeof AuthAuthViewRoute
   '/account/$accountView': typeof AuthenticatedAccountAccountViewRoute
-  '/cookbooks/$book': typeof AuthenticatedCookbooksBookRoute
+  '/cookbooks/$cookbookId': typeof AuthenticatedCookbooksCookbookIdRoute
   '/images/$id': typeof AuthenticatedImagesIdRoute
   '/ingredients/$id': typeof AuthenticatedIngredientsIdRoute
   '/ingredients/enrich': typeof AuthenticatedIngredientsEnrichRoute
@@ -434,7 +434,7 @@ export interface FileRoutesByTo {
   '/api/panel': typeof ApiPanelRoute
   '/auth/$authView': typeof AuthAuthViewRoute
   '/account/$accountView': typeof AuthenticatedAccountAccountViewRoute
-  '/cookbooks/$book': typeof AuthenticatedCookbooksBookRoute
+  '/cookbooks/$cookbookId': typeof AuthenticatedCookbooksCookbookIdRoute
   '/images/$id': typeof AuthenticatedImagesIdRoute
   '/ingredients/$id': typeof AuthenticatedIngredientsIdRoute
   '/ingredients/enrich': typeof AuthenticatedIngredientsEnrichRoute
@@ -491,7 +491,7 @@ export interface FileRoutesById {
   '/api/panel': typeof ApiPanelRoute
   '/auth/$authView': typeof AuthAuthViewRoute
   '/_authenticated/account/$accountView': typeof AuthenticatedAccountAccountViewRoute
-  '/_authenticated/cookbooks/$book': typeof AuthenticatedCookbooksBookRoute
+  '/_authenticated/cookbooks/$cookbookId': typeof AuthenticatedCookbooksCookbookIdRoute
   '/_authenticated/images/$id': typeof AuthenticatedImagesIdRoute
   '/_authenticated/ingredients/$id': typeof AuthenticatedIngredientsIdRoute
   '/_authenticated/ingredients/enrich': typeof AuthenticatedIngredientsEnrichRoute
@@ -548,7 +548,7 @@ export interface FileRouteTypes {
     | '/api/panel'
     | '/auth/$authView'
     | '/account/$accountView'
-    | '/cookbooks/$book'
+    | '/cookbooks/$cookbookId'
     | '/images/$id'
     | '/ingredients/$id'
     | '/ingredients/enrich'
@@ -603,7 +603,7 @@ export interface FileRouteTypes {
     | '/api/panel'
     | '/auth/$authView'
     | '/account/$accountView'
-    | '/cookbooks/$book'
+    | '/cookbooks/$cookbookId'
     | '/images/$id'
     | '/ingredients/$id'
     | '/ingredients/enrich'
@@ -659,7 +659,7 @@ export interface FileRouteTypes {
     | '/api/panel'
     | '/auth/$authView'
     | '/_authenticated/account/$accountView'
-    | '/_authenticated/cookbooks/$book'
+    | '/_authenticated/cookbooks/$cookbookId'
     | '/_authenticated/images/$id'
     | '/_authenticated/ingredients/$id'
     | '/_authenticated/ingredients/enrich'
@@ -1062,11 +1062,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedImagesIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/cookbooks/$book': {
-      id: '/_authenticated/cookbooks/$book'
-      path: '/cookbooks/$book'
-      fullPath: '/cookbooks/$book'
-      preLoaderRoute: typeof AuthenticatedCookbooksBookRouteImport
+    '/_authenticated/cookbooks/$cookbookId': {
+      id: '/_authenticated/cookbooks/$cookbookId'
+      path: '/cookbooks/$cookbookId'
+      fullPath: '/cookbooks/$cookbookId'
+      preLoaderRoute: typeof AuthenticatedCookbooksCookbookIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/account/$accountView': {
@@ -1105,7 +1105,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedProblemsRoute: typeof AuthenticatedProblemsRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedAccountAccountViewRoute: typeof AuthenticatedAccountAccountViewRoute
-  AuthenticatedCookbooksBookRoute: typeof AuthenticatedCookbooksBookRoute
+  AuthenticatedCookbooksCookbookIdRoute: typeof AuthenticatedCookbooksCookbookIdRoute
   AuthenticatedImagesIdRoute: typeof AuthenticatedImagesIdRoute
   AuthenticatedIngredientsIdRoute: typeof AuthenticatedIngredientsIdRoute
   AuthenticatedIngredientsEnrichRoute: typeof AuthenticatedIngredientsEnrichRoute
@@ -1153,7 +1153,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedProblemsRoute: AuthenticatedProblemsRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedAccountAccountViewRoute: AuthenticatedAccountAccountViewRoute,
-  AuthenticatedCookbooksBookRoute: AuthenticatedCookbooksBookRoute,
+  AuthenticatedCookbooksCookbookIdRoute: AuthenticatedCookbooksCookbookIdRoute,
   AuthenticatedImagesIdRoute: AuthenticatedImagesIdRoute,
   AuthenticatedIngredientsIdRoute: AuthenticatedIngredientsIdRoute,
   AuthenticatedIngredientsEnrichRoute: AuthenticatedIngredientsEnrichRoute,

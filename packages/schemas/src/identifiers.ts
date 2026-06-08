@@ -16,6 +16,7 @@ export const ingredientId = z.uuid().brand("IngredientId");
 export const productId = z.uuid().brand("ProductId");
 export const locationId = z.uuid().brand("LocationId");
 export const inventoryId = z.uuid().brand("InventoryId");
+export const cookbookId = z.uuid().brand("CookbookId");
 
 // Shortcode schemas re-exported from shared package (single source of truth)
 export {
@@ -32,6 +33,7 @@ export type IngredientId = z.infer<typeof ingredientId>;
 export type ProductId = z.infer<typeof productId>;
 export type LocationId = z.infer<typeof locationId>;
 export type InventoryId = z.infer<typeof inventoryId>;
+export type CookbookId = z.infer<typeof cookbookId>;
 
 // Helper functions for unsafe casts (use only when you're certain the value is valid)
 // These are useful in tests and when working with external data that you know is valid
@@ -43,6 +45,7 @@ export const unsafeIngredientId = (id: string) => unsafeId<IngredientId>(id);
 export const unsafeProductId = (id: string) => unsafeId<ProductId>(id);
 export const unsafeLocationId = (id: string) => unsafeId<LocationId>(id);
 export const unsafeInventoryId = (id: string) => unsafeId<InventoryId>(id);
+export const unsafeCookbookId = (id: string) => unsafeId<CookbookId>(id);
 export const unsafeLocationShortcode = (code: string) =>
   unsafeId<LocationShortcode>(code);
 export const unsafeProductShortcode = (code: string) =>

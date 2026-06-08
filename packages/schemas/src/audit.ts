@@ -10,6 +10,7 @@ export const auditEntitySchema = entitySchema.extract([
   "location",
   "inventory",
   "recipe",
+  "cookbook",
   "ingredient",
 ]);
 export type AuditEntityType = z.infer<typeof auditEntitySchema>;

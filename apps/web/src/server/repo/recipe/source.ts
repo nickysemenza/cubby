@@ -1,3 +1,4 @@
+import { unsafeCookbookId } from "@cubby/schemas/identifiers";
 import type { RecipeSource } from "@cubby/schemas/recipe";
 
 /**
@@ -11,15 +12,21 @@ import type { RecipeSource } from "@cubby/schemas/recipe";
 type SourceColumns = {
   SourceType: string | null;
   SourceData: string | null;
+  cookbookId?: string | null;
 };
 
 /** DB columns → tagged union. Legacy/ambiguous rows decode to `{ type: "other" }`. */
 export function recipeSourceFromDb({
   SourceType,
   SourceData,
+  cookbookId,
 }: SourceColumns): RecipeSource {
   if (SourceType === "Book" && SourceData) {
-    return { type: "book", book: SourceData };
+    return {
+      type: "book",
+      book: SourceData,
+      cookbookId: cookbookId ? unsafeCookbookId(cookbookId) : null,
+    };
   }
   if (SourceType === "Website" && SourceData) {
     return { type: "website", url: SourceData };

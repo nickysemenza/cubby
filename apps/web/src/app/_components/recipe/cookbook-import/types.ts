@@ -20,6 +20,8 @@ export type Book = {
   /** Editable display/import name (the value stamped as the recipe's book). */
   name: string;
   recipes: CookbookRecipe[];
+  /** Book-level OPF metadata read from the EPUB (empty for the JSON path). */
+  epubMeta?: { author: string[]; subjects: string[] };
   /** Selected recipe indices into `recipes`. */
   selected: Set<number>;
   /** Per-recipe import status, by index. */

@@ -27,7 +27,9 @@ export function EntityPillById({
   const queryOptions = useMemo(() => {
     switch (entityType) {
       case "inventory":
-        // Inventory entries don't have a getByID that returns product info
+      case "cookbook":
+        // No getByID for these — rendered via an early return below. Return a
+        // valid (skipped) query so useQuery never receives undefined (v5 throws).
         return { queryKey: ["invalid"] as const, queryFn: skipToken };
       case "product":
         return trpc.product.getByID.queryOptions({ id: entityId });
@@ -52,6 +54,16 @@ export function EntityPillById({
         className="font-medium text-sm hover:underline"
       >
         Inventory Entry
+      </a>
+    );
+  }
+
+  // Cookbooks are browsed by name, not id, and have no getByID — link to the
+  // cookbook index rather than resolving the id to a name here.
+  if (entityType === "cookbook") {
+    return (
+      <a href="/cookbooks" className="font-medium text-sm hover:underline">
+        Cookbook
       </a>
     );
   }

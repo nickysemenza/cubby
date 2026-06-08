@@ -25,6 +25,11 @@ const entityEmptyConfig: Record<Entity, EntityEmptyConfig> = {
       "Start a collection of recipes you love. Import one from a URL, or write it from scratch.",
     actionLabel: "Create Recipe",
   },
+  cookbook: {
+    title: "No cookbooks yet",
+    description:
+      "Drag an EPUB cookbook into the Recipes import page and Cubby will extract its recipes.",
+  },
   product: {
     title: "Nothing on the shelves yet",
     description:

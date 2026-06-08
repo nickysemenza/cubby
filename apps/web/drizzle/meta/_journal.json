@@ -50,6 +50,13 @@
       "when": 1780870899494,
       "tag": "0006_flowery_madame_hydra",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1780884812475,
+      "tag": "0007_furry_la_nuit",
+      "breakpoints": true
     }
   ]
 }

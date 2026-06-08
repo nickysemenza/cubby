@@ -474,7 +474,8 @@ pub fn parse_unit_mapping(input: String) -> Result<WUnitMapping, String> {
 
 use recipe_epub::{
     assemble_recipes as assemble_recipes_internal, build_chunk_request,
-    chunk_epub as chunk_epub_internal, parse_recipes_payload, Chunk as EpubChunk, Link as EpubLink,
+    chunk_epub as chunk_epub_internal, epub_metadata as epub_metadata_internal, parse_recipes_payload,
+    Chunk as EpubChunk, EpubMeta, Link as EpubLink,
 };
 use sha2::{Digest, Sha256};
 
@@ -538,6 +539,27 @@ pub struct WChunkResult {
 #[tsify(into_wasm_abi, from_wasm_abi)]
 #[serde(transparent)]
 pub struct WChunkResults(pub Vec<WChunkResult>);
+
+/// Book-level EPUB metadata (mirrors `recipe_epub::EpubMeta`): the OPF title,
+/// authors, and subject tags. Surfaced so the cookbook import can stamp a
+/// `Cookbook` row's metadata without re-running the LLM.
+#[derive(Tsify, Serialize, Deserialize)]
+#[tsify(into_wasm_abi)]
+pub struct WEpubMeta {
+    pub title: String,
+    pub authors: Vec<String>,
+    pub subjects: Vec<String>,
+}
+
+impl From<EpubMeta> for WEpubMeta {
+    fn from(m: EpubMeta) -> Self {
+        Self {
+            title: m.title,
+            authors: m.authors,
+            subjects: m.subjects,
+        }
+    }
+}
 
 /// Phase 1: unzip the EPUB and split it into text chunks, each carrying its
 /// ready-to-send LLM request. Pure — no network, no filesystem.
@@ -630,4 +652,13 @@ pub fn assemble_recipes(
     }
     let recipes = assemble_recipes_internal(per_chunk, links, &source);
     to_js(&recipes, "assembled recipes")
+}
+
+/// Read book-level metadata (title / authors / subjects) from an EPUB's OPF.
+/// Pure — opens the `.epub` in memory and parses only the OPF (no content
+/// decompression, no network). `undefined` if the bytes aren't a readable EPUB.
+/// The cookbook import calls this once to stamp the `Cookbook` row.
+#[wasm_bindgen]
+pub fn epub_metadata(bytes: &[u8]) -> Option<WEpubMeta> {
+    epub_metadata_internal(bytes).map(WEpubMeta::from)
 }

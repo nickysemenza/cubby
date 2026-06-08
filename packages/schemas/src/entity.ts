@@ -8,6 +8,7 @@ export const entitySchema = z.enum([
   "ingredient",
   "product",
   "recipe",
+  "cookbook",
   "location",
   "inventory",
   "usda-food",

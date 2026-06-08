@@ -11,6 +11,7 @@ import type { Database, DrizzleTransaction } from "../db";
 import { withTransaction } from "./database-helpers";
 import { findOrCreateIngredient } from "./ingredient";
 import {
+  type CookbookRef,
   findOrCreateRecipeLinkIngredient,
   getCookbookRecipeIdsByTitle,
   upsertCookbookRecipe,
@@ -110,13 +111,13 @@ export const upsertRecipeFromCompact = async (
  */
 const cookbookRecipeToRecipeInput = async (
   cr: CookbookRecipe,
-  book: string,
+  cookbookRef: CookbookRef,
   db: Database,
 ): Promise<RecipeCreateInput> => {
   const lineToTitle = new Map(
     cr.references.map((r) => [r.line.trim(), r.title.trim().toLowerCase()]),
   );
-  const titleToId = await getCookbookRecipeIdsByTitle(db, book);
+  const titleToId = await getCookbookRecipeIdsByTitle(db, cookbookRef.id);
 
   // Freeform yield ("Makes about 12") → structured, via the same Rust parser
   // the web scraper uses. Omitted when unparseable.
@@ -167,12 +168,12 @@ const cookbookRecipeToRecipeInput = async (
 
 export const upsertCookbookRecipeFromCookbook = async (
   cr: CookbookRecipe,
-  bookName: string,
+  cookbookRef: CookbookRef,
   db: Database,
   actor: ActorContext,
 ) => {
-  const recipeInput = await cookbookRecipeToRecipeInput(cr, bookName, db);
+  const recipeInput = await cookbookRecipeToRecipeInput(cr, cookbookRef, db);
 
-  // (book, title)-scoped upsert + "Book" provenance.
-  return await upsertCookbookRecipe(recipeInput, bookName, db, actor);
+  // (cookbookId, title)-scoped upsert + "Book" provenance + FK link.
+  return await upsertCookbookRecipe(recipeInput, cookbookRef, db, actor);
 };

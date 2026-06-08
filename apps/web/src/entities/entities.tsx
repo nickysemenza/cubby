@@ -1,6 +1,7 @@
 import {
   Apple,
   Barcode,
+  BookOpen,
   Carrot,
   ChefHat,
   Image,
@@ -96,6 +97,22 @@ export const entities: Record<Entity, EntityDefinition> = {
       defaultSort: "createdAt",
       standardColumns: ["image", "name", "createdAt"],
       sortableFields: ["createdAt", "name"],
+    },
+  },
+  cookbook: {
+    label: "Cookbook",
+    pluralLabel: "Cookbooks",
+    basePath: "cookbooks",
+    lucideIcon: BookOpen,
+    color: {
+      bg: "bg-plum/20",
+      text: "text-plum",
+    },
+    // Keyed by FK id (rename-safe); no generic list columns or "new" form
+    // (cookbooks are created by EPUB import, not a create form).
+    routes: {
+      detail: "/cookbooks/$cookbookId",
+      list: "/cookbooks",
     },
   },
   location: {

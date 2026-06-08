@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { amount } from "./codec";
 import { baseEntitySchema, dbTimestampsOut } from "./common";
-import { id, ingredientId, recipeId } from "./identifiers";
+import { cookbookId, id, ingredientId, recipeId } from "./identifiers";
 import { createInputImages, imageOut, updateInputImages } from "./image";
 
 // Recipe source values - single source of truth for both Zod and Drizzle
@@ -29,7 +29,13 @@ export const recipeTags = z.array(z.string());
 // (`~/server/repo/recipe/source`); no migration. This is what finally exposes a
 // cookbook recipe's book name in the API (`meta.url` only ever held web URLs).
 export const recipeSource = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("book"), book: z.string().min(1) }),
+  // `cookbookId` is the FK to the source Cookbook (nullable only for legacy book
+  // rows predating the table); lets the UI link a recipe to its cookbook by id.
+  z.object({
+    type: z.literal("book"),
+    book: z.string().min(1),
+    cookbookId: cookbookId.nullable(),
+  }),
   z.object({ type: z.literal("website"), url: z.url() }),
   z.object({ type: z.literal("other") }),
 ]);
@@ -100,11 +106,14 @@ export const recipeOut = z
 
 export type RecipeOut = z.infer<typeof recipeOut>;
 
-// A cookbook as seen on the browse index: its name (the Book recipes'
-// `SourceData`) and how many non-deleted recipes came from it. Not a DB entity —
-// derived by grouping recipes on read.
+// A cookbook as seen on the browse index: the `Cookbook` row plus how many
+// non-deleted recipes link to it. `book` is the cookbook name (kept for the
+// existing browse-by-name route + UI); `hasRawJson` gates the reprocess action.
 export const cookbookSummary = z.object({
+  id: cookbookId,
   book: z.string(),
+  author: z.array(z.string()),
+  subjects: z.array(z.string()),
   recipeCount: z.number().int().nonnegative(),
 });
 export type CookbookSummary = z.infer<typeof cookbookSummary>;

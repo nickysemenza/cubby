@@ -1,9 +1,10 @@
+import type { CookbookId } from "@cubby/schemas/identifiers";
 import type { RecipeOut } from "@cubby/schemas/recipe";
 import { getNutrientValueByKey } from "@cubby/usda-schemas";
 import { useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
-import { ExternalLink, Scale } from "lucide-react";
+import { BookOpen, ExternalLink, Scale } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Skeleton } from "~/components/ui/skeleton";
 import { queryKeys } from "~/lib/query-keys";
@@ -32,14 +33,14 @@ interface RecipeListProps {
   /** Actions to display in the table toolbar (e.g., "Create New" button) */
   actions?: ReactNode;
   /**
-   * Scope the list to a single cookbook (its `SourceData` name). Set on the
-   * cookbook detail / browse-by-source page; the table then shows only that
-   * book's recipes. Undefined on the main recipes page (shows everything).
+   * Scope the list to a single cookbook by FK id. Set on the cookbook detail
+   * page; the table then shows only that cookbook's recipes. Undefined on the
+   * main recipes page (shows everything).
    */
-  bookFilter?: string;
+  cookbookIdFilter?: CookbookId;
 }
 
-export function RecipeList({ actions, bookFilter }: RecipeListProps) {
+export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
   const api = useTRPC();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -168,8 +169,9 @@ export function RecipeList({ actions, bookFilter }: RecipeListProps) {
           );
         },
       }),
-      // Meta (source URL) column
-      columnHelper.accessor("meta", {
+      // Source column: cookbook link for book recipes, external URL for web
+      // recipes, nothing otherwise.
+      columnHelper.accessor("source", {
         header: "Source",
         enableSorting: false,
         meta: {
@@ -177,20 +179,44 @@ export function RecipeList({ actions, bookFilter }: RecipeListProps) {
           mobile: { slot: "meta", priority: 30 },
         },
         cell: (info) => {
-          const url = info.getValue()?.url;
-          if (!url) return <NoneState />;
-          return (
-            <a
-              href={url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 hover:underline"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <ExternalLink size={14} />
-              <span className="max-w-[200px] truncate">{url}</span>
-            </a>
-          );
+          const source = info.getValue();
+          if (source?.type === "book") {
+            const label = (
+              <>
+                <BookOpen size={14} />
+                <span className="max-w-[200px] truncate">{source.book}</span>
+              </>
+            );
+            // Link to the cookbook by id when known; older book rows without a
+            // cookbook FK just show the name.
+            return source.cookbookId ? (
+              <Link
+                to="/cookbooks/$cookbookId"
+                params={{ cookbookId: source.cookbookId }}
+                className="flex items-center gap-1.5 hover:underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {label}
+              </Link>
+            ) : (
+              <span className="flex items-center gap-1.5">{label}</span>
+            );
+          }
+          if (source?.type === "website") {
+            return (
+              <a
+                href={source.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 hover:underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <ExternalLink size={14} />
+                <span className="max-w-[200px] truncate">{source.url}</span>
+              </a>
+            );
+          }
+          return <NoneState />;
         },
       }),
     ],
@@ -220,13 +246,13 @@ export function RecipeList({ actions, bookFilter }: RecipeListProps) {
       nameFilter: ts.getColumnFilter("name"),
       // Constant scope when rendered on a cookbook page; merged with the
       // table's own name filter so search-within-a-book still works.
-      ...(bookFilter ? { book: bookFilter } : {}),
+      ...(cookbookIdFilter ? { cookbookId: cookbookIdFilter } : {}),
     }),
     columns,
     nameClassName: "w-64",
     filters: [
       { id: "name", placeholder: "Filter by recipe name..." },
-      { id: "meta", placeholder: "Filter by source..." },
+      { id: "source", placeholder: "Filter by source..." },
     ],
     bulkActions: {
       actions: [

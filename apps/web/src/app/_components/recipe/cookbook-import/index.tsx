@@ -98,6 +98,9 @@ export function CookbookImport() {
   const extractChunk = useMutation(
     api.recipe.extractCookbookChunk.mutationOptions(),
   );
+  const upsertCookbook = useMutation(
+    api.recipe.upsertCookbook.mutationOptions(),
+  );
   const insertCookbook = useMutation(
     api.recipe.insertCookbook.mutationOptions(),
   );
@@ -124,6 +127,26 @@ export function CookbookImport() {
   // assemble. A failed chunk yields no recipes rather than sinking the book.
   const extractBook = useCallback(
     async (source: string, bytes: Uint8Array) => {
+      // Read book-level OPF metadata (title/authors/subjects) once. Pure WASM,
+      // no LLM — used to stamp the Cookbook row and prefer the real title over
+      // the filename-derived name. Best-effort: a malformed EPUB just yields none.
+      try {
+        const meta = wasm.epub_metadata(bytes);
+        if (meta) {
+          const title = meta.title.trim();
+          updateBook(source, (b) => ({
+            ...b,
+            epubMeta: {
+              author: [...meta.authors],
+              subjects: [...meta.subjects],
+            },
+            name: title || b.name,
+          }));
+        }
+      } catch {
+        // metadata is optional — proceed with the filename-derived name.
+      }
+
       let chunks: WCookbookChunk[];
       const tEpub = performance.now();
       try {
@@ -399,8 +422,10 @@ export function CookbookImport() {
     [addEpubFiles],
   );
 
-  // Import one book's selected recipes, two passes so cross-recipe references
-  // resolve within the book (insertCookbook upserts by (book, title)).
+  // Import one book's selected recipes. First create/refresh the Cookbook row
+  // (stores the full raw extraction + OPF metadata, and is the FK target), then
+  // import each recipe in two passes so cross-recipe references resolve within
+  // the book (insertCookbook upserts by (cookbookId, title)).
   const importBook = useCallback(
     async (source: string) => {
       const book = books.find((b) => b.source === source);
@@ -412,6 +437,23 @@ export function CookbookImport() {
       }
       const indices = [...book.selected].sort((a, b) => a - b);
       if (indices.length === 0) return;
+
+      // Persist the cookbook up-front: its raw JSON is the *full* extraction (not
+      // just the selected recipes) so reprocess/re-import-extras work later.
+      let cookbookId: string;
+      try {
+        const cookbook = await upsertCookbook.mutateAsync({
+          name: bookName,
+          rawJson: book.recipes,
+          author: book.epubMeta?.author ?? [],
+          subjects: book.epubMeta?.subjects ?? [],
+          sourceLabel: source,
+        });
+        cookbookId = cookbook.id;
+      } catch (error) {
+        toast.error(`Couldn't save cookbook: ${getErrorMessage(error)}`);
+        return;
+      }
 
       const setResult = (i: number, result: ImportResult) =>
         updateBook(source, (b) => ({
@@ -425,6 +467,7 @@ export function CookbookImport() {
         try {
           const { id } = await insertCookbook.mutateAsync({
             recipe: book.recipes[i],
+            cookbookId,
             book: bookName,
           });
           setResult(i, { status: "done", id });
@@ -440,6 +483,7 @@ export function CookbookImport() {
         try {
           await insertCookbook.mutateAsync({
             recipe: book.recipes[i],
+            cookbookId,
             book: bookName,
           });
         } catch {
@@ -448,7 +492,7 @@ export function CookbookImport() {
       }
       toast.success(`Imported ${succeeded.size} from ${bookName}`);
     },
-    [books, insertCookbook, updateBook],
+    [books, insertCookbook, upsertCookbook, updateBook],
   );
 
   // Stable ref so memoized RecipeCards don't re-render every streaming pass just

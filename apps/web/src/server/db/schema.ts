@@ -1,5 +1,6 @@
 import type { AuditEntityType } from "@cubby/schemas/audit";
 import type { Amount } from "@cubby/schemas/codec";
+import type { CookbookRecipe } from "@cubby/schemas/cookbook";
 import { imageStatusValues } from "@cubby/schemas/image";
 import { productCategoryValues } from "@cubby/schemas/product";
 import { type RecipeYield, recipeSourceValues } from "@cubby/schemas/recipe";
@@ -44,6 +45,10 @@ export const recipe = pgTable(
     deletedAt: timestamp("deletedAt", { mode: "date" }),
     SourceType: recipeSourceEnum("SourceType"),
     SourceData: text("SourceData"),
+    // For Book recipes, the cookbook this came from. Nullable: Website/Other
+    // recipes have no cookbook. SourceData is kept synced to the cookbook name
+    // so the source codec stays a pure recipe-row read.
+    cookbookId: uuid("cookbookId").references(() => cookbook.id),
     yield: jsonb("yield").$type<RecipeYield>(),
     servings: integer("servings"),
     tags: text("tags").array(),
@@ -60,13 +65,16 @@ export const recipe = pgTable(
       .where(
         sql`${table.deletedAt} IS NULL AND ${table.SourceType} IS DISTINCT FROM 'Book'`,
       ),
-    // A cookbook recipe's identity is (book, title): unique per book, but the
-    // same title may recur across books. SourceData holds the book name.
+    // A cookbook recipe's identity is (cookbook, title): unique per book, but the
+    // same title may recur across books. The upsert keys on `cookbookId`; this DB
+    // guard uses `SourceData` (kept synced to the cookbook name, which is itself
+    // unique) so it's equivalent and needs no nullable-FK partial index.
     bookTitleUnique: uniqueIndex("Recipe_book_title_key")
       .on(table.name, table.SourceData)
       .where(sql`${table.deletedAt} IS NULL AND ${table.SourceType} = 'Book'`),
     createdAtIdx: index("Recipe_createdAt_idx").on(table.createdAt),
     sourceTypeIdx: index("Recipe_SourceType_idx").on(table.SourceType),
+    cookbookIdIdx: index("Recipe_cookbookId_idx").on(table.cookbookId),
     // GIN index for full-text search on name
     nameGinIdx: index("Recipe_name_gin_idx").using(
       "gin",
@@ -79,6 +87,46 @@ export const recipe = pgTable(
     nameActiveIdx: index("Recipe_name_active_idx")
       .on(table.name)
       .where(sql`${table.deletedAt} IS NULL`),
+  }),
+);
+
+// Cookbook table — a first-class recipe source (the book a set of EPUB-extracted
+// recipes came from). Holds the full assembled `CookbookRecipe[]` JSON so recipes
+// can be re-derived without re-running the LLM, plus OPF metadata. A cookbook is
+// always born from a full import, so every content column is NOT NULL.
+// Not linked to Product/inventory — the digital source and the physical book are
+// deliberately separate (see plan: the EPUB set and the shelf don't overlap).
+export const cookbook = pgTable(
+  "Cookbook",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    name: text("name").notNull(),
+    // EPUB OPF <dc:creator> / <dc:subject>; empty arrays when the book has none.
+    author: text("author").array().notNull().default(sql`'{}'::text[]`),
+    subjects: text("subjects").array().notNull().default(sql`'{}'::text[]`),
+    // The EPUB `source` label (filename/path) from assembly.
+    sourceLabel: text("sourceLabel").notNull(),
+    // The full assembled extraction — powers reprocess-without-LLM.
+    rawJson: jsonb("rawJson").notNull().$type<CookbookRecipe[]>(),
+    importedAt: timestamp("importedAt", { mode: "date" })
+      .notNull()
+      .defaultNow(),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt", { mode: "date" })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    deletedAt: timestamp("deletedAt", { mode: "date" }),
+  },
+  (table) => ({
+    nameUnique: uniqueIndex("Cookbook_name_key")
+      .on(table.name)
+      .where(sql`${table.deletedAt} IS NULL`),
+    createdAtIdx: index("Cookbook_createdAt_idx").on(table.createdAt),
+    nameGinIdx: index("Cookbook_name_gin_idx").using(
+      "gin",
+      sql`${table.name} gin_trgm_ops`,
+    ),
   }),
 );
 
@@ -498,7 +546,15 @@ export const recipeRelations = relations(recipe, ({ one, many }) => ({
     fields: [recipe.id],
     references: [ingredient.recipeId],
   }),
+  cookbook: one(cookbook, {
+    fields: [recipe.cookbookId],
+    references: [cookbook.id],
+  }),
   images: many(recipeImage),
+}));
+
+export const cookbookRelations = relations(cookbook, ({ many }) => ({
+  recipes: many(recipe),
 }));
 
 export const recipeSectionRelations = relations(

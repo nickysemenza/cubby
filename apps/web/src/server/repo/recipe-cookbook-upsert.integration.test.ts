@@ -11,9 +11,11 @@ import { buildTestDB } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "~/server/db";
 import { recipe } from "~/server/db/schema";
+import { upsertCookbook } from "./cookbook";
 import { getDb } from "./database-helpers";
 import { createIngredient } from "./ingredient";
 import {
+  type CookbookRef,
   getCookbookRecipeTitles,
   getRecipeByID,
   insertCookbookRecipe,
@@ -30,6 +32,19 @@ describe("upsertCookbookRecipe", () => {
   let db: Database;
   let teardown: () => Promise<void>;
   let ingredientId: string;
+  let bookA: CookbookRef;
+  let bookB: CookbookRef;
+
+  // Create a cookbook row up-front and return the ref recipes link to. rawJson
+  // is empty here (reprocess isn't exercised in this suite).
+  const mkCookbook = async (name: string): Promise<CookbookRef> => {
+    const { id } = await upsertCookbook(
+      db,
+      { name, rawJson: [], sourceLabel: name },
+      TEST_ACTOR,
+    );
+    return { id, name };
+  };
 
   beforeEach(async () => {
     ({ db, teardown } = await buildTestDB());
@@ -39,6 +54,8 @@ describe("upsertCookbookRecipe", () => {
       TEST_ACTOR,
     );
     ingredientId = ing.id;
+    bookA = await mkCookbook("Book A");
+    bookB = await mkCookbook("Book B");
     return teardown;
   });
 
@@ -66,7 +83,7 @@ describe("upsertCookbookRecipe", () => {
   it("creates a recipe stamped with Book provenance", async () => {
     const { id } = await upsertCookbookRecipe(
       recipeInput("Pancakes"),
-      "Book A",
+      bookA,
       db,
       TEST_ACTOR,
     );
@@ -81,13 +98,13 @@ describe("upsertCookbookRecipe", () => {
   it("re-importing the same (book, title) updates in place, no duplicate", async () => {
     const first = await upsertCookbookRecipe(
       recipeInput("Pancakes", "Mix gently"),
-      "Book A",
+      bookA,
       db,
       TEST_ACTOR,
     );
     const second = await upsertCookbookRecipe(
       recipeInput("Pancakes", "Mix vigorously"),
-      "Book A",
+      bookA,
       db,
       TEST_ACTOR,
     );
@@ -111,13 +128,13 @@ describe("upsertCookbookRecipe", () => {
   it("keeps the same title from two different books distinct", async () => {
     const a = await upsertCookbookRecipe(
       recipeInput("Pancakes"),
-      "Book A",
+      bookA,
       db,
       TEST_ACTOR,
     );
     const b = await upsertCookbookRecipe(
       recipeInput("Pancakes"),
-      "Book B",
+      bookB,
       db,
       TEST_ACTOR,
     );
@@ -143,7 +160,7 @@ describe("upsertCookbookRecipe", () => {
     );
     const book = await upsertCookbookRecipe(
       recipeInput("Pancakes"),
-      "Book A",
+      bookA,
       db,
       TEST_ACTOR,
     );
@@ -165,7 +182,7 @@ describe("upsertCookbookRecipe", () => {
         yield: { value: 12, unit: "pancakes" },
         servings: 4,
       },
-      "Book A",
+      bookA,
       db,
       TEST_ACTOR,
     );
@@ -178,21 +195,11 @@ describe("upsertCookbookRecipe", () => {
   });
 
   it("getCookbookRecipeTitles returns only this book's non-deleted titles", async () => {
-    await upsertCookbookRecipe(
-      recipeInput("Pancakes"),
-      "Book A",
-      db,
-      TEST_ACTOR,
-    );
-    await upsertCookbookRecipe(
-      recipeInput("Waffles"),
-      "Book A",
-      db,
-      TEST_ACTOR,
-    );
-    await upsertCookbookRecipe(recipeInput("Crepes"), "Book B", db, TEST_ACTOR);
+    await upsertCookbookRecipe(recipeInput("Pancakes"), bookA, db, TEST_ACTOR);
+    await upsertCookbookRecipe(recipeInput("Waffles"), bookA, db, TEST_ACTOR);
+    await upsertCookbookRecipe(recipeInput("Crepes"), bookB, db, TEST_ACTOR);
 
-    const titles = await getCookbookRecipeTitles(db, "Book A");
+    const titles = await getCookbookRecipeTitles(db, bookA.id);
     expect(titles.sort()).toEqual(["Pancakes", "Waffles"]);
   });
 
@@ -217,13 +224,13 @@ describe("upsertCookbookRecipe", () => {
     // Pass 1: both recipes imported flat (no references resolved yet).
     const piecrust = await insertCookbookRecipe(
       cookbook("The Only Piecrust", ["2 cups flour"]),
-      "Book A",
+      bookA,
       db,
       TEST_ACTOR,
     );
     await insertCookbookRecipe(
       cookbook("Apple Galette", ["1 recipe The Only Piecrust", "3 apples"]),
-      "Book A",
+      bookA,
       db,
       TEST_ACTOR,
     );
@@ -235,7 +242,7 @@ describe("upsertCookbookRecipe", () => {
         ["1 recipe The Only Piecrust", "3 apples"],
         [piecrustRef],
       ),
-      "Book A",
+      bookA,
       db,
       TEST_ACTOR,
     );
@@ -272,7 +279,7 @@ describe("upsertCookbookRecipe", () => {
         ],
         references: [],
       },
-      "Book A",
+      bookA,
       db,
       TEST_ACTOR,
     );
@@ -303,7 +310,7 @@ describe("upsertCookbookRecipe", () => {
           },
         ],
       ),
-      "Book A",
+      bookA,
       db,
       TEST_ACTOR,
     );

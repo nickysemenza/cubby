@@ -7,6 +7,7 @@
 
 // CRUD operations
 export {
+  type CookbookRef,
   createRecipe,
   deleteRecipes,
   deleteRecipesByCookbook,
@@ -17,7 +18,6 @@ export {
   getRecipesByIDs,
   insertCompactRecipe,
   insertCookbookRecipe,
-  listCookbooks,
   recipeList,
   updateRecipe,
   upsertCookbookRecipe,
