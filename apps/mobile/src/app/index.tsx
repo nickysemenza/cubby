@@ -1,111 +1,62 @@
-import { productId } from "@cubby/schemas/identifiers";
-import * as Device from "expo-device";
-import { Platform, StyleSheet } from "react-native";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { AnimatedIcon } from "@/components/animated-icon";
-import { HintRow } from "@/components/hint-row";
-import { ThemedText } from "@/components/themed-text";
-import { ThemedView } from "@/components/themed-view";
-import { WebBadge } from "@/components/web-badge";
-import { BottomTabInset, MaxContentWidth, Spacing } from "@/constants/theme";
-
-// De-risk probe (Phase 2): exercises Metro transpiling a raw-.ts workspace
-// package (@cubby/schemas) + its transitive zod at runtime.
-const SCHEMA_OK = productId.safeParse("00000000-0000-0000-0000-000000000000")
-  .success
-  ? "ok"
-  : "fail";
-
-function getDevMenuHint() {
-  if (Platform.OS === "web") {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === "android" ? "cmd+m (or ctrl+m)" : "cmd+d";
-  return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
+import { InventoryList } from "@/components/inventory-list";
+import { SignIn } from "@/components/sign-in";
+import { authClient } from "@/lib/auth-client";
+import { ensureApiKey } from "@/lib/session-key";
 
 export default function HomeScreen() {
-  return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
+  const { data: session, isPending } = authClient.useSession();
 
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
+  // Ensure the tRPC API key is minted+stored before rendering data so the first
+  // query carries x-api-key (avoids a cold-start 401 when a session exists but no
+  // key is stored yet, e.g. after reinstall).
+  const [keyReady, setKeyReady] = useState(false);
+  useEffect(() => {
+    let active = true;
+    if (!session) {
+      setKeyReady(false);
+      return;
+    }
+    void ensureApiKey().then(() => {
+      if (active) setKeyReady(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, [session]);
 
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Shared schema"
-            hint={
-              <ThemedText type="code">@cubby/schemas: {SCHEMA_OK}</ThemedText>
-            }
-          />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
+  if (isPending) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
 
-        {Platform.OS === "web" && <WebBadge />}
+  if (!session) {
+    return (
+      <SafeAreaView style={styles.flex} edges={["top"]}>
+        <SignIn />
       </SafeAreaView>
-    </ThemedView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.flex} edges={["top"]}>
+      {keyReady ? (
+        <InventoryList />
+      ) : (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" />
+        </View>
+      )}
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    flexDirection: "row",
-  },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: "center",
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
-  },
-  heroSection: {
-    alignItems: "center",
-    justifyContent: "center",
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
-  },
-  title: {
-    textAlign: "center",
-  },
-  code: {
-    textTransform: "uppercase",
-  },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: "stretch",
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
-  },
+  flex: { flex: 1 },
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
 });

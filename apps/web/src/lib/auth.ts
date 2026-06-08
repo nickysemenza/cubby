@@ -35,9 +35,26 @@ export const auth = betterAuth({
     }),
     tanstackStartCookies(), // Must be last
   ],
+  // The Expo app authenticates against this server: email/password sign-in from
+  // the native client (Origin cubby-mobile://, trusted below) + an API key for
+  // tRPC traffic. We deliberately do NOT add the @better-auth/expo server plugin
+  // here — pulling it into the web app introduces a second peer-hashed
+  // @better-auth/core copy that breaks the plugin types under pnpm, and its main
+  // job (trusting the app scheme; OAuth deep-link rewrites we don't use) is
+  // already covered by the cubby-mobile:// trustedOrigin. The @better-auth/expo
+  // CLIENT plugin lives in the mobile app and handles SecureStore cookie storage.
   trustedOrigins: [
     "cubby-mobile://",
-    ...(isDev ? ["http://localhost:3000", "http://127.0.0.1:3000"] : []),
+    ...(isDev
+      ? [
+          "http://localhost:3000",
+          "http://127.0.0.1:3000",
+          // Expo dev: Metro serves over the exp:// scheme.
+          "exp://",
+          "exp://**",
+          "exp://192.168.*.*:*/**",
+        ]
+      : []),
   ],
   socialProviders: {},
 });
