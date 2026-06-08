@@ -10,7 +10,10 @@
     "ios": {
       "icon": "./assets/expo.icon",
       "bundleIdentifier": "com.nickysemenza.cubby",
-      "supportsTablet": false
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Cubby uses the camera to scan product barcodes."
+      }
     },
     "android": {
       "adaptiveIcon": {
