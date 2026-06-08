@@ -10,7 +10,7 @@ import {
   Import,
   X,
 } from "lucide-react";
-import { memo, useMemo, useRef } from "react";
+import { memo, useCallback, useMemo, useRef } from "react";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -23,9 +23,9 @@ import { useTRPC } from "~/trpc/react";
 import { ParsedIngredientTable } from "../parsed-ingredient-table";
 import { formatRichText } from "../richtext";
 import { useIngredientMatches } from "../use-ingredient-matches";
+import { CopyRecipeJsonButton } from "./copy-recipe-json-button";
+import { normalize } from "./import-order";
 import type { Book, BookHandlers, ImportResult } from "./types";
-
-const normalize = (s: string) => s.trim().toLowerCase();
 
 // Stable empty set so memoized RecipeCards see a referentially-stable
 // `linkableTitles` during streaming (references only resolve once ready anyway).
@@ -184,6 +184,35 @@ function RecipeList({
   });
   const items = virtualizer.getVirtualItems();
 
+  // Map a recipe title to its index in this book, so a reference badge can scroll
+  // to its target. First-wins on duplicate titles. `previewTitles` is the
+  // clickability test (only references to a recipe shown here can be scrolled to).
+  const titleToIndex = useMemo(() => {
+    const m = new Map<string, number>();
+    book.recipes.forEach((r, i) => {
+      const key = normalize(r.meta.title);
+      if (!m.has(key)) m.set(key, i);
+    });
+    return m;
+  }, [book.recipes]);
+  const previewTitles = useMemo<ReadonlySet<string>>(
+    () => new Set(titleToIndex.keys()),
+    [titleToIndex],
+  );
+
+  // Read the latest map through a ref so `scrollToTitle` stays referentially
+  // stable (deps: just the stable virtualizer instance) — otherwise the memoized
+  // RecipeCards would churn every streaming pass.
+  const titleIndexRef = useRef(titleToIndex);
+  titleIndexRef.current = titleToIndex;
+  const scrollToTitle = useCallback(
+    (title: string) => {
+      const idx = titleIndexRef.current.get(normalize(title));
+      if (idx != null) virtualizer.scrollToIndex(idx, { align: "start" });
+    },
+    [virtualizer],
+  );
+
   return (
     <div ref={scrollRef} className="max-h-[70vh] overflow-auto">
       <div
@@ -211,6 +240,8 @@ function RecipeList({
                   normalize(recipe.meta.title),
                 )}
                 linkableTitles={linkableTitles}
+                previewTitles={previewTitles}
+                scrollToTitle={scrollToTitle}
               />
             </div>
           );
@@ -267,6 +298,8 @@ const RecipeCard = memo(
     a.result === b.result &&
     a.alreadyImported === b.alreadyImported &&
     a.linkableTitles === b.linkableTitles &&
+    a.previewTitles === b.previewTitles &&
+    a.scrollToTitle === b.scrollToTitle &&
     a.onToggle === b.onToggle &&
     a.source === b.source &&
     a.index === b.index &&
@@ -282,6 +315,8 @@ function RecipeCardImpl({
   result,
   alreadyImported,
   linkableTitles,
+  previewTitles,
+  scrollToTitle,
 }: {
   recipe: CookbookRecipe;
   source: string;
@@ -291,6 +326,8 @@ function RecipeCardImpl({
   result: ImportResult | undefined;
   alreadyImported: boolean;
   linkableTitles: ReadonlySet<string>;
+  previewTitles: ReadonlySet<string>;
+  scrollToTitle: (title: string) => void;
 }) {
   // One parse of this recipe's ingredient names — used both to match against the
   // DB and to highlight ingredients in the instructions.
@@ -344,6 +381,7 @@ function RecipeCardImpl({
             </span>
           )}
         </div>
+        <CopyRecipeJsonButton recipe={recipe} />
         <ImportStatus result={result} />
       </div>
 
@@ -352,7 +390,39 @@ function RecipeCardImpl({
           <span className="text-muted-foreground">Uses:</span>
           {recipe.references.map((ref) => {
             const linkable = linkableTitles.has(normalize(ref.title));
-            return (
+            const inPreview = previewTitles.has(normalize(ref.title));
+            const className = cn(
+              "rounded-sm px-1.5 py-0.5 font-medium",
+              linkable
+                ? "bg-accent/20 text-accent-foreground"
+                : "bg-muted text-muted-foreground",
+            );
+            const label = (
+              <>
+                → {ref.title}
+                {!linkable && " (not imported)"}
+              </>
+            );
+            // A reference to a recipe shown in this preview scrolls to it; others
+            // (already-imported-only, or absent) stay plain text.
+            return inPreview ? (
+              <button
+                key={ref.title}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  scrollToTitle(ref.title);
+                }}
+                title={
+                  linkable
+                    ? `Will link (${ref.confidence}) — click to jump`
+                    : "In this book — click to jump"
+                }
+                className={cn(className, "cursor-pointer hover:underline")}
+              >
+                {label}
+              </button>
+            ) : (
               <span
                 key={ref.title}
                 title={
@@ -360,15 +430,9 @@ function RecipeCardImpl({
                     ? `Will link (${ref.confidence})`
                     : "Target recipe not in this import — stays an ingredient"
                 }
-                className={cn(
-                  "rounded-sm px-1.5 py-0.5 font-medium",
-                  linkable
-                    ? "bg-accent/20 text-accent-foreground"
-                    : "bg-muted text-muted-foreground",
-                )}
+                className={className}
               >
-                → {ref.title}
-                {!linkable && " (not imported)"}
+                {label}
               </span>
             );
           })}

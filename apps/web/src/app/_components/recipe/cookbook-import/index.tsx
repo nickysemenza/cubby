@@ -15,6 +15,7 @@ import { cn } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
 import { useTRPC } from "~/trpc/react";
 import { BookGroupCard } from "./book-group-card";
+import { addWithReferences, topoOrderSelected } from "./import-order";
 import type {
   Book,
   ChunkRequestInput,
@@ -424,8 +425,9 @@ export function CookbookImport() {
 
   // Import one book's selected recipes. First create/refresh the Cookbook row
   // (stores the full raw extraction + OPF metadata, and is the FK target), then
-  // import each recipe in two passes so cross-recipe references resolve within
-  // the book (insertCookbook upserts by (cookbookId, title)).
+  // import each recipe once, in topological order (a referenced recipe before the
+  // recipe that references it) so cross-recipe references resolve within the book
+  // on a single insert (insertCookbook upserts by (cookbookId, title)).
   const importBook = useCallback(
     async (source: string) => {
       const book = books.find((b) => b.source === source);
@@ -437,6 +439,10 @@ export function CookbookImport() {
       }
       const indices = [...book.selected].sort((a, b) => a - b);
       if (indices.length === 0) return;
+      // Import a referenced recipe before the recipe that references it, so the
+      // reference resolves to a recipe link on its single insert — no orphaned
+      // plain ingredient, no second pass.
+      const orderedIndices = topoOrderSelected(book.recipes, indices);
 
       // Persist the cookbook up-front: its raw JSON is the *full* extraction (not
       // just the selected recipes) so reprocess/re-import-extras work later.
@@ -462,7 +468,7 @@ export function CookbookImport() {
         }));
 
       const succeeded = new Set<number>();
-      for (const i of indices) {
+      for (const i of orderedIndices) {
         setResult(i, { status: "importing" });
         try {
           const { id } = await insertCookbook.mutateAsync({
@@ -476,20 +482,6 @@ export function CookbookImport() {
           setResult(i, { status: "error", message: getErrorMessage(error) });
         }
       }
-      // Pass 2: re-import recipes with references so their links now resolve.
-      for (const i of indices) {
-        if (!succeeded.has(i) || book.recipes[i].references.length === 0)
-          continue;
-        try {
-          await insertCookbook.mutateAsync({
-            recipe: book.recipes[i],
-            cookbookId,
-            book: bookName,
-          });
-        } catch {
-          // already imported; only the links failed — keep the pass-1 result
-        }
-      }
       toast.success(`Imported ${succeeded.size} from ${bookName}`);
     },
     [books, insertCookbook, upsertCookbook, updateBook],
@@ -501,8 +493,14 @@ export function CookbookImport() {
     (source: string, i: number) =>
       updateBook(source, (b) => {
         const selected = new Set(b.selected);
-        if (selected.has(i)) selected.delete(i);
-        else selected.add(i);
+        if (selected.has(i)) {
+          // Deselect is single — a referenced recipe may be wanted on its own.
+          selected.delete(i);
+          return { ...b, selected };
+        }
+        // Select cascades: also check the recipes this one references
+        // (transitively, in-book) so their cross-recipe links resolve on import.
+        addWithReferences(b.recipes, selected, i);
         return { ...b, selected };
       }),
     [updateBook],
