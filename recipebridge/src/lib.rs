@@ -56,8 +56,9 @@ impl From<&Measure> for WAmount {
     fn from(m: &Measure) -> Self {
         Self {
             // `unit().to_str()` (canonical/singular, matching serde) — NOT
-            // `unit_as_string()`, which pluralizes for display.
-            unit: m.unit().to_str(),
+            // `unit_as_string()`, which pluralizes for display. `to_str` now
+            // returns `Cow`, so own it for the `String` field.
+            unit: m.unit().to_str().into_owned(),
             value: m.value(),
             upper_value: m.upper_value(),
         }
