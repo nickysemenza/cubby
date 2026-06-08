@@ -3,6 +3,19 @@ import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
 import { EntityLayout } from "~/components/layouts/entity-layout";
 
 export const Route = createFileRoute("/_authenticated/activity")({
+  // Warm the first page of the audit feed during route load so the list renders
+  // hydrated instead of flashing a spinner on mount. Input + getNextPageParam
+  // must match AuditLogList's useInfiniteQuery (default limit 20, no entity
+  // filters) or the cache won't be reused. prefetch (not ensure) so a cold feed
+  // never blocks navigation.
+  loader: async ({ context }) => {
+    void context.queryClient.prefetchInfiniteQuery(
+      context.trpc.auditLog.list.infiniteQueryOptions(
+        { limit: 20 },
+        { getNextPageParam: (lastPage) => lastPage.nextCursor },
+      ),
+    );
+  },
   component: ActivityPage,
 });
 

@@ -1,6 +1,7 @@
 import { AuthQueryProvider } from "@daveyplate/better-auth-tanstack";
 import { AuthUIProviderTanstack } from "@daveyplate/better-auth-ui/tanstack";
 import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { Link as TanStackLink, useNavigate } from "@tanstack/react-router";
 import {
   createTRPCClient,
@@ -16,6 +17,18 @@ import type { TRPCRouter } from "~/integrations/trpc/router";
 import { authClient } from "~/lib/auth-client";
 import { getAppErrorDetails, getErrorMessage } from "~/lib/error-utils";
 import { getFlag } from "~/lib/flags";
+import { persister } from "./persister";
+
+// Root query-key prefixes whose data is safe + useful to persist for offline
+// warm starts. Auth/session, agent streams, and anything not listed are skipped
+// so we never write sensitive data to IndexedDB.
+const PERSISTED_ROOTS = new Set([
+  "product",
+  "location",
+  "recipe",
+  "inventory",
+  "ingredient",
+]);
 
 // Wrapper to adapt TanStack Router Link to better-auth-ui Link format
 const Link = ({
@@ -142,9 +155,38 @@ export function Provider({
           else toast(text);
         }}
       >
-        <TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>
-          {children}
-        </TRPCProvider>
+        {persister ? (
+          <PersistQueryClientProvider
+            client={queryClient}
+            persistOptions={{
+              persister,
+              // Bust the persisted cache whenever the deploy changes, so a
+              // schema/shape change can't resurrect stale offline data.
+              buster: __GIT_COMMIT__,
+              maxAge: 1000 * 60 * 60 * 24,
+              dehydrateOptions: {
+                shouldDehydrateQuery: (query) => {
+                  // tRPC keys are nested: [["product","list"], { input, type }].
+                  const head = query.queryKey?.[0];
+                  const root = Array.isArray(head) ? head[0] : head;
+                  return (
+                    typeof root === "string" &&
+                    PERSISTED_ROOTS.has(root) &&
+                    query.state.status === "success"
+                  );
+                },
+              },
+            }}
+          >
+            <TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>
+              {children}
+            </TRPCProvider>
+          </PersistQueryClientProvider>
+        ) : (
+          <TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>
+            {children}
+          </TRPCProvider>
+        )}
       </AuthUIProviderTanstack>
     </AuthQueryProvider>
   );

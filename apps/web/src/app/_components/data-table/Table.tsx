@@ -1,6 +1,7 @@
 // cf https://ui.shadcn.com/docs/components/data-table
 
 import type { Entity } from "@cubby/schemas/entity";
+import { useThrottledValue } from "@tanstack/react-pacer";
 import { useLocation } from "@tanstack/react-router";
 import {
   flexRender,
@@ -132,21 +133,29 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
   // Keyboard navigation: focused row index (desktop only)
   const [focusedRowIndex, setFocusedRowIndex] = useState<number | null>(null);
 
-  // Dynamic table height: fill remaining viewport on desktop
+  // Dynamic table height: fill remaining viewport on desktop. Track raw window
+  // height in state and throttle it so a resize drag recomputes maxHeight at
+  // most ~once per 100ms instead of on every resize event.
   const [maxHeight, setMaxHeight] = useState(600);
+  const [winHeight, setWinHeight] = useState(() =>
+    typeof window !== "undefined" ? window.innerHeight : 0,
+  );
+  const [throttledWinHeight] = useThrottledValue(winHeight, { wait: 100 });
+
+  useEffect(() => {
+    if (isMobile) return;
+    const onResize = () => setWinHeight(window.innerHeight);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [isMobile]);
 
   useEffect(() => {
     const el = tableContainerRef.current;
     if (!el || isMobile) return;
-    const update = () => {
-      const rect = el.getBoundingClientRect();
-      const available = window.innerHeight - rect.top - BOTTOM_PADDING;
-      setMaxHeight(Math.max(available, MIN_TABLE_HEIGHT));
-    };
-    update();
-    window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
-  }, [isMobile]);
+    const rect = el.getBoundingClientRect();
+    const available = throttledWinHeight - rect.top - BOTTOM_PADDING;
+    setMaxHeight(Math.max(available, MIN_TABLE_HEIGHT));
+  }, [throttledWinHeight, isMobile]);
 
   // On desktop with infinite scroll, eagerly fetch all pages so client-side
   // pagination works over the complete dataset. Mobile uses scroll-to-load.
