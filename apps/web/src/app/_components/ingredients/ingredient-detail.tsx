@@ -16,6 +16,7 @@ import { useTRPC } from "~/trpc/react";
 import { DetailPage, type DetailSection } from "../data-table/detail-page";
 import { EntityPillLinkList } from "../EntityPillLinkList";
 import { useEntityDetail } from "../hooks/useEntityDetail";
+import { ConversionCapabilities } from "../units/ConversionCapabilities";
 import { UnitMappingsTable } from "../units/unitmappingstable";
 import { NutritionInfoTable } from "../usda/nutrition";
 import { EnrichIngredientDialog } from "./enrich-ingredient-dialog";
@@ -103,11 +104,18 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
         </div>
       ),
     },
-    // Custom section: Unit Mappings (uses UnitMappingsTable, not UnitMappingDisplay)
+    // Custom section: Unit Mappings — conversion capabilities + Convert modal
+    // above the source-attributed table (table shows which product/food each
+    // mapping came from, since ingredient mappings aggregate across products).
     {
       title: "Unit Mappings",
       icon: Scale,
-      content: <UnitMappingsTable mappings={mappings} />,
+      content: (
+        <div className="space-y-4">
+          <ConversionCapabilities mappings={mappings} />
+          <UnitMappingsTable mappings={mappings} />
+        </div>
+      ),
     },
     // Custom section: Appears In Recipes
     {
