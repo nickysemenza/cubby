@@ -64,7 +64,7 @@ function ConversionDialogContent({
   onClose: () => void;
 }) {
   const showNutrientsId = useId();
-  const [showNutrients, setShowNutrients] = useState(false);
+  const [showNutrients, setShowNutrients] = useState(true);
   const [conversions, setConversions] = useState<
     Partial<Record<AmountKind, Result<WAmount>>>
   >({});
