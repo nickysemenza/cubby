@@ -107,7 +107,7 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
             });
           })(e);
         }}
-        className="space-y-4"
+        className="space-y-2"
       >
         {children}
 
@@ -351,7 +351,7 @@ export function SideBySideFields({
   return (
     <div
       className={cn(
-        "flex flex-col space-y-4 sm:flex-row sm:space-x-4 sm:space-y-0",
+        "flex flex-col space-y-2 sm:flex-row sm:space-x-2 sm:space-y-0",
         className,
       )}
     >

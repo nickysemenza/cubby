@@ -18,7 +18,7 @@ function Card({
       data-size={size}
       data-emphasis={emphasis}
       className={cn(
-        "bg-card text-card-foreground group/card flex flex-col gap-4 overflow-hidden rounded-lg py-4 text-xs/relaxed has-[>img:first-child]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-3 *:[img:first-child]:rounded-t-lg *:[img:last-child]:rounded-b-lg",
+        "bg-card text-card-foreground group/card flex flex-col gap-3 overflow-hidden rounded-lg py-3 text-xs/relaxed has-[>img:first-child]:pt-0 data-[size=sm]:gap-2 data-[size=sm]:py-2 *:[img:first-child]:rounded-t-lg *:[img:last-child]:rounded-b-lg",
         emphasis === "chunky"
           ? "border-[var(--border-chunky)] border-2 shadow-[var(--shadow-chunky)]"
           : "ring-foreground/10 ring-1",

@@ -42,7 +42,7 @@ function FormSection({
 }) {
   if (compact) return <>{children}</>;
   return (
-    <section className="space-y-4">
+    <section className="space-y-2">
       <h4 className="font-semibold text-muted-foreground text-xs uppercase tracking-wide">
         {title}
       </h4>
@@ -176,6 +176,45 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
     }
   };
 
+  const upcBlock = (
+    <div className="space-y-2">
+      <div className="flex items-end gap-2">
+        <div className="flex-1">
+          <UnifiedTextField
+            form={form}
+            name={"upc" as Path<TFieldValues>}
+            label="UPC (Optional)"
+            placeholder="12-digit UPC code"
+            nullable={true}
+          />
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={handleUpcLookup}
+          disabled={isLookingUp || !form.watch("upc" as Path<TFieldValues>)}
+          className="mb-[2px]"
+        >
+          {isLookingUp ? <Spinner /> : <Search className="h-4 w-4" />}
+          <span className="ml-1">Lookup</span>
+        </Button>
+      </div>
+      {lookupImageUrl && (
+        <div className="flex items-center gap-2 text-muted-foreground text-sm">
+          <Image
+            src={lookupImageUrl}
+            alt="Product from UPC lookup"
+            width={64}
+            height={64}
+            className="rounded border object-contain"
+          />
+          <span>Image will be imported on save</span>
+        </div>
+      )}
+    </div>
+  );
+
   const content = (
     <>
       <FormSection title="Product details" compact={compact}>
@@ -206,52 +245,29 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
           nullable={true}
         />
 
-        {!isMisc &&
-          (compact ? (
-            <SideBySideFields>
-              <UnifiedTextField
-                form={form}
-                name={"manufacturer" as Path<TFieldValues>}
-                label="Manufacturer"
-                placeholder="Enter manufacturer"
-                nullable={false}
-              />
-              <CategoryFieldWithAI
-                form={form}
-                name={"category" as Path<TFieldValues>}
-                productName={nameValue}
-                manufacturer={manufacturerValue}
-                disabled={isFoodForced}
-                description={
-                  isFoodForced
-                    ? "Forced to 'food' (has NDB number or ingredient)"
-                    : undefined
-                }
-              />
-            </SideBySideFields>
-          ) : (
-            <>
-              <UnifiedTextField
-                form={form}
-                name={"manufacturer" as Path<TFieldValues>}
-                label="Manufacturer"
-                placeholder="Enter manufacturer"
-                nullable={false}
-              />
-              <CategoryFieldWithAI
-                form={form}
-                name={"category" as Path<TFieldValues>}
-                productName={nameValue}
-                manufacturer={manufacturerValue}
-                disabled={isFoodForced}
-                description={
-                  isFoodForced
-                    ? "Forced to 'food' (has NDB number or ingredient)"
-                    : undefined
-                }
-              />
-            </>
-          ))}
+        {!isMisc && (
+          <SideBySideFields>
+            <UnifiedTextField
+              form={form}
+              name={"manufacturer" as Path<TFieldValues>}
+              label="Manufacturer"
+              placeholder="Enter manufacturer"
+              nullable={false}
+            />
+            <CategoryFieldWithAI
+              form={form}
+              name={"category" as Path<TFieldValues>}
+              productName={nameValue}
+              manufacturer={manufacturerValue}
+              disabled={isFoodForced}
+              description={
+                isFoodForced
+                  ? "Forced to 'food' (has NDB number or ingredient)"
+                  : undefined
+              }
+            />
+          </SideBySideFields>
+        )}
       </FormSection>
 
       {!isMisc && (
@@ -304,16 +320,6 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
           </FormSection>
 
           <FormSection title="USDA & nutrition" compact={compact}>
-            {!hidePrice && (
-              <NullableNumericField
-                form={form}
-                step="1"
-                name={"ndb_number" as Path<TFieldValues>}
-                label="NDB Number (Optional)"
-                placeholder="NDB number (1000-99999)"
-              />
-            )}
-
             {!compact && (
               <UsdaFoodSearchField
                 initialQuery={nameValue}
@@ -321,44 +327,22 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
               />
             )}
 
-            <div className="space-y-2">
-              <div className="flex items-end gap-2">
-                <div className="flex-1">
-                  <UnifiedTextField
-                    form={form}
-                    name={"upc" as Path<TFieldValues>}
-                    label="UPC (Optional)"
-                    placeholder="12-digit UPC code"
-                    nullable={true}
-                  />
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleUpcLookup}
-                  disabled={
-                    isLookingUp || !form.watch("upc" as Path<TFieldValues>)
-                  }
-                  className="mb-[2px]"
-                >
-                  {isLookingUp ? <Spinner /> : <Search className="h-4 w-4" />}
-                  <span className="ml-1">Lookup</span>
-                </Button>
-              </div>
-              {lookupImageUrl && (
-                <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                  <Image
-                    src={lookupImageUrl}
-                    alt="Product from UPC lookup"
-                    width={64}
-                    height={64}
-                    className="rounded border object-contain"
-                  />
-                  <span>Image will be imported on save</span>
-                </div>
-              )}
-            </div>
+            {/* Full form pairs NDB beside UPC; compact renders NDB up in
+                "Quantity & price" (hidePrice), so only the UPC block shows here. */}
+            {hidePrice ? (
+              upcBlock
+            ) : (
+              <SideBySideFields>
+                <NullableNumericField
+                  form={form}
+                  step="1"
+                  name={"ndb_number" as Path<TFieldValues>}
+                  label="NDB Number (Optional)"
+                  placeholder="NDB number (1000-99999)"
+                />
+                {upcBlock}
+              </SideBySideFields>
+            )}
           </FormSection>
 
           <FormSection title="Ingredient" compact={compact}>
@@ -391,8 +375,6 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
           name={"unitMappings" as Path<TFieldValues>}
           title="Unit conversions"
           addButtonText="Add conversion"
-          titleClassName={compact ? "text-sm" : undefined}
-          className={compact ? "space-y-2" : undefined}
           emptyValue={{
             a: { value: 1, unit: "" },
             b: { value: 1, unit: "" },
@@ -401,41 +383,40 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
         >
           {(_, index) => (
             <>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <h5 className="font-medium text-sm">From</h5>
-                  <AmountFieldGroup
-                    form={form}
-                    valuePath={
-                      `unitMappings.${index}.a.value` as Path<TFieldValues>
-                    }
-                    unitPath={
-                      `unitMappings.${index}.a.unit` as Path<TFieldValues>
-                    }
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <h5 className="font-medium text-sm">To</h5>
-                  <AmountFieldGroup
-                    form={form}
-                    valuePath={
-                      `unitMappings.${index}.b.value` as Path<TFieldValues>
-                    }
-                    unitPath={
-                      `unitMappings.${index}.b.unit` as Path<TFieldValues>
-                    }
-                  />
-                </div>
+              <div className="min-w-[11rem] flex-1">
+                <AmountFieldGroup
+                  compact
+                  form={form}
+                  valuePath={
+                    `unitMappings.${index}.a.value` as Path<TFieldValues>
+                  }
+                  unitPath={
+                    `unitMappings.${index}.a.unit` as Path<TFieldValues>
+                  }
+                />
               </div>
-
-              <UnifiedTextField
-                form={form}
-                name={`unitMappings.${index}.source` as Path<TFieldValues>}
-                label="Source (Optional)"
-                placeholder="Enter source"
-                nullable={true}
-              />
+              <span className="pb-1.5 text-muted-foreground">=</span>
+              <div className="min-w-[11rem] flex-1">
+                <AmountFieldGroup
+                  compact
+                  form={form}
+                  valuePath={
+                    `unitMappings.${index}.b.value` as Path<TFieldValues>
+                  }
+                  unitPath={
+                    `unitMappings.${index}.b.unit` as Path<TFieldValues>
+                  }
+                />
+              </div>
+              <div className="min-w-[8rem] flex-1">
+                <UnifiedTextField
+                  form={form}
+                  name={`unitMappings.${index}.source` as Path<TFieldValues>}
+                  label="Source"
+                  placeholder="Optional"
+                  nullable={true}
+                />
+              </div>
             </>
           )}
         </ArrayFieldManager>
@@ -446,8 +427,6 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
         name={"externalIds" as Path<TFieldValues>}
         title="External IDs"
         addButtonText="Add External ID"
-        titleClassName={compact ? "text-sm" : undefined}
-        className={compact ? "space-y-2" : undefined}
         emptyValue={{
           source: "",
           externalId: "",
@@ -456,27 +435,31 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
       >
         {(_, index) => (
           <>
-            <SideBySideFields>
+            <div className="min-w-[8rem] flex-1">
               <UnifiedTextField
                 form={form}
                 name={`externalIds.${index}.source` as Path<TFieldValues>}
                 label="Source"
-                placeholder="e.g. amazon, mcmaster, mouser"
+                placeholder="e.g. amazon, mcmaster"
               />
+            </div>
+            <div className="min-w-[8rem] flex-1">
               <UnifiedTextField
                 form={form}
                 name={`externalIds.${index}.externalId` as Path<TFieldValues>}
                 label="Identifier"
                 placeholder="e.g. B08N5WRWNW"
               />
-            </SideBySideFields>
-            <UnifiedTextField
-              form={form}
-              name={`externalIds.${index}.url` as Path<TFieldValues>}
-              label="URL (Optional)"
-              placeholder="https://..."
-              nullable={true}
-            />
+            </div>
+            <div className="min-w-[10rem] flex-1">
+              <UnifiedTextField
+                form={form}
+                name={`externalIds.${index}.url` as Path<TFieldValues>}
+                label="URL"
+                placeholder="https://..."
+                nullable={true}
+              />
+            </div>
           </>
         )}
       </ArrayFieldManager>
@@ -492,5 +475,5 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
   }
 
   // Extra spacing between the labeled sections so the form reads as groups.
-  return <div className="space-y-6">{content}</div>;
+  return <div className="space-y-3">{content}</div>;
 }

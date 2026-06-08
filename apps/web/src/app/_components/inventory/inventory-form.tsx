@@ -27,6 +27,7 @@ import {
   type EditModeProps,
   FormWrapper,
   getSubmitButtonText,
+  SideBySideFields,
   submitOrCancel,
 } from "../form-utils";
 import { AmountFieldGroup } from "./amount-field-group";
@@ -129,19 +130,20 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
       onCancel={onCancel}
       submitButtonText={buttonText}
     >
-      <ComboboxFieldWithSearch
-        form={form}
-        name="product"
-        label="Product"
-        searchType="product"
-      />
-
-      <ComboboxFieldWithSearch
-        form={form}
-        name="location"
-        label="Location"
-        searchType="location"
-      />
+      <SideBySideFields>
+        <ComboboxFieldWithSearch
+          form={form}
+          name="product"
+          label="Product"
+          searchType="product"
+        />
+        <ComboboxFieldWithSearch
+          form={form}
+          name="location"
+          label="Location"
+          searchType="location"
+        />
+      </SideBySideFields>
 
       <AmountFieldGroup
         form={form}
