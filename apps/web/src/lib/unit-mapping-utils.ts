@@ -199,10 +199,13 @@ const priceMappingFromProduct = (
  * conversions derived from food data, plus the synthesized price edge.
  */
 export const getAllUnitMappingsFromProduct = (product: {
-  id?: ProductId;
+  // All fields are required (not optional) on purpose: omitting one would
+  // silently drop a synthesized edge — e.g. a missing `price` computes "no
+  // cost" with no error. Required params make that a compile error instead.
+  id: ProductId;
   unitMappings: UnitMapping[];
-  food?: FoodSummary | null;
-  price?: number | null;
+  food: FoodSummary | null;
+  price: number | null;
 }): UnitMapping[] => {
   const foodMappings = product.food ? unitMappingsFromFood(product.food) : [];
   const priceMapping = priceMappingFromProduct(product.price, product.id);
@@ -215,7 +218,12 @@ export const getAllUnitMappingsFromProduct = (product: {
  */
 export const getIngredientMappings = <
   T extends {
-    product: Array<{ unitMappings: UnitMapping[]; food?: FoodSummary | null }>;
+    product: Array<{
+      id: ProductId;
+      unitMappings: UnitMapping[];
+      food: FoodSummary | null;
+      price: number | null;
+    }>;
   },
 >(
   entity: T,
