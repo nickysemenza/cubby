@@ -377,7 +377,6 @@ dependencies = [
 [[package]]
 name = "ingredient"
 version = "0.3.0"
-source = "git+https://github.com/nickysemenza/ingredient-parser?rev=286635c#286635ca21da1f9ca0d3b708bf7d6410547541d7"
 dependencies = [
  "nom",
  "nom-language",
@@ -648,7 +647,6 @@ dependencies = [
 [[package]]
 name = "recipe-epub"
 version = "0.1.0"
-source = "git+https://github.com/nickysemenza/ingredient-parser?rev=286635c#286635ca21da1f9ca0d3b708bf7d6410547541d7"
 dependencies = [
  "ego-tree",
  "epub",
@@ -666,7 +664,6 @@ dependencies = [
 [[package]]
 name = "recipe-scraper"
 version = "0.1.0"
-source = "git+https://github.com/nickysemenza/ingredient-parser?rev=286635c#286635ca21da1f9ca0d3b708bf7d6410547541d7"
 dependencies = [
  "ingredient",
  "recipe-types",
@@ -680,7 +677,6 @@ dependencies = [
 [[package]]
 name = "recipe-types"
 version = "0.1.0"
-source = "git+https://github.com/nickysemenza/ingredient-parser?rev=286635c#286635ca21da1f9ca0d3b708bf7d6410547541d7"
 dependencies = [
  "serde",
 ]
