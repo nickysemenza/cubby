@@ -7,7 +7,6 @@ import {
   View,
 } from "react-native";
 import { authClient } from "@/lib/auth-client";
-import { ensureApiKey } from "@/lib/session-key";
 
 export function SignIn() {
   const [email, setEmail] = useState("");
@@ -24,8 +23,6 @@ export function SignIn() {
       setLoading(false);
       return;
     }
-    // Mint + persist the tRPC API key while the cookie session is fresh.
-    await ensureApiKey();
     setLoading(false);
     // authClient.useSession() in the parent re-renders into the app once signed in.
   }

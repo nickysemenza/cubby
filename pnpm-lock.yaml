@@ -34,9 +34,6 @@ importers:
 
   apps/mobile:
     dependencies:
-      '@better-auth/api-key':
-        specifier: ^1.6.11
-        version: 1.6.11(e6ce0448cfa395b40264e33777e36dde)
       '@better-auth/expo':
         specifier: 1.6.11
         version: 1.6.11(7663fe32e9bc7926d133c746d14b0b4d)
@@ -11940,13 +11937,6 @@ snapshots:
       better-auth: 1.6.11(b939a3342d34654fa41f6c8032eae0b0)
       zod: 4.4.3
 
-  '@better-auth/api-key@1.6.11(e6ce0448cfa395b40264e33777e36dde)':
-    dependencies:
-      '@better-auth/core': 1.6.11(@better-auth/utils@0.4.0)(@better-fetch/fetch@1.1.21)(@cloudflare/workers-types@4.20260607.1)(@opentelemetry/api@1.9.1)(better-call@1.3.5(zod@4.4.3))(jose@6.2.3)(kysely@0.28.17)(nanostores@1.3.0)
-      '@better-auth/utils': 0.4.0
-      better-auth: 1.6.11(@cloudflare/workers-types@4.20260607.1)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@5.9.3))(typescript@5.9.3))(@tanstack/react-start@1.168.25(crossws@0.4.4(srvx@0.11.16))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.44.1)(tsx@4.22.0)(yaml@2.9.0))(webpack@5.101.3(esbuild@0.28.0)))(better-sqlite3@12.10.0)(drizzle-kit@0.31.9)(next@16.1.0(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@playwright/test@1.60.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(pg@8.21.0)(prisma@6.17.0(magicast@0.3.5)(typescript@5.9.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(solid-js@1.9.10)(vitest@4.1.6)
-      zod: 4.4.3
-
   '@better-auth/core@1.6.11(@better-auth/utils@0.4.0)(@better-fetch/fetch@1.1.21)(@cloudflare/workers-types@4.20260607.1)(@opentelemetry/api@1.9.1)(better-call@1.3.5(zod@4.4.3))(jose@6.2.3)(kysely@0.28.17)(nanostores@1.3.0)':
     dependencies:
       '@better-auth/utils': 0.4.0
@@ -15731,9 +15721,7 @@ snapshots:
       metro-runtime: 0.84.4
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
 
   '@react-native/normalize-colors@0.74.89': {}
 

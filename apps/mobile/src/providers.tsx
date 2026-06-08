@@ -5,12 +5,15 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import superjson from "superjson";
 import { TRPC_URL } from "./lib/api-config";
-import { getStoredApiKey } from "./lib/session-key";
+import { authClient } from "./lib/auth-client";
 import { TRPCProvider } from "./lib/trpc";
 
 // React Native has no cookie jar and no streaming fetch body, so this differs
-// from web in two ways: httpBatchLink (not the stream link), and auth attached
-// manually via the x-api-key header (read from SecureStore per request).
+// from web in two ways: httpBatchLink (not the stream link), and the session
+// cookie is attached manually. @better-auth/expo persists the cookie in
+// SecureStore and exposes authClient.getCookie() — the same session the browser
+// sends automatically on web. (No API key needed; the server authenticates the
+// cookie via getSession exactly as it does for the web client.)
 //
 // Offline query persistence is intentionally NOT wired here yet (deferred) — a
 // plain QueryClient keeps the spine simple.
@@ -37,14 +40,13 @@ export function Providers({ children }: { children: ReactNode }) {
           // Cap batched-GET URL length (matches web) to avoid 431s on large fan-outs.
           maxURLLength: 8000,
           // credentials:"omit" dodges the Expo duplicate-cookie / Invalid-Base64
-          // bug; we attach auth explicitly via x-api-key below.
+          // bug; we set the Cookie header manually instead.
           fetch: (url, options) =>
             fetch(url as string, { ...options, credentials: "omit" }),
-          async headers() {
-            const key = await getStoredApiKey();
+          headers() {
             return {
               "x-trpc-source": "expo",
-              ...(key ? { "x-api-key": key } : {}),
+              Cookie: authClient.getCookie(),
             };
           },
         }),
