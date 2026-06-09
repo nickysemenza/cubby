@@ -1,6 +1,6 @@
 import { NativeTabs } from "expo-router/unstable-native-tabs";
 
-export default function AppTabs() {
+export default function TabsLayout() {
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
@@ -18,14 +18,14 @@ export default function AppTabs() {
         <NativeTabs.Trigger.Icon sf="barcode.viewfinder" />
       </NativeTabs.Trigger>
 
-      <NativeTabs.Trigger name="locations">
-        <NativeTabs.Trigger.Label>Locations</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon sf="map.fill" />
-      </NativeTabs.Trigger>
-
       <NativeTabs.Trigger name="search">
         <NativeTabs.Trigger.Label>Search</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="magnifyingglass" />
+      </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="browse">
+        <NativeTabs.Trigger.Label>Browse</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="square.grid.2x2.fill" />
       </NativeTabs.Trigger>
     </NativeTabs>
   );

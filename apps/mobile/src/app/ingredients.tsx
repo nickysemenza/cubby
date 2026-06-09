@@ -1,14 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
+import { router } from "expo-router";
 import { EntityListScreen } from "@/components/entity-list-screen";
 import { useTRPC } from "@/lib/trpc";
 
-export default function RecipesScreen() {
+export default function IngredientsScreen() {
   const trpc = useTRPC();
-  const q = useQuery(trpc.recipe.list.queryOptions({ filters: {} }));
+  const q = useQuery(trpc.ingredient.list.queryOptions({ filters: {} }));
 
   return (
     <EntityListScreen
-      title="Recipes"
+      embedded
+      title="Ingredients"
       items={q.data?.items ?? []}
       count={q.data?.meta.totalCount}
       isLoading={q.isLoading}
@@ -16,9 +18,9 @@ export default function RecipesScreen() {
       error={q.error}
       onRefresh={() => void q.refetch()}
       keyExtractor={(i) => i.id}
-      primaryText={(i) => i.name ?? "Untitled recipe"}
-      imageUrl={(i) => i.images[0]?.url}
-      emptyText="No recipes yet."
+      primaryText={(i) => i.name}
+      onPressItem={(i) => router.push(`/ingredient/${i.id}`)}
+      emptyText="No ingredients yet."
     />
   );
 }

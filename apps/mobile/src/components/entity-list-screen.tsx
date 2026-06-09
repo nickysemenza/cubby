@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
@@ -23,8 +24,16 @@ type EntityListScreenProps<T> = {
   secondaryText?: (item: T) => string | null | undefined;
   /** Thumbnail URL for the row; when provided, a leading image column is shown. */
   imageUrl?: (item: T) => string | null | undefined;
+  /** When provided, rows become tappable and call this on press. */
+  onPressItem?: (item: T) => void;
   headerRight?: ReactNode;
   emptyText?: string;
+  /**
+   * When true, the screen is rendered under a navigation Stack header (which
+   * supplies the title + back button), so the internal title row and top
+   * safe-area inset are skipped to avoid duplication.
+   */
+  embedded?: boolean;
 };
 
 /** Shared presentational list screen used by inventory / recipes / locations. */
@@ -40,20 +49,24 @@ export function EntityListScreen<T>({
   primaryText,
   secondaryText,
   imageUrl,
+  onPressItem,
   headerRight,
   emptyText = "Nothing here yet.",
+  embedded = false,
 }: EntityListScreenProps<T>) {
   const showImages = imageUrl != null;
 
   return (
-    <SafeAreaView style={styles.flex} edges={["top"]}>
-      <View style={styles.header}>
-        <Text style={styles.title}>
-          {title}
-          {count != null ? ` (${count})` : ""}
-        </Text>
-        {headerRight}
-      </View>
+    <SafeAreaView style={styles.flex} edges={embedded ? [] : ["top"]}>
+      {embedded ? null : (
+        <View style={styles.header}>
+          <Text style={styles.title}>
+            {title}
+            {count != null ? ` (${count})` : ""}
+          </Text>
+          {headerRight}
+        </View>
+      )}
 
       {isLoading ? (
         <View style={styles.center}>
@@ -80,7 +93,14 @@ export function EntityListScreen<T>({
             const secondary = secondaryText?.(item);
             const uri = imageUrl?.(item);
             return (
-              <View style={styles.row}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.row,
+                  pressed && onPressItem ? styles.rowPressed : null,
+                ]}
+                onPress={onPressItem ? () => onPressItem(item) : undefined}
+                disabled={!onPressItem}
+              >
                 {showImages ? (
                   uri ? (
                     <Image
@@ -109,7 +129,8 @@ export function EntityListScreen<T>({
                     </Text>
                   ) : null}
                 </View>
-              </View>
+                {onPressItem ? <Text style={styles.chevron}>›</Text> : null}
+              </Pressable>
             );
           }}
           ListEmptyComponent={<Text style={styles.empty}>{emptyText}</Text>}
@@ -142,7 +163,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "#ddd",
   },
+  rowPressed: { opacity: 0.55 },
   rowText: { flex: 1 },
+  chevron: { fontSize: 24, color: "#c4c4c4", marginLeft: 4 },
   thumb: {
     width: THUMB,
     height: THUMB,

@@ -1,16 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { EntityListScreen } from "@/components/entity-list-screen";
+import { SignOutButton } from "@/components/sign-out-button";
 import { useTRPC } from "@/lib/trpc";
 
-export default function LocationsScreen() {
+export default function InventoryScreen() {
   const trpc = useTRPC();
-  const q = useQuery(trpc.location.list.queryOptions({ filters: {} }));
+  const q = useQuery(trpc.inventory.list.queryOptions({ filters: {} }));
 
   return (
     <EntityListScreen
-      embedded
-      title="Locations"
+      title="Inventory"
       items={q.data?.items ?? []}
       count={q.data?.meta.totalCount}
       isLoading={q.isLoading}
@@ -18,11 +18,12 @@ export default function LocationsScreen() {
       error={q.error}
       onRefresh={() => void q.refetch()}
       keyExtractor={(i) => i.id}
-      primaryText={(i) => i.name}
-      secondaryText={(i) => i.type}
-      imageUrl={(i) => i.images[0]?.url}
-      onPressItem={(i) => router.push(`/location/${i.id}`)}
-      emptyText="No locations yet."
+      primaryText={(i) => i.product.name}
+      secondaryText={(i) => i.location.name}
+      imageUrl={(i) => i.product.images[0]?.url}
+      onPressItem={(i) => router.push(`/inventory/${i.id}`)}
+      headerRight={<SignOutButton />}
+      emptyText="No inventory yet."
     />
   );
 }

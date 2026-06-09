@@ -1,9 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { Image } from "expo-image";
+import { router } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -11,6 +13,23 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTRPC } from "@/lib/trpc";
+
+// Search results are a discriminated union by entityType — route each to its
+// detail. Literal-prefixed paths keep expo-router's typed routes happy.
+function openDetail(entityType: string, id: string) {
+  switch (entityType) {
+    case "product":
+      return router.push(`/product/${id}`);
+    case "recipe":
+      return router.push(`/recipe/${id}`);
+    case "ingredient":
+      return router.push(`/ingredient/${id}`);
+    case "location":
+      return router.push(`/location/${id}`);
+    case "inventory":
+      return router.push(`/inventory/${id}`);
+  }
+}
 
 export default function SearchScreen() {
   const trpc = useTRPC();
@@ -57,7 +76,13 @@ export default function SearchScreen() {
           contentContainerStyle={styles.listContent}
           keyboardShouldPersistTaps="handled"
           renderItem={({ item }) => (
-            <View style={styles.row}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.row,
+                pressed && styles.rowPressed,
+              ]}
+              onPress={() => openDetail(item.entityType, item.id)}
+            >
               {item.imageUrl ? (
                 <Image
                   style={styles.thumb}
@@ -82,7 +107,8 @@ export default function SearchScreen() {
                   {item.subtitle ? ` · ${item.subtitle}` : ""}
                 </Text>
               </View>
-            </View>
+              <Text style={styles.chevron}>›</Text>
+            </Pressable>
           )}
           ListEmptyComponent={
             <Text style={styles.empty}>
@@ -118,7 +144,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "#ddd",
   },
+  rowPressed: { opacity: 0.55 },
   rowText: { flex: 1 },
+  chevron: { fontSize: 24, color: "#c4c4c4", marginLeft: 4 },
   thumb: {
     width: 48,
     height: 48,
