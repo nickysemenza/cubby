@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 const SECTIONS = [
   { label: "Products", route: "/products", icon: "📦" },
   { label: "Ingredients", route: "/ingredients", icon: "🥕" },
+  { label: "Cookbooks", route: "/cookbooks", icon: "📚" },
   { label: "Locations", route: "/locations", icon: "🗺️" },
 ] as const;
 

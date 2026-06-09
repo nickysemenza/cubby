@@ -26,6 +26,7 @@ function AuthGate() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="products" options={{ title: "Products" }} />
         <Stack.Screen name="ingredients" options={{ title: "Ingredients" }} />
+        <Stack.Screen name="cookbooks" options={{ title: "Cookbooks" }} />
         <Stack.Screen name="locations" options={{ title: "Locations" }} />
         <Stack.Screen name="product/[id]" options={{ title: "Product" }} />
         <Stack.Screen name="recipe/[id]" options={{ title: "Recipe" }} />
@@ -35,6 +36,7 @@ function AuthGate() {
         />
         <Stack.Screen name="location/[id]" options={{ title: "Location" }} />
         <Stack.Screen name="inventory/[id]" options={{ title: "Item" }} />
+        <Stack.Screen name="cookbook/[id]" options={{ title: "Cookbook" }} />
       </Stack>
     </ThemeProvider>
   );
