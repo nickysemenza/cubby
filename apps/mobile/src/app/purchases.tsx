@@ -23,10 +23,12 @@ export default function PurchasesScreen() {
       keyExtractor={(p) => p.id}
       primaryText={(p) => p.name}
       secondaryText={(p) =>
-        [p.cost != null ? `$${p.cost}` : null, p.category, p.date]
-          .filter(Boolean)
-          .join(" · ") || null
+        [p.category, p.subcategory, p.date].filter(Boolean).join(" · ") || null
       }
+      rightValues={(p) => [
+        p.cost != null ? `$${p.cost.toFixed(2)}` : null,
+        p.purchaser,
+      ]}
       onPressItem={(p) => void WebBrowser.openBrowserAsync(p.notionUrl)}
       emptyText={notConfigured ? "Notion isn't connected." : "No purchases."}
     />

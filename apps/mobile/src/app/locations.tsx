@@ -21,6 +21,9 @@ export default function LocationsScreen() {
       primaryText={(i) => i.name}
       secondaryText={(i) => i.type}
       imageUrl={(i) => i.images[0]?.url}
+      rightValues={(i) => [
+        i.inventoryEntries.length ? `${i.inventoryEntries.length} items` : null,
+      ]}
       onPressItem={(i) => router.push(`/location/${i.id}`)}
       emptyText="No locations yet."
     />

@@ -20,11 +20,11 @@ export default function CookbooksScreen() {
       onRefresh={() => void q.refetch()}
       keyExtractor={(c) => c.id}
       primaryText={(c) => c.book}
-      secondaryText={(c) =>
-        `${c.recipeCount} recipe${c.recipeCount === 1 ? "" : "s"}` +
-        (c.author.length ? ` · ${c.author.join(", ")}` : "")
-      }
+      secondaryText={(c) => c.author.join(", ")}
       imageUrl={(c) => c.coverUrl}
+      rightValues={(c) => [
+        `${c.recipeCount} recipe${c.recipeCount === 1 ? "" : "s"}`,
+      ]}
       onPressItem={(c) =>
         router.push({
           pathname: "/cookbook/[id]",

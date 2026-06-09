@@ -19,8 +19,11 @@ export default function ProductsScreen() {
       onRefresh={() => void q.refetch()}
       keyExtractor={(i) => i.id}
       primaryText={(i) => i.name}
-      secondaryText={(i) => i.manufacturer}
+      secondaryText={(i) =>
+        [i.manufacturer, i.category].filter(Boolean).join(" · ")
+      }
       imageUrl={(i) => i.images[0]?.url}
+      rightValues={(i) => [i.price != null ? `$${i.price.toFixed(2)}` : null]}
       onPressItem={(i) => router.push(`/product/${i.id}`)}
       emptyText="No products yet."
     />

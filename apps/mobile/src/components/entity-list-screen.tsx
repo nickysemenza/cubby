@@ -26,6 +26,11 @@ type EntityListScreenProps<T> = {
   imageUrl?: (item: T) => string | null | undefined;
   /** When provided, rows become tappable and call this on press. */
   onPressItem?: (item: T) => void;
+  /**
+   * Up to 2 right-aligned values per row (first emphasized, second muted) —
+   * e.g. a price/quantity, like the web mobile cards. Falsy entries are dropped.
+   */
+  rightValues?: (item: T) => (string | null | undefined)[];
   headerRight?: ReactNode;
   emptyText?: string;
   /**
@@ -50,6 +55,7 @@ export function EntityListScreen<T>({
   secondaryText,
   imageUrl,
   onPressItem,
+  rightValues,
   headerRight,
   emptyText = "Nothing here yet.",
   embedded = false,
@@ -92,6 +98,9 @@ export function EntityListScreen<T>({
           renderItem={({ item }) => {
             const secondary = secondaryText?.(item);
             const uri = imageUrl?.(item);
+            const rights = (rightValues?.(item) ?? []).filter(
+              (v): v is string => !!v,
+            );
             return (
               <Pressable
                 style={({ pressed }) => [
@@ -129,6 +138,18 @@ export function EntityListScreen<T>({
                     </Text>
                   ) : null}
                 </View>
+                {rights.length ? (
+                  <View style={styles.rightCol}>
+                    <Text style={styles.rightPrimary} numberOfLines={1}>
+                      {rights[0]}
+                    </Text>
+                    {rights[1] ? (
+                      <Text style={styles.rightSecondary} numberOfLines={1}>
+                        {rights[1]}
+                      </Text>
+                    ) : null}
+                  </View>
+                ) : null}
                 {onPressItem ? <Text style={styles.chevron}>›</Text> : null}
               </Pressable>
             );
@@ -165,6 +186,9 @@ const styles = StyleSheet.create({
   },
   rowPressed: { opacity: 0.55 },
   rowText: { flex: 1 },
+  rightCol: { alignItems: "flex-end", maxWidth: 120 },
+  rightPrimary: { fontSize: 15, fontWeight: "700", color: "#222" },
+  rightSecondary: { fontSize: 12, color: "#888", marginTop: 2 },
   chevron: { fontSize: 24, color: "#c4c4c4", marginLeft: 4 },
   thumb: {
     width: THUMB,

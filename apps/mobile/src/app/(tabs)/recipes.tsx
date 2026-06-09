@@ -18,7 +18,9 @@ export default function RecipesScreen() {
       onRefresh={() => void q.refetch()}
       keyExtractor={(i) => i.id}
       primaryText={(i) => i.name ?? "Untitled recipe"}
+      secondaryText={(i) => i.tags?.join(" · ")}
       imageUrl={(i) => i.images[0]?.url}
+      rightValues={(i) => [i.servings != null ? `Serves ${i.servings}` : null]}
       onPressItem={(i) => router.push(`/recipe/${i.id}`)}
       emptyText="No recipes yet."
     />

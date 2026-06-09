@@ -19,8 +19,14 @@ export default function InventoryScreen() {
       onRefresh={() => void q.refetch()}
       keyExtractor={(i) => i.id}
       primaryText={(i) => i.product.name}
-      secondaryText={(i) => i.location.name}
+      secondaryText={(i) =>
+        [i.location.name, i.product.manufacturer].filter(Boolean).join(" · ")
+      }
       imageUrl={(i) => i.product.images[0]?.url}
+      rightValues={(i) => [
+        `${i.amount.value} ${i.amount.unit}`,
+        i.valuation != null ? `$${i.valuation.toFixed(2)}` : null,
+      ]}
       onPressItem={(i) => router.push(`/inventory/${i.id}`)}
       headerRight={<SignOutButton />}
       emptyText="No inventory yet."

@@ -24,8 +24,9 @@ export default function TasksScreen() {
       keyExtractor={(t) => t.id}
       primaryText={(t) => t.name}
       secondaryText={(t) =>
-        [t.status, t.projectName, t.due].filter(Boolean).join(" · ") || null
+        [t.projectName, t.category, t.due].filter(Boolean).join(" · ") || null
       }
+      rightValues={(t) => [t.status]}
       onPressItem={(t) => void WebBrowser.openBrowserAsync(t.notionUrl)}
       emptyText={notConfigured ? "Notion isn't connected." : "No tasks."}
     />
