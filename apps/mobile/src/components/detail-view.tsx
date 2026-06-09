@@ -162,9 +162,24 @@ export function DetailNavRow({
   );
 }
 
-/** A plain (non-tappable) text line for lists like ingredients/instructions. */
-export function DetailLine({ children }: { children: ReactNode }) {
-  return <Text style={styles.line}>{children}</Text>;
+/** A text line for lists like ingredients/instructions; tappable when onPress set. */
+export function DetailLine({
+  children,
+  onPress,
+}: {
+  children: ReactNode;
+  onPress?: () => void;
+}) {
+  if (!onPress) return <Text style={styles.line}>{children}</Text>;
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.lineRow, pressed && styles.pressed]}
+    >
+      <Text style={[styles.line, styles.lineFlex]}>{children}</Text>
+      <Text style={styles.lineChevron}>›</Text>
+    </Pressable>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -222,6 +237,14 @@ const styles = StyleSheet.create({
   navSub: { fontSize: 13, color: "#888", marginTop: 2 },
   chevron: { fontSize: 24, color: "#c4c4c4", marginLeft: 8 },
   line: { fontSize: 15, lineHeight: 22, color: "#333", paddingVertical: 3 },
+  lineRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#f0f0f0",
+  },
+  lineFlex: { flex: 1 },
+  lineChevron: { fontSize: 18, color: "#ccc", marginLeft: 8 },
   error: { color: "#c0392b", paddingHorizontal: 24, textAlign: "center" },
   muted: { color: "#666" },
 });

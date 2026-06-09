@@ -1,6 +1,6 @@
 import { unsafeRecipeId } from "@cubby/schemas/identifiers";
 import { useQuery } from "@tanstack/react-query";
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { View } from "react-native";
 import {
   DetailLine,
@@ -63,7 +63,12 @@ export default function RecipeDetail() {
               {s.ingredients.map((ing) => (
                 <DetailLine
                   key={ing.id}
-                >{`•  ${ingredientLine(ing)}`}</DetailLine>
+                  onPress={() =>
+                    ing.type === "ingredient"
+                      ? router.push(`/ingredient/${ing.ingredient.id}`)
+                      : router.push(`/recipe/${ing.recipe.id}`)
+                  }
+                >{`${ingredientLine(ing)}`}</DetailLine>
               ))}
             </DetailSection>
           ) : null}
