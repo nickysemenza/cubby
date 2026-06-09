@@ -2,6 +2,7 @@ import { router } from "expo-router";
 import { EntityListScreen } from "@/components/entity-list-screen";
 import { SignOutButton } from "@/components/sign-out-button";
 import { useTRPCClient } from "@/lib/trpc";
+import { useFormattedAmounts } from "@/lib/use-formatted-amounts";
 import { useInfiniteList } from "@/lib/use-infinite-list";
 
 export default function InventoryScreen() {
@@ -15,6 +16,14 @@ export default function InventoryScreen() {
         pagination: { pageIndex, pageSize },
       }),
   });
+
+  // Pretty amounts ("⅓ cup", "2 - 4 each") via on-device recipebridge WASM,
+  // batched in one WebView round-trip; falls back to the raw value until ready.
+  const amounts = useFormattedAmounts(
+    list.items,
+    (i) => i.id,
+    (i) => i.amount,
+  );
 
   return (
     <EntityListScreen
@@ -34,7 +43,7 @@ export default function InventoryScreen() {
       }
       imageUrl={(i) => i.product.images[0]?.url}
       rightValues={(i) => [
-        `${i.amount.value} ${i.amount.unit}`,
+        amounts.get(i.id) ?? `${i.amount.value} ${i.amount.unit}`,
         i.valuation != null ? `$${i.valuation.toFixed(2)}` : null,
       ]}
       onPressItem={(i) => router.push(`/inventory/${i.id}`)}

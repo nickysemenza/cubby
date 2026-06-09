@@ -5,6 +5,7 @@
   "dependencies": {
     "@better-auth/expo": "1.6.11",
     "@cubby/api-contract": "workspace:*",
+    "@cubby/recipebridge": "workspace:*",
     "@cubby/schemas": "workspace:*",
     "@cubby/shared": "workspace:*",
     "@shopify/flash-list": "2.0.2",
@@ -36,11 +37,13 @@
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "4.25.2",
     "react-native-web": "~0.21.0",
+    "react-native-webview": "13.16.1",
     "react-native-worklets": "0.8.3",
     "superjson": "^2.2.6"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "esbuild": "^0.28.0",
     "typescript": "^5.9.3"
   },
   "scripts": {
@@ -54,7 +57,8 @@
     "format:write": "biome check --write",
     "check": "biome check && pnpm typecheck",
     "typecheck": "tsgo --noEmit",
-    "typecheck:stable": "tsc --noEmit"
+    "typecheck:stable": "tsc --noEmit",
+    "build:recipebridge-host": "node scripts/build-recipebridge-host.mjs"
   },
   "private": true
 }

@@ -4,6 +4,7 @@ import { createTRPCClient, httpBatchLink, loggerLink } from "@trpc/client";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import superjson from "superjson";
+import { RecipebridgeHost } from "./components/recipebridge-host";
 import { TRPC_URL } from "./lib/api-config";
 import { authClient } from "./lib/auth-client";
 import { TRPCProvider } from "./lib/trpc";
@@ -58,6 +59,8 @@ export function Providers({ children }: { children: ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>
         {children}
+        {/* Off-screen WebView host that runs the recipebridge WASM on-device. */}
+        <RecipebridgeHost />
       </TRPCProvider>
     </QueryClientProvider>
   );
