@@ -95,7 +95,8 @@ export function EntityListScreen<T>({
             keyExtractor={keyExtractor}
             contentContainerStyle={styles.listContent}
             onEndReached={onEndReached}
-            onEndReachedThreshold={0.5}
+            onEndReachedThreshold={1.5}
+            drawDistance={600}
             ListFooterComponent={
               isFetchingMore ? (
                 <ActivityIndicator style={styles.footer} />
