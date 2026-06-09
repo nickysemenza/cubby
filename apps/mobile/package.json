@@ -7,7 +7,6 @@
     "@cubby/api-contract": "workspace:*",
     "@cubby/schemas": "workspace:*",
     "@cubby/shared": "workspace:*",
-    "@expo/ui": "~56.0.16",
     "@tanstack/react-query": "^5.90.20",
     "@trpc/client": "^11.10.0",
     "@trpc/tanstack-react-query": "^11.10.0",

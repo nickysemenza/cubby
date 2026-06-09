@@ -18,6 +18,7 @@ export default function LocationsScreen() {
       keyExtractor={(i) => i.id}
       primaryText={(i) => i.name}
       secondaryText={(i) => i.type}
+      imageUrl={(i) => i.images[0]?.url}
       emptyText="No locations yet."
     />
   );

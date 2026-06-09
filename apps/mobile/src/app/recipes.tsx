@@ -17,6 +17,7 @@ export default function RecipesScreen() {
       onRefresh={() => void q.refetch()}
       keyExtractor={(i) => i.id}
       primaryText={(i) => i.name ?? "Untitled recipe"}
+      imageUrl={(i) => i.images[0]?.url}
       emptyText="No recipes yet."
     />
   );

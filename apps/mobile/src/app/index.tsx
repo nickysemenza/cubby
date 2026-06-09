@@ -19,6 +19,7 @@ export default function InventoryScreen() {
       keyExtractor={(i) => i.id}
       primaryText={(i) => i.product.name}
       secondaryText={(i) => i.location.name}
+      imageUrl={(i) => i.product.images[0]?.url}
       headerRight={<SignOutButton />}
       emptyText="No inventory yet."
     />

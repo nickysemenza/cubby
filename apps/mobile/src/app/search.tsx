@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { Image } from "expo-image";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -57,11 +58,30 @@ export default function SearchScreen() {
           keyboardShouldPersistTaps="handled"
           renderItem={({ item }) => (
             <View style={styles.row}>
-              <Text style={styles.name}>{item.name}</Text>
-              <Text style={styles.sub}>
-                {item.entityType}
-                {item.subtitle ? ` · ${item.subtitle}` : ""}
-              </Text>
+              {item.imageUrl ? (
+                <Image
+                  style={styles.thumb}
+                  source={{ uri: item.imageUrl }}
+                  contentFit="cover"
+                  transition={150}
+                  cachePolicy="memory-disk"
+                />
+              ) : (
+                <View style={[styles.thumb, styles.thumbPlaceholder]}>
+                  <Text style={styles.thumbInitial}>
+                    {item.name.trim().charAt(0).toUpperCase() || "?"}
+                  </Text>
+                </View>
+              )}
+              <View style={styles.rowText}>
+                <Text style={styles.name} numberOfLines={2}>
+                  {item.name}
+                </Text>
+                <Text style={styles.sub}>
+                  {item.entityType}
+                  {item.subtitle ? ` · ${item.subtitle}` : ""}
+                </Text>
+              </View>
             </View>
           )}
           ListEmptyComponent={
@@ -91,10 +111,22 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   listContent: { paddingHorizontal: 16, paddingBottom: 24 },
   row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "#ddd",
   },
+  rowText: { flex: 1 },
+  thumb: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    backgroundColor: "#f0f0f0",
+  },
+  thumbPlaceholder: { alignItems: "center", justifyContent: "center" },
+  thumbInitial: { fontSize: 18, fontWeight: "700", color: "#999" },
   name: { fontSize: 16, fontWeight: "600" },
   sub: {
     fontSize: 13,
