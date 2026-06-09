@@ -7,6 +7,8 @@ const SECTIONS = [
   { label: "Ingredients", route: "/ingredients", icon: "🥕" },
   { label: "Cookbooks", route: "/cookbooks", icon: "📚" },
   { label: "Locations", route: "/locations", icon: "🗺️" },
+  { label: "Purchases", route: "/purchases", icon: "🧾" },
+  { label: "Tasks", route: "/tasks", icon: "✅" },
 ] as const;
 
 export default function BrowseScreen() {

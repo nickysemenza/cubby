@@ -28,6 +28,8 @@ function AuthGate() {
         <Stack.Screen name="ingredients" options={{ title: "Ingredients" }} />
         <Stack.Screen name="cookbooks" options={{ title: "Cookbooks" }} />
         <Stack.Screen name="locations" options={{ title: "Locations" }} />
+        <Stack.Screen name="purchases" options={{ title: "Purchases" }} />
+        <Stack.Screen name="tasks" options={{ title: "Tasks" }} />
         <Stack.Screen name="product/[id]" options={{ title: "Product" }} />
         <Stack.Screen name="recipe/[id]" options={{ title: "Recipe" }} />
         <Stack.Screen
