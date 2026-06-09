@@ -1,27 +1,32 @@
-import { useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { EntityListScreen } from "@/components/entity-list-screen";
-import { useTRPC } from "@/lib/trpc";
+import { useTRPCClient } from "@/lib/trpc";
+import { useInfiniteList } from "@/lib/use-infinite-list";
 
 export default function LocationsScreen() {
-  const trpc = useTRPC();
-  const q = useQuery(
-    trpc.location.list.queryOptions({
-      filters: {},
-      pagination: { pageIndex: 0, pageSize: 1000 },
-    }),
-  );
+  const client = useTRPCClient();
+  const list = useInfiniteList({
+    queryKey: ["location", "list"],
+    pageSize: 30,
+    fetchPage: (pageIndex, pageSize) =>
+      client.location.list.query({
+        filters: {},
+        pagination: { pageIndex, pageSize },
+      }),
+  });
 
   return (
     <EntityListScreen
       embedded
       title="Locations"
-      items={q.data?.items ?? []}
-      count={q.data?.meta.totalCount}
-      isLoading={q.isLoading}
-      isRefetching={q.isRefetching}
-      error={q.error}
-      onRefresh={() => void q.refetch()}
+      items={list.items}
+      count={list.totalCount}
+      isLoading={list.isLoading}
+      isRefetching={list.isRefetching}
+      error={list.error}
+      onRefresh={list.refetch}
+      onEndReached={list.onEndReached}
+      isFetchingMore={list.isFetchingMore}
       keyExtractor={(i) => i.id}
       primaryText={(i) => i.name}
       secondaryText={(i) => i.type}

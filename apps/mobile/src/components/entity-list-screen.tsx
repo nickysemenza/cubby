@@ -26,6 +26,10 @@ type EntityListScreenProps<T> = {
   imageUrl?: (item: T) => string | null | undefined;
   /** When provided, rows become tappable and call this on press. */
   onPressItem?: (item: T) => void;
+  /** Called when the list nears the end — load the next page. */
+  onEndReached?: () => void;
+  /** Show a footer spinner while the next page loads. */
+  isFetchingMore?: boolean;
   /**
    * Up to 2 right-aligned values per row (first emphasized, second muted) —
    * e.g. a price/quantity, like the web mobile cards. Falsy entries are dropped.
@@ -55,6 +59,8 @@ export function EntityListScreen<T>({
   secondaryText,
   imageUrl,
   onPressItem,
+  onEndReached,
+  isFetchingMore,
   rightValues,
   headerRight,
   emptyText = "Nothing here yet.",
@@ -88,6 +94,13 @@ export function EntityListScreen<T>({
             data={items}
             keyExtractor={keyExtractor}
             contentContainerStyle={styles.listContent}
+            onEndReached={onEndReached}
+            onEndReachedThreshold={0.5}
+            ListFooterComponent={
+              isFetchingMore ? (
+                <ActivityIndicator style={styles.footer} />
+              ) : null
+            }
             refreshControl={
               onRefresh ? (
                 <RefreshControl
@@ -163,7 +176,7 @@ export function EntityListScreen<T>({
   );
 }
 
-const THUMB = 48;
+const THUMB = 40;
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: "#fff" },
@@ -182,27 +195,28 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    paddingVertical: 12,
+    gap: 10,
+    paddingVertical: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#ddd",
+    borderBottomColor: "#e6e6e6",
   },
   rowPressed: { opacity: 0.55 },
   rowText: { flex: 1 },
   rightCol: { alignItems: "flex-end", maxWidth: 120 },
-  rightPrimary: { fontSize: 15, fontWeight: "700", color: "#222" },
-  rightSecondary: { fontSize: 12, color: "#888", marginTop: 2 },
-  chevron: { fontSize: 24, color: "#c4c4c4", marginLeft: 4 },
+  rightPrimary: { fontSize: 14, fontWeight: "700", color: "#222" },
+  rightSecondary: { fontSize: 11, color: "#888", marginTop: 1 },
+  chevron: { fontSize: 22, color: "#c4c4c4", marginLeft: 2 },
+  footer: { paddingVertical: 16 },
   thumb: {
     width: THUMB,
     height: THUMB,
-    borderRadius: 8,
+    borderRadius: 6,
     backgroundColor: "#f0f0f0",
   },
   thumbPlaceholder: { alignItems: "center", justifyContent: "center" },
-  thumbInitial: { fontSize: 18, fontWeight: "700", color: "#999" },
-  name: { fontSize: 16, fontWeight: "600" },
-  sub: { fontSize: 14, color: "#666", marginTop: 2 },
+  thumbInitial: { fontSize: 16, fontWeight: "700", color: "#999" },
+  name: { fontSize: 15, fontWeight: "600" },
+  sub: { fontSize: 13, color: "#666", marginTop: 1 },
   error: { color: "#c0392b", paddingHorizontal: 24, textAlign: "center" },
   empty: { color: "#666", paddingVertical: 24, textAlign: "center" },
 });

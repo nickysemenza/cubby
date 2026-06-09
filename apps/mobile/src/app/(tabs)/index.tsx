@@ -1,27 +1,32 @@
-import { useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { EntityListScreen } from "@/components/entity-list-screen";
 import { SignOutButton } from "@/components/sign-out-button";
-import { useTRPC } from "@/lib/trpc";
+import { useTRPCClient } from "@/lib/trpc";
+import { useInfiniteList } from "@/lib/use-infinite-list";
 
 export default function InventoryScreen() {
-  const trpc = useTRPC();
-  const q = useQuery(
-    trpc.inventory.list.queryOptions({
-      filters: {},
-      pagination: { pageIndex: 0, pageSize: 1000 },
-    }),
-  );
+  const client = useTRPCClient();
+  const list = useInfiniteList({
+    queryKey: ["inventory", "list"],
+    pageSize: 30,
+    fetchPage: (pageIndex, pageSize) =>
+      client.inventory.list.query({
+        filters: {},
+        pagination: { pageIndex, pageSize },
+      }),
+  });
 
   return (
     <EntityListScreen
       title="Inventory"
-      items={q.data?.items ?? []}
-      count={q.data?.meta.totalCount}
-      isLoading={q.isLoading}
-      isRefetching={q.isRefetching}
-      error={q.error}
-      onRefresh={() => void q.refetch()}
+      items={list.items}
+      count={list.totalCount}
+      isLoading={list.isLoading}
+      isRefetching={list.isRefetching}
+      error={list.error}
+      onRefresh={list.refetch}
+      onEndReached={list.onEndReached}
+      isFetchingMore={list.isFetchingMore}
       keyExtractor={(i) => i.id}
       primaryText={(i) => i.product.name}
       secondaryText={(i) =>
