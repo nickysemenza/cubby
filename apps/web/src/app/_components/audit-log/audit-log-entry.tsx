@@ -70,10 +70,10 @@ export function AuditLogEntryComponent({
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <div className="group/entry relative flex items-start gap-3 py-3 pl-6 last:border-b-0">
-        <div className="absolute top-5 left-0 h-3 w-3 rounded-full bg-primary ring-4 ring-background" />
-        <div className="absolute top-8 bottom-0 left-[5px] w-0.5 bg-gradient-to-b from-border to-transparent group-last/entry:hidden" />
-        <Avatar className="h-8 w-8 flex-shrink-0">
+      <div className="group/entry relative flex items-start gap-2.5 py-2 pl-6 last:border-b-0">
+        <div className="absolute top-4 left-0 h-3 w-3 rounded-full bg-primary ring-4 ring-background" />
+        <div className="absolute top-7 bottom-0 left-[5px] w-0.5 bg-gradient-to-b from-border to-transparent group-last/entry:hidden" />
+        <Avatar className="h-6 w-6 flex-shrink-0">
           {entry.user?.image ? (
             <AvatarImage src={entry.user.image} alt={entry.user.name ?? ""} />
           ) : null}
@@ -127,16 +127,16 @@ export function AuditLogEntryComponent({
             {!entry.user && (
               <span className="text-muted-foreground text-sm">by System</span>
             )}
-          </div>
 
-          {/* Timestamp */}
-          <div className="mt-1 text-muted-foreground text-xs">
-            <HoverableTimestamp timestamp={entry.createdAt} />
+            {/* Timestamp — inline with the metadata row to save a line */}
+            <span className="text-muted-foreground text-xs">
+              <HoverableTimestamp timestamp={entry.createdAt} />
+            </span>
           </div>
 
           {/* Changes (if any) */}
           {hasChanges && (
-            <CollapsibleTrigger className="mt-2 flex items-center gap-1 text-muted-foreground text-xs transition-colors hover:text-foreground">
+            <CollapsibleTrigger className="mt-1.5 flex items-center gap-1 text-muted-foreground text-xs transition-colors hover:text-foreground">
               {isOpen ? (
                 <ChevronDown className="h-3 w-3" />
               ) : (
