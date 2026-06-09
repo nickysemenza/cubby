@@ -13,18 +13,30 @@ import {
   View,
 } from "react-native";
 import { useTRPCClient } from "@/lib/trpc";
-import { uploadAndAttachToProduct } from "@/lib/upload-image";
+import { type ImageEntityType, uploadAndAttach } from "@/lib/entity-images";
+
+// Which list caches to refresh so thumbnails update after attaching a photo.
+const LIST_KEYS: Record<ImageEntityType, string[][]> = {
+  PRODUCT: [
+    ["product", "list"],
+    ["inventory", "list"],
+  ],
+  LOCATION: [["location", "list"]],
+  RECIPE: [["recipe", "list"]],
+};
 
 /**
- * Nav-bar action: take/pick a photo, upload to R2, attach to the product.
+ * Nav-bar action: take/pick a photo, upload to R2, attach to the entity.
  * `onUploaded` lets the host screen refetch its own query (more reliable than
  * cross-component cache invalidation); the list caches are invalidated too.
  */
 export function AddPhotoButton({
-  productId,
+  entityType,
+  entityId,
   onUploaded,
 }: {
-  productId: string;
+  entityType: ImageEntityType;
+  entityId: string;
   onUploaded?: () => void;
 }) {
   const client = useTRPCClient();
@@ -56,10 +68,11 @@ export function AddPhotoButton({
 
     setBusy(true);
     try {
-      await uploadAndAttachToProduct(client, productId, asset);
+      await uploadAndAttach(client, entityType, entityId, asset);
       onUploaded?.();
-      void qc.invalidateQueries({ queryKey: ["product", "list"] });
-      void qc.invalidateQueries({ queryKey: ["inventory", "list"] });
+      for (const queryKey of LIST_KEYS[entityType]) {
+        void qc.invalidateQueries({ queryKey });
+      }
     } catch (e) {
       Alert.alert("Upload failed", getErrorMessage(e));
     } finally {

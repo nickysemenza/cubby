@@ -3,6 +3,7 @@ import { Image } from "expo-image";
 import { type ReactNode, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -19,8 +20,10 @@ type DetailViewProps = {
   notFound?: boolean;
   title?: string;
   subtitle?: string | null;
-  /** Hero image URLs; >1 renders a swipeable gallery with page dots. */
-  imageUrls?: string[];
+  /** Hero images; >1 renders a swipeable gallery with page dots. */
+  images?: { id: string; url: string }[];
+  /** When set, each image gets a ✕ to remove it (confirmed first). */
+  onDeleteImage?: (imageId: string) => void;
   rows: DetailRow[];
   /** Make the title tappable (e.g. navigate to the underlying product). */
   onTitlePress?: () => void;
@@ -37,7 +40,8 @@ export function DetailView({
   notFound,
   title,
   subtitle,
-  imageUrls,
+  images,
+  onDeleteImage,
   rows,
   onTitlePress,
   onSubtitlePress,
@@ -69,7 +73,9 @@ export function DetailView({
 
   return (
     <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
-      {imageUrls?.length ? <HeroGallery urls={imageUrls} /> : null}
+      {images?.length ? (
+        <HeroGallery images={images} onDelete={onDeleteImage} />
+      ) : null}
       {title ? (
         onTitlePress ? (
           <Pressable
@@ -114,15 +120,53 @@ export function DetailView({
 }
 
 /** Hero image, or a swipeable paged gallery (with page dots) when >1 image. */
-function HeroGallery({ urls }: { urls: string[] }) {
+function HeroGallery({
+  images,
+  onDelete,
+}: {
+  images: { id: string; url: string }[];
+  onDelete?: (imageId: string) => void;
+}) {
   const { width } = useWindowDimensions();
   const itemWidth = width - 32; // matches content padding (16 each side)
   const [index, setIndex] = useState(0);
 
-  if (urls.length === 1) {
-    return (
-      <Image style={styles.hero} source={{ uri: urls[0] }} contentFit="cover" />
-    );
+  const confirmDelete = (imageId: string) => {
+    if (!onDelete) return;
+    Alert.alert("Remove photo?", undefined, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Remove",
+        style: "destructive",
+        onPress: () => onDelete(imageId),
+      },
+    ]);
+  };
+
+  const renderImage = (img: { id: string; url: string }, full: boolean) => (
+    <View key={img.id} style={full ? undefined : { width: itemWidth }}>
+      <Image
+        style={[
+          styles.hero,
+          full ? null : { width: itemWidth, marginBottom: 0 },
+        ]}
+        source={{ uri: img.url }}
+        contentFit="cover"
+      />
+      {onDelete ? (
+        <Pressable
+          style={styles.deleteBtn}
+          onPress={() => confirmDelete(img.id)}
+          hitSlop={8}
+        >
+          <Text style={styles.deleteIcon}>✕</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+
+  if (images.length === 1) {
+    return renderImage(images[0], true);
   }
   return (
     <View style={styles.galleryWrap}>
@@ -134,18 +178,14 @@ function HeroGallery({ urls }: { urls: string[] }) {
           setIndex(Math.round(e.nativeEvent.contentOffset.x / itemWidth))
         }
       >
-        {urls.map((u) => (
-          <Image
-            key={u}
-            style={[styles.hero, { width: itemWidth, marginBottom: 0 }]}
-            source={{ uri: u }}
-            contentFit="cover"
-          />
-        ))}
+        {images.map((img) => renderImage(img, false))}
       </ScrollView>
       <View style={styles.dots}>
-        {urls.map((u, i) => (
-          <View key={u} style={[styles.dot, i === index && styles.dotActive]} />
+        {images.map((img, i) => (
+          <View
+            key={img.id}
+            style={[styles.dot, i === index && styles.dotActive]}
+          />
         ))}
       </View>
     </View>
@@ -243,6 +283,23 @@ const styles = StyleSheet.create({
   },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#d0d0d0" },
   dotActive: { backgroundColor: "#208AEF" },
+  deleteBtn: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  deleteIcon: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "700",
+    lineHeight: 17,
+  },
   title: { fontSize: 24, fontWeight: "800" },
   subtitle: { fontSize: 16, color: "#666", marginTop: 1 },
   linkRow: { flexDirection: "row", alignItems: "center" },

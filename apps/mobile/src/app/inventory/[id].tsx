@@ -5,6 +5,7 @@ import { router, Stack, useLocalSearchParams } from "expo-router";
 import { AddPhotoButton } from "@/components/add-photo-button";
 import { DetailView } from "@/components/detail-view";
 import { useTRPC } from "@/lib/trpc";
+import { useDeleteEntityImage } from "@/lib/use-delete-image";
 
 export default function InventoryDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -14,6 +15,10 @@ export default function InventoryDetail() {
   );
   const item = q.data;
   const p = item?.product;
+  // Inventory photos live on the underlying product.
+  const onDeleteImage = useDeleteEntityImage("PRODUCT", p?.id ?? "", () => {
+    void q.refetch();
+  });
 
   return (
     <>
@@ -22,7 +27,8 @@ export default function InventoryDetail() {
           options={{
             headerRight: () => (
               <AddPhotoButton
-                productId={item.product.id}
+                entityType="PRODUCT"
+                entityId={item.product.id}
                 onUploaded={() => void q.refetch()}
               />
             ),
@@ -32,7 +38,8 @@ export default function InventoryDetail() {
       <DetailView
         isLoading={q.isLoading}
         error={q.error}
-        imageUrls={p?.images.map((i) => i.url)}
+        images={p?.images.map((i) => ({ id: i.id, url: i.url }))}
+        onDeleteImage={onDeleteImage}
         title={p?.name}
         subtitle={item?.location.name}
         onTitlePress={

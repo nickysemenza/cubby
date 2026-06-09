@@ -1,10 +1,12 @@
 import type { RichItem, WAmount } from "@cubby/recipebridge";
 import { unsafeRecipeId } from "@cubby/schemas/identifiers";
 import { useQuery } from "@tanstack/react-query";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, Stack, useLocalSearchParams } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { AddPhotoButton } from "@/components/add-photo-button";
 import { DetailView } from "@/components/detail-view";
 import { type RouterOutputs, useTRPC } from "@/lib/trpc";
+import { useDeleteEntityImage } from "@/lib/use-delete-image";
 import {
   useFormattedAmountLists,
   useFormattedAmounts,
@@ -32,6 +34,9 @@ export default function RecipeDetail() {
   );
   const r = q.data;
   const book = r?.source && r.source.type === "book" ? r.source.book : null;
+  const onDeleteImage = useDeleteEntityImage("RECIPE", id, () => {
+    void q.refetch();
+  });
   const sections = r?.sections ?? [];
   const ingredients = sections.flatMap((s) => s.ingredients);
   const stepTexts = sections.flatMap((s) =>
@@ -116,80 +121,94 @@ export default function RecipeDetail() {
   };
 
   return (
-    <DetailView
-      isLoading={q.isLoading}
-      error={q.error}
-      imageUrls={r?.images.map((i) => i.url)}
-      title={r?.name ?? "Untitled recipe"}
-      subtitle={book}
-      rows={[
-        {
-          label: "Servings",
-          value: r?.servings != null ? String(r.servings) : null,
-        },
-        {
-          label: "Yield",
-          value: r?.yield ? `${r.yield.value} ${r.yield.unit}` : null,
-        },
-        { label: "Tags", value: r?.tags?.length ? r.tags.join(", ") : null },
-      ]}
-    >
-      {ingredients.length ? (
-        <View style={styles.block}>
-          <View style={styles.rule} />
-          <Text style={styles.heading}>Ingredients</Text>
-          {ingredients.map((ing) => {
-            const name = ingredientName(ing);
-            const amount = ing.amounts.length
-              ? (formattedAmounts.get(ing.id) ??
-                ing.amounts.map((a) => `${a.value} ${a.unit}`).join(" / "))
-              : "";
-            const showRaw = ing.rawLine && ing.rawLine !== name;
-            return (
-              <Pressable
-                key={ing.id}
-                style={({ pressed }) => [
-                  styles.ingRow,
-                  pressed && styles.pressed,
-                ]}
-                onPress={() =>
-                  ing.type === "ingredient"
-                    ? router.push(`/ingredient/${ing.ingredient.id}`)
-                    : router.push(`/recipe/${ing.recipe.id}`)
-                }
-              >
-                <Text style={styles.amount}>{amount}</Text>
-                <View style={styles.nameCol}>
-                  <Text style={styles.name}>{name}</Text>
-                  {showRaw ? (
-                    <Text style={styles.raw}>{ing.rawLine}</Text>
-                  ) : null}
-                </View>
-              </Pressable>
-            );
-          })}
-        </View>
-      ) : null}
+    <>
+      <Stack.Screen
+        options={{
+          headerRight: () => (
+            <AddPhotoButton
+              entityType="RECIPE"
+              entityId={id}
+              onUploaded={() => void q.refetch()}
+            />
+          ),
+        }}
+      />
+      <DetailView
+        isLoading={q.isLoading}
+        error={q.error}
+        images={r?.images.map((i) => ({ id: i.id, url: i.url }))}
+        onDeleteImage={onDeleteImage}
+        title={r?.name ?? "Untitled recipe"}
+        subtitle={book}
+        rows={[
+          {
+            label: "Servings",
+            value: r?.servings != null ? String(r.servings) : null,
+          },
+          {
+            label: "Yield",
+            value: r?.yield ? `${r.yield.value} ${r.yield.unit}` : null,
+          },
+          { label: "Tags", value: r?.tags?.length ? r.tags.join(", ") : null },
+        ]}
+      >
+        {ingredients.length ? (
+          <View style={styles.block}>
+            <View style={styles.rule} />
+            <Text style={styles.heading}>Ingredients</Text>
+            {ingredients.map((ing) => {
+              const name = ingredientName(ing);
+              const amount = ing.amounts.length
+                ? (formattedAmounts.get(ing.id) ??
+                  ing.amounts.map((a) => `${a.value} ${a.unit}`).join(" / "))
+                : "";
+              const showRaw = ing.rawLine && ing.rawLine !== name;
+              return (
+                <Pressable
+                  key={ing.id}
+                  style={({ pressed }) => [
+                    styles.ingRow,
+                    pressed && styles.pressed,
+                  ]}
+                  onPress={() =>
+                    ing.type === "ingredient"
+                      ? router.push(`/ingredient/${ing.ingredient.id}`)
+                      : router.push(`/recipe/${ing.recipe.id}`)
+                  }
+                >
+                  <Text style={styles.amount}>{amount}</Text>
+                  <View style={styles.nameCol}>
+                    <Text style={styles.name}>{name}</Text>
+                    {showRaw ? (
+                      <Text style={styles.raw}>{ing.rawLine}</Text>
+                    ) : null}
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
 
-      {stepTexts.length ? (
-        <View style={styles.block}>
-          <View style={styles.rule} />
-          <Text style={styles.heading}>Instructions</Text>
-          {stepTexts.map((text, i) => {
-            const items = richSteps[i];
-            return (
-              // biome-ignore lint/suspicious/noArrayIndexKey: stable order, no ids.
-              <View key={i} style={styles.step}>
-                <Text style={styles.stepNum}>Step {i + 1}</Text>
-                <Text style={styles.stepText}>
-                  {items ? items.map((it, j) => renderSpan(it, i, j)) : text}
-                </Text>
-              </View>
-            );
-          })}
-        </View>
-      ) : null}
-    </DetailView>
+        {stepTexts.length ? (
+          <View style={styles.block}>
+            <View style={styles.rule} />
+            <Text style={styles.heading}>Instructions</Text>
+            {stepTexts.map((text, i) => {
+              const items = richSteps[i];
+              return (
+                // biome-ignore lint/suspicious/noArrayIndexKey: stable order, no ids.
+                <View key={i} style={styles.step}>
+                  <Text style={styles.stepNum}>Step {i + 1}</Text>
+                  <Text style={styles.stepText}>
+                    {items ? items.map((it, j) => renderSpan(it, i, j)) : text}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        ) : null}
+      </DetailView>
+    </>
   );
 }
 
