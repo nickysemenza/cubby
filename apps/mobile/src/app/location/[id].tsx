@@ -1,7 +1,11 @@
 import { unsafeLocationId } from "@cubby/schemas/identifiers";
 import { useQuery } from "@tanstack/react-query";
-import { useLocalSearchParams } from "expo-router";
-import { DetailView } from "@/components/detail-view";
+import { router, useLocalSearchParams } from "expo-router";
+import {
+  DetailNavRow,
+  DetailSection,
+  DetailView,
+} from "@/components/detail-view";
 import { useTRPC } from "@/lib/trpc";
 
 export default function LocationDetail() {
@@ -11,6 +15,7 @@ export default function LocationDetail() {
     trpc.location.getByID.queryOptions({ id: unsafeLocationId(id) }),
   );
   const loc = q.data;
+  const children = loc?.children ?? [];
 
   return (
     <DetailView
@@ -21,11 +26,30 @@ export default function LocationDetail() {
       subtitle={loc?.type}
       rows={[
         {
-          label: "Items",
+          label: "Total items",
           value:
             loc?.totalItemCount != null ? String(loc.totalItemCount) : null,
         },
+        {
+          label: "Direct items",
+          value:
+            loc?.directItemCount != null ? String(loc.directItemCount) : null,
+        },
+        { label: "Parent", value: loc?.parent?.name },
       ]}
-    />
+    >
+      {children.length ? (
+        <DetailSection title={`Sub-locations (${children.length})`}>
+          {children.map((c) => (
+            <DetailNavRow
+              key={c.id}
+              label={c.name}
+              sublabel={c.type}
+              onPress={() => router.push(`/location/${c.id}`)}
+            />
+          ))}
+        </DetailSection>
+      ) : null}
+    </DetailView>
   );
 }

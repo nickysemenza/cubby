@@ -20,9 +20,14 @@ export default function ProductDetail() {
       title={p?.name}
       subtitle={p?.manufacturer}
       rows={[
+        { label: "Category", value: p?.category },
+        {
+          label: "Price",
+          value: p?.price != null ? `$${p.price.toFixed(2)}` : null,
+        },
         { label: "UPC", value: p?.upc },
         { label: "Model", value: p?.model },
-        { label: "Price", value: p?.price != null ? `$${p.price}` : null },
+        { label: "Shortcode", value: p?.shortcode },
         { label: "Notes", value: p?.notes },
       ]}
     />
