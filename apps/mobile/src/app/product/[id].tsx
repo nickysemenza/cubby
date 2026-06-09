@@ -1,7 +1,8 @@
 import { unsafeProductId } from "@cubby/schemas/identifiers";
 import { formatCurrency } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
-import { useLocalSearchParams } from "expo-router";
+import { Stack, useLocalSearchParams } from "expo-router";
+import { AddPhotoButton } from "@/components/add-photo-button";
 import { DetailView } from "@/components/detail-view";
 import { useTRPC } from "@/lib/trpc";
 
@@ -14,23 +15,28 @@ export default function ProductDetail() {
   const p = q.data;
 
   return (
-    <DetailView
-      isLoading={q.isLoading}
-      error={q.error}
-      imageUrl={p?.images[0]?.url}
-      title={p?.name}
-      subtitle={p?.manufacturer}
-      rows={[
-        { label: "Category", value: p?.category },
-        {
-          label: "Price",
-          value: p?.price != null ? formatCurrency(p.price) : null,
-        },
-        { label: "UPC", value: p?.upc },
-        { label: "Model", value: p?.model },
-        { label: "Shortcode", value: p?.shortcode },
-        { label: "Notes", value: p?.notes },
-      ]}
-    />
+    <>
+      <Stack.Screen
+        options={{ headerRight: () => <AddPhotoButton productId={id} /> }}
+      />
+      <DetailView
+        isLoading={q.isLoading}
+        error={q.error}
+        imageUrl={p?.images[0]?.url}
+        title={p?.name}
+        subtitle={p?.manufacturer}
+        rows={[
+          { label: "Category", value: p?.category },
+          {
+            label: "Price",
+            value: p?.price != null ? formatCurrency(p.price) : null,
+          },
+          { label: "UPC", value: p?.upc },
+          { label: "Model", value: p?.model },
+          { label: "Shortcode", value: p?.shortcode },
+          { label: "Notes", value: p?.notes },
+        ]}
+      />
+    </>
   );
 }

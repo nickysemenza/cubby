@@ -44,6 +44,13 @@
           "cameraPermission": "Cubby uses the camera to scan product barcodes.",
           "recordAudioAndroid": false
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Cubby uses your photo library so you can attach product photos.",
+          "cameraPermission": "Cubby uses the camera to take product photos."
+        }
       ]
     ],
     "experiments": {

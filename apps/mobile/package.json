@@ -20,6 +20,7 @@
     "expo-font": "~56.0.5",
     "expo-glass-effect": "~56.0.4",
     "expo-image": "~56.0.10",
+    "expo-image-picker": "~56.0.16",
     "expo-linking": "~56.0.13",
     "expo-network": "~56.0.5",
     "expo-router": "~56.2.9",
