@@ -93,7 +93,9 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
           ...productCategoryOptionsWithTheme,
         ],
         renderCell: (cat) => <CategoryBadge category={cat} />,
-        mobile: { slot: "subtitle", priority: 20 },
+        // Mobile lists group by category (section headers), so the category
+        // chip is redundant per-row — prefer manufacturer as the subtitle.
+        mobile: { slot: "subtitle", priority: 30 },
         editable: {
           onSave: async (newCategory, product) => {
             await updateProductMutation.mutateAsync({
@@ -110,7 +112,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
       }),
       createTextColumn(columnHelper, "manufacturer", {
         className: "min-w-0 w-40 truncate",
-        mobile: { slot: "subtitle", priority: 30 },
+        mobile: { slot: "subtitle", priority: 20 },
         filterConfig: { placeholder: "Filter manufacturer..." },
         editable: {
           onSave: async (newValue, product) => {

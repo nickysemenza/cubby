@@ -5,22 +5,25 @@ import { entities } from "~/entities/entities";
 import type { Entity } from "~/entities/types";
 import { cn } from "~/lib/utils";
 
-const heroVariants = cva("flex flex-wrap items-start justify-between gap-3", {
-  variants: {
-    variant: {
-      list: "mb-4",
-      detail: "mb-3 sm:mb-4",
-      compact: "mb-2",
+const heroVariants = cva(
+  "flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between",
+  {
+    variants: {
+      variant: {
+        list: "mb-4",
+        detail: "mb-3 sm:mb-4",
+        compact: "mb-2",
+      },
     },
+    defaultVariants: { variant: "list" },
   },
-  defaultVariants: { variant: "list" },
-});
+);
 
-const titleVariants = cva("font-heading tracking-tight", {
+const titleVariants = cva("break-words font-heading tracking-tight", {
   variants: {
     variant: {
       list: "font-semibold text-3xl",
-      detail: "font-bold text-4xl sm:text-5xl",
+      detail: "font-bold text-3xl sm:text-4xl lg:text-5xl",
       compact: "font-bold text-2xl",
     },
   },
@@ -104,7 +107,9 @@ export function PageHero({
           </div>
         )}
       </div>
-      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+      {actions && (
+        <div className="flex w-full flex-wrap gap-2 sm:w-auto">{actions}</div>
+      )}
     </div>
   );
 }

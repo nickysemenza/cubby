@@ -10,29 +10,29 @@ export const Route = createFileRoute("/")({
 
 function Home() {
   return (
-    <PageWrapper className="gradient-mesh space-y-6">
+    <PageWrapper className="gradient-mesh space-y-4">
       {/* Warm greeting */}
       <div className="page-header-accent pb-2">
         <p className="mb-1 font-medium text-muted-foreground text-xs uppercase tracking-[0.18em]">
           Keep everything in its place
         </p>
-        <h1 className="font-bold font-heading text-3xl tracking-tight sm:text-4xl">
+        <h1 className="font-bold font-heading text-2xl tracking-tight sm:text-4xl">
           Welcome home.
         </h1>
       </div>
 
       {/* Entity Stats */}
-      <section>
-        <h2 className="mb-3 font-medium text-muted-foreground text-sm">
-          Here's everything you're keeping
-        </h2>
-        <EntityCount />
-      </section>
+      <EntityCount />
 
-      {/* Two-column layout for Activity and Quick Actions */}
+      {/* Two-column layout for Activity and Quick Actions. On mobile, surface
+          the create-actions above the read-only activity feed. */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <RecentActivityFeed limit={6} />
-        <QuickActionsCard />
+        <div className="lg:order-2">
+          <QuickActionsCard />
+        </div>
+        <div className="lg:order-1">
+          <RecentActivityFeed limit={4} />
+        </div>
       </div>
     </PageWrapper>
   );

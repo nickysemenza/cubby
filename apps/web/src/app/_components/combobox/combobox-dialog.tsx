@@ -119,7 +119,7 @@ export function DialogCompatibleCombobox<TId extends string = string>({
         aria-expanded={open}
         aria-controls={listboxId}
         aria-label={label}
-        className="w-full min-w-[200px] justify-between truncate"
+        className="w-full min-w-[200px] justify-between truncate max-sm:h-10"
         onClick={(e) => {
           // Prevent the click from bubbling up to the form and triggering a submit
           e.preventDefault();
@@ -129,7 +129,9 @@ export function DialogCompatibleCombobox<TId extends string = string>({
         // Prevent form submission when clicking the button
         type="button"
       >
-        <span className="truncate">{value?.name || "none"}</span>
+        <span className={cn("truncate", !value && "text-muted-foreground")}>
+          {value?.name ?? `Select ${label}…`}
+        </span>
         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
       </Button>
 

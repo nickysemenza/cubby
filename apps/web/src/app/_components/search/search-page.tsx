@@ -19,8 +19,10 @@ import { MobileCardSkeletonList } from "~/components/feedback/mobile-card-skelet
 import { Image } from "~/components/ui/image";
 import { Input } from "~/components/ui/input";
 import { entities } from "~/entities/entities";
+import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useIsMobile } from "~/hooks/useMobile";
 import { cn } from "~/lib/utils";
+import { dedupe } from "~/misc/array-helpers";
 import { useTRPC } from "~/trpc/react";
 import RTable from "../data-table/Table";
 import { useEntityPreview } from "../hooks/useEntityPreview";
@@ -59,6 +61,17 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
   // Active filter for mobile (separate from table filter)
   const [mobileFilter, setMobileFilter] = useState<SearchType>(type);
 
+  // Recent searches — committed on Enter so we don't record every keystroke.
+  const [recents, setRecents] = useLocalStorage<string[]>(
+    "cubby:recent-searches",
+    [],
+  );
+  const commitRecent = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    setRecents((prev) => dedupe([trimmed, ...prev]).slice(0, 8));
+  };
+
   // Create table instance (client-side filtering/sorting) — desktop only
   const table = useReactTable({
     data: data ?? [],
@@ -92,6 +105,9 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
           placeholder="Search products, recipes, locations..."
           defaultValue={query}
           onChange={(e) => handleSearchChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commitRecent(e.currentTarget.value);
+          }}
           className="pl-10"
           autoFocus
         />
@@ -115,12 +131,36 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
             onRowClick={onRowClick}
           />
         )
+      ) : recents.length > 0 ? (
+        <div className="space-y-1">
+          <div className="flex items-center justify-between px-1">
+            <span className="font-medium text-muted-foreground text-xs uppercase tracking-wider">
+              Recent
+            </span>
+            <button
+              type="button"
+              onClick={() => setRecents([])}
+              className="text-muted-foreground text-xs hover:text-foreground"
+            >
+              Clear
+            </button>
+          </div>
+          {recents.map((term) => (
+            <button
+              key={term}
+              type="button"
+              onClick={() => handleSearchChange(term)}
+              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-muted active:bg-muted/70"
+            >
+              <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <span className="truncate">{term}</span>
+            </button>
+          ))}
+        </div>
       ) : (
         <div className="flex h-48 flex-col items-center justify-center gap-2 text-muted-foreground">
           <Search className="h-8 w-8 opacity-40" />
-          <span className="text-sm">
-            Search products, recipes, locations...
-          </span>
+          <span className="text-sm">Start typing to search across Cubby</span>
         </div>
       )}
       <PreviewSheet />

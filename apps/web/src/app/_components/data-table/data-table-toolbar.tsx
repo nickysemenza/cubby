@@ -37,7 +37,12 @@ export function DataTableToolbar<TData>({
         {bulkActionBar}
       </div>
 
-      <div className="flex flex-1 items-center justify-end gap-2">
+      <div
+        className={cn(
+          "flex flex-1 items-center gap-2",
+          showViewOptions || bulkActionBar ? "justify-end" : "justify-start",
+        )}
+      >
         {additionalContent}
 
         {isFiltered && (

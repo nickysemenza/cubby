@@ -25,14 +25,14 @@ export type NavItem = {
 // Define each item once
 const scan: NavItem = {
   href: "/inventory/quick-capture?scanner=true",
-  label: "Scan",
+  label: "Scan UPC",
   icon: ScanBarcode,
   isActive: (p) => p === "/inventory/quick-capture",
 };
 
 const captureShelf: NavItem = {
   href: "/capture",
-  label: "Scan a shelf",
+  label: "Capture shelf",
   icon: Camera,
   isActive: (p) => p.startsWith("/capture"),
 };
@@ -185,6 +185,7 @@ export const moreNavItems: NavItem[] = [
   insights,
   problems,
   images,
+  settings,
 ];
 
 export const kitchenItems: NavItem[] = [

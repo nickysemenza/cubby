@@ -41,7 +41,7 @@ interface MainNavProps extends React.HTMLAttributes<HTMLElement> {
 export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
   const pathName = useLocation().pathname;
   const { isDebugEnabled, toggleDebug } = useDebug();
-  const session = authClient.useSession();
+  const { data: sessionData, isPending } = authClient.useSession();
 
   return (
     <div className="flex w-full items-center justify-between">
@@ -134,7 +134,7 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
           <span className="hidden xl:inline">Projects</span>
         </Link>
 
-        {session.data?.user && (
+        {sessionData?.user && (
           <NavDropdown
             label="Reports"
             items={reportsItems}
@@ -156,7 +156,7 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
             variant="ghost"
             size="sm"
             onClick={onSearchClick}
-            className="h-8 px-2"
+            className="hidden h-8 px-2 md:flex"
             title="Search"
           >
             <Search className="h-4 w-4" />
@@ -165,10 +165,10 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
         )}
 
         {/* Quick Actions */}
-        {session.data?.user && <QuickActionsMenu />}
+        {sessionData?.user && <QuickActionsMenu />}
 
         {/* Status Badges */}
-        {session.data?.user && <ProblemsBadge />}
+        {sessionData?.user && <ProblemsBadge />}
 
         {/* Debug Toggle */}
         <Button
@@ -189,7 +189,16 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
           <span className="sr-only">Toggle debug mode</span>
         </Button>
 
-        {!session.data?.user ? (
+        {isPending ? (
+          // Avoid flashing "Sign In" before the session resolves on an
+          // authenticated PWA — show a neutral avatar placeholder instead.
+          <div
+            className="h-7 w-7 animate-pulse rounded-full bg-muted/60"
+            aria-hidden
+          />
+        ) : sessionData?.user ? (
+          <UserAvatarDropdown />
+        ) : (
           <Link
             to="/auth/$authView"
             params={{ authView: "sign-in" }}
@@ -197,8 +206,6 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
           >
             Sign In
           </Link>
-        ) : (
-          <UserAvatarDropdown />
         )}
       </FlexContainer>
     </div>

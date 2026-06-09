@@ -39,7 +39,7 @@ function StatCard({
       <Card
         emphasis="chunky"
         className={cn(
-          "stat-card-glow group relative overflow-hidden p-3 transition-all duration-150 ease-cozy",
+          "stat-card-glow group relative overflow-hidden p-2.5 transition-all duration-150 ease-cozy",
           "hover:-translate-x-px hover:-translate-y-px hover:shadow-[var(--shadow-chunky-lg)]",
           "cursor-pointer border-l-4",
           "fade-in slide-in-from-bottom-2 animate-in",
@@ -47,10 +47,10 @@ function StatCard({
         )}
         style={{ animationDelay: `${index * 50}ms`, animationFillMode: "both" }}
       >
-        <div className="relative flex items-center gap-3">
+        <div className="relative flex flex-col items-start gap-1.5">
           <div
             className={cn(
-              "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br transition-all duration-150 group-hover:rotate-3 group-hover:scale-110",
+              "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br",
               def.color.bg,
               def.color.text,
             )}
@@ -59,17 +59,17 @@ function StatCard({
                 "inset 0 1px 2px rgba(255,255,255,0.3), inset 0 -1px 2px rgba(0,0,0,0.1)",
             }}
           >
-            <Icon className="h-5 w-5" />
+            <Icon className="h-4 w-4" />
           </div>
           <div className="min-w-0 flex-1">
             {isLoading ? (
-              <Skeleton className="h-7 w-12" />
+              <Skeleton className="h-6 w-10" />
             ) : isError ? (
-              <p className="font-heading font-semibold text-2xl text-muted-foreground leading-none tracking-tight">
+              <p className="font-heading font-semibold text-muted-foreground text-xl leading-none tracking-tight">
                 —
               </p>
             ) : (
-              <p className="font-heading font-semibold text-2xl leading-none tracking-tight">
+              <p className="font-heading font-semibold text-xl leading-none tracking-tight">
                 {formatCount(count ?? 0)}
               </p>
             )}
@@ -125,7 +125,7 @@ export default function EntityCount() {
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-7">
       {displayOrder.map((entity, i) => (
         <StatCard
           key={entity}

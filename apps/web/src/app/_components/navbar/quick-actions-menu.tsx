@@ -53,7 +53,14 @@ export const QuickActionsMenu = () => {
         <TooltipTrigger
           render={
             <DropdownMenuTrigger
-              render={<Button variant="ghost" size="sm" className="h-8 px-2" />}
+              render={
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2"
+                  aria-label="Quick actions"
+                />
+              }
             />
           }
         >

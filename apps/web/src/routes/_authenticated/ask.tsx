@@ -19,6 +19,13 @@ export const Route = createFileRoute("/_authenticated/ask")({
   head: () => ({ meta: [{ title: "Ask | cubby" }] }),
 });
 
+const EXAMPLE_PROMPTS = [
+  "Where's the orange spool of cable?",
+  "What can I cook with what I have?",
+  "How many cans of tomatoes do I have?",
+  "Which locations are empty?",
+];
+
 function AskPage() {
   const api = useTRPC();
   const navigate = useNavigate();
@@ -40,12 +47,7 @@ function AskPage() {
 
   return (
     <PageWrapper className="space-y-4">
-      <PageHero
-        variant="list"
-        title="Ask Cubby"
-        eyebrow="Your helpful companion"
-        meta={[{ icon: Sparkles, label: "Ask me where anything is" }]}
-      />
+      <PageHero variant="compact" decoration="none" title="Ask Cubby" />
 
       <form onSubmit={submit} className="flex gap-2">
         <Input
@@ -68,6 +70,31 @@ function AskPage() {
           )}
         </Button>
       </form>
+
+      {!result && !ask.isPending && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-1.5 px-1 font-medium text-muted-foreground text-xs uppercase tracking-wider">
+            <Sparkles className="h-3.5 w-3.5" />
+            Try asking
+          </div>
+          <div className="grid gap-1.5">
+            {EXAMPLE_PROMPTS.map((prompt) => (
+              <button
+                key={prompt}
+                type="button"
+                onClick={() => {
+                  setQuery(prompt);
+                  ask.mutate({ query: prompt });
+                }}
+                className="flex items-center gap-2 rounded-md border border-border/50 px-3 py-2.5 text-left text-sm transition-colors hover:bg-muted/50 active:bg-muted/70"
+              >
+                <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <span className="min-w-0 flex-1">{prompt}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {result && (
         <div className="space-y-4">

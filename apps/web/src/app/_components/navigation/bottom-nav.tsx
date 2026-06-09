@@ -1,5 +1,5 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { Bug, BugOff, Settings } from "lucide-react";
+import { Bug, BugOff, MoreHorizontal } from "lucide-react";
 import { useState } from "react";
 import { Button } from "~/components/ui/button";
 import {
@@ -81,18 +81,18 @@ export function BottomNav() {
               />
             }
           >
-            <Settings
+            <MoreHorizontal
               className={cn("h-5 w-5", isMoreActive && "scale-110")}
               aria-hidden="true"
             />
-            <span className="font-medium text-2xs">Settings</span>
+            <span className="font-medium text-2xs">More</span>
           </SheetTrigger>
           <SheetContent
             side="bottom"
             className="flex max-h-[70vh] flex-col rounded-t-xl"
           >
             <SheetHeader className="px-4 pt-4 pb-2">
-              <SheetTitle>Settings</SheetTitle>
+              <SheetTitle>More</SheetTitle>
             </SheetHeader>
             <div className="safe-bottom flex flex-1 flex-col gap-1 overflow-y-auto px-4 pb-8">
               {/* Debug Toggle */}

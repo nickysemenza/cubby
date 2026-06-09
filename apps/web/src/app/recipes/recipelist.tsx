@@ -95,7 +95,9 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
         enableSorting: false,
         meta: {
           className: "w-24",
-          mobile: { slot: "meta", priority: 20 },
+          // Mobile: yield/servings is the most useful at-a-glance datum, and
+          // recipe rows have no image — surface it as the row subtitle.
+          mobile: { slot: "subtitle", priority: 5 },
         },
         cell: (info) => {
           const recipe = info.row.original;
@@ -128,7 +130,7 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
           return (
             <span title={`${withPrice}/${totals.totalIngredients} ingredients`}>
               {formatCurrency(totals.price)}
-              <span className="ml-1 text-2xs text-muted-foreground">
+              <span className="ml-1 hidden text-2xs text-muted-foreground sm:inline">
                 ({withPrice}/{totals.totalIngredients})
               </span>
             </span>
@@ -162,7 +164,7 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
               title={`${withNutrients}/${totals.totalIngredients} ingredients`}
             >
               {Math.round(calories)} kcal
-              <span className="ml-1 text-2xs text-muted-foreground">
+              <span className="ml-1 hidden text-2xs text-muted-foreground sm:inline">
                 ({withNutrients}/{totals.totalIngredients})
               </span>
             </span>

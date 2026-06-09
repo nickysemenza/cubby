@@ -83,6 +83,7 @@ export const ProblemsBadge = () => {
             )}
             render={<Link to="/problems" />}
             nativeButton={false}
+            aria-label={tooltipText}
           />
         }
       >

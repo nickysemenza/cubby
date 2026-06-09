@@ -7,7 +7,6 @@ import { ImageWithPreview } from "~/components/ui/image-with-preview";
 import { EntityIcon } from "~/entities/entities";
 import { cn } from "~/lib/utils";
 import { InventoryValuationSummary } from "./inventory-valuation-summary";
-import { LocationTypeBadge } from "./LocationTypeBadge";
 import { LocationIcon } from "./location-icons";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
@@ -82,24 +81,31 @@ export const LocationGalleryCard = function LocationGalleryCard({
         className,
       )}
     >
-      {/* Header */}
-      <div className="flex items-center gap-1.5 border-b px-2 py-1.5">
-        <LocationIcon
-          type={location.type}
-          colored
-          className="h-3.5 w-3.5 shrink-0"
-        />
-        <Link
-          to="/locations/$id"
-          params={{ id: location.id }}
-          className="flex-1 truncate font-medium text-xs hover:text-primary hover:underline"
-        >
-          {location.name}
-        </Link>
+      {/* Header — name owns its own line so it isn't crushed by the value;
+          the colored type icon already conveys location type (no badge). */}
+      <div className="border-b px-2 py-1.5">
+        <div className="flex items-center gap-1.5">
+          <LocationIcon
+            type={location.type}
+            colored
+            className="h-3.5 w-3.5 shrink-0"
+          />
+          <Link
+            to="/locations/$id"
+            params={{ id: location.id }}
+            className="min-w-0 flex-1 truncate font-medium text-xs hover:text-primary hover:underline"
+          >
+            {location.name}
+          </Link>
+        </div>
         {inventoryItems.length > 0 && (
-          <InventoryValuationSummary items={inventoryItems} variant="compact" />
+          <div className="mt-0.5 flex justify-end">
+            <InventoryValuationSummary
+              items={inventoryItems}
+              variant="compact"
+            />
+          </div>
         )}
-        <LocationTypeBadge type={location.type} />
       </div>
 
       {/* Location Images Strip */}

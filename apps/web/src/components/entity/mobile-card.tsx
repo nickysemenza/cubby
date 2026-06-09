@@ -91,7 +91,7 @@ export function MobileCard({
       // biome-ignore lint/a11y/noStaticElementInteractions: role, tabIndex, and onKeyDown are conditionally set based on onClick
       <div
         className={cn(
-          "grid w-full max-w-full items-center gap-x-2.5 overflow-hidden border-border/30 border-b px-3 py-2.5",
+          "grid w-full max-w-full items-center gap-x-2.5 overflow-hidden border-border/30 border-b px-3 py-2",
           // Dynamic grid columns based on which slots are present
           selectable && imageSlot
             ? "grid-cols-[auto_auto_1fr_auto]"
@@ -166,14 +166,14 @@ export function MobileCard({
                 {subtitle}
               </span>
             )}
-            <div className="ml-auto flex min-w-0 max-w-[45%] items-center justify-end gap-2">
+            <div className="ml-auto flex min-w-0 max-w-[55%] items-center justify-end gap-2">
               {rightValues?.[0] !== undefined && (
-                <span className="inline-block min-w-0 max-w-24 truncate text-muted-foreground text-xs">
+                <span className="flex min-w-0 max-w-28 items-center overflow-hidden whitespace-nowrap text-muted-foreground text-xs [&_*]:truncate">
                   {rightValues[0]}
                 </span>
               )}
               {rightValues?.[1] !== undefined && (
-                <span className="inline-block min-w-0 max-w-24 truncate text-muted-foreground text-xs">
+                <span className="flex min-w-0 max-w-28 items-center overflow-hidden whitespace-nowrap text-muted-foreground text-xs [&_*]:truncate">
                   {rightValues[1]}
                 </span>
               )}

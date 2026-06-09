@@ -96,6 +96,14 @@ export function useMobileListModel<TItem>({
     () =>
       rows.map((row) => {
         let title = extractEntityTitle(row.original);
+        // Mobile: drop the redundant " @ Location" suffix — the location is
+        // already rendered as the row subtitle, and the suffix forces the
+        // product name to truncate mid-word.
+        if (entity === "inventory") {
+          const product = (row.original as { product?: { name?: string } })
+            .product;
+          if (product?.name) title = product.name;
+        }
         let imageSlot: ReactNode | undefined;
         let actionsContent: ReactNode | undefined;
         const subtitleCandidates: SlotValue[] = [];
@@ -178,6 +186,6 @@ export function useMobileListModel<TItem>({
           detailsHref,
         };
       }),
-    [basePath, maxRightValues, rows],
+    [basePath, entity, maxRightValues, rows],
   );
 }

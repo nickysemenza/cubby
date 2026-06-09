@@ -113,11 +113,14 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
 
         {error && <div className="text-destructive text-sm">{error}</div>}
 
-        <div className="flex justify-end space-x-2">
+        {/* flex-col-reverse: primary submit sits at the bottom (thumb reach)
+            on mobile, full-width; reverts to submit-left/cancel-right on sm+. */}
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button
             type="submit"
             disabled={isPending}
             variant={submitButtonVariant}
+            className="w-full max-sm:h-11 sm:w-auto"
           >
             {isPending && <Spinner size="sm" />}
             {isPending
@@ -129,6 +132,7 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
             variant="outline"
             onClick={onCancel}
             disabled={isPending}
+            className="w-full max-sm:h-11 sm:w-auto"
           >
             Cancel
           </Button>
