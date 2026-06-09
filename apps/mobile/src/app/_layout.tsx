@@ -22,7 +22,9 @@ function AuthGate() {
 
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <Stack>
+      {/* Show only the chevron on back buttons (the previous screen is the
+          untitled (tabs) group, which would otherwise read "(tabs)"). */}
+      <Stack screenOptions={{ headerBackButtonDisplayMode: "minimal" }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="products" options={{ title: "Products" }} />
         <Stack.Screen name="ingredients" options={{ title: "Ingredients" }} />
