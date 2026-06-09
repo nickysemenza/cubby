@@ -1,4 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useRef, useState } from "react";
 import {
@@ -9,23 +10,24 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useCameraPermission } from "react-native-vision-camera";
-import { CodeScanner } from "react-native-vision-camera-barcode-scanner";
 import { useTRPC } from "@/lib/trpc";
 
+// expo-camera uses Apple AVFoundation on iOS (no MLKit) — so it builds and runs
+// on the plain arm64 simulator. The simulator has no camera feed, but every
+// other screen works there; real scanning happens on a physical device.
 const PRODUCT_FORMATS = [
-  "ean-13",
-  "ean-8",
-  "upc-a",
-  "upc-e",
-  "code-128",
-  "qr-code",
+  "ean13",
+  "ean8",
+  "upc_e",
+  "code128",
+  "code39",
+  "qr",
 ] as const;
 
 const isValidUpc = (value: string) => /^\d{12,14}$/.test(value);
 
 export default function ScanScreen() {
-  const { hasPermission, requestPermission } = useCameraPermission();
+  const [permission, requestPermission] = useCameraPermissions();
 
   // Pause the camera when the tab isn't focused (expo-router's focus effect
   // avoids a phantom @react-navigation/native import under pnpm).
@@ -38,7 +40,7 @@ export default function ScanScreen() {
   );
 
   const [scanned, setScanned] = useState<string | null>(null);
-  // onBarcodeScanned fires ~30x/sec; lock so we only capture the first hit.
+  // onBarcodeScanned can fire repeatedly; lock so we capture only the first hit.
   const locked = useRef(false);
 
   const reset = useCallback(() => {
@@ -46,7 +48,15 @@ export default function ScanScreen() {
     setScanned(null);
   }, []);
 
-  if (!hasPermission) {
+  if (!permission) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
+
+  if (!permission.granted) {
     return (
       <SafeAreaView style={styles.flex} edges={["top"]}>
         <View style={styles.center}>
@@ -64,21 +74,22 @@ export default function ScanScreen() {
 
   return (
     <View style={styles.flex}>
-      <CodeScanner
+      <CameraView
         style={StyleSheet.absoluteFill}
-        isActive={isFocused && !scanned}
-        barcodeFormats={[...PRODUCT_FORMATS]}
-        onBarcodeScanned={(barcodes) => {
-          if (locked.current) return;
-          const hit = barcodes.find(
-            (b) => b.rawValue && isValidUpc(b.rawValue),
-          );
-          if (hit?.rawValue) {
-            locked.current = true;
-            setScanned(hit.rawValue);
-          }
-        }}
-        onError={(e) => console.error("scanner error", e)}
+        facing="back"
+        active={isFocused && !scanned}
+        barcodeScannerSettings={{ barcodeTypes: [...PRODUCT_FORMATS] }}
+        onBarcodeScanned={
+          scanned
+            ? undefined
+            : ({ data }) => {
+                if (locked.current) return;
+                if (isValidUpc(data)) {
+                  locked.current = true;
+                  setScanned(data);
+                }
+              }
+        }
       />
 
       {!scanned ? (
