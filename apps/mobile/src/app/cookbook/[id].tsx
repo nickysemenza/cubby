@@ -11,6 +11,7 @@ export default function CookbookDetail() {
   const q = useQuery(
     trpc.recipe.list.queryOptions({
       filters: { cookbookId: unsafeCookbookId(id) },
+      pagination: { pageIndex: 0, pageSize: 1000 },
     }),
   );
 

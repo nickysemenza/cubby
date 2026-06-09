@@ -5,7 +5,12 @@ import { useTRPC } from "@/lib/trpc";
 
 export default function IngredientsScreen() {
   const trpc = useTRPC();
-  const q = useQuery(trpc.ingredient.list.queryOptions({ filters: {} }));
+  const q = useQuery(
+    trpc.ingredient.list.queryOptions({
+      filters: {},
+      pagination: { pageIndex: 0, pageSize: 1000 },
+    }),
+  );
 
   return (
     <EntityListScreen

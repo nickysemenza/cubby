@@ -1,8 +1,8 @@
+import { FlashList } from "@shopify/flash-list";
 import { Image } from "expo-image";
 import type { ReactNode } from "react";
 import {
   ActivityIndicator,
-  FlatList,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -83,79 +83,81 @@ export function EntityListScreen<T>({
           <Text style={styles.error}>{error.message}</Text>
         </View>
       ) : (
-        <FlatList
-          data={items}
-          keyExtractor={keyExtractor}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            onRefresh ? (
-              <RefreshControl
-                refreshing={isRefetching ?? false}
-                onRefresh={onRefresh}
-              />
-            ) : undefined
-          }
-          renderItem={({ item }) => {
-            const secondary = secondaryText?.(item);
-            const uri = imageUrl?.(item);
-            const rights = (rightValues?.(item) ?? []).filter(
-              (v): v is string => !!v,
-            );
-            return (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.row,
-                  pressed && onPressItem ? styles.rowPressed : null,
-                ]}
-                onPress={onPressItem ? () => onPressItem(item) : undefined}
-                disabled={!onPressItem}
-              >
-                {showImages ? (
-                  uri ? (
-                    <Image
-                      style={styles.thumb}
-                      source={{ uri }}
-                      contentFit="cover"
-                      transition={150}
-                      cachePolicy="memory-disk"
-                    />
-                  ) : (
-                    <View style={[styles.thumb, styles.thumbPlaceholder]}>
-                      <Text style={styles.thumbInitial}>
-                        {primaryText(item).trim().charAt(0).toUpperCase() ||
-                          "?"}
-                      </Text>
-                    </View>
-                  )
-                ) : null}
-                <View style={styles.rowText}>
-                  <Text style={styles.name} numberOfLines={2}>
-                    {primaryText(item)}
-                  </Text>
-                  {secondary ? (
-                    <Text style={styles.sub} numberOfLines={1}>
-                      {secondary}
-                    </Text>
+        <View style={styles.listWrap}>
+          <FlashList
+            data={items}
+            keyExtractor={keyExtractor}
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              onRefresh ? (
+                <RefreshControl
+                  refreshing={isRefetching ?? false}
+                  onRefresh={onRefresh}
+                />
+              ) : undefined
+            }
+            renderItem={({ item }) => {
+              const secondary = secondaryText?.(item);
+              const uri = imageUrl?.(item);
+              const rights = (rightValues?.(item) ?? []).filter(
+                (v): v is string => !!v,
+              );
+              return (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.row,
+                    pressed && onPressItem ? styles.rowPressed : null,
+                  ]}
+                  onPress={onPressItem ? () => onPressItem(item) : undefined}
+                  disabled={!onPressItem}
+                >
+                  {showImages ? (
+                    uri ? (
+                      <Image
+                        style={styles.thumb}
+                        source={{ uri }}
+                        contentFit="cover"
+                        transition={150}
+                        cachePolicy="memory-disk"
+                      />
+                    ) : (
+                      <View style={[styles.thumb, styles.thumbPlaceholder]}>
+                        <Text style={styles.thumbInitial}>
+                          {primaryText(item).trim().charAt(0).toUpperCase() ||
+                            "?"}
+                        </Text>
+                      </View>
+                    )
                   ) : null}
-                </View>
-                {rights.length ? (
-                  <View style={styles.rightCol}>
-                    <Text style={styles.rightPrimary} numberOfLines={1}>
-                      {rights[0]}
+                  <View style={styles.rowText}>
+                    <Text style={styles.name} numberOfLines={2}>
+                      {primaryText(item)}
                     </Text>
-                    {rights[1] ? (
-                      <Text style={styles.rightSecondary} numberOfLines={1}>
-                        {rights[1]}
+                    {secondary ? (
+                      <Text style={styles.sub} numberOfLines={1}>
+                        {secondary}
                       </Text>
                     ) : null}
                   </View>
-                ) : null}
-                {onPressItem ? <Text style={styles.chevron}>›</Text> : null}
-              </Pressable>
-            );
-          }}
-          ListEmptyComponent={<Text style={styles.empty}>{emptyText}</Text>}
-        />
+                  {rights.length ? (
+                    <View style={styles.rightCol}>
+                      <Text style={styles.rightPrimary} numberOfLines={1}>
+                        {rights[0]}
+                      </Text>
+                      {rights[1] ? (
+                        <Text style={styles.rightSecondary} numberOfLines={1}>
+                          {rights[1]}
+                        </Text>
+                      ) : null}
+                    </View>
+                  ) : null}
+                  {onPressItem ? <Text style={styles.chevron}>›</Text> : null}
+                </Pressable>
+              );
+            }}
+            ListEmptyComponent={<Text style={styles.empty}>{emptyText}</Text>}
+          />
+        </View>
       )}
     </SafeAreaView>
   );
@@ -175,6 +177,7 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 28, fontWeight: "800" },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  listWrap: { flex: 1 },
   listContent: { paddingHorizontal: 16, paddingBottom: 24 },
   row: {
     flexDirection: "row",

@@ -1,10 +1,10 @@
+import { FlashList } from "@shopify/flash-list";
 import { useQuery } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
-  FlatList,
   Pressable,
   StyleSheet,
   Text,
@@ -70,52 +70,54 @@ export default function SearchScreen() {
           <Text style={styles.error}>{q.error.message}</Text>
         </View>
       ) : (
-        <FlatList
-          data={enabled ? (q.data ?? []) : []}
-          keyExtractor={(item) => `${item.entityType}:${item.id}`}
-          contentContainerStyle={styles.listContent}
-          keyboardShouldPersistTaps="handled"
-          renderItem={({ item }) => (
-            <Pressable
-              style={({ pressed }) => [
-                styles.row,
-                pressed && styles.rowPressed,
-              ]}
-              onPress={() => openDetail(item.entityType, item.id)}
-            >
-              {item.imageUrl ? (
-                <Image
-                  style={styles.thumb}
-                  source={{ uri: item.imageUrl }}
-                  contentFit="cover"
-                  transition={150}
-                  cachePolicy="memory-disk"
-                />
-              ) : (
-                <View style={[styles.thumb, styles.thumbPlaceholder]}>
-                  <Text style={styles.thumbInitial}>
-                    {item.name.trim().charAt(0).toUpperCase() || "?"}
+        <View style={styles.listWrap}>
+          <FlashList
+            data={enabled ? (q.data ?? []) : []}
+            keyExtractor={(item) => `${item.entityType}:${item.id}`}
+            contentContainerStyle={styles.listContent}
+            keyboardShouldPersistTaps="handled"
+            renderItem={({ item }) => (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.row,
+                  pressed && styles.rowPressed,
+                ]}
+                onPress={() => openDetail(item.entityType, item.id)}
+              >
+                {item.imageUrl ? (
+                  <Image
+                    style={styles.thumb}
+                    source={{ uri: item.imageUrl }}
+                    contentFit="cover"
+                    transition={150}
+                    cachePolicy="memory-disk"
+                  />
+                ) : (
+                  <View style={[styles.thumb, styles.thumbPlaceholder]}>
+                    <Text style={styles.thumbInitial}>
+                      {item.name.trim().charAt(0).toUpperCase() || "?"}
+                    </Text>
+                  </View>
+                )}
+                <View style={styles.rowText}>
+                  <Text style={styles.name} numberOfLines={2}>
+                    {item.name}
+                  </Text>
+                  <Text style={styles.sub}>
+                    {item.entityType}
+                    {item.subtitle ? ` · ${item.subtitle}` : ""}
                   </Text>
                 </View>
-              )}
-              <View style={styles.rowText}>
-                <Text style={styles.name} numberOfLines={2}>
-                  {item.name}
-                </Text>
-                <Text style={styles.sub}>
-                  {item.entityType}
-                  {item.subtitle ? ` · ${item.subtitle}` : ""}
-                </Text>
-              </View>
-              <Text style={styles.chevron}>›</Text>
-            </Pressable>
-          )}
-          ListEmptyComponent={
-            <Text style={styles.empty}>
-              {enabled ? "No results." : "Type at least 2 characters."}
-            </Text>
-          }
-        />
+                <Text style={styles.chevron}>›</Text>
+              </Pressable>
+            )}
+            ListEmptyComponent={
+              <Text style={styles.empty}>
+                {enabled ? "No results." : "Type at least 2 characters."}
+              </Text>
+            }
+          />
+        </View>
       )}
     </SafeAreaView>
   );
@@ -135,6 +137,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  listWrap: { flex: 1 },
   listContent: { paddingHorizontal: 16, paddingBottom: 24 },
   row: {
     flexDirection: "row",
