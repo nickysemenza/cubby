@@ -1,3 +1,4 @@
+import type { RichItem, WAmount } from "@cubby/recipebridge";
 import { unsafeRecipeId } from "@cubby/schemas/identifiers";
 import { useQuery } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
@@ -5,6 +6,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { DetailView } from "@/components/detail-view";
 import { type RouterOutputs, useTRPC } from "@/lib/trpc";
 import { useFormattedAmountLists } from "@/lib/use-formatted-amounts";
+import { useRichInstructions } from "@/lib/use-rich-instructions";
 
 type Recipe = RouterOutputs["recipe"]["getByID"];
 type Section = Recipe["sections"][number];
@@ -12,6 +14,12 @@ type SectionIngredient = Section["ingredients"][number];
 
 const ingredientName = (ing: SectionIngredient): string =>
   ing.type === "ingredient" ? ing.ingredient.name : ing.recipe.name;
+
+const measureText = (amounts: WAmount[]): string => {
+  const last = amounts.at(-1);
+  if (!last) return "";
+  return last.unit === "whole" ? `${last.value}` : `${last.value} ${last.unit}`;
+};
 
 export default function RecipeDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -23,7 +31,9 @@ export default function RecipeDetail() {
   const book = r?.source && r.source.type === "book" ? r.source.book : null;
   const sections = r?.sections ?? [];
   const ingredients = sections.flatMap((s) => s.ingredients);
-  const steps = sections.flatMap((s) => s.instructions);
+  const stepTexts = sections.flatMap((s) =>
+    s.instructions.map((i) => i.instruction),
+  );
 
   // Amounts formatted on-device (recipebridge), one round-trip, joined " / ".
   const formattedAmounts = useFormattedAmountLists(
@@ -32,6 +42,57 @@ export default function RecipeDetail() {
     (ing) => ing.amounts,
     " / ",
   );
+
+  // Map an ingredient name (as it appears in instruction text) → its detail route.
+  const linkByName = new Map<string, { id: string; isRecipe: boolean }>();
+  for (const ing of ingredients) {
+    linkByName.set(
+      ingredientName(ing).toLowerCase(),
+      ing.type === "ingredient"
+        ? { id: ing.ingredient.id, isRecipe: false }
+        : { id: ing.recipe.id, isRecipe: true },
+    );
+  }
+
+  // Instruction steps parsed into ingredient/measurement spans on-device.
+  const richSteps = useRichInstructions(
+    stepTexts,
+    ingredients.map(ingredientName),
+  );
+
+  const renderSpan = (item: RichItem, key: number) => {
+    if (item.kind === "Ing") {
+      const link = linkByName.get(item.value.toLowerCase());
+      if (!link) {
+        return (
+          <Text key={key} style={styles.ingHi}>
+            {item.value}
+          </Text>
+        );
+      }
+      return (
+        <Text
+          key={key}
+          style={styles.ingLink}
+          onPress={() =>
+            link.isRecipe
+              ? router.push(`/recipe/${link.id}`)
+              : router.push(`/ingredient/${link.id}`)
+          }
+        >
+          {item.value}
+        </Text>
+      );
+    }
+    if (item.kind === "Measure") {
+      return (
+        <Text key={key} style={styles.measure}>
+          {measureText(item.value)}
+        </Text>
+      );
+    }
+    return <Text key={key}>{item.value}</Text>;
+  };
 
   return (
     <DetailView
@@ -89,17 +150,22 @@ export default function RecipeDetail() {
         </View>
       ) : null}
 
-      {steps.length ? (
+      {stepTexts.length ? (
         <View style={styles.block}>
           <View style={styles.rule} />
           <Text style={styles.heading}>Instructions</Text>
-          {steps.map((ins, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: stable order, no ids.
-            <View key={i} style={styles.step}>
-              <Text style={styles.stepNum}>Step {i + 1}</Text>
-              <Text style={styles.stepText}>{ins.instruction}</Text>
-            </View>
-          ))}
+          {stepTexts.map((text, i) => {
+            const items = richSteps[i];
+            return (
+              // biome-ignore lint/suspicious/noArrayIndexKey: stable order, no ids.
+              <View key={i} style={styles.step}>
+                <Text style={styles.stepNum}>Step {i + 1}</Text>
+                <Text style={styles.stepText}>
+                  {items ? items.map((it, j) => renderSpan(it, j)) : text}
+                </Text>
+              </View>
+            );
+          })}
         </View>
       ) : null}
     </DetailView>
@@ -140,4 +206,7 @@ const styles = StyleSheet.create({
   step: { paddingVertical: 10 },
   stepNum: { fontSize: 16, fontWeight: "700", color: "#111" },
   stepText: { fontSize: 15, color: "#333", marginTop: 3, lineHeight: 21 },
+  ingLink: { color: "#208AEF", fontWeight: "600" },
+  ingHi: { color: "#111", fontWeight: "600" },
+  measure: { color: "#111", fontWeight: "700" },
 });

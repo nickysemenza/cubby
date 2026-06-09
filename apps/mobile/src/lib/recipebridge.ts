@@ -93,6 +93,24 @@ export async function formatAmounts(
   return res.map((r) => (r.ok ? (r.result as string) : null));
 }
 
+/**
+ * Parse many instruction strings into measurement/ingredient-aware spans in one
+ * round-trip. `null` for any text that failed to parse (caller falls back to the
+ * raw string). `ingredientNames` is the same set passed to every call.
+ */
+export async function parseRichTexts(
+  texts: string[],
+  ingredientNames: string[],
+): Promise<(RB.RichItem[] | null)[]> {
+  const res = await callBatch(
+    texts.map((t) => ({
+      method: "parse_rich_text",
+      args: [t, ingredientNames],
+    })),
+  );
+  return res.map((r) => (r.ok ? (r.result as RB.RichItem[]) : null));
+}
+
 // Async mirror of the @cubby/recipebridge API (add wrappers as screens need them;
 // `call` already reaches every exported function for free).
 export const recipebridge = {
