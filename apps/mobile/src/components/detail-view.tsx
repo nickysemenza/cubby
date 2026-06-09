@@ -1,12 +1,13 @@
 import { getAppErrorDetails } from "@cubby/api-contract";
 import { Image } from "expo-image";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
 
@@ -18,7 +19,8 @@ type DetailViewProps = {
   notFound?: boolean;
   title?: string;
   subtitle?: string | null;
-  imageUrl?: string | null;
+  /** Hero image URLs; >1 renders a swipeable gallery with page dots. */
+  imageUrls?: string[];
   rows: DetailRow[];
   /** Make the title tappable (e.g. navigate to the underlying product). */
   onTitlePress?: () => void;
@@ -35,7 +37,7 @@ export function DetailView({
   notFound,
   title,
   subtitle,
-  imageUrl,
+  imageUrls,
   rows,
   onTitlePress,
   onSubtitlePress,
@@ -67,13 +69,7 @@ export function DetailView({
 
   return (
     <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
-      {imageUrl ? (
-        <Image
-          style={styles.hero}
-          source={{ uri: imageUrl }}
-          contentFit="cover"
-        />
-      ) : null}
+      {imageUrls?.length ? <HeroGallery urls={imageUrls} /> : null}
       {title ? (
         onTitlePress ? (
           <Pressable
@@ -114,6 +110,45 @@ export function DetailView({
 
       {children}
     </ScrollView>
+  );
+}
+
+/** Hero image, or a swipeable paged gallery (with page dots) when >1 image. */
+function HeroGallery({ urls }: { urls: string[] }) {
+  const { width } = useWindowDimensions();
+  const itemWidth = width - 32; // matches content padding (16 each side)
+  const [index, setIndex] = useState(0);
+
+  if (urls.length === 1) {
+    return (
+      <Image style={styles.hero} source={{ uri: urls[0] }} contentFit="cover" />
+    );
+  }
+  return (
+    <View style={styles.galleryWrap}>
+      <ScrollView
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={(e) =>
+          setIndex(Math.round(e.nativeEvent.contentOffset.x / itemWidth))
+        }
+      >
+        {urls.map((u) => (
+          <Image
+            key={u}
+            style={[styles.hero, { width: itemWidth, marginBottom: 0 }]}
+            source={{ uri: u }}
+            contentFit="cover"
+          />
+        ))}
+      </ScrollView>
+      <View style={styles.dots}>
+        {urls.map((u, i) => (
+          <View key={u} style={[styles.dot, i === index && styles.dotActive]} />
+        ))}
+      </View>
+    </View>
   );
 }
 
@@ -199,6 +234,15 @@ const styles = StyleSheet.create({
     backgroundColor: "#f0f0f0",
     marginBottom: 10,
   },
+  galleryWrap: { marginBottom: 10 },
+  dots: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 8,
+  },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#d0d0d0" },
+  dotActive: { backgroundColor: "#208AEF" },
   title: { fontSize: 24, fontWeight: "800" },
   subtitle: { fontSize: 16, color: "#666", marginTop: 1 },
   linkRow: { flexDirection: "row", alignItems: "center" },

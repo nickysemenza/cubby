@@ -21,7 +21,7 @@ export default function LocationDetail() {
     <DetailView
       isLoading={q.isLoading}
       error={q.error}
-      imageUrl={loc?.images[0]?.url}
+      imageUrls={loc?.images.map((i) => i.url)}
       title={loc?.name}
       subtitle={loc?.type}
       rows={[

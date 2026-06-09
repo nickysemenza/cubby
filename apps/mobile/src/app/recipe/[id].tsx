@@ -119,7 +119,7 @@ export default function RecipeDetail() {
     <DetailView
       isLoading={q.isLoading}
       error={q.error}
-      imageUrl={r?.images[0]?.url}
+      imageUrls={r?.images.map((i) => i.url)}
       title={r?.name ?? "Untitled recipe"}
       subtitle={book}
       rows={[

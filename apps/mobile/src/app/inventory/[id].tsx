@@ -32,7 +32,7 @@ export default function InventoryDetail() {
       <DetailView
         isLoading={q.isLoading}
         error={q.error}
-        imageUrl={p?.images[0]?.url}
+        imageUrls={p?.images.map((i) => i.url)}
         title={p?.name}
         subtitle={item?.location.name}
         onTitlePress={
