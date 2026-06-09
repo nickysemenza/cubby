@@ -1,4 +1,3 @@
-import { unsafeProductId } from "@cubby/schemas/identifiers";
 import { getErrorMessage } from "@cubby/shared";
 import { useQueryClient } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
@@ -7,17 +6,28 @@ import {
   ActionSheetIOS,
   ActivityIndicator,
   Alert,
+  Modal,
   Pressable,
   StyleSheet,
   Text,
+  View,
 } from "react-native";
-import { useTRPC, useTRPCClient } from "@/lib/trpc";
+import { useTRPCClient } from "@/lib/trpc";
 import { uploadAndAttachToProduct } from "@/lib/upload-image";
 
-/** Nav-bar action: take/pick a photo, upload to R2, attach to the product. */
-export function AddPhotoButton({ productId }: { productId: string }) {
+/**
+ * Nav-bar action: take/pick a photo, upload to R2, attach to the product.
+ * `onUploaded` lets the host screen refetch its own query (more reliable than
+ * cross-component cache invalidation); the list caches are invalidated too.
+ */
+export function AddPhotoButton({
+  productId,
+  onUploaded,
+}: {
+  productId: string;
+  onUploaded?: () => void;
+}) {
   const client = useTRPCClient();
-  const trpc = useTRPC();
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
 
@@ -47,15 +57,9 @@ export function AddPhotoButton({ productId }: { productId: string }) {
     setBusy(true);
     try {
       await uploadAndAttachToProduct(client, productId, asset);
-      await Promise.all([
-        qc.invalidateQueries({
-          queryKey: trpc.product.getByID.queryKey({
-            id: unsafeProductId(productId),
-          }),
-        }),
-        qc.invalidateQueries({ queryKey: ["product", "list"] }),
-        qc.invalidateQueries({ queryKey: ["inventory", "list"] }),
-      ]);
+      onUploaded?.();
+      void qc.invalidateQueries({ queryKey: ["product", "list"] });
+      void qc.invalidateQueries({ queryKey: ["inventory", "list"] });
     } catch (e) {
       Alert.alert("Upload failed", getErrorMessage(e));
     } finally {
@@ -64,6 +68,7 @@ export function AddPhotoButton({ productId }: { productId: string }) {
   };
 
   const onPress = () => {
+    if (busy) return;
     ActionSheetIOS.showActionSheetWithOptions(
       {
         options: ["Take Photo", "Choose from Library", "Cancel"],
@@ -76,16 +81,39 @@ export function AddPhotoButton({ productId }: { productId: string }) {
     );
   };
 
-  if (busy) return <ActivityIndicator style={styles.spinner} />;
-
   return (
-    <Pressable onPress={onPress} hitSlop={8}>
-      <Text style={styles.label}>Photo</Text>
-    </Pressable>
+    <>
+      <Pressable onPress={onPress} hitSlop={8} disabled={busy}>
+        {busy ? <ActivityIndicator /> : <Text style={styles.label}>Photo</Text>}
+      </Pressable>
+
+      <Modal visible={busy} transparent animationType="fade">
+        <View style={styles.backdrop}>
+          <View style={styles.card}>
+            <ActivityIndicator size="large" />
+            <Text style={styles.caption}>Uploading…</Text>
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   label: { color: "#208AEF", fontSize: 16, fontWeight: "600" },
-  spinner: { marginRight: 4 },
+  backdrop: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.4)",
+  },
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    paddingVertical: 28,
+    paddingHorizontal: 40,
+    alignItems: "center",
+    gap: 12,
+  },
+  caption: { fontSize: 15, fontWeight: "600", color: "#333" },
 });

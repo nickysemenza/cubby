@@ -17,7 +17,14 @@ export default function ProductDetail() {
   return (
     <>
       <Stack.Screen
-        options={{ headerRight: () => <AddPhotoButton productId={id} /> }}
+        options={{
+          headerRight: () => (
+            <AddPhotoButton
+              productId={id}
+              onUploaded={() => void q.refetch()}
+            />
+          ),
+        }}
       />
       <DetailView
         isLoading={q.isLoading}

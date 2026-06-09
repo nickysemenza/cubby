@@ -20,7 +20,12 @@ export default function InventoryDetail() {
       {item ? (
         <Stack.Screen
           options={{
-            headerRight: () => <AddPhotoButton productId={item.product.id} />,
+            headerRight: () => (
+              <AddPhotoButton
+                productId={item.product.id}
+                onUploaded={() => void q.refetch()}
+              />
+            ),
           }}
         />
       ) : null}
