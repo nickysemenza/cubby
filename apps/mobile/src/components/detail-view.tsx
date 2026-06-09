@@ -19,6 +19,10 @@ type DetailViewProps = {
   subtitle?: string | null;
   imageUrl?: string | null;
   rows: DetailRow[];
+  /** Make the title tappable (e.g. navigate to the underlying product). */
+  onTitlePress?: () => void;
+  /** Make the subtitle tappable (e.g. navigate to the location). */
+  onSubtitlePress?: () => void;
   /** Custom sections rendered below the label/value rows. */
   children?: ReactNode;
 };
@@ -32,6 +36,8 @@ export function DetailView({
   subtitle,
   imageUrl,
   rows,
+  onTitlePress,
+  onSubtitlePress,
   children,
 }: DetailViewProps) {
   if (isLoading) {
@@ -67,8 +73,32 @@ export function DetailView({
           contentFit="cover"
         />
       ) : null}
-      {title ? <Text style={styles.title}>{title}</Text> : null}
-      {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+      {title ? (
+        onTitlePress ? (
+          <Pressable
+            style={({ pressed }) => [styles.linkRow, pressed && styles.pressed]}
+            onPress={onTitlePress}
+          >
+            <Text style={[styles.title, styles.linkText]}>{title}</Text>
+            <Text style={styles.linkChevron}>›</Text>
+          </Pressable>
+        ) : (
+          <Text style={styles.title}>{title}</Text>
+        )
+      ) : null}
+      {subtitle ? (
+        onSubtitlePress ? (
+          <Pressable
+            style={({ pressed }) => [styles.linkRow, pressed && styles.pressed]}
+            onPress={onSubtitlePress}
+          >
+            <Text style={[styles.subtitle, styles.linkText]}>{subtitle}</Text>
+            <Text style={styles.linkChevronSm}>›</Text>
+          </Pressable>
+        ) : (
+          <Text style={styles.subtitle}>{subtitle}</Text>
+        )
+      ) : null}
 
       {visible.length ? (
         <View style={styles.rows}>
@@ -148,25 +178,30 @@ const styles = StyleSheet.create({
   },
   hero: {
     width: "100%",
-    height: 220,
+    height: 180,
     borderRadius: 14,
     backgroundColor: "#f0f0f0",
-    marginBottom: 12,
+    marginBottom: 10,
   },
   title: { fontSize: 24, fontWeight: "800" },
-  subtitle: { fontSize: 16, color: "#666", marginTop: 2 },
-  rows: { marginTop: 16, gap: 2 },
+  subtitle: { fontSize: 16, color: "#666", marginTop: 1 },
+  linkRow: { flexDirection: "row", alignItems: "center" },
+  linkText: { color: "#208AEF" },
+  linkChevron: { fontSize: 22, color: "#208AEF", marginLeft: 4 },
+  linkChevronSm: { fontSize: 18, color: "#208AEF", marginLeft: 4 },
+  pressed: { opacity: 0.55 },
+  rows: { marginTop: 12, gap: 0 },
   row: {
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingVertical: 12,
+    paddingVertical: 9,
     gap: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "#eee",
   },
   label: { fontSize: 15, color: "#888" },
   value: { fontSize: 15, fontWeight: "600", flexShrink: 1, textAlign: "right" },
-  section: { marginTop: 24, gap: 4 },
+  section: { marginTop: 18, gap: 4 },
   sectionTitle: {
     fontSize: 13,
     fontWeight: "700",

@@ -1,11 +1,7 @@
 import { unsafeInventoryId } from "@cubby/schemas/identifiers";
 import { useQuery } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
-import {
-  DetailNavRow,
-  DetailSection,
-  DetailView,
-} from "@/components/detail-view";
+import { DetailView } from "@/components/detail-view";
 import { useTRPC } from "@/lib/trpc";
 
 export default function InventoryDetail() {
@@ -24,6 +20,12 @@ export default function InventoryDetail() {
       imageUrl={p?.images[0]?.url}
       title={p?.name}
       subtitle={item?.location.name}
+      onTitlePress={
+        item ? () => router.push(`/product/${item.product.id}`) : undefined
+      }
+      onSubtitlePress={
+        item ? () => router.push(`/location/${item.location.id}`) : undefined
+      }
       rows={[
         {
           label: "Quantity",
@@ -42,21 +44,6 @@ export default function InventoryDetail() {
           value: p?.price != null ? `$${p.price.toFixed(2)}` : null,
         },
       ]}
-    >
-      {item ? (
-        <DetailSection title="Linked">
-          <DetailNavRow
-            label={p?.name ?? "Product"}
-            sublabel="View product"
-            onPress={() => router.push(`/product/${item.product.id}`)}
-          />
-          <DetailNavRow
-            label={item.location.name}
-            sublabel="View location"
-            onPress={() => router.push(`/location/${item.location.id}`)}
-          />
-        </DetailSection>
-      ) : null}
-    </DetailView>
+    />
   );
 }
