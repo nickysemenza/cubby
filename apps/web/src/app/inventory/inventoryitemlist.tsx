@@ -180,6 +180,11 @@ export function InventoryItemList() {
     extraActions,
     bulkActions,
     infinite: true,
+    // "Created" is low-signal when browsing inventory — hidden by default,
+    // still toggleable via the View menu.
+    initialColumnVisibility: {
+      createdAt: false,
+    },
   });
 
   return (

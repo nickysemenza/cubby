@@ -73,7 +73,7 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
           title="Home"
         >
           <HomeIcon className="h-4 w-4" />
-          <span className="hidden xl:inline">Home</span>
+          <span className="hidden lg:inline">Home</span>
         </Link>
 
         <Link
@@ -87,7 +87,7 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
           title="Products"
         >
           <ProductsIcon className="h-4 w-4" />
-          <span className="hidden xl:inline">Products</span>
+          <span className="hidden lg:inline">Products</span>
         </Link>
 
         <NavDropdown label="Kitchen" items={kitchenItems} icon={KitchenIcon} />
@@ -103,7 +103,7 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
           title="Locations"
         >
           <LocationsIcon className="h-4 w-4" />
-          <span className="hidden xl:inline">Locations</span>
+          <span className="hidden lg:inline">Locations</span>
         </Link>
 
         <Link
@@ -117,7 +117,7 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
           title="Inventory"
         >
           <InventoryIcon className="h-4 w-4" />
-          <span className="hidden xl:inline">Inventory</span>
+          <span className="hidden lg:inline">Inventory</span>
         </Link>
 
         <Link
@@ -131,7 +131,7 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
           title="Projects"
         >
           <Hammer className="h-4 w-4" />
-          <span className="hidden xl:inline">Projects</span>
+          <span className="hidden lg:inline">Projects</span>
         </Link>
 
         {sessionData?.user && (

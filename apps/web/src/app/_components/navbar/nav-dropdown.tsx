@@ -33,7 +33,7 @@ export const NavDropdown = ({ label, items, icon: Icon }: NavDropdownProps) => {
         title={label}
       >
         {Icon && <Icon className="h-4 w-4" />}
-        <span className="hidden xl:inline">{label}</span>
+        <span className="hidden lg:inline">{label}</span>
         <ChevronDown className="h-3 w-3" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-44">

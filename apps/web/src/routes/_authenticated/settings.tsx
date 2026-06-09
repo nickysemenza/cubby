@@ -38,7 +38,7 @@ function SettingsPage() {
   const { flags, setFlag, resetFlags } = useFlags();
   return (
     <EntityLayout title="Settings">
-      <div className="mx-auto max-w-2xl space-y-4 pb-16">
+      <div className="max-w-2xl space-y-4 pb-16">
         {GROUPS.map(({ group, blurb }) => {
           const keys = FLAG_KEYS.filter((k) => FLAGS[k].group === group);
           if (keys.length === 0) return null;

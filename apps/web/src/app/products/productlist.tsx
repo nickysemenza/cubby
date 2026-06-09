@@ -320,6 +320,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
       model: false,
       manufacturer: false,
       createdAt: false,
+      notes: false,
     },
     groupConfig,
   });

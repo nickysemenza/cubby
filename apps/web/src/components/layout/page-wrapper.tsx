@@ -13,7 +13,15 @@ export const PageWrapper = ({
   fullWidth,
 }: PageWrapperProps) => {
   return (
-    <div className={cn("w-full", !fullWidth && "mx-auto max-w-7xl", className)}>
+    <div
+      className={cn(
+        "w-full",
+        // Cap content for readable line-lengths, but let very large displays
+        // breathe instead of stranding a 1280px column in an ocean of margin.
+        !fullWidth && "mx-auto max-w-7xl 2xl:max-w-[90rem]",
+        className,
+      )}
+    >
       {children}
     </div>
   );
