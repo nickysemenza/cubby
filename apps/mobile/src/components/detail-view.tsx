@@ -1,3 +1,4 @@
+import { getAppErrorDetails } from "@cubby/api-contract";
 import { Image } from "expo-image";
 import type { ReactNode } from "react";
 import {
@@ -13,7 +14,7 @@ export type DetailRow = { label: string; value: string | null | undefined };
 
 type DetailViewProps = {
   isLoading: boolean;
-  error: { message: string } | null;
+  error: unknown;
   notFound?: boolean;
   title?: string;
   subtitle?: string | null;
@@ -50,7 +51,7 @@ export function DetailView({
   if (error) {
     return (
       <View style={styles.center}>
-        <Text style={styles.error}>{error.message}</Text>
+        <Text style={styles.error}>{getAppErrorDetails(error).message}</Text>
       </View>
     );
   }

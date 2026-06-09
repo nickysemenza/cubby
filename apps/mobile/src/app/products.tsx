@@ -1,3 +1,4 @@
+import { formatCurrency } from "@cubby/shared";
 import { router } from "expo-router";
 import { EntityListScreen } from "@/components/entity-list-screen";
 import { useTRPCClient } from "@/lib/trpc";
@@ -33,7 +34,7 @@ export default function ProductsScreen() {
         [i.manufacturer, i.category].filter(Boolean).join(" · ")
       }
       imageUrl={(i) => i.images[0]?.url}
-      rightValues={(i) => [i.price != null ? `$${i.price.toFixed(2)}` : null]}
+      rightValues={(i) => [i.price != null ? formatCurrency(i.price) : null]}
       onPressItem={(i) => router.push(`/product/${i.id}`)}
       emptyText="No products yet."
     />

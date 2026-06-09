@@ -1,3 +1,4 @@
+import { formatCurrency } from "@cubby/shared";
 import { router } from "expo-router";
 import { EntityListScreen } from "@/components/entity-list-screen";
 import { SignOutButton } from "@/components/sign-out-button";
@@ -44,7 +45,7 @@ export default function InventoryScreen() {
       imageUrl={(i) => i.product.images[0]?.url}
       rightValues={(i) => [
         amounts.get(i.id) ?? `${i.amount.value} ${i.amount.unit}`,
-        i.valuation != null ? `$${i.valuation.toFixed(2)}` : null,
+        i.valuation != null ? formatCurrency(i.valuation) : null,
       ]}
       onPressItem={(i) => router.push(`/inventory/${i.id}`)}
       headerRight={<SignOutButton />}

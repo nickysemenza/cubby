@@ -1,3 +1,4 @@
+import { formatCurrency } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import * as WebBrowser from "expo-web-browser";
 import { EntityListScreen } from "@/components/entity-list-screen";
@@ -26,7 +27,7 @@ export default function PurchasesScreen() {
         [p.category, p.subcategory, p.date].filter(Boolean).join(" · ") || null
       }
       rightValues={(p) => [
-        p.cost != null ? `$${p.cost.toFixed(2)}` : null,
+        p.cost != null ? formatCurrency(p.cost) : null,
         p.purchaser,
       ]}
       onPressItem={(p) => void WebBrowser.openBrowserAsync(p.notionUrl)}

@@ -1,4 +1,5 @@
 import { unsafeInventoryId } from "@cubby/schemas/identifiers";
+import { formatCurrency } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
 import { DetailView } from "@/components/detail-view";
@@ -34,14 +35,14 @@ export default function InventoryDetail() {
         {
           label: "Value",
           value:
-            item?.valuation != null ? `$${item.valuation.toFixed(2)}` : null,
+            item?.valuation != null ? formatCurrency(item.valuation) : null,
         },
         { label: "Manufacturer", value: p?.manufacturer },
         { label: "Category", value: p?.category },
         { label: "UPC", value: p?.upc },
         {
           label: "Unit price",
-          value: p?.price != null ? `$${p.price.toFixed(2)}` : null,
+          value: p?.price != null ? formatCurrency(p.price) : null,
         },
       ]}
     />

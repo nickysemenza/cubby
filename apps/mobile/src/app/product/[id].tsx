@@ -1,4 +1,5 @@
 import { unsafeProductId } from "@cubby/schemas/identifiers";
+import { formatCurrency } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useLocalSearchParams } from "expo-router";
 import { DetailView } from "@/components/detail-view";
@@ -23,7 +24,7 @@ export default function ProductDetail() {
         { label: "Category", value: p?.category },
         {
           label: "Price",
-          value: p?.price != null ? `$${p.price.toFixed(2)}` : null,
+          value: p?.price != null ? formatCurrency(p.price) : null,
         },
         { label: "UPC", value: p?.upc },
         { label: "Model", value: p?.model },

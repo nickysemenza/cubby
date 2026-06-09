@@ -1,3 +1,4 @@
+import { getAppErrorDetails } from "@cubby/api-contract";
 import { FlashList } from "@shopify/flash-list";
 import { Image } from "expo-image";
 import type { ReactNode } from "react";
@@ -16,7 +17,7 @@ type EntityListScreenProps<T> = {
   items: T[];
   isLoading: boolean;
   isRefetching?: boolean;
-  error: { message: string } | null;
+  error: unknown;
   onRefresh?: () => void;
   count?: number;
   keyExtractor: (item: T) => string;
@@ -86,7 +87,7 @@ export function EntityListScreen<T>({
         </View>
       ) : error ? (
         <View style={styles.center}>
-          <Text style={styles.error}>{error.message}</Text>
+          <Text style={styles.error}>{getAppErrorDetails(error).message}</Text>
         </View>
       ) : (
         <View style={styles.listWrap}>

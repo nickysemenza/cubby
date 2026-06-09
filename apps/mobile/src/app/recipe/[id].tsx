@@ -5,7 +5,10 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { DetailView } from "@/components/detail-view";
 import { type RouterOutputs, useTRPC } from "@/lib/trpc";
-import { useFormattedAmountLists } from "@/lib/use-formatted-amounts";
+import {
+  useFormattedAmountLists,
+  useFormattedAmounts,
+} from "@/lib/use-formatted-amounts";
 import { useRichInstructions } from "@/lib/use-rich-instructions";
 
 type Recipe = RouterOutputs["recipe"]["getByID"];
@@ -60,7 +63,25 @@ export default function RecipeDetail() {
     ingredients.map(ingredientName),
   );
 
-  const renderSpan = (item: RichItem, key: number) => {
+  // Format the measurement spans through the same WASM format_amount as the
+  // ingredient list, so an amount renders identically in both places.
+  const measures: { key: string; amount: WAmount }[] = [];
+  richSteps.forEach((items, si) => {
+    items?.forEach((it, j) => {
+      if (it.kind === "Measure") {
+        const last = it.value.at(-1);
+        if (last) measures.push({ key: `${si}:${j}`, amount: last });
+      }
+    });
+  });
+  const measureFmt = useFormattedAmounts(
+    measures,
+    (m) => m.key,
+    (m) => m.amount,
+  );
+
+  const renderSpan = (item: RichItem, stepIdx: number, spanIdx: number) => {
+    const key = `${stepIdx}:${spanIdx}`;
     if (item.kind === "Ing") {
       const link = linkByName.get(item.value.toLowerCase());
       if (!link) {
@@ -87,7 +108,7 @@ export default function RecipeDetail() {
     if (item.kind === "Measure") {
       return (
         <Text key={key} style={styles.measure}>
-          {measureText(item.value)}
+          {measureFmt.get(key) ?? measureText(item.value)}
         </Text>
       );
     }
@@ -161,7 +182,7 @@ export default function RecipeDetail() {
               <View key={i} style={styles.step}>
                 <Text style={styles.stepNum}>Step {i + 1}</Text>
                 <Text style={styles.stepText}>
-                  {items ? items.map((it, j) => renderSpan(it, j)) : text}
+                  {items ? items.map((it, j) => renderSpan(it, i, j)) : text}
                 </Text>
               </View>
             );

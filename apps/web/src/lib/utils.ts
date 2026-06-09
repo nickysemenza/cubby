@@ -5,15 +5,5 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-/**
- * Format a number as USD currency.
- * @param value - The number to format
- * @param decimals - Maximum fraction digits (default: 2)
- */
-export function formatCurrency(value: number, decimals = 2): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: decimals,
-  }).format(value);
-}
+// Currency formatting is shared across web + mobile to prevent drift.
+export { formatCurrency } from "@cubby/shared";

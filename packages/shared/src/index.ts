@@ -45,3 +45,5 @@ export {
   isMiscProduct,
   getMiscDisplayName,
 } from "./constants";
+
+export { formatCurrency } from "./format";
