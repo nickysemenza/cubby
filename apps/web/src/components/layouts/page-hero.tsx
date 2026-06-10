@@ -93,10 +93,7 @@ export function PageHero({
   // Entity-inked accent bar (falls back to terracotta via the CSS defaults).
   const accent = entity ? ENTITY_ACCENTS[entity] : null;
   const accentStyle = accent
-    ? ({
-        "--page-accent": accent.base,
-        "--page-accent-light": accent.light,
-      } as CSSProperties)
+    ? ({ "--page-accent": accent } as CSSProperties)
     : undefined;
 
   return (

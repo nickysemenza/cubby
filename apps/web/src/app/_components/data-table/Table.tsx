@@ -472,7 +472,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
           style={
             entity
               ? ({
-                  "--row-accent": ENTITY_ACCENTS[entity].base,
+                  "--row-accent": ENTITY_ACCENTS[entity],
                 } as React.CSSProperties)
               : undefined
           }

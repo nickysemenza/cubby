@@ -482,14 +482,10 @@
   }
   .page-header-accent::after {
     content: "";
-    @apply absolute -bottom-2 left-0 h-1 w-16 rounded-full;
-    /* Entity-inked: pages set --page-accent(-light) per entity; falls back
-       to the brand terracotta everywhere else. */
-    background: linear-gradient(
-      90deg,
-      var(--page-accent, var(--brand-terracotta)) 0%,
-      var(--page-accent-light, var(--brand-terra-light)) 100%
-    );
+    @apply absolute -bottom-2 left-0 h-1 w-16;
+    /* Spot-ink rule: a flat, square-ended bar — no gradient, no pill. Pages
+       set --page-accent per entity; falls back to the brand terracotta. */
+    background: var(--page-accent, var(--brand-terracotta));
   }
 
   /* View Transitions — progressive enhancement for page navigation */

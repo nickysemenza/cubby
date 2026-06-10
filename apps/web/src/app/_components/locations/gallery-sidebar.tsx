@@ -160,11 +160,9 @@ export function GallerySidebar({
       )}
     >
       {/* Header */}
-      <div className="flex items-center justify-between border-b bg-gradient-to-r from-primary/5 to-transparent px-3 py-2">
+      <div className="flex items-center justify-between border-b px-3 py-2">
         <div className="flex items-center gap-2">
-          <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10">
-            <ImageIcon className="h-3.5 w-3.5 text-primary" />
-          </div>
+          <ImageIcon className="h-3.5 w-3.5 text-eyebrow" />
           <span className="font-semibold text-foreground text-sm tracking-tight">
             Locations
           </span>
