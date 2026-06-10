@@ -199,7 +199,7 @@ const RecipeDetailInner: React.FC<{
   return (
     <div className="space-y-6">
       {/* Tags and View Toggle */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
         {recipe.tags && recipe.tags.length > 0 && (
           <RecipeTagList tags={recipe.tags} />
         )}
@@ -293,10 +293,10 @@ const RecipeDetailInner: React.FC<{
       )}
 
       {/* Tear line between the recipe itself and its paper trail */}
-      <TicketDivider />
+      <TicketDivider className="print:hidden" />
 
       {/* History Section */}
-      <Card>
+      <Card className="print:hidden">
         <CardHeader className="bg-muted/50 px-4 py-2">
           <CardTitle>History</CardTitle>
         </CardHeader>

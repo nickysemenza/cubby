@@ -53,7 +53,7 @@ function EntityCounts() {
 
 export function AppFooter() {
   return (
-    <footer className="safe-bottom border-t">
+    <footer className="safe-bottom border-t print:hidden">
       <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 px-4 py-2 font-mono text-2xs text-muted-foreground uppercase tracking-[0.12em] md:px-6">
         <div className="flex items-center gap-3">
           <span>

@@ -219,7 +219,7 @@ function RootComponent() {
     <Provider queryClient={queryClient}>
       <DebugContextProvider>
         <div className="flex min-h-dvh flex-col">
-          <div className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+          <div className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 print:hidden">
             <div className="mx-auto flex h-16 w-full max-w-7xl items-center px-4 md:px-6">
               <MainNav className="mx-0" onSearchClick={openCommandMenu} />
             </div>

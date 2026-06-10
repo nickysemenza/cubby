@@ -552,6 +552,23 @@
     animation: none;
   }
 
+  /* Print: the recipe spread is literally a cookbook page — let it print
+     like one. Chrome hides via print:hidden utilities on the components;
+     these are the global resets (true-white paper, no shadows/texture). */
+  @media print {
+    body {
+      background: white;
+    }
+    body::after,
+    .gradient-mesh::before {
+      display: none;
+    }
+    * {
+      /* biome-ignore lint/complexity/noImportantStyles: print reset must beat shadow utilities */
+      box-shadow: none !important;
+    }
+  }
+
   /* Auth page background with warm gradient */
   .auth-background {
     @apply bg-background;

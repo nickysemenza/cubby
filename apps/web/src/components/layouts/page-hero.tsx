@@ -145,7 +145,9 @@ export function PageHero({
         )}
       </div>
       {actions && (
-        <div className="flex w-full flex-wrap gap-2 sm:w-auto">{actions}</div>
+        <div className="flex w-full flex-wrap gap-2 sm:w-auto print:hidden">
+          {actions}
+        </div>
       )}
     </div>
   );
