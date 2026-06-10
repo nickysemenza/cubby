@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   BookOpen,
   ClipboardList,
+  Equal,
   ExternalLink,
   Hammer,
   MapPin,
@@ -37,6 +38,7 @@ import { setFlag, useFlag } from "~/lib/flags";
 import { cn, formatCurrency } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import { getRecents, pushRecent } from "./command-menu/recents";
+import { useConversionAnswer } from "./command-menu/use-conversion-answer";
 import { useGlobalSearch } from "./command-menu/use-global-search";
 import { useAgentStream } from "./hooks/useAgentStream";
 import {
@@ -66,6 +68,7 @@ export function GlobalCommandMenu({
 
   const { results, filteredActions, isLoading, isEmpty } =
     useGlobalSearch(search);
+  const conversion = useConversionAnswer(search);
 
   // Notion data — already cached from dashboard, filter client-side
   const trpc = useTRPC();
@@ -272,6 +275,34 @@ export function GlobalCommandMenu({
           />
         ) : (
           <>
+            {/* Inline unit conversion — "250 g flour in cups" */}
+            {conversion && (
+              <CommandGroup heading="Conversion">
+                <CommandItem
+                  value={`conversion-${search}`}
+                  onSelect={() =>
+                    goToEntity(
+                      "ingredient",
+                      conversion.ingredientId,
+                      conversion.ingredientName,
+                    )
+                  }
+                  className="flex items-center gap-3"
+                >
+                  <Equal className="h-4 w-4 shrink-0 text-primary" />
+                  <span className="truncate font-mono font-semibold text-sm tabular-nums">
+                    {conversion.input} {conversion.ingredientName} ={" "}
+                    {conversion.result}
+                  </span>
+                  {conversion.cost && (
+                    <span className="ml-auto shrink-0 font-mono text-muted-foreground text-xs tabular-nums">
+                      ≈ {conversion.cost}
+                    </span>
+                  )}
+                </CommandItem>
+              </CommandGroup>
+            )}
+
             {/* Ask Cubby — opt-in agent, pinned at top while searching */}
             {hasSearch && (
               <CommandGroup>
