@@ -1,6 +1,7 @@
 import type { RecipeOut, SectionIngredientOut } from "@cubby/schemas/recipe";
 import { getNutrientValueByKey } from "@cubby/usda-schemas";
 import { type ReactNode, useState } from "react";
+import { sectionRuleClass } from "~/components/ui/section-rule";
 import type { CalculateTotalsResult } from "~/lib/recipe-costing";
 import { cn, formatCurrency } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
@@ -21,7 +22,7 @@ interface RecipeMagazineViewProps {
 /** Broadsheet section heading: heavy top rule + serif title. */
 function SpreadHeading({ children }: { children: ReactNode }) {
   return (
-    <div className="border-foreground border-t-[3px] pt-1.5">
+    <div className={sectionRuleClass}>
       <h3 className="my-0 font-bold font-heading text-base">{children}</h3>
     </div>
   );

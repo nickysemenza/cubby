@@ -10,8 +10,10 @@ import { ArrayFieldManager } from "~/components/forms/array-field-manager";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Image } from "~/components/ui/image";
+import { sectionRuleClass } from "~/components/ui/section-rule";
 import { Spinner } from "~/components/ui/spinner";
 import type { useImageState } from "~/hooks/useImageState";
+import { cn } from "~/lib/utils";
 import { useTRPCClient } from "~/trpc/react";
 import { UsdaFoodSearchField } from "../combobox/with-usda-food-search";
 import {
@@ -55,7 +57,12 @@ function FormSection({
   }
   return (
     <section className="space-y-2">
-      <h4 className="my-0 font-medium font-mono text-2xs text-eyebrow uppercase tracking-wider">
+      <h4
+        className={cn(
+          sectionRuleClass,
+          "my-0 font-medium font-mono text-2xs text-eyebrow uppercase tracking-wider",
+        )}
+      >
         {title}
       </h4>
       {children}

@@ -157,10 +157,8 @@ function RecipeComparePage() {
         <div className="space-y-4">
           {/* Comparison Table */}
           <Card>
-            <CardHeader className="bg-muted/50 px-4 py-3">
-              <CardTitle className="font-medium text-base">
-                Cost & Nutrition Comparison
-              </CardTitle>
+            <CardHeader rule className="pb-3">
+              <CardTitle>Cost & Nutrition Comparison</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto">

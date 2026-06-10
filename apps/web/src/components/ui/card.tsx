@@ -1,5 +1,6 @@
 import * as React from "react";
 
+import { sectionRuleClass } from "~/components/ui/section-rule";
 import { cn } from "~/lib/utils";
 
 function Card({
@@ -65,12 +66,23 @@ function SelectableCard({
   );
 }
 
-function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
+function CardHeader({
+  className,
+  rule = false,
+  ...props
+}: React.ComponentProps<"div"> & {
+  /** Thick ink rule that opens the section, inset to the card padding. */
+  rule?: boolean;
+}) {
   return (
     <div
       data-slot="card-header"
       className={cn(
         "group/card-header @container/card-header grid auto-rows-min items-start gap-1 rounded-t-lg px-4 group-data-[size=sm]/card:px-3 has-data-[slot=card-action]:grid-cols-[1fr_auto] has-data-[slot=card-description]:grid-rows-[auto_auto] [.border-b]:pb-4 group-data-[size=sm]/card:[.border-b]:pb-3",
+        rule && [
+          sectionRuleClass,
+          "mx-4 px-0 group-data-[size=sm]/card:mx-3 group-data-[size=sm]/card:px-0",
+        ],
         className,
       )}
       {...props}
