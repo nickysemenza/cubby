@@ -7,24 +7,28 @@ function SkeletonText({ className }: { className?: string }) {
   return <Skeleton className={cn("h-4", className)} />;
 }
 
-function SkeletonCard() {
+/**
+ * One loading row shaped like the ledger it becomes: a short mono-qty bar,
+ * a name bar, a trailing value bar, dashed rule below. Widths vary by index
+ * so the column doesn't read as a barcode.
+ */
+function SkeletonLedgerRow({ index }: { index: number }) {
+  const nameWidths = ["w-3/5", "w-2/5", "w-1/2", "w-2/3", "w-1/3"];
   return (
-    <div className="flex items-center space-x-4">
-      <Skeleton className="h-12 w-12" />
-      <div className="flex-1 space-y-2">
-        <SkeletonText />
-        <SkeletonText className="w-2/3" />
-      </div>
+    <div className="grid grid-cols-[3.5rem_minmax(0,1fr)_4rem] items-center gap-3 border-border border-b border-dashed py-2.5">
+      <Skeleton className="h-3 w-full" />
+      <Skeleton className={cn("h-3", nameWidths[index % nameWidths.length])} />
+      <Skeleton className="h-3 w-full" />
     </div>
   );
 }
 
 function SkeletonGrid({ count = 6 }: { count?: number }) {
   return (
-    <div className="space-y-3">
+    <div>
       {Array.from({ length: count }, (_, i) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: static list that never reorders
-        <SkeletonCard key={i} />
+        <SkeletonLedgerRow key={i} index={i} />
       ))}
     </div>
   );
@@ -43,7 +47,7 @@ export function ListLoadingSkeleton({ count = 6 }: { count?: number }) {
 // Simple loading text with spinner for inline use
 export function SimpleLoading({ text = "Loading..." }: { text?: string }) {
   return (
-    <div className="flex items-center justify-center gap-2 p-4 text-muted-foreground">
+    <div className="flex items-center justify-center gap-2 p-4 font-mono text-2xs text-muted-foreground uppercase tracking-wider">
       <Spinner />
       {text}
     </div>
