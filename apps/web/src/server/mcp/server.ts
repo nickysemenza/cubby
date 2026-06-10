@@ -119,7 +119,13 @@ function slimInventory(entry: Record<string, unknown>) {
 }
 
 /** Strip heavy fields from product objects */
-function slimProduct(p: Record<string, unknown>) {
+export function slimProduct(p: Record<string, unknown>) {
+  // USDA linkage is resolved at query time (UPC-first, ndb_number fallback) and
+  // surfaced as `p.food`; a non-null `usdaFdcId` is the canonical "is it linked"
+  // signal and covers BOTH paths. `ndb_number` alone is insufficient — a product
+  // linked only by UPC (e.g. Diamond Crystal salt) has a null ndb_number but is
+  // still linked. `externalIds` is unrelated (Amazon ASIN / McMaster part #, etc.).
+  const food = p.food as { fdc_id?: number } | null | undefined;
   return {
     id: p.id,
     name: p.name,
@@ -129,6 +135,8 @@ function slimProduct(p: Record<string, unknown>) {
     category: p.category,
     price: p.price,
     expectedQuantity: p.expectedQuantity,
+    ndb_number: p.ndb_number ?? null,
+    usdaFdcId: food?.fdc_id ?? null,
     externalIds: p.externalIds,
   };
 }
