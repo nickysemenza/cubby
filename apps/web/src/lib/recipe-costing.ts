@@ -540,6 +540,30 @@ export const computeAbsorbedOilMeasures = (
 };
 
 /**
+ * Returns ingredient rows with unmeasured frying-medium rows' priceInfo replaced
+ * by the absorbed-oil estimate, plus the set of those overridden row ids (for the
+ * "est." markers). Use this anywhere per-ingredient measures feed a view (table,
+ * treemap, sunburst) so the absorbed oil is included consistently with the
+ * recipe totals — `calculateTotals` already folds it in.
+ */
+export const applyAbsorbedOil = (
+  data: IngredientDataItem[],
+  ingMap: Record<string, IngredientWithFoodOut>,
+  getName: (i: SectionIngredientOut) => string,
+): { data: IngredientDataItem[]; oilRowIds: Set<string> } => {
+  const oilMeasures = computeAbsorbedOilMeasures(data, ingMap, getName);
+  if (oilMeasures.size === 0) return { data, oilRowIds: new Set() };
+  return {
+    data: data.map((row) =>
+      oilMeasures.has(row.id)
+        ? { ...row, priceInfo: oilMeasures.get(row.id) }
+        : row,
+    ),
+    oilRowIds: new Set(oilMeasures.keys()),
+  };
+};
+
+/**
  * Creates a wrapper for tracking ingredient data with price/nutrient info
  */
 export const createIngredientData = (

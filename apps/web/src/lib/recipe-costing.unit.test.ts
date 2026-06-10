@@ -9,6 +9,7 @@ import type { RecipeOut, SectionIngredientOut } from "@cubby/schemas/recipe";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { beforeAll, describe, expect, test } from "vitest";
 import {
+  applyAbsorbedOil,
   calculateTotals,
   computeAbsorbedOilMeasures,
   convertAmountToNutrients,
@@ -958,5 +959,36 @@ describe("calculateTotals with absorbed frying oil", () => {
     const m = map.get("oil");
     expect(m?.gram.isOk() && m.gram.value.value).toBeCloseTo(15, 0);
     expect(m?.nutrient.isOk() && m.nutrient.value["208"]).toBeCloseTo(132.6, 0);
+  });
+
+  test("applyAbsorbedOil overrides the oil row's priceInfo + reports its id", () => {
+    const data = createIngredientData([flourCup, fryingOil], ingMap);
+    // Before: the unmeasured oil row has no usable measures.
+    const rawOil = data.find((r) => r.id === "oil");
+    expect(rawOil?.priceInfo?.nutrient.isOk()).toBe(false);
+
+    const { data: withOil, oilRowIds } = applyAbsorbedOil(
+      data,
+      ingMap,
+      getName,
+    );
+
+    expect([...oilRowIds]).toEqual(["oil"]);
+    const oilRow = withOil.find((r) => r.id === "oil");
+    expect(
+      oilRow?.priceInfo?.nutrient.isOk() &&
+        oilRow.priceInfo.nutrient.value["208"],
+    ).toBeCloseTo(132.6, 0);
+    // Non-oil rows pass through untouched (same reference).
+    const flourRow = withOil.find((r) => r.id === "flour");
+    expect(flourRow).toBe(data.find((r) => r.id === "flour"));
+  });
+
+  test("applyAbsorbedOil is a no-op when there's no frying medium", () => {
+    const data = createIngredientData([flourCup], ingMap);
+    const { data: out, oilRowIds } = applyAbsorbedOil(data, ingMap, getName);
+
+    expect(out).toBe(data); // same array reference, untouched
+    expect(oilRowIds.size).toBe(0);
   });
 });

@@ -12,6 +12,7 @@ import {
 } from "~/components/ui/view-switcher";
 import { PerfProfiler } from "~/lib/perf/PerfProfiler";
 import {
+  applyAbsorbedOil,
   type CalculateTotalsResult,
   calculateTotals,
   createIngredientData,
@@ -181,9 +182,19 @@ const RecipeDetailInner: React.FC<{
   const recipesForCosting = useMemo(() => [recipe], [recipe]);
   const { ingMap, recipeMap } = useRecipeCostingData(recipesForCosting);
 
-  // Load enriched ingredient data for charts (with price/nutrition info)
+  // Load enriched ingredient data for charts (with price/nutrition info). Apply
+  // the absorbed frying-oil override so the cost treemap + nutrition charts
+  // include it and reconcile with the summary totals (calculateTotals folds it
+  // in too); a no-op for non-fried recipes.
   const ingredientDataItems = useMemo(
-    () => (ingMap ? createIngredientData(ingredients, ingMap, recipeMap) : []),
+    () =>
+      ingMap
+        ? applyAbsorbedOil(
+            createIngredientData(ingredients, ingMap, recipeMap),
+            ingMap,
+            getIngredientName,
+          ).data
+        : [],
     [ingredients, ingMap, recipeMap],
   );
 
