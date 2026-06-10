@@ -5,7 +5,6 @@ import { Link } from "@tanstack/react-router";
 import { Card } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
 import { entities } from "~/entities/entities";
-import { useCountUp } from "~/hooks/useCountUp";
 import { authClient } from "~/lib/auth-client";
 import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
@@ -34,11 +33,6 @@ function StatCard({
 }: StatCardPropsWithIndex) {
   const def = entities[entity];
   const Icon = def.lucideIcon;
-  // Count up from 0 once the value loads, staggered to match the card's
-  // slide-in (animationDelay: index * 50ms) so the numbers tick in as a wave.
-  const animatedCount = useCountUp(isError ? undefined : count, {
-    delayMs: index * 50,
-  });
 
   return (
     <Link to={def.routes.list}>
@@ -75,8 +69,8 @@ function StatCard({
                 —
               </p>
             ) : (
-              <p className="font-heading font-semibold text-xl tabular-nums leading-none tracking-tight">
-                {formatCount(animatedCount)}
+              <p className="font-heading font-semibold text-xl leading-none tracking-tight">
+                {formatCount(count ?? 0)}
               </p>
             )}
             <p className="mt-1 truncate font-mono text-muted-foreground text-xs">
