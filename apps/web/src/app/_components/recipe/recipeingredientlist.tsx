@@ -3,10 +3,11 @@ import {
   createColumnHelper,
   getCoreRowModel,
   getPaginationRowModel,
+  getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
 import { useMemo } from "react";
-import { NutrientsSummary } from "~/app/_components/units/NutrientsSummary";
+import { KEY_NUTRIENTS } from "~/app/_components/units/NutrientsSummary";
 import {
   EntitySummaryCard,
   type RecipeSummaryData,
@@ -14,6 +15,7 @@ import {
 import {
   type CalculateTotalsResult,
   calculateTotals,
+  computeBakerPercentages,
   createIngredientData,
   type IngredientDataItem,
 } from "~/lib/recipe-costing";
@@ -26,7 +28,7 @@ import { EntityPillLink } from "../EntityPill";
 import { tryFormatAmount } from "../inventory/format-amount";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import { CopyCorpusButton } from "./copy-corpus-button";
-import { getIngredientName } from "./recipe-utils";
+import { getIngredientName, isFlourIngredient } from "./recipe-utils";
 
 export const RecipeIngredientList: React.FC<{
   ingredients: SectionIngredientOut[];
@@ -62,12 +64,19 @@ export const RecipeIngredientList: React.FC<{
     return Object.fromEntries(entries);
   }, [ingMap]);
 
+  // Baker's percentage per row: ingredient grams as a % of total flour grams.
+  const bakerPct = useMemo(
+    () => computeBakerPercentages(data, getIngredientName, isFlourIngredient),
+    [data],
+  );
+
   const columnHelper = createColumnHelper<IngredientDataItem>();
 
   const columns = [
     columnHelper.accessor((ingredient) => getIngredientName(ingredient), {
       id: "ing name",
       header: "Ingredient",
+      enableSorting: false,
       meta: { className: "min-w-0 truncate" },
       cell: (info) => {
         const row = info.row.original;
@@ -98,6 +107,7 @@ export const RecipeIngredientList: React.FC<{
     }),
     columnHelper.accessor("amounts", {
       header: "Amounts",
+      enableSorting: false,
       meta: { className: "w-32" },
       cell: (info) => {
         const amounts = info.getValue();
@@ -113,42 +123,104 @@ export const RecipeIngredientList: React.FC<{
         );
       },
     }),
-    columnHelper.display({
-      id: "dollars",
-      header: "Cost",
-      meta: { className: "w-24" },
+    // Numeric columns are accessors (not display) so the sort key is the raw
+    // number; the cell still renders the rich Result-aware view. Missing values
+    // sink to the bottom in both directions via sortUndefined: "last".
+    columnHelper.accessor(
+      (row) =>
+        row.priceInfo?.price.isOk()
+          ? row.priceInfo.price.value.value
+          : undefined,
+      {
+        id: "dollars",
+        header: "Cost",
+        meta: { className: "w-24" },
+        sortUndefined: "last",
+        cell: (info) => {
+          const measure = info.row.original.priceInfo?.price;
+          return (
+            measure && renderValueOrMissing(measure, (m) => tryFormatAmount(m))
+          );
+        },
+      },
+    ),
+    columnHelper.accessor(
+      (row) =>
+        row.priceInfo?.gram.isOk() ? row.priceInfo.gram.value.value : undefined,
+      {
+        id: "grams",
+        header: "Weight",
+        meta: { className: "w-24" },
+        sortUndefined: "last",
+        cell: (info) => {
+          const measure = info.row.original.priceInfo?.gram;
+          return (
+            measure && renderValueOrMissing(measure, (m) => tryFormatAmount(m))
+          );
+        },
+      },
+    ),
+    columnHelper.accessor((row) => bakerPct.get(row.id) ?? undefined, {
+      id: "bakerPct",
+      header: "Baker's %",
+      meta: { className: "w-20" },
+      sortUndefined: "last",
       cell: (props) => {
-        const measure = props.row.original.priceInfo?.price;
-        return (
-          measure && renderValueOrMissing(measure, (m) => tryFormatAmount(m))
+        const row = props.row.original;
+        const pct = bakerPct.get(row.id);
+        if (pct == null) {
+          return <span className="text-muted-foreground">—</span>;
+        }
+        // One decimal below 10% so small-but-meaningful amounts (salt, leavening,
+        // spices) don't collapse to a misleading "0%"; whole percent above.
+        const label = `${pct >= 10 ? Math.round(pct) : Math.round(pct * 10) / 10}%`;
+        // Mark the flour base (the 100% reference) so the column reads at a glance.
+        return isFlourIngredient(getIngredientName(row)) ? (
+          <span className="font-semibold text-primary">{label}</span>
+        ) : (
+          label
         );
       },
     }),
-    columnHelper.display({
-      id: "grams",
-      header: "Weight",
-      meta: { className: "w-24" },
-      cell: (props) => {
-        const measure = props.row.original.priceInfo?.gram;
-        return (
-          measure && renderValueOrMissing(measure, (m) => tryFormatAmount(m))
-        );
-      },
-    }),
-    columnHelper.display({
-      id: "nutrient",
-      header: "Nutrition",
-      meta: { className: "w-40" },
-      cell: (props) => {
-        const nutrientResult = props.row.original.priceInfo?.nutrient;
-        return (
-          nutrientResult &&
-          renderValueOrMissing(nutrientResult, (nutrients) => (
-            <NutrientsSummary nutrients={nutrients} />
-          ))
-        );
-      },
-    }),
+    // One mini-column per key nutrient — the table has room and per-nutrient
+    // columns let you scan a single value (e.g. Protein) down the list.
+    ...KEY_NUTRIENTS.map((n) =>
+      columnHelper.accessor(
+        (row) => {
+          const res = row.priceInfo?.nutrient;
+          if (!res || res.isErr()) return undefined;
+          const value = res.value[n.code];
+          return value != null && value > 0 ? value : undefined;
+        },
+        {
+          id: `nutrient-${n.code}`,
+          header: () => (
+            <div className="flex flex-col leading-tight">
+              <span>{n.label}</span>
+              <span className="font-normal text-2xs text-muted-foreground/70 lowercase">
+                {n.unit}
+              </span>
+            </div>
+          ),
+          meta: { className: "w-14 text-right tabular-nums" },
+          sortUndefined: "last",
+          cell: (info) => {
+            const nutrientResult = info.row.original.priceInfo?.nutrient;
+            if (!nutrientResult) return null;
+            return renderValueOrMissing(nutrientResult, (nutrients) => {
+              const value = nutrients[n.code];
+              if (value == null || value <= 0) {
+                return <span className="text-muted-foreground/40">·</span>;
+              }
+              // Whole numbers for kcal/mg; one decimal for grams.
+              return n.unit === "g"
+                ? value.toFixed(1)
+                : Math.round(value).toString();
+            });
+          },
+        },
+      ),
+    ),
     columnHelper.display({
       id: "ingredientDetails",
       header: "Ingredient Details",
@@ -209,10 +281,10 @@ export const RecipeIngredientList: React.FC<{
   const table = useReactTable({
     data: data,
     columns,
-    enableSorting: false,
     enableFilters: false,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+    getSortedRowModel: getSortedRowModel(),
     rowCount: ingredients.length,
     state: {
       pagination: {

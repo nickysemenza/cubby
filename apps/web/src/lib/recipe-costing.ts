@@ -417,6 +417,38 @@ export type IngredientDataItem = SectionIngredientOut & {
 };
 
 /**
+ * Baker's percentage per ingredient: its weight in grams as a percentage of the
+ * total flour weight (flour = 100%). Returns a Map keyed by ingredient row id.
+ * Entries are null when the ingredient has no gram weight, or when no flour was
+ * detected / flour weight is zero (no valid base to divide by).
+ */
+export const computeBakerPercentages = (
+  data: IngredientDataItem[],
+  getName: (i: SectionIngredientOut) => string,
+  isFlour: (name: string) => boolean,
+): Map<string, number | null> => {
+  let flourGrams = 0;
+  for (const row of data) {
+    const gram = row.priceInfo?.gram;
+    if (gram?.isOk() && isFlour(getName(row))) {
+      flourGrams += gram.value.value;
+    }
+  }
+
+  const result = new Map<string, number | null>();
+  for (const row of data) {
+    const gram = row.priceInfo?.gram;
+    result.set(
+      row.id,
+      flourGrams > 0 && gram?.isOk()
+        ? (gram.value.value / flourGrams) * 100
+        : null,
+    );
+  }
+  return result;
+};
+
+/**
  * Creates a wrapper for tracking ingredient data with price/nutrient info
  */
 export const createIngredientData = (

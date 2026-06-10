@@ -22,6 +22,16 @@ export const getGlobalInstructionNumber = (
 export const formatYield = (y: { value: number; unit: string }): string =>
   y.unit === "whole" ? `${y.value}` : `${y.value} ${y.unit}`;
 
+// Matches the flour that forms a baker's-percentage base. Substring "flour"
+// catches bread/AP/all-purpose/whole-wheat/white/cake/pastry/00/durum flour;
+// a few common flours-by-other-name are listed explicitly.
+const FLOUR_TERMS = ["flour", "semolina"];
+
+export const isFlourIngredient = (name: string): boolean => {
+  const n = name.toLowerCase();
+  return FLOUR_TERMS.some((t) => n.includes(t));
+};
+
 export const getIngredientName = (ingredient: SectionIngredient): string => {
   const { type } = ingredient;
   switch (type) {

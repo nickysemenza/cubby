@@ -2,28 +2,24 @@ import {
   getNutrientDisplayName,
   getNutrientUnit,
   type NutrientsPer100,
-  TIER1_NUTRIENTS,
 } from "@cubby/usda-schemas";
 
-// Priority order for display - show macros first, then minerals, then vitamins
-const DISPLAY_ORDER = [
-  "208", // kcal
-  "203", // protein
-  "204", // fat
-  "205", // carbs
-  "291", // fiber
-  "307", // sodium
-  "601", // cholesterol
-  "606", // saturated fat
+// The key nutrients shown in summaries and the recipe table, in display order.
+// A deliberate whitelist — only these appear, even when more nutrient data is
+// present, to keep things scannable. Macros first, then the two most
+// diet-relevant extras. `label` is the short header used by the table's
+// per-nutrient columns. Single source of truth so the summary and table can't
+// drift apart.
+export const KEY_NUTRIENTS = [
+  { code: "208", label: "Cal", unit: "kcal" },
+  { code: "203", label: "Protein", unit: "g" },
+  { code: "204", label: "Fat", unit: "g" },
+  { code: "205", label: "Carbs", unit: "g" },
+  { code: "291", label: "Fiber", unit: "g" },
+  { code: "307", label: "Sodium", unit: "mg" },
 ] as const;
 
-// Get all nutrient codes in display order (priority codes first, then rest)
-const getOrderedNutrientCodes = (): string[] => {
-  const allCodes = Object.values(TIER1_NUTRIENTS).map((n) => n.code);
-  const priorityCodes = new Set<string>(DISPLAY_ORDER);
-  const remainingCodes = allCodes.filter((code) => !priorityCodes.has(code));
-  return [...DISPLAY_ORDER, ...remainingCodes];
-};
+const KEY_NUTRIENT_CODES = KEY_NUTRIENTS.map((n) => n.code);
 
 export function NutrientsSummary({
   nutrients,
@@ -32,10 +28,8 @@ export function NutrientsSummary({
   nutrients: NutrientsPer100;
   compact?: boolean;
 }) {
-  const orderedCodes = getOrderedNutrientCodes();
-
-  // Filter to only nutrients present in the data
-  const presentNutrients = orderedCodes.filter(
+  // Show only the key nutrients that are present in the data, in priority order.
+  const presentNutrients = KEY_NUTRIENT_CODES.filter(
     (code) => nutrients[code] !== undefined && nutrients[code] > 0,
   );
 
