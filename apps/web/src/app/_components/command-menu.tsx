@@ -34,8 +34,9 @@ import { Spinner } from "~/components/ui/spinner";
 import { EntityIcon, entities } from "~/entities/entities";
 import { useDebug } from "~/hooks/useDebug";
 import { setFlag, useFlag } from "~/lib/flags";
-import { formatCurrency } from "~/lib/utils";
+import { cn, formatCurrency } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
+import { getRecents, pushRecent } from "./command-menu/recents";
 import { useGlobalSearch } from "./command-menu/use-global-search";
 import { useAgentStream } from "./hooks/useAgentStream";
 import {
@@ -146,12 +147,27 @@ export function GlobalCommandMenu({
 
   const goToShortcode = () => {
     if (parsedShortcode?.type === "location" && locationQuery.data) {
+      pushRecent({
+        entityType: "location",
+        id: locationQuery.data.id,
+        name: locationQuery.data.name,
+      });
       navigate({ to: `/locations/${locationQuery.data.id}` });
       setOpen(false);
     } else if (parsedShortcode?.type === "product" && productQuery.data) {
+      pushRecent({
+        entityType: "product",
+        id: productQuery.data.id,
+        name: productQuery.data.name,
+      });
       navigate({ to: `/products/${productQuery.data.id}` });
       setOpen(false);
     } else if (parsedShortcode?.type === "recipe" && recipeQuery.data) {
+      pushRecent({
+        entityType: "recipe",
+        id: recipeQuery.data.id,
+        name: recipeQuery.data.name,
+      });
       navigate({ to: `/recipes/${recipeQuery.data.id}` });
       setOpen(false);
     }
@@ -170,9 +186,22 @@ export function GlobalCommandMenu({
     }
   }, [open, agent.reset]);
 
-  const goToEntity = (entityType: SearchableEntity, id: string) => {
+  // Recent jumps — read on open so the list reflects other tabs/sessions.
+  const [recents, setRecents] = React.useState<ReturnType<typeof getRecents>>(
+    [],
+  );
+  React.useEffect(() => {
+    if (open) setRecents(getRecents());
+  }, [open]);
+
+  const goToEntity = (
+    entityType: SearchableEntity,
+    id: string,
+    name?: string,
+  ) => {
     const entity = entities[entityTypeMap[entityType]];
     if (entity) {
+      if (name) pushRecent({ entityType, id, name });
       navigate({ to: `/${entity.basePath}/${id}` });
       setOpen(false);
     }
@@ -237,7 +266,9 @@ export function GlobalCommandMenu({
             toolCalls={agent.result?.toolCalls ?? []}
             showToolCalls={isDevtoolsVisible}
             onBack={exitAnswerMode}
-            onSelectSource={(entityType, id) => goToEntity(entityType, id)}
+            onSelectSource={(entityType, id, name) =>
+              goToEntity(entityType, id, name)
+            }
           />
         ) : (
           <>
@@ -300,10 +331,15 @@ export function GlobalCommandMenu({
                     {group.items.map((item) => {
                       const enrichment = getEnrichmentText(item);
 
+                      const entityDef =
+                        entities[entityTypeMap[item.entityType]];
+
                       return (
                         <CommandItem
                           key={`${item.entityType}-${item.id}`}
-                          onSelect={() => goToEntity(item.entityType, item.id)}
+                          onSelect={() =>
+                            goToEntity(item.entityType, item.id, item.name)
+                          }
                           className="flex items-center gap-3"
                         >
                           {item.imageUrl ? (
@@ -313,7 +349,13 @@ export function GlobalCommandMenu({
                               className="h-8 w-8 shrink-0 rounded object-cover"
                             />
                           ) : (
-                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-muted/50">
+                            <div
+                              className={cn(
+                                "flex h-8 w-8 shrink-0 items-center justify-center rounded",
+                                entityDef?.color.bg ?? "bg-muted/50",
+                                entityDef?.color.text,
+                              )}
+                            >
                               <SearchResultItemIcon
                                 item={item}
                                 className="h-4 w-4 shrink-0"
@@ -465,6 +507,36 @@ export function GlobalCommandMenu({
             {/* Default view when not searching */}
             {!hasSearch && !isLoading && (
               <>
+                {recents.length > 0 && (
+                  <CommandGroup heading="Jump back">
+                    {recents.map((recent) => (
+                      <CommandItem
+                        key={`recent-${recent.entityType}-${recent.id}`}
+                        value={`recent-${recent.id}`}
+                        onSelect={() =>
+                          goToEntity(recent.entityType, recent.id, recent.name)
+                        }
+                        className="flex items-center gap-3"
+                      >
+                        <div
+                          className={cn(
+                            "flex h-6 w-6 shrink-0 items-center justify-center rounded",
+                            entities[entityTypeMap[recent.entityType]]?.color
+                              .bg ?? "bg-muted/50",
+                            entities[entityTypeMap[recent.entityType]]?.color
+                              .text,
+                          )}
+                        >
+                          <EntityIcon
+                            entity={entityTypeMap[recent.entityType]}
+                            className="h-3.5 w-3.5"
+                          />
+                        </div>
+                        <span className="truncate">{recent.name}</span>
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                )}
                 <CommandGroup heading="Quick Actions">
                   {filteredActions.map((action) => (
                     <CommandItem
@@ -538,7 +610,11 @@ interface AnswerViewProps {
   toolCalls: AgentResult["toolCalls"];
   showToolCalls: boolean;
   onBack: () => void;
-  onSelectSource: (entityType: SearchableEntity, id: string) => void;
+  onSelectSource: (
+    entityType: SearchableEntity,
+    id: string,
+    name?: string,
+  ) => void;
 }
 
 /** Turn a tool name like "list_inventory" into "inventory" for status text. */
@@ -598,7 +674,9 @@ function AnswerView({
             <CommandItem
               key={`${source.entityType}-${source.id}`}
               value={`source-${source.entityType}-${source.id}`}
-              onSelect={() => onSelectSource(source.entityType, source.id)}
+              onSelect={() =>
+                onSelectSource(source.entityType, source.id, source.name)
+              }
               className="flex items-center gap-3"
             >
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-muted/50">
