@@ -1,10 +1,22 @@
-import { useCallback, useState, type ComponentProps } from "react";
+import { ImageOff } from "lucide-react";
+import {
+  type ComponentProps,
+  type ReactNode,
+  useCallback,
+  useState,
+} from "react";
 import { cn } from "~/lib/utils";
 
 export type ImageProps = Omit<
   ComponentProps<"img">,
   "loading" | "onError" | "onLoad" | "ref"
->;
+> & {
+  /**
+   * Rendered in place of the image when the src is missing or fails to load.
+   * Should fill its box (h-full w-full). Defaults to a quiet muted icon tile.
+   */
+  fallback?: ReactNode;
+};
 
 // URLs that have successfully loaded this session. Virtualized tables
 // unmount/remount rows while scrolling; without remembering, every remount
@@ -15,14 +27,29 @@ export type ImageProps = Omit<
 const loadedSrcs = new Set<string>();
 
 /**
- * Lazy-loaded image component with native browser lazy loading.
- * Drop-in replacement for next/image (without optimization).
+ * Lazy-loaded image with a calm fade-in and a graceful fallback.
+ *
+ * - Reserves its box via the caller's className (no layout shift).
+ * - Fades in over a quiet muted placeholder once decoded — no pop, no spinner.
+ *   Images already seen this session (or browser-cached) skip the fade.
+ * - On a missing/failed src, renders `fallback` (or a muted icon tile) instead
+ *   of the browser's broken-image glyph.
  */
-export function Image({ src, alt, className, style, ...props }: ImageProps) {
+export function Image({
+  src,
+  alt,
+  className,
+  style,
+  fallback,
+  ...props
+}: ImageProps) {
+  const hasSrc = typeof src === "string" && src.length > 0;
+
   // Skip the placeholder entirely for images already loaded this session.
   const [isLoading, setIsLoading] = useState(
-    () => !(typeof src === "string" && loadedSrcs.has(src)),
+    () => !(hasSrc && loadedSrcs.has(src as string)),
   );
+  const [errored, setErrored] = useState(false);
 
   const markLoaded = useCallback(() => {
     if (typeof src === "string") loadedSrcs.add(src);
@@ -40,10 +67,31 @@ export function Image({ src, alt, className, style, ...props }: ImageProps) {
     [markLoaded],
   );
 
+  if (!hasSrc || errored) {
+    return (
+      <div
+        className={cn("flex items-center justify-center bg-muted/30", className)}
+        style={style}
+        aria-label={typeof alt === "string" ? alt : undefined}
+      >
+        {fallback ?? (
+          <ImageOff
+            className="h-1/3 max-h-5 w-1/3 max-w-5 text-muted-foreground/40"
+            aria-hidden
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <>
       {isLoading && (
-        <div className={cn("skeleton-shimmer", className)} style={style} />
+        <div
+          className={cn("bg-muted/25", className)}
+          style={style}
+          aria-hidden
+        />
       )}
       <img
         ref={handleRef}
@@ -52,8 +100,15 @@ export function Image({ src, alt, className, style, ...props }: ImageProps) {
         loading="lazy"
         decoding="async"
         onLoad={markLoaded}
-        onError={() => setIsLoading(false)}
-        className={cn(className, isLoading && "invisible")}
+        onError={() => {
+          setErrored(true);
+          setIsLoading(false);
+        }}
+        className={cn(
+          className,
+          "transition-opacity duration-500 ease-out",
+          isLoading ? "opacity-0" : "opacity-100",
+        )}
         style={style}
         {...props}
       />

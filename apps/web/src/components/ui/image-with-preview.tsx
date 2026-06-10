@@ -1,5 +1,5 @@
-
 import { Link } from "@tanstack/react-router";
+import type { ReactNode } from "react";
 import { Image } from "~/components/ui/image";
 import {
   Tooltip,
@@ -27,6 +27,8 @@ export interface ImageWithPreviewProps {
   lazyPreview?: boolean;
   /** Additional classes for the thumbnail container (can override defaults like rounded, border) */
   className?: string;
+  /** Graceful fallback rendered when the image is missing or fails to load. */
+  fallback?: ReactNode;
 }
 
 /**
@@ -43,6 +45,7 @@ export function ImageWithPreview({
   previewSide = "right",
   lazyPreview = false,
   className,
+  fallback,
 }: ImageWithPreviewProps) {
   const thumbnailClasses = cn(
     "bg-background relative flex-shrink-0 overflow-hidden rounded border transition-transform hover:scale-105",
@@ -68,6 +71,7 @@ export function ImageWithPreview({
         <Image
           src={src}
           alt={alt}
+          fallback={fallback}
           className="absolute inset-0 h-full w-full object-cover"
         />
       </TooltipTrigger>

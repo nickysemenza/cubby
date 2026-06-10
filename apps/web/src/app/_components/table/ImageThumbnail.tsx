@@ -24,15 +24,19 @@ export const ImageThumbnail = ({
   lazyPreview = false,
   entity,
 }: ImageThumbnailProps) => {
+  // Same tile for both "no image" and "image failed to load" so a broken URL
+  // degrades to the entity's colored mark, never the browser's broken glyph.
+  const fallbackIcon = entity ? (
+    <EntityIcon entity={entity} colored className="h-4 w-4" />
+  ) : (
+    <ImageIcon className="h-4 w-4 text-muted-foreground/30" />
+  );
+
   if (images.length === 0) {
     return (
       <div className="flex h-full items-center justify-center">
-        <div className="flex aspect-square h-full items-center justify-center bg-muted/30">
-          {entity ? (
-            <EntityIcon entity={entity} colored className="h-4 w-4" />
-          ) : (
-            <ImageIcon className="h-4 w-4 text-muted-foreground/30" />
-          )}
+        <div className="flex aspect-square h-full items-center justify-center rounded-lg bg-muted/30">
+          {fallbackIcon}
         </div>
       </div>
     );
@@ -47,6 +51,7 @@ export const ImageThumbnail = ({
           src={image.url}
           alt={alt}
           lazyPreview={lazyPreview}
+          fallback={fallbackIcon}
           className="absolute inset-0 h-full w-full rounded-none border-0"
         />
         {images.length > 1 && (
