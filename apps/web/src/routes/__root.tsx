@@ -314,28 +314,9 @@ function NotFoundComponent() {
 }
 
 function RootDocument({ children }: { children: React.ReactNode }) {
-  // The pre-paint script sets `.dark` on <html> before hydration. React owns
-  // the <html> element here, so the hydration render must agree with what the
-  // script did or React 19 reconciles the class away — read it back from the
-  // DOM (SSR renders none; the mismatch is suppressed).
-  const isDark =
-    typeof document !== "undefined" &&
-    document.documentElement.classList.contains("dark");
   return (
-    <html
-      lang="en"
-      className={isDark ? "dark" : undefined}
-      suppressHydrationWarning
-    >
+    <html lang="en">
       <head>
-        {/* Pre-paint theme: apply the stored (or system) preference before
-            first paint so dark mode never flashes light. */}
-        <script
-          // biome-ignore lint/security/noDangerouslySetInnerHtml: static theme bootstrap, no user input
-          dangerouslySetInnerHTML={{
-            __html: `try{var t=localStorage.getItem("cubby-theme");var d=t?t==="dark":matchMedia("(prefers-color-scheme: dark)").matches;if(d)document.documentElement.classList.add("dark")}catch(e){}`,
-          }}
-        />
         <HeadContent />
       </head>
       <body>
