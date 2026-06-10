@@ -25,6 +25,125 @@ beforeAll(async () => {
   await ensureWasm();
 });
 
+// ─── Shared fixture builders ─────────────────────────────────────────────────
+// Almost every field on IngredientWithFoodOut / SectionIngredientOut / RecipeOut
+// is irrelevant scaffolding for these tests. These builders state the defaults
+// once so each test shows only the values its assertions actually depend on
+// (mapping amounts, nutrient codes, names, yields).
+const TS = new Date();
+const dates = { createdAt: TS, updatedAt: TS };
+
+const getName = (i: SectionIngredientOut): string =>
+  i.type === "ingredient" ? i.ingredient.name : "sub-recipe";
+
+const ingredientWith = (
+  idStr: string,
+  name: string,
+  product: IngredientWithFoodOut["product"],
+): IngredientWithFoodOut => ({
+  id: unsafeIngredientId(idStr),
+  name,
+  recipe: null,
+  appearsInRecipes: [],
+  aliases: [],
+  ...dates,
+  product,
+});
+
+// An ingredient backed by one product carrying `mappings`. Pass `nutrientsPer100`
+// to attach USDA food data; omit it for a product with no nutrition.
+const makeIngredient = (
+  idStr: string,
+  name: string,
+  mappings: { a: Amount; b: Amount }[],
+  nutrientsPer100?: Record<string, number>,
+): IngredientWithFoodOut =>
+  ingredientWith(idStr, name, [
+    {
+      id: unsafeProductId(`prod-${idStr}`),
+      shortcode: unsafeProductShortcode("P-TEST"),
+      name,
+      upc: null,
+      ndb_number: null,
+      manufacturer: "",
+      category: null,
+      model: null,
+      expectedQuantity: null,
+      price: null,
+      images: [],
+      externalIds: [],
+      food: nutrientsPer100
+        ? {
+            legacyFoodInfo: null,
+            nutritionInfo: { nutrientsPer100, nutrientSummary: [] },
+            fdc_id: 0,
+            brandedFoodInfo: null,
+            foodInfo: { data_type: "branded_food", description: "" },
+            portionInfoRaw: [],
+          }
+        : null,
+      unitMappings: mappings.map(({ a, b }, i) => ({
+        id: `${idStr}-m${i}`,
+        a,
+        b,
+        source: "test",
+        sourceMetadata: { type: "manual" as const },
+        ...dates,
+      })),
+      ...dates,
+    },
+  ]);
+
+// An ingredient with no product at all (forces missing price/weight/nutrients).
+const emptyIngredient = (idStr: string, name: string): IngredientWithFoodOut =>
+  ingredientWith(idStr, name, []);
+
+// A section row referencing a plain ingredient (optionally with a modifier).
+const makeEntry = (
+  idStr: string,
+  name: string,
+  amounts: Amount[],
+  modifier?: string,
+): SectionIngredientOut => ({
+  id: idStr,
+  type: "ingredient",
+  ...dates,
+  ingredient: { id: unsafeIngredientId(idStr), name, ...dates },
+  recipe: null,
+  amounts,
+  modifier: modifier ?? null,
+});
+
+// A section row referencing a sub-recipe (recipe-as-ingredient).
+const makeSubRecipeEntry = (
+  sub: RecipeOut,
+  amounts: Amount[],
+): SectionIngredientOut => ({
+  id: `link-${sub.id}`,
+  type: "recipe",
+  ...dates,
+  ingredient: null,
+  recipe: sub,
+  amounts,
+});
+
+const makeSubRecipe = (
+  idStr: string,
+  name: string,
+  yieldValue: RecipeOut["yield"],
+  ingredients: SectionIngredientOut[],
+): RecipeOut => ({
+  id: unsafeRecipeId(idStr),
+  name,
+  ...dates,
+  meta: null,
+  yield: yieldValue,
+  images: [],
+  sections: [
+    { id: `${idStr}-sec`, name: null, instructions: [], ingredients, ...dates },
+  ],
+});
+
 describe("createEmptyNutrients", () => {
   test("returns empty nutrients record", () => {
     const result = createEmptyNutrients();
@@ -513,252 +632,61 @@ describe("WASM Error Scenarios", () => {
 });
 
 describe("calculateTotals", () => {
-  const mockGetIngredientName = (ingredient: SectionIngredientOut): string => {
-    return ingredient.type === "ingredient"
-      ? ingredient.ingredient.name
-      : "recipe";
-  };
+  // chicken: 1 lb = 453.59 g; 1 lb = $5.99; 100 g = 20 g protein = 200 kcal
+  const chicken = makeIngredient(
+    "ing1",
+    "chicken",
+    [
+      { a: { value: 1, unit: "pound" }, b: { value: 453.59, unit: "gram" } },
+      { a: { value: 1, unit: "pound" }, b: { value: 5.99, unit: "dollar" } },
+      { a: { value: 100, unit: "g" }, b: { value: 20, unit: "g protein" } },
+      { a: { value: 100, unit: "g" }, b: { value: 200, unit: "kcal" } },
+    ],
+    { "203": 20, "208": 200 },
+  );
 
   test("calculates totals with all data available", async () => {
-    const ingredients: SectionIngredientOut[] = [
-      {
-        id: unsafeIngredientId("ing1"),
-        type: "ingredient",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        ingredient: {
-          id: unsafeIngredientId("ing1"),
-          name: "chicken",
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        recipe: null,
-        amounts: [{ value: 1, unit: "pound" }],
-      },
-      {
-        id: unsafeIngredientId("ing2"),
-        type: "ingredient",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        ingredient: {
-          id: unsafeIngredientId("ing2"),
-          name: "rice",
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        recipe: null,
-        amounts: [{ value: 2, unit: "cup" }],
-      },
-    ];
-
-    const ingMap: Record<string, IngredientWithFoodOut> = {
-      ing1: {
-        id: unsafeIngredientId("ing1"),
-        name: "chicken",
-        recipe: null,
-        appearsInRecipes: [],
-        aliases: [],
-        product: [
-          {
-            id: unsafeProductId("prod1"),
-            name: "chicken",
-            shortcode: unsafeProductShortcode("P-TEST"),
-            food: {
-              legacyFoodInfo: null,
-              nutritionInfo: {
-                nutrientsPer100: { "203": 20, "208": 200 },
-                nutrientSummary: [],
-              },
-              fdc_id: 0,
-              brandedFoodInfo: null,
-              foodInfo: { data_type: "branded_food", description: "" },
-              portionInfoRaw: [],
-            },
-            upc: null,
-            ndb_number: null,
-            manufacturer: "",
-            category: null,
-            model: null,
-            expectedQuantity: null,
-            price: null,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            images: [],
-            externalIds: [],
-            unitMappings: [
-              {
-                id: "map1",
-                a: { value: 1, unit: "pound" },
-                b: { value: 453.59, unit: "gram" },
-                source: "test",
-                sourceMetadata: { type: "manual" },
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              },
-              {
-                id: "map2",
-                a: { value: 1, unit: "pound" },
-                b: { value: 5.99, unit: "dollar" },
-                source: "test",
-                sourceMetadata: { type: "manual" },
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              },
-              // Nutrient mappings for WASM conversion
-              {
-                id: "map1-protein",
-                a: { value: 100, unit: "g" },
-                b: { value: 20, unit: "g protein" },
-                source: "test",
-                sourceMetadata: { type: "manual" },
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              },
-              // kcal uses "kcal" (parses to Unit::KCal) - required for conv_amount_to_kind("calories")
-              {
-                id: "map1-kcal",
-                a: { value: 100, unit: "g" },
-                b: { value: 200, unit: "kcal" },
-                source: "test",
-                sourceMetadata: { type: "manual" },
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              },
-            ],
-          },
-        ],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      ing2: {
-        id: unsafeIngredientId("ing2"),
-        name: "rice",
-        recipe: null,
-        appearsInRecipes: [],
-        aliases: [],
-        product: [
-          {
-            id: unsafeProductId("prod2"),
-            name: "rice",
-            shortcode: unsafeProductShortcode("P-TEST"),
-            food: {
-              legacyFoodInfo: null,
-              nutritionInfo: {
-                nutrientsPer100: { "203": 7, "208": 130 },
-                nutrientSummary: [],
-              },
-              fdc_id: 0,
-              brandedFoodInfo: null,
-              foodInfo: { data_type: "branded_food", description: "" },
-              portionInfoRaw: [],
-            },
-            upc: null,
-            ndb_number: null,
-            manufacturer: "",
-            category: null,
-            model: null,
-            expectedQuantity: null,
-            price: null,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            images: [],
-            externalIds: [],
-            unitMappings: [
-              {
-                id: "map3",
-                a: { value: 1, unit: "cup" },
-                b: { value: 200, unit: "gram" },
-                source: "test",
-                sourceMetadata: { type: "manual" },
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              },
-              {
-                id: "map4",
-                a: { value: 1, unit: "cup" },
-                b: { value: 2.5, unit: "dollar" },
-                source: "test",
-                sourceMetadata: { type: "manual" },
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              },
-              // Nutrient mappings for WASM conversion
-              {
-                id: "map3-protein",
-                a: { value: 100, unit: "g" },
-                b: { value: 7, unit: "g protein" },
-                source: "test",
-                sourceMetadata: { type: "manual" },
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              },
-              // kcal uses "kcal" (parses to Unit::KCal) - required for conv_amount_to_kind("calories")
-              {
-                id: "map3-kcal",
-                a: { value: 100, unit: "g" },
-                b: { value: 130, unit: "kcal" },
-                source: "test",
-                sourceMetadata: { type: "manual" },
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              },
-            ],
-          },
-        ],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-    };
+    // rice: 1 cup = 200 g; 1 cup = $2.50; 100 g = 7 g protein = 130 kcal
+    const rice = makeIngredient(
+      "ing2",
+      "rice",
+      [
+        { a: { value: 1, unit: "cup" }, b: { value: 200, unit: "gram" } },
+        { a: { value: 1, unit: "cup" }, b: { value: 2.5, unit: "dollar" } },
+        { a: { value: 100, unit: "g" }, b: { value: 7, unit: "g protein" } },
+        { a: { value: 100, unit: "g" }, b: { value: 130, unit: "kcal" } },
+      ],
+      { "203": 7, "208": 130 },
+    );
 
     const result = await calculateTotals(
-      ingredients,
-      ingMap,
-      mockGetIngredientName,
+      [
+        makeEntry("ing1", "chicken", [{ value: 1, unit: "pound" }]),
+        makeEntry("ing2", "rice", [{ value: 2, unit: "cup" }]),
+      ],
+      { ing1: chicken, ing2: rice },
+      getName,
     );
 
     expect(result.totalIngredients).toBe(2);
     expect(result.price).toBeCloseTo(10.99, 2); // 5.99 + 5.00
     expect(result.weight).toBeCloseTo(854, 1); // WASM rounds: ~454 + 400
-    expect(result.missingByType.price).toEqual([]);
-    expect(result.missingByType.weight).toEqual([]);
-    expect(result.missingByType.nutrients).toEqual([]);
+    expect(result.missingByType).toEqual({
+      price: [],
+      weight: [],
+      nutrients: [],
+    });
   });
 
   test("handles completely missing data", async () => {
-    const ingredients: SectionIngredientOut[] = [
-      {
-        id: unsafeIngredientId("ing1"),
-        type: "ingredient",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        ingredient: {
-          id: unsafeIngredientId("ing1"),
-          name: "unknown ingredient",
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        recipe: null,
-        amounts: [{ value: 1, unit: "unknownunit" }],
-      },
-    ];
-
-    const ingMap: Record<string, IngredientWithFoodOut> = {
-      ing1: {
-        id: unsafeIngredientId("ing1"),
-        name: "unknown ingredient",
-        recipe: null,
-        appearsInRecipes: [],
-        aliases: [],
-        product: [], // No products
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-    };
-
     const result = await calculateTotals(
-      ingredients,
-      ingMap,
-      mockGetIngredientName,
+      [
+        makeEntry("ing1", "unknown ingredient", [
+          { value: 1, unit: "unknownunit" },
+        ]),
+      ],
+      { ing1: emptyIngredient("ing1", "unknown ingredient") },
+      getName,
     );
 
     expect(result.totalIngredients).toBe(1);
@@ -766,213 +694,44 @@ describe("calculateTotals", () => {
     expect(result.weight).toBe(0);
     expect(result.nutrients["203"] ?? 0).toBe(0);
     expect(result.nutrients["208"] ?? 0).toBe(0);
-    expect(result.missingByType.price).toEqual(["unknown ingredient"]);
-    expect(result.missingByType.weight).toEqual(["unknown ingredient"]);
-    expect(result.missingByType.nutrients).toEqual(["unknown ingredient"]);
+    expect(result.missingByType).toEqual({
+      price: ["unknown ingredient"],
+      weight: ["unknown ingredient"],
+      nutrients: ["unknown ingredient"],
+    });
   });
 
   test("handles partially missing data", async () => {
-    const ingredients: SectionIngredientOut[] = [
-      {
-        id: unsafeIngredientId("ing1"),
-        type: "ingredient",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        ingredient: {
-          id: unsafeIngredientId("ing1"),
-          name: "chicken",
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        recipe: null,
-        amounts: [{ value: 1, unit: "pound" }],
-      },
-      {
-        id: unsafeIngredientId("ing2"),
-        type: "ingredient",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        ingredient: {
-          id: unsafeIngredientId("ing2"),
-          name: "unknown spice",
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        recipe: null,
-        amounts: [{ value: 1, unit: "teaspoon" }],
-      },
-    ];
-
-    const ingMap: Record<string, IngredientWithFoodOut> = {
-      ing1: {
-        id: unsafeIngredientId("ing1"),
-        name: "chicken",
-        recipe: null,
-        appearsInRecipes: [],
-        aliases: [],
-        product: [
-          {
-            id: unsafeProductId("prod1"),
-            name: "chicken",
-            shortcode: unsafeProductShortcode("P-TEST"),
-            food: {
-              legacyFoodInfo: null,
-              nutritionInfo: {
-                nutrientsPer100: { "203": 20, "208": 200 },
-                nutrientSummary: [],
-              },
-              fdc_id: 0,
-              brandedFoodInfo: null,
-              foodInfo: { data_type: "branded_food", description: "" },
-              portionInfoRaw: [],
-            },
-            upc: null,
-            ndb_number: null,
-            manufacturer: "",
-            category: null,
-            model: null,
-            expectedQuantity: null,
-            price: null,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            images: [],
-            externalIds: [],
-            unitMappings: [
-              {
-                id: "map1",
-                a: { value: 1, unit: "pound" },
-                b: { value: 453.59, unit: "gram" },
-                source: "test",
-                sourceMetadata: { type: "manual" },
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              },
-              {
-                id: "map2",
-                a: { value: 1, unit: "pound" },
-                b: { value: 5.99, unit: "dollar" },
-                source: "test",
-                sourceMetadata: { type: "manual" },
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              },
-              // Nutrient mappings for WASM conversion
-              {
-                id: "map1-protein",
-                a: { value: 100, unit: "g" },
-                b: { value: 20, unit: "g protein" },
-                source: "test",
-                sourceMetadata: { type: "manual" },
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              },
-              // kcal uses "kcal" (parses to Unit::KCal) - required for conv_amount_to_kind("calories")
-              {
-                id: "map1-kcal",
-                a: { value: 100, unit: "g" },
-                b: { value: 200, unit: "kcal" },
-                source: "test",
-                sourceMetadata: { type: "manual" },
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              },
-            ],
-          },
-        ],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      ing2: {
-        id: unsafeIngredientId("ing2"),
-        name: "unknown spice",
-        recipe: null,
-        appearsInRecipes: [],
-        aliases: [],
-        product: [], // No products - will cause missing data
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-    };
-
     const result = await calculateTotals(
-      ingredients,
-      ingMap,
-      mockGetIngredientName,
+      [
+        makeEntry("ing1", "chicken", [{ value: 1, unit: "pound" }]),
+        makeEntry("ing2", "unknown spice", [{ value: 1, unit: "teaspoon" }]),
+      ],
+      { ing1: chicken, ing2: emptyIngredient("ing2", "unknown spice") },
+      getName,
     );
 
     expect(result.totalIngredients).toBe(2);
     expect(result.price).toBeCloseTo(5.99, 2); // Only chicken has price
     expect(result.weight).toBeCloseTo(454, 1); // WASM rounds: ~454
-    expect(result.missingByType.price).toEqual(["unknown spice"]);
-    expect(result.missingByType.weight).toEqual(["unknown spice"]);
-    expect(result.missingByType.nutrients).toEqual(["unknown spice"]);
+    expect(result.missingByType).toEqual({
+      price: ["unknown spice"],
+      weight: ["unknown spice"],
+      nutrients: ["unknown spice"],
+    });
   });
 
   test("handles missing only specific data types", async () => {
-    const ingredients: SectionIngredientOut[] = [
-      {
-        id: unsafeIngredientId("ing1"),
-        type: "ingredient",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        ingredient: {
-          id: unsafeIngredientId("ing1"),
-          name: "ingredient with weight only",
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        recipe: null,
-        amounts: [{ value: 1, unit: "cup" }],
-      },
-    ];
-
-    const ingMap: Record<string, IngredientWithFoodOut> = {
-      ing1: {
-        id: unsafeIngredientId("ing1"),
-        name: "ingredient with weight only",
-        recipe: null,
-        appearsInRecipes: [],
-        aliases: [],
-        product: [
-          {
-            id: unsafeProductId("prod1"),
-            name: "ingredient with weight only",
-            shortcode: unsafeProductShortcode("P-TEST"),
-            food: null, // No nutrition data
-            upc: null,
-            ndb_number: null,
-            manufacturer: "",
-            category: null,
-            model: null,
-            expectedQuantity: null,
-            price: null,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            images: [],
-            externalIds: [],
-            unitMappings: [
-              {
-                id: "map5",
-                a: { value: 1, unit: "cup" },
-                b: { value: 240, unit: "gram" },
-                source: "test",
-                sourceMetadata: { type: "manual" },
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              },
-              // No price mapping
-            ],
-          },
-        ],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-    };
+    const name = "ingredient with weight only";
+    // weight mapping only — no price, no nutrition (food stays null).
+    const weightOnly = makeIngredient("ing1", name, [
+      { a: { value: 1, unit: "cup" }, b: { value: 240, unit: "gram" } },
+    ]);
 
     const result = await calculateTotals(
-      ingredients,
-      ingMap,
-      mockGetIngredientName,
+      [makeEntry("ing1", name, [{ value: 1, unit: "cup" }])],
+      { ing1: weightOnly },
+      getName,
     );
 
     expect(result.totalIngredients).toBe(1);
@@ -980,48 +739,19 @@ describe("calculateTotals", () => {
     expect(result.weight).toBe(240); // Has weight
     expect(result.nutrients["203"] ?? 0).toBe(0);
     expect(result.nutrients["208"] ?? 0).toBe(0);
-    expect(result.missingByType.price).toEqual(["ingredient with weight only"]);
-    expect(result.missingByType.weight).toEqual([]);
-    expect(result.missingByType.nutrients).toEqual([
-      "ingredient with weight only",
-    ]);
+    expect(result.missingByType).toEqual({
+      price: [name],
+      weight: [],
+      nutrients: [name],
+    });
   });
 
   test("handles error in ingredient processing", async () => {
-    const ingredients: SectionIngredientOut[] = [
-      {
-        id: unsafeIngredientId("ing1"),
-        type: "ingredient",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        ingredient: {
-          id: unsafeIngredientId("ing1"),
-          name: "problematic ingredient",
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        recipe: null,
-        amounts: [], // Empty amounts - will cause error
-      },
-    ];
-
-    const ingMap: Record<string, IngredientWithFoodOut> = {
-      ing1: {
-        id: unsafeIngredientId("ing1"),
-        name: "problematic ingredient",
-        recipe: null,
-        appearsInRecipes: [],
-        aliases: [],
-        product: [],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-    };
-
+    const name = "problematic ingredient";
     const result = await calculateTotals(
-      ingredients,
-      ingMap,
-      mockGetIngredientName,
+      [makeEntry("ing1", name, [])], // empty amounts → processing error
+      { ing1: emptyIngredient("ing1", name) },
+      getName,
     );
 
     expect(result.totalIngredients).toBe(1);
@@ -1030,133 +760,18 @@ describe("calculateTotals", () => {
     expect(result.nutrients["203"] ?? 0).toBe(0);
     expect(result.nutrients["208"] ?? 0).toBe(0);
     // Error case should add to all missing categories
-    expect(result.missingByType.price).toEqual(["problematic ingredient"]);
-    expect(result.missingByType.weight).toEqual(["problematic ingredient"]);
-    expect(result.missingByType.nutrients).toEqual(["problematic ingredient"]);
+    expect(result.missingByType).toEqual({
+      price: [name],
+      weight: [name],
+      nutrients: [name],
+    });
   });
 });
 
 describe("calculateTotals with sub-recipes", () => {
-  const mockGetIngredientName = (ingredient: SectionIngredientOut): string =>
-    ingredient.type === "ingredient"
-      ? ingredient.ingredient.name
-      : "sub-recipe";
-
-  // Builds an IngredientWithFoodOut with the given unit mappings (weight, price,
-  // and per-100g nutrient mappings incl. kcal). Mirrors the fixture shape used by
-  // the plain-ingredient tests above.
-  const buildIngredient = (
-    idStr: string,
-    name: string,
-    mappings: { a: Amount; b: Amount }[],
-    nutrientsPer100: Record<string, number>,
-  ): IngredientWithFoodOut => ({
-    id: unsafeIngredientId(idStr),
-    name,
-    recipe: null,
-    appearsInRecipes: [],
-    aliases: [],
-    product: [
-      {
-        id: unsafeProductId(`prod-${idStr}`),
-        name,
-        shortcode: unsafeProductShortcode("P-TEST"),
-        food: {
-          legacyFoodInfo: null,
-          nutritionInfo: { nutrientsPer100, nutrientSummary: [] },
-          fdc_id: 0,
-          brandedFoodInfo: null,
-          foodInfo: { data_type: "branded_food", description: "" },
-          portionInfoRaw: [],
-        },
-        upc: null,
-        ndb_number: null,
-        manufacturer: "",
-        category: null,
-        model: null,
-        expectedQuantity: null,
-        price: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        images: [],
-        externalIds: [],
-        unitMappings: mappings.map((m, i) => ({
-          id: `${idStr}-map${i}`,
-          a: m.a,
-          b: m.b,
-          source: "test",
-          sourceMetadata: { type: "manual" as const },
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })),
-      },
-    ],
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  });
-
-  // A section ingredient referencing a plain ingredient.
-  const ingredientEntry = (
-    idStr: string,
-    name: string,
-    amounts: Amount[],
-  ): SectionIngredientOut => ({
-    id: idStr,
-    type: "ingredient",
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    ingredient: {
-      id: unsafeIngredientId(idStr),
-      name,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    },
-    recipe: null,
-    amounts,
-  });
-
-  // A section ingredient referencing a sub-recipe (recipe-as-ingredient).
-  const subRecipeEntry = (
-    sub: RecipeOut,
-    amounts: Amount[],
-  ): SectionIngredientOut => ({
-    id: `link-${sub.id}`,
-    type: "recipe",
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    ingredient: null,
-    recipe: sub,
-    amounts,
-  });
-
-  const makeSubRecipe = (
-    idStr: string,
-    name: string,
-    yieldValue: RecipeOut["yield"],
-    ingredients: SectionIngredientOut[],
-  ): RecipeOut => ({
-    id: unsafeRecipeId(idStr),
-    name,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    meta: null,
-    yield: yieldValue,
-    images: [],
-    sections: [
-      {
-        id: `${idStr}-sec`,
-        name: null,
-        instructions: [],
-        ingredients,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-    ],
-  });
-
   test("rolls sub-recipe cost + calories into the parent totals, scaled by yield", async () => {
     // tomato: 1 cup = 100 g = $1; 100 g = 10 g protein = 50 kcal
-    const tomato = buildIngredient(
+    const tomato = makeIngredient(
       "tomato",
       "tomato",
       [
@@ -1169,7 +784,7 @@ describe("calculateTotals with sub-recipes", () => {
     );
     // pasta: 1 scoop = 100 g = $3; 100 g = 5 g protein = 100 kcal. "scoop" is a
     // non-builtin unit so WASM uses the mapping (not a builtin like pound→gram).
-    const pasta = buildIngredient(
+    const pasta = makeIngredient(
       "pasta",
       "pasta",
       [
@@ -1181,33 +796,24 @@ describe("calculateTotals with sub-recipes", () => {
       { "203": 5, "208": 100 },
     );
 
-    const ingMap: Record<string, IngredientWithFoodOut> = {
-      tomato,
-      pasta,
-    };
-
     // Sub-recipe "tomato sauce" yields 4 cups; uses 4 cups of tomato.
     // Its totals: $4, 400 g, 40 g protein, 200 kcal.
     const sauce = makeSubRecipe(
       "sauce",
       "tomato sauce",
       { value: 4, unit: "cup" },
-      [ingredientEntry("tomato", "tomato", [{ value: 4, unit: "cup" }])],
+      [makeEntry("tomato", "tomato", [{ value: 4, unit: "cup" }])],
     );
 
-    const recipeMap: Record<string, RecipeOut> = { sauce };
-
-    // Parent "pasta dish": 1 pound pasta + 2 cups of the 4-cup sauce (= half).
-    const parentIngredients: SectionIngredientOut[] = [
-      ingredientEntry("pasta", "pasta", [{ value: 1, unit: "scoop" }]),
-      subRecipeEntry(sauce, [{ value: 2, unit: "cup" }]),
-    ];
-
+    // Parent "pasta dish": 1 scoop pasta + 2 cups of the 4-cup sauce (= half).
     const result = await calculateTotals(
-      parentIngredients,
-      ingMap,
-      mockGetIngredientName,
-      recipeMap,
+      [
+        makeEntry("pasta", "pasta", [{ value: 1, unit: "scoop" }]),
+        makeSubRecipeEntry(sauce, [{ value: 2, unit: "cup" }]),
+      ],
+      { tomato, pasta },
+      getName,
+      { sauce },
     );
 
     // pasta $3 + half of sauce ($4 → $2) = $5
@@ -1219,33 +825,30 @@ describe("calculateTotals with sub-recipes", () => {
     // kcal: pasta 100 + half of sauce (200 → 100) = 200
     expect(result.nutrients["208"]).toBeCloseTo(200, 1);
     // The sub-recipe contributed — it is NOT flagged as missing.
-    expect(result.missingByType.price).toEqual([]);
-    expect(result.missingByType.weight).toEqual([]);
-    expect(result.missingByType.nutrients).toEqual([]);
+    expect(result.missingByType).toEqual({
+      price: [],
+      weight: [],
+      nutrients: [],
+    });
     expect(result.totalIngredients).toBe(2);
   });
 
   test("guards against cycles (A → B → A) without hanging", async () => {
     const recipeA = makeSubRecipe("recA", "A", { value: 1, unit: "batch" }, []);
     const recipeB = makeSubRecipe("recB", "B", { value: 1, unit: "batch" }, [
-      subRecipeEntry(recipeA, [{ value: 1, unit: "batch" }]),
+      makeSubRecipeEntry(recipeA, [{ value: 1, unit: "batch" }]),
     ]);
     // Close the loop: A uses B, B uses A.
     recipeA.sections[0].ingredients.push(
-      subRecipeEntry(recipeB, [{ value: 1, unit: "batch" }]),
+      makeSubRecipeEntry(recipeB, [{ value: 1, unit: "batch" }]),
     );
-
-    const recipeMap: Record<string, RecipeOut> = {
-      recA: recipeA,
-      recB: recipeB,
-    };
 
     // Should terminate (the visited-set cycle guard breaks the loop), not hang.
     const result = await calculateTotals(
       recipeA.sections[0].ingredients,
       {},
-      mockGetIngredientName,
-      recipeMap,
+      getName,
+      { recA: recipeA, recB: recipeB },
     );
 
     expect(result).toBeDefined();
@@ -1255,118 +858,46 @@ describe("calculateTotals with sub-recipes", () => {
   test("flags a yield-less sub-recipe as missing instead of guessing", async () => {
     // No yield → can't scale → treated as unconvertible (missing), contributes $0.
     const sauce = makeSubRecipe("sauce", "tomato sauce", null, [
-      ingredientEntry("tomato", "tomato", [{ value: 1, unit: "cup" }]),
+      makeEntry("tomato", "tomato", [{ value: 1, unit: "cup" }]),
     ]);
 
-    const recipeMap: Record<string, RecipeOut> = { sauce };
-
     const result = await calculateTotals(
-      [subRecipeEntry(sauce, [{ value: 2, unit: "cup" }])],
+      [makeSubRecipeEntry(sauce, [{ value: 2, unit: "cup" }])],
       {},
-      mockGetIngredientName,
-      recipeMap,
+      getName,
+      { sauce },
     );
 
     expect(result.price).toBe(0);
     expect(result.weight).toBe(0);
-    expect(result.missingByType.price).toEqual(["sub-recipe"]);
-    expect(result.missingByType.weight).toEqual(["sub-recipe"]);
-    expect(result.missingByType.nutrients).toEqual(["sub-recipe"]);
+    expect(result.missingByType).toEqual({
+      price: ["sub-recipe"],
+      weight: ["sub-recipe"],
+      nutrients: ["sub-recipe"],
+    });
   });
 });
 
 describe("calculateTotals with absorbed frying oil", () => {
-  const getName = (i: SectionIngredientOut): string =>
-    i.type === "ingredient" ? i.ingredient.name : "recipe";
-
-  // Ingredient backed by one product carrying the given unit mappings.
-  const ing = (
-    idStr: string,
-    name: string,
-    mappings: { a: Amount; b: Amount }[],
-  ): IngredientWithFoodOut => ({
-    id: unsafeIngredientId(idStr),
-    name,
-    recipe: null,
-    appearsInRecipes: [],
-    aliases: [],
-    product: [
-      {
-        id: unsafeProductId(`prod-${idStr}`),
-        name,
-        shortcode: unsafeProductShortcode("P-TEST"),
-        food: null,
-        upc: null,
-        ndb_number: null,
-        manufacturer: "",
-        category: null,
-        model: null,
-        expectedQuantity: null,
-        price: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        images: [],
-        externalIds: [],
-        unitMappings: mappings.map((m, i) => ({
-          id: `${idStr}-m${i}`,
-          a: m.a,
-          b: m.b,
-          source: "test",
-          sourceMetadata: { type: "manual" as const },
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })),
-      },
-    ],
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  });
-
-  const entry = (
-    idStr: string,
-    name: string,
-    amounts: Amount[],
-    modifier?: string,
-  ): SectionIngredientOut => ({
-    id: idStr,
-    type: "ingredient",
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    ingredient: {
-      id: unsafeIngredientId(idStr),
-      name,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    },
-    recipe: null,
-    amounts,
-    modifier: modifier ?? null,
-  });
-
   // flour: 1 cup = 100 g; 100 g = 364 kcal = 10 g protein; 1 cup = $1
-  const flourIng = ing("flour", "flour", [
+  const flour = makeIngredient("flour", "flour", [
     { a: { value: 1, unit: "cup" }, b: { value: 100, unit: "gram" } },
     { a: { value: 100, unit: "g" }, b: { value: 364, unit: "kcal" } },
     { a: { value: 100, unit: "g" }, b: { value: 10, unit: "g protein" } },
     { a: { value: 1, unit: "cup" }, b: { value: 1, unit: "dollar" } },
   ]);
   // oil: 100 g = 884 kcal; 1000 g = $5
-  const oilIng = ing("oil", "neutral oil", [
+  const oil = makeIngredient("oil", "neutral oil", [
     { a: { value: 100, unit: "g" }, b: { value: 884, unit: "kcal" } },
     { a: { value: 1000, unit: "g" }, b: { value: 5, unit: "dollar" } },
   ]);
-  const ingMap: Record<string, IngredientWithFoodOut> = {
-    flour: flourIng,
-    oil: oilIng,
-  };
+  const ingMap = { flour, oil };
+
+  const flourCup = makeEntry("flour", "flour", [{ value: 1, unit: "cup" }]);
+  const fryingOil = makeEntry("oil", "neutral oil", [], "for frying");
 
   test("folds estimated absorbed oil into totals (15% of batter weight)", async () => {
-    const ingredients = [
-      entry("flour", "flour", [{ value: 1, unit: "cup" }]),
-      entry("oil", "neutral oil", [], "for frying"),
-    ];
-
-    const r = await calculateTotals(ingredients, ingMap, getName);
+    const r = await calculateTotals([flourCup, fryingOil], ingMap, getName);
 
     // batter = 100 g flour; absorbed oil = 0.15 * 100 = 15 g
     expect(r.weight).toBeCloseTo(115, 0);
@@ -1377,16 +908,12 @@ describe("calculateTotals with absorbed frying oil", () => {
     // price: flour $1 + oil (15/1000 * 5 ≈ $0.075); WASM rounds slightly
     expect(r.price).toBeCloseTo(1.075, 1);
     // oil resolved → not flagged missing
-    expect(r.missingByType.price).toEqual([]);
-    expect(r.missingByType.weight).toEqual([]);
-    expect(r.missingByType.nutrients).toEqual([]);
+    expect(r.missingByType).toEqual({ price: [], weight: [], nutrients: [] });
     expect(r.totalIngredients).toBe(2);
   });
 
   test("control: same recipe without the frying medium is unchanged", async () => {
-    const ingredients = [entry("flour", "flour", [{ value: 1, unit: "cup" }])];
-
-    const r = await calculateTotals(ingredients, ingMap, getName);
+    const r = await calculateTotals([flourCup], ingMap, getName);
 
     expect(r.weight).toBeCloseTo(100, 0);
     expect(r.nutrients["208"]).toBeCloseTo(364, 0);
@@ -1394,11 +921,14 @@ describe("calculateTotals with absorbed frying oil", () => {
 
   test("unmeasured oil with explicit amount is treated as a normal ingredient", async () => {
     // Has both a frying modifier AND an amount → not an absorption estimate.
-    const ingredients = [
-      entry("oil", "neutral oil", [{ value: 100, unit: "g" }], "for frying"),
-    ];
+    const measuredOil = makeEntry(
+      "oil",
+      "neutral oil",
+      [{ value: 100, unit: "g" }],
+      "for frying",
+    );
 
-    const r = await calculateTotals(ingredients, ingMap, getName);
+    const r = await calculateTotals([measuredOil], ingMap, getName);
 
     // 100 g oil measured directly → 884 kcal, no batter-relative estimate.
     expect(r.weight).toBeCloseTo(100, 0);
@@ -1406,15 +936,11 @@ describe("calculateTotals with absorbed frying oil", () => {
   });
 
   test("frying medium with no resolvable mapping fails gracefully", async () => {
-    const noMapOil = ing("oil2", "neutral oil", []); // empty mappings
-    const ingredients = [
-      entry("flour", "flour", [{ value: 1, unit: "cup" }]),
-      entry("oil2", "neutral oil", [], "for frying"),
-    ];
+    const noMapOil = makeIngredient("oil2", "neutral oil", []); // empty mappings
 
     const r = await calculateTotals(
-      ingredients,
-      { flour: flourIng, oil2: noMapOil },
+      [flourCup, makeEntry("oil2", "neutral oil", [], "for frying")],
+      { flour, oil2: noMapOil },
       getName,
     );
 
@@ -1425,12 +951,7 @@ describe("calculateTotals with absorbed frying oil", () => {
   });
 
   test("computeAbsorbedOilMeasures keys only the oil row, sized off the others", () => {
-    const ingredients = [
-      entry("flour", "flour", [{ value: 1, unit: "cup" }]),
-      entry("oil", "neutral oil", [], "for frying"),
-    ];
-
-    const data = createIngredientData(ingredients, ingMap);
+    const data = createIngredientData([flourCup, fryingOil], ingMap);
     const map = computeAbsorbedOilMeasures(data, ingMap, getName);
 
     expect([...map.keys()]).toEqual(["oil"]);
