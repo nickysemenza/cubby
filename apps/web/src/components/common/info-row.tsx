@@ -9,20 +9,23 @@ interface InfoRowProps {
 }
 
 /**
- * One line of the entity "fact sheet" — ledger-style: a mono eyebrow label
- * column with the value set beside it. Stack inside a `divide-y divide-dashed`
- * container (see BasicInfo) for the grocer's-ledger rules between rows.
+ * One line of the entity "fact sheet", set like an index page: a mono eyebrow
+ * label, a dotted leader, and the value flush right. The leader is the row's
+ * own rule, so stacks of InfoRows need no dividers between them.
  */
 export const InfoRow = ({ label, children, className }: InfoRowProps) => (
-  <div
-    className={cn(
-      "grid grid-cols-[7.5rem_minmax(0,1fr)] items-baseline gap-2 py-1.5",
-      className,
-    )}
-  >
-    <span className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
+  <div className={cn("flex items-baseline gap-2 py-1.5", className)}>
+    <span className="shrink-0 font-mono text-2xs text-eyebrow uppercase tracking-wider">
       {label}
     </span>
-    <span className="min-w-0 text-sm">{children ?? <NoneState />}</span>
+    {/* Empty flex items baseline-align on their bottom border box edge, which
+        lands the dots right on the text baseline. */}
+    <span
+      aria-hidden
+      className="min-w-6 flex-1 border-border/80 border-b-2 border-dotted"
+    />
+    <span className="min-w-0 max-w-[65%] text-right text-sm">
+      {children ?? <NoneState />}
+    </span>
   </div>
 );

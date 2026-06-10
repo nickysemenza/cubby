@@ -25,8 +25,8 @@ export const BasicInfo: FC<BasicInfoProps> = ({
   return (
     <div className="space-y-2">
       {header}
-      {/* Fact sheet: dashed ledger rules between rows (see InfoRow) */}
-      <div className="divide-y divide-dashed divide-border">
+      {/* Fact sheet: each InfoRow carries its own dotted leader — no dividers */}
+      <div>
         {visibleFields.map((field) => (
           <InfoRow key={field.label} label={field.label}>
             {field.value}

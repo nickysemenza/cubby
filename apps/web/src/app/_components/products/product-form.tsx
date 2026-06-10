@@ -110,7 +110,7 @@ const ProductLivePreview: FC<{ control: Control<ProductFormValues> }> = ({
       <h3 className="my-0 break-words font-bold font-heading text-lg tracking-tight">
         {v.name?.trim() || "Untitled product"}
       </h3>
-      <div className="mt-2 divide-y divide-dashed divide-border">
+      <div className="mt-2">
         <InfoRow label="Manufacturer">{v.manufacturer || undefined}</InfoRow>
         <InfoRow label="Category">{v.category ?? undefined}</InfoRow>
         <InfoRow label="Price">
