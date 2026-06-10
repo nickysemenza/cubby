@@ -64,21 +64,7 @@ export function monthLabel(key: string): string {
 
 // -- Chart theme (consistent across all Nivo charts) --
 
-export const nivoChartTheme = {
-  text: { fill: "hsl(var(--foreground))" },
-  axis: {
-    ticks: { text: { fill: "hsl(var(--muted-foreground))", fontSize: 11 } },
-  },
-  grid: {
-    line: { stroke: "hsl(var(--border))", strokeWidth: 1 },
-  },
-  crosshair: {
-    line: { stroke: "hsl(var(--muted-foreground))", strokeWidth: 1 },
-  },
-  legends: {
-    text: { fill: "hsl(var(--muted-foreground))" },
-  },
-};
+export { nivoBarChrome, nivoChartTheme } from "~/lib/nivo-theme";
 
 // -- Status Icon --
 

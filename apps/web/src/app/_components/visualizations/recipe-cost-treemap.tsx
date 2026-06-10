@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import * as d3Hierarchy from "d3-hierarchy";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useId, useMemo, useRef, useState } from "react";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import type { IngredientDataItem } from "~/lib/recipe-costing";
 import { formatCurrency } from "~/lib/utils";
@@ -113,6 +113,7 @@ function Treemap({ data }: TreemapProps) {
     initialHeight: 300,
   });
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
+  const noPricePatternId = useId();
 
   const hierarchy = useMemo(() => {
     return d3Hierarchy
@@ -142,15 +143,24 @@ function Treemap({ data }: TreemapProps) {
     [treemapLayout],
   );
 
-  const getNodeColor = useCallback(
+  // Brand sequential ramp (cream -> terracotta): bigger cost share -> deeper
+  // step. Unpriced cells get a hatched pattern instead of a dominant gray.
+  const getNodeFill = useCallback(
     (node: d3Hierarchy.HierarchyRectangularNode<CostNode>) => {
-      if (!node.data.hasPrice) {
-        return "hsl(40, 6%, 82%)"; // Warm grey for unpriced
-      }
-      // Warm terracotta gradient: bigger cost share -> deeper
-      const lightness = Math.max(38, 68 - node.data.percentage * 0.5);
-      return `hsl(36, 55%, ${lightness}%)`;
+      if (!node.data.hasPrice) return `url(#${noPricePatternId})`;
+      const p = node.data.percentage;
+      if (p >= 40) return "var(--chart-seq-5)";
+      if (p >= 25) return "var(--chart-seq-4)";
+      if (p >= 12) return "var(--chart-seq-3)";
+      if (p >= 5) return "var(--chart-seq-2)";
+      return "var(--chart-seq-1)";
     },
+    [noPricePatternId],
+  );
+  // Deep ramp steps need light ink; shallow steps read with brand foreground.
+  const isDeepFill = useCallback(
+    (node: d3Hierarchy.HierarchyRectangularNode<CostNode>) =>
+      node.data.hasPrice && node.data.percentage >= 25,
     [],
   );
 
@@ -164,6 +174,25 @@ function Treemap({ data }: TreemapProps) {
         width={dimensions.width}
         height={dimensions.height}
       >
+        <defs>
+          <pattern
+            id={noPricePatternId}
+            width="8"
+            height="8"
+            patternTransform="rotate(45)"
+            patternUnits="userSpaceOnUse"
+          >
+            <rect width="8" height="8" fill="var(--muted)" />
+            <line
+              x1="0"
+              y1="0"
+              x2="0"
+              y2="8"
+              stroke="var(--background)"
+              strokeWidth="4"
+            />
+          </pattern>
+        </defs>
         {nodes.map((node) => {
           const width = node.x1 - node.x0;
           const height = node.y1 - node.y0;
@@ -179,9 +208,10 @@ function Treemap({ data }: TreemapProps) {
                 y={node.y0}
                 width={width}
                 height={height}
-                fill={getNodeColor(node)}
-                stroke={isHovered ? "var(--primary)" : "white"}
-                strokeWidth={isHovered ? 2 : 1}
+                fill={getNodeFill(node)}
+                stroke={isHovered ? "var(--primary)" : "var(--border-chunky)"}
+                strokeWidth={isHovered ? 2.5 : 1.5}
+                strokeDasharray={node.data.hasPrice ? undefined : "4 3"}
                 rx={3}
                 className="cursor-pointer transition-opacity hover:opacity-90"
                 onMouseEnter={() => setHoveredNode(node.data.name)}
@@ -197,15 +227,13 @@ function Treemap({ data }: TreemapProps) {
                 >
                   <div className="flex h-full flex-col overflow-hidden">
                     <div
-                      className={`font-medium text-xs ${
-                        node.data.hasPrice
-                          ? "text-white"
-                          : "text-muted-foreground"
-                      }`}
+                      className="font-medium text-xs"
                       style={{
-                        textShadow: node.data.hasPrice
-                          ? "0 1px 2px rgba(0,0,0,0.3)"
-                          : "none",
+                        color: isDeepFill(node)
+                          ? "var(--brand-cream)"
+                          : node.data.hasPrice
+                            ? "var(--brand-foreground)"
+                            : "var(--muted-foreground)",
                       }}
                     >
                       {node.data.id ? (
@@ -229,15 +257,19 @@ function Treemap({ data }: TreemapProps) {
                     </div>
                     {node.data.hasPrice && width > 60 && height > 45 && (
                       <div
-                        className="mt-0.5 text-2xs text-white/80"
-                        style={{ textShadow: "0 1px 2px rgba(0,0,0,0.3)" }}
+                        className="mt-0.5 font-mono text-2xs tabular-nums"
+                        style={{
+                          color: isDeepFill(node)
+                            ? "oklch(from var(--brand-cream) l c h / 0.85)"
+                            : "var(--muted-foreground)",
+                        }}
                       >
                         {formatCurrency(node.data.value)} (
                         {node.data.percentage.toFixed(0)}%)
                       </div>
                     )}
                     {!node.data.hasPrice && width > 60 && height > 45 && (
-                      <div className="mt-0.5 text-2xs text-muted-foreground">
+                      <div className="mt-0.5 font-mono text-2xs text-muted-foreground uppercase">
                         No price
                       </div>
                     )}

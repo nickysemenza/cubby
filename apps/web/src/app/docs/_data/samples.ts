@@ -95,7 +95,7 @@ export const sampleUnitMappings: z.infer<typeof unitMappingWithMetadata>[] = [
   },
 ];
 
-// Sample data for NYTView
+// Sample recipe data for component demos
 export const sampleRecipe: z.infer<typeof recipeOut> = {
   id: "sample-recipe-id",
   name: "Classic Chocolate Chip Cookies",

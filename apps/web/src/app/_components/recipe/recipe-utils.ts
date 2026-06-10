@@ -1,19 +1,6 @@
 import type { RecipeOut, SectionIngredient } from "@cubby/schemas/recipe";
 import { assertNever } from "~/lib/assert";
 
-// returns the 1-indexed count of the instruction, across all sections.
-export const getGlobalInstructionNumber = (
-  recipe: RecipeOut,
-  sectionIndex: number,
-  instructionIndex: number,
-) =>
-  recipe.sections
-    .slice(0, sectionIndex)
-    .map((x) => x.instructions.length)
-    .reduce((a, b) => a + b, 0) +
-  instructionIndex +
-  1;
-
 /**
  * Format a recipe yield for display, e.g. "18 servings". A unitless yield
  * carries the parser's "whole" sentinel (a bare count); drop it so "18 whole"
@@ -21,6 +8,13 @@ export const getGlobalInstructionNumber = (
  */
 export const formatYield = (y: { value: number; unit: string }): string =>
   y.unit === "whole" ? `${y.value}` : `${y.value} ${y.unit}`;
+
+/** Effective servings: explicit servings, or the yield value when its unit is "servings". */
+export const getEffectiveServings = (recipe: RecipeOut): number | null => {
+  if (recipe.servings) return recipe.servings;
+  if (recipe.yield?.unit === "servings") return recipe.yield.value;
+  return null;
+};
 
 // Matches the flour that forms a baker's-percentage base. Substring "flour"
 // catches bread/AP/all-purpose/whole-wheat/white/cake/pastry/00/durum flour;

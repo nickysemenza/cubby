@@ -1,10 +1,6 @@
 import type { RecipeOut, SectionIngredient } from "@cubby/schemas/recipe";
 import { expect, test } from "vitest";
-import {
-  formatYield,
-  getGlobalInstructionNumber,
-  getIngredientName,
-} from "./recipe-utils";
+import { formatYield, getIngredientName } from "./recipe-utils";
 
 test("recipe utils", () => {
   const recipe: RecipeOut = {
@@ -63,7 +59,6 @@ test("recipe utils", () => {
     createdAt: new Date(),
     updatedAt: new Date(),
   };
-  expect(getGlobalInstructionNumber(recipe, 1, 0)).toEqual(1);
   let si: SectionIngredient | undefined = recipe.sections[1]?.ingredients[0];
   expect(si).toBeDefined();
   if (!si) return;

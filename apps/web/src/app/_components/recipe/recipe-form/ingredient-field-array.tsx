@@ -1,25 +1,108 @@
-import type { SectionIngredientType } from "@cubby/schemas/recipe";
-import { Plus } from "lucide-react";
-import type { FC } from "react";
-import { type UseFormReturn, useFieldArray } from "react-hook-form";
+import { ExternalLink, MoreVertical, Plus, Trash } from "lucide-react";
+import type { FC, KeyboardEvent } from "react";
+import { Controller, type UseFormReturn, useFieldArray } from "react-hook-form";
 import { Button } from "~/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
+import { Input } from "~/components/ui/input";
 import {
   WithIngredientSearch,
   WithRecipeSearch,
 } from "../../combobox/with-search-hook";
-import { EntityPillLink } from "../../EntityPill";
 import { ComboboxField } from "../../form-utils";
-import { AmountFieldArray } from "./amount-field-array";
-import { FieldArrayItemControls } from "./field-array-item-controls";
 import { IngredientReparse } from "./ingredient-reparse";
-import type { RecipeFormValues } from "./types";
+import type { IngItem, RecipeFormValues } from "./types";
 
 interface IngredientFieldArrayProps {
   form: UseFormReturn<RecipeFormValues>;
   sectionIndex: number;
 }
 
+const newRow = (type: IngItem["type"]): IngItem =>
+  type === "ingredient"
+    ? {
+        type: "ingredient",
+        ingredient: { id: "", name: "" },
+        recipe: null,
+        amounts: [{ value: 1, unit: "" }],
+      }
+    : {
+        type: "recipe",
+        ingredient: null,
+        recipe: { id: "", name: "" },
+        amounts: [{ value: 1, unit: "" }],
+      };
+
+/** Bare qty/unit inputs for one amount — no labels, ledger-row density. */
+const AmountInputs: FC<{
+  form: UseFormReturn<RecipeFormValues>;
+  sectionIndex: number;
+  ingredientIndex: number;
+  amountIndex: number;
+  onEnter?: () => void;
+}> = ({ form, sectionIndex, ingredientIndex, amountIndex, onEnter }) => {
+  const base =
+    `sections.${sectionIndex}.ingredients.${ingredientIndex}.amounts.${amountIndex}` as const;
+
+  const handleEnter = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && onEnter) {
+      e.preventDefault();
+      onEnter();
+    }
+  };
+
+  return (
+    <>
+      <Controller
+        control={form.control}
+        name={`${base}.value`}
+        render={({ field }) => (
+          <Input
+            type="number"
+            step="any"
+            inputMode="decimal"
+            aria-label="Amount"
+            placeholder="qty"
+            className="text-right font-mono tabular-nums"
+            value={field.value ?? ""}
+            onChange={(e) =>
+              field.onChange(
+                e.target.value === "" ? null : Number(e.target.value),
+              )
+            }
+            onKeyDown={handleEnter}
+          />
+        )}
+      />
+      <Controller
+        control={form.control}
+        name={`${base}.unit`}
+        render={({ field }) => (
+          <Input
+            aria-label="Unit"
+            placeholder="unit"
+            className="font-mono"
+            value={field.value ?? ""}
+            onChange={(e) => field.onChange(e.target.value)}
+            onKeyDown={handleEnter}
+          />
+        )}
+      />
+    </>
+  );
+};
+
+/**
+ * Ledger-style ingredient editor: one line per ingredient
+ * ([qty][unit][name][⋮]), dashed rules between rows. Type switching, extra
+ * amounts, the entity link, and row moves live in the ⋮ menu; Enter in the
+ * qty/unit of the last row appends the next one.
+ */
 export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
   form,
   sectionIndex,
@@ -29,61 +112,37 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
     name: `sections.${sectionIndex}.ingredients`,
   });
 
+  const appendRow = () => append(newRow("ingredient"));
+
   return (
-    <div className="w-full space-y-2">
+    <div className="w-full">
       {fields.length === 0 ? (
-        <div className="text-muted-foreground text-sm italic">
-          No ingredients added yet
+        <div className="py-1 text-muted-foreground text-sm italic">
+          No ingredients yet — add the first row below.
         </div>
       ) : (
-        <div className="space-y-2">
-          {fields.map((field, ingredientIndex) => (
-            <div
-              key={field.id}
-              className="space-y-2 rounded border border-border border-opacity-50 px-2 py-2"
-            >
-              <div className="flex flex-row items-center">
-                <div className="flex w-8 flex-col items-center justify-center">
-                  <h6 className="rotate-[-90deg] whitespace-nowrap font-medium text-sm">
-                    Ingredient #{ingredientIndex + 1}
-                  </h6>
-                </div>
-                <div className="w-1/2 pr-2">
-                  <Tabs
-                    defaultValue={form.watch(
-                      `sections.${sectionIndex}.ingredients.${ingredientIndex}.type`,
-                    )}
-                    onValueChange={(value) => {
-                      const currentField = form.getValues(
-                        `sections.${sectionIndex}.ingredients.${ingredientIndex}`,
-                      );
-                      const newType = value as SectionIngredientType;
+        <div className="divide-y divide-dashed divide-border">
+          {fields.map((field, ingredientIndex) => {
+            const path =
+              `sections.${sectionIndex}.ingredients.${ingredientIndex}` as const;
+            const row = form.watch(path);
+            const isLast = ingredientIndex === fields.length - 1;
+            const linked =
+              row.type === "ingredient" ? row.ingredient : row.recipe;
 
-                      // Update the field with the new type and reset the corresponding values
-                      if (newType === "ingredient") {
-                        update(ingredientIndex, {
-                          ...currentField,
-                          type: newType,
-                          ingredient: { id: "", name: "" }, // Empty ComboboxItem
-                          recipe: null,
-                        });
-                      } else {
-                        update(ingredientIndex, {
-                          ...currentField,
-                          type: newType,
-                          ingredient: null,
-                          recipe: { id: "", name: "" }, // Empty ComboboxItem
-                        });
-                      }
-                    }}
-                    className="w-full"
-                  >
-                    <TabsList className="mb-2">
-                      <TabsTrigger value="ingredient">Ingredient</TabsTrigger>
-                      <TabsTrigger value="recipe">Recipe</TabsTrigger>
-                    </TabsList>
+            return (
+              <div key={field.id} className="py-1.5">
+                <div className="grid grid-cols-[4.5rem_4rem_minmax(0,1fr)_auto] items-center gap-1.5">
+                  <AmountInputs
+                    form={form}
+                    sectionIndex={sectionIndex}
+                    ingredientIndex={ingredientIndex}
+                    amountIndex={0}
+                    onEnter={isLast ? appendRow : undefined}
+                  />
 
-                    <TabsContent value="ingredient">
+                  <div className="min-w-0">
+                    {row.type === "ingredient" ? (
                       <WithIngredientSearch>
                         {({
                           items,
@@ -91,135 +150,178 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                           isLoading,
                           onCreateNew,
                         }) => (
-                          <>
-                            <ComboboxField
-                              form={form}
-                              name={`sections.${sectionIndex}.ingredients.${ingredientIndex}.ingredient`}
-                              label="Ingredient"
-                              items={items}
-                              onSearchChange={onSearchChange}
-                              isLoading={isLoading}
-                              onCreateNew={onCreateNew}
-                            />
-                            {form.watch(
-                              `sections.${sectionIndex}.ingredients.${ingredientIndex}.ingredient`,
-                            ) && (
-                              <div className="mt-1">
-                                <EntityPillLink
-                                  entity="ingredient"
-                                  data={{
-                                    id: form.watch(
-                                      `sections.${sectionIndex}.ingredients.${ingredientIndex}.ingredient.id`,
-                                    ),
-                                    name: form.watch(
-                                      `sections.${sectionIndex}.ingredients.${ingredientIndex}.ingredient.name`,
-                                    ),
-                                  }}
-                                  openInNewTab
-                                />
-                              </div>
-                            )}
-                          </>
+                          <ComboboxField
+                            form={form}
+                            name={`${path}.ingredient`}
+                            items={items}
+                            onSearchChange={onSearchChange}
+                            isLoading={isLoading}
+                            onCreateNew={onCreateNew}
+                          />
                         )}
                       </WithIngredientSearch>
-                    </TabsContent>
-
-                    <TabsContent value="recipe">
+                    ) : (
                       <WithRecipeSearch>
                         {({ items, onSearchChange, isLoading }) => (
-                          <>
-                            <ComboboxField
-                              form={form}
-                              name={`sections.${sectionIndex}.ingredients.${ingredientIndex}.recipe`}
-                              label="Recipe"
-                              items={items}
-                              onSearchChange={onSearchChange}
-                              isLoading={isLoading}
-                            />
-                            {form.watch(
-                              `sections.${sectionIndex}.ingredients.${ingredientIndex}.recipe`,
-                            ) && (
-                              <div className="mt-1">
-                                <EntityPillLink
-                                  entity="recipe"
-                                  data={{
-                                    id: form.watch(
-                                      `sections.${sectionIndex}.ingredients.${ingredientIndex}.recipe.id`,
-                                    ),
-                                    name: form.watch(
-                                      `sections.${sectionIndex}.ingredients.${ingredientIndex}.recipe.name`,
-                                    ),
-                                  }}
-                                  openInNewTab
-                                />
-                              </div>
-                            )}
-                          </>
+                          <ComboboxField
+                            form={form}
+                            name={`${path}.recipe`}
+                            items={items}
+                            onSearchChange={onSearchChange}
+                            isLoading={isLoading}
+                          />
                         )}
                       </WithRecipeSearch>
-                    </TabsContent>
-                  </Tabs>
+                    )}
+                  </div>
+
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Ingredient ${ingredientIndex + 1} options`}
+                        />
+                      }
+                    >
+                      <MoreVertical className="h-3.5 w-3.5" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        disabled={ingredientIndex === 0}
+                        onClick={() =>
+                          move(ingredientIndex, ingredientIndex - 1)
+                        }
+                      >
+                        Move up
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={ingredientIndex === fields.length - 1}
+                        onClick={() =>
+                          move(ingredientIndex, ingredientIndex + 1)
+                        }
+                      >
+                        Move down
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => {
+                          const current = form.getValues(path);
+                          update(
+                            ingredientIndex,
+                            current.type === "ingredient"
+                              ? {
+                                  ...newRow("recipe"),
+                                  amounts: current.amounts,
+                                }
+                              : {
+                                  ...newRow("ingredient"),
+                                  amounts: current.amounts,
+                                },
+                          );
+                        }}
+                      >
+                        {row.type === "ingredient"
+                          ? "Switch to sub-recipe"
+                          : "Switch to ingredient"}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          const current = form.getValues(path);
+                          form.setValue(`${path}.amounts`, [
+                            ...current.amounts,
+                            { value: 1, unit: "" },
+                          ]);
+                        }}
+                      >
+                        Add second amount
+                      </DropdownMenuItem>
+                      {linked?.id && (
+                        <DropdownMenuItem
+                          onClick={() =>
+                            window.open(
+                              `/${row.type === "ingredient" ? "ingredients" : "recipes"}/${linked.id}`,
+                              "_blank",
+                            )
+                          }
+                        >
+                          <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                          Open{" "}
+                          {row.type === "ingredient" ? "ingredient" : "recipe"}
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        variant="destructive"
+                        onClick={() => remove(ingredientIndex)}
+                      >
+                        <Trash className="mr-1.5 h-3.5 w-3.5" />
+                        Delete row
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
 
-                <div className="space-y-2">
-                  <AmountFieldArray
-                    form={form}
-                    sectionIndex={sectionIndex}
-                    ingredientIndex={ingredientIndex}
-                  />
-                </div>
-                <FieldArrayItemControls
-                  move={move}
-                  remove={remove}
-                  index={ingredientIndex}
-                  fieldsLength={fields.length}
-                  className="ml-4 flex flex-col space-y-1"
+                {/* Extra amounts (e.g. "250 g / 1 cup") on follow-up lines */}
+                {row.amounts.slice(1).map((_, extraIdx) => (
+                  <div
+                    key={`${field.id}-amount-${extraIdx + 1}`}
+                    className="mt-1 grid grid-cols-[4.5rem_4rem_minmax(0,1fr)_auto] items-center gap-1.5"
+                  >
+                    <AmountInputs
+                      form={form}
+                      sectionIndex={sectionIndex}
+                      ingredientIndex={ingredientIndex}
+                      amountIndex={extraIdx + 1}
+                    />
+                    <span className="font-mono text-2xs text-muted-foreground">
+                      alt. amount
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Remove this amount"
+                      onClick={() => {
+                        const current = form.getValues(`${path}.amounts`);
+                        form.setValue(
+                          `${path}.amounts`,
+                          current.filter((_, i) => i !== extraIdx + 1),
+                        );
+                      }}
+                    >
+                      <Trash className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+
+                <IngredientReparse
+                  form={form}
+                  sectionIndex={sectionIndex}
+                  ingredientIndex={ingredientIndex}
+                  onApply={(updated) => update(ingredientIndex, updated)}
                 />
               </div>
-              <IngredientReparse
-                form={form}
-                sectionIndex={sectionIndex}
-                ingredientIndex={ingredientIndex}
-                onApply={(row) => update(ingredientIndex, row)}
-              />
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
-      <div className="mt-2 flex justify-between">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() =>
-            append({
-              type: "ingredient",
-              ingredient: { id: "", name: "" }, // Empty ComboboxItem
-              recipe: null,
-              amounts: [{ value: 1, unit: "" }],
-            })
-          }
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Add Ingredient
+      <div className="mt-2 flex gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={appendRow}>
+          <Plus className="mr-1.5 h-3.5 w-3.5" />
+          Ingredient
         </Button>
-
         <Button
           type="button"
-          variant="outline"
+          variant="ghost"
           size="sm"
-          onClick={() =>
-            append({
-              type: "recipe",
-              ingredient: null,
-              recipe: { id: "", name: "" }, // Empty ComboboxItem
-              amounts: [{ value: 1, unit: "" }],
-            })
-          }
+          onClick={() => append(newRow("recipe"))}
         >
-          <Plus className="mr-2 h-4 w-4" />
-          Add Recipe Reference
+          <Plus className="mr-1.5 h-3.5 w-3.5" />
+          Sub-recipe
         </Button>
       </div>
     </div>

@@ -24,10 +24,7 @@ import { useTRPC } from "~/trpc/react";
 
 const searchSchema = z.object({
   edit: z.boolean().optional().catch(undefined),
-  view: z
-    .enum(["magazine", "nyt", "table", "charts"])
-    .optional()
-    .catch(undefined),
+  view: z.enum(["magazine", "table", "charts"]).optional().catch(undefined),
 });
 
 const searchDefaults = { edit: undefined, view: undefined } as const;

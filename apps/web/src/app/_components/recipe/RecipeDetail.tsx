@@ -1,10 +1,11 @@
 import type { RecipeOut, SectionIngredientOut } from "@cubby/schemas/recipe";
 import { getNutrientValueByKey } from "@cubby/usda-schemas";
-import { BarChart3, BookOpen, Newspaper, Table2 } from "lucide-react";
+import { BarChart3, BookOpen, Table2 } from "lucide-react";
 import type React from "react";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { TicketDivider } from "~/components/ui/ticket-divider";
 import {
   ViewSwitcher,
   type ViewSwitcherOption,
@@ -19,27 +20,25 @@ import { formatCurrency } from "~/lib/utils";
 import { AuditLogList } from "../audit-log/audit-log-list";
 import EntityImageList from "../EntityImageList";
 import { useRecipeCostingData } from "../hooks/useRecipeCostingData";
-import { NYTView } from "./NYTView";
 import { RecipeMagazineView } from "./RecipeMagazineView";
 import { RecipeTagList } from "./recipe-tag";
-import { formatYield, getIngredientName } from "./recipe-utils";
+import {
+  formatYield,
+  getEffectiveServings,
+  getIngredientName,
+} from "./recipe-utils";
 import { RecipeIngredientList } from "./recipeingredientlist";
 
-// Nivo + d3-hierarchy are heavy and only render in the "charts" view, so keep
-// them out of the recipe-detail route chunk until that tab is opened.
-const MacroSunburst = lazy(
-  () => import("~/app/_components/visualizations/macro-sunburst"),
+// d3-hierarchy is heavy and only renders in the "charts" view, so keep it out
+// of the recipe-detail route chunk until that tab is opened.
+const NutritionBars = lazy(
+  () => import("~/app/_components/visualizations/nutrition-bars"),
 );
 const RecipeCostTreemap = lazy(
   () => import("~/app/_components/visualizations/recipe-cost-treemap"),
 );
 
 /** Get effective servings: explicit servings, or yield value if unit is "servings" */
-function getEffectiveServings(recipe: RecipeOut): number | null {
-  if (recipe.servings) return recipe.servings;
-  if (recipe.yield?.unit === "servings") return recipe.yield.value;
-  return null;
-}
 
 /** Summary card showing yield, servings, and per-serving metrics */
 const RecipeSummaryCard: React.FC<{
@@ -78,8 +77,10 @@ const RecipeSummaryCard: React.FC<{
           {/* Yield info */}
           {hasYield && (
             <div>
-              <div className="text-muted-foreground text-sm">Makes</div>
-              <div className="font-medium text-lg">
+              <div className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
+                Makes
+              </div>
+              <div className="font-mono font-semibold text-lg tabular-nums">
                 {formatYield(recipe.yield!)}
               </div>
             </div>
@@ -88,16 +89,22 @@ const RecipeSummaryCard: React.FC<{
           {/* Servings (only if different from yield) */}
           {effectiveServings && recipe.yield?.unit !== "servings" && (
             <div>
-              <div className="text-muted-foreground text-sm">Servings</div>
-              <div className="font-medium text-lg">{effectiveServings}</div>
+              <div className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
+                Servings
+              </div>
+              <div className="font-mono font-semibold text-lg tabular-nums">
+                {effectiveServings}
+              </div>
             </div>
           )}
 
           {/* Total cost */}
           {totals?.price ? (
             <div>
-              <div className="text-muted-foreground text-sm">Total Cost</div>
-              <div className="font-medium text-lg">
+              <div className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
+                Total Cost
+              </div>
+              <div className="font-mono font-semibold text-lg tabular-nums">
                 {formatCurrency(totals.price)}
               </div>
             </div>
@@ -106,30 +113,30 @@ const RecipeSummaryCard: React.FC<{
           {/* Per-serving metrics */}
           {perServingCost && (
             <div>
-              <div className="text-muted-foreground text-sm">
+              <div className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
                 Cost per Serving
               </div>
-              <div className="font-medium text-lg">
+              <div className="font-mono font-semibold text-lg tabular-nums">
                 {formatCurrency(perServingCost)}
               </div>
             </div>
           )}
           {perServingCalories && (
             <div>
-              <div className="text-muted-foreground text-sm">
+              <div className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
                 Calories per Serving
               </div>
-              <div className="font-medium text-lg">
+              <div className="font-mono font-semibold text-lg tabular-nums">
                 {Math.round(perServingCalories)} kcal
               </div>
             </div>
           )}
           {perServingProtein && (
             <div>
-              <div className="text-muted-foreground text-sm">
+              <div className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
                 Protein per Serving
               </div>
-              <div className="font-medium text-lg">
+              <div className="font-mono font-semibold text-lg tabular-nums">
                 {Math.round(perServingProtein)}g
               </div>
             </div>
@@ -140,11 +147,10 @@ const RecipeSummaryCard: React.FC<{
   );
 };
 
-export type RecipeViewMode = "magazine" | "nyt" | "table" | "charts";
+export type RecipeViewMode = "magazine" | "table" | "charts";
 
 export const RECIPE_VIEW_OPTIONS: ViewSwitcherOption<RecipeViewMode>[] = [
   { value: "magazine", label: "Magazine", icon: BookOpen },
-  { value: "nyt", label: "NYT", icon: Newspaper },
   { value: "table", label: "Table", icon: Table2 },
   { value: "charts", label: "Charts", icon: BarChart3 },
 ];
@@ -207,8 +213,9 @@ const RecipeDetailInner: React.FC<{
       </div>
 
       {/* View Components */}
-      {viewMode === "magazine" && <RecipeMagazineView recipe={recipe} />}
-      {viewMode === "nyt" && <NYTView recipe={recipe} />}
+      {viewMode === "magazine" && (
+        <RecipeMagazineView recipe={recipe} totals={totals} />
+      )}
       {viewMode === "table" && (
         <>
           {/* Images for table view */}
@@ -239,9 +246,7 @@ const RecipeDetailInner: React.FC<{
             <div className="grid gap-6 lg:grid-cols-2">
               <Card>
                 <CardHeader className="bg-muted/50 px-4 py-2">
-                  <CardTitle className="font-medium text-base">
-                    Cost Breakdown
-                  </CardTitle>
+                  <CardTitle>Cost Breakdown</CardTitle>
                 </CardHeader>
                 <CardContent className="p-3">
                   {ingredientDataItems.length > 0 ? (
@@ -258,13 +263,11 @@ const RecipeDetailInner: React.FC<{
               </Card>
               <Card>
                 <CardHeader className="bg-muted/50 px-4 py-2">
-                  <CardTitle className="font-medium text-base">
-                    Nutrition Breakdown
-                  </CardTitle>
+                  <CardTitle>Nutrition Breakdown</CardTitle>
                 </CardHeader>
                 <CardContent className="p-3">
                   {ingredientDataItems.length > 0 ? (
-                    <MacroSunburst ingredients={ingredientDataItems} />
+                    <NutritionBars ingredients={ingredientDataItems} />
                   ) : (
                     <div className="h-[300px]">
                       <SimpleLoading />
@@ -281,7 +284,7 @@ const RecipeDetailInner: React.FC<{
       {viewMode === "magazine" && recipeImages.length > 1 && (
         <Card>
           <CardHeader className="bg-muted/50 px-4 py-2">
-            <CardTitle className="font-medium text-base">More Images</CardTitle>
+            <CardTitle>More Images</CardTitle>
           </CardHeader>
           <CardContent className="p-3">
             <EntityImageList images={recipeImages.slice(1)} />
@@ -289,10 +292,13 @@ const RecipeDetailInner: React.FC<{
         </Card>
       )}
 
+      {/* Tear line between the recipe itself and its paper trail */}
+      <TicketDivider />
+
       {/* History Section */}
       <Card>
         <CardHeader className="bg-muted/50 px-4 py-2">
-          <CardTitle className="font-medium text-base">History</CardTitle>
+          <CardTitle>History</CardTitle>
         </CardHeader>
         <CardContent className="p-3">
           <AuditLogList

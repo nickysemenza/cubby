@@ -9,9 +9,25 @@ import type {
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useMutation } from "@tanstack/react-query";
-import { ChevronDown, ChevronUp, Import, Plus, Trash } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  ClipboardList,
+  Image as ImageIcon,
+  Import,
+  Link2,
+  Plus,
+  Trash,
+} from "lucide-react";
 import { type FC, useId, useMemo, useState } from "react";
-import { Controller, useFieldArray, useForm, useWatch } from "react-hook-form";
+import {
+  type Control,
+  Controller,
+  useFieldArray,
+  useForm,
+  useFormState,
+  useWatch,
+} from "react-hook-form";
 import { toast } from "sonner";
 import type { z } from "zod";
 import {
@@ -29,16 +45,14 @@ import {
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "~/components/ui/collapsible";
+import { Card, CardContent } from "~/components/ui/card";
 import { Field, FieldLabel } from "~/components/ui/field";
+import { InkStamp } from "~/components/ui/ink-stamp";
 import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
 import { useImageState } from "~/hooks/useImageState";
+import { cn } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
 import { useTRPC } from "~/trpc/react";
 import {
@@ -62,6 +76,7 @@ import {
   haveIngredientsChanged,
   haveInstructionsChanged,
 } from "./recipe-form-utils";
+import { RecipeLivePreview } from "./recipe-live-preview";
 import { TagInput } from "./tag-input";
 import {
   formSchema,
@@ -114,6 +129,31 @@ const YieldServingsFields: FC<{
           placeholder="How many portions?"
         />
       )}
+    </div>
+  );
+};
+
+// Live tally for the sticky footer: counts + a dirty stamp. Subscribed
+// narrowly via control so keystrokes re-render this strip, not the form.
+const EditorTally: FC<{ control: Control<RecipeFormValues> }> = ({
+  control,
+}) => {
+  const sections = useWatch({ control, name: "sections" });
+  // dirtyFields, not isDirty: registering the URL/yield inputs materializes
+  // their objects ({url: undefined} vs null), which trips isDirty on load.
+  const { dirtyFields } = useFormState({ control });
+  const isDirty = Object.keys(dirtyFields).length > 0;
+  const ingredients =
+    sections?.reduce((acc, s) => acc + (s?.ingredients?.length ?? 0), 0) ?? 0;
+  const steps =
+    sections?.reduce((acc, s) => acc + (s?.instructions?.length ?? 0), 0) ?? 0;
+
+  return (
+    <div className="flex min-w-0 items-center gap-2.5 font-mono text-2xs text-muted-foreground uppercase">
+      <span className="truncate tabular-nums">
+        {ingredients} ingredients · {steps} steps
+      </span>
+      {isDirty && <InkStamp tone="red">Unsaved</InkStamp>}
     </div>
   );
 };
@@ -172,8 +212,15 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
     hasImageChanges,
   } = useImageState();
 
+  // Which import tool panel is open. They're plumbing, not recipe data, so
+  // they collapse behind a toolbar; scraping starts open when creating fresh.
+  const [openTool, setOpenTool] = useState<"scrape" | "text" | "photos" | null>(
+    mode === "create" ? "scrape" : null,
+  );
+  const toggleTool = (tool: "scrape" | "text" | "photos") =>
+    setOpenTool((current) => (current === tool ? null : tool));
+
   // Import section state
-  const [textImportOpen, setTextImportOpen] = useState(false);
   const [textImportIngredients, setTextImportIngredients] = useState("");
   const [textImportInstructions, setTextImportInstructions] = useState("");
 
@@ -422,7 +469,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
       // Clear and close import section
       setTextImportIngredients("");
       setTextImportInstructions("");
-      setTextImportOpen(false);
+      setOpenTool(null);
     } catch (error) {
       console.error("Import failed:", error);
     }
@@ -548,288 +595,357 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
       isPending={isPending}
       onCancel={onCancel}
       submitButtonText={buttonText}
+      stickyFooter
+      footerStart={<EditorTally control={form.control} />}
     >
-      <SideBySideFields>
-        <UnifiedTextField
-          form={form}
-          name="name"
-          label="Name"
-          placeholder="Enter recipe name"
-          nullable={false}
-        />
-
-        <Field>
-          <FieldLabel>URL (Optional)</FieldLabel>
-          <div className="flex gap-2">
-            <Controller
-              control={form.control}
-              name="meta.url"
-              render={({ field }) => (
-                <Input
-                  placeholder="Enter recipe URL"
-                  value={field.value ?? ""}
-                  onChange={(e) => field.onChange(e.target.value || null)}
-                  className="flex-1"
-                />
-              )}
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleScrape}
-              disabled={!urlValue || scrapeMutation.isPending || isResolving}
-              className="shrink-0"
-            >
-              {scrapeMutation.isPending || isResolving ? (
-                <Spinner className="mr-1" />
-              ) : (
-                <Import className="mr-1 h-4 w-4" />
-              )}
-              Scrape
-            </Button>
-          </div>
-          {isResolving && progress.total > 0 && (
-            <p className="text-muted-foreground text-xs">
-              Resolving ingredients {progress.done}/{progress.total}…
-            </p>
-          )}
-        </Field>
-      </SideBySideFields>
-
-      {/* Import from Text */}
-      <Collapsible open={textImportOpen} onOpenChange={setTextImportOpen}>
-        <CollapsibleTrigger
-          render={
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="flex items-center gap-1 text-muted-foreground"
-            />
-          }
-        >
-          {textImportOpen ? (
-            <ChevronUp className="h-4 w-4" />
-          ) : (
-            <ChevronDown className="h-4 w-4" />
-          )}
-          Import from Text
-        </CollapsibleTrigger>
-        <CollapsibleContent className="mt-2 space-y-2 rounded border border-border p-2">
-          {/* Ingredients: textarea + pills preview */}
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-            <Field>
-              <FieldLabel>Ingredients (one per line)</FieldLabel>
-              <Textarea
-                placeholder="1 cup flour&#10;2 eggs&#10;1/2 tsp salt"
-                value={textImportIngredients}
-                onChange={(e) => setTextImportIngredients(e.target.value)}
-                rows={6}
-              />
-            </Field>
-            <div>
-              <FieldLabel>Parsed Ingredients</FieldLabel>
-              <div className="mt-2 min-h-[120px] rounded border border-border bg-muted/30 p-2">
-                <IngredientPreviewTable ingredientLines={ingredientLines} />
-              </div>
+      <div className="gap-6 xl:grid xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
+        <div className="space-y-3">
+          {/* Import toolbar — one-time tools, tucked out of the recipe's way */}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
+              {mode === "edit" ? "Editing recipe" : "New recipe"}
+            </span>
+            <div className="flex gap-1.5">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                aria-expanded={openTool === "scrape"}
+                className={cn(openTool === "scrape" && "bg-muted")}
+                onClick={() => toggleTool("scrape")}
+              >
+                <Link2 className="mr-1.5 h-3.5 w-3.5" />
+                Scrape URL
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                aria-expanded={openTool === "text"}
+                className={cn(openTool === "text" && "bg-muted")}
+                onClick={() => toggleTool("text")}
+              >
+                <ClipboardList className="mr-1.5 h-3.5 w-3.5" />
+                Paste text
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                aria-expanded={openTool === "photos"}
+                className={cn(openTool === "photos" && "bg-muted")}
+                onClick={() => toggleTool("photos")}
+              >
+                <ImageIcon className="mr-1.5 h-3.5 w-3.5" />
+                Photos
+              </Button>
             </div>
           </div>
 
-          {/* Instructions: textarea + preview */}
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+          {/* Scrape panel (kept mounted so in-flight scrapes aren't lost) */}
+          <div
+            className={cn(
+              "rounded-lg border border-border bg-card p-3",
+              openTool !== "scrape" && "hidden",
+            )}
+          >
             <Field>
-              <FieldLabel>Instructions (one per line)</FieldLabel>
-              <Textarea
-                placeholder="Preheat oven to 350°F&#10;Mix dry ingredients&#10;Add wet ingredients"
-                value={textImportInstructions}
-                onChange={(e) => setTextImportInstructions(e.target.value)}
-                rows={6}
-              />
+              <FieldLabel>URL (Optional)</FieldLabel>
+              <div className="flex gap-2">
+                <Controller
+                  control={form.control}
+                  name="meta.url"
+                  render={({ field }) => (
+                    <Input
+                      placeholder="Enter recipe URL"
+                      value={field.value ?? ""}
+                      onChange={(e) => field.onChange(e.target.value || null)}
+                      className="flex-1"
+                    />
+                  )}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleScrape}
+                  disabled={
+                    !urlValue || scrapeMutation.isPending || isResolving
+                  }
+                  className="shrink-0"
+                >
+                  {scrapeMutation.isPending || isResolving ? (
+                    <Spinner className="mr-1" />
+                  ) : (
+                    <Import className="mr-1 h-4 w-4" />
+                  )}
+                  Scrape
+                </Button>
+              </div>
+              {isResolving && progress.total > 0 && (
+                <p className="text-muted-foreground text-xs">
+                  Resolving ingredients {progress.done}/{progress.total}…
+                </p>
+              )}
             </Field>
-            <div>
-              <FieldLabel>Instructions Preview</FieldLabel>
-              <div className="mt-1.5 min-h-[120px] rounded border border-border bg-muted/30 p-2">
-                {richInstructions.length > 0 ? (
-                  <ol className="list-decimal space-y-1.5 pl-4 text-sm">
-                    {richInstructions.map((richItems, idx) => (
-                      // biome-ignore lint/suspicious/noArrayIndexKey: instructions are ordered by line
-                      <li key={idx}>{formatRichText(richItems)}</li>
-                    ))}
-                  </ol>
-                ) : (
-                  <div className="text-muted-foreground text-sm">
-                    Enter instructions to see preview
-                  </div>
+          </div>
+
+          {/* Paste-text panel */}
+          <div
+            className={cn(
+              "space-y-2 rounded-lg border border-border bg-card p-3",
+              openTool !== "text" && "hidden",
+            )}
+          >
+            {/* Ingredients: textarea + pills preview */}
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+              <Field>
+                <FieldLabel>Ingredients (one per line)</FieldLabel>
+                <Textarea
+                  placeholder="1 cup flour&#10;2 eggs&#10;1/2 tsp salt"
+                  value={textImportIngredients}
+                  onChange={(e) => setTextImportIngredients(e.target.value)}
+                  rows={6}
+                />
+              </Field>
+              <div>
+                <FieldLabel>Parsed Ingredients</FieldLabel>
+                <div className="mt-2 min-h-[120px] rounded border border-border bg-muted/30 p-2">
+                  <IngredientPreviewTable ingredientLines={ingredientLines} />
+                </div>
+              </div>
+            </div>
+
+            {/* Instructions: textarea + preview */}
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+              <Field>
+                <FieldLabel>Instructions (one per line)</FieldLabel>
+                <Textarea
+                  placeholder="Preheat oven to 350°F&#10;Mix dry ingredients&#10;Add wet ingredients"
+                  value={textImportInstructions}
+                  onChange={(e) => setTextImportInstructions(e.target.value)}
+                  rows={6}
+                />
+              </Field>
+              <div>
+                <FieldLabel>Instructions Preview</FieldLabel>
+                <div className="mt-1.5 min-h-[120px] rounded border border-border bg-muted/30 p-2">
+                  {richInstructions.length > 0 ? (
+                    <ol className="list-decimal space-y-1.5 pl-4 text-sm">
+                      {richInstructions.map((richItems, idx) => (
+                        // biome-ignore lint/suspicious/noArrayIndexKey: instructions are ordered by line
+                        <li key={idx}>{formatRichText(richItems)}</li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <div className="text-muted-foreground text-sm">
+                      Enter instructions to see preview
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Import button */}
+            <div className="flex items-center justify-between">
+              <div className="text-muted-foreground text-sm">
+                {ingredientImport.totalCount > 0 && (
+                  <>
+                    {ingredientImport.matchedCount}/
+                    {ingredientImport.totalCount} ingredients matched
+                    {ingredientImport.missingCount > 0 && (
+                      <span className="text-amber-600">
+                        {" "}
+                        ({ingredientImport.missingCount} will be created)
+                      </span>
+                    )}
+                  </>
                 )}
               </div>
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                onClick={handleImportAll}
+                disabled={
+                  ingredientImport.isLoading ||
+                  ingredientImport.isImporting ||
+                  (ingredientLines.length === 0 &&
+                    instructionLines.length === 0)
+                }
+              >
+                {ingredientImport.isImporting ? (
+                  <Spinner className="mr-1" />
+                ) : (
+                  <Import className="mr-1 h-4 w-4" />
+                )}
+                {ingredientImport.missingCount > 0
+                  ? `Import All (create ${ingredientImport.missingCount})`
+                  : "Import All"}
+              </Button>
             </div>
           </div>
 
-          {/* Import button */}
-          <div className="flex items-center justify-between">
-            <div className="text-muted-foreground text-sm">
-              {ingredientImport.totalCount > 0 && (
-                <>
-                  {ingredientImport.matchedCount}/{ingredientImport.totalCount}{" "}
-                  ingredients matched
-                  {ingredientImport.missingCount > 0 && (
-                    <span className="text-amber-600">
-                      {" "}
-                      ({ingredientImport.missingCount} will be created)
-                    </span>
-                  )}
-                </>
-              )}
-            </div>
-            <Button
-              type="button"
-              variant="default"
-              size="sm"
-              onClick={handleImportAll}
-              disabled={
-                ingredientImport.isLoading ||
-                ingredientImport.isImporting ||
-                (ingredientLines.length === 0 && instructionLines.length === 0)
-              }
-            >
-              {ingredientImport.isImporting ? (
-                <Spinner className="mr-1" />
-              ) : (
-                <Import className="mr-1 h-4 w-4" />
-              )}
-              {ingredientImport.missingCount > 0
-                ? `Import All (create ${ingredientImport.missingCount})`
-                : "Import All"}
-            </Button>
-          </div>
-        </CollapsibleContent>
-      </Collapsible>
-
-      {/* Yield and Servings */}
-      <YieldServingsFields form={form} />
-
-      {/* Tags */}
-      <Controller
-        control={form.control}
-        name="tags"
-        render={({ field }) => (
-          <Field>
-            <FieldLabel htmlFor="tags">Tags (Optional)</FieldLabel>
-            <TagInput value={field.value} onChange={field.onChange} />
-          </Field>
-        )}
-      />
-
-      {/* Show image upload in both create and edit modes */}
-      <PendingImageUpload
-        entityType="RECIPE"
-        onImagesChange={handlePendingImagesChange}
-        existingImages={mode === "edit" && recipe?.images ? recipe.images : []}
-        onExistingImagesRemove={handleRemovedImagesChange}
-        autoImportUrl={scrapedImageUrl}
-        className="mt-4"
-      />
-
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <h3 className="font-sans font-semibold text-foreground text-sm">
-            Recipe Sections
-          </h3>
-        </div>
-
-        {sectionFields.map((sectionField, sectionIndex) => (
+          {/* Photos panel (kept mounted: scraped images auto-import here) */}
           <div
-            key={sectionField.id}
-            className="space-y-2 rounded border border-border p-2"
+            className={cn(
+              "rounded-lg border border-border bg-card p-3",
+              openTool !== "photos" && "hidden",
+            )}
           >
+            <PendingImageUpload
+              entityType="RECIPE"
+              onImagesChange={handlePendingImagesChange}
+              existingImages={
+                mode === "edit" && recipe?.images ? recipe.images : []
+              }
+              onExistingImagesRemove={handleRemovedImagesChange}
+              autoImportUrl={scrapedImageUrl}
+            />
+          </div>
+
+          {/* Spec plate: the recipe's vitals in one chunky placard */}
+          <Card emphasis="chunky">
+            <CardContent className="space-y-2 px-4 py-1">
+              <UnifiedTextField
+                form={form}
+                name="name"
+                label="Name"
+                placeholder="Enter recipe name"
+                nullable={false}
+              />
+              <YieldServingsFields form={form} />
+              <Controller
+                control={form.control}
+                name="tags"
+                render={({ field }) => (
+                  <Field>
+                    <FieldLabel htmlFor="tags">Tags (Optional)</FieldLabel>
+                    <TagInput value={field.value} onChange={field.onChange} />
+                  </Field>
+                )}
+              />
+            </CardContent>
+          </Card>
+
+          <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <h4 className="font-medium">
-                Section {sectionIndex + 1}
-                {sectionField.name ? `: ${sectionField.name}` : ""}
-              </h4>
-              <div className="flex space-x-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() =>
-                    moveSection(sectionIndex, Math.max(0, sectionIndex - 1))
-                  }
-                  disabled={sectionIndex === 0}
-                >
-                  <ChevronUp className="h-4 w-4" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() =>
-                    moveSection(
-                      sectionIndex,
-                      Math.min(sectionFields.length - 1, sectionIndex + 1),
-                    )
-                  }
-                  disabled={sectionIndex === sectionFields.length - 1}
-                >
-                  <ChevronDown className="h-4 w-4" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => removeSection(sectionIndex)}
-                  disabled={sectionFields.length === 1}
-                >
-                  <Trash className="h-4 w-4" />
-                </Button>
-              </div>
+              <h3 className="my-0 font-medium font-mono text-2xs text-eyebrow uppercase tracking-wider">
+                Recipe sections
+              </h3>
             </div>
 
-            {/* Ingredients and Instructions side by side */}
-            <div className="flex flex-col space-y-2 md:flex-row md:space-x-2 md:space-y-0">
-              {/* Ingredients */}
-              <div className="md:w-1/2">
-                <h5 className="mb-2 font-medium text-sm">Ingredients</h5>
-                <IngredientFieldArray form={form} sectionIndex={sectionIndex} />
-              </div>
+            {sectionFields.map((sectionField, sectionIndex) => (
+              <div
+                key={sectionField.id}
+                className="space-y-2 rounded-lg border-2 border-[var(--border-chunky)] bg-card p-3 shadow-[var(--shadow-chunky-sm)]"
+              >
+                <div className="flex items-center justify-between">
+                  <h4 className="my-0 font-heading font-semibold text-sm">
+                    Section {sectionIndex + 1}
+                    {sectionField.name ? `: ${sectionField.name}` : ""}
+                  </h4>
+                  <div className="flex space-x-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() =>
+                        moveSection(sectionIndex, Math.max(0, sectionIndex - 1))
+                      }
+                      disabled={sectionIndex === 0}
+                    >
+                      <ChevronUp className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() =>
+                        moveSection(
+                          sectionIndex,
+                          Math.min(sectionFields.length - 1, sectionIndex + 1),
+                        )
+                      }
+                      disabled={sectionIndex === sectionFields.length - 1}
+                    >
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeSection(sectionIndex)}
+                      disabled={sectionFields.length === 1}
+                    >
+                      <Trash className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
 
-              {/* Instructions */}
-              <div className="md:w-1/2">
-                <UnifiedTextField
-                  form={form}
-                  name={`sections.${sectionIndex}.name`}
-                  label="Section Name (Optional)"
-                  placeholder="E.g., 'Main Course', 'Sauce', etc."
-                  nullable={true}
-                />
-                <h5 className="mb-2 font-medium text-sm">Instructions</h5>
-                <InstructionFieldArray
-                  form={form}
-                  sectionIndex={sectionIndex}
-                />
+                {/* Ingredients and Instructions side by side */}
+                <div className="flex flex-col space-y-2 md:flex-row md:space-x-2 md:space-y-0">
+                  {/* Ingredients */}
+                  <div className="md:w-1/2">
+                    <h5 className="mb-2 font-medium font-mono text-2xs text-eyebrow uppercase tracking-wider">
+                      Ingredients
+                    </h5>
+                    <IngredientFieldArray
+                      form={form}
+                      sectionIndex={sectionIndex}
+                    />
+                  </div>
+
+                  {/* Instructions */}
+                  <div className="md:w-1/2">
+                    <UnifiedTextField
+                      form={form}
+                      name={`sections.${sectionIndex}.name`}
+                      label="Section Name (Optional)"
+                      placeholder="E.g., 'Main Course', 'Sauce', etc."
+                      nullable={true}
+                    />
+                    <h5 className="mb-2 font-medium font-mono text-2xs text-eyebrow uppercase tracking-wider">
+                      Instructions
+                    </h5>
+                    <InstructionFieldArray
+                      form={form}
+                      sectionIndex={sectionIndex}
+                    />
+                  </div>
+                </div>
               </div>
+            ))}
+
+            <div className="mt-3 flex justify-center">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  appendSection({
+                    name: null,
+                    ingredients: [],
+                    instructions: [],
+                  })
+                }
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add Section
+              </Button>
             </div>
           </div>
-        ))}
-
-        <div className="mt-3 flex justify-center">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              appendSection({
-                name: null,
-                ingredients: [],
-                instructions: [],
-              })
-            }
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Add Section
-          </Button>
         </div>
+
+        {/* Live page preview — the cookbook spread builds as you type */}
+        <aside className="hidden xl:sticky xl:top-20 xl:block">
+          <div className="max-h-[75vh] overflow-y-auto rounded-lg border-2 border-[var(--border-chunky)] bg-card p-4 shadow-[var(--shadow-chunky)]">
+            <p className="mb-3 font-mono text-2xs text-eyebrow uppercase tracking-wider">
+              Live preview
+            </p>
+            <RecipeLivePreview control={form.control} />
+          </div>
+        </aside>
       </div>
 
       <AlertDialog open={confirmScrapeOpen} onOpenChange={setConfirmScrapeOpen}>

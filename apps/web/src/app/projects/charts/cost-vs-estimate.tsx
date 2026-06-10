@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
 import { sumByKey } from "~/misc/array-helpers";
 import type { NotionProject, NotionPurchase } from "~/server/clients/notion";
-import { nivoChartTheme } from "../shared";
+import { nivoBarChrome, nivoChartTheme } from "../shared";
 import { ChartEmpty } from "./chart-empty";
 
 type Datum = {
@@ -64,7 +64,7 @@ export function CostVsEstimate({
             ? "var(--chart-negative)"
             : "var(--chart-1)";
         }}
-        borderRadius={2}
+        {...nivoBarChrome}
         axisBottom={{
           format: (v: number) => formatCurrency(v, 0),
         }}

@@ -26,14 +26,14 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
   // Meta row (ingredient/step counts, source) — shared between layouts.
   const metaInfo = (
     <div
-      className={`flex flex-wrap items-center gap-4 text-sm ${hasImage ? "text-white/90" : "text-muted-foreground"}`}
+      className={`flex flex-wrap items-center gap-4 font-mono text-2xs ${hasImage ? "text-white/90" : "text-muted-foreground"}`}
     >
       <div className="flex items-center gap-1.5">
-        <Users size={16} />
+        <Users size={12} />
         <span>{totalIngredients} ingredients</span>
       </div>
       <div className="flex items-center gap-1.5">
-        <Clock size={16} />
+        <Clock size={12} />
         <span>{totalSteps} steps</span>
       </div>
       {recipe.meta?.url && (
@@ -43,7 +43,7 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
           rel="noopener noreferrer"
           className="flex items-center gap-1.5 hover:underline"
         >
-          <ExternalLink size={16} />
+          <ExternalLink size={12} />
           <span>Source</span>
         </a>
       )}
@@ -54,12 +54,12 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
             params={{ cookbookId: recipe.source.cookbookId }}
             className="flex items-center gap-1.5 hover:underline"
           >
-            <BookOpen size={16} />
+            <BookOpen size={12} />
             <span>{recipe.source.book}</span>
           </Link>
         ) : (
           <span className="flex items-center gap-1.5">
-            <BookOpen size={16} />
+            <BookOpen size={12} />
             <span>{recipe.source.book}</span>
           </span>
         ))}

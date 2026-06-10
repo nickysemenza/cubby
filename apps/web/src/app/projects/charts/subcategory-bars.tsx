@@ -5,6 +5,7 @@ import { formatCurrency } from "~/lib/utils";
 import type { NotionPurchase } from "~/server/clients/notion";
 import {
   CATEGORY_COLORS,
+  nivoBarChrome,
   nivoChartTheme,
   normalizeCategoryKey,
 } from "../shared";
@@ -76,7 +77,7 @@ export function SubcategoryBars({
           const key = bar.id as string;
           return CATEGORY_COLORS[key] ?? "hsl(0, 0%, 65%)";
         }}
-        borderRadius={2}
+        {...nivoBarChrome}
         axisBottom={{
           format: (v: number) => formatCurrency(v, 0),
         }}

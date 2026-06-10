@@ -1,11 +1,9 @@
 import { infLocation } from "@cubby/schemas/location";
-import { recipeOut } from "@cubby/schemas/recipe";
 import { unitMappingWithMetadata } from "@cubby/schemas/unitmapping";
 import { AlertTriangle, Apple, Scale } from "lucide-react";
 import { lazy, Suspense } from "react";
 import { z } from "zod";
 import { LocationTree } from "~/app/_components/inventory/location-tree-view";
-import { NYTView } from "~/app/_components/recipe/NYTView";
 import { formatRichText } from "~/app/_components/recipe/richtext";
 import { ConversionCapabilities } from "~/app/_components/units/ConversionCapabilities";
 import {
@@ -26,7 +24,6 @@ import {
   entityRelationshipsDot,
   richTextInputSchema,
   sampleLocations,
-  sampleRecipe,
   sampleRichTextInput,
   sampleSummaryData,
   sampleUnitMappings,
@@ -245,15 +242,6 @@ export function DocsPage() {
         defaultData={sampleUnitMappings}
       >
         {(data) => <ConversionCapabilities mappings={data} />}
-      </EditableComponentDemo>
-
-      <EditableComponentDemo
-        title="NYTView"
-        description="NYT Cooking-style recipe display with ingredients and instructions side by side."
-        schema={recipeOut}
-        defaultData={sampleRecipe}
-      >
-        {(data) => <NYTView recipe={data} />}
       </EditableComponentDemo>
 
       <EditableComponentDemo
