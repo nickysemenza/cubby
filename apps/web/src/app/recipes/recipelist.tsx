@@ -56,6 +56,17 @@ const CoverageValue: React.FC<{
   );
 };
 
+/**
+ * Divisor for per-yield ("each") figures: the yield count, falling back to
+ * servings. Only meaningful for whole, multi-item yields (e.g. "12 churros"),
+ * so fractional or single yields (e.g. "0.75 cup", "1 loaf") return null and get
+ * no per-item line.
+ */
+const perYieldDivisor = (recipe: RecipeOut): number | null => {
+  const v = recipe.yield?.value ?? recipe.servings ?? null;
+  return v != null && Number.isInteger(v) && v >= 2 ? v : null;
+};
+
 interface RecipeListProps {
   /** Actions to display in the table toolbar (e.g., "Create New" button) */
   actions?: ReactNode;
@@ -154,10 +165,21 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
           if (!totals.price) return <NoneState />;
           const withPrice =
             totals.totalIngredients - totals.missingByType.price.length;
+          const perItem = perYieldDivisor(recipe);
           return (
-            <CoverageValue covered={withPrice} total={totals.totalIngredients}>
-              {formatCurrency(totals.price)}
-            </CoverageValue>
+            <div className="space-y-0.5">
+              <CoverageValue
+                covered={withPrice}
+                total={totals.totalIngredients}
+              >
+                {formatCurrency(totals.price)}
+              </CoverageValue>
+              {perItem && (
+                <div className="text-2xs text-muted-foreground">
+                  {formatCurrency(totals.price / perItem)} ea
+                </div>
+              )}
+            </div>
           );
         },
       }),
@@ -183,13 +205,21 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
           if (!calories) return <NoneState />;
           const withNutrients =
             totals.totalIngredients - totals.missingByType.nutrients.length;
+          const perItem = perYieldDivisor(recipe);
           return (
-            <CoverageValue
-              covered={withNutrients}
-              total={totals.totalIngredients}
-            >
-              {Math.round(calories)} kcal
-            </CoverageValue>
+            <div className="space-y-0.5">
+              <CoverageValue
+                covered={withNutrients}
+                total={totals.totalIngredients}
+              >
+                {Math.round(calories)} kcal
+              </CoverageValue>
+              {perItem && (
+                <div className="text-2xs text-muted-foreground">
+                  {Math.round(calories / perItem)} kcal ea
+                </div>
+              )}
+            </div>
           );
         },
       }),
