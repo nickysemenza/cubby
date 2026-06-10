@@ -3,6 +3,11 @@
 @import "@daveyplate/better-auth-ui/css";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+
+/* Class-strategy dark mode: `dark:` utilities key off a `.dark` class on
+   <html> (set pre-paint by the root inline script), not the media query,
+   so the in-app toggle can override the system preference. */
+@custom-variant dark (&:where(.dark, .dark *));
 /*
   ---break---
 */
@@ -264,6 +269,97 @@
 }
 /*
   ---break---
+  Midnight hearth - the same warm soul after dark. Lamp-lit browns rather
+  than tech gray-blue: paper deepens to umber, cream cards become lit
+  shelves, terracotta lifts for contrast, chunky shadows turn to ink and
+  the chunky border flips light-on-dark. Toggled via .dark on <html>.
+*/
+.dark {
+  /* Brand palette, re-pitched for dark. NOTE: --brand-cream becomes the
+     dark card surface here, so anything that meant "light cream ink"
+     (primary/destructive foregrounds) is redefined explicitly below. */
+  --brand-foreground: oklch(0.91 0.02 80);
+  --brand-cream: oklch(0.225 0.014 60);
+  --brand-paper: oklch(0.18 0.012 60);
+  --brand-shelf: oklch(0.66 0.02 75);
+
+  /* Ink shadows + light outline: offset shadows read as cast ink on dark,
+     while the chunky border becomes the lit edge that carries the shape. */
+  --shadow-warm-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
+  --shadow-warm-md: 0 4px 12px -2px rgba(0, 0, 0, 0.4);
+  --shadow-warm-lg: 0 8px 24px -4px rgba(0, 0, 0, 0.5);
+  --shadow-warm-xl: 0 20px 40px -8px rgba(0, 0, 0, 0.55);
+  --shadow-chunky-sm: 1.5px 1.5px 0 0 oklch(0 0 0 / 0.5);
+  --shadow-chunky: 3px 3px 0 0 oklch(0 0 0 / 0.55);
+  --shadow-chunky-lg: 4px 4px 0 0 oklch(0 0 0 / 0.55);
+  --border-chunky: oklch(from var(--brand-foreground) l c h / 0.3);
+
+  --background: var(--brand-paper);
+  --foreground: var(--brand-foreground);
+  --card: var(--brand-cream);
+  --card-foreground: var(--brand-foreground);
+  --popover: var(--brand-cream);
+  --popover-foreground: var(--brand-foreground);
+
+  --primary: oklch(0.66 0.14 42);
+  --primary-foreground: oklch(0.16 0.012 60);
+
+  --secondary: oklch(0.3 0.035 145);
+  --secondary-foreground: oklch(0.85 0.04 145);
+
+  --muted: oklch(0.26 0.012 60);
+  --muted-foreground: var(--brand-shelf);
+
+  --accent: oklch(0.42 0.08 50);
+  --accent-foreground: oklch(0.93 0.02 80);
+
+  --destructive: oklch(0.6 0.17 18);
+  --destructive-foreground: oklch(0.97 0.01 80);
+
+  --border: oklch(0.32 0.015 60);
+  --input: oklch(0.26 0.012 60);
+  --ring: oklch(0.66 0.14 42);
+
+  --eyebrow: oklch(0.7 0.07 55);
+  --highlight: oklch(0.66 0.14 42);
+  --subtle: oklch(0.6 0.07 90);
+  --glow: oklch(0.55 0.1 50);
+  --plum: oklch(0.68 0.12 320);
+  --slate: oklch(0.68 0.04 55);
+  --positive: oklch(0.68 0.1 150);
+
+  /* Categorical ramp brightens slightly so it carries on umber. */
+  --chart-1: oklch(0.66 0.15 42);
+  --chart-2: oklch(0.78 0.13 80);
+  --chart-3: oklch(0.64 0.09 140);
+  --chart-4: oklch(0.66 0.13 8);
+  --chart-5: oklch(0.6 0.13 345);
+  --chart-6: oklch(0.72 0.05 200);
+  --chart-7: oklch(0.58 0.07 55);
+  --chart-8: oklch(0.7 0.04 70);
+
+  /* Sequential ramp: umber -> terracotta (deeper share = brighter ember). */
+  --chart-seq-1: oklch(0.28 0.025 60);
+  --chart-seq-2: oklch(0.38 0.06 52);
+  --chart-seq-3: oklch(0.48 0.09 48);
+  --chart-seq-4: oklch(0.57 0.12 45);
+  --chart-seq-5: oklch(0.66 0.15 42);
+
+  /* Row accents (table hover gradient start + selected wash) */
+  --row-hover-from: oklch(0.26 0.02 55);
+  --row-selected: oklch(0.3 0.04 30);
+
+  --sidebar: var(--brand-cream);
+  --sidebar-foreground: var(--brand-foreground);
+  --sidebar-primary: oklch(0.66 0.14 42);
+  --sidebar-primary-foreground: oklch(0.16 0.012 60);
+  --sidebar-accent: oklch(0.26 0.012 60);
+  --sidebar-accent-foreground: var(--brand-foreground);
+  --sidebar-border: oklch(0.32 0.015 60);
+  --sidebar-ring: oklch(0.66 0.14 42);
+}
+/*
+  ---break---
 */
 @theme inline {
   --color-background: var(--background);
@@ -421,6 +517,16 @@
     z-index: 9999;
     mix-blend-mode: multiply;
   }
+  /* Multiply vanishes on near-black; switch the grain to a faint screen so
+     dark paper still feels like paper. */
+  .dark body::after {
+    mix-blend-mode: screen;
+    opacity: 0.035;
+  }
+  /* The radial color blooms read stronger on umber - ease them off. */
+  .dark .gradient-mesh::before {
+    opacity: 0.06;
+  }
 
   /* Tactile card emboss - a faint top inner-light "shelf lip" so cards read
      like physical cards on a shelf, not flat panels. Styled via the design
@@ -437,6 +543,10 @@
     pointer-events: none;
     box-shadow: inset 0 1px 0 0 oklch(1 0 0 / 0.5);
   }
+  /* After dark the shelf-lip highlight dims to a faint lamp edge. */
+  .dark [data-slot="card"]::after {
+    box-shadow: inset 0 1px 0 0 oklch(1 0 0 / 0.06);
+  }
 
   /* Table row hover - warm gradient accent */
   .table-row-hover {
@@ -445,7 +555,7 @@
   .table-row-hover:hover {
     background: linear-gradient(
       90deg,
-      oklch(0.96 0.02 55) 0%,
+      var(--row-hover-from, oklch(0.96 0.02 55)) 0%,
       transparent 100%
     );
     box-shadow: inset 3px 0 0 var(--row-accent, var(--brand-terracotta));

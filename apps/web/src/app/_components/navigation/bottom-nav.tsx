@@ -1,5 +1,5 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { Bug, BugOff, MoreHorizontal } from "lucide-react";
+import { Bug, BugOff, Moon, MoreHorizontal, Sun } from "lucide-react";
 import { useState } from "react";
 import { Button } from "~/components/ui/button";
 import {
@@ -10,6 +10,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "~/components/ui/sheet";
+import { useTheme } from "~/components/ui/theme-toggle";
 import { useDebug } from "~/hooks/useDebug";
 import { authClient } from "~/lib/auth-client";
 import { cn } from "~/lib/utils";
@@ -26,6 +27,7 @@ export function BottomNav() {
   const pathname = useLocation().pathname;
   const [isOpen, setIsOpen] = useState(false);
   const { isDebugEnabled, toggleDebug } = useDebug();
+  const { isDark, toggle: toggleTheme } = useTheme();
   const session = authClient.useSession();
 
   // Check if any "more" item is active
@@ -95,6 +97,20 @@ export function BottomNav() {
               <SheetTitle>More</SheetTitle>
             </SheetHeader>
             <div className="safe-bottom flex flex-1 flex-col gap-1 overflow-y-auto px-4 pb-8">
+              {/* Theme toggle — stays open so the switch is visible */}
+              <Button
+                variant="ghost"
+                onClick={toggleTheme}
+                className="min-h-[44px] justify-start px-3 py-2 text-sm"
+              >
+                {isDark ? (
+                  <Sun className="mr-2 h-4 w-4" />
+                ) : (
+                  <Moon className="mr-2 h-4 w-4" />
+                )}
+                {isDark ? "Light mode" : "Dark mode"}
+              </Button>
+
               {/* Debug Toggle */}
               <Button
                 variant="ghost"

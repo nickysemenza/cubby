@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { FlexContainer } from "~/components/layout/flex-container";
 import { Button } from "~/components/ui/button";
+import { ThemeToggleButton } from "~/components/ui/theme-toggle";
 import { entities } from "~/entities/entities";
 import { useDebug } from "~/hooks/useDebug";
 import { authClient } from "~/lib/auth-client";
@@ -163,6 +164,9 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
             <span className="sr-only">Search</span>
           </Button>
         )}
+
+        {/* Theme toggle */}
+        <ThemeToggleButton className="hidden md:flex" />
 
         {/* Quick Actions */}
         {sessionData?.user && <QuickActionsMenu />}
