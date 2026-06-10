@@ -73,11 +73,11 @@ export const ArrayFieldManager = <
   const canAdd = !maxItems || fields.length < maxItems;
 
   return (
-    <div className={cn("space-y-2", className)}>
+    <div className={cn("space-y-1.5", className)}>
       <div className="flex items-center justify-between">
         <h3
           className={cn(
-            "font-sans font-semibold text-foreground text-sm",
+            "my-0 font-medium font-mono text-2xs text-eyebrow uppercase tracking-wider",
             titleClassName,
           )}
         >
@@ -85,45 +85,49 @@ export const ArrayFieldManager = <
         </h3>
         <Button
           type="button"
-          variant="outline"
+          variant="ghost"
           size="sm"
+          className="border-[1.5px] border-border border-dashed"
           onClick={handleAdd}
           disabled={!canAdd}
         >
-          <Plus className="mr-2 h-4 w-4" />
+          <Plus className="mr-1.5 h-3.5 w-3.5" />
           {addButtonText}
         </Button>
       </div>
 
       {fields.length === 0 && (
-        <div className="text-muted-foreground text-sm">
+        <div className="text-muted-foreground text-sm italic">
           No {title.toLowerCase()} added yet
         </div>
       )}
 
-      {fields.map((field, index) => (
-        <div
-          key={field.id}
-          className={cn(
-            "flex flex-wrap items-end gap-2 rounded-lg border p-2",
-            itemClassName,
-          )}
-        >
-          {children(field as T, index, handleRemove)}
-          {showRemoveButton && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="mb-0.5"
-              aria-label={`Remove ${title.slice(0, -1).toLowerCase()} ${index + 1}`}
-              onClick={() => handleRemove(index)}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
-      ))}
+      {/* Ledger rows: dashed rules between entries instead of boxed cards */}
+      <div className="divide-y divide-dashed divide-border">
+        {fields.map((field, index) => (
+          <div
+            key={field.id}
+            className={cn(
+              "flex flex-wrap items-end gap-2 py-1.5",
+              itemClassName,
+            )}
+          >
+            {children(field as T, index, handleRemove)}
+            {showRemoveButton && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="mb-0.5"
+                aria-label={`Remove ${title.slice(0, -1).toLowerCase()} ${index + 1}`}
+                onClick={() => handleRemove(index)}
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 };

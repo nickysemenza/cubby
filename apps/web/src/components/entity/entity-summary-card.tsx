@@ -159,7 +159,7 @@ const MissingDataFooter: React.FC<{
 
   return (
     <div className="mt-4 space-y-2 border-foreground/10 border-t pt-3">
-      <div className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+      <div className="font-medium font-mono text-2xs text-eyebrow uppercase tracking-wider">
         Missing data
       </div>
       {categories.map((category) => (
@@ -293,12 +293,14 @@ export const EntitySummaryCard: React.FC<EntitySummaryCardProps> = ({
         <GridContainer cols="summary">
           {items.map((item) => (
             <div key={item.label}>
-              <div className="text-muted-foreground text-sm">{item.label}</div>
-              <div className="font-semibold text-foreground text-lg">
+              <div className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
+                {item.label}
+              </div>
+              <div className="font-mono font-semibold text-foreground text-lg tabular-nums">
                 {item.formatter ? item.formatter(item.value) : item.value}
               </div>
               {item.caption && (
-                <div className="text-muted-foreground text-xs">
+                <div className="font-mono text-2xs text-muted-foreground">
                   {item.caption}
                 </div>
               )}

@@ -148,8 +148,9 @@
   --brand-terracotta: #c2603d;
   --brand-terra-light: #d98a68;
   --brand-cream: #fdfbf7;
-  /* Warm paper - one step deeper than cream so cards lift off the page */
-  --brand-paper: oklch(0.972 0.012 74);
+  /* Warm paper - a full step deeper than cream so cards visibly lift off
+     the page (sharpened from 0.972 so the 3-step elevation reads at a glance) */
+  --brand-paper: oklch(0.954 0.016 74);
   --brand-shelf: #5c5550;
   --brand-sage: oklch(0.94 0.025 145);
 
@@ -172,11 +173,11 @@
      whole "chunky" treatment app-wide: these offsets/alpha and --border-chunky. */
   --shadow-chunky-sm: 1.5px 1.5px 0 0
     oklch(from var(--brand-foreground) l c h / 0.5);
-  --shadow-chunky: 2px 2px 0 0 oklch(from var(--brand-foreground) l c h / 0.55);
-  --shadow-chunky-lg: 3px 3px 0 0
-    oklch(from var(--brand-foreground) l c h / 0.55);
+  --shadow-chunky: 3px 3px 0 0 oklch(from var(--brand-foreground) l c h / 0.6);
+  --shadow-chunky-lg: 4px 4px 0 0
+    oklch(from var(--brand-foreground) l c h / 0.6);
   /* Border for chunky chrome - a soft brown outline, not a stark black line. */
-  --border-chunky: oklch(from var(--brand-foreground) l c h / 0.55);
+  --border-chunky: oklch(from var(--brand-foreground) l c h / 0.6);
 
   /* Core colors - 3-step surface elevation: muted < paper(bg) < cream(card) */
   --background: var(--brand-paper);
@@ -212,6 +213,10 @@
   --ring: var(--brand-terracotta);
 
   /* Extended palette */
+  /* Eyebrow - warm mid-brown for mono uppercase micro-labels (page-hero
+     eyebrows, table column headers, stat-card labels). Sits between
+     terracotta and shelf so labels read warm but stay quiet. */
+  --eyebrow: oklch(0.5 0.07 50);
   --highlight: var(--brand-terracotta);
   --subtle: oklch(0.65 0.08 90); /* Warm olive */
   --glow: var(--brand-terra-light);
@@ -280,6 +285,7 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-eyebrow: var(--eyebrow);
   --color-highlight: var(--highlight);
   --color-subtle: var(--subtle);
   --color-glow: var(--glow);
@@ -338,9 +344,19 @@
     @apply focus:bg-accent focus:text-accent-foreground relative flex cursor-default items-center gap-2 rounded-sm py-1.5 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50;
   }
 
-  /* Command dialog cmdk child selectors */
+  /* Command dialog cmdk child selectors — group headings read as ledger
+     eyebrows to match card/table section labels. */
   .command-dialog-styles {
-    @apply [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group]]:px-2 [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5;
+    @apply [&_[cmdk-group-heading]]:text-eyebrow [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-mono [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-2xs [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group]]:px-2 [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5;
+  }
+
+  /* Sonner toasts wear the chunky signature like dialogs (they're transient
+     modals). Sonner injects its own border/shadow, hence the overrides. */
+  .cn-toast {
+    /* biome-ignore lint/complexity/noImportantStyles: sonner sets inline border/shadow */
+    border-width: 2px !important;
+    /* biome-ignore lint/complexity/noImportantStyles: sonner sets inline border/shadow */
+    box-shadow: var(--shadow-chunky) !important;
   }
 
   /* Skeleton shimmer loading effect */
@@ -432,7 +448,7 @@
       oklch(0.96 0.02 55) 0%,
       transparent 100%
     );
-    box-shadow: inset 3px 0 0 var(--brand-terracotta);
+    box-shadow: inset 3px 0 0 var(--row-accent, var(--brand-terracotta));
   }
 
   /* Nav link animated underline */
@@ -467,10 +483,12 @@
   .page-header-accent::after {
     content: "";
     @apply absolute -bottom-2 left-0 h-1 w-16 rounded-full;
+    /* Entity-inked: pages set --page-accent(-light) per entity; falls back
+       to the brand terracotta everywhere else. */
     background: linear-gradient(
       90deg,
-      var(--brand-terracotta) 0%,
-      var(--brand-terra-light) 100%
+      var(--page-accent, var(--brand-terracotta)) 0%,
+      var(--page-accent-light, var(--brand-terra-light)) 100%
     );
   }
 

@@ -82,7 +82,13 @@ function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-title"
-      className={cn("text-sm font-medium", className)}
+      // Ledger-style section label — cards are "ledger blocks" and their
+      // titles read as mono eyebrows (INGREDIENTS, HISTORY, ...). Override
+      // via className for the rare card that needs a prose-sized title.
+      className={cn(
+        "font-mono text-2xs font-medium uppercase tracking-wider text-eyebrow",
+        className,
+      )}
       {...props}
     />
   );

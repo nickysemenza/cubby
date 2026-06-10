@@ -168,12 +168,12 @@ export function MobileCard({
             )}
             <div className="ml-auto flex min-w-0 max-w-[55%] items-center justify-end gap-2">
               {rightValues?.[0] !== undefined && (
-                <span className="flex min-w-0 max-w-28 items-center overflow-hidden whitespace-nowrap text-muted-foreground text-xs [&_*]:truncate">
+                <span className="flex min-w-0 max-w-28 items-center overflow-hidden whitespace-nowrap font-mono text-2xs text-muted-foreground tabular-nums [&_*]:truncate">
                   {rightValues[0]}
                 </span>
               )}
               {rightValues?.[1] !== undefined && (
-                <span className="flex min-w-0 max-w-28 items-center overflow-hidden whitespace-nowrap text-muted-foreground text-xs [&_*]:truncate">
+                <span className="flex min-w-0 max-w-28 items-center overflow-hidden whitespace-nowrap font-mono text-2xs text-muted-foreground tabular-nums [&_*]:truncate">
                   {rightValues[1]}
                 </span>
               )}
@@ -194,7 +194,7 @@ export function MobileCard({
       className={cn(
         // No mount fade-in: the mobile list is virtualized, so a per-card
         // fade-in replays every time a card scrolls back into view (flicker).
-        "flex items-start gap-2.5 rounded-lg border border-l-4 bg-card p-2.5 shadow-sm transition-all duration-300 hover:shadow-md",
+        "flex items-start gap-2.5 rounded-lg border border-l-4 bg-card p-2.5 shadow-[var(--shadow-chunky-sm)] transition-all duration-300 hover:shadow-[var(--shadow-chunky)]",
         borderColor,
         // Touch devices have no :hover — give a pressed state so taps register.
         onClick && "cursor-pointer active:bg-muted/40",

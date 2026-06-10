@@ -28,12 +28,15 @@ export function DashboardCard({
   children,
 }: DashboardCardProps) {
   return (
-    <Card className="fade-in slide-in-from-bottom-2 flex animate-in flex-col duration-300">
+    <Card
+      emphasis="chunky"
+      className="fade-in slide-in-from-bottom-2 flex animate-in flex-col duration-300"
+    >
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Icon className="h-4 w-4 text-muted-foreground" />
-            <CardTitle className="text-base">{title}</CardTitle>
+            <Icon className="h-3.5 w-3.5 text-eyebrow" />
+            <CardTitle>{title}</CardTitle>
           </div>
           {action}
         </div>

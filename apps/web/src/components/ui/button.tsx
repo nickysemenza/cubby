@@ -4,10 +4,17 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "~/lib/utils";
 
 // Tactile "chunky" chrome - a 2px foreground border with a crisp offset shadow
-// that lifts on hover and presses into its own shadow on active. Shared by the
-// substantive button variants; ghost/link stay flat so toolbars don't get noisy.
+// that lifts on hover and presses into its own shadow on active. Reserved as
+// the brand signature for the action variants (default/destructive);
+// ghost/link stay flat so toolbars don't get noisy.
 const chunky =
   "border-2 border-[var(--border-chunky)] shadow-[var(--shadow-chunky-sm)] hover:shadow-[var(--shadow-chunky)] hover:-translate-x-px hover:-translate-y-px active:translate-x-0.5 active:translate-y-0.5 active:shadow-none";
+
+// Quieter chunky for supporting variants (outline/secondary): static small
+// offset, no hover lift, so a row of controls doesn't out-shout the one
+// primary action on the screen. Press feedback is kept.
+const chunkyQuiet =
+  "border-2 border-[var(--border-chunky)] shadow-[var(--shadow-chunky-sm)] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none";
 
 const buttonVariants = cva(
   "focus-visible:border-ring focus-visible:ring-ring/30 aria-invalid:ring-destructive/20 aria-invalid:border-destructive rounded-md border border-transparent bg-clip-padding text-xs/relaxed font-mono font-medium focus-visible:ring-[2px] aria-invalid:ring-[2px] [&_svg:not([class*='size-'])]:size-4 inline-flex items-center justify-center whitespace-nowrap transition-all duration-150 ease-cozy disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none shrink-0 [&_svg]:shrink-0 outline-none group/button select-none",
@@ -15,8 +22,8 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: `bg-primary text-primary-foreground hover:bg-primary/80 ${chunky}`,
-        outline: `bg-card hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground ${chunky}`,
-        secondary: `bg-secondary text-secondary-foreground hover:bg-secondary/80 aria-expanded:bg-secondary aria-expanded:text-secondary-foreground ${chunky}`,
+        outline: `bg-card hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground ${chunkyQuiet}`,
+        secondary: `bg-secondary text-secondary-foreground hover:bg-secondary/80 aria-expanded:bg-secondary aria-expanded:text-secondary-foreground ${chunkyQuiet}`,
         ghost:
           "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground",
         destructive: `bg-destructive/10 hover:bg-destructive/20 focus-visible:ring-destructive/20 text-destructive ${chunky}`,
