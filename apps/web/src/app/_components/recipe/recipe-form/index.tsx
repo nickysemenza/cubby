@@ -75,6 +75,7 @@ import { InstructionFieldArray } from "./instruction-field-array";
 import {
   haveIngredientsChanged,
   haveInstructionsChanged,
+  normalizeAmounts,
 } from "./recipe-form-utils";
 import { RecipeLivePreview } from "./recipe-live-preview";
 import { TagInput } from "./tag-input";
@@ -165,7 +166,7 @@ const mapIngredientToApiFormat = (ing: IngItem): RecipeIngredientInput => {
       type: "ingredient",
       ingredientId: getOptionalIngredientId(ing.ingredient)!,
       recipeId: null,
-      amounts: ing.amounts,
+      amounts: normalizeAmounts(ing.amounts),
       id: ing.id,
       rawLine: ing.rawLine ?? undefined,
       modifier: ing.modifier ?? undefined,
@@ -175,7 +176,7 @@ const mapIngredientToApiFormat = (ing: IngItem): RecipeIngredientInput => {
       type: "recipe",
       recipeId: getOptionalRecipeId(ing.recipe)!,
       ingredientId: null,
-      amounts: ing.amounts,
+      amounts: normalizeAmounts(ing.amounts),
       id: ing.id,
       rawLine: ing.rawLine ?? undefined,
       modifier: ing.modifier ?? undefined,
@@ -301,7 +302,12 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                     name: ing.ingredient.name,
                   },
                   recipe: null,
-                  amounts: ing.amounts,
+                  // The editor binds inputs to amounts.0.*, so an amount-less
+                  // ingredient (DB `[]`) needs a blank slot; submit strips it.
+                  amounts:
+                    ing.amounts.length > 0
+                      ? ing.amounts
+                      : [{ value: null, unit: "" }],
                   rawLine: ing.rawLine ?? null,
                   modifier: ing.modifier ?? null,
                   aliases: ing.ingredient.aliases ?? [],
@@ -315,7 +321,11 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                     id: ing.recipe.id,
                     name: ing.recipe.name,
                   },
-                  amounts: ing.amounts,
+                  // See the ingredient branch: keep a blank slot for the editor.
+                  amounts:
+                    ing.amounts.length > 0
+                      ? ing.amounts
+                      : [{ value: null, unit: "" }],
                   rawLine: ing.rawLine ?? null,
                   modifier: ing.modifier ?? null,
                 };

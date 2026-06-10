@@ -1,4 +1,3 @@
-import { amount } from "@cubby/schemas/codec";
 import type { ImageOut } from "@cubby/schemas/image";
 import {
   type RecipeCreateInput,
@@ -11,11 +10,26 @@ import { z } from "zod";
 import { ComboboxItem } from "../../combobox/combobox-types";
 import type { PendingImage } from "../../PendingImageUpload";
 
+// Draft shape for an ingredient amount, edited via separate qty/unit inputs.
+// Either part may be blank so an amount-less ingredient (e.g. oil for frying) can
+// be saved with no amount; the refine requires both-or-neither so a half-typed
+// amount surfaces an error instead of silently dropping the typed half.
+// handleSubmit strips fully-blank amounts to the strict API shape (amounts: []).
+const draftAmount = z
+  .object({
+    value: z.number().nullish(),
+    unit: z.string().nullish(),
+  })
+  .refine((a) => (a.value == null) === !a.unit?.trim(), {
+    error: "Enter both a quantity and unit, or leave both blank",
+    path: ["unit"],
+  });
+
 // Fields shared by both ingredient-union variants. Mirrors the schema package's
 // sectioningredientOut base + extend idiom so the form union is defined once.
 const ingItemBase = z.object({
   id: z.string().uuid().optional(),
-  amounts: z.array(amount),
+  amounts: z.array(draftAmount),
   // Import provenance: the original unparsed line and the parser-derived modifier.
   // Carried read-only through the form so editing a recipe doesn't drop them, and
   // so a row can offer "re-parse this line".

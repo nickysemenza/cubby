@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   haveIngredientsChanged,
   haveInstructionsChanged,
+  normalizeAmounts,
 } from "./recipe-form-utils";
 import type { IngItem } from "./types";
 
@@ -173,6 +174,65 @@ describe("haveIngredientsChanged", () => {
     ];
 
     expect(haveIngredientsChanged(original, updated)).toBe(true);
+  });
+
+  // An amount-less ingredient (e.g. oil for frying) loads from the DB as `[]` but
+  // is seeded with a blank form slot. The two must compare equal so editing an
+  // untouched recipe doesn't fire a spurious update.
+  it("treats a blank-slot amount as equal to no amounts", () => {
+    const original: IngItem[] = [{ ...baseIngredient, amounts: [] }];
+    const updated: IngItem[] = [
+      { ...baseIngredient, amounts: [{ value: null, unit: "" }] },
+    ];
+
+    expect(haveIngredientsChanged(original, updated)).toBe(false);
+  });
+
+  // The modifier is user-editable and drives the absorbed-oil estimate, so a
+  // modifier-only edit must register as a change (else it's silently dropped).
+  it("returns true when only the modifier changes", () => {
+    const original: IngItem[] = [
+      { ...baseIngredient, amounts: [], modifier: null },
+    ];
+    const updated: IngItem[] = [
+      { ...baseIngredient, amounts: [], modifier: "for frying" },
+    ];
+
+    expect(haveIngredientsChanged(original, updated)).toBe(true);
+  });
+
+  it("ignores blank-vs-null modifier differences", () => {
+    const original: IngItem[] = [
+      { ...baseIngredient, modifier: null as string | null },
+    ];
+    const updated: IngItem[] = [{ ...baseIngredient, modifier: "  " }];
+
+    expect(haveIngredientsChanged(original, updated)).toBe(false);
+  });
+});
+
+describe("normalizeAmounts", () => {
+  it("drops a fully-blank amount", () => {
+    expect(normalizeAmounts([{ value: null, unit: "" }])).toEqual([]);
+  });
+
+  it("drops a blank amount with whitespace-only unit", () => {
+    expect(normalizeAmounts([{ value: null, unit: "  " }])).toEqual([]);
+  });
+
+  it("keeps a complete amount", () => {
+    expect(normalizeAmounts([{ value: 250, unit: "g" }])).toEqual([
+      { value: 250, unit: "g" },
+    ]);
+  });
+
+  it("keeps complete amounts and drops blank ones", () => {
+    expect(
+      normalizeAmounts([
+        { value: 1, unit: "cup" },
+        { value: null, unit: "" },
+      ]),
+    ).toEqual([{ value: 1, unit: "cup" }]);
   });
 });
 

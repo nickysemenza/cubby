@@ -43,4 +43,51 @@ describe("formSchema", () => {
       false,
     );
   });
+
+  // An ingredient row with one amount slot, exercising the draftAmount refine.
+  const formWithAmount = (amount: { value: unknown; unit: unknown }) => ({
+    ...nameOnlyForm,
+    sections: [
+      {
+        name: null,
+        ingredients: [
+          {
+            type: "ingredient",
+            ingredient: { id: "i-1", name: "Vegetable oil" },
+            recipe: null,
+            amounts: [amount],
+          },
+        ],
+        instructions: [],
+      },
+    ],
+  });
+
+  it("accepts an amount-less ingredient (both qty and unit blank)", () => {
+    const result = formSchema.safeParse(
+      formWithAmount({ value: null, unit: "" }),
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a fully specified amount", () => {
+    const result = formSchema.safeParse(
+      formWithAmount({ value: 250, unit: "g" }),
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a partial amount with a quantity but no unit", () => {
+    const result = formSchema.safeParse(
+      formWithAmount({ value: 250, unit: "" }),
+    );
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a partial amount with a unit but no quantity", () => {
+    const result = formSchema.safeParse(
+      formWithAmount({ value: null, unit: "g" }),
+    );
+    expect(result.success).toBe(false);
+  });
 });

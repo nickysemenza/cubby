@@ -29,13 +29,13 @@ const newRow = (type: IngItem["type"]): IngItem =>
         type: "ingredient",
         ingredient: { id: "", name: "" },
         recipe: null,
-        amounts: [{ value: 1, unit: "" }],
+        amounts: [{ value: null, unit: "" }],
       }
     : {
         type: "recipe",
         ingredient: null,
         recipe: { id: "", name: "" },
-        amounts: [{ value: 1, unit: "" }],
+        amounts: [{ value: null, unit: "" }],
       };
 
 /** Bare qty/unit inputs for one amount — no labels, ledger-row density. */
@@ -132,7 +132,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
 
             return (
               <div key={field.id} className="py-1.5">
-                <div className="grid grid-cols-[4.5rem_4rem_minmax(0,1fr)_auto] items-center gap-1.5">
+                <div className="grid grid-cols-[4.5rem_4rem_minmax(0,1.6fr)_minmax(0,1fr)_auto] items-center gap-1.5">
                   <AmountInputs
                     form={form}
                     sectionIndex={sectionIndex}
@@ -174,6 +174,32 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                       </WithRecipeSearch>
                     )}
                   </div>
+
+                  {/* Modifier / prep note (e.g. "for frying", "finely chopped").
+                      "for frying" / "fried" flags an amount-less oil as the frying
+                      medium so its absorbed weight is estimated in the totals. */}
+                  <Controller
+                    control={form.control}
+                    name={`${path}.modifier`}
+                    render={({ field }) => (
+                      <Input
+                        aria-label="Modifier"
+                        placeholder="note, e.g. for frying"
+                        // Ghost styling: a secondary annotation, not a competing
+                        // boxed input — transparent until hovered/focused so it
+                        // doesn't read as colliding with the ingredient combobox.
+                        className="min-w-0 border-transparent bg-transparent text-muted-foreground italic hover:border-border hover:bg-input/20"
+                        value={field.value ?? ""}
+                        onChange={(e) => field.onChange(e.target.value || null)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && isLast) {
+                            e.preventDefault();
+                            appendRow();
+                          }
+                        }}
+                      />
+                    )}
+                  />
 
                   <DropdownMenu>
                     <DropdownMenuTrigger

@@ -1,4 +1,22 @@
+import type { Amount } from "@cubby/schemas/codec";
 import type { IngItem } from "./types";
+
+/** A draft amount, where either part may be blank while the row is half-typed. */
+type DraftAmount = { value?: number | null; unit?: string | null };
+
+/** True when neither part of an amount is filled — the "no amount" case. */
+export const isBlankAmount = (a: DraftAmount): boolean =>
+  a.value == null && !a.unit?.trim();
+
+/**
+ * Drop fully-blank amounts (an amount-less ingredient like frying oil) and narrow
+ * the survivors to the strict Amount shape. The form's draftAmount refine
+ * guarantees a non-blank amount has both parts, so the assertions are safe here.
+ */
+export const normalizeAmounts = (amounts: DraftAmount[]): Amount[] =>
+  amounts
+    .filter((a) => !isBlankAmount(a))
+    .map((a) => ({ value: a.value as number, unit: a.unit as string }));
 
 /**
  * Normalize an ingredient for comparison by extracting the comparable properties.
@@ -10,7 +28,13 @@ const normalizeIngredientForComparison = (ing: IngItem) => ({
   ingredientId:
     ing.type === "ingredient" && ing.ingredient ? ing.ingredient.id : null,
   recipeId: ing.type === "recipe" && ing.recipe ? ing.recipe.id : null,
-  amounts: ing.amounts,
+  // Strip blank amounts so a loaded amount-less ingredient (DB `[]` → blank form
+  // slot) compares equal and doesn't read as a spurious change.
+  amounts: normalizeAmounts(ing.amounts),
+  // modifier is now user-editable (e.g. "for frying" on an amount-less oil, which
+  // drives the absorbed-oil estimate), so it must be compared or a modifier-only
+  // edit is silently dropped. Coerce undefined/"" to null so the shapes match.
+  modifier: ing.modifier?.trim() || null,
 });
 
 /**
