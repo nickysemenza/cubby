@@ -316,10 +316,11 @@ export const createRecipe = async (
     });
 
     // Create sections and their ingredients
-    for (const section of processedSections) {
+    for (const [i, section] of processedSections.entries()) {
       const createdSection = await insertAndReturn(tx, recipeSection, {
         recipeId: createdRecipe.id,
         name: section.name,
+        sortOrder: i,
         instructions:
           section.instructions?.map((instruction) => ({
             text: instruction.instruction,
@@ -331,8 +332,8 @@ export const createRecipe = async (
         await batchInsert(
           tx,
           recipeSectionIngredient,
-          section.processedIngredients.map((ing) =>
-            sectionIngredientValues(createdSection.id, ing),
+          section.processedIngredients.map((ing, j) =>
+            sectionIngredientValues(createdSection.id, ing, j),
           ),
         );
       }
@@ -389,10 +390,11 @@ const replaceRecipeSections = async (
     existingSections.map((s) => s.id),
   );
 
-  for (const section of sections) {
+  for (const [i, section] of sections.entries()) {
     const createdSection = await insertAndReturn(tx, recipeSection, {
       recipeId,
       name: section.name,
+      sortOrder: i,
       instructions:
         section.instructions?.map((instruction) => ({
           text: instruction.instruction,
@@ -403,8 +405,8 @@ const replaceRecipeSections = async (
       await batchInsert(
         tx,
         recipeSectionIngredient,
-        section.ingredients.map((ing) =>
-          sectionIngredientValues(createdSection.id, ing),
+        section.ingredients.map((ing, j) =>
+          sectionIngredientValues(createdSection.id, ing, j),
         ),
       );
     }

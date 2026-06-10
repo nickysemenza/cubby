@@ -153,6 +153,10 @@ export const recipeSection = pgTable(
       .notNull()
       .$type<Instruction[]>()
       .default(sql`'[]'::jsonb`),
+    // Position within the recipe. Nullable: rows saved before this column was
+    // added have no recoverable order (createdAt is the transaction timestamp,
+    // identical across one save) — reads tiebreak on createdAt/id for those.
+    sortOrder: integer("sortOrder"),
   },
   (table) => ({
     recipeIdIdx: index("RecipeSection_recipeId_idx").on(table.recipeId),
@@ -222,6 +226,8 @@ export const recipeSectionIngredient = pgTable(
     // for rows created after this column was added.
     rawLine: text("rawLine"),
     modifier: text("modifier"),
+    // Position within the section; see recipeSection.sortOrder for null semantics.
+    sortOrder: integer("sortOrder"),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updatedAt", { mode: "date" })
       .notNull()

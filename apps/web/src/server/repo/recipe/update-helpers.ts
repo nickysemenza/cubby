@@ -128,12 +128,14 @@ export const sectionIngredientValues = (
     rawLine?: string | null;
     modifier?: string | null;
   },
+  sortOrder: number,
 ) => ({
   recipeSectionId,
   ingredientId: ing.ingredientId as string,
   amounts: ing.amounts,
   rawLine: ing.rawLine ?? null,
   modifier: ing.modifier ?? null,
+  sortOrder,
 });
 
 /**
@@ -253,6 +255,7 @@ async function createSectionWithIngredients(
   tx: DrizzleTransaction,
   recipeId: RecipeId,
   sectionInput: NonNullable<RecipeUpdateInput["data"]["sections"]>[number],
+  sortOrder: number,
 ): Promise<void> {
   const processedIngredients = sectionInput.ingredients
     ? await processIngredients(tx, sectionInput.ingredients)
@@ -261,6 +264,7 @@ async function createSectionWithIngredients(
   const createdSection = await insertAndReturn(tx, recipeSection, {
     recipeId,
     name: sectionInput.name || null,
+    sortOrder,
     instructions: sectionInput.instructions
       ? sectionInput.instructions.map((inst) => ({ text: inst.instruction }))
       : [],
@@ -270,8 +274,8 @@ async function createSectionWithIngredients(
     await tx
       .insert(recipeSectionIngredient)
       .values(
-        processedIngredients.map((ing) =>
-          sectionIngredientValues(createdSection.id, ing),
+        processedIngredients.map((ing, i) =>
+          sectionIngredientValues(createdSection.id, ing, i),
         ),
       );
   }
@@ -302,7 +306,7 @@ async function updateSectionIngredients(
     if (!ingredientUpdate.id) {
       // Collect new ingredients for batch insert
       newIngredients.push(
-        sectionIngredientValues(sectionId, processedIngredient),
+        sectionIngredientValues(sectionId, processedIngredient, i),
       );
     } else {
       // Queue update for parallel execution
@@ -316,6 +320,7 @@ async function updateSectionIngredients(
             // the provenance captured at import time.
             rawLine: processedIngredient.rawLine ?? undefined,
             modifier: processedIngredient.modifier ?? undefined,
+            sortOrder: i,
           })
           .where(eq(recipeSectionIngredient.id, ingredientUpdate.id)),
       );
@@ -358,14 +363,17 @@ async function updateExistingSection(
     id: string;
   },
   existingSection: ExistingRecipeWithSections["sections"][number],
+  sortOrder: number,
 ): Promise<void> {
-  // Update section name if provided
-  if (sectionUpdate.name !== undefined) {
-    await tx
-      .update(recipeSection)
-      .set({ name: sectionUpdate.name })
-      .where(eq(recipeSection.id, sectionUpdate.id));
-  }
+  // Always stamp the section's position from its index in the update array —
+  // this is what persists reorders (and backfills legacy null rows on edit).
+  await tx
+    .update(recipeSection)
+    .set({
+      sortOrder,
+      ...(sectionUpdate.name !== undefined ? { name: sectionUpdate.name } : {}),
+    })
+    .where(eq(recipeSection.id, sectionUpdate.id));
 
   // Handle ingredient updates
   if (sectionUpdate.ingredients) {
@@ -410,10 +418,10 @@ export async function handleSectionUpdates(
     );
   }
 
-  for (const sectionUpdate of sectionUpdates) {
+  for (const [i, sectionUpdate] of sectionUpdates.entries()) {
     if (!sectionUpdate.id) {
       // Create new section
-      await createSectionWithIngredients(tx, recipeId, sectionUpdate);
+      await createSectionWithIngredients(tx, recipeId, sectionUpdate, i);
     } else {
       // Update existing section
       const existingSection = existingRecipe.sections.find(
@@ -430,6 +438,7 @@ export async function handleSectionUpdates(
         tx,
         { ...sectionUpdate, id: sectionUpdate.id },
         existingSection,
+        i,
       );
     }
   }

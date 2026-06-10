@@ -14,6 +14,21 @@
  * - Array.filter(item => item.deletedAt === null) for simple arrays with deletedAt
  */
 
+import { type AnyColumn, asc } from "drizzle-orm";
+
+/**
+ * Display order for recipe sections and section ingredients: explicit
+ * `sortOrder` first, then createdAt/id so legacy rows (null sortOrder —
+ * created before the column existed) come back in a stable, if arbitrary,
+ * order instead of plan-dependent heap order. createdAt alone can't break
+ * ties: it's the transaction timestamp, identical across one save.
+ */
+const sectionOrder = (t: {
+  sortOrder: AnyColumn;
+  createdAt: AnyColumn;
+  id: AnyColumn;
+}) => [asc(t.sortOrder), asc(t.createdAt), asc(t.id)];
+
 export const relations = {
   ingredient: {
     full: {
@@ -84,8 +99,10 @@ export const relations = {
     full: {
       with: {
         sections: {
+          orderBy: sectionOrder,
           with: {
             ingredients: {
+              orderBy: sectionOrder,
               with: {
                 ingredient: {
                   with: {
@@ -111,8 +128,10 @@ export const relations = {
     list: {
       with: {
         sections: {
+          orderBy: sectionOrder,
           with: {
             ingredients: {
+              orderBy: sectionOrder,
               with: {
                 ingredient: {
                   with: {
