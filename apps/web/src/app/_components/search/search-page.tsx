@@ -12,18 +12,20 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { Search } from "lucide-react";
+import { Equal, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { MobileCard } from "~/components/entity/mobile-card";
 import { MobileCardSkeletonList } from "~/components/feedback/mobile-card-skeleton";
 import { Image } from "~/components/ui/image";
 import { Input } from "~/components/ui/input";
-import { entities } from "~/entities/entities";
+import { EntityIcon, entities } from "~/entities/entities";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useIsMobile } from "~/hooks/useMobile";
 import { cn } from "~/lib/utils";
 import { dedupe } from "~/misc/array-helpers";
 import { useTRPC } from "~/trpc/react";
+import { getRecents, pushRecent } from "../command-menu/recents";
+import { useConversionAnswer } from "../command-menu/use-conversion-answer";
 import RTable from "../data-table/Table";
 import { useEntityPreview } from "../hooks/useEntityPreview";
 import { searchColumns } from "./search-columns";
@@ -60,6 +62,13 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
 
   // Active filter for mobile (separate from table filter)
   const [mobileFilter, setMobileFilter] = useState<SearchType>(type);
+
+  // Inline unit answer ("250 g flour in cups") — same brain as the ⌘K console.
+  const conversion = useConversionAnswer(query);
+
+  // Entities recently jumped to from the console — shared localStorage list,
+  // read once per mount (the empty state re-mounts on every visit).
+  const jumps = useMemo(() => getRecents(), []);
 
   // Recent searches — committed on Enter so we don't record every keystroke.
   const [recents, setRecents] = useLocalStorage<string[]>(
@@ -113,6 +122,35 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
         />
       </div>
 
+      {/* Inline unit answer — rendered above results, jumps to the ingredient */}
+      {query.length > 0 && conversion && (
+        <button
+          type="button"
+          onClick={() => {
+            pushRecent({
+              entityType: "ingredient",
+              id: conversion.ingredientId,
+              name: conversion.ingredientName,
+            });
+            navigate({
+              to: entities.ingredient.routes.detail,
+              params: { id: conversion.ingredientId },
+            });
+          }}
+          className="flex w-full items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 text-left transition-all ease-cozy hover:-translate-y-0.5 hover:shadow-[var(--shadow-chunky-sm)]"
+        >
+          <Equal className="h-4 w-4 shrink-0 text-primary" />
+          <span className="truncate font-mono font-semibold text-sm tabular-nums">
+            {conversion.input} {conversion.ingredientName} = {conversion.result}
+          </span>
+          {conversion.cost && (
+            <span className="ml-auto shrink-0 font-mono text-muted-foreground text-xs tabular-nums">
+              ≈ {conversion.cost}
+            </span>
+          )}
+        </button>
+      )}
+
       {/* Results */}
       {query.length > 0 ? (
         isMobile ? (
@@ -131,31 +169,71 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
             onRowClick={onRowClick}
           />
         )
-      ) : recents.length > 0 ? (
-        <div className="space-y-1">
-          <div className="flex items-center justify-between px-1">
-            <span className="font-medium text-muted-foreground text-xs uppercase tracking-wider">
-              Recent
-            </span>
-            <button
-              type="button"
-              onClick={() => setRecents([])}
-              className="text-muted-foreground text-xs hover:text-foreground"
-            >
-              Clear
-            </button>
-          </div>
-          {recents.map((term) => (
-            <button
-              key={term}
-              type="button"
-              onClick={() => handleSearchChange(term)}
-              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-muted active:bg-muted/70"
-            >
-              <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <span className="truncate">{term}</span>
-            </button>
-          ))}
+      ) : jumps.length > 0 || recents.length > 0 ? (
+        <div className="space-y-4">
+          {/* Entities recently jumped to — entity-inked chips, same list as ⌘K */}
+          {jumps.length > 0 && (
+            <div className="space-y-1">
+              <span className="px-1 font-medium font-mono text-2xs text-eyebrow uppercase tracking-wider">
+                Jump back
+              </span>
+              {jumps.map((jump) => {
+                const entity = entityTypeMap[jump.entityType];
+                return (
+                  <button
+                    key={`jump-${jump.entityType}-${jump.id}`}
+                    type="button"
+                    onClick={() => {
+                      pushRecent(jump);
+                      navigate({
+                        to: entities[entity].routes.detail,
+                        params: { id: jump.id },
+                      });
+                    }}
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-muted active:bg-muted/70"
+                  >
+                    <span
+                      className={cn(
+                        "flex h-6 w-6 shrink-0 items-center justify-center rounded",
+                        entities[entity]?.color.bg ?? "bg-muted/50",
+                        entities[entity]?.color.text,
+                      )}
+                    >
+                      <EntityIcon entity={entity} className="h-3.5 w-3.5" />
+                    </span>
+                    <span className="truncate">{jump.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {recents.length > 0 && (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between px-1">
+                <span className="font-medium font-mono text-2xs text-eyebrow uppercase tracking-wider">
+                  Recent
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setRecents([])}
+                  className="font-mono text-2xs text-muted-foreground uppercase hover:text-foreground"
+                >
+                  Clear
+                </button>
+              </div>
+              {recents.map((term) => (
+                <button
+                  key={term}
+                  type="button"
+                  onClick={() => handleSearchChange(term)}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-muted active:bg-muted/70"
+                >
+                  <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="truncate">{term}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       ) : (
         <div className="flex h-48 flex-col items-center justify-center gap-2 text-muted-foreground">
@@ -283,7 +361,13 @@ function MobileSearchResults({
                         />
                       </div>
                     ) : (
-                      <div className="flex h-11 w-11 items-center justify-center rounded bg-muted/50">
+                      <div
+                        className={cn(
+                          "flex h-11 w-11 items-center justify-center rounded",
+                          entities[entity]?.color.bg ?? "bg-muted/50",
+                          entities[entity]?.color.text,
+                        )}
+                      >
                         <SearchResultItemIcon
                           item={item}
                           className="h-5 w-5 shrink-0"
@@ -294,6 +378,11 @@ function MobileSearchResults({
                   rightValues={enrichment ? [enrichment] : []}
                   entity={entity}
                   onClick={() => {
+                    pushRecent({
+                      entityType: item.entityType,
+                      id: item.id,
+                      name: item.name,
+                    });
                     navigate({
                       to: entities[entity].routes.detail,
                       params: { id: item.id },
