@@ -1,10 +1,11 @@
 import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { createColumnHelper } from "@tanstack/react-table";
-import { ArrowRightLeft } from "lucide-react";
+import { createColumnHelper, type Row } from "@tanstack/react-table";
+import { ArrowRightLeft, Trash } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { z } from "zod";
+import type { SwipeAction } from "~/components/entity/swipe-row";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { queryKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
@@ -106,6 +107,7 @@ export function InventoryItemList() {
     timing,
     bulkActionBar,
     deleteDialog,
+    requestDelete,
     infiniteScroll,
     refreshControls,
   } = useEntityList({
@@ -195,6 +197,25 @@ export function InventoryItemList() {
   const [view, setView] = useState<ShelfView>("table");
   const items = table.getRowModel().rows.map((r) => r.original);
 
+  // Swipe-to-reveal Move/Delete on mobile rows — same flows as the ⋮ menu
+  // (Move opens the single-item dialog, Delete the optimistic confirm).
+  const swipeActions = useCallback(
+    (row: Row<InventoryListItem>): SwipeAction[] => [
+      {
+        label: "Move",
+        icon: ArrowRightLeft,
+        onAction: () => setMoveTarget(row.original),
+      },
+      {
+        label: "Delete",
+        icon: Trash,
+        tone: "destructive",
+        onAction: () => requestDelete(row.original),
+      },
+    ],
+    [requestDelete],
+  );
+
   return (
     <div>
       <AiSearchBar table={table} />
@@ -231,6 +252,7 @@ export function InventoryItemList() {
           timing={timing}
           entity="inventory"
           onRowClick={onRowClick}
+          swipeActions={swipeActions}
           bulkActionBar={bulkActionBar}
           infiniteScroll={infiniteScroll}
           refreshControls={refreshControls}

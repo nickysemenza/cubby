@@ -108,6 +108,8 @@ interface UseEntityListReturn<TData> {
   bulkActionBar: ReactNode | null;
   /** Delete dialog element - render in component if deletable is enabled */
   deleteDialog: ReactNode | null;
+  /** Opens the delete confirmation for one item (e.g. mobile swipe actions) */
+  requestDelete: (item: TData) => void;
   /** Infinite scroll controls (only present when infinite: true) */
   infiniteScroll?: InfiniteScrollControls;
   /** Pull-to-refresh controls for mobile views */
@@ -169,8 +171,12 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   );
 
   // Optimistic delete: mutation, bulk action, extra actions, dialog
-  const { deleteBulkAction, combinedExtraActions, deleteDialog } =
-    useOptimisticDelete<TData>({ deletable, extraActions });
+  const {
+    deleteBulkAction,
+    combinedExtraActions,
+    deleteDialog,
+    requestDelete,
+  } = useOptimisticDelete<TData>({ deletable, extraActions });
 
   // Combine user's bulk actions with delete bulk action if deletable is provided
   const effectiveBulkActions = useMemo(():
@@ -335,6 +341,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     timing,
     bulkActionBar,
     deleteDialog,
+    requestDelete,
     infiniteScroll: infinite ? infiniteResult.infiniteScroll : undefined,
     refreshControls,
     grouped,

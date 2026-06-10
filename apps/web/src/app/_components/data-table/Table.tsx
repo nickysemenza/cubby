@@ -26,6 +26,7 @@ import {
   useRef,
   useState,
 } from "react";
+import type { SwipeAction } from "~/components/entity/swipe-row";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { SpacedContainer } from "~/components/layout/spaced-container";
@@ -84,6 +85,8 @@ interface TTableProps<TItem> {
    * Useful for tables with inline editing or special mobile UX.
    */
   renderMobileCard?: (row: Row<TItem>, defaultContent: ReactNode) => ReactNode;
+  /** Swipe-to-reveal actions per row on the mobile list */
+  swipeActions?: (row: Row<TItem>) => SwipeAction[];
   /** Callback when a row is clicked */
   onRowClick?: (row: Row<TItem>) => void;
   /** Bulk action bar (rendered in toolbar when rows are selected) */
@@ -202,6 +205,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     timing,
     entity,
     renderMobileCard,
+    swipeActions,
     onRowClick,
     infiniteScroll,
     refreshControls,
@@ -753,6 +757,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
           isLoading={isLoading}
           error={error}
           renderMobileCard={renderMobileCard}
+          swipeActions={swipeActions}
           infiniteScroll={infiniteScroll}
           refreshControls={refreshControls}
           groupConfig={groupConfig}

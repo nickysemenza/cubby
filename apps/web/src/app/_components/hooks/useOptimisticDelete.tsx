@@ -36,6 +36,8 @@ interface UseOptimisticDeleteReturn<TData> {
   combinedExtraActions: ((row: TData) => ReactNode) | undefined;
   /** Delete dialog element - render in component */
   deleteDialog: ReactNode | null;
+  /** Opens the delete confirmation dialog for one item (e.g. swipe actions) */
+  requestDelete: (item: TData) => void;
 }
 
 /**
@@ -241,5 +243,6 @@ export function useOptimisticDelete<
     deleteBulkAction,
     combinedExtraActions,
     deleteDialog,
+    requestDelete: setDeleteTarget,
   };
 }

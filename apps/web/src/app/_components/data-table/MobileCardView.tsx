@@ -5,6 +5,7 @@ import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { Bug } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef } from "react";
 import { MobileCard } from "~/components/entity/mobile-card";
+import { type SwipeAction, SwipeRow } from "~/components/entity/swipe-row";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { EntityIcon } from "~/entities/entities";
@@ -33,6 +34,8 @@ interface MobileCardViewProps<TItem> {
   groupConfig?: GroupConfig<TItem>;
   /** Whether grouping is currently active */
   grouped?: boolean;
+  /** Swipe-to-reveal actions per row (mobile lists, e.g. inventory move/delete) */
+  swipeActions?: (row: Row<TItem>) => SwipeAction[];
 }
 
 export function MobileCardView<TItem>({
@@ -42,6 +45,7 @@ export function MobileCardView<TItem>({
   infiniteScroll,
   groupConfig,
   grouped = false,
+  swipeActions,
 }: MobileCardViewProps<TItem>) {
   const { isDebugEnabled } = useDebug();
   const navigate = useNavigate();
@@ -211,6 +215,51 @@ export function MobileCardView<TItem>({
     }
 
     // Default compact row with right-aligned values
+    const card = (
+      <MobileCard
+        variant="row"
+        title={model.title}
+        subtitle={model.subtitle}
+        imageSlot={
+          model.imageSlot ??
+          // Recipes have no per-item image; a generic chef-hat on every row
+          // is noise. Let the grid collapse and reclaim the 44px gutter.
+          (entity && entity !== "recipe" && (
+            <div className="flex h-11 w-11 items-center justify-center rounded bg-muted/50">
+              <EntityIcon entity={entity} colored className="h-5 w-5" />
+            </div>
+          ))
+        }
+        rightValues={model.rightValues}
+        selectable={
+          isSelectable
+            ? {
+                isSelected: row.getIsSelected(),
+                onSelectionChange: (checked) => row.toggleSelected(checked),
+              }
+            : undefined
+        }
+        actions={model.actionsContent}
+        entity={entity}
+        onClick={
+          model.detailsHref
+            ? () => {
+                navigate({ to: model.detailsHref });
+              }
+            : undefined
+        }
+        onTouchStart={
+          model.detailsHref
+            ? () => {
+                router.preloadRoute({ to: model.detailsHref });
+              }
+            : undefined
+        }
+      >
+        {debugContent}
+      </MobileCard>
+    );
+
     return (
       <div
         key={row.id}
@@ -224,48 +273,11 @@ export function MobileCardView<TItem>({
           transform: `translateY(${vi.start - virtualizer.options.scrollMargin}px)`,
         }}
       >
-        <MobileCard
-          variant="row"
-          title={model.title}
-          subtitle={model.subtitle}
-          imageSlot={
-            model.imageSlot ??
-            // Recipes have no per-item image; a generic chef-hat on every row
-            // is noise. Let the grid collapse and reclaim the 44px gutter.
-            (entity && entity !== "recipe" && (
-              <div className="flex h-11 w-11 items-center justify-center rounded bg-muted/50">
-                <EntityIcon entity={entity} colored className="h-5 w-5" />
-              </div>
-            ))
-          }
-          rightValues={model.rightValues}
-          selectable={
-            isSelectable
-              ? {
-                  isSelected: row.getIsSelected(),
-                  onSelectionChange: (checked) => row.toggleSelected(checked),
-                }
-              : undefined
-          }
-          actions={model.actionsContent}
-          entity={entity}
-          onClick={
-            model.detailsHref
-              ? () => {
-                  navigate({ to: model.detailsHref });
-                }
-              : undefined
-          }
-          onTouchStart={
-            model.detailsHref
-              ? () => {
-                  router.preloadRoute({ to: model.detailsHref });
-                }
-              : undefined
-          }
-        >
-          {debugContent}
-        </MobileCard>
+        {swipeActions ? (
+          <SwipeRow actions={swipeActions(row)}>{card}</SwipeRow>
+        ) : (
+          card
+        )}
       </div>
     );
   };
