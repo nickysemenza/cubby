@@ -2,18 +2,18 @@ import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
 import type { LocationId } from "@cubby/schemas/identifiers";
 import type { Row } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
-import { ArrowRightLeft, LayoutGrid, LayoutList, Trash } from "lucide-react";
+import { ArrowRightLeft, Trash } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { z } from "zod";
 import { Button } from "~/components/ui/button";
 import { queryKeys } from "~/lib/query-keys";
-import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import {
   createEditableAmountColumn,
   createImageColumn,
   createSingleEntityPillColumn,
 } from "../data-table/columnHelpers";
+import { ShelfTableToggle, type ShelfView } from "../data-table/shelf";
 import RTable from "../data-table/Table";
 import { useEntityList } from "../hooks/useEntityList";
 import { useUpdateMutation } from "../hooks/useUpdateMutation";
@@ -39,7 +39,7 @@ export function LocationInventoryTable({
   });
 
   // Browse as a photo "shelf" by default; the editable table is one toggle away.
-  const [view, setView] = useState<"shelf" | "table">("shelf");
+  const [view, setView] = useState<ShelfView>("shelf");
 
   // Dialog states for bulk actions
   const [dialogState, setDialogState] = useState<{
@@ -153,34 +153,11 @@ export function LocationInventoryTable({
 
   return (
     <>
-      <div className="mb-3 flex items-center justify-end gap-1">
-        <Button
-          variant={view === "shelf" ? "secondary" : "ghost"}
-          size="sm"
-          className={cn(
-            "h-7 gap-1 text-xs",
-            view !== "shelf" && "text-muted-foreground",
-          )}
-          onClick={() => setView("shelf")}
-          aria-pressed={view === "shelf"}
-        >
-          <LayoutGrid className="h-3.5 w-3.5" />
-          Shelf
-        </Button>
-        <Button
-          variant={view === "table" ? "secondary" : "ghost"}
-          size="sm"
-          className={cn(
-            "h-7 gap-1 text-xs",
-            view !== "table" && "text-muted-foreground",
-          )}
-          onClick={() => setView("table")}
-          aria-pressed={view === "table"}
-        >
-          <LayoutList className="h-3.5 w-3.5" />
-          Table
-        </Button>
-      </div>
+      <ShelfTableToggle
+        value={view}
+        onChange={setView}
+        className="mb-3 justify-end"
+      />
 
       {view === "shelf" ? (
         <InventoryShelf items={items} isLoading={isLoading} error={error} />

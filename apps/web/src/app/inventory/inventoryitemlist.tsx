@@ -14,6 +14,10 @@ import {
   createImageColumn,
   createSingleEntityPillColumn,
 } from "../_components/data-table/columnHelpers";
+import {
+  ShelfTableToggle,
+  type ShelfView,
+} from "../_components/data-table/shelf";
 import RTable from "../_components/data-table/Table";
 import { EntityPillLink } from "../_components/EntityPill";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
@@ -21,6 +25,7 @@ import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { AiSearchBar } from "../_components/inventory/ai-search-bar";
 import { tryFormatAmount } from "../_components/inventory/format-amount";
+import { InventoryShelf } from "../_components/inventory/inventory-shelf";
 import { MoveInventoryDialog } from "../_components/inventory/move-inventory-dialog";
 import type { InventoryItem } from "../_components/locations/calculate-inventory-valuation";
 import { InventoryValuationSummary } from "../_components/locations/inventory-valuation-summary";
@@ -187,27 +192,50 @@ export function InventoryItemList() {
     },
   });
 
+  const [view, setView] = useState<ShelfView>("table");
+  const items = table.getRowModel().rows.map((r) => r.original);
+
   return (
     <div>
       <AiSearchBar table={table} />
-      <RTable
-        table={table}
-        additionalToolbarContent={
-          <InventoryValuationSummary
-            items={data as InventoryItem[]}
-            variant="compact"
-          />
-        }
-        isLoading={isLoading}
-        error={error}
-        ariaLabel="Inventory Items Table"
-        timing={timing}
-        entity="inventory"
-        onRowClick={onRowClick}
-        bulkActionBar={bulkActionBar}
-        infiniteScroll={infiniteScroll}
-        refreshControls={refreshControls}
-      />
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          {view === "shelf" && (
+            <InventoryValuationSummary
+              items={data as InventoryItem[]}
+              variant="compact"
+            />
+          )}
+        </div>
+        <ShelfTableToggle value={view} onChange={setView} />
+      </div>
+      {view === "shelf" ? (
+        <InventoryShelf
+          items={items}
+          isLoading={isLoading}
+          error={error}
+          infiniteScroll={infiniteScroll}
+        />
+      ) : (
+        <RTable
+          table={table}
+          additionalToolbarContent={
+            <InventoryValuationSummary
+              items={data as InventoryItem[]}
+              variant="compact"
+            />
+          }
+          isLoading={isLoading}
+          error={error}
+          ariaLabel="Inventory Items Table"
+          timing={timing}
+          entity="inventory"
+          onRowClick={onRowClick}
+          bulkActionBar={bulkActionBar}
+          infiniteScroll={infiniteScroll}
+          refreshControls={refreshControls}
+        />
+      )}
       <PreviewSheet />
       {deleteDialog}
       {moveTarget && (

@@ -1,0 +1,49 @@
+import { formatCurrency } from "~/lib/utils";
+import type { ProductWithFoodOut } from "~/server/services/product.service";
+import { ShelfCard, ShelfEmpty, ShelfGrid } from "../data-table/shelf";
+import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
+
+/**
+ * Photo-first "shelf" view of products — image-led cards captioned with price
+ * (falling back to category). The data table stays one toggle away.
+ */
+export function ProductShelf({
+  items,
+  isLoading,
+  error,
+  infiniteScroll,
+}: {
+  items: ProductWithFoodOut[];
+  isLoading?: boolean;
+  error?: unknown;
+  infiniteScroll?: InfiniteScrollControls;
+}) {
+  return (
+    <ShelfGrid
+      items={items}
+      isLoading={isLoading}
+      error={error}
+      infiniteScroll={infiniteScroll}
+      emptyState={<ShelfEmpty entity="product" label="No products yet" />}
+      renderCard={(product) => {
+        const images = product.images ?? [];
+        const subtitle =
+          product.price != null
+            ? formatCurrency(product.price)
+            : (product.category ?? undefined);
+        return (
+          <ShelfCard
+            key={product.id}
+            to="/products/$id"
+            params={{ id: product.id }}
+            image={images[0]?.url}
+            extraCount={images.length - 1}
+            title={product.name}
+            subtitle={subtitle}
+            entity="product"
+          />
+        );
+      }}
+    />
+  );
+}

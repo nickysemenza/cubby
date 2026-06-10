@@ -4,7 +4,7 @@ import type { ColumnFiltersState } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Package, Printer } from "lucide-react";
 import type { ReactNode } from "react";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import {
   Tooltip,
@@ -23,6 +23,10 @@ import {
   createSingleEntityPillColumn,
   createTextColumn,
 } from "../_components/data-table/columnHelpers";
+import {
+  ShelfTableToggle,
+  type ShelfView,
+} from "../_components/data-table/shelf";
 import RTable from "../_components/data-table/Table";
 import type { GroupConfig } from "../_components/data-table/useGroupedList";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
@@ -31,6 +35,7 @@ import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { CategoryBadge } from "../_components/products/CategoryBadge";
 import { productCategoryOptionsWithTheme } from "../_components/products/product-category-icons";
+import { ProductShelf } from "../_components/products/product-shelf";
 
 interface ProductListProps {
   initialCategory?: string;
@@ -325,24 +330,42 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
     groupConfig,
   });
 
+  const [view, setView] = useState<ShelfView>("table");
+  const items = table.getRowModel().rows.map((r) => r.original);
+
   return (
     <div>
-      <RTable
-        table={table}
-        isLoading={isLoading}
-        error={error}
-        ariaLabel="Products Table"
-        timing={timing}
-        entity="product"
-        onRowClick={onRowClick}
-        actions={actions}
-        bulkActionBar={bulkActionBar}
-        infiniteScroll={infiniteScroll}
-        refreshControls={refreshControls}
-        groupConfig={groupConfig}
-        grouped={grouped}
-        onGroupedChange={onGroupedChange}
-      />
+      <div className="mb-3 flex items-center justify-between gap-2">
+        {/* Keep primary actions reachable in shelf view (they live in the
+            table toolbar otherwise). */}
+        <div className="min-w-0">{view === "shelf" ? actions : null}</div>
+        <ShelfTableToggle value={view} onChange={setView} />
+      </div>
+      {view === "shelf" ? (
+        <ProductShelf
+          items={items}
+          isLoading={isLoading}
+          error={error}
+          infiniteScroll={infiniteScroll}
+        />
+      ) : (
+        <RTable
+          table={table}
+          isLoading={isLoading}
+          error={error}
+          ariaLabel="Products Table"
+          timing={timing}
+          entity="product"
+          onRowClick={onRowClick}
+          actions={actions}
+          bulkActionBar={bulkActionBar}
+          infiniteScroll={infiniteScroll}
+          refreshControls={refreshControls}
+          groupConfig={groupConfig}
+          grouped={grouped}
+          onGroupedChange={onGroupedChange}
+        />
+      )}
       <PreviewSheet />
       {deleteDialog}
     </div>
