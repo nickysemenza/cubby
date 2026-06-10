@@ -15,9 +15,11 @@ import {
 import {
   type CalculateTotalsResult,
   calculateTotals,
+  computeAbsorbedOilMeasures,
   computeBakerPercentages,
   createIngredientData,
   type IngredientDataItem,
+  type IngredientPriceInfo,
 } from "~/lib/recipe-costing";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { renderValueOrMissing } from "~/misc/result";
@@ -29,6 +31,12 @@ import { tryFormatAmount } from "../inventory/format-amount";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import { CopyCorpusButton } from "./copy-corpus-button";
 import { getIngredientName, isFlourIngredient } from "./recipe-utils";
+
+// Small muted marker so estimated (absorbed frying-oil) values don't read as
+// measured ones.
+const EstimateMarker = () => (
+  <span className="ml-1 text-2xs text-muted-foreground/70">est.</span>
+);
 
 export const RecipeIngredientList: React.FC<{
   ingredients: SectionIngredientOut[];
@@ -65,9 +73,30 @@ export const RecipeIngredientList: React.FC<{
   }, [ingMap]);
 
   // Baker's percentage per row: ingredient grams as a % of total flour grams.
+  // Computed from the original data so the (unmeasured) oil row stays at "—".
   const bakerPct = useMemo(
     () => computeBakerPercentages(data, getIngredientName, isFlourIngredient),
     [data],
+  );
+
+  // Estimated absorbed-oil measures for unmeasured frying-medium rows, keyed by
+  // row id. Override those rows' priceInfo so the existing Cost/Weight/Nutrition
+  // columns render the estimate instead of "—".
+  const oilMeasures = useMemo(
+    () =>
+      ingMap
+        ? computeAbsorbedOilMeasures(data, ingMap, getIngredientName)
+        : new Map<string, IngredientPriceInfo>(),
+    [data, ingMap],
+  );
+  const displayData = useMemo(
+    () =>
+      data.map((row) =>
+        oilMeasures.has(row.id)
+          ? { ...row, priceInfo: oilMeasures.get(row.id) }
+          : row,
+      ),
+    [data, oilMeasures],
   );
 
   const columnHelper = createColumnHelper<IngredientDataItem>();
@@ -112,6 +141,17 @@ export const RecipeIngredientList: React.FC<{
       cell: (info) => {
         const amounts = info.getValue();
 
+        // Unmeasured frying-medium rows have no amount; flag the estimate here so
+        // the derived weight/calorie values read as guesses, not measurements.
+        if (amounts.length === 0 && oilMeasures.has(info.row.original.id)) {
+          return (
+            <span className="text-muted-foreground text-sm">
+              absorbed
+              <EstimateMarker />
+            </span>
+          );
+        }
+
         // Format each amount using tryFormatAmount
         return (
           <div className="space-y-0.5 text-sm">
@@ -138,8 +178,14 @@ export const RecipeIngredientList: React.FC<{
         sortUndefined: "last",
         cell: (info) => {
           const measure = info.row.original.priceInfo?.price;
+          if (!measure) return null;
           return (
-            measure && renderValueOrMissing(measure, (m) => tryFormatAmount(m))
+            <span>
+              {renderValueOrMissing(measure, (m) => tryFormatAmount(m))}
+              {oilMeasures.has(info.row.original.id) && measure.isOk() && (
+                <EstimateMarker />
+              )}
+            </span>
           );
         },
       },
@@ -154,8 +200,14 @@ export const RecipeIngredientList: React.FC<{
         sortUndefined: "last",
         cell: (info) => {
           const measure = info.row.original.priceInfo?.gram;
+          if (!measure) return null;
           return (
-            measure && renderValueOrMissing(measure, (m) => tryFormatAmount(m))
+            <span>
+              {renderValueOrMissing(measure, (m) => tryFormatAmount(m))}
+              {oilMeasures.has(info.row.original.id) && measure.isOk() && (
+                <EstimateMarker />
+              )}
+            </span>
           );
         },
       },
@@ -279,7 +331,7 @@ export const RecipeIngredientList: React.FC<{
   ];
 
   const table = useReactTable({
-    data: data,
+    data: displayData,
     columns,
     enableFilters: false,
     getCoreRowModel: getCoreRowModel(),

@@ -13,6 +13,7 @@ import {
   TIER1_NUTRIENTS,
 } from "@cubby/usda-schemas";
 import { err, ok } from "neverthrow";
+import { isFryingMediumIngredient } from "~/app/_components/recipe/recipe-utils";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { wasm } from "~/lib/wasm";
 import type { Result } from "~/misc/result-types";
@@ -228,7 +229,7 @@ const getSubRecipeMappings = (
 };
 
 /** Price, weight, and nutrient results for one ingredient (or sub-recipe). */
-type IngredientPriceInfo = {
+export type IngredientPriceInfo = {
   price: Result<WAmount>;
   gram: Result<WAmount>;
   nutrient: Result<NutrientsPer100>;
@@ -331,6 +332,49 @@ const getIngredientMeasures = (
   return measuresFromMappings(firstAmount, mappings);
 };
 
+/**
+ * Fraction of a fried dish's (raw) batter weight that ends up absorbed as oil and
+ * actually eaten. Deep-fried dough takes on roughly 10–20% of its weight in oil;
+ * 0.15 is a middle-ground guesstimate. NOTE: it's applied to *raw* batter weight
+ * (before frying drives off water), so it deliberately folds the evaporation
+ * effect into the constant — this is the single knob to turn for accuracy.
+ */
+export const FRY_OIL_ABSORPTION_FRACTION = 0.15;
+
+/**
+ * Measures for an unmeasured frying-medium ingredient (e.g. "oil, for frying"):
+ * convert an estimated absorbed gram weight through the oil's own USDA/price unit
+ * mappings, so calories, fat, and (tiny) cost all come from the linked food with
+ * no hardcoded oil constants. Returns error Results if there's no basis or the
+ * oil has no resolvable mappings (renders as a graceful "—").
+ */
+const fryingMediumMeasures = (
+  absorbedGrams: number,
+  ingredient: SectionIngredientOut,
+  ingMap: Record<string, IngredientWithFoodOut>,
+): IngredientPriceInfo => {
+  if (ingredient.type !== "ingredient" || absorbedGrams <= 0) {
+    const error = "no absorbed-oil basis";
+    return { price: err(error), gram: err(error), nutrient: err(error) };
+  }
+  const entry = ingMap[ingredient.ingredient.id];
+  const mappings = (entry?.product ?? []).flatMap((p) =>
+    getAllUnitMappingsFromProduct(p),
+  );
+  return measuresFromMappings({ value: absorbedGrams, unit: "g" }, mappings);
+};
+
+/**
+ * True when an ingredient is the frying medium AND carries no measured amount —
+ * i.e. its contribution should be *estimated* from absorbed oil rather than read
+ * off the recipe. An oil with an explicit amount is treated as a normal ingredient.
+ */
+const isUnmeasuredFryingMedium = (
+  ingredient: SectionIngredientOut,
+  name: string,
+): boolean =>
+  !ingredient.amounts[0] && isFryingMediumIngredient(ingredient, name);
+
 export type CalculateTotalsResult = {
   price: number;
   nutrients: NutrientsPer100;
@@ -362,33 +406,33 @@ export const calculateTotals = (
     nutrients: [] as string[],
   };
 
+  // Collect the trio into the running totals, routing failures to missingByType.
+  const fold = (
+    { price, gram, nutrient }: IngredientPriceInfo,
+    ingName: string,
+  ) => {
+    if (price.isOk()) prices.push(price.value);
+    else missingByType.price.push(ingName);
+    if (gram.isOk()) grams.push(gram.value);
+    else missingByType.weight.push(ingName);
+    if (nutrient.isOk()) nutrients.push(nutrient.value);
+    else missingByType.nutrients.push(ingName);
+  };
+
+  // Pass 1: normal ingredients. Defer unmeasured frying mediums — their absorbed
+  // oil is estimated from the weight of everything else, known only after this loop.
+  const fryingMediums: SectionIngredientOut[] = [];
   for (const ingredient of ingredients) {
     const ingName = getIngredientName(ingredient);
+    if (isUnmeasuredFryingMedium(ingredient, ingName)) {
+      fryingMediums.push(ingredient);
+      continue;
+    }
     try {
-      const { price, gram, nutrient } = getIngredientMeasures(
-        ingredient,
-        ingMap,
-        recipeMap,
-        visited,
+      fold(
+        getIngredientMeasures(ingredient, ingMap, recipeMap, visited),
+        ingName,
       );
-
-      if (price.isOk()) {
-        prices.push(price.value);
-      } else {
-        missingByType.price.push(ingName);
-      }
-
-      if (gram.isOk()) {
-        grams.push(gram.value);
-      } else {
-        missingByType.weight.push(ingName);
-      }
-
-      if (nutrient.isOk()) {
-        nutrients.push(nutrient.value);
-      } else {
-        missingByType.nutrients.push(ingName);
-      }
     } catch (e) {
       console.error(`Error calculating measures for ${ingName}`, e);
       // If there's a general error, add to all missing categories
@@ -398,7 +442,18 @@ export const calculateTotals = (
     }
   }
 
-  // Calculate totals
+  // Pass 2: fold in estimated absorbed frying oil, using the summed batter weight
+  // as the basis (the oil itself contributed nothing in pass 1).
+  const batterWeight = grams.reduce((acc, curr) => acc + curr.value, 0);
+  for (const ingredient of fryingMediums) {
+    const absorbedGrams = FRY_OIL_ABSORPTION_FRACTION * batterWeight;
+    fold(
+      fryingMediumMeasures(absorbedGrams, ingredient, ingMap),
+      getIngredientName(ingredient),
+    );
+  }
+
+  // Calculate totals (weight now includes the absorbed oil — it's eaten)
   const totalPrice = prices.reduce((acc, curr) => acc + (curr.value || 0), 0);
   const totalWeight = grams.reduce((acc, curr) => acc + curr.value, 0);
   const totalNutrients = sumNutrients(nutrients);
@@ -443,6 +498,42 @@ export const computeBakerPercentages = (
       flourGrams > 0 && gram?.isOk()
         ? (gram.value.value / flourGrams) * 100
         : null,
+    );
+  }
+  return result;
+};
+
+/**
+ * Per-row estimated measures for unmeasured frying-medium ingredients, keyed by
+ * row id (mirrors computeBakerPercentages). The basis is the summed gram weight
+ * of all *other* rows — the same batter weight calculateTotals() uses — so the
+ * row display and the totals agree. Only frying-medium rows appear in the map.
+ */
+export const computeAbsorbedOilMeasures = (
+  data: IngredientDataItem[],
+  ingMap: Record<string, IngredientWithFoodOut>,
+  getName: (i: SectionIngredientOut) => string,
+): Map<string, IngredientPriceInfo> => {
+  let batterWeight = 0;
+  const fryingRows: IngredientDataItem[] = [];
+  for (const row of data) {
+    if (isUnmeasuredFryingMedium(row, getName(row))) {
+      fryingRows.push(row);
+      continue;
+    }
+    const gram = row.priceInfo?.gram;
+    if (gram?.isOk()) batterWeight += gram.value.value;
+  }
+
+  const result = new Map<string, IngredientPriceInfo>();
+  for (const row of fryingRows) {
+    result.set(
+      row.id,
+      fryingMediumMeasures(
+        FRY_OIL_ABSORPTION_FRACTION * batterWeight,
+        row,
+        ingMap,
+      ),
     );
   }
   return result;

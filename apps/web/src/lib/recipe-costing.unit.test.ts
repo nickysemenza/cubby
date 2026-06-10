@@ -10,9 +10,11 @@ import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { beforeAll, describe, expect, test } from "vitest";
 import {
   calculateTotals,
+  computeAbsorbedOilMeasures,
   convertAmountToNutrients,
   convertAmountToPrice,
   createEmptyNutrients,
+  createIngredientData,
   getGramAndNutrient,
 } from "~/lib/recipe-costing";
 import { ensureWasm } from "~/lib/wasm";
@@ -1270,5 +1272,170 @@ describe("calculateTotals with sub-recipes", () => {
     expect(result.missingByType.price).toEqual(["sub-recipe"]);
     expect(result.missingByType.weight).toEqual(["sub-recipe"]);
     expect(result.missingByType.nutrients).toEqual(["sub-recipe"]);
+  });
+});
+
+describe("calculateTotals with absorbed frying oil", () => {
+  const getName = (i: SectionIngredientOut): string =>
+    i.type === "ingredient" ? i.ingredient.name : "recipe";
+
+  // Ingredient backed by one product carrying the given unit mappings.
+  const ing = (
+    idStr: string,
+    name: string,
+    mappings: { a: Amount; b: Amount }[],
+  ): IngredientWithFoodOut => ({
+    id: unsafeIngredientId(idStr),
+    name,
+    recipe: null,
+    appearsInRecipes: [],
+    aliases: [],
+    product: [
+      {
+        id: unsafeProductId(`prod-${idStr}`),
+        name,
+        shortcode: unsafeProductShortcode("P-TEST"),
+        food: null,
+        upc: null,
+        ndb_number: null,
+        manufacturer: "",
+        category: null,
+        model: null,
+        expectedQuantity: null,
+        price: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        images: [],
+        externalIds: [],
+        unitMappings: mappings.map((m, i) => ({
+          id: `${idStr}-m${i}`,
+          a: m.a,
+          b: m.b,
+          source: "test",
+          sourceMetadata: { type: "manual" as const },
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })),
+      },
+    ],
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+
+  const entry = (
+    idStr: string,
+    name: string,
+    amounts: Amount[],
+    modifier?: string,
+  ): SectionIngredientOut => ({
+    id: idStr,
+    type: "ingredient",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ingredient: {
+      id: unsafeIngredientId(idStr),
+      name,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+    recipe: null,
+    amounts,
+    modifier: modifier ?? null,
+  });
+
+  // flour: 1 cup = 100 g; 100 g = 364 kcal = 10 g protein; 1 cup = $1
+  const flourIng = ing("flour", "flour", [
+    { a: { value: 1, unit: "cup" }, b: { value: 100, unit: "gram" } },
+    { a: { value: 100, unit: "g" }, b: { value: 364, unit: "kcal" } },
+    { a: { value: 100, unit: "g" }, b: { value: 10, unit: "g protein" } },
+    { a: { value: 1, unit: "cup" }, b: { value: 1, unit: "dollar" } },
+  ]);
+  // oil: 100 g = 884 kcal; 1000 g = $5
+  const oilIng = ing("oil", "neutral oil", [
+    { a: { value: 100, unit: "g" }, b: { value: 884, unit: "kcal" } },
+    { a: { value: 1000, unit: "g" }, b: { value: 5, unit: "dollar" } },
+  ]);
+  const ingMap: Record<string, IngredientWithFoodOut> = {
+    flour: flourIng,
+    oil: oilIng,
+  };
+
+  test("folds estimated absorbed oil into totals (15% of batter weight)", async () => {
+    const ingredients = [
+      entry("flour", "flour", [{ value: 1, unit: "cup" }]),
+      entry("oil", "neutral oil", [], "for frying"),
+    ];
+
+    const r = await calculateTotals(ingredients, ingMap, getName);
+
+    // batter = 100 g flour; absorbed oil = 0.15 * 100 = 15 g
+    expect(r.weight).toBeCloseTo(115, 0);
+    // kcal: flour 364 + oil (15/100 * 884 = 132.6) = 496.6
+    expect(r.nutrients["208"]).toBeCloseTo(496.6, 0);
+    // protein comes from flour only
+    expect(r.nutrients["203"]).toBeCloseTo(10, 0);
+    // price: flour $1 + oil (15/1000 * 5 ≈ $0.075); WASM rounds slightly
+    expect(r.price).toBeCloseTo(1.075, 1);
+    // oil resolved → not flagged missing
+    expect(r.missingByType.price).toEqual([]);
+    expect(r.missingByType.weight).toEqual([]);
+    expect(r.missingByType.nutrients).toEqual([]);
+    expect(r.totalIngredients).toBe(2);
+  });
+
+  test("control: same recipe without the frying medium is unchanged", async () => {
+    const ingredients = [entry("flour", "flour", [{ value: 1, unit: "cup" }])];
+
+    const r = await calculateTotals(ingredients, ingMap, getName);
+
+    expect(r.weight).toBeCloseTo(100, 0);
+    expect(r.nutrients["208"]).toBeCloseTo(364, 0);
+  });
+
+  test("unmeasured oil with explicit amount is treated as a normal ingredient", async () => {
+    // Has both a frying modifier AND an amount → not an absorption estimate.
+    const ingredients = [
+      entry("oil", "neutral oil", [{ value: 100, unit: "g" }], "for frying"),
+    ];
+
+    const r = await calculateTotals(ingredients, ingMap, getName);
+
+    // 100 g oil measured directly → 884 kcal, no batter-relative estimate.
+    expect(r.weight).toBeCloseTo(100, 0);
+    expect(r.nutrients["208"]).toBeCloseTo(884, 0);
+  });
+
+  test("frying medium with no resolvable mapping fails gracefully", async () => {
+    const noMapOil = ing("oil2", "neutral oil", []); // empty mappings
+    const ingredients = [
+      entry("flour", "flour", [{ value: 1, unit: "cup" }]),
+      entry("oil2", "neutral oil", [], "for frying"),
+    ];
+
+    const r = await calculateTotals(
+      ingredients,
+      { flour: flourIng, oil2: noMapOil },
+      getName,
+    );
+
+    // flour is unaffected; the oil simply can't be estimated → missing.
+    expect(r.weight).toBeCloseTo(100, 0);
+    expect(r.nutrients["208"]).toBeCloseTo(364, 0);
+    expect(r.missingByType.nutrients).toContain("neutral oil");
+  });
+
+  test("computeAbsorbedOilMeasures keys only the oil row, sized off the others", () => {
+    const ingredients = [
+      entry("flour", "flour", [{ value: 1, unit: "cup" }]),
+      entry("oil", "neutral oil", [], "for frying"),
+    ];
+
+    const data = createIngredientData(ingredients, ingMap);
+    const map = computeAbsorbedOilMeasures(data, ingMap, getName);
+
+    expect([...map.keys()]).toEqual(["oil"]);
+    const m = map.get("oil");
+    expect(m?.gram.isOk() && m.gram.value.value).toBeCloseTo(15, 0);
+    expect(m?.nutrient.isOk() && m.nutrient.value["208"]).toBeCloseTo(132.6, 0);
   });
 });
