@@ -245,7 +245,7 @@ const RecipeDetailInner: React.FC<{
           >
             <div className="grid gap-6 lg:grid-cols-2">
               <Card>
-                <CardHeader rule className="pb-2">
+                <CardHeader className="pb-2">
                   <CardTitle>Cost Breakdown</CardTitle>
                 </CardHeader>
                 <CardContent className="p-3">
@@ -262,7 +262,7 @@ const RecipeDetailInner: React.FC<{
                 </CardContent>
               </Card>
               <Card>
-                <CardHeader rule className="pb-2">
+                <CardHeader className="pb-2">
                   <CardTitle>Nutrition Breakdown</CardTitle>
                 </CardHeader>
                 <CardContent className="p-3">
@@ -283,7 +283,7 @@ const RecipeDetailInner: React.FC<{
       {/* Additional Images (for magazine view, if more than hero) */}
       {viewMode === "magazine" && recipeImages.length > 1 && (
         <Card>
-          <CardHeader rule className="pb-2">
+          <CardHeader className="pb-2">
             <CardTitle>More Images</CardTitle>
           </CardHeader>
           <CardContent className="p-3">
@@ -297,7 +297,7 @@ const RecipeDetailInner: React.FC<{
 
       {/* History Section */}
       <Card className="print:hidden">
-        <CardHeader rule className="pb-2">
+        <CardHeader className="pb-2">
           <CardTitle>History</CardTitle>
         </CardHeader>
         <CardContent className="p-3">

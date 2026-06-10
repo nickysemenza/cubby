@@ -157,7 +157,7 @@ function RecipeComparePage() {
         <div className="space-y-4">
           {/* Comparison Table */}
           <Card>
-            <CardHeader rule className="pb-3">
+            <CardHeader className="pb-3">
               <CardTitle>Cost & Nutrition Comparison</CardTitle>
             </CardHeader>
             <CardContent className="p-0">

@@ -36,7 +36,7 @@ export const EntityHero: FC<EntityHeroProps> = ({ images }) => {
       )}
       style={{ animationFillMode: "both" }}
     >
-      <CardHeader rule className="pb-3">
+      <CardHeader className="pb-3">
         <div className="flex items-center gap-2">
           <ImageIcon className="h-3.5 w-3.5 text-eyebrow" />
           <CardTitle>Images</CardTitle>

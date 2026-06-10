@@ -154,7 +154,7 @@ export const DetailPage: FC<DetailPageProps> = ({
               animationFillMode: "both",
             }}
           >
-            <CardHeader rule className="pb-2">
+            <CardHeader className="pb-2">
               <div className="flex items-center gap-2">
                 <section.icon className="h-3.5 w-3.5 text-eyebrow" />
                 <CardTitle>{section.title}</CardTitle>
@@ -168,7 +168,7 @@ export const DetailPage: FC<DetailPageProps> = ({
       {/* Debug raw details section - full width */}
       {isDebugEnabled && (
         <Card className="fade-in slide-in-from-bottom-2 animate-in duration-300">
-          <CardHeader rule className="pb-2">
+          <CardHeader className="pb-2">
             <CardTitle>Raw Details</CardTitle>
           </CardHeader>
           <CardContent>
