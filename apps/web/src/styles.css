@@ -474,23 +474,6 @@
     );
   }
 
-  /* Stat card hover glow */
-  .stat-card-glow {
-    @apply relative overflow-hidden;
-  }
-  .stat-card-glow::before {
-    content: "";
-    @apply absolute inset-0 opacity-0 transition-opacity duration-300;
-    background: radial-gradient(
-      circle at 80% 20%,
-      oklch(from var(--brand-terra-light) l c h / 0.15) 0%,
-      transparent 50%
-    );
-  }
-  .stat-card-glow:hover::before {
-    @apply opacity-100;
-  }
-
   /* View Transitions — progressive enhancement for page navigation */
   ::view-transition-old(root) {
     animation: vt-fade-out 150ms ease-in;

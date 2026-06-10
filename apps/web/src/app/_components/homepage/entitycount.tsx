@@ -20,17 +20,7 @@ interface StatCardProps {
   isError: boolean;
 }
 
-interface StatCardPropsWithIndex extends StatCardProps {
-  index: number;
-}
-
-function StatCard({
-  entity,
-  count,
-  isLoading,
-  isError,
-  index,
-}: StatCardPropsWithIndex) {
+function StatCard({ entity, count, isLoading, isError }: StatCardProps) {
   const def = entities[entity];
   const Icon = def.lucideIcon;
 
@@ -39,15 +29,13 @@ function StatCard({
       <Card
         emphasis="chunky"
         className={cn(
-          "stat-card-glow group relative overflow-hidden p-2.5 transition-all duration-150 ease-cozy",
+          "p-2.5 transition-all duration-150 ease-cozy",
           "hover:-translate-x-px hover:-translate-y-px hover:shadow-[var(--shadow-chunky-lg)]",
           "cursor-pointer border-l-4",
-          "fade-in slide-in-from-bottom-2 animate-in",
           def.color.text.replace("text-", "border-l-"),
         )}
-        style={{ animationDelay: `${index * 50}ms`, animationFillMode: "both" }}
       >
-        <div className="relative flex flex-col items-start gap-1.5">
+        <div className="flex flex-col items-start gap-1.5">
           <div
             className={cn(
               "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br",
@@ -133,7 +121,6 @@ export default function EntityCount() {
           count={results[i]?.count}
           isLoading={results[i]?.isLoading ?? true}
           isError={results[i]?.isError ?? false}
-          index={i}
         />
       ))}
     </div>
