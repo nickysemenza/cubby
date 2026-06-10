@@ -84,7 +84,7 @@ export function ImageDetail({ image }: ImageDetailProps) {
       {/* Preview */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Preview</CardTitle>
+          <CardTitle>Preview</CardTitle>
         </CardHeader>
         <CardContent className="flex justify-center">
           <div className="relative aspect-square w-full max-w-xs overflow-hidden rounded-md border">
@@ -113,7 +113,7 @@ export function ImageDetail({ image }: ImageDetailProps) {
       {/* Info */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Information</CardTitle>
+          <CardTitle>Information</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <div>

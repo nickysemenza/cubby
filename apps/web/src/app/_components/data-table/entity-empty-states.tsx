@@ -9,6 +9,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "~/components/ui/empty";
+import { InkStamp } from "~/components/ui/ink-stamp";
 import { EntityIcon, entities } from "~/entities/entities";
 
 interface EntityEmptyConfig {
@@ -100,6 +101,7 @@ export function EntityEmptyState({
   return (
     <Empty variant="warm" className="relative isolate overflow-hidden py-8">
       <IconPattern className="-z-10" />
+      <InkStamp className="mb-1">Nothing on file</InkStamp>
       <EmptyMedia variant="icon">
         <EntityIcon entity={entity} colored className="size-5" />
       </EmptyMedia>

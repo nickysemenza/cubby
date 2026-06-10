@@ -20,10 +20,10 @@ export function SectionHeader({ title, count, color }: SectionHeaderProps) {
         className="h-2 w-2 rounded-full"
         style={{ backgroundColor: color }}
       />
-      <span className="font-semibold text-foreground/80 text-xs capitalize">
+      <span className="font-mono font-semibold text-2xs text-foreground/80 uppercase tracking-wider">
         {title}
       </span>
-      <span className="rounded-full bg-foreground/10 px-1.5 py-0.5 font-medium text-2xs text-foreground/50 leading-none">
+      <span className="rounded-full bg-foreground/10 px-1.5 py-0.5 font-medium font-mono text-2xs text-foreground/50 tabular-nums leading-none">
         {count}
       </span>
     </div>

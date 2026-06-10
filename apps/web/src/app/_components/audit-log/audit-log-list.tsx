@@ -18,6 +18,8 @@ interface AuditLogListProps {
   showEntityLink?: boolean;
   /** Number of entries per page (default 20) */
   limit?: number;
+  /** "ledger" renders glanceable single-line entries (home feed) */
+  variant?: "default" | "ledger";
 }
 
 export function AuditLogList({
@@ -25,6 +27,7 @@ export function AuditLogList({
   entityId,
   showEntityLink = true,
   limit = 20,
+  variant = "default",
 }: AuditLogListProps) {
   const trpc = useTRPC();
 
@@ -70,6 +73,7 @@ export function AuditLogList({
             key={entry.id}
             entry={entry}
             showEntityLink={showEntityLink}
+            variant={variant}
           />
         ))}
       </div>

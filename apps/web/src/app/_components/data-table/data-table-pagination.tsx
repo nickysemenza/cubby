@@ -24,10 +24,10 @@ export function DataTablePagination<TData>({
   return (
     <div className="flex flex-col space-y-2 px-2 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
       {/* Selected rows info + timing - hidden on mobile to save space */}
-      <div className="hidden items-center gap-2 text-muted-foreground text-sm sm:flex">
+      <div className="hidden items-center gap-2 font-mono text-2xs text-muted-foreground uppercase sm:flex">
         <span>
           {table.getFilteredSelectedRowModel().rows.length} of{" "}
-          {table.getFilteredRowModel().rows.length} row(s) selected.
+          {table.getFilteredRowModel().rows.length} selected
         </span>
         {timing && <QueryTimingIndicator timing={timing} />}
       </div>
@@ -36,7 +36,9 @@ export function DataTablePagination<TData>({
       <div className="flex flex-col space-y-2 sm:flex-row sm:items-center sm:space-x-3 sm:space-y-0 lg:space-x-4">
         {/* Rows per page - simplified on mobile */}
         <div className="flex items-center justify-between space-x-2 sm:justify-start">
-          <p className="font-medium text-sm">Rows per page</p>
+          <p className="font-medium font-mono text-2xs text-muted-foreground uppercase tracking-wider">
+            Rows per page
+          </p>
           <FilterableCombobox
             items={[10, 50, 100, 1000].map((pageSize) => ({
               value: `${pageSize}`,
@@ -51,7 +53,7 @@ export function DataTablePagination<TData>({
         </div>
 
         {/* Page info - responsive text */}
-        <div className="flex min-w-0 flex-1 items-center justify-center font-medium text-sm sm:flex-none">
+        <div className="flex min-w-0 flex-1 items-center justify-center font-mono text-2xs text-muted-foreground uppercase tabular-nums sm:flex-none">
           <span className="hidden sm:inline">
             Page {table.getState().pagination.pageIndex + 1} of{" "}
             {table.getPageCount()} ({table.getRowCount()} records)

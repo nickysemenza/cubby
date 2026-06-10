@@ -16,6 +16,7 @@ function CookbooksPage() {
   return (
     <EntityLayout
       title="Cookbooks"
+      entity="cookbook"
       actions={
         <Link to="/recipes/import-cookbook">
           <Button size="sm" variant="outline" className="h-7 gap-1 text-xs">

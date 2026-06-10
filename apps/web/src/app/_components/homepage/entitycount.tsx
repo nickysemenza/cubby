@@ -1,13 +1,87 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { SortParams } from "@cubby/schemas/pagination";
-import { useQueries } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { AlertTriangle } from "lucide-react";
 import { Card } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
 import { entities } from "~/entities/entities";
 import { authClient } from "~/lib/auth-client";
 import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
+
+/**
+ * Alert stat — the mockup's red "EXPIRING" block, fed by the data-problems
+ * count. Red ink + red chunky frame when anything needs attention.
+ */
+function ProblemsStatCard() {
+  const api = useTRPC();
+  const { data, isLoading } = useQuery({
+    ...api.problems.getProblemsCount.queryOptions(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const count = data?.total ?? 0;
+  const alert = count > 0;
+
+  return (
+    <Link to="/problems">
+      <Card
+        emphasis="chunky"
+        className={cn(
+          "p-2.5 transition-all duration-150 ease-cozy",
+          "hover:-translate-x-px hover:-translate-y-px",
+          "cursor-pointer border-l-4",
+          alert
+            ? "border-destructive/60 border-l-destructive hover:shadow-[4px_4px_0_0_oklch(from_var(--destructive)_l_c_h_/_0.55)]"
+            : "border-l-positive hover:shadow-[var(--shadow-chunky-lg)]",
+        )}
+        style={
+          alert
+            ? {
+                boxShadow:
+                  "3px 3px 0 0 oklch(from var(--destructive) l c h / 0.55)",
+              }
+            : undefined
+        }
+      >
+        <div className="flex flex-col items-start gap-1.5">
+          <div
+            className={cn(
+              "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg",
+              alert
+                ? "bg-destructive/10 text-destructive"
+                : "bg-positive/10 text-positive",
+            )}
+          >
+            <AlertTriangle className="h-4 w-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            {isLoading ? (
+              <Skeleton className="h-6 w-10" />
+            ) : (
+              <p
+                className={cn(
+                  "font-mono font-semibold text-xl tabular-nums leading-none tracking-tight",
+                  alert && "text-destructive",
+                )}
+              >
+                {count}
+              </p>
+            )}
+            <p
+              className={cn(
+                "mt-1 truncate font-mono text-2xs uppercase tracking-wider",
+                alert ? "text-destructive/80" : "text-eyebrow",
+              )}
+            >
+              Problems
+            </p>
+          </div>
+        </div>
+      </Card>
+    </Link>
+  );
+}
 
 /** Format large numbers with compact notation (e.g., 2.1M, 15K) */
 const compactFormatter = new Intl.NumberFormat("en", { notation: "compact" });
@@ -53,15 +127,15 @@ function StatCard({ entity, count, isLoading, isError }: StatCardProps) {
             {isLoading ? (
               <Skeleton className="h-6 w-10" />
             ) : isError ? (
-              <p className="font-heading font-semibold text-muted-foreground text-xl leading-none tracking-tight">
+              <p className="font-mono font-semibold text-muted-foreground text-xl leading-none tracking-tight">
                 —
               </p>
             ) : (
-              <p className="font-heading font-semibold text-xl leading-none tracking-tight">
+              <p className="font-mono font-semibold text-xl tabular-nums leading-none tracking-tight">
                 {formatCount(count ?? 0)}
               </p>
             )}
-            <p className="mt-1 truncate font-mono text-muted-foreground text-xs">
+            <p className="mt-1 truncate font-mono text-2xs text-eyebrow uppercase tracking-wider">
               {def.pluralLabel}
             </p>
           </div>
@@ -113,7 +187,7 @@ export default function EntityCount() {
   ];
 
   return (
-    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-8">
       {displayOrder.map((entity, i) => (
         <StatCard
           key={entity}
@@ -123,6 +197,7 @@ export default function EntityCount() {
           isError={results[i]?.isError ?? false}
         />
       ))}
+      <ProblemsStatCard />
     </div>
   );
 }

@@ -28,13 +28,13 @@ export function CookbookList() {
   }
 
   return (
-    <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    <ul className="my-0 ml-0 grid list-none grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {cookbooks.map(({ id, book, author, recipeCount, coverUrl }) => (
         <li key={id}>
           <Link
             to="/cookbooks/$cookbookId"
             params={{ cookbookId: id }}
-            className="flex items-center gap-3 rounded-lg border border-border bg-card p-4 transition-colors hover:border-foreground/30 hover:bg-muted/50"
+            className="flex items-center gap-3 rounded-lg border border-border bg-card p-4 shadow-[var(--shadow-chunky-sm)] transition-all ease-cozy hover:-translate-y-0.5 hover:bg-muted/50 hover:shadow-[var(--shadow-chunky)]"
           >
             {coverUrl ? (
               <Image
@@ -48,7 +48,7 @@ export function CookbookList() {
               </span>
             )}
             <span className="min-w-0 flex-1">
-              <span className="block truncate font-medium">
+              <span className="block truncate font-heading font-semibold">
                 {book || <NoneState />}
               </span>
               {author.length > 0 && (
@@ -56,7 +56,7 @@ export function CookbookList() {
                   {author.join(", ")}
                 </span>
               )}
-              <span className="block text-muted-foreground text-sm">
+              <span className="block font-mono text-2xs text-muted-foreground uppercase tabular-nums">
                 {recipeCount} {recipeCount === 1 ? "recipe" : "recipes"}
               </span>
             </span>

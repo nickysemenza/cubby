@@ -39,6 +39,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import { ENTITY_ACCENTS } from "~/entities/entity-accents";
 import { useDebug } from "~/hooks/useDebug";
 import { useIsMobile } from "~/hooks/useMobile";
 import type { QueryTiming } from "~/lib/query-timing";
@@ -321,7 +322,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
   const styles = {
     table: "text-xs leading-tight border-collapse border-spacing-0",
     header:
-      "h-8 px-2 py-1 text-2xs font-mono font-semibold uppercase tracking-wider text-muted-foreground bg-muted/50",
+      "h-8 px-2 py-1 text-2xs font-mono font-semibold uppercase tracking-wider text-eyebrow bg-muted/50",
     filterRow: "h-7 px-2 py-0.5 bg-muted/30 border-b border-border/50",
     cell: cn(dConfig.cellClass, "overflow-hidden align-middle"),
     row: cn(dConfig.rowClass, "table-row-hover border-border/30 border-b"),
@@ -463,9 +464,19 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
 
   return (
     <SpacedContainer space={4}>
-      {/* Desktop Table View - Unified wrapper */}
+      {/* Desktop Table View - Unified wrapper. Sets the entity-inked
+          --row-accent so hover/selected bars match the section's color. */}
       {!isMobile && (
-        <div className="overflow-hidden rounded-lg border-2 border-[var(--border-chunky)] shadow-[var(--shadow-chunky)]">
+        <div
+          className="overflow-hidden rounded-lg border-2 border-[var(--border-chunky)] shadow-[var(--shadow-chunky)]"
+          style={
+            entity
+              ? ({
+                  "--row-accent": ENTITY_ACCENTS[entity].base,
+                } as React.CSSProperties)
+              : undefined
+          }
+        >
           {/* Attached Toolbar */}
           <DataTableToolbar
             table={table}

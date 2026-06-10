@@ -19,7 +19,7 @@ export function HoverableTimestamp({ timestamp }: HoverableTimestampProps) {
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger className="cursor-default">
-          <span>{relativeTime}</span>
+          <span className="font-mono text-2xs">{relativeTime}</span>
         </TooltipTrigger>
         <TooltipContent>
           <p>{formattedDate}</p>

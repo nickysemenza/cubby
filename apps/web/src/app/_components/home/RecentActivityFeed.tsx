@@ -27,7 +27,7 @@ export function RecentActivityFeed({ limit = 5 }: RecentActivityFeedProps) {
         </Link>
       }
     >
-      <AuditLogList limit={limit} showEntityLink />
+      <AuditLogList limit={limit} showEntityLink variant="ledger" />
     </DashboardCard>
   );
 }

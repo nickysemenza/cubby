@@ -47,17 +47,59 @@ type AuditLogEntry = RouterOutputs["auditLog"]["list"]["entries"][number];
 interface AuditLogEntryProps {
   entry: AuditLogEntry;
   showEntityLink?: boolean;
+  /**
+   * "ledger" renders a glanceable single line (pill + action ... time) with no
+   * avatar, timeline, or change details — used on the home feed.
+   */
+  variant?: "default" | "ledger";
 }
 
 export function AuditLogEntryComponent({
   entry,
   showEntityLink = true,
+  variant = "default",
 }: AuditLogEntryProps) {
   const [isOpen, setIsOpen] = useState(false);
   const hasChanges = entry.changes && Object.keys(entry.changes).length > 0;
 
   const entityConfig = entities[entry.entityType as AuditEntityType];
   const action = getStatusBadgeProps("audit", entry.action);
+
+  if (variant === "ledger") {
+    return (
+      <div className="flex items-center justify-between gap-3 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          {showEntityLink ? (
+            <EntityPillById
+              entityType={entry.entityType}
+              entityId={entry.entityId}
+              compact
+            />
+          ) : (
+            <>
+              <EntityIcon
+                entity={entry.entityType}
+                colored
+                className="h-4 w-4 flex-shrink-0"
+              />
+              <span className="truncate font-medium text-sm">
+                {entityConfig.label}
+              </span>
+            </>
+          )}
+          <Badge
+            variant="secondary"
+            className={cn("text-2xs", action.className)}
+          >
+            {action.label}
+          </Badge>
+        </div>
+        <span className="shrink-0 text-muted-foreground">
+          <HoverableTimestamp timestamp={entry.createdAt} />
+        </span>
+      </div>
+    );
+  }
 
   const userInitials = entry.user?.name
     ? entry.user.name

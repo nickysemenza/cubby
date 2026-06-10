@@ -1,7 +1,8 @@
 import { cva, type VariantProps } from "class-variance-authority";
 import type { LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { entities } from "~/entities/entities";
+import { ENTITY_ACCENTS } from "~/entities/entity-accents";
 import type { Entity } from "~/entities/types";
 import { cn } from "~/lib/utils";
 
@@ -35,6 +36,29 @@ interface PageHeroMetaItem {
   label: ReactNode;
 }
 
+// Entities that live under the "Kitchen" nav group — their eyebrows read as a
+// path ("Kitchen / Recipes") to match the ledger-style breadcrumb labels.
+const KITCHEN_ENTITIES: ReadonlySet<Entity> = new Set([
+  "recipe",
+  "cookbook",
+  "ingredient",
+]);
+
+/**
+ * Derive an eyebrow path from the entity when none is given explicitly.
+ * Detail pages get the full path ("Kitchen / Recipes"); list pages drop the
+ * segment that would just repeat the title (so the Recipes list shows
+ * "Kitchen", and the Products list shows nothing).
+ */
+function deriveEyebrow(entity: Entity, title: ReactNode): string | null {
+  const def = entities[entity];
+  const segments = KITCHEN_ENTITIES.has(entity)
+    ? ["Kitchen", def.pluralLabel]
+    : [def.pluralLabel];
+  const filtered = segments.filter((s) => s !== title);
+  return filtered.length > 0 ? filtered.join(" / ") : null;
+}
+
 interface PageHeroProps extends VariantProps<typeof heroVariants> {
   title: ReactNode;
   /** Small uppercase label above the title (e.g. "Pantry" above "Locations"). */
@@ -64,13 +88,26 @@ export function PageHero({
   const EntityIconComponent = def?.lucideIcon;
   const showEntityIcon = variant === "detail" && EntityIconComponent && def;
   const showAccent = decoration === "accent" && variant !== "compact";
+  const effectiveEyebrow =
+    eyebrow ?? (entity ? deriveEyebrow(entity, title) : null);
+  // Entity-inked accent bar (falls back to terracotta via the CSS defaults).
+  const accent = entity ? ENTITY_ACCENTS[entity] : null;
+  const accentStyle = accent
+    ? ({
+        "--page-accent": accent.base,
+        "--page-accent-light": accent.light,
+      } as CSSProperties)
+    : undefined;
 
   return (
-    <div className={cn(heroVariants({ variant }), className)}>
+    <div
+      className={cn(heroVariants({ variant }), className)}
+      style={accentStyle}
+    >
       <div className="min-w-0 flex-1">
-        {eyebrow && (
-          <p className="mb-1 font-medium text-muted-foreground text-xs uppercase tracking-[0.18em]">
-            {eyebrow}
+        {effectiveEyebrow && (
+          <p className="mb-1 font-medium font-mono text-2xs text-eyebrow uppercase tracking-[0.18em]">
+            {effectiveEyebrow}
           </p>
         )}
         <div
@@ -93,14 +130,14 @@ export function PageHero({
           <h1 className={titleVariants({ variant })}>{title}</h1>
         </div>
         {meta && meta.length > 0 && (
-          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-muted-foreground text-sm">
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-2xs text-muted-foreground">
             {meta.map((item, i) => (
               <span
                 // biome-ignore lint/suspicious/noArrayIndexKey: meta items are positional and have no stable id
                 key={i}
                 className="inline-flex items-center gap-1.5"
               >
-                {item.icon && <item.icon className="h-4 w-4 shrink-0" />}
+                {item.icon && <item.icon className="h-3 w-3 shrink-0" />}
                 <span>{item.label}</span>
               </span>
             ))}
