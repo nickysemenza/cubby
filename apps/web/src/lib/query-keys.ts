@@ -22,6 +22,11 @@ export const queryKeys = {
     // The cookbook browse index lives on the recipe router (`recipe.listCookbooks`),
     // so its key mirrors that tRPC path.
     listCookbooks: ["recipe", "listCookbooks"] as const,
+    // Client-computed cost/calorie rollups for a set of recipes, keyed by a
+    // content signature so navigating away and back reuses the result instead of
+    // re-fetching every ingredient and re-running WASM.
+    costingTotals: (signature: string) =>
+      ["recipe", "costingTotals", signature] as const,
     all: ["recipe"] as const,
   },
 } as const;

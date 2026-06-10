@@ -29,6 +29,33 @@ import {
 } from "../_components/recipe/recipe-utils";
 import { TruncatedList } from "../_components/TruncatedList";
 
+/**
+ * A computed list-cell value (cost, calories) whose confidence depends on how
+ * many of the recipe's ingredients had the underlying data. When coverage is
+ * complete the value stands on its own — no fraction. When partial, the value is
+ * preliminary, so it's greyed and annotated with the (covered/total) fraction.
+ */
+const CoverageValue: React.FC<{
+  covered: number;
+  total: number;
+  children: ReactNode;
+}> = ({ covered, total, children }) => {
+  const complete = covered >= total;
+  return (
+    <span
+      className={complete ? undefined : "opacity-60"}
+      title={`${covered}/${total} ingredients`}
+    >
+      {children}
+      {!complete && (
+        <span className="ml-1 hidden text-2xs text-muted-foreground sm:inline">
+          ({covered}/{total})
+        </span>
+      )}
+    </span>
+  );
+};
+
 interface RecipeListProps {
   /** Actions to display in the table toolbar (e.g., "Create New" button) */
   actions?: ReactNode;
@@ -128,12 +155,9 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
           const withPrice =
             totals.totalIngredients - totals.missingByType.price.length;
           return (
-            <span title={`${withPrice}/${totals.totalIngredients} ingredients`}>
+            <CoverageValue covered={withPrice} total={totals.totalIngredients}>
               {formatCurrency(totals.price)}
-              <span className="ml-1 hidden text-2xs text-muted-foreground sm:inline">
-                ({withPrice}/{totals.totalIngredients})
-              </span>
-            </span>
+            </CoverageValue>
           );
         },
       }),
@@ -160,14 +184,12 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
           const withNutrients =
             totals.totalIngredients - totals.missingByType.nutrients.length;
           return (
-            <span
-              title={`${withNutrients}/${totals.totalIngredients} ingredients`}
+            <CoverageValue
+              covered={withNutrients}
+              total={totals.totalIngredients}
             >
               {Math.round(calories)} kcal
-              <span className="ml-1 hidden text-2xs text-muted-foreground sm:inline">
-                ({withNutrients}/{totals.totalIngredients})
-              </span>
-            </span>
+            </CoverageValue>
           );
         },
       }),
@@ -302,17 +324,39 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
     [data],
   );
 
-  // Load ingredient data and calculate totals in a single effect
-  // biome-ignore lint/correctness/useExhaustiveDependencies: triggers on dataSignature; reads data via dataRef
+  // Load ingredient data and calculate totals in a single effect. Triggers on
+  // dataSignature (stable content hash); the latest `data` is read via dataRef.
   useEffect(() => {
     let cancelled = false;
     const recipes = dataRef.current;
+
+    // The computed rollup keyed by content signature. calculateTotals re-fetches
+    // every ingredient and re-runs WASM, and the result is component state that's
+    // discarded on unmount — so without this the work redoes on every visit. The
+    // react-query cache outlives navigation, so a revisit reuses it with no
+    // skeleton. (The raw getManyByIDs fetches were already cached; this caches the
+    // expensive *derived* output too.)
+    const cacheKey = queryKeys.recipe.costingTotals(dataSignature);
+    type CostingCache = {
+      ingredientMap: Record<string, IngredientWithFoodOut>;
+      recipeTotalsMap: Record<string, CalculateTotalsResult>;
+    };
 
     async function loadAndCalculate() {
       // No recipes - nothing to calculate
       if (recipes.length === 0) {
         setIngredientMap({});
         setRecipeTotalsMap({});
+        setIsLoadingTotals(false);
+        return;
+      }
+
+      // Reuse a previously computed rollup if this exact set of recipes/ingredients
+      // was costed recently — instant, no fetch, no WASM, no skeleton flash.
+      const cached = queryClient.getQueryData<CostingCache>(cacheKey);
+      if (cached) {
+        setIngredientMap(cached.ingredientMap);
+        setRecipeTotalsMap(cached.recipeTotalsMap);
         setIsLoadingTotals(false);
         return;
       }
@@ -333,27 +377,34 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
 
         if (cancelled) return;
 
-        setIngredientMap(ingMap);
-
         // Calculate totals for all recipes (even if no ingredients). recipeMap
         // lets sub-recipe cost/calories roll into the parent totals, scaled by
         // amount/yield.
-        const entries = recipes.map((recipe) => {
-          const recipeIngredients = recipe.sections.flatMap(
-            (s) => s.ingredients,
-          );
-          const totals = calculateTotals(
-            recipeIngredients,
-            ingMap,
-            getIngredientName,
-            recipeMap,
-          );
-          return [recipe.id, totals] as const;
+        const recipeTotalsMap = Object.fromEntries(
+          recipes.map((recipe) => {
+            const recipeIngredients = recipe.sections.flatMap(
+              (s) => s.ingredients,
+            );
+            const totals = calculateTotals(
+              recipeIngredients,
+              ingMap,
+              getIngredientName,
+              recipeMap,
+            );
+            return [recipe.id, totals] as const;
+          }),
+        );
+
+        // Cache the derived rollup so navigation reuses it (GC'd after gcTime).
+        queryClient.setQueryData<CostingCache>(cacheKey, {
+          ingredientMap: ingMap,
+          recipeTotalsMap,
         });
 
         if (cancelled) return;
 
-        setRecipeTotalsMap(Object.fromEntries(entries));
+        setIngredientMap(ingMap);
+        setRecipeTotalsMap(recipeTotalsMap);
       } catch (e) {
         console.error("Failed to load recipe totals:", e);
         if (!cancelled) {
