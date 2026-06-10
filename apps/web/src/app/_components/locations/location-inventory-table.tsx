@@ -2,11 +2,12 @@ import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
 import type { LocationId } from "@cubby/schemas/identifiers";
 import type { Row } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
-import { ArrowRightLeft, Trash } from "lucide-react";
+import { ArrowRightLeft, LayoutGrid, LayoutList, Trash } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { z } from "zod";
 import { Button } from "~/components/ui/button";
 import { queryKeys } from "~/lib/query-keys";
+import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import {
   createEditableAmountColumn,
@@ -17,6 +18,7 @@ import RTable from "../data-table/Table";
 import { useEntityList } from "../hooks/useEntityList";
 import { useUpdateMutation } from "../hooks/useUpdateMutation";
 import { DeleteInventoryDialog } from "../inventory/delete-inventory-dialog";
+import { InventoryShelf } from "../inventory/inventory-shelf";
 import { MoveInventoryDialog } from "../inventory/move-inventory-dialog";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
@@ -35,6 +37,9 @@ export function LocationInventoryTable({
     entity: "inventory",
     invalidateKeys: [queryKeys.inventory.list],
   });
+
+  // Browse as a photo "shelf" by default; the editable table is one toggle away.
+  const [view, setView] = useState<"shelf" | "table">("shelf");
 
   // Dialog states for bulk actions
   const [dialogState, setDialogState] = useState<{
@@ -144,15 +149,50 @@ export function LocationInventoryTable({
     bulkActions,
   });
 
+  const items = table.getRowModel().rows.map((r) => r.original);
+
   return (
     <>
-      <RTable
-        table={table}
-        isLoading={isLoading}
-        error={error}
-        entity="inventory"
-        bulkActionBar={bulkActionBar}
-      />
+      <div className="mb-3 flex items-center justify-end gap-1">
+        <Button
+          variant={view === "shelf" ? "secondary" : "ghost"}
+          size="sm"
+          className={cn(
+            "h-7 gap-1 text-xs",
+            view !== "shelf" && "text-muted-foreground",
+          )}
+          onClick={() => setView("shelf")}
+          aria-pressed={view === "shelf"}
+        >
+          <LayoutGrid className="h-3.5 w-3.5" />
+          Shelf
+        </Button>
+        <Button
+          variant={view === "table" ? "secondary" : "ghost"}
+          size="sm"
+          className={cn(
+            "h-7 gap-1 text-xs",
+            view !== "table" && "text-muted-foreground",
+          )}
+          onClick={() => setView("table")}
+          aria-pressed={view === "table"}
+        >
+          <LayoutList className="h-3.5 w-3.5" />
+          Table
+        </Button>
+      </div>
+
+      {view === "shelf" ? (
+        <InventoryShelf items={items} isLoading={isLoading} error={error} />
+      ) : (
+        <RTable
+          table={table}
+          isLoading={isLoading}
+          error={error}
+          entity="inventory"
+          bulkActionBar={bulkActionBar}
+        />
+      )}
 
       {/* Move dialog */}
       <MoveInventoryDialog
