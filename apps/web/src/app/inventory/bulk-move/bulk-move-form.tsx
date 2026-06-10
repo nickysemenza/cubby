@@ -246,6 +246,12 @@ export default function BulkMoveForm() {
           ? "Moving..."
           : `Move ${selectedItems.length} Item${selectedItems.length !== 1 ? "s" : ""}`
       }
+      stickyFooter
+      footerStart={
+        <span className="truncate font-mono text-2xs text-muted-foreground uppercase tabular-nums">
+          {selectedItems.length} selected
+        </span>
+      }
     >
       {/* Location selectors */}
       <div className="mb-4 flex items-end gap-3">

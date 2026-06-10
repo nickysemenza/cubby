@@ -20,6 +20,7 @@ import {
   requiredLocationField,
   requiredProductField,
 } from "~/app/_components/form-fields";
+import { Card, CardContent } from "~/components/ui/card";
 import {
   ComboboxFieldWithSearch,
   type CreateModeProps,
@@ -130,26 +131,30 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
       onCancel={onCancel}
       submitButtonText={buttonText}
     >
-      <SideBySideFields>
-        <ComboboxFieldWithSearch
-          form={form}
-          name="product"
-          label="Product"
-          searchType="product"
-        />
-        <ComboboxFieldWithSearch
-          form={form}
-          name="location"
-          label="Location"
-          searchType="location"
-        />
-      </SideBySideFields>
+      <Card emphasis="chunky">
+        <CardContent className="space-y-2 px-4 py-1">
+          <SideBySideFields>
+            <ComboboxFieldWithSearch
+              form={form}
+              name="product"
+              label="Product"
+              searchType="product"
+            />
+            <ComboboxFieldWithSearch
+              form={form}
+              name="location"
+              label="Location"
+              searchType="location"
+            />
+          </SideBySideFields>
 
-      <AmountFieldGroup
-        form={form}
-        valuePath="amount.value"
-        unitPath="amount.unit"
-      />
+          <AmountFieldGroup
+            form={form}
+            valuePath="amount.value"
+            unitPath="amount.unit"
+          />
+        </CardContent>
+      </Card>
     </FormWrapper>
   );
 };

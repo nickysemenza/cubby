@@ -430,6 +430,12 @@ export default function QuickCaptureForm({
       error={error ?? undefined}
       isPending={isSubmitting}
       submitButtonText={getSubmitButtonText("create")}
+      stickyFooter
+      footerStart={
+        <span className="truncate font-mono text-2xs text-muted-foreground uppercase tabular-nums">
+          {fields.length} item{fields.length === 1 ? "" : "s"} ready
+        </span>
+      }
     >
       {/* Persistent Scanner Mode Toggle */}
       <Card className="mb-3">
@@ -507,9 +513,7 @@ export default function QuickCaptureForm({
       {focusedLocationId ? (
         <Card className="mb-3">
           <CardHeader className="pb-2">
-            <CardTitle className="font-medium text-sm">
-              Current Location Context
-            </CardTitle>
+            <CardTitle>Current Location Context</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {isLoadingFocusedLocation ? (
@@ -671,7 +675,7 @@ export default function QuickCaptureForm({
               className="flex w-full items-center justify-between text-left"
               onClick={() => setShowInventory(!showInventory)}
             >
-              <CardTitle className="flex items-center gap-2 font-medium text-sm">
+              <CardTitle className="flex items-center gap-2">
                 <EntityIcon entity="inventory" className="h-4 w-4" />
                 Items at {focusedItem?.location?.name ?? "this location"} (
                 {inventoryAtLocation?.meta?.totalCount ?? 0})

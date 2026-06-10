@@ -208,12 +208,12 @@ function LocationCard({
         ) : null
       }
       onClick={onLocationSelect ? () => onLocationSelect(location) : undefined}
-      className="h-full transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md"
+      className="h-full transition-all duration-150 hover:-translate-y-0.5"
       detailsHref={`/locations/${location.id}`}
     >
       {/* Valuation row */}
       {hasInventory && (
-        <div className="text-muted-foreground text-xs">
+        <div className="font-mono text-2xs text-muted-foreground tabular-nums">
           <InventoryValuationSummary
             items={inventoryItems}
             variant="compact"
@@ -247,7 +247,7 @@ function LocationCard({
 
       {/* Timestamp - subtle, at bottom */}
       {location.lastBulkInventory && (
-        <div className="flex items-center gap-1 text-muted-foreground/70 text-xs">
+        <div className="flex items-center gap-1 font-mono text-2xs text-muted-foreground/70">
           <Calendar size={12} />
           <span>
             {formatDistanceToNow(location.lastBulkInventory, {

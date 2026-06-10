@@ -14,14 +14,17 @@ import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { ndb, upc } from "@cubby/usda-schemas";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { FC } from "react";
-import { useForm } from "react-hook-form";
+import { type Control, useForm, useFormState, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { getOptionalIngredientId } from "~/app/_components/form-fields";
+import { InfoRow } from "~/components/common/info-row";
+import { InkStamp } from "~/components/ui/ink-stamp";
 import { useImageState } from "~/hooks/useImageState";
 import {
   isCanonicalPriceMapping,
   isMoneyUnit,
 } from "~/lib/price-mapping-utils";
+import { formatCurrency } from "~/lib/utils";
 import { ComboboxItem } from "../combobox/combobox-types";
 import {
   buildUpdateObject,
@@ -73,6 +76,68 @@ const productFormSchema = z
   }));
 
 type ProductFormValues = z.infer<typeof productFormSchema>;
+
+// Live tally for the sticky footer. dirtyFields (not isDirty) — registering
+// nullable inputs materializes their objects and trips isDirty on load.
+const ProductTally: FC<{ control: Control<ProductFormValues> }> = ({
+  control,
+}) => {
+  const mappings = useWatch({ control, name: "unitMappings" });
+  const externalIds = useWatch({ control, name: "externalIds" });
+  const { dirtyFields } = useFormState({ control });
+  const isDirty = Object.keys(dirtyFields).length > 0;
+
+  return (
+    <div className="flex min-w-0 items-center gap-2.5 font-mono text-2xs text-muted-foreground uppercase">
+      <span className="truncate tabular-nums">
+        {mappings?.length ?? 0} conversions · {externalIds?.length ?? 0}{" "}
+        external IDs
+      </span>
+      {isDirty && <InkStamp tone="red">Unsaved</InkStamp>}
+    </div>
+  );
+};
+
+// Live fact-sheet preview: the product detail page's ledger rows, built from
+// form state as you type. Display-only; renders partial drafts defensively.
+const ProductLivePreview: FC<{ control: Control<ProductFormValues> }> = ({
+  control,
+}) => {
+  const v = useWatch({ control }) as Partial<ProductFormValues>;
+
+  return (
+    <div>
+      <h3 className="my-0 break-words font-bold font-heading text-lg tracking-tight">
+        {v.name?.trim() || "Untitled product"}
+      </h3>
+      <div className="mt-2 divide-y divide-dashed divide-border">
+        <InfoRow label="Manufacturer">{v.manufacturer || undefined}</InfoRow>
+        <InfoRow label="Category">{v.category ?? undefined}</InfoRow>
+        <InfoRow label="Price">
+          {v.price != null ? (
+            <span className="font-mono tabular-nums">
+              {formatCurrency(v.price)}
+            </span>
+          ) : undefined}
+        </InfoRow>
+        <InfoRow label="UPC">
+          {v.upc ? <span className="font-mono">{v.upc}</span> : undefined}
+        </InfoRow>
+        <InfoRow label="NDB">
+          {v.ndb_number ? (
+            <span className="font-mono">{v.ndb_number}</span>
+          ) : undefined}
+        </InfoRow>
+        <InfoRow label="Ingredient">{v.ingredient?.name || undefined}</InfoRow>
+        <InfoRow label="Conversions">
+          <span className="font-mono tabular-nums">
+            {v.unitMappings?.length ?? 0}
+          </span>
+        </InfoRow>
+      </div>
+    </div>
+  );
+};
 
 // Props for create mode
 interface CreateProductFormProps extends CreateModeProps<ProductCreateInput> {
@@ -239,15 +304,31 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
       isPending={isPending}
       onCancel={onCancel}
       submitButtonText={buttonText}
+      stickyFooter
+      footerStart={<ProductTally control={form.control} />}
     >
-      <ProductFormFields
-        form={form}
-        imageHandlers={imageState}
-        existingImages={
-          mode === "edit" && product?.images ? product.images : []
-        }
-        pendingImages={imageState.pendingImages}
-      />
+      <div className="gap-6 xl:grid xl:grid-cols-[minmax(0,1fr)_340px] xl:items-start">
+        <div className="space-y-3">
+          <ProductFormFields
+            form={form}
+            imageHandlers={imageState}
+            existingImages={
+              mode === "edit" && product?.images ? product.images : []
+            }
+            pendingImages={imageState.pendingImages}
+          />
+        </div>
+
+        {/* Live fact-sheet — the detail page builds as you type */}
+        <aside className="hidden xl:sticky xl:top-20 xl:block">
+          <div className="max-h-[75vh] overflow-y-auto rounded-lg border-2 border-[var(--border-chunky)] bg-card p-4 shadow-[var(--shadow-chunky)]">
+            <p className="mb-3 font-mono text-2xs text-eyebrow uppercase tracking-wider">
+              Live preview
+            </p>
+            <ProductLivePreview control={form.control} />
+          </div>
+        </aside>
+      </div>
     </FormWrapper>
   );
 };

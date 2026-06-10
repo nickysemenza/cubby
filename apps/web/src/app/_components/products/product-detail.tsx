@@ -3,9 +3,15 @@ import { Apple, Info } from "lucide-react";
 import type { FC } from "react";
 import { MutedBox } from "~/components/layout/muted-box";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
+import { formatCurrency } from "~/lib/utils";
+import { dedupe } from "~/misc/array-helpers";
 import type { ProductWithFoodOut } from "~/server/services/product.service";
 import { useTRPC } from "~/trpc/react";
-import { DetailPage, type DetailSection } from "../data-table/detail-page";
+import {
+  type DetailHeroStat,
+  DetailPage,
+  type DetailSection,
+} from "../data-table/detail-page";
 import { useEntityDetail } from "../hooks/useEntityDetail";
 import { NutritionInfoTable } from "../usda/nutrition";
 import { ProductBasicInfo } from "./product-basic-info";
@@ -63,6 +69,16 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
     ...commonSections,
   ];
 
+  const entries = product.inventoryEntry ?? [];
+  const locationCount = dedupe(entries.map((e) => e.location.id)).length;
+  const heroStats: DetailHeroStat[] = [
+    { label: "On hand", value: entries.length },
+    { label: "Locations", value: locationCount },
+    ...(product.price != null
+      ? [{ label: "Price", value: formatCurrency(product.price) }]
+      : []),
+  ];
+
   return (
     <DetailPage
       sections={sections}
@@ -70,6 +86,13 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       name={product.name}
       rawData={product}
       heroImages={product.images}
+      heroNo={product.shortcode ?? undefined}
+      heroStamp={
+        entries.length > 0
+          ? { label: "In stock", tone: "green" }
+          : { label: "Not stocked", tone: "ink" }
+      }
+      heroStats={heroStats}
     />
   );
 };

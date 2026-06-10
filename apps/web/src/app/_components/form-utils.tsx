@@ -73,6 +73,8 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
   submitButtonText,
   submitButtonVariant = "default",
   children,
+  stickyFooter = false,
+  footerStart,
 }: {
   form: UseFormReturn<TFieldValues>;
   onSubmit: (values: TFieldValues) => void;
@@ -82,6 +84,10 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
   submitButtonText: string;
   submitButtonVariant?: VariantProps<typeof buttonVariants>["variant"];
   children: ReactNode;
+  /** Float the actions in a chunky bar that stays in reach on long forms. */
+  stickyFooter?: boolean;
+  /** Left slot of the sticky bar (e.g. a live tally). Sticky mode only. */
+  footerStart?: ReactNode;
 }) {
   return (
     <FormProvider {...form}>
@@ -114,28 +120,47 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
         {error && <div className="text-destructive text-sm">{error}</div>}
 
         {/* flex-col-reverse: primary submit sits at the bottom (thumb reach)
-            on mobile, full-width; reverts to submit-left/cancel-right on sm+. */}
-        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <Button
-            type="submit"
-            disabled={isPending}
-            variant={submitButtonVariant}
-            className="w-full max-sm:h-11 sm:w-auto"
+            on mobile, full-width; reverts to submit-left/cancel-right on sm+.
+            Sticky mode floats the actions in a chunky ledger bar that stays in
+            reach on long forms (offset above the mobile bottom nav). */}
+        <div
+          className={cn(
+            stickyFooter
+              ? "sticky bottom-20 z-20 flex items-center gap-3 rounded-lg border-2 border-[var(--border-chunky)] bg-card px-3 py-2 shadow-[var(--shadow-chunky)] md:bottom-4"
+              : "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
+          )}
+        >
+          {stickyFooter && footerStart && (
+            <div className="min-w-0 flex-1">{footerStart}</div>
+          )}
+          <div
+            className={cn(
+              stickyFooter
+                ? "flex shrink-0 flex-row-reverse items-center gap-2"
+                : "contents",
+            )}
           >
-            {isPending && <Spinner size="sm" />}
-            {isPending
-              ? getPendingButtonText(submitButtonText)
-              : submitButtonText}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onCancel}
-            disabled={isPending}
-            className="w-full max-sm:h-11 sm:w-auto"
-          >
-            Cancel
-          </Button>
+            <Button
+              type="submit"
+              disabled={isPending}
+              variant={submitButtonVariant}
+              className={cn(!stickyFooter && "w-full max-sm:h-11 sm:w-auto")}
+            >
+              {isPending && <Spinner size="sm" />}
+              {isPending
+                ? getPendingButtonText(submitButtonText)
+                : submitButtonText}
+            </Button>
+            <Button
+              type="button"
+              variant={stickyFooter ? "ghost" : "outline"}
+              onClick={onCancel}
+              disabled={isPending}
+              className={cn(!stickyFooter && "w-full max-sm:h-11 sm:w-auto")}
+            >
+              Cancel
+            </Button>
+          </div>
         </div>
       </form>
     </FormProvider>

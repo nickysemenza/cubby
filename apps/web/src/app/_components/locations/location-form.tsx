@@ -12,6 +12,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { buildLocationComboboxItem } from "~/app/_components/combobox/combobox-builders";
 import { getOptionalLocationId } from "~/app/_components/form-fields";
+import { Card, CardContent } from "~/components/ui/card";
 import { useImageState } from "~/hooks/useImageState";
 import { ComboboxItem } from "../combobox/combobox-types";
 import {
@@ -149,24 +150,28 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
       onCancel={onCancel}
       submitButtonText={buttonText}
     >
-      <SideBySideFields>
-        <UnifiedTextField
-          form={form}
-          name="name"
-          label="Name"
-          placeholder="Enter location name"
-          nullable={false}
-        />
+      <Card emphasis="chunky">
+        <CardContent className="space-y-2 px-4 py-1">
+          <SideBySideFields>
+            <UnifiedTextField
+              form={form}
+              name="name"
+              label="Name"
+              placeholder="Enter location name"
+              nullable={false}
+            />
 
-        <TypeFieldWithAI form={form} name="type" locationName={nameValue} />
-      </SideBySideFields>
+            <TypeFieldWithAI form={form} name="type" locationName={nameValue} />
+          </SideBySideFields>
 
-      <ComboboxFieldWithSearch
-        form={form}
-        name="parent"
-        label="Parent Location (Optional)"
-        searchType="location"
-      />
+          <ComboboxFieldWithSearch
+            form={form}
+            name="parent"
+            label="Parent Location (Optional)"
+            searchType="location"
+          />
+        </CardContent>
+      </Card>
 
       {/* Show image upload in both create and edit modes */}
       <PendingImageUpload

@@ -8,6 +8,7 @@ import { type ReactNode, useState } from "react";
 import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
 import { ArrayFieldManager } from "~/components/forms/array-field-manager";
 import { Button } from "~/components/ui/button";
+import { Card, CardContent } from "~/components/ui/card";
 import { Image } from "~/components/ui/image";
 import { Spinner } from "~/components/ui/spinner";
 import type { useImageState } from "~/hooks/useImageState";
@@ -29,21 +30,32 @@ const EMPTY_PENDING_IMAGES: PendingImage[] = [];
 /**
  * Visual grouping for the product form. In `compact` mode (QuickInventoryAdd) it
  * renders children flat — the compact card is already small. In the full form it
- * adds a small section header so the long field list reads as labeled groups.
+ * adds a ledger eyebrow header, or — for the vitals group — a chunky spec plate
+ * (`plate`), so the long field list reads as the entity's placard + sections.
  */
 function FormSection({
   title,
   compact,
+  plate,
   children,
 }: {
   title: string;
   compact?: boolean;
+  /** Render as the chunky spec-plate card (no header) instead of a section. */
+  plate?: boolean;
   children: ReactNode;
 }) {
   if (compact) return <>{children}</>;
+  if (plate) {
+    return (
+      <Card emphasis="chunky">
+        <CardContent className="space-y-2 px-4 py-1">{children}</CardContent>
+      </Card>
+    );
+  }
   return (
     <section className="space-y-2">
-      <h4 className="font-semibold text-muted-foreground text-xs uppercase tracking-wide">
+      <h4 className="my-0 font-medium font-mono text-2xs text-eyebrow uppercase tracking-wider">
         {title}
       </h4>
       {children}
@@ -215,7 +227,7 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
 
   const content = (
     <>
-      <FormSection title="Product details" compact={compact}>
+      <FormSection title="Product details" compact={compact} plate>
         {!hideNameField && (
           <SideBySideFields>
             <UnifiedTextField
@@ -347,14 +359,16 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
             <ComboboxFieldWithSearch
               form={form}
               name={"ingredient" as Path<TFieldValues>}
-              label="Ingredient"
+              label="Linked ingredient"
               searchType="ingredient"
             />
           </FormSection>
         </>
       )}
 
-      <FormSection title="Images" compact={compact}>
+      {/* PendingImageUpload carries its own "Upload images" label, so no
+          FormSection header — avoids an IMAGES/UPLOAD IMAGES double. */}
+      <div className="space-y-2">
         <PendingImageUpload
           entityType="PRODUCT"
           onImagesChange={imageHandlers.handlePendingImagesChange}
@@ -365,7 +379,7 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
         {pendingImages.length > 0 && (
           <IdentifyProductButton form={form} pendingImages={pendingImages} />
         )}
-      </FormSection>
+      </div>
 
       {!isMisc && (
         <ArrayFieldManager<UnitMappingInput, TFieldValues>

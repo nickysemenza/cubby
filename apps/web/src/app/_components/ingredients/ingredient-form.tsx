@@ -8,6 +8,7 @@ import type { FC } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 import { ArrayFieldManager } from "~/components/forms/array-field-manager";
+import { Card, CardContent } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import {
   buildUpdateObject,
@@ -106,13 +107,17 @@ export const IngredientForm: FC<IngredientFormProps> = (props) => {
       onCancel={onCancel}
       submitButtonText={buttonText}
     >
-      <UnifiedTextField
-        form={form}
-        name="name"
-        label="Name"
-        placeholder="Enter ingredient name"
-        nullable={false}
-      />
+      <Card emphasis="chunky">
+        <CardContent className="px-4 py-1">
+          <UnifiedTextField
+            form={form}
+            name="name"
+            label="Name"
+            placeholder="Enter ingredient name"
+            nullable={false}
+          />
+        </CardContent>
+      </Card>
 
       <ArrayFieldManager<string, IngredientFormValues>
         form={form}

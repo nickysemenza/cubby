@@ -223,6 +223,12 @@ export default function BulkInventoryForm() {
       error={error ?? undefined}
       isPending={isSubmitting}
       submitButtonText={getSubmitButtonText("edit")}
+      stickyFooter
+      footerStart={
+        <span className="truncate font-mono text-2xs text-muted-foreground uppercase tabular-nums">
+          {fields.length} item{fields.length === 1 ? "" : "s"}
+        </span>
+      }
     >
       <div className="mb-4 max-w-md">
         <ComboboxFieldWithSearch
