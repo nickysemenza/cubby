@@ -145,12 +145,15 @@
 :root {
   /* Brand palette */
   --brand-foreground: #3a3530;
-  --brand-terracotta: #c2603d;
-  --brand-terra-light: #d98a68;
+  /* Brick-deepened terracotta: reads as a printer's spot ink, not "orange UI"
+     (2026-06-10 palette tune; was #c2603d / #d98a68) */
+  --brand-terracotta: #ae4a28;
+  --brand-terra-light: #cf7d57;
   --brand-cream: #fdfbf7;
-  /* Warm paper - a full step deeper than cream so cards visibly lift off
-     the page (sharpened from 0.972 so the 3-step elevation reads at a glance) */
-  --brand-paper: oklch(0.954 0.016 74);
+  /* Cooler paper - chroma pulled toward neutral cream so the ground stops
+     competing with the terracotta ink; still a full step deeper than cream
+     so cards visibly lift off the page (was oklch(0.954 0.016 74)) */
+  --brand-paper: oklch(0.955 0.009 90);
   --brand-shelf: #5c5550;
   --brand-sage: oklch(0.94 0.025 145);
 
@@ -400,7 +403,8 @@
       radial-gradient(at 85% 5%, var(--subtle) 0px, transparent 45%),
       radial-gradient(at 0% 30%, var(--glow) 0px, transparent 40%),
       radial-gradient(at 95% 60%, var(--plum) 0px, transparent 35%);
-    opacity: 0.1;
+    /* Quieted (was 0.1) - on the cooler paper the mesh is a whisper */
+    opacity: 0.05;
     pointer-events: none;
     z-index: -1;
   }
@@ -416,7 +420,8 @@
     position: fixed;
     inset: 0;
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
-    opacity: 0.022;
+    /* Quieted (was 0.022) - felt only on large empty fields */
+    opacity: 0.011;
     pointer-events: none;
     z-index: 9999;
     mix-blend-mode: multiply;
