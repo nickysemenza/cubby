@@ -472,6 +472,21 @@
       var(--brand-terracotta) 0%,
       var(--brand-terra-light) 100%
     );
+    /* Draw the terracotta rule in on mount — a small signature flourish under
+       every page title. The ease-cozy spring gives it a touch of overshoot.
+       The global prefers-reduced-motion guard neutralizes this automatically. */
+    transform-origin: left center;
+    animation: accent-draw 600ms var(--ease-cozy) both;
+  }
+  @keyframes accent-draw {
+    from {
+      transform: scaleX(0);
+      opacity: 0;
+    }
+    to {
+      transform: scaleX(1);
+      opacity: 1;
+    }
   }
 
   /* Stat card hover glow */
