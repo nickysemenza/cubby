@@ -7,7 +7,7 @@ import { cn } from "~/lib/utils";
 // that lifts on hover and presses into its own shadow on active. Shared by the
 // substantive button variants; ghost/link stay flat so toolbars don't get noisy.
 const chunky =
-  "border-2 border-[var(--border-chunky)] shadow-[var(--shadow-chunky-sm)] hover:shadow-[var(--shadow-chunky)] hover:-translate-x-px hover:-translate-y-px active:translate-x-0.5 active:translate-y-0.5 active:scale-[0.97] active:shadow-none";
+  "border-2 border-[var(--border-chunky)] shadow-[var(--shadow-chunky-sm)] hover:shadow-[var(--shadow-chunky)] hover:-translate-x-px hover:-translate-y-px active:translate-x-0.5 active:translate-y-0.5 active:shadow-none";
 
 const buttonVariants = cva(
   "focus-visible:border-ring focus-visible:ring-ring/30 aria-invalid:ring-destructive/20 aria-invalid:border-destructive rounded-md border border-transparent bg-clip-padding text-xs/relaxed font-mono font-medium focus-visible:ring-[2px] aria-invalid:ring-[2px] [&_svg:not([class*='size-'])]:size-4 inline-flex items-center justify-center whitespace-nowrap transition-all duration-150 ease-cozy disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none shrink-0 [&_svg]:shrink-0 outline-none group/button select-none",
