@@ -36,26 +36,31 @@ export const EntityHero: FC<EntityHeroProps> = ({ images }) => {
       )}
       style={{ animationFillMode: "both" }}
     >
-      <CardHeader className="pb-3">
+      <CardHeader rule className="pb-3">
         <div className="flex items-center gap-2">
           <ImageIcon className="h-3.5 w-3.5 text-eyebrow" />
           <CardTitle>Images</CardTitle>
         </div>
       </CardHeader>
       <CardContent className="space-y-2">
-        {/* Primary image */}
+        {/* Primary image, set as a textbook figure: hairline mat + caption */}
         <Link
           to="/images/$id"
           params={{ id: activeImage.id }}
           className="group block"
         >
-          <div className="relative aspect-video overflow-hidden rounded-md">
-            <Image
-              src={activeImage.url}
-              alt={activeImage.filename}
-              className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-            />
-          </div>
+          <figure className="my-0 rounded-sm border border-border p-1.5">
+            <div className="relative aspect-video overflow-hidden">
+              <Image
+                src={activeImage.url}
+                alt={activeImage.filename}
+                className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+              />
+            </div>
+            <figcaption className="pt-1.5 font-mono text-2xs text-eyebrow uppercase tracking-wider">
+              Fig. {String(activeIndex + 1).padStart(2, "0")} / {images.length}
+            </figcaption>
+          </figure>
         </Link>
 
         {/* Thumbnail strip for multiple images */}

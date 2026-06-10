@@ -25,9 +25,7 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
 
   // Meta row (ingredient/step counts, source) — shared between layouts.
   const metaInfo = (
-    <div
-      className={`flex flex-wrap items-center gap-4 font-mono text-2xs ${hasImage ? "text-white/90" : "text-muted-foreground"}`}
-    >
+    <div className="flex flex-wrap items-center gap-4 font-mono text-2xs text-muted-foreground">
       <div className="flex items-center gap-1.5">
         <Users size={12} />
         <span>{totalIngredients} ingredients</span>
@@ -76,26 +74,22 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
     );
   }
 
+  // Textbook figure: hairline mat, the photo, and a mono caption. The recipe
+  // title lives in the page header, so the photo doesn't repeat it as an
+  // overlay — the caption names the figure instead.
   return (
-    <div className="relative h-64 overflow-hidden rounded-xl sm:h-80 md:h-96">
+    <figure className="my-0 rounded-sm border border-border bg-card p-2">
       <Image
         src={heroImage.url}
         alt={recipe.name}
-        className="absolute inset-0 h-full w-full object-cover"
+        className="h-64 w-full object-cover sm:h-80 md:h-96"
       />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{ boxShadow: "inset 0 0 120px 40px rgba(0,0,0,0.4)" }}
-      />
-
-      {/* Content */}
-      <div className="relative z-10 flex h-full flex-col justify-end p-6 sm:p-8">
-        <h2 className="font-bold text-3xl text-white tracking-tight drop-shadow-[0_2px_12px_rgba(0,0,0,0.5)] sm:text-4xl md:text-5xl">
-          {recipe.name}
-        </h2>
-        <div className="mt-4">{metaInfo}</div>
-      </div>
-    </div>
+      <figcaption className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-1 pt-2">
+        <span className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
+          Fig. 01 — {recipe.name}
+        </span>
+        {metaInfo}
+      </figcaption>
+    </figure>
   );
 }

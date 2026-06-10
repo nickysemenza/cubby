@@ -93,7 +93,7 @@ export function ImageGallery({ images, className }: ImageGalleryProps) {
 
       {/* Pagination dots */}
       {images.length > 1 && (
-        <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1.5">
+        <div className="absolute bottom-8 left-1/2 flex -translate-x-1/2 gap-1.5">
           {images.map((image, index) => (
             <button
               key={image.id}
@@ -108,6 +108,11 @@ export function ImageGallery({ images, className }: ImageGalleryProps) {
           ))}
         </div>
       )}
+
+      {/* Figure caption — the gallery reads as a numbered plate */}
+      <div className="border-border border-b bg-card px-4 py-1.5 font-mono text-2xs text-eyebrow uppercase tracking-wider">
+        Fig. {String(activeIndex + 1).padStart(2, "0")} / {images.length}
+      </div>
     </div>
   );
 }
