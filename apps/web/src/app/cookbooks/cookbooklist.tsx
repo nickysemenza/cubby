@@ -28,37 +28,35 @@ export function CookbookList() {
   }
 
   return (
-    <ul className="my-0 ml-0 grid list-none grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    <ul className="my-0 ml-0 grid list-none grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
       {cookbooks.map(({ id, book, author, recipeCount, coverUrl }) => (
         <li key={id}>
+          {/* Matted cover + catalog card: real cover in a hairline mat when
+              we have one, plum "cloth binding" with the serif title when not */}
           <Link
             to="/cookbooks/$cookbookId"
             params={{ cookbookId: id }}
-            className="flex items-center gap-3 rounded-lg border border-border bg-card p-4 shadow-[var(--shadow-chunky-sm)] transition-all ease-cozy hover:-translate-y-0.5 hover:bg-muted/50 hover:shadow-[var(--shadow-chunky)]"
+            className="block rounded-sm border border-border bg-card p-2 transition-all ease-cozy hover:-translate-y-0.5 hover:shadow-[var(--shadow-chunky-sm)]"
           >
             {coverUrl ? (
               <Image
                 src={coverUrl}
                 alt={book}
-                className="h-14 w-10 shrink-0 rounded-md object-cover"
+                className="aspect-[3/4] w-full object-cover"
               />
             ) : (
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-plum/20 text-plum">
-                <BookOpen className="h-5 w-5" />
+              <span className="flex aspect-[3/4] w-full items-center justify-center bg-plum/15 px-3 text-center">
+                <span className="line-clamp-4 font-heading font-semibold text-plum">
+                  {book || <NoneState />}
+                </span>
               </span>
             )}
-            <span className="min-w-0 flex-1">
-              <span className="block truncate font-heading font-semibold">
-                {book || <NoneState />}
-              </span>
-              {author.length > 0 && (
-                <span className="block truncate text-muted-foreground text-sm">
-                  {author.join(", ")}
-                </span>
-              )}
-              <span className="block font-mono text-2xs text-muted-foreground uppercase tabular-nums">
-                {recipeCount} {recipeCount === 1 ? "recipe" : "recipes"}
-              </span>
+            <span className="mt-2 block truncate font-medium font-mono text-2xs text-eyebrow uppercase tracking-wider">
+              {book || "Untitled"}
+            </span>
+            <span className="block truncate font-mono text-2xs text-muted-foreground uppercase tabular-nums">
+              {author.length > 0 && `${author.join(", ")} · `}
+              {recipeCount} {recipeCount === 1 ? "recipe" : "recipes"}
             </span>
           </Link>
         </li>

@@ -87,27 +87,33 @@ function CookbookDetailPage() {
     <PageWrapper fullWidth>
       <div className="flex items-start gap-4">
         {coverUrl && (
-          <Image
-            src={coverUrl}
-            alt={name}
-            className="h-24 w-16 shrink-0 rounded-md object-cover ring-1 ring-foreground/10"
-          />
+          <figure className="my-0 shrink-0 rounded-sm border border-border bg-card p-1.5">
+            <Image
+              src={coverUrl}
+              alt={name}
+              className="h-24 w-16 object-cover"
+            />
+          </figure>
         )}
         <div className="min-w-0 flex-1">
           <PageHero
             variant="detail"
             title={name}
+            entity="cookbook"
             eyebrow="Cookbook"
-            meta={
-              recipeCount !== undefined
+            meta={[
+              ...(cookbook && cookbook.author.length > 0
+                ? [{ label: cookbook.author.join(", ") }]
+                : []),
+              ...(recipeCount !== undefined
                 ? [
                     {
                       icon: BookOpen,
                       label: `${recipeCount} ${recipeCount === 1 ? "recipe" : "recipes"}`,
                     },
                   ]
-                : undefined
-            }
+                : []),
+            ]}
             actions={
               <div className="flex items-center gap-2">
                 {notImported > 0 && (
