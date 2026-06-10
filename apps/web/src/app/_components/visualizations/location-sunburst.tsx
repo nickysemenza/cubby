@@ -99,15 +99,26 @@ function Sunburst({ data }: SunburstProps) {
     [],
   );
 
+  // Brand sequential ramp by depth: the root ring burns deepest and each
+  // nested ring lightens toward cream. Empty locations sit out in muted.
   const getNodeColor = useCallback(
     (node: d3Hierarchy.HierarchyRectangularNode<LocationHierarchyNode>) => {
-      const isEmpty = node.data.totalCount === 0;
-      const lightness = Math.min(75, 35 + node.depth * 12);
-      const saturation = isEmpty ? 12 : 50;
-      const adjustedLightness = isEmpty ? lightness + 20 : lightness;
-      // Warm amber/terracotta gradient by depth (was cold blue hsl(220))
-      return `hsl(42, ${saturation}%, ${adjustedLightness}%)`;
+      if (node.data.totalCount === 0) return "var(--muted)";
+      const ramp = [
+        "var(--chart-seq-5)",
+        "var(--chart-seq-4)",
+        "var(--chart-seq-3)",
+        "var(--chart-seq-2)",
+        "var(--chart-seq-1)",
+      ];
+      return ramp[Math.min(node.depth - 1, ramp.length - 1)] ?? ramp[0];
     },
+    [],
+  );
+  // Deep rings need light ink; shallow rings read with the brand foreground.
+  const isDeepRing = useCallback(
+    (node: d3Hierarchy.HierarchyRectangularNode<LocationHierarchyNode>) =>
+      node.data.totalCount > 0 && node.depth <= 2,
     [],
   );
 
@@ -160,8 +171,8 @@ function Sunburst({ data }: SunburstProps) {
                 <path
                   d={arc(node)}
                   fill={getNodeColor(node)}
-                  stroke={isHovered ? "var(--primary)" : "white"}
-                  strokeWidth={isHovered ? 2 : 0.5}
+                  stroke={isHovered ? "var(--primary)" : "var(--background)"}
+                  strokeWidth={isHovered ? 2 : 1}
                   className="cursor-pointer transition-opacity hover:opacity-90"
                   onMouseEnter={() => setHoveredNode(node)}
                   onMouseLeave={() => setHoveredNode(null)}
@@ -173,12 +184,14 @@ function Sunburst({ data }: SunburstProps) {
                     transform={`rotate(${labelPos.rotation}, ${labelPos.x}, ${labelPos.y})`}
                     textAnchor="middle"
                     dominantBaseline="middle"
-                    className={`pointer-events-none font-medium text-2xs ${
+                    className="pointer-events-none font-medium text-2xs"
+                    fill={
                       node.data.totalCount === 0
-                        ? "fill-muted-foreground"
-                        : "fill-white"
-                    }`}
-                    style={{ textShadow: "0 1px 2px rgba(0,0,0,0.3)" }}
+                        ? "var(--muted-foreground)"
+                        : isDeepRing(node)
+                          ? "var(--brand-cream)"
+                          : "var(--brand-foreground)"
+                    }
                   >
                     {node.data.name.length > 12
                       ? `${node.data.name.slice(0, 10)}...`

@@ -155,7 +155,7 @@ function DonutChart({ data }: DonutChartProps) {
                       isHovered ? outerRadius + 4 : outerRadius,
                     )}
                     fill={getCategoryColor(slice.category)}
-                    stroke={isHovered ? "var(--primary)" : "white"}
+                    stroke={isHovered ? "var(--primary)" : "var(--background)"}
                     strokeWidth={isHovered ? 2 : 1}
                     className="cursor-pointer transition-all duration-150"
                     onMouseEnter={() => setHoveredSlice(slice)}
