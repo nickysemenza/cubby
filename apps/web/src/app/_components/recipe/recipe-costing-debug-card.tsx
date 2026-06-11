@@ -94,6 +94,9 @@ export const RecipeCostingDebugCard: React.FC<{ recipeId: RecipeId }> = ({
   if (!data) return null;
 
   const { persisted, computed, drift } = data as RecipeCostingExplain;
+  // When the live compute is known-degraded (USDA misses), drift against it is
+  // expected and meaningless — don't shout about it.
+  const showDrift = computed.complete && (drift.cost || drift.calories);
 
   return (
     <Card>
@@ -122,10 +125,10 @@ export const RecipeCostingDebugCard: React.FC<{ recipeId: RecipeId }> = ({
             {persisted.totalsComputedAt &&
               ` @ ${persisted.totalsComputedAt.toLocaleString()}`}
           </span>
-          <span className={drift.cost || drift.calories ? "font-medium" : ""}>
+          <span className={showDrift ? "font-medium" : ""}>
             live {formatCurrency(computed.totals.costTotal)} ·{" "}
             {Math.round(computed.totals.caloriesTotal)} kcal
-            {(drift.cost || drift.calories) && (
+            {showDrift && (
               <Badge className="ml-1" variant="destructive">
                 drift
               </Badge>
