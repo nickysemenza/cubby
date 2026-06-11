@@ -9,7 +9,6 @@ import {
   type RecipeId,
   unsafeRecipeId,
 } from "@cubby/schemas/identifiers";
-import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import {
   buildTakeSkip,
   type PaginationParams,
@@ -36,11 +35,6 @@ import {
   logAuditEntries,
   logAuditEntry,
 } from "~/server/repo/audit-log";
-import {
-  upsertCookbookRecipeFromCookbook,
-  upsertImportRecipe,
-  upsertNotionRecipeFromImport,
-} from "~/server/repo/compactrecipe";
 import {
   associatePendingImages,
   batchInsert,
@@ -194,31 +188,6 @@ export const getRecipeByShortcode = async (
 };
 
 /**
- * Insert a recipe from the URL scraper (an `ImportRecipe`), keyed on name.
- */
-export const insertImportRecipe = (
-  recipeInput: ImportRecipe,
-  db: Database,
-  actor: ActorContext,
-) => {
-  return upsertImportRecipe(recipeInput, db, actor);
-};
-
-/**
- * Insert/refresh a recipe synced from a Notion page (an `ImportRecipe` in, page
- * id as the idempotency key). The converter parses ingredient lines via WASM.
- */
-export const insertNotionRecipe = (
-  recipeInput: ImportRecipe,
-  pageId: string,
-  tags: string[] | null,
-  db: Database,
-  actor: ActorContext,
-) => {
-  return upsertNotionRecipeFromImport(recipeInput, pageId, tags, db, actor);
-};
-
-/**
  * Page ids (SourceData) of every non-deleted Notion-synced recipe — lets the
  * import preview flag which pages already exist (new vs. will-update).
  */
@@ -255,30 +224,6 @@ export const getNotionRecipesForDiff = async (
       ? [{ id: r.id, pageId: r.SourceData, recipe: full }]
       : [];
   });
-};
-
-/**
- * Insert a recipe extracted from an EPUB cookbook, scoped to its book so
- * re-imports upsert by (book, title). See {@link upsertCookbookRecipe}.
- *
- * The recipe's own `references` (recipe-epub's `resolve_references`) drive
- * sub-recipe linking: an ingredient line matching a reference whose target
- * recipe already exists in the book becomes a sub-recipe link instead of a flat
- * ingredient. Re-import after all the book's recipes exist to resolve forward
- * references.
- */
-export const insertCookbookRecipe = (
-  cookbookRecipe: ImportRecipe,
-  cookbookRef: CookbookRef,
-  db: Database,
-  actor: ActorContext,
-) => {
-  return upsertCookbookRecipeFromCookbook(
-    cookbookRecipe,
-    cookbookRef,
-    db,
-    actor,
-  );
 };
 
 /**

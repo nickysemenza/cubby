@@ -18,8 +18,8 @@ import {
   type CookbookRef,
   getCookbookRecipeTitles,
   getRecipeByID,
-  insertCookbookRecipe,
   upsertCookbookRecipe,
+  upsertCookbookRecipeFromCookbook,
   upsertRecipe,
 } from "./recipe";
 
@@ -195,7 +195,7 @@ describe("upsertCookbookRecipe", () => {
   });
 
   it("composes the headnote and tips into markdown notes", async () => {
-    const { id } = await insertCookbookRecipe(
+    const { id } = await upsertCookbookRecipeFromCookbook(
       {
         meta: {
           title: "Pancakes",
@@ -219,7 +219,7 @@ describe("upsertCookbookRecipe", () => {
   });
 
   it("re-import replaces notes from the source (like sections)", async () => {
-    const first = await insertCookbookRecipe(
+    const first = await upsertCookbookRecipeFromCookbook(
       {
         meta: { title: "Pancakes", description: "Old blurb." },
         sections: [{ ingredients: ["2 cups flour"], instructions: [] }],
@@ -229,7 +229,7 @@ describe("upsertCookbookRecipe", () => {
       db,
       TEST_ACTOR,
     );
-    const second = await insertCookbookRecipe(
+    const second = await upsertCookbookRecipeFromCookbook(
       {
         meta: { title: "Pancakes" },
         sections: [{ ingredients: ["2 cups flour"], instructions: [] }],
@@ -275,13 +275,13 @@ describe("upsertCookbookRecipe", () => {
 
   it("links a cross-recipe reference as a sub-recipe (two-pass)", async () => {
     // Pass 1: both recipes imported flat (no references resolved yet).
-    const piecrust = await insertCookbookRecipe(
+    const piecrust = await upsertCookbookRecipeFromCookbook(
       cookbook("The Only Piecrust", ["2 cups flour"]),
       bookA,
       db,
       TEST_ACTOR,
     );
-    await insertCookbookRecipe(
+    await upsertCookbookRecipeFromCookbook(
       cookbook("Apple Galette", ["1 recipe The Only Piecrust", "3 apples"]),
       bookA,
       db,
@@ -289,7 +289,7 @@ describe("upsertCookbookRecipe", () => {
     );
 
     // Pass 2: re-import the galette with its reference → links to the piecrust.
-    const galette = await insertCookbookRecipe(
+    const galette = await upsertCookbookRecipeFromCookbook(
       cookbook(
         "Apple Galette",
         ["1 recipe The Only Piecrust", "3 apples"],
@@ -312,7 +312,7 @@ describe("upsertCookbookRecipe", () => {
   it("handles the same ingredient appearing in multiple sections", async () => {
     // "almond extract" is in both sections — concurrent find-or-create used to
     // race on the unique name index and 500 (regression for Dessert Person).
-    const { id } = await insertCookbookRecipe(
+    const { id } = await upsertCookbookRecipeFromCookbook(
       {
         meta: { title: "Poppy Seed Almond Cake" },
         sections: [
@@ -351,7 +351,7 @@ describe("upsertCookbookRecipe", () => {
   });
 
   it("leaves a reference whose target isn't imported as a flat ingredient", async () => {
-    const galette = await insertCookbookRecipe(
+    const galette = await upsertCookbookRecipeFromCookbook(
       cookbook(
         "Galette",
         ["1 recipe Missing Dough"],

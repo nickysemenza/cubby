@@ -10,8 +10,8 @@ import {
   recipeSection,
   recipeSectionIngredient,
 } from "~/server/db/schema";
-import { upsertImportRecipe } from "./compactrecipe";
 import { getDb } from "./database-helpers";
+import { upsertImportRecipe } from "./import-recipe-convert";
 
 const TEST_ACTOR: ActorContext = {
   userId: unsafeUserId("test-user-id"),

@@ -14,7 +14,7 @@ import {
   upsertCookbook,
 } from "./cookbook";
 import { getDb } from "./database-helpers";
-import { insertCookbookRecipe } from "./recipe";
+import { upsertCookbookRecipeFromCookbook } from "./recipe";
 
 const TEST_ACTOR: ActorContext = {
   userId: unsafeUserId("test-user-id"),
@@ -77,7 +77,7 @@ describe("cookbook repository", () => {
       TEST_ACTOR,
     );
     const ref = { id, name: "Book A" };
-    await insertCookbookRecipe(raw[0], ref, db, TEST_ACTOR);
+    await upsertCookbookRecipeFromCookbook(raw[0], ref, db, TEST_ACTOR);
 
     const list = await listCookbooks(db);
     const entry = list.find((c) => c.id === id);
@@ -123,7 +123,12 @@ describe("cookbook repository", () => {
     const ref = { id, name: "Book A" };
 
     // Import only the first recipe (the user's selection).
-    const imported = await insertCookbookRecipe(raw[0], ref, db, TEST_ACTOR);
+    const imported = await upsertCookbookRecipeFromCookbook(
+      raw[0],
+      ref,
+      db,
+      TEST_ACTOR,
+    );
 
     const result = await reprocessCookbook(db, id, TEST_ACTOR);
 

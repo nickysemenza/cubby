@@ -4,7 +4,7 @@ import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import { buildTestDB } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "~/server/db";
-import { upsertImportRecipe } from "~/server/repo/compactrecipe";
+import { upsertImportRecipe } from "~/server/repo/import-recipe-convert";
 import { createCallerFactory, createTestTRPCContext } from "../trpc";
 import { recipeRouter } from "./recipe";
 

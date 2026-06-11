@@ -52,11 +52,11 @@ import {
   getRecipeByID,
   getRecipeByShortcode,
   getRecipesByIDs,
-  insertCookbookRecipe,
-  insertImportRecipe,
-  insertNotionRecipe,
   recipeList,
   updateRecipe,
+  upsertCookbookRecipeFromCookbook,
+  upsertImportRecipe,
+  upsertNotionRecipeFromImport,
 } from "~/server/repo/recipe";
 import { extractCookbookChunk } from "~/server/utils/cookbook-llm";
 import {
@@ -125,11 +125,11 @@ const scrape = protectedProcedure
   .input(z.url())
   .output(importRecipeSchema)
   .mutation(async ({ input }) => await scrapeToImportRecipe(input));
-const insertCompact = protectedProcedure
+const insertImport = protectedProcedure
   .input(importRecipeSchema)
   .output(z.object({ id: z.uuid() }))
   .mutation(async ({ ctx, input }) => {
-    return await insertImportRecipe(input, ctx.db, ctx.actorContext);
+    return await upsertImportRecipe(input, ctx.db, ctx.actorContext);
   });
 // Create/refresh a cookbook from a full EPUB extraction. Called once at the start
 // of an import (before any recipe insert) so the FK target exists and the raw JSON
@@ -180,7 +180,7 @@ const insertCookbook = protectedProcedure
   )
   .output(z.object({ id: z.uuid() }))
   .mutation(async ({ ctx, input }) => {
-    return await insertCookbookRecipe(
+    return await upsertCookbookRecipeFromCookbook(
       input.recipe,
       { id: input.cookbookId, name: input.book },
       ctx.db,
@@ -292,7 +292,7 @@ const importNotionRecipe = protectedProcedure
     const existed = (await getNotionRecipePageIds(ctx.db)).some(
       (id) => normalizeNotionId(id) === normalizeNotionId(input.pageId),
     );
-    const { id } = await insertNotionRecipe(
+    const { id } = await upsertNotionRecipeFromImport(
       recipe,
       input.pageId,
       row.tags,
@@ -436,7 +436,7 @@ const explainCosting = protectedProcedure
   });
 
 export const recipeRouter = createTRPCRouter({
-  insertCompact,
+  insertImport,
   upsertCookbook: upsertCookbookEndpoint,
   getCookbookSource: getCookbookSourceEndpoint,
   insertCookbook,

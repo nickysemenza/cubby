@@ -163,6 +163,16 @@ export const upsertNotionRecipeFromImport = async (
   );
 };
 
+/**
+ * Upsert a recipe extracted from an EPUB cookbook, scoped to its book so
+ * re-imports upsert by (book, title). See {@link upsertCookbookRecipe}.
+ *
+ * The recipe's own `references` (recipe-epub's `resolve_references`) drive
+ * sub-recipe linking: an ingredient line matching a reference whose target
+ * recipe already exists in the book becomes a sub-recipe link instead of a flat
+ * ingredient. Re-import after all the book's recipes exist to resolve forward
+ * references.
+ */
 export const upsertCookbookRecipeFromCookbook = async (
   cr: ImportRecipe,
   cookbookRef: CookbookRef,

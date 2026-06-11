@@ -52,7 +52,7 @@ export type RecipeImportCardProps = {
 };
 
 /** Cheap structural signature so memoized cards skip re-render unless content changed. */
-function recipeSignature(r: ImportRecipe): string {
+function recipeMemoKey(r: ImportRecipe): string {
   let ings = 0;
   let ins = 0;
   for (const s of r.sections) {
@@ -93,9 +93,9 @@ export const RecipeImportCard = memo(
     a.externalUrl === b.externalUrl &&
     (a.reasons ?? []).join("|") === (b.reasons ?? []).join("|") &&
     // onToggle is intentionally not compared: its only state-dependent capture
-    // (the recipe's identity) changes the signature too, which already triggers
+    // (the recipe's identity) changes the memo key too, which already triggers
     // a re-render with a fresh closure.
-    recipeSignature(a.recipe) === recipeSignature(b.recipe),
+    recipeMemoKey(a.recipe) === recipeMemoKey(b.recipe),
 );
 
 function RecipeImportCardImpl({

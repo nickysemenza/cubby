@@ -17,7 +17,6 @@ import type { Database } from "~/server/db";
 import { cookbook, image, recipe } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
-import { upsertCookbookRecipeFromCookbook } from "~/server/repo/compactrecipe";
 import {
   getDb,
   insertAndReturn,
@@ -25,6 +24,7 @@ import {
   updateAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { upsertCookbookRecipeFromCookbook } from "~/server/repo/import-recipe-convert";
 import { getCookbookRecipeTitles } from "~/server/repo/recipe";
 
 // Everything an import knows about a cookbook before its recipes are written: the

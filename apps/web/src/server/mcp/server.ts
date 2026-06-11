@@ -833,8 +833,8 @@ function registerTools(server: McpServer) {
     { url: z.string().url().describe("Recipe page URL") },
     withErrorHandling(async (params, extra) => {
       const caller = getCaller(extra);
-      const compact = await caller.recipe.scrape(params.url);
-      const result = await caller.recipe.insertCompact(compact);
+      const imported = await caller.recipe.scrape(params.url);
+      const result = await caller.recipe.insertImport(imported);
       return json({ id: result.id });
     }),
   );

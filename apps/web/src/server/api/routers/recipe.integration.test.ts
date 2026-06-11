@@ -454,7 +454,7 @@ describe("recipe router", () => {
     );
   });
 
-  it("should insert compact recipe", async () => {
+  it("should insert import recipe", async () => {
     // Create a test caller for the recipe router
     const createCaller = createCallerFactory(recipeRouter);
     const caller = createCaller(
@@ -464,8 +464,8 @@ describe("recipe router", () => {
     );
 
     // Create an import recipe (raw lines, parsed server-side)
-    const compactRecipeData = {
-      meta: { title: "Compact Recipe" },
+    const importRecipeData = {
+      meta: { title: "Import Recipe" },
       sections: [
         {
           instructions: ["Mix well", "Bake for 30 minutes"],
@@ -475,8 +475,8 @@ describe("recipe router", () => {
       references: [],
     };
 
-    // Insert the compact recipe
-    const insertedRecipe = await caller.insertCompact(compactRecipeData);
+    // Insert the import recipe
+    const insertedRecipe = await caller.insertImport(importRecipeData);
 
     // Verify the recipe was created
     expect(insertedRecipe.id).toBeDefined();
@@ -484,7 +484,7 @@ describe("recipe router", () => {
     // Retrieve and verify the recipe
     const retrievedRecipe = await caller.getByID({ id: insertedRecipe.id });
 
-    expect(retrievedRecipe.name).toEqual("Compact Recipe");
+    expect(retrievedRecipe.name).toEqual("Import Recipe");
     expect(retrievedRecipe.sections).toHaveLength(1);
     expect(retrievedRecipe.sections[0].instructions).toHaveLength(2);
   });

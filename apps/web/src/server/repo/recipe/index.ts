@@ -5,6 +5,12 @@
  * Import from this file for all recipe operations.
  */
 
+// ImportRecipe → RecipeCreateInput conversion + upserts
+export {
+  upsertCookbookRecipeFromCookbook,
+  upsertImportRecipe,
+  upsertNotionRecipeFromImport,
+} from "../import-recipe-convert";
 // CRUD operations
 export {
   type CookbookRef,
@@ -19,9 +25,6 @@ export {
   getRecipeByID,
   getRecipeByShortcode,
   getRecipesByIDs,
-  insertCookbookRecipe,
-  insertImportRecipe,
-  insertNotionRecipe,
   recipeList,
   updateRecipe,
   upsertCookbookRecipe,
