@@ -6,6 +6,7 @@ import { AlertTriangle } from "lucide-react";
 import { Card } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
 import { entities } from "~/entities/entities";
+import { useHydrated } from "~/hooks/useHydrated";
 import { authClient } from "~/lib/auth-client";
 import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
@@ -14,11 +15,15 @@ import { useTRPC } from "~/trpc/react";
  * Alert stat — the mockup's red "EXPIRING" block, fed by the data-problems
  * count. Red ink + red chunky frame when anything needs attention.
  */
-function ProblemsStatCard() {
+function ProblemsStatCard({ enabled }: { enabled: boolean }) {
   const api = useTRPC();
+  // `enabled` must gate this query like the sibling StatCard queries: an
+  // always-on query is idle during SSR but fetching on the client's first
+  // render, so the isLoading branch diverges and hydration mismatches.
   const { data, isLoading } = useQuery({
     ...api.problems.getProblemsCount.queryOptions(),
     staleTime: 5 * 60 * 1000,
+    enabled,
   });
   const count = data?.total ?? 0;
   const alert = count > 0;
@@ -148,7 +153,9 @@ function StatCard({ entity, count, isLoading, isError }: StatCardProps) {
 export default function EntityCount() {
   const api = useTRPC();
   const session = authClient.useSession();
-  const isAuthenticated = !!session.data?.user;
+  // Hydration gate: the session store can resolve before React hydrates, so
+  // branching on it alone makes the first client render diverge from SSR.
+  const isAuthenticated = useHydrated() && !!session.data?.user;
 
   const sort: SortParams = { orderBy: "name", direction: "asc" };
   const opts = {
@@ -197,7 +204,7 @@ export default function EntityCount() {
           isError={results[i]?.isError ?? false}
         />
       ))}
-      <ProblemsStatCard />
+      <ProblemsStatCard enabled={isAuthenticated} />
     </div>
   );
 }

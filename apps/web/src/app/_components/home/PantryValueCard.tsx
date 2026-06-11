@@ -2,6 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Wallet } from "lucide-react";
 import { useMemo } from "react";
 import { DashboardCard } from "~/components/layout/dashboard-card";
+import { useHydrated } from "~/hooks/useHydrated";
+import { authClient } from "~/lib/auth-client";
 import { formatCurrency } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import type { InventoryItem } from "../locations/calculate-inventory-valuation";
@@ -21,13 +23,19 @@ const BAR_COLORS = [
  */
 export function PantryValueCard() {
   const api = useTRPC();
-  const { data } = useQuery(
-    api.inventory.list.queryOptions({
+  const session = authClient.useSession();
+  // Hydration-gated auth (see useHydrated): keeps SSR and first client
+  // render identical, and stops the query from firing Unauthorized on the
+  // public home page.
+  const isAuthenticated = useHydrated() && !!session.data?.user;
+  const { data } = useQuery({
+    ...api.inventory.list.queryOptions({
       sort: { orderBy: "createdAt", direction: "desc" },
       pagination: { pageIndex: 0, pageSize: 1000 },
       filters: {},
     }),
-  );
+    enabled: isAuthenticated,
+  });
 
   const { total, bars } = useMemo(() => {
     const items = (data?.items ?? []) as InventoryItem[];

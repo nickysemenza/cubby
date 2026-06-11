@@ -9,6 +9,8 @@ import {
   EmptyTitle,
 } from "~/components/ui/empty";
 import { Spinner } from "~/components/ui/spinner";
+import { useHydrated } from "~/hooks/useHydrated";
+import { authClient } from "~/lib/auth-client";
 import { useTRPC } from "~/trpc/react";
 import { AuditLogEntryComponent } from "./audit-log-entry";
 
@@ -30,10 +32,16 @@ export function AuditLogList({
   variant = "default",
 }: AuditLogListProps) {
   const trpc = useTRPC();
-
+  const session = authClient.useSession();
+  // Hydration gate: the session store can resolve before React hydrates, so
+  // branching on it alone makes the first client render diverge from SSR.
+  // Gating the query on auth also stops it from firing Unauthorized when
+  // signed out (this list renders on the public home page).
+  const hydrated = useHydrated();
+  const isAuthenticated = hydrated && !!session.data?.user;
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
-    useInfiniteQuery(
-      trpc.auditLog.list.infiniteQueryOptions(
+    useInfiniteQuery({
+      ...trpc.auditLog.list.infiniteQueryOptions(
         {
           entityType,
           entityId,
@@ -43,9 +51,13 @@ export function AuditLogList({
           getNextPageParam: (lastPage) => lastPage.nextCursor,
         },
       ),
-    );
+      enabled: isAuthenticated,
+    });
 
-  if (isLoading) {
+  // Pre-hydration renders the empty state on both sides; isPending only
+  // matters after hydration, where it avoids flashing "No activity yet"
+  // while the session is still resolving for a signed-in user.
+  if (isLoading || (hydrated && session.isPending)) {
     return (
       <div className="flex items-center justify-center py-8">
         <Spinner size="md" className="text-muted-foreground" />
