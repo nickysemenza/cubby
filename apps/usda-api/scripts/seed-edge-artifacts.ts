@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { cliArgs } from "./lib/cli-args.js";
 
 interface CliOptions {
   artifactDir: string;
@@ -9,11 +10,7 @@ interface CliOptions {
 }
 
 function parseArgs(): CliOptions {
-  const args = process.argv.slice(2);
-  const getArg = (name: string) => {
-    const index = args.indexOf(name);
-    return index >= 0 ? args[index + 1] : undefined;
-  };
+  const { args, getArg } = cliArgs();
   return {
     artifactDir:
       getArg("--artifacts") ?? path.resolve("artifacts", "usda-edge", "sample"),

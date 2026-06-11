@@ -6,6 +6,13 @@ import {
 } from "@cubby/usda-schemas";
 import type { D1Database } from "@cloudflare/workers-types";
 import { toFtsQuery } from "../search/fts-query.js";
+import {
+  assertVersion,
+  indexTableName,
+  manifestKey,
+  normalizeDataType,
+  searchTableName,
+} from "./artifact-layout.js";
 import type { EdgeBindings } from "./cloudflare-types.js";
 import type {
   Counts,
@@ -14,12 +21,8 @@ import type {
   USDADataSource,
 } from "./types.js";
 
-const VERSION_RE = /^v[0-9A-Za-z_]+$/;
 const MAX_SQL_VARIABLES = 100;
 const DEFAULT_CONCURRENCY = 16;
-const DATA_TYPE_ALIASES: Record<string, string> = {
-  market_acquistion: "market_acquisition",
-};
 
 interface FoodIndexRow {
   fdc_id: number;
@@ -47,13 +50,11 @@ let activeVersionCache:
   | undefined;
 
 function sanitizeVersion(version: string): VersionTables {
-  if (!VERSION_RE.test(version)) {
-    throw new Error(`Invalid USDA edge dataset version: ${version}`);
-  }
+  assertVersion(version);
   return {
     version,
-    foodIndex: `food_index_${version}`,
-    foodSearch: `food_search_${version}`,
+    foodIndex: indexTableName(version),
+    foodSearch: searchTableName(version),
   };
 }
 
@@ -76,6 +77,7 @@ async function getActiveVersion(db: D1Database): Promise<VersionTables> {
         return sanitizeVersion(row.value);
       })
       .catch((error) => {
+        // Drop the entry so a transient failure isn't cached for the full TTL.
         activeVersionCache = undefined;
         throw error;
       }),
@@ -95,18 +97,13 @@ function sqlOrderBy(orderBy: ListFoodsArgs["orderBy"]): string {
   }
 }
 
-function sqlIndexOrderBy(orderBy: ListFoodsArgs["orderBy"]): string {
-  return `i.${sqlOrderBy(orderBy)}`;
-}
-
 function sqlDirection(direction: ListFoodsArgs["direction"]): string {
   return direction === "desc" ? "DESC" : "ASC";
 }
 
-function normalizeDataType(dataType: string): string {
-  return DATA_TYPE_ALIASES[dataType] ?? dataType;
-}
-
+// The seeded v20260611 artifacts predate build-time normalization and still
+// contain the `market_acquistion` typo in R2 bundles, so this must run at
+// read time until a re-seeded version is activated.
 function normalizeFoodSummaryPayload(payload: unknown): unknown {
   if (
     payload &&
@@ -237,10 +234,10 @@ export function createEdgeUsdaDataSource(
   return {
     async getCounts() {
       const tables = await getActiveVersion(env.DB);
-      const manifestKey = `usda/${tables.version}/manifest.json`;
-      const object = await env.USDA_BUNDLES.get(manifestKey);
+      const key = manifestKey(tables.version);
+      const object = await env.USDA_BUNDLES.get(key);
       if (!object) {
-        throw new Error(`Missing USDA edge manifest: ${manifestKey}`);
+        throw new Error(`Missing USDA edge manifest: ${key}`);
       }
       const manifest = JSON.parse(await object.text()) as Manifest;
       return countsSchema.parse(manifest.counts);
@@ -291,12 +288,11 @@ export function createEdgeUsdaDataSource(
       for (const row of rows) {
         if (row) uniqueRows.set(row.fdc_id, row);
       }
-      const hydrated = await hydrateRows([...uniqueRows.values()]);
-      const hydratedById = new Map<number, FoodSummary | null>();
-      hydrated.forEach((food, i) => {
-        const row = [...uniqueRows.values()][i]!;
-        hydratedById.set(row.fdc_id, food);
-      });
+      const uniqueRowList = [...uniqueRows.values()];
+      const hydrated = await hydrateRows(uniqueRowList);
+      const hydratedById = new Map<number, FoodSummary | null>(
+        uniqueRowList.map((row, i) => [row.fdc_id, hydrated[i] ?? null]),
+      );
 
       return rows.map((row) =>
         row ? (hydratedById.get(row.fdc_id) ?? null) : null,
@@ -313,52 +309,46 @@ export function createEdgeUsdaDataSource(
     }) {
       const tables = await getActiveVersion(env.DB);
       const offset = pageIndex * pageSize;
-      let rows: FoodIndexRow[];
-      let totalCount: number;
+      let dataFrom: string;
+      let countFrom: string;
+      let where: string;
+      let values: string[];
 
       if (nameFilter && nameFilter.trim().length > 0) {
-        const ftsQuery = toFtsQuery(nameFilter);
-        const where = dataTypeFilter
+        dataFrom = `${tables.foodSearch}
+             INNER JOIN ${tables.foodIndex} i
+               ON i.fdc_id = ${tables.foodSearch}.fdc_id`;
+        countFrom = tables.foodSearch;
+        where = dataTypeFilter
           ? `WHERE ${tables.foodSearch} MATCH ? AND ${tables.foodSearch}.data_type = ?`
           : `WHERE ${tables.foodSearch} MATCH ?`;
-        const values = dataTypeFilter ? [ftsQuery, dataTypeFilter] : [ftsQuery];
-
-        const result = await env.DB.prepare(
-          `SELECT i.*
-             FROM ${tables.foodSearch}
-             INNER JOIN ${tables.foodIndex} i
-               ON i.fdc_id = ${tables.foodSearch}.fdc_id
-             ${where}
-             ORDER BY ${sqlIndexOrderBy(orderBy)} ${sqlDirection(direction)}
-             LIMIT ? OFFSET ?`,
-        )
-          .bind(...values, pageSize, offset)
-          .all<FoodIndexRow>();
-        rows = rowsFromResult(result);
-
-        const countRow = await env.DB.prepare(
-          `SELECT count(*) as count FROM ${tables.foodSearch} ${where}`,
-        )
-          .bind(...values)
-          .first<{ count: number }>();
-        totalCount = countRow?.count ?? 0;
+        values = dataTypeFilter
+          ? [toFtsQuery(nameFilter), dataTypeFilter]
+          : [toFtsQuery(nameFilter)];
       } else {
-        const where = dataTypeFilter ? "WHERE data_type = ?" : "";
-        const values = dataTypeFilter ? [dataTypeFilter] : [];
-        const result = await env.DB.prepare(
-          `SELECT * FROM ${tables.foodIndex} ${where} ORDER BY ${sqlOrderBy(orderBy)} ${sqlDirection(direction)} LIMIT ? OFFSET ?`,
-        )
-          .bind(...values, pageSize, offset)
-          .all<FoodIndexRow>();
-        rows = rowsFromResult(result);
-
-        const countRow = await env.DB.prepare(
-          `SELECT count(*) as count FROM ${tables.foodIndex} ${where}`,
-        )
-          .bind(...values)
-          .first<{ count: number }>();
-        totalCount = countRow?.count ?? 0;
+        dataFrom = `${tables.foodIndex} i`;
+        countFrom = `${tables.foodIndex} i`;
+        where = dataTypeFilter ? "WHERE i.data_type = ?" : "";
+        values = dataTypeFilter ? [dataTypeFilter] : [];
       }
+
+      const result = await env.DB.prepare(
+        `SELECT i.*
+           FROM ${dataFrom}
+           ${where}
+           ORDER BY i.${sqlOrderBy(orderBy)} ${sqlDirection(direction)}
+           LIMIT ? OFFSET ?`,
+      )
+        .bind(...values, pageSize, offset)
+        .all<FoodIndexRow>();
+      const rows = rowsFromResult(result);
+
+      const countRow = await env.DB.prepare(
+        `SELECT count(*) as count FROM ${countFrom} ${where}`,
+      )
+        .bind(...values)
+        .first<{ count: number }>();
+      const totalCount = countRow?.count ?? 0;
 
       const data = (await hydrateRows(rows)).filter(
         (food): food is FoodSummary => food !== null,

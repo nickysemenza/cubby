@@ -2,6 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { createReadStream } from "node:fs";
 import { createInterface } from "node:readline/promises";
+import { manifestKey } from "../src/data/artifact-layout.js";
+import { cliArgs } from "./lib/cli-args.js";
 
 interface PointerRow {
   fdc_id: number;
@@ -22,11 +24,7 @@ interface CliOptions {
 }
 
 function parseArgs(): CliOptions {
-  const args = process.argv.slice(2);
-  const getArg = (name: string) => {
-    const index = args.indexOf(name);
-    return index >= 0 ? args[index + 1] : undefined;
-  };
+  const { getArg } = cliArgs();
   const limit = getArg("--limit");
   return {
     artifactDir:
@@ -50,8 +48,17 @@ async function main() {
   const options = parseArgs();
   const pointersPath = path.join(options.artifactDir, "pointers.ndjson");
   const r2Root = path.join(options.artifactDir, "r2");
+  const usdaDir = path.join(r2Root, "usda");
+  const versions = (await fs.readdir(usdaDir, { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name);
+  if (versions.length !== 1) {
+    throw new Error(
+      `Expected exactly one version under ${usdaDir}, found: ${versions.join(", ") || "none"}`,
+    );
+  }
   const manifest = JSON.parse(
-    await fs.readFile(path.join(r2Root, "manifest.json"), "utf8"),
+    await fs.readFile(path.join(r2Root, manifestKey(versions[0]!)), "utf8"),
   ) as Manifest;
   const pointers = createInterface({
     input: createReadStream(pointersPath),

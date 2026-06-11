@@ -4,11 +4,17 @@ import { once } from "node:events";
 import BetterSqlite3 from "better-sqlite3";
 import type { Database } from "better-sqlite3";
 import { TIER1_CODES } from "@cubby/usda-schemas";
+import {
+  assertVersion,
+  bundleKey,
+  bundlePrefix,
+  indexTableName,
+  normalizeDataType,
+  searchTableName,
+} from "../src/data/artifact-layout.js";
+import { cliArgs } from "./lib/cli-args.js";
 
 const D1_INSERT_BATCH_SIZE = 50;
-const DATA_TYPE_ALIASES: Record<string, string> = {
-  market_acquistion: "market_acquisition",
-};
 
 interface FoodRow {
   fdc_id: number;
@@ -76,12 +82,7 @@ class GroupedIterator<T extends { fdc_id: number }> {
 }
 
 function parseArgs(): CliOptions {
-  const args = process.argv.slice(2);
-  const getArg = (name: string) => {
-    const index = args.indexOf(name);
-    return index >= 0 ? args[index + 1] : undefined;
-  };
-
+  const { getArg } = cliArgs();
   const today = new Date().toISOString().slice(0, 10).replaceAll("-", "");
   const bundleSizeMb = Number(getArg("--bundle-size-mb") ?? "128");
   const limit = getArg("--limit");
@@ -99,21 +100,11 @@ function parseArgs(): CliOptions {
   };
 }
 
-function assertVersion(version: string) {
-  if (!/^v[0-9A-Za-z_]+$/.test(version)) {
-    throw new Error(`Invalid version "${version}". Use vYYYYMMDD-style names.`);
-  }
-}
-
 function sqlString(value: string | number | null): string {
   if (value === null || value === undefined) return "NULL";
   if (typeof value === "number")
     return Number.isFinite(value) ? String(value) : "NULL";
   return `'${value.replaceAll("'", "''")}'`;
-}
-
-function normalizeDataType(dataType: string): string {
-  return DATA_TYPE_ALIASES[dataType] ?? dataType;
 }
 
 async function write(
@@ -200,8 +191,8 @@ function makeFoodSummary(
 }
 
 function createSchemaSql(version: string) {
-  const indexTable = `food_index_${version}`;
-  const searchTable = `food_search_${version}`;
+  const indexTable = indexTableName(version);
+  const searchTable = searchTableName(version);
 
   return `CREATE TABLE IF NOT EXISTS usda_edge_meta (
   key TEXT PRIMARY KEY NOT NULL,
@@ -240,7 +231,7 @@ CREATE VIRTUAL TABLE ${searchTable} USING fts5(
 }
 
 function createFinalizeSql(version: string) {
-  const searchTable = `food_search_${version}`;
+  const searchTable = searchTableName(version);
   return `INSERT INTO ${searchTable}(${searchTable}) VALUES('optimize');
 SELECT '${version}' as finalized_version;
 `;
@@ -267,8 +258,8 @@ async function main() {
   db.pragma("query_only = ON");
 
   const counts = tableCounts(db);
-  const indexTable = `food_index_${options.version}`;
-  const searchTable = `food_search_${options.version}`;
+  const indexTable = indexTableName(options.version);
+  const searchTable = searchTableName(options.version);
   const schemaSqlPath = path.join(d1Dir, "001_schema.sql");
   const dataSqlPath = path.join(d1Dir, "002_data.sql");
   const finalizeSqlPath = path.join(d1Dir, "003_finalize.sql");
@@ -284,7 +275,7 @@ async function main() {
 
   let bundleIndex = 0;
   let bundleBytes = 0;
-  let currentBundleKey = `usda/${options.version}/bundles/food-${String(bundleIndex).padStart(6, "0")}.ndjson`;
+  let currentBundleKey = bundleKey(options.version, bundleIndex);
   let bundleStream = fs.createWriteStream(
     path.join(bundleDir, path.basename(currentBundleKey)),
   );
@@ -293,7 +284,7 @@ async function main() {
     await close(bundleStream);
     bundleIndex += 1;
     bundleBytes = 0;
-    currentBundleKey = `usda/${options.version}/bundles/food-${String(bundleIndex).padStart(6, "0")}.ndjson`;
+    currentBundleKey = bundleKey(options.version, bundleIndex);
     bundleStream = fs.createWriteStream(
       path.join(bundleDir, path.basename(currentBundleKey)),
     );
@@ -455,7 +446,7 @@ async function main() {
       format: "ndjson",
       compression: "none",
       targetSizeBytes: options.bundleSizeBytes,
-      prefix: `usda/${options.version}/bundles/`,
+      prefix: bundlePrefix(options.version),
     },
   };
 
