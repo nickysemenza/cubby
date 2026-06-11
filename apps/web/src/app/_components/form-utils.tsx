@@ -20,9 +20,10 @@ import { DialogCompatibleCombobox } from "./combobox/combobox-dialog";
 import type { ComboboxItem } from "./combobox/combobox-types";
 
 // Guard so the bundler eliminates the @hookform/devtools import (and its
-// lodash dependency) from production builds. import.meta.env.DEV alone is NOT
-// enough: build:cf runs with DEV=true, so prod gating must also check the
-// __CF_WORKERS__ define (same pattern as server/db.ts).
+// lodash dependency) from production builds. build:cf pins NODE_ENV=production
+// so DEV is false there, but keep the __CF_WORKERS__ check as a belt-and-braces
+// guard (same pattern as server/db.ts) — a dev-mode CF build must never ship
+// the lodash-importing devtools, which break the Workers server build.
 declare const __CF_WORKERS__: boolean | undefined;
 const SHOW_FORM_DEVTOOLS =
   import.meta.env.DEV &&

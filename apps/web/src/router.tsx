@@ -9,8 +9,8 @@ import * as TanstackQuery from "./integrations/tanstack-query/root-provider";
 import { routeTree } from "./routeTree.gen";
 
 // Defined by Vite only for CF builds (build:cf), absent under `vite dev`.
-// We gate SW registration on this rather than import.meta.env.PROD, which is
-// unreliably false in this build (it also zeroes the Sentry replay rates).
+// We gate SW registration on this rather than import.meta.env.PROD so the SW
+// only ever registers for deployed CF builds, never a local production build.
 declare const __CF_WORKERS__: boolean | undefined;
 
 // Create a new router instance
