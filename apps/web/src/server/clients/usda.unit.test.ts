@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { USDAClient } from "./usda";
 
 // Regression test for the prod 500 "operation was aborted due to timeout":
-// usda-db is scale-to-zero (~50s cold start) and food enrichment is best-effort,
-// so a thrown fetch error (AbortSignal timeout / network) must degrade to
+// USDA enrichment is best-effort, so a thrown fetch error
+// (AbortSignal timeout / network) must degrade to
 // null/nulls — never propagate up and 500 the calling list query.
 
 const makeTimeoutError = () =>
@@ -23,7 +23,7 @@ describe("USDAClient resilience to fetch failures", () => {
       vi.fn(() => Promise.reject(makeTimeoutError())),
     );
 
-    const client = new USDAClient("http://localhost:8080");
+    const client = new USDAClient("http://localhost:8787");
     const results = await client.findFoodsBatch([
       { kind: "upc", gtin_upc: "012345678905" },
       { kind: "ndb", ndb_number: 1234 },
@@ -38,7 +38,7 @@ describe("USDAClient resilience to fetch failures", () => {
       vi.fn(() => Promise.reject(makeTimeoutError())),
     );
 
-    const client = new USDAClient("http://localhost:8080");
+    const client = new USDAClient("http://localhost:8787");
     const result = await client.findFood({
       kind: "upc",
       gtin_upc: "012345678905",
@@ -53,7 +53,7 @@ describe("USDAClient resilience to fetch failures", () => {
       vi.fn(() => Promise.reject(new TypeError("network error"))),
     );
 
-    const client = new USDAClient("http://localhost:8080");
+    const client = new USDAClient("http://localhost:8787");
     const result = await client.findFood({ kind: "ndb", ndb_number: 1234 });
 
     expect(result).toBeNull();

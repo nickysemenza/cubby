@@ -42,7 +42,7 @@
     "R2_BUCKET_NAME": "foo",
     "R2_PUBLIC_URL": "https://foobucket.nicky.fun",
     "R2_KEY_PREFIX": "cubby",
-    "USDA_API_URL": "https://usda-db.fly.dev/",
+    "USDA_API_URL": "https://usda-api.nicky.workers.dev/",
     "UPC_LOOKUP_API_URL": "https://upc-lookup.nicky.workers.dev"
   }
   // Required secrets (set via `wrangler secret put <NAME>`):

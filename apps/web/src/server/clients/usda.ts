@@ -77,9 +77,8 @@ export class USDAClient {
             headers: response.headers,
           };
         } catch (error) {
-          // usda-db is scale-to-zero (~50s cold start) and food enrichment is
-          // best-effort. Convert a thrown fetch error (e.g. AbortSignal timeout
-          // when the machine is cold, or a network error) into a synthetic
+          // USDA enrichment is best-effort. Convert a thrown fetch error (for
+          // example an AbortSignal timeout or network error) into a synthetic
           // non-200 so every caller degrades to `null`/`nulls` via its existing
           // status check, rather than propagating a 500 up through list queries.
           if (error instanceof Error && error.name === "TimeoutError") {

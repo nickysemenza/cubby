@@ -96,9 +96,8 @@ async function globalSetup(config: FullConfig): Promise<void> {
       "--var",
       "R2_SECRET_ACCESS_KEY:dummy",
       // Dead port so USDA enrichment fails instantly (the client degrades to
-      // empty results). Without this, every combobox keystroke hangs 5s on
-      // the scale-to-zero usda-db.fly.dev cold start and parallel workers
-      // blow the 30s test budget — E2E must not depend on remote services.
+      // empty results). E2E must not depend on remote services for combobox
+      // searches, or parallel workers can blow the 30s test budget.
       "--var",
       "USDA_API_URL:http://127.0.0.1:9/",
     ],

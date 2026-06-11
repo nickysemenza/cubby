@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { toFtsQuery } from "./fts";
+import { toFtsQuery } from "./fts-query";
 
 describe("toFtsQuery", () => {
   it("should handle empty or whitespace-only input", () => {

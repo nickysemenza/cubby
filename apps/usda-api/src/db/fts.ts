@@ -52,23 +52,3 @@ export function rebuildFoodSearchFts(): void {
 
   trx();
 }
-
-// Convert a raw user search string into an FTS5 query that supports prefix on the last term.
-export function toFtsQuery(raw: string): string {
-  const s = (raw || "").trim();
-  if (!s) return "";
-
-  // Split by whitespace; basic escaping of quotes
-  const parts = s
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((p, i, arr) => {
-      const term = p.replace(/["']/g, " ").trim();
-      // Add prefix wildcard to last term for responsive incremental search
-      if (i === arr.length - 1) return `${term}*`;
-      return term;
-    });
-
-  // Join with AND to require all terms
-  return parts.join(" ");
-}

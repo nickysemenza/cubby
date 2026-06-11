@@ -1,0 +1,37 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "usda-api",
+  "account_id": "9f10f078d35d86c78dedece2300a6b88",
+  "compatibility_date": "2026-06-10",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "./src/worker.ts",
+
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 1
+    }
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "usda-api-index",
+      "database_id": "e2e0037c-6046-4b66-85d9-03ceb0770db6",
+      "migrations_dir": "edge-migrations"
+    }
+  ],
+
+  "r2_buckets": [
+    {
+      "binding": "USDA_BUNDLES",
+      "bucket_name": "usda-api-bundles"
+    }
+  ],
+
+  "vars": {
+    "API_BASE_URL": "http://localhost:8787"
+  }
+}

@@ -8,5 +8,5 @@ runs:
       run: |
         cp apps/web/.env.example apps/web/.env
         echo "NEXTAUTH_SECRET=supersecret" >> apps/web/.env
-        echo "USDA_API_URL=https://usda-db.fly.dev/" >> apps/web/.env
+        echo "USDA_API_URL=https://usda-api.nicky.workers.dev/" >> apps/web/.env
       shell: bash

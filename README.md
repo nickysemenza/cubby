@@ -82,7 +82,7 @@ It's three things at once: an earnest daily-use home utility, a playground for a
 |---|---|---|---|---|
 | [apps/web](apps/web) | `@cubby/web` | Main app — TanStack Start + tRPC + Drizzle | Cloudflare Workers | Worker `cubby` · DB via **Hyperdrive** → Postgres |
 | [apps/upc-lookup](apps/upc-lookup) | `@cubby/upc-lookup` | UPC barcode lookup API — Hono + D1 | Cloudflare Workers | Worker `upc-lookup` · <https://upc-lookup.nicky.workers.dev> |
-| [apps/usda-api](apps/usda-api) | `@cubby/usda-api` | USDA FoodData Central API — Hono + SQLite | Node | **Fly.io** app `usda-db` (sjc) · <https://usda-db.fly.dev> · SQLite hydrated from R2 (`usda.sqlite.zst`) |
+| [apps/usda-api](apps/usda-api) | `@cubby/usda-api` | USDA FoodData Central API — Hono + D1/R2 bundles | Cloudflare Workers | Worker `usda-api` · <https://usda-api.nicky.workers.dev> · D1 search index + R2 NDJSON payload bundles |
 
 ### Packages (internal, not deployed)
 
@@ -174,7 +174,7 @@ Required keys (see [apps/web/.env.example](apps/web/.env.example) for the full f
 | `BETTER_AUTH_SECRET` | Auth signing secret |
 | `DATABASE_URL` | PostgreSQL connection (defaults to local docker-compose) |
 | `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_ENDPOINT` / `R2_BUCKET_NAME` / `R2_PUBLIC_URL` | Image storage |
-| `USDA_API_URL` | USDA service URL (defaults to `http://localhost:8080/`) |
+| `USDA_API_URL` | USDA service URL (defaults to `http://localhost:8787/` for local Wrangler dev) |
 | `UPC_LOOKUP_API_URL` / `UPC_LOOKUP_API_KEY` | UPC lookup worker |
 | `NOTION_API_KEY` | *(optional)* Project Tracker dashboard |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | *(optional)* OTLP traces → Jaeger |
@@ -217,7 +217,7 @@ E2E tests use IntegresQL to spin up fresh databases per test — see memory note
 
 ## 🚀 Deployment — `apps/web` on Cloudflare Workers
 
-What deploys where lives in the [Monorepo Layout](#-monorepo-layout) table. This section covers the non-trivial internals of the main app's CF Workers deploy. (`upc-lookup` is a straightforward CF Worker; `usda-api` is a vanilla Fly.io Dockerfile deploy via `flyctl deploy`.)
+What deploys where lives in the [Monorepo Layout](#-monorepo-layout) table. This section covers the non-trivial internals of the main app's CF Workers deploy. (`upc-lookup` and `usda-api` are also Cloudflare Workers.)
 
 The dev server is plain Node via `vite dev`. Production = CF Workers.
 

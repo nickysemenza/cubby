@@ -41,7 +41,7 @@ nutrition information for thousands of foods.
     },
     servers: [
       {
-        url: process.env.API_BASE_URL || "http://localhost:8080",
+        url: process.env.API_BASE_URL || "http://localhost:8787",
         description: "USDA API Server",
       },
     ],

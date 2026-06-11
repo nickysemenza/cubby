@@ -1,36 +1,20 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import {
-  fdcIdParam,
-  listFoodsQuery,
-  listFoodsResponse,
-} from "@cubby/usda-contract";
-import { foodLookupParam, foodSummary } from "@cubby/usda-schemas";
-import {
-  findFoodByUpc,
-  findFoodByNdb,
-  listFoods,
-  getCompleteFoodInfo,
-} from "../db/queries.js";
-import { withTrace, TraceNames } from "../tracing.js";
+import { fdcIdParam, listFoodsQuery } from "@cubby/usda-contract";
+import { foodLookupParam } from "@cubby/usda-schemas";
+import type { USDADataSource } from "../data/types.js";
 
-const app = new Hono();
+export function createFoodRoutes(dataSource: USDADataSource) {
+  const app = new Hono();
 
-// 1. Get Complete Food by FDC ID
-app.get("/api/foods/:fdc_id", (c) => {
-  return withTrace(TraceNames.food("getFoodById"), async (span) => {
+  app.get("/api/foods/:fdc_id", async (c) => {
     const params = fdcIdParam.safeParse({ fdc_id: c.req.param("fdc_id") });
     if (!params.success) {
       return c.json({ error: "Invalid FDC ID" }, 400);
     }
 
-    span.setAttributes({
-      "food.fdc_id": params.data.fdc_id,
-    });
-
-    const completeFood = await getCompleteFoodInfo(params.data.fdc_id);
+    const completeFood = await dataSource.getFoodById(params.data.fdc_id);
     if (!completeFood) {
-      span.setAttributes({ "food.found": false });
       return c.json(
         {
           error: "Food not found",
@@ -40,17 +24,10 @@ app.get("/api/foods/:fdc_id", (c) => {
       );
     }
 
-    span.setAttributes({
-      "food.found": true,
-      "food.description": completeFood.foodInfo.description || "unknown",
-    });
-    return c.json(foodSummary.parse(completeFood), 200);
+    return c.json(completeFood, 200);
   });
-});
 
-// 2. Consolidated: Find Food by Lookup (UPC or NDB) via POST body
-app.post("/api/foods/search", async (c) => {
-  return withTrace(TraceNames.search("findFoodByLookup"), async (span) => {
+  app.post("/api/foods/search", async (c) => {
     const body = await c.req.json().catch(() => undefined);
     const parsed = foodLookupParam.safeParse(body);
     if (!parsed.success) {
@@ -58,25 +35,15 @@ app.post("/api/foods/search", async (c) => {
     }
     const lookup = parsed.data;
 
-    span.setAttributes({
-      "search.kind": lookup.kind,
-      "search.value":
-        lookup.kind === "upc" ? lookup.gtin_upc : String(lookup.ndb_number),
-    });
-
     const food =
       lookup.kind === "upc"
-        ? await findFoodByUpc(lookup.gtin_upc)
-        : await findFoodByNdb(lookup.ndb_number);
+        ? await dataSource.findFoodByUpc(lookup.gtin_upc)
+        : await dataSource.findFoodByNdb(lookup.ndb_number);
 
-    span.setAttributes({ "search.found": !!food });
-    return c.json(food ? foodSummary.parse(food) : null, 200);
+    return c.json(food, 200);
   });
-});
 
-// 3. Batch Find Foods by Lookup
-app.post("/api/foods/search/batch", async (c) => {
-  return withTrace(TraceNames.search("batchFindFoods"), async (span) => {
+  app.post("/api/foods/search/batch", async (c) => {
     const body = await c.req.json().catch(() => undefined);
     const parsed = z
       .object({
@@ -87,32 +54,14 @@ app.post("/api/foods/search/batch", async (c) => {
       return c.json({ error: "Invalid batch lookup" }, 400);
     }
 
-    span.setAttributes({
-      "search.batch.count": parsed.data.lookups.length,
-    });
-
-    const results = await Promise.all(
-      parsed.data.lookups.map(async (lookup) => {
-        const food =
-          lookup.kind === "upc"
-            ? await findFoodByUpc(lookup.gtin_upc)
-            : await findFoodByNdb(lookup.ndb_number);
-        return food ? foodSummary.parse(food) : null;
-      }),
-    );
-
-    const foundCount = results.filter((r) => r !== null).length;
-    span.setAttributes({
-      "search.batch.found": foundCount,
-    });
+    const results = (
+      await dataSource.findFoodsByLookupBatch(parsed.data.lookups)
+    ).map((food) => food ?? null);
 
     return c.json({ results }, 200);
   });
-});
 
-// 4. List Foods with Pagination and Filtering
-app.get("/api/foods", (c) => {
-  return withTrace(TraceNames.food("listFoods"), async (span) => {
+  app.get("/api/foods", async (c) => {
     const queryParams = Object.fromEntries(
       new URL(c.req.url).searchParams.entries(),
     );
@@ -128,24 +77,9 @@ app.get("/api/foods", (c) => {
       return c.json({ error: "Invalid query parameters" }, 400);
     }
 
-    span.setAttributes({
-      "list.page_index": parsed.data.pageIndex ?? 0,
-      "list.page_size": parsed.data.pageSize ?? 20,
-      "list.has_filter": !!parsed.data.nameFilter,
-    });
-    if (parsed.data.nameFilter) {
-      span.setAttributes({ "list.filter": parsed.data.nameFilter });
-    }
-
-    const result = await listFoods(parsed.data);
-
-    span.setAttributes({
-      "list.result_count": result.data.length,
-      "list.total_count": result.count,
-    });
-
-    return c.json(listFoodsResponse.parse(result), 200);
+    const result = await dataSource.listFoods(parsed.data);
+    return c.json(result, 200);
   });
-});
 
-export default app;
+  return app;
+}

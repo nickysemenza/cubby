@@ -1,39 +1,40 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Hono } from "hono";
+import type { USDADataSource } from "../data/types.js";
+import { createFoodRoutes } from "./foods.js";
 
-// Mock the database queries before importing the foods module
-vi.mock("../db/queries.js", () => ({
-  findFoodByUpc: vi.fn(),
-  findFoodByNdb: vi.fn(),
-  listFoods: vi.fn(),
-  getCompleteFoodInfo: vi.fn(),
-}));
+const mockFood = {
+  fdc_id: 12345,
+  brandedFoodInfo: null,
+  foodInfo: {
+    data_type: "foundation_food" as const,
+    description: "Apple, raw",
+  },
+  legacyFoodInfo: null,
+  nutritionInfo: {
+    nutrientSummary: [],
+    nutrientsPer100: {
+      protein: 0.26,
+      kcal: 52,
+    },
+  },
+  portionInfoRaw: [],
+};
 
 describe("Foods API routes", () => {
   let app: Hono;
-  let mockQueries: typeof import("../db/queries.js");
-  let findFoodByUpc: ReturnType<
-    typeof vi.mocked<typeof import("../db/queries.js").findFoodByUpc>
-  >;
-  let findFoodByNdb: ReturnType<
-    typeof vi.mocked<typeof import("../db/queries.js").findFoodByNdb>
-  >;
-  let getCompleteFoodInfo: ReturnType<
-    typeof vi.mocked<typeof import("../db/queries.js").getCompleteFoodInfo>
-  >;
+  let dataSource: USDADataSource;
 
-  beforeEach(async () => {
-    vi.clearAllMocks();
-
-    // Import and mock the queries module
-    mockQueries = await import("../db/queries.js");
-    findFoodByUpc = vi.mocked(mockQueries.findFoodByUpc);
-    findFoodByNdb = vi.mocked(mockQueries.findFoodByNdb);
-    getCompleteFoodInfo = vi.mocked(mockQueries.getCompleteFoodInfo);
-
-    // Import foods module after mocks are set up
-    const foodsModule = await import("./foods.js");
-    app = foodsModule.default;
+  beforeEach(() => {
+    dataSource = {
+      getCounts: vi.fn(),
+      getFoodById: vi.fn(),
+      findFoodByUpc: vi.fn(),
+      findFoodByNdb: vi.fn(),
+      findFoodsByLookupBatch: vi.fn(),
+      listFoods: vi.fn(),
+    };
+    app = createFoodRoutes(dataSource);
   });
 
   describe("GET /api/foods/:fdc_id", () => {
@@ -46,7 +47,7 @@ describe("Foods API routes", () => {
     });
 
     it("should return 404 when food not found", async () => {
-      getCompleteFoodInfo.mockResolvedValueOnce(null);
+      vi.mocked(dataSource.getFoodById).mockResolvedValueOnce(null);
 
       const res = await app.request("/api/foods/12345");
       expect(res.status).toBe(404);
@@ -59,28 +60,11 @@ describe("Foods API routes", () => {
     });
 
     it("should return food data when found", async () => {
-      const mockFood = {
-        fdc_id: 12345,
-        brandedFoodInfo: null,
-        foodInfo: {
-          data_type: "foundation_food" as const,
-          description: "Apple, raw",
-        },
-        legacyFoodInfo: null,
-        nutritionInfo: {
-          nutrientSummary: [],
-          nutrientsPer100: {
-            protein: 0.26,
-            kcal: 52,
-          },
-        },
-        portionInfoRaw: [],
-      };
-
-      getCompleteFoodInfo.mockResolvedValueOnce(mockFood);
+      vi.mocked(dataSource.getFoodById).mockResolvedValueOnce(mockFood);
 
       const res = await app.request("/api/foods/12345");
       expect(res.status).toBe(200);
+      expect(dataSource.getFoodById).toHaveBeenCalledWith(12345);
 
       const json = await res.json();
       expect(json).toMatchObject({
@@ -108,8 +92,8 @@ describe("Foods API routes", () => {
     });
 
     it("should search by UPC and return food when found", async () => {
-      const mockFood = {
-        fdc_id: 12345,
+      const brandedFood = {
+        ...mockFood,
         brandedFoodInfo: {
           brand_owner: "Coca Cola Company",
           brand_name: "Coca Cola",
@@ -126,18 +110,9 @@ describe("Foods API routes", () => {
           data_type: "branded_food" as const,
           description: "Coca Cola Original",
         },
-        legacyFoodInfo: null,
-        nutritionInfo: {
-          nutrientSummary: [],
-          nutrientsPer100: {
-            protein: 0,
-            kcal: 139,
-          },
-        },
-        portionInfoRaw: [],
       };
 
-      findFoodByUpc.mockResolvedValueOnce(mockFood);
+      vi.mocked(dataSource.findFoodByUpc).mockResolvedValueOnce(brandedFood);
 
       const res = await app.request("/api/foods/search", {
         method: "POST",
@@ -149,7 +124,7 @@ describe("Foods API routes", () => {
       });
 
       expect(res.status).toBe(200);
-      expect(findFoodByUpc).toHaveBeenCalledWith("123456789012");
+      expect(dataSource.findFoodByUpc).toHaveBeenCalledWith("123456789012");
 
       const json = await res.json();
       expect(json).toMatchObject({
@@ -161,28 +136,18 @@ describe("Foods API routes", () => {
     });
 
     it("should search by NDB and return food when found", async () => {
-      const mockFood = {
-        fdc_id: 12345,
-        brandedFoodInfo: null,
+      const legacyFood = {
+        ...mockFood,
         foodInfo: {
           data_type: "sr_legacy_food" as const,
           description: "Apple, raw, legacy",
         },
         legacyFoodInfo: {
-          fdc_id: 12345,
           ndb_number: 12345,
         },
-        nutritionInfo: {
-          nutrientSummary: [],
-          nutrientsPer100: {
-            protein: 0.26,
-            kcal: 52,
-          },
-        },
-        portionInfoRaw: [],
       };
 
-      findFoodByNdb.mockResolvedValueOnce(mockFood);
+      vi.mocked(dataSource.findFoodByNdb).mockResolvedValueOnce(legacyFood);
 
       const res = await app.request("/api/foods/search", {
         method: "POST",
@@ -194,7 +159,7 @@ describe("Foods API routes", () => {
       });
 
       expect(res.status).toBe(200);
-      expect(findFoodByNdb).toHaveBeenCalledWith(12345);
+      expect(dataSource.findFoodByNdb).toHaveBeenCalledWith(12345);
 
       const json = await res.json();
       expect(json).toMatchObject({
@@ -206,7 +171,7 @@ describe("Foods API routes", () => {
     });
 
     it("should return null when food not found", async () => {
-      findFoodByUpc.mockResolvedValueOnce(null);
+      vi.mocked(dataSource.findFoodByUpc).mockResolvedValueOnce(null);
 
       const res = await app.request("/api/foods/search", {
         method: "POST",
@@ -234,6 +199,31 @@ describe("Foods API routes", () => {
 
       const json = await res.json();
       expect(json).toEqual({ error: "Invalid lookup" });
+    });
+  });
+
+  describe("POST /api/foods/search/batch", () => {
+    it("should preserve batch order and nulls", async () => {
+      vi.mocked(dataSource.findFoodsByLookupBatch).mockResolvedValueOnce([
+        mockFood,
+        null,
+      ]);
+
+      const res = await app.request("/api/foods/search/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lookups: [
+            { kind: "upc", gtin_upc: "123456789012" },
+            { kind: "ndb", ndb_number: 12345 },
+          ],
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({
+        results: [expect.objectContaining({ fdc_id: 12345 }), null],
+      });
     });
   });
 });
