@@ -17,6 +17,7 @@ describe("recipe repository helpers", () => {
         yield: null,
         servings: null,
         tags: null,
+        notes: null,
         totals: null,
         totalsComputedAt: null,
       };
@@ -33,6 +34,7 @@ describe("recipe repository helpers", () => {
         yield: null,
         servings: null,
         tags: null,
+        notes: null,
         totals: null,
         totalsComputedAt: null,
         meta: {
@@ -59,6 +61,7 @@ describe("recipe repository helpers", () => {
         yield: null,
         servings: null,
         tags: null,
+        notes: null,
         totals: null,
         totalsComputedAt: null,
       };
@@ -75,6 +78,7 @@ describe("recipe repository helpers", () => {
         yield: null,
         servings: null,
         tags: null,
+        notes: null,
         totals: null,
         totalsComputedAt: null,
         meta: {

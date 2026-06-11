@@ -284,6 +284,26 @@ describe("recipeCreateInput schema", () => {
     expect(result.success).toBe(true);
   });
 
+  test("accepts optional markdown notes (string or null)", () => {
+    const base = {
+      name: "Chocolate Cake",
+      meta: null,
+      sections: [],
+      images: [],
+    };
+
+    expect(
+      recipeCreateInput.safeParse({
+        ...base,
+        notes: "A family favorite.\n\n- Freezes well",
+      }).success,
+    ).toBe(true);
+    expect(recipeCreateInput.safeParse({ ...base, notes: null }).success).toBe(
+      true,
+    );
+    expect(recipeCreateInput.safeParse(base).success).toBe(true);
+  });
+
   test("rejects missing name", () => {
     const invalidRecipe = {
       // No name

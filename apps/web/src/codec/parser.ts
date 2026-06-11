@@ -21,5 +21,6 @@ export const parseCompactRecipe = (raw: CompactRecipe): ParsedCompactRecipe => {
     })),
     recipe_yield: raw.recipe_yield,
     servings: raw.servings,
+    description: raw.description,
   };
 };

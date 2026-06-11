@@ -288,6 +288,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
       yield: recipe?.yield ?? null,
       servings: recipe?.servings ?? null,
       tags: recipe?.tags ?? [],
+      notes: recipe?.notes ?? null,
       sections: recipe
         ? recipe.sections.map((section) => ({
             id: section.id,
@@ -426,6 +427,11 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
         setScrapedImageUrl(result.image);
       }
 
+      // Surface the scraped headnote as notes unless the user already has some.
+      if (result.description && !form.getValues("notes")?.trim()) {
+        form.setValue("notes", result.description);
+      }
+
       const ingredientCount = ingredientGroups.reduce(
         (sum, group) => sum + group.length,
         0,
@@ -494,6 +500,9 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
         ? { value: values.yield.value, unit: values.yield.unit }
         : null;
     const normalizedMeta = values.meta?.url ? { url: values.meta.url } : null;
+    // Collapse a blank textarea to null so clearing notes persists (and doesn't
+    // phantom-diff against a stored null in edit mode).
+    const normalizedNotes = values.notes?.trim() ? values.notes : null;
 
     if (mode === "create") {
       // For creation, transform the form values to the API format
@@ -503,6 +512,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
         yield: normalizedYield,
         servings: values.servings,
         tags: values.tags,
+        notes: normalizedNotes,
         sections: values.sections.map(mapSectionToApiFormat),
         ...getImageData(true), // Apply pending images for creation
       };
@@ -512,8 +522,13 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
       // In edit mode, determine which fields have changed
       const basicUpdates = buildUpdateObject(
         recipe,
-        { ...values, yield: normalizedYield, meta: normalizedMeta },
-        ["name", "meta", "yield", "servings", "tags"],
+        {
+          ...values,
+          yield: normalizedYield,
+          meta: normalizedMeta,
+          notes: normalizedNotes,
+        },
+        ["name", "meta", "yield", "servings", "tags", "notes"],
       );
 
       // Handle section updates - this is more complex since we need to track IDs
@@ -832,6 +847,23 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                   <Field>
                     <FieldLabel htmlFor="tags">Tags (Optional)</FieldLabel>
                     <TagInput value={field.value} onChange={field.onChange} />
+                  </Field>
+                )}
+              />
+              <Controller
+                control={form.control}
+                name="notes"
+                render={({ field }) => (
+                  <Field>
+                    <FieldLabel htmlFor="notes">
+                      Notes (Optional, Markdown)
+                    </FieldLabel>
+                    <Textarea
+                      placeholder="Headnote, do-ahead tips, serving suggestions…"
+                      value={field.value ?? ""}
+                      onChange={(e) => field.onChange(e.target.value || null)}
+                      rows={4}
+                    />
                   </Field>
                 )}
               />

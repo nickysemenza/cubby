@@ -134,6 +134,9 @@ export type RecipeCostingExplain = z.infer<typeof recipeCostingExplain>;
 export const recipeMeta = z.object({ url: z.url().nullable() }).nullable();
 export const recipeServings = z.number().int().positive();
 export const recipeTags = z.array(z.string());
+// Freeform markdown: headnote/intro blurb plus tips. Imports compose it from
+// the source's description + notes (see composeNotesMarkdown).
+export const recipeNotes = z.string();
 
 // A recipe's provenance as a strong discriminated union — invalid pairings
 // (a Book with no book, a Website with no URL) are unrepresentable. Maps to/from
@@ -168,6 +171,7 @@ export const recipeTopLevel = baseEntitySchema.extend({
   yield: recipeYieldSchema.nullish(),
   servings: recipeServings.nullish(),
   tags: recipeTags.nullish(),
+  notes: recipeNotes.nullish(),
 });
 
 // Create a base schema with common fields
@@ -290,6 +294,7 @@ export const recipeCreateInput = z
     yield: recipeYieldSchema.nullable().optional(),
     servings: recipeServings.nullable().optional(),
     tags: recipeTags.nullable().optional(),
+    notes: recipeNotes.nullable().optional(),
     sections: z.array(recipeSectionInput),
   })
   .extend(createInputImages.shape);

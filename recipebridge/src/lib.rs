@@ -303,6 +303,9 @@ pub struct WCompactRecipe {
     pub url: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image: Option<String>,
+    /// Headnote / intro blurb (schema.org `description`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     /// Parsed yield (e.g., `{ value: 12, unit: "pancakes" }`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recipe_yield: Option<WRecipeYield>,
@@ -318,6 +321,7 @@ impl From<ScrapedRecipe> for WCompactRecipe {
             name: Some(r.name),
             url: Some(r.url),
             image: r.image,
+            description: r.description,
             recipe_yield: r.recipe_yield.map(WRecipeYield::from),
             servings: r.servings,
         }

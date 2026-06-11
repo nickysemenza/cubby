@@ -194,6 +194,59 @@ describe("upsertCookbookRecipe", () => {
     expect(found!.servings).toBe(4);
   });
 
+  it("composes the headnote and tips into markdown notes", async () => {
+    const { id } = await insertCookbookRecipe(
+      {
+        meta: {
+          title: "Pancakes",
+          description: "A weekend staple.",
+          notes: ["Freezes well", "Serve with maple syrup"],
+        },
+        sections: [{ ingredients: ["2 cups flour"], instructions: [] }],
+        references: [],
+      },
+      bookA,
+      db,
+      TEST_ACTOR,
+    );
+
+    const found = await getDb(db).query.recipe.findFirst({
+      where: eq(recipe.id, id),
+    });
+    expect(found!.notes).toBe(
+      "A weekend staple.\n\n- Freezes well\n- Serve with maple syrup",
+    );
+  });
+
+  it("re-import replaces notes from the source (like sections)", async () => {
+    const first = await insertCookbookRecipe(
+      {
+        meta: { title: "Pancakes", description: "Old blurb." },
+        sections: [{ ingredients: ["2 cups flour"], instructions: [] }],
+        references: [],
+      },
+      bookA,
+      db,
+      TEST_ACTOR,
+    );
+    const second = await insertCookbookRecipe(
+      {
+        meta: { title: "Pancakes" },
+        sections: [{ ingredients: ["2 cups flour"], instructions: [] }],
+        references: [],
+      },
+      bookA,
+      db,
+      TEST_ACTOR,
+    );
+
+    expect(second.id).toBe(first.id);
+    const found = await getDb(db).query.recipe.findFirst({
+      where: eq(recipe.id, first.id),
+    });
+    expect(found!.notes).toBeNull();
+  });
+
   it("getCookbookRecipeTitles returns only this book's non-deleted titles", async () => {
     await upsertCookbookRecipe(recipeInput("Pancakes"), bookA, db, TEST_ACTOR);
     await upsertCookbookRecipe(recipeInput("Waffles"), bookA, db, TEST_ACTOR);

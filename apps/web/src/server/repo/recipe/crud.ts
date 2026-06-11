@@ -325,6 +325,7 @@ export const createRecipe = async (
       yield: recipeInput.yield ?? null,
       servings: recipeInput.servings ?? null,
       tags: recipeInput.tags ?? null,
+      notes: recipeInput.notes ?? null,
     });
 
     // Create sections and their ingredients
@@ -455,6 +456,9 @@ const upsertRecipeMatching = async (
         SourceType: provenance.sourceType,
         SourceData: provenance.sourceData,
         cookbookId: provenance.cookbookId ?? null,
+        // Like sections, notes are replaced from the import source on re-import
+        // (a manual edit doesn't survive a re-import).
+        notes: input.notes ?? null,
         updatedAt: new Date(),
       },
       eq(recipe.id, existingRecipe.id),

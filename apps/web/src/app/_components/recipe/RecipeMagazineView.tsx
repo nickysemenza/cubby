@@ -1,6 +1,7 @@
 import type { RecipeOut, SectionIngredientOut } from "@cubby/schemas/recipe";
 import { getNutrientValueByKey } from "@cubby/usda-schemas";
 import { type ReactNode, useState } from "react";
+import { MarkdownText } from "~/components/markdown";
 import { sectionRuleClass } from "~/components/ui/section-rule";
 import type { CalculateTotalsResult } from "~/lib/recipe-costing";
 import { cn, formatCurrency } from "~/lib/utils";
@@ -138,6 +139,13 @@ export function RecipeMagazineView({
         <p className="border-foreground border-b pb-1.5 font-mono text-2xs text-eyebrow uppercase tracking-[0.12em]">
           {kicker}
         </p>
+      )}
+
+      {/* Headnote + tips: freeform markdown imported from the source or edited */}
+      {recipe.notes && (
+        <MarkdownText className="max-w-prose text-muted-foreground">
+          {recipe.notes}
+        </MarkdownText>
       )}
 
       {/* Open-book spread: ingredients column + method column, no boxes */}

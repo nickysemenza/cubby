@@ -78,6 +78,13 @@
       "when": 1781142111722,
       "tag": "0010_wide_grey_gargoyle",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1781198813046,
+      "tag": "0011_chemical_malice",
+      "breakpoints": true
     }
   ]
 }

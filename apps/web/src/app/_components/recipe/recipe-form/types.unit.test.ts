@@ -14,6 +14,7 @@ const nameOnlyForm = {
   yield: { value: undefined, unit: undefined },
   servings: null,
   tags: [],
+  notes: null,
   sections: [{ name: null, ingredients: [], instructions: [] }],
 };
 

@@ -54,6 +54,8 @@ export const compactRecipeSchema = z.object({
   servings: z.number().optional(),
   // Optional image URL extracted by the scraper.
   image: z.string().optional(),
+  // Optional headnote / intro blurb (schema.org `description`).
+  description: z.string().optional(),
 });
 export type CompactRecipe = z.infer<typeof compactRecipeSchema>;
 
@@ -64,5 +66,6 @@ const parsedCompactRecipeSchema = z.object({
   sections: z.array(compactSection(parsedIngredient)),
   recipe_yield: compactRecipeYield.optional(),
   servings: z.number().optional(),
+  description: z.string().optional(),
 });
 export type ParsedCompactRecipe = z.infer<typeof parsedCompactRecipeSchema>;

@@ -56,6 +56,9 @@ export const recipe = pgTable(
     yield: jsonb("yield").$type<RecipeYield>(),
     servings: integer("servings"),
     tags: text("tags").array(),
+    // Freeform markdown: headnote/intro blurb plus tips ("notes"). Imports
+    // compose it from the source's description + notes; null when absent.
+    notes: text("notes"),
     // Precomputed cost/calorie rollup + when it was last computed. `null`
     // totalsComputedAt ⇒ stale (recomputed by the presence-driven drain). See
     // recipe-costing.service.

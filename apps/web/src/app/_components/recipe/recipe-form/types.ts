@@ -3,6 +3,7 @@ import {
   type RecipeCreateInput,
   type RecipeOut,
   type RecipeUpdateInput,
+  recipeNotes,
   recipeServings,
   recipeTags,
 } from "@cubby/schemas/recipe";
@@ -93,6 +94,9 @@ export const formSchema = z.object({
   yield: recipeYieldDraft,
   servings: recipeServings.nullable(),
   tags: recipeTags.nullable(),
+  // Freeform markdown notes; the textarea normalizes "" → null on change so an
+  // untouched/cleared field round-trips as null.
+  notes: recipeNotes.nullable(),
   sections: z.array(
     z.object({
       id: z.uuid().optional(),

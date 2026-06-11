@@ -51,6 +51,23 @@ const makeIngredientResolvers = (tx: DrizzleTransaction) => {
   };
 };
 
+/**
+ * Compose a recipe's freeform `notes` markdown from the import source's
+ * headnote (`description`) and tip list (`notes`): description as the opening
+ * paragraph, notes as a bullet list. Null when both are empty/blank.
+ */
+export const composeNotesMarkdown = (
+  description: string | undefined | null,
+  notes: readonly string[] | undefined | null,
+): string | null => {
+  const parts: string[] = [];
+  const headnote = description?.trim();
+  if (headnote) parts.push(headnote);
+  const bullets = (notes ?? []).map((n) => n.trim()).filter(Boolean);
+  if (bullets.length > 0) parts.push(bullets.map((n) => `- ${n}`).join("\n"));
+  return parts.length > 0 ? parts.join("\n\n") : null;
+};
+
 // Convert ParsedCompactRecipe to RecipeCreateInput format
 const convertParsedCompactToRecipeInput = async (
   recipe: ParsedCompactRecipe,
@@ -65,6 +82,7 @@ const convertParsedCompactToRecipeInput = async (
       },
       yield: recipe.recipe_yield ?? null,
       servings: recipe.servings ?? null,
+      notes: composeNotesMarkdown(recipe.description, null),
       sections: await Promise.all(
         recipe.sections.map(async (section) => ({
           name: section.name ?? null,
@@ -132,6 +150,7 @@ const cookbookRecipeToRecipeInput = async (
       meta: { url: null },
       yield: parsedYield?.recipe_yield ?? null,
       servings: parsedYield?.servings ?? null,
+      notes: composeNotesMarkdown(cr.meta.description, cr.meta.notes),
       sections: await Promise.all(
         cr.sections.map(async (section) => ({
           name: sanitizeSectionName(section.name),

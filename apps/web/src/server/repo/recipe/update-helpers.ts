@@ -152,7 +152,8 @@ export async function updateRecipeBasicProperties(
     updates.meta !== undefined ||
     updates.yield !== undefined ||
     updates.servings !== undefined ||
-    updates.tags !== undefined;
+    updates.tags !== undefined ||
+    updates.notes !== undefined;
 
   if (!hasBasicUpdates) return;
 
@@ -171,6 +172,7 @@ export async function updateRecipeBasicProperties(
     yield?: RecipeYield | null;
     servings?: number | null;
     tags?: string[] | null;
+    notes?: string | null;
   } = {};
 
   if (updates.name) {
@@ -188,6 +190,9 @@ export async function updateRecipeBasicProperties(
   }
   if (updates.tags !== undefined) {
     updateData.tags = updates.tags;
+  }
+  if (updates.notes !== undefined) {
+    updateData.notes = updates.notes;
   }
 
   await tx.update(recipe).set(updateData).where(eq(recipe.id, recipeId));
