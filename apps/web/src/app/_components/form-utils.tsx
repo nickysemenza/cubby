@@ -19,9 +19,16 @@ import { cn } from "~/lib/utils";
 import { DialogCompatibleCombobox } from "./combobox/combobox-dialog";
 import type { ComboboxItem } from "./combobox/combobox-types";
 
-// Guard with import.meta.env.DEV so the bundler eliminates the
-// @hookform/devtools import (and its lodash dependency) from production builds.
-const DevTool = import.meta.env.DEV
+// Guard so the bundler eliminates the @hookform/devtools import (and its
+// lodash dependency) from production builds. import.meta.env.DEV alone is NOT
+// enough: build:cf runs with DEV=true, so prod gating must also check the
+// __CF_WORKERS__ define (same pattern as server/db.ts).
+declare const __CF_WORKERS__: boolean | undefined;
+const SHOW_FORM_DEVTOOLS =
+  import.meta.env.DEV &&
+  !(typeof __CF_WORKERS__ !== "undefined" && __CF_WORKERS__ === true);
+
+const DevTool = SHOW_FORM_DEVTOOLS
   ? lazy(() =>
       import("@hookform/devtools").then((m) => ({ default: m.DevTool })),
     )
@@ -91,7 +98,7 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
 }) {
   return (
     <FormProvider {...form}>
-      {process.env.NODE_ENV !== "production" ? (
+      {SHOW_FORM_DEVTOOLS ? (
         <Suspense>
           <DevTool control={form.control as never} />
         </Suspense>

@@ -39,10 +39,26 @@ export async function selectComboboxItem(
   await expect(searchInput).toBeVisible({ timeout: 5000 });
   await searchInput.fill(itemName);
 
-  // Wait for and click the matching option
-  const option = page.getByRole("button", { name: itemName });
+  // Wait for and click the matching option. The name regex is anchored to the
+  // start: while the debounced search is still loading, the popup shows a
+  // "Create new <label>: <itemName>" button whose accessible name also
+  // contains itemName — an unanchored (substring) match clicks it and opens
+  // the quick-create dialog, wedging the whole form behind aria-hidden.
+  const escapedName = itemName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const option = page.getByRole("button", {
+    name: new RegExp(`^${escapedName}`),
+  });
   await expect(option).toBeVisible({ timeout: 10000 });
-  await option.click();
+
+  // Click, then verify the selection actually registered (popup closed). The
+  // option's onClick is a React handler — a click can silently no-op if the
+  // list re-renders mid-click (debounced search swaps the option nodes).
+  await expect(async () => {
+    await option.click();
+    await expect(combobox).toHaveAttribute("aria-expanded", "false", {
+      timeout: 1000,
+    });
+  }).toPass({ timeout: 10000 });
 }
 
 /**

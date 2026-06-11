@@ -38,46 +38,29 @@ test.describe("Create Recipe - Full Flow", () => {
     await selectComboboxItem(
       page,
       page.getByRole("combobox", { name: /ingredient/i }),
-      "Search ingredient...",
+      // The field label is "Linked ingredient" — the combobox derives its
+      // search placeholder from the lowercased label.
+      "Search linked ingredient...",
       ingredientName,
     );
 
-    // Add unit mappings (1 cup = $2.50, 100 grams = $1.50)
-    await page.getByRole("button", { name: "Add Mapping" }).click();
-    await expect(page.getByText("Unit Mapping 1")).toBeVisible();
-    await page
-      .getByRole("textbox", { name: "Amount Unit" })
-      .first()
-      .fill("cup");
-    await page
-      .getByRole("spinbutton", { name: "Amount Value" })
-      .last()
-      .fill("2.50");
-    await page
-      .getByRole("textbox", { name: "Amount Unit" })
-      .last()
-      .fill("dollar");
+    // Add unit conversions (1 cup = $2.50, 100 grams = $1.50). Rows use
+    // compact "Qty"/"Unit" labels that repeat per row, so target the stable
+    // input ids instead. The "from" value defaults to 1.
+    await page.getByRole("button", { name: "Add conversion" }).click();
+    const firstFromUnit = page.locator('[id="unitMappings.0.a.unit"]');
+    await expect(firstFromUnit).toBeVisible({ timeout: 10000 });
+    await firstFromUnit.fill("cup");
+    await page.locator('[id="unitMappings.0.b.value"]').fill("2.50");
+    await page.locator('[id="unitMappings.0.b.unit"]').fill("dollar");
 
-    await page.getByRole("button", { name: "Add Mapping" }).click();
-    await expect(
-      page.getByRole("heading", { name: "Unit Mapping 2" }),
-    ).toBeVisible();
-    await page
-      .getByRole("spinbutton", { name: "Amount Value" })
-      .nth(2)
-      .fill("100");
-    await page
-      .getByRole("textbox", { name: "Amount Unit" })
-      .nth(2)
-      .fill("grams");
-    await page
-      .getByRole("spinbutton", { name: "Amount Value" })
-      .nth(3)
-      .fill("1.50");
-    await page
-      .getByRole("textbox", { name: "Amount Unit" })
-      .nth(3)
-      .fill("dollar");
+    await page.getByRole("button", { name: "Add conversion" }).click();
+    const secondFromValue = page.locator('[id="unitMappings.1.a.value"]');
+    await expect(secondFromValue).toBeVisible({ timeout: 10000 });
+    await secondFromValue.fill("100");
+    await page.locator('[id="unitMappings.1.a.unit"]').fill("grams");
+    await page.locator('[id="unitMappings.1.b.value"]').fill("1.50");
+    await page.locator('[id="unitMappings.1.b.unit"]').fill("dollar");
 
     await page.getByRole("button", { name: /^Create$/ }).click();
     await expect(page).toHaveURL(/\/products\/[a-f0-9-]+/, { timeout: 15000 });
@@ -92,20 +75,22 @@ test.describe("Create Recipe - Full Flow", () => {
     await page.getByLabel("Yield Value (Optional)").fill("12");
     await page.getByLabel("Yield Unit").fill("cookies");
 
-    // Add ingredient
-    await page.getByRole("button", { name: /Add Ingredient/i }).click();
+    // Add ingredient row (the add button is labeled just "Ingredient"). The
+    // row combobox has no field label, so its aria-label and search
+    // placeholder fall back to the generic "item".
+    await page.getByRole("button", { name: "Ingredient", exact: true }).click();
     await selectComboboxItem(
       page,
-      page.getByRole("combobox", { name: /ingredient/i }),
-      "Search ingredient...",
+      page.getByRole("combobox", { name: "item" }),
+      "Search item...",
       ingredientName,
     );
 
-    // Add amount (2 cups) - wait for fields to be ready after ingredient selection
-    const amountValue = page.getByLabel("Amount Value");
+    // Add amount (2 cups) — row inputs are labeled "Amount" / "Unit"
+    const amountValue = page.getByLabel("Amount", { exact: true });
     await expect(amountValue).toBeVisible({ timeout: 5000 });
     await amountValue.fill("2");
-    await page.getByRole("textbox", { name: "Amount Unit" }).fill("cups");
+    await page.getByLabel("Unit", { exact: true }).fill("cups");
 
     // Add instruction
     await page.getByRole("button", { name: /Add Instruction/i }).click();

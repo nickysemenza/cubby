@@ -37,56 +37,30 @@ test.describe("Create Product with Ingredient", () => {
     await selectComboboxItem(
       page,
       page.getByRole("combobox", { name: /ingredient/i }),
-      "Search ingredient...",
+      // The field label is "Linked ingredient" — the combobox derives its
+      // search placeholder from the lowercased label.
+      "Search linked ingredient...",
       ingredientName,
     );
 
-    // Add first unit mapping (1 cup = $2.50)
-    await page.getByRole("button", { name: "Add Mapping" }).click();
-    await expect(page.getByText("Unit Mapping 1")).toBeVisible({
-      timeout: 10000,
-    });
-    await expect(page.getByPlaceholder("Enter unit").first()).toBeVisible({
-      timeout: 10000,
-    });
+    // Add first unit conversion (1 cup = $2.50). Rows use compact "Qty"/"Unit"
+    // labels that repeat per row, so target the stable input ids instead.
+    // The "from" value defaults to 1.
+    await page.getByRole("button", { name: "Add conversion" }).click();
+    const firstFromUnit = page.locator('[id="unitMappings.0.a.unit"]');
+    await expect(firstFromUnit).toBeVisible({ timeout: 10000 });
+    await firstFromUnit.fill("cup");
+    await page.locator('[id="unitMappings.0.b.value"]').fill("2.50");
+    await page.locator('[id="unitMappings.0.b.unit"]').fill("dollar");
 
-    const fromUnitField1 = page
-      .getByRole("textbox", { name: "Amount Unit" })
-      .first();
-    await fromUnitField1.fill("cup");
-
-    const toValueField1 = page
-      .getByRole("spinbutton", { name: "Amount Value" })
-      .last();
-    await toValueField1.fill("2.50");
-    const toUnitField1 = page
-      .getByRole("textbox", { name: "Amount Unit" })
-      .last();
-    await toUnitField1.fill("dollar");
-
-    // Add second unit mapping (100 grams = $1.50)
-    await page.getByRole("button", { name: "Add Mapping" }).click();
-    await expect(
-      page.getByRole("heading", { name: "Unit Mapping 2" }),
-    ).toBeVisible();
-
-    const fromValueField2 = page
-      .getByRole("spinbutton", { name: "Amount Value" })
-      .nth(2);
-    await fromValueField2.fill("100");
-    const fromUnitField2 = page
-      .getByRole("textbox", { name: "Amount Unit" })
-      .nth(2);
-    await fromUnitField2.fill("grams");
-
-    const toValueField2 = page
-      .getByRole("spinbutton", { name: "Amount Value" })
-      .nth(3);
-    await toValueField2.fill("1.50");
-    const toUnitField2 = page
-      .getByRole("textbox", { name: "Amount Unit" })
-      .nth(3);
-    await toUnitField2.fill("dollar");
+    // Add second unit conversion (100 grams = $1.50)
+    await page.getByRole("button", { name: "Add conversion" }).click();
+    const secondFromValue = page.locator('[id="unitMappings.1.a.value"]');
+    await expect(secondFromValue).toBeVisible({ timeout: 10000 });
+    await secondFromValue.fill("100");
+    await page.locator('[id="unitMappings.1.a.unit"]').fill("grams");
+    await page.locator('[id="unitMappings.1.b.value"]').fill("1.50");
+    await page.locator('[id="unitMappings.1.b.unit"]').fill("dollar");
 
     // Submit product
     await page.getByRole("button", { name: /^Create$/ }).click();
