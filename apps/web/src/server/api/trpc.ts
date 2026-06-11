@@ -38,6 +38,7 @@ import { findProductsByFoodIdentifier } from "~/server/repo/product";
 import { AvailabilityService } from "~/server/services/availability.service";
 import { IngredientService } from "~/server/services/ingredient.service";
 import { ProductService } from "~/server/services/product.service";
+import { RecipeCostingService } from "~/server/services/recipe-costing.service";
 import { USDAService } from "~/server/services/usda.service";
 import { getTracer, TraceNames } from "~/server/tracing";
 
@@ -76,6 +77,7 @@ const buildCrudServices = (db: Database) => {
     product: new ProductService(db, usdaClient),
     ingredient,
     availability: new AvailabilityService(db, ingredient),
+    recipeCosting: new RecipeCostingService(db, ingredient),
   };
 
   return {

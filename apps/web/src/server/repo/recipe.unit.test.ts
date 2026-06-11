@@ -17,6 +17,8 @@ describe("recipe repository helpers", () => {
         yield: null,
         servings: null,
         tags: null,
+        totals: null,
+        totalsComputedAt: null,
       };
 
       const result = dbRecipeToAPIShallow(recipe);
@@ -31,6 +33,8 @@ describe("recipe repository helpers", () => {
         yield: null,
         servings: null,
         tags: null,
+        totals: null,
+        totalsComputedAt: null,
         meta: {
           url: "https://example.com/recipe",
         },
@@ -55,6 +59,8 @@ describe("recipe repository helpers", () => {
         yield: null,
         servings: null,
         tags: null,
+        totals: null,
+        totalsComputedAt: null,
       };
 
       const result = dbRecipeToAPIShallow(recipe);
@@ -69,6 +75,8 @@ describe("recipe repository helpers", () => {
         yield: null,
         servings: null,
         tags: null,
+        totals: null,
+        totalsComputedAt: null,
         meta: {
           url: null,
         },

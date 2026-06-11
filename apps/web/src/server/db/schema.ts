@@ -3,7 +3,11 @@ import type { Amount } from "@cubby/schemas/codec";
 import type { CookbookRecipe } from "@cubby/schemas/cookbook";
 import { imageStatusValues } from "@cubby/schemas/image";
 import { productCategoryValues } from "@cubby/schemas/product";
-import { type RecipeYield, recipeSourceValues } from "@cubby/schemas/recipe";
+import {
+  type RecipeTotals,
+  type RecipeYield,
+  recipeSourceValues,
+} from "@cubby/schemas/recipe";
 import { relations, sql } from "drizzle-orm";
 import {
   index,
@@ -52,6 +56,11 @@ export const recipe = pgTable(
     yield: jsonb("yield").$type<RecipeYield>(),
     servings: integer("servings"),
     tags: text("tags").array(),
+    // Precomputed cost/calorie rollup + when it was last computed. `null`
+    // totalsComputedAt ⇒ stale (recomputed by the presence-driven drain). See
+    // recipe-costing.service.
+    totals: jsonb("totals").$type<RecipeTotals | null>(),
+    totalsComputedAt: timestamp("totalsComputedAt", { mode: "date" }),
   },
   (table) => ({
     shortcodeUnique: uniqueIndex("Recipe_shortcode_unique")
@@ -87,6 +96,10 @@ export const recipe = pgTable(
     nameActiveIdx: index("Recipe_name_active_idx")
       .on(table.name)
       .where(sql`${table.deletedAt} IS NULL`),
+    // Drain target: recipes whose totals need (re)computing.
+    totalsStaleIdx: index("Recipe_totals_stale_idx")
+      .on(table.totalsComputedAt)
+      .where(sql`${table.totalsComputedAt} IS NULL`),
   }),
 );
 

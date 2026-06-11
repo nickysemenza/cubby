@@ -226,10 +226,22 @@ export const recipeList = async (
     ],
   );
 
-  // Build orderBy using central sortableFields config
-  const orderByClause = buildOrderBy(recipe, sort, [
-    ...getSortableFields("recipe"),
-  ]);
+  // Build orderBy using central sortableFields config. costTotal/caloriesTotal
+  // live in the `totals` jsonb (not real columns), so sort them via a jsonb
+  // expression; everything else goes through the generic buildOrderBy.
+  const jsonbSortKey =
+    sort.orderBy === "costTotal"
+      ? "costTotal"
+      : sort.orderBy === "caloriesTotal"
+        ? "caloriesTotal"
+        : null;
+  const orderByClause = jsonbSortKey
+    ? [
+        sort.direction === "asc"
+          ? sql`(${recipe.totals}->>${jsonbSortKey})::numeric asc nulls last`
+          : sql`(${recipe.totals}->>${jsonbSortKey})::numeric desc nulls last`,
+      ]
+    : buildOrderBy(recipe, sort, [...getSortableFields("recipe")]);
 
   const { take, skip } = buildTakeSkip(pagination);
 

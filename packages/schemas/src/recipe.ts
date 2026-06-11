@@ -14,6 +14,19 @@ export const recipeYieldSchema = z.object({
 });
 export type RecipeYield = z.infer<typeof recipeYieldSchema>;
 
+// Precomputed cost/calorie rollup for a recipe, persisted as a `totals` jsonb
+// column and surfaced on `recipeOut.totals`. Covered counts (out of
+// ingredientCount) drive the list's coverage display. Computed server-side; see
+// recipe-costing.service.
+export const recipeTotals = z.object({
+  costTotal: z.number(),
+  caloriesTotal: z.number(),
+  ingredientCount: z.number().int(),
+  costCovered: z.number().int(),
+  caloriesCovered: z.number().int(),
+});
+export type RecipeTotals = z.infer<typeof recipeTotals>;
+
 // Shared building blocks for a recipe's writable fields. Defined once here so the
 // output (recipeTopLevel), API input (recipeCreateInput), and the form's formSchema
 // stay in sync. Each consumer applies its own null/optional wrapper because the
@@ -101,6 +114,9 @@ export const recipeOut = z
   .object({
     sections: z.array(recipeSectionOut),
     images: z.array(imageOut).default([]),
+    // Precomputed cost/calorie rollup (null until first computed). Populated by
+    // recipe.list; getByID may leave it null (the detail page computes its own).
+    totals: recipeTotals.nullish(),
   })
   .extend(recipeTopLevel.shape);
 

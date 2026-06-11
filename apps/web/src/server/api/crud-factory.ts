@@ -15,6 +15,7 @@ import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import type { IngredientService } from "~/server/services/ingredient.service";
 import type { ProductService } from "~/server/services/product.service";
+import type { RecipeCostingService } from "~/server/services/recipe-costing.service";
 import { protectedProcedure } from "./trpc";
 
 // Common input schema for update operations
@@ -34,6 +35,7 @@ export interface CrudServices {
   services: {
     product: ProductService;
     ingredient: IngredientService;
+    recipeCosting: RecipeCostingService;
   };
   usdaClient: USDAClient;
   upcLookupClient: UPCLookupClient;

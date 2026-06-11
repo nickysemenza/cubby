@@ -897,6 +897,17 @@ function registerTools(server: McpServer) {
     }),
   );
 
+  server.tool(
+    "recompute_recipe_totals",
+    "Recompute every recipe's persisted cost/calorie totals (one-shot backfill / recovery, e.g. after the USDA backend was unavailable).",
+    {},
+    withErrorHandling(async (_params, extra) => {
+      const caller = getCaller(extra);
+      const result = await caller.recipe.recomputeAll();
+      return json(result);
+    }),
+  );
+
   // ---------------------------------------------------------------------------
   // Data quality tools
   // ---------------------------------------------------------------------------

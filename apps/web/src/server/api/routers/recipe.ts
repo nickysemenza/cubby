@@ -87,10 +87,24 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
       return await recipeList(services.db, filters, sort, pagination);
     },
     create: async (services, data) => {
-      return await createRecipe(services.db, data, services.actorContext);
+      const created = await createRecipe(
+        services.db,
+        data,
+        services.actorContext,
+      );
+      // Recompute its totals now (instant freshness) + null any parents.
+      await services.services.recipeCosting.recompute([created.id as RecipeId]);
+      return created;
     },
     update: async (services, id: RecipeId, data) => {
-      return await updateRecipe(services.db, id, data, services.actorContext);
+      const updated = await updateRecipe(
+        services.db,
+        id,
+        data,
+        services.actorContext,
+      );
+      await services.services.recipeCosting.recompute([id]);
+      return updated;
     },
   },
   entityName: "recipe",
@@ -270,6 +284,30 @@ const deleteItem = createDeleteProcedure<RecipeId>(async (services, ids) => {
   await deleteRecipes(services.db, ids, services.actorContext);
 }, recipeId);
 
+// Recompute one batch of recipes whose persisted totals are stale
+// (totalsComputedAt IS NULL). Driven by the client while the app is open;
+// returns how many remain so the caller can keep draining. A high `limit` also
+// serves as a one-shot backfill (new rows start stale).
+const recomputeStale = protectedProcedure
+  .input(z.object({ limit: z.number().int().positive().max(500).default(25) }))
+  .output(
+    z.object({
+      processed: z.number().int(),
+      remaining: z.number().int(),
+    }),
+  )
+  .mutation(async ({ ctx, input }) => {
+    return await ctx.services.recipeCosting.drainStale(input.limit);
+  });
+
+// One-shot backfill: recompute every recipe's totals regardless of stale state.
+// Admin/recovery (e.g. after the USDA backend was down during a drain).
+const recomputeAll = protectedProcedure
+  .output(z.object({ processed: z.number().int() }))
+  .mutation(async ({ ctx }) => {
+    return await ctx.services.recipeCosting.recomputeAll();
+  });
+
 export const recipeRouter = createTRPCRouter({
   insertCompact,
   upsertCookbook: upsertCookbookEndpoint,
@@ -288,6 +326,8 @@ export const recipeRouter = createTRPCRouter({
   create,
   update,
   delete: deleteItem,
+  recomputeStale,
+  recomputeAll,
   getIngredientCooccurrence: getIngredientCooccurrenceEndpoint,
   getAllTags: getAllTagsEndpoint,
 });

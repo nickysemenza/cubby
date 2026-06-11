@@ -13,7 +13,7 @@ import {
   TIER1_NUTRIENTS,
 } from "@cubby/usda-schemas";
 import { err, ok } from "neverthrow";
-import { isFryingMediumIngredient } from "~/app/_components/recipe/recipe-utils";
+import { isFryingMediumIngredient } from "~/lib/ingredient-utils";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { wasm } from "~/lib/wasm";
 import type { Result } from "~/misc/result-types";

@@ -17,6 +17,10 @@ import {
   productList as productListRepo,
   updateProduct as updateProductRepo,
 } from "../repo/product";
+import {
+  findRecipeIdsUsingIngredient,
+  markRecipesStale,
+} from "../repo/recipe/totals";
 import { batchEnrichWithFood } from "./usda-helpers";
 
 // Extended schema that includes food data
@@ -91,7 +95,9 @@ export class ProductService {
     actor: ActorContext,
   ): Promise<ProductWithFoodOut> {
     const product = await createProductRepo(this.db, data, actor);
-    return this.getProductByID(product.id);
+    const result = await this.getProductByID(product.id);
+    await this.invalidateRecipeTotals(result.ingredient?.id);
+    return result;
   }
 
   async updateProduct(
@@ -100,6 +106,22 @@ export class ProductService {
     actor: ActorContext,
   ): Promise<ProductWithFoodOut> {
     await updateProductRepo(this.db, id, data, actor);
-    return this.getProductByID(id);
+    const result = await this.getProductByID(id);
+    await this.invalidateRecipeTotals(result.ingredient?.id);
+    return result;
+  }
+
+  /**
+   * A product's price/USDA link feeds recipe cost & calories via its linked
+   * ingredient. Null the persisted totals of every recipe using that ingredient
+   * so the drain recomputes them. Over-invalidates on benign edits (no diffing),
+   * which is fine — recompute is cheap and deferred.
+   */
+  private async invalidateRecipeTotals(
+    ingredientId: string | undefined,
+  ): Promise<void> {
+    if (!ingredientId) return;
+    const recipeIds = await findRecipeIdsUsingIngredient(this.db, ingredientId);
+    await markRecipesStale(this.db, recipeIds);
   }
 }

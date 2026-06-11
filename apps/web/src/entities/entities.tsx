@@ -96,7 +96,9 @@ export const entities: Record<Entity, EntityDefinition> = {
     list: {
       defaultSort: "createdAt",
       standardColumns: ["image", "name", "createdAt"],
-      sortableFields: ["createdAt", "name"],
+      // costTotal/caloriesTotal live in the `totals` jsonb (not real columns);
+      // recipeList sorts them via a jsonb expression. See recipe/crud.recipeList.
+      sortableFields: ["createdAt", "name", "costTotal", "caloriesTotal"],
     },
   },
   cookbook: {

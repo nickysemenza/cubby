@@ -1,32 +1,21 @@
 import type { CookbookId } from "@cubby/schemas/identifiers";
 import type { RecipeOut } from "@cubby/schemas/recipe";
-import { getNutrientValueByKey } from "@cubby/usda-schemas";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { BookOpen, ExternalLink, Scale } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef } from "react";
 import { Skeleton } from "~/components/ui/skeleton";
 import { queryKeys } from "~/lib/query-keys";
-import {
-  type CalculateTotalsResult,
-  calculateTotals,
-} from "~/lib/recipe-costing";
 import { formatCurrency } from "~/lib/utils";
-import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { useTRPC } from "~/trpc/react";
 import RTable from "../_components/data-table/Table";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
-import { loadRecipeCostingData } from "../_components/hooks/useRecipeCostingData";
-import { useStableColumnState } from "../_components/hooks/useStableColumnState";
 import { NoneState } from "../_components/NoneState";
 import { RecipeTag } from "../_components/recipe/recipe-tag";
-import {
-  formatYield,
-  getIngredientName,
-} from "../_components/recipe/recipe-utils";
+import { formatYield } from "../_components/recipe/recipe-utils";
 import { TruncatedList } from "../_components/TruncatedList";
 
 /**
@@ -67,6 +56,48 @@ const perYieldDivisor = (recipe: RecipeOut): number | null => {
   return v != null && Number.isInteger(v) && v >= 2 ? v : null;
 };
 
+/**
+ * Presence-driven drain for stale recipe totals. While the recipes page is open,
+ * recompute the persisted cost/calorie rollups in batches until none remain
+ * (recipes start stale, and product/recipe edits mark them stale again), then
+ * idle. Costs nothing on days the app isn't opened — there's no cron. Each batch
+ * that does work invalidates the list so fresh totals appear.
+ */
+function useRecipeTotalsDrain() {
+  const api = useTRPC();
+  const queryClient = useQueryClient();
+  const drain = useMutation(api.recipe.recomputeStale.mutationOptions());
+  // Stable handle so the effect can run once (mutateAsync identity isn't guaranteed).
+  const drainRef = useRef(drain.mutateAsync);
+  drainRef.current = drain.mutateAsync;
+
+  useEffect(() => {
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const tick = async () => {
+      if (stopped) return;
+      try {
+        const { processed, remaining } = await drainRef.current({ limit: 25 });
+        if (processed > 0 && !stopped) {
+          await queryClient.invalidateQueries({
+            queryKey: [...queryKeys.recipe.list],
+          });
+        }
+        // Drain quickly while work remains; otherwise re-check occasionally for
+        // rows newly invalidated by edits made while the page stays open.
+        if (!stopped) timer = setTimeout(tick, remaining > 0 ? 600 : 60_000);
+      } catch {
+        if (!stopped) timer = setTimeout(tick, 60_000);
+      }
+    };
+    void tick();
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [queryClient]);
+}
+
 interface RecipeListProps {
   /** Actions to display in the table toolbar (e.g., "Create New" button) */
   actions?: ReactNode;
@@ -80,30 +111,13 @@ interface RecipeListProps {
 
 export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
   const api = useTRPC();
-  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const columnHelper = createColumnHelper<RecipeOut>();
   const { onRowClick, PreviewSheet } = useEntityPreview("recipe");
 
-  // State for async computed data (cost/calories)
-  const [ingredientMap, setIngredientMap] = useState<Record<
-    string,
-    IngredientWithFoodOut
-  > | null>(null);
-  const [recipeTotalsMap, setRecipeTotalsMap] = useState<
-    Record<string, CalculateTotalsResult>
-  >({});
-  const [isLoadingTotals, setIsLoadingTotals] = useState(false);
+  // Keep persisted cost/calorie totals fresh while this page is open.
+  useRecipeTotalsDrain();
 
-  // Use stable ref to avoid stale closures in column cell renderers
-  const stateRef = useStableColumnState({
-    ingredientMap,
-    recipeTotalsMap,
-    isLoadingTotals,
-  });
-
-  // Define columns with access to state (columns re-create when state changes, but IDs stay stable)
-  // biome-ignore lint/correctness/useExhaustiveDependencies: stateRef is a ref - intentionally excluded to avoid re-renders
   const columns = useMemo(
     () => [
       // Tags column
@@ -144,79 +158,66 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
           return <NoneState />;
         },
       }),
-      // Total cost column
-      columnHelper.display({
-        id: "totalCost",
+      // Total cost — read from the server-persisted rollup (recipe.totals).
+      // Accessor (not display) so the column sorts server-side by costTotal;
+      // null totals = not yet computed (the drain will fill it) → skeleton.
+      columnHelper.accessor((row) => row.totals?.costTotal ?? undefined, {
+        id: "costTotal",
         header: "Cost",
-        enableSorting: false,
         meta: {
           className: "w-24",
           mobile: { slot: "trailing", priority: 5 },
         },
+        sortUndefined: "last",
         cell: (info) => {
           const recipe = info.row.original;
-          // Read from ref to get latest state (avoids stale closure)
-          const { ingredientMap, recipeTotalsMap, isLoadingTotals } =
-            stateRef.current;
-          const totals = recipeTotalsMap[recipe.id];
-          // Show skeleton while loading or if totals not yet calculated for this recipe
-          if (isLoadingTotals || ingredientMap === null || !totals)
-            return <Skeleton className="h-4 w-12" />;
-          if (!totals.price) return <NoneState />;
-          const withPrice =
-            totals.totalIngredients - totals.missingByType.price.length;
+          const totals = recipe.totals;
+          if (!totals) return <Skeleton className="h-4 w-12" />;
+          if (!totals.costTotal) return <NoneState />;
           const perItem = perYieldDivisor(recipe);
           return (
             <div className="space-y-0.5">
               <CoverageValue
-                covered={withPrice}
-                total={totals.totalIngredients}
+                covered={totals.costCovered}
+                total={totals.ingredientCount}
               >
-                {formatCurrency(totals.price)}
+                {formatCurrency(totals.costTotal)}
               </CoverageValue>
               {perItem && (
                 <div className="text-2xs text-muted-foreground">
-                  {formatCurrency(totals.price / perItem)} ea
+                  {formatCurrency(totals.costTotal / perItem)} ea
                 </div>
               )}
             </div>
           );
         },
       }),
-      // Total calories column
-      columnHelper.display({
-        id: "totalCalories",
+      // Total calories — server-persisted rollup.
+      columnHelper.accessor((row) => row.totals?.caloriesTotal ?? undefined, {
+        id: "caloriesTotal",
         header: "Calories",
-        enableSorting: false,
         meta: {
           className: "w-28",
           mobile: { slot: "trailing", priority: 10 },
         },
+        sortUndefined: "last",
         cell: (info) => {
           const recipe = info.row.original;
-          // Read from ref to get latest state (avoids stale closure)
-          const { ingredientMap, recipeTotalsMap, isLoadingTotals } =
-            stateRef.current;
-          const totals = recipeTotalsMap[recipe.id];
-          // Show skeleton while loading or if totals not yet calculated for this recipe
-          if (isLoadingTotals || ingredientMap === null || !totals)
-            return <Skeleton className="h-4 w-12" />;
-          const calories = getNutrientValueByKey(totals.nutrients, "kcal");
-          if (!calories) return <NoneState />;
-          const withNutrients =
-            totals.totalIngredients - totals.missingByType.nutrients.length;
+          const totals = recipe.totals;
+          if (!totals) return <Skeleton className="h-4 w-12" />;
+          if (!totals.caloriesTotal) return <NoneState />;
           const perItem = perYieldDivisor(recipe);
           return (
             <div className="space-y-0.5">
               <CoverageValue
-                covered={withNutrients}
-                total={totals.totalIngredients}
+                covered={totals.caloriesCovered}
+                total={totals.ingredientCount}
               >
-                {Math.round(calories)} kcal
+                {Math.round(totals.caloriesTotal)} kcal
               </CoverageValue>
               {perItem && (
                 <div className="text-2xs text-muted-foreground">
-                  {Math.round(calories / perItem)} kcal ea
+                  {Math.round(totals.caloriesTotal / perItem)} kcal ea
                 </div>
               )}
             </div>
@@ -288,7 +289,6 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
     isLoading,
     error,
     timing,
-    data,
     bulkActionBar,
     deleteDialog,
     infiniteScroll,
@@ -328,132 +328,6 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
     deletable: deletableConfig,
     infinite: true,
   });
-
-  // `data` (the flattened infinite-query result) gets a fresh array reference on
-  // every refetch/stream tick even when its content is unchanged. Depending on it
-  // directly made this effect re-run ~16× per page load — re-fetching every
-  // ingredient and recomputing every recipe's cost each time (a render storm plus
-  // thousands of WASM conversions). Trigger on a stable content signature instead
-  // and read the latest `data` through a ref.
-  const dataRef = useRef(data);
-  dataRef.current = data;
-  const dataSignature = useMemo(
-    () =>
-      data
-        .map(
-          (r) =>
-            `${r.id}:${r.sections
-              .flatMap((s) =>
-                s.ingredients.map((i) =>
-                  i.type === "ingredient" ? i.ingredient.id : `r${i.recipe.id}`,
-                ),
-              )
-              .join("-")}`,
-        )
-        .join(","),
-    [data],
-  );
-
-  // Load ingredient data and calculate totals in a single effect. Triggers on
-  // dataSignature (stable content hash); the latest `data` is read via dataRef.
-  useEffect(() => {
-    let cancelled = false;
-    const recipes = dataRef.current;
-
-    // The computed rollup keyed by content signature. calculateTotals re-fetches
-    // every ingredient and re-runs WASM, and the result is component state that's
-    // discarded on unmount — so without this the work redoes on every visit. The
-    // react-query cache outlives navigation, so a revisit reuses it with no
-    // skeleton. (The raw getManyByIDs fetches were already cached; this caches the
-    // expensive *derived* output too.)
-    const cacheKey = queryKeys.recipe.costingTotals(dataSignature);
-    type CostingCache = {
-      ingredientMap: Record<string, IngredientWithFoodOut>;
-      recipeTotalsMap: Record<string, CalculateTotalsResult>;
-    };
-
-    async function loadAndCalculate() {
-      // No recipes - nothing to calculate
-      if (recipes.length === 0) {
-        setIngredientMap({});
-        setRecipeTotalsMap({});
-        setIsLoadingTotals(false);
-        return;
-      }
-
-      // Reuse a previously computed rollup if this exact set of recipes/ingredients
-      // was costed recently — instant, no fetch, no WASM, no skeleton flash.
-      const cached = queryClient.getQueryData<CostingCache>(cacheKey);
-      if (cached) {
-        setIngredientMap(cached.ingredientMap);
-        setRecipeTotalsMap(cached.recipeTotalsMap);
-        setIsLoadingTotals(false);
-        return;
-      }
-
-      // Set loading BEFORE any async work
-      setIsLoadingTotals(true);
-
-      try {
-        // Load all ingredient data plus the full graph of any sub-recipes used
-        // as ingredients (recipe-as-ingredient), batched & cached. Replaces ~one
-        // getByID per ingredient with a handful of batched round-trips;
-        // ensureQueryData caches each chunk so revisits reuse it.
-        const { ingMap, recipeMap } = await loadRecipeCostingData(
-          recipes,
-          api,
-          queryClient,
-        );
-
-        if (cancelled) return;
-
-        // Calculate totals for all recipes (even if no ingredients). recipeMap
-        // lets sub-recipe cost/calories roll into the parent totals, scaled by
-        // amount/yield.
-        const recipeTotalsMap = Object.fromEntries(
-          recipes.map((recipe) => {
-            const recipeIngredients = recipe.sections.flatMap(
-              (s) => s.ingredients,
-            );
-            const totals = calculateTotals(
-              recipeIngredients,
-              ingMap,
-              getIngredientName,
-              recipeMap,
-            );
-            return [recipe.id, totals] as const;
-          }),
-        );
-
-        // Cache the derived rollup so navigation reuses it (GC'd after gcTime).
-        queryClient.setQueryData<CostingCache>(cacheKey, {
-          ingredientMap: ingMap,
-          recipeTotalsMap,
-        });
-
-        if (cancelled) return;
-
-        setIngredientMap(ingMap);
-        setRecipeTotalsMap(recipeTotalsMap);
-      } catch (e) {
-        console.error("Failed to load recipe totals:", e);
-        if (!cancelled) {
-          setIngredientMap({});
-          setRecipeTotalsMap({});
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoadingTotals(false);
-        }
-      }
-    }
-
-    loadAndCalculate();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [queryClient, api, dataSignature]);
 
   return (
     <div>
