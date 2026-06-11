@@ -58,15 +58,17 @@ const CACHEABLE_METHODS = [
   "parse_ingredient",
   "parse_rich_text",
   "conv_amount_to_kind",
-  "conv_amount_to_nutrients",
-  "conv_amount_all",
   "conv_amount_explain",
   "format_amount",
   "format_amount_value",
-  // Pure string classification, called once per ingredient row per costing
-  // pass — same args repeat across re-renders and the server totals rollup.
-  "classify_ingredient_usage",
+  // Mapping synthesis from product/food data — pure, called per product per
+  // render (table mapping columns, detail pages) with identical args.
+  "unit_mappings_from_food",
+  "product_unit_mappings",
 ] as const;
+// NOTE: cost_recipes is deliberately NOT cached — its args are whole recipe
+// closures (multi-KB stringify keys, fresh object identities every render);
+// React useMemo + the persisted-totals service already dedupe the calls.
 /** Source of truth shared by the runtime cache and the `ImmutableWasm` types. */
 type CacheableMethod = (typeof CACHEABLE_METHODS)[number];
 const cacheableMethods = new Set<string>(CACHEABLE_METHODS);

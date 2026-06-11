@@ -78,6 +78,19 @@ jobs:
           name: wasm-pkg
           path: packages/wasm
 
+  test-rust:
+    name: Rust Tests - recipebridge
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          cache: true
+      # Native-target tests: the costing + food-mapping modules are pure
+      # serde/ingredient code, so the parity suite runs without a wasm runtime.
+      - name: Run recipebridge tests
+        run: cargo test --manifest-path recipebridge/Cargo.toml
+
   lint-format:
     name: Lint and Format
     runs-on: ubuntu-latest
@@ -325,7 +338,7 @@ jobs:
 
   check-tests:
     name: Check All Tests Passed
-    needs: [test-unit-web, test-unit-aux, test-e2e]
+    needs: [test-unit-web, test-unit-aux, test-e2e, test-rust]
     runs-on: ubuntu-latest
     if: always()
     outputs:
@@ -337,13 +350,16 @@ jobs:
           unit_web_result="${{ needs.test-unit-web.result }}"
           unit_aux_result="${{ needs.test-unit-aux.result }}"
           e2e_result="${{ needs.test-e2e.result }}"
+          rust_result="${{ needs.test-rust.result }}"
 
           echo "Unit tests (web) result: $unit_web_result"
           echo "Unit tests (aux) result: $unit_aux_result"
           echo "E2E tests result: $e2e_result"
+          echo "Rust tests result: $rust_result"
 
           # Skipped jobs are OK (aux skipped when those packages unchanged, e2e skipped on Renovate PRs)
           if [[ "$unit_web_result" == "success" && \
+                "$rust_result" == "success" && \
                 ("$unit_aux_result" == "success" || "$unit_aux_result" == "skipped") && \
                 ("$e2e_result" == "success" || "$e2e_result" == "skipped") ]]; then
             echo "all-passed=true" >> $GITHUB_OUTPUT

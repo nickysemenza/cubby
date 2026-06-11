@@ -1,4 +1,3 @@
-import type { RecipeOut } from "@cubby/schemas/recipe";
 import {
   createColumnHelper,
   getCoreRowModel,
@@ -12,15 +11,12 @@ import {
   EntitySummaryCard,
   type RecipeSummaryData,
 } from "~/components/entity/entity-summary-card";
-import {
-  applyUsageEstimates,
-  type CalculateTotalsResult,
-  type CostingRow,
-  calculateTotals,
-  computeBakerPercentages,
-  createIngredientData,
-  type IngredientDataItem,
-  type IngredientUsage,
+import type {
+  CalculateTotalsResult,
+  CostingRow,
+  IngredientDataItem,
+  IngredientUsage,
+  RecipeCosting,
 } from "~/lib/recipe-costing";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { renderValueOrMissing } from "~/misc/result";
@@ -50,27 +46,27 @@ const ESTIMATE_AMOUNT_LABELS: Partial<Record<IngredientUsage, string>> = {
   dredging: "coating",
 };
 
+// Stable empties for the loading state (referenced by cell renderers).
+const EMPTY_ESTIMATED = new Map<string, IngredientUsage>();
+const EMPTY_BAKER = new Map<string, number | null>();
+
 export const RecipeIngredientList: React.FC<{
   ingredients: CostingRow[];
   ingMap: Record<string, IngredientWithFoodOut> | undefined;
-  // Sub-recipe graphs, so recipe-as-ingredient rows + the summary roll up their
-  // own cost/calories (scaled by amount/yield) instead of showing as missing.
-  recipeMap?: Record<string, RecipeOut>;
-}> = ({ ingredients, ingMap, recipeMap }) => {
-  // Load ingredient data
-  const data = useMemo(
-    () => (ingMap ? createIngredientData(ingredients, ingMap, recipeMap) : []),
-    [ingredients, ingMap, recipeMap],
-  );
-
-  // Load totals
-  const totals = useMemo(
-    () =>
-      ingMap
-        ? calculateTotals(ingredients, ingMap, getIngredientName, recipeMap)
-        : undefined,
-    [ingredients, ingMap, recipeMap],
-  );
+  /**
+   * The unified engine result (computed by the parent — RecipeDetail — with
+   * sub-recipe rollups, usage estimates, and baker percentages applied). Rows
+   * already carry the consumption-model-adjusted measures, so the Cost/Weight/
+   * Nutrition columns render estimates instead of "—" (or, for measured fry
+   * oil, instead of the whole pot); `estimatedRows` drives the "est." markers.
+   * Baker % is own-gram based, so the (unmeasured) oil row stays at "—".
+   */
+  costing: RecipeCosting | null;
+}> = ({ ingredients, ingMap, costing }) => {
+  const displayData = costing?.rows ?? [];
+  const totals = costing?.totals;
+  const estimatedRows = costing?.estimatedRows ?? EMPTY_ESTIMATED;
+  const bakerPct = costing?.bakerPct ?? EMPTY_BAKER;
 
   // Load unit mappings
   const mappingsMap = useMemo(() => {
@@ -83,25 +79,6 @@ export const RecipeIngredientList: React.FC<{
     });
     return Object.fromEntries(entries);
   }, [ingMap]);
-
-  // Baker's percentage per row: ingredient grams as a % of total flour grams.
-  // Computed from the original data so the (unmeasured) oil row stays at "—".
-  const bakerPct = useMemo(
-    () => computeBakerPercentages(data, getIngredientName, isFlourIngredient),
-    [data],
-  );
-
-  // Override usage-adjusted rows' priceInfo with the consumption-model estimate
-  // so the Cost/Weight/Nutrition columns render it instead of "—" (or, for
-  // measured fry oil, instead of the whole pot); `estimatedRows` drives the
-  // "est." markers.
-  const { data: displayData, estimatedRows } = useMemo(
-    () =>
-      ingMap
-        ? applyUsageEstimates(data, ingMap, getIngredientName)
-        : { data, estimatedRows: new Map<string, IngredientUsage>() },
-    [data, ingMap],
-  );
 
   const columnHelper = createColumnHelper<IngredientDataItem>();
 
@@ -375,7 +352,7 @@ export const RecipeIngredientList: React.FC<{
       )}
       <RTable
         table={table}
-        isLoading={data.length === 0}
+        isLoading={displayData.length === 0}
         error={undefined}
         ariaLabel="Recipe Ingredients Table"
       />

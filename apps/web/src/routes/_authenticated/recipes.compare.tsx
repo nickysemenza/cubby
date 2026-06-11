@@ -17,8 +17,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import {
   type CalculateTotalsResult,
-  calculateTotals,
-  flattenSections,
+  computeRecipeCosting,
 } from "~/lib/recipe-costing";
 import { formatCurrency } from "~/lib/utils";
 import { dedupe } from "~/misc/array-helpers";
@@ -85,24 +84,22 @@ function RecipeComparePage() {
   // so cost/calories roll up correctly. `ingMap` is null until first load.
   const { ingMap, recipeMap } = useRecipeCostingData(recipes);
 
-  // Calculate totals for each recipe
+  // One engine call for the whole comparison set (the ingredient payload is
+  // deduped across recipes inside the call).
   const recipesWithTotals: RecipeWithTotals[] = useMemo(() => {
     if (!ingMap || recipes.length === 0) return [];
 
-    return recipes.map((recipe) => {
-      const ingredients = flattenSections(recipe.sections);
-      const totals = calculateTotals(
-        ingredients,
-        ingMap,
-        getIngredientName,
-        recipeMap,
-      );
-      return {
-        recipe,
-        totals,
-        effectiveServings: getEffectiveServings(recipe),
-      };
-    });
+    const costings = computeRecipeCosting(
+      recipes,
+      ingMap,
+      getIngredientName,
+      recipeMap,
+    );
+    return recipes.map((recipe) => ({
+      recipe,
+      totals: costings.get(recipe.id)?.totals ?? null,
+      effectiveServings: getEffectiveServings(recipe),
+    }));
   }, [recipes, ingMap, recipeMap]);
 
   // Remove a recipe from comparison

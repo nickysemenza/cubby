@@ -1,13 +1,12 @@
 use std::{collections::HashSet, str::FromStr};
 
 use ingredient::{
-    classify_usage, from_str as parse_ingredient_str,
+    from_str as parse_ingredient_str,
     ingredient::Ingredient,
     rich_text::{Chunk, RichParser},
     unit::{
-        convert_measure_with_graph, convert_measure_with_graph_explained,
-        find_connected_components, is_valid, make_graph, print_graph, ConversionStep, Measure,
-        MeasureKind,
+        convert_measure_with_graph_explained, find_connected_components, is_valid, make_graph,
+        print_graph, ConversionStep, Measure, MeasureKind,
     },
     unit_mapping::{parse_unit_mapping as parse_unit_mapping_internal, ParsedUnitMapping},
     usage::IngredientUsage,
@@ -17,6 +16,11 @@ use recipe_scraper::{RecipeSection, RecipeYield, ScrapedRecipe};
 use serde::{Deserialize, Serialize};
 use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
+
+mod costing;
+mod food_mappings;
+pub use costing::*;
+pub use food_mappings::*;
 
 // WASM initialization - called automatically when module loads
 #[wasm_bindgen(start)]
@@ -52,7 +56,7 @@ type UnitMappingPairs = Vec<(Measure, Measure)>;
 // can't be derived stay hand-authored below.
 
 /// A measurement value + unit (mirrors `Measure`).
-#[derive(Tsify, Serialize, Deserialize)]
+#[derive(Tsify, Serialize, Deserialize, Clone)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct WAmount {
     pub unit: String,
@@ -62,7 +66,7 @@ pub struct WAmount {
 }
 
 impl WAmount {
-    fn to_measure(&self) -> Measure {
+    pub(crate) fn to_measure(&self) -> Measure {
         match self.upper_value {
             Some(upper) => Measure::with_range(&self.unit, self.value, upper),
             None => Measure::new(&self.unit, self.value),
@@ -89,38 +93,9 @@ impl From<Measure> for WAmount {
     }
 }
 
-/// One nutrient target's conversion (e.g. "g protein"), or null when no path
-/// exists. A Vec (not a map) so tsify derives the boundary type cleanly —
-/// serde_wasm_bindgen serializes a HashMap as an ES Map, not an object.
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(into_wasm_abi)]
-pub struct WNutrientConversion {
-    pub target: String,
-    pub amount: Option<WAmount>,
-}
-
-/// One entry per requested nutrient target (the return of
-/// `conv_amount_to_nutrients`). Transparent newtype so a bare list can cross the
-/// wasm boundary as `WNutrientConversion[]` (same pattern as `WCookbookChunks`).
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(into_wasm_abi)]
-#[serde(transparent)]
-pub struct WNutrientConversions(pub Vec<WNutrientConversion>);
-
-/// Every costing measure for one amount, from a single `conv_amount_all` call.
-/// Each field is the converted amount, or null when no conversion path exists.
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(into_wasm_abi)]
-pub struct WAmountAll {
-    pub money: Option<WAmount>,
-    pub weight: Option<WAmount>,
-    pub calories: Option<WAmount>,
-    pub nutrients: Vec<WNutrientConversion>,
-}
-
 /// One hop of an explained conversion path (mirrors `ConversionStep`). Units are
 /// the normalized graph nodes (cup amounts enter at `tsp`, money at `cent`).
-#[derive(Tsify, Serialize, Deserialize)]
+#[derive(Tsify, Serialize, Deserialize, Debug)]
 #[tsify(into_wasm_abi)]
 pub struct WConversionStep {
     pub from_unit: String,
@@ -387,26 +362,6 @@ pub fn parse_ingredient(input: &str) -> WIngredient {
     parse_ingredient_str(input).into()
 }
 
-/// Classify an ingredient row's usage from its stored parts. Built for cubby's
-/// stored rows (name + nullable modifier/rawLine columns, plus the enclosing
-/// section's name for marinade/brine detection), so old recipes pick up
-/// classifier improvements with no re-parse or backfill.
-#[wasm_bindgen]
-pub fn classify_ingredient_usage(
-    name: &str,
-    modifier: Option<String>,
-    raw_line: Option<String>,
-    section_name: Option<String>,
-) -> WIngredientUsage {
-    classify_usage(
-        name,
-        modifier.as_deref(),
-        raw_line.as_deref(),
-        section_name.as_deref(),
-    )
-    .into()
-}
-
 #[wasm_bindgen]
 pub fn format_amount(amount: WAmount) -> String {
     amount.to_measure().to_string()
@@ -473,81 +428,6 @@ pub fn conv_amount_explain(
     )
 }
 
-/// Convert an amount to multiple nutrient targets in a single call (graph built
-/// once). Returns one entry per target — the converted amount, or null when no
-/// conversion path exists.
-#[wasm_bindgen]
-pub fn conv_amount_to_nutrients(
-    mappings: WUnitMappings,
-    nutrient_targets: Vec<String>, // ["g protein", "mg sodium", "kcal kcal"]
-    amount_w: WAmount,
-) -> WNutrientConversions {
-    let measure = amount_w.to_measure();
-    let graph = make_graph(&mappings.to_pairs());
-    WNutrientConversions(
-        nutrient_targets
-            .into_iter()
-            .map(|target| WNutrientConversion {
-                amount: convert_measure_with_graph(
-                    &measure,
-                    MeasureKind::Nutrient(target.clone()),
-                    &graph,
-                )
-                .map(WAmount::from),
-                target,
-            })
-            .collect(),
-    )
-}
-
-/// Convert an amount to every costing measure (money, weight, calories, and each
-/// nutrient target) in a single call, building the unit-mapping graph ONCE and
-/// reusing it for all conversions. Collapses the recipe-costing hot path's
-/// per-ingredient fan-out (money + weight + nutrients + calories = 4 boundary
-/// crossings, each rebuilding the graph) into one. Each field is the converted
-/// `WAmount`, or null when no conversion path exists.
-#[wasm_bindgen]
-pub fn conv_amount_all(
-    mappings: WUnitMappings,
-    nutrient_targets: Vec<String>, // non-kcal targets, e.g. ["g protein", "mg sodium"]
-    amount_w: WAmount,
-) -> WAmountAll {
-    let measure = amount_w.to_measure();
-    let graph = make_graph(&mappings.to_pairs()); // built ONCE, reused below
-    let convert =
-        |kind: MeasureKind| convert_measure_with_graph(&measure, kind, &graph).map(WAmount::from);
-
-    WAmountAll {
-        money: convert(MeasureKind::Money),
-        weight: convert(MeasureKind::Weight),
-        calories: convert(MeasureKind::Calories),
-        nutrients: nutrient_targets
-            .into_iter()
-            .map(|target| WNutrientConversion {
-                amount: convert(MeasureKind::Nutrient(target.clone())),
-                target,
-            })
-            .collect(),
-    }
-}
-
-/// Convert an amount to a specific unit target (e.g., "g protein").
-#[wasm_bindgen]
-pub fn conv_amount_to_unit(
-    mappings: WUnitMappings,
-    target_unit: String,
-    amount_w: WAmount,
-) -> Result<WAmount, String> {
-    let pairs = mappings.to_pairs();
-    let measure = amount_w.to_measure();
-    let kind = MeasureKind::Nutrient(target_unit.clone());
-
-    measure
-        .convert_measure_via_mappings(kind, &pairs)
-        .ok_or_else(|| format!("Failed to convert to '{target_unit}'"))
-        .map(WAmount::from)
-}
-
 #[wasm_bindgen]
 pub fn parse_scraped_recipe(body: &str, url: &str) -> Result<WCompactRecipe, String> {
     recipe_scraper::scrape(body, url)
@@ -596,6 +476,33 @@ pub fn amount_kind(amount: WAmount) -> Result<WAmountKind, String> {
 #[wasm_bindgen]
 pub fn parse_unit_mapping(input: String) -> Result<WUnitMapping, String> {
     Ok(parse_unit_mapping_internal(&input)?.into())
+}
+
+/// All unit mappings derivable from one USDA food: portion edges, the
+/// (bare-count-guarded) branded serving edge, and per-nutrient `100 g = X`
+/// edges. The TS `unitMappingsFromFood` is a thin wrapper over this.
+#[wasm_bindgen]
+pub fn unit_mappings_from_food(food: WFoodInput) -> WSourcedUnitMappings {
+    WSourcedUnitMappings(food_mappings::mappings_from_food(&food))
+}
+
+/// All unit mappings for a product: stored rows (verbatim), food-derived edges,
+/// and the synthesized `1 each = $price` edge. The TS
+/// `getAllUnitMappingsFromProduct` is a thin wrapper over this; the costing
+/// engine consumes the same synthesis internally.
+#[wasm_bindgen]
+pub fn product_unit_mappings(product: WProductInput) -> WSourcedUnitMappings {
+    WSourcedUnitMappings(food_mappings::product_mappings(&product))
+}
+
+/// Cost a batch of recipes in one call: totals + per-row resolved measures +
+/// usage estimates + baker percentages + diagnostics (and, with
+/// `input.explain`, unit-graph conversion paths). The whole two-pass
+/// consumption-model engine runs in Rust — the TS `computeRecipeCosting` is a
+/// thin wrapper that assembles the input and reshapes the result.
+#[wasm_bindgen]
+pub fn cost_recipes(input: WCostingInput) -> Result<WCostingResult, String> {
+    costing::cost_recipes_impl(&input)
 }
 
 // ===========================================================================

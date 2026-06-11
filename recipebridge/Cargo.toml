@@ -34,3 +34,8 @@ serde-wasm-bindgen = "0.6"
 wasm-tracing = "2.0.0"
 tracing = "0.1.41"
 console_error_panic_hook = "0.1.7"
+
+[dev-dependencies]
+# Native-target tests (cargo test): the costing + food-mapping modules are pure
+# serde/ingredient code, so the parity suite runs without a wasm runtime.
+rstest = "0.26"

@@ -9,7 +9,6 @@
  * `drainStale` recomputes them, driven by the client while the app is open.
  */
 
-import type { Amount } from "@cubby/schemas/codec";
 import type { RecipeId } from "@cubby/schemas/identifiers";
 import type {
   RecipeCostingExplain,
@@ -20,12 +19,9 @@ import { getNutrientValueByKey } from "@cubby/usda-schemas";
 import {
   type CalculateTotalsResult,
   type CostingRow,
-  calculateTotals,
+  computeRecipeCosting,
   flattenSections,
-  type RowDiagnostic,
 } from "~/lib/recipe-costing";
-import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
-import { wasm } from "~/lib/wasm";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import { getRecipesByIDs } from "~/server/repo/recipe/crud";
@@ -107,24 +103,6 @@ const usdaMissesFor = (
   return misses;
 };
 
-/**
- * The amount that actually drove a row's measures: its own written amount, or
- * the estimated grams (basis fraction / flat) the consumption plan substituted.
- */
-const amountDrivingRow = (
-  row: CostingRow,
-  diag: RowDiagnostic,
-): Amount | null => {
-  const own = row.amounts[0];
-  if (own) return own;
-  const w = diag.plan.weight;
-  if (w.kind === "basis-fraction" && diag.basisGrams != null) {
-    return { value: w.fraction * diag.basisGrams, unit: "g" };
-  }
-  if (w.kind === "flat-grams") return { value: w.grams, unit: "g" };
-  return null;
-};
-
 export class RecipeCostingService {
   constructor(
     private db: Database,
@@ -176,16 +154,25 @@ export class RecipeCostingService {
   ): Promise<Map<RecipeId, { totals: RecipeTotals; complete: boolean }>> {
     const { ingMap, recipeMap } = await this.loadContext(recipes);
 
+    // One engine call for the whole batch (ingredients serialized once).
+    const costings = computeRecipeCosting(
+      recipes,
+      ingMap,
+      recipeIngredientName,
+      recipeMap,
+    );
+
     const result = new Map<
       RecipeId,
       { totals: RecipeTotals; complete: boolean }
     >();
     for (const r of recipes) {
-      const ings = flattenSections(r.sections);
-      const t = calculateTotals(ings, ingMap, recipeIngredientName, recipeMap);
+      const costing = costings.get(r.id);
+      if (!costing) continue;
       result.set(r.id as RecipeId, {
-        complete: usdaMissesFor(ings, ingMap).length === 0,
-        totals: toRecipeTotals(t),
+        complete:
+          usdaMissesFor(flattenSections(r.sections), ingMap).length === 0,
+        totals: toRecipeTotals(costing.totals),
       });
     }
     return result;
@@ -209,37 +196,22 @@ export class RecipeCostingService {
 
     const { ingMap, recipeMap } = await this.loadContext([recipe]);
     const rows = flattenSections(recipe.sections);
-    const t = calculateTotals(rows, ingMap, recipeIngredientName, recipeMap);
-    const computedTotals = toRecipeTotals(t);
+    // Explain mode: the engine attaches the unit-graph route per measure to
+    // each row's diagnostic — the "show your work" that makes a wrong number
+    // self-explanatory — driven by the row's own amount or its estimated grams.
+    const costing = computeRecipeCosting(
+      [recipe],
+      ingMap,
+      recipeIngredientName,
+      recipeMap,
+      { explain: true },
+    ).get(recipe.id);
+    if (!costing) {
+      throw createAppError("RECIPE_NOT_FOUND", "Recipe could not be costed");
+    }
+    const computedTotals = toRecipeTotals(costing.totals);
     const usdaMisses = usdaMissesFor(rows, ingMap);
-
-    // Enrich each row's diagnostic with the unit-graph route per measure —
-    // the "show your work" that makes a wrong number self-explanatory.
-    const diagnostics = t.diagnostics.map((diag, i) => {
-      const row = rows[i];
-      if (!row || row.type !== "ingredient") return diag;
-      const mappings = (ingMap[row.ingredient.id]?.product ?? []).flatMap((p) =>
-        getAllUnitMappingsFromProduct(p),
-      );
-      const amount = amountDrivingRow(row, diag);
-      if (!amount || mappings.length === 0) return diag;
-      const explain = (kind: "money" | "weight" | "calories") => {
-        try {
-          const e = wasm.conv_amount_explain(mappings, kind, amount);
-          return e.path ? [...e.path] : null;
-        } catch {
-          return null;
-        }
-      };
-      return {
-        ...diag,
-        paths: {
-          money: explain("money"),
-          weight: explain("weight"),
-          calories: explain("calories"),
-        },
-      };
-    });
+    const diagnostics = costing.totals.diagnostics;
 
     const persisted = state.totals;
     const drift = {

@@ -14,11 +14,9 @@ import {
 import { useDebug } from "~/hooks/useDebug";
 import { PerfProfiler } from "~/lib/perf/PerfProfiler";
 import {
-  applyUsageEstimates,
   type CalculateTotalsResult,
   type CostingRow,
-  calculateTotals,
-  createIngredientData,
+  computeRecipeCosting,
   flattenSections,
 } from "~/lib/recipe-costing";
 import { formatCurrency } from "~/lib/utils";
@@ -32,6 +30,7 @@ import {
   formatYield,
   getEffectiveServings,
   getIngredientName,
+  isFlourIngredient,
 } from "./recipe-utils";
 import { RecipeIngredientList } from "./recipeingredientlist";
 
@@ -188,30 +187,26 @@ const RecipeDetailInner: React.FC<{
   const recipesForCosting = useMemo(() => [recipe], [recipe]);
   const { ingMap, recipeMap } = useRecipeCostingData(recipesForCosting);
 
-  // Load enriched ingredient data for charts (with price/nutrition info). Apply
-  // the usage-estimate overrides (absorbed frying oil, to-taste salt, …) so the
-  // cost treemap + nutrition charts include them and reconcile with the summary
-  // totals (calculateTotals folds them in too); a no-op for all-normal recipes.
-  const ingredientDataItems = useMemo(
+  // One engine call (Rust, via cost_recipes) per data change: totals + per-row
+  // resolved measures — the usage-estimate overrides (absorbed frying oil,
+  // to-taste salt, …) already applied — plus "est." markers and baker
+  // percentages. The table and charts views share this result so they always
+  // agree with the summary totals.
+  const costing = useMemo(
     () =>
       ingMap
-        ? applyUsageEstimates(
-            createIngredientData(ingredients, ingMap, recipeMap),
+        ? (computeRecipeCosting(
+            recipesForCosting,
             ingMap,
             getIngredientName,
-          ).data
-        : [],
-    [ingredients, ingMap, recipeMap],
-  );
-
-  // Calculate totals for charts
-  const totals = useMemo(
-    () =>
-      ingMap
-        ? calculateTotals(ingredients, ingMap, getIngredientName, recipeMap)
+            recipeMap,
+            { isFlour: isFlourIngredient },
+          ).get(recipe.id) ?? null)
         : null,
-    [ingredients, ingMap, recipeMap],
+    [recipesForCosting, ingMap, recipeMap, recipe.id],
   );
+  const totals = costing?.totals ?? null;
+  const ingredientDataItems = costing?.rows ?? [];
 
   return (
     <div className="space-y-6">
@@ -244,7 +239,7 @@ const RecipeDetailInner: React.FC<{
           <RecipeIngredientList
             ingredients={ingredients}
             ingMap={ingMap ?? undefined}
-            recipeMap={recipeMap}
+            costing={costing}
           />
         </>
       )}
