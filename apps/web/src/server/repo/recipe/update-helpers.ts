@@ -24,6 +24,7 @@ import {
 import { insertAndReturn } from "~/server/repo/database-helpers";
 
 import type { ExistingRecipeWithSections } from "./internal-types";
+import { webProvenance } from "./source";
 
 /**
  * Process a single ingredient input.
@@ -157,8 +158,10 @@ export async function updateRecipeBasicProperties(
 
   if (!hasBasicUpdates) return;
 
+  // A url edit re-derives Website provenance; without one the existing
+  // SourceType is preserved (a manual edit must not clobber Book/Notion).
   const sourceType = updates.meta?.url
-    ? "Website"
+    ? webProvenance(updates.meta.url).sourceType
     : existingRecipe.SourceType || "Other";
   const sourceData =
     updates.meta?.url !== undefined

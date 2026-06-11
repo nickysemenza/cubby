@@ -55,6 +55,11 @@ import { generateUniqueRecipeShortcode } from "~/server/repo/shortcode-utils";
 import { dbRecipeToAPI } from "./helpers";
 import type { RecipeFilters } from "./internal-types";
 import {
+  type RecipeProvenance,
+  recipeSourceToColumns,
+  webProvenance,
+} from "./source";
+import {
   deleteAllSections,
   handleSectionUpdates,
   processIngredients,
@@ -287,16 +292,6 @@ export const recipeList = async (
   return { data: items, count: totalCount };
 };
 
-// Provenance override for recipes whose source isn't a website URL (e.g. EPUB
-// cookbooks → SourceType "Book"). When omitted, source derives from meta.url.
-// `cookbookId` is set only for Book recipes (the FK to their Cookbook); SourceData
-// is kept synced to the cookbook name so the source codec stays a pure row read.
-type RecipeProvenance = {
-  sourceType: "Book" | "Website" | "Other" | "Notion";
-  sourceData: string | null;
-  cookbookId?: CookbookId | null;
-};
-
 // A cookbook the importer is writing into: its FK id plus its name (stamped onto
 // each recipe's SourceData). Created up-front by `upsertCookbook` (cookbook repo).
 export type CookbookRef = { id: CookbookId; name: string };
@@ -310,12 +305,9 @@ export const createRecipe = async (
   actor: ActorContext,
   provenance?: RecipeProvenance,
 ): Promise<RecipeOut> => {
-  const sourceType =
-    provenance?.sourceType ?? (recipeInput.meta?.url ? "Website" : "Other");
-  const sourceData = provenance
-    ? provenance.sourceData
-    : recipeInput.meta?.url || null;
-  const cookbookId = provenance?.cookbookId ?? null;
+  const sourceColumns = recipeSourceToColumns(
+    provenance ?? webProvenance(recipeInput.meta?.url ?? null),
+  );
   const { pendingImageIds } = recipeInput;
 
   // Create the recipe in a transaction
@@ -342,9 +334,7 @@ export const createRecipe = async (
     const createdRecipe = await insertAndReturn(tx, recipe, {
       name: recipeInput.name,
       shortcode,
-      SourceType: sourceType,
-      SourceData: sourceData,
-      cookbookId,
+      ...sourceColumns,
       yield: recipeInput.yield ?? null,
       servings: recipeInput.servings ?? null,
       tags: recipeInput.tags ?? null,
@@ -476,9 +466,7 @@ const upsertRecipeMatching = async (
       tx,
       recipe,
       {
-        SourceType: provenance.sourceType,
-        SourceData: provenance.sourceData,
-        cookbookId: provenance.cookbookId ?? null,
+        ...recipeSourceToColumns(provenance),
         // Like sections, notes are replaced from the import source on re-import
         // (a manual edit doesn't survive a re-import).
         notes: input.notes ?? null,
@@ -512,10 +500,7 @@ export const upsertRecipe = (
       notDeleted(recipe),
       sql`${recipe.SourceType} IS DISTINCT FROM 'Book'`,
     ),
-    {
-      sourceType: input.meta?.url ? "Website" : "Other",
-      sourceData: input.meta?.url || null,
-    },
+    webProvenance(input.meta?.url ?? null),
   );
 
 /**
