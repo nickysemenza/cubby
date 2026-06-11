@@ -3,7 +3,6 @@ use std::{collections::HashSet, str::FromStr};
 use ingredient::{
     classify_usage, from_str as parse_ingredient_str,
     ingredient::Ingredient,
-    usage::IngredientUsage,
     rich_text::{Chunk, RichParser},
     unit::{
         convert_measure_with_graph, convert_measure_with_graph_explained,
@@ -11,6 +10,7 @@ use ingredient::{
         MeasureKind,
     },
     unit_mapping::{parse_unit_mapping as parse_unit_mapping_internal, ParsedUnitMapping},
+    usage::IngredientUsage,
     util::truncate_3_decimals,
 };
 use recipe_scraper::{RecipeSection, RecipeYield, ScrapedRecipe};
@@ -24,7 +24,23 @@ pub fn init() {
     console_error_panic_hook::set_once();
     let mut config = wasm_tracing::WasmLayerConfig::new();
     config.set_max_level(tracing::Level::INFO);
+    // workerd (CF Workers) ships a `performance` global without the User
+    // Timing API — wasm-tracing's span timings call performance.mark()/
+    // measure() unguarded, throwing "performance.mark is not a function" on
+    // every traced call. Only report timings where the API actually exists
+    // (browsers, Node), so devtools profiles keep their marks in dev.
+    config.set_report_logs_in_timings(performance_supports_user_timing());
     let _ = wasm_tracing::set_as_global_default_with_config(config);
+}
+
+/// True when the host's `performance` global implements the User Timing API
+/// (browsers, Node) rather than workerd's bare now()/timeOrigin stub.
+fn performance_supports_user_timing() -> bool {
+    js_sys::Reflect::get(&js_sys::global(), &JsValue::from_str("performance"))
+        .ok()
+        .filter(|p| !p.is_undefined() && !p.is_null())
+        .and_then(|p| js_sys::Reflect::get(&p, &JsValue::from_str("mark")).ok())
+        .is_some_and(|m| m.is_function())
 }
 
 // A pair of measures that can be used for unit conversion
@@ -591,8 +607,8 @@ pub fn parse_unit_mapping(input: String) -> Result<WUnitMapping, String> {
 use recipe_epub::{
     assemble_recipes as assemble_recipes_internal, build_chunk_request,
     chunk_epub as chunk_epub_internal, cover_image_ref as cover_image_ref_internal,
-    epub_metadata as epub_metadata_internal, parse_recipes_payload, read_image as read_image_internal,
-    Chunk as EpubChunk, EpubMeta, ImageRef, Link as EpubLink,
+    epub_metadata as epub_metadata_internal, parse_recipes_payload,
+    read_image as read_image_internal, Chunk as EpubChunk, EpubMeta, ImageRef, Link as EpubLink,
 };
 use sha2::{Digest, Sha256};
 
