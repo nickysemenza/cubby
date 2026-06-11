@@ -1,9 +1,9 @@
-import type { CookbookRecipe } from "@cubby/schemas/cookbook";
+import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import { describe, expect, it } from "vitest";
 import { addWithReferences, topoOrderSelected } from "./import-order";
 
-// Minimal CookbookRecipe builder: a title plus the titles it references.
-const r = (title: string, refs: string[] = []): CookbookRecipe => ({
+// Minimal ImportRecipe builder: a title plus the titles it references.
+const r = (title: string, refs: string[] = []): ImportRecipe => ({
   meta: { title },
   sections: [{ ingredients: [], instructions: [] }],
   references: refs.map((t) => ({

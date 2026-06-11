@@ -13,7 +13,7 @@ import { Card, CardContent, CardHeader } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
-import { cookbookRecipeSignature } from "~/lib/recipe-signature";
+import { importRecipeSignature } from "~/lib/recipe-signature";
 import { useTRPC } from "~/trpc/react";
 import {
   RecipeImportCard,
@@ -239,7 +239,7 @@ function RecipeList({
           // → "no changes" vs "will update"; un-imported ones are "new".
           const status: RecipeImportStatus = !existing
             ? "new"
-            : cookbookRecipeSignature(recipe) !== existing.sig
+            : importRecipeSignature(recipe) !== existing.sig
               ? "will-update"
               : "unchanged";
           return (

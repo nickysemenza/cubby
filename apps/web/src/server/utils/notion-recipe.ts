@@ -9,7 +9,7 @@
  */
 
 import type { CompactRecipe } from "@cubby/schemas/codec";
-import type { CookbookRecipe } from "@cubby/schemas/cookbook";
+import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import { wasm } from "~/lib/wasm";
 import type { NotionBlock, NotionRecipeRow } from "~/server/clients/notion";
 
@@ -119,15 +119,15 @@ export function notionPageToCompact(
 }
 
 /**
- * Adapt a mapped Notion page to the `CookbookRecipe` shape the shared import
+ * Adapt a mapped Notion page to the `ImportRecipe` shape the shared import
  * card renders — so the Notion and EPUB previews use the exact same component
  * (ingredient-match table, headnote, rich-text steps). The raw yield string is
  * kept for display; notes are already folded into `description`; no references.
  */
-export function notionCompactToCookbookRecipe(
+export function notionCompactToImportRecipe(
   compact: CompactRecipe,
   yieldText: string | null,
-): CookbookRecipe {
+): ImportRecipe {
   return {
     meta: {
       title: compact.name,

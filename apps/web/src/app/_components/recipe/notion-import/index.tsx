@@ -1,4 +1,4 @@
-import type { CookbookRecipe } from "@cubby/schemas/cookbook";
+import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, Import, RefreshCw } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
@@ -21,7 +21,7 @@ type PreviewItem = {
   status: "new" | "unchanged" | "will-update" | "needs-formatting";
   existingId: string | null;
   reasons: string[];
-  recipe: CookbookRecipe;
+  recipe: ImportRecipe;
 };
 
 /**

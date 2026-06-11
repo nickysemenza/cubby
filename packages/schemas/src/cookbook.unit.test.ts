@@ -1,20 +1,17 @@
 import { describe, expect, test } from "vitest";
 import cookbookSample from "./__fixtures__/cookbook.sample.json";
-import {
-  composeNotesMarkdown,
-  cookbookBundleSchema,
-  cookbookRecipesSchema,
-} from "./cookbook";
+import { cookbookBundleSchema } from "./cookbook";
+import { composeNotesMarkdown, importRecipesSchema } from "./import-recipe";
 
-describe("cookbookRecipesSchema", () => {
+describe("importRecipesSchema", () => {
   // Drift alarm for the unspoken syntax agreement with ../ingredient-parser.
   // `cookbook.sample.json` is a faithful `food-cli scrape-epub <book>.epub --json`
-  // payload (the `recipe-epub` crate's `Vec<CookbookRecipe>`). If the Rust output
+  // payload (the `recipe-epub` crate's `Vec<ImportRecipe>`). If the Rust output
   // shape changes, regenerate the fixture and update `cookbook.ts` to match:
   //   cargo run -p food-cli -- scrape-epub <book>.epub --json > \
   //     packages/schemas/src/__fixtures__/cookbook.sample.json
   test("accepts a real food-cli cookbook JSON payload", () => {
-    const result = cookbookRecipesSchema.safeParse(cookbookSample);
+    const result = importRecipesSchema.safeParse(cookbookSample);
 
     expect(result.success).toBe(true);
     // Spot-check the shape survived: named sections, metadata, and a resolved
@@ -25,7 +22,7 @@ describe("cookbookRecipesSchema", () => {
   });
 
   test("accepts a food-cli --json array (instructions default to [])", () => {
-    const result = cookbookRecipesSchema.safeParse([
+    const result = importRecipesSchema.safeParse([
       {
         meta: { title: "Soup" },
         sections: [{ ingredients: ["1 onion"] }],
@@ -38,7 +35,7 @@ describe("cookbookRecipesSchema", () => {
   });
 
   test("rejects a section missing ingredients", () => {
-    const result = cookbookRecipesSchema.safeParse([
+    const result = importRecipesSchema.safeParse([
       { meta: { title: "Bad" }, sections: [{ instructions: ["step"] }] },
     ]);
 
@@ -46,7 +43,7 @@ describe("cookbookRecipesSchema", () => {
   });
 
   test("references default to [] and parse cross-recipe pointers", () => {
-    const result = cookbookRecipesSchema.safeParse([
+    const result = importRecipesSchema.safeParse([
       // no references key → defaults to []
       { meta: { title: "Plain" }, sections: [{ ingredients: ["1 egg"] }] },
       {
@@ -69,7 +66,7 @@ describe("cookbookRecipesSchema", () => {
   });
 
   test("rejects an invalid reference confidence", () => {
-    const result = cookbookRecipesSchema.safeParse([
+    const result = importRecipesSchema.safeParse([
       {
         meta: { title: "X" },
         sections: [{ ingredients: ["a"] }],
@@ -88,7 +85,7 @@ describe("cookbookBundleSchema", () => {
     ...(source ? { source } : {}),
   });
 
-  test("passes a flat CookbookRecipe[] through unchanged", () => {
+  test("passes a flat ImportRecipe[] through unchanged", () => {
     const result = cookbookBundleSchema.safeParse([
       recipe("A", "one.epub"),
       recipe("B", "two.epub"),

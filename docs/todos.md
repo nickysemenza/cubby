@@ -29,3 +29,8 @@ Now that all unit conversions go through WASM with compound unit support:
 
 ### Larger changes
 - [ ] Simplify household sharing - replace organization plugin with simple household model (users share one household UUID, magic link invites, no hierarchy)
+
+## Future: Recipe Import
+
+- [ ] **Scraped page URL not stored as source**: the WASM→`ImportRecipe` scraper bridge (`WCompactToImportRecipe`, `apps/web/src/server/utils/scraper.ts`) never sets a real source URL, so URL/MCP-imported recipes (`insertCompactRecipe`) land as `SourceType=Other` with no source link. Fix: carry the scraped URL on `ImportRecipe` and have the import converter set `meta.url` from it, guarded to `http(s)` so a cookbook's synthetic `source#doc_path` stays null. (The recipe form's own URL field already covers the interactive scrape path.)
+- [ ] **Scraped/Notion image not persisted on the server import path**: the scrape *form* imports the image client-side via `image.importFromUrl`, but `insertCompactRecipe`/`insertNotionRecipe` drop `ImportRecipe.image`. Fix: call the existing `importImageFromUrl(db, …)` (`apps/web/src/server/repo/image.ts`) during server-side import and attach the resulting image id. This is also the path for the deferred Notion hero-image import — note Notion image URLs are signed/expiring, so they must be fetched at import time.

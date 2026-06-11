@@ -10,9 +10,9 @@
 import type { CompactRecipe } from "@cubby/schemas/codec";
 import { sanitizeSectionName } from "@cubby/schemas/codec";
 import {
-  type CookbookRecipe,
   composeNotesMarkdown,
-} from "@cubby/schemas/cookbook";
+  type ImportRecipe,
+} from "@cubby/schemas/import-recipe";
 import type { RecipeOut } from "@cubby/schemas/recipe";
 import { wasm } from "~/lib/wasm";
 
@@ -68,12 +68,12 @@ export function compactSignature(
 }
 
 /**
- * Signature of the recipe an EPUB `CookbookRecipe` *would* import as — applies
- * the same transforms as `cookbookRecipeToRecipeInput` (WASM yield parse,
+ * Signature of the recipe an EPUB `ImportRecipe` *would* import as — applies
+ * the same transforms as `importRecipeToRecipeInput` (WASM yield parse,
  * composed notes, sanitized section names) so it matches the stored recipe's
  * `recipeOutSignature`. Cookbook recipes carry no tags.
  */
-export function cookbookRecipeSignature(cr: CookbookRecipe): string {
+export function importRecipeSignature(cr: ImportRecipe): string {
   const parsedYield = cr.meta.recipe_yield
     ? wasm.parse_yield(cr.meta.recipe_yield)
     : undefined;

@@ -1,10 +1,10 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { CookbookRecipe } from "@cubby/schemas/cookbook";
 import {
   unsafeIngredientId,
   unsafeRecipeId,
   unsafeUserId,
 } from "@cubby/schemas/identifiers";
+import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import { and, eq } from "drizzle-orm";
 import { buildTestDB } from "tooling/test-setup";
@@ -256,12 +256,12 @@ describe("upsertCookbookRecipe", () => {
     expect(titles.sort()).toEqual(["Pancakes", "Waffles"]);
   });
 
-  // A raw CookbookRecipe (the parser's shape; lines parsed server-side).
+  // A raw ImportRecipe (the parser's shape; lines parsed server-side).
   const cookbook = (
     name: string,
     ingredients: string[],
-    references: CookbookRecipe["references"] = [],
-  ): CookbookRecipe => ({
+    references: ImportRecipe["references"] = [],
+  ): ImportRecipe => ({
     meta: { title: name },
     sections: [{ ingredients, instructions: [] }],
     references,

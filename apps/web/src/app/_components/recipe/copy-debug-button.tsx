@@ -52,7 +52,7 @@ export function CopyDebugButton({
   );
 }
 
-/** Copy any value as pretty JSON — e.g. the `CookbookRecipe` extraction fixture. */
+/** Copy any value as pretty JSON — e.g. the `ImportRecipe` extraction fixture. */
 export function CopyJsonButton({
   value,
   title,

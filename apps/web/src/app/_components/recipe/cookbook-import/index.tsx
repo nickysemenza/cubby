@@ -1,14 +1,14 @@
 import type { WCookbookChunk } from "@cubby/recipebridge";
-import {
-  type CookbookRecipe,
-  cookbookBundleSchema,
-  cookbookRecipesSchema,
-} from "@cubby/schemas/cookbook";
+import { cookbookBundleSchema } from "@cubby/schemas/cookbook";
 import { unsafeCookbookId } from "@cubby/schemas/identifiers";
 import {
   ALLOWED_IMAGE_TYPES,
   type AllowedImageType,
 } from "@cubby/schemas/image";
+import {
+  type ImportRecipe,
+  importRecipesSchema,
+} from "@cubby/schemas/import-recipe";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Upload } from "lucide-react";
 import { useCallback, useEffect, useId, useState } from "react";
@@ -306,10 +306,10 @@ export function CookbookImport({
           if (now - lastPreviewAt < PREVIEW_THROTTLE_MS) return;
           lastPreviewAt = now;
         }
-        let recipes: CookbookRecipe[];
+        let recipes: ImportRecipe[];
         try {
           const tA = performance.now();
-          recipes = cookbookRecipesSchema.parse(
+          recipes = importRecipesSchema.parse(
             wasm.assemble_recipes(chunks, results, source),
           );
           assembleMs += performance.now() - tA;
@@ -469,7 +469,7 @@ export function CookbookImport({
     [books, extractBook],
   );
 
-  // Power-user path: a flat CookbookRecipe[] or a {book,recipes}[] bundle.
+  // Power-user path: a flat ImportRecipe[] or a {book,recipes}[] bundle.
   const loadJson = useCallback(async (file: File) => {
     let data: unknown;
     try {
@@ -485,7 +485,7 @@ export function CookbookImport({
     }
     // Group recipes by their per-recipe source (fixes the old one-book-name-for-
     // all bug): each distinct source becomes its own book.
-    const bySource = new Map<string, CookbookRecipe[]>();
+    const bySource = new Map<string, ImportRecipe[]>();
     for (const r of parsed.data) {
       const key = r.source ?? "(unknown)";
       const list = bySource.get(key);

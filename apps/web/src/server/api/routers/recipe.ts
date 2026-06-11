@@ -8,15 +8,15 @@
 
 import { compactRecipeSchema } from "@cubby/schemas/codec";
 import {
-  cookbookRecipeSchema,
-  cookbookRecipesSchema,
-} from "@cubby/schemas/cookbook";
-import {
   cookbookId,
   type RecipeId,
   recipeId,
   unsafeCookbookId,
 } from "@cubby/schemas/identifiers";
+import {
+  importRecipeSchema,
+  importRecipesSchema,
+} from "@cubby/schemas/import-recipe";
 import {
   type IngredientCooccurrence,
   ingredientCooccurrenceSchema,
@@ -59,7 +59,7 @@ import {
 import { extractCookbookChunk } from "~/server/utils/cookbook-llm";
 import {
   lintNotionCompact,
-  notionCompactToCookbookRecipe,
+  notionCompactToImportRecipe,
   notionPageToCompact,
 } from "~/server/utils/notion-recipe";
 import { scrapeToCompact } from "~/server/utils/scraper";
@@ -138,7 +138,7 @@ const upsertCookbookEndpoint = protectedProcedure
   .input(
     z.object({
       name: z.string().min(1),
-      rawJson: cookbookRecipesSchema,
+      rawJson: importRecipesSchema,
       author: z.array(z.string()).optional(),
       subjects: z.array(z.string()).optional(),
       sourceLabel: z.string(),
@@ -160,7 +160,7 @@ const getCookbookSourceEndpoint = protectedProcedure
     z.object({
       id: cookbookId,
       name: z.string(),
-      recipes: cookbookRecipesSchema,
+      recipes: importRecipesSchema,
     }),
   )
   .query(async ({ ctx, input }) => {
@@ -172,7 +172,7 @@ const getCookbookSourceEndpoint = protectedProcedure
 const insertCookbook = protectedProcedure
   .input(
     z.object({
-      recipe: cookbookRecipeSchema,
+      recipe: importRecipeSchema,
       cookbookId,
       book: z.string().min(1),
     }),
@@ -214,7 +214,7 @@ const notionPreviewItem = z.object({
   reasons: z.array(z.string()),
   // The mapped recipe in the shared cookbook shape, so the Notion and EPUB
   // previews render with the exact same card.
-  recipe: cookbookRecipeSchema,
+  recipe: importRecipeSchema,
 });
 
 // Notion page ids come dashed from the API but are stored dashless-tolerant;
@@ -256,7 +256,7 @@ const previewNotionSync = protectedProcedure
           status,
           existingId: prior?.id ?? null,
           reasons,
-          recipe: notionCompactToCookbookRecipe(compact, row.yieldText),
+          recipe: notionCompactToImportRecipe(compact, row.yieldText),
         };
       }),
     );

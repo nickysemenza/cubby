@@ -3,11 +3,11 @@ import {
   sanitizeSectionName,
 } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
-import {
-  type CookbookRecipe,
-  composeNotesMarkdown,
-} from "@cubby/schemas/cookbook";
 import { unsafeIngredientId } from "@cubby/schemas/identifiers";
+import {
+  composeNotesMarkdown,
+  type ImportRecipe,
+} from "@cubby/schemas/import-recipe";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import { wasm } from "~/lib/wasm";
 import type { Database, DrizzleTransaction } from "../db";
@@ -127,15 +127,15 @@ export const upsertNotionRecipeFromCompact = async (
 };
 
 /**
- * Convert a raw `CookbookRecipe` (the parser's JSON shape) directly into a
+ * Convert a raw `ImportRecipe` (the parser's JSON shape) directly into a
  * `RecipeCreateInput` — no `CompactRecipe` intermediary. Parses ingredient lines
  * and the freeform yield via WASM, find-or-creates ingredients (memoized), and
  * links cross-recipe references: when an ingredient `line` matches one of the
  * recipe's `references` whose target title already exists in this book, it
  * becomes a recipe-linked ingredient instead of a flat one.
  */
-const cookbookRecipeToRecipeInput = async (
-  cr: CookbookRecipe,
+const importRecipeToRecipeInput = async (
+  cr: ImportRecipe,
   cookbookRef: CookbookRef,
   db: Database,
 ): Promise<RecipeCreateInput> => {
@@ -193,12 +193,12 @@ const cookbookRecipeToRecipeInput = async (
 };
 
 export const upsertCookbookRecipeFromCookbook = async (
-  cr: CookbookRecipe,
+  cr: ImportRecipe,
   cookbookRef: CookbookRef,
   db: Database,
   actor: ActorContext,
 ) => {
-  const recipeInput = await cookbookRecipeToRecipeInput(cr, cookbookRef, db);
+  const recipeInput = await importRecipeToRecipeInput(cr, cookbookRef, db);
 
   // (cookbookId, title)-scoped upsert + "Book" provenance + FK link.
   return await upsertCookbookRecipe(recipeInput, cookbookRef, db, actor);

@@ -2,15 +2,15 @@
  * Cookbook repository.
  *
  * A `Cookbook` is a first-class recipe source: the book a set of EPUB-extracted
- * recipes came from. It stores the full assembled `CookbookRecipe[]` (`rawJson`)
+ * recipes came from. It stores the full assembled `ImportRecipe[]` (`rawJson`)
  * so recipes can be re-derived without re-running the LLM, plus OPF metadata.
  * Recipes link to it via `recipe.cookbookId`; cookbook-scoped recipe queries live
  * in the recipe repo (`./recipe`).
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
-import type { CookbookRecipe } from "@cubby/schemas/cookbook";
 import { type CookbookId, unsafeCookbookId } from "@cubby/schemas/identifiers";
+import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import type { CookbookSummary } from "@cubby/schemas/recipe";
 import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
@@ -32,7 +32,7 @@ import { getCookbookRecipeTitles } from "~/server/repo/recipe";
 // to empty (the power-user JSON path has no EPUB to read metadata from).
 export type CookbookUpsertInput = {
   name: string;
-  rawJson: CookbookRecipe[];
+  rawJson: ImportRecipe[];
   author?: string[];
   subjects?: string[];
   sourceLabel: string;
@@ -155,7 +155,7 @@ export const listCookbooks = async (
 export const getCookbookSource = async (
   db: Database,
   id: CookbookId,
-): Promise<{ id: CookbookId; name: string; recipes: CookbookRecipe[] }> => {
+): Promise<{ id: CookbookId; name: string; recipes: ImportRecipe[] }> => {
   const cb = await getCookbookById(db, id);
   if (!cb) {
     throw createAppError("COOKBOOK_NOT_FOUND", `Cookbook ${id} not found`);

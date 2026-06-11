@@ -1,7 +1,7 @@
 import type { AuditEntityType } from "@cubby/schemas/audit";
 import type { Amount } from "@cubby/schemas/codec";
-import type { CookbookRecipe } from "@cubby/schemas/cookbook";
 import { imageStatusValues } from "@cubby/schemas/image";
+import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import { productCategoryValues } from "@cubby/schemas/product";
 import {
   type RecipeTotals,
@@ -117,7 +117,7 @@ export const recipe = pgTable(
 );
 
 // Cookbook table — a first-class recipe source (the book a set of EPUB-extracted
-// recipes came from). Holds the full assembled `CookbookRecipe[]` JSON so recipes
+// recipes came from). Holds the full assembled `ImportRecipe[]` JSON so recipes
 // can be re-derived without re-running the LLM, plus OPF metadata. A cookbook is
 // always born from a full import, so every content column is NOT NULL.
 // Not linked to Product/inventory — the digital source and the physical book are
@@ -133,7 +133,7 @@ export const cookbook = pgTable(
     // The EPUB `source` label (filename/path) from assembly.
     sourceLabel: text("sourceLabel").notNull(),
     // The full assembled extraction — powers reprocess-without-LLM.
-    rawJson: jsonb("rawJson").notNull().$type<CookbookRecipe[]>(),
+    rawJson: jsonb("rawJson").notNull().$type<ImportRecipe[]>(),
     // The book's cover, extracted from the EPUB on import. Nullable: older
     // cookbooks / cover-less EPUBs have none.
     coverImageId: uuid("coverImageId").references(() => image.id),

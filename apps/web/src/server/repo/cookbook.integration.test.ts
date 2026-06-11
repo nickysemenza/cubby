@@ -1,6 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { CookbookRecipe } from "@cubby/schemas/cookbook";
 import { unsafeUserId } from "@cubby/schemas/identifiers";
+import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import { eq } from "drizzle-orm";
 import { buildTestDB } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -21,11 +21,11 @@ const TEST_ACTOR: ActorContext = {
   source: "epub_import",
 };
 
-// A raw CookbookRecipe (the parser's shape; lines parsed server-side on import).
+// A raw ImportRecipe (the parser's shape; lines parsed server-side on import).
 const cookbookRecipe = (
   title: string,
   ingredients: string[],
-): CookbookRecipe => ({
+): ImportRecipe => ({
   meta: { title },
   sections: [{ ingredients, instructions: [] }],
   references: [],

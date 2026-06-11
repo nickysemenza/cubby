@@ -1,4 +1,4 @@
-import type { CookbookRecipe } from "@cubby/schemas/cookbook";
+import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 
 /** Result of importing a single recipe into the DB. */
 export type ImportResult =
@@ -19,7 +19,7 @@ export type Book = {
   source: string;
   /** Editable display/import name (the value stamped as the recipe's book). */
   name: string;
-  recipes: CookbookRecipe[];
+  recipes: ImportRecipe[];
   /** Book-level OPF metadata read from the EPUB (empty for the JSON path). */
   epubMeta?: { author: string[]; subjects: string[] };
   /** Cover image extracted from the EPUB (empty for JSON / from-source paths). */

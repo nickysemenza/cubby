@@ -7,6 +7,7 @@
     "./availability": "./src/availability.ts",
     "./codec": "./src/codec.ts",
     "./cookbook": "./src/cookbook.ts",
+    "./import-recipe": "./src/import-recipe.ts",
     "./entity": "./src/entity.ts",
     "./identifiers": "./src/identifiers.ts",
     "./common": "./src/common.ts",

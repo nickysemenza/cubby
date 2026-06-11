@@ -1,7 +1,7 @@
 import {
-  type CookbookRecipe,
   composeNotesMarkdown,
-} from "@cubby/schemas/cookbook";
+  type ImportRecipe,
+} from "@cubby/schemas/import-recipe";
 import { Link } from "@tanstack/react-router";
 import { AlertCircle, Check, ExternalLink } from "lucide-react";
 import { memo, useMemo } from "react";
@@ -36,7 +36,7 @@ export type ReferenceLinking = {
 
 export type RecipeImportCardProps = {
   /** The recipe to preview, in the cookbook shape (both importers map to this). */
-  recipe: CookbookRecipe;
+  recipe: ImportRecipe;
   status: RecipeImportStatus;
   /** The existing Cubby recipe id, when already imported — drives the link pill. */
   existingId?: string;
@@ -52,7 +52,7 @@ export type RecipeImportCardProps = {
 };
 
 /** Cheap structural signature so memoized cards skip re-render unless content changed. */
-function recipeSignature(r: CookbookRecipe): string {
+function recipeSignature(r: ImportRecipe): string {
   let ings = 0;
   let ins = 0;
   for (const s of r.sections) {

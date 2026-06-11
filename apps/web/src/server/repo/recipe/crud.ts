@@ -5,12 +5,12 @@
 
 import type { CompactRecipe } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
-import type { CookbookRecipe } from "@cubby/schemas/cookbook";
 import {
   type CookbookId,
   type RecipeId,
   unsafeRecipeId,
 } from "@cubby/schemas/identifiers";
+import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import {
   buildTakeSkip,
   type PaginationParams,
@@ -272,7 +272,7 @@ export const getNotionRecipesForDiff = async (
  * references.
  */
 export const insertCookbookRecipe = (
-  cookbookRecipe: CookbookRecipe,
+  cookbookRecipe: ImportRecipe,
   cookbookRef: CookbookRef,
   db: Database,
   actor: ActorContext,

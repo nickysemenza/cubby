@@ -1,4 +1,4 @@
-import type { CookbookRecipe } from "@cubby/schemas/cookbook";
+import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 
 /** Case/whitespace-insensitive key for matching recipe titles to references. */
 export const normalize = (s: string) => s.trim().toLowerCase();
@@ -8,7 +8,7 @@ export const normalize = (s: string) => s.trim().toLowerCase();
  * and the topological import order (both resolve a reference title to its recipe).
  */
 export const buildTitleIndex = (
-  recipes: CookbookRecipe[],
+  recipes: ImportRecipe[],
 ): Map<string, number> => {
   const m = new Map<string, number>();
   recipes.forEach((r, i) => {
@@ -24,7 +24,7 @@ export const buildTitleIndex = (
  * links can resolve. Mutates `selected`.
  */
 export const addWithReferences = (
-  recipes: CookbookRecipe[],
+  recipes: ImportRecipe[],
   selected: Set<number>,
   i: number,
 ): void => {
@@ -51,7 +51,7 @@ export const addWithReferences = (
  * ingredient (used by the recipe, not dangling).
  */
 export const topoOrderSelected = (
-  recipes: CookbookRecipe[],
+  recipes: ImportRecipe[],
   selected: number[],
 ): number[] => {
   const selectedSet = new Set(selected);
