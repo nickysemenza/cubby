@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useTableDensity } from "~/app/_components/data-table/useTableDensity";
 import { EntityLayout } from "~/components/layouts/entity-layout";
@@ -10,6 +11,7 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import { Switch } from "~/components/ui/switch";
+import { getErrorMessage } from "~/lib/error-utils";
 import {
   FLAG_KEYS,
   FLAGS,
@@ -17,6 +19,8 @@ import {
   type FlagKey,
   useFlags,
 } from "~/lib/flags";
+import { queryKeys } from "~/lib/query-keys";
+import type { TimingResponse } from "~/routes/api/debug/timing";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   component: SettingsPage,
@@ -62,6 +66,8 @@ function SettingsPage() {
           );
         })}
 
+        <DiagnosticsCard />
+
         <AppearanceCard />
 
         <Button variant="outline" size="sm" onClick={resetFlags}>
@@ -95,6 +101,83 @@ function FlagRow({
       </div>
       <Switch checked={value} onCheckedChange={onChange} />
     </div>
+  );
+}
+
+function DiagnosticsCard() {
+  const { data, error, isFetching, refetch, dataUpdatedAt } =
+    useQuery<TimingResponse>({
+      queryKey: queryKeys.debug.timing,
+      queryFn: async () => {
+        const res = await fetch("/api/debug/timing");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json() as Promise<TimingResponse>;
+      },
+      staleTime: 60_000,
+      refetchOnWindowFocus: false,
+      retry: false,
+    });
+
+  return (
+    <Card emphasis="chunky">
+      <CardHeader>
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1.5">
+            <CardTitle>Diagnostics</CardTitle>
+            <CardDescription>
+              Latency of core infrastructure — database, USDA API, and UPC
+              lookup.
+            </CardDescription>
+          </div>
+          <Button
+            variant="outline"
+            size="xs"
+            onClick={() => refetch()}
+            disabled={isFetching}
+          >
+            {isFetching ? "Measuring…" : "Re-run"}
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="divide-y divide-border/60">
+        {error ? (
+          <p className="py-3 text-destructive text-xs">
+            Timing check failed: {getErrorMessage(error)}
+          </p>
+        ) : !data ? (
+          <p className="py-3 text-muted-foreground text-xs">Measuring…</p>
+        ) : (
+          <>
+            {data.results.map((result) => (
+              <div
+                key={result.label}
+                className="flex items-start justify-between gap-4 py-2"
+              >
+                <div className="min-w-0 space-y-0.5">
+                  <code className="block truncate font-mono text-muted-foreground text-xs">
+                    {result.label}
+                  </code>
+                  {result.error && (
+                    <p className="text-destructive text-xs">{result.error}</p>
+                  )}
+                </div>
+                <span className="shrink-0 font-medium font-mono text-sm tabular-nums">
+                  {result.durationMs} ms
+                </span>
+              </div>
+            ))}
+            <div className="flex items-center justify-between gap-4 py-2 text-muted-foreground text-xs">
+              <span>
+                Last run {new Date(dataUpdatedAt).toLocaleTimeString()}
+              </span>
+              <span className="font-mono tabular-nums">
+                total {data.totalMs} ms
+              </span>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

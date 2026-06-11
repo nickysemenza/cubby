@@ -16,6 +16,9 @@ export const queryKeys = {
     list: ["ingredient", "list"] as const,
     getByName: ["ingredient", "getByName"] as const,
   },
+  debug: {
+    timing: ["debug", "timing"] as const,
+  },
   recipe: {
     list: ["recipe", "list"] as const,
     getByID: ["recipe", "getByID"] as const,

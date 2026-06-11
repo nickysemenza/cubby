@@ -7,10 +7,15 @@ import { db } from "~/server/db";
 import { product } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 
-type TimingResult = {
+export type TimingResult = {
   label: string;
   durationMs: number;
   error?: string;
+};
+
+export type TimingResponse = {
+  results: TimingResult[];
+  totalMs: number;
 };
 
 async function measure(
