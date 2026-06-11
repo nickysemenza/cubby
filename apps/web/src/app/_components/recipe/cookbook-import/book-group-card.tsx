@@ -1,4 +1,7 @@
-import type { CookbookRecipe } from "@cubby/schemas/cookbook";
+import {
+  type CookbookRecipe,
+  composeNotesMarkdown,
+} from "@cubby/schemas/cookbook";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -11,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { memo, useCallback, useMemo, useRef } from "react";
+import { MarkdownText } from "~/components/markdown";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -288,7 +292,9 @@ function recipeSignature(r: CookbookRecipe): string {
     ings += s.ingredients.length;
     ins += s.instructions.length;
   }
-  return `${r.meta.title}|${r.sections.length}|${ings}|${ins}|${r.references.length}|${r.meta.recipe_yield ?? ""}`;
+  // description/notes lengths: cross-chunk merges can attach them after the
+  // recipe first streams in, and the card renders them.
+  return `${r.meta.title}|${r.sections.length}|${ings}|${ins}|${r.references.length}|${r.meta.recipe_yield ?? ""}|${r.meta.description?.length ?? 0}|${r.meta.notes?.length ?? 0}`;
 }
 
 const RecipeCard = memo(
@@ -347,6 +353,12 @@ function RecipeCardImpl({
   const { matchMap } = useIngredientMatches(ingredientNames);
   const matchReady = matchMap.size > 0;
 
+  // The notes markdown exactly as import will store it (headnote + tips).
+  const notesMarkdown = composeNotesMarkdown(
+    recipe.meta.description,
+    recipe.meta.notes,
+  );
+
   const richBySection = useMemo(
     () =>
       recipe.sections.map((section) =>
@@ -388,6 +400,12 @@ function RecipeCardImpl({
         />
         <ImportStatus result={result} />
       </div>
+
+      {notesMarkdown && (
+        <MarkdownText className="mt-2 text-muted-foreground text-xs">
+          {notesMarkdown}
+        </MarkdownText>
+      )}
 
       {recipe.references.length > 0 && (
         <div className="mt-2 flex flex-wrap items-center gap-1 text-xs">

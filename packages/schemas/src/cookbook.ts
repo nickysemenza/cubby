@@ -25,6 +25,25 @@ const cookbookRecipeMeta = z.object({
   page: z.string().optional(),
 });
 
+/**
+ * Compose a recipe's freeform `notes` markdown from an import source's
+ * headnote (`description`) and tip list (`notes`): description as the opening
+ * paragraph, notes as a bullet list. Null when both are empty/blank. Shared by
+ * the server import paths and the client-side import preview so the preview
+ * shows exactly what import will store.
+ */
+export const composeNotesMarkdown = (
+  description: string | undefined | null,
+  notes: readonly string[] | undefined | null,
+): string | null => {
+  const parts: string[] = [];
+  const headnote = description?.trim();
+  if (headnote) parts.push(headnote);
+  const bullets = (notes ?? []).map((n) => n.trim()).filter(Boolean);
+  if (bullets.length > 0) parts.push(bullets.map((n) => `- ${n}`).join("\n"));
+  return parts.length > 0 ? parts.join("\n\n") : null;
+};
+
 const cookbookRecipeSection = z.object({
   name: z.string().optional(),
   ingredients: z.array(z.string()),

@@ -1,5 +1,6 @@
 import type { FC } from "react";
 import { type Control, useWatch } from "react-hook-form";
+import { MarkdownText } from "~/components/markdown";
 import { wasm } from "~/lib/wasm";
 import type { RecipeFormValues } from "./types";
 
@@ -55,6 +56,13 @@ export const RecipeLivePreview: FC<{
           </p>
         )}
       </div>
+
+      {/* Notes markdown, headnote-style — mirrors the detail view's placement. */}
+      {values.notes?.trim() && (
+        <MarkdownText className="text-muted-foreground text-xs">
+          {values.notes}
+        </MarkdownText>
+      )}
 
       {sections.map((section, sectionIndex) => (
         <div

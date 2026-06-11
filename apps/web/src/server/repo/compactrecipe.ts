@@ -3,7 +3,10 @@ import {
   sanitizeSectionName,
 } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
-import type { CookbookRecipe } from "@cubby/schemas/cookbook";
+import {
+  type CookbookRecipe,
+  composeNotesMarkdown,
+} from "@cubby/schemas/cookbook";
 import { unsafeIngredientId } from "@cubby/schemas/identifiers";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import { wasm } from "~/lib/wasm";
@@ -49,23 +52,6 @@ const makeIngredientResolvers = (tx: DrizzleTransaction) => {
       return p;
     },
   };
-};
-
-/**
- * Compose a recipe's freeform `notes` markdown from the import source's
- * headnote (`description`) and tip list (`notes`): description as the opening
- * paragraph, notes as a bullet list. Null when both are empty/blank.
- */
-export const composeNotesMarkdown = (
-  description: string | undefined | null,
-  notes: readonly string[] | undefined | null,
-): string | null => {
-  const parts: string[] = [];
-  const headnote = description?.trim();
-  if (headnote) parts.push(headnote);
-  const bullets = (notes ?? []).map((n) => n.trim()).filter(Boolean);
-  if (bullets.length > 0) parts.push(bullets.map((n) => `- ${n}`).join("\n"));
-  return parts.length > 0 ? parts.join("\n\n") : null;
 };
 
 // Convert ParsedCompactRecipe to RecipeCreateInput format
