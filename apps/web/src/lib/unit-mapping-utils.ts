@@ -60,6 +60,19 @@ const normalizeBrandedFoodServingSizeUnit = (
 };
 
 /**
+ * Strip a plural suffix from a household unit word ("scoops" → "scoop",
+ * "pouches" → "pouch"). Mirrors the parser's own singularization so the unit we
+ * emit matches how the same word parses on a recipe line.
+ */
+const singularizeUnitWord = (s: string): string => {
+  if (s.endsWith("es")) {
+    const base = s.slice(0, -2);
+    if (/(ch|sh|ss|x|z)$/.test(base)) return base;
+  }
+  return s.length > 2 && s.endsWith("s") ? s.slice(0, -1) : s;
+};
+
+/**
  * Creates a unit mapping from branded food serving size info using WASM parsing
  */
 const createServingMapping = (
@@ -87,6 +100,20 @@ const createServingMapping = (
       return undefined;
     }
     const b = { ...last };
+
+    // INVARIANT: bare counts may enter the conversion graph only from *recipe
+    // amounts*, never from serving metadata. In the unit graph "whole" ≡ "each"
+    // ≡ the priced item, so emitting a bare serving COUNT here would let a
+    // serving inherit the product's per-item price (e.g. ProMix fdc 576208:
+    // household "2 SCOOPS" parses to `2 ⟨whole⟩` + name "SCOOPS" — unguarded,
+    // 44.3 g = 2 whole made one scoop cost a whole $39.99 bag). Relabel the
+    // bare count with the household word the parser read as the "name"
+    // (normalized to match how that word parses on a recipe line), falling
+    // back to a generic "serving" unit.
+    if (b.unit === "whole" || b.unit === "") {
+      const householdUnit = singularizeUnitWord(p.name.trim().toLowerCase());
+      b.unit = householdUnit.length > 0 ? householdUnit : "serving";
+    }
     const servingSizeUnit = branded_food_serving_size_unit.parse(
       serving.serving_size_unit,
     );
