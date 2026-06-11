@@ -1,8 +1,4 @@
-import type {
-  WFoodInput,
-  WSourcedUnitMapping,
-  WUnitMapping,
-} from "@cubby/recipebridge";
+import type { WFoodInput, WUnitMapping } from "@cubby/recipebridge";
 import { type ProductId, unsafeProductId } from "@cubby/schemas/identifiers";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import {
@@ -22,7 +18,8 @@ import { wasm } from "~/lib/wasm";
 // the thin boundary wrapper: project inputs, recast outputs.
 
 // Parsed unit mapping result (source normalized from undefined to null)
-interface ParsedUnitMappingResult extends Omit<WUnitMapping, "source"> {
+interface ParsedUnitMappingResult
+  extends Omit<WUnitMapping, "source" | "sourceMetadata"> {
   source: string | null;
 }
 
@@ -66,20 +63,21 @@ export const toWFoodInput = (food: FoodSummary): WFoodInput => ({
 
 /**
  * Recast a WASM-synthesized mapping to the TS `UnitMapping`: brand the product
- * id, normalize the optional source to null. Fresh objects — the WASM proxy's
- * cached results are shared/readonly.
+ * id, normalize the optional source/metadata to the required shape. Fresh
+ * objects — the WASM proxy's cached results are shared/readonly. The metadata
+ * fallback is defensive: every edge this boundary emits carries it.
  */
-const toUnitMapping = (m: ReadonlyDeep<WSourcedUnitMapping>): UnitMapping => ({
+const toUnitMapping = (m: ReadonlyDeep<WUnitMapping>): UnitMapping => ({
   a: { value: m.a.value, unit: m.a.unit },
   b: { value: m.b.value, unit: m.b.unit },
   source: m.source ?? null,
   sourceMetadata:
-    m.sourceMetadata.type === "product"
+    m.sourceMetadata?.type === "product"
       ? {
           type: "product",
           productId: unsafeProductId(m.sourceMetadata.productId),
         }
-      : m.sourceMetadata.type === "food"
+      : m.sourceMetadata?.type === "food"
         ? { type: "food", fdcId: m.sourceMetadata.fdcId }
         : { type: "manual" },
 });

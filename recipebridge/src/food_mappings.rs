@@ -2,17 +2,19 @@
 //!
 //! Port of the synthesis half of `apps/web/src/lib/unit-mapping-utils.ts` — the
 //! TS module is now a thin wrapper over the `unit_mappings_from_food` /
-//! `product_unit_mappings` exports in lib.rs. The recipe-costing engine consumes
+//! `product_unit_mappings` exports below. The recipe-costing engine consumes
 //! `product_mappings` directly, so client display, server totals, and costing
 //! all derive conversion edges from this single implementation.
 //!
-//! Pure serde + parser code (no JsValue) so `cargo test` runs natively.
+//! Pure serde + parser code (no JsValue except the export shims) so
+//! `cargo test` runs natively.
 
-use ingredient::from_str as parse_ingredient_str;
+use ingredient::{from_str as parse_ingredient_str, unit::singular};
 use serde::{Deserialize, Serialize};
 use tsify_next::Tsify;
+use wasm_bindgen::prelude::*;
 
-use crate::WAmount;
+use crate::{WAmount, WUnitMapping, WUnitMappings};
 
 // ---------------------------------------------------------------------------
 // Boundary types
@@ -78,7 +80,7 @@ pub struct WProductInput {
     #[tsify(type = "number | null")]
     pub price: Option<f64>,
     /// Stored DB rows — pass through verbatim, keeping their own metadata.
-    pub unit_mappings: Vec<WSourcedUnitMapping>,
+    pub unit_mappings: Vec<WUnitMapping>,
     #[serde(default)]
     #[tsify(type = "WFoodInput | null")]
     pub food: Option<WFoodInput>,
@@ -101,31 +103,6 @@ pub enum WSourceMetadata {
     Manual,
 }
 
-/// A unit mapping with provenance — the boundary shape of the TS `UnitMapping`.
-#[derive(Tsify, Serialize, Deserialize, Clone)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
-pub struct WSourcedUnitMapping {
-    pub a: WAmount,
-    pub b: WAmount,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[tsify(optional, type = "string | null")]
-    pub source: Option<String>,
-    #[serde(rename = "sourceMetadata")]
-    pub source_metadata: WSourceMetadata,
-}
-
-impl WSourcedUnitMapping {
-    pub(crate) fn to_pair(&self) -> (ingredient::unit::Measure, ingredient::unit::Measure) {
-        (self.a.to_measure(), self.b.to_measure())
-    }
-}
-
-/// `WSourcedUnitMapping[]` (`transparent`).
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(into_wasm_abi)]
-#[serde(transparent)]
-pub struct WSourcedUnitMappings(pub Vec<WSourcedUnitMapping>);
-
 // ---------------------------------------------------------------------------
 // Synthesis
 // ---------------------------------------------------------------------------
@@ -135,26 +112,6 @@ fn amount(value: f64, unit: impl Into<String>) -> WAmount {
         unit: unit.into(),
         value,
         upper_value: None,
-    }
-}
-
-/// Strip a plural suffix from a household unit word ("scoops" → "scoop",
-/// "pouches" → "pouch"). Mirrors the parser's own singularization so the unit
-/// emitted matches how the same word parses on a recipe line.
-fn singularize_unit_word(s: &str) -> &str {
-    if let Some(base) = s.strip_suffix("es") {
-        if base.ends_with("ch")
-            || base.ends_with("sh")
-            || base.ends_with("ss")
-            || base.ends_with('x')
-            || base.ends_with('z')
-        {
-            return base;
-        }
-    }
-    match s.strip_suffix('s') {
-        Some(base) if s.len() > 2 => base,
-        _ => s,
     }
 }
 
@@ -172,7 +129,7 @@ fn normalize_serving_size_unit(unit: &str) -> Option<&str> {
 
 /// Serving-size mapping from branded food info, household text parsed by the
 /// ingredient parser. `None` when any field is null or unparseable.
-fn serving_mapping(fdc_id: u32, serving: &WFoodServing) -> Option<WSourcedUnitMapping> {
+fn serving_mapping(fdc_id: u32, serving: &WFoodServing) -> Option<WUnitMapping> {
     let serving_size = serving.serving_size?;
     let unit_raw = serving.serving_size_unit.as_deref()?;
     let household = serving.household_serving_fulltext.as_deref()?;
@@ -186,53 +143,55 @@ fn serving_mapping(fdc_id: u32, serving: &WFoodServing) -> Option<WSourcedUnitMa
     // serving inherit the product's per-item price (e.g. ProMix fdc 576208:
     // household "2 SCOOPS" parses to `2 ⟨whole⟩` + name "SCOOPS" — unguarded,
     // 44.3 g = 2 whole made one scoop cost a whole $39.99 bag). Relabel the
-    // bare count with the household word the parser read as the "name"
-    // (normalized to match how that word parses on a recipe line), falling
-    // back to a generic "serving" unit.
+    // bare count with the household word the parser read as the "name" —
+    // through the parser's own `singular`, so the emitted unit matches exactly
+    // how that word parses on a recipe line — falling back to a generic
+    // "serving" unit.
     if b.unit == "whole" || b.unit.is_empty() {
-        let household_unit = singularize_unit_word(parsed.name.trim().to_lowercase().as_str())
-            .to_string();
+        let household_unit = singular(parsed.name.trim());
         b.unit = if household_unit.is_empty() {
             "serving".to_string()
         } else {
-            household_unit
+            household_unit.into_owned()
         };
     }
 
-    Some(WSourcedUnitMapping {
+    Some(WUnitMapping {
         a: amount(serving_size, normalize_serving_size_unit(unit_raw)?),
         b,
         source: Some("USDA FDC serving".to_string()),
-        source_metadata: WSourceMetadata::Food { fdc_id },
+        source_metadata: Some(WSourceMetadata::Food { fdc_id }),
     })
 }
 
 /// USDA portion row → weight mapping.
-fn portion_mapping(p: &WFoodPortion, fdc_id: u32) -> WSourcedUnitMapping {
-    WSourcedUnitMapping {
+fn portion_mapping(p: &WFoodPortion, fdc_id: u32) -> WUnitMapping {
+    WUnitMapping {
         a: amount(p.amount, p.modifier.as_deref().unwrap_or("portion")),
         b: amount(p.gram_weight, "g"),
         source: Some("USDA portion".to_string()),
-        source_metadata: WSourceMetadata::Food { fdc_id },
+        source_metadata: Some(WSourceMetadata::Food { fdc_id }),
     }
 }
 
 /// Per-nutrient `100 g = X <target>` edges (e.g. `100 g = 15 g protein`).
-fn nutrition_mappings(food: &WFoodInput) -> impl Iterator<Item = WSourcedUnitMapping> + '_ {
+fn nutrition_mappings(food: &WFoodInput) -> impl Iterator<Item = WUnitMapping> + '_ {
     food.nutrients_per_100
         .iter()
         .filter(|n| n.amount > 0.0)
-        .map(|n| WSourcedUnitMapping {
+        .map(|n| WUnitMapping {
             a: amount(100.0, "g"),
             b: amount(n.amount, n.unit.clone()),
             source: Some("USDA nutrition".to_string()),
-            source_metadata: WSourceMetadata::Food { fdc_id: food.fdc_id },
+            source_metadata: Some(WSourceMetadata::Food {
+                fdc_id: food.fdc_id,
+            }),
         })
 }
 
 /// All mappings derivable from one USDA food: portions, the (guarded) branded
 /// serving edge, and per-nutrient edges — in that order, matching the TS port.
-pub fn mappings_from_food(food: &WFoodInput) -> Vec<WSourcedUnitMapping> {
+pub fn mappings_from_food(food: &WFoodInput) -> Vec<WUnitMapping> {
     food.portions
         .iter()
         .map(|p| portion_mapping(p, food.fdc_id))
@@ -248,27 +207,54 @@ pub fn mappings_from_food(food: &WFoodInput) -> Vec<WSourcedUnitMapping> {
 /// The synthetic `1 each = $price` costing edge. Price lives on the scalar
 /// `product.price` column (source of truth), projected into the graph at
 /// compute time — same read-time synthesis as the USDA edges.
-fn price_mapping(price: Option<f64>, product_id: &str) -> Option<WSourcedUnitMapping> {
-    Some(WSourcedUnitMapping {
+fn price_mapping(price: Option<f64>, product_id: &str) -> Option<WUnitMapping> {
+    Some(WUnitMapping {
         a: amount(1.0, "each"),
         b: amount(price?, "dollar"),
         source: Some("price".to_string()),
-        source_metadata: WSourceMetadata::Product {
+        source_metadata: Some(WSourceMetadata::Product {
             product_id: product_id.to_string(),
-        },
+        }),
     })
 }
 
 /// All unit mappings for a product: stored rows (verbatim, keeping their own
 /// metadata), food-derived edges, then the synthesized price edge.
-pub fn product_mappings(product: &WProductInput) -> Vec<WSourcedUnitMapping> {
+pub fn product_mappings(product: &WProductInput) -> Vec<WUnitMapping> {
     product
         .unit_mappings
         .iter()
         .cloned()
-        .chain(product.food.as_ref().map(mappings_from_food).unwrap_or_default())
+        .chain(
+            product
+                .food
+                .as_ref()
+                .map(mappings_from_food)
+                .unwrap_or_default(),
+        )
         .chain(price_mapping(product.price, &product.id))
         .collect()
+}
+
+// ---------------------------------------------------------------------------
+// Exports
+// ---------------------------------------------------------------------------
+
+/// All unit mappings derivable from one USDA food: portion edges, the
+/// (bare-count-guarded) branded serving edge, and per-nutrient `100 g = X`
+/// edges. The TS `unitMappingsFromFood` is a thin wrapper over this.
+#[wasm_bindgen]
+pub fn unit_mappings_from_food(food: WFoodInput) -> WUnitMappings {
+    WUnitMappings(mappings_from_food(&food))
+}
+
+/// All unit mappings for a product: stored rows (verbatim), food-derived edges,
+/// and the synthesized `1 each = $price` edge. The TS
+/// `getAllUnitMappingsFromProduct` is a thin wrapper over this; the costing
+/// engine consumes the same synthesis internally.
+#[wasm_bindgen]
+pub fn product_unit_mappings(product: WProductInput) -> WUnitMappings {
+    WUnitMappings(product_mappings(&product))
 }
 
 // ---------------------------------------------------------------------------
@@ -301,12 +287,8 @@ mod tests {
         }
     }
 
-    fn convert(
-        mappings: &[WSourcedUnitMapping],
-        from: Measure,
-        kind: MeasureKind,
-    ) -> Option<Measure> {
-        let pairs: Vec<_> = mappings.iter().map(WSourcedUnitMapping::to_pair).collect();
+    fn convert(mappings: &[WUnitMapping], from: Measure, kind: MeasureKind) -> Option<Measure> {
+        let pairs: Vec<_> = mappings.iter().map(WUnitMapping::to_pair).collect();
         let graph = make_graph(&pairs);
         convert_measure_with_graph(&from, kind, &graph)
     }
@@ -393,17 +375,6 @@ mod tests {
         );
     }
 
-    #[rstest]
-    #[case("scoops", "scoop")]
-    #[case("pouches", "pouch")]
-    #[case("boxes", "box")]
-    #[case("glasses", "glass")]
-    #[case("scoop", "scoop")]
-    #[case("os", "os")] // len <= 2 → unchanged
-    fn singularize(#[case] input: &str, #[case] expected: &str) {
-        assert_eq!(singularize_unit_word(input), expected);
-    }
-
     #[test]
     fn portion_and_nutrition_and_price_edges() {
         let product = WProductInput {
@@ -439,7 +410,7 @@ mod tests {
         assert_eq!(mappings[0].b.value, 120.0);
         assert_eq!(
             mappings[0].source_metadata,
-            WSourceMetadata::Food { fdc_id: 1234 }
+            Some(WSourceMetadata::Food { fdc_id: 1234 })
         );
         // nutrition: 100 g = 15 g protein
         assert_eq!(mappings[1].b.unit, "g protein");
@@ -448,19 +419,19 @@ mod tests {
         assert_eq!(mappings[2].b.value, 3.5);
         assert_eq!(
             mappings[2].source_metadata,
-            WSourceMetadata::Product {
+            Some(WSourceMetadata::Product {
                 product_id: "prod-1".to_string()
-            }
+            })
         );
     }
 
     #[test]
     fn stored_mappings_pass_through_with_their_metadata() {
-        let stored = WSourcedUnitMapping {
+        let stored = WUnitMapping {
             a: amount(4.0, "lb"),
             b: amount(5.0, "dollar"),
             source: Some("costco".to_string()),
-            source_metadata: WSourceMetadata::Manual,
+            source_metadata: Some(WSourceMetadata::Manual),
         };
         let product = WProductInput {
             id: "prod-1".to_string(),
@@ -471,7 +442,7 @@ mod tests {
         let mappings = product_mappings(&product);
         assert_eq!(mappings.len(), 1);
         assert_eq!(mappings[0].source.as_deref(), Some("costco"));
-        assert_eq!(mappings[0].source_metadata, WSourceMetadata::Manual);
+        assert_eq!(mappings[0].source_metadata, Some(WSourceMetadata::Manual));
     }
 
     #[test]

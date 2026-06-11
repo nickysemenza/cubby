@@ -4,9 +4,9 @@
 //! file is the native-target net that runs in CI without a wasm runtime.
 
 use recipebridge::{
-    cost_recipes_impl, ComponentSource, WAmount, WCostingIngredient, WCostingInput,
-    WCostingRecipe, WCostingRow, WMeasureResult, WNutrientTarget, WNutrientsResult,
-    WProductInput, WRecipeCosting, WRowKind, WSourceMetadata, WSourcedUnitMapping,
+    cost_recipes_impl, ComponentSource, WAmount, WCostingIngredient, WCostingInput, WCostingRecipe,
+    WCostingRow, WMeasureResult, WNutrientTarget, WNutrientsResult, WProductInput, WRecipeCosting,
+    WRowKind, WSourceMetadata, WUnitMapping,
 };
 
 // ─── Fixture builders (mirror the TS test builders) ─────────────────────────
@@ -19,18 +19,18 @@ fn amount(value: f64, unit: &str) -> WAmount {
     }
 }
 
-fn mapping(a: (f64, &str), b: (f64, &str)) -> WSourcedUnitMapping {
-    WSourcedUnitMapping {
+fn mapping(a: (f64, &str), b: (f64, &str)) -> WUnitMapping {
+    WUnitMapping {
         a: amount(a.0, a.1),
         b: amount(b.0, b.1),
         source: Some("test".to_string()),
-        source_metadata: WSourceMetadata::Manual,
+        source_metadata: Some(WSourceMetadata::Manual),
     }
 }
 
 /// An ingredient backed by one product carrying `mappings` (no food/price —
 /// the TS tests' nutrient edges are stored mappings too).
-fn ingredient(id: &str, mappings: Vec<WSourcedUnitMapping>) -> WCostingIngredient {
+fn ingredient(id: &str, mappings: Vec<WUnitMapping>) -> WCostingIngredient {
     WCostingIngredient {
         id: id.to_string(),
         products: vec![WProductInput {
@@ -160,7 +160,7 @@ fn chicken() -> WCostingIngredient {
 }
 
 /// flour: 1 cup = 100 g; 100 g = 364 kcal = 10 g protein; 1 cup = $1
-fn flour_mappings() -> Vec<WSourcedUnitMapping> {
+fn flour_mappings() -> Vec<WUnitMapping> {
     vec![
         mapping((1.0, "cup"), (100.0, "gram")),
         mapping((100.0, "g"), (364.0, "kcal")),
@@ -346,6 +346,37 @@ fn rolls_sub_recipe_totals_into_parent_scaled_by_yield() {
 }
 
 #[test]
+fn diamond_sub_recipe_dependencies_resolve_consistently() {
+    // root uses the same yielded sub twice (memoized after the first
+    // encounter) — both rows must contribute identical, correct values.
+    let tomato = ingredient(
+        "tomato",
+        vec![
+            mapping((1.0, "cup"), (100.0, "gram")),
+            mapping((1.0, "cup"), (1.0, "dollar")),
+        ],
+    );
+    let sauce = WCostingRecipe {
+        id: "sauce".to_string(),
+        recipe_yield: Some(amount(4.0, "cup")),
+        rows: vec![row("tomato", "tomato", Some((4.0, "cup")), None, None)],
+    };
+    let mut second = sub_recipe_row("sauce", (2.0, "cup"));
+    second.id = "link-sauce-2".to_string();
+
+    let r = cost(
+        vec![sub_recipe_row("sauce", (2.0, "cup")), second],
+        vec![tomato],
+        vec![sauce],
+    );
+
+    // Each 2-cup row = half of the sauce's $4 / 400 g.
+    assert_close(r.price, 4.0, 0.005, "price");
+    assert_close(r.weight, 400.0, 0.05, "weight");
+    assert!(r.missing_by_type.price.is_empty());
+}
+
+#[test]
 fn guards_against_cycles_without_hanging() {
     // A uses B, B uses A.
     let recipe_a = WCostingRecipe {
@@ -378,7 +409,11 @@ fn flags_yield_less_sub_recipe_as_missing() {
         recipe_yield: None,
         rows: vec![row("tomato", "tomato", Some((1.0, "cup")), None, None)],
     };
-    let r = cost(vec![sub_recipe_row("sauce", (2.0, "cup"))], vec![], vec![sauce]);
+    let r = cost(
+        vec![sub_recipe_row("sauce", (2.0, "cup"))],
+        vec![],
+        vec![sauce],
+    );
 
     assert_eq!(r.price, 0.0);
     assert_eq!(r.weight, 0.0);
@@ -423,7 +458,13 @@ fn control_without_frying_medium_is_unchanged() {
 #[test]
 fn measured_frying_oil_full_cost_absorbed_weight_excluded_from_basis() {
     // "100 g oil, for frying" — the amount is the pot, not consumption.
-    let measured_oil = row("oil", "neutral oil", Some((100.0, "g")), Some("for frying"), None);
+    let measured_oil = row(
+        "oil",
+        "neutral oil",
+        Some((100.0, "g")),
+        Some("for frying"),
+        None,
+    );
     let r = cost(
         vec![flour_cup(), measured_oil],
         vec![ingredient("flour", flour_mappings()), oil()],
@@ -443,7 +484,10 @@ fn measured_frying_oil_full_cost_absorbed_weight_excluded_from_basis() {
 fn frying_medium_with_no_mapping_fails_gracefully() {
     let r = cost(
         vec![flour_cup(), frying_oil()],
-        vec![ingredient("flour", flour_mappings()), empty_ingredient("oil")],
+        vec![
+            ingredient("flour", flour_mappings()),
+            empty_ingredient("oil"),
+        ],
         vec![],
     );
 
@@ -461,7 +505,10 @@ fn estimate_only_recipe_has_no_basis() {
 
     assert_eq!(r.weight, 0.0);
     assert!(r.missing_by_type.price.contains(&"neutral oil".to_string()));
-    assert!(r.missing_by_type.weight.contains(&"neutral oil".to_string()));
+    assert!(r
+        .missing_by_type
+        .weight
+        .contains(&"neutral oil".to_string()));
     assert!(r
         .missing_by_type
         .nutrients
@@ -506,7 +553,10 @@ fn totals_are_order_independent() {
 #[test]
 fn seasoning_salt_to_taste_one_percent_of_basis() {
     let r = cost(
-        vec![flour_cup(), row("salt", "salt", None, Some("to taste"), None)],
+        vec![
+            flour_cup(),
+            row("salt", "salt", None, Some("to taste"), None),
+        ],
         vec![ingredient("flour", flour_mappings()), salt()],
         vec![],
     );
@@ -595,7 +645,13 @@ fn unmeasured_dredging_flour_five_percent_of_basis() {
 
 #[test]
 fn measured_dredging_full_cost_twenty_percent_retained_excluded_from_basis() {
-    let dredge = row("flour2", "flour", Some((1.0, "cup")), Some("for dredging"), None);
+    let dredge = row(
+        "flour2",
+        "flour",
+        Some((1.0, "cup")),
+        Some("for dredging"),
+        None,
+    );
     let r = cost(
         vec![flour_cup(), dredge, frying_oil()],
         vec![
@@ -628,7 +684,13 @@ fn measured_marinade_by_section_name_full_cost_fifteen_percent_retained() {
     let r = cost(
         vec![
             flour_cup(),
-            row("soy", "soy sauce", Some((100.0, "g")), None, Some("Marinade")),
+            row(
+                "soy",
+                "soy sauce",
+                Some((100.0, "g")),
+                None,
+                Some("Marinade"),
+            ),
         ],
         vec![ingredient("flour", flour_mappings()), soy],
         vec![],
@@ -710,7 +772,13 @@ fn estimated_rows_carry_the_estimate_and_flag() {
 
 #[test]
 fn measured_fry_row_displays_est_weight_but_own_cost() {
-    let measured_oil = row("oil", "neutral oil", Some((100.0, "g")), Some("for frying"), None);
+    let measured_oil = row(
+        "oil",
+        "neutral oil",
+        Some((100.0, "g")),
+        Some("for frying"),
+        None,
+    );
     let r = cost(
         vec![flour_cup(), measured_oil],
         vec![ingredient("flour", flour_mappings()), oil()],
@@ -922,11 +990,21 @@ fn kcal_requires_unit_kcal_not_a_generic_nutrient_unit() {
         vec![bad],
         vec![],
     );
-    assert_eq!(nutrient(&r, "208"), 0.0, "Other(\"kcal kcal\") must not match");
+    assert_eq!(
+        nutrient(&r, "208"),
+        0.0,
+        "Other(\"kcal kcal\") must not match"
+    );
 
     let good = ingredient("good", vec![mapping((100.0, "g"), (200.0, "kcal"))]);
     let r = cost(
-        vec![row("good", "mystery powder", Some((100.0, "g")), None, None)],
+        vec![row(
+            "good",
+            "mystery powder",
+            Some((100.0, "g")),
+            None,
+            None,
+        )],
         vec![good],
         vec![],
     );

@@ -1,11 +1,11 @@
 import { parse_scraped_recipe } from "@cubby/recipebridge";
 import { describe, expect, it } from "vitest";
-import { WCompactToImportRecipe } from "./scraper";
+import { scrapedToImportRecipe } from "./scraper";
 
 // Regression coverage for the section-aware scrape boundary. A live HTTP scrape
 // is intentionally NOT exercised here — the scrape mutation fetches the URL
 // server-side, so a real fetch would be network-dependent and flaky in CI. This
-// instead feeds fixture HTML through the WASM scraper and the WCompactToImportRecipe
+// instead feeds fixture HTML through the WASM scraper and the scrapedToImportRecipe
 // transform, which is exactly the layer that breaks when the upstream
 // ingredient-parser recipe schema changes shape.
 
@@ -14,7 +14,7 @@ const recipeHtml = (jsonLd: object) =>
     jsonLd,
   )}</script></head><body></body></html>`;
 
-describe("parse_scraped_recipe → WCompactToImportRecipe", () => {
+describe("parse_scraped_recipe → scrapedToImportRecipe", () => {
   it("maps a single-section recipe into import sections with raw lines", () => {
     const html = recipeHtml({
       "@context": "https://schema.org",
@@ -29,7 +29,7 @@ describe("parse_scraped_recipe → WCompactToImportRecipe", () => {
       ],
     });
 
-    const recipe = WCompactToImportRecipe(
+    const recipe = scrapedToImportRecipe(
       parse_scraped_recipe(html, "https://example.com/pancakes"),
     );
 

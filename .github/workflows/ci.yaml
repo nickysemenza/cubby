@@ -89,6 +89,10 @@ jobs:
           components: llvm-tools-preview
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Format check
+        run: cargo fmt --manifest-path recipebridge/Cargo.toml --check
+      - name: Lint (clippy)
+        run: cargo clippy --manifest-path recipebridge/Cargo.toml --all-targets -- -D warnings
       # Native-target tests: the costing + food-mapping modules are pure
       # serde/ingredient code, so the parity suite runs without a wasm runtime.
       # llvm-cov runs the same `cargo test` under instrumentation — a test

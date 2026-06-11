@@ -1,4 +1,4 @@
-import type { WCompactRecipe } from "@cubby/recipebridge";
+import type { WScrapedRecipe } from "@cubby/recipebridge";
 import { sanitizeSectionName } from "@cubby/schemas/codec";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import { wasm } from "~/lib/wasm";
@@ -20,13 +20,13 @@ export const scrapeToImportRecipe = async (
   url: string,
 ): Promise<ImportRecipe> => {
   const scraped = await scrapeRecipe(url);
-  return WCompactToImportRecipe(scraped);
+  return scrapedToImportRecipe(scraped);
 };
 
 // The scraper's WASM output → the shared `ImportRecipe` carrier. Yield arrives
 // already structured (`{value, unit}`) — the union's object branch; the import
 // converter uses it directly without re-parsing.
-export const WCompactToImportRecipe = (w: WCompactRecipe): ImportRecipe => {
+export const scrapedToImportRecipe = (w: WScrapedRecipe): ImportRecipe => {
   return {
     meta: {
       title: w.name ?? "",

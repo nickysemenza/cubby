@@ -14,6 +14,7 @@ pub use types::*;
 use std::collections::HashSet;
 
 use engine::Engine;
+use wasm_bindgen::prelude::*;
 
 /// Cost every root recipe in the input: one `WRecipeCosting` per `root_ids`
 /// entry, in order. Errors only on malformed input (a root id missing from the
@@ -28,4 +29,14 @@ pub fn cost_recipes_impl(input: &WCostingInput) -> Result<WCostingResult, String
         recipes.push(engine.cost_recipe(recipe, &HashSet::new(), input.explain));
     }
     Ok(WCostingResult { recipes })
+}
+
+/// Cost a batch of recipes in one call: totals + per-row resolved measures +
+/// usage estimates + baker percentages + diagnostics (and, with
+/// `input.explain`, unit-graph conversion paths). The whole two-pass
+/// consumption-model engine runs in Rust — the TS `computeRecipeCosting` is a
+/// thin wrapper that assembles the input and reshapes the result.
+#[wasm_bindgen]
+pub fn cost_recipes(input: WCostingInput) -> Result<WCostingResult, String> {
+    cost_recipes_impl(&input)
 }

@@ -74,9 +74,9 @@ impl PlanTrio {
 
     /// True when any measure is adjusted away from the written amount ("est.").
     pub fn is_estimated(&self) -> bool {
-        self.sources().iter().any(|c| {
-            !matches!(c, ComponentSource::OwnFull | ComponentSource::Missing)
-        })
+        self.sources()
+            .iter()
+            .any(|c| !matches!(c, ComponentSource::OwnFull | ComponentSource::Missing))
     }
 
     /// Whether a row's own weight contributes to the basis other rows estimate
