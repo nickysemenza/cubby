@@ -71,3 +71,4 @@ certificates
 
 # MCP config (contains API keys)
 .mcp.json
+lcov.info

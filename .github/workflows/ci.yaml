@@ -86,10 +86,26 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           cache: true
+          components: llvm-tools-preview
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
       # Native-target tests: the costing + food-mapping modules are pure
       # serde/ingredient code, so the parity suite runs without a wasm runtime.
-      - name: Run recipebridge tests
-        run: cargo test --manifest-path recipebridge/Cargo.toml
+      # llvm-cov runs the same `cargo test` under instrumentation — a test
+      # failure fails this step. NOTE: lib.rs reads as mostly uncovered by
+      # design: it's the #[wasm_bindgen] shim layer, executable only inside a
+      # wasm runtime; the logic lives in the covered costing/food_mappings
+      # modules.
+      - name: Run recipebridge tests (with coverage)
+        run: cargo llvm-cov --manifest-path recipebridge/Cargo.toml --lcov --output-path recipebridge/lcov.info
+      - name: Upload coverage
+        uses: codecov/codecov-action@v6
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: nickysemenza/cubby
+          files: recipebridge/lcov.info
+          flags: recipebridge
+          name: recipebridge-coverage
 
   lint-format:
     name: Lint and Format
