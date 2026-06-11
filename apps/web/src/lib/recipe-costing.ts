@@ -388,7 +388,7 @@ const DREDGE_RETAINED_FRACTION = 0.2;
 const MARINADE_RETAINED_FRACTION = 0.15;
 
 /** Where one measure (cost, weight, or nutrients) of a row resolves from. */
-type ComponentSource =
+export type ComponentSource =
   | { kind: "own-full" } // the row's own amount, as written
   | { kind: "own-fraction"; fraction: number } // fraction of the own amount
   | { kind: "basis-fraction"; fraction: number } // fraction of the other rows' weight
@@ -634,6 +634,56 @@ const resolveRowMeasures = (
   };
 };
 
+/** One resolved measure, flattened for display/serialization (no Result). */
+export type MeasureDiagnostic =
+  | { ok: true; value: number; unit: string }
+  | { ok: false; error: string };
+
+/** Nutrient summary diagnostic: kcal + how many nutrient codes resolved. */
+export type NutrientDiagnostic =
+  | { ok: true; kcal: number | null; nutrientCount: number }
+  | { ok: false; error: string };
+
+/**
+ * Per-row costing trace: which usage the classifier assigned, which consumption
+ * rule fired per measure (the ComponentSource), the basis it drew from, and how
+ * each measure resolved — including the exact error string when it didn't.
+ * This is the data the per-cell "—" swallows; the debug card and the
+ * explain endpoint/MCP tool surface it. JSON-serializable by construction.
+ */
+export type RowDiagnostic = {
+  id: string;
+  name: string;
+  sectionName: string | null;
+  kind: "ingredient" | "recipe";
+  usage: IngredientUsage;
+  measured: boolean;
+  plan: {
+    cost: ComponentSource;
+    weight: ComponentSource;
+    nutrients: ComponentSource;
+  };
+  /** Basis weight (g) deferred rows estimated from; null for pass-1 rows. */
+  basisGrams: number | null;
+  price: MeasureDiagnostic;
+  gram: MeasureDiagnostic;
+  nutrient: NutrientDiagnostic;
+};
+
+const toMeasureDiag = (r: Result<WAmount>): MeasureDiagnostic =>
+  r.isOk()
+    ? { ok: true, value: r.value.value, unit: r.value.unit }
+    : { ok: false, error: r.error };
+
+const toNutrientDiag = (r: Result<NutrientsPer100>): NutrientDiagnostic =>
+  r.isOk()
+    ? {
+        ok: true,
+        kcal: r.value[TIER1_NUTRIENTS.kcal.code] ?? null,
+        nutrientCount: Object.keys(r.value).length,
+      }
+    : { ok: false, error: r.error };
+
 export type CalculateTotalsResult = {
   price: number;
   nutrients: NutrientsPer100;
@@ -644,6 +694,8 @@ export type CalculateTotalsResult = {
     weight: string[];
     nutrients: string[];
   };
+  /** Per-row trace, in input order. Cheap: records what was already computed. */
+  diagnostics: RowDiagnostic[];
 };
 
 /**
@@ -679,10 +731,39 @@ export const calculateTotals = (
     else missingByType.nutrients.push(ingName);
   };
 
-  const planned = ingredients.map((row) => {
+  const planned = ingredients.map((row, idx) => {
     const name = getIngredientName(row);
-    return { row, name, plan: planConsumption(row, name) };
+    return { row, name, idx, plan: planConsumption(row, name) };
   });
+
+  // Per-row trace, recorded in input order (the work is already done; this
+  // just keeps the Results' detail instead of discarding it).
+  const diagnostics: RowDiagnostic[] = new Array(planned.length);
+  const recordDiag = (
+    { row, name, idx, plan }: (typeof planned)[number],
+    info: IngredientPriceInfo | null,
+    basis: number | null,
+  ) => {
+    const threw: MeasureDiagnostic = {
+      ok: false,
+      error: "measure computation threw (see server/console log)",
+    };
+    diagnostics[idx] = {
+      id: row.id,
+      name,
+      sectionName: row.sectionName,
+      kind: row.type,
+      usage: plan.usage,
+      measured: row.amounts[0] != null,
+      plan: { cost: plan.cost, weight: plan.weight, nutrients: plan.nutrients },
+      basisGrams: basis,
+      price: info ? toMeasureDiag(info.price) : threw,
+      gram: info ? toMeasureDiag(info.gram) : threw,
+      nutrient: info
+        ? toNutrientDiag(info.nutrient)
+        : { ok: false, error: threw.error },
+    };
+  };
 
   // Resolve a row and fold it, routing thrown errors to every missing
   // category. Returns the resolved trio (null when it threw).
@@ -722,6 +803,7 @@ export const calculateTotals = (
       continue;
     }
     const info = resolveAndFold(p, 0);
+    recordDiag(p, info, null);
     if (contributesToBasis(p.plan) && info?.gram.isOk()) {
       basisGrams += info.gram.value.value;
     }
@@ -729,7 +811,7 @@ export const calculateTotals = (
 
   // Pass 2: basis-dependent and flat estimates, now that the basis is known.
   for (const p of deferred) {
-    resolveAndFold(p, basisGrams);
+    recordDiag(p, resolveAndFold(p, basisGrams), basisGrams);
   }
 
   // Calculate totals (weight includes the estimated rows — they're eaten)
@@ -743,6 +825,7 @@ export const calculateTotals = (
     weight: totalWeight,
     totalIngredients: ingredients.length,
     missingByType,
+    diagnostics,
   };
 };
 

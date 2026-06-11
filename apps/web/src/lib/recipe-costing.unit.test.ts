@@ -1219,3 +1219,76 @@ describe("calculateTotals with the consumption model", () => {
     expect(estimatedRows.size).toBe(0);
   });
 });
+
+describe("calculateTotals diagnostics", () => {
+  // flour: 1 cup = 100 g = $1; per-100g kcal. oil: kcal + price per kg.
+  const flour = makeIngredient("flour", "flour", [
+    { a: { value: 1, unit: "cup" }, b: { value: 100, unit: "gram" } },
+    { a: { value: 100, unit: "g" }, b: { value: 364, unit: "kcal" } },
+    { a: { value: 1, unit: "cup" }, b: { value: 1, unit: "dollar" } },
+  ]);
+  const oil = makeIngredient("oil", "neutral oil", [
+    { a: { value: 100, unit: "g" }, b: { value: 884, unit: "kcal" } },
+    { a: { value: 1000, unit: "g" }, b: { value: 5, unit: "dollar" } },
+  ]);
+  const ingMap = { flour, oil, mystery: emptyIngredient("mystery", "mystery") };
+
+  test("records usage, fired rule, basis, and resolved values in input order", () => {
+    const r = calculateTotals(
+      [
+        makeEntry("flour", "flour", [{ value: 1, unit: "cup" }]),
+        makeEntry("oil", "neutral oil", [], "for frying"),
+      ],
+      ingMap,
+      getName,
+    );
+
+    expect(r.diagnostics).toHaveLength(2);
+    const [flourDiag, oilDiag] = r.diagnostics;
+
+    expect(flourDiag).toMatchObject({
+      name: "flour",
+      kind: "ingredient",
+      usage: "normal",
+      measured: true,
+      basisGrams: null,
+      plan: { cost: { kind: "own-full" } },
+    });
+    expect(flourDiag?.price).toEqual({ ok: true, value: 1, unit: "$" });
+
+    // The oil row shows the consumption rule that fired AND the basis it used.
+    expect(oilDiag).toMatchObject({
+      name: "neutral oil",
+      usage: "frying_medium",
+      measured: false,
+      basisGrams: 100,
+      plan: { weight: { kind: "basis-fraction", fraction: 0.15 } },
+    });
+    expect(oilDiag?.gram.ok && oilDiag.gram).toMatchObject({ value: 15 });
+    expect(oilDiag?.nutrient.ok && oilDiag.nutrient.kcal).toBeCloseTo(132.6, 0);
+  });
+
+  test("keeps the exact error strings the cells swallow into '—'", () => {
+    const r = calculateTotals(
+      [
+        // No amounts on a normal row → "has no amounts" on all three.
+        makeEntry("flour", "flour", []),
+        // Measured but no product/mappings → per-measure conversion errors.
+        makeEntry("mystery", "mystery", [{ value: 1, unit: "cup" }]),
+      ],
+      ingMap,
+      getName,
+    );
+
+    const errOf = (m: { ok: boolean } | undefined): string =>
+      m && !m.ok && "error" in m ? String(m.error) : "";
+
+    const [noAmounts, noMappings] = r.diagnostics;
+    expect(errOf(noAmounts?.price)).toMatch(/has no amounts/);
+    expect(errOf(noMappings?.price)).toMatch(/money/i);
+    expect(errOf(noMappings?.gram)).toMatch(/weight/i);
+    expect(errOf(noMappings?.nutrient)).toMatch(/nutrient/i);
+    // missingByType (names only) is unchanged for existing consumers.
+    expect(r.missingByType.price).toEqual(["flour", "mystery"]);
+  });
+});
