@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { BookOpen, Plus } from "lucide-react";
+import { BookOpen, NotebookPen, Plus } from "lucide-react";
 import { RecipeList } from "~/app/recipes/recipelist";
 import { EntityLayout } from "~/components/layouts/entity-layout";
 import { Button } from "~/components/ui/button";
@@ -19,6 +19,12 @@ function RecipesPage() {
               <Button size="sm" variant="outline" className="h-7 gap-1 text-xs">
                 <BookOpen className="h-3.5 w-3.5" />
                 Import cookbook
+              </Button>
+            </Link>
+            <Link to="/recipes/import-notion">
+              <Button size="sm" variant="outline" className="h-7 gap-1 text-xs">
+                <NotebookPen className="h-3.5 w-3.5" />
+                Import from Notion
               </Button>
             </Link>
             <Link to="/recipes/new">

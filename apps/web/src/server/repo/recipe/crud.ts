@@ -24,6 +24,7 @@ import type {
 import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
 import { parseCompactRecipe } from "~/codec/parser";
 import { getSortableFields } from "~/entities/entities";
+import { recipeOutSignature } from "~/lib/recipe-signature";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   recipe,
@@ -39,6 +40,7 @@ import {
 } from "~/server/repo/audit-log";
 import {
   upsertCookbookRecipeFromCookbook,
+  upsertNotionRecipeFromCompact,
   upsertRecipeFromCompact,
 } from "~/server/repo/compactrecipe";
 import {
@@ -134,6 +136,32 @@ export const getCookbookRecipeTitles = async (
   return rows.map((r) => r.name);
 };
 
+/**
+ * A cookbook's non-deleted recipes with their id and content signature — lets
+ * the import preview show "no changes" vs "will update" per title and link to
+ * the existing Cubby recipe. Title is the per-book key.
+ */
+export const getCookbookRecipesForDiff = async (
+  db: Database,
+  cookbookId: CookbookId,
+): Promise<Array<{ title: string; id: string; sig: string }>> => {
+  const rows = await getDb(db).query.recipe.findMany({
+    where: and(eq(recipe.cookbookId, cookbookId), notDeleted(recipe)),
+    columns: { id: true, name: true },
+  });
+  const recipes = await getRecipesByIDs(
+    db,
+    rows.map((r) => unsafeRecipeId(r.id)),
+  );
+  const byId = new Map(recipes.map((r) => [r.id, r]));
+  return rows.flatMap((r) => {
+    const full = byId.get(r.id);
+    return full
+      ? [{ title: r.name, id: r.id, sig: recipeOutSignature(full) }]
+      : [];
+  });
+};
+
 // Normalize a title for cross-recipe reference matching (trim + lowercase).
 const normalizeTitle = (title: string): string => title.trim().toLowerCase();
 
@@ -177,6 +205,60 @@ export const insertCompactRecipe = (
 ) => {
   const parsed = parseCompactRecipe(recipeInput);
   return upsertRecipeFromCompact(parsed, db, actor);
+};
+
+/**
+ * Insert/refresh a recipe synced from a Notion page (compact format in, page id
+ * as the idempotency key). Parses ingredient lines via WASM, then upserts.
+ */
+export const insertNotionRecipe = (
+  recipeInput: CompactRecipe,
+  pageId: string,
+  tags: string[] | null,
+  db: Database,
+  actor: ActorContext,
+) => {
+  const parsed = parseCompactRecipe(recipeInput);
+  return upsertNotionRecipeFromCompact(parsed, pageId, tags, db, actor);
+};
+
+/**
+ * Page ids (SourceData) of every non-deleted Notion-synced recipe — lets the
+ * import preview flag which pages already exist (new vs. will-update).
+ */
+export const getNotionRecipePageIds = async (
+  db: Database,
+): Promise<string[]> => {
+  const rows = await getDb(db).query.recipe.findMany({
+    where: and(eq(recipe.SourceType, "Notion"), notDeleted(recipe)),
+    columns: { SourceData: true },
+  });
+  return rows.map((r) => r.SourceData).filter((s): s is string => s !== null);
+};
+
+/**
+ * Every non-deleted Notion-synced recipe with its page id and full content — so
+ * the import preview can compare against what a re-import would produce ("no
+ * changes" vs "will update") and link to the existing Cubby recipe.
+ */
+export const getNotionRecipesForDiff = async (
+  db: Database,
+): Promise<Array<{ id: string; pageId: string; recipe: RecipeOut }>> => {
+  const rows = await getDb(db).query.recipe.findMany({
+    where: and(eq(recipe.SourceType, "Notion"), notDeleted(recipe)),
+    columns: { id: true, SourceData: true },
+  });
+  const recipes = await getRecipesByIDs(
+    db,
+    rows.map((r) => unsafeRecipeId(r.id)),
+  );
+  const byId = new Map(recipes.map((r) => [r.id, r]));
+  return rows.flatMap((r) => {
+    const full = byId.get(r.id);
+    return r.SourceData && full
+      ? [{ id: r.id, pageId: r.SourceData, recipe: full }]
+      : [];
+  });
 };
 
 /**
@@ -269,7 +351,7 @@ export const recipeList = async (
 // `cookbookId` is set only for Book recipes (the FK to their Cookbook); SourceData
 // is kept synced to the cookbook name so the source codec stays a pure row read.
 type RecipeProvenance = {
-  sourceType: "Book" | "Website" | "Other";
+  sourceType: "Book" | "Website" | "Other" | "Notion";
   sourceData: string | null;
   cookbookId?: CookbookId | null;
 };
@@ -524,6 +606,35 @@ export const upsertCookbookRecipe = (
       sourceType: "Book",
       sourceData: cookbookRef.name,
       cookbookId: cookbookRef.id,
+    },
+  );
+
+/**
+ * Upsert a recipe synced from a Notion page.
+ *
+ * A Notion recipe's identity is its **page id** (stored in SourceData) — not its
+ * title — so a renamed page still updates the same row and never collides with a
+ * same-named web/manual recipe (the `Recipe_name_key` index exempts Notion). This
+ * is the Notion analogue of {@link upsertCookbookRecipe}.
+ */
+export const upsertNotionRecipe = (
+  input: RecipeCreateInput,
+  pageId: string,
+  db: Database,
+  actor: ActorContext,
+): Promise<{ id: string }> =>
+  upsertRecipeMatching(
+    input,
+    db,
+    actor,
+    and(
+      eq(recipe.SourceType, "Notion"),
+      eq(recipe.SourceData, pageId),
+      notDeleted(recipe),
+    ),
+    {
+      sourceType: "Notion",
+      sourceData: pageId,
     },
   );
 

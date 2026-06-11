@@ -29,6 +29,7 @@ import {
   recipeUpdateInput,
 } from "@cubby/schemas/recipe";
 import { z } from "zod";
+import { compactSignature, recipeOutSignature } from "~/lib/recipe-signature";
 import { createAppError } from "~/server/errors/app-error";
 import {
   getCookbookByName,
@@ -42,17 +43,25 @@ import {
   deleteRecipes,
   deleteRecipesByCookbook,
   getAllTags,
-  getCookbookRecipeTitles,
+  getCookbookRecipesForDiff,
   getIngredientCooccurrence,
+  getNotionRecipePageIds,
+  getNotionRecipesForDiff,
   getRecipeByID,
   getRecipeByShortcode,
   getRecipesByIDs,
   insertCompactRecipe,
   insertCookbookRecipe,
+  insertNotionRecipe,
   recipeList,
   updateRecipe,
 } from "~/server/repo/recipe";
 import { extractCookbookChunk } from "~/server/utils/cookbook-llm";
+import {
+  lintNotionCompact,
+  notionCompactToCookbookRecipe,
+  notionPageToCompact,
+} from "~/server/utils/notion-recipe";
 import { scrapeToCompact } from "~/server/utils/scraper";
 import {
   createDeleteProcedure,
@@ -177,15 +186,120 @@ const insertCookbook = protectedProcedure
       { ...ctx.actorContext, source: "epub_import" },
     );
   });
-// Titles already imported from a given book, so the import preview can flag
-// recipes a re-import would update. Empty when the cookbook doesn't exist yet.
-const getCookbookTitles = protectedProcedure
+// Recipes already imported from a given book, each with its id (for an in-app
+// link) and a content signature (so the preview shows "no changes" vs "will
+// update" per title). Empty when the cookbook doesn't exist yet.
+const getCookbookDiff = protectedProcedure
   .input(z.object({ book: z.string().min(1) }))
-  .output(z.array(z.string()))
+  .output(
+    z.array(z.object({ title: z.string(), id: z.uuid(), sig: z.string() })),
+  )
   .query(async ({ ctx, input }) => {
     const cb = await getCookbookByName(ctx.db, input.book);
     if (!cb) return [];
-    return await getCookbookRecipeTitles(ctx.db, unsafeCookbookId(cb.id));
+    return await getCookbookRecipesForDiff(ctx.db, unsafeCookbookId(cb.id));
+  });
+
+// --- Notion recipe sync ---------------------------------------------------
+// Stable, deterministic import from the Notion "Recipes" database. Preview parses
+// every row server-side (no writes), diffs against already-imported page ids, and
+// lints each for importability; the per-recipe commit upserts keyed on page id.
+const notionPreviewItem = z.object({
+  pageId: z.string(),
+  name: z.string(),
+  notionUrl: z.string(),
+  status: z.enum(["new", "unchanged", "will-update", "needs-formatting"]),
+  // The existing Cubby recipe id when already imported — drives the in-app link.
+  existingId: z.string().nullable(),
+  reasons: z.array(z.string()),
+  // The mapped recipe in the shared cookbook shape, so the Notion and EPUB
+  // previews render with the exact same card.
+  recipe: cookbookRecipeSchema,
+});
+
+// Notion page ids come dashed from the API but are stored dashless-tolerant;
+// compare on the dashless form so a format difference never desyncs the diff.
+const normalizeNotionId = (id: string): string => id.replace(/-/g, "");
+
+const previewNotionSync = protectedProcedure
+  .output(z.array(notionPreviewItem))
+  .query(async ({ ctx }) => {
+    const client = ctx.notionClient;
+    if (!client) return [];
+    const rows = await client.queryRecipes();
+    // Existing Notion recipes keyed by page id, with a content signature so we
+    // can distinguish "no changes" from "will update".
+    const existing = new Map(
+      (await getNotionRecipesForDiff(ctx.db)).map((e) => [
+        normalizeNotionId(e.pageId),
+        { id: e.id, sig: recipeOutSignature(e.recipe) },
+      ]),
+    );
+    return await Promise.all(
+      rows.map(async (row) => {
+        const blocks = await client.getPageContent(row.id);
+        const compact = notionPageToCompact(row, blocks);
+        const { status: lintStatus, reasons } = lintNotionCompact(compact);
+        const prior = existing.get(normalizeNotionId(row.id));
+        const status =
+          lintStatus === "needs-formatting"
+            ? ("needs-formatting" as const)
+            : !prior
+              ? ("new" as const)
+              : compactSignature(compact, row.tags) === prior.sig
+                ? ("unchanged" as const)
+                : ("will-update" as const);
+        return {
+          pageId: row.id,
+          name: row.name,
+          notionUrl: row.notionUrl,
+          status,
+          existingId: prior?.id ?? null,
+          reasons,
+          recipe: notionCompactToCookbookRecipe(compact, row.yieldText),
+        };
+      }),
+    );
+  });
+
+const importNotionRecipe = protectedProcedure
+  .input(z.object({ pageId: z.string() }))
+  .output(z.object({ id: z.uuid(), status: z.enum(["created", "updated"]) }))
+  .mutation(async ({ ctx, input }) => {
+    const client = ctx.notionClient;
+    if (!client) {
+      throw createAppError("CONSTRAINT_VIOLATION", "Notion is not configured.");
+    }
+    const row = (await client.queryRecipes()).find(
+      (r) => r.id === input.pageId,
+    );
+    if (!row) {
+      throw createAppError(
+        "RECIPE_NOT_FOUND",
+        "That page isn't in the Notion Recipes database.",
+      );
+    }
+    const blocks = await client.getPageContent(input.pageId);
+    const compact = notionPageToCompact(row, blocks);
+    const { status, reasons } = lintNotionCompact(compact);
+    if (status === "needs-formatting") {
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        `Recipe isn't import-ready: ${reasons.join(" ")}`,
+      );
+    }
+    const existed = (await getNotionRecipePageIds(ctx.db)).some(
+      (id) => normalizeNotionId(id) === normalizeNotionId(input.pageId),
+    );
+    const { id } = await insertNotionRecipe(
+      compact,
+      input.pageId,
+      row.tags,
+      ctx.db,
+      ctx.actorContext,
+    );
+    await ctx.services.recipeCosting.recompute([id as RecipeId]);
+    return { id, status: existed ? "updated" : "created" };
   });
 
 // Distinct cookbooks with recipe counts, for the browse-by-source index.
@@ -325,7 +439,9 @@ export const recipeRouter = createTRPCRouter({
   upsertCookbook: upsertCookbookEndpoint,
   getCookbookSource: getCookbookSourceEndpoint,
   insertCookbook,
-  getCookbookTitles,
+  getCookbookDiff,
+  previewNotionSync,
+  importNotionRecipe,
   listCookbooks: listCookbooksEndpoint,
   deleteByCookbook,
   reprocessCookbook: reprocessCookbookEndpoint,

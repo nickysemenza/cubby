@@ -1,0 +1,1 @@
+ALTER TYPE "public"."RecipeSource" ADD VALUE 'Notion';

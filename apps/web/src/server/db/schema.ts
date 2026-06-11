@@ -69,13 +69,15 @@ export const recipe = pgTable(
     shortcodeUnique: uniqueIndex("Recipe_shortcode_unique")
       .on(table.shortcode)
       .where(sql`${table.deletedAt} IS NULL`),
-    // Non-cookbook recipes keep a globally-unique name. EPUB-imported recipes
-    // are excluded here and instead keyed by (name, book) below, so the same
-    // title can appear in different cookbooks (and alongside a web recipe).
+    // Non-cookbook recipes keep a globally-unique name. EPUB-imported (Book) and
+    // Notion-synced recipes are excluded here — they're keyed by (name, book) and
+    // by Notion page id respectively — so the same title can appear across a
+    // cookbook, a Notion page, and a web recipe. `IS DISTINCT FROM` (not NOT IN)
+    // keeps NULL-SourceType legacy rows inside the index.
     nameUnique: uniqueIndex("Recipe_name_key")
       .on(table.name)
       .where(
-        sql`${table.deletedAt} IS NULL AND ${table.SourceType} IS DISTINCT FROM 'Book'`,
+        sql`${table.deletedAt} IS NULL AND ${table.SourceType} IS DISTINCT FROM 'Book' AND ${table.SourceType} IS DISTINCT FROM 'Notion'`,
       ),
     // A cookbook recipe's identity is (cookbook, title): unique per book, but the
     // same title may recur across books. The upsert keys on `cookbookId`; this DB
@@ -84,6 +86,14 @@ export const recipe = pgTable(
     bookTitleUnique: uniqueIndex("Recipe_book_title_key")
       .on(table.name, table.SourceData)
       .where(sql`${table.deletedAt} IS NULL AND ${table.SourceType} = 'Book'`),
+    // A Notion-synced recipe's identity is its Notion page id, stored in
+    // SourceData. This makes re-importing a page idempotent (and a renamed page
+    // still hits the same row) — the analogue of bookTitleUnique for Notion.
+    notionPageUnique: uniqueIndex("Recipe_notion_page_key")
+      .on(table.SourceData)
+      .where(
+        sql`${table.deletedAt} IS NULL AND ${table.SourceType} = 'Notion'`,
+      ),
     createdAtIdx: index("Recipe_createdAt_idx").on(table.createdAt),
     sourceTypeIdx: index("Recipe_SourceType_idx").on(table.SourceType),
     cookbookIdIdx: index("Recipe_cookbookId_idx").on(table.cookbookId),

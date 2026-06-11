@@ -15,6 +15,8 @@ const DATA_SOURCE_IDS = {
   projects: "359f9bad-4815-4a9a-8de9-c6072e8fb5f2",
   tasks: "7c203038-5c1a-411a-8019-5698643c0394",
   purchases: "85bb653f-15a5-44d7-8389-93c93202219a",
+  // The "Recipes" database under Food → Recipes. Synced into Cubby recipes.
+  recipes: "69f477cf-b5dd-4151-8508-8c8d1be19706",
 } as const;
 
 // -- Output types --
@@ -64,6 +66,19 @@ export type NotionBlock = {
   checked?: boolean;
   imageUrl?: string;
   children?: NotionBlock[];
+};
+
+// One row of the Recipes database: the column metadata (the body comes from
+// `getPageContent`). `yieldText`/`servings`/`tags` are read only if those
+// optional columns exist on the data source.
+export type NotionRecipeRow = {
+  id: string;
+  name: string;
+  source: string | null;
+  yieldText: string | null;
+  servings: number | null;
+  tags: string[];
+  notionUrl: string;
 };
 
 // -- Property extraction helpers --
@@ -123,6 +138,17 @@ function getDateEnd(prop: PropertyValue | undefined): string | null {
 function getUrl(prop: PropertyValue | undefined): string | null {
   if (prop?.type === "url") {
     return prop.url;
+  }
+  return null;
+}
+
+function getRichText(prop: PropertyValue | undefined): string | null {
+  if (prop?.type === "rich_text") {
+    const text = prop.rich_text
+      .map((t) => t.plain_text)
+      .join("")
+      .trim();
+    return text.length > 0 ? text : null;
   }
   return null;
 }
@@ -439,6 +465,27 @@ export class NotionClient {
           purchaser: getSelect(p.purchaser),
           projectName: getRelationId(p.Project),
           url: getUrl(p.URL),
+          notionUrl: getPageUrl(page),
+        };
+      });
+    });
+  }
+
+  /** All rows of the Recipes database (column metadata only; body via getPageContent). */
+  async queryRecipes(): Promise<NotionRecipeRow[]> {
+    return this.cachedTrace("recipes", "queryRecipes", async () => {
+      const pages = await this.queryAll(DATA_SOURCE_IDS.recipes);
+
+      return pages.map((page) => {
+        const p = page.properties;
+        return {
+          id: page.id,
+          name: getTitle(p.Name),
+          source: getUrl(p.Source),
+          // Optional columns — these helpers return null/[] when absent.
+          yieldText: getRichText(p.Yield),
+          servings: getNumber(p.Servings),
+          tags: getMultiSelect(p.tags),
           notionUrl: getPageUrl(page),
         };
       });

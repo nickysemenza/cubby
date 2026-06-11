@@ -5,7 +5,12 @@ import { cookbookId, id, ingredientId, recipeId } from "./identifiers";
 import { createInputImages, imageOut, updateInputImages } from "./image";
 
 // Recipe source values - single source of truth for both Zod and Drizzle
-export const recipeSourceValues = ["Book", "Website", "Other"] as const;
+export const recipeSourceValues = [
+  "Book",
+  "Website",
+  "Other",
+  "Notion",
+] as const;
 
 // Recipe yield schema - what the recipe produces
 export const recipeYieldSchema = z.object({
@@ -152,6 +157,13 @@ export const recipeSource = z.discriminatedUnion("type", [
     cookbookId: cookbookId.nullable(),
   }),
   z.object({ type: z.literal("website"), url: z.url() }),
+  // Notion-synced: `pageId` is the stable idempotency key (stored in SourceData);
+  // `url` is the page link derived from it, for the source badge.
+  z.object({
+    type: z.literal("notion"),
+    pageId: z.string().min(1),
+    url: z.url(),
+  }),
   z.object({ type: z.literal("other") }),
 ]);
 export type RecipeSource = z.infer<typeof recipeSource>;

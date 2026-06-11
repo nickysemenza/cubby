@@ -18,6 +18,7 @@ import {
   findOrCreateRecipeLinkIngredient,
   getCookbookRecipeIdsByTitle,
   upsertCookbookRecipe,
+  upsertNotionRecipe,
   upsertRecipe,
 } from "./recipe";
 
@@ -103,6 +104,26 @@ export const upsertRecipeFromCompact = async (
 
   // Use the centralized upsert logic
   return await upsertRecipe(recipeInput, db, actor);
+};
+
+/**
+ * Upsert a recipe synced from a Notion page: convert + apply the Notion-column
+ * tags (the compact body carries no tags), then upsert keyed on the page id.
+ */
+export const upsertNotionRecipeFromCompact = async (
+  recipe: ParsedCompactRecipe,
+  pageId: string,
+  tags: string[] | null,
+  db: Database,
+  actor: ActorContext,
+) => {
+  const recipeInput = await convertParsedCompactToRecipeInput(recipe, db);
+  return await upsertNotionRecipe(
+    { ...recipeInput, tags: tags && tags.length > 0 ? tags : null },
+    pageId,
+    db,
+    actor,
+  );
 };
 
 /**

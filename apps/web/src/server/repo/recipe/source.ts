@@ -15,6 +15,14 @@ type SourceColumns = {
   cookbookId?: string | null;
 };
 
+/**
+ * The public Notion page URL for a page id (dashed or not). Notion accepts the
+ * 32-char dashless id in the path, so we normalize to that.
+ */
+export function notionUrlFromId(pageId: string): string {
+  return `https://www.notion.so/${pageId.replace(/-/g, "")}`;
+}
+
 /** DB columns → tagged union. Legacy/ambiguous rows decode to `{ type: "other" }`. */
 export function recipeSourceFromDb({
   SourceType,
@@ -30,6 +38,14 @@ export function recipeSourceFromDb({
   }
   if (SourceType === "Website" && SourceData) {
     return { type: "website", url: SourceData };
+  }
+  // Notion: SourceData holds the stable page id; derive the page URL for display.
+  if (SourceType === "Notion" && SourceData) {
+    return {
+      type: "notion",
+      pageId: SourceData,
+      url: notionUrlFromId(SourceData),
+    };
   }
   return { type: "other" };
 }

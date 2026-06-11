@@ -167,7 +167,7 @@ export async function updateRecipeBasicProperties(
 
   const updateData: {
     name?: string;
-    SourceType?: "Book" | "Website" | "Other";
+    SourceType?: "Book" | "Website" | "Other" | "Notion";
     SourceData?: string | null;
     yield?: RecipeYield | null;
     servings?: number | null;

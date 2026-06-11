@@ -39,6 +39,7 @@ import { Route as ApiDebugTimingRouteImport } from './routes/api/debug/timing'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as AuthenticatedUsdaIdRouteImport } from './routes/_authenticated/usda.$id'
 import { Route as AuthenticatedRecipesNewRouteImport } from './routes/_authenticated/recipes.new'
+import { Route as AuthenticatedRecipesImportNotionRouteImport } from './routes/_authenticated/recipes.import-notion'
 import { Route as AuthenticatedRecipesImportCookbookRouteImport } from './routes/_authenticated/recipes.import-cookbook'
 import { Route as AuthenticatedRecipesCompareRouteImport } from './routes/_authenticated/recipes.compare'
 import { Route as AuthenticatedRecipesIdRouteImport } from './routes/_authenticated/recipes.$id'
@@ -221,6 +222,12 @@ const AuthenticatedRecipesNewRoute = AuthenticatedRecipesNewRouteImport.update({
   path: '/recipes/new',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedRecipesImportNotionRoute =
+  AuthenticatedRecipesImportNotionRouteImport.update({
+    id: '/recipes/import-notion',
+    path: '/recipes/import-notion',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedRecipesImportCookbookRoute =
   AuthenticatedRecipesImportCookbookRouteImport.update({
     id: '/recipes/import-cookbook',
@@ -392,6 +399,7 @@ export interface FileRoutesByFullPath {
   '/recipes/$id': typeof AuthenticatedRecipesIdRoute
   '/recipes/compare': typeof AuthenticatedRecipesCompareRoute
   '/recipes/import-cookbook': typeof AuthenticatedRecipesImportCookbookRoute
+  '/recipes/import-notion': typeof AuthenticatedRecipesImportNotionRoute
   '/recipes/new': typeof AuthenticatedRecipesNewRoute
   '/usda/$id': typeof AuthenticatedUsdaIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -446,6 +454,7 @@ export interface FileRoutesByTo {
   '/recipes/$id': typeof AuthenticatedRecipesIdRoute
   '/recipes/compare': typeof AuthenticatedRecipesCompareRoute
   '/recipes/import-cookbook': typeof AuthenticatedRecipesImportCookbookRoute
+  '/recipes/import-notion': typeof AuthenticatedRecipesImportNotionRoute
   '/recipes/new': typeof AuthenticatedRecipesNewRoute
   '/usda/$id': typeof AuthenticatedUsdaIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -502,6 +511,7 @@ export interface FileRoutesById {
   '/_authenticated/recipes/$id': typeof AuthenticatedRecipesIdRoute
   '/_authenticated/recipes/compare': typeof AuthenticatedRecipesCompareRoute
   '/_authenticated/recipes/import-cookbook': typeof AuthenticatedRecipesImportCookbookRoute
+  '/_authenticated/recipes/import-notion': typeof AuthenticatedRecipesImportNotionRoute
   '/_authenticated/recipes/new': typeof AuthenticatedRecipesNewRoute
   '/_authenticated/usda/$id': typeof AuthenticatedUsdaIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -558,6 +568,7 @@ export interface FileRouteTypes {
     | '/recipes/$id'
     | '/recipes/compare'
     | '/recipes/import-cookbook'
+    | '/recipes/import-notion'
     | '/recipes/new'
     | '/usda/$id'
     | '/api/auth/$'
@@ -612,6 +623,7 @@ export interface FileRouteTypes {
     | '/recipes/$id'
     | '/recipes/compare'
     | '/recipes/import-cookbook'
+    | '/recipes/import-notion'
     | '/recipes/new'
     | '/usda/$id'
     | '/api/auth/$'
@@ -667,6 +679,7 @@ export interface FileRouteTypes {
     | '/_authenticated/recipes/$id'
     | '/_authenticated/recipes/compare'
     | '/_authenticated/recipes/import-cookbook'
+    | '/_authenticated/recipes/import-notion'
     | '/_authenticated/recipes/new'
     | '/_authenticated/usda/$id'
     | '/api/auth/$'
@@ -909,6 +922,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRecipesNewRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/recipes/import-notion': {
+      id: '/_authenticated/recipes/import-notion'
+      path: '/recipes/import-notion'
+      fullPath: '/recipes/import-notion'
+      preLoaderRoute: typeof AuthenticatedRecipesImportNotionRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/recipes/import-cookbook': {
       id: '/_authenticated/recipes/import-cookbook'
       path: '/recipes/import-cookbook'
@@ -1105,6 +1125,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedRecipesIdRoute: typeof AuthenticatedRecipesIdRoute
   AuthenticatedRecipesCompareRoute: typeof AuthenticatedRecipesCompareRoute
   AuthenticatedRecipesImportCookbookRoute: typeof AuthenticatedRecipesImportCookbookRoute
+  AuthenticatedRecipesImportNotionRoute: typeof AuthenticatedRecipesImportNotionRoute
   AuthenticatedRecipesNewRoute: typeof AuthenticatedRecipesNewRoute
   AuthenticatedUsdaIdRoute: typeof AuthenticatedUsdaIdRoute
   AuthenticatedCookbooksIndexRoute: typeof AuthenticatedCookbooksIndexRoute
@@ -1155,6 +1176,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedRecipesCompareRoute: AuthenticatedRecipesCompareRoute,
   AuthenticatedRecipesImportCookbookRoute:
     AuthenticatedRecipesImportCookbookRoute,
+  AuthenticatedRecipesImportNotionRoute: AuthenticatedRecipesImportNotionRoute,
   AuthenticatedRecipesNewRoute: AuthenticatedRecipesNewRoute,
   AuthenticatedUsdaIdRoute: AuthenticatedUsdaIdRoute,
   AuthenticatedCookbooksIndexRoute: AuthenticatedCookbooksIndexRoute,
