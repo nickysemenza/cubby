@@ -27,6 +27,7 @@ import { ZodError } from "zod";
 import { env } from "~/env";
 import { auth as betterAuth } from "~/lib/auth";
 import { getErrorMessage } from "~/lib/error-utils";
+import { getBindingFetcher } from "~/server/cf-env";
 import { NotionClient } from "~/server/clients/notion";
 import { UPCLookupClient } from "~/server/clients/upc-lookup";
 import { USDAClient } from "~/server/clients/usda";
@@ -63,10 +64,14 @@ const buildCrudServices = (db: Database) => {
   const notionClient = env.NOTION_API_KEY
     ? new NotionClient(env.NOTION_API_KEY)
     : null;
-  const usdaClient = new USDAClient(env.USDA_API_URL);
+  const usdaClient = new USDAClient(
+    env.USDA_API_URL,
+    getBindingFetcher("USDA_API"),
+  );
   const upcLookupClient = new UPCLookupClient(
     env.UPC_LOOKUP_API_URL,
     env.UPC_LOOKUP_API_KEY,
+    { fetcher: getBindingFetcher("UPC_LOOKUP") },
   );
   const usdaService = new USDAService(usdaClient, async (lookup) => {
     const products = await findProductsByFoodIdentifier(db, lookup);

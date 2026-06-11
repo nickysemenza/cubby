@@ -28,6 +28,12 @@
   "placement": {
     "mode": "smart"
   },
+  // Worker-to-worker service bindings (prod only — dev falls back to the
+  // public *_API_URL vars below since vite dev runs plain Node).
+  "services": [
+    { "binding": "USDA_API", "service": "usda-api" },
+    { "binding": "UPC_LOOKUP", "service": "upc-lookup" }
+  ],
   // Hyperdrive connection pooling — creates via:
   //   wrangler hyperdrive create cubby-db --connection-string="postgres://..."
   "hyperdrive": [

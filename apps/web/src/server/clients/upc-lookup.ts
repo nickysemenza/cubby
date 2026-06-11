@@ -9,11 +9,18 @@ import { getTracer, TraceNames } from "~/server/tracing";
 const DEFAULT_TIMEOUT_MS = 5000;
 
 export class UPCLookupClient {
+  private timeoutMs: number;
+  private fetcher: typeof fetch;
+
   constructor(
     private baseUrl: string,
     private apiKey?: string,
-    private timeoutMs: number = DEFAULT_TIMEOUT_MS,
-  ) {}
+    options?: { timeoutMs?: number; fetcher?: typeof fetch },
+  ) {
+    this.timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    // Service binding fetch in prod, global fetch (public URL) in dev
+    this.fetcher = options?.fetcher ?? fetch;
+  }
 
   private getHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
@@ -54,7 +61,7 @@ export class UPCLookupClient {
       const url = new URL(`/lookup/${upc}`, this.baseUrl);
 
       try {
-        const res = await fetch(url.toString(), {
+        const res = await this.fetcher(url.toString(), {
           method: "GET",
           headers: this.getHeaders(),
           signal: AbortSignal.timeout(this.timeoutMs),
@@ -99,7 +106,7 @@ export class UPCLookupClient {
       url.searchParams.set("limit", String(limit));
 
       try {
-        const res = await fetch(url.toString(), {
+        const res = await this.fetcher(url.toString(), {
           method: "GET",
           headers: this.getHeaders(),
           signal: AbortSignal.timeout(this.timeoutMs),

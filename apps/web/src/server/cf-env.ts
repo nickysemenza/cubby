@@ -1,0 +1,30 @@
+// Access to the CF Workers env (service bindings) outside the fetch handler.
+//
+// Module-level storage is safe here — unlike the per-request pg.Client in
+// db.ts, `env` is the same object for every request in an isolate. On the
+// dev server (plain Node via vite) setCfEnv is never called, so accessors
+// return undefined and callers fall back to public URLs + global fetch.
+
+let cfEnv: Env | undefined;
+
+export const setCfEnv = (env: Env): void => {
+  cfEnv = env;
+};
+
+type ServiceBindingName = "USDA_API" | "UPC_LOOKUP";
+
+/**
+ * Returns a fetch-compatible function backed by a service binding, or
+ * undefined when not running on CF Workers. Binding fetch still requires
+ * absolute URLs; the hostname is ignored for routing.
+ */
+export const getBindingFetcher = (
+  name: ServiceBindingName,
+): typeof fetch | undefined => {
+  const binding = cfEnv?.[name];
+  if (!binding) return undefined;
+  // Wrap in an arrow — Fetcher["fetch"] isn't directly assignable to the
+  // global fetch type.
+  return ((input, init) =>
+    binding.fetch(input as never, init as never)) as typeof fetch;
+};

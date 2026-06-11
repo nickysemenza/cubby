@@ -5,6 +5,7 @@
 //    TCP connections, but each Worker invocation still needs its own pg.Client handle.
 // 3. Intercepts console.error to capture real error details for `wrangler tail`.
 
+import { setCfEnv } from "./server/cf-env";
 import { withRequestDb } from "./server/db";
 
 // Cache the handler module promise so the dynamic import only runs once (on
@@ -55,6 +56,10 @@ export default {
     // Bridge CF secrets → process.env for libraries that read from it
     // (better-auth reads BETTER_AUTH_SECRET from process.env at init time)
     process.env.BETTER_AUTH_SECRET ??= env.BETTER_AUTH_SECRET;
+
+    // Expose service bindings to server code (clients pick binding fetch
+    // over public URLs when present).
+    setCfEnv(env);
 
     lastInterceptedError = null;
 

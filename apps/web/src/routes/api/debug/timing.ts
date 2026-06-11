@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { count, sql } from "drizzle-orm";
 import { env } from "~/env";
 import { getErrorMessage } from "~/lib/error-utils";
+import { getBindingFetcher } from "~/server/cf-env";
 import { db } from "~/server/db";
 import { product } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
@@ -55,19 +56,30 @@ export const Route = createFileRoute("/api/debug/timing")({
           durationMs: dbParallelMs,
         };
 
+        // Service binding fetch in prod, global fetch (public URL) in dev
+        const usdaFetch = getBindingFetcher("USDA_API");
+        const upcFetch = getBindingFetcher("UPC_LOOKUP");
+        const usdaVia = usdaFetch ? "binding" : "url";
+        const upcVia = upcFetch ? "binding" : "url";
+
         const [usdaCounts, usdaBatch, upcPing] = await Promise.all([
           // 3. USDA API: health/counts endpoint
-          measure(`usda: GET ${env.USDA_API_URL}counts`, async () => {
-            const res = await fetch(`${env.USDA_API_URL}counts`);
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            await res.text();
-          }),
+          measure(
+            `usda (${usdaVia}): GET ${env.USDA_API_URL}counts`,
+            async () => {
+              const res = await (usdaFetch ?? fetch)(
+                `${env.USDA_API_URL}counts`,
+              );
+              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+              await res.text();
+            },
+          ),
 
           // 4. USDA API: single food lookup (batch of 0 — tests connection overhead)
           measure(
-            `usda: POST ${env.USDA_API_URL}api/foods/search/batch (empty)`,
+            `usda (${usdaVia}): POST ${env.USDA_API_URL}api/foods/search/batch (empty)`,
             async () => {
-              const res = await fetch(
+              const res = await (usdaFetch ?? fetch)(
                 `${env.USDA_API_URL}api/foods/search/batch`,
                 {
                   method: "POST",
@@ -81,11 +93,14 @@ export const Route = createFileRoute("/api/debug/timing")({
           ),
 
           // 5. UPC lookup worker ping
-          measure(`upc-lookup: GET ${env.UPC_LOOKUP_API_URL}`, async () => {
-            const res = await fetch(env.UPC_LOOKUP_API_URL);
-            // Don't check status — just measuring reachability
-            await res.text();
-          }),
+          measure(
+            `upc-lookup (${upcVia}): GET ${env.UPC_LOOKUP_API_URL}`,
+            async () => {
+              const res = await (upcFetch ?? fetch)(env.UPC_LOOKUP_API_URL);
+              // Don't check status — just measuring reachability
+              await res.text();
+            },
+          ),
         ]);
 
         const results: TimingResult[] = [

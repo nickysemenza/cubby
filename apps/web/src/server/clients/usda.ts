@@ -13,8 +13,14 @@ import { getTracer, TraceNames } from "~/server/tracing";
 
 export class USDAClient {
   private client;
+  private fetcher: typeof fetch;
 
-  constructor(private baseUrl: string) {
+  constructor(
+    private baseUrl: string,
+    fetcher?: typeof fetch,
+  ) {
+    // Service binding fetch in prod, global fetch (public URL) in dev
+    this.fetcher = fetcher ?? fetch;
     // Helper to get trace context headers for each request
     const getTraceHeaders = () => {
       const headers: Record<string, string> = {};
@@ -51,7 +57,7 @@ export class USDAClient {
         }
 
         try {
-          const response = await fetch(args.path, {
+          const response = await this.fetcher(args.path, {
             ...args,
             signal: AbortSignal.timeout(5_000),
           });
