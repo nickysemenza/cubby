@@ -8,7 +8,6 @@ import {
   Plus,
   Printer,
   ScanBarcode,
-  Settings,
 } from "lucide-react";
 
 export interface QuickAction {
@@ -82,12 +81,5 @@ export const quickActions: QuickAction[] = [
     path: "/labels",
     icon: Printer,
     keywords: ["label", "print", "qr", "barcode", "sticker"],
-  },
-  {
-    id: "api-panel",
-    name: "API Panel",
-    path: "/api/panel",
-    icon: Settings,
-    keywords: ["developer", "debug", "admin"],
   },
 ];

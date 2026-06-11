@@ -3,7 +3,6 @@ import {
   AlertTriangle,
   BookOpen,
   Camera,
-  ExternalLink,
   Hammer,
   Home,
   LayoutDashboard,
@@ -150,13 +149,6 @@ const projects: NavItem = {
   isActive: (p) => p.startsWith("/projects"),
 };
 
-const apiPanel: NavItem = {
-  href: "/api/panel",
-  label: "API Panel",
-  icon: ExternalLink,
-  isActive: () => false,
-};
-
 const settings: NavItem = {
   href: "/settings",
   label: "Settings",
@@ -203,9 +195,4 @@ export const reportsItems: NavItem[] = [
   problems,
 ];
 
-export const desktopMoreItems: NavItem[] = [
-  captureShelf,
-  images,
-  apiPanel,
-  settings,
-];
+export const desktopMoreItems: NavItem[] = [captureShelf, images, settings];

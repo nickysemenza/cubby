@@ -13,7 +13,6 @@ import { Route as DocsRouteImport } from './routes/docs'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthAuthViewRouteImport } from './routes/auth.$authView'
-import { Route as ApiPanelRouteImport } from './routes/api/panel'
 import { Route as ApiMcpRouteImport } from './routes/api/mcp'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedProblemsRouteImport } from './routes/_authenticated/problems'
@@ -81,11 +80,6 @@ const IndexRoute = IndexRouteImport.update({
 const AuthAuthViewRoute = AuthAuthViewRouteImport.update({
   id: '/auth/$authView',
   path: '/auth/$authView',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiPanelRoute = ApiPanelRouteImport.update({
-  id: '/api/panel',
-  path: '/api/panel',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiMcpRoute = ApiMcpRouteImport.update({
@@ -376,7 +370,6 @@ export interface FileRoutesByFullPath {
   '/problems': typeof AuthenticatedProblemsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/api/mcp': typeof ApiMcpRoute
-  '/api/panel': typeof ApiPanelRoute
   '/auth/$authView': typeof AuthAuthViewRoute
   '/account/$accountView': typeof AuthenticatedAccountAccountViewRoute
   '/cookbooks/$cookbookId': typeof AuthenticatedCookbooksCookbookIdRoute
@@ -431,7 +424,6 @@ export interface FileRoutesByTo {
   '/problems': typeof AuthenticatedProblemsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/api/mcp': typeof ApiMcpRoute
-  '/api/panel': typeof ApiPanelRoute
   '/auth/$authView': typeof AuthAuthViewRoute
   '/account/$accountView': typeof AuthenticatedAccountAccountViewRoute
   '/cookbooks/$cookbookId': typeof AuthenticatedCookbooksCookbookIdRoute
@@ -488,7 +480,6 @@ export interface FileRoutesById {
   '/_authenticated/problems': typeof AuthenticatedProblemsRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/api/mcp': typeof ApiMcpRoute
-  '/api/panel': typeof ApiPanelRoute
   '/auth/$authView': typeof AuthAuthViewRoute
   '/_authenticated/account/$accountView': typeof AuthenticatedAccountAccountViewRoute
   '/_authenticated/cookbooks/$cookbookId': typeof AuthenticatedCookbooksCookbookIdRoute
@@ -545,7 +536,6 @@ export interface FileRouteTypes {
     | '/problems'
     | '/settings'
     | '/api/mcp'
-    | '/api/panel'
     | '/auth/$authView'
     | '/account/$accountView'
     | '/cookbooks/$cookbookId'
@@ -600,7 +590,6 @@ export interface FileRouteTypes {
     | '/problems'
     | '/settings'
     | '/api/mcp'
-    | '/api/panel'
     | '/auth/$authView'
     | '/account/$accountView'
     | '/cookbooks/$cookbookId'
@@ -656,7 +645,6 @@ export interface FileRouteTypes {
     | '/_authenticated/problems'
     | '/_authenticated/settings'
     | '/api/mcp'
-    | '/api/panel'
     | '/auth/$authView'
     | '/_authenticated/account/$accountView'
     | '/_authenticated/cookbooks/$cookbookId'
@@ -703,7 +691,6 @@ export interface RootRouteChildren {
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   DocsRoute: typeof DocsRoute
   ApiMcpRoute: typeof ApiMcpRoute
-  ApiPanelRoute: typeof ApiPanelRoute
   AuthAuthViewRoute: typeof AuthAuthViewRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiDebugTimingRoute: typeof ApiDebugTimingRoute
@@ -738,13 +725,6 @@ declare module '@tanstack/react-router' {
       path: '/auth/$authView'
       fullPath: '/auth/$authView'
       preLoaderRoute: typeof AuthAuthViewRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/panel': {
-      id: '/api/panel'
-      path: '/api/panel'
-      fullPath: '/api/panel'
-      preLoaderRoute: typeof ApiPanelRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/mcp': {
@@ -1200,7 +1180,6 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   DocsRoute: DocsRoute,
   ApiMcpRoute: ApiMcpRoute,
-  ApiPanelRoute: ApiPanelRoute,
   AuthAuthViewRoute: AuthAuthViewRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiDebugTimingRoute: ApiDebugTimingRoute,
