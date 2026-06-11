@@ -1,4 +1,4 @@
-import type { AmountKind, WAmount } from "@cubby/recipebridge";
+import type { AmountKind, WAmount, WConversionStep } from "@cubby/recipebridge";
 import { type Amount, amount } from "@cubby/schemas/codec";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -56,6 +56,22 @@ const amountKinds: AmountKind[] = [
 
 const isNutrientMapping = (m: UnitMapping) => m.source === "USDA nutrition";
 
+/**
+ * Render an explained conversion path compactly, e.g. `g ×0.0226→ scoop ×19.995→ cent`.
+ * Units are the normalized graph nodes (cup enters at tsp, money at cent) —
+ * showing the real traversal is the point.
+ */
+const formatConversionPath = (path: readonly WConversionStep[]): string => {
+  const fmtFactor = (f: number) =>
+    Number.parseFloat(f.toPrecision(4)).toString();
+  const first = path[0];
+  if (!first) return "";
+  return [
+    first.from_unit,
+    ...path.map((s) => `×${fmtFactor(s.factor)}→ ${s.to_unit}`),
+  ].join(" ");
+};
+
 function ConversionDialogContent({
   mappings,
   onClose,
@@ -67,6 +83,9 @@ function ConversionDialogContent({
   const [showNutrients, setShowNutrients] = useState(true);
   const [conversions, setConversions] = useState<
     Partial<Record<AmountKind, Result<WAmount>>>
+  >({});
+  const [paths, setPaths] = useState<
+    Partial<Record<AmountKind, readonly WConversionStep[]>>
   >({});
 
   const filteredMappings = showNutrients
@@ -91,12 +110,30 @@ function ConversionDialogContent({
         AmountKind,
         Result<WAmount>
       >;
+      const resultPaths: Partial<
+        Record<AmountKind, readonly WConversionStep[]>
+      > = {};
 
       for (const kind of amountKinds) {
         results[kind] = safeConvertAmount(currentAmount, mappings, kind);
+        // The traversed unit-graph path ("show your work") for convertible
+        // kinds — surfaces e.g. a price reached via a bogus whole-count edge.
+        try {
+          const explained = wasm.conv_amount_explain(
+            mappings,
+            kind,
+            currentAmount,
+          );
+          if (explained.path && explained.path.length > 0) {
+            resultPaths[kind] = explained.path;
+          }
+        } catch {
+          // explain is best-effort; the result row already shows convertibility
+        }
       }
 
       setConversions(results);
+      setPaths(resultPaths);
     },
     [mappings],
   );
@@ -188,21 +225,26 @@ function ConversionDialogContent({
                 <div className="space-y-2">
                   {amountKinds.map((kind) => {
                     const result = conversions[kind];
+                    const path = paths[kind];
                     const Meta = kindIconMap[kind];
                     return (
-                      <div
-                        key={kind}
-                        className="flex items-center justify-between border-b py-1"
-                      >
-                        <span className="flex items-center gap-2">
-                          <Meta.Icon className="h-4 w-4" aria-hidden />
-                          <span className="font-medium">{Meta.label}</span>
-                        </span>
-                        <span>
-                          {result?.isOk()
-                            ? wasm.format_amount(result.value)
-                            : "Not convertible"}
-                        </span>
+                      <div key={kind} className="border-b py-1">
+                        <div className="flex items-center justify-between">
+                          <span className="flex items-center gap-2">
+                            <Meta.Icon className="h-4 w-4" aria-hidden />
+                            <span className="font-medium">{Meta.label}</span>
+                          </span>
+                          <span>
+                            {result?.isOk()
+                              ? wasm.format_amount(result.value)
+                              : "Not convertible"}
+                          </span>
+                        </div>
+                        {result?.isOk() && path && (
+                          <div className="text-right font-mono text-2xs text-muted-foreground">
+                            {formatConversionPath(path)}
+                          </div>
+                        )}
                       </div>
                     );
                   })}

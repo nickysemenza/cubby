@@ -22,11 +22,11 @@ tsify-next = { version = "0.5", features = ["js"] }
 # Pin to a rev (not branch = "main"): CI's WASM build cache key hashes this
 # Cargo.toml, so a moving branch would let a stale cached pkg outlive an
 # upstream parser change. Bump these in lockstep when pulling in parser fixes.
-ingredient = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "b03b2eba58afaf46d51f1946e67223db67c03807" }
-recipe-scraper = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "b03b2eba58afaf46d51f1946e67223db67c03807" }
+ingredient = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "33533dc44a42d3bc96f44daf5a642a6c193cc8da" }
+recipe-scraper = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "33533dc44a42d3bc96f44daf5a642a6c193cc8da" }
 # EPUB cookbook extraction — the pure subset only (no reqwest/fs). `chunk_epub`
 # + `assemble_recipes` run client-side; the LLM call is proxied through Cubby.
-recipe-epub = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "b03b2eba58afaf46d51f1946e67223db67c03807", default-features = false }
+recipe-epub = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "33533dc44a42d3bc96f44daf5a642a6c193cc8da", default-features = false }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha2 = "0.11"

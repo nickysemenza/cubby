@@ -6,8 +6,9 @@ use ingredient::{
     usage::IngredientUsage,
     rich_text::{Chunk, RichParser},
     unit::{
-        convert_measure_with_graph, find_connected_components, is_valid, make_graph, print_graph,
-        Measure, MeasureKind,
+        convert_measure_with_graph, convert_measure_with_graph_explained,
+        find_connected_components, is_valid, make_graph, print_graph, ConversionStep, Measure,
+        MeasureKind,
     },
     unit_mapping::{parse_unit_mapping as parse_unit_mapping_internal, ParsedUnitMapping},
     util::truncate_3_decimals,
@@ -99,6 +100,37 @@ pub struct WAmountAll {
     pub weight: Option<WAmount>,
     pub calories: Option<WAmount>,
     pub nutrients: Vec<WNutrientConversion>,
+}
+
+/// One hop of an explained conversion path (mirrors `ConversionStep`). Units are
+/// the normalized graph nodes (cup amounts enter at `tsp`, money at `cent`).
+#[derive(Tsify, Serialize, Deserialize)]
+#[tsify(into_wasm_abi)]
+pub struct WConversionStep {
+    pub from_unit: String,
+    pub to_unit: String,
+    pub factor: f64,
+}
+
+impl From<ConversionStep> for WConversionStep {
+    fn from(s: ConversionStep) -> Self {
+        Self {
+            from_unit: s.from_unit.to_str().into_owned(),
+            to_unit: s.to_unit.to_str().into_owned(),
+            factor: s.factor,
+        }
+    }
+}
+
+/// An explained conversion: the converted amount plus the unit-graph path that
+/// produced it (both null when no path exists). The conversion's "show your
+/// work" — a bogus route (e.g. grams reaching money via a serving-count `whole`
+/// edge) reads right off the steps.
+#[derive(Tsify, Serialize, Deserialize)]
+#[tsify(into_wasm_abi)]
+pub struct WAmountExplained {
+    pub result: Option<WAmount>,
+    pub path: Option<Vec<WConversionStep>>,
 }
 
 /// The role an ingredient line plays in a recipe (mirrors `IngredientUsage`).
@@ -390,6 +422,35 @@ pub fn conv_amount_to_kind(
         .convert_measure_via_mappings(kind.clone(), &pairs)
         .ok_or_else(|| format!("Failed to convert '{measure}' to '{kind}'"))
         .map(WAmount::from)
+}
+
+/// Convert an amount to a target kind AND return the conversion path traversed
+/// (which unit-mapping edges, with their factors). Result/path are null when no
+/// path exists. Powers the costing debug/explain surfaces.
+#[wasm_bindgen]
+pub fn conv_amount_explain(
+    mappings: WUnitMappings,
+    target_kind_w: WAmountKind,
+    amount_w: WAmount,
+) -> Result<WAmountExplained, String> {
+    let measure = amount_w.to_measure();
+    let kind_str: String = from_js(target_kind_w, "amount kind")?;
+    let kind =
+        MeasureKind::from_str(&kind_str).map_err(|_| format!("Invalid amount kind: {kind_str}"))?;
+    let graph = make_graph(&mappings.to_pairs());
+
+    Ok(
+        match convert_measure_with_graph_explained(&measure, kind, &graph) {
+            Some((m, steps)) => WAmountExplained {
+                result: Some(m.into()),
+                path: Some(steps.into_iter().map(WConversionStep::from).collect()),
+            },
+            None => WAmountExplained {
+                result: None,
+                path: None,
+            },
+        },
+    )
 }
 
 /// Convert an amount to multiple nutrient targets in a single call (graph built

@@ -60,6 +60,7 @@ const CACHEABLE_METHODS = [
   "conv_amount_to_kind",
   "conv_amount_to_nutrients",
   "conv_amount_all",
+  "conv_amount_explain",
   "format_amount",
   "format_amount_value",
   // Pure string classification, called once per ingredient row per costing
