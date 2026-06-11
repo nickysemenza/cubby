@@ -146,6 +146,8 @@ export function Provider({
         replace={(href) => navigate({ to: href, replace: true })}
         Link={Link}
         apiKey
+        passkey
+        signUp={false}
         toast={({ variant, message }) => {
           const text = message ?? "Something went wrong.";
           if (variant === "error") toast.error(text);

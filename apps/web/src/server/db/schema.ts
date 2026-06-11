@@ -21,14 +21,21 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { account, apikey, session, user, verification } from "./auth.schema";
+import {
+  account,
+  apikey,
+  passkey,
+  session,
+  user,
+  verification,
+} from "./auth.schema";
 
 // JSON types for JSONB columns
 export type { Amount };
 export type Instruction = { text: string };
 
 // Re-export Better-Auth tables for use throughout the app
-export { user, session, account, verification, apikey };
+export { user, session, account, verification, apikey, passkey };
 
 // Enums - values derived from Zod schemas
 export const recipeSourceEnum = pgEnum("RecipeSource", recipeSourceValues);

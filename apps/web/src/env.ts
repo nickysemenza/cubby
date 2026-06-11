@@ -21,6 +21,8 @@ export const env = createEnv({
     UPC_LOOKUP_API_KEY: z.string().min(1).optional(),
     BETTER_AUTH_SECRET: z.string().min(1),
     BETTER_AUTH_URL: z.string().url().optional(),
+    // Personal instance: signup is closed unless this is explicitly "true".
+    ALLOW_SIGNUP: z.enum(["true", "false"]).default("false"),
     AI_GATEWAY_API_KEY: z.string().min(1).optional(),
     NOTION_API_KEY: z.string().min(1).optional(),
     PORT: z.coerce.number().int().positive().optional(),
@@ -47,6 +49,7 @@ export const env = createEnv({
     UPC_LOOKUP_API_KEY: process.env.UPC_LOOKUP_API_KEY,
     BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
     BETTER_AUTH_URL: process.env.BETTER_AUTH_URL,
+    ALLOW_SIGNUP: process.env.ALLOW_SIGNUP,
     AI_GATEWAY_API_KEY: process.env.AI_GATEWAY_API_KEY,
     NOTION_API_KEY: process.env.NOTION_API_KEY,
     PORT: process.env.PORT,

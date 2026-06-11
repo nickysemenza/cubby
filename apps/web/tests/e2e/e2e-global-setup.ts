@@ -89,6 +89,10 @@ async function globalSetup(config: FullConfig): Promise<void> {
       "3001",
       "--var",
       `BETTER_AUTH_SECRET:${process.env.BETTER_AUTH_SECRET || "e2e-test-secret"}`,
+      // Signup is disabled by default; global setup creates the test user
+      // via /api/auth/sign-up/email, so open it for E2E.
+      "--var",
+      "ALLOW_SIGNUP:true",
       "--var",
       `DATABASE_URL:${databaseUrl}`,
       "--var",

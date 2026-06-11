@@ -1,7 +1,9 @@
 import { apiKey } from "@better-auth/api-key";
+import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
+import { env } from "~/env";
 import { drizzle } from "~/server/db";
 import * as schema from "~/server/db/auth.schema";
 
@@ -15,6 +17,9 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: false,
+    // Personal instance: signup closed. Set ALLOW_SIGNUP=true temporarily to
+    // open it (e.g. adding a second account), then unset.
+    disableSignUp: env.ALLOW_SIGNUP !== "true",
   },
   session: {
     // Read session validity from a short-lived signed cookie instead of hitting
@@ -32,6 +37,13 @@ export const auth = betterAuth({
     apiKey({
       enableSessionForAPIKeys: true,
       rateLimit: { enabled: false },
+    }),
+    passkey({
+      rpID: isDev ? "localhost" : "cubby.nickysemenza.com",
+      rpName: "Cubby",
+      origin: isDev
+        ? "http://localhost:3000"
+        : "https://cubby.nickysemenza.com",
     }),
     tanstackStartCookies(), // Must be last
   ],

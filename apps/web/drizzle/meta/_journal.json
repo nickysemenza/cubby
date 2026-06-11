@@ -99,6 +99,13 @@
       "when": 1781204828000,
       "tag": "0013_fluffy_nextwave",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1781212843617,
+      "tag": "0014_daily_lady_vermin",
+      "breakpoints": true
     }
   ]
 }
