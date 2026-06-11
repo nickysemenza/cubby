@@ -26,10 +26,6 @@ export const isFlourIngredient = (name: string): boolean => {
   return FLOUR_TERMS.some((t) => n.includes(t));
 };
 
-// Re-exported from a server-safe module so the costing rollup can run server-side
-// too; kept here for existing client callers.
-export { isFryingMediumIngredient } from "~/lib/ingredient-utils";
-
 export const getIngredientName = (ingredient: SectionIngredient): string => {
   const { type } = ingredient;
   switch (type) {

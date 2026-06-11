@@ -62,6 +62,9 @@ const CACHEABLE_METHODS = [
   "conv_amount_all",
   "format_amount",
   "format_amount_value",
+  // Pure string classification, called once per ingredient row per costing
+  // pass — same args repeat across re-renders and the server totals rollup.
+  "classify_ingredient_usage",
 ] as const;
 /** Source of truth shared by the runtime cache and the `ImmutableWasm` types. */
 type CacheableMethod = (typeof CACHEABLE_METHODS)[number];

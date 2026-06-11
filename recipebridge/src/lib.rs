@@ -1,8 +1,9 @@
 use std::{collections::HashSet, str::FromStr};
 
 use ingredient::{
-    from_str as parse_ingredient_str,
+    classify_usage, from_str as parse_ingredient_str,
     ingredient::Ingredient,
+    usage::IngredientUsage,
     rich_text::{Chunk, RichParser},
     unit::{
         convert_measure_with_graph, find_connected_components, is_valid, make_graph, print_graph,
@@ -100,6 +101,36 @@ pub struct WAmountAll {
     pub nutrients: Vec<WNutrientConversion>,
 }
 
+/// The role an ingredient line plays in a recipe (mirrors `IngredientUsage`).
+/// The exhaustive `From` match below is the compile-time drift check: adding a
+/// variant upstream without mirroring it here fails the build.
+#[derive(Tsify, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[tsify(into_wasm_abi)]
+#[serde(rename_all = "snake_case")]
+pub enum WIngredientUsage {
+    Normal,
+    FryingMedium,
+    PanGrease,
+    Seasoning,
+    Dredging,
+    Garnish,
+    Marinade,
+}
+
+impl From<IngredientUsage> for WIngredientUsage {
+    fn from(u: IngredientUsage) -> Self {
+        match u {
+            IngredientUsage::Normal => Self::Normal,
+            IngredientUsage::FryingMedium => Self::FryingMedium,
+            IngredientUsage::PanGrease => Self::PanGrease,
+            IngredientUsage::Seasoning => Self::Seasoning,
+            IngredientUsage::Dredging => Self::Dredging,
+            IngredientUsage::Garnish => Self::Garnish,
+            IngredientUsage::Marinade => Self::Marinade,
+        }
+    }
+}
+
 /// A parsed ingredient (mirrors `Ingredient`).
 #[derive(Tsify, Serialize, Deserialize)]
 #[tsify(into_wasm_abi)]
@@ -108,6 +139,8 @@ pub struct WIngredient {
     pub amounts: Vec<WAmount>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub modifier: Option<String>,
+    /// The role the line declares ("oil, for frying" → `frying_medium`).
+    pub usage: WIngredientUsage,
 }
 
 impl From<Ingredient> for WIngredient {
@@ -116,6 +149,7 @@ impl From<Ingredient> for WIngredient {
             name: i.name,
             amounts: i.amounts.iter().map(WAmount::from).collect(),
             modifier: i.modifier,
+            usage: i.usage.into(),
         }
     }
 }
@@ -299,6 +333,26 @@ pub fn format_amount_value(input: WAmount) -> f64 {
 #[wasm_bindgen]
 pub fn parse_ingredient(input: &str) -> WIngredient {
     parse_ingredient_str(input).into()
+}
+
+/// Classify an ingredient row's usage from its stored parts. Built for cubby's
+/// stored rows (name + nullable modifier/rawLine columns, plus the enclosing
+/// section's name for marinade/brine detection), so old recipes pick up
+/// classifier improvements with no re-parse or backfill.
+#[wasm_bindgen]
+pub fn classify_ingredient_usage(
+    name: &str,
+    modifier: Option<String>,
+    raw_line: Option<String>,
+    section_name: Option<String>,
+) -> WIngredientUsage {
+    classify_usage(
+        name,
+        modifier.as_deref(),
+        raw_line.as_deref(),
+        section_name.as_deref(),
+    )
+    .into()
 }
 
 #[wasm_bindgen]

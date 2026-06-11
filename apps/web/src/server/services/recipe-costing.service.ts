@@ -12,7 +12,7 @@
 import type { RecipeId } from "@cubby/schemas/identifiers";
 import type { RecipeOut, RecipeTotals } from "@cubby/schemas/recipe";
 import { getNutrientValueByKey } from "@cubby/usda-schemas";
-import { calculateTotals } from "~/lib/recipe-costing";
+import { calculateTotals, flattenSections } from "~/lib/recipe-costing";
 import type { Database } from "~/server/db";
 import { getRecipesByIDs } from "~/server/repo/recipe/crud";
 import {
@@ -102,7 +102,7 @@ export class RecipeCostingService {
       { totals: RecipeTotals; complete: boolean }
     >();
     for (const r of recipes) {
-      const ings = r.sections.flatMap((s) => s.ingredients);
+      const ings = flattenSections(r.sections);
       const t = calculateTotals(ings, ingMap, recipeIngredientName, recipeMap);
       const complete = ings.every(
         (i) => i.type !== "ingredient" || ingredientResolvedOk(i.ingredient.id),

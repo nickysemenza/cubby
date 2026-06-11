@@ -1,4 +1,8 @@
-import type { AmountKind, WAmount } from "@cubby/recipebridge";
+import type {
+  AmountKind,
+  WAmount,
+  WIngredientUsage,
+} from "@cubby/recipebridge";
 import type { Amount } from "@cubby/schemas/codec";
 import type {
   RecipeOut,
@@ -13,7 +17,6 @@ import {
   TIER1_NUTRIENTS,
 } from "@cubby/usda-schemas";
 import { err, ok } from "neverthrow";
-import { isFryingMediumIngredient } from "~/lib/ingredient-utils";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { wasm } from "~/lib/wasm";
 import type { Result } from "~/misc/result-types";
@@ -21,6 +24,25 @@ import type {
   IngredientWithFoodOut,
   ProductWithMappingsAndFoodOut,
 } from "~/server/services/ingredient.service";
+
+/**
+ * A section ingredient carrying its enclosing section's name — the costing
+ * input shape. The section name matters because some usage classifications are
+ * section-level ("For the marinade", "Brine"), not line-level. Build rows with
+ * `flattenSections` so every costing entry point agrees.
+ */
+export type CostingRow = SectionIngredientOut & { sectionName: string | null };
+
+/** Flatten a recipe's sections into costing rows, attaching each section name. */
+export const flattenSections = (
+  sections: readonly {
+    name: string | null;
+    ingredients: SectionIngredientOut[];
+  }[],
+): CostingRow[] =>
+  sections.flatMap((s) =>
+    s.ingredients.map((i) => ({ ...i, sectionName: s.name })),
+  );
 
 /**
  * Get nutrient target unit strings for WASM batch conversion
@@ -219,7 +241,7 @@ const getSubRecipeMappings = (
   if (!sub || sub.yield == null) return null;
 
   const subTotals = calculateTotals(
-    sub.sections.flatMap((s) => s.ingredients),
+    flattenSections(sub.sections),
     ingMap,
     (ing) => ing.id, // nested missing-data labels are discarded; identity is fine
     recipeMap,
@@ -332,6 +354,18 @@ const getIngredientMeasures = (
   return measuresFromMappings(firstAmount, mappings);
 };
 
+// ---------------------------------------------------------------------------
+// Consumption model: the recipe line is not always what you eat.
+//
+// Each row's usage role (classified by the wasm parser from modifier/rawLine/
+// section name) maps to a per-measure plan: cost, weight, and nutrients each
+// resolve from one source. This is the single table both `calculateTotals` and
+// the per-row views consume — the constants below are the tuning knobs.
+// ---------------------------------------------------------------------------
+
+/** The role a row plays, as classified by ingredient-parser. */
+export type IngredientUsage = WIngredientUsage;
+
 /**
  * Fraction of a fried dish's (raw) batter weight that ends up absorbed as oil and
  * actually eaten. Deep-fried dough takes on roughly 10–20% of its weight in oil;
@@ -340,40 +374,265 @@ const getIngredientMeasures = (
  * effect into the constant — this is the single knob to turn for accuracy.
  */
 export const FRY_OIL_ABSORPTION_FRACTION = 0.15;
+/** "Salt to taste" ≈ 1% of dish weight — a standard seasoning rate. */
+const SEASONING_BASIS_FRACTION = 0.01;
+/** Unmeasured "butter, for the pan": a flat ~10 g, nearly all of it eaten. */
+const PAN_GREASE_GRAMS = 10;
+/** Unmeasured "parsley, for garnish": a flat ~5 g flourish. */
+const GARNISH_GRAMS = 5;
+/** Unmeasured "flour, for dusting": adhered coating ≈ 5% of dish weight. */
+const DREDGE_BASIS_FRACTION = 0.05;
+/** Measured dredging flour: only ~20% of the bowl ends up on the food. */
+const DREDGE_RETAINED_FRACTION = 0.2;
+/** Measured marinade: ~15% clings to the food; the rest is discarded. */
+const MARINADE_RETAINED_FRACTION = 0.15;
+
+/** Where one measure (cost, weight, or nutrients) of a row resolves from. */
+type ComponentSource =
+  | { kind: "own-full" } // the row's own amount, as written
+  | { kind: "own-fraction"; fraction: number } // fraction of the own amount
+  | { kind: "basis-fraction"; fraction: number } // fraction of the other rows' weight
+  | { kind: "flat-grams"; grams: number } // a fixed gram estimate
+  | { kind: "missing" }; // no basis at all (errors into missingByType)
+
+/** How a row's three measures resolve. */
+type ConsumptionPlan = {
+  usage: IngredientUsage;
+  cost: ComponentSource;
+  weight: ComponentSource;
+  nutrients: ComponentSource;
+};
+
+type PlanTrio = Pick<ConsumptionPlan, "cost" | "weight" | "nutrients">;
+
+const ownFull: ComponentSource = { kind: "own-full" };
+const missing: ComponentSource = { kind: "missing" };
+const ownFraction = (fraction: number): ComponentSource => ({
+  kind: "own-fraction",
+  fraction,
+});
+const basisFraction = (fraction: number): ComponentSource => ({
+  kind: "basis-fraction",
+  fraction,
+});
+const flatGrams = (grams: number): ComponentSource => ({
+  kind: "flat-grams",
+  grams,
+});
+const all = (source: ComponentSource): PlanTrio => ({
+  cost: source,
+  weight: source,
+  nutrients: source,
+});
 
 /**
- * Measures for an unmeasured frying-medium ingredient (e.g. "oil, for frying"):
- * convert an estimated absorbed gram weight through the oil's own USDA/price unit
- * mappings, so calories, fat, and (tiny) cost all come from the linked food with
- * no hardcoded oil constants. Returns error Results if there's no basis or the
- * oil has no resolvable mappings (renders as a graceful "—").
+ * The consumption table, per usage × measured/unmeasured. Notable asymmetries:
+ * - Measured frying oil ("2 quarts oil, for frying"): the amount is the POT
+ *   volume, not consumption — full cost (you bought it), absorbed weight and
+ *   nutrients (you ate ~15% of batter weight, not 7,700 kcal of oil).
+ * - Measured marinade/dredging: full cost, fractional weight/nutrition (the
+ *   rest is discarded).
  */
-const fryingMediumMeasures = (
-  absorbedGrams: number,
-  ingredient: SectionIngredientOut,
-  ingMap: Record<string, IngredientWithFoodOut>,
-): IngredientPriceInfo => {
-  if (ingredient.type !== "ingredient" || absorbedGrams <= 0) {
-    const error = "no absorbed-oil basis";
-    return { price: err(error), gram: err(error), nutrient: err(error) };
-  }
-  const entry = ingMap[ingredient.ingredient.id];
-  const mappings = (entry?.product ?? []).flatMap((p) =>
-    getAllUnitMappingsFromProduct(p),
-  );
-  return measuresFromMappings({ value: absorbedGrams, unit: "g" }, mappings);
+const USAGE_CONSUMPTION: Record<
+  IngredientUsage,
+  { measured: PlanTrio; unmeasured: PlanTrio }
+> = {
+  normal: { measured: all(ownFull), unmeasured: all(missing) },
+  frying_medium: {
+    measured: {
+      cost: ownFull,
+      weight: basisFraction(FRY_OIL_ABSORPTION_FRACTION),
+      nutrients: basisFraction(FRY_OIL_ABSORPTION_FRACTION),
+    },
+    unmeasured: all(basisFraction(FRY_OIL_ABSORPTION_FRACTION)),
+  },
+  seasoning: {
+    measured: all(ownFull),
+    unmeasured: all(basisFraction(SEASONING_BASIS_FRACTION)),
+  },
+  pan_grease: {
+    measured: all(ownFull),
+    unmeasured: all(flatGrams(PAN_GREASE_GRAMS)),
+  },
+  garnish: {
+    measured: all(ownFull),
+    unmeasured: all(flatGrams(GARNISH_GRAMS)),
+  },
+  dredging: {
+    measured: {
+      cost: ownFull,
+      weight: ownFraction(DREDGE_RETAINED_FRACTION),
+      nutrients: ownFraction(DREDGE_RETAINED_FRACTION),
+    },
+    unmeasured: all(basisFraction(DREDGE_BASIS_FRACTION)),
+  },
+  marinade: {
+    measured: {
+      cost: ownFull,
+      weight: ownFraction(MARINADE_RETAINED_FRACTION),
+      nutrients: ownFraction(MARINADE_RETAINED_FRACTION),
+    },
+    // An unmeasured marinade line has no estimable basis — leave it missing.
+    unmeasured: all(missing),
+  },
 };
 
 /**
- * True when an ingredient is the frying medium AND carries no measured amount —
- * i.e. its contribution should be *estimated* from absorbed oil rather than read
- * off the recipe. An oil with an explicit amount is treated as a normal ingredient.
+ * Build a row's consumption plan. Sub-recipe rows are always normal (their
+ * internals already applied their own model); ingredient rows are classified
+ * by the wasm parser (LRU-cached — pure string work, repeated args).
  */
-const isUnmeasuredFryingMedium = (
-  ingredient: SectionIngredientOut,
-  name: string,
-): boolean =>
-  !ingredient.amounts[0] && isFryingMediumIngredient(ingredient, name);
+const planConsumption = (row: CostingRow, name: string): ConsumptionPlan => {
+  const usage: IngredientUsage =
+    row.type === "recipe"
+      ? "normal"
+      : wasm.classify_ingredient_usage(
+          name,
+          row.modifier ?? undefined,
+          row.rawLine ?? undefined,
+          row.sectionName ?? undefined,
+        );
+  const trio =
+    USAGE_CONSUMPTION[usage][row.amounts[0] ? "measured" : "unmeasured"];
+  return { usage, ...trio };
+};
+
+/**
+ * True when any measure depends on the basis weight (or is a flat estimate) —
+ * these rows resolve in pass 2, after the basis is known, and their own
+ * amounts never enter the basis.
+ */
+const isDeferred = (plan: ConsumptionPlan): boolean =>
+  [plan.cost, plan.weight, plan.nutrients].some(
+    (c) => c.kind === "basis-fraction" || c.kind === "flat-grams",
+  );
+
+/** True when any measure is adjusted away from the written amount ("est."). */
+const isEstimatedPlan = (plan: ConsumptionPlan): boolean =>
+  [plan.cost, plan.weight, plan.nutrients].some(
+    (c) => c.kind !== "own-full" && c.kind !== "missing",
+  );
+
+/** Whether a row's own weight contributes to the basis other rows estimate
+ * from. Own-full only, deliberately: a measured marinade's *retained* grams
+ * are themselves an estimate, so they don't feed a sibling fry-oil's basis. */
+const contributesToBasis = (plan: ConsumptionPlan): boolean =>
+  plan.weight.kind === "own-full";
+
+/**
+ * Measures for an estimated gram weight, converted through the ingredient's own
+ * USDA/price unit mappings — calories, sodium, and (tiny) cost all come from
+ * the linked food with no hardcoded per-food constants. Error Results when
+ * there's no estimable basis or no resolvable mappings (renders as "—").
+ */
+const estimatedMeasures = (
+  grams: number,
+  row: CostingRow,
+  ingMap: Record<string, IngredientWithFoodOut>,
+): IngredientPriceInfo => {
+  if (row.type !== "ingredient" || grams <= 0) {
+    const error = "no basis for estimate";
+    return { price: err(error), gram: err(error), nutrient: err(error) };
+  }
+  const entry = ingMap[row.ingredient.id];
+  const mappings = (entry?.product ?? []).flatMap((p) =>
+    getAllUnitMappingsFromProduct(p),
+  );
+  return measuresFromMappings({ value: grams, unit: "g" }, mappings);
+};
+
+const scaleAmount = (
+  result: Result<WAmount>,
+  fraction: number,
+): Result<WAmount> =>
+  result.map((a) => ({
+    ...a,
+    value: a.value * fraction,
+    upper_value:
+      a.upper_value != null ? a.upper_value * fraction : a.upper_value,
+  }));
+
+const scaleNutrients = (
+  result: Result<NutrientsPer100>,
+  fraction: number,
+): Result<NutrientsPer100> =>
+  result.map((nutrients) =>
+    Object.fromEntries(
+      Object.entries(nutrients).map(([code, value]) => [
+        code,
+        (value ?? 0) * fraction,
+      ]),
+    ),
+  );
+
+/**
+ * Resolve a row's three measures per its plan. At most two conversions run:
+ * the row's own trio (lazy — only when some measure is own-*) and one
+ * estimated-grams trio. `precomputedOwn` lets per-row views reuse the trio
+ * `createIngredientData` already computed.
+ */
+const resolveRowMeasures = (
+  row: CostingRow,
+  plan: ConsumptionPlan,
+  basisGrams: number,
+  ingMap: Record<string, IngredientWithFoodOut>,
+  recipeMap: Record<string, RecipeOut>,
+  visited: Set<string>,
+  precomputedOwn?: IngredientPriceInfo,
+): IngredientPriceInfo => {
+  let ownTrio = precomputedOwn;
+  const own = (): IngredientPriceInfo =>
+    (ownTrio ??= getIngredientMeasures(row, ingMap, recipeMap, visited));
+
+  // One estimate trio per distinct gram value (in practice: one).
+  const estCache = new Map<number, IngredientPriceInfo>();
+  const est = (grams: number): IngredientPriceInfo => {
+    const cached = estCache.get(grams);
+    if (cached) return cached;
+    const info = estimatedMeasures(grams, row, ingMap);
+    estCache.set(grams, info);
+    return info;
+  };
+
+  const amountFor = (
+    source: ComponentSource,
+    key: "price" | "gram",
+  ): Result<WAmount> => {
+    switch (source.kind) {
+      case "own-full":
+        return own()[key];
+      case "own-fraction":
+        return scaleAmount(own()[key], source.fraction);
+      case "basis-fraction":
+        return est(source.fraction * basisGrams)[key];
+      case "flat-grams":
+        return est(source.grams)[key];
+      case "missing":
+        return err(`ingredient ${row.id} has no amounts`);
+    }
+  };
+
+  const nutrientsFor = (source: ComponentSource): Result<NutrientsPer100> => {
+    switch (source.kind) {
+      case "own-full":
+        return own().nutrient;
+      case "own-fraction":
+        return scaleNutrients(own().nutrient, source.fraction);
+      case "basis-fraction":
+        return est(source.fraction * basisGrams).nutrient;
+      case "flat-grams":
+        return est(source.grams).nutrient;
+      case "missing":
+        return err(`ingredient ${row.id} has no amounts`);
+    }
+  };
+
+  return {
+    price: amountFor(plan.cost, "price"),
+    gram: amountFor(plan.weight, "gram"),
+    nutrient: nutrientsFor(plan.nutrients),
+  };
+};
 
 export type CalculateTotalsResult = {
   price: number;
@@ -388,10 +647,11 @@ export type CalculateTotalsResult = {
 };
 
 /**
- * Calculates price, weight, and nutrient information for a list of ingredients
+ * Calculates price, weight, and nutrient information for a list of ingredients,
+ * applying each row's consumption plan (see USAGE_CONSUMPTION).
  */
 export const calculateTotals = (
-  ingredients: SectionIngredientOut[],
+  ingredients: CostingRow[],
   ingMap: Record<string, IngredientWithFoodOut>,
   getIngredientName: (ingredient: SectionIngredientOut) => string,
   recipeMap: Record<string, RecipeOut> = {},
@@ -419,41 +679,60 @@ export const calculateTotals = (
     else missingByType.nutrients.push(ingName);
   };
 
-  // Pass 1: normal ingredients. Defer unmeasured frying mediums — their absorbed
-  // oil is estimated from the weight of everything else, known only after this loop.
-  const fryingMediums: SectionIngredientOut[] = [];
-  for (const ingredient of ingredients) {
-    const ingName = getIngredientName(ingredient);
-    if (isUnmeasuredFryingMedium(ingredient, ingName)) {
-      fryingMediums.push(ingredient);
+  const planned = ingredients.map((row) => {
+    const name = getIngredientName(row);
+    return { row, name, plan: planConsumption(row, name) };
+  });
+
+  // Resolve a row and fold it, routing thrown errors to every missing
+  // category. Returns the resolved trio (null when it threw).
+  const resolveAndFold = (
+    { row, name, plan }: (typeof planned)[number],
+    basisGrams: number,
+  ): IngredientPriceInfo | null => {
+    try {
+      const info = resolveRowMeasures(
+        row,
+        plan,
+        basisGrams,
+        ingMap,
+        recipeMap,
+        visited,
+      );
+      fold(info, name);
+      return info;
+    } catch (e) {
+      console.error(`Error calculating measures for ${name}`, e);
+      missingByType.price.push(name);
+      missingByType.weight.push(name);
+      missingByType.nutrients.push(name);
+      return null;
+    }
+  };
+
+  // Pass 1: rows whose measures resolve from their own amounts. Accumulate the
+  // basis weight from own-full rows only — a deferred row (incl. a MEASURED
+  // frying medium, whose written amount is the pot volume) never feeds the
+  // basis, so pass 2 is order-independent.
+  let basisGrams = 0;
+  const deferred: typeof planned = [];
+  for (const p of planned) {
+    if (isDeferred(p.plan)) {
+      deferred.push(p);
       continue;
     }
-    try {
-      fold(
-        getIngredientMeasures(ingredient, ingMap, recipeMap, visited),
-        ingName,
-      );
-    } catch (e) {
-      console.error(`Error calculating measures for ${ingName}`, e);
-      // If there's a general error, add to all missing categories
-      missingByType.price.push(ingName);
-      missingByType.weight.push(ingName);
-      missingByType.nutrients.push(ingName);
+    const info = resolveAndFold(p, 0);
+    if (contributesToBasis(p.plan) && info?.gram.isOk()) {
+      basisGrams += info.gram.value.value;
     }
   }
 
-  // Pass 2: fold in estimated absorbed frying oil, using the summed batter weight
-  // as the basis (the oil itself contributed nothing in pass 1).
-  const batterWeight = grams.reduce((acc, curr) => acc + curr.value, 0);
-  for (const ingredient of fryingMediums) {
-    const absorbedGrams = FRY_OIL_ABSORPTION_FRACTION * batterWeight;
-    fold(
-      fryingMediumMeasures(absorbedGrams, ingredient, ingMap),
-      getIngredientName(ingredient),
-    );
+  // Pass 2: basis-dependent and flat estimates, now that the basis is known.
+  for (const p of deferred) {
+    resolveAndFold(p, basisGrams);
   }
 
-  // Calculate totals (weight now includes the absorbed oil — it's eaten)
+  // Calculate totals (weight includes the estimated rows — they're eaten)
   const totalPrice = prices.reduce((acc, curr) => acc + (curr.value || 0), 0);
   const totalWeight = grams.reduce((acc, curr) => acc + curr.value, 0);
   const totalNutrients = sumNutrients(nutrients);
@@ -467,7 +746,7 @@ export const calculateTotals = (
   };
 };
 
-export type IngredientDataItem = SectionIngredientOut & {
+export type IngredientDataItem = CostingRow & {
   priceInfo: IngredientPriceInfo | undefined;
 };
 
@@ -504,62 +783,80 @@ export const computeBakerPercentages = (
 };
 
 /**
- * Per-row estimated measures for unmeasured frying-medium ingredients, keyed by
- * row id (mirrors computeBakerPercentages). The basis is the summed gram weight
- * of all *other* rows — the same batter weight calculateTotals() uses — so the
- * row display and the totals agree. Only frying-medium rows appear in the map.
+ * Per-row estimated measures for usage-adjusted rows, keyed by row id (mirrors
+ * computeBakerPercentages). The basis is the summed gram weight of own-full
+ * rows — the same basis calculateTotals() uses — so the row display and the
+ * totals agree. Only rows with an estimated plan appear in the map.
  */
-export const computeAbsorbedOilMeasures = (
+export const computeUsageEstimates = (
   data: IngredientDataItem[],
   ingMap: Record<string, IngredientWithFoodOut>,
   getName: (i: SectionIngredientOut) => string,
-): Map<string, IngredientPriceInfo> => {
-  let batterWeight = 0;
-  const fryingRows: IngredientDataItem[] = [];
-  for (const row of data) {
-    if (isUnmeasuredFryingMedium(row, getName(row))) {
-      fryingRows.push(row);
-      continue;
-    }
+): Map<string, { info: IngredientPriceInfo; usage: IngredientUsage }> => {
+  const plans = data.map((row) => ({
+    row,
+    plan: planConsumption(row, getName(row)),
+  }));
+
+  let basisGrams = 0;
+  for (const { row, plan } of plans) {
     const gram = row.priceInfo?.gram;
-    if (gram?.isOk()) batterWeight += gram.value.value;
+    if (contributesToBasis(plan) && gram?.isOk()) {
+      basisGrams += gram.value.value;
+    }
   }
 
-  const result = new Map<string, IngredientPriceInfo>();
-  for (const row of fryingRows) {
-    result.set(
-      row.id,
-      fryingMediumMeasures(
-        FRY_OIL_ABSORPTION_FRACTION * batterWeight,
+  const result = new Map<
+    string,
+    { info: IngredientPriceInfo; usage: IngredientUsage }
+  >();
+  for (const { row, plan } of plans) {
+    if (!isEstimatedPlan(plan)) continue;
+    result.set(row.id, {
+      // Reuse the own trio createIngredientData already computed (own-fraction
+      // plans scale it; estimate plans never touch it).
+      info: resolveRowMeasures(
         row,
+        plan,
+        basisGrams,
         ingMap,
+        {},
+        new Set(),
+        row.priceInfo,
       ),
-    );
+      usage: plan.usage,
+    });
   }
   return result;
 };
 
 /**
- * Returns ingredient rows with unmeasured frying-medium rows' priceInfo replaced
- * by the absorbed-oil estimate, plus the set of those overridden row ids (for the
- * "est." markers). Use this anywhere per-ingredient measures feed a view (table,
- * treemap, sunburst) so the absorbed oil is included consistently with the
- * recipe totals — `calculateTotals` already folds it in.
+ * Returns ingredient rows with usage-adjusted rows' priceInfo replaced by the
+ * consumption-model estimate, plus a map of those row ids to their usage (for
+ * the "est."/"absorbed" markers). Use this anywhere per-ingredient measures
+ * feed a view (table, treemap, sunburst) so estimates are included
+ * consistently with the recipe totals — `calculateTotals` folds them in too.
+ * Note this also overrides MEASURED frying/dredging/marinade rows: their
+ * displayed weight/nutrition become the estimate while cost stays as written.
  */
-export const applyAbsorbedOil = (
+export const applyUsageEstimates = (
   data: IngredientDataItem[],
   ingMap: Record<string, IngredientWithFoodOut>,
   getName: (i: SectionIngredientOut) => string,
-): { data: IngredientDataItem[]; oilRowIds: Set<string> } => {
-  const oilMeasures = computeAbsorbedOilMeasures(data, ingMap, getName);
-  if (oilMeasures.size === 0) return { data, oilRowIds: new Set() };
+): {
+  data: IngredientDataItem[];
+  estimatedRows: Map<string, IngredientUsage>;
+} => {
+  const estimates = computeUsageEstimates(data, ingMap, getName);
+  if (estimates.size === 0) return { data, estimatedRows: new Map() };
   return {
-    data: data.map((row) =>
-      oilMeasures.has(row.id)
-        ? { ...row, priceInfo: oilMeasures.get(row.id) }
-        : row,
+    data: data.map((row) => {
+      const estimate = estimates.get(row.id);
+      return estimate ? { ...row, priceInfo: estimate.info } : row;
+    }),
+    estimatedRows: new Map(
+      [...estimates].map(([id, e]) => [id, e.usage] as const),
     ),
-    oilRowIds: new Set(oilMeasures.keys()),
   };
 };
 
@@ -567,7 +864,7 @@ export const applyAbsorbedOil = (
  * Creates a wrapper for tracking ingredient data with price/nutrient info
  */
 export const createIngredientData = (
-  ingredients: SectionIngredientOut[],
+  ingredients: CostingRow[],
   ingMap: Record<string, IngredientWithFoodOut> | undefined,
   recipeMap: Record<string, RecipeOut> = {},
 ): IngredientDataItem[] => {

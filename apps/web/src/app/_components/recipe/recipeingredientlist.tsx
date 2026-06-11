@@ -1,4 +1,4 @@
-import type { RecipeOut, SectionIngredientOut } from "@cubby/schemas/recipe";
+import type { RecipeOut } from "@cubby/schemas/recipe";
 import {
   createColumnHelper,
   getCoreRowModel,
@@ -13,12 +13,14 @@ import {
   type RecipeSummaryData,
 } from "~/components/entity/entity-summary-card";
 import {
-  applyAbsorbedOil,
+  applyUsageEstimates,
   type CalculateTotalsResult,
+  type CostingRow,
   calculateTotals,
   computeBakerPercentages,
   createIngredientData,
   type IngredientDataItem,
+  type IngredientUsage,
 } from "~/lib/recipe-costing";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { renderValueOrMissing } from "~/misc/result";
@@ -31,14 +33,25 @@ import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import { CopyCorpusButton } from "./copy-corpus-button";
 import { getIngredientName, isFlourIngredient } from "./recipe-utils";
 
-// Small muted marker so estimated (absorbed frying-oil) values don't read as
+// Small muted marker so estimated (usage-adjusted) values don't read as
 // measured ones.
 const EstimateMarker = () => (
   <span className="ml-1 text-2xs text-muted-foreground/70">est.</span>
 );
 
+// What an unmeasured estimated row shows in its Amounts cell, per usage.
+// "absorbed" keeps its established meaning for frying oil; the rest read as
+// what the estimate stands in for.
+const ESTIMATE_AMOUNT_LABELS: Partial<Record<IngredientUsage, string>> = {
+  frying_medium: "absorbed",
+  seasoning: "to taste",
+  pan_grease: "for the pan",
+  garnish: "garnish",
+  dredging: "coating",
+};
+
 export const RecipeIngredientList: React.FC<{
-  ingredients: SectionIngredientOut[];
+  ingredients: CostingRow[];
   ingMap: Record<string, IngredientWithFoodOut> | undefined;
   // Sub-recipe graphs, so recipe-as-ingredient rows + the summary roll up their
   // own cost/calories (scaled by amount/yield) instead of showing as missing.
@@ -78,14 +91,15 @@ export const RecipeIngredientList: React.FC<{
     [data],
   );
 
-  // Override unmeasured frying-medium rows' priceInfo with the absorbed-oil
-  // estimate so the Cost/Weight/Nutrition columns render it instead of "—";
-  // `oilRowIds` drives the "est." markers.
-  const { data: displayData, oilRowIds } = useMemo(
+  // Override usage-adjusted rows' priceInfo with the consumption-model estimate
+  // so the Cost/Weight/Nutrition columns render it instead of "—" (or, for
+  // measured fry oil, instead of the whole pot); `estimatedRows` drives the
+  // "est." markers.
+  const { data: displayData, estimatedRows } = useMemo(
     () =>
       ingMap
-        ? applyAbsorbedOil(data, ingMap, getIngredientName)
-        : { data, oilRowIds: new Set<string>() },
+        ? applyUsageEstimates(data, ingMap, getIngredientName)
+        : { data, estimatedRows: new Map<string, IngredientUsage>() },
     [data, ingMap],
   );
 
@@ -131,12 +145,13 @@ export const RecipeIngredientList: React.FC<{
       cell: (info) => {
         const amounts = info.getValue();
 
-        // Unmeasured frying-medium rows have no amount; flag the estimate here so
+        // Unmeasured estimated rows have no amount; flag the estimate here so
         // the derived weight/calorie values read as guesses, not measurements.
-        if (amounts.length === 0 && oilRowIds.has(info.row.original.id)) {
+        const usage = estimatedRows.get(info.row.original.id);
+        if (amounts.length === 0 && usage) {
           return (
             <span className="text-muted-foreground text-sm">
-              absorbed
+              {ESTIMATE_AMOUNT_LABELS[usage] ?? "estimated"}
               <EstimateMarker />
             </span>
           );
@@ -172,7 +187,7 @@ export const RecipeIngredientList: React.FC<{
           return (
             <span>
               {renderValueOrMissing(measure, (m) => tryFormatAmount(m))}
-              {oilRowIds.has(info.row.original.id) && measure.isOk() && (
+              {estimatedRows.has(info.row.original.id) && measure.isOk() && (
                 <EstimateMarker />
               )}
             </span>
@@ -194,7 +209,7 @@ export const RecipeIngredientList: React.FC<{
           return (
             <span>
               {renderValueOrMissing(measure, (m) => tryFormatAmount(m))}
-              {oilRowIds.has(info.row.original.id) && measure.isOk() && (
+              {estimatedRows.has(info.row.original.id) && measure.isOk() && (
                 <EstimateMarker />
               )}
             </span>

@@ -71,6 +71,13 @@
       "when": 1781125964279,
       "tag": "0009_ambiguous_guardian",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1781142111722,
+      "tag": "0010_wide_grey_gargoyle",
+      "breakpoints": true
     }
   ]
 }

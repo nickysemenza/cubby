@@ -9,13 +9,15 @@ import type { RecipeOut, SectionIngredientOut } from "@cubby/schemas/recipe";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { beforeAll, describe, expect, test } from "vitest";
 import {
-  applyAbsorbedOil,
+  applyUsageEstimates,
+  type CostingRow,
   calculateTotals,
-  computeAbsorbedOilMeasures,
+  computeUsageEstimates,
   convertAmountToNutrients,
   convertAmountToPrice,
   createEmptyNutrients,
   createIngredientData,
+  flattenSections,
   getGramAndNutrient,
 } from "~/lib/recipe-costing";
 import { ensureWasm } from "~/lib/wasm";
@@ -99,13 +101,15 @@ const makeIngredient = (
 const emptyIngredient = (idStr: string, name: string): IngredientWithFoodOut =>
   ingredientWith(idStr, name, []);
 
-// A section row referencing a plain ingredient (optionally with a modifier).
+// A section row referencing a plain ingredient (optionally with a modifier
+// and/or a section name — both feed the usage classifier).
 const makeEntry = (
   idStr: string,
   name: string,
   amounts: Amount[],
   modifier?: string,
-): SectionIngredientOut => ({
+  sectionName?: string,
+): CostingRow => ({
   id: idStr,
   type: "ingredient",
   ...dates,
@@ -113,19 +117,18 @@ const makeEntry = (
   recipe: null,
   amounts,
   modifier: modifier ?? null,
+  sectionName: sectionName ?? null,
 });
 
 // A section row referencing a sub-recipe (recipe-as-ingredient).
-const makeSubRecipeEntry = (
-  sub: RecipeOut,
-  amounts: Amount[],
-): SectionIngredientOut => ({
+const makeSubRecipeEntry = (sub: RecipeOut, amounts: Amount[]): CostingRow => ({
   id: `link-${sub.id}`,
   type: "recipe",
   ...dates,
   ingredient: null,
   recipe: sub,
   amounts,
+  sectionName: null,
 });
 
 const makeSubRecipe = (
@@ -846,7 +849,7 @@ describe("calculateTotals with sub-recipes", () => {
 
     // Should terminate (the visited-set cycle guard breaks the loop), not hang.
     const result = await calculateTotals(
-      recipeA.sections[0].ingredients,
+      flattenSections(recipeA.sections),
       {},
       getName,
       { recA: recipeA, recB: recipeB },
@@ -879,25 +882,50 @@ describe("calculateTotals with sub-recipes", () => {
   });
 });
 
-describe("calculateTotals with absorbed frying oil", () => {
+describe("calculateTotals with the consumption model", () => {
   // flour: 1 cup = 100 g; 100 g = 364 kcal = 10 g protein; 1 cup = $1
-  const flour = makeIngredient("flour", "flour", [
+  const flourMappings = [
     { a: { value: 1, unit: "cup" }, b: { value: 100, unit: "gram" } },
     { a: { value: 100, unit: "g" }, b: { value: 364, unit: "kcal" } },
     { a: { value: 100, unit: "g" }, b: { value: 10, unit: "g protein" } },
     { a: { value: 1, unit: "cup" }, b: { value: 1, unit: "dollar" } },
-  ]);
+  ];
+  const flour = makeIngredient("flour", "flour", flourMappings);
+  // Second flour identity, so a recipe can hold a normal flour row AND a
+  // dredging flour row without colliding ids.
+  const flour2 = makeIngredient("flour2", "flour", flourMappings);
   // oil: 100 g = 884 kcal; 1000 g = $5
   const oil = makeIngredient("oil", "neutral oil", [
     { a: { value: 100, unit: "g" }, b: { value: 884, unit: "kcal" } },
     { a: { value: 1000, unit: "g" }, b: { value: 5, unit: "dollar" } },
   ]);
-  const ingMap = { flour, oil };
+  // salt: 100 g = 38758 mg sodium; 100 g = $0.10
+  const salt = makeIngredient("salt", "salt", [
+    { a: { value: 100, unit: "g" }, b: { value: 38758, unit: "mg sodium" } },
+    { a: { value: 100, unit: "g" }, b: { value: 0.1, unit: "dollar" } },
+  ]);
+  // butter: 100 g = 717 kcal; 100 g = $1
+  const butter = makeIngredient("butter", "butter", [
+    { a: { value: 100, unit: "g" }, b: { value: 717, unit: "kcal" } },
+    { a: { value: 100, unit: "g" }, b: { value: 1, unit: "dollar" } },
+  ]);
+  // parsley: 100 g = 36 kcal (no price mapping on purpose)
+  const parsley = makeIngredient("parsley", "parsley", [
+    { a: { value: 100, unit: "g" }, b: { value: 36, unit: "kcal" } },
+  ]);
+  // soy sauce: 100 g = 53 kcal; 100 g = $1
+  const soy = makeIngredient("soy", "soy sauce", [
+    { a: { value: 100, unit: "g" }, b: { value: 53, unit: "kcal" } },
+    { a: { value: 100, unit: "g" }, b: { value: 1, unit: "dollar" } },
+  ]);
+  const ingMap = { flour, flour2, oil, salt, butter, parsley, soy };
 
   const flourCup = makeEntry("flour", "flour", [{ value: 1, unit: "cup" }]);
   const fryingOil = makeEntry("oil", "neutral oil", [], "for frying");
 
-  test("folds estimated absorbed oil into totals (15% of batter weight)", async () => {
+  // ── FryingMedium ──────────────────────────────────────────────────────────
+
+  test("unmeasured frying oil: absorbed estimate (15% of batter weight)", async () => {
     const r = await calculateTotals([flourCup, fryingOil], ingMap, getName);
 
     // batter = 100 g flour; absorbed oil = 0.15 * 100 = 15 g
@@ -920,8 +948,8 @@ describe("calculateTotals with absorbed frying oil", () => {
     expect(r.nutrients["208"]).toBeCloseTo(364, 0);
   });
 
-  test("unmeasured oil with explicit amount is treated as a normal ingredient", async () => {
-    // Has both a frying modifier AND an amount → not an absorption estimate.
+  test("MEASURED frying oil: full cost, absorbed weight/nutrients, excluded from basis", async () => {
+    // "100 g oil, for frying" — the amount is the pot, not consumption.
     const measuredOil = makeEntry(
       "oil",
       "neutral oil",
@@ -929,11 +957,16 @@ describe("calculateTotals with absorbed frying oil", () => {
       "for frying",
     );
 
-    const r = await calculateTotals([measuredOil], ingMap, getName);
+    const r = await calculateTotals([flourCup, measuredOil], ingMap, getName);
 
-    // 100 g oil measured directly → 884 kcal, no batter-relative estimate.
-    expect(r.weight).toBeCloseTo(100, 0);
-    expect(r.nutrients["208"]).toBeCloseTo(884, 0);
+    // Weight: flour 100 + absorbed 15 — NOT 200. The pot's own 100 g never
+    // enters the basis either (15 = 0.15 × 100 flour, not 0.15 × 200).
+    expect(r.weight).toBeCloseTo(115, 0);
+    // kcal: 364 + 132.6 — NOT 364 + 884 (the whole pot).
+    expect(r.nutrients["208"]).toBeCloseTo(496.6, 0);
+    // Price: flour $1 + the FULL pot $0.50 (100 g of $5/kg) — you bought it.
+    expect(r.price).toBeCloseTo(1.5, 2);
+    expect(r.missingByType).toEqual({ price: [], weight: [], nutrients: [] });
   });
 
   test("frying medium with no resolvable mapping fails gracefully", async () => {
@@ -951,44 +984,238 @@ describe("calculateTotals with absorbed frying oil", () => {
     expect(r.missingByType.nutrients).toContain("neutral oil");
   });
 
-  test("computeAbsorbedOilMeasures keys only the oil row, sized off the others", () => {
+  test("estimate-only recipe has no basis → estimated rows go missing", async () => {
+    const r = await calculateTotals([fryingOil], ingMap, getName);
+
+    expect(r.weight).toBe(0);
+    expect(r.missingByType.price).toContain("neutral oil");
+    expect(r.missingByType.weight).toContain("neutral oil");
+    expect(r.missingByType.nutrients).toContain("neutral oil");
+  });
+
+  test("totals are order-independent (estimated rows first vs last)", async () => {
+    const saltToTaste = makeEntry("salt", "salt", [], "to taste");
+    const forward = await calculateTotals(
+      [flourCup, fryingOil, saltToTaste],
+      ingMap,
+      getName,
+    );
+    const reversed = await calculateTotals(
+      [saltToTaste, fryingOil, flourCup],
+      ingMap,
+      getName,
+    );
+
+    expect(reversed.weight).toBeCloseTo(forward.weight, 5);
+    expect(reversed.price).toBeCloseTo(forward.price, 5);
+    expect(reversed.nutrients).toEqual(forward.nutrients);
+  });
+
+  // ── Seasoning ─────────────────────────────────────────────────────────────
+
+  test("'salt, to taste': 1% of dish weight through salt's own mappings", async () => {
+    const saltToTaste = makeEntry("salt", "salt", [], "to taste");
+    const r = await calculateTotals([flourCup, saltToTaste], ingMap, getName);
+
+    // 1 g salt (0.01 × 100 g flour) → 387.58 mg sodium, ~$0.001
+    expect(r.weight).toBeCloseTo(101, 0);
+    expect(r.nutrients["307"]).toBeCloseTo(387.6, 0);
+    expect(r.price).toBeCloseTo(1.001, 2);
+    expect(r.missingByType.nutrients).toEqual([]);
+  });
+
+  test("measured salt is a normal ingredient even with 'to taste'", async () => {
+    const measuredSalt = makeEntry(
+      "salt",
+      "salt",
+      [{ value: 5, unit: "g" }],
+      "to taste",
+    );
+    const r = await calculateTotals([flourCup, measuredSalt], ingMap, getName);
+
+    expect(r.weight).toBeCloseTo(105, 0);
+    expect(r.nutrients["307"]).toBeCloseTo(1937.9, 0);
+  });
+
+  // ── PanGrease / Garnish (flat estimates) ──────────────────────────────────
+
+  test("'butter, for the pan': flat 10 g", async () => {
+    const panButter = makeEntry("butter", "butter", [], "for the pan");
+    const r = await calculateTotals([flourCup, panButter], ingMap, getName);
+
+    expect(r.weight).toBeCloseTo(110, 0);
+    expect(r.nutrients["208"]).toBeCloseTo(364 + 71.7, 0);
+    expect(r.price).toBeCloseTo(1.1, 2);
+  });
+
+  test("'parsley, for garnish': flat 5 g; unmapped measures still go missing", async () => {
+    const garnish = makeEntry("parsley", "parsley", [], "for garnish");
+    const r = await calculateTotals([flourCup, garnish], ingMap, getName);
+
+    expect(r.weight).toBeCloseTo(105, 0);
+    expect(r.nutrients["208"]).toBeCloseTo(364 + 1.8, 0);
+    // parsley has no price mapping — the flat estimate can't price it.
+    expect(r.missingByType.price).toEqual(["parsley"]);
+  });
+
+  // ── Dredging ──────────────────────────────────────────────────────────────
+
+  test("unmeasured 'flour, for dusting': 5% of dish weight", async () => {
+    const dusting = makeEntry("flour2", "flour", [], "for dusting");
+    const r = await calculateTotals([flourCup, dusting], ingMap, getName);
+
+    // 5 g flour (0.05 × 100) → 18.2 kcal
+    expect(r.weight).toBeCloseTo(105, 0);
+    expect(r.nutrients["208"]).toBeCloseTo(364 + 18.2, 0);
+  });
+
+  test("measured dredging flour: full cost, 20% retained, excluded from basis", async () => {
+    const dredge = makeEntry(
+      "flour2",
+      "flour",
+      [{ value: 1, unit: "cup" }],
+      "for dredging",
+    );
+    const r = await calculateTotals(
+      [flourCup, dredge, fryingOil],
+      ingMap,
+      getName,
+    );
+
+    // Basis is the normal flour's 100 g ONLY: the dredge row's retained grams
+    // are an estimate and must not feed the fry-oil basis (oil = 15 g, not 19).
+    // Weight: 100 + 20 (0.2 × 100) + 15 = 135.
+    expect(r.weight).toBeCloseTo(135, 0);
+    // kcal: 364 + 72.8 (0.2 × 364) + 132.6 = 569.4
+    expect(r.nutrients["208"]).toBeCloseTo(569.4, 0);
+    // Price: $1 + FULL $1 (you used the cup; discarding doesn't refund) + oil.
+    expect(r.price).toBeCloseTo(2.075, 1);
+  });
+
+  // ── Marinade ──────────────────────────────────────────────────────────────
+
+  test("measured marinade (by section name): full cost, 15% retained", async () => {
+    const soyRow = makeEntry(
+      "soy",
+      "soy sauce",
+      [{ value: 100, unit: "g" }],
+      undefined,
+      "Marinade",
+    );
+    const r = await calculateTotals([flourCup, soyRow], ingMap, getName);
+
+    // Weight: 100 + 15 (retained); kcal: 364 + 7.95; price: $1 + FULL $1.
+    expect(r.weight).toBeCloseTo(115, 0);
+    expect(r.nutrients["208"]).toBeCloseTo(364 + 7.95, 0);
+    expect(r.price).toBeCloseTo(2, 2);
+  });
+
+  test("unmeasured marinade row stays missing (no estimable basis)", async () => {
+    const soyRow = makeEntry("soy", "soy sauce", [], undefined, "Marinade");
+    const r = await calculateTotals([flourCup, soyRow], ingMap, getName);
+
+    expect(r.weight).toBeCloseTo(100, 0);
+    expect(r.missingByType.weight).toContain("soy sauce");
+    expect(r.missingByType.price).toContain("soy sauce");
+  });
+
+  // ── Classifier traps (through the real wasm classifier) ───────────────────
+
+  test("'refried beans' / 'stir-fry sauce' are normal ingredients", async () => {
+    const beans = makeIngredient("beans", "refried beans", [
+      { a: { value: 1, unit: "can" }, b: { value: 400, unit: "gram" } },
+    ]);
+    const stirfry = makeIngredient("stirfry", "stir-fry sauce", [
+      { a: { value: 1, unit: "tbsp" }, b: { value: 15, unit: "gram" } },
+    ]);
+
+    const r = await calculateTotals(
+      [
+        makeEntry("beans", "refried beans", [{ value: 1, unit: "can" }]),
+        makeEntry("stirfry", "stir-fry sauce", [{ value: 2, unit: "tbsp" }]),
+      ],
+      { beans, stirfry },
+      getName,
+    );
+
+    // Full measured weights — the bare "fried"/"fry" substrings never classify.
+    expect(r.weight).toBeCloseTo(430, 0);
+  });
+
+  // ── Per-row view parity ───────────────────────────────────────────────────
+
+  test("computeUsageEstimates keys only estimated rows, sized off the basis", () => {
     const data = createIngredientData([flourCup, fryingOil], ingMap);
-    const map = computeAbsorbedOilMeasures(data, ingMap, getName);
+    const map = computeUsageEstimates(data, ingMap, getName);
 
     expect([...map.keys()]).toEqual(["oil"]);
     const m = map.get("oil");
-    expect(m?.gram.isOk() && m.gram.value.value).toBeCloseTo(15, 0);
-    expect(m?.nutrient.isOk() && m.nutrient.value["208"]).toBeCloseTo(132.6, 0);
+    expect(m?.usage).toBe("frying_medium");
+    expect(m?.info.gram.isOk() && m.info.gram.value.value).toBeCloseTo(15, 0);
+    expect(m?.info.nutrient.isOk() && m.info.nutrient.value["208"]).toBeCloseTo(
+      132.6,
+      0,
+    );
   });
 
-  test("applyAbsorbedOil overrides the oil row's priceInfo + reports its id", () => {
+  test("applyUsageEstimates overrides estimated rows + reports usages", () => {
     const data = createIngredientData([flourCup, fryingOil], ingMap);
     // Before: the unmeasured oil row has no usable measures.
     const rawOil = data.find((r) => r.id === "oil");
     expect(rawOil?.priceInfo?.nutrient.isOk()).toBe(false);
 
-    const { data: withOil, oilRowIds } = applyAbsorbedOil(
+    const { data: withEstimates, estimatedRows } = applyUsageEstimates(
       data,
       ingMap,
       getName,
     );
 
-    expect([...oilRowIds]).toEqual(["oil"]);
-    const oilRow = withOil.find((r) => r.id === "oil");
+    expect([...estimatedRows]).toEqual([["oil", "frying_medium"]]);
+    const oilRow = withEstimates.find((r) => r.id === "oil");
     expect(
       oilRow?.priceInfo?.nutrient.isOk() &&
         oilRow.priceInfo.nutrient.value["208"],
     ).toBeCloseTo(132.6, 0);
-    // Non-oil rows pass through untouched (same reference).
-    const flourRow = withOil.find((r) => r.id === "flour");
+    // Non-estimated rows pass through untouched (same reference).
+    const flourRow = withEstimates.find((r) => r.id === "flour");
     expect(flourRow).toBe(data.find((r) => r.id === "flour"));
   });
 
-  test("applyAbsorbedOil is a no-op when there's no frying medium", () => {
+  test("applyUsageEstimates overrides a MEASURED fry row: est weight, own cost", () => {
+    const measuredOil = makeEntry(
+      "oil",
+      "neutral oil",
+      [{ value: 100, unit: "g" }],
+      "for frying",
+    );
+    const data = createIngredientData([flourCup, measuredOil], ingMap);
+    const { data: withEstimates, estimatedRows } = applyUsageEstimates(
+      data,
+      ingMap,
+      getName,
+    );
+
+    expect(estimatedRows.get("oil")).toBe("frying_medium");
+    const oilRow = withEstimates.find((r) => r.id === "oil");
+    // Displayed weight is the absorbed estimate, not the pot…
+    expect(
+      oilRow?.priceInfo?.gram.isOk() && oilRow.priceInfo.gram.value.value,
+    ).toBeCloseTo(15, 0);
+    // …while cost stays the full written amount.
+    expect(
+      oilRow?.priceInfo?.price.isOk() && oilRow.priceInfo.price.value.value,
+    ).toBeCloseTo(0.5, 2);
+  });
+
+  test("applyUsageEstimates is a no-op when every row is normal", () => {
     const data = createIngredientData([flourCup], ingMap);
-    const { data: out, oilRowIds } = applyAbsorbedOil(data, ingMap, getName);
+    const { data: out, estimatedRows } = applyUsageEstimates(
+      data,
+      ingMap,
+      getName,
+    );
 
     expect(out).toBe(data); // same array reference, untouched
-    expect(oilRowIds.size).toBe(0);
+    expect(estimatedRows.size).toBe(0);
   });
 });

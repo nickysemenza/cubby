@@ -18,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import {
   type CalculateTotalsResult,
   calculateTotals,
+  flattenSections,
 } from "~/lib/recipe-costing";
 import { formatCurrency } from "~/lib/utils";
 import { dedupe } from "~/misc/array-helpers";
@@ -89,7 +90,7 @@ function RecipeComparePage() {
     if (!ingMap || recipes.length === 0) return [];
 
     return recipes.map((recipe) => {
-      const ingredients = recipe.sections.flatMap((s) => s.ingredients);
+      const ingredients = flattenSections(recipe.sections);
       const totals = calculateTotals(
         ingredients,
         ingMap,

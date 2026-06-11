@@ -1,4 +1,4 @@
-import type { RecipeOut, SectionIngredientOut } from "@cubby/schemas/recipe";
+import type { RecipeOut } from "@cubby/schemas/recipe";
 import { getNutrientValueByKey } from "@cubby/usda-schemas";
 import { BarChart3, BookOpen, Table2 } from "lucide-react";
 import type React from "react";
@@ -12,10 +12,12 @@ import {
 } from "~/components/ui/view-switcher";
 import { PerfProfiler } from "~/lib/perf/PerfProfiler";
 import {
-  applyAbsorbedOil,
+  applyUsageEstimates,
   type CalculateTotalsResult,
+  type CostingRow,
   calculateTotals,
   createIngredientData,
+  flattenSections,
 } from "~/lib/recipe-costing";
 import { formatCurrency } from "~/lib/utils";
 import { AuditLogList } from "../audit-log/audit-log-list";
@@ -168,8 +170,8 @@ const RecipeDetailInner: React.FC<{
   const viewMode = controlledView ?? internalView;
   const setViewMode = onViewChange ?? setInternalView;
 
-  const ingredients: SectionIngredientOut[] = useMemo(
-    () => recipe.sections.flatMap((section) => section.ingredients.flat()),
+  const ingredients: CostingRow[] = useMemo(
+    () => flattenSections(recipe.sections),
     [recipe.sections],
   );
 
@@ -183,13 +185,13 @@ const RecipeDetailInner: React.FC<{
   const { ingMap, recipeMap } = useRecipeCostingData(recipesForCosting);
 
   // Load enriched ingredient data for charts (with price/nutrition info). Apply
-  // the absorbed frying-oil override so the cost treemap + nutrition charts
-  // include it and reconcile with the summary totals (calculateTotals folds it
-  // in too); a no-op for non-fried recipes.
+  // the usage-estimate overrides (absorbed frying oil, to-taste salt, …) so the
+  // cost treemap + nutrition charts include them and reconcile with the summary
+  // totals (calculateTotals folds them in too); a no-op for all-normal recipes.
   const ingredientDataItems = useMemo(
     () =>
       ingMap
-        ? applyAbsorbedOil(
+        ? applyUsageEstimates(
             createIngredientData(ingredients, ingMap, recipeMap),
             ingMap,
             getIngredientName,

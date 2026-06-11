@@ -176,8 +176,10 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                   </div>
 
                   {/* Modifier / prep note (e.g. "for frying", "finely chopped").
-                      "for frying" / "fried" flags an amount-less oil as the frying
-                      medium so its absorbed weight is estimated in the totals. */}
+                      Purpose phrases here drive the usage classifier: "for
+                      frying", "to taste", "for the pan", "for garnish", "for
+                      dusting" make the totals estimate the row's consumed
+                      amount instead of reading it off the line. */}
                   <Controller
                     control={form.control}
                     name={`${path}.modifier`}
