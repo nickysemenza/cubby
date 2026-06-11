@@ -13,11 +13,17 @@ const importRecipeTimes = z.object({
   cook: z.string().optional(),
 });
 
+// Structured yield, as the URL scraper produces it (parsed from schema.org).
+const structuredYield = z.object({ value: z.number(), unit: z.string() });
+
 const importRecipeMeta = z.object({
   title: z.string(),
   description: z.string().optional(),
-  // Freeform yield line, e.g. "Makes 1 loaf" — NOT structured {value, unit}.
-  recipe_yield: z.string().optional(),
+  // Yield is either a freeform line ("Makes 1 loaf", from EPUB/Notion — re-parsed
+  // at import) or already-structured `{value, unit}` (from the URL scraper). The
+  // converter normalizes both; the raw string is what `Cookbook.rawJson` stores
+  // so `reprocessCookbook` can re-apply WASM parser upgrades.
+  recipe_yield: z.union([z.string(), structuredYield]).optional(),
   times: importRecipeTimes.optional(),
   equipment: z.array(z.string()).optional(),
   notes: z.array(z.string()).optional(),
@@ -78,7 +84,13 @@ export const importRecipeSchema = z.object({
   // Cross-recipe references (other recipes in the same book this one uses as
   // ingredients). Defaults to empty for older JSON without the field.
   references: z.array(recipeRefSchema).default([]),
-  // NOTE: no `image` field yet — see the hero-photos TODO above.
+  // Servings, pre-computed by the URL scraper (EPUB/Notion derive it from the
+  // yield line at import). Optional; the converter falls back to the parsed yield.
+  servings: z.number().optional(),
+  // Image URL extracted by the URL scraper (a public URL). EPUB hero photos are
+  // not modeled yet — see the hero-photos TODO above. Currently consumed by the
+  // scrape form's client-side image import, not persisted on the server path.
+  image: z.string().optional(),
 });
 export type ImportRecipe = z.infer<typeof importRecipeSchema>;
 

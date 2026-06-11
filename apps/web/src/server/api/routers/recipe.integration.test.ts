@@ -463,15 +463,16 @@ describe("recipe router", () => {
       }),
     );
 
-    // Create a compact recipe (simplified format)
+    // Create an import recipe (raw lines, parsed server-side)
     const compactRecipeData = {
-      name: "Compact Recipe",
+      meta: { title: "Compact Recipe" },
       sections: [
         {
           instructions: ["Mix well", "Bake for 30 minutes"],
           ingredients: ["2 cups flour", "1 tsp salt"],
         },
       ],
+      references: [],
     };
 
     // Insert the compact recipe

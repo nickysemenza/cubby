@@ -1,6 +1,6 @@
-import type { ParsedCompactRecipe } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
 import { unsafeUserId } from "@cubby/schemas/identifiers";
+import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import { eq, inArray, ne } from "drizzle-orm";
 import { buildTestDB } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -10,7 +10,7 @@ import {
   recipeSection,
   recipeSectionIngredient,
 } from "~/server/db/schema";
-import { upsertRecipeFromCompact } from "./compactrecipe";
+import { upsertImportRecipe } from "./compactrecipe";
 import { getDb } from "./database-helpers";
 
 const TEST_ACTOR: ActorContext = {
@@ -18,7 +18,7 @@ const TEST_ACTOR: ActorContext = {
   source: "ui",
 };
 
-describe("upsertRecipeFromCompact", () => {
+describe("upsertImportRecipe", () => {
   let db: Database;
   let teardown: () => Promise<void>;
   beforeEach(async () => {
@@ -26,61 +26,38 @@ describe("upsertRecipeFromCompact", () => {
     return teardown;
   });
 
-  const mockRecipe: ParsedCompactRecipe = {
-    name: "Test Recipe",
-    meta: {
-      url: "https://example.com/recipe",
-    },
+  const mockRecipe: ImportRecipe = {
+    meta: { title: "Test Recipe" },
+    url: "https://example.com/recipe",
     sections: [
       {
         instructions: ["Mix ingredients", "Bake for 30 minutes"],
-        ingredients: [
-          {
-            name: "flour",
-            amounts: [{ value: 2, unit: "cups" }],
-          },
-          {
-            name: "sugar",
-            amounts: [{ value: 1, unit: "cup" }],
-          },
-        ],
+        ingredients: ["2 cups flour", "1 cup sugar"],
       },
     ],
+    references: [],
   };
 
-  const mockRecipeUpdated: ParsedCompactRecipe = {
-    name: "Test Recipe", // Same name
-    meta: {
-      url: "https://example.com/recipe-updated",
-    },
+  const mockRecipeUpdated: ImportRecipe = {
+    meta: { title: "Test Recipe" }, // Same name
+    url: "https://example.com/recipe-updated",
     sections: [
       {
-        instructions: ["Mix ingredients well", "Bake for 35 minutes"], // Updated instructions
-        ingredients: [
-          {
-            name: "flour",
-            amounts: [{ value: 3, unit: "cups" }], // Updated amount
-          },
-          {
-            name: "butter", // Different ingredient
-            amounts: [{ value: 0.5, unit: "cup" }],
-          },
-        ],
+        // Updated instructions
+        instructions: ["Mix ingredients well", "Bake for 35 minutes"],
+        // Updated amount, different second ingredient (sugar → butter)
+        ingredients: ["3 cups flour", "0.5 cup butter"],
       },
       {
         instructions: ["Sprinkle on top"],
-        ingredients: [
-          {
-            name: "cinnamon",
-            amounts: [{ value: 1, unit: "tsp" }],
-          },
-        ],
+        ingredients: ["1 tsp cinnamon"],
       },
     ],
+    references: [],
   };
 
   it("creates a new recipe when it doesn't exist", async () => {
-    const result = await upsertRecipeFromCompact(mockRecipe, db, TEST_ACTOR);
+    const result = await upsertImportRecipe(mockRecipe, db, TEST_ACTOR);
 
     expect(result.id).toBeDefined();
 
@@ -106,11 +83,7 @@ describe("upsertRecipeFromCompact", () => {
 
   it("updates an existing recipe when it already exists", async () => {
     // First, create the recipe
-    const firstResult = await upsertRecipeFromCompact(
-      mockRecipe,
-      db,
-      TEST_ACTOR,
-    );
+    const firstResult = await upsertImportRecipe(mockRecipe, db, TEST_ACTOR);
 
     // Verify initial state
     const initialRecipe = await getDb(db).query.recipe.findFirst({
@@ -128,7 +101,7 @@ describe("upsertRecipeFromCompact", () => {
     expect(initialRecipe!.sections[0]!.ingredients).toHaveLength(2);
 
     // Now update with different data
-    const secondResult = await upsertRecipeFromCompact(
+    const secondResult = await upsertImportRecipe(
       mockRecipeUpdated,
       db,
       TEST_ACTOR,
@@ -167,9 +140,9 @@ describe("upsertRecipeFromCompact", () => {
 
   it("handles multiple upserts correctly (back-to-back npm run load-data scenario)", async () => {
     // This tests the exact scenario mentioned - running load-data multiple times
-    const firstRun = await upsertRecipeFromCompact(mockRecipe, db, TEST_ACTOR);
-    const secondRun = await upsertRecipeFromCompact(mockRecipe, db, TEST_ACTOR); // Same recipe
-    const thirdRun = await upsertRecipeFromCompact(mockRecipe, db, TEST_ACTOR); // Same recipe again
+    const firstRun = await upsertImportRecipe(mockRecipe, db, TEST_ACTOR);
+    const secondRun = await upsertImportRecipe(mockRecipe, db, TEST_ACTOR); // Same recipe
+    const thirdRun = await upsertImportRecipe(mockRecipe, db, TEST_ACTOR); // Same recipe again
 
     // All should return the same recipe ID
     expect(secondRun.id).toBe(firstRun.id);
@@ -185,7 +158,7 @@ describe("upsertRecipeFromCompact", () => {
 
   it("properly cleans up old sections and ingredients", async () => {
     // Create recipe with 2 sections
-    await upsertRecipeFromCompact(mockRecipeUpdated, db, TEST_ACTOR);
+    await upsertImportRecipe(mockRecipeUpdated, db, TEST_ACTOR);
 
     const beforeUpdate = await getDb(db).query.recipe.findFirst({
       where: eq(recipe.name, "Test Recipe"),
@@ -200,7 +173,7 @@ describe("upsertRecipeFromCompact", () => {
     );
 
     // Update to recipe with 1 section
-    await upsertRecipeFromCompact(mockRecipe, db, TEST_ACTOR);
+    await upsertImportRecipe(mockRecipe, db, TEST_ACTOR);
 
     const afterUpdate = await getDb(db).query.recipe.findFirst({
       where: eq(recipe.name, "Test Recipe"),

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { NotionBlock, NotionRecipeRow } from "~/server/clients/notion";
-import { lintNotionCompact, notionPageToCompact } from "./notion-recipe";
+import { lintImportRecipe, notionPageToImportRecipe } from "./notion-recipe";
 
 const row = (over: Partial<NotionRecipeRow> = {}): NotionRecipeRow => ({
   id: "page-1",
@@ -45,11 +45,11 @@ const churrosBlocks: NotionBlock[] = [
   step("Grind and sift over the churros."),
 ];
 
-describe("notionPageToCompact", () => {
+describe("notionPageToImportRecipe", () => {
   it("maps headings→sections, bullets→ingredients, numbers→steps", () => {
-    const compact = notionPageToCompact(row(), churrosBlocks);
+    const compact = notionPageToImportRecipe(row(), churrosBlocks);
 
-    expect(compact.name).toBe("Churros with Strawberry Dust");
+    expect(compact.meta.title).toBe("Churros with Strawberry Dust");
     // The leading H1 holds only the image → pruned as an empty section.
     expect(compact.sections.map((s) => s.name)).toEqual([
       "dough",
@@ -67,8 +67,8 @@ describe("notionPageToCompact", () => {
   });
 
   it("is deterministic — same blocks yield identical output", () => {
-    const a = notionPageToCompact(row(), churrosBlocks);
-    const b = notionPageToCompact(row(), churrosBlocks);
+    const a = notionPageToImportRecipe(row(), churrosBlocks);
+    const b = notionPageToImportRecipe(row(), churrosBlocks);
     expect(a).toEqual(b);
   });
 
@@ -80,43 +80,43 @@ describe("notionPageToCompact", () => {
       step("mix"),
       { type: "quote", text: "Tip: rest the dough." },
     ];
-    const compact = notionPageToCompact(
+    const compact = notionPageToImportRecipe(
       row({ source: "https://example.com/churros" }),
       blocks,
     );
-    expect(compact.description).toBe(
+    expect(compact.meta.description).toBe(
       "A classic.\n\nTip: rest the dough.\n\nSource: https://example.com/churros",
     );
   });
 
   it("ignores image blocks (v1)", () => {
-    const compact = notionPageToCompact(row(), churrosBlocks);
+    const compact = notionPageToImportRecipe(row(), churrosBlocks);
     expect(JSON.stringify(compact)).not.toContain("expiring.png");
   });
 });
 
-describe("lintNotionCompact", () => {
+describe("lintImportRecipe", () => {
   it("passes a recipe with ingredients and steps", () => {
-    const compact = notionPageToCompact(row(), churrosBlocks);
-    expect(lintNotionCompact(compact).status).toBe("ok");
+    const compact = notionPageToImportRecipe(row(), churrosBlocks);
+    expect(lintImportRecipe(compact).status).toBe("ok");
   });
 
   it("flags a recipe with no steps", () => {
-    const compact = notionPageToCompact(row(), [
+    const compact = notionPageToImportRecipe(row(), [
       h(2, "salsa"),
       bullet("tomatillos"),
     ]);
-    const { status, reasons } = lintNotionCompact(compact);
+    const { status, reasons } = lintImportRecipe(compact);
     expect(status).toBe("needs-formatting");
     expect(reasons.join(" ")).toMatch(/no steps/i);
   });
 
   it("flags a recipe with no ingredients", () => {
-    const compact = notionPageToCompact(row(), [
+    const compact = notionPageToImportRecipe(row(), [
       h(2, "method"),
       step("do a thing"),
     ]);
-    const { status, reasons } = lintNotionCompact(compact);
+    const { status, reasons } = lintImportRecipe(compact);
     expect(status).toBe("needs-formatting");
     expect(reasons.join(" ")).toMatch(/no ingredients/i);
   });

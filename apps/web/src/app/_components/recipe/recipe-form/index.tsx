@@ -391,7 +391,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
 
       // Set recipe name if empty
       if (!form.getValues("name")) {
-        form.setValue("name", result.name);
+        form.setValue("name", result.meta.title);
       }
 
       // Resolve each section's ingredient lines into structured form
@@ -414,11 +414,15 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
         form.setValue("servings", result.servings);
       }
 
-      // Set yield if available from scraper (already parsed by Rust)
-      if (result.recipe_yield) {
+      // Set yield if available. The scraper returns structured {value, unit};
+      // a freeform string (other sources) is parsed via WASM.
+      const ry = result.meta.recipe_yield;
+      const yieldStruct =
+        typeof ry === "string" ? wasm.parse_yield(ry).recipe_yield : ry;
+      if (yieldStruct) {
         form.setValue("yield", {
-          value: result.recipe_yield.value,
-          unit: result.recipe_yield.unit,
+          value: yieldStruct.value,
+          unit: yieldStruct.unit,
         });
       }
 
@@ -428,8 +432,8 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
       }
 
       // Surface the scraped headnote as notes unless the user already has some.
-      if (result.description && !form.getValues("notes")?.trim()) {
-        form.setValue("notes", result.description);
+      if (result.meta.description && !form.getValues("notes")?.trim()) {
+        form.setValue("notes", result.meta.description);
       }
 
       const ingredientCount = ingredientGroups.reduce(

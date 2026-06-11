@@ -1,7 +1,4 @@
-import {
-  type ParsedCompactRecipe,
-  sanitizeSectionName,
-} from "@cubby/schemas/codec";
+import { sanitizeSectionName } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
 import { unsafeIngredientId } from "@cubby/schemas/identifiers";
 import {
@@ -55,108 +52,52 @@ const makeIngredientResolvers = (tx: DrizzleTransaction) => {
   };
 };
 
-// Convert ParsedCompactRecipe to RecipeCreateInput format
-const convertParsedCompactToRecipeInput = async (
-  recipe: ParsedCompactRecipe,
-  db: Database,
-): Promise<RecipeCreateInput> => {
-  return await withTransaction(db, async (tx) => {
-    const { resolvePlain } = makeIngredientResolvers(tx);
-    return {
-      name: recipe.name,
-      meta: {
-        url: recipe.meta?.url ?? null,
-      },
-      yield: recipe.recipe_yield ?? null,
-      servings: recipe.servings ?? null,
-      notes: composeNotesMarkdown(recipe.description, null),
-      sections: await Promise.all(
-        recipe.sections.map(async (section) => ({
-          name: section.name ?? null,
-          instructions: section.instructions.map((instruction) => ({
-            instruction,
-          })),
-          ingredients: await Promise.all(
-            section.ingredients.map(async (ingredient) => ({
-              type: "ingredient" as const,
-              ingredientId: unsafeIngredientId(
-                await resolvePlain(ingredient.name),
-              ),
-              recipeId: null,
-              amounts: ingredient.amounts,
-              rawLine: ingredient.rawLine ?? null,
-              modifier: ingredient.modifier ?? null,
-            })),
-          ),
-        })),
-      ),
-    };
-  });
-};
-
-export const upsertRecipeFromCompact = async (
-  recipe: ParsedCompactRecipe,
-  db: Database,
-  actor: ActorContext,
-) => {
-  // Convert compact recipe format to standard recipe input format
-  const recipeInput = await convertParsedCompactToRecipeInput(recipe, db);
-
-  // Use the centralized upsert logic
-  return await upsertRecipe(recipeInput, db, actor);
-};
-
 /**
- * Upsert a recipe synced from a Notion page: convert + apply the Notion-column
- * tags (the compact body carries no tags), then upsert keyed on the page id.
- */
-export const upsertNotionRecipeFromCompact = async (
-  recipe: ParsedCompactRecipe,
-  pageId: string,
-  tags: string[] | null,
-  db: Database,
-  actor: ActorContext,
-) => {
-  const recipeInput = await convertParsedCompactToRecipeInput(recipe, db);
-  return await upsertNotionRecipe(
-    { ...recipeInput, tags: tags && tags.length > 0 ? tags : null },
-    pageId,
-    db,
-    actor,
-  );
-};
-
-/**
- * Convert a raw `ImportRecipe` (the parser's JSON shape) directly into a
- * `RecipeCreateInput` — no `CompactRecipe` intermediary. Parses ingredient lines
- * and the freeform yield via WASM, find-or-creates ingredients (memoized), and
- * links cross-recipe references: when an ingredient `line` matches one of the
- * recipe's `references` whose target title already exists in this book, it
- * becomes a recipe-linked ingredient instead of a flat one.
+ * The one converter from a raw `ImportRecipe` (scraper / EPUB / Notion) into a
+ * `RecipeCreateInput`: parses ingredient lines and the yield via WASM,
+ * find-or-creates ingredients (memoized), and — only when importing into a
+ * cookbook (`cookbookRef`) — links cross-recipe references (an ingredient `line`
+ * matching one of the recipe's `references` whose target title already exists in
+ * the book becomes a recipe-linked ingredient instead of a flat one).
  */
 const importRecipeToRecipeInput = async (
   cr: ImportRecipe,
-  cookbookRef: CookbookRef,
   db: Database,
+  cookbookRef?: CookbookRef,
 ): Promise<RecipeCreateInput> => {
-  const lineToTitle = new Map(
-    cr.references.map((r) => [r.line.trim(), r.title.trim().toLowerCase()]),
-  );
-  const titleToId = await getCookbookRecipeIdsByTitle(db, cookbookRef.id);
+  // Cross-recipe linking is cookbook-only; scraper/Notion resolve everything flat.
+  const lineToTitle = cookbookRef
+    ? new Map(
+        cr.references.map((r) => [r.line.trim(), r.title.trim().toLowerCase()]),
+      )
+    : new Map<string, string>();
+  const titleToId = cookbookRef
+    ? await getCookbookRecipeIdsByTitle(db, cookbookRef.id)
+    : new Map<string, string>();
 
-  // Freeform yield ("Makes about 12") → structured, via the same Rust parser
-  // the web scraper uses. Omitted when unparseable.
-  const parsedYield = cr.meta.recipe_yield
-    ? wasm.parse_yield(cr.meta.recipe_yield)
-    : undefined;
+  // Yield: a freeform line ("Makes about 12", EPUB/Notion) is parsed via the same
+  // Rust parser the scraper uses; an already-structured `{value, unit}` (scraper)
+  // is used directly. `servings` prefers the scraper's pre-computed value.
+  const y = cr.meta.recipe_yield;
+  const parsedYield = typeof y === "string" ? wasm.parse_yield(y) : undefined;
+  const yieldOut =
+    typeof y === "string" ? (parsedYield?.recipe_yield ?? null) : (y ?? null);
+  const servingsOut =
+    cr.servings ??
+    (typeof y === "string" ? (parsedYield?.servings ?? null) : null);
 
   return await withTransaction(db, async (tx) => {
     const { resolvePlain, resolveLink } = makeIngredientResolvers(tx);
     return {
       name: cr.meta.title,
-      meta: { url: null },
-      yield: parsedYield?.recipe_yield ?? null,
-      servings: parsedYield?.servings ?? null,
+      // The scraper's real page URL → Website provenance. Cookbook recipes carry
+      // a synthetic `source#doc_path` (not http) which is filtered out here and
+      // overridden by Book provenance anyway; Notion has no url.
+      meta: {
+        url: /^https?:\/\//i.test(cr.url ?? "") ? (cr.url ?? null) : null,
+      },
+      yield: yieldOut,
+      servings: servingsOut,
       notes: composeNotesMarkdown(cr.meta.description, cr.meta.notes),
       sections: await Promise.all(
         cr.sections.map(async (section) => ({
@@ -192,13 +133,43 @@ const importRecipeToRecipeInput = async (
   });
 };
 
+/** Upsert a scraped/imported recipe, keyed on name (the URL-scrape path). */
+export const upsertImportRecipe = async (
+  cr: ImportRecipe,
+  db: Database,
+  actor: ActorContext,
+) => {
+  const recipeInput = await importRecipeToRecipeInput(cr, db);
+  return await upsertRecipe(recipeInput, db, actor);
+};
+
+/**
+ * Upsert a recipe synced from a Notion page: convert + apply the Notion-column
+ * tags (the recipe body carries no tags), then upsert keyed on the page id.
+ */
+export const upsertNotionRecipeFromImport = async (
+  cr: ImportRecipe,
+  pageId: string,
+  tags: string[] | null,
+  db: Database,
+  actor: ActorContext,
+) => {
+  const recipeInput = await importRecipeToRecipeInput(cr, db);
+  return await upsertNotionRecipe(
+    { ...recipeInput, tags: tags && tags.length > 0 ? tags : null },
+    pageId,
+    db,
+    actor,
+  );
+};
+
 export const upsertCookbookRecipeFromCookbook = async (
   cr: ImportRecipe,
   cookbookRef: CookbookRef,
   db: Database,
   actor: ActorContext,
 ) => {
-  const recipeInput = await importRecipeToRecipeInput(cr, cookbookRef, db);
+  const recipeInput = await importRecipeToRecipeInput(cr, db, cookbookRef);
 
   // (cookbookId, title)-scoped upsert + "Book" provenance + FK link.
   return await upsertCookbookRecipe(recipeInput, cookbookRef, db, actor);

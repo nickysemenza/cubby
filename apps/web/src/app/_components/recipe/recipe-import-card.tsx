@@ -164,7 +164,9 @@ function RecipeImportCardImpl({
           </span>
           {recipe.meta.recipe_yield && (
             <span className="text-muted-foreground text-xs">
-              {recipe.meta.recipe_yield}
+              {typeof recipe.meta.recipe_yield === "string"
+                ? recipe.meta.recipe_yield
+                : `${recipe.meta.recipe_yield.value} ${recipe.meta.recipe_yield.unit}`}
             </span>
           )}
           <span

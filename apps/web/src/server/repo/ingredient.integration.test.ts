@@ -5,7 +5,7 @@ import { buildTestDB } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "~/server/db";
 import { ingredient } from "~/server/db/schema";
-import { insertCompactRecipe } from "~/server/repo/recipe";
+import { insertImportRecipe } from "~/server/repo/recipe";
 import { getDb, withTransaction } from "./database-helpers";
 import { findOrCreateIngredient, mergeIngredients } from "./ingredient";
 
@@ -34,15 +34,16 @@ describe("ingredient", () => {
     expect(result!.count).toEqual(1);
   });
   it("ingredient merging works", async () => {
-    await insertCompactRecipe(
+    await insertImportRecipe(
       {
-        name: "egg recipe",
+        meta: { title: "egg recipe" },
         sections: [
           {
             instructions: ["crack egg"],
             ingredients: ["eggs"],
           },
         ],
+        references: [],
       },
       db,
       TEST_ACTOR,

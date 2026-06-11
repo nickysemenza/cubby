@@ -1,11 +1,11 @@
 import { parse_scraped_recipe } from "@cubby/recipebridge";
 import { describe, expect, it } from "vitest";
-import { WCompactToCompact } from "./scraper";
+import { WCompactToImportRecipe } from "./scraper";
 
 // Regression coverage for the section-aware scrape boundary. A live HTTP scrape
 // is intentionally NOT exercised here — the scrape mutation fetches the URL
 // server-side, so a real fetch would be network-dependent and flaky in CI. This
-// instead feeds fixture HTML through the WASM scraper and the WCompactToCompact
+// instead feeds fixture HTML through the WASM scraper and the WCompactToImportRecipe
 // transform, which is exactly the layer that breaks when the upstream
 // ingredient-parser recipe schema changes shape.
 
@@ -14,8 +14,8 @@ const recipeHtml = (jsonLd: object) =>
     jsonLd,
   )}</script></head><body></body></html>`;
 
-describe("parse_scraped_recipe → WCompactToCompact", () => {
-  it("maps a single-section recipe into compact sections with parsed amounts", () => {
+describe("parse_scraped_recipe → WCompactToImportRecipe", () => {
+  it("maps a single-section recipe into import sections with raw lines", () => {
     const html = recipeHtml({
       "@context": "https://schema.org",
       "@type": "Recipe",
@@ -29,21 +29,21 @@ describe("parse_scraped_recipe → WCompactToCompact", () => {
       ],
     });
 
-    const compact = WCompactToCompact(
+    const recipe = WCompactToImportRecipe(
       parse_scraped_recipe(html, "https://example.com/pancakes"),
     );
 
-    expect(compact.name).toBe("Test Pancakes");
-    expect(compact.sections).toHaveLength(1);
-    expect(compact.sections[0]?.ingredients).toEqual([
+    expect(recipe.meta.title).toBe("Test Pancakes");
+    expect(recipe.sections).toHaveLength(1);
+    expect(recipe.sections[0]?.ingredients).toEqual([
       "2 cups flour",
       "1 cup milk",
     ]);
-    expect(compact.sections[0]?.instructions).toHaveLength(2);
+    expect(recipe.sections[0]?.instructions).toHaveLength(2);
     // Unnamed main section.
-    expect(compact.sections[0]?.name).toBeNull();
+    expect(recipe.sections[0]?.name).toBeUndefined();
     // Image is passed through for auto-import.
-    expect(compact.image).toBe("https://example.com/pancakes.jpg");
+    expect(recipe.image).toBe("https://example.com/pancakes.jpg");
   });
 
   it("does not expose the legacy flat ingredients/instructions fields", () => {

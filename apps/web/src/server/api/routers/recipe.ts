@@ -6,7 +6,6 @@
  * See CLAUDE.md "Service Layer Architecture" for details.
  */
 
-import { compactRecipeSchema } from "@cubby/schemas/codec";
 import {
   cookbookId,
   type RecipeId,
@@ -29,7 +28,10 @@ import {
   recipeUpdateInput,
 } from "@cubby/schemas/recipe";
 import { z } from "zod";
-import { compactSignature, recipeOutSignature } from "~/lib/recipe-signature";
+import {
+  importRecipeSignature,
+  recipeOutSignature,
+} from "~/lib/recipe-signature";
 import { createAppError } from "~/server/errors/app-error";
 import {
   getCookbookByName,
@@ -50,19 +52,18 @@ import {
   getRecipeByID,
   getRecipeByShortcode,
   getRecipesByIDs,
-  insertCompactRecipe,
   insertCookbookRecipe,
+  insertImportRecipe,
   insertNotionRecipe,
   recipeList,
   updateRecipe,
 } from "~/server/repo/recipe";
 import { extractCookbookChunk } from "~/server/utils/cookbook-llm";
 import {
-  lintNotionCompact,
-  notionCompactToImportRecipe,
-  notionPageToCompact,
+  lintImportRecipe,
+  notionPageToImportRecipe,
 } from "~/server/utils/notion-recipe";
-import { scrapeToCompact } from "~/server/utils/scraper";
+import { scrapeToImportRecipe } from "~/server/utils/scraper";
 import {
   createDeleteProcedure,
   createEntityCrudProcedures,
@@ -122,13 +123,13 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
 
 const scrape = protectedProcedure
   .input(z.url())
-  .output(compactRecipeSchema)
-  .mutation(async ({ input }) => await scrapeToCompact(input));
+  .output(importRecipeSchema)
+  .mutation(async ({ input }) => await scrapeToImportRecipe(input));
 const insertCompact = protectedProcedure
-  .input(compactRecipeSchema)
+  .input(importRecipeSchema)
   .output(z.object({ id: z.uuid() }))
   .mutation(async ({ ctx, input }) => {
-    return await insertCompactRecipe(input, ctx.db, ctx.actorContext);
+    return await insertImportRecipe(input, ctx.db, ctx.actorContext);
   });
 // Create/refresh a cookbook from a full EPUB extraction. Called once at the start
 // of an import (before any recipe insert) so the FK target exists and the raw JSON
@@ -238,15 +239,15 @@ const previewNotionSync = protectedProcedure
     return await Promise.all(
       rows.map(async (row) => {
         const blocks = await client.getPageContent(row.id);
-        const compact = notionPageToCompact(row, blocks);
-        const { status: lintStatus, reasons } = lintNotionCompact(compact);
+        const recipe = notionPageToImportRecipe(row, blocks);
+        const { status: lintStatus, reasons } = lintImportRecipe(recipe);
         const prior = existing.get(normalizeNotionId(row.id));
         const status =
           lintStatus === "needs-formatting"
             ? ("needs-formatting" as const)
             : !prior
               ? ("new" as const)
-              : compactSignature(compact, row.tags) === prior.sig
+              : importRecipeSignature(recipe, row.tags) === prior.sig
                 ? ("unchanged" as const)
                 : ("will-update" as const);
         return {
@@ -256,7 +257,7 @@ const previewNotionSync = protectedProcedure
           status,
           existingId: prior?.id ?? null,
           reasons,
-          recipe: notionCompactToImportRecipe(compact, row.yieldText),
+          recipe,
         };
       }),
     );
@@ -280,8 +281,8 @@ const importNotionRecipe = protectedProcedure
       );
     }
     const blocks = await client.getPageContent(input.pageId);
-    const compact = notionPageToCompact(row, blocks);
-    const { status, reasons } = lintNotionCompact(compact);
+    const recipe = notionPageToImportRecipe(row, blocks);
+    const { status, reasons } = lintImportRecipe(recipe);
     if (status === "needs-formatting") {
       throw createAppError(
         "CONSTRAINT_VIOLATION",
@@ -292,7 +293,7 @@ const importNotionRecipe = protectedProcedure
       (id) => normalizeNotionId(id) === normalizeNotionId(input.pageId),
     );
     const { id } = await insertNotionRecipe(
-      compact,
+      recipe,
       input.pageId,
       row.tags,
       ctx.db,

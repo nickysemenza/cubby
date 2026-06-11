@@ -7,7 +7,6 @@
  * source change" check — independent of ingredient resolution / linking.
  */
 
-import type { CompactRecipe } from "@cubby/schemas/codec";
 import { sanitizeSectionName } from "@cubby/schemas/codec";
 import {
   composeNotesMarkdown,
@@ -47,45 +46,37 @@ export function recipeOutSignature(recipe: RecipeOut): string {
   });
 }
 
-/** Signature of the recipe a Notion page *would* import as. */
-export function compactSignature(
-  compact: CompactRecipe,
-  tags: string[],
-): string {
-  return signature({
-    yield: compact.recipe_yield
-      ? { value: compact.recipe_yield.value, unit: compact.recipe_yield.unit }
-      : null,
-    servings: compact.servings ?? null,
-    tags: [...tags].sort(),
-    notes: composeNotesMarkdown(compact.description, null),
-    sections: compact.sections.map((s) => ({
-      name: s.name ?? null,
-      ingredients: s.ingredients,
-      instructions: s.instructions,
-    })),
-  });
-}
-
 /**
- * Signature of the recipe an EPUB `ImportRecipe` *would* import as — applies
- * the same transforms as `importRecipeToRecipeInput` (WASM yield parse,
- * composed notes, sanitized section names) so it matches the stored recipe's
- * `recipeOutSignature`. Cookbook recipes carry no tags.
+ * Signature of the recipe an `ImportRecipe` (scraper / EPUB / Notion) *would*
+ * import as — applies the same transforms as `importRecipeToRecipeInput` (yield
+ * union → WASM parse or use-as-is, servings fallback, composed notes, sanitized
+ * section names) so it matches the stored recipe's `recipeOutSignature`. `tags`
+ * is supplied by the Notion column path; the EPUB path carries none.
  */
-export function importRecipeSignature(cr: ImportRecipe): string {
-  const parsedYield = cr.meta.recipe_yield
-    ? wasm.parse_yield(cr.meta.recipe_yield)
-    : undefined;
+export function importRecipeSignature(
+  cr: ImportRecipe,
+  tags: string[] = [],
+): string {
+  const y = cr.meta.recipe_yield;
+  const parsedYield = typeof y === "string" ? wasm.parse_yield(y) : undefined;
+  const yieldOut =
+    typeof y === "string"
+      ? parsedYield?.recipe_yield
+        ? {
+            value: parsedYield.recipe_yield.value,
+            unit: parsedYield.recipe_yield.unit,
+          }
+        : null
+      : y
+        ? { value: y.value, unit: y.unit }
+        : null;
+  const servings =
+    cr.servings ??
+    (typeof y === "string" ? (parsedYield?.servings ?? null) : null);
   return signature({
-    yield: parsedYield?.recipe_yield
-      ? {
-          value: parsedYield.recipe_yield.value,
-          unit: parsedYield.recipe_yield.unit,
-        }
-      : null,
-    servings: parsedYield?.servings ?? null,
-    tags: [],
+    yield: yieldOut,
+    servings: servings ?? null,
+    tags: [...tags].sort(),
     notes: composeNotesMarkdown(cr.meta.description, cr.meta.notes),
     sections: cr.sections.map((s) => ({
       name: sanitizeSectionName(s.name),

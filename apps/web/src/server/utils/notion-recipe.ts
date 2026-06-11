@@ -1,5 +1,5 @@
 /**
- * Deterministic Notion-page → `CompactRecipe` mapping (no LLM, no DB).
+ * Deterministic Notion-page → `ImportRecipe` mapping (no LLM, no DB).
  *
  * Canonical format: a `## heading` starts a section; within a section, bulleted
  * list items are ingredients and numbered list items are steps. Prose before the
@@ -8,9 +8,7 @@
  * blocks always yield the same recipe, which is what makes re-import stable.
  */
 
-import type { CompactRecipe } from "@cubby/schemas/codec";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
-import { wasm } from "~/lib/wasm";
 import type { NotionBlock, NotionRecipeRow } from "~/server/clients/notion";
 
 const HEADING_TYPES = new Set(["heading_1", "heading_2", "heading_3"]);
@@ -32,10 +30,10 @@ function flattenColumns(blocks: NotionBlock[]): NotionBlock[] {
   return out;
 }
 
-export function notionPageToCompact(
+export function notionPageToImportRecipe(
   row: NotionRecipeRow,
   rawBlocks: NotionBlock[],
-): CompactRecipe {
+): ImportRecipe {
   const blocks = flattenColumns(rawBlocks);
 
   const sections: DraftSection[] = [];
@@ -99,47 +97,21 @@ export function notionPageToCompact(
   const description =
     descriptionParts.length > 0 ? descriptionParts.join("\n\n") : undefined;
 
-  // Yield column ("12 churros", "serves 4") → structured, via the same WASM
-  // parser the scraper/cookbook paths use. An explicit Servings column overrides.
-  const parsedYield = row.yieldText
-    ? wasm.parse_yield(row.yieldText)
-    : undefined;
-
-  return {
-    name: row.name,
-    sections: sections.map((s) => ({
-      name: s.name,
-      ingredients: s.ingredients,
-      instructions: s.instructions,
-    })),
-    recipe_yield: parsedYield?.recipe_yield ?? undefined,
-    servings: row.servings ?? parsedYield?.servings ?? undefined,
-    description,
-  };
-}
-
-/**
- * Adapt a mapped Notion page to the `ImportRecipe` shape the shared import
- * card renders — so the Notion and EPUB previews use the exact same component
- * (ingredient-match table, headnote, rich-text steps). The raw yield string is
- * kept for display; notes are already folded into `description`; no references.
- */
-export function notionCompactToImportRecipe(
-  compact: CompactRecipe,
-  yieldText: string | null,
-): ImportRecipe {
   return {
     meta: {
-      title: compact.name,
-      recipe_yield: yieldText ?? undefined,
-      description: compact.description,
+      title: row.name,
+      description,
+      // Keep the raw yield line; the import converter / signature re-parse it via
+      // WASM (and a `Servings` column overrides via the top-level field below).
+      recipe_yield: row.yieldText ?? undefined,
     },
-    sections: compact.sections.map((s) => ({
+    sections: sections.map((s) => ({
       name: s.name ?? undefined,
       ingredients: s.ingredients,
       instructions: s.instructions,
     })),
     references: [],
+    servings: row.servings ?? undefined,
   };
 }
 
@@ -150,13 +122,13 @@ export type NotionLintStatus = "ok" | "needs-formatting";
  * (a bullet) and one step (a numbered item) somewhere. Returns human-readable
  * reasons so the preview can tell the user what to fix in Notion.
  */
-export function lintNotionCompact(compact: CompactRecipe): {
+export function lintImportRecipe(recipe: ImportRecipe): {
   status: NotionLintStatus;
   reasons: string[];
 } {
   const reasons: string[] = [];
-  const hasIngredients = compact.sections.some((s) => s.ingredients.length > 0);
-  const hasInstructions = compact.sections.some(
+  const hasIngredients = recipe.sections.some((s) => s.ingredients.length > 0);
+  const hasInstructions = recipe.sections.some(
     (s) => s.instructions.length > 0,
   );
   if (!hasIngredients) {

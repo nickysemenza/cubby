@@ -1,5 +1,6 @@
 import type { WCompactRecipe } from "@cubby/recipebridge";
-import { type CompactRecipe, sanitizeSectionName } from "@cubby/schemas/codec";
+import { sanitizeSectionName } from "@cubby/schemas/codec";
+import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import { wasm } from "~/lib/wasm";
 
 const scrapeRecipe = async (url: string) => {
@@ -15,24 +16,32 @@ const scrapeRecipe = async (url: string) => {
   return wasm.parse_scraped_recipe(html, url);
 };
 
-export const scrapeToCompact = async (url: string): Promise<CompactRecipe> => {
+export const scrapeToImportRecipe = async (
+  url: string,
+): Promise<ImportRecipe> => {
   const scraped = await scrapeRecipe(url);
-  const compact: CompactRecipe = WCompactToCompact(scraped);
-  return compact;
+  return WCompactToImportRecipe(scraped);
 };
-export const WCompactToCompact = (wCompact: WCompactRecipe): CompactRecipe => {
+
+// The scraper's WASM output → the shared `ImportRecipe` carrier. Yield arrives
+// already structured (`{value, unit}`) — the union's object branch; the import
+// converter uses it directly without re-parsing.
+export const WCompactToImportRecipe = (w: WCompactRecipe): ImportRecipe => {
   return {
-    name: wCompact.name ?? "",
-    sections: wCompact.sections.map((section) => ({
-      name: sanitizeSectionName(section.name),
+    meta: {
+      title: w.name ?? "",
+      description: w.description,
+      recipe_yield: w.recipe_yield,
+    },
+    sections: w.sections.map((section) => ({
+      name: sanitizeSectionName(section.name) ?? undefined,
       ingredients: section.ingredients,
       instructions: section.instructions,
     })),
-    // Pass through yield, servings, image, and description from scraper
-    // (parsed by Rust)
-    recipe_yield: wCompact.recipe_yield,
-    servings: wCompact.servings,
-    image: wCompact.image,
-    description: wCompact.description,
+    references: [],
+    servings: w.servings,
+    image: w.image,
+    // Carried for provenance; the converter doesn't store it yet (see docs/todos).
+    url: w.url,
   };
 };

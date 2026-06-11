@@ -3,7 +3,6 @@
  * Core create, read, update, list operations for recipes.
  */
 
-import type { CompactRecipe } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   type CookbookId,
@@ -22,7 +21,6 @@ import type {
   RecipeUpdateInput,
 } from "@cubby/schemas/recipe";
 import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
-import { parseCompactRecipe } from "~/codec/parser";
 import { getSortableFields } from "~/entities/entities";
 import { recipeOutSignature } from "~/lib/recipe-signature";
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -40,8 +38,8 @@ import {
 } from "~/server/repo/audit-log";
 import {
   upsertCookbookRecipeFromCookbook,
-  upsertNotionRecipeFromCompact,
-  upsertRecipeFromCompact,
+  upsertImportRecipe,
+  upsertNotionRecipeFromImport,
 } from "~/server/repo/compactrecipe";
 import {
   associatePendingImages,
@@ -196,30 +194,28 @@ export const getRecipeByShortcode = async (
 };
 
 /**
- * Insert a recipe from compact format.
+ * Insert a recipe from the URL scraper (an `ImportRecipe`), keyed on name.
  */
-export const insertCompactRecipe = (
-  recipeInput: CompactRecipe,
+export const insertImportRecipe = (
+  recipeInput: ImportRecipe,
   db: Database,
   actor: ActorContext,
 ) => {
-  const parsed = parseCompactRecipe(recipeInput);
-  return upsertRecipeFromCompact(parsed, db, actor);
+  return upsertImportRecipe(recipeInput, db, actor);
 };
 
 /**
- * Insert/refresh a recipe synced from a Notion page (compact format in, page id
- * as the idempotency key). Parses ingredient lines via WASM, then upserts.
+ * Insert/refresh a recipe synced from a Notion page (an `ImportRecipe` in, page
+ * id as the idempotency key). The converter parses ingredient lines via WASM.
  */
 export const insertNotionRecipe = (
-  recipeInput: CompactRecipe,
+  recipeInput: ImportRecipe,
   pageId: string,
   tags: string[] | null,
   db: Database,
   actor: ActorContext,
 ) => {
-  const parsed = parseCompactRecipe(recipeInput);
-  return upsertNotionRecipeFromCompact(parsed, pageId, tags, db, actor);
+  return upsertNotionRecipeFromImport(recipeInput, pageId, tags, db, actor);
 };
 
 /**
