@@ -60,6 +60,25 @@ export const selectStaleRecipeIds = async (
   return rows.map((r) => r.id as RecipeId);
 };
 
+/** Persisted totals state for one recipe (explain endpoint). Null = not found. */
+export const getRecipeTotalsState = async (
+  db: Database,
+  id: RecipeId,
+): Promise<{
+  totals: RecipeTotals | null;
+  totalsComputedAt: Date | null;
+} | null> => {
+  const [row] = await getDb(db)
+    .select({
+      totals: recipe.totals,
+      totalsComputedAt: recipe.totalsComputedAt,
+    })
+    .from(recipe)
+    .where(and(eq(recipe.id, id), notDeleted(recipe)))
+    .limit(1);
+  return row ?? null;
+};
+
 /** All active recipe ids — for a full backfill/recompute. */
 export const selectAllActiveRecipeIds = async (
   db: Database,

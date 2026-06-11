@@ -899,11 +899,22 @@ function registerTools(server: McpServer) {
 
   server.tool(
     "recompute_recipe_totals",
-    "Recompute every recipe's persisted cost/calorie totals (one-shot backfill / recovery, e.g. after the USDA backend was unavailable).",
+    "Recompute every recipe's persisted cost/calorie totals (one-shot backfill / recovery, e.g. after the USDA backend was unavailable). Use explain_recipe_costing first to diagnose WHY a total looks wrong.",
     {},
     withErrorHandling(async (_params, extra) => {
       const caller = getCaller(extra);
       const result = await caller.recipe.recomputeAll();
+      return json(result);
+    }),
+  );
+
+  server.tool(
+    "explain_recipe_costing",
+    "Explain a recipe's cost/calorie totals: persisted state (totals, computed-at, stale?), a fresh compute with per-ingredient diagnostics (usage classification, fired consumption rule, exact per-measure errors, unit-graph conversion paths), named USDA misses, and persisted-vs-computed drift. Read-only. Pair with recompute_recipe_totals to heal.",
+    { id: z.string().describe("Recipe ID") },
+    withErrorHandling(async (params, extra) => {
+      const caller = getCaller(extra);
+      const result = await caller.recipe.explainCosting({ id: params.id });
       return json(result);
     }),
   );

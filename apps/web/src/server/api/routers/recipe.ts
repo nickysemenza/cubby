@@ -23,6 +23,7 @@ import {
 } from "@cubby/schemas/ingredient-cooccurrence";
 import {
   cookbookSummary,
+  recipeCostingExplain,
   recipeCreateInput,
   recipeOut,
   recipeUpdateInput,
@@ -308,6 +309,17 @@ const recomputeAll = protectedProcedure
     return await ctx.services.recipeCosting.recomputeAll();
   });
 
+// Full costing explanation: persisted totals state vs a fresh compute with
+// per-row diagnostics (usage classification, fired consumption rule, exact
+// per-measure errors, unit-graph conversion paths), named USDA misses, and
+// drift. Read-only — never stamps; consumed by the debug card + MCP tool.
+const explainCosting = protectedProcedure
+  .input(z.object({ id: recipeId }))
+  .output(recipeCostingExplain)
+  .query(async ({ ctx, input }) => {
+    return await ctx.services.recipeCosting.explainRecipe(input.id);
+  });
+
 export const recipeRouter = createTRPCRouter({
   insertCompact,
   upsertCookbook: upsertCookbookEndpoint,
@@ -328,6 +340,7 @@ export const recipeRouter = createTRPCRouter({
   delete: deleteItem,
   recomputeStale,
   recomputeAll,
+  explainCosting,
   getIngredientCooccurrence: getIngredientCooccurrenceEndpoint,
   getAllTags: getAllTagsEndpoint,
 });

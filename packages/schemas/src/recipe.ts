@@ -27,6 +27,105 @@ export const recipeTotals = z.object({
 });
 export type RecipeTotals = z.infer<typeof recipeTotals>;
 
+// ---------------------------------------------------------------------------
+// Costing explain payload (recipe.explainCosting + the MCP explain tool).
+// Mirrors the diagnostics calculateTotals produces (lib/recipe-costing.ts) —
+// the zod shapes are the wire contract; the lib types are the source.
+// ---------------------------------------------------------------------------
+
+/** The role the usage classifier assigned to a row (mirrors WIngredientUsage). */
+export const ingredientUsage = z.enum([
+  "normal",
+  "frying_medium",
+  "pan_grease",
+  "seasoning",
+  "dredging",
+  "garnish",
+  "marinade",
+]);
+
+/** Where one measure of a row resolves from (mirrors ComponentSource). */
+const componentSource = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("own-full") }),
+  z.object({ kind: z.literal("own-fraction"), fraction: z.number() }),
+  z.object({ kind: z.literal("basis-fraction"), fraction: z.number() }),
+  z.object({ kind: z.literal("flat-grams"), grams: z.number() }),
+  z.object({ kind: z.literal("missing") }),
+]);
+
+const measureDiagnostic = z.discriminatedUnion("ok", [
+  z.object({ ok: z.literal(true), value: z.number(), unit: z.string() }),
+  z.object({ ok: z.literal(false), error: z.string() }),
+]);
+
+const nutrientDiagnostic = z.discriminatedUnion("ok", [
+  z.object({
+    ok: z.literal(true),
+    kcal: z.number().nullable(),
+    nutrientCount: z.number().int(),
+  }),
+  z.object({ ok: z.literal(false), error: z.string() }),
+]);
+
+/** One hop of an explained unit-graph conversion (normalized nodes). */
+export const conversionStep = z.object({
+  from_unit: z.string(),
+  to_unit: z.string(),
+  factor: z.number(),
+});
+
+export const rowDiagnostic = z.object({
+  id: z.string(),
+  name: z.string(),
+  sectionName: z.string().nullable(),
+  kind: z.enum(["ingredient", "recipe"]),
+  usage: ingredientUsage,
+  measured: z.boolean(),
+  plan: z.object({
+    cost: componentSource,
+    weight: componentSource,
+    nutrients: componentSource,
+  }),
+  basisGrams: z.number().nullable(),
+  price: measureDiagnostic,
+  gram: measureDiagnostic,
+  nutrient: nutrientDiagnostic,
+  /** Unit-graph routes per measure (explain endpoint only; null = no path). */
+  paths: z
+    .object({
+      money: z.array(conversionStep).nullable(),
+      weight: z.array(conversionStep).nullable(),
+      calories: z.array(conversionStep).nullable(),
+    })
+    .nullish(),
+});
+export type RowDiagnosticOut = z.infer<typeof rowDiagnostic>;
+
+/** Full costing explanation: persisted state vs a fresh compute, with drift. */
+export const recipeCostingExplain = z.object({
+  persisted: z.object({
+    totals: recipeTotals.nullable(),
+    totalsComputedAt: z.date().nullable(),
+    /** true ⇒ the drain will recompute this recipe (totalsComputedAt is null). */
+    stale: z.boolean(),
+  }),
+  computed: z.object({
+    totals: recipeTotals,
+    /** false ⇒ a USDA lookup that should resolve came back null (retry later). */
+    complete: z.boolean(),
+    diagnostics: z.array(rowDiagnostic),
+    usdaMisses: z.array(
+      z.object({
+        ingredientName: z.string(),
+        productName: z.string(),
+        ndbNumber: z.number(),
+      }),
+    ),
+  }),
+  drift: z.object({ cost: z.boolean(), calories: z.boolean() }),
+});
+export type RecipeCostingExplain = z.infer<typeof recipeCostingExplain>;
+
 // Shared building blocks for a recipe's writable fields. Defined once here so the
 // output (recipeTopLevel), API input (recipeCreateInput), and the form's formSchema
 // stay in sync. Each consumer applies its own null/optional wrapper because the

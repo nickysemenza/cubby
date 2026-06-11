@@ -1,3 +1,4 @@
+import { unsafeRecipeId } from "@cubby/schemas/identifiers";
 import type { RecipeOut } from "@cubby/schemas/recipe";
 import { getNutrientValueByKey } from "@cubby/usda-schemas";
 import { BarChart3, BookOpen, Table2 } from "lucide-react";
@@ -10,6 +11,7 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
+import { useDebug } from "~/hooks/useDebug";
 import { PerfProfiler } from "~/lib/perf/PerfProfiler";
 import {
   applyUsageEstimates,
@@ -24,6 +26,7 @@ import { AuditLogList } from "../audit-log/audit-log-list";
 import EntityImageList from "../EntityImageList";
 import { useRecipeCostingData } from "../hooks/useRecipeCostingData";
 import { RecipeMagazineView } from "./RecipeMagazineView";
+import { RecipeCostingDebugCard } from "./recipe-costing-debug-card";
 import { RecipeTagList } from "./recipe-tag";
 import {
   formatYield,
@@ -167,6 +170,7 @@ const RecipeDetailInner: React.FC<{
   // Controlled when the parent supplies view/onViewChange; otherwise self-managed
   // (e.g. the search preview panel embeds this without URL state).
   const [internalView, setInternalView] = useState<RecipeViewMode>("magazine");
+  const { isDebugEnabled } = useDebug();
   const viewMode = controlledView ?? internalView;
   const setViewMode = onViewChange ?? setInternalView;
 
@@ -303,6 +307,11 @@ const RecipeDetailInner: React.FC<{
             <EntityImageList images={recipeImages.slice(1)} />
           </CardContent>
         </Card>
+      )}
+
+      {/* Debug mode: how the totals were produced (usage, rules, errors, paths) */}
+      {isDebugEnabled && (
+        <RecipeCostingDebugCard recipeId={unsafeRecipeId(recipe.id)} />
       )}
 
       {/* Tear line between the recipe itself and its paper trail */}

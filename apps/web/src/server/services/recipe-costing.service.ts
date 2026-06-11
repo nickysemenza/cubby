@@ -9,21 +9,39 @@
  * `drainStale` recomputes them, driven by the client while the app is open.
  */
 
+import type { Amount } from "@cubby/schemas/codec";
 import type { RecipeId } from "@cubby/schemas/identifiers";
-import type { RecipeOut, RecipeTotals } from "@cubby/schemas/recipe";
+import type {
+  RecipeCostingExplain,
+  RecipeOut,
+  RecipeTotals,
+} from "@cubby/schemas/recipe";
 import { getNutrientValueByKey } from "@cubby/usda-schemas";
-import { calculateTotals, flattenSections } from "~/lib/recipe-costing";
+import {
+  type CalculateTotalsResult,
+  type CostingRow,
+  calculateTotals,
+  flattenSections,
+  type RowDiagnostic,
+} from "~/lib/recipe-costing";
+import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
+import { wasm } from "~/lib/wasm";
 import type { Database } from "~/server/db";
+import { createAppError } from "~/server/errors/app-error";
 import { getRecipesByIDs } from "~/server/repo/recipe/crud";
 import {
   countStaleRecipes,
   findParentRecipeIds,
+  getRecipeTotalsState,
   markRecipesStale,
   selectAllActiveRecipeIds,
   selectStaleRecipeIds,
   updateRecipeTotals,
 } from "~/server/repo/recipe/totals";
-import type { IngredientService } from "./ingredient.service";
+import type {
+  IngredientService,
+  IngredientWithFoodOut,
+} from "./ingredient.service";
 
 // Local (server-safe) name getter — avoids importing the client recipe-utils.
 const recipeIngredientName = (
@@ -48,6 +66,65 @@ const collectSubRecipeIds = (recipes: RecipeOut[]): RecipeId[] => {
   return [...ids] as RecipeId[];
 };
 
+const toRecipeTotals = (t: CalculateTotalsResult): RecipeTotals => ({
+  costTotal: t.price,
+  caloriesTotal: getNutrientValueByKey(t.nutrients, "kcal") ?? 0,
+  ingredientCount: t.totalIngredients,
+  costCovered: t.totalIngredients - t.missingByType.price.length,
+  caloriesCovered: t.totalIngredients - t.missingByType.nutrients.length,
+});
+
+/**
+ * Products with a confirmed USDA match (`ndb_number`) whose food failed to
+ * resolve — a transient backend miss, not real no-data. Doubles as the
+ * completeness predicate (empty ⇒ complete) and the named list the explain
+ * payload surfaces.
+ */
+const usdaMissesFor = (
+  rows: CostingRow[],
+  ingMap: Record<string, IngredientWithFoodOut>,
+): { ingredientName: string; productName: string; ndbNumber: number }[] => {
+  const misses: {
+    ingredientName: string;
+    productName: string;
+    ndbNumber: number;
+  }[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    if (row.type !== "ingredient" || seen.has(row.ingredient.id)) continue;
+    seen.add(row.ingredient.id);
+    const entry = ingMap[row.ingredient.id];
+    for (const p of entry?.product ?? []) {
+      if (p.ndb_number != null && p.food == null) {
+        misses.push({
+          ingredientName: entry?.name ?? row.ingredient.name,
+          productName: p.name,
+          ndbNumber: p.ndb_number,
+        });
+      }
+    }
+  }
+  return misses;
+};
+
+/**
+ * The amount that actually drove a row's measures: its own written amount, or
+ * the estimated grams (basis fraction / flat) the consumption plan substituted.
+ */
+const amountDrivingRow = (
+  row: CostingRow,
+  diag: RowDiagnostic,
+): Amount | null => {
+  const own = row.amounts[0];
+  if (own) return own;
+  const w = diag.plan.weight;
+  if (w.kind === "basis-fraction" && diag.basisGrams != null) {
+    return { value: w.fraction * diag.basisGrams, unit: "g" };
+  }
+  if (w.kind === "flat-grams") return { value: w.grams, unit: "g" };
+  return null;
+};
+
 export class RecipeCostingService {
   constructor(
     private db: Database,
@@ -55,17 +132,14 @@ export class RecipeCostingService {
   ) {}
 
   /**
-   * Compute totals for the given (fully-loaded) recipes. Resolves the transitive
-   * closure of sub-recipes and the USDA-enriched ingredient map, then runs
-   * `calculateTotals` per recipe. `complete` is false when a USDA lookup that
-   * should have resolved (a product with an `ndb_number`) came back null —
-   * signalling a transient backend miss the caller should retry rather than bake in.
+   * Load everything a costing pass needs for these recipes: the transitive
+   * closure of sub-recipes (recipe-as-ingredient, cycle-guarded) and the
+   * USDA-enriched ingredient map.
    */
-  async computeTotals(
-    recipes: RecipeOut[],
-  ): Promise<Map<RecipeId, { totals: RecipeTotals; complete: boolean }>> {
-    // Transitive closure of sub-recipes (recipe-as-ingredient), so nested
-    // cost/calories roll up. Cycle-guarded by the seen set.
+  private async loadContext(recipes: RecipeOut[]): Promise<{
+    ingMap: Record<string, IngredientWithFoodOut>;
+    recipeMap: Record<string, RecipeOut>;
+  }> {
     const recipeMap: Record<string, RecipeOut> = {};
     const seen = new Set<string>();
     let frontier = collectSubRecipeIds(recipes);
@@ -88,14 +162,19 @@ export class RecipeCostingService {
     const ingredients =
       await this.ingredientService.getIngredientsByIDs(ingredientIds);
     const ingMap = Object.fromEntries(ingredients.map((i) => [i.id, i]));
+    return { ingMap, recipeMap };
+  }
 
-    // A product with an `ndb_number` (a confirmed USDA match) that resolved to
-    // null food = a transient backend miss, not real no-data. If any of a recipe's
-    // ingredients hit that, its compute is "incomplete" → don't stamp it fresh.
-    const ingredientResolvedOk = (ingredientId: string): boolean => {
-      const products = ingMap[ingredientId]?.product ?? [];
-      return !products.some((p) => p.ndb_number != null && p.food == null);
-    };
+  /**
+   * Compute totals for the given (fully-loaded) recipes. `complete` is false
+   * when a USDA lookup that should have resolved (a product with an
+   * `ndb_number`) came back null — a transient backend miss the caller should
+   * retry rather than bake in.
+   */
+  async computeTotals(
+    recipes: RecipeOut[],
+  ): Promise<Map<RecipeId, { totals: RecipeTotals; complete: boolean }>> {
+    const { ingMap, recipeMap } = await this.loadContext(recipes);
 
     const result = new Map<
       RecipeId,
@@ -104,22 +183,88 @@ export class RecipeCostingService {
     for (const r of recipes) {
       const ings = flattenSections(r.sections);
       const t = calculateTotals(ings, ingMap, recipeIngredientName, recipeMap);
-      const complete = ings.every(
-        (i) => i.type !== "ingredient" || ingredientResolvedOk(i.ingredient.id),
-      );
       result.set(r.id as RecipeId, {
-        complete,
-        totals: {
-          costTotal: t.price,
-          caloriesTotal: getNutrientValueByKey(t.nutrients, "kcal") ?? 0,
-          ingredientCount: t.totalIngredients,
-          costCovered: t.totalIngredients - t.missingByType.price.length,
-          caloriesCovered:
-            t.totalIngredients - t.missingByType.nutrients.length,
-        },
+        complete: usdaMissesFor(ings, ingMap).length === 0,
+        totals: toRecipeTotals(t),
       });
     }
     return result;
+  }
+
+  /**
+   * Full costing explanation for one recipe: the persisted state (totals,
+   * computed-at, staleness), a fresh compute with per-row diagnostics enriched
+   * with unit-graph conversion paths, named USDA misses, and persisted-vs-live
+   * drift. Read-only — never stamps or recomputes persisted state.
+   */
+  async explainRecipe(recipeId: RecipeId): Promise<RecipeCostingExplain> {
+    const [state, recipes] = await Promise.all([
+      getRecipeTotalsState(this.db, recipeId),
+      getRecipesByIDs(this.db, [recipeId]),
+    ]);
+    const recipe = recipes[0];
+    if (!state || !recipe) {
+      throw createAppError("RECIPE_NOT_FOUND", "Recipe not found");
+    }
+
+    const { ingMap, recipeMap } = await this.loadContext([recipe]);
+    const rows = flattenSections(recipe.sections);
+    const t = calculateTotals(rows, ingMap, recipeIngredientName, recipeMap);
+    const computedTotals = toRecipeTotals(t);
+    const usdaMisses = usdaMissesFor(rows, ingMap);
+
+    // Enrich each row's diagnostic with the unit-graph route per measure —
+    // the "show your work" that makes a wrong number self-explanatory.
+    const diagnostics = t.diagnostics.map((diag, i) => {
+      const row = rows[i];
+      if (!row || row.type !== "ingredient") return diag;
+      const mappings = (ingMap[row.ingredient.id]?.product ?? []).flatMap((p) =>
+        getAllUnitMappingsFromProduct(p),
+      );
+      const amount = amountDrivingRow(row, diag);
+      if (!amount || mappings.length === 0) return diag;
+      const explain = (kind: "money" | "weight" | "calories") => {
+        try {
+          const e = wasm.conv_amount_explain(mappings, kind, amount);
+          return e.path ? [...e.path] : null;
+        } catch {
+          return null;
+        }
+      };
+      return {
+        ...diag,
+        paths: {
+          money: explain("money"),
+          weight: explain("weight"),
+          calories: explain("calories"),
+        },
+      };
+    });
+
+    const persisted = state.totals;
+    const drift = {
+      cost:
+        persisted != null &&
+        Math.abs(persisted.costTotal - computedTotals.costTotal) > 0.005,
+      calories:
+        persisted != null &&
+        Math.abs(persisted.caloriesTotal - computedTotals.caloriesTotal) > 0.5,
+    };
+
+    return {
+      persisted: {
+        totals: state.totals,
+        totalsComputedAt: state.totalsComputedAt,
+        stale: state.totalsComputedAt == null,
+      },
+      computed: {
+        totals: computedTotals,
+        complete: usdaMisses.length === 0,
+        diagnostics,
+        usdaMisses,
+      },
+      drift,
+    };
   }
 
   /**
@@ -162,6 +307,12 @@ export class RecipeCostingService {
     const ids = await selectStaleRecipeIds(this.db, limit);
     await this.recompute(ids);
     const remaining = await countStaleRecipes(this.db);
+    if (ids.length > 0) {
+      // Visible in `wrangler tail` / the dev terminal — the drain's only trace.
+      console.log(
+        `[recipe-totals] drained ${ids.length} (${remaining} remaining)`,
+      );
+    }
     return { processed: ids.length, remaining };
   }
 
@@ -176,6 +327,7 @@ export class RecipeCostingService {
     for (let i = 0; i < ids.length; i += CHUNK) {
       await this.recompute(ids.slice(i, i + CHUNK));
     }
+    console.log(`[recipe-totals] recomputeAll processed ${ids.length}`);
     return { processed: ids.length };
   }
 }
