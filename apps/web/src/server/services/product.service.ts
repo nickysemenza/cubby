@@ -1,6 +1,6 @@
 import { productWithIngredientAndInventoryAndMappingsOut } from "@cubby/schemas/combo";
 import type { ActorContext } from "@cubby/schemas/context";
-import type { ProductId } from "@cubby/schemas/identifiers";
+import type { IngredientId, ProductId } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type {
   ProductCategory,
@@ -118,7 +118,7 @@ export class ProductService {
    * which is fine — recompute is cheap and deferred.
    */
   private async invalidateRecipeTotals(
-    ingredientId: string | undefined,
+    ingredientId: IngredientId | undefined,
   ): Promise<void> {
     if (!ingredientId) return;
     const recipeIds = await findRecipeIdsUsingIngredient(this.db, ingredientId);

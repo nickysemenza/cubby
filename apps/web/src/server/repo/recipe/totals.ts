@@ -5,7 +5,7 @@
  * by the presence-driven drain. See recipe-costing.service.
  */
 
-import type { RecipeId } from "@cubby/schemas/identifiers";
+import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
 import type { RecipeTotals } from "@cubby/schemas/recipe";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
@@ -106,7 +106,7 @@ export const countStaleRecipes = async (db: Database): Promise<number> => {
  */
 export const findRecipeIdsUsingIngredient = async (
   db: Database,
-  ingredientId: string,
+  ingredientId: IngredientId,
 ): Promise<RecipeId[]> => {
   const rows = await getDb(db)
     .selectDistinct({ recipeId: recipeSection.recipeId })
@@ -116,7 +116,7 @@ export const findRecipeIdsUsingIngredient = async (
       eq(recipeSectionIngredient.recipeSectionId, recipeSection.id),
     )
     .where(eq(recipeSectionIngredient.ingredientId, ingredientId));
-  return rows.map((r) => r.recipeId as RecipeId);
+  return rows.map((r) => r.recipeId);
 };
 
 /**

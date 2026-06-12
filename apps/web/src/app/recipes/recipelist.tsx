@@ -15,7 +15,10 @@ import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { NoneState } from "../_components/NoneState";
 import { RecipeTag } from "../_components/recipe/recipe-tag";
-import { formatYield } from "../_components/recipe/recipe-utils";
+import {
+  formatYield,
+  getServingBasis,
+} from "../_components/recipe/recipe-utils";
 import { TruncatedList } from "../_components/TruncatedList";
 
 /**
@@ -43,17 +46,6 @@ const CoverageValue: React.FC<{
       )}
     </span>
   );
-};
-
-/**
- * Divisor for per-yield ("each") figures: the yield count, falling back to
- * servings. Only meaningful for whole, multi-item yields (e.g. "12 churros"),
- * so fractional or single yields (e.g. "0.75 cup", "1 loaf") return null and get
- * no per-item line.
- */
-const perYieldDivisor = (recipe: RecipeOut): number | null => {
-  const v = recipe.yield?.value ?? recipe.servings ?? null;
-  return v != null && Number.isInteger(v) && v >= 2 ? v : null;
 };
 
 /**
@@ -174,7 +166,7 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
           const totals = recipe.totals;
           if (!totals) return <Skeleton className="h-4 w-12" />;
           if (!totals.costTotal) return <NoneState />;
-          const perItem = perYieldDivisor(recipe);
+          const perItem = getServingBasis(recipe);
           return (
             <div className="space-y-0.5">
               <CoverageValue
@@ -185,7 +177,8 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
               </CoverageValue>
               {perItem && (
                 <div className="text-2xs text-muted-foreground">
-                  {formatCurrency(totals.costTotal / perItem)} ea
+                  {formatCurrency(totals.costTotal / perItem.divisor)}{" "}
+                  {perItem.noun === "each" ? "ea" : `/ ${perItem.noun}`}
                 </div>
               )}
             </div>
@@ -206,7 +199,7 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
           const totals = recipe.totals;
           if (!totals) return <Skeleton className="h-4 w-12" />;
           if (!totals.caloriesTotal) return <NoneState />;
-          const perItem = perYieldDivisor(recipe);
+          const perItem = getServingBasis(recipe);
           return (
             <div className="space-y-0.5">
               <CoverageValue
@@ -217,7 +210,8 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
               </CoverageValue>
               {perItem && (
                 <div className="text-2xs text-muted-foreground">
-                  {Math.round(totals.caloriesTotal / perItem)} kcal ea
+                  {Math.round(totals.caloriesTotal / perItem.divisor)} kcal{" "}
+                  {perItem.noun === "each" ? "ea" : `/ ${perItem.noun}`}
                 </div>
               )}
             </div>

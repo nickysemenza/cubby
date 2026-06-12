@@ -1,5 +1,6 @@
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
 import type { ExternalIdInput } from "@cubby/schemas/external-id";
+import type { IngredientId } from "@cubby/schemas/identifiers";
 import { hasFoodIndicators } from "@cubby/schemas/product";
 import type { UnitMappingInput } from "@cubby/schemas/unitmapping";
 import { isMiscProduct } from "@cubby/shared";
@@ -118,7 +119,7 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
     | number
     | null;
   const ingredientValue = form.watch("ingredient" as Path<TFieldValues>) as {
-    id?: string;
+    id?: IngredientId;
   } | null;
 
   const isMisc = isMiscProduct(nameValue);

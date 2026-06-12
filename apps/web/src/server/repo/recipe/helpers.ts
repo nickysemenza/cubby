@@ -36,11 +36,12 @@ const sectionIngredientToAPI = (
       amounts: sectionIngredient.amounts,
     };
   } else {
+    const ingredient = sectionIngredient.ingredient;
     return {
       ...sectionIngredient,
       type: "ingredient",
       recipe: null,
-      ingredient: sectionIngredient.ingredient ?? null,
+      ingredient,
       amounts: sectionIngredient.amounts,
     };
   }

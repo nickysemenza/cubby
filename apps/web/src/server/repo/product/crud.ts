@@ -4,7 +4,11 @@
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
-import { type ProductId, unsafeProductId } from "@cubby/schemas/identifiers";
+import {
+  type IngredientId,
+  type ProductId,
+  unsafeProductId,
+} from "@cubby/schemas/identifiers";
 import {
   buildTakeSkip,
   type PaginationParams,
@@ -427,7 +431,7 @@ export const updateProduct = async (
       ndb_number?: number | null;
       model?: string | null;
       expectedQuantity?: number | null;
-      ingredientId?: string | null;
+      ingredientId?: IngredientId | null;
       price?: number | null;
     } = { ...productData };
 
@@ -533,7 +537,7 @@ export const quickCreateProduct = async (
     expectedQuantity?: number | null;
     model?: string | null;
     ndb_number?: number | null;
-    ingredientId?: string | null;
+    ingredientId?: IngredientId | null;
     price?: number | null;
     category?: ProductCategory | null;
     shortcode?: string; // Optional shortcode from import (preserves sheet shortcodes)

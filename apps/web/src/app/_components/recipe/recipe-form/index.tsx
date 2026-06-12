@@ -1,11 +1,3 @@
-import { unsafeRecipeId } from "@cubby/schemas/identifiers";
-import type {
-  RecipeCreateInput,
-  RecipeIngredientInput,
-  RecipeUpdateInput,
-  recipeInstructionInput,
-  recipeSectionInput,
-} from "@cubby/schemas/recipe";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useMutation } from "@tanstack/react-query";
@@ -29,11 +21,6 @@ import {
   useWatch,
 } from "react-hook-form";
 import { toast } from "sonner";
-import type { z } from "zod";
-import {
-  getOptionalIngredientId,
-  getOptionalRecipeId,
-} from "~/app/_components/form-fields";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -56,7 +43,6 @@ import { cn } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
 import { useTRPC } from "~/trpc/react";
 import {
-  buildUpdateObject,
   FormWrapper,
   getSubmitButtonText,
   NullableNumericField,
@@ -65,6 +51,11 @@ import {
 } from "../../form-utils";
 import { PendingImageUpload } from "../../PendingImageUpload";
 import { formatRichText } from "../richtext";
+import {
+  recipeFormValuesToCreateInput,
+  recipeFormValuesToUpdateInput,
+  recipeToFormValues,
+} from "./adapters";
 import { IngredientFieldArray } from "./ingredient-field-array";
 import {
   IngredientPreviewTable,
@@ -72,16 +63,10 @@ import {
   useIngredientResolver,
 } from "./ingredient-preview-table";
 import { InstructionFieldArray } from "./instruction-field-array";
-import {
-  haveIngredientsChanged,
-  haveInstructionsChanged,
-  normalizeAmounts,
-} from "./recipe-form-utils";
 import { RecipeLivePreview } from "./recipe-live-preview";
 import { TagInput } from "./tag-input";
 import {
   formSchema,
-  type IngItem,
   type RecipeFormProps,
   type RecipeFormValues,
 } from "./types";
@@ -157,50 +142,6 @@ const EditorTally: FC<{ control: Control<RecipeFormValues> }> = ({
       {isDirty && <InkStamp tone="red">Unsaved</InkStamp>}
     </div>
   );
-};
-
-// Helper function to map any ingredient type to the correct API format
-const mapIngredientToApiFormat = (ing: IngItem): RecipeIngredientInput => {
-  if (ing.type === "ingredient" && ing.ingredient) {
-    return {
-      type: "ingredient",
-      ingredientId: getOptionalIngredientId(ing.ingredient)!,
-      recipeId: null,
-      amounts: normalizeAmounts(ing.amounts),
-      id: ing.id,
-      rawLine: ing.rawLine ?? undefined,
-      modifier: ing.modifier ?? undefined,
-    };
-  } else if (ing.type === "recipe" && ing.recipe) {
-    return {
-      type: "recipe",
-      recipeId: getOptionalRecipeId(ing.recipe)!,
-      ingredientId: null,
-      amounts: normalizeAmounts(ing.amounts),
-      id: ing.id,
-      rawLine: ing.rawLine ?? undefined,
-      modifier: ing.modifier ?? undefined,
-    };
-  }
-  throw new Error(
-    `Invalid ingredient type or missing data: ${JSON.stringify(ing)}`,
-  );
-};
-
-// Map a form section to the API shape. recipeSectionInput marks ingredients and
-// instructions as `.min(1).optional()`, so a present-but-empty array is rejected
-// by the server (a section with ingredients but no steps, or vice versa, is
-// valid). Omit empty arrays — the create/replace repo paths tolerate missing ones.
-const mapSectionToApiFormat = (
-  section: RecipeFormValues["sections"][number],
-): z.infer<typeof recipeSectionInput> => {
-  const ingredients = section.ingredients.map(mapIngredientToApiFormat);
-  return {
-    name: section.name,
-    ingredients: ingredients.length > 0 ? ingredients : undefined,
-    instructions:
-      section.instructions.length > 0 ? section.instructions : undefined,
-  };
 };
 
 export const RecipeForm: FC<RecipeFormProps> = (props) => {
@@ -282,66 +223,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
   // Initialize form with default values or existing recipe data
   const form = useForm<RecipeFormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: {
-      name: recipe ? recipe.name : (initialName ?? ""),
-      meta: recipe ? recipe.meta : null,
-      yield: recipe?.yield ?? null,
-      servings: recipe?.servings ?? null,
-      tags: recipe?.tags ?? [],
-      notes: recipe?.notes ?? null,
-      sections: recipe
-        ? recipe.sections.map((section) => ({
-            id: section.id,
-            name: section.name,
-            ingredients: section.ingredients.map((ing) => {
-              if (ing.type === "ingredient") {
-                return {
-                  id: ing.id,
-                  type: "ingredient" as const,
-                  ingredient: {
-                    id: ing.ingredient.id,
-                    name: ing.ingredient.name,
-                  },
-                  recipe: null,
-                  // The editor binds inputs to amounts.0.*, so an amount-less
-                  // ingredient (DB `[]`) needs a blank slot; submit strips it.
-                  amounts:
-                    ing.amounts.length > 0
-                      ? ing.amounts
-                      : [{ value: null, unit: "" }],
-                  rawLine: ing.rawLine ?? null,
-                  modifier: ing.modifier ?? null,
-                  aliases: ing.ingredient.aliases ?? [],
-                };
-              } else {
-                return {
-                  id: ing.id,
-                  type: "recipe" as const,
-                  ingredient: null,
-                  recipe: {
-                    id: ing.recipe.id,
-                    name: ing.recipe.name,
-                  },
-                  // See the ingredient branch: keep a blank slot for the editor.
-                  amounts:
-                    ing.amounts.length > 0
-                      ? ing.amounts
-                      : [{ value: null, unit: "" }],
-                  rawLine: ing.rawLine ?? null,
-                  modifier: ing.modifier ?? null,
-                };
-              }
-            }),
-            instructions: section.instructions,
-          }))
-        : [
-            {
-              name: null,
-              ingredients: [],
-              instructions: [],
-            },
-          ],
-    },
+    defaultValues: recipeToFormValues(recipe, initialName),
   });
 
   // Set up field arrays for sections
@@ -496,116 +378,17 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
   };
 
   const handleSubmit = (values: RecipeFormValues) => {
-    // The yield/meta inputs materialize an object even when blank, so collapse a
-    // value-less (or unit-less) yield and a url-less meta to null. This matches the
-    // strict API schema and avoids registering a phantom change in edit mode.
-    const normalizedYield =
-      values.yield?.value != null && values.yield.unit
-        ? { value: values.yield.value, unit: values.yield.unit }
-        : null;
-    const normalizedMeta = values.meta?.url ? { url: values.meta.url } : null;
-    // Collapse a blank textarea to null so clearing notes persists (and doesn't
-    // phantom-diff against a stored null in edit mode).
-    const normalizedNotes = values.notes?.trim() ? values.notes : null;
-
     if (mode === "create") {
-      // For creation, transform the form values to the API format
-      const createData: RecipeCreateInput = {
-        name: values.name,
-        meta: normalizedMeta,
-        yield: normalizedYield,
-        servings: values.servings,
-        tags: values.tags,
-        notes: normalizedNotes,
-        sections: values.sections.map(mapSectionToApiFormat),
-        ...getImageData(true), // Apply pending images for creation
-      };
-
-      props.onCreate(createData);
+      props.onCreate(recipeFormValuesToCreateInput(values, getImageData(true)));
     } else if (mode === "edit" && recipe) {
-      // In edit mode, determine which fields have changed
-      const basicUpdates = buildUpdateObject(
+      const updateData = recipeFormValuesToUpdateInput(
+        values,
         recipe,
-        {
-          ...values,
-          yield: normalizedYield,
-          meta: normalizedMeta,
-          notes: normalizedNotes,
-        },
-        ["name", "meta", "yield", "servings", "tags", "notes"],
+        getImageData(),
+        hasImageChanges(),
       );
 
-      // Handle section updates - this is more complex since we need to track IDs
-      const sectionUpdates = values.sections.map((section, idx) => {
-        const originalSection = recipe.sections[idx];
-
-        // For a new section or completely changed section
-        if (!originalSection || !section.id) {
-          return mapSectionToApiFormat(section);
-        }
-
-        // For existing section, include ID and track changes
-        const sectionUpdate: z.infer<typeof recipeSectionInput> = {
-          id: section.id,
-        };
-
-        // Check for name changes
-        if (originalSection.name !== section.name) {
-          sectionUpdate.name = section.name;
-        }
-
-        // Check for ingredient changes
-        const ingredientsChanged = haveIngredientsChanged(
-          originalSection.ingredients,
-          section.ingredients,
-        );
-
-        if (ingredientsChanged) {
-          sectionUpdate.ingredients = section.ingredients.map(
-            mapIngredientToApiFormat,
-          );
-        }
-
-        // Check for instruction changes
-        const instructionsChanged = haveInstructionsChanged(
-          originalSection.instructions,
-          section.instructions,
-        );
-
-        if (instructionsChanged) {
-          sectionUpdate.instructions = section.instructions.map((inst) => {
-            const output: z.infer<typeof recipeInstructionInput> = {
-              instruction: inst.instruction,
-            };
-
-            // Include ID if it exists (for updates)
-            if (inst.id) {
-              output.id = inst.id;
-            }
-
-            return output;
-          });
-        }
-
-        return sectionUpdate;
-      });
-
-      // Check if we have any changes
-      const imageChanges = hasImageChanges();
-      const hasFieldChanges =
-        Object.keys(basicUpdates).length > 0 ||
-        sectionUpdates.some((s) => Object.keys(s).length > 1);
-
-      // Only update if there are changes
-      if (hasFieldChanges || imageChanges) {
-        const updateData: RecipeUpdateInput = {
-          id: unsafeRecipeId(recipe.id),
-          data: {
-            ...basicUpdates,
-            sections: sectionUpdates,
-            ...getImageData(), // Apply image updates
-          },
-        };
+      if (updateData) {
         props.onEdit(updateData);
       } else if (onCancel) {
         // If no changes, just run the cancel function

@@ -1,6 +1,11 @@
+import { unsafeIngredientId, unsafeRecipeId } from "@cubby/schemas/identifiers";
 import type { RecipeOut, SectionIngredient } from "@cubby/schemas/recipe";
 import { expect, test } from "vitest";
-import { formatYield, getIngredientName } from "./recipe-utils";
+import {
+  formatYield,
+  getIngredientName,
+  getServingBasis,
+} from "./recipe-utils";
 
 test("recipe utils", () => {
   const recipe: RecipeOut = {
@@ -22,7 +27,7 @@ test("recipe utils", () => {
             updatedAt: new Date(),
             recipe: null,
             ingredient: {
-              id: "",
+              id: unsafeIngredientId("ingredient"),
               name: "flour-i",
               createdAt: new Date(),
               updatedAt: new Date(),
@@ -36,7 +41,7 @@ test("recipe utils", () => {
             updatedAt: new Date(),
             ingredient: null,
             recipe: {
-              id: "",
+              id: unsafeRecipeId("sub-recipe"),
               name: "flour-r",
               createdAt: new Date(),
               updatedAt: new Date(),
@@ -52,7 +57,7 @@ test("recipe utils", () => {
         updatedAt: new Date(),
       },
     ],
-    id: "",
+    id: unsafeRecipeId("recipe"),
     name: "",
     meta: null,
     images: [],
@@ -77,4 +82,30 @@ test("formatYield drops the bare-count 'whole' unit", () => {
   expect(formatYield({ value: 18, unit: "whole" })).toEqual("18");
   // Real units render normally:
   expect(formatYield({ value: 12, unit: "servings" })).toEqual("12 servings");
+});
+
+test("getServingBasis prefers servings and labels yield units", () => {
+  const base = {
+    id: unsafeRecipeId("r"),
+    name: "Recipe",
+    meta: null,
+    images: [],
+    sections: [],
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  } as RecipeOut;
+
+  expect(getServingBasis({ ...base, servings: 4 })).toEqual({
+    divisor: 4,
+    noun: "serving",
+  });
+  expect(
+    getServingBasis({ ...base, yield: { value: 12, unit: "churros" } }),
+  ).toEqual({ divisor: 12, noun: "churro" });
+  expect(
+    getServingBasis({ ...base, yield: { value: 2, unit: "whole" } }),
+  ).toEqual({ divisor: 2, noun: "each" });
+  expect(getServingBasis({ ...base, yield: { value: 1, unit: "loaf" } })).toBe(
+    null,
+  );
 });

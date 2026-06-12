@@ -1,6 +1,8 @@
 import {
+  unsafeIngredientId,
   unsafeLocationId,
   unsafeLocationShortcode,
+  unsafeRecipeId,
 } from "@cubby/schemas/identifiers";
 import type { infLocation, LocationType } from "@cubby/schemas/location";
 import type { recipeOut } from "@cubby/schemas/recipe";
@@ -23,7 +25,7 @@ const makeIngredient = (
   id: `ing-${id}`,
   type: "ingredient" as const,
   amounts: [{ value, unit }],
-  ingredient: { id: `${id}-id`, name, ...ts },
+  ingredient: { id: unsafeIngredientId(`${id}-id`), name, ...ts },
   recipe: null,
   ...ts,
 });
@@ -97,7 +99,7 @@ export const sampleUnitMappings: z.infer<typeof unitMappingWithMetadata>[] = [
 
 // Sample recipe data for component demos
 export const sampleRecipe: z.infer<typeof recipeOut> = {
-  id: "sample-recipe-id",
+  id: unsafeRecipeId("sample-recipe-id"),
   name: "Classic Chocolate Chip Cookies",
   meta: { url: "https://example.com/cookies" },
   images: [],

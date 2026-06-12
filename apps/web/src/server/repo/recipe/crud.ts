@@ -37,7 +37,6 @@ import {
 } from "~/server/repo/audit-log";
 import {
   associatePendingImages,
-  batchInsert,
   buildOrderBy,
   buildSearchConditions,
   executeListQueryWithCount,
@@ -60,10 +59,9 @@ import {
   webProvenance,
 } from "./source";
 import {
-  deleteAllSections,
+  createSectionWithIngredients,
   handleSectionUpdates,
-  processIngredients,
-  sectionIngredientValues,
+  replaceRecipeSections,
   updateRecipeBasicProperties,
   updateRecipeImages,
 } from "./update-helpers";
@@ -152,7 +150,7 @@ export const getCookbookRecipesForDiff = async (
   );
   const byId = new Map(recipes.map((r) => [r.id, r]));
   return rows.flatMap((r) => {
-    const full = byId.get(r.id);
+    const full = byId.get(unsafeRecipeId(r.id));
     return full
       ? [{ title: r.name, id: r.id, sig: recipeOutSignature(full) }]
       : [];
@@ -170,7 +168,7 @@ const normalizeTitle = (title: string): string => title.trim().toLowerCase();
 export const getCookbookRecipeIdsByTitle = async (
   db: Database,
   cookbookId: CookbookId,
-): Promise<Map<string, string>> => {
+): Promise<Map<string, RecipeId>> => {
   const rows = await getDb(db).query.recipe.findMany({
     where: and(eq(recipe.cookbookId, cookbookId), notDeleted(recipe)),
     columns: { id: true, name: true },
@@ -224,7 +222,7 @@ export const getNotionRecipesForDiff = async (
   );
   const byId = new Map(recipes.map((r) => [r.id, r]));
   return rows.flatMap((r) => {
-    const full = byId.get(r.id);
+    const full = byId.get(unsafeRecipeId(r.id));
     return r.SourceData && full
       ? [{ id: r.id, pageId: r.SourceData, recipe: full }]
       : [];
@@ -315,21 +313,6 @@ export const createRecipe = async (
     // Generate unique shortcode
     const shortcode = await generateUniqueRecipeShortcode(tx);
 
-    // Process all ingredients first
-    const processedSections = await Promise.all(
-      recipeInput.sections.map(async (section) => {
-        const processedIngredients = section.ingredients
-          ? await processIngredients(tx, section.ingredients)
-          : [];
-
-        return {
-          name: section.name,
-          processedIngredients,
-          instructions: section.instructions,
-        };
-      }),
-    );
-
     // Create the main recipe
     const createdRecipe = await insertAndReturn(tx, recipe, {
       name: recipeInput.name,
@@ -340,29 +323,10 @@ export const createRecipe = async (
       tags: recipeInput.tags ?? null,
       notes: recipeInput.notes ?? null,
     });
+    const createdRecipeId = unsafeRecipeId(createdRecipe.id);
 
-    // Create sections and their ingredients
-    for (const [i, section] of processedSections.entries()) {
-      const createdSection = await insertAndReturn(tx, recipeSection, {
-        recipeId: createdRecipe.id,
-        name: section.name,
-        sortOrder: i,
-        instructions:
-          section.instructions?.map((instruction) => ({
-            text: instruction.instruction,
-          })) ?? [],
-      });
-
-      // Create ingredients for this section
-      if (section.processedIngredients.length > 0) {
-        await batchInsert(
-          tx,
-          recipeSectionIngredient,
-          section.processedIngredients.map((ing, j) =>
-            sectionIngredientValues(createdSection.id, ing, j),
-          ),
-        );
-      }
+    for (const [i, section] of recipeInput.sections.entries()) {
+      await createSectionWithIngredients(tx, createdRecipeId, section, i);
     }
 
     // Associate images if provided
@@ -383,60 +347,12 @@ export const createRecipe = async (
       action: "create",
     });
 
-    const fullRecipe = await getRecipeByID(
-      tx,
-      unsafeRecipeId(createdRecipe.id),
-    );
+    const fullRecipe = await getRecipeByID(tx, createdRecipeId);
     if (!fullRecipe) {
       throw new Error("Failed to retrieve created recipe");
     }
     return fullRecipe;
   });
-};
-
-/**
- * Replace a recipe's sections wholesale: hard-delete the existing sections and
- * their ingredients, then insert the new ones. Hard-delete (not soft) because
- * replacing sections during an edit/re-import is internal churn, not a
- * user-facing deletion — soft-deleting here left dead RecipeSection /
- * RecipeSectionIngredient rows that accumulated on every re-upsert. Recipe-level
- * deletion remains a soft delete with audit logging in deleteRecipes().
- */
-const replaceRecipeSections = async (
-  tx: DrizzleTransaction,
-  recipeId: string,
-  sections: RecipeCreateInput["sections"],
-) => {
-  const existingSections = await tx.query.recipeSection.findMany({
-    where: eq(recipeSection.recipeId, recipeId),
-    columns: { id: true },
-  });
-  await deleteAllSections(
-    tx,
-    existingSections.map((s) => s.id),
-  );
-
-  for (const [i, section] of sections.entries()) {
-    const createdSection = await insertAndReturn(tx, recipeSection, {
-      recipeId,
-      name: section.name,
-      sortOrder: i,
-      instructions:
-        section.instructions?.map((instruction) => ({
-          text: instruction.instruction,
-        })) ?? [],
-    });
-
-    if (section.ingredients && section.ingredients.length > 0) {
-      await batchInsert(
-        tx,
-        recipeSectionIngredient,
-        section.ingredients.map((ing, j) =>
-          sectionIngredientValues(createdSection.id, ing, j),
-        ),
-      );
-    }
-  }
 };
 
 /**
@@ -451,7 +367,7 @@ const upsertRecipeMatching = async (
   actor: ActorContext,
   matchWhere: SQL | undefined,
   provenance: RecipeProvenance,
-): Promise<{ id: string }> => {
+): Promise<{ id: RecipeId }> => {
   const existingRecipe = await getDb(db).query.recipe.findFirst({
     where: matchWhere,
   });
@@ -474,7 +390,11 @@ const upsertRecipeMatching = async (
       },
       eq(recipe.id, existingRecipe.id),
     );
-    await replaceRecipeSections(tx, updatedRecipe.id, input.sections);
+    await replaceRecipeSections(
+      tx,
+      unsafeRecipeId(updatedRecipe.id),
+      input.sections,
+    );
     return { id: updatedRecipe.id };
   });
 };
@@ -490,7 +410,7 @@ export const upsertRecipe = (
   input: RecipeCreateInput,
   db: Database,
   actor: ActorContext,
-): Promise<{ id: string }> =>
+): Promise<{ id: RecipeId }> =>
   upsertRecipeMatching(
     input,
     db,
@@ -518,7 +438,7 @@ export const upsertCookbookRecipe = (
   cookbookRef: CookbookRef,
   db: Database,
   actor: ActorContext,
-): Promise<{ id: string }> =>
+): Promise<{ id: RecipeId }> =>
   upsertRecipeMatching(
     input,
     db,
@@ -548,7 +468,7 @@ export const upsertNotionRecipe = (
   pageId: string,
   db: Database,
   actor: ActorContext,
-): Promise<{ id: string }> =>
+): Promise<{ id: RecipeId }> =>
   upsertRecipeMatching(
     input,
     db,

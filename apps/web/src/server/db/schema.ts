@@ -1,5 +1,6 @@
 import type { AuditEntityType } from "@cubby/schemas/audit";
 import type { Amount } from "@cubby/schemas/codec";
+import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
 import { imageStatusValues } from "@cubby/schemas/image";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import { productCategoryValues } from "@cubby/schemas/product";
@@ -45,7 +46,10 @@ export const imageStatusEnum = pgEnum("ImageStatus", imageStatusValues);
 export const recipe = pgTable(
   "Recipe",
   {
-    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`)
+      .$type<RecipeId>(),
     shortcode: text("shortcode"),
     name: text("name").notNull(),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
@@ -174,6 +178,7 @@ export const recipeSection = pgTable(
     id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
     recipeId: uuid("recipeId")
       .notNull()
+      .$type<RecipeId>()
       .references(() => recipe.id),
     name: text("name"),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
@@ -201,7 +206,10 @@ export const recipeSection = pgTable(
 export const ingredient = pgTable(
   "Ingredient",
   {
-    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`)
+      .$type<IngredientId>(),
     name: text("name").notNull(),
     aliases: text("aliases").array().notNull().default(sql`'{}'::text[]`),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
@@ -210,7 +218,9 @@ export const ingredient = pgTable(
       .defaultNow()
       .$onUpdate(() => new Date()),
     deletedAt: timestamp("deletedAt", { mode: "date" }),
-    recipeId: uuid("recipeId").references(() => recipe.id),
+    recipeId: uuid("recipeId")
+      .$type<RecipeId>()
+      .references(() => recipe.id),
   },
   (table) => ({
     nameUnique: uniqueIndex("Ingredient_name_key")
@@ -247,6 +257,7 @@ export const recipeSectionIngredient = pgTable(
       .references(() => recipeSection.id),
     ingredientId: uuid("ingredientId")
       .notNull()
+      .$type<IngredientId>()
       .references(() => ingredient.id),
     amounts: jsonb("amounts")
       .notNull()
@@ -297,7 +308,9 @@ export const product = pgTable(
       .defaultNow()
       .$onUpdate(() => new Date()),
     deletedAt: timestamp("deletedAt", { mode: "date" }),
-    ingredientId: uuid("ingredientId").references(() => ingredient.id),
+    ingredientId: uuid("ingredientId")
+      .$type<IngredientId>()
+      .references(() => ingredient.id),
     category: text("category", {
       enum: productCategoryValues,
     }), // product category for filtering

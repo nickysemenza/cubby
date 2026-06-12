@@ -1,11 +1,8 @@
-import { sanitizeSectionName } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
-import { unsafeIngredientId } from "@cubby/schemas/identifiers";
-import {
-  composeNotesMarkdown,
-  type ImportRecipe,
-} from "@cubby/schemas/import-recipe";
+import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
+import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
+import { normalizeImportRecipe } from "~/lib/import-recipe-normalizer";
 import { wasm } from "~/lib/wasm";
 import type { Database, DrizzleTransaction } from "../db";
 import { withTransaction } from "./database-helpers";
@@ -29,10 +26,10 @@ import {
  * duplicates to one find-or-create.
  */
 const makeIngredientResolvers = (tx: DrizzleTransaction) => {
-  const plain = new Map<string, Promise<string>>();
-  const link = new Map<string, Promise<string>>();
+  const plain = new Map<string, Promise<IngredientId>>();
+  const link = new Map<RecipeId, Promise<IngredientId>>();
   return {
-    resolvePlain: (name: string): Promise<string> => {
+    resolvePlain: (name: string): Promise<IngredientId> => {
       const key = name.trim().toLowerCase();
       let p = plain.get(key);
       if (!p) {
@@ -41,7 +38,7 @@ const makeIngredientResolvers = (tx: DrizzleTransaction) => {
       }
       return p;
     },
-    resolveLink: (recipeId: string): Promise<string> => {
+    resolveLink: (recipeId: RecipeId): Promise<IngredientId> => {
       let p = link.get(recipeId);
       if (!p) {
         p = findOrCreateRecipeLinkIngredient(tx, recipeId);
@@ -73,38 +70,22 @@ const importRecipeToRecipeInput = async (
     : new Map<string, string>();
   const titleToId = cookbookRef
     ? await getCookbookRecipeIdsByTitle(db, cookbookRef.id)
-    : new Map<string, string>();
+    : new Map<string, RecipeId>();
 
-  // Yield: a freeform line ("Makes about 12", EPUB/Notion) is parsed via the same
-  // Rust parser the scraper uses; an already-structured `{value, unit}` (scraper)
-  // is used directly. `servings` prefers the scraper's pre-computed value.
-  const y = cr.meta.recipe_yield;
-  const parsedYield = typeof y === "string" ? wasm.parse_yield(y) : undefined;
-  const yieldOut =
-    typeof y === "string" ? (parsedYield?.recipe_yield ?? null) : (y ?? null);
-  const servingsOut =
-    cr.servings ??
-    (typeof y === "string" ? (parsedYield?.servings ?? null) : null);
+  const normalized = normalizeImportRecipe(cr);
 
   return await withTransaction(db, async (tx) => {
     const { resolvePlain, resolveLink } = makeIngredientResolvers(tx);
     return {
-      name: cr.meta.title,
-      // The scraper's real page URL → Website provenance. Cookbook recipes carry
-      // a synthetic `source#doc_path` (not http) which is filtered out here and
-      // overridden by Book provenance anyway; Notion has no url.
-      meta: {
-        url: /^https?:\/\//i.test(cr.url ?? "") ? (cr.url ?? null) : null,
-      },
-      yield: yieldOut,
-      servings: servingsOut,
-      notes: composeNotesMarkdown(cr.meta.description, cr.meta.notes),
+      name: normalized.name,
+      meta: normalized.meta,
+      yield: normalized.yield,
+      servings: normalized.servings,
+      notes: normalized.notes,
       sections: await Promise.all(
-        cr.sections.map(async (section) => ({
-          name: sanitizeSectionName(section.name),
-          instructions: section.instructions.map((instruction) => ({
-            instruction,
-          })),
+        normalized.sections.map(async (section) => ({
+          name: section.name,
+          instructions: section.instructions,
           ingredients: await Promise.all(
             section.ingredients.map(async (line) => {
               const parsed = wasm.parse_ingredient(line);
@@ -118,7 +99,7 @@ const importRecipeToRecipeInput = async (
                 : await resolvePlain(parsed.name);
               return {
                 type: "ingredient" as const,
-                ingredientId: unsafeIngredientId(ingredientId),
+                ingredientId,
                 recipeId: null,
                 // Copy out of the readonly cached result into the mutable input.
                 amounts: parsed.amounts.map((a) => ({ ...a })),

@@ -1,10 +1,7 @@
-import type { WIngredient } from "@cubby/recipebridge";
-import type { Amount } from "@cubby/schemas/codec";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import type { ReadonlyDeep } from "type-fest";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import {
@@ -17,7 +14,6 @@ import {
 } from "~/components/ui/table";
 import { queryKeys } from "~/lib/query-keys";
 import { cn } from "~/lib/utils";
-import { wasm } from "~/lib/wasm";
 import { dedupe } from "~/misc/array-helpers";
 import { useTRPC } from "~/trpc/react";
 import { CreateIngredientDialog } from "../../combobox/with-search-hook";
@@ -25,12 +21,14 @@ import { EntityPillLink } from "../../EntityPill";
 import { formatAmounts } from "../../inventory/format-amount";
 import { NoneState } from "../../NoneState";
 import { useIngredientMatches } from "../use-ingredient-matches";
+import {
+  type ParsedIngredientLine,
+  parsedIngredientNames,
+  parsedIngredientToFormItem,
+  parseIngredientLines,
+  resolveParsedIngredientGroups,
+} from "./ingredient-line-utils";
 import type { IngItem } from "./types";
-
-interface ParsedIngredient {
-  raw: string;
-  parsed: ReadonlyDeep<WIngredient>;
-}
 
 interface IngredientMatch {
   id: string;
@@ -47,17 +45,13 @@ interface IngredientMatch {
  * while a missing key means "still loading".
  */
 function useParsedIngredientMatches(ingredientLines: string[]) {
-  const parsedIngredients = useMemo<ParsedIngredient[]>(
-    () =>
-      ingredientLines.map((line) => ({
-        raw: line,
-        parsed: wasm.parse_ingredient(line),
-      })),
+  const parsedIngredients = useMemo<ParsedIngredientLine[]>(
+    () => parseIngredientLines(ingredientLines, { requireName: true }),
     [ingredientLines],
   );
 
   const uniqueIngredientNames = useMemo(
-    () => dedupe(parsedIngredients.map((p) => p.parsed.name)),
+    () => parsedIngredientNames(parsedIngredients),
     [parsedIngredients],
   );
 
@@ -82,7 +76,7 @@ function useParsedIngredientMatches(ingredientLines: string[]) {
 
 interface ParsedIngredientWithMatch {
   raw: string;
-  parsed: ReadonlyDeep<WIngredient>;
+  parsed: ParsedIngredientLine["parsed"];
   match: {
     id: string;
     name: string;
@@ -338,18 +332,7 @@ export function useIngredientImport(ingredientLines: string[]) {
           throw new Error(`No match found for ingredient: ${p.parsed.name}`);
         }
 
-        return {
-          type: "ingredient" as const,
-          ingredient: {
-            id: match.id,
-            name: match.name,
-          },
-          recipe: null,
-          amounts: p.parsed.amounts.map((a) => ({
-            value: a.value,
-            unit: a.unit,
-          })) as Amount[],
-        };
+        return parsedIngredientToFormItem(p, match);
       });
 
     return structuredIngredients;
@@ -392,20 +375,13 @@ export function useIngredientResolver() {
   });
 
   const resolveGroups = async (groups: string[][]): Promise<IngItem[][]> => {
-    // Parse every line up front, dropping blanks and unparseable (empty-name) lines.
     const parsedGroups = groups.map((lines) =>
-      lines
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0)
-        .map((line) => wasm.parse_ingredient(line))
-        .filter((parsed) => parsed.name.length > 0),
+      parseIngredientLines(lines, { requireName: true }),
     );
-
-    // Resolve each unique name once: look up, then create if missing.
-    const uniqueNames = dedupe(parsedGroups.flat().map((p) => p.name));
+    const uniqueNames = parsedIngredientNames(parsedGroups.flat());
     setProgress({ done: 0, total: uniqueNames.length });
-    const resolved = new Map<string, { id: string; name: string }>();
-    for (const name of uniqueNames) {
+
+    return resolveParsedIngredientGroups(parsedGroups, async (name) => {
       const existing = await queryClient.fetchQuery(
         api.ingredient.getByName.queryOptions({ nameFilter: name }),
       );
@@ -414,27 +390,9 @@ export function useIngredientResolver() {
         : await createIngredientMutation
             .mutateAsync({ name, aliases: [] })
             .then((created) => ({ id: created.id, name: created.name }));
-      resolved.set(name, match);
       setProgress((p) => ({ ...p, done: p.done + 1 }));
-    }
-
-    return parsedGroups.map((parsed) =>
-      parsed.map((p) => {
-        const match = resolved.get(p.name);
-        if (!match) {
-          throw new Error(`No match found for ingredient: ${p.name}`);
-        }
-        return {
-          type: "ingredient" as const,
-          ingredient: { id: match.id, name: match.name },
-          recipe: null,
-          amounts: p.amounts.map((a) => ({
-            value: a.value,
-            unit: a.unit,
-          })) as Amount[],
-        };
-      }),
-    );
+      return match;
+    });
   };
 
   return {

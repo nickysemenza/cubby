@@ -7,13 +7,9 @@
  * source change" check — independent of ingredient resolution / linking.
  */
 
-import { sanitizeSectionName } from "@cubby/schemas/codec";
-import {
-  composeNotesMarkdown,
-  type ImportRecipe,
-} from "@cubby/schemas/import-recipe";
+import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import type { RecipeOut } from "@cubby/schemas/recipe";
-import { wasm } from "~/lib/wasm";
+import { normalizedImportSignatureShape } from "~/lib/import-recipe-normalizer";
 
 type SignatureShape = {
   yield: { value: number; unit: string } | null;
@@ -57,31 +53,5 @@ export function importRecipeSignature(
   cr: ImportRecipe,
   tags: string[] = [],
 ): string {
-  const y = cr.meta.recipe_yield;
-  const parsedYield = typeof y === "string" ? wasm.parse_yield(y) : undefined;
-  const yieldOut =
-    typeof y === "string"
-      ? parsedYield?.recipe_yield
-        ? {
-            value: parsedYield.recipe_yield.value,
-            unit: parsedYield.recipe_yield.unit,
-          }
-        : null
-      : y
-        ? { value: y.value, unit: y.unit }
-        : null;
-  const servings =
-    cr.servings ??
-    (typeof y === "string" ? (parsedYield?.servings ?? null) : null);
-  return signature({
-    yield: yieldOut,
-    servings: servings ?? null,
-    tags: [...tags].sort(),
-    notes: composeNotesMarkdown(cr.meta.description, cr.meta.notes),
-    sections: cr.sections.map((s) => ({
-      name: sanitizeSectionName(s.name),
-      ingredients: s.ingredients,
-      instructions: s.instructions,
-    })),
-  });
+  return signature(normalizedImportSignatureShape(cr, tags));
 }

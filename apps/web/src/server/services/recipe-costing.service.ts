@@ -22,6 +22,11 @@ import {
   computeRecipeCosting,
   flattenSections,
 } from "~/lib/recipe-costing";
+import {
+  collectIngredientIds,
+  collectSubRecipeIds,
+  getRecipeIngredientName,
+} from "~/lib/recipe-graph";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import { getRecipesByIDs } from "~/server/repo/recipe/crud";
@@ -38,29 +43,6 @@ import type {
   IngredientService,
   IngredientWithFoodOut,
 } from "./ingredient.service";
-
-// Local (server-safe) name getter — avoids importing the client recipe-utils.
-const recipeIngredientName = (
-  i: RecipeOut["sections"][number]["ingredients"][number],
-) => (i.type === "ingredient" ? i.ingredient.name : i.recipe.name);
-
-const collectIngredientIds = (recipes: RecipeOut[]): string[] => {
-  const ids = new Set<string>();
-  for (const r of recipes)
-    for (const s of r.sections)
-      for (const i of s.ingredients)
-        if (i.type === "ingredient") ids.add(i.ingredient.id);
-  return [...ids];
-};
-
-const collectSubRecipeIds = (recipes: RecipeOut[]): RecipeId[] => {
-  const ids = new Set<string>();
-  for (const r of recipes)
-    for (const s of r.sections)
-      for (const i of s.ingredients)
-        if (i.type === "recipe") ids.add(i.recipe.id);
-  return [...ids] as RecipeId[];
-};
 
 const toRecipeTotals = (t: CalculateTotalsResult): RecipeTotals => ({
   costTotal: t.price,
@@ -136,7 +118,7 @@ export class RecipeCostingService {
     const ingredientIds = collectIngredientIds([
       ...recipes,
       ...Object.values(recipeMap),
-    ]) as Parameters<IngredientService["getIngredientsByIDs"]>[0];
+    ]);
     const ingredients =
       await this.ingredientService.getIngredientsByIDs(ingredientIds);
     const ingMap = Object.fromEntries(ingredients.map((i) => [i.id, i]));
@@ -158,7 +140,7 @@ export class RecipeCostingService {
     const costings = computeRecipeCosting(
       recipes,
       ingMap,
-      recipeIngredientName,
+      getRecipeIngredientName,
       recipeMap,
     );
 
@@ -202,7 +184,7 @@ export class RecipeCostingService {
     const costing = computeRecipeCosting(
       [recipe],
       ingMap,
-      recipeIngredientName,
+      getRecipeIngredientName,
       recipeMap,
       { explain: true },
     ).get(recipe.id);

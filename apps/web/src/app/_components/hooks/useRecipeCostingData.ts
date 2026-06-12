@@ -1,6 +1,12 @@
+import type { RecipeId } from "@cubby/schemas/identifiers";
 import type { RecipeOut } from "@cubby/schemas/recipe";
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  collectIngredientIds,
+  collectSubRecipeIds,
+  recipeLinkSignature,
+} from "~/lib/recipe-graph";
 import { chunk, ID_CHUNK_SIZE } from "~/misc/array-helpers";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { useTRPC } from "~/trpc/react";
@@ -45,7 +51,7 @@ export async function loadRecipeCostingData(
       ),
     );
 
-    const next: string[] = [];
+    const next: RecipeId[] = [];
     for (const r of chunks.flat()) {
       fetched[r.id] = r;
       next.push(...collectSubRecipeIds([r]));
@@ -98,7 +104,7 @@ export function useRecipeCostingData(recipes: RecipeOut[]): {
   // content signature instead of the array reference (which changes every tick).
   const recipesRef = useRef(recipes);
   recipesRef.current = recipes;
-  const signature = useMemo(() => buildSignature(recipes), [recipes]);
+  const signature = useMemo(() => recipeLinkSignature(recipes), [recipes]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: gated on signature; reads recipes via recipesRef
   useEffect(() => {
@@ -136,47 +142,3 @@ export function useRecipeCostingData(recipes: RecipeOut[]): {
 
   return { ingMap, recipeMap, isLoading };
 }
-
-/** Unique ids of sub-recipes (recipe-as-ingredient) referenced by these recipes. */
-const collectSubRecipeIds = (recipes: RecipeOut[]): string[] => {
-  const ids = new Set<string>();
-  for (const r of recipes) {
-    for (const s of r.sections) {
-      for (const i of s.ingredients) {
-        if (i.type === "recipe") ids.add(i.recipe.id);
-      }
-    }
-  }
-  return [...ids];
-};
-
-/** Unique ids of plain ingredients referenced by these recipes. */
-const collectIngredientIds = (recipes: RecipeOut[]): string[] => {
-  const ids = new Set<string>();
-  for (const r of recipes) {
-    for (const s of r.sections) {
-      for (const i of s.ingredients) {
-        if (i.type === "ingredient") ids.add(i.ingredient.id);
-      }
-    }
-  }
-  return [...ids];
-};
-
-/**
- * Stable content signature: recipe ids plus each section ingredient's id (and
- * sub-recipe id), so the loader reruns only when linkage actually changes.
- */
-const buildSignature = (recipes: RecipeOut[]): string =>
-  recipes
-    .map(
-      (r) =>
-        `${r.id}:${r.sections
-          .flatMap((s) =>
-            s.ingredients.map((i) =>
-              i.type === "ingredient" ? i.ingredient.id : `r${i.recipe.id}`,
-            ),
-          )
-          .join("-")}`,
-    )
-    .join(",");

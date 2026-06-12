@@ -2,9 +2,9 @@ import { AlertCircle, Plus } from "lucide-react";
 import { Fragment, useMemo } from "react";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
-import { wasm } from "~/lib/wasm";
 import { EntityPillLink } from "../EntityPill";
 import { formatAmounts } from "../inventory/format-amount";
+import { parseIngredientLines } from "./recipe-form/ingredient-line-utils";
 import type { IngredientMatchMap } from "./use-ingredient-matches";
 
 /**
@@ -27,16 +27,13 @@ export function ParsedIngredientTable({
   matchReady: boolean;
   onCreate?: (name: string) => void;
 }) {
-  const rows = useMemo(
-    () => lines.map((line) => ({ line, parsed: wasm.parse_ingredient(line) })),
-    [lines],
-  );
+  const rows = useMemo(() => parseIngredientLines(lines), [lines]);
   if (rows.length === 0) return null;
   return (
     <table className="w-full border-collapse text-xs">
       <tbody>
-        {rows.map(({ line, parsed }, i) => {
-          const name = parsed.name || line;
+        {rows.map(({ raw, parsed }, i) => {
+          const name = parsed.name || raw;
           const match = parsed.name
             ? matchMap.get(parsed.name.toLowerCase())
             : null;
@@ -97,7 +94,7 @@ export function ParsedIngredientTable({
                   colSpan={3}
                   className="pb-0.5 text-2xs text-muted-foreground/70 leading-tight"
                 >
-                  {line}
+                  {raw}
                 </td>
               </tr>
             </Fragment>

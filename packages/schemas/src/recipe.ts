@@ -172,10 +172,12 @@ export type RecipeSource = z.infer<typeof recipeSource>;
 // real parser drift from a re-parse that just hit one of this ingredient's
 // aliases (e.g. "large eggs" → the "large brown eggs" ingredient that aliases it).
 const ingredientOut = baseEntitySchema.extend({
+  id: ingredientId,
   aliases: z.array(z.string()).optional(),
 });
 
 export const recipeTopLevel = baseEntitySchema.extend({
+  id: recipeId,
   meta: recipeMeta,
   // Strong provenance, derived from the DB columns on read. Output-only for now
   // (`meta.url` still drives the write path); nullish so older rows are lenient.

@@ -4,8 +4,9 @@
  */
 
 import type { amount } from "@cubby/schemas/codec";
-import type { RecipeId } from "@cubby/schemas/identifiers";
+import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
 import type {
+  RecipeCreateInput,
   RecipeUpdateInput,
   RecipeYield,
   recipeIngredientInput,
@@ -40,8 +41,8 @@ import { webProvenance } from "./source";
  */
 export const findOrCreateRecipeLinkIngredient = async (
   tx: DrizzleTransaction,
-  recipeId: string,
-): Promise<string> => {
+  recipeId: RecipeId,
+): Promise<IngredientId> => {
   const existing = await tx.query.ingredient.findFirst({
     where: eq(ingredient.recipeId, recipeId),
   });
@@ -66,7 +67,7 @@ export const findOrCreateRecipeLinkIngredient = async (
 };
 
 type ProcessedIngredient = {
-  ingredientId: string;
+  ingredientId: IngredientId;
   amounts: z.infer<typeof amount>[];
   rawLine: string | null;
   modifier: string | null;
@@ -86,7 +87,7 @@ const processIngredient = async (
   // For ingredient types, just use the ingredient ID directly
   if (ingredientInput.type === "ingredient") {
     return {
-      ingredientId: ingredientInput.ingredientId as string,
+      ingredientId: ingredientInput.ingredientId,
       amounts: ingredientInput.amounts,
       ...provenance,
     };
@@ -124,7 +125,7 @@ export const processIngredients = async (
 export const sectionIngredientValues = (
   recipeSectionId: string,
   ing: {
-    ingredientId: string | null;
+    ingredientId: IngredientId;
     amounts: z.infer<typeof amount>[];
     rawLine?: string | null;
     modifier?: string | null;
@@ -132,7 +133,7 @@ export const sectionIngredientValues = (
   sortOrder: number,
 ) => ({
   recipeSectionId,
-  ingredientId: ing.ingredientId as string,
+  ingredientId: ing.ingredientId,
   amounts: ing.amounts,
   rawLine: ing.rawLine ?? null,
   modifier: ing.modifier ?? null,
@@ -259,10 +260,12 @@ export async function deleteAllSections(
 /**
  * Create a new recipe section with ingredients.
  */
-async function createSectionWithIngredients(
+export async function createSectionWithIngredients(
   tx: DrizzleTransaction,
   recipeId: RecipeId,
-  sectionInput: NonNullable<RecipeUpdateInput["data"]["sections"]>[number],
+  sectionInput:
+    | RecipeCreateInput["sections"][number]
+    | NonNullable<RecipeUpdateInput["data"]["sections"]>[number],
   sortOrder: number,
 ): Promise<void> {
   const processedIngredients = sectionInput.ingredients
@@ -271,7 +274,7 @@ async function createSectionWithIngredients(
 
   const createdSection = await insertAndReturn(tx, recipeSection, {
     recipeId,
-    name: sectionInput.name || null,
+    name: sectionInput.name ?? null,
     sortOrder,
     instructions: sectionInput.instructions
       ? sectionInput.instructions.map((inst) => ({ text: inst.instruction }))
@@ -286,6 +289,31 @@ async function createSectionWithIngredients(
           sectionIngredientValues(createdSection.id, ing, i),
         ),
       );
+  }
+}
+
+/**
+ * Replace a recipe's sections wholesale: hard-delete existing section rows and
+ * reinsert the supplied API section shape through the same section-creation path
+ * used by create/update. This keeps instruction JSON, ingredient processing, and
+ * provenance column handling in one place.
+ */
+export async function replaceRecipeSections(
+  tx: DrizzleTransaction,
+  recipeId: RecipeId,
+  sections: RecipeCreateInput["sections"],
+): Promise<void> {
+  const existingSections = await tx.query.recipeSection.findMany({
+    where: eq(recipeSection.recipeId, recipeId),
+    columns: { id: true },
+  });
+  await deleteAllSections(
+    tx,
+    existingSections.map((s) => s.id),
+  );
+
+  for (const [i, section] of sections.entries()) {
+    await createSectionWithIngredients(tx, recipeId, section, i);
   }
 }
 

@@ -129,6 +129,8 @@ const insertImport = protectedProcedure
   .input(importRecipeSchema)
   .output(z.object({ id: z.uuid() }))
   .mutation(async ({ ctx, input }) => {
+    // TODO: enqueue imported recipe ids for async Cloudflare Queue recompute
+    // instead of blocking per-recipe import requests.
     return await upsertImportRecipe(input, ctx.db, ctx.actorContext);
   });
 // Create/refresh a cookbook from a full EPUB extraction. Called once at the start
@@ -180,6 +182,8 @@ const insertCookbook = protectedProcedure
   )
   .output(z.object({ id: z.uuid() }))
   .mutation(async ({ ctx, input }) => {
+    // TODO: enqueue cookbook import recipe ids for batched Cloudflare Queue
+    // recompute instead of blocking each EPUB recipe insert.
     return await upsertCookbookRecipeFromCookbook(
       input.recipe,
       { id: input.cookbookId, name: input.book },

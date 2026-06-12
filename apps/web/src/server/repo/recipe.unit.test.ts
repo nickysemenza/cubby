@@ -1,3 +1,4 @@
+import { unsafeRecipeId } from "@cubby/schemas/identifiers";
 import { describe, expect, test } from "vitest";
 import { dbRecipeToAPIShallow } from "./recipe";
 
@@ -5,7 +6,7 @@ describe("recipe repository helpers", () => {
   describe("dbRecipeToAPIShallow", () => {
     test("converts website recipe with URL", () => {
       const recipe = {
-        id: "recipe-1",
+        id: unsafeRecipeId("recipe-1"),
         shortcode: "R-A3F2",
         name: "Test Recipe",
         createdAt: new Date("2023-01-01"),
@@ -25,7 +26,7 @@ describe("recipe repository helpers", () => {
       const result = dbRecipeToAPIShallow(recipe);
 
       expect(result).toEqual({
-        id: "recipe-1",
+        id: unsafeRecipeId("recipe-1"),
         shortcode: "R-A3F2",
         name: "Test Recipe",
         createdAt: new Date("2023-01-01"),
@@ -49,7 +50,7 @@ describe("recipe repository helpers", () => {
 
     test("converts non-website recipe without URL", () => {
       const recipe = {
-        id: "recipe-1",
+        id: unsafeRecipeId("recipe-1"),
         shortcode: "R-X7K9",
         name: "Test Recipe",
         createdAt: new Date("2023-01-01"),
@@ -69,7 +70,7 @@ describe("recipe repository helpers", () => {
       const result = dbRecipeToAPIShallow(recipe);
 
       expect(result).toEqual({
-        id: "recipe-1",
+        id: unsafeRecipeId("recipe-1"),
         shortcode: "R-X7K9",
         name: "Test Recipe",
         createdAt: new Date("2023-01-01"),

@@ -3,7 +3,12 @@ import { ndb, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { dbTimestampsOut } from "./common";
 import { externalIdInput, externalIdOut } from "./external-id";
-import { ingredientId, productId, productShortcode } from "./identifiers";
+import {
+  ingredientId,
+  type IngredientId,
+  productId,
+  productShortcode,
+} from "./identifiers";
 import { imageOut, updateInputImages } from "./image";
 import { unitMappingInput } from "./unitmapping";
 
@@ -26,7 +31,7 @@ export { productCategoryValues } from "@cubby/shared";
  */
 export const hasFoodIndicators = (product: {
   ndb_number?: number | null;
-  ingredientId?: string | null;
+  ingredientId?: IngredientId | null;
 }): boolean =>
   (product.ndb_number != null && product.ndb_number > 0) ||
   (product.ingredientId != null && product.ingredientId.length > 0);

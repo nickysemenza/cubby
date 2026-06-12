@@ -1,9 +1,9 @@
-import type { RecipeOut, SectionIngredient } from "@cubby/schemas/recipe";
+import type { RecipeOut } from "@cubby/schemas/recipe";
 import {
   getNutrientValueByKey,
   type NutrientsPer100,
 } from "@cubby/usda-schemas";
-import { assertNever } from "~/lib/assert";
+import { getRecipeIngredientName } from "~/lib/recipe-graph";
 
 /** The four headline figures every recipe-summary surface shows (table, charts,
  * magazine kicker), pulled from a costing result in one place so all three agree
@@ -99,14 +99,4 @@ export const isFlourIngredient = (name: string): boolean => {
   return FLOUR_TERMS.some((t) => n.includes(t));
 };
 
-export const getIngredientName = (ingredient: SectionIngredient): string => {
-  const { type } = ingredient;
-  switch (type) {
-    case "ingredient":
-      return ingredient.ingredient.name;
-    case "recipe":
-      return ingredient.recipe.name;
-    default:
-      return assertNever(type);
-  }
-};
+export const getIngredientName = getRecipeIngredientName;

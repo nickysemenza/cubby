@@ -1,11 +1,15 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { unsafeIngredientId, unsafeUserId } from "@cubby/schemas/identifiers";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { buildTestDB } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "~/server/db";
-import { recipe } from "~/server/db/schema";
+import {
+  recipe,
+  recipeSection,
+  recipeSectionIngredient,
+} from "~/server/db/schema";
 import { getDb } from "./database-helpers";
 import { createIngredient } from "./ingredient";
 import { upsertRecipe } from "./recipe";
@@ -228,5 +232,53 @@ describe("upsertRecipe", () => {
 
     expect(foundRecipe!.SourceType).toBe("Other");
     expect(foundRecipe!.SourceData).toBeNull();
+  });
+
+  it("preserves section order, empty arrays, and ingredient provenance", async () => {
+    const input: RecipeCreateInput = {
+      name: "Provenance Recipe",
+      meta: { url: null },
+      sections: [
+        {
+          name: "Batter",
+          instructions: [],
+          ingredients: [
+            {
+              type: "ingredient",
+              ingredientId: unsafeIngredientId(testIngredients[0]!.id),
+              recipeId: null,
+              amounts: [{ value: 2, unit: "cups" }],
+              rawLine: "2 cups flour, sifted",
+              modifier: "sifted",
+            },
+          ],
+        },
+        {
+          name: "Bake",
+          instructions: [{ instruction: "Bake until set" }],
+        },
+      ],
+    };
+
+    const { id } = await upsertRecipe(input, db, TEST_ACTOR);
+    const sections = await getDb(db).query.recipeSection.findMany({
+      where: eq(recipeSection.recipeId, id),
+      orderBy: [asc(recipeSection.sortOrder)],
+      with: { ingredients: true },
+    });
+
+    expect(sections.map((s) => s.name)).toEqual(["Batter", "Bake"]);
+    expect(sections[0]!.instructions).toEqual([]);
+    expect(sections[1]!.instructions).toEqual([{ text: "Bake until set" }]);
+    expect(sections[1]!.ingredients).toEqual([]);
+
+    const [row] = await getDb(db)
+      .select()
+      .from(recipeSectionIngredient)
+      .where(eq(recipeSectionIngredient.recipeSectionId, sections[0]!.id));
+
+    expect(row?.rawLine).toBe("2 cups flour, sifted");
+    expect(row?.modifier).toBe("sifted");
+    expect(row?.sortOrder).toBe(0);
   });
 });
