@@ -13,6 +13,12 @@ import {
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/components/ui/tooltip";
+import { EntityIcon } from "~/entities/entities";
 import { queryKeys } from "~/lib/query-keys";
 import { getIngredientMappings } from "~/lib/unit-mapping-utils";
 import { cn } from "~/lib/utils";
@@ -110,6 +116,49 @@ function MergeConfirmation({
   );
 }
 
+type IngredientProduct = IngredientWithFoodOut["product"][number];
+
+/**
+ * Product column for the ingredients list. Renders the product pill plus a small
+ * USDA apple adornment when the product resolved to a USDA food — a coverage
+ * signal so you can triage which ingredients are nutrition/cost-linked without
+ * opening each product. `food` is already batch-enriched on the list query
+ * (IngredientService.ingredientList), so this is free of extra fetches.
+ */
+function ProductPillsCell({ products }: { products: IngredientProduct[] }) {
+  return (
+    <TruncatedList
+      items={products}
+      maxItems={1}
+      renderItem={(product: IngredientProduct) => (
+        <span
+          key={product.id}
+          className="inline-flex min-w-0 items-center gap-1"
+        >
+          <EntityPillLink entity="product" data={product} compact />
+          {product.food ? (
+            <Tooltip>
+              <TooltipTrigger
+                render={<span className="inline-flex shrink-0" />}
+              >
+                <EntityIcon
+                  entity="usda-food"
+                  size={12}
+                  colored
+                  aria-label="Linked to USDA food data"
+                />
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                USDA: {product.food.foodInfo.description ?? "linked food"}
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
+        </span>
+      )}
+    />
+  );
+}
+
 export function IngredientList() {
   const missingProductsId = useId();
   const api = useTRPC();
@@ -200,10 +249,15 @@ export function IngredientList() {
         dedupe: true,
         mobile: { slot: "meta", priority: 30 },
       }),
-      createEntityPillColumn(columnHelper, "product", "product", {
+      columnHelper.accessor("product", {
+        id: "product",
         header: "Product",
-        className: "w-48 max-w-48",
-        mobile: { slot: "subtitle", priority: 10 },
+        enableSorting: false,
+        meta: {
+          className: "w-48 max-w-48 overflow-hidden",
+          mobile: { slot: "subtitle", priority: 10 },
+        },
+        cell: (info) => <ProductPillsCell products={info.getValue() ?? []} />,
       }),
     ],
     [columnHelper],
