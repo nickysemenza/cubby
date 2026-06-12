@@ -104,6 +104,12 @@ interface TTableProps<TItem> {
   grouped?: boolean;
   /** Toggle grouping on/off */
   onGroupedChange?: (value: boolean) => void;
+  /**
+   * Extra per-row classes (desktop). Must be a pure function of `row.original`
+   * so memoized rows stay stable — e.g. tint estimated rows. Returns undefined
+   * for the default styling.
+   */
+  getRowClassName?: (row: Row<TItem>) => string | undefined;
 }
 
 interface DataRowProps<TItem> {
@@ -212,6 +218,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     groupConfig,
     grouped = false,
     onGroupedChange,
+    getRowClassName,
   } = props;
 
   const { isDebugEnabled } = useDebug();
@@ -430,7 +437,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                 isFocused={focusedRowIndex === row.index}
                 isDebugEnabled={isDebugEnabled}
                 onRowClick={onRowClick}
-                rowClassName={styles.row}
+                rowClassName={cn(styles.row, getRowClassName?.(row))}
                 cellClassName={styles.cell}
                 columnsKey={columnsKey}
                 height={`${virtualRow.size}px`}
@@ -446,7 +453,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
               isFocused={focusedRowIndex === row.index}
               isDebugEnabled={isDebugEnabled}
               onRowClick={onRowClick}
-              rowClassName={styles.row}
+              rowClassName={cn(styles.row, getRowClassName?.(row))}
               cellClassName={styles.cell}
               columnsKey={columnsKey}
               height={`${virtualRow.size}px`}

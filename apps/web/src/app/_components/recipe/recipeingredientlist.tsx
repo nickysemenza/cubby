@@ -355,6 +355,13 @@ export const RecipeIngredientList: React.FC<{
         isLoading={displayData.length === 0}
         error={undefined}
         ariaLabel="Recipe Ingredients Table"
+        getRowClassName={(row) =>
+          // Wash estimated rows in a soft honey tint so usage-adjusted numbers
+          // read as approximate at a glance, not just via the "est." markers.
+          estimatedRows.has(row.original.id)
+            ? "bg-[var(--chart-seq-2)]/25"
+            : undefined
+        }
       />
     </div>
   );

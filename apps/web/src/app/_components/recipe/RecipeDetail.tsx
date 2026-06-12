@@ -257,7 +257,11 @@ const RecipeDetailInner: React.FC<{
 
       {/* View Components */}
       {viewMode === "magazine" && (
-        <RecipeMagazineView recipe={scaledRecipe} totals={totals} />
+        <RecipeMagazineView
+          recipe={scaledRecipe}
+          totals={totals}
+          costing={costing}
+        />
       )}
       {viewMode === "table" && (
         <>
