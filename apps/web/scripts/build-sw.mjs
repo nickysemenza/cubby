@@ -21,8 +21,9 @@ const CLIENT_DIR = path.resolve("dist/client");
 const SW_ENTRY = path.resolve("src/sw.ts");
 const SW_OUT = path.join(CLIENT_DIR, "sw.js");
 
-// Precache these asset types (hashed JS/CSS chunks, fonts, WASM, vector icons)
-const PRECACHE_EXT = new Set([".js", ".css", ".woff2", ".wasm", ".svg"]);
+// Precache stable app-shell support assets. Runtime JS chunks are intentionally
+// left to normal HTTP/runtime caching so SW install does not fetch every route.
+const PRECACHE_EXT = new Set([".css", ".woff2", ".wasm", ".svg"]);
 // ...plus these specific files by name (raster icons + the offline page)
 const PRECACHE_NAMED = new Set(["offline.html", "favicon.ico"]);
 const PRECACHE_NAMED_PREFIX = ["icon-"];

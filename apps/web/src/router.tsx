@@ -24,6 +24,7 @@ export const getRouter = () => {
     },
 
     defaultPreload: "intent",
+    defaultPreloadDelay: 120,
     defaultViewTransition: true,
     defaultErrorComponent: RouteErrorComponent,
     // Route-transition skeleton instead of a blank flash. Thresholds chosen so

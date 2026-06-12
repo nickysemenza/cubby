@@ -1,5 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { useNavigate, useRouter } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import type { Table as ITable, Row } from "@tanstack/react-table";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { Bug } from "lucide-react";
@@ -49,7 +49,6 @@ export function MobileCardView<TItem>({
 }: MobileCardViewProps<TItem>) {
   const { isDebugEnabled } = useDebug();
   const navigate = useNavigate();
-  const router = useRouter();
   const mobileRows = useMobileListModel({ table, entity });
 
   // Build a lookup from table row index to mobileRow model
@@ -245,13 +244,6 @@ export function MobileCardView<TItem>({
           model.detailsHref
             ? () => {
                 navigate({ to: model.detailsHref });
-              }
-            : undefined
-        }
-        onTouchStart={
-          model.detailsHref
-            ? () => {
-                router.preloadRoute({ to: model.detailsHref });
               }
             : undefined
         }
