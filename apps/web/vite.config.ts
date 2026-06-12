@@ -106,6 +106,37 @@ export default defineConfig(async () => {
     // Resolve tsconfig `paths` (~/*, tooling/*) natively — Vite 8 replaces the
     // vite-tsconfig-paths plugin with this built-in option.
     resolve: { tsconfigPaths: true },
+    // Consolidate the CLIENT build's request fan-out. Default Rollup splitting
+    // gives each route its own chunk (correct, keep) but also hoists every shared
+    // leaf module into its own chunk — so a single `import { Clock } from
+    // "lucide-react"` used by 2+ routes became a standalone ~1KB chunk. lucide
+    // alone fanned out into ~68 of these, i.e. dozens of HTTP requests for a few
+    // KB. experimentalMinChunkSize does NOT fix this (it won't merge a chunk
+    // shared across async boundaries), so we coalesce lucide by-package instead.
+    //
+    // Only lucide is grouped, and deliberately so:
+    //   - Icons are tiny + ubiquitous: the whole set is 39KB (13KB gzip), already
+    //     eager via the nav, so forcing the full set eager costs ~12KB to save
+    //     ~50 requests — a clear win.
+    //   - @base-ui was tried and reverted: its grouped chunk is 243KB (80KB gzip)
+    //     but the landing page only uses ~7KB of it, so grouping would drag
+    //     lazy-route dialog/sheet code into first paint. Left split on purpose.
+    //   - Lazy-only deps (@nivo, Graphviz, markdown, cmdk) are untouched and stay
+    //     code-split, so first paint never pulls them in.
+    // Scoped to `client` so it never reshapes the CF Worker SSR bundle (single entry).
+    environments: {
+      client: {
+        build: {
+          rollupOptions: {
+            output: {
+              manualChunks(id: string) {
+                if (id.includes("/lucide-react/")) return "icons";
+              },
+            },
+          },
+        },
+      },
+    },
     // CF Workers build-time flag for dead code elimination in db.ts
     define: {
       __GIT_COMMIT__: JSON.stringify(gitCommit),
