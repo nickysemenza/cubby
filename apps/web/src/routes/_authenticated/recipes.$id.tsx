@@ -25,9 +25,16 @@ import { useTRPC } from "~/trpc/react";
 const searchSchema = z.object({
   edit: z.boolean().optional().catch(undefined),
   view: z.enum(["magazine", "table", "charts"]).optional().catch(undefined),
+  // Scaling is purely derived/display state, kept in the URL so a scaled view is
+  // shareable and printable. `scale` is the resolved factor (absent = 1×).
+  scale: z.number().positive().optional().catch(undefined),
 });
 
-const searchDefaults = { edit: undefined, view: undefined } as const;
+const searchDefaults = {
+  edit: undefined,
+  view: undefined,
+  scale: undefined,
+} as const;
 
 export const Route = createFileRoute("/_authenticated/recipes/$id")({
   ssr: false,
@@ -51,7 +58,7 @@ export const Route = createFileRoute("/_authenticated/recipes/$id")({
 
 function RecipeDetailPage() {
   const { id } = Route.useParams();
-  const { edit: isEditing, view } = Route.useSearch();
+  const { edit: isEditing, view, scale } = Route.useSearch();
   const navigate = useNavigate();
 
   const recipeView: RecipeViewMode = view ?? "magazine";
@@ -63,6 +70,14 @@ function RecipeDetailPage() {
         ...prev,
         view: next === "magazine" ? undefined : next,
       }),
+    });
+  };
+
+  const setScale = (factor: number) => {
+    // Strip the default (1×) so unscaled links stay clean.
+    navigate({
+      to: ".",
+      search: (prev) => ({ ...prev, scale: factor === 1 ? undefined : factor }),
     });
   };
   const api = useTRPC();
@@ -123,6 +138,8 @@ function RecipeDetailPage() {
           recipe={recipe}
           view={recipeView}
           onViewChange={setRecipeView}
+          scale={scale}
+          onScaleChange={setScale}
         />
       )}
 

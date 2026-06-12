@@ -24,7 +24,9 @@ import { AuditLogList } from "../audit-log/audit-log-list";
 import EntityImageList from "../EntityImageList";
 import { useRecipeCostingData } from "../hooks/useRecipeCostingData";
 import { RecipeMagazineView } from "./RecipeMagazineView";
+import { RecipeScaleControl } from "./RecipeScaleControl";
 import { RecipeCostingDebugCard } from "./recipe-costing-debug-card";
+import { scaleRecipe } from "./recipe-scaling";
 import { RecipeTagList } from "./recipe-tag";
 import {
   formatYield,
@@ -165,17 +167,37 @@ const RecipeDetailInner: React.FC<{
   /** Controlled view mode (e.g. URL-driven on the detail route). */
   view?: RecipeViewMode;
   onViewChange?: (view: RecipeViewMode) => void;
-}> = ({ recipe, view: controlledView, onViewChange }) => {
+  /** Controlled scale factor (URL-driven on the detail route); 1 = unscaled. */
+  scale?: number;
+  onScaleChange?: (factor: number) => void;
+}> = ({
+  recipe,
+  view: controlledView,
+  onViewChange,
+  scale: controlledScale,
+  onScaleChange,
+}) => {
   // Controlled when the parent supplies view/onViewChange; otherwise self-managed
   // (e.g. the search preview panel embeds this without URL state).
   const [internalView, setInternalView] = useState<RecipeViewMode>("magazine");
+  const [internalScale, setInternalScale] = useState(1);
   const { isDebugEnabled } = useDebug();
   const viewMode = controlledView ?? internalView;
   const setViewMode = onViewChange ?? setInternalView;
+  const factor = controlledScale ?? internalScale;
+  const setFactor = onScaleChange ?? setInternalScale;
+
+  // Derived scaled recipe: every amount (plus yield/servings) multiplied by the
+  // factor. All downstream views + the costing engine consume this, so scaling
+  // is a single transform upstream of the TS→WASM boundary. IDs are preserved.
+  const scaledRecipe = useMemo(
+    () => scaleRecipe(recipe, factor),
+    [recipe, factor],
+  );
 
   const ingredients: CostingRow[] = useMemo(
-    () => flattenSections(recipe.sections),
-    [recipe.sections],
+    () => flattenSections(scaledRecipe.sections),
+    [scaledRecipe.sections],
   );
 
   // Get recipe images from the recipe object
@@ -183,9 +205,11 @@ const RecipeDetailInner: React.FC<{
 
   // Load ingredient data plus the graph of any sub-recipes used as ingredients,
   // so cost/calories roll up correctly (table and charts views). `ingMap` is
-  // null until the first load completes.
-  const recipesForCosting = useMemo(() => [recipe], [recipe]);
-  const { ingMap, recipeMap } = useRecipeCostingData(recipesForCosting);
+  // null until the first load completes. Keyed by ids (scaling doesn't change
+  // them), so use the original recipe here to avoid refetch churn on scale.
+  const recipesForData = useMemo(() => [recipe], [recipe]);
+  const recipesForCosting = useMemo(() => [scaledRecipe], [scaledRecipe]);
+  const { ingMap, recipeMap } = useRecipeCostingData(recipesForData);
 
   // One engine call (Rust, via cost_recipes) per data change: totals + per-row
   // resolved measures — the usage-estimate overrides (absorbed frying oil,
@@ -210,23 +234,30 @@ const RecipeDetailInner: React.FC<{
 
   return (
     <div className="space-y-6">
-      {/* Tags and View Toggle */}
+      {/* Tags, Scale control, and View Toggle */}
       <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
         {recipe.tags && recipe.tags.length > 0 && (
           <RecipeTagList tags={recipe.tags} />
         )}
-        <ViewSwitcher
-          className="ml-auto"
-          ariaLabel="Recipe view"
-          options={RECIPE_VIEW_OPTIONS}
-          value={viewMode}
-          onValueChange={setViewMode}
-        />
+        <div className="ml-auto flex flex-wrap items-center gap-3">
+          <RecipeScaleControl
+            recipe={recipe}
+            totals={totals}
+            factor={factor}
+            onFactorChange={setFactor}
+          />
+          <ViewSwitcher
+            ariaLabel="Recipe view"
+            options={RECIPE_VIEW_OPTIONS}
+            value={viewMode}
+            onValueChange={setViewMode}
+          />
+        </div>
       </div>
 
       {/* View Components */}
       {viewMode === "magazine" && (
-        <RecipeMagazineView recipe={recipe} totals={totals} />
+        <RecipeMagazineView recipe={scaledRecipe} totals={totals} />
       )}
       {viewMode === "table" && (
         <>
@@ -246,7 +277,7 @@ const RecipeDetailInner: React.FC<{
       {viewMode === "charts" && (
         <div className="space-y-6">
           {/* Yield/Servings Summary */}
-          <RecipeSummaryCard recipe={recipe} totals={totals} />
+          <RecipeSummaryCard recipe={scaledRecipe} totals={totals} />
 
           <Suspense
             fallback={

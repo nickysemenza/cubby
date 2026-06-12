@@ -1,0 +1,246 @@
+import type { RecipeOut } from "@cubby/schemas/recipe";
+import { Scaling, X } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/components/ui/popover";
+import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
+import type { CalculateTotalsResult } from "~/lib/recipe-costing";
+import { resolveScaleFactor, type ScaleAnchor } from "./recipe-scaling";
+import { getIngredientName } from "./recipe-utils";
+
+const QUICK_FACTORS = [0.5, 1, 2, 3] as const;
+
+const factorLabel = (f: number): string =>
+  f === 0.5 ? "½×" : `${Number.isInteger(f) ? f : Number(f.toFixed(2))}×`;
+
+type AnchorMode = ScaleAnchor["type"];
+
+interface RecipeScaleControlProps {
+  recipe: RecipeOut;
+  /** Costing rollup (for the totalWeight anchor); null while loading. */
+  totals: CalculateTotalsResult | null;
+  /** Current resolved scale factor (1 = unscaled). */
+  factor: number;
+  onFactorChange: (factor: number) => void;
+}
+
+/**
+ * Recipe scaling control: quick ×-chips plus a popover to anchor the scale on a
+ * target total weight or a specific ingredient's amount. Presentational +
+ * controlled — the parent owns `factor` (URL state) and re-derives the recipe.
+ */
+export function RecipeScaleControl({
+  recipe,
+  totals,
+  factor,
+  onFactorChange,
+}: RecipeScaleControlProps) {
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<AnchorMode>("multiplier");
+  const [draft, setDraft] = useState("");
+  const [ingredientRowId, setIngredientRowId] = useState<string>("");
+
+  // Ingredient rows that carry a numeric primary amount — the candidates the
+  // "an ingredient" anchor can pin the scale to.
+  const ingredientRows = useMemo(
+    () =>
+      recipe.sections.flatMap((s) =>
+        s.ingredients.flatMap((row) => {
+          const amt = row.amounts[0];
+          if (!amt || amt.value <= 0) return [];
+          return [
+            {
+              id: row.id,
+              name: getIngredientName(row),
+              unit: amt.unit,
+              value: amt.value,
+            },
+          ];
+        }),
+      ),
+    [recipe.sections],
+  );
+
+  const scaled = factor !== 1;
+  const selectedRow = ingredientRows.find((r) => r.id === ingredientRowId);
+
+  const applyAnchor = () => {
+    const value = Number.parseFloat(draft);
+    if (!Number.isFinite(value) || value <= 0) return;
+
+    let anchor: ScaleAnchor;
+    switch (mode) {
+      case "multiplier":
+        anchor = { type: "multiplier", value };
+        break;
+      case "totalWeight":
+        anchor = { type: "totalWeight", grams: value };
+        break;
+      case "ingredient":
+        if (!selectedRow) return;
+        anchor = { type: "ingredient", rowId: selectedRow.id, newValue: value };
+        break;
+    }
+    onFactorChange(resolveScaleFactor(anchor, recipe, totals, factor));
+    setOpen(false);
+  };
+
+  // Highlight the matching quick chip when the current factor is one of them;
+  // otherwise nothing in the chip group is selected (it's a custom factor).
+  const activeChip = QUICK_FACTORS.find((f) => f === factor);
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
+        Scale
+      </span>
+
+      {/* Quick ×-chips */}
+      <ToggleGroup
+        aria-label="Scale recipe"
+        variant="outline"
+        size="sm"
+        value={[activeChip != null ? String(activeChip) : "custom"]}
+        onValueChange={(values: string[]) => {
+          const next = values[0];
+          if (next && next !== "custom") onFactorChange(Number(next));
+        }}
+      >
+        {QUICK_FACTORS.map((f) => (
+          <ToggleGroupItem
+            key={f}
+            value={String(f)}
+            aria-label={`Scale ${factorLabel(f)}`}
+          >
+            {factorLabel(f)}
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
+
+      {/* Custom anchor popover */}
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger
+          render={
+            <Button variant="outline" size="sm">
+              <Scaling className="mr-1 h-3 w-3" />
+              {scaled ? `${Number(factor.toFixed(2))}×` : "Custom"}
+            </Button>
+          }
+        />
+        <PopoverContent className="w-72 space-y-3">
+          <div className="space-y-1.5">
+            <Label className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
+              Scale by
+            </Label>
+            <ToggleGroup
+              aria-label="Scale anchor"
+              variant="outline"
+              size="sm"
+              spacing={0}
+              className="w-full"
+              value={[mode]}
+              onValueChange={(values: string[]) => {
+                const next = values[0] as AnchorMode | undefined;
+                if (next) {
+                  setMode(next);
+                  setDraft("");
+                }
+              }}
+            >
+              <ToggleGroupItem value="multiplier" className="flex-1">
+                ×
+              </ToggleGroupItem>
+              <ToggleGroupItem value="totalWeight" className="flex-1">
+                Weight
+              </ToggleGroupItem>
+              <ToggleGroupItem value="ingredient" className="flex-1">
+                Ingredient
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
+
+          {mode === "ingredient" && (
+            <select
+              aria-label="Ingredient to scale by"
+              className="h-7 w-full rounded-md border border-input bg-card px-2 text-xs"
+              value={ingredientRowId}
+              onChange={(e) => {
+                setIngredientRowId(e.target.value);
+                const row = ingredientRows.find((r) => r.id === e.target.value);
+                if (row) setDraft(String(row.value));
+              }}
+            >
+              <option value="">Choose an ingredient…</option>
+              {ingredientRows.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name} ({r.value} {r.unit})
+                </option>
+              ))}
+            </select>
+          )}
+
+          <form
+            className="flex items-end gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              applyAnchor();
+            }}
+          >
+            <div className="flex-1 space-y-1">
+              <Label className="text-2xs text-muted-foreground">
+                {mode === "multiplier" && "Multiplier"}
+                {mode === "totalWeight" && "Target total weight (g)"}
+                {mode === "ingredient" &&
+                  (selectedRow
+                    ? `Target amount (${selectedRow.unit})`
+                    : "Target amount")}
+              </Label>
+              <Input
+                type="number"
+                step="any"
+                min="0"
+                inputMode="decimal"
+                value={draft}
+                placeholder={
+                  mode === "totalWeight"
+                    ? totals?.weight
+                      ? `now ${Math.round(totals.weight)}`
+                      : "—"
+                    : undefined
+                }
+                onChange={(e) => setDraft(e.target.value)}
+                disabled={mode === "ingredient" && !selectedRow}
+              />
+            </div>
+            <Button type="submit" size="sm">
+              Apply
+            </Button>
+          </form>
+
+          {mode === "totalWeight" && !totals?.weight && (
+            <p className="text-2xs text-muted-foreground">
+              No weight conversion yet — add a unit mapping to scale by weight.
+            </p>
+          )}
+        </PopoverContent>
+      </Popover>
+
+      {scaled && (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Reset scale to 1×"
+          onClick={() => onFactorChange(1)}
+        >
+          <X className="h-3 w-3" />
+        </Button>
+      )}
+    </div>
+  );
+}
