@@ -28,7 +28,11 @@ import { EntityPillLink } from "../EntityPill";
 import { tryFormatAmount } from "../inventory/format-amount";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import { CopyCorpusButton } from "./copy-corpus-button";
-import { getIngredientName, isFlourIngredient } from "./recipe-utils";
+import {
+  getIngredientName,
+  isFlourIngredient,
+  type ServingBasis,
+} from "./recipe-utils";
 
 // Small muted marker so estimated (usage-adjusted) values don't read as
 // measured ones.
@@ -63,7 +67,9 @@ export const RecipeIngredientList: React.FC<{
    * Baker % is own-gram based, so the (unmeasured) oil row stays at "—".
    */
   costing: RecipeCosting | null;
-}> = ({ ingredients, ingMap, costing }) => {
+  /** Per-portion basis (from the scaled recipe); drives the per-serving sub-lines. */
+  perServing?: ServingBasis | null;
+}> = ({ ingredients, ingMap, costing, perServing }) => {
   const displayData = costing?.rows ?? [];
   const totals = costing?.totals;
   const estimatedRows = costing?.estimatedRows ?? EMPTY_ESTIMATED;
@@ -348,6 +354,7 @@ export const RecipeIngredientList: React.FC<{
     nutrients: t.nutrients,
     totalIngredients: t.totalIngredients,
     missingByType: t.missingByType,
+    perServing,
   });
 
   return (

@@ -1,6 +1,5 @@
 import { unsafeRecipeId } from "@cubby/schemas/identifiers";
 import type { RecipeOut } from "@cubby/schemas/recipe";
-import { getNutrientValueByKey } from "@cubby/usda-schemas";
 import { BarChart3, BookOpen, Table2 } from "lucide-react";
 import type React from "react";
 import { lazy, Suspense, useMemo, useState } from "react";
@@ -35,7 +34,10 @@ import {
   formatYield,
   getEffectiveServings,
   getIngredientName,
+  getServingBasis,
   isFlourIngredient,
+  perUnitLabel,
+  recipeHeadlineTotals,
 } from "./recipe-utils";
 import { RecipeIngredientList } from "./recipeingredientlist";
 
@@ -58,27 +60,23 @@ const RecipeSummaryCard: React.FC<{
   const effectiveServings = getEffectiveServings(recipe);
   const hasYield = recipe.yield?.value && recipe.yield?.unit;
 
-  // Extract nutrients
-  const totalCalories = totals
-    ? getNutrientValueByKey(totals.nutrients, "kcal")
-    : 0;
-  const totalProtein = totals
-    ? getNutrientValueByKey(totals.nutrients, "protein")
-    : 0;
+  // The four headline figures (cost, weight, calories, protein), defined once.
+  const head = totals ? recipeHeadlineTotals(totals) : null;
 
   // If no yield/servings info, don't show the card
   if (!hasYield && !effectiveServings) return null;
 
-  const perServingCost =
-    effectiveServings && totals?.price
-      ? totals.price / effectiveServings
-      : null;
+  // Per-portion basis: explicit servings, else the yield count labelled by its
+  // unit (e.g. "per Cup", "per Churro"); falls back to "per Serving".
+  const basis = getServingBasis(recipe);
+  const perLabel = basis ? perUnitLabel(basis.noun) : "";
+  const perServingCost = basis && head?.cost ? head.cost / basis.divisor : null;
   const perServingCalories =
-    effectiveServings && totalCalories
-      ? totalCalories / effectiveServings
-      : null;
+    basis && head?.calories ? head.calories / basis.divisor : null;
   const perServingProtein =
-    effectiveServings && totalProtein ? totalProtein / effectiveServings : null;
+    basis && head?.protein ? head.protein / basis.divisor : null;
+  const perServingWeight =
+    basis && head?.weight ? head.weight / basis.divisor : null;
 
   return (
     <Card>
@@ -109,13 +107,13 @@ const RecipeSummaryCard: React.FC<{
           )}
 
           {/* Total cost */}
-          {totals?.price ? (
+          {head?.cost ? (
             <div>
               <div className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
                 Total Cost
               </div>
               <div className="font-mono font-semibold text-lg tabular-nums">
-                {formatCurrency(totals.price)}
+                {formatCurrency(head.cost)}
               </div>
             </div>
           ) : null}
@@ -124,7 +122,7 @@ const RecipeSummaryCard: React.FC<{
           {perServingCost && (
             <div>
               <div className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
-                Cost per Serving
+                Cost {perLabel}
               </div>
               <div className="font-mono font-semibold text-lg tabular-nums">
                 {formatCurrency(perServingCost)}
@@ -134,7 +132,7 @@ const RecipeSummaryCard: React.FC<{
           {perServingCalories && (
             <div>
               <div className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
-                Calories per Serving
+                Calories {perLabel}
               </div>
               <div className="font-mono font-semibold text-lg tabular-nums">
                 {Math.round(perServingCalories)} kcal
@@ -144,10 +142,20 @@ const RecipeSummaryCard: React.FC<{
           {perServingProtein && (
             <div>
               <div className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
-                Protein per Serving
+                Protein {perLabel}
               </div>
               <div className="font-mono font-semibold text-lg tabular-nums">
                 {Math.round(perServingProtein)}g
+              </div>
+            </div>
+          )}
+          {perServingWeight && (
+            <div>
+              <div className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
+                Weight {perLabel}
+              </div>
+              <div className="font-mono font-semibold text-lg tabular-nums">
+                {Math.round(perServingWeight)}g
               </div>
             </div>
           )}
@@ -303,6 +311,7 @@ const RecipeDetailInner: React.FC<{
             ingredients={ingredients}
             ingMap={ingMap ?? undefined}
             costing={costing}
+            perServing={getServingBasis(scaledRecipe)}
           />
         </>
       )}

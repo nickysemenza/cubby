@@ -1,5 +1,4 @@
 import type { RecipeOut, SectionIngredientOut } from "@cubby/schemas/recipe";
-import { getNutrientValueByKey } from "@cubby/usda-schemas";
 import { type ReactNode, useMemo, useState } from "react";
 import { MarkdownText } from "~/components/markdown";
 import { sectionRuleClass } from "~/components/ui/section-rule";
@@ -16,6 +15,9 @@ import {
   formatYield,
   getEffectiveServings,
   getIngredientName,
+  getServingBasis,
+  perUnitSuffix,
+  recipeHeadlineTotals,
 } from "./recipe-utils";
 
 interface RecipeMagazineViewProps {
@@ -183,7 +185,11 @@ export function RecipeMagazineView({
   costing,
 }: RecipeMagazineViewProps) {
   const servings = getEffectiveServings(recipe);
-  const kcal = totals ? getNutrientValueByKey(totals.nutrients, "kcal") : 0;
+  // Per-portion basis: explicit servings, else the yield count labelled by unit
+  // (e.g. "/ cup", "/ churro"); falls back to "each".
+  const basis = getServingBasis(recipe);
+  // The four headline figures (cost, weight, calories, protein), defined once.
+  const head = totals ? recipeHeadlineTotals(totals) : null;
 
   // Ingredient id → derived gram weight, from the same engine the table uses.
   const gramById = useMemo(() => {
@@ -204,12 +210,20 @@ export function RecipeMagazineView({
   const kicker = [
     recipe.yield?.value ? `Makes ${formatYield(recipe.yield)}` : null,
     servings && recipe.yield?.unit !== "servings" ? `Serves ${servings}` : null,
-    totals?.price && servings
-      ? `${formatCurrency(totals.price / servings)} / serving`
-      : totals?.price
-        ? `${formatCurrency(totals.price)} total`
+    head?.cost && basis
+      ? `${formatCurrency(head.cost / basis.divisor)} ${perUnitSuffix(basis.noun)}`
+      : head?.cost
+        ? `${formatCurrency(head.cost)} total`
         : null,
-    kcal && servings ? `${Math.round(kcal / servings)} kcal / serving` : null,
+    head?.calories && basis
+      ? `${Math.round(head.calories / basis.divisor)} kcal ${perUnitSuffix(basis.noun)}`
+      : null,
+    head?.protein && basis
+      ? `${Math.round(head.protein / basis.divisor)}g protein ${perUnitSuffix(basis.noun)}`
+      : null,
+    head?.weight && basis
+      ? `${Math.round(head.weight / basis.divisor)}g ${perUnitSuffix(basis.noun)}`
+      : null,
   ]
     .filter(Boolean)
     .join("  ·  ");

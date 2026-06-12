@@ -22,7 +22,10 @@ export const gridContainerVariants = cva("grid gap-4", {
       cards3: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3",
       thumbs: "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5",
       images: "grid-cols-3 sm:grid-cols-4 md:grid-cols-5",
-      summary: "grid-cols-4 md:grid-cols-8",
+      // auto-fit stretches the present metrics to fill the row (4 for recipe/
+      // inventory, up to 6 for nutrition) instead of pinning to 8 fixed columns
+      // and leaving dead space; the 7rem floor wraps to 2–3 across on mobile.
+      summary: "grid-cols-[repeat(auto-fit,minmax(7rem,1fr))]",
     },
     gap: {
       2: "gap-2",

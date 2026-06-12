@@ -1,6 +1,9 @@
-import { getNutrientDisplayName, getNutrientUnit } from "@cubby/usda-schemas";
 import * as React from "react";
 import { z } from "zod";
+import {
+  perUnitSuffix,
+  recipeHeadlineTotals,
+} from "~/app/_components/recipe/recipe-utils";
 import type { SummaryItem } from "~/app/_components/SummaryCard";
 import { GridContainer } from "~/components/layout/grid-container";
 import { Badge } from "~/components/ui/badge";
@@ -18,6 +21,11 @@ const recipeSummaryDataSchema = z.object({
     weight: z.array(z.string()),
     nutrients: z.array(z.string()),
   }),
+  /** Per-portion basis; when present each metric gains a "/ {noun}" sub-line. */
+  perServing: z
+    .object({ divisor: z.number(), noun: z.string() })
+    .nullable()
+    .optional(),
 });
 
 const nutritionSummaryDataSchema = z.object({
@@ -78,14 +86,14 @@ interface EntitySummaryCardProps {
   summaryData: EntitySummaryData;
 }
 
-// Priority nutrients to display in summary (kcal and protein)
-const SUMMARY_NUTRIENT_CODES = ["208", "203"] as const; // kcal, protein
-
 // Helper functions for each summary type
 const formatRecipeSummary = (data: RecipeSummaryData): SummaryItem[] => {
   // Builds one metric: a clean value plus an optional small coverage caption.
   // Keeping coverage out of the value prevents the big number from wrapping into
   // adjacent grid columns.
+  const format = (n: number, unit: string, prefix: string) =>
+    `${prefix}${n.toFixed(n < 10 ? 2 : 0)}${unit}`;
+
   const buildMetric = (
     label: string,
     value: number,
@@ -100,32 +108,25 @@ const formatRecipeSummary = (data: RecipeSummaryData): SummaryItem[] => {
     }
     return {
       label,
-      value: `${prefix}${value.toFixed(value < 10 ? 2 : 0)}${unit}`,
+      value: format(value, unit, prefix),
       caption:
         successCount === total
           ? undefined
           : `${successCount}/${total} ingredients`,
+      subValue: data.perServing
+        ? `${format(value / data.perServing.divisor, unit, prefix)} ${perUnitSuffix(data.perServing.noun)}`
+        : undefined,
     };
   };
 
-  // Generate nutrient items for priority nutrients
-  const nutrientItems = SUMMARY_NUTRIENT_CODES.map((code) => {
-    const value = data.nutrients[code] ?? 0;
-    const displayName = getNutrientDisplayName(code);
-    const unit = getNutrientUnit(code).toLowerCase();
-    return buildMetric(
-      `Total ${displayName}`,
-      value,
-      data.missingByType.nutrients.length,
-      data.totalIngredients,
-      code === "208" ? " kcal" : unit, // Special formatting for kcal
-    );
-  });
-
+  // The four headline figures, defined once in recipeHeadlineTotals so the table,
+  // charts, and magazine kicker agree on which numbers they are.
+  const head = recipeHeadlineTotals(data);
+  const nutrientsMissing = data.missingByType.nutrients.length;
   return [
     buildMetric(
       "Total Cost",
-      data.price,
+      head.cost,
       data.missingByType.price.length,
       data.totalIngredients,
       "",
@@ -133,12 +134,25 @@ const formatRecipeSummary = (data: RecipeSummaryData): SummaryItem[] => {
     ),
     buildMetric(
       "Total Weight",
-      data.weight,
+      head.weight,
       data.missingByType.weight.length,
       data.totalIngredients,
       "g",
     ),
-    ...nutrientItems,
+    buildMetric(
+      "Total Calories",
+      head.calories,
+      nutrientsMissing,
+      data.totalIngredients,
+      " kcal",
+    ),
+    buildMetric(
+      "Total Protein",
+      head.protein,
+      nutrientsMissing,
+      data.totalIngredients,
+      "g",
+    ),
   ];
 };
 
@@ -299,6 +313,11 @@ export const EntitySummaryCard: React.FC<EntitySummaryCardProps> = ({
               <div className="font-mono font-semibold text-foreground text-lg tabular-nums">
                 {item.formatter ? item.formatter(item.value) : item.value}
               </div>
+              {item.subValue && (
+                <div className="font-mono text-2xs text-muted-foreground tabular-nums">
+                  {item.subValue}
+                </div>
+              )}
               {item.caption && (
                 <div className="font-mono text-2xs text-muted-foreground">
                   {item.caption}
