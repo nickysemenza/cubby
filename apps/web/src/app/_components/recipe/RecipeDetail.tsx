@@ -18,10 +18,12 @@ import {
   computeRecipeCosting,
   flattenSections,
 } from "~/lib/recipe-costing";
+import { deriveCostingGaps } from "~/lib/recipe-costing-gaps";
 import { formatCurrency } from "~/lib/utils";
 import { AuditLogList } from "../audit-log/audit-log-list";
 import EntityImageList from "../EntityImageList";
 import { useRecipeCostingData } from "../hooks/useRecipeCostingData";
+import { RecipeCostingCoverage } from "./RecipeCostingCoverage";
 import { RecipeMagazineView } from "./RecipeMagazineView";
 import {
   type MissingWeightLink,
@@ -243,29 +245,28 @@ const RecipeDetailInner: React.FC<{
   const totals = costing?.totals ?? null;
   const ingredientDataItems = costing?.rows ?? [];
 
-  // Ingredients whose line can't reach grams (so the total-weight scale anchor
-  // can't use them) → deep-link to where the mapping is added. Keyed off the
-  // engine's per-row gram Result (`priceInfo.gram.isErr()`), NOT the name-string
-  // `totals.missingByType.weight`, so identity stays exact (ids, not names).
-  const missingWeightLinks = useMemo<MissingWeightLink[]>(() => {
-    if (!costing || !ingMap) return [];
-    const seen = new Set<string>();
-    const out: MissingWeightLink[] = [];
-    for (const row of costing.rows) {
-      if (row.type !== "ingredient") continue; // sub-recipe rows: different problem
-      if (!row.priceInfo || row.priceInfo.gram.isOk()) continue; // reaches grams → fine
-      const id = row.ingredient.id;
-      if (seen.has(id)) continue;
-      seen.add(id);
-      const products = ingMap[id]?.product ?? [];
-      out.push({
-        ingredientId: id,
-        name: row.ingredient.name,
-        productId: products.length === 1 ? products[0].id : null,
-      });
-    }
-    return out;
-  }, [costing, ingMap]);
+  // Prioritized mapping suggestions for every ingredient this recipe can't
+  // fully cost (no product, missing USDA link, missing price/weight mapping).
+  // One source of truth — the coverage panel and the weight-scale popover below
+  // both read from this, so they never disagree.
+  const costingGaps = useMemo(
+    () => (costing && ingMap ? deriveCostingGaps(costing, ingMap) : []),
+    [costing, ingMap],
+  );
+
+  // The weight-only subset, for the total-weight scale anchor: ingredients whose
+  // line can't reach grams, deep-linked to where the mapping is added.
+  const missingWeightLinks = useMemo<MissingWeightLink[]>(
+    () =>
+      costingGaps
+        .filter((gap) => gap.missing.weight)
+        .map((gap) => ({
+          ingredientId: gap.ingredientId,
+          name: gap.name,
+          productId: gap.productId,
+        })),
+    [costingGaps],
+  );
 
   return (
     <div className="space-y-6">
@@ -290,6 +291,10 @@ const RecipeDetailInner: React.FC<{
           />
         </div>
       </div>
+
+      {/* Actionable costing-coverage suggestions (table/charts views, where cost
+          matters). Hidden in the reader-facing magazine view and when fully costed. */}
+      {viewMode !== "magazine" && <RecipeCostingCoverage gaps={costingGaps} />}
 
       {/* View Components */}
       {viewMode === "magazine" && (
