@@ -292,7 +292,7 @@ Framed as **Now / Next / Later** (no dates — it's a personal project). Canonic
 ### Next
 
 - **Mobile / offline PWA** — service-worker offline, swipe-to-delete, pull-to-refresh, performance → [docs/plans/2026-01-05-mobile-first-experience-design.md](docs/plans/2026-01-05-mobile-first-experience-design.md)
-- **AI deepening** — *"what can I make tonight?"* via a `find_cookable_recipes` MCP tool, smarter Ask Cubby, better photo capture → [docs/todos.md](docs/todos.md)
+- **AI deepening** — smarter Ask Cubby and better photo capture, building on the shipped *"what can I make tonight?"* (`find_cookable_recipes`) tool → [docs/todos.md](docs/todos.md)
 - **Nutrition & cost intelligence** — price-per-nutrient, daily-value %, and nutrient-density comparisons via WASM conversion extensions → [docs/todos.md](docs/todos.md)
 - **Household sharing** — replace the org plugin with a simple shared-household model + magic-link invites (e.g. share with a partner) → [docs/todos.md](docs/todos.md)
 
@@ -301,7 +301,7 @@ Framed as **Now / Next / Later** (no dates — it's a personal project). Canonic
 - **Meal planning v2** — expiration-aware suggestions, FEFO consumption, meal templates, nutrition goals
 - **WASM deep cuts** — batch recipe parsing, custom unit aliases, inventory depletion preview
 - **Location drag-drop** in the tree view
-- **Engineering backlog** — replace the CSV import pipeline with direct tRPC calls; document test-placement criteria
+- **Engineering backlog** — document test-placement criteria; persist scraped/Notion hero images on the server import path
 
 ## 📚 Further Docs
 
