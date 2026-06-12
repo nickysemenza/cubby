@@ -93,7 +93,7 @@ export default function NutritionBars({
         <div className="mt-1 font-mono font-semibold text-xl tabular-nums">
           {Math.round(totalKcal)} kcal
         </div>
-        <div className="mt-2 flex h-7 overflow-hidden rounded-md border-2 border-[var(--border-chunky)] bg-card">
+        <div className="mt-2 flex h-7 overflow-hidden rounded-md border border-[var(--border-chunky)] bg-card">
           {kcalRows.map((row, i) => (
             <div
               key={row.key}

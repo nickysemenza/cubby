@@ -884,7 +884,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
             {sectionFields.map((sectionField, sectionIndex) => (
               <div
                 key={sectionField.id}
-                className="space-y-2 rounded-lg border-2 border-[var(--border-chunky)] bg-card p-3 shadow-[var(--shadow-chunky-sm)]"
+                className="space-y-2 rounded-lg border border-[var(--border-chunky)] bg-card p-3 shadow-[var(--shadow-chunky-sm)]"
               >
                 <div className="flex items-center justify-between">
                   <h4 className="my-0 font-heading font-semibold text-sm">
@@ -985,7 +985,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
 
         {/* Live page preview — the cookbook spread builds as you type */}
         <aside className="hidden xl:sticky xl:top-20 xl:block">
-          <div className="max-h-[75vh] overflow-y-auto rounded-lg border-2 border-[var(--border-chunky)] bg-card p-4 shadow-[var(--shadow-chunky)]">
+          <div className="max-h-[75vh] overflow-y-auto rounded-lg border border-[var(--border-chunky)] bg-card p-4 shadow-[var(--shadow-chunky)]">
             <p className="mb-3 font-mono text-2xs text-eyebrow uppercase tracking-wider">
               Live preview
             </p>

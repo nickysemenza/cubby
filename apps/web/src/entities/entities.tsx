@@ -27,7 +27,7 @@ export const entities: Record<Entity, EntityDefinition> = {
     basePath: "ingredients",
     lucideIcon: Carrot,
     color: {
-      bg: "bg-accent/20",
+      bg: "bg-warning/20",
       text: "text-accent-foreground",
     },
     routes: {

@@ -663,7 +663,7 @@ export function CookbookImport({
         onDrop={onDrop}
         className={cn(
           "flex flex-col items-center gap-2 rounded border border-border border-dashed p-8 text-muted-foreground transition-colors",
-          isDragging && "border-accent bg-accent/10 text-accent-foreground",
+          isDragging && "border-warning bg-warning/10 text-accent-foreground",
         )}
       >
         <Upload className="h-6 w-6" />

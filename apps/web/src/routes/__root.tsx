@@ -1,6 +1,6 @@
 // Fontsource variable fonts - loaded via bundler for better performance
 import "@fontsource-variable/fraunces";
-import "@fontsource-variable/nunito";
+import "@fontsource-variable/inter";
 
 import { TanStackDevtools } from "@tanstack/react-devtools";
 import type { QueryClient } from "@tanstack/react-query";

@@ -37,10 +37,10 @@ export const nivoChartTheme = {
   },
 };
 
-// Chunky bar chrome shared by the nivo bar charts — soft brown outline like
-// the mockup's bordered bars. Spread into <ResponsiveBar {...nivoBarChrome}>.
+// Bar chrome shared by the nivo bar charts — hairline outline so bars read
+// crisp, not stickered. Spread into <ResponsiveBar {...nivoBarChrome}>.
 export const nivoBarChrome = {
-  borderWidth: 1.5,
+  borderWidth: 1,
   borderColor: "var(--border-chunky)",
   borderRadius: 3,
 } as const;

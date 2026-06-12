@@ -333,8 +333,8 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
   const styles = {
     table: "text-xs leading-tight border-collapse border-spacing-0",
     header:
-      "h-8 px-2 py-1 text-2xs font-mono font-semibold uppercase tracking-wider text-eyebrow bg-muted/50",
-    filterRow: "h-7 px-2 py-0.5 bg-muted/30 border-b border-border/50",
+      "h-8 px-2 py-1 text-2xs font-mono font-semibold uppercase tracking-wider text-eyebrow border-b border-[var(--border-chunky)]",
+    filterRow: "h-7 px-2 py-0.5 border-b border-border/50",
     cell: cn(dConfig.cellClass, "overflow-hidden align-middle"),
     row: cn(dConfig.rowClass, "table-row-hover border-border/30 border-b"),
     sortIcon: "h-3 w-3",
@@ -479,7 +479,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
           --row-accent so hover/selected bars match the section's color. */}
       {!isMobile && (
         <div
-          className="overflow-hidden rounded-lg border-2 border-[var(--border-chunky)] shadow-[var(--shadow-chunky)]"
+          className="overflow-hidden rounded-lg border border-[var(--border-chunky)] shadow-[var(--shadow-chunky)]"
           style={
             entity
               ? ({
@@ -517,7 +517,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
             }
             actions={actions}
             bulkActionBar={bulkActionBar}
-            className="border-border/50 border-b bg-muted/30 px-3 py-2"
+            className="border-border/50 border-b px-3 py-2"
           />
 
           {/* Scrollable container for virtualization */}
@@ -642,7 +642,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                               className={cn(
                                 header.column.columnDef.meta?.className,
                                 styles.header,
-                                sortDirection && "bg-[oklch(0.95_0.03_30)]",
+                                sortDirection && "bg-muted/50",
                               )}
                             >
                               {canSort ? (
@@ -720,7 +720,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                   );
                   if (!hasFooter) return null;
                   return (
-                    <TableFooter className="sticky bottom-0 border-t bg-muted/50 font-medium text-xs">
+                    <TableFooter className="sticky bottom-0 border-t bg-card font-medium text-xs">
                       {footerGroups.map((footerGroup) => (
                         <TableRow
                           key={footerGroup.id}

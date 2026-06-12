@@ -321,7 +321,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
 
         {/* Live fact-sheet — the detail page builds as you type */}
         <aside className="hidden xl:sticky xl:top-20 xl:block">
-          <div className="max-h-[75vh] overflow-y-auto rounded-lg border-2 border-[var(--border-chunky)] bg-card p-4 shadow-[var(--shadow-chunky)]">
+          <div className="max-h-[75vh] overflow-y-auto rounded-lg border border-[var(--border-chunky)] bg-card p-4 shadow-[var(--shadow-chunky)]">
             <p className="mb-3 font-mono text-2xs text-eyebrow uppercase tracking-wider">
               Live preview
             </p>

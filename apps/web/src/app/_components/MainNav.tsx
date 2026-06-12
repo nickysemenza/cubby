@@ -177,7 +177,7 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
           onClick={toggleDebug}
           className={cn(
             "hidden h-8 px-2 md:flex",
-            isDebugEnabled && "bg-accent/30 text-accent-foreground",
+            isDebugEnabled && "bg-warning/30 text-accent-foreground",
           )}
           title={isDebugEnabled ? "Disable debug mode" : "Enable debug mode"}
         >

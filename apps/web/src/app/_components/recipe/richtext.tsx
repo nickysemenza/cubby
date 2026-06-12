@@ -12,7 +12,7 @@ export const formatRichText = (text: ReadonlyDeep<RichItem[]>) => {
       case "Ing":
         return (
           <span
-            className="rounded-sm bg-accent/20 box-decoration-clone px-1 font-medium text-accent-foreground"
+            className="rounded-sm bg-warning/20 box-decoration-clone px-1 font-medium text-accent-foreground"
             // biome-ignore lint/suspicious/noArrayIndexKey: RichItem array has no stable IDs
             key={x}
           >

@@ -63,7 +63,7 @@ const projectStatus: Record<string, StatusBadgeProps> = {
   },
   later: {
     label: "later",
-    className: "bg-accent/30 text-accent-foreground",
+    className: "bg-warning/30 text-accent-foreground",
     icon: Clock,
   },
 };

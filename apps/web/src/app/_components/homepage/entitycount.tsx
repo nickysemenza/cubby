@@ -109,7 +109,7 @@ function StatCard({ entity, count, isLoading, isError }: StatCardProps) {
         emphasis="chunky"
         className={cn(
           "p-2.5 transition-all duration-150 ease-cozy",
-          "hover:-translate-x-px hover:-translate-y-px hover:shadow-[var(--shadow-chunky-lg)]",
+          "hover:-translate-y-0.5 hover:shadow-[var(--shadow-chunky)]",
           "cursor-pointer border-l-4",
           def.color.text.replace("text-", "border-l-"),
         )}

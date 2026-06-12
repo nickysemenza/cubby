@@ -4,7 +4,6 @@ import { Package, Printer } from "lucide-react";
 import type { FC } from "react";
 import { toast } from "sonner";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
-import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { queryKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
@@ -64,9 +63,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
           {
             label: "Shortcode",
             value: (
-              <Badge variant="secondary" className="font-mono">
-                {product.shortcode}
-              </Badge>
+              <span className="font-mono text-xs">{product.shortcode}</span>
             ),
           },
         ]
@@ -157,7 +154,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
           {
             label: "External IDs",
             value: (
-              <div className="flex flex-wrap gap-1">
+              <div className="flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-xs">
                 {product.externalIds.map((eid) => {
                   const label = `${eid.source}: ${eid.externalId}`;
                   return eid.url ? (
@@ -168,12 +165,12 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
                       rel="noopener noreferrer"
                       className="text-primary hover:underline"
                     >
-                      <Badge variant="outline">{label}</Badge>
+                      {label}
                     </a>
                   ) : (
-                    <Badge key={eid.id} variant="outline">
+                    <span key={eid.id} className="text-muted-foreground">
                       {label}
-                    </Badge>
+                    </span>
                   );
                 })}
               </div>

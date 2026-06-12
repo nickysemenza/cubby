@@ -109,7 +109,7 @@ export function BottomNav() {
                 }}
                 className={cn(
                   "min-h-[44px] justify-start px-3 py-2 text-sm",
-                  isDebugEnabled && "bg-accent/30 text-accent-foreground",
+                  isDebugEnabled && "bg-warning/30 text-accent-foreground",
                 )}
               >
                 {isDebugEnabled ? (

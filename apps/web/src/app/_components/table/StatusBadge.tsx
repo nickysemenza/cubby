@@ -5,7 +5,7 @@ import { Badge } from "~/components/ui/badge";
 const statusBadgeVariants = cva("", {
   variants: {
     status: {
-      UPLOADED: "bg-accent text-accent-foreground hover:bg-accent/80",
+      UPLOADED: "bg-warning text-accent-foreground hover:bg-warning/80",
       PENDING: "border-muted-foreground text-muted-foreground",
       FAILED: "border-destructive text-destructive",
     },

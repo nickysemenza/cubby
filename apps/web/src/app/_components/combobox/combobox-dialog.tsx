@@ -120,8 +120,8 @@ export function DialogCompatibleCombobox<TId extends string = string>({
         aria-controls={listboxId}
         aria-label={label}
         // Form-control trigger: hairline input chrome, not the outline button's
-        // chunky treatment, so forms stay quiet (chunky is for primary actions).
-        className="w-full min-w-[200px] justify-between truncate border border-border bg-input/20 font-normal font-sans shadow-none hover:bg-input/30 active:translate-x-0 active:translate-y-0 active:shadow-none max-sm:h-10"
+        // elevated treatment, so forms stay quiet.
+        className="w-full min-w-[200px] justify-between truncate border border-border bg-input/20 font-normal font-sans shadow-none hover:bg-input/30 active:shadow-none max-sm:h-10"
         onClick={(e) => {
           // Prevent the click from bubbling up to the form and triggering a submit
           e.preventDefault();

@@ -135,7 +135,7 @@ export function PerfOverlay() {
         type="button"
         onClick={() => setMinimized(false)}
         className={cn(
-          "fixed z-[60] flex items-center gap-1.5 rounded-md border-2 border-[var(--border-chunky)] bg-card px-2 py-1 font-mono text-xs shadow-[var(--shadow-chunky)]",
+          "fixed z-[60] flex items-center gap-1.5 rounded-md border border-[var(--border-chunky)] bg-card px-2 py-1 font-mono text-xs shadow-[var(--shadow-chunky)]",
           CORNER_CLASS[corner],
         )}
       >
@@ -148,7 +148,7 @@ export function PerfOverlay() {
   return (
     <div
       className={cn(
-        "fixed z-[60] flex max-h-[70vh] w-80 flex-col overflow-hidden rounded-lg border-2 border-[var(--border-chunky)] bg-card font-mono text-xs shadow-[var(--shadow-chunky-lg)]",
+        "fixed z-[60] flex max-h-[70vh] w-80 flex-col overflow-hidden rounded-lg border border-[var(--border-chunky)] bg-card font-mono text-xs shadow-[var(--shadow-chunky-lg)]",
         CORNER_CLASS[corner],
       )}
     >

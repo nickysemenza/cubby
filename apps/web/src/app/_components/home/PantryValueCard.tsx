@@ -62,12 +62,12 @@ export function PantryValueCard() {
       <div className="font-mono font-semibold text-xl tabular-nums">
         {formatCurrency(total)}
       </div>
-      <div className="mt-3 flex h-24 items-end gap-3 border-[var(--border-chunky)] border-b-2 px-1">
+      <div className="mt-3 flex h-24 items-end gap-3 border-[var(--border-chunky)] border-b px-1">
         {bars.map((b, i) => (
           <div
             key={b.label}
             title={`${b.label}: ${formatCurrency(b.value)}`}
-            className="min-w-0 flex-1 rounded-t border-2 border-[var(--border-chunky)] border-b-0"
+            className="min-w-0 flex-1 rounded-t border border-[var(--border-chunky)] border-b-0"
             style={{
               height: `${Math.max(8, (b.value / max) * 100)}%`,
               backgroundColor: BAR_COLORS[i % BAR_COLORS.length],

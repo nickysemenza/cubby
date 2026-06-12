@@ -15,7 +15,7 @@ const variantClasses: Record<ColoredAlertVariant, string> = {
   success:
     "border-secondary bg-secondary text-secondary-foreground [&>svg]:text-secondary-foreground",
   warning:
-    "border-accent bg-accent/30 text-accent-foreground [&>svg]:text-accent-foreground",
+    "border-warning bg-warning/30 text-accent-foreground [&>svg]:text-accent-foreground",
   info: "border-slate/30 bg-slate/10 text-slate [&>svg]:text-slate",
 };
 

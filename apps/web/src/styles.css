@@ -10,10 +10,10 @@
 @theme {
   /* Fraunces - warm serif with personality for headings */
   --font-heading: "Fraunces Variable", Georgia, "Times New Roman", serif;
-  /* Nunito - friendly rounded sans-serif for body text */
+  /* Inter - crisp neutral UI sans (2026-06-12 refresh; was Nunito) */
   --font-sans:
-    "Nunito Variable", ui-sans-serif, system-ui, sans-serif,
-    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    "Inter Variable", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
+    "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
   --font-mono:
     "JetBrains Mono", "Fira Code", "SF Mono", Monaco, "Cascadia Code",
     "Roboto Mono", Consolas, "Courier New", monospace;
@@ -56,13 +56,13 @@
   h4 {
     font-family: var(--font-heading);
   }
+  /* Crisp refresh: one step down from the old text-4xl/5xl extrabold display
+     scale - headings keep Fraunces' warmth but stop shouting. */
   h1 {
-    /* font-size: var(--text-2xl); */
-    @apply scroll-m-20 text-4xl font-extrabold tracking-tight lg:text-5xl;
+    @apply scroll-m-20 text-3xl font-bold tracking-tight lg:text-4xl;
   }
   h2 {
-    /* font-size: var(--text-xl); */
-    @apply scroll-m-20 border-b pb-2 text-3xl font-semibold tracking-tight first:mt-0;
+    @apply scroll-m-20 border-b pb-2 text-2xl font-semibold tracking-tight first:mt-0;
   }
   ul {
     @apply my-6 ml-6 list-inside list-disc [&>li]:mt-2;
@@ -74,7 +74,9 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    /* font-sans must be explicit: Tailwind v4 preflight doesn't wire --font-sans
+       to the document, so without this the app silently runs on system fonts. */
+    @apply bg-background font-sans text-foreground;
     /* iOS PWA target: suppress the default gray tap-highlight box; we provide
        our own warm active: states for press feedback. */
     -webkit-tap-highlight-color: transparent;
@@ -83,10 +85,10 @@
   input:focus,
   textarea:focus,
   [data-slot="combobox-trigger"]:focus {
+    /* Crisp two-ring focus - no outer glow */
     box-shadow:
       0 0 0 2px var(--background),
-      0 0 0 4px oklch(from var(--brand-terracotta) l c h / 0.2),
-      0 0 12px -2px oklch(from var(--brand-terracotta) l c h / 0.15);
+      0 0 0 4px oklch(from var(--brand-terracotta) l c h / 0.25);
   }
 
   /* Respect users who prefer reduced motion - neutralize our animations.
@@ -149,11 +151,11 @@
      (2026-06-10 palette tune; was #c2603d / #d98a68) */
   --brand-terracotta: #ae4a28;
   --brand-terra-light: #cf7d57;
-  --brand-cream: #fdfbf7;
-  /* Cooler paper - chroma pulled toward neutral cream so the ground stops
-     competing with the terracotta ink; still a full step deeper than cream
-     so cards visibly lift off the page (was oklch(0.954 0.016 74)) */
-  --brand-paper: oklch(0.955 0.009 90);
+  /* Gallery refresh (2026-06-12): brighter near-white card + lighter, more
+     neutral paper so terracotta/entity inks pop harder. Still warm, just
+     cooler than the old hearth cream (was card #fdfbf7 / paper 0.955 0.009 90). */
+  --brand-cream: #fffefb;
+  --brand-paper: oklch(0.97 0.004 95);
   --brand-shelf: #5c5550;
   --brand-sage: oklch(0.94 0.025 145);
 
@@ -169,18 +171,21 @@
     0 20px 40px -8px rgba(58, 53, 48, 0.2),
     0 8px 16px -4px rgba(58, 53, 48, 0.12);
 
-  /* Chunky offset shadows - crisp zero-blur drop for the tactile, soft-
-     neobrutalist chrome (turbopuffer-style). Warm foreground, softened so it
-     reads as a gentle brown lift rather than a loud black slab. Used via
-     shadow-[var(--shadow-chunky)] arbitrary utilities. Two knobs tune the
-     whole "chunky" treatment app-wide: these offsets/alpha and --border-chunky. */
-  --shadow-chunky-sm: 1.5px 1.5px 0 0
-    oklch(from var(--brand-foreground) l c h / 0.5);
-  --shadow-chunky: 3px 3px 0 0 oklch(from var(--brand-foreground) l c h / 0.6);
-  --shadow-chunky-lg: 4px 4px 0 0
-    oklch(from var(--brand-foreground) l c h / 0.6);
-  /* Border for chunky chrome - a soft brown outline, not a stark black line. */
-  --border-chunky: oklch(from var(--brand-foreground) l c h / 0.6);
+  /* Crisp elevation ("chunky" tokens repurposed, 2026-06-12 Linear/Figma-style
+     refresh) - layered low-alpha blurs in the warm foreground tint instead of
+     the old zero-blur offset slabs. Same two knobs still tune all signature
+     chrome app-wide: these shadows and --border-chunky. */
+  --shadow-chunky-sm: 0 1px 2px 0
+    oklch(from var(--brand-foreground) l c h / 0.06);
+  --shadow-chunky:
+    0 1px 2px 0 oklch(from var(--brand-foreground) l c h / 0.05),
+    0 2px 8px -2px oklch(from var(--brand-foreground) l c h / 0.1);
+  --shadow-chunky-lg:
+    0 2px 4px -1px oklch(from var(--brand-foreground) l c h / 0.06),
+    0 8px 24px -6px oklch(from var(--brand-foreground) l c h / 0.16);
+  /* Border for signature chrome - a hairline a step darker than --border so
+     primary surfaces still read defined, just not outlined. */
+  --border-chunky: oklch(0.86 0.01 75);
 
   /* Core colors - 3-step surface elevation: muted < paper(bg) < cream(card) */
   --background: var(--brand-paper);
@@ -194,32 +199,41 @@
   --primary: var(--brand-terracotta);
   --primary-foreground: var(--brand-cream);
 
-  /* Secondary - Warm sage green */
-  --secondary: oklch(0.94 0.025 145);
+  /* Secondary - Warm sage green (Gallery: slightly desaturated) */
+  --secondary: oklch(0.945 0.018 145);
   --secondary-foreground: oklch(0.35 0.04 145);
 
-  /* Muted - Warm beige */
-  --muted: oklch(0.94 0.015 55);
+  /* Muted - light warm-neutral (Gallery: chroma pulled toward neutral) */
+  --muted: oklch(0.95 0.006 75);
   --muted-foreground: var(--brand-shelf);
 
-  /* Accent - Terra light */
-  --accent: var(--brand-terra-light);
+  /* Accent - neutral hover/focus wash (Gallery refresh: was terra-light
+     orange; color is now reserved for selection/active, not hover. Semantic
+     orange moved to --warning). --accent-foreground stays the ink. */
+  --accent: oklch(0.945 0.007 75);
   --accent-foreground: var(--brand-foreground);
+
+  /* Warning - the reserved semantic orange (was carried by --accent) */
+  --warning: var(--brand-terra-light);
 
   /* Destructive - Deep burgundy */
   --destructive: oklch(0.45 0.18 15);
   --destructive-foreground: var(--brand-cream);
 
-  /* Borders and inputs */
-  --border: oklch(0.88 0.02 55);
-  --input: oklch(0.94 0.015 55);
+  /* Borders and inputs (Gallery: lighter, more neutral) */
+  --border: oklch(0.9 0.008 75);
+  --input: oklch(0.95 0.006 75);
   --ring: var(--brand-terracotta);
+
+  /* Selected table-row tint - warm but quiet (replaces hardcoded oklch tints
+     in Table.tsx + table.tsx) */
+  --row-selected: oklch(0.955 0.012 50);
 
   /* Extended palette */
   /* Eyebrow - warm mid-brown for mono uppercase micro-labels (page-hero
      eyebrows, table column headers, stat-card labels). Sits between
      terracotta and shelf so labels read warm but stay quiet. */
-  --eyebrow: oklch(0.5 0.07 50);
+  --eyebrow: oklch(0.52 0.045 60);
   --highlight: var(--brand-terracotta);
   --subtle: oklch(0.65 0.08 90); /* Warm olive */
   --glow: var(--brand-terra-light);
@@ -260,9 +274,9 @@
   --sidebar-foreground: var(--brand-foreground);
   --sidebar-primary: var(--brand-terracotta);
   --sidebar-primary-foreground: var(--brand-cream);
-  --sidebar-accent: oklch(0.94 0.015 55);
+  --sidebar-accent: oklch(0.95 0.006 75);
   --sidebar-accent-foreground: var(--brand-foreground);
-  --sidebar-border: oklch(0.88 0.02 55);
+  --sidebar-border: oklch(0.9 0.008 75);
   --sidebar-ring: var(--brand-terracotta);
 }
 /*
@@ -283,6 +297,7 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+  --color-warning: var(--warning);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
@@ -326,7 +341,6 @@
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
-  --font-sans: var(--font-sans);
 }
 /*
   ---break---
@@ -353,13 +367,13 @@
     @apply [&_[cmdk-group-heading]]:text-eyebrow [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-mono [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-2xs [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group]]:px-2 [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5;
   }
 
-  /* Sonner toasts wear the chunky signature like dialogs (they're transient
+  /* Sonner toasts wear the signature chrome like dialogs (they're transient
      modals). Sonner injects its own border/shadow, hence the overrides. */
   .cn-toast {
     /* biome-ignore lint/complexity/noImportantStyles: sonner sets inline border/shadow */
-    border-width: 2px !important;
+    border-color: var(--border-chunky) !important;
     /* biome-ignore lint/complexity/noImportantStyles: sonner sets inline border/shadow */
-    box-shadow: var(--shadow-chunky) !important;
+    box-shadow: var(--shadow-chunky-lg) !important;
   }
 
   /* Skeleton shimmer loading effect */
@@ -403,8 +417,8 @@
       radial-gradient(at 85% 5%, var(--subtle) 0px, transparent 45%),
       radial-gradient(at 0% 30%, var(--glow) 0px, transparent 40%),
       radial-gradient(at 95% 60%, var(--plum) 0px, transparent 35%);
-    /* Quieted (was 0.1) - on the cooler paper the mesh is a whisper */
-    opacity: 0.05;
+    /* Quieted again for the crisp refresh (was 0.05) - barely-there atmosphere */
+    opacity: 0.03;
     pointer-events: none;
     z-index: -1;
   }
@@ -413,46 +427,12 @@
     z-index: 1;
   }
 
-  /* Global paper grain - a faint fixed film over the whole app so the cream
-     reads like paper, not flat screen. Very subtle (felt, not seen). */
-  body::after {
-    content: "";
-    position: fixed;
-    inset: 0;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
-    /* Quieted (was 0.022) - felt only on large empty fields */
-    opacity: 0.011;
-    pointer-events: none;
-    z-index: 9999;
-    mix-blend-mode: multiply;
-  }
-
-  /* Tactile card emboss - a faint top inner-light "shelf lip" so cards read
-     like physical cards on a shelf, not flat panels. Styled via the design
-     layer (not the shadcn card component). The ::after is clipped to the
-     card's rounded corners by its overflow-hidden. */
-  [data-slot="card"] {
-    position: relative;
-  }
-  [data-slot="card"]::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    pointer-events: none;
-    box-shadow: inset 0 1px 0 0 oklch(1 0 0 / 0.5);
-  }
-
-  /* Table row hover - warm gradient accent */
+  /* Table row hover - flat wash + spot-ink accent bar */
   .table-row-hover {
     @apply transition-all duration-150;
   }
   .table-row-hover:hover {
-    background: linear-gradient(
-      90deg,
-      oklch(0.96 0.02 55) 0%,
-      transparent 100%
-    );
+    background: oklch(0.96 0.005 90);
     box-shadow: inset 3px 0 0 var(--row-accent, var(--brand-terracotta));
   }
 
@@ -560,7 +540,6 @@
     body {
       background: white;
     }
-    body::after,
     .gradient-mesh::before {
       display: none;
     }

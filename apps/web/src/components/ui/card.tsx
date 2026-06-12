@@ -9,7 +9,7 @@ function Card({
   ...props
 }: React.ComponentProps<"div"> & {
   size?: "default" | "sm";
-  /** "chunky" swaps the soft ring for a tactile 2px border + offset shadow. */
+  /** "chunky" swaps the soft ring for a defined hairline border + elevation. */
   emphasis?: "soft" | "chunky";
 }) {
   return (
@@ -20,7 +20,7 @@ function Card({
       className={cn(
         "bg-card text-card-foreground group/card flex flex-col gap-3 overflow-hidden rounded-lg py-3 text-xs/relaxed has-[>img:first-child]:pt-0 data-[size=sm]:gap-2 data-[size=sm]:py-2 *:[img:first-child]:rounded-t-lg *:[img:last-child]:rounded-b-lg",
         emphasis === "chunky"
-          ? "border-[var(--border-chunky)] border-2 shadow-[var(--shadow-chunky)]"
+          ? "border-[var(--border-chunky)] border shadow-[var(--shadow-chunky)]"
           : "ring-foreground/10 ring-1",
         className,
       )}
@@ -31,9 +31,9 @@ function Card({
 
 /**
  * A clickable, radio-style card for "pick one of these" surfaces (e.g. choosing
- * a location to move items into). Selected = thick foreground border + offset
- * shadow; unselected = a thin inner ring. The border width is reserved on both
- * states (transparent when unselected) so selecting never shifts layout.
+ * a location to move items into). Selected = primary hairline border +
+ * elevation; unselected = a thin inner ring. The border width is reserved on
+ * both states (transparent when unselected) so selecting never shifts layout.
  */
 function SelectableCard({
   className,
@@ -56,8 +56,8 @@ function SelectableCard({
         "bg-card text-card-foreground group/card ease-cozy flex w-full flex-col gap-1 overflow-hidden rounded-lg px-4 py-3 text-left text-xs/relaxed transition-all outline-none",
         "focus-visible:ring-ring/40 focus-visible:ring-2",
         selected
-          ? "border-[var(--border-chunky)] border-2 shadow-[var(--shadow-chunky)]"
-          : "hover:border-foreground/40 border-2 border-transparent ring-1 ring-border/80 ring-inset",
+          ? "border-primary border shadow-[var(--shadow-chunky)]"
+          : "hover:border-foreground/40 border border-transparent ring-1 ring-border/80 ring-inset",
         className,
       )}
       {...props}
