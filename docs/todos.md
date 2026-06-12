@@ -15,16 +15,6 @@ Follow-on to client-side recipe scaling (multiplier/weight/ingredient anchors,
 `recipe-scaling.ts` + `RecipeScaleControl.tsx`). No new schema/table — fix data
 organically via the existing per-product `UnitMapping` mechanism.
 
-- [ ] **Actionable missing-weight links**: the total-weight anchor needs every
-  line to convert to grams. Gaps already surface via `totals.missingByType.weight`
-  and the scale popover shows a passive "No weight conversion yet…" notice. Make it
-  actionable: list the offending ingredient(s) and deep-link to where the mapping
-  is actually edited — the **product** form (`product-form-fields.tsx`, the
-  `unitMappings` `ArrayFieldManager`), **not** the ingredient page
-  (`ingredient-detail.tsx` is read-only `UnitMappingsTable`). Since a line resolves
-  to an ingredient that may have multiple products, link straight to the product
-  edit form when the ingredient has exactly one product, else via `/ingredients/$id`
-  (the hub that lists its products). Reuse `UnitMappingDisplay` / `ConversionDialog`.
 - [ ] **Salt convention**: distinct salts ("Diamond Crystal kosher salt" — already
   in data — "Morton", "table salt") each carry their own density mapping; bare
   "salt" defaults to table salt. Mostly data; document the default in `recipe-utils`.

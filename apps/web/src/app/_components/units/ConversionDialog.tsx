@@ -2,7 +2,7 @@ import type { AmountKind, WAmount, WConversionStep } from "@cubby/recipebridge";
 import { type Amount, amount } from "@cubby/schemas/codec";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Scale } from "lucide-react";
+import { Calculator } from "lucide-react";
 import * as React from "react";
 import { useId, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -41,6 +41,8 @@ type FormValues = z.infer<typeof formSchema>;
 
 interface ConversionDialogProps {
   mappings: UnitMapping[];
+  /** Icon-only, no label — for dense table cells where the coverage icons lead. */
+  compact?: boolean;
 }
 
 const amountKinds: AmountKind[] = [
@@ -258,7 +260,10 @@ function ConversionDialogContent({
   );
 }
 
-export function ConversionDialog({ mappings }: ConversionDialogProps) {
+export function ConversionDialog({
+  mappings,
+  compact = false,
+}: ConversionDialogProps) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -269,16 +274,16 @@ export function ConversionDialog({ mappings }: ConversionDialogProps) {
             <TooltipTrigger
               render={
                 <Button
-                  variant="secondary"
-                  size="xs"
-                  className="flex items-center gap-1"
+                  variant="ghost"
+                  size={compact ? "icon-sm" : "sm"}
+                  className="flex items-center gap-1 text-muted-foreground"
                 />
               }
             />
           }
         >
-          <Scale className="h-3 w-3" />
-          <span>Convert</span>
+          <Calculator className="h-3 w-3" />
+          {!compact && <span>Convert</span>}
         </DialogTrigger>
         <TooltipContent sideOffset={6}>Open unit converter</TooltipContent>
       </Tooltip>

@@ -24,7 +24,10 @@ import { AuditLogList } from "../audit-log/audit-log-list";
 import EntityImageList from "../EntityImageList";
 import { useRecipeCostingData } from "../hooks/useRecipeCostingData";
 import { RecipeMagazineView } from "./RecipeMagazineView";
-import { RecipeScaleControl } from "./RecipeScaleControl";
+import {
+  type MissingWeightLink,
+  RecipeScaleControl,
+} from "./RecipeScaleControl";
 import { RecipeCostingDebugCard } from "./recipe-costing-debug-card";
 import { scaleRecipe } from "./recipe-scaling";
 import { RecipeTagList } from "./recipe-tag";
@@ -232,6 +235,30 @@ const RecipeDetailInner: React.FC<{
   const totals = costing?.totals ?? null;
   const ingredientDataItems = costing?.rows ?? [];
 
+  // Ingredients whose line can't reach grams (so the total-weight scale anchor
+  // can't use them) → deep-link to where the mapping is added. Keyed off the
+  // engine's per-row gram Result (`priceInfo.gram.isErr()`), NOT the name-string
+  // `totals.missingByType.weight`, so identity stays exact (ids, not names).
+  const missingWeightLinks = useMemo<MissingWeightLink[]>(() => {
+    if (!costing || !ingMap) return [];
+    const seen = new Set<string>();
+    const out: MissingWeightLink[] = [];
+    for (const row of costing.rows) {
+      if (row.type !== "ingredient") continue; // sub-recipe rows: different problem
+      if (!row.priceInfo || row.priceInfo.gram.isOk()) continue; // reaches grams → fine
+      const id = row.ingredient.id;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const products = ingMap[id]?.product ?? [];
+      out.push({
+        ingredientId: id,
+        name: row.ingredient.name,
+        productId: products.length === 1 ? products[0].id : null,
+      });
+    }
+    return out;
+  }, [costing, ingMap]);
+
   return (
     <div className="space-y-6">
       {/* Tags, Scale control, and View Toggle */}
@@ -243,6 +270,7 @@ const RecipeDetailInner: React.FC<{
           <RecipeScaleControl
             recipe={recipe}
             totals={totals}
+            missingWeightLinks={missingWeightLinks}
             factor={factor}
             onFactorChange={setFactor}
           />

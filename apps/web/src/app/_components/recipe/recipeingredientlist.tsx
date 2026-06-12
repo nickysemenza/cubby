@@ -87,7 +87,10 @@ export const RecipeIngredientList: React.FC<{
       id: "ing name",
       header: "Ingredient",
       enableSorting: false,
-      meta: { className: "min-w-0 truncate" },
+      // Fixed width (like the sibling numeric columns, which use w-*) so the
+      // primary column doesn't collapse to "jala…"; the inner divs truncate
+      // long names. `min-w-*` alone isn't honored by this table's layout.
+      meta: { className: "w-48" },
       cell: (info) => {
         const row = info.row.original;
         const rawLine = row.rawLine;
@@ -297,7 +300,14 @@ export const RecipeIngredientList: React.FC<{
         }
 
         const mappings = id ? (mappingsMap[id] ?? []) : [];
-        return <UnitMappingDisplay mappings={mappings} title="" compact />;
+        return (
+          <UnitMappingDisplay
+            mappings={mappings}
+            title=""
+            compact
+            showCoverage
+          />
+        );
       },
     }),
     // Actions column - links to ingredient or recipe detail

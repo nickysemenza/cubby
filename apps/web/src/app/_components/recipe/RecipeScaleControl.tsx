@@ -1,4 +1,5 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
+import { Link } from "@tanstack/react-router";
 import { Scaling, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "~/components/ui/button";
@@ -21,10 +22,24 @@ const factorLabel = (f: number): string =>
 
 type AnchorMode = ScaleAnchor["type"];
 
+/**
+ * An ingredient whose line couldn't reach grams, so the total-weight anchor
+ * can't use it. Links to where the missing mapping is fixed: the product edit
+ * form when the ingredient resolves to exactly one product, else the ingredient
+ * hub (which lists its products).
+ */
+export interface MissingWeightLink {
+  ingredientId: string;
+  name: string;
+  productId: string | null;
+}
+
 interface RecipeScaleControlProps {
   recipe: RecipeOut;
   /** Costing rollup (for the totalWeight anchor); null while loading. */
   totals: CalculateTotalsResult | null;
+  /** Ingredients blocking the total-weight anchor (no gram conversion). */
+  missingWeightLinks: MissingWeightLink[];
   /** Current resolved scale factor (1 = unscaled). */
   factor: number;
   onFactorChange: (factor: number) => void;
@@ -38,6 +53,7 @@ interface RecipeScaleControlProps {
 export function RecipeScaleControl({
   recipe,
   totals,
+  missingWeightLinks,
   factor,
   onFactorChange,
 }: RecipeScaleControlProps) {
@@ -223,11 +239,43 @@ export function RecipeScaleControl({
             </Button>
           </form>
 
-          {mode === "totalWeight" && !totals?.weight && (
-            <p className="text-2xs text-muted-foreground">
-              No weight conversion yet — add a unit mapping to scale by weight.
-            </p>
-          )}
+          {/* In weight mode, name the ingredients that can't reach grams so the
+              user can fix them. Fires whenever there are offenders — a fully
+              weightless recipe (no `totals.weight`) AND a partial one (the
+              total silently excludes these lines, making weight-scaling
+              inaccurate). Falls back to the passive line only when there's
+              nothing to point at (e.g. still loading). */}
+          {mode === "totalWeight" &&
+            (missingWeightLinks.length > 0 ? (
+              <div className="space-y-1 text-2xs text-muted-foreground">
+                <p>
+                  {totals?.weight
+                    ? "These ingredients aren't in the weight total. Add a unit mapping for:"
+                    : "No weight conversion yet. Add a unit mapping for:"}
+                </p>
+                <ul className="space-y-0.5">
+                  {missingWeightLinks.map((link) => (
+                    <li key={link.ingredientId}>
+                      <Link
+                        to={
+                          link.productId ? "/products/$id" : "/ingredients/$id"
+                        }
+                        params={{ id: link.productId ?? link.ingredientId }}
+                        className="text-primary underline-offset-2 hover:underline"
+                        onClick={() => setOpen(false)}
+                      >
+                        {link.name}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : !totals?.weight ? (
+              <p className="text-2xs text-muted-foreground">
+                No weight conversion yet — add a unit mapping to scale by
+                weight.
+              </p>
+            ) : null)}
         </PopoverContent>
       </Popover>
 
