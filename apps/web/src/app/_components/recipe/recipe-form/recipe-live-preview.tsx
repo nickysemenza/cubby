@@ -87,9 +87,9 @@ export const RecipeLivePreview: FC<{
                   <li
                     // biome-ignore lint/suspicious/noArrayIndexKey: positional draft rows
                     key={i}
-                    className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-baseline gap-2 py-1"
+                    className="grid grid-cols-[5rem_minmax(0,1fr)] items-baseline gap-2 py-1"
                   >
-                    <span className="text-right font-mono text-2xs text-muted-foreground tabular-nums">
+                    <span className="whitespace-nowrap text-right font-mono text-2xs text-muted-foreground tabular-nums">
                       {formatDraftQty(ing?.amounts)}
                     </span>
                     <span className="truncate text-sm">{name}</span>

@@ -43,11 +43,15 @@ function SpreadHeading({ children }: { children: ReactNode }) {
 }
 
 /** Cooking quantities only — money/calories amounts belong to the table view. */
-function formatQty(ing: SectionIngredientOut): string {
+function formatWrittenQuantities(ing: SectionIngredientOut) {
   return ing.amounts
     .filter((a) => !["money", "calories"].includes(wasm.amount_kind(a)))
-    .map((a) => wasm.format_amount(a))
-    .join(" / ");
+    .map((a, index) => ({
+      key: `written-${index}-${a.value}-${a.unit}`,
+      text: wasm.format_amount(a),
+      derived: false,
+      estimated: false,
+    }));
 }
 
 /**
@@ -106,6 +110,19 @@ function IngredientLedger({
               const derivedGram = hasWrittenWeight(ing)
                 ? undefined
                 : gramById.get(ing.id);
+              const quantities = [
+                ...formatWrittenQuantities(ing),
+                ...(derivedGram
+                  ? [
+                      {
+                        key: "derived-grams",
+                        text: derivedGram.text,
+                        derived: true,
+                        estimated: derivedGram.estimated,
+                      },
+                    ]
+                  : []),
+              ];
               return (
                 <li key={ing.id}>
                   <button
@@ -117,22 +134,29 @@ function IngredientLedger({
                         ? ing.rawLine
                         : undefined
                     }
-                    className="grid w-full cursor-pointer grid-cols-[3.5rem_minmax(0,1fr)] items-baseline gap-2 py-1.5 text-left"
+                    className="grid w-full cursor-pointer grid-cols-[5rem_minmax(0,1fr)] items-baseline gap-2 py-1.5 text-left"
                   >
                     <span
                       className={cn(
-                        "text-right font-mono text-muted-foreground text-xs tabular-nums",
+                        "whitespace-nowrap text-right font-mono text-muted-foreground text-xs tabular-nums",
                         isStruck && "opacity-40",
                       )}
                     >
-                      {formatQty(ing)}
-                      {derivedGram && (
-                        <span className="text-muted-foreground/70">
-                          {" / "}
-                          {derivedGram.text}
-                          {derivedGram.estimated && <EstimateMarker />}
+                      {quantities.map((quantity, index) => (
+                        <span key={quantity.key}>
+                          {index > 0 && " / "}
+                          <span
+                            className={
+                              quantity.derived
+                                ? "text-muted-foreground/70"
+                                : undefined
+                            }
+                          >
+                            {quantity.text}
+                            {quantity.estimated && <EstimateMarker />}
+                          </span>
                         </span>
-                      )}
+                      ))}
                     </span>
                     <span
                       className={cn(
