@@ -403,6 +403,79 @@ fn guards_against_cycles_without_hanging() {
 }
 
 #[test]
+fn sub_recipe_referenced_both_inside_and_outside_a_cycle() {
+    // The hardest memo/taint topology. root references S directly (clean) AND
+    // references T, whose subtree is cyclic (T→U→T) but also reaches the same
+    // S (U→S). S must resolve to identical values in both the clean direct
+    // encounter and the tainted subtree — the cache (filled clean, read under
+    // taint) must neither poison S nor be poisoned by the cycle.
+    let tomato = ingredient(
+        "tomato",
+        vec![
+            mapping((1.0, "cup"), (100.0, "gram")),
+            mapping((1.0, "cup"), (1.0, "dollar")),
+        ],
+    );
+    // S "sauce": yields 4 cup; 4 cup tomato → $4 / 400 g. 2 cup of it = $2 / 200 g.
+    let sauce = WCostingRecipe {
+        id: "S".to_string(),
+        recipe_yield: Some(amount(4.0, "cup")),
+        rows: vec![row("tomato", "tomato", Some((4.0, "cup")), None, None)],
+    };
+    // U "u": yields 1 batch; references T (closes the cycle → guarded → missing)
+    // and S (2 cup → $2 / 200 g). So U = $2 / 200 g.
+    let u = WCostingRecipe {
+        id: "U".to_string(),
+        recipe_yield: Some(amount(1.0, "batch")),
+        rows: vec![
+            sub_recipe_row("T", (1.0, "batch")),
+            sub_recipe_row("S", (2.0, "cup")),
+        ],
+    };
+    // T "t": yields 1 batch; references U (1 batch → full U = $2 / 200 g).
+    let t = WCostingRecipe {
+        id: "T".to_string(),
+        recipe_yield: Some(amount(1.0, "batch")),
+        rows: vec![sub_recipe_row("U", (1.0, "batch"))],
+    };
+
+    // root: direct S row FIRST (fills the clean cache), then the cyclic T branch
+    // (reaches S again via U, as a cache hit).
+    let mut direct_s = sub_recipe_row("S", (2.0, "cup"));
+    direct_s.id = "link-S-direct".to_string();
+    let r = cost(
+        vec![direct_s, sub_recipe_row("T", (1.0, "batch"))],
+        vec![tomato],
+        vec![sauce, u, t],
+    );
+
+    // Direct S row resolves to $2 / 200 g — the cache value is correct.
+    match &r.rows[0].price {
+        WMeasureResult::Ok(m) => assert_close(m.value, 2.0, 0.005, "direct S price"),
+        WMeasureResult::Err(e) => panic!("expected direct S price ok, got {e:?}"),
+    }
+    // Both branches contribute $2 / 200 g (S directly + T→U→S), so the cycle is
+    // broken cleanly and S is identical across the clean/tainted boundary.
+    assert_close(r.price, 4.0, 0.005, "total price");
+    assert_close(r.weight, 400.0, 0.05, "total weight");
+    assert!(r.missing_by_type.price.is_empty());
+}
+
+#[test]
+fn empty_recipe_costs_to_zero() {
+    let r = cost(vec![], vec![], vec![]);
+    assert_eq!(r.total_ingredients, 0);
+    assert_eq!(r.price, 0.0);
+    assert_eq!(r.weight, 0.0);
+    assert!(r.nutrients.is_empty());
+    assert!(r.rows.is_empty());
+    assert!(r.baker_percentages.is_empty());
+    assert!(r.missing_by_type.price.is_empty());
+    assert!(r.missing_by_type.weight.is_empty());
+    assert!(r.missing_by_type.nutrients.is_empty());
+}
+
+#[test]
 fn flags_yield_less_sub_recipe_as_missing() {
     let sauce = WCostingRecipe {
         id: "sauce".to_string(),
@@ -823,6 +896,57 @@ fn baker_percentages_own_gram_based() {
     };
     assert_close(pct("flour").expect("flour pct"), 100.0, 0.005, "flour pct");
     assert_close(pct("water").expect("water pct"), 200.0, 0.005, "water pct");
+}
+
+#[test]
+fn baker_percentages_use_pre_estimate_gram_for_estimated_flour_rows() {
+    // A measured "for dredging" flour row is estimated (20% retained weight),
+    // but baker % must use its PRE-estimate own gram (the written 100 g), not
+    // the 20 g retained. Two flour rows of 100 g each → flour basis 200 g, so
+    // each is 50%. If the retained estimate (20 g) fed the denominator, the
+    // normal flour would read ~83% instead.
+    let mut flour_row = flour_cup();
+    flour_row.is_flour = true;
+    let mut dredge_row = row(
+        "flour2",
+        "flour",
+        Some((1.0, "cup")),
+        Some("for dredging"),
+        None,
+    );
+    dredge_row.is_flour = true;
+
+    let r = cost(
+        vec![flour_row, dredge_row],
+        vec![
+            ingredient("flour", flour_mappings()),
+            ingredient("flour2", flour_mappings()),
+        ],
+        vec![],
+    );
+
+    // The dredge row is estimated, displays 20 g, but reports own_gram = 100 g.
+    let dredge = &r.rows[1];
+    assert!(dredge.estimated);
+    assert_eq!(dredge.own_gram, Some(100.0));
+    match &dredge.gram {
+        WMeasureResult::Ok(m) => assert_close(m.value, 20.0, 0.5, "dredge displayed gram"),
+        WMeasureResult::Err(e) => panic!("expected dredge gram ok, got {e:?}"),
+    }
+
+    let pct = |id: &str| {
+        r.baker_percentages
+            .iter()
+            .find(|b| b.row_id == id)
+            .and_then(|b| b.pct)
+    };
+    assert_close(pct("flour").expect("flour pct"), 50.0, 0.005, "flour pct");
+    assert_close(
+        pct("flour2").expect("dredge pct"),
+        50.0,
+        0.005,
+        "dredge pct",
+    );
 }
 
 #[test]

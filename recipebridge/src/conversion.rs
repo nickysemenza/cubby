@@ -43,7 +43,11 @@ impl From<ConversionStep> for WConversionStep {
 #[derive(Tsify, Serialize, Deserialize)]
 #[tsify(into_wasm_abi)]
 pub struct WAmountExplained {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[tsify(optional)]
     pub result: Option<WAmount>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[tsify(optional)]
     pub path: Option<Vec<WConversionStep>>,
 }
 
@@ -76,13 +80,19 @@ pub fn graph_unit_mappings(mappings: WUnitMappings) -> String {
     print_graph(make_graph(&mappings.to_pairs()))
 }
 
-/// Detect disconnected components (islands) in the unit-mapping graph. Returns a
-/// list of component groups, where each group is a list of unit strings.
+/// Disconnected components (islands) of a unit-mapping graph: a list of groups,
+/// each a list of unit strings. `transparent` → `type WUnitIslands = string[][]`.
+#[derive(Tsify, Serialize, Deserialize)]
+#[tsify(into_wasm_abi)]
+#[serde(transparent)]
+pub struct WUnitIslands(pub Vec<Vec<String>>);
+
+/// Detect disconnected components (islands) in the unit-mapping graph. Infallible
+/// — `find_connected_components` always returns (an empty list when the graph is
+/// fully connected or has <2 nodes).
 #[wasm_bindgen]
-pub fn detect_unit_mapping_islands(mappings: WUnitMappings) -> Result<JsValue, String> {
-    let graph = make_graph(&mappings.to_pairs());
-    let components = find_connected_components(&graph);
-    to_js(&components, "connected components")
+pub fn detect_unit_mapping_islands(mappings: WUnitMappings) -> WUnitIslands {
+    WUnitIslands(find_connected_components(&make_graph(&mappings.to_pairs())))
 }
 
 #[wasm_bindgen]

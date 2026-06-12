@@ -455,9 +455,7 @@ const findProductsWithIslandedMappings = async (
 
     try {
       // Detect islands using WASM
-      const islands = wasm.detect_unit_mapping_islands(
-        prod.unitMappings,
-      ) as string[][];
+      const islands = wasm.detect_unit_mapping_islands(prod.unitMappings);
 
       // Only flag if there are 2+ islands
       if (islands.length >= 2) {
@@ -702,9 +700,7 @@ const countProductsWithIslandedMappings = async (
     if (prod.unitMappings.length < 2) continue;
 
     try {
-      const islands = wasm.detect_unit_mapping_islands(
-        prod.unitMappings,
-      ) as string[][];
+      const islands = wasm.detect_unit_mapping_islands(prod.unitMappings);
 
       if (islands.length >= 2) {
         count++;
