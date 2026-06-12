@@ -74,7 +74,7 @@ export function ShelfCard({
     <Link
       to={to}
       params={params}
-      className="flex flex-col overflow-hidden rounded-lg border bg-card transition-shadow duration-150 hover:shadow-[var(--shadow-warm-lg)]"
+      className="flex flex-col overflow-hidden rounded-lg border bg-card transition-shadow duration-150 hover:shadow-[var(--shadow-chunky)]"
     >
       <div className="relative aspect-square w-full overflow-hidden bg-muted/20">
         <Image

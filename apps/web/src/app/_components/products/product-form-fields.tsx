@@ -50,7 +50,7 @@ function FormSection({
   if (compact) return <>{children}</>;
   if (plate) {
     return (
-      <Card emphasis="chunky">
+      <Card>
         <CardContent className="space-y-2 px-4 py-1">{children}</CardContent>
       </Card>
     );

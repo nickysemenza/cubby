@@ -31,7 +31,6 @@ function ProblemsStatCard({ enabled }: { enabled: boolean }) {
   return (
     <Link to="/problems">
       <Card
-        emphasis="chunky"
         className={cn(
           "p-2.5 transition-all duration-150 ease-cozy",
           "hover:-translate-x-px hover:-translate-y-px",
@@ -106,7 +105,6 @@ function StatCard({ entity, count, isLoading, isError }: StatCardProps) {
   return (
     <Link to={def.routes.list}>
       <Card
-        emphasis="chunky"
         className={cn(
           "p-2.5 transition-all duration-150 ease-cozy",
           "hover:-translate-y-0.5 hover:shadow-[var(--shadow-chunky)]",

@@ -10,6 +10,7 @@ import {
 import { ExternalLink, Hammer, ListTodo, ShoppingCart } from "lucide-react";
 import { useMemo } from "react";
 import RTable from "~/app/_components/data-table/Table";
+import { NoneState } from "~/app/_components/NoneState";
 import { Badge } from "~/components/ui/badge";
 import {
   Empty,
@@ -321,7 +322,7 @@ const projectColumns = [
     cell: ({ row }) => (
       <div className="flex items-center gap-1.5">
         <StatusIcon status={row.original.status} />
-        <span>{row.original.status ?? "—"}</span>
+        <span>{row.original.status ?? <NoneState />}</span>
       </div>
     ),
     enableSorting: true,

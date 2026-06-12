@@ -1,3 +1,4 @@
+import type { LucideIcon } from "lucide-react";
 import * as React from "react";
 
 import { cn } from "~/lib/utils";
@@ -5,23 +6,19 @@ import { cn } from "~/lib/utils";
 function Card({
   className,
   size = "default",
-  emphasis = "soft",
   ...props
 }: React.ComponentProps<"div"> & {
   size?: "default" | "sm";
-  /** "chunky" swaps the soft ring for a defined hairline border + elevation. */
-  emphasis?: "soft" | "chunky";
 }) {
   return (
     <div
       data-slot="card"
       data-size={size}
-      data-emphasis={emphasis}
+      // One card surface (2026-06-12 consolidation): a defined hairline border
+      // + soft elevation, everywhere. The old soft(ring)/chunky(border) split
+      // had visually converged after the crisp refresh, so `emphasis` is gone.
       className={cn(
-        "bg-card text-card-foreground group/card flex flex-col gap-3 overflow-hidden rounded-lg py-3 text-xs/relaxed has-[>img:first-child]:pt-0 data-[size=sm]:gap-2 data-[size=sm]:py-2 *:[img:first-child]:rounded-t-lg *:[img:last-child]:rounded-b-lg",
-        emphasis === "chunky"
-          ? "border-[var(--border-chunky)] border shadow-[var(--shadow-chunky)]"
-          : "ring-foreground/10 ring-1",
+        "bg-card text-card-foreground group/card flex flex-col gap-3 overflow-hidden rounded-lg border border-[var(--border-chunky)] py-3 text-xs/relaxed shadow-[var(--shadow-chunky)] has-[>img:first-child]:pt-0 data-[size=sm]:gap-2 data-[size=sm]:py-2 *:[img:first-child]:rounded-t-lg *:[img:last-child]:rounded-b-lg",
         className,
       )}
       {...props}
@@ -78,19 +75,28 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
   );
 }
 
-function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
+function CardTitle({
+  className,
+  icon: Icon,
+  children,
+  ...props
+}: React.ComponentProps<"div"> & { icon?: LucideIcon }) {
   return (
     <div
       data-slot="card-title"
-      // Ledger-style section label — cards are "ledger blocks" and their
-      // titles read as mono eyebrows (INGREDIENTS, HISTORY, ...). Override
-      // via className for the rare card that needs a prose-sized title.
+      // Ledger-style section label — cards are "ledger blocks" and their titles
+      // read as mono eyebrows (INGREDIENTS, HISTORY, ...). Pass `icon` for the
+      // common eyebrow-with-leading-icon header. The one sanctioned className
+      // override is a size bump for "numeral-as-title" stat cards (text-2xl).
       className={cn(
-        "font-mono text-2xs font-medium uppercase tracking-wider text-eyebrow",
+        "flex items-center gap-2 font-mono text-2xs font-medium uppercase tracking-wider text-eyebrow",
         className,
       )}
       {...props}
-    />
+    >
+      {Icon && <Icon className="size-3.5 shrink-0" />}
+      {children}
+    </div>
   );
 }
 

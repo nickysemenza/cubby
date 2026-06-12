@@ -126,7 +126,7 @@ export function ProblemsOverview() {
       {problems.totalProblems > 0 ? (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle>
               <Badge variant="destructive" className="text-base">
                 {problems.totalProblems}
               </Badge>
@@ -152,7 +152,7 @@ export function ProblemsOverview() {
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle>
               <CheckCircle className="h-5 w-5 text-secondary-foreground" />
               All Good!
             </CardTitle>

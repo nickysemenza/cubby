@@ -32,10 +32,7 @@ export function CategoryAudit() {
       <CardHeader>
         <div className="flex items-center justify-between">
           <div className="space-y-1">
-            <CardTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5" />
-              Category Audit
-            </CardTitle>
+            <CardTitle icon={Sparkles}>Category Audit</CardTitle>
             <CardDescription>
               Use AI to identify gaps in your category system based on your
               current product catalog.

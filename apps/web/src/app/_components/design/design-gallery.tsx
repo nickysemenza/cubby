@@ -406,25 +406,20 @@ export function DesignGallery() {
       </GallerySection>
 
       <GallerySection title="Cards" source="components/ui/card">
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2">
           <Card className="p-4">
             <CardHeader className="px-0">
-              <CardTitle>Soft card</CardTitle>
+              <CardTitle icon={Package}>Card</CardTitle>
             </CardHeader>
             <CardContent className="px-0 text-sm">
-              Default emphasis — a quiet inner ring.
-            </CardContent>
-          </Card>
-          <Card emphasis="chunky" className="p-4">
-            <CardHeader className="px-0">
-              <CardTitle>Chunky card</CardTitle>
-            </CardHeader>
-            <CardContent className="px-0 text-sm">
-              Signature chrome — hairline border + elevation.
+              One surface — hairline border + soft elevation. Eyebrow title
+              takes an optional <code>icon</code>.
             </CardContent>
           </Card>
           <DashboardCard icon={Layers} title="Dashboard card">
-            <p className="text-sm">Header with icon, eyebrow title.</p>
+            <p className="text-sm">
+              Same surface + an icon-eyebrow header helper.
+            </p>
           </DashboardCard>
         </div>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">

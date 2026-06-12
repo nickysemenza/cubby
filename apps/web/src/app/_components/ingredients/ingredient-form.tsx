@@ -107,7 +107,7 @@ export const IngredientForm: FC<IngredientFormProps> = (props) => {
       onCancel={onCancel}
       submitButtonText={buttonText}
     >
-      <Card emphasis="chunky">
+      <Card>
         <CardContent className="px-4 py-1">
           <UnifiedTextField
             form={form}

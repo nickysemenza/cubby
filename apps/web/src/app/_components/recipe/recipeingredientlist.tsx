@@ -6,6 +6,7 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { useMemo } from "react";
+import { NoneState } from "~/app/_components/NoneState";
 import { KEY_NUTRIENTS } from "~/app/_components/units/NutrientsSummary";
 import {
   EntitySummaryCard,
@@ -206,7 +207,7 @@ export const RecipeIngredientList: React.FC<{
         const row = props.row.original;
         const pct = bakerPct.get(row.id);
         if (pct == null) {
-          return <span className="text-muted-foreground">—</span>;
+          return <NoneState />;
         }
         // One decimal below 10% so small-but-meaningful amounts (salt, leavening,
         // spices) don't collapse to a misleading "0%"; whole percent above.

@@ -1,5 +1,6 @@
 import { ListChecks } from "lucide-react";
 import { useMemo } from "react";
+import { NoneState } from "~/app/_components/NoneState";
 import { getStatusChartColor } from "~/lib/status-colors";
 import type { NotionProject, NotionTask } from "~/server/clients/notion";
 import { ChartEmpty } from "./chart-empty";
@@ -117,7 +118,7 @@ export function TaskStatusBoard({
                         {count}
                       </span>
                     ) : (
-                      <span className="text-muted-foreground/30">—</span>
+                      <NoneState />
                     )}
                   </td>
                 );

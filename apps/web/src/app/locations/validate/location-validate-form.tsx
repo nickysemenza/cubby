@@ -385,7 +385,7 @@ export function LocationValidateForm({
       {confirmed.length > 0 && (
         <Card className="border-positive/20">
           <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle>
               <Check className="h-4 w-4 text-positive" />
               Confirmed ({confirmed.length})
             </CardTitle>
@@ -410,7 +410,7 @@ export function LocationValidateForm({
       {missing.length > 0 && (
         <Card className="border-amber-300">
           <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle>
               <CircleAlert className="h-4 w-4 text-amber-600" />
               Missing ({missing.length})
             </CardTitle>
@@ -434,7 +434,7 @@ export function LocationValidateForm({
       {unexpected.length > 0 && (
         <Card className="border-primary/20">
           <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle>
               <CircleHelp className="h-4 w-4 text-primary" />
               Unexpected ({unexpected.length})
             </CardTitle>

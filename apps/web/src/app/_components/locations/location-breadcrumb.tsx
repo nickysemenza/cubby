@@ -2,7 +2,6 @@ import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
 import { Home } from "lucide-react";
 import * as React from "react";
-import { Pill } from "~/app/_components/Pill";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -113,22 +112,26 @@ export function LocationBreadcrumb({
           const isLast = index === segments.length - 1;
 
           const content = (
-            <Pill
-              icon={<LocationIcon type={segment.type} size={12} colored />}
-              metadata={
-                showTypeAnnotations && !isDefault ? segment.type : undefined
-              }
-              compact={compact}
+            <span
               className={cn(
+                "inline-flex items-center gap-1",
+                isLast && "font-medium",
                 highlightNonDefault &&
                   !isDefault &&
-                  "border-amber-500/50 bg-amber-50",
-                isLast && "font-medium",
-                isLast && activeHighlight && "bg-primary/10",
+                  "rounded border border-amber-500/50 bg-amber-50 px-1 py-px",
+                isLast && activeHighlight && "rounded bg-primary/10 px-1 py-px",
               )}
             >
-              {segment.name}
-            </Pill>
+              <LocationIcon type={segment.type} size={12} colored />
+              <span className={cn("min-w-0", compact && "max-w-32 truncate")}>
+                {segment.name}
+              </span>
+              {showTypeAnnotations && !isDefault && segment.type && (
+                <span className="text-2xs text-muted-foreground">
+                  · {segment.type}
+                </span>
+              )}
+            </span>
           );
 
           return (

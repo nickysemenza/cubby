@@ -834,7 +834,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
           </div>
 
           {/* Spec plate: the recipe's vitals in one chunky placard */}
-          <Card emphasis="chunky">
+          <Card>
             <CardContent className="space-y-2 px-4 py-1">
               <UnifiedTextField
                 form={form}

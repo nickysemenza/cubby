@@ -675,7 +675,7 @@ export default function QuickCaptureForm({
               className="flex w-full items-center justify-between text-left"
               onClick={() => setShowInventory(!showInventory)}
             >
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle>
                 <EntityIcon entity="inventory" className="h-4 w-4" />
                 Items at {focusedItem?.location?.name ?? "this location"} (
                 {inventoryAtLocation?.meta?.totalCount ?? 0})

@@ -72,7 +72,7 @@ export function ProblemSection<T>({
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle>
             {IconElement}
             {title}
           </CardTitle>
@@ -90,7 +90,7 @@ export function ProblemSection<T>({
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle>
             {IconElement}
             {title}
             <Badge variant="destructive">{items.length}</Badge>

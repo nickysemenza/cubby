@@ -47,7 +47,7 @@ function SettingsPage() {
           const keys = FLAG_KEYS.filter((k) => FLAGS[k].group === group);
           if (keys.length === 0) return null;
           return (
-            <Card key={group} emphasis="chunky">
+            <Card key={group}>
               <CardHeader>
                 <CardTitle>{group}</CardTitle>
                 <CardDescription>{blurb}</CardDescription>
@@ -119,7 +119,7 @@ function DiagnosticsCard() {
     });
 
   return (
-    <Card emphasis="chunky">
+    <Card>
       <CardHeader>
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1.5">
@@ -186,7 +186,7 @@ const DENSITIES = ["comfortable", "compact", "dense"] as const;
 function AppearanceCard() {
   const { density, setDensity } = useTableDensity();
   return (
-    <Card emphasis="chunky">
+    <Card>
       <CardHeader>
         <CardTitle>Appearance</CardTitle>
       </CardHeader>

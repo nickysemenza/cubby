@@ -81,7 +81,6 @@ export const DetailPage: FC<DetailPageProps> = ({
       {/* Spec-plate hero: a chunky placard with entity spine, reference no.,
           status stamp, and an inline ledger stat strip. */}
       <Card
-        emphasis="chunky"
         className={cn("border-l-[6px]", spineClass)}
         data-testid="detail-spec-plate"
       >

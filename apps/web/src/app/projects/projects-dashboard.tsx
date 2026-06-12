@@ -512,7 +512,7 @@ function ProjectCard({ project }: { project: NotionProject }) {
           </div>
         )}
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle>
             {project.icon && <span>{project.icon}</span>}
             <span className="truncate">{project.name}</span>
             <a

@@ -11,6 +11,7 @@ import {
   useState,
 } from "react";
 import { toast } from "sonner";
+import { NoneState } from "~/app/_components/NoneState";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import {
@@ -103,7 +104,7 @@ function MergeConfirmation({
               />
             ))
           ) : (
-            <span className="text-muted-foreground text-sm">—</span>
+            <NoneState />
           )}
         </div>
       </div>

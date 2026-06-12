@@ -159,18 +159,6 @@
   --brand-shelf: #5c5550;
   --brand-sage: oklch(0.94 0.025 145);
 
-  /* Warm shadows - earthy tones for depth */
-  --shadow-warm-sm:
-    0 1px 3px 0 rgba(58, 53, 48, 0.06), 0 1px 2px -1px rgba(58, 53, 48, 0.08);
-  --shadow-warm-md:
-    0 4px 12px -2px rgba(58, 53, 48, 0.12),
-    0 2px 4px -1px rgba(58, 53, 48, 0.08);
-  --shadow-warm-lg:
-    0 8px 24px -4px rgba(58, 53, 48, 0.15), 0 4px 8px -2px rgba(58, 53, 48, 0.1);
-  --shadow-warm-xl:
-    0 20px 40px -8px rgba(58, 53, 48, 0.2),
-    0 8px 16px -4px rgba(58, 53, 48, 0.12);
-
   /* Crisp elevation ("chunky" tokens repurposed, 2026-06-12 Linear/Figma-style
      refresh) - layered low-alpha blurs in the warm foreground tint instead of
      the old zero-blur offset slabs. Same two knobs still tune all signature

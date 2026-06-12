@@ -2,6 +2,7 @@ import type { WAmount } from "@cubby/recipebridge";
 import type { Amount } from "@cubby/schemas/codec";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { ReadonlyDeep } from "type-fest";
+import { NoneState } from "~/app/_components/NoneState";
 import {
   Tooltip,
   TooltipContent,
@@ -29,7 +30,7 @@ export const showAmountAndPrice = (
   if (mappings.length === 0) {
     return (
       <div className="flex flex-col">
-        <div className="text-muted-foreground">—</div>
+        <NoneState />
         <div>{tryFormatAmount(amount)}</div>
       </div>
     );

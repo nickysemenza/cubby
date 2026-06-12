@@ -7,7 +7,6 @@ import {
   createImageColumn,
 } from "../data-table/columnHelpers";
 import { NoneState } from "../NoneState";
-import { Pill } from "../Pill";
 import {
   entityTypeMap,
   getEnrichmentText,
@@ -70,9 +69,10 @@ export const searchColumns = [
       const entity = entityTypeMap[row.original.entityType];
       const entityDef = entities[entity];
       return (
-        <Pill icon={<EntityIcon entity={entity} size={10} colored />}>
+        <span className="inline-flex items-center gap-1.5">
+          <EntityIcon entity={entity} size={10} colored />
           {entityDef.label}
-        </Pill>
+        </span>
       );
     },
   }),
