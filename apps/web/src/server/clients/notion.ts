@@ -162,7 +162,7 @@ function getRelationIds(prop: PropertyValue | undefined): string[] {
 
 function getRelationId(prop: PropertyValue | undefined): string | null {
   if (prop?.type === "relation" && prop.relation.length > 0) {
-    return prop.relation[0].id;
+    return prop.relation[0]!.id;
   }
   return null;
 }

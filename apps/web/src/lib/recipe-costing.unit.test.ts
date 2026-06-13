@@ -469,7 +469,7 @@ describe("calculateTotals with sub-recipes", () => {
       makeSubRecipeEntry(recipeA, [{ value: 1, unit: "batch" }]),
     ]);
     // Close the loop: A uses B, B uses A.
-    recipeA.sections[0].ingredients.push(
+    recipeA.sections[0]!.ingredients.push(
       makeSubRecipeEntry(recipeB, [{ value: 1, unit: "batch" }]),
     );
 

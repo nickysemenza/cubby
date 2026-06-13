@@ -451,7 +451,7 @@ function countCsvRows(filePath: string): Promise<number> {
       for (let i = 0; i < buffer.length; i++) {
         if (buffer[i] === 10) newlineCount++; // '\n'
       }
-      lastByte = buffer[buffer.length - 1];
+      lastByte = buffer[buffer.length - 1] ?? null;
     });
     stream.on("end", () => {
       let lineCount = newlineCount;

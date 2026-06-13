@@ -72,7 +72,7 @@ export const ConversionCapabilities = memo(function ConversionCapabilities({
           {coverage && compact && (
             <div className="flex items-center gap-0.5">
               {BASE_KINDS.map((kind) => {
-                const { Icon, label } = kindIconMap[kind];
+                const { Icon, label } = kindIconMap[kind]!;
                 const lit = coverage.covered.has(kind);
                 const state = lit ? "convertible" : "no conversion";
                 return (
@@ -110,8 +110,11 @@ export const ConversionCapabilities = memo(function ConversionCapabilities({
         <div className="grid grid-cols-3 gap-1 text-xs">
           {coverage.pairs.map((pair) => {
             const label = formatKindsLabel(pair.from, pair.to);
-            const FromIcon = kindIconMap[pair.from].Icon;
-            const ToIcon = kindIconMap[pair.to].Icon;
+            const fromMeta = kindIconMap[pair.from];
+            const toMeta = kindIconMap[pair.to];
+            if (!fromMeta || !toMeta) return null;
+            const FromIcon = fromMeta.Icon;
+            const ToIcon = toMeta.Icon;
             return (
               <div
                 key={`${pair.from}-${pair.to}`}

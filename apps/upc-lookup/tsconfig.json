@@ -4,6 +4,7 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "strict": true,
+    "noUncheckedIndexedAccess": true,
     "skipLibCheck": true,
     "lib": ["ESNext"],
     "types": ["vite/client", "@cloudflare/workers-types"],

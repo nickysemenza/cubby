@@ -88,7 +88,8 @@ export function IconPattern({ className }: IconPatternProps) {
           const iconIndex = Math.floor(
             seededRandom(i * 7) * patternIcons.length,
           );
-          const Icon = patternIcons[iconIndex];
+          // iconIndex = floor(rand * length) with rand < 1, so always in-bounds
+          const Icon = patternIcons[iconIndex]!;
           const rotation = seededRandom(i * 13) * 40 - 20;
           const scale = 0.7 + seededRandom(i * 17) * 0.5;
           return (

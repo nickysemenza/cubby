@@ -40,7 +40,7 @@ export function PullToRefresh({
 
       // Only start pull if scrolled to top
       const scrollTop = getScrollTop ? getScrollTop() : container.scrollTop;
-      if (scrollTop === 0) {
+      if (scrollTop === 0 && e.touches[0]) {
         startYRef.current = e.touches[0].clientY;
         isPullingRef.current = true;
       }
@@ -52,7 +52,9 @@ export function PullToRefresh({
     (e: React.TouchEvent) => {
       if (!isPullingRef.current || disabled || isRefreshing) return;
 
-      const deltaY = e.touches[0].clientY - startYRef.current;
+      const touch = e.touches[0];
+      if (!touch) return;
+      const deltaY = touch.clientY - startYRef.current;
 
       if (deltaY > 0) {
         // Pulling down

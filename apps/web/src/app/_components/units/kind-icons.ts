@@ -26,5 +26,5 @@ export const kindIconMap: Record<
 };
 
 export function formatKindsLabel(from: AmountKind, to: AmountKind): string {
-  return `${kindIconMap[from].label} ↔ ${kindIconMap[to].label}`;
+  return `${kindIconMap[from]?.label ?? from} ↔ ${kindIconMap[to]?.label ?? to}`;
 }

@@ -27,7 +27,12 @@ export function TaskHeatmap({ tasks }: { tasks: NotionTask[] }) {
       return { data: [], from: "", to: "", itemsByDay: new Map() };
 
     const dates = data.map((d) => d.day).sort();
-    return { data, from: dates[0], to: dates[dates.length - 1], itemsByDay };
+    return {
+      data,
+      from: dates[0]!,
+      to: dates[dates.length - 1]!,
+      itemsByDay,
+    };
   }, [tasks]);
 
   if (data.length === 0) {

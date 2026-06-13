@@ -65,7 +65,7 @@ describe("cookbook repository", () => {
       actor,
     );
     const ref = { id, name: "Book A" };
-    await upsertCookbookRecipeFromCookbook(raw[0], ref, db, actor);
+    await upsertCookbookRecipeFromCookbook(raw[0]!, ref, db, actor);
 
     const list = await listCookbooks(db);
     const entry = list.find((c) => c.id === id);
@@ -112,7 +112,7 @@ describe("cookbook repository", () => {
 
     // Import only the first recipe (the user's selection).
     const imported = await upsertCookbookRecipeFromCookbook(
-      raw[0],
+      raw[0]!,
       ref,
       db,
       actor,

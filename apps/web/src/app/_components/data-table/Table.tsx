@@ -284,7 +284,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     count: virtualizerCount,
     getScrollElement: () => tableContainerRef.current,
     estimateSize: (index) => {
-      if (groupedItems && groupedItems[index].kind === "header") {
+      if (groupedItems && groupedItems[index]!.kind === "header") {
         return SECTION_HEADER_HEIGHT;
       }
       return dConfig.rowHeight;
@@ -403,14 +403,15 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     return (
       <>
         {/* Top padding row for scroll position */}
-        {virtualRows.length > 0 && virtualRows[0].start > 0 && (
-          <tr style={{ height: `${virtualRows[0].start}px` }} />
+        {virtualRows.length > 0 && virtualRows[0]!.start > 0 && (
+          <tr style={{ height: `${virtualRows[0]!.start}px` }} />
         )}
 
         {/* Render only visible rows (with optional group headers) */}
         {virtualRows.map((virtualRow) => {
           if (groupedItems) {
-            const item = groupedItems[virtualRow.index];
+            // virtualRow.index is bounded by the virtualizer count (= groupedItems.length)
+            const item = groupedItems[virtualRow.index]!;
             if (item.kind === "header") {
               return (
                 <TableRow
@@ -428,7 +429,8 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                 </TableRow>
               );
             }
-            const row = rows[item.rowIndex];
+            // rowIndex was built from valid positions into the same rows array
+            const row = rows[item.rowIndex]!;
             return (
               <DataRow
                 key={row.id}
@@ -444,7 +446,8 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
               />
             );
           }
-          const row = rows[virtualRow.index];
+          // non-grouped path: virtualRow.index is bounded by rows.length
+          const row = rows[virtualRow.index]!;
           return (
             <DataRow
               key={row.id}

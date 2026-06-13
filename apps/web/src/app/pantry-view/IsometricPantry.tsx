@@ -197,7 +197,8 @@ function toScreen(
 function parseHSL(hsl: string): [number, number, number] {
   const m = hsl.match(/hsl\((\d+),\s*(\d+)%,\s*(\d+)%\)/);
   if (!m) return [0, 0, 50];
-  return [parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10)];
+  // m matched the 3-capture-group regex, so m[1..3] are present
+  return [parseInt(m[1]!, 10), parseInt(m[2]!, 10), parseInt(m[3]!, 10)];
 }
 
 function makeHSL(h: number, s: number, l: number): string {
@@ -580,7 +581,7 @@ function drawItemsOnLevels(
     const shelfZ = gz + level + 0.12;
     let col = 0;
     while (itemIdx < items.length && col < maxPerShelf) {
-      const item = items[itemIdx];
+      const item = items[itemIdx]!; // guarded by itemIdx < items.length
       const ix = gx + 0.2 + col * 0.45;
       const iy = gy + d * 0.25;
       const itemH = getItemHeight(item.category);
@@ -864,8 +865,7 @@ function buildRooms(
     }
 
     // Create a zone for each container child (area/room)
-    for (let zi = 0; zi < zoneContainers.length; zi++) {
-      const container = zoneContainers[zi];
+    for (const [zi, container] of zoneContainers.entries()) {
       const zonePath = [rootNode.name, container.name];
       const pieces = collectPiecesFromSubtree(
         container,
@@ -911,8 +911,9 @@ function buildRooms(
       zones.push({
         name: container.name,
         locationId: container.id,
-        color: ZONE_OVERLAY_COLORS[zi % ZONE_OVERLAY_COLORS.length],
-        labelColor: ZONE_LABEL_COLORS[zi % ZONE_LABEL_COLORS.length],
+        // modulo into a non-empty const array is always in-bounds
+        color: ZONE_OVERLAY_COLORS[zi % ZONE_OVERLAY_COLORS.length]!,
+        labelColor: ZONE_LABEL_COLORS[zi % ZONE_LABEL_COLORS.length]!,
         startGx: 0,
         endGx: 0,
         pieces,
@@ -996,10 +997,10 @@ function buildRooms(
         name: hasNamedZones ? "Other" : "",
         locationId: rootNode.id,
         color: hasNamedZones
-          ? ZONE_OVERLAY_COLORS[zones.length % ZONE_OVERLAY_COLORS.length]
+          ? ZONE_OVERLAY_COLORS[zones.length % ZONE_OVERLAY_COLORS.length]!
           : "transparent",
         labelColor: hasNamedZones
-          ? ZONE_LABEL_COLORS[zones.length % ZONE_LABEL_COLORS.length]
+          ? ZONE_LABEL_COLORS[zones.length % ZONE_LABEL_COLORS.length]!
           : "transparent",
         startGx: 0,
         endGx: 0,
@@ -1019,10 +1020,11 @@ function buildRooms(
 
     // Assign zone X ranges
     let currentX = 0.5;
+    // zoneWidths is built via zones.map, so indices align and are in-bounds
     for (let i = 0; i < zones.length; i++) {
-      zones[i].startGx = currentX;
-      zones[i].endGx = currentX + zoneWidths[i];
-      currentX += zoneWidths[i] + zoneGap;
+      zones[i]!.startGx = currentX;
+      zones[i]!.endGx = currentX + zoneWidths[i]!;
+      currentX += zoneWidths[i]! + zoneGap;
     }
 
     // Calculate room depth
@@ -1156,27 +1158,28 @@ function layoutRoomsGrid(rooms: RoomData[]) {
   const rowMaxD: number[] = new Array(numRows).fill(0);
   const colMaxW: number[] = new Array(cols).fill(0);
 
+  // r ∈ [0, numRows), c ∈ [0, cols); rowMaxD/colMaxW sized to exactly those
   for (let i = 0; i < rooms.length; i++) {
     const r = Math.floor(i / cols);
     const c = i % cols;
-    rowMaxD[r] = Math.max(rowMaxD[r], rooms[i].roomD);
-    colMaxW[c] = Math.max(colMaxW[c], rooms[i].roomW);
+    rowMaxD[r] = Math.max(rowMaxD[r]!, rooms[i]!.roomD);
+    colMaxW[c] = Math.max(colMaxW[c]!, rooms[i]!.roomW);
   }
 
   const rowY: number[] = [0];
   for (let r = 1; r < numRows; r++) {
-    rowY.push(rowY[r - 1] + rowMaxD[r - 1] + gap);
+    rowY.push(rowY[r - 1]! + rowMaxD[r - 1]! + gap);
   }
   const colX: number[] = [0];
   for (let c = 1; c < cols; c++) {
-    colX.push(colX[c - 1] + colMaxW[c - 1] + gap);
+    colX.push(colX[c - 1]! + colMaxW[c - 1]! + gap);
   }
 
   for (let i = 0; i < rooms.length; i++) {
     const r = Math.floor(i / cols);
     const c = i % cols;
-    rooms[i].originX = colX[c];
-    rooms[i].originY = rowY[r];
+    rooms[i]!.originX = colX[c]!;
+    rooms[i]!.originY = rowY[r]!;
   }
 }
 
@@ -1246,10 +1249,11 @@ function calculateZoomToFit(
 function pointInPolygon(px: number, py: number, corners: Point[]): boolean {
   let inside = false;
   for (let i = 0, j = corners.length - 1; i < corners.length; j = i++) {
-    const xi = corners[i].x,
-      yi = corners[i].y;
-    const xj = corners[j].x,
-      yj = corners[j].y;
+    // i < length and j is a prior i (or length-1), both in-bounds
+    const xi = corners[i]!.x,
+      yi = corners[i]!.y;
+    const xj = corners[j]!.x,
+      yj = corners[j]!.y;
     const intersect =
       yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi;
     if (intersect) inside = !inside;
@@ -1265,14 +1269,14 @@ function hitTestPieces(
   cy: number,
 ): HoverTarget | null {
   for (let pi = pieces.length - 1; pi >= 0; pi--) {
-    const piece = pieces[pi];
+    const piece = pieces[pi]!; // guarded by pi >= 0 within pieces.length
     const maxPerShelf = Math.max(1, Math.floor((piece.w - 0.3) / 0.45));
     let itemIdx = 0;
 
     for (const level of piece.shelfLevels) {
       let col = 0;
       while (itemIdx < piece.items.length && col < maxPerShelf) {
-        const item = piece.items[itemIdx];
+        const item = piece.items[itemIdx]!; // guarded by itemIdx < piece.items.length
         const ix = piece.gx + 0.2 + col * 0.45;
         const iy = piece.gy + piece.d * 0.25;
         const shelfZ = piece.gz + level + 0.12;
@@ -1548,14 +1552,15 @@ function renderScene(
     // Zone overlays and dividers (after floor, before furniture)
     if (
       room.zones.length > 1 ||
-      (room.zones.length === 1 && room.zones[0].name)
+      (room.zones.length === 1 && room.zones[0]!.name)
     ) {
       for (const zone of room.zones) {
         drawZoneOverlay(ctx, zone, roomCx, roomCy, room.roomD);
       }
       // Draw dividers between zones
       for (let i = 1; i < room.zones.length; i++) {
-        const dividerX = (room.zones[i - 1].endGx + room.zones[i].startGx) / 2;
+        const dividerX =
+          (room.zones[i - 1]!.endGx + room.zones[i]!.startGx) / 2;
         drawZoneDivider(ctx, dividerX, roomCx, roomCy, room.roomD);
       }
     }
@@ -1624,7 +1629,7 @@ function renderScene(
     // Zone labels at the front edge of each zone
     if (
       room.zones.length > 1 ||
-      (room.zones.length === 1 && room.zones[0].name)
+      (room.zones.length === 1 && room.zones[0]!.name)
     ) {
       for (const zone of room.zones) {
         if (!zone.name) continue;
@@ -1903,7 +1908,8 @@ export function IsometricPantry() {
     if (!canvas) return;
 
     function getPinchDist(e: TouchEvent): number {
-      const [a, b] = [e.touches[0], e.touches[1]];
+      // only called when e.touches.length === 2
+      const [a, b] = [e.touches[0]!, e.touches[1]!];
       return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
     }
 
@@ -1911,7 +1917,7 @@ export function IsometricPantry() {
       e.preventDefault();
       const t = touchRef.current;
       if (e.touches.length === 1) {
-        const touch = e.touches[0];
+        const touch = e.touches[0]!;
         t.lastTouchX = touch.clientX;
         t.lastTouchY = touch.clientY;
         t.startTouchX = touch.clientX;
@@ -1920,9 +1926,9 @@ export function IsometricPantry() {
         t.touchMoved = false;
       } else if (e.touches.length === 2) {
         t.lastPinchDist = getPinchDist(e);
-        // Track midpoint for panning during pinch
-        t.lastTouchX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-        t.lastTouchY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        // Track midpoint for panning during pinch (length === 2 guaranteed here)
+        t.lastTouchX = (e.touches[0]!.clientX + e.touches[1]!.clientX) / 2;
+        t.lastTouchY = (e.touches[0]!.clientY + e.touches[1]!.clientY) / 2;
         t.touchMoved = true; // pinch is always a "move"
       }
     }
@@ -1934,7 +1940,7 @@ export function IsometricPantry() {
       if (!cam) return;
 
       if (e.touches.length === 1 && t.isTouching) {
-        const touch = e.touches[0];
+        const touch = e.touches[0]!;
         const dx = touch.clientX - t.lastTouchX;
         const dy = touch.clientY - t.lastTouchY;
         t.lastTouchX = touch.clientX;
@@ -1950,8 +1956,8 @@ export function IsometricPantry() {
         );
       } else if (e.touches.length === 2) {
         const newDist = getPinchDist(e);
-        const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-        const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        const midX = (e.touches[0]!.clientX + e.touches[1]!.clientX) / 2;
+        const midY = (e.touches[0]!.clientY + e.touches[1]!.clientY) / 2;
         const rect = canvas!.getBoundingClientRect();
         const canvasX = midX - rect.left;
         const canvasY = midY - rect.top;
@@ -1985,8 +1991,8 @@ export function IsometricPantry() {
       e.preventDefault();
       const t = touchRef.current;
       if (!t.touchMoved && t.isTouching && e.changedTouches.length > 0) {
-        // Tap — hit-test and navigate
-        const touch = e.changedTouches[0];
+        // Tap — hit-test and navigate (changedTouches.length > 0 guaranteed)
+        const touch = e.changedTouches[0]!;
         const rect = canvas!.getBoundingClientRect();
         const mouseX = touch.clientX - rect.left;
         const mouseY = touch.clientY - rect.top;

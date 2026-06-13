@@ -47,7 +47,7 @@ async function mapLimit<T, R>(
   const worker = async () => {
     while (next < items.length) {
       const i = next++;
-      results[i] = await fn(items[i], i);
+      results[i] = await fn(items[i]!, i);
     }
   };
   await Promise.all(
@@ -587,7 +587,7 @@ export function CookbookImport({
         setResult(i, { status: "importing" });
         try {
           const { id } = await insertCookbook.mutateAsync({
-            recipe: book.recipes[i],
+            recipe: book.recipes[i]!,
             cookbookId,
             book: bookName,
           });

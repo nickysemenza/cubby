@@ -10,7 +10,6 @@ import {
   ShoppingCart,
   Table2,
 } from "lucide-react";
-import { assertNever } from "~/lib/assert";
 
 // Re-export colors/helpers from @cubby/shared for existing consumers
 export { getLocationTypeColor };
@@ -62,35 +61,27 @@ const typeToGroup: Record<LocationType, LocationTypeGroup> = {
 export const getLocationTypeGroup = (type: LocationType): LocationTypeGroup =>
   typeToGroup[type];
 
+// Exhaustive at construction: a new LocationType without a key here is a compile
+// error (replaces the old assertNever default-case guarantee).
+const locationIcons: Record<LocationType, LucideIcon> = {
+  room: Home,
+  area: LayoutGrid,
+  bag: ShoppingBag,
+  shelf: Layers,
+  crate: Box,
+  "half-crate": Box,
+  "quarter-crate": Box,
+  "milk-crate": Box,
+  "tote-bin": Box,
+  table: Table2,
+  drawer: FileBox,
+  cart: ShoppingCart,
+  cabinet: Box,
+  box: Box,
+};
+
 /**
  * Get the icon component for a location type
  */
-export const getLocationIcon = (type: LocationType): LucideIcon => {
-  switch (type) {
-    case "room":
-      return Home;
-    case "area":
-      return LayoutGrid;
-    case "bag":
-      return ShoppingBag;
-    case "shelf":
-      return Layers;
-    case "crate":
-    case "half-crate":
-    case "quarter-crate":
-    case "milk-crate":
-    case "tote-bin":
-      return Box;
-    case "table":
-      return Table2;
-    case "drawer":
-      return FileBox;
-    case "cart":
-      return ShoppingCart;
-    case "cabinet":
-    case "box":
-      return Box;
-    default:
-      assertNever(type);
-  }
-};
+export const getLocationIcon = (type: LocationType): LucideIcon =>
+  locationIcons[type]; // safe: complete Record keyed by the enum

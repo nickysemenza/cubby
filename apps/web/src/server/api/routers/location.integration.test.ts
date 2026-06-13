@@ -85,8 +85,8 @@ describe("location router", () => {
     // Retrieve the parent and verify it has the child
     const retrievedParent = await caller.getByID({ id: parentLocation.id });
     expect(retrievedParent.children).toHaveLength(1);
-    expect(retrievedParent.children?.[0].id).toEqual(childLocation.id);
-    expect(retrievedParent.children?.[0].name).toEqual(childLocation.name);
+    expect(retrievedParent.children?.[0]?.id).toEqual(childLocation.id);
+    expect(retrievedParent.children?.[0]?.name).toEqual(childLocation.name);
   });
 
   it("should list locations with filtering", async () => {
@@ -142,8 +142,8 @@ describe("location router", () => {
     // Should return only locations with "Kitchen" in name
     expect(kitchenLocations.items.length).toEqual(2);
     expect(kitchenLocations.meta.totalCount).toEqual(2);
-    expect(kitchenLocations.items[0].name).toContain("Kitchen");
-    expect(kitchenLocations.items[1].name).toContain("Kitchen");
+    expect(kitchenLocations.items[0]!.name).toContain("Kitchen");
+    expect(kitchenLocations.items[1]!.name).toContain("Kitchen");
 
     // Test filtering by type
     const roomLocations = await caller.list({
@@ -154,8 +154,8 @@ describe("location router", () => {
     // Should return only room type locations
     expect(roomLocations.items.length).toEqual(2);
     expect(roomLocations.meta.totalCount).toEqual(2);
-    expect(roomLocations.items[0].type).toEqual("room");
-    expect(roomLocations.items[1].type).toEqual("room");
+    expect(roomLocations.items[0]!.type).toEqual("room");
+    expect(roomLocations.items[1]!.type).toEqual("room");
 
     // Test filtering with no matches
     const drawerLocations = await caller.list({
@@ -290,9 +290,9 @@ describe("location router", () => {
     const kitchenInTree = tree.find((loc) => loc.name === "Kitchen");
     expect(kitchenInTree).toBeDefined();
     expect(kitchenInTree?.children).toHaveLength(1);
-    expect(kitchenInTree?.children?.[0].name).toEqual("Kitchen Cabinet");
-    expect(kitchenInTree?.children?.[0].children).toHaveLength(1);
-    expect(kitchenInTree?.children?.[0].children?.[0].name).toEqual(
+    expect(kitchenInTree?.children?.[0]?.name).toEqual("Kitchen Cabinet");
+    expect(kitchenInTree?.children?.[0]?.children).toHaveLength(1);
+    expect(kitchenInTree?.children?.[0]?.children?.[0]?.name).toEqual(
       "Cabinet Shelf",
     );
 

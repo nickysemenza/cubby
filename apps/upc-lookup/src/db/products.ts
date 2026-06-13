@@ -34,6 +34,9 @@ export async function createProduct(
   values: NewProduct,
 ): Promise<Product> {
   const [row] = await db.insert(schema.products).values(values).returning();
+  // `returning()` is typed as a (possibly-empty) array; an insert always yields
+  // one row, so a missing row is a real failure, not a `Product`-typed undefined.
+  if (!row) throw new Error("createProduct: insert returned no rows");
   return row;
 }
 

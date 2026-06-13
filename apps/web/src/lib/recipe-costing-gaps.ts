@@ -143,7 +143,7 @@ export const deriveCostingGaps = (
     const lineUnit = row.amounts[0]?.unit ?? null;
     byId.set(id, {
       name: row.ingredient.name,
-      productId: products.length === 1 ? products[0].id : null,
+      productId: products.length === 1 ? products[0]!.id : null,
       lineUnit,
       lineKind: classifyLine(lineUnit),
       products,

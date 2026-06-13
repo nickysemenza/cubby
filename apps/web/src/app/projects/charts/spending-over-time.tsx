@@ -40,7 +40,7 @@ export function SpendingOverTime({
     return <ChartEmpty icon={TrendingUp} title="No dated purchase data." />;
   }
 
-  const maxY = data[0].data[data[0].data.length - 1].y;
+  const maxY = data[0]!.data[data[0]!.data.length - 1]!.y;
   const yMax = costEstimate
     ? Math.max(maxY * 1.1, costEstimate * 1.15)
     : maxY * 1.1;

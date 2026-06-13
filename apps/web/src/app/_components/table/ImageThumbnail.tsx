@@ -42,7 +42,7 @@ export const ImageThumbnail = ({
     );
   }
 
-  const image = images[0];
+  const image = images[0]!;
 
   return (
     <div className="flex h-full items-center justify-center">

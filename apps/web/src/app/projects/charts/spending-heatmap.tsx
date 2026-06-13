@@ -32,7 +32,12 @@ export function SpendingHeatmap({
       return { data: [], from: "", to: "", itemsByDay: new Map() };
 
     const dates = data.map((d) => d.day).sort();
-    return { data, from: dates[0], to: dates[dates.length - 1], itemsByDay };
+    return {
+      data,
+      from: dates[0]!,
+      to: dates[dates.length - 1]!,
+      itemsByDay,
+    };
   }, [purchases]);
 
   if (data.length === 0) {
