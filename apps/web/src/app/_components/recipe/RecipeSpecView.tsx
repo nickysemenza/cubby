@@ -1,4 +1,5 @@
 import type { RecipeOut, RecipeSource } from "@cubby/schemas/recipe";
+import { uniq } from "es-toolkit";
 import { Fragment, useMemo, useState } from "react";
 import { match, P } from "ts-pattern";
 import { MarkdownText } from "~/components/markdown";
@@ -166,6 +167,9 @@ export function RecipeSpecView({
 
                   const pct = pctById.get(ing.id) ?? null;
                   const isBase = ing.id === baseId;
+                  // No resolvable weight → this row can't scale (same signal that
+                  // feeds totals.missingByType.weight). Flag it loudly.
+                  const noWeight = !gramById.has(ing.id);
 
                   return (
                     <tr key={ing.id} className="align-top">
@@ -174,6 +178,14 @@ export function RecipeSpecView({
                         {isBase && (
                           <span className="ml-1.5 rounded-sm bg-primary/10 px-1 py-px align-middle font-mono text-[9px] text-primary uppercase tracking-wide">
                             100% base
+                          </span>
+                        )}
+                        {noWeight && (
+                          <span
+                            title="No weight — omitted from scaling"
+                            className="ml-1.5 rounded-sm bg-warning/15 px-1 py-px align-middle font-mono text-[9px] text-warning uppercase tracking-wide"
+                          >
+                            no weight
                           </span>
                         )}
                       </td>
@@ -186,7 +198,20 @@ export function RecipeSpecView({
                       </td>
                       <td className="py-1.5 pr-3 font-mono text-xs tabular-nums">
                         {pct == null ? (
-                          <span className="text-muted-foreground/60">—</span>
+                          <span
+                            title={
+                              noWeight
+                                ? "No weight — omitted from scaling"
+                                : undefined
+                            }
+                            className={cn(
+                              noWeight
+                                ? "text-warning/80"
+                                : "text-muted-foreground/60",
+                            )}
+                          >
+                            —
+                          </span>
                         ) : (
                           <button
                             type="button"
@@ -236,9 +261,11 @@ export function RecipeSpecView({
           spec sheet stays consistent with the costing the other views show. */}
       {totals && totals.missingByType.weight.length > 0 && (
         <p className="mt-2 font-mono text-2xs text-muted-foreground/70">
-          Scaling omits {totals.missingByType.weight.length} ingredient
-          {totals.missingByType.weight.length === 1 ? "" : "s"} without a
-          weight.
+          Scaling omits{" "}
+          <span className="text-warning">
+            {uniq(totals.missingByType.weight).join(", ")}
+          </span>{" "}
+          — no weight.
         </p>
       )}
     </div>
