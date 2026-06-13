@@ -165,7 +165,7 @@ function ConversionDialogContent({
   }, [form, performConversions]);
 
   return (
-    <DialogContent className="sm:max-w-[900px]">
+    <DialogContent size="2xl">
       <DialogHeader>
         <DialogTitle>Unit Conversion</DialogTitle>
         <DialogDescription>

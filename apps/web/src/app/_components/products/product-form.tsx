@@ -146,6 +146,8 @@ interface CreateProductFormProps extends CreateModeProps<ProductCreateInput> {
   initialExpectedQuantity?: number | null;
   /** Pre-link the new product to an ingredient (used by the enrichment queue). */
   initialIngredient?: ComboboxItem | null;
+  /** Rendered inside a modal — use a plain inline footer instead of the page sticky bar. */
+  embedded?: boolean;
 }
 
 // Define a custom type for product with ingredient and unit mappings
@@ -168,13 +170,15 @@ interface EditProductFormProps
     ProductWithIngredient
   > {
   entity: ProductWithIngredient;
+  /** Rendered inside a modal — use a plain inline footer instead of the page sticky bar. */
+  embedded?: boolean;
 }
 
 // Combined props type using discriminated union
 type ProductFormProps = CreateProductFormProps | EditProductFormProps;
 
 export const ProductForm: FC<ProductFormProps> = (props) => {
-  const { mode, isPending, error, onCancel } = props;
+  const { mode, isPending, error, onCancel, embedded } = props;
   const imageState = useImageState();
   const { getImageData, hasImageChanges } = imageState;
 
@@ -304,30 +308,39 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
       isPending={isPending}
       onCancel={onCancel}
       submitButtonText={buttonText}
-      stickyFooter
-      footerStart={<ProductTally control={form.control} />}
+      stickyFooter={!embedded}
+      footerStart={
+        embedded ? undefined : <ProductTally control={form.control} />
+      }
     >
-      <div className="gap-6 xl:grid xl:grid-cols-[minmax(0,1fr)_340px] xl:items-start">
-        <div className="space-y-3">
-          <ProductFormFields
-            form={form}
-            imageHandlers={imageState}
-            existingImages={
-              mode === "edit" && product?.images ? product.images : []
-            }
-            pendingImages={imageState.pendingImages}
-          />
-        </div>
-
-        {/* Live fact-sheet — the detail page builds as you type */}
-        <aside className="hidden xl:sticky xl:top-20 xl:block">
-          <div className="max-h-[75vh] overflow-y-auto rounded-lg border border-[var(--border-chunky)] bg-card p-4 shadow-[var(--shadow-chunky)]">
-            <p className="mb-3 font-mono text-2xs text-eyebrow uppercase tracking-wider">
-              Live preview
-            </p>
-            <ProductLivePreview control={form.control} />
+      {/* Container query (not viewport): the fields + live-preview split
+          activates on the FORM's own width, so it works whether it's full-page,
+          in a wide modal, or stacked inside a narrow detail card. The
+          @container must sit on a PARENT of the queried grid — a container
+          never queries its own size. */}
+      <div className="@container/product">
+        <div className="@3xl/product:grid @3xl/product:grid-cols-[minmax(0,1fr)_minmax(360px,400px)] @3xl/product:items-start gap-6">
+          <div className="space-y-3">
+            <ProductFormFields
+              form={form}
+              imageHandlers={imageState}
+              existingImages={
+                mode === "edit" && product?.images ? product.images : []
+              }
+              pendingImages={imageState.pendingImages}
+            />
           </div>
-        </aside>
+
+          {/* Live fact-sheet — the detail page builds as you type */}
+          <aside className="@3xl/product:sticky @3xl/product:top-20 @3xl/product:block hidden">
+            <div className="max-h-[75vh] overflow-y-auto rounded-lg border border-[var(--border-chunky)] bg-card p-4 shadow-[var(--shadow-chunky)]">
+              <p className="mb-3 font-mono text-2xs text-eyebrow uppercase tracking-wider">
+                Live preview
+              </p>
+              <ProductLivePreview control={form.control} />
+            </div>
+          </aside>
+        </div>
       </div>
     </FormWrapper>
   );

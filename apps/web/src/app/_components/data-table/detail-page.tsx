@@ -1,5 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { FC, ReactNode } from "react";
+import { Fragment } from "react";
 import { ImageGallery } from "~/components/media/image-gallery";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { InkStamp } from "~/components/ui/ink-stamp";
@@ -133,37 +134,42 @@ export const DetailPage: FC<DetailPageProps> = ({
 
       {/* Grid sections */}
       <div className="grid gap-2 sm:gap-3 md:grid-cols-2">
-        {/* Image card — desktop only, first in grid */}
-        {!isMobile && heroImages && heroImages.length > 0 && (
-          <div
-            className="fade-in slide-in-from-bottom-2 animate-in"
-            style={{ animationFillMode: "both" }}
-          >
-            <EntityHero images={heroImages} />
-          </div>
-        )}
         {sections.map((section, index) => (
-          <Card
-            key={section.title}
-            className={cn(
-              "transition-all duration-200 ease-cozy",
-              "md:hover:-translate-y-0.5 md:hover:shadow-[var(--shadow-chunky-sm)]",
-              "fade-in slide-in-from-bottom-2 animate-in",
-              section.fullWidth && "md:col-span-2",
-            )}
-            style={{
-              animationDelay: `${index * 75}ms`,
-              animationFillMode: "both",
-            }}
-          >
-            <CardHeader className="pb-2">
-              <div className="flex items-center gap-2">
-                <section.icon className="h-3.5 w-3.5 text-eyebrow" />
-                <CardTitle>{section.title}</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent>{section.content}</CardContent>
-          </Card>
+          <Fragment key={section.title}>
+            <Card
+              className={cn(
+                "transition-all duration-200 ease-cozy",
+                "md:hover:-translate-y-0.5 md:hover:shadow-[var(--shadow-chunky-sm)]",
+                "fade-in slide-in-from-bottom-2 animate-in",
+                section.fullWidth && "md:col-span-2",
+              )}
+              style={{
+                animationDelay: `${index * 75}ms`,
+                animationFillMode: "both",
+              }}
+            >
+              <CardHeader className="pb-2">
+                <div className="flex items-center gap-2">
+                  <section.icon className="h-3.5 w-3.5 text-eyebrow" />
+                  <CardTitle>{section.title}</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>{section.content}</CardContent>
+            </Card>
+            {/* Image card sits second — after the primary info section so the
+                content leads on desktop. Desktop only. */}
+            {index === 0 &&
+              !isMobile &&
+              heroImages &&
+              heroImages.length > 0 && (
+                <div
+                  className="fade-in slide-in-from-bottom-2 animate-in"
+                  style={{ animationFillMode: "both" }}
+                >
+                  <EntityHero images={heroImages} />
+                </div>
+              )}
+          </Fragment>
         ))}
       </div>
 

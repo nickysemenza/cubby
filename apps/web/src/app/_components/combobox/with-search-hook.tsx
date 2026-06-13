@@ -5,7 +5,12 @@ import type {
   ProductTopLevelOut,
 } from "@cubby/schemas/product";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type ReactNode, useCallback, useState } from "react";
+import {
+  type ComponentProps,
+  type ReactNode,
+  useCallback,
+  useState,
+} from "react";
 import { toast } from "sonner";
 import { IngredientForm } from "~/app/_components/ingredients/ingredient-form";
 import { LocationForm } from "~/app/_components/locations/location-form";
@@ -121,17 +126,17 @@ function CreateEntityDialogWrapper({
   onOpenChange,
   title,
   children,
-  className = "sm:max-w-lg",
+  size = "md",
 }: {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
   children: ReactNode;
-  className?: string;
+  size?: ComponentProps<typeof DialogContent>["size"];
 }) {
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className={className}>
+      <DialogContent size={size}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
@@ -235,6 +240,7 @@ function CreateProductDialog({
       isOpen={isOpen}
       onOpenChange={onOpenChange}
       title="Create New Product"
+      size="xl"
     >
       <ProductForm
         mode="create"
@@ -244,6 +250,7 @@ function CreateProductDialog({
         onCreate={onCreate}
         initialName={initialName}
         initialExpectedQuantity={initialExpectedQuantity}
+        embedded
       />
     </CreateEntityDialogWrapper>
   );

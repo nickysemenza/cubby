@@ -59,7 +59,7 @@ export function BarcodeScannerButton({
       </Button>
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent size="md">
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between">
               Scan Barcode

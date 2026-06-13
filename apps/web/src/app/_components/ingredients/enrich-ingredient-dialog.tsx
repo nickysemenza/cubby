@@ -60,7 +60,7 @@ export function EnrichIngredientDialog({
         if (!open) onOpenChange(false);
       }}
     >
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+      <DialogContent size="xl">
         {ingredient && (
           <>
             <DialogHeader>
@@ -83,6 +83,7 @@ export function EnrichIngredientDialog({
                 }
                 initialName={ingredient.name}
                 initialIngredient={{ id: ingredient.id, name: ingredient.name }}
+                embedded
               />
             </div>
           </>

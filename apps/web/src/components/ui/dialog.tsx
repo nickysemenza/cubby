@@ -38,13 +38,28 @@ function DialogOverlay({
   );
 }
 
+type DialogSize = "sm" | "md" | "lg" | "xl" | "2xl" | "full";
+
+// Width scale all modals opt into via `size`. Mobile is always
+// max-w-[calc(100%-2rem)]; the sm: cap widens per size on larger screens.
+const dialogSizes: Record<DialogSize, string> = {
+  sm: "sm:max-w-sm", // 384 — confirmations / alerts
+  md: "sm:max-w-lg", // 512 — simple forms
+  lg: "sm:max-w-2xl", // 672 — content-heavy
+  xl: "sm:max-w-4xl", // 896 — product form (fields + preview side-by-side)
+  "2xl": "sm:max-w-5xl", // 1024 — conversion / debug
+  full: "sm:max-w-[90vw]",
+};
+
 function DialogContent({
   className,
   children,
   showCloseButton = true,
+  size = "sm",
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean;
+  size?: DialogSize;
 }) {
   return (
     <DialogPortal>
@@ -52,7 +67,8 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "bg-background data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 border-[var(--border-chunky)] fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-3 rounded-xl border p-3 text-xs/relaxed shadow-[var(--shadow-chunky-lg)] duration-100 outline-none sm:max-w-sm",
+          "bg-background data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 border-[var(--border-chunky)] fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] max-h-[90vh] -translate-x-1/2 -translate-y-1/2 gap-3 overflow-y-auto rounded-xl border p-3 text-xs/relaxed shadow-[var(--shadow-chunky-lg)] duration-100 outline-none",
+          dialogSizes[size],
           className,
         )}
         {...props}

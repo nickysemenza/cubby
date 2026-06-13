@@ -47,7 +47,7 @@ export const CreateChildLocationDialog: FC<CreateChildLocationDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent size="md">
         <DialogHeader>
           <DialogTitle>Create Child Location</DialogTitle>
           <DialogDescription>

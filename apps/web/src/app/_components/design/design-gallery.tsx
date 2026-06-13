@@ -575,6 +575,30 @@ export function DesignGallery() {
             Toast
           </Button>
         </Row>
+
+        <Row label="Dialog widths">
+          {(["sm", "md", "lg", "xl", "2xl", "full"] as const).map((size) => (
+            <Dialog key={size}>
+              <DialogTrigger
+                render={<Button variant="outline">{size}</Button>}
+              />
+              <DialogContent size={size}>
+                <DialogHeader>
+                  <DialogTitle>size=&quot;{size}&quot;</DialogTitle>
+                  <DialogDescription>
+                    The shared modal width scale. Tall content scrolls inside
+                    the capped height.
+                  </DialogDescription>
+                </DialogHeader>
+                <p className="text-sm">Body content goes here.</p>
+                <DialogFooter>
+                  <Button variant="outline">Cancel</Button>
+                  <Button>Confirm</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          ))}
+        </Row>
       </GallerySection>
 
       <GallerySection title="Alerts" source="components/common/colored-alert">

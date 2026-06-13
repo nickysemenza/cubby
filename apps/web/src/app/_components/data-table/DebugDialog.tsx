@@ -23,7 +23,10 @@ export function DebugDialog({
   return (
     <Dialog>
       <DialogTrigger render={trigger} />
-      <DialogContent className="flex max-h-[80vh] max-w-6xl flex-col overflow-hidden">
+      <DialogContent
+        size="full"
+        className="flex max-h-[80vh] flex-col overflow-hidden"
+      >
         <DialogHeader className="flex-shrink-0">
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
