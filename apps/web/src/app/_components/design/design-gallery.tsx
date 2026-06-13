@@ -77,6 +77,7 @@ import {
 } from "~/components/ui/table";
 import { Textarea } from "~/components/ui/textarea";
 import { TicketDivider } from "~/components/ui/ticket-divider";
+import { INGREDIENT_PART_COLOR } from "~/lib/ingredient-part-colors";
 
 /** Surface + semantic palette tokens, grouped for the swatch grid. */
 const SURFACE_TOKENS = [
@@ -284,27 +285,15 @@ export function DesignGallery() {
           </Row>
           <Row label="Legend">
             <span className="flex flex-wrap items-center gap-3 text-2xs text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                <span
-                  className="inline-block h-0 w-3.5 border-b-2"
-                  style={{ borderBottomColor: "var(--ingredient-amount)" }}
-                />
-                amount
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span
-                  className="inline-block h-0 w-3.5 border-b-2"
-                  style={{ borderBottomColor: "var(--ingredient-name)" }}
-                />
-                name
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span
-                  className="inline-block h-0 w-3.5 border-b-2"
-                  style={{ borderBottomColor: "var(--ingredient-modifier)" }}
-                />
-                modifier
-              </span>
+              {Object.entries(INGREDIENT_PART_COLOR).map(([part, color]) => (
+                <span key={part} className="flex items-center gap-1.5">
+                  <span
+                    className="inline-block h-0 w-3.5 border-b-2"
+                    style={{ borderBottomColor: color }}
+                  />
+                  {part}
+                </span>
+              ))}
             </span>
           </Row>
         </div>

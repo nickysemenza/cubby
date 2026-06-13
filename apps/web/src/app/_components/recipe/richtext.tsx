@@ -1,6 +1,7 @@
 import type { RichItem } from "@cubby/recipebridge";
 import { match } from "ts-pattern";
 import type { ReadonlyDeep } from "type-fest";
+import { INGREDIENT_PART_COLOR } from "~/lib/ingredient-part-colors";
 import { tryFormatAmount } from "../inventory/format-amount";
 
 export const formatRichText = (text: ReadonlyDeep<RichItem[]>) => {
@@ -10,7 +11,7 @@ export const formatRichText = (text: ReadonlyDeep<RichItem[]>) => {
       .with({ kind: "Ing" }, (t) => (
         <span
           className="border-b-2 box-decoration-clone pb-px font-medium"
-          style={{ borderBottomColor: "var(--ingredient-name)" }}
+          style={{ borderBottomColor: INGREDIENT_PART_COLOR.name }}
           // biome-ignore lint/suspicious/noArrayIndexKey: RichItem array has no stable IDs
           key={x}
         >
@@ -28,7 +29,7 @@ export const formatRichText = (text: ReadonlyDeep<RichItem[]>) => {
         return (
           <span
             className="border-b-2 box-decoration-clone pb-px font-medium"
-            style={{ borderBottomColor: "var(--ingredient-amount)" }}
+            style={{ borderBottomColor: INGREDIENT_PART_COLOR.amount }}
             // biome-ignore lint/suspicious/noArrayIndexKey: RichItem array has no stable IDs
             key={x}
           >
