@@ -79,7 +79,7 @@ export function CategoryTreemap({
         colors={(node) => {
           // pathComponents is [root, category, subcategory] — use index 1 for the category
           const category = node.pathComponents[1] ?? node.pathComponents[0];
-          return getCategoryColor(category);
+          return getCategoryColor(category ?? null);
         }}
         borderWidth={2}
         borderColor="var(--card)"

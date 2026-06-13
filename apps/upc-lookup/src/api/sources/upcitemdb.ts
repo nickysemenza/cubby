@@ -36,7 +36,7 @@ export async function lookupUPCitemdb(
       return null;
     }
 
-    const item = data.items[0];
+    const item = data.items[0]!;
 
     // Extract best price from offers (API returns dollars)
     let priceDollars: number | null = null;
@@ -59,7 +59,7 @@ export async function lookupUPCitemdb(
       category: item.category || null,
       description: item.description || null,
       priceDollars,
-      imageUrl: item.images && item.images.length > 0 ? item.images[0] : null,
+      imageUrl: item.images && item.images.length > 0 ? item.images[0]! : null,
       source: "upcitemdb",
       sourceData: JSON.stringify(data),
     };

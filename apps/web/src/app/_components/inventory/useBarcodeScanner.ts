@@ -178,7 +178,7 @@ export function useBarcodeScanner({
           try {
             const results = await detector.detect(video);
             if (results.length > 0 && !cancelled) {
-              const barcode = results[0].rawValue;
+              const barcode = results[0]!.rawValue;
               const now = Date.now();
 
               // Debounce same barcode

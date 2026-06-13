@@ -571,7 +571,7 @@ function MobileGalleryDrillDown({
 
   // Current level: root or drilled-in children
   const currentLocations =
-    path.length === 0 ? locations : (path[path.length - 1].children ?? []);
+    path.length === 0 ? locations : (path[path.length - 1]!.children ?? []);
 
   const handleTap = useCallback(
     (location: InfLocation) => {

@@ -229,6 +229,7 @@ function ConversionDialogContent({
                     const result = conversions[kind];
                     const path = paths[kind];
                     const Meta = kindIconMap[kind];
+                    if (!Meta) return null;
                     return (
                       <div key={kind} className="border-b py-1">
                         <div className="flex items-center justify-between">

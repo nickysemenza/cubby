@@ -71,7 +71,7 @@ export function BookGroupCard({
     if (!ready) return EMPTY_TITLES;
     const titles = new Set<string>(existingTitleSet);
     for (const i of book.selected) {
-      titles.add(normalize(book.recipes[i].meta.title));
+      titles.add(normalize(book.recipes[i]!.meta.title));
     }
     return titles;
   }, [ready, book.recipes, book.selected, existingTitleSet]);
@@ -234,6 +234,7 @@ function RecipeList({
       >
         {items.map((vi) => {
           const recipe = book.recipes[vi.index];
+          if (!recipe) return null;
           const existing = existingByTitle.get(normalize(recipe.meta.title));
           // Imported recipes compare their would-be signature to the stored one
           // → "no changes" vs "will update"; un-imported ones are "new".

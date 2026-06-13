@@ -27,12 +27,13 @@ export function useDesktopGroupedRows<TItem>(
     let currentKey: string | null = null;
 
     for (let i = 0; i < rows.length; i++) {
-      const key = groupConfig.keyFn(rows[i].original) ?? "(unspecified)";
+      const key = groupConfig.keyFn(rows[i]!.original) ?? "(unspecified)";
       if (key !== currentKey) {
         groups.push({ key, startIndex: i, count: 1 });
         currentKey = key;
       } else {
-        groups[groups.length - 1].count++;
+        // else branch only runs after at least one push, so the last group exists
+        groups[groups.length - 1]!.count++;
       }
     }
 

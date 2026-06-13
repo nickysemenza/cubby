@@ -254,7 +254,7 @@ export const imageList = async (
 
   return {
     data: processedImages,
-    count: countResult[0].count,
+    count: countResult[0]?.count ?? 0,
   };
 };
 

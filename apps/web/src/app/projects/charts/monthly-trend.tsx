@@ -75,7 +75,9 @@ export function MonthlyTrend({ purchases }: { purchases: NotionPurchase[] }) {
         areaOpacity={0.3}
         colors={(d) => {
           const idx = data.findIndex((s) => s.id === d.id);
-          return PROJECT_COLORS[idx % PROJECT_COLORS.length];
+          return (
+            PROJECT_COLORS[idx % PROJECT_COLORS.length] ?? PROJECT_COLORS[0]!
+          );
         }}
         pointSize={5}
         pointColor="white"

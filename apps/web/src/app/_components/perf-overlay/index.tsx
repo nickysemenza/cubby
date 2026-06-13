@@ -85,7 +85,7 @@ export function PerfOverlay() {
   }, [queryClient]);
 
   const cycleCorner = () =>
-    setCorner(CORNERS[(CORNERS.indexOf(corner) + 1) % CORNERS.length]);
+    setCorner(CORNERS[(CORNERS.indexOf(corner) + 1) % CORNERS.length]!);
   const togglePause = () => {
     const next = !paused;
     setPausedState(next);
@@ -459,7 +459,7 @@ function RendersTab({ snap }: { snap: PerfSnapshot }) {
       />
     );
   }
-  const maxCount = rows[0][1].count;
+  const maxCount = rows[0]![1].count;
   return (
     <div>
       <table className="w-full">

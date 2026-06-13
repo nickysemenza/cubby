@@ -52,7 +52,7 @@ function article(word: string): string {
 /** Extract the column list from a Postgres detail like `Key (a, b)=(...)`. */
 function columnsFromDetail(detail?: string): string | null {
   const match = detail?.match(/Key \(([^)]+)\)=/);
-  return match ? match[1] : null;
+  return match?.[1] ?? null;
 }
 
 /** Extract the referenced table from an FK detail (`… in table "Ingredient".`). */

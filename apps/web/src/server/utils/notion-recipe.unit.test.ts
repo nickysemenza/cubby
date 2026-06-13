@@ -61,7 +61,7 @@ describe("notionPageToImportRecipe", () => {
       ingredients: ["250 g water", "50 g butter"],
       instructions: ["Bring to a simmer.", "Add the flour."],
     });
-    expect(compact.sections[1].ingredients).toEqual([
+    expect(compact.sections[1]!.ingredients).toEqual([
       "vegetable oil, for frying",
     ]);
   });

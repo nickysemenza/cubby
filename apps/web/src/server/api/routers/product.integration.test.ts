@@ -128,8 +128,8 @@ describe("product router", () => {
     // Should return only Apple products
     expect(appleProducts.items.length).toEqual(2);
     expect(appleProducts.meta.totalCount).toEqual(2);
-    expect(appleProducts.items[0].name).toContain("Apple");
-    expect(appleProducts.items[1].name).toContain("Apple");
+    expect(appleProducts.items[0]!.name).toContain("Apple");
+    expect(appleProducts.items[1]!.name).toContain("Apple");
 
     // Test filtering by manufacturer
     const samsungProducts = await caller.list({
@@ -140,7 +140,7 @@ describe("product router", () => {
     // Should return only Samsung products
     expect(samsungProducts.items.length).toEqual(1);
     expect(samsungProducts.meta.totalCount).toEqual(1);
-    expect(samsungProducts.items[0].manufacturer).toEqual("Samsung");
+    expect(samsungProducts.items[0]!.manufacturer).toEqual("Samsung");
 
     // Test filtering by UPC
     const upcProducts = await caller.list({
@@ -151,7 +151,7 @@ describe("product router", () => {
     // Should return product with matching UPC
     expect(upcProducts.items.length).toEqual(1);
     expect(upcProducts.meta.totalCount).toEqual(1);
-    expect(upcProducts.items[0].upc).toEqual("123456789012");
+    expect(upcProducts.items[0]!.upc).toEqual("123456789012");
   });
 
   it("should update a product", async () => {
@@ -206,15 +206,15 @@ describe("product router", () => {
 
     // Verify unit mappings were created
     expect(retrievedProduct.unitMappings.length).toEqual(1);
-    expect(retrievedProduct.unitMappings[0].a).toEqual({
+    expect(retrievedProduct.unitMappings[0]!.a).toEqual({
       value: 1,
       unit: "each",
     });
-    expect(retrievedProduct.unitMappings[0].b).toEqual({
+    expect(retrievedProduct.unitMappings[0]!.b).toEqual({
       value: 5.99,
       unit: "lb",
     });
-    expect(retrievedProduct.unitMappings[0].source).toEqual("test");
+    expect(retrievedProduct.unitMappings[0]!.source).toEqual("test");
   });
 
   it("should handle partial updates correctly", async () => {
@@ -359,7 +359,10 @@ describe("product router", () => {
       const retrieved = await caller.getByID({ id: created.id });
       expect(retrieved.price).toBeNull();
       expect(retrieved.unitMappings).toHaveLength(1);
-      expect(retrieved.unitMappings[0].b).toEqual({ value: 4, unit: "dollar" });
+      expect(retrieved.unitMappings[0]!.b).toEqual({
+        value: 4,
+        unit: "dollar",
+      });
     });
   });
 });

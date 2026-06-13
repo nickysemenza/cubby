@@ -25,7 +25,9 @@ export const EntityHero: FC<EntityHeroProps> = ({ images }) => {
 
   if (images.length === 0) return null;
 
-  const activeImage = images[activeIndex];
+  // images[0] is safe given the length check above; falls back to it if
+  // activeIndex ever points past the end (e.g. after the array shrinks).
+  const activeImage = images[activeIndex] ?? images[0]!;
 
   return (
     <Card

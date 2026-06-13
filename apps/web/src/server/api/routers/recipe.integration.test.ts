@@ -78,20 +78,22 @@ describe("recipe router", () => {
     expect(retrievedRecipe.name).toEqual(recipeData.name);
     expect(retrievedRecipe.meta?.url).toEqual(recipeData.meta.url);
     expect(retrievedRecipe.sections).toHaveLength(1);
-    expect(retrievedRecipe.sections[0].name).toEqual("Main Section");
-    expect(retrievedRecipe.sections[0].ingredients).toHaveLength(1);
-    expect(retrievedRecipe.sections[0].ingredients[0].type).toEqual(
+    expect(retrievedRecipe.sections[0]!.name).toEqual("Main Section");
+    expect(retrievedRecipe.sections[0]!.ingredients).toHaveLength(1);
+    expect(retrievedRecipe.sections[0]!.ingredients[0]!.type).toEqual(
       "ingredient",
     );
-    expect(retrievedRecipe.sections[0].ingredients[0].amounts).toHaveLength(1);
-    expect(retrievedRecipe.sections[0].ingredients[0].amounts[0].value).toEqual(
-      2,
+    expect(retrievedRecipe.sections[0]!.ingredients[0]!.amounts).toHaveLength(
+      1,
     );
-    expect(retrievedRecipe.sections[0].ingredients[0].amounts[0].unit).toEqual(
-      "cups",
-    );
-    expect(retrievedRecipe.sections[0].instructions).toHaveLength(1);
-    expect(retrievedRecipe.sections[0].instructions[0].instruction).toEqual(
+    expect(
+      retrievedRecipe.sections[0]!.ingredients[0]!.amounts[0]!.value,
+    ).toEqual(2);
+    expect(
+      retrievedRecipe.sections[0]!.ingredients[0]!.amounts[0]!.unit,
+    ).toEqual("cups");
+    expect(retrievedRecipe.sections[0]!.instructions).toHaveLength(1);
+    expect(retrievedRecipe.sections[0]!.instructions[0]!.instruction).toEqual(
       "Mix ingredients",
     );
   });
@@ -198,8 +200,8 @@ describe("recipe router", () => {
     // Should return only recipes with "Chocolate" in name
     expect(chocolateRecipes.items.length).toEqual(2);
     expect(chocolateRecipes.meta.totalCount).toEqual(2);
-    expect(chocolateRecipes.items[0].name).toContain("Chocolate");
-    expect(chocolateRecipes.items[1].name).toContain("Chocolate");
+    expect(chocolateRecipes.items[0]!.name).toContain("Chocolate");
+    expect(chocolateRecipes.items[1]!.name).toContain("Chocolate");
 
     // Test filtering with no matches
     const pizzaRecipes = await caller.list({
@@ -290,13 +292,13 @@ describe("recipe router", () => {
     expect(retrievedRecipe.name).toEqual("Updated Recipe");
     expect(retrievedRecipe.meta?.url).toEqual("https://example.com/updated");
     expect(retrievedRecipe.sections).toHaveLength(1);
-    expect(retrievedRecipe.sections[0].name).toEqual("Updated Section");
-    expect(retrievedRecipe.sections[0].instructions[0].instruction).toEqual(
+    expect(retrievedRecipe.sections[0]!.name).toEqual("Updated Section");
+    expect(retrievedRecipe.sections[0]!.instructions[0]!.instruction).toEqual(
       "Updated instruction",
     );
-    expect(retrievedRecipe.sections[0].ingredients[0].amounts[0].value).toEqual(
-      0.5,
-    );
+    expect(
+      retrievedRecipe.sections[0]!.ingredients[0]!.amounts[0]!.value,
+    ).toEqual(0.5);
   });
 
   it("should handle partial updates correctly", async () => {
@@ -357,7 +359,7 @@ describe("recipe router", () => {
     expect(retrievedRecipe.name).toEqual("Updated Name Only");
     expect(retrievedRecipe.meta?.url).toEqual("https://example.com/original"); // Unchanged
     expect(retrievedRecipe.sections).toHaveLength(1);
-    expect(retrievedRecipe.sections[0].name).toEqual("Test Section"); // Unchanged
+    expect(retrievedRecipe.sections[0]!.name).toEqual("Test Section"); // Unchanged
   });
 
   it("should throw error when retrieving recipe with invalid ID", async () => {
@@ -441,17 +443,17 @@ describe("recipe router", () => {
     // Retrieve and verify the complex recipe
     const retrievedRecipe = await caller.getByID({ id: complexRecipe.id });
 
-    expect(retrievedRecipe.sections[0].ingredients).toHaveLength(1);
-    expect(retrievedRecipe.sections[0].ingredients[0].type).toEqual("recipe");
-    expect(retrievedRecipe.sections[0].ingredients[0].recipe?.name).toEqual(
+    expect(retrievedRecipe.sections[0]!.ingredients).toHaveLength(1);
+    expect(retrievedRecipe.sections[0]!.ingredients[0]!.type).toEqual("recipe");
+    expect(retrievedRecipe.sections[0]!.ingredients[0]!.recipe?.name).toEqual(
       "Base Recipe",
     );
-    expect(retrievedRecipe.sections[0].ingredients[0].amounts[0].value).toEqual(
-      2,
-    );
-    expect(retrievedRecipe.sections[0].ingredients[0].amounts[0].unit).toEqual(
-      "portions",
-    );
+    expect(
+      retrievedRecipe.sections[0]!.ingredients[0]!.amounts[0]!.value,
+    ).toEqual(2);
+    expect(
+      retrievedRecipe.sections[0]!.ingredients[0]!.amounts[0]!.unit,
+    ).toEqual("portions");
   });
 
   it("should insert import recipe", async () => {
@@ -486,6 +488,6 @@ describe("recipe router", () => {
 
     expect(retrievedRecipe.name).toEqual("Import Recipe");
     expect(retrievedRecipe.sections).toHaveLength(1);
-    expect(retrievedRecipe.sections[0].instructions).toHaveLength(2);
+    expect(retrievedRecipe.sections[0]!.instructions).toHaveLength(2);
   });
 });

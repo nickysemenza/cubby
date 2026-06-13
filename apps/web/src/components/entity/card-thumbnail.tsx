@@ -20,7 +20,7 @@ export function CardThumbnail({
 }: CardThumbnailProps) {
   if (images.length === 0) return null;
 
-  const image = images[0];
+  const image = images[0]!;
 
   return (
     <div

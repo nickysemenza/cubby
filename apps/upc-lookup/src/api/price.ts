@@ -38,6 +38,6 @@ export function extractBestPrice(offers: UPCitemdbOffer[]): number | null {
   validPrices.sort((a, b) => a - b);
   const mid = Math.floor(validPrices.length / 2);
   return validPrices.length % 2 !== 0
-    ? validPrices[mid]
-    : (validPrices[mid - 1] + validPrices[mid]) / 2;
+    ? validPrices[mid]!
+    : (validPrices[mid - 1]! + validPrices[mid]!) / 2;
 }

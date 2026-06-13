@@ -83,8 +83,8 @@ describe("product repository", () => {
     // Should return first 2 products sorted by name ascending
     expect(firstPage.data.length).toEqual(2);
     expect(firstPage.count).toEqual(3); // Total count should be 3
-    expect(firstPage.data[0].name).toEqual("Product A");
-    expect(firstPage.data[1].name).toEqual("Product B");
+    expect(firstPage.data[0]!.name).toEqual("Product A");
+    expect(firstPage.data[1]!.name).toEqual("Product B");
 
     // Test listing with pagination - second page
     const secondPage = await productList(
@@ -100,7 +100,7 @@ describe("product repository", () => {
     // Should return the last product
     expect(secondPage.data.length).toEqual(1);
     expect(secondPage.count).toEqual(3);
-    expect(secondPage.data[0].name).toEqual("Product C");
+    expect(secondPage.data[0]!.name).toEqual("Product C");
 
     // Test listing with filtering by manufacturer
     const filteredList = await productList(
@@ -116,8 +116,8 @@ describe("product repository", () => {
     // Should return only products from Manufacturer X
     expect(filteredList.data.length).toEqual(2);
     expect(filteredList.count).toEqual(2);
-    expect(filteredList.data[0].manufacturer).toEqual("Manufacturer X");
-    expect(filteredList.data[1].manufacturer).toEqual("Manufacturer X");
+    expect(filteredList.data[0]!.manufacturer).toEqual("Manufacturer X");
+    expect(filteredList.data[1]!.manufacturer).toEqual("Manufacturer X");
   });
 
   it("should update a product", async () => {
@@ -161,15 +161,15 @@ describe("product repository", () => {
 
     // Verify unit mappings were created
     expect(retrievedProduct.unitMappings.length).toEqual(1);
-    expect(retrievedProduct.unitMappings[0].a).toEqual({
+    expect(retrievedProduct.unitMappings[0]!.a).toEqual({
       value: 1,
       unit: "each",
     });
-    expect(retrievedProduct.unitMappings[0].b).toEqual({
+    expect(retrievedProduct.unitMappings[0]!.b).toEqual({
       value: 5.99,
       unit: "lb",
     });
-    expect(retrievedProduct.unitMappings[0].source).toEqual("test");
+    expect(retrievedProduct.unitMappings[0]!.source).toEqual("test");
   });
 
   it("should link a product to an ingredient", async () => {

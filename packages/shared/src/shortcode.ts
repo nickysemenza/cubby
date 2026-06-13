@@ -72,7 +72,8 @@ export function parseShortcode(
   const match = normalized.match(SHORTCODE_RE);
   if (!match) return null;
 
-  const type = PREFIX_MAP[match[1]];
+  const prefix = match[1];
+  const type = prefix ? PREFIX_MAP[prefix] : undefined;
   if (!type) return null;
 
   return { type, shortcode: normalized, id: normalized.slice(2) };

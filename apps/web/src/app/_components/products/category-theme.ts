@@ -15,35 +15,26 @@ import {
   Utensils,
   Wrench,
 } from "lucide-react";
-import { assertNever } from "~/lib/assert";
 
 // Re-export colors/helpers from @cubby/shared for existing consumers
 export { formatCategoryLabel, getCategoryColor };
 
+// Exhaustive at construction: a new ProductCategory without a key here is a
+// compile error (replaces the old assertNever default-case guarantee).
+const categoryIcons: Record<ProductCategory, LucideIcon> = {
+  food: Utensils,
+  tools: Wrench,
+  "tool-consumables": Disc,
+  "tool-accessories": Settings,
+  storage: Archive,
+  hardware: Bolt,
+  electronics: Cpu,
+  household: Sofa,
+  supplies: Sparkles,
+};
+
 /**
  * Get the icon component for a product category
  */
-export const getCategoryIcon = (category: ProductCategory): LucideIcon => {
-  switch (category) {
-    case "food":
-      return Utensils;
-    case "tools":
-      return Wrench;
-    case "tool-consumables":
-      return Disc;
-    case "tool-accessories":
-      return Settings;
-    case "storage":
-      return Archive;
-    case "hardware":
-      return Bolt;
-    case "electronics":
-      return Cpu;
-    case "household":
-      return Sofa;
-    case "supplies":
-      return Sparkles;
-    default:
-      assertNever(category);
-  }
-};
+export const getCategoryIcon = (category: ProductCategory): LucideIcon =>
+  categoryIcons[category]; // safe: complete Record keyed by the enum

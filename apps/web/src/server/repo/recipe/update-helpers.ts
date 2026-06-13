@@ -338,6 +338,9 @@ async function updateSectionIngredients(
   for (let i = 0; i < ingredientUpdates.length; i++) {
     const ingredientUpdate = ingredientUpdates[i];
     const processedIngredient = processedIngredients[i];
+    // Parallel arrays built from the same source; skip rather than risk a
+    // partial write if they ever fall out of lockstep.
+    if (!ingredientUpdate || !processedIngredient) continue;
 
     if (!ingredientUpdate.id) {
       // Collect new ingredients for batch insert

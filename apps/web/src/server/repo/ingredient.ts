@@ -241,7 +241,7 @@ export const getIngredientMatches = async (
   if (names.length === 0) return map;
 
   const rows = await getDb(db).query.ingredient.findMany({
-    where: buildIngredientWhere(true, names[0], names.slice(1)),
+    where: buildIngredientWhere(true, names[0]!, names.slice(1)),
     columns: { id: true, name: true, aliases: true },
   });
 

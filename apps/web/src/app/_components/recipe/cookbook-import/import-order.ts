@@ -30,7 +30,7 @@ export const addWithReferences = (
   const titleToIndex = buildTitleIndex(recipes);
   const queue = [i];
   for (let cur = queue.pop(); cur != null; cur = queue.pop()) {
-    for (const ref of recipes[cur].references) {
+    for (const ref of recipes[cur]!.references) {
       const refIdx = titleToIndex.get(normalize(ref.title));
       if (refIdx != null && !selected.has(refIdx)) {
         selected.add(refIdx);
@@ -57,7 +57,7 @@ export const topoOrderSelected = (
   const deps = new Map<number, Set<number>>();
   for (const i of selected) {
     const d = new Set<number>();
-    for (const ref of recipes[i].references) {
+    for (const ref of recipes[i]!.references) {
       const refIdx = titleToIndex.get(normalize(ref.title));
       if (refIdx != null && refIdx !== i && selectedSet.has(refIdx)) {
         d.add(refIdx);

@@ -152,7 +152,7 @@ describe("inventory router", () => {
     // Should return only flour entries
     expect(flourEntries.items.length).toEqual(1);
     expect(flourEntries.meta.totalCount).toEqual(1);
-    expect(flourEntries.items[0].product.name).toEqual("Flour");
+    expect(flourEntries.items[0]!.product.name).toEqual("Flour");
 
     // Test filtering by location name
     const kitchenEntries = await caller.list({
@@ -163,8 +163,8 @@ describe("inventory router", () => {
     // Should return only kitchen entries
     expect(kitchenEntries.items.length).toEqual(2);
     expect(kitchenEntries.meta.totalCount).toEqual(2);
-    expect(kitchenEntries.items[0].location.name).toEqual("Kitchen");
-    expect(kitchenEntries.items[1].location.name).toEqual("Kitchen");
+    expect(kitchenEntries.items[0]!.location.name).toEqual("Kitchen");
+    expect(kitchenEntries.items[1]!.location.name).toEqual("Kitchen");
 
     // Test filtering by location ID
     const pantryEntries = await caller.list({
@@ -175,7 +175,7 @@ describe("inventory router", () => {
     // Should return only pantry entries
     expect(pantryEntries.items.length).toEqual(1);
     expect(pantryEntries.meta.totalCount).toEqual(1);
-    expect(pantryEntries.items[0].location.id).toEqual(pantryId);
+    expect(pantryEntries.items[0]!.location.id).toEqual(pantryId);
 
     // Test filtering with no matches
     const noMatches = await caller.list({
@@ -452,8 +452,8 @@ describe("inventory router", () => {
       });
 
       expect(result).toHaveLength(1);
-      expect(result[0].location.id).toEqual(targetLocation.id);
-      expect(result[0].amount.value).toEqual(10);
+      expect(result[0]!.location.id).toEqual(targetLocation.id);
+      expect(result[0]!.amount.value).toEqual(10);
 
       // Verify source location is empty
       const sourceEntries = await caller.list({
@@ -503,8 +503,8 @@ describe("inventory router", () => {
       });
 
       expect(result).toHaveLength(1);
-      expect(result[0].amount.value).toEqual(3);
-      expect(result[0].location.id).toEqual(targetLocation.id);
+      expect(result[0]!.amount.value).toEqual(3);
+      expect(result[0]!.location.id).toEqual(targetLocation.id);
 
       // Verify source still has 7
       const sourceEntry = await caller.getByID({ id: entryId });
@@ -580,8 +580,8 @@ describe("inventory router", () => {
       });
 
       expect(result).toHaveLength(1);
-      expect(result[0].id).toEqual(targetEntry.id); // Same entry updated
-      expect(result[0].amount.value).toEqual(8); // 3 + 5 = 8
+      expect(result[0]!.id).toEqual(targetEntry.id); // Same entry updated
+      expect(result[0]!.amount.value).toEqual(8); // 3 + 5 = 8
     });
 
     it("should throw error when source and target are the same", async () => {

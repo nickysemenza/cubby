@@ -33,13 +33,13 @@ function BlockList({ blocks }: { blocks: NotionBlock[] }) {
   let i = 0;
 
   while (i < blocks.length) {
-    const block = blocks[i];
+    const block = blocks[i]!;
 
     // Group consecutive list items
     if (block.type === "bulleted_list_item") {
       const items: NotionBlock[] = [];
-      while (i < blocks.length && blocks[i].type === "bulleted_list_item") {
-        items.push(blocks[i]);
+      while (i < blocks.length && blocks[i]!.type === "bulleted_list_item") {
+        items.push(blocks[i]!);
         i++;
       }
       elements.push(
@@ -55,8 +55,8 @@ function BlockList({ blocks }: { blocks: NotionBlock[] }) {
 
     if (block.type === "numbered_list_item") {
       const items: NotionBlock[] = [];
-      while (i < blocks.length && blocks[i].type === "numbered_list_item") {
-        items.push(blocks[i]);
+      while (i < blocks.length && blocks[i]!.type === "numbered_list_item") {
+        items.push(blocks[i]!);
         i++;
       }
       elements.push(
@@ -72,8 +72,8 @@ function BlockList({ blocks }: { blocks: NotionBlock[] }) {
 
     if (block.type === "to_do") {
       const items: NotionBlock[] = [];
-      while (i < blocks.length && blocks[i].type === "to_do") {
-        items.push(blocks[i]);
+      while (i < blocks.length && blocks[i]!.type === "to_do") {
+        items.push(blocks[i]!);
         i++;
       }
       elements.push(

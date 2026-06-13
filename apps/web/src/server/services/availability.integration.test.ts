@@ -99,10 +99,10 @@ describe("AvailabilityService.getRecipeAvailability", () => {
     expect(result.totalIngredients).toBe(1);
     expect(result.availableIngredients).toBe(1);
     expect(result.missing).toEqual([]);
-    expect(result.ingredients[0].status).toBe("ok");
-    expect(result.ingredients[0].basisUnit).toBe("g");
-    expect(result.ingredients[0].needValue).toBeCloseTo(240, 1); // 2 cups
-    expect(result.ingredients[0].haveValue).toBeCloseTo(500, 1); // 500 g on hand
+    expect(result.ingredients[0]!.status).toBe("ok");
+    expect(result.ingredients[0]!.basisUnit).toBe("g");
+    expect(result.ingredients[0]!.needValue).toBeCloseTo(240, 1); // 2 cups
+    expect(result.ingredients[0]!.haveValue).toBeCloseTo(500, 1); // 500 g on hand
   });
 
   it("reports short when inventory is insufficient", async () => {
@@ -114,7 +114,7 @@ describe("AvailabilityService.getRecipeAvailability", () => {
     );
 
     expect(result.coverage).toBe(0);
-    expect(result.ingredients[0].status).toBe("short");
+    expect(result.ingredients[0]!.status).toBe("short");
     expect(result.missing).toEqual(["flour"]);
   });
 
@@ -127,8 +127,8 @@ describe("AvailabilityService.getRecipeAvailability", () => {
     );
 
     expect(result.coverage).toBe(0);
-    expect(result.ingredients[0].status).toBe("missing");
-    expect(result.ingredients[0].haveValue).toBeNull();
+    expect(result.ingredients[0]!.status).toBe("missing");
+    expect(result.ingredients[0]!.haveValue).toBeNull();
   });
 
   it("reports unconvertible when units can't be reconciled", async () => {
@@ -140,8 +140,8 @@ describe("AvailabilityService.getRecipeAvailability", () => {
       recipe.id,
     );
 
-    expect(result.ingredients[0].status).toBe("unconvertible");
-    expect(result.ingredients[0].haveValue).toBeNull();
+    expect(result.ingredients[0]!.status).toBe("unconvertible");
+    expect(result.ingredients[0]!.haveValue).toBeNull();
     expect(result.coverage).toBe(0);
   });
 });
