@@ -8,8 +8,6 @@
 // Analytics operations
 export {
   backfillFoodCategories,
-  countProductsNeedingFoodCategory,
-  countProductsWithNoImages,
   findDuplicateUniqueProducts,
   findProductsNeedingFoodCategory,
   findProductsWithNoImages,

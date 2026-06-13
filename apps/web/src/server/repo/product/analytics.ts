@@ -66,61 +66,7 @@ export const findProductsWithNoImages = async (
 };
 
 /**
- * Count products that have no images at all.
- * Optimized SQL-level count for badge display.
- * @param excludeIngredients - If true, excludes products linked to ingredients (for problems dashboard)
- */
-export const countProductsWithNoImages = async (
-  db: Database,
-  { excludeIngredients = false } = {},
-): Promise<number> => {
-  const dbClient = getDb(db);
-
-  const conditions = [notDeleted(product)];
-  if (excludeIngredients) {
-    conditions.push(isNull(product.ingredientId));
-  }
-
-  const result = await dbClient.select({ count: sql<number>`count(*)` }).from(
-    dbClient
-      .select({ id: product.id })
-      .from(product)
-      .leftJoin(productImage, eq(productImage.productId, product.id))
-      .where(and(...conditions))
-      .groupBy(product.id)
-      .having(sql`count(${productImage.imageId}) = 0`)
-      .as("no_images"),
-  );
-
-  return Number(result[0]?.count ?? 0);
-};
-
-/**
- * Count products that have food indicators but category is not "food".
- * Optimized SQL-level count for badge display.
- */
-export const countProductsNeedingFoodCategory = async (
-  db: Database,
-): Promise<number> => {
-  const dbClient = getDb(db);
-
-  const result = await dbClient
-    .select({ count: sql<number>`count(*)` })
-    .from(product)
-    .where(
-      and(
-        notDeleted(product),
-        sql`${product.category} IS DISTINCT FROM 'food'`,
-        sql`((${product.ndb_number} IS NOT NULL AND ${product.ndb_number} > 0) OR ${product.ingredientId} IS NOT NULL)`,
-      ),
-    );
-
-  return Number(result[0]?.count ?? 0);
-};
-
-/**
  * Find all products that have food indicators (NDB or ingredient) but category is not "food".
- * Uses SQL WHERE predicates matching countProductsNeedingFoodCategory.
  * Used for food category backfill functionality.
  */
 export const findProductsNeedingFoodCategory = async (
