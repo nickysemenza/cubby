@@ -16,7 +16,7 @@
     "test": "pnpm -r test",
     "test-ui": "vitest --ui",
     "test:e2e": "pnpm -r test:e2e",
-    "wasm": "wasm-pack build --scope cubby --out-dir ../packages/wasm recipebridge",
+    "wasm": "CARGO_TARGET_DIR=\"${CARGO_TARGET_DIR:-$HOME/.cache/cubby/recipebridge-target}\" wasm-pack build --scope cubby --out-dir ../packages/wasm recipebridge",
     "prepare": "husky"
   },
   "devDependencies": {

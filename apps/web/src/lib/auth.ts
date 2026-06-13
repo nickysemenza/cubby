@@ -47,9 +47,23 @@ export const auth = betterAuth({
     }),
     tanstackStartCookies(), // Must be last
   ],
-  trustedOrigins: [
-    "cubby-mobile://",
-    ...(isDev ? ["http://localhost:3000", "http://127.0.0.1:3000"] : []),
-  ],
+  // In dev, trust any localhost/127.0.0.1 origin regardless of port so worktree
+  // dev servers (which run on auto-assigned ports — see README "Worktrees") can
+  // perform auth POSTs. The session cookie itself isn't port-scoped (RFC 6265) and
+  // lives in the shared DB, so an existing login already carries across ports; this
+  // only unblocks origin validation. Prod stays locked to the deployed origin.
+  trustedOrigins: isDev
+    ? (request) => {
+        const base = [
+          "cubby-mobile://",
+          "http://localhost:3000",
+          "http://127.0.0.1:3000",
+        ];
+        const origin = request?.headers.get("origin"); // undefined on init/auth.api
+        const isLocal =
+          origin && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+        return isLocal ? [...base, origin] : base;
+      }
+    : ["cubby-mobile://"],
   socialProviders: {},
 });

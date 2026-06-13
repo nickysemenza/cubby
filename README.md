@@ -179,6 +179,42 @@ Required keys (see [apps/web/.env.example](apps/web/.env.example) for the full f
 | `NOTION_API_KEY` | *(optional)* Project Tracker dashboard |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | *(optional)* OTLP traces → Jaeger |
 
+### Worktrees (parallel sessions)
+
+Claude Code can run parallel sessions, each in its own git worktree under
+`.claude/worktrees/<name>`. A few things to know:
+
+- **Fresh worktree setup:** `pnpm install && pnpm run wasm`. Gitignored env
+  (`apps/web/.env`, `.env.local`) is copied in automatically via
+  [.worktreeinclude](.worktreeinclude); `node_modules` and the gitignored WASM
+  package (`packages/wasm/*`) are not, so build them once.
+- **Builds are shared, not cold.** The `wasm` script points `CARGO_TARGET_DIR` at a
+  shared cache (`~/.cache/cubby/recipebridge-target`), so worktrees reuse the
+  compiled Rust deps — a worktree `pnpm run wasm` is an incremental build, not the
+  ~90s cold one, and there's no 1.3GB `target/` per worktree.
+- **WASM never silently drifts.** [scripts/ensure-wasm.sh](scripts/ensure-wasm.sh)
+  runs on `git pull`/`git checkout` (husky `post-merge`/`post-checkout`) and rebuilds
+  only if `recipebridge/` is newer than the built binary (a `find -newer` check —
+  cargo does the real staleness work). So a pulled `recipebridge/` change rebuilds
+  instead of throwing `missing field …` at runtime — on the **main** checkout too.
+- **Ports.** The main checkout is always `:3000` (`vite.config.ts` uses `strictPort`,
+  so it fails loudly rather than drifting). Worktree dev servers auto-pick a free
+  port — the preview harness via `autoPort` (injects `PORT`), or a terminal
+  `pnpm dev` via vite's auto-increment.
+- **Previewing a worktree:** start a session with the **worktree folder itself**
+  selected as the project (`<repo>/.claude/worktrees/<name>`), not by entering a
+  worktree from inside the main-rooted session — preview resolves `launch.json` from
+  the folder you opened, so opening the worktree serves its branch.
+- **Shared services:** docker-compose (Postgres/IntegresQL/Jaeger) binds fixed host
+  ports — `docker-compose up -d` once from any checkout and all worktrees reuse them
+  for `test`/`test:e2e`.
+- **⚠ Shared prod DB:** every worktree's `DATABASE_URL` is the **same prod Neon**
+  instance (dev DB *is* prod). `db:push` and data changes from one worktree are
+  visible everywhere and hit prod — coordinate schema changes across parallel work.
+- Rebuild WASM manually (`pnpm run wasm`) only if you edit `recipebridge/` Rust
+  source; it needs the rust toolchain + the global cargo patch + the sibling
+  ingredient-parser checkout.
+
 ## ⚡ Common Commands
 
 | Command | What it does |

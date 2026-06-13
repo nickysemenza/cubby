@@ -101,6 +101,10 @@ export default defineConfig(async () => {
     deployPlugin.push(cloudflare({ viteEnvironment: { name: "ssr" } }));
   }
 
+  // Multi-worktree dev-server port resolution (see `server.port` below).
+  const serverPort = Number(process.env.PORT) || 0;
+  const inWorktree = process.cwd().includes("/.claude/worktrees/");
+
   return {
     envDir: ".", // Explicitly load .env from this directory
     // Resolve tsconfig `paths` (~/*, tooling/*) natively — Vite 8 replaces the
@@ -146,6 +150,13 @@ export default defineConfig(async () => {
     },
     server: {
       host: "0.0.0.0",
+      // Port resolution for multi-worktree dev (see README "Worktrees"):
+      // - The Claude Code preview harness (autoPort) injects PORT when it picks a
+      //   free port — bind exactly that (strictPort) so the preview attaches.
+      // - No PORT: the main checkout is 3000-or-fail-loudly (never silent-drift);
+      //   a worktree's terminal `pnpm dev` auto-finds a free port instead.
+      port: serverPort || 3000,
+      strictPort: serverPort ? true : !inWorktree,
       allowedHosts: ["nickys-macbook-air.tailnet-0eba.ts.net"],
     },
     ssr: {
