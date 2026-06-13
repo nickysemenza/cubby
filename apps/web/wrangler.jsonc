@@ -24,9 +24,14 @@
       "custom_domain": true
     }
   ],
-  // Per-PR preview deploys use `wrangler versions upload`, which serves each
-  // uploaded version at https://<prefix>-cubby.nicky.workers.dev. Explicit (the
-  // default is on) so a future workers.dev toggle can't silently disable it.
+  // Prod is custom-domain only — keep the production *.workers.dev URL off so
+  // cubby.nickysemenza.com is the sole prod origin. Per-PR preview deploys
+  // (`wrangler versions upload`) still get https://<prefix>-cubby.nicky.workers.dev
+  // via preview_urls. NOTE: these are non-versioned settings — they apply on
+  // `wrangler deploy` (deploy-cf), not on `versions upload`, so enable Preview
+  // URLs once in the dashboard for them to take effect before the first prod
+  // deploy. Pinned here so a later deploy can't silently flip either.
+  "workers_dev": false,
   "preview_urls": true,
   // Place Worker near the database rather than the user (SSR-heavy app)
   "placement": {
