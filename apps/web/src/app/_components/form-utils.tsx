@@ -283,6 +283,7 @@ export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
   onSearchChange,
   isLoading,
   onCreateNew,
+  onSelect,
 }: {
   form: UseFormReturn<TFieldValues>;
   name: Path<TFieldValues>;
@@ -291,6 +292,10 @@ export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
   onSearchChange: (query: string) => void;
   isLoading?: boolean;
   onCreateNew?: (name: string) => Promise<ComboboxItem>;
+  // Fires with the selected item (or null on clear), after the field updates.
+  // Lets callers sync a sibling field — e.g. write the ingredient's aliases to
+  // the row so the Re-parse drift check sees them.
+  onSelect?: (item: ComboboxItem | null) => void;
 }) {
   return (
     <Controller
@@ -305,11 +310,12 @@ export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
             onSearchChange={onSearchChange}
             isLoading={isLoading}
             value={field.value as ComboboxItem | null}
-            setValue={(value) =>
+            setValue={(value) => {
               field.onChange(
                 value as PathValue<TFieldValues, Path<TFieldValues>>,
-              )
-            }
+              );
+              onSelect?.(value);
+            }}
             onCreateNew={onCreateNew}
           />
           {fieldState.error && <FieldError errors={[fieldState.error]} />}

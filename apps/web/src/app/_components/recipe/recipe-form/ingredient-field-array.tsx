@@ -157,6 +157,15 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                             onSearchChange={onSearchChange}
                             isLoading={isLoading}
                             onCreateNew={onCreateNew}
+                            // Keep the row's aliases in sync with the picked
+                            // ingredient so the Re-parse drift check doesn't
+                            // false-positive on an alias match.
+                            onSelect={(item) =>
+                              form.setValue(
+                                `${path}.aliases`,
+                                item?.aliases ?? [],
+                              )
+                            }
                           />
                         )}
                       </WithIngredientSearch>
