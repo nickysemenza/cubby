@@ -37,6 +37,7 @@ export const buildIngredientComboboxItem = (
 ): ComboboxItem<IngredientId> => ({
   id: location.id,
   name: `${location.name}`,
+  aliases: location.aliases ?? [],
 });
 
 export const buildRecipeComboboxItem = (

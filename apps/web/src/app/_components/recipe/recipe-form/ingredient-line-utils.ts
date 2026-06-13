@@ -32,9 +32,13 @@ export const parsedIngredientNames = (
     parsed.map((item) => item.parsed.name).filter((name) => name.length > 0),
   );
 
+// Carry `aliases` onto the row so the Re-parse drift check treats an alias hit
+// (e.g. a "granulated sugar" line matched to the "White sugar" ingredient) as a
+// match, not drift. Without this the import path leaves aliases empty and every
+// alias-matched line falsely shows a Re-parse button.
 export const parsedIngredientToFormItem = (
   item: ParsedIngredientLine,
-  match: Pick<IngredientMatch, "id" | "name">,
+  match: Pick<IngredientMatch, "id" | "name" | "aliases">,
 ): IngItem => ({
   type: "ingredient",
   ingredient: { id: match.id, name: match.name },
@@ -45,13 +49,19 @@ export const parsedIngredientToFormItem = (
   })) as Amount[],
   rawLine: item.raw,
   modifier: item.parsed.modifier ?? null,
+  aliases: match.aliases ?? [],
 });
 
 export async function resolveParsedIngredientGroups(
   parsedGroups: readonly (readonly ParsedIngredientLine[])[],
-  resolveName: (name: string) => Promise<Pick<IngredientMatch, "id" | "name">>,
+  resolveName: (
+    name: string,
+  ) => Promise<Pick<IngredientMatch, "id" | "name" | "aliases">>,
 ): Promise<IngItem[][]> {
-  const resolved = new Map<string, Pick<IngredientMatch, "id" | "name">>();
+  const resolved = new Map<
+    string,
+    Pick<IngredientMatch, "id" | "name" | "aliases">
+  >();
 
   for (const name of parsedIngredientNames(parsedGroups.flat())) {
     resolved.set(name, await resolveName(name));

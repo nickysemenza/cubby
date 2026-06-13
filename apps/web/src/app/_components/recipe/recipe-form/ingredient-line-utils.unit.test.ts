@@ -38,7 +38,7 @@ describe("ingredient line helpers", () => {
       parsedGroups,
       async (name) => {
         calls.push(name);
-        return { id: `id-${name}`, name };
+        return { id: `id-${name}`, name, aliases: [] };
       },
     );
 
@@ -48,5 +48,25 @@ describe("ingredient line helpers", () => {
       ["id-flour", "id-egg"],
     ]);
     expect(groups[0]?.[0]?.rawLine).toBe("1 cup flour");
+  });
+
+  // Regression: an imported line whose wording is a registered alias of the
+  // matched ingredient (e.g. "egg" → the "large brown egg" ingredient) must
+  // carry that ingredient's aliases onto the row, so the Re-parse drift check
+  // recognizes the alias match instead of false-flagging drift.
+  it("threads the matched ingredient's aliases onto each row", async () => {
+    const parsedGroups = [
+      parseIngredientLines(["1 egg"], { requireName: true }),
+    ];
+    const groups = await resolveParsedIngredientGroups(
+      parsedGroups,
+      async (name) => ({
+        id: `id-${name}`,
+        name: "large brown egg",
+        aliases: ["egg", "eggs"],
+      }),
+    );
+
+    expect(groups[0]?.[0]?.aliases).toEqual(["egg", "eggs"]);
   });
 });
