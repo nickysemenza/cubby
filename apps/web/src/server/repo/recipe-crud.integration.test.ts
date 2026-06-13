@@ -115,7 +115,7 @@ describe("recipe crud repo", () => {
   });
 
   describe("upsert variants", () => {
-    it("upsertNotionRecipe re-imports the same page into one stable row", async () => {
+    it("upsertNotionRecipe re-imports a renamed page in place, updating the title", async () => {
       const pageId = "notion-page-123";
       const first = await upsertNotionRecipe(
         makeRecipeInput({
@@ -147,10 +147,11 @@ describe("recipe crud repo", () => {
         .from(recipe)
         .where(and(eq(recipe.SourceData, pageId), notDeleted(recipe)));
       expect(rows).toHaveLength(1);
-      // NB: page id is the identity key; the upsert refreshes sections/notes/source
-      // but deliberately does NOT overwrite the existing name on re-import.
+      // Page id is the identity key; re-import reflects the source, so the renamed
+      // page's new title is written through (Notion names are exempt from
+      // Recipe_name_key, so the rename can't collide).
       const full = await getRecipeByID(db, renamed.id);
-      expect(full?.name).toBe("Original Title");
+      expect(full?.name).toBe("Renamed Title");
     });
 
     it("upsertRecipe (web) does not collide with a same-named cookbook recipe", async () => {

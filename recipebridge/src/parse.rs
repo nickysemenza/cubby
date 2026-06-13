@@ -188,8 +188,10 @@ pub fn format_amount(amount: WAmount) -> String {
 }
 
 /// Singularize a unit for display labels ("churros" → "churro", "cups" → "cup").
-/// Wraps the parser's `singular` so cubby and ingredient-parser agree on the
-/// rule (it guards "glass" and handles real yield units).
+/// Wraps the parser's `singular` so cubby and ingredient-parser agree on the rule,
+/// including the `-es` guard ("glasses" → "glass", not "glasse"). It expects a
+/// plural; an already-singular word is out of contract (e.g. "glass" → "glas").
+/// See `singularize_unit_table` in the tests for the locked-in cases.
 #[wasm_bindgen]
 pub fn singularize_unit(unit: String) -> String {
     ingredient::unit::singular(&unit).to_string()

@@ -104,6 +104,10 @@ pub fn conv_amount_to_kind(
     let pairs = mappings.to_pairs();
     let measure = amount_w.to_measure();
     let kind_str: String = from_js(target_kind_w, "amount kind")?;
+    // `from_str` is currently infallible (an unknown kind becomes `other:<s>`), so
+    // this map_err is dead today — but keep it: it returns an error rather than
+    // panicking if upstream ever makes the parse fallible. `measure_kind_from_str_contract`
+    // pins the current behavior and would flag that change.
     let kind =
         MeasureKind::from_str(&kind_str).map_err(|_| format!("Invalid amount kind: {kind_str}"))?;
 
@@ -124,6 +128,7 @@ pub fn conv_amount_explain(
 ) -> Result<WAmountExplained, String> {
     let measure = amount_w.to_measure();
     let kind_str: String = from_js(target_kind_w, "amount kind")?;
+    // Defensive map_err — see conv_amount_to_kind: `from_str` is infallible today.
     let kind =
         MeasureKind::from_str(&kind_str).map_err(|_| format!("Invalid amount kind: {kind_str}"))?;
     let graph = make_graph(&mappings.to_pairs());
