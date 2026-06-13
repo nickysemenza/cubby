@@ -1,9 +1,15 @@
 import type { Amount } from "@cubby/schemas/codec";
+import {
+  type IngredientId,
+  type RecipeId,
+  unsafeRecipeId,
+} from "@cubby/schemas/identifiers";
 import { isMiscProduct } from "@cubby/shared";
 import { upc as upcSchema } from "@cubby/usda-schemas";
 import { and, eq, isNotNull, isNull, notExists, sql } from "drizzle-orm";
 import { computeParseDrift, hasDrift } from "~/lib/parse-drift";
 import { wasm } from "~/lib/wasm";
+import { dedupe } from "~/misc/array-helpers";
 import type { Database } from "~/server/db";
 import {
   ingredient,
@@ -20,12 +26,16 @@ import {
   getDb,
   notDeleted,
   parseInventoryAmount,
+  updateAndReturn,
+  withTransaction,
 } from "~/server/repo/database-helpers";
+import { findOrCreateIngredient } from "~/server/repo/ingredient";
 import { findInventoryWithStaleValuations } from "~/server/repo/inventory/crud";
 import {
   findProductsNeedingFoodCategory,
   findProductsWithNoImages,
 } from "~/server/repo/product";
+import { markRecipesStale } from "~/server/repo/recipe/totals";
 
 // Interface for the complete problems result
 interface AllProblems {
@@ -628,6 +638,45 @@ const findStaleIngredientParses = async (
     });
   }
   return stale;
+};
+
+// Apply the current parser's result to every stale ingredient line, persisting the
+// fresh parse on all three axes (name, amounts, modifier). Reuses the exact scan the
+// UI shows, so it fixes precisely the listed rows. Name drift re-points the ingredient
+// FK via find-or-create; amounts/modifier are column writes. Idempotent — a second run
+// finds nothing stale. Totals invalidation is left to the caller (recompute) plus a
+// belt-and-braces markRecipesStale so the drain retries if recompute is interrupted.
+export const reparseStaleIngredientParses = async (
+  db: Database,
+): Promise<{ updated: number; recipesAffected: RecipeId[] }> => {
+  const stale = await findStaleIngredientParses(db);
+  if (stale.length === 0) return { updated: 0, recipesAffected: [] };
+
+  await withTransaction(db, async (tx) => {
+    for (const row of stale) {
+      const values: {
+        amounts?: Amount[];
+        modifier?: string | null;
+        ingredientId?: IngredientId;
+      } = {};
+      if (row.amountDrift) values.amounts = row.parsedAmounts;
+      if (row.modifierDrift) values.modifier = row.parsedModifier;
+      if (row.nameDrift) {
+        const ing = await findOrCreateIngredient(tx, row.parsedName);
+        values.ingredientId = ing.id;
+      }
+      await updateAndReturn(
+        tx,
+        recipeSectionIngredient,
+        values,
+        eq(recipeSectionIngredient.id, row.recipeSectionIngredientId),
+      );
+    }
+  });
+
+  const recipesAffected = dedupe(stale.map((s) => unsafeRecipeId(s.recipeId)));
+  await markRecipesStale(db, recipesAffected);
+  return { updated: stale.length, recipesAffected };
 };
 
 // Badge counts derive from the full problems scan — one source of truth, no

@@ -1,6 +1,10 @@
 import { amount } from "@cubby/schemas/codec";
 import { z } from "zod";
-import { findAllProblems, findAllProblemsCount } from "~/server/repo/problems";
+import {
+  findAllProblems,
+  findAllProblemsCount,
+  reparseStaleIngredientParses,
+} from "~/server/repo/problems";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 // Output schemas for each problem type
@@ -167,7 +171,26 @@ const getProblemsCount = protectedProcedure
     return await findAllProblemsCount(ctx.db);
   });
 
+// Re-parse every stale ingredient line with the current parser and persist the fresh
+// result (name, amounts, modifier), then recompute affected recipe totals so the
+// costing reflects the updated lines immediately. Clears the Stale Parses section.
+const reparseStale = protectedProcedure
+  .output(
+    z.object({
+      updated: z.number(),
+      recipesAffected: z.number(),
+    }),
+  )
+  .mutation(async ({ ctx }) => {
+    const { updated, recipesAffected } = await reparseStaleIngredientParses(
+      ctx.db,
+    );
+    await ctx.services.recipeCosting.recompute(recipesAffected);
+    return { updated, recipesAffected: recipesAffected.length };
+  });
+
 export const problemsRouter = createTRPCRouter({
   getAllProblems,
   getProblemsCount,
+  reparseStale,
 });

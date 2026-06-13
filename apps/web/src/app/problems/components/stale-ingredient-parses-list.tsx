@@ -1,6 +1,12 @@
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { formatAmounts } from "~/app/_components/inventory/format-amount";
 import { DriftIndicator } from "~/app/_components/parse-drift-indicator";
+import { Button } from "~/components/ui/button";
+import { Spinner } from "~/components/ui/spinner";
+import { getErrorMessage } from "~/lib/error-utils";
 import type { StaleIngredientParse } from "~/server/repo/problems";
+import { useTRPC } from "~/trpc/react";
 import { ProblemSection } from "./problem-section";
 
 export function StaleIngredientParsesList({
@@ -8,6 +14,33 @@ export function StaleIngredientParsesList({
 }: {
   items: StaleIngredientParse[];
 }) {
+  const api = useTRPC();
+  const queryClient = useQueryClient();
+
+  const reparseMutation = useMutation(
+    api.problems.reparseStale.mutationOptions({
+      onSuccess: (result) => {
+        if (result.updated > 0) {
+          toast.success(
+            `Re-parsed ${result.updated} ingredient line${result.updated !== 1 ? "s" : ""}`,
+          );
+        } else {
+          toast.info("No stale parses to re-parse");
+        }
+        // Wrap keys in array to match tRPC's nested structure: [["entity", "list"], {...}]
+        queryClient.invalidateQueries({
+          queryKey: [api.problems.getAllProblems.queryKey()],
+        });
+        queryClient.invalidateQueries({
+          queryKey: [api.recipe.list.queryKey()],
+        });
+      },
+      onError: (error) => {
+        toast.error(getErrorMessage(error));
+      },
+    }),
+  );
+
   return (
     <ProblemSection
       title="Stale Parses"
@@ -15,6 +48,22 @@ export function StaleIngredientParsesList({
       entity="recipe"
       items={items}
       emptyMessage="No stale parses — every stored ingredient matches a fresh parse of its original line."
+      headerAction={
+        <Button
+          size="sm"
+          onClick={() => reparseMutation.mutate()}
+          disabled={reparseMutation.isPending}
+        >
+          {reparseMutation.isPending ? (
+            <>
+              <Spinner className="mr-2" />
+              Re-parsing...
+            </>
+          ) : (
+            "Re-parse All"
+          )}
+        </Button>
+      }
       renderItem={(item) => ({
         // Title is the stable ingredient name; every drifted axis (name included) is a
         // DriftIndicator in the details — the card title is string-typed, so a colored
