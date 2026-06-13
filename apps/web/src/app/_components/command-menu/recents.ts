@@ -3,7 +3,7 @@ import type { SearchableEntity } from "@cubby/schemas/search";
 const KEY = "cubby-recent-jumps";
 const MAX_RECENTS = 6;
 
-export interface RecentJump {
+interface RecentJump {
   entityType: SearchableEntity;
   id: string;
   name: string;

@@ -44,7 +44,7 @@ export const collectIngredientIds = (
   return [...ids];
 };
 
-export const recipeIngredientLinkSignature = (
+const recipeIngredientLinkSignature = (
   ingredient: SectionIngredient | SectionIngredientOut,
 ): string =>
   ingredient.type === "ingredient"

@@ -30,7 +30,7 @@ import { getCookbookRecipeTitles } from "~/server/repo/recipe";
 // Everything an import knows about a cookbook before its recipes are written: the
 // book name plus the full extraction and OPF metadata. `author`/`subjects` default
 // to empty (the power-user JSON path has no EPUB to read metadata from).
-export type CookbookUpsertInput = {
+type CookbookUpsertInput = {
   name: string;
   rawJson: ImportRecipe[];
   author?: string[];
@@ -107,7 +107,7 @@ export const getCookbookByName = async (db: Database, name: string) => {
 };
 
 /** A non-deleted cookbook by id, or null. */
-export const getCookbookById = async (db: Database, id: CookbookId) => {
+const getCookbookById = async (db: Database, id: CookbookId) => {
   const row = await getDb(db).query.cookbook.findFirst({
     where: and(eq(cookbook.id, id), notDeleted(cookbook)),
   });

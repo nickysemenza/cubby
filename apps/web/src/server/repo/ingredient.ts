@@ -226,7 +226,7 @@ export const getIngredientByName = async (db: Database, name: string) => {
  * the matched/new status for a whole book's ingredients without firing one
  * request per ingredient per recipe card.
  */
-export type IngredientNameMatch = {
+type IngredientNameMatch = {
   id: string;
   name: string;
   aliases: string[];

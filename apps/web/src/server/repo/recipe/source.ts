@@ -50,7 +50,7 @@ export function webProvenance(url: string | null): RecipeProvenance {
  * The public Notion page URL for a page id (dashed or not). Notion accepts the
  * 32-char dashless id in the path, so we normalize to that.
  */
-export function notionUrlFromId(pageId: string): string {
+function notionUrlFromId(pageId: string): string {
   return `https://www.notion.so/${pageId.replace(/-/g, "")}`;
 }
 

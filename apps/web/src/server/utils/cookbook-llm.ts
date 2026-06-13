@@ -57,7 +57,7 @@ async function fetchWithTimeout(
 }
 
 /** One chunk's LLM request, built by `recipebridge`'s `chunk_epub` (WASM). */
-export interface CookbookChunkRequest {
+interface CookbookChunkRequest {
   system: string;
   user: string;
   toolName: string;

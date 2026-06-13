@@ -115,7 +115,7 @@ export function notionPageToImportRecipe(
   };
 }
 
-export type NotionLintStatus = "ok" | "needs-formatting";
+type NotionLintStatus = "ok" | "needs-formatting";
 
 /**
  * Lint a mapped recipe for importability: it needs at least one ingredient

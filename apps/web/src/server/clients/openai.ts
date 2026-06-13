@@ -19,7 +19,7 @@ import { AI_GATEWAY_BASE_URL } from "./anthropic";
 
 // CF AI Gateway custom metadata: up to 5 string/number/boolean entries, surfaced
 // in the gateway dashboard/logs for filtering. https://developers.cloudflare.com/ai-gateway/observability/custom-metadata/
-export type GatewayMetadata = Record<string, string | number | boolean>;
+type GatewayMetadata = Record<string, string | number | boolean>;
 
 const MODEL = "gpt-4o-mini";
 

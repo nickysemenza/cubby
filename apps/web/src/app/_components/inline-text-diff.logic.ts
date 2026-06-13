@@ -1,4 +1,4 @@
-export type DiffSeg = { type: "common" | "add" | "remove"; text: string };
+type DiffSeg = { type: "common" | "add" | "remove"; text: string };
 
 // Tokenize into word and non-word (punctuation/space) runs so " , fresh" diffs as
 // whole tokens rather than character noise.

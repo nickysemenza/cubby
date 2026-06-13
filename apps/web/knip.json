@@ -6,6 +6,7 @@
     "src/routes/**/*.ts!",
     "src/styles.css",
     "src/server.ts!",
+    "src/sw.ts!",
     "src/lib/recipebridge-cf.ts!",
     "src/integrations/**/*.{ts,tsx}!",
     "drizzle.config.ts",
@@ -17,13 +18,13 @@
     "tooling/*": ["./tooling/*"]
   },
   "ignore": [
-    "wasm/**",
     "types.ts",
     "src/components/ui/**",
     "scripts/**",
     "tests/**",
     "tooling/**"
   ],
+  "ignoreBinaries": ["tsgo", "rsvg-convert", "magick"],
   "ignoreDependencies": [
     "@cubby/.+",
     "@testing-library/.+",

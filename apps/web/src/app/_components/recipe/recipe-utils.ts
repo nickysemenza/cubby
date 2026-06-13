@@ -82,13 +82,6 @@ export const getServingBasis = (recipe: RecipeOut): ServingBasis | null => {
 export const perUnitSuffix = (noun: string): string =>
   noun === "each" ? "each" : `/ ${noun}`;
 
-/** Header label for a per-unit metric: "Each", else "per {Noun}".
- * → "Cost Each", "Cost per Serving", "Cost per Cup". */
-export const perUnitLabel = (noun: string): string =>
-  noun === "each"
-    ? "Each"
-    : `per ${noun.charAt(0).toUpperCase()}${noun.slice(1)}`;
-
 // Matches the flour that forms a baker's-percentage base. Substring "flour"
 // catches bread/AP/all-purpose/whole-wheat/white/cake/pastry/00/durum flour;
 // a few common flours-by-other-name are listed explicitly.

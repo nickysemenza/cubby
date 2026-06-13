@@ -30,13 +30,13 @@ export type RecipeImportStatus =
   | "needs-formatting";
 
 /** Cross-recipe reference linking — cookbook-only; Notion v1 has no references. */
-export type ReferenceLinking = {
+type ReferenceLinking = {
   linkableTitles: ReadonlySet<string>;
   previewTitles: ReadonlySet<string>;
   scrollToTitle: (title: string) => void;
 };
 
-export type RecipeImportCardProps = {
+type RecipeImportCardProps = {
   /** The recipe to preview, in the cookbook shape (both importers map to this). */
   recipe: ImportRecipe;
   status: RecipeImportStatus;

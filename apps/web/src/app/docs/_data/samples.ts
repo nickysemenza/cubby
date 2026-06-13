@@ -1,11 +1,8 @@
 import {
-  unsafeIngredientId,
   unsafeLocationId,
   unsafeLocationShortcode,
-  unsafeRecipeId,
 } from "@cubby/schemas/identifiers";
 import type { infLocation, LocationType } from "@cubby/schemas/location";
-import type { recipeOut } from "@cubby/schemas/recipe";
 import type { unitMappingWithMetadata } from "@cubby/schemas/unitmapping";
 import { generateLocationShortcode } from "@cubby/shared";
 import { z } from "zod";
@@ -14,21 +11,6 @@ import type { entitySummaryDataSchema } from "~/components/entity/entity-summary
 const uuid = () => crypto.randomUUID();
 const now = new Date();
 const ts = { createdAt: now, updatedAt: now };
-
-// Helper to create a recipe ingredient
-const makeIngredient = (
-  id: string,
-  name: string,
-  value: number,
-  unit: string,
-) => ({
-  id: `ing-${id}`,
-  type: "ingredient" as const,
-  amounts: [{ value, unit }],
-  ingredient: { id: unsafeIngredientId(`${id}-id`), name, ...ts },
-  recipe: null,
-  ...ts,
-});
 
 // Helper to create a location
 const makeLocation = (
@@ -96,49 +78,6 @@ export const sampleUnitMappings: z.infer<typeof unitMappingWithMetadata>[] = [
     sourceMetadata: { type: "manual" },
   },
 ];
-
-// Sample recipe data for component demos
-export const sampleRecipe: z.infer<typeof recipeOut> = {
-  id: unsafeRecipeId("sample-recipe-id"),
-  name: "Classic Chocolate Chip Cookies",
-  meta: { url: "https://example.com/cookies" },
-  images: [],
-  ...ts,
-  sections: [
-    {
-      id: "section-1",
-      name: "Dough",
-      ...ts,
-      ingredients: [
-        makeIngredient("1", "all-purpose flour", 2.25, "cup"),
-        makeIngredient("2", "salt", 1, "tsp"),
-        makeIngredient("3", "unsalted butter, softened", 1, "cup"),
-        makeIngredient("4", "granulated sugar", 0.75, "cup"),
-        makeIngredient("5", "large eggs", 2, "whole"),
-        makeIngredient("6", "chocolate chips", 2, "cup"),
-      ],
-      instructions: [
-        { instruction: "Preheat oven to 375°F (190°C)." },
-        {
-          instruction: "Combine flour, baking soda, and salt in a small bowl.",
-        },
-        {
-          instruction:
-            "Beat butter, granulated sugar, and brown sugar until creamy.",
-        },
-        { instruction: "Add eggs and vanilla; beat until combined." },
-        {
-          instruction:
-            "Gradually blend in flour mixture. Stir in chocolate chips.",
-        },
-        {
-          instruction: "Drop rounded tablespoons onto ungreased baking sheets.",
-        },
-        { instruction: "Bake for 9 to 11 minutes or until golden brown." },
-      ],
-    },
-  ],
-};
 
 // Sample data for EntitySummaryCard
 export const sampleSummaryData: z.infer<typeof entitySummaryDataSchema> = {

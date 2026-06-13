@@ -36,24 +36,6 @@ export const insertAndReturn = async <T extends PgTable>(
 };
 
 /**
- * Insert multiple records in batch and return them.
- * Returns empty array if values array is empty.
- */
-export const batchInsert = async <T extends PgTable>(
-  tx: DrizzleTransaction,
-  table: T,
-  values: InferInsertModel<T>[],
-): Promise<InferSelectModel<T>[]> => {
-  if (values.length === 0) return [];
-  return withTrace(TraceNames.db("batchInsert"), async (span) => {
-    span.setAttribute("db.table", getTableName(table));
-    span.setAttribute("db.batch_size", values.length);
-    const result = await tx.insert(table).values(values).returning();
-    return result as InferSelectModel<T>[];
-  });
-};
-
-/**
  * Update a single record and return it.
  * Cleaner than manually destructuring the returning() array.
  * Accepts both Database and DrizzleTransaction.

@@ -12,7 +12,7 @@ type NormalizedImportSection = {
   instructions: { instruction: string }[];
 };
 
-export type NormalizedImportRecipe = {
+type NormalizedImportRecipe = {
   name: string;
   meta: RecipeCreateInput["meta"];
   yield: NonNullable<RecipeCreateInput["yield"]> | null;
@@ -25,7 +25,7 @@ export type NormalizedImportRecipe = {
 export const importRecipeUrl = (url: string | undefined): string | null =>
   /^https?:\/\//i.test(url ?? "") ? (url ?? null) : null;
 
-export const normalizeImportYield = (
+const normalizeImportYield = (
   recipeYield: ImportRecipe["meta"]["recipe_yield"],
 ): {
   yield: NormalizedImportRecipe["yield"];

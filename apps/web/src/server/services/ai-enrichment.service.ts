@@ -122,7 +122,7 @@ export async function backfillLocationDescriptions(
 // terminal select tool. Same @tanstack/ai loop the agent runtime uses.
 // ---------------------------------------------------------------------------
 
-export interface UsdaFoodSuggestion {
+interface UsdaFoodSuggestion {
   food: FoodSummaryWithLinkedProducts | null;
   confidence: Confidence;
   reasoning: string;

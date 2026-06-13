@@ -121,7 +121,7 @@ export const markRecipesStaleForIngredient = async (
  * a product's price/USDA link/ingredient changes (a product feeds recipe cost via
  * its linked ingredient).
  */
-export const findRecipeIdsUsingIngredient = async (
+const findRecipeIdsUsingIngredient = async (
   db: Database,
   ingredientId: IngredientId,
 ): Promise<RecipeId[]> => {

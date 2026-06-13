@@ -107,7 +107,7 @@ const processIngredient = async (
 /**
  * Process multiple ingredients.
  */
-export const processIngredients = async (
+const processIngredients = async (
   tx: DrizzleTransaction,
   ingredients: z.infer<typeof recipeIngredientInput>[],
 ): Promise<ProcessedIngredient[]> => {
@@ -122,7 +122,7 @@ export const processIngredients = async (
  * column set — notably the `rawLine`/`modifier` provenance — lives in one place
  * and a new column can't be silently dropped by a missed call site.
  */
-export const sectionIngredientValues = (
+const sectionIngredientValues = (
   recipeSectionId: string,
   ing: {
     ingredientId: IngredientId;
@@ -245,7 +245,7 @@ export async function updateRecipeImages(
  * this hard delete to keep their semantics consistent and avoid accumulating dead rows.
  * Ingredients are deleted first to respect the recipeSectionId foreign key.
  */
-export async function deleteAllSections(
+async function deleteAllSections(
   tx: DrizzleTransaction,
   sectionIds: string[],
 ): Promise<void> {

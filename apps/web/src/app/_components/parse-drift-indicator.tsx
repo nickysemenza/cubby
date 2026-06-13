@@ -1,7 +1,7 @@
 import { cn } from "~/lib/utils";
 import { InlineTextDiff } from "./inline-text-diff";
 
-export type DriftAxis = "amount" | "name" | "modifier";
+type DriftAxis = "amount" | "name" | "modifier";
 
 // One underline color per part of the "amount name modifier" display format. The
 // colored underline identifies *which* section a diff belongs to — replacing inline

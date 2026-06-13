@@ -48,7 +48,7 @@ const RecipeCostTreemap = lazy(
 
 export type RecipeViewMode = "magazine" | "table" | "charts";
 
-export const RECIPE_VIEW_OPTIONS: ViewSwitcherOption<RecipeViewMode>[] = [
+const RECIPE_VIEW_OPTIONS: ViewSwitcherOption<RecipeViewMode>[] = [
   { value: "magazine", label: "Magazine", icon: BookOpen },
   { value: "table", label: "Table", icon: Table2 },
   { value: "charts", label: "Charts", icon: BarChart3 },

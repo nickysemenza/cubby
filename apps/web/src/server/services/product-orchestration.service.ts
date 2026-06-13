@@ -105,7 +105,7 @@ export async function findOrCreateByUPC(
   );
 }
 
-export interface BackfillResult {
+interface BackfillResult {
   productId: string;
   productName: string;
   upc: string;
@@ -113,7 +113,7 @@ export interface BackfillResult {
   error?: string;
 }
 
-export interface BackfillSummary {
+interface BackfillSummary {
   found: number;
   imported: number;
   failed: number;
