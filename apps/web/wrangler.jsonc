@@ -24,6 +24,10 @@
       "custom_domain": true
     }
   ],
+  // Per-PR preview deploys use `wrangler versions upload`, which serves each
+  // uploaded version at https://<prefix>-cubby.nicky.workers.dev. Explicit (the
+  // default is on) so a future workers.dev toggle can't silently disable it.
+  "preview_urls": true,
   // Place Worker near the database rather than the user (SSR-heavy app)
   "placement": {
     "mode": "smart"

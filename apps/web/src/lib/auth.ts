@@ -51,7 +51,15 @@ export const auth = betterAuth({
   // dev servers (which run on auto-assigned ports — see README "Worktrees") can
   // perform auth POSTs. The session cookie itself isn't port-scoped (RFC 6265) and
   // lives in the shared DB, so an existing login already carries across ports; this
-  // only unblocks origin validation. Prod stays locked to the deployed origin.
+  // only unblocks origin validation.
+  //
+  // In prod, trust the mobile scheme plus per-PR preview deploys served at
+  // https://<prefix>-cubby.nicky.workers.dev (see ci.yaml `preview-cf`). The
+  // wildcard is scoped to our own account subdomain — better-auth's `*` doesn't
+  // cross `/`, so this only widens the auth-origin (CSRF) surface to workers on
+  // nicky.workers.dev. Passkeys still won't work on previews (rpID is bound to
+  // cubby.nickysemenza.com above); email/password does. The custom domain is the
+  // deployed origin, trusted automatically as the baseURL.
   trustedOrigins: isDev
     ? (request) => {
         const base = [
@@ -64,6 +72,6 @@ export const auth = betterAuth({
           origin && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
         return isLocal ? [...base, origin] : base;
       }
-    : ["cubby-mobile://"],
+    : ["cubby-mobile://", "https://*.nicky.workers.dev"],
   socialProviders: {},
 });
