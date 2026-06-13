@@ -1,6 +1,4 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import { unsafeUserId } from "@cubby/schemas/identifiers";
-import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import { eq, inArray, ne } from "drizzle-orm";
 import { buildTestDB } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -12,21 +10,18 @@ import {
 } from "~/server/db/schema";
 import { getDb } from "./database-helpers";
 import { upsertImportRecipe } from "./import-recipe-convert";
-
-const TEST_ACTOR: ActorContext = {
-  userId: unsafeUserId("test-user-id"),
-  source: "ui",
-};
+import { makeImportRecipe } from "./repo.fixtures";
 
 describe("upsertImportRecipe", () => {
   let db: Database;
+  let actor: ActorContext;
   let teardown: () => Promise<void>;
   beforeEach(async () => {
-    ({ db, teardown } = await buildTestDB());
+    ({ db, actor, teardown } = await buildTestDB());
     return teardown;
   });
 
-  const mockRecipe: ImportRecipe = {
+  const mockRecipe = makeImportRecipe({
     meta: { title: "Test Recipe" },
     url: "https://example.com/recipe",
     sections: [
@@ -35,10 +30,9 @@ describe("upsertImportRecipe", () => {
         ingredients: ["2 cups flour", "1 cup sugar"],
       },
     ],
-    references: [],
-  };
+  });
 
-  const mockRecipeUpdated: ImportRecipe = {
+  const mockRecipeUpdated = makeImportRecipe({
     meta: { title: "Test Recipe" }, // Same name
     url: "https://example.com/recipe-updated",
     sections: [
@@ -53,11 +47,10 @@ describe("upsertImportRecipe", () => {
         ingredients: ["1 tsp cinnamon"],
       },
     ],
-    references: [],
-  };
+  });
 
   it("creates a new recipe when it doesn't exist", async () => {
-    const result = await upsertImportRecipe(mockRecipe, db, TEST_ACTOR);
+    const result = await upsertImportRecipe(mockRecipe, db, actor);
 
     expect(result.id).toBeDefined();
 
@@ -83,7 +76,7 @@ describe("upsertImportRecipe", () => {
 
   it("updates an existing recipe when it already exists", async () => {
     // First, create the recipe
-    const firstResult = await upsertImportRecipe(mockRecipe, db, TEST_ACTOR);
+    const firstResult = await upsertImportRecipe(mockRecipe, db, actor);
 
     // Verify initial state
     const initialRecipe = await getDb(db).query.recipe.findFirst({
@@ -101,11 +94,7 @@ describe("upsertImportRecipe", () => {
     expect(initialRecipe!.sections[0]!.ingredients).toHaveLength(2);
 
     // Now update with different data
-    const secondResult = await upsertImportRecipe(
-      mockRecipeUpdated,
-      db,
-      TEST_ACTOR,
-    );
+    const secondResult = await upsertImportRecipe(mockRecipeUpdated, db, actor);
 
     // Should return same recipe ID (updated, not created new)
     expect(secondResult.id).toBe(firstResult.id);
@@ -140,9 +129,9 @@ describe("upsertImportRecipe", () => {
 
   it("handles multiple upserts correctly (back-to-back npm run load-data scenario)", async () => {
     // This tests the exact scenario mentioned - running load-data multiple times
-    const firstRun = await upsertImportRecipe(mockRecipe, db, TEST_ACTOR);
-    const secondRun = await upsertImportRecipe(mockRecipe, db, TEST_ACTOR); // Same recipe
-    const thirdRun = await upsertImportRecipe(mockRecipe, db, TEST_ACTOR); // Same recipe again
+    const firstRun = await upsertImportRecipe(mockRecipe, db, actor);
+    const secondRun = await upsertImportRecipe(mockRecipe, db, actor); // Same recipe
+    const thirdRun = await upsertImportRecipe(mockRecipe, db, actor); // Same recipe again
 
     // All should return the same recipe ID
     expect(secondRun.id).toBe(firstRun.id);
@@ -158,7 +147,7 @@ describe("upsertImportRecipe", () => {
 
   it("properly cleans up old sections and ingredients", async () => {
     // Create recipe with 2 sections
-    await upsertImportRecipe(mockRecipeUpdated, db, TEST_ACTOR);
+    await upsertImportRecipe(mockRecipeUpdated, db, actor);
 
     const beforeUpdate = await getDb(db).query.recipe.findFirst({
       where: eq(recipe.name, "Test Recipe"),
@@ -173,7 +162,7 @@ describe("upsertImportRecipe", () => {
     );
 
     // Update to recipe with 1 section
-    await upsertImportRecipe(mockRecipe, db, TEST_ACTOR);
+    await upsertImportRecipe(mockRecipe, db, actor);
 
     const afterUpdate = await getDb(db).query.recipe.findFirst({
       where: eq(recipe.name, "Test Recipe"),

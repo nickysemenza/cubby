@@ -1,5 +1,4 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import { unsafeIngredientId, unsafeUserId } from "@cubby/schemas/identifiers";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import { asc, eq } from "drizzle-orm";
 import { buildTestDB } from "tooling/test-setup";
@@ -11,118 +10,83 @@ import {
   recipeSectionIngredient,
 } from "~/server/db/schema";
 import { getDb } from "./database-helpers";
-import { createIngredient } from "./ingredient";
 import { upsertRecipe } from "./recipe";
-
-const TEST_ACTOR: ActorContext = {
-  userId: unsafeUserId("test-user-id"),
-  source: "ui",
-};
+import {
+  createIngredients,
+  ingredientRef,
+  makeRecipeInput,
+} from "./repo.fixtures";
 
 describe("upsertRecipe", () => {
   let db: Database;
+  let actor: ActorContext;
   let teardown: () => Promise<void>;
 
   let testIngredients: { id: string; name: string }[] = [];
   beforeEach(async () => {
-    ({ db, teardown } = await buildTestDB());
+    ({ db, actor, teardown } = await buildTestDB());
 
     // Create the required ingredients for the tests and store their IDs
-    const ingredient1 = await createIngredient(
+    testIngredients = await createIngredients(
       db,
-      {
-        name: "Test Ingredient 1",
-        aliases: [],
-      },
-      TEST_ACTOR,
+      ["Test Ingredient 1", "Test Ingredient 2", "Test Ingredient 3"],
+      actor,
     );
-    const ingredient2 = await createIngredient(
-      db,
-      {
-        name: "Test Ingredient 2",
-        aliases: [],
-      },
-      TEST_ACTOR,
-    );
-    const ingredient3 = await createIngredient(
-      db,
-      {
-        name: "Test Ingredient 3",
-        aliases: [],
-      },
-      TEST_ACTOR,
-    );
-
-    testIngredients = [ingredient1, ingredient2, ingredient3];
 
     return teardown;
   });
 
-  const getMockRecipeInput = (): RecipeCreateInput => ({
-    name: "Test Recipe Direct",
-    meta: {
+  const getMockRecipeInput = (): RecipeCreateInput =>
+    makeRecipeInput({
+      name: "Test Recipe Direct",
       url: "https://example.com/recipe",
-    },
-    sections: [
-      {
-        instructions: [
-          { instruction: "Mix ingredients" },
-          { instruction: "Bake for 30 minutes" },
-        ],
-        ingredients: [
-          {
-            type: "ingredient" as const,
-            ingredientId: unsafeIngredientId(testIngredients[0]!.id),
-            recipeId: null,
-            amounts: [{ value: 2, unit: "cups" }],
-          },
-          {
-            type: "ingredient" as const,
-            ingredientId: unsafeIngredientId(testIngredients[1]!.id),
-            recipeId: null,
-            amounts: [{ value: 1, unit: "cup" }],
-          },
-        ],
-      },
-    ],
-  });
+      sections: [
+        {
+          instructions: [
+            { instruction: "Mix ingredients" },
+            { instruction: "Bake for 30 minutes" },
+          ],
+          ingredients: [
+            ingredientRef(testIngredients[0]!.id, {
+              amounts: [{ value: 2, unit: "cups" }],
+            }),
+            ingredientRef(testIngredients[1]!.id, {
+              amounts: [{ value: 1, unit: "cup" }],
+            }),
+          ],
+        },
+      ],
+    });
 
-  const getMockRecipeUpdated = (): RecipeCreateInput => ({
-    name: "Test Recipe Direct", // Same name
-    meta: {
+  const getMockRecipeUpdated = (): RecipeCreateInput =>
+    makeRecipeInput({
+      name: "Test Recipe Direct", // Same name
       url: "https://example.com/recipe-updated",
-    },
-    sections: [
-      {
-        instructions: [
-          { instruction: "Mix ingredients well" },
-          { instruction: "Bake for 35 minutes" },
-        ],
-        ingredients: [
-          {
-            type: "ingredient" as const,
-            ingredientId: unsafeIngredientId(testIngredients[0]!.id), // Same ingredient
-            recipeId: null,
-            amounts: [{ value: 3, unit: "cups" }], // Different amount
-          },
-        ],
-      },
-      {
-        instructions: [{ instruction: "Add topping" }],
-        ingredients: [
-          {
-            type: "ingredient" as const,
-            ingredientId: unsafeIngredientId(testIngredients[2]!.id), // New ingredient
-            recipeId: null,
-            amounts: [{ value: 1, unit: "tsp" }],
-          },
-        ],
-      },
-    ],
-  });
+      sections: [
+        {
+          instructions: [
+            { instruction: "Mix ingredients well" },
+            { instruction: "Bake for 35 minutes" },
+          ],
+          ingredients: [
+            ingredientRef(testIngredients[0]!.id, {
+              amounts: [{ value: 3, unit: "cups" }], // Same ingredient, different amount
+            }),
+          ],
+        },
+        {
+          instructions: [{ instruction: "Add topping" }],
+          ingredients: [
+            ingredientRef(testIngredients[2]!.id, {
+              amounts: [{ value: 1, unit: "tsp" }], // New ingredient
+            }),
+          ],
+        },
+      ],
+    });
 
   it("creates a new recipe when it doesn't exist", async () => {
-    const result = await upsertRecipe(getMockRecipeInput(), db, TEST_ACTOR);
+    const result = await upsertRecipe(getMockRecipeInput(), db, actor);
 
     expect(result.id).toBeDefined();
 
@@ -148,18 +112,10 @@ describe("upsertRecipe", () => {
 
   it("updates an existing recipe when it already exists", async () => {
     // First, create the recipe
-    const firstResult = await upsertRecipe(
-      getMockRecipeInput(),
-      db,
-      TEST_ACTOR,
-    );
+    const firstResult = await upsertRecipe(getMockRecipeInput(), db, actor);
 
     // Now update with different data
-    const secondResult = await upsertRecipe(
-      getMockRecipeUpdated(),
-      db,
-      TEST_ACTOR,
-    );
+    const secondResult = await upsertRecipe(getMockRecipeUpdated(), db, actor);
 
     // Should return same recipe ID (updated, not created new)
     expect(secondResult.id).toBe(firstResult.id);
@@ -194,9 +150,9 @@ describe("upsertRecipe", () => {
 
   it("can be called multiple times without conflicts", async () => {
     // This tests that the function is idempotent
-    const firstRun = await upsertRecipe(getMockRecipeInput(), db, TEST_ACTOR);
-    const secondRun = await upsertRecipe(getMockRecipeInput(), db, TEST_ACTOR); // Same input
-    const thirdRun = await upsertRecipe(getMockRecipeInput(), db, TEST_ACTOR); // Same input again
+    const firstRun = await upsertRecipe(getMockRecipeInput(), db, actor);
+    const secondRun = await upsertRecipe(getMockRecipeInput(), db, actor); // Same input
+    const thirdRun = await upsertRecipe(getMockRecipeInput(), db, actor); // Same input again
 
     // All should return the same recipe ID
     expect(secondRun.id).toBe(firstRun.id);
@@ -211,20 +167,17 @@ describe("upsertRecipe", () => {
   });
 
   it("works with recipes that have no URL (Other source type)", async () => {
-    const recipeNoUrl: RecipeCreateInput = {
+    const recipeNoUrl = makeRecipeInput({
       name: "Manual Recipe",
-      meta: {
-        url: null,
-      },
       sections: [
         {
           instructions: [{ instruction: "Do something" }],
           ingredients: [],
         },
       ],
-    };
+    });
 
-    await upsertRecipe(recipeNoUrl, db, TEST_ACTOR);
+    await upsertRecipe(recipeNoUrl, db, actor);
 
     const foundRecipe = await getDb(db).query.recipe.findFirst({
       where: eq(recipe.name, "Manual Recipe"),
@@ -235,22 +188,18 @@ describe("upsertRecipe", () => {
   });
 
   it("preserves section order, empty arrays, and ingredient provenance", async () => {
-    const input: RecipeCreateInput = {
+    const input = makeRecipeInput({
       name: "Provenance Recipe",
-      meta: { url: null },
       sections: [
         {
           name: "Batter",
           instructions: [],
           ingredients: [
-            {
-              type: "ingredient",
-              ingredientId: unsafeIngredientId(testIngredients[0]!.id),
-              recipeId: null,
+            ingredientRef(testIngredients[0]!.id, {
               amounts: [{ value: 2, unit: "cups" }],
               rawLine: "2 cups flour, sifted",
               modifier: "sifted",
-            },
+            }),
           ],
         },
         {
@@ -258,9 +207,9 @@ describe("upsertRecipe", () => {
           instructions: [{ instruction: "Bake until set" }],
         },
       ],
-    };
+    });
 
-    const { id } = await upsertRecipe(input, db, TEST_ACTOR);
+    const { id } = await upsertRecipe(input, db, actor);
     const sections = await getDb(db).query.recipeSection.findMany({
       where: eq(recipeSection.recipeId, id),
       orderBy: [asc(recipeSection.sortOrder)],

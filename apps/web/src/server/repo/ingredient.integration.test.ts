@@ -1,5 +1,4 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import { unsafeUserId } from "@cubby/schemas/identifiers";
 import { count, eq } from "drizzle-orm";
 import { buildTestDB } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -8,18 +7,15 @@ import { ingredient } from "~/server/db/schema";
 import { upsertImportRecipe } from "~/server/repo/recipe";
 import { getDb, withTransaction } from "./database-helpers";
 import { findOrCreateIngredient, mergeIngredients } from "./ingredient";
-
-const TEST_ACTOR: ActorContext = {
-  userId: unsafeUserId("test-user-id"),
-  source: "ui",
-};
+import { makeImportRecipe } from "./repo.fixtures";
 
 describe("ingredient", () => {
   let db: Database;
+  let actor: ActorContext;
   let teardown: () => Promise<void>;
 
   beforeEach(async () => {
-    ({ db, teardown } = await buildTestDB());
+    ({ db, actor, teardown } = await buildTestDB());
     return teardown;
   });
 
@@ -35,7 +31,7 @@ describe("ingredient", () => {
   });
   it("ingredient merging works", async () => {
     await upsertImportRecipe(
-      {
+      makeImportRecipe({
         meta: { title: "egg recipe" },
         sections: [
           {
@@ -43,10 +39,9 @@ describe("ingredient", () => {
             ingredients: ["eggs"],
           },
         ],
-        references: [],
-      },
+      }),
       db,
-      TEST_ACTOR,
+      actor,
     );
     const a = await findOrCreateIngredient(db, "egg");
     const b = await findOrCreateIngredient(db, "eggs");

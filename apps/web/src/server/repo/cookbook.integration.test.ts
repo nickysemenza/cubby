@@ -1,6 +1,4 @@
-import type { ActorContext } from "@cubby/schemas/context";
-import { unsafeUserId } from "@cubby/schemas/identifiers";
-import type { ImportRecipe } from "@cubby/schemas/import-recipe";
+import { type ActorContext, buildActorContext } from "@cubby/schemas/context";
 import { eq } from "drizzle-orm";
 import { buildTestDB } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -15,28 +13,18 @@ import {
 } from "./cookbook";
 import { getDb } from "./database-helpers";
 import { upsertCookbookRecipeFromCookbook } from "./recipe";
-
-const TEST_ACTOR: ActorContext = {
-  userId: unsafeUserId("test-user-id"),
-  source: "epub_import",
-};
-
-// A raw ImportRecipe (the parser's shape; lines parsed server-side on import).
-const cookbookRecipe = (
-  title: string,
-  ingredients: string[],
-): ImportRecipe => ({
-  meta: { title },
-  sections: [{ ingredients, instructions: [] }],
-  references: [],
-});
+import { cookbookRecipe } from "./repo.fixtures";
 
 describe("cookbook repository", () => {
   let db: Database;
+  let actor: ActorContext;
   let teardown: () => Promise<void>;
 
   beforeEach(async () => {
-    ({ db, teardown } = await buildTestDB());
+    const tdb = await buildTestDB();
+    db = tdb.db;
+    teardown = tdb.teardown;
+    actor = buildActorContext(tdb.actor.userId, "epub_import");
     return teardown;
   });
 
@@ -45,7 +33,7 @@ describe("cookbook repository", () => {
     const first = await upsertCookbook(
       db,
       { name: "Book A", rawJson: raw, author: ["Ada"], sourceLabel: "a.epub" },
-      TEST_ACTOR,
+      actor,
     );
     const second = await upsertCookbook(
       db,
@@ -56,7 +44,7 @@ describe("cookbook repository", () => {
         subjects: ["Baking"],
         sourceLabel: "a.epub",
       },
-      TEST_ACTOR,
+      actor,
     );
 
     expect(second.id).toBe(first.id);
@@ -74,10 +62,10 @@ describe("cookbook repository", () => {
     const { id } = await upsertCookbook(
       db,
       { name: "Book A", rawJson: raw, sourceLabel: "a.epub" },
-      TEST_ACTOR,
+      actor,
     );
     const ref = { id, name: "Book A" };
-    await upsertCookbookRecipeFromCookbook(raw[0], ref, db, TEST_ACTOR);
+    await upsertCookbookRecipeFromCookbook(raw[0], ref, db, actor);
 
     const list = await listCookbooks(db);
     const entry = list.find((c) => c.id === id);
@@ -98,7 +86,7 @@ describe("cookbook repository", () => {
     const { id } = await upsertCookbook(
       db,
       { name: "Book A", rawJson: raw, sourceLabel: "a.epub" },
-      TEST_ACTOR,
+      actor,
     );
 
     const src = await getCookbookSource(db, id);
@@ -118,7 +106,7 @@ describe("cookbook repository", () => {
     const { id } = await upsertCookbook(
       db,
       { name: "Book A", rawJson: raw, sourceLabel: "a.epub" },
-      TEST_ACTOR,
+      actor,
     );
     const ref = { id, name: "Book A" };
 
@@ -127,10 +115,10 @@ describe("cookbook repository", () => {
       raw[0],
       ref,
       db,
-      TEST_ACTOR,
+      actor,
     );
 
-    const result = await reprocessCookbook(db, id, TEST_ACTOR);
+    const result = await reprocessCookbook(db, id, actor);
 
     // Pancakes was re-derived; Waffles (never imported) is surfaced, not created.
     expect(result.reprocessed).toBe(1);

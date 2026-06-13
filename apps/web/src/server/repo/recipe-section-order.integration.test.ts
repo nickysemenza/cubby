@@ -1,16 +1,10 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import { unsafeIngredientId, unsafeUserId } from "@cubby/schemas/identifiers";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import { buildTestDB } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "~/server/db";
-import { createIngredient } from "./ingredient";
 import { createRecipe, getRecipeByID, updateRecipe } from "./recipe";
-
-const TEST_ACTOR: ActorContext = {
-  userId: unsafeUserId("test-user-id"),
-  source: "ui",
-};
+import { createIngredients, ingredientRef } from "./repo.fixtures";
 
 /**
  * Regression test: sections (and ingredients within a section) must round-trip
@@ -21,31 +15,22 @@ const TEST_ACTOR: ActorContext = {
  */
 describe("recipe section ordering", () => {
   let db: Database;
+  let actor: ActorContext;
   let teardown: () => Promise<void>;
 
   let ingredientIds: string[] = [];
 
   beforeEach(async () => {
-    ({ db, teardown } = await buildTestDB());
+    ({ db, actor, teardown } = await buildTestDB());
 
-    ingredientIds = [];
-    for (const name of ["Flour", "Sugar", "Butter", "Salt"]) {
-      const created = await createIngredient(
-        db,
-        { name, aliases: [] },
-        TEST_ACTOR,
-      );
-      ingredientIds.push(created.id);
-    }
+    const created = await createIngredients(
+      db,
+      ["Flour", "Sugar", "Butter", "Salt"],
+      actor,
+    );
+    ingredientIds = created.map((i) => i.id);
 
     return teardown;
-  });
-
-  const ingredientInput = (id: string) => ({
-    type: "ingredient" as const,
-    ingredientId: unsafeIngredientId(id),
-    recipeId: null,
-    amounts: [{ value: 1, unit: "cup" }],
   });
 
   const buildInput = (): RecipeCreateInput => ({
@@ -55,14 +40,14 @@ describe("recipe section ordering", () => {
       name,
       instructions: [{ instruction: `Step for ${name}` }],
       ingredients: [
-        ingredientInput(ingredientIds[i]!),
-        ingredientInput(ingredientIds[i + 1]!),
+        ingredientRef(ingredientIds[i]!),
+        ingredientRef(ingredientIds[i + 1]!),
       ],
     })),
   });
 
   it("returns sections and ingredients in the order they were created", async () => {
-    const created = await createRecipe(db, buildInput(), TEST_ACTOR);
+    const created = await createRecipe(db, buildInput(), actor);
 
     const found = await getRecipeByID(db, created.id);
 
@@ -81,7 +66,7 @@ describe("recipe section ordering", () => {
   });
 
   it("persists a section reorder on update", async () => {
-    const created = await createRecipe(db, buildInput(), TEST_ACTOR);
+    const created = await createRecipe(db, buildInput(), actor);
     const id = created.id;
 
     // Reorder existing sections (by id) to C, A, B
@@ -95,7 +80,7 @@ describe("recipe section ordering", () => {
           name,
         })),
       },
-      TEST_ACTOR,
+      actor,
     );
 
     const found = await getRecipeByID(db, id);
@@ -107,7 +92,7 @@ describe("recipe section ordering", () => {
   });
 
   it("persists an ingredient reorder within a section on update", async () => {
-    const created = await createRecipe(db, buildInput(), TEST_ACTOR);
+    const created = await createRecipe(db, buildInput(), actor);
     const id = created.id;
 
     const firstSection = created.sections[0]!;
@@ -130,7 +115,7 @@ describe("recipe section ordering", () => {
           })),
         })),
       },
-      TEST_ACTOR,
+      actor,
     );
 
     const found = await getRecipeByID(db, id);

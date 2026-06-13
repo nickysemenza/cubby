@@ -1,5 +1,4 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import { unsafeUserId } from "@cubby/schemas/identifiers";
 import { buildTestDB } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "~/server/db";
@@ -11,36 +10,22 @@ import {
   productList,
   updateProduct,
 } from "./product";
-
-const TEST_ACTOR: ActorContext = {
-  userId: unsafeUserId("test-user-id"),
-  source: "ui",
-};
+import { makeProductInput } from "./repo.fixtures";
 
 describe("product repository", () => {
   let db: Database;
+  let actor: ActorContext;
   let teardown: () => Promise<void>;
   beforeEach(async () => {
-    ({ db, teardown } = await buildTestDB());
+    ({ db, actor, teardown } = await buildTestDB());
     return teardown;
   });
 
   it("should create a product and retrieve it by ID", async () => {
-    // Create a test product
-    const productData = {
-      name: "Test Product",
-      manufacturer: "Test Manufacturer",
-      model: "TEST-123",
-      upc: "123456789012",
-      ndb_number: null,
-      expectedQuantity: null,
-      ingredientId: null,
-      unitMappings: [],
-      externalIds: [],
-    };
+    const productData = makeProductInput({ upc: "123456789012" });
 
     // Create the product
-    const createdProduct = await createProduct(db, productData, TEST_ACTOR);
+    const createdProduct = await createProduct(db, productData, actor);
 
     // Verify the product was created correctly
     expect(createdProduct.id).toBeDefined();
@@ -66,38 +51,22 @@ describe("product repository", () => {
       {
         name: "Product A",
         manufacturer: "Manufacturer X",
-        model: "MODEL-A",
         upc: "111111111111",
-        ndb_number: null,
       },
       {
         name: "Product B",
         manufacturer: "Manufacturer Y",
-        model: "MODEL-B",
         upc: "222222222222",
-        ndb_number: null,
       },
       {
         name: "Product C",
         manufacturer: "Manufacturer X",
-        model: "MODEL-C",
         upc: "333333333333",
-        ndb_number: null,
       },
     ];
 
     for (const product of products) {
-      await createProduct(
-        db,
-        {
-          ...product,
-          ingredientId: null,
-          expectedQuantity: null,
-          unitMappings: [],
-          externalIds: [],
-        },
-        TEST_ACTOR,
-      );
+      await createProduct(db, makeProductInput(product), actor);
     }
 
     // Test listing with pagination - first page
@@ -152,21 +121,15 @@ describe("product repository", () => {
   });
 
   it("should update a product", async () => {
-    // Create a test product
-    const productData = {
+    const productData = makeProductInput({
       name: "Original Product",
       manufacturer: "Original Manufacturer",
       model: "Original-123",
       upc: "123456789012",
-      ndb_number: null,
-      expectedQuantity: null,
-      ingredientId: null,
-      unitMappings: [],
-      externalIds: [],
-    };
+    });
 
     // Create the product
-    const createdProduct = await createProduct(db, productData, TEST_ACTOR);
+    const createdProduct = await createProduct(db, productData, actor);
 
     // Update the product
     const updatedProduct = await updateProduct(
@@ -183,7 +146,7 @@ describe("product repository", () => {
           },
         ],
       },
-      TEST_ACTOR,
+      actor,
     );
 
     // Verify the product was updated correctly
@@ -213,28 +176,20 @@ describe("product repository", () => {
     // First create an ingredient
     const ingredient = await createIngredient(
       db,
-      {
-        name: "Test Ingredient",
-        aliases: ["test", "ingredient"],
-      },
-      TEST_ACTOR,
+      { name: "Test Ingredient", aliases: ["test", "ingredient"] },
+      actor,
     );
 
     // Create a product linked to the ingredient
-    const productData = {
+    const productData = makeProductInput({
       name: "Test Product with Ingredient",
-      manufacturer: "Test Manufacturer",
       model: "TEST-ING-123",
       upc: "123456789012",
-      ndb_number: null,
-      expectedQuantity: null,
       ingredientId: ingredient.id,
-      unitMappings: [],
-      externalIds: [],
-    };
+    });
 
     // Create the product
-    const createdProduct = await createProduct(db, productData, TEST_ACTOR);
+    const createdProduct = await createProduct(db, productData, actor);
 
     // Retrieve the product to verify ingredient association
     const retrievedProduct = await getProductByID(db, createdProduct.id);
@@ -249,46 +204,33 @@ describe("product repository", () => {
     // Create two ingredients
     const ingredient1 = await createIngredient(
       db,
-      {
-        name: "Ingredient 1",
-        aliases: ["ing1"],
-      },
-      TEST_ACTOR,
+      { name: "Ingredient 1", aliases: ["ing1"] },
+      actor,
     );
 
     const ingredient2 = await createIngredient(
       db,
-      {
-        name: "Ingredient 2",
-        aliases: ["ing2"],
-      },
-      TEST_ACTOR,
+      { name: "Ingredient 2", aliases: ["ing2"] },
+      actor,
     );
 
     // Create a product linked to the first ingredient
-    const productData = {
+    const productData = makeProductInput({
       name: "Test Product with Ingredient",
-      manufacturer: "Test Manufacturer",
       model: "TEST-ING-123",
       upc: "123456789012",
-      ndb_number: null,
-      expectedQuantity: null,
       ingredientId: ingredient1.id,
-      unitMappings: [],
-      externalIds: [],
-    };
+    });
 
     // Create the product
-    const createdProduct = await createProduct(db, productData, TEST_ACTOR);
+    const createdProduct = await createProduct(db, productData, actor);
 
     // Update the product to link to the second ingredient
     await updateProduct(
       db,
       createdProduct.id,
-      {
-        ingredientId: ingredient2.id,
-      },
-      TEST_ACTOR,
+      { ingredientId: ingredient2.id },
+      actor,
     );
 
     // Retrieve the product to verify ingredient association
@@ -300,14 +242,7 @@ describe("product repository", () => {
     expect(retrievedProduct.ingredient!.name).toEqual("Ingredient 2");
 
     // Update the product to remove ingredient association
-    await updateProduct(
-      db,
-      createdProduct.id,
-      {
-        ingredientId: null,
-      },
-      TEST_ACTOR,
-    );
+    await updateProduct(db, createdProduct.id, { ingredientId: null }, actor);
 
     // Retrieve the product again
     const updatedProduct = await getProductByID(db, createdProduct.id);
@@ -318,21 +253,14 @@ describe("product repository", () => {
 
   describe("findProductByNameFuzzyManufacturer", () => {
     it("should find product by exact name and manufacturer match", async () => {
-      // Create a product with specific manufacturer
       await createProduct(
         db,
-        {
+        makeProductInput({
           name: "Power Drill",
           manufacturer: "DeWalt",
           model: null,
-          upc: null,
-          ndb_number: null,
-          expectedQuantity: null,
-          ingredientId: null,
-          unitMappings: [],
-          externalIds: [],
-        },
-        TEST_ACTOR,
+        }),
+        actor,
       );
 
       // Should find exact match
@@ -348,21 +276,14 @@ describe("product repository", () => {
     });
 
     it("should find product when incoming manufacturer is (unspecified)", async () => {
-      // Create a product with specific manufacturer
       await createProduct(
         db,
-        {
+        makeProductInput({
           name: "Router Table",
           manufacturer: "Bosch",
           model: null,
-          upc: null,
-          ndb_number: null,
-          expectedQuantity: null,
-          ingredientId: null,
-          unitMappings: [],
-          externalIds: [],
-        },
-        TEST_ACTOR,
+        }),
+        actor,
       );
 
       // Should find product when searching with "(unspecified)" - matches by name only
@@ -378,21 +299,14 @@ describe("product repository", () => {
     });
 
     it("should find product when incoming manufacturer is empty string", async () => {
-      // Create a product with specific manufacturer
       await createProduct(
         db,
-        {
+        makeProductInput({
           name: "Table Saw",
           manufacturer: "Makita",
           model: null,
-          upc: null,
-          ndb_number: null,
-          expectedQuantity: null,
-          ingredientId: null,
-          unitMappings: [],
-          externalIds: [],
-        },
-        TEST_ACTOR,
+        }),
+        actor,
       );
 
       // Should find product when searching with empty string
@@ -407,21 +321,14 @@ describe("product repository", () => {
     });
 
     it("should find product when incoming manufacturer is null", async () => {
-      // Create a product with specific manufacturer
       await createProduct(
         db,
-        {
+        makeProductInput({
           name: "Circular Saw",
           manufacturer: "Ryobi",
           model: null,
-          upc: null,
-          ndb_number: null,
-          expectedQuantity: null,
-          ingredientId: null,
-          unitMappings: [],
-          externalIds: [],
-        },
-        TEST_ACTOR,
+        }),
+        actor,
       );
 
       // Should find product when searching with null
@@ -436,21 +343,14 @@ describe("product repository", () => {
     });
 
     it("should fallback to (unspecified) manufacturer when specific manufacturer not found", async () => {
-      // Create a product with (unspecified) manufacturer
       await createProduct(
         db,
-        {
+        makeProductInput({
           name: "Hammer",
           manufacturer: "(unspecified)",
           model: null,
-          upc: null,
-          ndb_number: null,
-          expectedQuantity: null,
-          ingredientId: null,
-          unitMappings: [],
-          externalIds: [],
-        },
-        TEST_ACTOR,
+        }),
+        actor,
       );
 
       // Should find product with "(unspecified)" when searching for specific manufacturer
@@ -466,21 +366,14 @@ describe("product repository", () => {
     });
 
     it("should NOT find product when both have different specific manufacturers", async () => {
-      // Create a product with specific manufacturer
       await createProduct(
         db,
-        {
+        makeProductInput({
           name: "Jigsaw",
           manufacturer: "DeWalt",
           model: null,
-          upc: null,
-          ndb_number: null,
-          expectedQuantity: null,
-          ingredientId: null,
-          unitMappings: [],
-          externalIds: [],
-        },
-        TEST_ACTOR,
+        }),
+        actor,
       );
 
       // Should NOT find product when manufacturers are both specific and different
@@ -497,34 +390,22 @@ describe("product repository", () => {
       // Create two products: one with specific manufacturer, one with (unspecified)
       await createProduct(
         db,
-        {
+        makeProductInput({
           name: "Screwdriver",
           manufacturer: "Stanley",
           model: null,
-          upc: null,
-          ndb_number: null,
-          expectedQuantity: null,
-          ingredientId: null,
-          unitMappings: [],
-          externalIds: [],
-        },
-        TEST_ACTOR,
+        }),
+        actor,
       );
 
       await createProduct(
         db,
-        {
+        makeProductInput({
           name: "Screwdriver",
           manufacturer: "(unspecified)",
           model: null,
-          upc: null,
-          ndb_number: null,
-          expectedQuantity: null,
-          ingredientId: null,
-          unitMappings: [],
-          externalIds: [],
-        },
-        TEST_ACTOR,
+        }),
+        actor,
       );
 
       // Should find exact match first
@@ -551,18 +432,12 @@ describe("product repository", () => {
     it("should be case insensitive for product name", async () => {
       await createProduct(
         db,
-        {
+        makeProductInput({
           name: "Power Drill PRO",
           manufacturer: "DeWalt",
           model: null,
-          upc: null,
-          ndb_number: null,
-          expectedQuantity: null,
-          ingredientId: null,
-          unitMappings: [],
-          externalIds: [],
-        },
-        TEST_ACTOR,
+        }),
+        actor,
       );
 
       // Should find with different case

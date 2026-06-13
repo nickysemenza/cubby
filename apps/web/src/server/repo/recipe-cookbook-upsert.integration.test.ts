@@ -1,6 +1,4 @@
-import type { ActorContext } from "@cubby/schemas/context";
-import { unsafeIngredientId, unsafeUserId } from "@cubby/schemas/identifiers";
-import type { ImportRecipe } from "@cubby/schemas/import-recipe";
+import { type ActorContext, buildActorContext } from "@cubby/schemas/context";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import { and, eq } from "drizzle-orm";
 import { buildTestDB } from "tooling/test-setup";
@@ -18,14 +16,16 @@ import {
   upsertCookbookRecipeFromCookbook,
   upsertRecipe,
 } from "./recipe";
-
-const TEST_ACTOR: ActorContext = {
-  userId: unsafeUserId("test-user-id"),
-  source: "epub_import",
-};
+import {
+  cookbookRecipe,
+  ingredientRef,
+  makeImportRecipe,
+  makeRecipeInput,
+} from "./repo.fixtures";
 
 describe("upsertCookbookRecipe", () => {
   let db: Database;
+  let actor: ActorContext;
   let teardown: () => Promise<void>;
   let ingredientId: string;
   let bookA: CookbookRef;
@@ -37,17 +37,22 @@ describe("upsertCookbookRecipe", () => {
     const { id } = await upsertCookbook(
       db,
       { name, rawJson: [], sourceLabel: name },
-      TEST_ACTOR,
+      actor,
     );
     return { id, name };
   };
 
   beforeEach(async () => {
-    ({ db, teardown } = await buildTestDB());
+    const tdb = await buildTestDB();
+    db = tdb.db;
+    teardown = tdb.teardown;
+    // This suite imports from cookbooks — stamp the actor as an epub import.
+    actor = buildActorContext(tdb.actor.userId, "epub_import");
+
     const ing = await createIngredient(
       db,
       { name: "Flour", aliases: [] },
-      TEST_ACTOR,
+      actor,
     );
     ingredientId = ing.id;
     bookA = await mkCookbook("Book A");
@@ -55,33 +60,27 @@ describe("upsertCookbookRecipe", () => {
     return teardown;
   });
 
-  const recipeInput = (
-    name: string,
-    instruction = "Mix",
-  ): RecipeCreateInput => ({
-    name,
-    meta: { url: null },
-    sections: [
-      {
-        instructions: [{ instruction }],
-        ingredients: [
-          {
-            type: "ingredient" as const,
-            ingredientId: unsafeIngredientId(ingredientId),
-            recipeId: null,
-            amounts: [{ value: 2, unit: "cups" }],
-          },
-        ],
-      },
-    ],
-  });
+  const recipeInput = (name: string, instruction = "Mix"): RecipeCreateInput =>
+    makeRecipeInput({
+      name,
+      sections: [
+        {
+          instructions: [{ instruction }],
+          ingredients: [
+            ingredientRef(ingredientId, {
+              amounts: [{ value: 2, unit: "cups" }],
+            }),
+          ],
+        },
+      ],
+    });
 
   it("creates a recipe stamped with Book provenance", async () => {
     const { id } = await upsertCookbookRecipe(
       recipeInput("Pancakes"),
       bookA,
       db,
-      TEST_ACTOR,
+      actor,
     );
 
     const found = await getDb(db).query.recipe.findFirst({
@@ -96,13 +95,13 @@ describe("upsertCookbookRecipe", () => {
       recipeInput("Pancakes", "Mix gently"),
       bookA,
       db,
-      TEST_ACTOR,
+      actor,
     );
     const second = await upsertCookbookRecipe(
       recipeInput("Pancakes", "Mix vigorously"),
       bookA,
       db,
-      TEST_ACTOR,
+      actor,
     );
 
     expect(second.id).toBe(first.id);
@@ -126,13 +125,13 @@ describe("upsertCookbookRecipe", () => {
       recipeInput("Pancakes"),
       bookA,
       db,
-      TEST_ACTOR,
+      actor,
     );
     const b = await upsertCookbookRecipe(
       recipeInput("Pancakes"),
       bookB,
       db,
-      TEST_ACTOR,
+      actor,
     );
 
     expect(b.id).not.toBe(a.id);
@@ -146,19 +145,19 @@ describe("upsertCookbookRecipe", () => {
 
   it("does not collide with a website-scraped recipe of the same name", async () => {
     const website = await upsertRecipe(
-      {
+      makeRecipeInput({
         name: "Pancakes",
-        meta: { url: "https://example.com/pancakes" },
+        url: "https://example.com/pancakes",
         sections: [{ instructions: [{ instruction: "Web" }], ingredients: [] }],
-      },
+      }),
       db,
-      TEST_ACTOR,
+      actor,
     );
     const book = await upsertCookbookRecipe(
       recipeInput("Pancakes"),
       bookA,
       db,
-      TEST_ACTOR,
+      actor,
     );
 
     expect(book.id).not.toBe(website.id);
@@ -180,7 +179,7 @@ describe("upsertCookbookRecipe", () => {
       },
       bookA,
       db,
-      TEST_ACTOR,
+      actor,
     );
 
     const found = await getDb(db).query.recipe.findFirst({
@@ -192,18 +191,17 @@ describe("upsertCookbookRecipe", () => {
 
   it("composes the headnote and tips into markdown notes", async () => {
     const { id } = await upsertCookbookRecipeFromCookbook(
-      {
+      makeImportRecipe({
         meta: {
           title: "Pancakes",
           description: "A weekend staple.",
           notes: ["Freezes well", "Serve with maple syrup"],
         },
         sections: [{ ingredients: ["2 cups flour"], instructions: [] }],
-        references: [],
-      },
+      }),
       bookA,
       db,
-      TEST_ACTOR,
+      actor,
     );
 
     const found = await getDb(db).query.recipe.findFirst({
@@ -216,24 +214,22 @@ describe("upsertCookbookRecipe", () => {
 
   it("re-import replaces notes from the source (like sections)", async () => {
     const first = await upsertCookbookRecipeFromCookbook(
-      {
+      makeImportRecipe({
         meta: { title: "Pancakes", description: "Old blurb." },
         sections: [{ ingredients: ["2 cups flour"], instructions: [] }],
-        references: [],
-      },
+      }),
       bookA,
       db,
-      TEST_ACTOR,
+      actor,
     );
     const second = await upsertCookbookRecipeFromCookbook(
-      {
+      makeImportRecipe({
         meta: { title: "Pancakes" },
         sections: [{ ingredients: ["2 cups flour"], instructions: [] }],
-        references: [],
-      },
+      }),
       bookA,
       db,
-      TEST_ACTOR,
+      actor,
     );
 
     expect(second.id).toBe(first.id);
@@ -244,23 +240,12 @@ describe("upsertCookbookRecipe", () => {
   });
 
   it("getCookbookRecipeTitles returns only this book's non-deleted titles", async () => {
-    await upsertCookbookRecipe(recipeInput("Pancakes"), bookA, db, TEST_ACTOR);
-    await upsertCookbookRecipe(recipeInput("Waffles"), bookA, db, TEST_ACTOR);
-    await upsertCookbookRecipe(recipeInput("Crepes"), bookB, db, TEST_ACTOR);
+    await upsertCookbookRecipe(recipeInput("Pancakes"), bookA, db, actor);
+    await upsertCookbookRecipe(recipeInput("Waffles"), bookA, db, actor);
+    await upsertCookbookRecipe(recipeInput("Crepes"), bookB, db, actor);
 
     const titles = await getCookbookRecipeTitles(db, bookA.id);
     expect(titles.sort()).toEqual(["Pancakes", "Waffles"]);
-  });
-
-  // A raw ImportRecipe (the parser's shape; lines parsed server-side).
-  const cookbook = (
-    name: string,
-    ingredients: string[],
-    references: ImportRecipe["references"] = [],
-  ): ImportRecipe => ({
-    meta: { title: name },
-    sections: [{ ingredients, instructions: [] }],
-    references,
   });
 
   const piecrustRef = {
@@ -272,28 +257,31 @@ describe("upsertCookbookRecipe", () => {
   it("links a cross-recipe reference as a sub-recipe (two-pass)", async () => {
     // Pass 1: both recipes imported flat (no references resolved yet).
     const piecrust = await upsertCookbookRecipeFromCookbook(
-      cookbook("The Only Piecrust", ["2 cups flour"]),
+      cookbookRecipe("The Only Piecrust", ["2 cups flour"]),
       bookA,
       db,
-      TEST_ACTOR,
+      actor,
     );
     await upsertCookbookRecipeFromCookbook(
-      cookbook("Apple Galette", ["1 recipe The Only Piecrust", "3 apples"]),
+      cookbookRecipe("Apple Galette", [
+        "1 recipe The Only Piecrust",
+        "3 apples",
+      ]),
       bookA,
       db,
-      TEST_ACTOR,
+      actor,
     );
 
     // Pass 2: re-import the galette with its reference → links to the piecrust.
     const galette = await upsertCookbookRecipeFromCookbook(
-      cookbook(
+      cookbookRecipe(
         "Apple Galette",
         ["1 recipe The Only Piecrust", "3 apples"],
-        [piecrustRef],
+        { references: [piecrustRef] },
       ),
       bookA,
       db,
-      TEST_ACTOR,
+      actor,
     );
 
     const full = await getRecipeByID(db, galette.id);
@@ -309,7 +297,7 @@ describe("upsertCookbookRecipe", () => {
     // "almond extract" is in both sections — concurrent find-or-create used to
     // race on the unique name index and 500 (regression for Dessert Person).
     const { id } = await upsertCookbookRecipeFromCookbook(
-      {
+      makeImportRecipe({
         meta: { title: "Poppy Seed Almond Cake" },
         sections: [
           {
@@ -326,11 +314,10 @@ describe("upsertCookbookRecipe", () => {
             instructions: [],
           },
         ],
-        references: [],
-      },
+      }),
       bookA,
       db,
-      TEST_ACTOR,
+      actor,
     );
 
     const full = await getRecipeByID(db, id);
@@ -348,20 +335,18 @@ describe("upsertCookbookRecipe", () => {
 
   it("leaves a reference whose target isn't imported as a flat ingredient", async () => {
     const galette = await upsertCookbookRecipeFromCookbook(
-      cookbook(
-        "Galette",
-        ["1 recipe Missing Dough"],
-        [
+      cookbookRecipe("Galette", ["1 recipe Missing Dough"], {
+        references: [
           {
             title: "Missing Dough",
             line: "1 recipe Missing Dough",
             confidence: "title_match",
           },
         ],
-      ),
+      }),
       bookA,
       db,
-      TEST_ACTOR,
+      actor,
     );
 
     const full = await getRecipeByID(db, galette.id);
