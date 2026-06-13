@@ -39,7 +39,7 @@ export type Stats = {
 };
 
 /** One ingredient row aligned across every compared recipe. */
-export type CompareRow = {
+type CompareRow = {
   key: string;
   label: string;
   isFlour: boolean;

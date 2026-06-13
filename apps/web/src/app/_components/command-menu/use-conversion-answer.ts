@@ -8,7 +8,7 @@ import { useTRPC } from "~/trpc/react";
 const CONVERSION_RE =
   /^(\d+(?:[.,]\d+)?)\s*([a-zA-Z]+)\s+(.+?)\s+(?:in|to|as)\s+([a-zA-Z]+)$/i;
 
-export interface ConversionAnswer {
+interface ConversionAnswer {
   /** The formatted input amount, e.g. "250 g" */
   input: string;
   ingredientName: string;

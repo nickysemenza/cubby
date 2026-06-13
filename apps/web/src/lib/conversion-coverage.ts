@@ -18,17 +18,17 @@ import { safeConvertAmount } from "~/lib/recipe-costing";
  */
 
 export const BASE_KINDS = ["weight", "volume", "money", "calories"] as const;
-export type BaseKind = (typeof BASE_KINDS)[number];
+type BaseKind = (typeof BASE_KINDS)[number];
 
 export type CoverageTier = "complete" | "good" | "partial" | "none";
 
-export interface CoveragePair {
+interface CoveragePair {
   from: BaseKind;
   to: BaseKind;
   success: boolean;
 }
 
-export interface ConversionCoverage {
+interface ConversionCoverage {
   /** Base kinds that participate in at least one working conversion (lit icons). */
   covered: Set<BaseKind>;
   /** |covered| ∈ {0,2,3,4} (a lone kind has no pair, so never 1). */

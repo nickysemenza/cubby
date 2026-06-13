@@ -5,7 +5,7 @@ import type { IngItem } from "./types";
 type DraftAmount = { value?: number | null; unit?: string | null };
 
 /** True when neither part of an amount is filled — the "no amount" case. */
-export const isBlankAmount = (a: DraftAmount): boolean =>
+const isBlankAmount = (a: DraftAmount): boolean =>
   a.value == null && !a.unit?.trim();
 
 /**

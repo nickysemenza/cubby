@@ -12,8 +12,6 @@ import type {
 } from "@cubby/recipebridge";
 import type { Amount } from "@cubby/schemas/codec";
 import type {
-  MeasureDiagnosticOut,
-  NutrientDiagnosticOut,
   RecipeOut,
   RowDiagnosticOut,
   SectionIngredientOut,
@@ -108,12 +106,6 @@ export type IngredientDataItem = CostingRow & {
  * reshaper feeds in — PlanTrio, WConversionStep, WIngredientUsage — and these
  * is compiler-enforced at `toRowDiagnostic`).
  */
-
-/** One resolved measure, flattened for display/serialization (no Result). */
-export type MeasureDiagnostic = MeasureDiagnosticOut;
-
-/** Nutrient summary diagnostic: kcal + how many nutrient codes resolved. */
-export type NutrientDiagnostic = NutrientDiagnosticOut;
 
 /**
  * Per-row costing trace: which usage the classifier assigned, which consumption

@@ -7,9 +7,7 @@ export const normalize = (s: string) => s.trim().toLowerCase();
  * First-wins title→index map over a book's recipes. Shared by the cascade-select
  * and the topological import order (both resolve a reference title to its recipe).
  */
-export const buildTitleIndex = (
-  recipes: ImportRecipe[],
-): Map<string, number> => {
+const buildTitleIndex = (recipes: ImportRecipe[]): Map<string, number> => {
   const m = new Map<string, number>();
   recipes.forEach((r, i) => {
     const key = normalize(r.meta.title);

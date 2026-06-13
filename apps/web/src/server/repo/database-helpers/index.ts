@@ -10,7 +10,6 @@ export { getDb, unwrapDb, withTransaction } from "./core";
 // CRUD operations
 export {
   associatePendingImages,
-  batchInsert,
   batchUpdateWithCaseWhen,
   insertAndReturn,
   updateAndReturn,

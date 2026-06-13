@@ -14,7 +14,7 @@ import { useTRPC } from "~/trpc/react";
 
 type TRPC = ReturnType<typeof useTRPC>;
 
-export type RecipeCostingData = {
+type RecipeCostingData = {
   ingMap: Record<string, IngredientWithFoodOut>;
   recipeMap: Record<string, RecipeOut>;
 };
@@ -29,7 +29,7 @@ export type RecipeCostingData = {
  * useRecipeCostingData} can share it. Fetches are batched and cached via React
  * Query (`ensureQueryData`).
  */
-export async function loadRecipeCostingData(
+async function loadRecipeCostingData(
   recipes: RecipeOut[],
   api: TRPC,
   queryClient: QueryClient,

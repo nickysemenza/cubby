@@ -20,7 +20,7 @@ import {
 } from "./recipe-form-utils";
 import type { IngItem, RecipeFormValues } from "./types";
 
-export type RecipeImageChanges = Pick<RecipeCreateInput, "pendingImageIds"> &
+type RecipeImageChanges = Pick<RecipeCreateInput, "pendingImageIds"> &
   Pick<RecipeUpdateInput["data"], "removeImageIds">;
 
 const blankAmount = { value: null, unit: "" };

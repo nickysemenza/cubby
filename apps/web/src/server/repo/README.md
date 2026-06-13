@@ -145,12 +145,12 @@ const updated = await updateAndReturn(
 ### Batch Operations
 
 ```typescript
-import { batchInsert } from "~/server/repo/database-helpers";
+import { batchUpdateWithCaseWhen } from "~/server/repo/database-helpers";
 
-// Insert multiple records and return all
-const users = await batchInsert(tx, user, [
-  { name: "Alice", email: "alice@example.com" },
-  { name: "Bob", email: "bob@example.com" },
+// Update many records in a single SQL CASE WHEN statement (auto-chunked)
+const updatedCount = await batchUpdateWithCaseWhen(tx, product, [
+  { id: "p1", priceCents: 199 },
+  { id: "p2", priceCents: 299 },
 ]);
 ```
 

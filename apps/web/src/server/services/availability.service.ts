@@ -19,12 +19,7 @@ import type {
 } from "./ingredient.service";
 
 // Output types live in @cubby/schemas/availability (single source of truth, shared
-// with the suggestions router's .output()). Re-exported for existing importers.
-export type {
-  IngredientAvailability,
-  IngredientAvailabilityStatus,
-  RecipeAvailability,
-};
+// with the suggestions router's .output()).
 
 /** Tiny tolerance so float rounding doesn't flip an exact match to "short". */
 const COVERAGE_EPSILON = 1e-6;

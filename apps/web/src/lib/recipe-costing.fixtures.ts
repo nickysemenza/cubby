@@ -22,8 +22,8 @@ import type { IngredientWithFoodOut } from "~/server/services/ingredient.service
 // (mapping amounts, nutrient codes, names, yields). The `.fixtures.ts` suffix
 // keeps this file out of the `*.unit.test.ts` glob so vitest won't collect it.
 
-export const TS = new Date();
-export const dates = { createdAt: TS, updatedAt: TS };
+const TS = new Date();
+const dates = { createdAt: TS, updatedAt: TS };
 
 export type Product = IngredientWithFoodOut["product"][number];
 

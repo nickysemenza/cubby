@@ -4,7 +4,7 @@
  * environment (they are NOT build-time stripped) — see `store.ts` for the
  * synchronous `getFlag` used on hot paths and the `useFlag` hook for components.
  */
-export interface FlagDef {
+interface FlagDef {
   /** localStorage key (kept stable across releases so users keep their state). */
   storageKey: string;
   label: string;

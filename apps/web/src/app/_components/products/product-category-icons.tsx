@@ -9,7 +9,7 @@ interface CategoryIconProps {
   colored?: boolean;
 }
 
-export function CategoryIcon({
+function CategoryIcon({
   category,
   className,
   size = 16,
