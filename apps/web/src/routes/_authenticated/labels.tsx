@@ -1,4 +1,4 @@
-import { unsafeLocationId } from "@cubby/schemas/identifiers";
+import type { LocationId } from "@cubby/schemas/identifiers";
 import type { LocationType } from "@cubby/schemas/location";
 import type { ProductCategory } from "@cubby/schemas/product";
 import { getShortcodeUrl, parseShortcode } from "@cubby/shared";
@@ -223,10 +223,10 @@ function AddLabelsPopover({
     toast.success(`Added ${location.name}`);
   }
 
-  async function handleAddChildren(location: { id: string; name: string }) {
+  async function handleAddChildren(location: { id: LocationId; name: string }) {
     const full = await queryClient.fetchQuery(
       api.location.getByID.queryOptions({
-        id: unsafeLocationId(location.id),
+        id: location.id,
       }),
     );
     const children = full.children ?? [];

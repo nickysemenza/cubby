@@ -37,7 +37,7 @@ export const findProductsWithNoImages = async (
   { excludeIngredients = false } = {},
 ): Promise<
   Array<{
-    id: string;
+    id: ProductId;
     name: string;
     manufacturer: string;
     upc: string | null;

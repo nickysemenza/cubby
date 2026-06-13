@@ -1,4 +1,4 @@
-import { type LocationId, unsafeLocationId } from "@cubby/schemas/identifiers";
+import type { LocationId } from "@cubby/schemas/identifiers";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
@@ -9,6 +9,7 @@ import {
   mergePricingStatus,
   type PricingStatus,
 } from "~/app/_components/locations/calculate-inventory-valuation";
+import { ROOT_LOCATION_ID } from "~/hooks/useLocationTree";
 import { useTRPC } from "~/trpc/react";
 
 /**
@@ -157,7 +158,7 @@ export function useLocationHierarchy(
 
     return {
       name: "All Locations",
-      id: unsafeLocationId("_root"),
+      id: ROOT_LOCATION_ID,
       type: "room" as LocationType,
       value:
         valuationMode === "equalWeight" ? allNodes.length : totalCount || 1,

@@ -1,9 +1,9 @@
-import { type LocationId, unsafeLocationId } from "@cubby/schemas/identifiers";
+import type { LocationId } from "@cubby/schemas/identifiers";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import * as d3Hierarchy from "d3-hierarchy";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EntityPillLink } from "~/app/_components/EntityPill";
-import { useLocationTree } from "~/hooks/useLocationTree";
+import { ROOT_LOCATION_ID, useLocationTree } from "~/hooks/useLocationTree";
 
 interface TreeNode {
   name: string;
@@ -29,7 +29,7 @@ export default function LocationTreeGraph() {
     if (!data || data.length === 0) return null;
     return {
       name: "_root",
-      id: unsafeLocationId("_root"),
+      id: ROOT_LOCATION_ID,
       type: "room" as LocationType,
       children: data.map(transformToTreeNode),
     };

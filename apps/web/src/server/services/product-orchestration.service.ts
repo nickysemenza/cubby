@@ -7,7 +7,6 @@
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
-import { unsafeProductId } from "@cubby/schemas/identifiers";
 import type { ProductTopLevelOut } from "@cubby/schemas/product";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -151,7 +150,7 @@ export async function backfillUPCImages(
             db,
             upcLookupClient,
             p.upc,
-            unsafeProductId(p.id),
+            p.id,
           );
 
           if (result) {
