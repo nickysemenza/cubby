@@ -379,6 +379,13 @@ const upsertRecipeMatching = async (
       recipe,
       {
         ...recipeSourceToColumns(provenance),
+        // Re-import reflects the source (like sections + notes — a manual edit
+        // doesn't survive a re-import). For web/cookbook recipes name is the match
+        // key, so this is a no-op; it only bites for Notion, which matches on page
+        // id — a renamed page now updates its title instead of keeping the stale
+        // one. Safe: Notion names are exempt from Recipe_name_key (identity is the
+        // page id via Recipe_notion_page_key), so the rename can't collide.
+        name: input.name,
         // Like sections, notes are replaced from the import source on re-import
         // (a manual edit doesn't survive a re-import).
         notes: input.notes ?? null,
