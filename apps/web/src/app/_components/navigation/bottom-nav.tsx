@@ -12,20 +12,10 @@ import {
 } from "~/components/ui/sheet";
 import { useDebug } from "~/hooks/useDebug";
 import { authClient } from "~/lib/auth-client";
-import { cn } from "~/lib/utils";
+import { cn, formatBuildDate } from "~/lib/utils";
 import { bottomNavItems, moreNavItems } from "./nav-items";
 
-// timeZone: "UTC" is load-bearing — see the matching note in footer.tsx.
-// __BUILD_DATE__ is a UTC ISO string; without pinning the zone, the CF edge and
-// the client can format it on different calendar days, causing a React #418
-// hydration text mismatch (this nav renders in the root layout on every page).
-const buildDateFormatter = new Intl.DateTimeFormat("en", {
-  month: "short",
-  day: "numeric",
-  timeZone: "UTC",
-});
-
-const buildDate = buildDateFormatter.format(new Date(__BUILD_DATE__));
+const buildDate = formatBuildDate(__BUILD_DATE__);
 
 export function BottomNav() {
   const pathname = useLocation().pathname;

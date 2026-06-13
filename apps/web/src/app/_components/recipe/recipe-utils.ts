@@ -3,7 +3,9 @@ import {
   getNutrientValueByKey,
   type NutrientsPer100,
 } from "@cubby/usda-schemas";
+import type { CalculateTotalsResult } from "~/lib/recipe-costing";
 import { getRecipeIngredientName } from "~/lib/recipe-graph";
+import { formatCurrency } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
 
 /** The four headline figures every recipe-summary surface shows (table, charts,
@@ -74,5 +76,54 @@ export const getServingBasis = (recipe: RecipeOut): ServingBasis | null => {
  * → "$0.29 each", "$0.42 / serving", "$1.10 / cup". */
 export const perUnitSuffix = (noun: string): string =>
   noun === "each" ? "each" : `/ ${noun}`;
+
+/**
+ * The recipe vitals line — "Makes X · Serves Y · $cost / serving · kcal · g
+ * protein" — built once for every surface that shows it. Without `opts.totals`
+ * (the draft live-preview, where nothing's costed yet) it degrades to just the
+ * Makes/Serves prefix. Callers join the parts with their own separator. The
+ * yield label follows `formatYield`'s "whole"-sentinel handling (a bare count
+ * drops the unit).
+ */
+export function buildRecipeKicker(
+  input: {
+    yield?: { value?: number | null; unit?: string | null } | null;
+    servings?: number | null;
+  },
+  opts?: { totals: CalculateTotalsResult; basis: ServingBasis | null },
+): string[] {
+  const y = input.yield;
+  const parts: Array<string | null> = [
+    y?.value
+      ? `Makes ${!y.unit || y.unit === "whole" ? y.value : `${y.value} ${y.unit}`}`
+      : null,
+    input.servings && y?.unit !== "servings"
+      ? `Serves ${input.servings}`
+      : null,
+  ];
+
+  if (opts) {
+    const head = recipeHeadlineTotals(opts.totals);
+    const { basis } = opts;
+    parts.push(
+      head.cost && basis
+        ? `${formatCurrency(head.cost / basis.divisor)} ${perUnitSuffix(basis.noun)}`
+        : head.cost
+          ? `${formatCurrency(head.cost)} total`
+          : null,
+      head.calories && basis
+        ? `${Math.round(head.calories / basis.divisor)} kcal ${perUnitSuffix(basis.noun)}`
+        : null,
+      head.protein && basis
+        ? `${Math.round(head.protein / basis.divisor)}g protein ${perUnitSuffix(basis.noun)}`
+        : null,
+      head.weight && basis
+        ? `${Math.round(head.weight / basis.divisor)}g ${perUnitSuffix(basis.noun)}`
+        : null,
+    );
+  }
+
+  return parts.filter((p): p is string => Boolean(p));
+}
 
 export const getIngredientName = getRecipeIngredientName;

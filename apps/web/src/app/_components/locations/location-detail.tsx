@@ -26,6 +26,7 @@ import { queryKeys } from "~/lib/query-keys";
 import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import { DetailPage, type DetailSection } from "../data-table/detail-page";
+import { editableDetailSection } from "../data-table/editable-detail-section";
 import { useEntityDetail } from "../hooks/useEntityDetail";
 import { QuickInventoryAdd } from "../inventory/quick-inventory-add";
 import { AiDescriptionSection } from "./ai-description-section";
@@ -60,22 +61,16 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
   });
 
   const sections: DetailSection[] = [
-    {
+    editableDetailSection({
       title: "Basic Information",
       icon: Info,
-      content: editMode.isEditing ? (
-        <LocationForm
-          mode="edit"
-          entity={location}
-          onEdit={editMode.handleEdit}
-          isPending={editMode.isPending}
-          error={editMode.error}
-          onCancel={editMode.handleCancel}
-        />
-      ) : (
+      editMode,
+      Form: LocationForm,
+      entity: location,
+      children: (
         <LocationBasicInfo location={location} onEdit={editMode.startEditing} />
       ),
-    },
+    }),
     // Custom section: Inventory Valuation
     {
       title: "Inventory Valuation",

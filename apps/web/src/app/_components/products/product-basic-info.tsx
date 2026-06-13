@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Package, Printer } from "lucide-react";
+import { Package } from "lucide-react";
 import type { FC } from "react";
 import { toast } from "sonner";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
@@ -14,6 +14,7 @@ import { EntityPillLink } from "../EntityPill";
 import { EntityPillLinkList } from "../EntityPillLinkList";
 import { useEntityDelete } from "../hooks/useEntityDelete";
 import { NoneState } from "../NoneState";
+import { PrintLabelButton } from "../print-label-button";
 import { CategoryBadge } from "./CategoryBadge";
 import { productCategoryOptionsWithTheme } from "./product-category-icons";
 
@@ -216,18 +217,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
               <Package className="mr-2 h-4 w-4" />
               Add to Inventory
             </Button>
-            {product.shortcode && (
-              <Button
-                variant="outline"
-                render={
-                  <Link to="/labels" search={{ codes: product.shortcode }} />
-                }
-                nativeButton={false}
-              >
-                <Printer className="mr-2 h-4 w-4" />
-                Print Label
-              </Button>
-            )}
+            <PrintLabelButton shortcode={product.shortcode} />
             <DeleteButton />
           </div>
         }

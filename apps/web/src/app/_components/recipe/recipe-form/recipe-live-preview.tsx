@@ -1,25 +1,29 @@
 import type { FC } from "react";
 import { type Control, useWatch } from "react-hook-form";
 import { MarkdownText } from "~/components/markdown";
-import { wasm } from "~/lib/wasm";
+import { cn } from "~/lib/utils";
+import { tryFormatAmount } from "../../inventory/format-amount";
+import {
+  type DisplayQuantity,
+  IngredientQuantities,
+  ingredientRowGridNarrow,
+} from "../IngredientQuantities";
+import { buildRecipeKicker } from "../recipe-utils";
+import { Eyebrow, SectionHeading } from "../section-heading";
 import type { RecipeFormValues } from "./types";
 
 /** Safe quantity formatting over possibly-partial draft amounts. */
 function formatDraftQty(
   amounts: Array<{ value?: number | null; unit?: string | null }> | undefined,
-): string {
-  if (!amounts) return "";
+): DisplayQuantity[] {
+  if (!amounts) return [];
   return amounts
-    .map((a) => {
-      if (a?.value == null) return null;
-      try {
-        return wasm.format_amount({ value: a.value, unit: a.unit ?? "" });
-      } catch {
-        return `${a.value} ${a.unit ?? ""}`.trim();
-      }
-    })
-    .filter(Boolean)
-    .join(" / ");
+    .filter((a) => a?.value != null)
+    .map((a) => ({
+      text: tryFormatAmount({ value: a.value ?? 0, unit: a.unit ?? "" }),
+      derived: false,
+      estimated: false,
+    }));
 }
 
 /**
@@ -33,14 +37,10 @@ export const RecipeLivePreview: FC<{
   const values = useWatch({ control }) as Partial<RecipeFormValues>;
 
   const sections = values.sections ?? [];
-  const kicker = [
-    values.yield?.value
-      ? `Makes ${values.yield.value}${values.yield.unit && values.yield.unit !== "whole" ? ` ${values.yield.unit}` : ""}`
-      : null,
-    values.servings ? `Serves ${values.servings}` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const kicker = buildRecipeKicker({
+    yield: values.yield,
+    servings: values.servings,
+  }).join(" · ");
 
   let stepNumber = 0;
 
@@ -51,9 +51,9 @@ export const RecipeLivePreview: FC<{
           {values.name?.trim() || "Untitled recipe"}
         </h3>
         {kicker && (
-          <p className="mt-1 border-foreground border-b pb-1 font-mono text-2xs text-eyebrow uppercase tracking-[0.12em]">
+          <Eyebrow className="mt-1 border-foreground border-b pb-1 tracking-[0.12em]">
             {kicker}
-          </p>
+          </Eyebrow>
         )}
       </div>
 
@@ -70,11 +70,11 @@ export const RecipeLivePreview: FC<{
           key={sectionIndex}
           className="space-y-2"
         >
-          {(sections.length > 1 || section?.name) && (
-            <p className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
-              {section?.name || `Part ${sectionIndex + 1}`}
-            </p>
-          )}
+          <SectionHeading
+            sectionName={section?.name}
+            index={sectionIndex}
+            total={sections.length}
+          />
 
           {(section?.ingredients?.length ?? 0) > 0 && (
             <ul className="my-0 ml-0 list-none divide-y divide-dashed divide-border">
@@ -87,11 +87,12 @@ export const RecipeLivePreview: FC<{
                   <li
                     // biome-ignore lint/suspicious/noArrayIndexKey: positional draft rows
                     key={i}
-                    className="grid grid-cols-[5rem_minmax(0,1fr)] items-baseline gap-2 py-1"
+                    className={cn(ingredientRowGridNarrow, "py-1")}
                   >
-                    <span className="whitespace-nowrap text-right font-mono text-2xs text-muted-foreground tabular-nums">
-                      {formatDraftQty(ing?.amounts)}
-                    </span>
+                    <IngredientQuantities
+                      quantities={formatDraftQty(ing?.amounts)}
+                      className="text-2xs"
+                    />
                     <span className="truncate text-sm">{name}</span>
                   </li>
                 );

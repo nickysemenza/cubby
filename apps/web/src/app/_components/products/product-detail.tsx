@@ -12,6 +12,7 @@ import {
   DetailPage,
   type DetailSection,
 } from "../data-table/detail-page";
+import { editableDetailSection } from "../data-table/editable-detail-section";
 import { useEntityDetail } from "../hooks/useEntityDetail";
 import { NutritionInfoTable } from "../usda/nutrition";
 import { ProductBasicInfo } from "./product-basic-info";
@@ -35,22 +36,16 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   });
 
   const sections: DetailSection[] = [
-    {
+    editableDetailSection({
       title: "Basic Information",
       icon: Info,
-      content: editMode.isEditing ? (
-        <ProductForm
-          mode="edit"
-          entity={product}
-          onEdit={editMode.handleEdit}
-          isPending={editMode.isPending}
-          error={editMode.error}
-          onCancel={editMode.handleCancel}
-        />
-      ) : (
+      editMode,
+      Form: ProductForm,
+      entity: product,
+      children: (
         <ProductBasicInfo product={product} onEdit={editMode.startEditing} />
       ),
-    },
+    }),
     // Custom section: Nutrition (only if available)
     ...(product.food?.nutritionInfo
       ? [
