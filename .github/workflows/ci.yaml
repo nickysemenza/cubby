@@ -299,15 +299,15 @@ jobs:
 
   test-e2e:
     name: E2E Tests
-    # Skip on Renovate PRs, and skip when manually bypassing E2E to force a
-    # deploy. check-tests treats a skipped E2E as a pass, so bypass flows through
-    # the existing gate. NOTE: no job-level `continue-on-error` — that would
-    # force needs.test-e2e.result to 'success' and let a red E2E ship to prod
-    # (same footgun documented on the unit jobs). A real failure now blocks the
-    # deploy honestly; post-test steps below stay on if:always()/if:failure().
-    if: >-
-      github.event.pull_request.user.login != 'renovate[bot]' &&
-      !(github.event_name == 'workflow_dispatch' && inputs.bypass_e2e)
+    # Run on every PR (incl. Renovate — a dep bump is exactly what E2E should
+    # catch; the repo is public so Actions minutes are free). Only skip when
+    # manually bypassing E2E to force a deploy; check-tests treats a skipped E2E
+    # as a pass, so bypass flows through the existing gate. NOTE: no job-level
+    # `continue-on-error` — that would force needs.test-e2e.result to 'success'
+    # and let a red E2E ship to prod (same footgun documented on the unit jobs).
+    # A real failure now blocks the deploy honestly; post-test steps below stay
+    # on if:always()/if:failure().
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.bypass_e2e) }}
     needs: [build-wasm]
     runs-on: ubuntu-latest
     outputs:
