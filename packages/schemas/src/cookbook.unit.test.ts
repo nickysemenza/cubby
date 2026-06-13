@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, it } from "vitest";
 import cookbookSample from "./__fixtures__/cookbook.sample.json";
 import { cookbookBundleSchema } from "./cookbook";
 import { composeNotesMarkdown, importRecipesSchema } from "./import-recipe";
@@ -10,7 +10,7 @@ describe("importRecipesSchema", () => {
   // shape changes, regenerate the fixture and update `cookbook.ts` to match:
   //   cargo run -p food-cli -- scrape-epub <book>.epub --json > \
   //     packages/schemas/src/__fixtures__/cookbook.sample.json
-  test("accepts a real food-cli cookbook JSON payload", () => {
+  it("accepts a real food-cli cookbook JSON payload", () => {
     const result = importRecipesSchema.safeParse(cookbookSample);
 
     expect(result.success).toBe(true);
@@ -21,7 +21,7 @@ describe("importRecipesSchema", () => {
     expect(result.data?.[0]?.references[0]?.confidence).toBe("title_match");
   });
 
-  test("accepts a food-cli --json array (instructions default to [])", () => {
+  it("accepts a food-cli --json array (instructions default to [])", () => {
     const result = importRecipesSchema.safeParse([
       {
         meta: { title: "Soup" },
@@ -34,7 +34,7 @@ describe("importRecipesSchema", () => {
     expect(result.data?.[0]?.sections[0]?.instructions).toEqual([]);
   });
 
-  test("rejects a section missing ingredients", () => {
+  it("rejects a section missing ingredients", () => {
     const result = importRecipesSchema.safeParse([
       { meta: { title: "Bad" }, sections: [{ instructions: ["step"] }] },
     ]);
@@ -42,7 +42,7 @@ describe("importRecipesSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  test("references default to [] and parse cross-recipe pointers", () => {
+  it("references default to [] and parse cross-recipe pointers", () => {
     const result = importRecipesSchema.safeParse([
       // no references key → defaults to []
       { meta: { title: "Plain" }, sections: [{ ingredients: ["1 egg"] }] },
@@ -65,7 +65,7 @@ describe("importRecipesSchema", () => {
     expect(result.data?.[1]?.references[0]?.confidence).toBe("title_match");
   });
 
-  test("rejects an invalid reference confidence", () => {
+  it("rejects an invalid reference confidence", () => {
     const result = importRecipesSchema.safeParse([
       {
         meta: { title: "X" },
@@ -85,7 +85,7 @@ describe("cookbookBundleSchema", () => {
     ...(source ? { source } : {}),
   });
 
-  test("passes a flat ImportRecipe[] through unchanged", () => {
+  it("passes a flat ImportRecipe[] through unchanged", () => {
     const result = cookbookBundleSchema.safeParse([
       recipe("A", "one.epub"),
       recipe("B", "two.epub"),
@@ -95,7 +95,7 @@ describe("cookbookBundleSchema", () => {
     expect(result.data?.map((r) => r.source)).toEqual(["one.epub", "two.epub"]);
   });
 
-  test("flattens a {book, recipes}[] bundle and stamps source from book", () => {
+  it("flattens a {book, recipes}[] bundle and stamps source from book", () => {
     const result = cookbookBundleSchema.safeParse([
       { book: "Book One", recipes: [recipe("A"), recipe("B")] },
       { book: "Book Two", recipes: [recipe("C")] },
@@ -111,7 +111,7 @@ describe("cookbookBundleSchema", () => {
     ]);
   });
 
-  test("keeps a recipe's own source over the bundle book", () => {
+  it("keeps a recipe's own source over the bundle book", () => {
     const result = cookbookBundleSchema.safeParse([
       { book: "Fallback", recipes: [recipe("A", "explicit.epub")] },
     ]);
@@ -119,7 +119,7 @@ describe("cookbookBundleSchema", () => {
     expect(result.data?.[0]?.source).toBe("explicit.epub");
   });
 
-  test("rejects a bundle whose recipe is malformed", () => {
+  it("rejects a bundle whose recipe is malformed", () => {
     const result = cookbookBundleSchema.safeParse([
       { book: "X", recipes: [{ meta: { title: "no sections" } }] },
     ]);
@@ -129,7 +129,7 @@ describe("cookbookBundleSchema", () => {
 });
 
 describe("composeNotesMarkdown", () => {
-  test("composes headnote and tips into markdown", () => {
+  it("composes headnote and tips into markdown", () => {
     expect(
       composeNotesMarkdown("A family favorite.", [
         "Freezes well",
@@ -138,25 +138,25 @@ describe("composeNotesMarkdown", () => {
     ).toBe("A family favorite.\n\n- Freezes well\n- Serve with rice");
   });
 
-  test("headnote only", () => {
+  it("headnote only", () => {
     expect(composeNotesMarkdown("Just a blurb.", [])).toBe("Just a blurb.");
     expect(composeNotesMarkdown("Just a blurb.", null)).toBe("Just a blurb.");
   });
 
-  test("tips only", () => {
+  it("tips only", () => {
     expect(composeNotesMarkdown(undefined, ["Make ahead up to 3 days"])).toBe(
       "- Make ahead up to 3 days",
     );
   });
 
-  test("null when both are empty or blank", () => {
+  it("null when both are empty or blank", () => {
     expect(composeNotesMarkdown(undefined, undefined)).toBeNull();
     expect(composeNotesMarkdown("", [])).toBeNull();
     expect(composeNotesMarkdown("   ", ["", "  "])).toBeNull();
     expect(composeNotesMarkdown(null, null)).toBeNull();
   });
 
-  test("trims whitespace and drops blank tips", () => {
+  it("trims whitespace and drops blank tips", () => {
     expect(composeNotesMarkdown("  blurb  ", ["  tip  ", ""])).toBe(
       "blurb\n\n- tip",
     );

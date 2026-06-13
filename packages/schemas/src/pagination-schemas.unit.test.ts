@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { extractDbTimestampsFromDBRec } from "./common";
 import {
@@ -9,7 +9,7 @@ import {
 } from "./pagination";
 
 describe("buildPaginatedResponse", () => {
-  test("builds correct response structure with data", () => {
+  it("builds correct response structure with data", () => {
     const pagination: PaginationParams = {
       pageIndex: 2,
       pageSize: 15,
@@ -32,7 +32,7 @@ describe("buildPaginatedResponse", () => {
     });
   });
 
-  test("builds correct response with empty data", () => {
+  it("builds correct response with empty data", () => {
     const pagination: PaginationParams = {
       pageIndex: 0,
       pageSize: 10,
@@ -54,7 +54,7 @@ describe("buildPaginatedResponse", () => {
 });
 
 describe("createPaginatedResponseSchema", () => {
-  test("creates schema with correct structure", () => {
+  it("creates schema with correct structure", () => {
     const testSchema = z.object({
       id: z.string(),
       name: z.string(),
@@ -96,7 +96,7 @@ describe("createPaginatedResponseSchema", () => {
 });
 
 describe("buildTakeSkip", () => {
-  test("calculates correct skip and take values", () => {
+  it("calculates correct skip and take values", () => {
     const pagination: PaginationParams = {
       pageIndex: 3,
       pageSize: 25,
@@ -110,7 +110,7 @@ describe("buildTakeSkip", () => {
     });
   });
 
-  test("handles zero pageIndex", () => {
+  it("handles zero pageIndex", () => {
     const pagination: PaginationParams = {
       pageIndex: 0,
       pageSize: 10,
@@ -126,7 +126,7 @@ describe("buildTakeSkip", () => {
 });
 
 describe("extractDbTimestampsFromDBRec", () => {
-  test("extracts timestamp fields correctly", () => {
+  it("extracts timestamp fields correctly", () => {
     const now = new Date();
     const dbRecord = {
       id: "123",

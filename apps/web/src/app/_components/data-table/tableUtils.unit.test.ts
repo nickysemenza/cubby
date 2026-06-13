@@ -1,5 +1,5 @@
 import type { SortingState } from "@tanstack/react-table";
-import { describe, expect, test } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   buildSortParams,
   defaultPagination,
@@ -7,7 +7,7 @@ import {
 } from "./tableUtils";
 
 describe("buildSortParams", () => {
-  test("returns correct params with sorting state", () => {
+  it("returns correct params with sorting state", () => {
     const sorting: SortingState = [{ id: "name", desc: true }];
     const result = buildSortParams(sorting);
 
@@ -17,7 +17,7 @@ describe("buildSortParams", () => {
     });
   });
 
-  test("returns correct params with sorting state in ascending order", () => {
+  it("returns correct params with sorting state in ascending order", () => {
     const sorting: SortingState = [{ id: "name", desc: false }];
     const result = buildSortParams(sorting);
 
@@ -27,7 +27,7 @@ describe("buildSortParams", () => {
     });
   });
 
-  test("uses initialSort when sorting state is empty", () => {
+  it("uses initialSort when sorting state is empty", () => {
     const sorting: SortingState = [];
     const result = buildSortParams(sorting, "title");
 
@@ -37,7 +37,7 @@ describe("buildSortParams", () => {
     });
   });
 
-  test("uses createdAt as default when sorting state is empty and no initialSort", () => {
+  it("uses createdAt as default when sorting state is empty and no initialSort", () => {
     const sorting: SortingState = [];
     const result = buildSortParams(sorting);
 
@@ -49,13 +49,13 @@ describe("buildSortParams", () => {
 });
 
 describe("defaultSortState", () => {
-  test("returns correct default state with initialSort", () => {
+  it("returns correct default state with initialSort", () => {
     const result = defaultSortState("name");
 
     expect(result).toEqual([{ id: "name", desc: true }]);
   });
 
-  test("returns correct default state without initialSort", () => {
+  it("returns correct default state without initialSort", () => {
     const result = defaultSortState();
 
     expect(result).toEqual([{ id: "createdAt", desc: true }]);
@@ -63,7 +63,7 @@ describe("defaultSortState", () => {
 });
 
 describe("defaultPagination", () => {
-  test("has correct default values", () => {
+  it("has correct default values", () => {
     expect(defaultPagination).toEqual({
       pageIndex: 0,
       pageSize: 50,

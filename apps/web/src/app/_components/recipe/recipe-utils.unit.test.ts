@@ -1,13 +1,13 @@
 import { unsafeIngredientId, unsafeRecipeId } from "@cubby/schemas/identifiers";
 import type { RecipeOut, SectionIngredient } from "@cubby/schemas/recipe";
-import { expect, test } from "vitest";
+import { expect, it } from "vitest";
 import {
   formatYield,
   getIngredientName,
   getServingBasis,
 } from "./recipe-utils";
 
-test("recipe utils", () => {
+it("recipe utils", () => {
   const recipe: RecipeOut = {
     sections: [
       {
@@ -78,13 +78,13 @@ test("recipe utils", () => {
  * A unitless yield carries the parser's "whole" sentinel; formatYield drops it
  * so "18 whole" renders as "18". Real units render normally.
  */
-test("formatYield drops the bare-count 'whole' unit", () => {
+it("formatYield drops the bare-count 'whole' unit", () => {
   expect(formatYield({ value: 18, unit: "whole" })).toEqual("18");
   // Real units render normally:
   expect(formatYield({ value: 12, unit: "servings" })).toEqual("12 servings");
 });
 
-test("getServingBasis prefers servings and labels yield units", () => {
+it("getServingBasis prefers servings and labels yield units", () => {
   const base = {
     id: unsafeRecipeId("r"),
     name: "Recipe",

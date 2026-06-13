@@ -1,10 +1,10 @@
 import { unsafeRecipeId } from "@cubby/schemas/identifiers";
-import { describe, expect, test } from "vitest";
+import { describe, expect, it } from "vitest";
 import { dbRecipeToAPIShallow } from "./recipe";
 
 describe("recipe repository helpers", () => {
   describe("dbRecipeToAPIShallow", () => {
-    test("converts website recipe with URL", () => {
+    it("converts website recipe with URL", () => {
       const recipe = {
         id: unsafeRecipeId("recipe-1"),
         shortcode: "R-A3F2",
@@ -48,7 +48,7 @@ describe("recipe repository helpers", () => {
       });
     });
 
-    test("converts non-website recipe without URL", () => {
+    it("converts non-website recipe without URL", () => {
       const recipe = {
         id: unsafeRecipeId("recipe-1"),
         shortcode: "R-X7K9",
