@@ -9,7 +9,7 @@ import type { IngredientDataItem, RecipeCosting } from "~/lib/recipe-costing";
 // own-gram-based `bakerPct`, so the percentage and the printed grams agree.
 
 /** Resolved gram weight for a row, or null when the line can't reach grams. */
-export const gramsForRow = (row: IngredientDataItem): number | null => {
+const gramsForRow = (row: IngredientDataItem): number | null => {
   const gram = row.priceInfo?.gram;
   return gram?.isOk() ? gram.value.value : null;
 };

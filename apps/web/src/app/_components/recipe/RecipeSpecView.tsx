@@ -4,6 +4,7 @@ import type {
   SectionIngredientOut,
 } from "@cubby/schemas/recipe";
 import { Fragment, useMemo, useState } from "react";
+import { match, P } from "ts-pattern";
 import { MarkdownText } from "~/components/markdown";
 import type {
   CalculateTotalsResult,
@@ -48,15 +49,16 @@ function sourceFootnote(
   source: RecipeSource | null | undefined,
 ): string | null {
   if (!source) return null;
-  if (source.type === "book") return `(from ${source.book})`;
-  if (source.type === "website" || source.type === "notion") {
-    try {
-      return `(via ${new URL(source.url).hostname.replace(/^www\./, "")})`;
-    } catch {
-      return null;
-    }
-  }
-  return null;
+  return match(source)
+    .with({ type: "book" }, (s) => `(from ${s.book})`)
+    .with({ type: P.union("website", "notion") }, (s) => {
+      try {
+        return `(via ${new URL(s.url).hostname.replace(/^www\./, "")})`;
+      } catch {
+        return null;
+      }
+    })
+    .otherwise(() => null);
 }
 
 export function RecipeSpecView({
