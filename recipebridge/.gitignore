@@ -1,1 +1,5 @@
 target
+# Untracked on purpose: the global ~/.cargo/config.toml path-patch makes this
+# lock non-authoritative locally (no git source for the parser crates), and CI
+# must re-resolve `branch = "main"` to latest upstream rather than honor a pin.
+Cargo.lock
