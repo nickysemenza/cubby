@@ -66,7 +66,6 @@ fn row(
         modifier: modifier.map(String::from),
         raw_line: None,
         section_name: section.map(String::from),
-        is_flour: false,
     }
 }
 
@@ -80,7 +79,6 @@ fn sub_recipe_row(sub_id: &str, amt: (f64, &str)) -> WCostingRow {
         modifier: None,
         raw_line: None,
         section_name: None,
-        is_flour: false,
     }
 }
 
@@ -568,7 +566,6 @@ fn prefers_stated_weight_over_volume_sharing_one_basis() {
         modifier: None,
         raw_line: None,
         section_name: None,
-        is_flour: false,
     };
     let flour = ingredient(
         "flour",
@@ -912,8 +909,7 @@ fn measured_fry_row_displays_est_weight_but_own_cost() {
 
 #[test]
 fn baker_percentages_own_gram_based() {
-    let mut flour_row = flour_cup();
-    flour_row.is_flour = true;
+    let flour_row = flour_cup();
     let water = ingredient("water", vec![mapping((1.0, "g"), (1.0, "gram"))]);
     let r = cost(
         vec![
@@ -941,16 +937,14 @@ fn baker_percentages_use_pre_estimate_gram_for_estimated_flour_rows() {
     // the 20 g retained. Two flour rows of 100 g each → flour basis 200 g, so
     // each is 50%. If the retained estimate (20 g) fed the denominator, the
     // normal flour would read ~83% instead.
-    let mut flour_row = flour_cup();
-    flour_row.is_flour = true;
-    let mut dredge_row = row(
+    let flour_row = flour_cup();
+    let dredge_row = row(
         "flour2",
         "flour",
         Some((1.0, "cup")),
         Some("for dredging"),
         None,
     );
-    dredge_row.is_flour = true;
 
     let r = cost(
         vec![flour_row, dredge_row],
@@ -987,9 +981,12 @@ fn baker_percentages_use_pre_estimate_gram_for_estimated_flour_rows() {
 
 #[test]
 fn baker_percentages_null_without_flour() {
+    // No flour in the recipe → no baker's-% base, so every row is null. (The
+    // engine now classifies flour by name, so this must use a non-flour row.)
+    let water = ingredient("water", vec![mapping((1.0, "g"), (1.0, "gram"))]);
     let r = cost(
-        vec![flour_cup()],
-        vec![ingredient("flour", flour_mappings())],
+        vec![row("water", "water", Some((200.0, "g")), None, None)],
+        vec![water],
         vec![],
     );
     assert!(r.baker_percentages.iter().all(|b| b.pct.is_none()));

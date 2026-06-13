@@ -8,7 +8,6 @@ import { formatCurrency } from "~/lib/utils";
 import {
   formatYield,
   getServingBasis,
-  isFlourIngredient,
   perUnitSuffix,
   type RecipeHeadlineTotals,
 } from "../recipe-utils";
@@ -56,7 +55,7 @@ const extractRecipeRows = (costing: RecipeCosting | null): RecipeRowMap => {
     } else {
       map.set(key, {
         label: name,
-        isFlour: isFlourIngredient(name),
+        isFlour: costing.isFlourRows.get(row.id) ?? false,
         grams,
         bakerPct,
       });
