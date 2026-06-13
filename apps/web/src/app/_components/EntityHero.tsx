@@ -56,6 +56,7 @@ export const EntityHero: FC<EntityHeroProps> = ({ images }) => {
               <Image
                 src={activeImage.url}
                 alt={activeImage.filename}
+                displayWidth={800}
                 className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
               />
             </div>
@@ -84,6 +85,7 @@ export const EntityHero: FC<EntityHeroProps> = ({ images }) => {
                   <Image
                     src={image.url}
                     alt={image.filename}
+                    displayWidth={96}
                     className="absolute inset-0 h-full w-full object-cover"
                   />
                 </button>

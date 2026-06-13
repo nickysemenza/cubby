@@ -89,6 +89,7 @@ export function ImageDetail({ image }: ImageDetailProps) {
               <Image
                 src={image.url}
                 alt={image.filename}
+                displayWidth={640}
                 className="absolute inset-0 h-full w-full object-contain"
               />
             ) : (

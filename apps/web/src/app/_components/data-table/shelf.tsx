@@ -80,6 +80,7 @@ export function ShelfCard({
         <Image
           src={image ?? ""}
           alt={title}
+          displayWidth={400}
           className="absolute inset-0 h-full w-full object-cover"
           fallback={<EntityIcon entity={entity} colored className="h-6 w-6" />}
         />
