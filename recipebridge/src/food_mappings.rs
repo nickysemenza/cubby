@@ -207,6 +207,11 @@ pub fn mappings_from_food(food: &WFoodInput) -> Vec<WUnitMapping> {
 /// The synthetic `1 each = $price` costing edge. Price lives on the scalar
 /// `product.price` column (source of truth), projected into the graph at
 /// compute time — same read-time synthesis as the USDA edges.
+///
+/// The shared `each` anchor is the collision point for the multi-priced-product
+/// hazard documented on `engine.rs` (`Engine::new`): every product's price edge
+/// lands on the same `each` node, so two priced products on one ingredient yield
+/// two `each → dollar` edges the conversion picks between arbitrarily.
 fn price_mapping(price: Option<f64>, product_id: &str) -> Option<WUnitMapping> {
     Some(WUnitMapping {
         a: amount(1.0, "each"),

@@ -12,6 +12,17 @@
 //!   identical results to the TS per-encounter recursion, minus the redundant
 //!   recomputes. Only cycle-free computations are cached: a result produced
 //!   under a fired cycle guard depends on the visited set, not just the id.
+//!
+//! Known limitation — multiple *priced* products on one ingredient (dormant):
+//! all of an ingredient's products are merged into one graph (see `Engine::new`),
+//! which is load-bearing — products complete each other's edges. The hazard is
+//! only the synthesized `1 each = $price` edge: with ≥2 priced products their
+//! `each → dollar` edges collide and conversion picks one arbitrarily. Intended
+//! fix (NOT implemented): keep one shared conversion graph per ingredient from
+//! all *non-price* edges, then resolve price *per priced product* (amount → `each`
+//! on the shared graph, × that product's $/each) and take the **cheapest**; keep
+//! weight/nutrition single-valued on the shared graph. Do *not* isolate whole
+//! graphs per product — that breaks the cross-product completion.
 
 use std::cell::{OnceCell, RefCell};
 use std::collections::{HashMap, HashSet};
@@ -238,6 +249,16 @@ impl<'a> Engine<'a> {
                 .ingredients
                 .iter()
                 .map(|i| {
+                    // Merge ALL products' mappings into one graph. This is
+                    // intentional and load-bearing: products complete each other
+                    // (e.g. branded "Pete & Gerry's" eggs has no mappings and
+                    // reaches its price only via the generic shell's
+                    // `large → whole → each` bridge; branded olive oil supplies
+                    // price+package but its nutrition comes from the shell's USDA
+                    // food). The flip side is the price-collision hazard noted in
+                    // the module doc — multiple priced products on one ingredient
+                    // collide on the shared `each` node → arbitrary pick. Dormant
+                    // today (no ingredient has 2+ priced products).
                     let pairs = i
                         .products
                         .iter()
