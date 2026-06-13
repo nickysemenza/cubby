@@ -6,7 +6,7 @@ use ingredient::{
     ingredient::Ingredient,
     rich_text::{Chunk, RichParser},
     usage::IngredientUsage,
-    Decomposition, Field,
+    Confidence, Decomposition, Field, ParseNotes,
 };
 use recipe_scraper::{RecipeSection, RecipeYield, ScrapedRecipe};
 use serde::{Deserialize, Serialize};
@@ -45,6 +45,54 @@ impl From<IngredientUsage> for WIngredientUsage {
     }
 }
 
+/// How confident the parser is in a result (mirrors `Confidence`). The
+/// exhaustive `From` match below is the compile-time drift check.
+#[derive(Tsify, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[tsify(into_wasm_abi)]
+#[serde(rename_all = "lowercase")]
+pub enum WConfidence {
+    High,
+    Medium,
+    Low,
+}
+
+impl From<Confidence> for WConfidence {
+    fn from(c: Confidence) -> Self {
+        match c {
+            Confidence::High => Self::High,
+            Confidence::Medium => Self::Medium,
+            Confidence::Low => Self::Low,
+        }
+    }
+}
+
+/// Non-failing metadata about *how* a line parsed (mirrors `ParseNotes`):
+/// parse fidelity, not costability. "a pinch of salt" is a clean parse whose
+/// uncostable quantity a consumer derives from the unit, not from here. Review
+/// surfaces key off the discrete `fell_back` / `unparsed_digit` booleans rather
+/// than a `confidence` threshold. Booleans are always emitted (no skip) so the
+/// TS shape is a definite `{ confidence, fell_back, unparsed_digit }`.
+#[derive(Tsify, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[tsify(into_wasm_abi)]
+pub struct WParseNotes {
+    /// Convenience rollup of the booleans below.
+    pub confidence: WConfidence,
+    /// The parse fell back to a name-only ingredient (no recognizer/core parse).
+    pub fell_back: bool,
+    /// A digit was present but produced no amount — a likely missed quantity.
+    pub unparsed_digit: bool,
+}
+
+impl From<ParseNotes> for WParseNotes {
+    fn from(n: ParseNotes) -> Self {
+        Self {
+            confidence: n.confidence.into(),
+            fell_back: n.fell_back,
+            unparsed_digit: n.unparsed_digit,
+        }
+    }
+}
+
 /// A parsed ingredient (mirrors `Ingredient`).
 #[derive(Tsify, Serialize, Deserialize)]
 #[tsify(into_wasm_abi)]
@@ -55,6 +103,8 @@ pub struct WIngredient {
     pub modifier: Option<String>,
     /// The role the line declares ("oil, for frying" → `frying_medium`).
     pub usage: WIngredientUsage,
+    /// Non-failing metadata about how this line parsed (confidence + flags).
+    pub parse_notes: WParseNotes,
 }
 
 impl From<Ingredient> for WIngredient {
@@ -64,6 +114,7 @@ impl From<Ingredient> for WIngredient {
             amounts: i.amounts.iter().map(WAmount::from).collect(),
             modifier: i.modifier,
             usage: i.usage.into(),
+            parse_notes: i.parse_notes.into(),
         }
     }
 }
@@ -352,7 +403,8 @@ mod tests {
 
     /// `parse_ingredient` golden over serde — confirms the full W-bridge shape
     /// (name, one `{value, unit}` amount, snake_case usage, modifier omitted when
-    /// absent), mirroring `component_source_serde_matches_the_zod_contract`.
+    /// absent, definite `parse_notes`), mirroring
+    /// `component_source_serde_matches_the_zod_contract`.
     #[test]
     fn parse_ingredient_golden_shape() {
         let parsed = parse_ingredient("2 1/2 cups flour");
@@ -364,7 +416,34 @@ mod tests {
                 "name": "flour",
                 "amounts": [{ "unit": "cup", "value": 2.5 }],
                 "usage": "normal",
+                "parse_notes": {
+                    "confidence": "high",
+                    "fell_back": false,
+                    "unparsed_digit": false,
+                },
             })
+        );
+    }
+
+    /// `parse_notes` drift tripwire: the confidence rollup + the discrete
+    /// `unparsed_digit` review signal the TS side keys off. A structured parse is
+    /// High; a clean name-only line is Medium; a digit that yields no amount is
+    /// Low and flags `unparsed_digit` (the silent-dropped-quantity case).
+    #[rstest]
+    #[case("2 cups flour", WConfidence::High, false)]
+    #[case("Chocolate Chip Cookies", WConfidence::Medium, false)]
+    #[case("salt to taste", WConfidence::Medium, false)]
+    #[case("1+1 multivitamins", WConfidence::Low, true)]
+    fn parse_notes_drift(
+        #[case] line: &str,
+        #[case] confidence: WConfidence,
+        #[case] unparsed_digit: bool,
+    ) {
+        let notes = parse_ingredient(line).parse_notes;
+        assert_eq!(notes.confidence, confidence, "confidence for: {line}");
+        assert_eq!(
+            notes.unparsed_digit, unparsed_digit,
+            "unparsed_digit for: {line}"
         );
     }
 
