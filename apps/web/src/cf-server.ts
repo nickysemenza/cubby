@@ -81,12 +81,14 @@ export default {
         return response;
       });
     } catch (error) {
-      console.error("[cf-server]", error);
-      const msg =
+      // Log full detail server-side (visible in `wrangler tail`) but never
+      // return the stack/message to the client — avoids stack-trace exposure.
+      const detail =
         error instanceof Error
           ? `${error.constructor.name}: ${error.message}\n${error.stack}`
           : String(error);
-      return new Response(msg, { status: 500 });
+      console.error("[cf-server]", detail);
+      return new Response("Internal Server Error", { status: 500 });
     }
   },
 };
