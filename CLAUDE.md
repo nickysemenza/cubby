@@ -116,3 +116,8 @@ Drizzle doesn't support branded types directly, so use unsafe converters (`unsaf
 ## Mobile PWA
 
 **Target: iOS only** — no Android-specific APIs (e.g., `navigator.vibrate` is not available on iOS Safari). For design details, follow the Mobile PWA roadmap pointer in [README.md](README.md).
+
+## Colors / Design Tokens
+
+- Never hardcode colors (hex/oklch) in components. Use the tokens in `apps/web/src/styles.css` — the warm chart ramp (`--chart-1..8`) and semantic tokens (`--plum`, `--positive`, `--warning`, …).
+- A new semantic color gets a `--token` in `:root` **and** a `--color-*` mirror in `@theme inline` (the `--plum` / `--color-plum` pattern), so both `var(--token)` and Tailwind utilities (`text-foo`) work. e.g. `--ingredient-amount/name/modifier`.
