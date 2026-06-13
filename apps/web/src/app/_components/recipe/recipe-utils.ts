@@ -4,6 +4,7 @@ import {
   type NutrientsPer100,
 } from "@cubby/usda-schemas";
 import { getRecipeIngredientName } from "~/lib/recipe-graph";
+import { wasm } from "~/lib/wasm";
 
 /** The four headline figures every recipe-summary surface shows (table, charts,
  * magazine kicker), pulled from a costing result in one place so all three agree
@@ -43,14 +44,6 @@ export const getEffectiveServings = (recipe: RecipeOut): number | null => {
   return null;
 };
 
-/** Naive singular of a yield unit for labels: "churros" → "churro", "cups" → "cup".
- * Strips a trailing "s" (but not "ss", e.g. "glass"); good enough for real yield
- * units, which are short nouns. */
-const singularizeUnit = (unit: string): string =>
-  unit.length > 2 && unit.endsWith("s") && !unit.endsWith("ss")
-    ? unit.slice(0, -1)
-    : unit;
-
 /** How to express a per-portion figure: the count to divide totals by and the
  * noun to label it. Prefers an explicit servings count ("serving"); otherwise
  * falls back to the yield count, labelled by its unit — so "makes 2 cups" reads
@@ -71,7 +64,7 @@ export const getServingBasis = (recipe: RecipeOut): ServingBasis | null => {
         ? "each"
         : y.unit === "servings"
           ? "serving"
-          : singularizeUnit(y.unit);
+          : wasm.singularize_unit(y.unit);
     return { divisor: y.value, noun };
   }
   return null;
@@ -88,15 +81,5 @@ export const perUnitLabel = (noun: string): string =>
   noun === "each"
     ? "Each"
     : `per ${noun.charAt(0).toUpperCase()}${noun.slice(1)}`;
-
-// Matches the flour that forms a baker's-percentage base. Substring "flour"
-// catches bread/AP/all-purpose/whole-wheat/white/cake/pastry/00/durum flour;
-// a few common flours-by-other-name are listed explicitly.
-const FLOUR_TERMS = ["flour", "semolina"];
-
-export const isFlourIngredient = (name: string): boolean => {
-  const n = name.toLowerCase();
-  return FLOUR_TERMS.some((t) => n.includes(t));
-};
 
 export const getIngredientName = getRecipeIngredientName;

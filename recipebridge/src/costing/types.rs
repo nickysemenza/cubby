@@ -52,8 +52,6 @@ pub struct WCostingRow {
     #[serde(default)]
     #[tsify(type = "string | null")]
     pub section_name: Option<String>,
-    /// Caller-provided flour predicate result (baker's percentages).
-    pub is_flour: bool,
 }
 
 /// One recipe in the costing closure (a root or a transitively-reached sub).
@@ -224,6 +222,9 @@ pub struct WRowResult {
     /// True when any measure was adjusted away from the written amount
     /// (the "est."/"absorbed" markers).
     pub estimated: bool,
+    /// Whether the engine classified this row as a flour (the baker's-%
+    /// base) — computed from the row name, not caller-provided.
+    pub is_flour: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[tsify(optional)]
     pub paths: Option<WRowPaths>,

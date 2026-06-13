@@ -30,11 +30,7 @@ import {
 import { RecipeCostingDebugCard } from "./recipe-costing-debug-card";
 import { scaleRecipe } from "./recipe-scaling";
 import { RecipeTagList } from "./recipe-tag";
-import {
-  getIngredientName,
-  getServingBasis,
-  isFlourIngredient,
-} from "./recipe-utils";
+import { getIngredientName, getServingBasis } from "./recipe-utils";
 import { RecipeIngredientList } from "./recipeingredientlist";
 
 // d3-hierarchy is heavy and only renders in the "charts" view, so keep it out
@@ -116,7 +112,6 @@ const RecipeDetailInner: React.FC<{
             ingMap,
             getIngredientName,
             recipeMap,
-            { isFlour: isFlourIngredient },
           ).get(recipe.id) ?? null)
         : null,
     [recipesForCosting, ingMap, recipeMap, recipe.id],

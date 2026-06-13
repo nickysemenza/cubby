@@ -18,7 +18,6 @@ import {
 import {
   getEffectiveServings,
   getIngredientName,
-  isFlourIngredient,
   recipeHeadlineTotals,
 } from "~/app/_components/recipe/recipe-utils";
 import { EntityLayout } from "~/components/layouts/entity-layout";
@@ -76,8 +75,8 @@ function RecipeComparePage() {
   const { ingMap, recipeMap } = useRecipeCostingData(recipes);
 
   // One engine call for the whole comparison set (the ingredient payload is
-  // deduped across recipes inside the call). `isFlour` is required for baker's
-  // percentages to be computed.
+  // deduped across recipes inside the call). The engine classifies flour rows
+  // (for baker's percentages) by name internally.
   const compared: ComparedRecipe[] = useMemo(() => {
     if (!ingMap || recipes.length === 0) return [];
 
@@ -86,7 +85,6 @@ function RecipeComparePage() {
       ingMap,
       getIngredientName,
       recipeMap,
-      { isFlour: isFlourIngredient },
     );
     return recipes.map((recipe) => {
       const costing = costings.get(recipe.id) ?? null;

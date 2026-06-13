@@ -187,6 +187,14 @@ pub fn format_amount(amount: WAmount) -> String {
     amount.to_measure().to_string()
 }
 
+/// Singularize a unit for display labels ("churros" → "churro", "cups" → "cup").
+/// Wraps the parser's `singular` so cubby and ingredient-parser agree on the
+/// rule (it guards "glass" and handles real yield units).
+#[wasm_bindgen]
+pub fn singularize_unit(unit: String) -> String {
+    ingredient::unit::singular(&unit).to_string()
+}
+
 #[wasm_bindgen]
 pub fn parse_scraped_recipe(body: &str, url: &str) -> Result<WScrapedRecipe, String> {
     recipe_scraper::scrape(body, url)
