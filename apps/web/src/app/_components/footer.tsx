@@ -2,20 +2,10 @@ import type { SortParams } from "@cubby/schemas/pagination";
 import { useQueries } from "@tanstack/react-query";
 import { Github } from "lucide-react";
 import { authClient } from "~/lib/auth-client";
+import { formatBuildDate } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 
-// timeZone: "UTC" is load-bearing. __BUILD_DATE__ is a UTC ISO string; without
-// pinning the zone, the CF edge (UTC) and the client (local tz) format it in
-// different zones and can land on different calendar days near a UTC midnight
-// boundary — server renders e.g. "Jun 12", client "Jun 11" → React #418
-// hydration text mismatch. Formatting both sides in UTC keeps the text stable.
-const buildDateFormatter = new Intl.DateTimeFormat("en", {
-  month: "short",
-  day: "numeric",
-  timeZone: "UTC",
-});
-
-const buildDate = buildDateFormatter.format(new Date(__BUILD_DATE__));
+const buildDate = formatBuildDate(__BUILD_DATE__);
 
 function EntityCounts() {
   const api = useTRPC();

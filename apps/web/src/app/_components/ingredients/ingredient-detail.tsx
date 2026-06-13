@@ -14,6 +14,7 @@ import { getIngredientMappings } from "~/lib/unit-mapping-utils";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { useTRPC } from "~/trpc/react";
 import { DetailPage, type DetailSection } from "../data-table/detail-page";
+import { editableDetailSection } from "../data-table/editable-detail-section";
 import { EntityPillLinkList } from "../EntityPillLinkList";
 import { useEntityDetail } from "../hooks/useEntityDetail";
 import { ConversionCapabilities } from "../units/ConversionCapabilities";
@@ -47,25 +48,19 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
     ?.food?.nutritionInfo;
 
   const sections: DetailSection[] = [
-    {
+    editableDetailSection({
       title: "Basic Information",
       icon: Info,
-      content: editMode.isEditing ? (
-        <IngredientForm
-          mode="edit"
-          entity={ingredient}
-          isPending={editMode.isPending}
-          error={editMode.error}
-          onEdit={editMode.handleEdit}
-          onCancel={editMode.handleCancel}
-        />
-      ) : (
+      editMode,
+      Form: IngredientForm,
+      entity: ingredient,
+      children: (
         <IngredientBasicInfo
           ingredient={ingredient}
           onEdit={editMode.startEditing}
         />
       ),
-    },
+    }),
     // Custom section: Nutrition (only if available)
     ...(nutritionInfo
       ? [

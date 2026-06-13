@@ -1,6 +1,5 @@
 import type { InfLocation } from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
-import { Printer } from "lucide-react";
 import type { FC } from "react";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Badge } from "~/components/ui/badge";
@@ -9,6 +8,7 @@ import { queryKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 import { EntityPillLink } from "../EntityPill";
 import { useEntityDelete } from "../hooks/useEntityDelete";
+import { PrintLabelButton } from "../print-label-button";
 import { LocationTypeBadge } from "./LocationTypeBadge";
 import { LocationIconWithLabel } from "./location-icons";
 import { typeSupportsQrCode } from "./location-type-theme";
@@ -72,17 +72,8 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
         actions={
           <div className="flex flex-wrap gap-2">
             <Button onClick={onEdit}>Edit</Button>
-            {location.shortcode && typeSupportsQrCode(location.type) && (
-              <Button
-                variant="outline"
-                render={
-                  <Link to="/labels" search={{ codes: location.shortcode }} />
-                }
-                nativeButton={false}
-              >
-                <Printer className="mr-2 h-4 w-4" />
-                Print Label
-              </Button>
+            {typeSupportsQrCode(location.type) && (
+              <PrintLabelButton shortcode={location.shortcode} />
             )}
             <Button
               variant="outline"

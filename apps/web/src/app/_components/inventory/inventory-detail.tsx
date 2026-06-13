@@ -7,6 +7,7 @@ import type { z } from "zod";
 import { queryKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 import { DetailPage, type DetailSection } from "../data-table/detail-page";
+import { editableDetailSection } from "../data-table/editable-detail-section";
 import { useEntityDelete } from "../hooks/useEntityDelete";
 import { useEntityDetail } from "../hooks/useEntityDetail";
 import { InventoryBasicInfo } from "./inventory-basic-info";
@@ -45,19 +46,13 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
   });
 
   const sections: DetailSection[] = [
-    {
+    editableDetailSection({
       title: "Inventory Item Details",
       icon: Package,
-      content: editMode.isEditing ? (
-        <InventoryForm
-          mode="edit"
-          entity={inventoryitem}
-          onEdit={editMode.handleEdit}
-          onCancel={editMode.handleCancel}
-          isPending={editMode.isPending}
-          error={editMode.error}
-        />
-      ) : (
+      editMode,
+      Form: InventoryForm,
+      entity: inventoryitem,
+      children: (
         <InventoryBasicInfo
           inventoryitem={inventoryitem}
           onEdit={editMode.startEditing}
@@ -65,7 +60,7 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
           DeleteButton={DeleteButton}
         />
       ),
-    },
+    }),
     // Common sections from entity config (History)
     ...commonSections,
   ];

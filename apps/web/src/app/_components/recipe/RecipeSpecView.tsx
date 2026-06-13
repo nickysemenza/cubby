@@ -1,8 +1,4 @@
-import type {
-  RecipeOut,
-  RecipeSource,
-  SectionIngredientOut,
-} from "@cubby/schemas/recipe";
+import type { RecipeOut, RecipeSource } from "@cubby/schemas/recipe";
 import { Fragment, useMemo, useState } from "react";
 import { match, P } from "ts-pattern";
 import { MarkdownText } from "~/components/markdown";
@@ -11,9 +7,11 @@ import type {
   RecipeCosting,
 } from "~/lib/recipe-costing";
 import { cn } from "~/lib/utils";
-import { wasm } from "~/lib/wasm";
-import { tryFormatAmount } from "../inventory/format-amount";
-import { EstimateMarker } from "./estimate-marker";
+import {
+  buildDisplayQuantities,
+  gramMapFromCosting,
+  IngredientQuantities,
+} from "./IngredientQuantities";
 import {
   computeScalingPercentages,
   formatScalingPct,
@@ -27,21 +25,6 @@ interface RecipeSpecViewProps {
   totals: CalculateTotalsResult | null;
   /** Per-row engine result — null while loading; grams/scaling degrade to "—". */
   costing: RecipeCosting | null;
-}
-
-/** Derived gram weight + estimate flag for a row, keyed by ingredient id. */
-type GramInfo = { text: string; estimated: boolean };
-
-/** Cooking quantities only — money/calories live in the table view. */
-function writtenQuantities(ing: SectionIngredientOut): string[] {
-  return ing.amounts
-    .filter((a) => !["money", "calories"].includes(wasm.amount_kind(a)))
-    .map((a) => wasm.format_amount(a));
-}
-
-/** True when the line already carries a weight, so we don't append derived grams. */
-function hasWrittenWeight(ing: SectionIngredientOut): boolean {
-  return ing.amounts.some((a) => wasm.amount_kind(a) === "weight");
 }
 
 /** A short italic attribution from the recipe's source, MC's footer line. */
@@ -67,20 +50,7 @@ export function RecipeSpecView({
   costing,
 }: RecipeSpecViewProps) {
   // Ingredient id → derived grams, from the same engine the other views use.
-  const gramById = useMemo(() => {
-    const map = new Map<string, GramInfo>();
-    if (!costing) return map;
-    for (const row of costing.rows) {
-      const gram = row.priceInfo?.gram;
-      if (gram?.isOk()) {
-        map.set(row.id, {
-          text: tryFormatAmount(gram.value),
-          estimated: costing.estimatedRows.has(row.id),
-        });
-      }
-    }
-    return map;
-  }, [costing]);
+  const gramById = useMemo(() => gramMapFromCosting(costing), [costing]);
 
   // Scaling base (the 100% reference). Defaults to flour, else the heaviest row;
   // clicking any row's % re-anchors it — purely client-side, no engine re-call.
@@ -192,25 +162,7 @@ export function RecipeSpecView({
 
                 {ingredients.map((ing, ri) => {
                   const name = getIngredientName(ing);
-                  const derivedGram = hasWrittenWeight(ing)
-                    ? undefined
-                    : gramById.get(ing.id);
-                  const quantities = [
-                    ...writtenQuantities(ing).map((text) => ({
-                      text,
-                      derived: false,
-                      estimated: false,
-                    })),
-                    ...(derivedGram
-                      ? [
-                          {
-                            text: derivedGram.text,
-                            derived: true,
-                            estimated: derivedGram.estimated,
-                          },
-                        ]
-                      : []),
-                  ];
+                  const quantities = buildDisplayQuantities(ing, gramById);
 
                   const pct = pctById.get(ing.id) ?? null;
                   const isBase = ing.id === baseId;
@@ -225,23 +177,12 @@ export function RecipeSpecView({
                           </span>
                         )}
                       </td>
-                      <td className="whitespace-nowrap py-1.5 pr-3 font-mono text-muted-foreground text-xs tabular-nums">
-                        {quantities.length > 0
-                          ? quantities.map((q, qi) => (
-                              <span
-                                key={`${q.text}-${qi}`}
-                                className={
-                                  q.derived
-                                    ? "text-muted-foreground/70"
-                                    : undefined
-                                }
-                              >
-                                {qi > 0 && " / "}
-                                {q.text}
-                                {q.estimated && <EstimateMarker />}
-                              </span>
-                            ))
-                          : "—"}
+                      <td className="py-1.5 pr-3">
+                        <IngredientQuantities
+                          quantities={quantities}
+                          className="text-xs"
+                          emptyText="—"
+                        />
                       </td>
                       <td className="py-1.5 pr-3 font-mono text-xs tabular-nums">
                         {pct == null ? (

@@ -2,6 +2,7 @@ import type { RecipeOut } from "@cubby/schemas/recipe";
 import { useMemo } from "react";
 import { wasm } from "~/lib/wasm";
 import { formatRichText } from "./richtext";
+import { SectionHeading } from "./section-heading";
 
 interface RecipeInstructionsProps {
   recipe: RecipeOut;
@@ -25,11 +26,12 @@ export function RecipeInstructions({ recipe }: RecipeInstructionsProps) {
           className="fade-in slide-in-from-bottom-2 animate-in duration-300"
         >
           {/* Section header - only show if there are multiple sections or section has a name */}
-          {(recipe.sections.length > 1 || section.name) && (
-            <h3 className="mb-4 font-semibold text-xl">
-              {section.name || `Part ${sectionIndex + 1}`}
-            </h3>
-          )}
+          <SectionHeading
+            sectionName={section.name}
+            index={sectionIndex}
+            total={recipe.sections.length}
+            variant="title"
+          />
 
           {/* Instructions list */}
           <ol className="my-0 ml-0 list-none space-y-4">
