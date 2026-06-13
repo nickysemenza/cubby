@@ -109,6 +109,13 @@ const staleIngredientParseSchema = z.object({
   storedName: z.string(),
   rawLine: z.string(),
   parsedName: z.string(),
+  nameDrift: z.boolean(),
+  storedAmounts: z.array(amount),
+  parsedAmounts: z.array(amount),
+  amountDrift: z.boolean(),
+  storedModifier: z.string().nullable(),
+  parsedModifier: z.string().nullable(),
+  modifierDrift: z.boolean(),
 });
 
 // Combined output schema for all problems

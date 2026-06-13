@@ -1,6 +1,8 @@
+import type { Amount } from "@cubby/schemas/codec";
 import { isMiscProduct } from "@cubby/shared";
 import { upc as upcSchema } from "@cubby/usda-schemas";
 import { and, eq, isNotNull, isNull, notExists, sql } from "drizzle-orm";
+import { computeParseDrift, hasDrift } from "~/lib/parse-drift";
 import { wasm } from "~/lib/wasm";
 import type { Database } from "~/server/db";
 import {
@@ -531,8 +533,9 @@ interface ProblemsCount {
 }
 
 // A stored ingredient occurrence whose original raw line, re-parsed with the
-// *current* parser, now yields a different name than what's stored — i.e. it was
-// parsed by an older parser and a re-parse would change it.
+// *current* parser, now differs from what's stored on any axis — name, amounts, or
+// modifier — i.e. it was parsed by an older parser and a re-parse would change it.
+// All drift is equal; the per-axis booleans drive only how the panel sorts/styles.
 export interface StaleIngredientParse {
   recipeSectionIngredientId: string;
   recipeId: string;
@@ -541,6 +544,13 @@ export interface StaleIngredientParse {
   storedName: string;
   rawLine: string;
   parsedName: string;
+  nameDrift: boolean;
+  storedAmounts: Amount[];
+  parsedAmounts: Amount[];
+  amountDrift: boolean;
+  storedModifier: string | null;
+  parsedModifier: string | null;
+  modifierDrift: boolean;
 }
 
 const findStaleIngredientParses = async (
@@ -554,6 +564,8 @@ const findStaleIngredientParses = async (
     .select({
       recipeSectionIngredientId: recipeSectionIngredient.id,
       rawLine: recipeSectionIngredient.rawLine,
+      storedAmounts: recipeSectionIngredient.amounts,
+      storedModifier: recipeSectionIngredient.modifier,
       ingredientId: ingredient.id,
       storedName: ingredient.name,
       storedAliases: ingredient.aliases,
@@ -579,29 +591,41 @@ const findStaleIngredientParses = async (
       ),
     );
 
-  // Match findOrCreateIngredient's matching: case-insensitive, and a hit on any
-  // alias counts (so "large eggs" parsing to the "large brown eggs" ingredient
-  // that aliases it is NOT drift). Only a name the stored ingredient wouldn't
-  // answer to is real drift.
-  const normalize = (s: string) => s.trim().toLowerCase();
+  // Re-parse each line and diff it field-by-field against what's stored, via the same
+  // computeParseDrift the client surfaces use. Name matching is alias-aware (so "large
+  // eggs" parsing to the alias-bearing "large brown eggs" ingredient is NOT drift); the
+  // amount/modifier axes are strict — the parser is the single normalizer.
   const stale: StaleIngredientParse[] = [];
   for (const row of rows) {
     if (!row.rawLine) continue; // isNotNull already filtered; narrow the type
-    const parsedName = wasm.parse_ingredient(row.rawLine).name;
-    const known = new Set(
-      [row.storedName, ...row.storedAliases].map(normalize),
+    const fresh = wasm.parse_ingredient(row.rawLine);
+    const drift = computeParseDrift(
+      {
+        knownNames: [row.storedName, ...row.storedAliases],
+        amounts: row.storedAmounts,
+        modifier: row.storedModifier,
+      },
+      fresh,
     );
-    if (!known.has(normalize(parsedName))) {
-      stale.push({
-        recipeSectionIngredientId: row.recipeSectionIngredientId,
-        recipeId: row.recipeId,
-        recipeName: row.recipeName,
-        ingredientId: row.ingredientId,
-        storedName: row.storedName,
-        rawLine: row.rawLine,
-        parsedName,
-      });
-    }
+    if (!hasDrift(drift)) continue;
+    stale.push({
+      recipeSectionIngredientId: row.recipeSectionIngredientId,
+      recipeId: row.recipeId,
+      recipeName: row.recipeName,
+      ingredientId: row.ingredientId,
+      storedName: row.storedName,
+      rawLine: row.rawLine,
+      parsedName: fresh.name,
+      nameDrift: drift.name !== null,
+      storedAmounts: row.storedAmounts,
+      parsedAmounts: drift.amounts
+        ? drift.amounts.map((a) => ({ value: a.value, unit: a.unit }))
+        : [],
+      amountDrift: drift.amounts !== null,
+      storedModifier: row.storedModifier,
+      parsedModifier: drift.modifier,
+      modifierDrift: drift.modifier !== null,
+    });
   }
   return stale;
 };

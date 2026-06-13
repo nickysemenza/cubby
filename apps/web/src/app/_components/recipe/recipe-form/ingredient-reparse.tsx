@@ -1,19 +1,23 @@
+import type { Amount } from "@cubby/schemas/codec";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
 import { useState } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
+import { computeParseDrift, hasDrift } from "~/lib/parse-drift";
 import { wasm } from "~/lib/wasm";
 import { useTRPC } from "~/trpc/react";
+import { formatAmounts } from "../../inventory/format-amount";
+import { DriftIndicator } from "../../parse-drift-indicator";
 import type { IngItem, RecipeFormValues } from "./types";
 
 /**
  * Per-row provenance + "re-parse this line" action in the recipe editor. Shows the
- * original import line (read-only), and when re-parsing it with the *current*
- * parser would yield a different ingredient name than the row holds, offers a
- * button to apply that fresh parse to the form row. The user still saves the form
- * to persist; this only restages the row.
+ * original import line (read-only), and when re-parsing it with the *current* parser
+ * would change the row on any axis (name, amounts, or modifier), shows the per-axis
+ * diff and a button to apply that fresh parse to the form row. The user still saves the
+ * form to persist; this only restages the row.
  */
 export function IngredientReparse({
   form,
@@ -46,16 +50,33 @@ export function IngredientReparse({
   const aliases = form.watch(
     `sections.${sectionIndex}.ingredients.${ingredientIndex}.aliases`,
   );
+  const amounts = form.watch(
+    `sections.${sectionIndex}.ingredients.${ingredientIndex}.amounts`,
+  );
+  const modifier = form.watch(
+    `sections.${sectionIndex}.ingredients.${ingredientIndex}.modifier`,
+  );
 
   // Only plain ingredient rows that carry an original line can be re-parsed.
   if (type !== "ingredient" || !rawLine) return null;
 
   const fresh = wasm.parse_ingredient(rawLine);
-  const norm = (s: string) => s.trim().toLowerCase();
-  // Real drift only if the parsed name isn't one the current ingredient already
-  // answers to (its name or any alias) — so an alias hit isn't a false positive.
-  const known = new Set([currentName ?? "", ...(aliases ?? [])].map(norm));
-  const drifted = !known.has(norm(fresh.name));
+  // Project the draft amounts to the persisted {value, unit} shape (drop half-typed
+  // rows), matching exactly what the apply/import path stores.
+  const persistedAmounts: Amount[] = (amounts ?? []).flatMap((a) =>
+    a.value != null && a.unit?.trim() ? [{ value: a.value, unit: a.unit }] : [],
+  );
+  // Real drift only if the parse differs from what the row holds. The known-names set
+  // (current name + aliases) keeps an alias hit from reading as a false positive.
+  const drift = computeParseDrift(
+    {
+      knownNames: [currentName ?? "", ...(aliases ?? [])],
+      amounts: persistedAmounts,
+      modifier: modifier ?? null,
+    },
+    fresh,
+  );
+  const drifted = hasDrift(drift);
 
   const apply = async () => {
     setApplying(true);
@@ -90,7 +111,7 @@ export function IngredientReparse({
   };
 
   return (
-    <div className="mt-1 flex items-center gap-2 pl-8">
+    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 pl-8">
       <span
         className="truncate text-muted-foreground/70 text-xs italic"
         title={rawLine}
@@ -98,18 +119,41 @@ export function IngredientReparse({
         from: {rawLine}
       </span>
       {drifted && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-5 shrink-0 gap-1 px-1 text-xs"
-          disabled={applying}
-          onClick={apply}
-          title={`Re-parse this line → "${fresh.name}"`}
-        >
-          <RefreshCw className="h-3 w-3" />
-          Update → {fresh.name}
-        </Button>
+        <>
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+            {drift.name !== null && (
+              <DriftIndicator before={currentName ?? ""} after={drift.name} />
+            )}
+            {drift.amounts !== null && (
+              <DriftIndicator
+                before={formatAmounts(persistedAmounts)}
+                after={formatAmounts(drift.amounts)}
+              />
+            )}
+            {drift.modifier !== null && (
+              <span className="inline-flex max-w-[20rem] items-baseline gap-1 text-muted-foreground/60">
+                mod:{" "}
+                <DriftIndicator
+                  tone="muted"
+                  before={modifier ?? ""}
+                  after={drift.modifier}
+                />
+              </span>
+            )}
+          </span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-5 shrink-0 gap-1 px-1 text-xs"
+            disabled={applying}
+            onClick={apply}
+            title="Re-parse this line with the current parser and apply"
+          >
+            <RefreshCw className="h-3 w-3" />
+            Re-parse
+          </Button>
+        </>
       )}
     </div>
   );

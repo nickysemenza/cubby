@@ -6,25 +6,24 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
+import { computeParseDrift, type ParseDrift } from "~/lib/parse-drift";
 import { wasm } from "~/lib/wasm";
 import { EntityPillLink } from "../EntityPill";
 import { formatAmounts } from "../inventory/format-amount";
-
-const norm = (s: string) => s.trim().toLowerCase();
+import { DriftIndicator } from "../parse-drift-indicator";
 
 type UsageRow = RecipeUsage & {
-  // Re-parsing the stored raw line with the *current* parser yields a different
-  // ingredient name than this ingredient answers to (its name or any alias) —
-  // i.e. the stored parse has drifted. null when there's no raw line to check.
-  driftedTo: string | null;
+  // Re-parsing the stored raw line with the *current* parser, compared field-by-field
+  // against what's persisted. Non-null fields are stale and would change on re-parse.
+  drift: ParseDrift;
 };
 
 /**
  * Per-usage table for the ingredient detail page's "Appears In Recipes" section.
  * One row per {@link RecipeUsage} (a recipe repeats when it uses the ingredient in
  * multiple sections), showing the formatted amount, modifier, and the original
- * imported line. Mirrors {@link IngredientReparse}'s drift check — re-parses each
- * raw line and flags (read-only) when it would now resolve to a different name.
+ * imported line. Re-parses each raw line with the current parser and surfaces (read-only)
+ * any drift — name (Source line), amounts (Amount), or modifier — via {@link computeParseDrift}.
  */
 export function IngredientRecipeUsagesTable({
   usages,
@@ -36,15 +35,22 @@ export function IngredientRecipeUsagesTable({
   aliases?: string[];
 }) {
   const rows = useMemo<UsageRow[]>(() => {
-    const known = new Set([ingredientName, ...(aliases ?? [])].map(norm));
+    const knownNames = [ingredientName, ...(aliases ?? [])];
     return usages
       .map((usage) => {
-        let driftedTo: string | null = null;
+        let drift: ParseDrift = { name: null, amounts: null, modifier: null };
         if (usage.rawLine) {
           const fresh = wasm.parse_ingredient(usage.rawLine);
-          if (!known.has(norm(fresh.name))) driftedTo = fresh.name;
+          drift = computeParseDrift(
+            {
+              knownNames,
+              amounts: usage.amounts,
+              modifier: usage.modifier ?? null,
+            },
+            fresh,
+          );
         }
-        return { ...usage, driftedTo };
+        return { ...usage, drift };
       })
       .sort(
         (a, b) =>
@@ -76,7 +82,13 @@ export function IngredientRecipeUsagesTable({
               {row.sectionName ?? ""}
             </td>
             <td className="whitespace-nowrap py-1 pr-2 align-top text-muted-foreground">
-              {row.amounts.length > 0 ? (
+              {row.drift.amounts !== null ? (
+                <DriftIndicator
+                  before={formatAmounts(row.amounts)}
+                  after={formatAmounts(row.drift.amounts)}
+                  className="max-w-[12rem]"
+                />
+              ) : row.amounts.length > 0 ? (
                 formatAmounts(row.amounts)
               ) : (
                 <Tooltip>
@@ -92,7 +104,16 @@ export function IngredientRecipeUsagesTable({
               )}
             </td>
             <td className="py-1 pr-2 align-top text-muted-foreground">
-              {row.modifier ?? ""}
+              {row.drift.modifier !== null ? (
+                <DriftIndicator
+                  tone="muted"
+                  before={row.modifier ?? ""}
+                  after={row.drift.modifier}
+                  className="max-w-[18rem]"
+                />
+              ) : (
+                (row.modifier ?? "")
+              )}
             </td>
             <td className="py-1 align-top">
               {row.rawLine ? (
@@ -100,21 +121,11 @@ export function IngredientRecipeUsagesTable({
                   <span className="text-muted-foreground/70">
                     {row.rawLine}
                   </span>
-                  {row.driftedTo && (
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <span className="inline-flex items-center gap-0.5 whitespace-nowrap text-amber-700" />
-                        }
-                      >
-                        <AlertCircle className="h-3 w-3 shrink-0 text-amber-600" />
-                        → {row.driftedTo}
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        Now parses as "{row.driftedTo}" — open the recipe to
-                        re-parse.
-                      </TooltipContent>
-                    </Tooltip>
+                  {row.drift.name !== null && (
+                    <DriftIndicator
+                      before={ingredientName}
+                      after={row.drift.name}
+                    />
                   )}
                 </span>
               ) : (
