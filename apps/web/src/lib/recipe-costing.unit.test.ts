@@ -42,6 +42,7 @@ const ingredientWith = (
   id: unsafeIngredientId(idStr),
   name,
   recipe: null,
+  recipeUsages: [],
   appearsInRecipes: [],
   aliases: [],
   ...dates,

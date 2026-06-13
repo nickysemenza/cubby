@@ -1,5 +1,6 @@
 import { foodSummary } from "@cubby/usda-schemas";
 import { z } from "zod";
+import { amount } from "./codec";
 import { imageOut } from "./image";
 import { ingredientOut } from "./ingredient";
 import { inventoryEntryOut } from "./inventory";
@@ -49,9 +50,25 @@ export type IngredientWithRecipesAndProductOut = z.infer<
   typeof ingredientWithRecipesAndProductOut
 >;
 
+// One row per RecipeSectionIngredient — the same recipe repeats when it uses the
+// ingredient in multiple sections. Carries the per-usage provenance (raw imported
+// line, parser-derived modifier) and amounts so the ingredient detail page can show
+// usage + surface parser drift. `appearsInRecipes` is derived from this (deduped).
+const recipeUsageOut = z.object({
+  // RecipeSectionIngredient id — stable row identity (a recipe can appear twice).
+  id: z.uuid(),
+  recipe: recipeTopLevel,
+  sectionName: z.string().nullish(),
+  amounts: z.array(amount),
+  rawLine: z.string().nullish(),
+  modifier: z.string().nullish(),
+});
+export type RecipeUsage = z.infer<typeof recipeUsageOut>;
+
 export const ingredientWithRecipesAndProductOut = z
   .object({
     recipe: recipeTopLevel.nullable(),
+    recipeUsages: z.array(recipeUsageOut),
     appearsInRecipes: z.array(recipeTopLevel),
     product: z.array(productWithMappingsOut),
   })

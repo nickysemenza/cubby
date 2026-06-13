@@ -14,6 +14,8 @@ export interface DetailSection {
   title: string;
   content: React.ReactNode;
   icon: React.ElementType;
+  /** Span both grid columns on desktop — for wide content like multi-column tables. */
+  fullWidth?: boolean;
 }
 
 export interface DetailHeroStat {
@@ -147,6 +149,7 @@ export const DetailPage: FC<DetailPageProps> = ({
               "transition-all duration-200 ease-cozy",
               "md:hover:-translate-y-0.5 md:hover:shadow-[var(--shadow-chunky-sm)]",
               "fade-in slide-in-from-bottom-2 animate-in",
+              section.fullWidth && "md:col-span-2",
             )}
             style={{
               animationDelay: `${index * 75}ms`,

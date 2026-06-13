@@ -27,12 +27,12 @@ import type { IngredientWithFoodOut } from "~/server/services/ingredient.service
 import { useTRPC, useTRPCClient } from "~/trpc/react";
 import {
   createCreatedAtColumn,
-  createEntityPillColumn,
   createImageColumn,
   createNameColumn,
 } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
 import { EntityPillLink } from "../_components/EntityPill";
+import { EntityPillLinkList } from "../_components/EntityPillLinkList";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
@@ -160,6 +160,49 @@ function ProductPillsCell({ products }: { products: IngredientProduct[] }) {
   );
 }
 
+/**
+ * "Recipes" column cell: the deduped recipe pills (as before) plus a muted total-
+ * usage count when the ingredient is used more times than it has distinct recipes
+ * (i.e. it appears in multiple sections of the same recipe). `recipeUsages` and the
+ * derived `appearsInRecipes` both ride on the shared list output — no extra fetch.
+ */
+function RecipeUsageCell({
+  ingredient,
+}: {
+  ingredient: IngredientWithFoodOut;
+}) {
+  const recipes = ingredient.appearsInRecipes;
+  const totalUses = ingredient.recipeUsages.length;
+  // Lead with the count so it survives the narrow column's overflow clipping;
+  // the pills' own "+N" already conveys recipe breadth, so only show when an
+  // ingredient is used more times than it has distinct recipes (multi-section).
+  return (
+    <div className="flex min-w-0 items-center gap-1">
+      {totalUses > recipes.length && (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <span className="shrink-0 whitespace-nowrap text-muted-foreground text-xs tabular-nums" />
+            }
+          >
+            {totalUses}×
+          </TooltipTrigger>
+          <TooltipContent>
+            {totalUses} uses across {recipes.length} recipe
+            {recipes.length === 1 ? "" : "s"}
+          </TooltipContent>
+        </Tooltip>
+      )}
+      <EntityPillLinkList
+        entity="recipe"
+        items={recipes}
+        maxItems={1}
+        compact
+      />
+    </div>
+  );
+}
+
 export function IngredientList() {
   const missingProductsId = useId();
   const api = useTRPC();
@@ -244,11 +287,14 @@ export function IngredientList() {
         ),
       }),
       createCreatedAtColumn(columnHelper),
-      createEntityPillColumn(columnHelper, "appearsInRecipes", "recipe", {
+      columnHelper.display({
+        id: "appearsInRecipes",
         header: "Recipes",
-        className: "w-48 max-w-48",
-        dedupe: true,
-        mobile: { slot: "meta", priority: 30 },
+        meta: {
+          className: "w-48 max-w-48 overflow-hidden",
+          mobile: { slot: "meta", priority: 30 },
+        },
+        cell: (info) => <RecipeUsageCell ingredient={info.row.original} />,
       }),
       columnHelper.accessor("product", {
         id: "product",

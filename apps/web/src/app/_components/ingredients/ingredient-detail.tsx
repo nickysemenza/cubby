@@ -22,6 +22,7 @@ import { NutritionInfoTable } from "../usda/nutrition";
 import { EnrichIngredientDialog } from "./enrich-ingredient-dialog";
 import { IngredientBasicInfo } from "./ingredient-basic-info";
 import { IngredientForm } from "./ingredient-form";
+import { IngredientRecipeUsagesTable } from "./ingredient-recipe-usages-table";
 
 interface IngredientDetailProps {
   ingredient: IngredientWithFoodOut;
@@ -117,16 +118,25 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
         </div>
       ),
     },
-    // Custom section: Appears In Recipes
+    // Custom section: Appears In Recipes — one row per usage, with amount,
+    // source line, and a read-only parser-drift flag. Full-width so the 5-column
+    // table has room (esp. the source line).
     {
       title: "Appears In Recipes",
       icon: ChefHat,
-      content: (
-        <EntityPillLinkList
-          entity="recipe"
-          items={ingredient.appearsInRecipes}
-        />
-      ),
+      fullWidth: true,
+      content:
+        ingredient.recipeUsages.length > 0 ? (
+          <IngredientRecipeUsagesTable
+            usages={ingredient.recipeUsages}
+            ingredientName={ingredient.name}
+            aliases={ingredient.aliases}
+          />
+        ) : (
+          <p className="text-muted-foreground text-sm">
+            Not used in any recipes yet.
+          </p>
+        ),
     },
     // Common sections from entity config (History)
     ...commonSections,

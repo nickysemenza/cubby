@@ -155,14 +155,31 @@ const dbIngredientToAPI = async (
     };
   });
 
+  // One row per usage (a recipe repeats when it uses this ingredient in multiple
+  // sections); the deduped `appearsInRecipes` is derived from these.
+  const recipeUsages = mapRelation(RecipeSectionIngredient, (section) => ({
+    id: section.id,
+    recipe: dbRecipeToAPIShallow(section.recipeSection.recipe),
+    sectionName: section.recipeSection.name,
+    amounts: section.amounts,
+    rawLine: section.rawLine,
+    modifier: section.modifier,
+  }));
+
+  const seenRecipeIds = new Set<string>();
+  const appearsInRecipes = recipeUsages
+    .filter(
+      (u) => !seenRecipeIds.has(u.recipe.id) && seenRecipeIds.add(u.recipe.id),
+    )
+    .map((u) => u.recipe);
+
   return {
     ...restOfIngredient,
     id: unsafeIngredientId(restOfIngredient.id),
     recipe: Recipe ? dbRecipeToAPIShallow(Recipe) : null,
     product: productWithMappings,
-    appearsInRecipes: mapRelation(RecipeSectionIngredient, (section) =>
-      dbRecipeToAPIShallow(section.recipeSection.recipe),
-    ),
+    recipeUsages,
+    appearsInRecipes,
   };
 };
 

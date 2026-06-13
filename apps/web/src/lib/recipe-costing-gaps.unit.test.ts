@@ -68,6 +68,7 @@ const makeIngredient = (
   id: unsafeIngredientId(idStr),
   name,
   recipe: null,
+  recipeUsages: [],
   appearsInRecipes: [],
   aliases: [],
   ...dates,
