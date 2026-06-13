@@ -1,3 +1,4 @@
+import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useMutation } from "@tanstack/react-query";
@@ -5,6 +6,7 @@ import {
   ChevronDown,
   ChevronUp,
   ClipboardList,
+  Code,
   Image as ImageIcon,
   Import,
   Link2,
@@ -156,15 +158,17 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
 
   // Which import tool panel is open. They're plumbing, not recipe data, so
   // they collapse behind a toolbar; scraping starts open when creating fresh.
-  const [openTool, setOpenTool] = useState<"scrape" | "text" | "photos" | null>(
-    mode === "create" ? "scrape" : null,
-  );
-  const toggleTool = (tool: "scrape" | "text" | "photos") =>
+  const [openTool, setOpenTool] = useState<
+    "scrape" | "text" | "html" | "photos" | null
+  >(mode === "create" ? "scrape" : null);
+  const toggleTool = (tool: "scrape" | "text" | "html" | "photos") =>
     setOpenTool((current) => (current === tool ? null : tool));
 
   // Import section state
   const [textImportIngredients, setTextImportIngredients] = useState("");
   const [textImportInstructions, setTextImportInstructions] = useState("");
+  // Pasted page HTML, for the parse-only fallback when a URL scrape is blocked.
+  const [htmlInput, setHtmlInput] = useState("");
 
   // Debounced ingredient lines for live preview
   const [debouncedIngredients] = useDebouncedValue(textImportIngredients, {
@@ -213,8 +217,9 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
     [instructionLines, ingredientImport.namesForHighlighting],
   );
 
-  // Scrape mutation
+  // Scrape mutation + parse-only fallback for pasted HTML
   const scrapeMutation = useMutation(api.recipe.scrape.mutationOptions());
+  const parseHtmlMutation = useMutation(api.recipe.parseHtml.mutationOptions());
 
   // Get the recipe entity in edit mode
   const recipe = mode === "edit" ? props.entity : undefined;
@@ -243,8 +248,9 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
 
   // Scraped image URL, handed to PendingImageUpload for auto-import.
   const [scrapedImageUrl, setScrapedImageUrl] = useState<string | null>(null);
-  // True while an overwrite-confirmation dialog is open for a scrape.
-  const [confirmScrapeOpen, setConfirmScrapeOpen] = useState(false);
+  // A pending import (URL scrape or pasted HTML) awaiting overwrite confirmation;
+  // non-null while the confirm dialog is open. Running it replaces form contents.
+  const [pendingImport, setPendingImport] = useState<(() => void) | null>(null);
 
   // Watch URL field for scrape button
   const urlValue = useWatch({ control: form.control, name: "meta.url" });
@@ -260,8 +266,67 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
           (s.name?.trim().length ?? 0) > 0,
       );
 
-  // Scrape the URL and populate the structured section editor directly,
-  // preserving section names and boundaries (auto-creates missing ingredients).
+  // Populate the structured section editor from an imported recipe, preserving
+  // section names and boundaries (auto-creates missing ingredients). Shared by
+  // both the URL scrape and the pasted-HTML fallback.
+  const applyImportResult = async (result: ImportRecipe) => {
+    // Set recipe name if empty
+    if (!form.getValues("name")) {
+      form.setValue("name", result.meta.title);
+    }
+
+    // Resolve each section's ingredient lines into structured form
+    // ingredients, then replace the section editor with the imported sections.
+    const ingredientGroups = await resolveGroups(
+      result.sections.map((section) => section.ingredients),
+    );
+    replaceSections(
+      result.sections.map((section, i) => ({
+        name: section.name ?? null,
+        ingredients: ingredientGroups[i] ?? [],
+        instructions: section.instructions.map((instruction) => ({
+          instruction,
+        })),
+      })),
+    );
+
+    // Set servings if available from scraper
+    if (result.servings) {
+      form.setValue("servings", result.servings);
+    }
+
+    // Set yield if available. The scraper returns structured {value, unit};
+    // a freeform string (other sources) is parsed via WASM.
+    const ry = result.meta.recipe_yield;
+    const yieldStruct =
+      typeof ry === "string" ? wasm.parse_yield(ry).recipe_yield : ry;
+    if (yieldStruct) {
+      form.setValue("yield", {
+        value: yieldStruct.value,
+        unit: yieldStruct.unit,
+      });
+    }
+
+    // Hand any scraped image to PendingImageUpload for auto-import.
+    if (result.image) {
+      setScrapedImageUrl(result.image);
+    }
+
+    // Surface the scraped headnote as notes unless the user already has some.
+    if (result.meta.description && !form.getValues("notes")?.trim()) {
+      form.setValue("notes", result.meta.description);
+    }
+
+    const ingredientCount = ingredientGroups.reduce(
+      (sum, group) => sum + group.length,
+      0,
+    );
+    toast.success(
+      `Imported ${ingredientCount} ingredient${ingredientCount === 1 ? "" : "s"} across ${result.sections.length} section${result.sections.length === 1 ? "" : "s"}.`,
+    );
+  };
+
+  // Scrape the URL and populate the form.
   const doScrape = async () => {
     if (!urlValue) return;
     try {
@@ -270,61 +335,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
         toast.error("No recipe found at that URL.");
         return;
       }
-
-      // Set recipe name if empty
-      if (!form.getValues("name")) {
-        form.setValue("name", result.meta.title);
-      }
-
-      // Resolve each section's ingredient lines into structured form
-      // ingredients, then replace the section editor with the scraped sections.
-      const ingredientGroups = await resolveGroups(
-        result.sections.map((section) => section.ingredients),
-      );
-      replaceSections(
-        result.sections.map((section, i) => ({
-          name: section.name ?? null,
-          ingredients: ingredientGroups[i] ?? [],
-          instructions: section.instructions.map((instruction) => ({
-            instruction,
-          })),
-        })),
-      );
-
-      // Set servings if available from scraper
-      if (result.servings) {
-        form.setValue("servings", result.servings);
-      }
-
-      // Set yield if available. The scraper returns structured {value, unit};
-      // a freeform string (other sources) is parsed via WASM.
-      const ry = result.meta.recipe_yield;
-      const yieldStruct =
-        typeof ry === "string" ? wasm.parse_yield(ry).recipe_yield : ry;
-      if (yieldStruct) {
-        form.setValue("yield", {
-          value: yieldStruct.value,
-          unit: yieldStruct.unit,
-        });
-      }
-
-      // Hand any scraped image to PendingImageUpload for auto-import.
-      if (result.image) {
-        setScrapedImageUrl(result.image);
-      }
-
-      // Surface the scraped headnote as notes unless the user already has some.
-      if (result.meta.description && !form.getValues("notes")?.trim()) {
-        form.setValue("notes", result.meta.description);
-      }
-
-      const ingredientCount = ingredientGroups.reduce(
-        (sum, group) => sum + group.length,
-        0,
-      );
-      toast.success(
-        `Imported ${ingredientCount} ingredient${ingredientCount === 1 ? "" : "s"} across ${result.sections.length} section${result.sections.length === 1 ? "" : "s"}.`,
-      );
+      await applyImportResult(result);
     } catch (error) {
       // Mutation failures (scrape fetch, ingredient create) are already toasted
       // by the global MutationCache onError handler; just log for debugging.
@@ -332,14 +343,43 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
     }
   };
 
-  // Guard the scrape behind a confirmation when it would overwrite existing work.
-  const handleScrape = () => {
-    if (!urlValue) return;
+  // Parse pasted page HTML and populate the form — fallback for blocked scrapes.
+  // URL is required so the recipe keeps its source provenance.
+  const doParseHtml = async () => {
+    if (!htmlInput.trim() || !urlValue) return;
+    try {
+      const result = await parseHtmlMutation.mutateAsync({
+        html: htmlInput,
+        url: urlValue,
+      });
+      if (!result?.sections.length) {
+        toast.error("No recipe found in that HTML.");
+        return;
+      }
+      await applyImportResult(result);
+      setHtmlInput("");
+      setOpenTool(null);
+    } catch (error) {
+      // Parse failures are toasted by the global MutationCache onError handler.
+      console.error("HTML parse failed:", error);
+    }
+  };
+
+  // Guard an import behind a confirmation when it would overwrite existing work.
+  const confirmOrRun = (run: () => void) => {
     if (formHasContent()) {
-      setConfirmScrapeOpen(true);
+      setPendingImport(() => run);
       return;
     }
-    void doScrape();
+    run();
+  };
+  const handleScrape = () => {
+    if (!urlValue) return;
+    confirmOrRun(() => void doScrape());
+  };
+  const handleParseHtml = () => {
+    if (!htmlInput.trim() || !urlValue) return;
+    confirmOrRun(() => void doParseHtml());
   };
 
   // Handle import - auto-creates missing ingredients and populates form
@@ -450,6 +490,17 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
               >
                 <ImageIcon className="mr-1.5 h-3.5 w-3.5" />
                 Photos
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                aria-expanded={openTool === "html"}
+                className={cn(openTool === "html" && "bg-muted")}
+                onClick={() => toggleTool("html")}
+              >
+                <Code className="mr-1.5 h-3.5 w-3.5" />
+                Paste HTML
               </Button>
             </div>
           </div>
@@ -616,6 +667,66 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
             />
           </div>
 
+          {/* Paste-HTML panel — fallback when a URL scrape is blocked. Open the
+              page in your browser, View Source, copy all, and paste it here. */}
+          <div
+            className={cn(
+              "space-y-2 rounded-lg border border-border bg-card p-3",
+              openTool !== "html" && "hidden",
+            )}
+          >
+            <Field>
+              <FieldLabel>Source URL</FieldLabel>
+              <Controller
+                control={form.control}
+                name="meta.url"
+                render={({ field }) => (
+                  <Input
+                    placeholder="https://example.com/the-recipe"
+                    value={field.value ?? ""}
+                    onChange={(e) => field.onChange(e.target.value || null)}
+                  />
+                )}
+              />
+            </Field>
+            <Field>
+              <FieldLabel>Page HTML</FieldLabel>
+              <Textarea
+                placeholder="Paste the full page HTML here (open the recipe in your browser → View Source → Copy All)"
+                value={htmlInput}
+                onChange={(e) => setHtmlInput(e.target.value)}
+                rows={8}
+                className="font-mono text-xs"
+              />
+            </Field>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-muted-foreground text-xs">
+                The source URL is saved with the recipe and used to resolve
+                relative image and link references.
+              </p>
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                onClick={handleParseHtml}
+                disabled={
+                  !htmlInput.trim() ||
+                  !urlValue ||
+                  parseHtmlMutation.isPending ||
+                  isResolving
+                }
+                className="shrink-0"
+              >
+                {parseHtmlMutation.isPending || isResolving ? (
+                  <Spinner className="mr-1" />
+                ) : (
+                  <Import className="mr-1 h-4 w-4" />
+                )}
+                Parse HTML
+              </Button>
+            </div>
+          </div>
+
           {/* Spec plate: the recipe's vitals in one chunky placard */}
           <Card>
             <CardContent className="space-y-2 px-4 py-1">
@@ -777,14 +888,19 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
         </aside>
       </div>
 
-      <AlertDialog open={confirmScrapeOpen} onOpenChange={setConfirmScrapeOpen}>
+      <AlertDialog
+        open={pendingImport !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingImport(null);
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
               Replace current recipe contents?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Scraping will replace the ingredients and instructions you've
+              Importing will replace the ingredients and instructions you've
               already entered with the imported recipe. This can't be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -792,8 +908,9 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                setConfirmScrapeOpen(false);
-                void doScrape();
+                const run = pendingImport;
+                setPendingImport(null);
+                run?.();
               }}
             >
               Replace

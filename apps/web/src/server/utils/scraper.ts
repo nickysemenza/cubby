@@ -23,6 +23,13 @@ export const scrapeToImportRecipe = async (
   return scrapedToImportRecipe(scraped);
 };
 
+// Parse-only path for pasted HTML — skips the server fetch (which some sites
+// block) and runs the same WASM parser + converter as a URL scrape. `url` is
+// required: it's the source provenance kept on the recipe and is also used by
+// the parser to resolve relative image/source links.
+export const htmlToImportRecipe = (html: string, url: string): ImportRecipe =>
+  scrapedToImportRecipe(wasm.parse_scraped_recipe(html, url));
+
 // The scraper's WASM output → the shared `ImportRecipe` carrier. Yield arrives
 // already structured (`{value, unit}`) — the union's object branch; the import
 // converter uses it directly without re-parsing.

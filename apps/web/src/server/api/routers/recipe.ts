@@ -62,7 +62,10 @@ import {
   lintImportRecipe,
   notionPageToImportRecipe,
 } from "~/server/utils/notion-recipe";
-import { scrapeToImportRecipe } from "~/server/utils/scraper";
+import {
+  htmlToImportRecipe,
+  scrapeToImportRecipe,
+} from "~/server/utils/scraper";
 import {
   createDeleteProcedure,
   createEntityCrudProcedures,
@@ -124,6 +127,12 @@ const scrape = protectedProcedure
   .input(z.url())
   .output(importRecipeSchema)
   .mutation(async ({ input }) => await scrapeToImportRecipe(input));
+// Parse-only fallback for when a URL scrape is blocked (anti-bot, auth wall,
+// JS-rendered): the user pastes the page HTML and we run the same parser.
+const parseHtml = protectedProcedure
+  .input(z.object({ html: z.string().min(1), url: z.url() }))
+  .output(importRecipeSchema)
+  .mutation(({ input }) => htmlToImportRecipe(input.html, input.url));
 const insertImport = protectedProcedure
   .input(importRecipeSchema)
   .output(z.object({ id: z.uuid() }))
@@ -451,6 +460,7 @@ export const recipeRouter = createTRPCRouter({
   reprocessCookbook: reprocessCookbookEndpoint,
   extractCookbookChunk: extractCookbookChunkProc,
   scrape,
+  parseHtml,
   getByID,
   getByShortcode,
   getManyByIDs,
