@@ -2,8 +2,6 @@ import type { IngredientWithRecipesAndProductOut } from "@cubby/schemas/combo";
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   type IngredientId,
-  unsafeIngredientId,
-  unsafeProductId,
   unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
 import type { ingredientBase } from "@cubby/schemas/ingredient";
@@ -147,7 +145,7 @@ const dbIngredientToAPI = async (
     const { ingredientId: _ingredientId, ...prodRest } = prod;
     return {
       ...prodRest,
-      id: unsafeProductId(prod.id),
+      id: prod.id,
       shortcode: unsafeProductShortcode(prod.shortcode),
       images: extractImagesFromJoinTable(prod.images),
       externalIds: prod.externalIds.filter((eid) => eid.deletedAt === null),
@@ -175,7 +173,7 @@ const dbIngredientToAPI = async (
 
   return {
     ...restOfIngredient,
-    id: unsafeIngredientId(restOfIngredient.id),
+    id: restOfIngredient.id,
     recipe: Recipe ? dbRecipeToAPIShallow(Recipe) : null,
     product: productWithMappings,
     recipeUsages,

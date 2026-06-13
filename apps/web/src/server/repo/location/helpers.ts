@@ -5,10 +5,7 @@
 
 import { extractDbTimestampsFromDBRec } from "@cubby/schemas/common";
 import {
-  unsafeInventoryId,
-  unsafeLocationId,
   unsafeLocationShortcode,
-  unsafeProductId,
   unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
 import {
@@ -36,7 +33,7 @@ export const dbLocationToAPI = (
   },
 ): LocationOut => {
   return {
-    id: unsafeLocationId(locationData.id),
+    id: locationData.id,
     shortcode: unsafeLocationShortcode(locationData.shortcode),
     lastBulkInventory: locationData.lastBulkInventory,
     aiDescription: locationData.aiDescription ?? null,
@@ -66,13 +63,13 @@ export const dbLocationToAPIWithChildren = (
     inventoryEntries: mapRelation(InventoryEntries, (x) => {
       const { Product, ...rest } = x;
       return {
-        id: unsafeInventoryId(rest.id),
+        id: rest.id,
         amount: rest.amount as { value: number; unit: string },
         valuation: rest.valuation,
         createdAt: rest.createdAt,
         updatedAt: rest.updatedAt,
         product: {
-          id: unsafeProductId(Product.id),
+          id: Product.id,
           shortcode: unsafeProductShortcode(Product.shortcode),
           name: Product.name,
           manufacturer: Product.manufacturer,
@@ -119,7 +116,7 @@ export const buildLocationWithChildren = (
 
   return {
     name: x.name,
-    id: unsafeLocationId(x.id),
+    id: x.id,
     shortcode: unsafeLocationShortcode(x.shortcode),
     lastBulkInventory: x.lastBulkInventory,
     aiDescription: x.aiDescription ?? null,

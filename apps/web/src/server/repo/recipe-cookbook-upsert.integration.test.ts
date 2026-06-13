@@ -1,9 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import {
-  unsafeIngredientId,
-  unsafeRecipeId,
-  unsafeUserId,
-} from "@cubby/schemas/identifiers";
+import { unsafeIngredientId, unsafeUserId } from "@cubby/schemas/identifiers";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import { and, eq } from "drizzle-orm";
@@ -300,7 +296,7 @@ describe("upsertCookbookRecipe", () => {
       TEST_ACTOR,
     );
 
-    const full = await getRecipeByID(db, unsafeRecipeId(galette.id));
+    const full = await getRecipeByID(db, galette.id);
     const ingredients = full!.sections.flatMap((s) => s.ingredients);
     const linked = ingredients.find((ing) => ing.type === "recipe");
     expect(linked).toBeDefined();
@@ -337,7 +333,7 @@ describe("upsertCookbookRecipe", () => {
       TEST_ACTOR,
     );
 
-    const full = await getRecipeByID(db, unsafeRecipeId(id));
+    const full = await getRecipeByID(db, id);
     const almonds = full!.sections
       .flatMap((s) => s.ingredients)
       .filter(
@@ -368,7 +364,7 @@ describe("upsertCookbookRecipe", () => {
       TEST_ACTOR,
     );
 
-    const full = await getRecipeByID(db, unsafeRecipeId(galette.id));
+    const full = await getRecipeByID(db, galette.id);
     const ingredients = full!.sections.flatMap((s) => s.ingredients);
     expect(ingredients.every((ing) => ing.type === "ingredient")).toBe(true);
   });

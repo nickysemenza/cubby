@@ -1,12 +1,7 @@
 import { recipeAvailabilityOut } from "@cubby/schemas/availability";
 import type { Amount } from "@cubby/schemas/codec";
 import { buildActorContext } from "@cubby/schemas/context";
-import {
-  unsafeIngredientId,
-  unsafeLocationId,
-  unsafeRecipeId,
-  unsafeUserId,
-} from "@cubby/schemas/identifiers";
+import { unsafeUserId } from "@cubby/schemas/identifiers";
 import { buildTestDB } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "~/server/db";
@@ -83,7 +78,7 @@ describe("suggestions router", () => {
         upc: null,
         ndb_number: null,
         expectedQuantity: null,
-        ingredientId: unsafeIngredientId(ing.id),
+        ingredientId: ing.id,
         unitMappings: [CUP_TO_GRAM],
         externalIds: [],
       },
@@ -93,7 +88,7 @@ describe("suggestions router", () => {
       db,
       {
         productId: prod.id,
-        locationId: unsafeLocationId(loc.id),
+        locationId: loc.id,
         amount: onHand,
       },
       ACTOR,
@@ -112,7 +107,7 @@ describe("suggestions router", () => {
     });
 
     const result = await suggestionsCaller.getRecipeAvailability({
-      recipeId: unsafeRecipeId(recipe.id),
+      recipeId: recipe.id,
     });
 
     // The .output() contract must accept real service output (pins schema<->service).

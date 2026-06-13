@@ -10,7 +10,6 @@ import {
   cookbookId,
   type RecipeId,
   recipeId,
-  unsafeCookbookId,
 } from "@cubby/schemas/identifiers";
 import {
   importRecipeSchema,
@@ -202,7 +201,7 @@ const getCookbookDiff = protectedProcedure
   .query(async ({ ctx, input }) => {
     const cb = await getCookbookByName(ctx.db, input.book);
     if (!cb) return [];
-    return await getCookbookRecipesForDiff(ctx.db, unsafeCookbookId(cb.id));
+    return await getCookbookRecipesForDiff(ctx.db, cb.id);
   });
 
 // --- Notion recipe sync ---------------------------------------------------

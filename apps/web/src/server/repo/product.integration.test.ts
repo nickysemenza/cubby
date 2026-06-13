@@ -1,9 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import {
-  unsafeIngredientId,
-  unsafeProductId,
-  unsafeUserId,
-} from "@cubby/schemas/identifiers";
+import { unsafeUserId } from "@cubby/schemas/identifiers";
 import { buildTestDB } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "~/server/db";
@@ -54,10 +50,7 @@ describe("product repository", () => {
     expect(createdProduct.upc).toEqual(productData.upc);
 
     // Retrieve the product by ID
-    const retrievedProduct = await getProductByID(
-      db,
-      unsafeProductId(createdProduct.id),
-    );
+    const retrievedProduct = await getProductByID(db, createdProduct.id);
 
     // Verify the retrieved product matches the created product
     expect(retrievedProduct.id).toEqual(createdProduct.id);
@@ -178,7 +171,7 @@ describe("product repository", () => {
     // Update the product
     const updatedProduct = await updateProduct(
       db,
-      unsafeProductId(createdProduct.id),
+      createdProduct.id,
       {
         name: "Updated Product",
         manufacturer: "Updated Manufacturer",
@@ -201,10 +194,7 @@ describe("product repository", () => {
     expect(updatedProduct.upc).toEqual(productData.upc); // Unchanged
 
     // Retrieve the product to verify unit mappings
-    const retrievedProduct = await getProductByID(
-      db,
-      unsafeProductId(createdProduct.id),
-    );
+    const retrievedProduct = await getProductByID(db, createdProduct.id);
 
     // Verify unit mappings were created
     expect(retrievedProduct.unitMappings.length).toEqual(1);
@@ -238,7 +228,7 @@ describe("product repository", () => {
       upc: "123456789012",
       ndb_number: null,
       expectedQuantity: null,
-      ingredientId: unsafeIngredientId(ingredient.id),
+      ingredientId: ingredient.id,
       unitMappings: [],
       externalIds: [],
     };
@@ -247,10 +237,7 @@ describe("product repository", () => {
     const createdProduct = await createProduct(db, productData, TEST_ACTOR);
 
     // Retrieve the product to verify ingredient association
-    const retrievedProduct = await getProductByID(
-      db,
-      unsafeProductId(createdProduct.id),
-    );
+    const retrievedProduct = await getProductByID(db, createdProduct.id);
 
     // Verify the ingredient association
     expect(retrievedProduct.ingredient).not.toBeNull();
@@ -286,7 +273,7 @@ describe("product repository", () => {
       upc: "123456789012",
       ndb_number: null,
       expectedQuantity: null,
-      ingredientId: unsafeIngredientId(ingredient1.id),
+      ingredientId: ingredient1.id,
       unitMappings: [],
       externalIds: [],
     };
@@ -297,18 +284,15 @@ describe("product repository", () => {
     // Update the product to link to the second ingredient
     await updateProduct(
       db,
-      unsafeProductId(createdProduct.id),
+      createdProduct.id,
       {
-        ingredientId: unsafeIngredientId(ingredient2.id),
+        ingredientId: ingredient2.id,
       },
       TEST_ACTOR,
     );
 
     // Retrieve the product to verify ingredient association
-    const retrievedProduct = await getProductByID(
-      db,
-      unsafeProductId(createdProduct.id),
-    );
+    const retrievedProduct = await getProductByID(db, createdProduct.id);
 
     // Verify the ingredient association was updated
     expect(retrievedProduct.ingredient).not.toBeNull();
@@ -318,7 +302,7 @@ describe("product repository", () => {
     // Update the product to remove ingredient association
     await updateProduct(
       db,
-      unsafeProductId(createdProduct.id),
+      createdProduct.id,
       {
         ingredientId: null,
       },
@@ -326,10 +310,7 @@ describe("product repository", () => {
     );
 
     // Retrieve the product again
-    const updatedProduct = await getProductByID(
-      db,
-      unsafeProductId(createdProduct.id),
-    );
+    const updatedProduct = await getProductByID(db, createdProduct.id);
 
     // Verify the ingredient association was removed
     expect(updatedProduct.ingredient).toBeNull();

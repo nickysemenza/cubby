@@ -7,7 +7,7 @@
  */
 
 import { recipeAvailabilityOut } from "@cubby/schemas/availability";
-import { recipeId, unsafeRecipeId } from "@cubby/schemas/identifiers";
+import { recipeId } from "@cubby/schemas/identifiers";
 import { z } from "zod";
 import { recipeList } from "~/server/repo/recipe";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
@@ -46,9 +46,7 @@ const getMakeable = protectedProcedure
     );
 
     const availabilities = await Promise.all(
-      recipes.map((r) =>
-        ctx.services.availability.getRecipeAvailability(unsafeRecipeId(r.id)),
-      ),
+      recipes.map((r) => ctx.services.availability.getRecipeAvailability(r.id)),
     );
 
     return availabilities

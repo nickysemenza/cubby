@@ -1,5 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { LocationId } from "@cubby/schemas/identifiers";
+import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
+import { unsafeInventoryId } from "@cubby/schemas/identifiers";
 import type {
   BulkMovePayload,
   InventoryBulkOperationItem,
@@ -34,10 +35,15 @@ async function batchFetchResults(
 ): Promise<InventoryEntryDeepDB[]> {
   if (resultIds.length === 0) return [];
   const fetched = await tx.query.inventoryEntry.findMany({
-    where: inArray(inventoryEntry.id, resultIds),
+    where: inArray(
+      inventoryEntry.id,
+      resultIds.map((id) => unsafeInventoryId(id)),
+    ),
     ...relations.inventory.full,
   });
-  const fetchedById = new Map(fetched.map((r) => [r.id, r]));
+  const fetchedById = new Map<string, InventoryEntryDeepDB>(
+    fetched.map((r) => [r.id, r]),
+  );
   return resultIds
     .map((id) => fetchedById.get(id))
     .filter((r) => r != null) as InventoryEntryDeepDB[];
@@ -69,7 +75,9 @@ export const bulkProcessInventoryEntries = async (
 
       // Pre-fetch all product prices in a single query
       const allProductIds = dedupe([
-        ...items.filter((i) => i.productId).map((i) => i.productId as string),
+        ...items
+          .filter((i) => i.productId)
+          .map((i) => i.productId as ProductId),
         ...existingItems.map((i) => i.productId),
       ]);
       const priceMap = new Map<string, number | null>();

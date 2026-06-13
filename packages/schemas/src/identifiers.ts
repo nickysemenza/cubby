@@ -35,20 +35,43 @@ export type LocationId = z.infer<typeof locationId>;
 export type InventoryId = z.infer<typeof inventoryId>;
 export type CookbookId = z.infer<typeof cookbookId>;
 
-// Helper functions for unsafe casts (use only when you're certain the value is valid)
-// These are useful in tests and when working with external data that you know is valid
+// Helper functions for unsafe casts (use only when you're certain the value is valid).
+// Useful in tests and when working with external/untyped strings you know are valid.
+//
+// Guard against no-op casts: a branded string (e.g. `ProductId`) carries a `unique
+// symbol` key beyond `keyof string`; plain strings and string literals do not. If the
+// argument is already branded, `RejectBranded<T>` resolves the parameter to `never`,
+// making the call a compile error — because branding the value upstream (DB `.$type<>()`
+// columns, branded route params) is the correct fix, not re-casting it. This is enforced
+// by `pnpm typecheck` (tsgo) and the IDE; Biome has no custom-rule support at the pinned
+// version, so the type system is the lint rule.
+type RejectBranded<T> = [Exclude<keyof T, keyof string>] extends [never]
+  ? T
+  : never;
+
 const unsafeId = <T>(id: string): T => id as unknown as T;
 
-export const unsafeUserId = (id: string) => unsafeId<UserId>(id);
-export const unsafeRecipeId = (id: string) => unsafeId<RecipeId>(id);
-export const unsafeIngredientId = (id: string) => unsafeId<IngredientId>(id);
-export const unsafeProductId = (id: string) => unsafeId<ProductId>(id);
-export const unsafeLocationId = (id: string) => unsafeId<LocationId>(id);
-export const unsafeInventoryId = (id: string) => unsafeId<InventoryId>(id);
-export const unsafeCookbookId = (id: string) => unsafeId<CookbookId>(id);
-export const unsafeLocationShortcode = (code: string) =>
-  unsafeId<LocationShortcode>(code);
-export const unsafeProductShortcode = (code: string) =>
-  unsafeId<ProductShortcode>(code);
-export const unsafeRecipeShortcode = (code: string) =>
-  unsafeId<RecipeShortcode>(code);
+export const unsafeUserId = <T extends string>(id: T & RejectBranded<T>) =>
+  unsafeId<UserId>(id);
+export const unsafeRecipeId = <T extends string>(id: T & RejectBranded<T>) =>
+  unsafeId<RecipeId>(id);
+export const unsafeIngredientId = <T extends string>(
+  id: T & RejectBranded<T>,
+) => unsafeId<IngredientId>(id);
+export const unsafeProductId = <T extends string>(id: T & RejectBranded<T>) =>
+  unsafeId<ProductId>(id);
+export const unsafeLocationId = <T extends string>(id: T & RejectBranded<T>) =>
+  unsafeId<LocationId>(id);
+export const unsafeInventoryId = <T extends string>(id: T & RejectBranded<T>) =>
+  unsafeId<InventoryId>(id);
+export const unsafeCookbookId = <T extends string>(id: T & RejectBranded<T>) =>
+  unsafeId<CookbookId>(id);
+export const unsafeLocationShortcode = <T extends string>(
+  code: T & RejectBranded<T>,
+) => unsafeId<LocationShortcode>(code);
+export const unsafeProductShortcode = <T extends string>(
+  code: T & RejectBranded<T>,
+) => unsafeId<ProductShortcode>(code);
+export const unsafeRecipeShortcode = <T extends string>(
+  code: T & RejectBranded<T>,
+) => unsafeId<RecipeShortcode>(code);

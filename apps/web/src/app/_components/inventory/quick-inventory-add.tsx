@@ -10,7 +10,7 @@
  */
 
 import { amount } from "@cubby/schemas/codec";
-import { type LocationId, unsafeProductId } from "@cubby/schemas/identifiers";
+import type { LocationId } from "@cubby/schemas/identifiers";
 import { productCategory } from "@cubby/schemas/product";
 import { unitMappingInput } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
@@ -176,7 +176,7 @@ export function QuickInventoryAdd({
       // Step 2: Create the inventory entry
       try {
         await inventoryCreateMutation.mutateAsync({
-          productId: unsafeProductId(newProduct.id),
+          productId: newProduct.id,
           locationId,
           amount: values.amount,
         });

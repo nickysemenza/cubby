@@ -1,5 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import { unsafeIngredientId, unsafeUserId } from "@cubby/schemas/identifiers";
+import { unsafeUserId } from "@cubby/schemas/identifiers";
 import { count, eq } from "drizzle-orm";
 import { buildTestDB } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -58,10 +58,7 @@ describe("ingredient", () => {
       .from(ingredient);
     expect(resultAfterUpsert!.count).toEqual(3);
 
-    await mergeIngredients(db, unsafeIngredientId(a.id), [
-      unsafeIngredientId(b.id),
-      unsafeIngredientId(c.id),
-    ]);
+    await mergeIngredients(db, a.id, [b.id, c.id]);
     const [resultAfterMerge] = await getDb(db)
       .select({ count: count() })
       .from(ingredient);

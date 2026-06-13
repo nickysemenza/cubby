@@ -1,9 +1,6 @@
 import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
 import {
-  unsafeInventoryId,
-  unsafeLocationId,
   unsafeLocationShortcode,
-  unsafeProductId,
   unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
 import { locationType } from "@cubby/schemas/location";
@@ -30,11 +27,11 @@ export const dbInventoryEntryToAPI: (
 
   return {
     ...restOfInventoryEntry,
-    id: unsafeInventoryId(restOfInventoryEntry.id),
+    id: restOfInventoryEntry.id,
     amount: parsedAmount,
     location: {
       ...restOfLocation,
-      id: unsafeLocationId(restOfLocation.id),
+      id: restOfLocation.id,
       shortcode: unsafeLocationShortcode(restOfLocation.shortcode),
       type: parseWithContext(locationType, type, {
         entityType: "Location",
@@ -47,7 +44,7 @@ export const dbInventoryEntryToAPI: (
         const { ingredientId: _ingredientId, ...rest } = Product;
         return rest;
       })(),
-      id: unsafeProductId(Product.id),
+      id: Product.id,
       shortcode: unsafeProductShortcode(Product.shortcode),
       unitMappings: addProductSourceMetadata(Product.id, Product.unitMappings),
       externalIds: Product.externalIds.filter((eid) => eid.deletedAt === null),

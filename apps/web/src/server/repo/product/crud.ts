@@ -4,11 +4,7 @@
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
-import {
-  type IngredientId,
-  type ProductId,
-  unsafeProductId,
-} from "@cubby/schemas/identifiers";
+import type { IngredientId, ProductId } from "@cubby/schemas/identifiers";
 import {
   buildTakeSkip,
   type PaginationParams,
@@ -95,7 +91,7 @@ const findProductByShortcode = async (
       notDeleted(product),
     ),
   });
-  return prod ? unsafeProductId(prod.id) : null;
+  return prod ? prod.id : null;
 };
 
 /**

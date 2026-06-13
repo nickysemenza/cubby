@@ -1,11 +1,6 @@
 import type { Amount } from "@cubby/schemas/codec";
 import { buildActorContext } from "@cubby/schemas/context";
-import {
-  unsafeIngredientId,
-  unsafeLocationId,
-  unsafeRecipeId,
-  unsafeUserId,
-} from "@cubby/schemas/identifiers";
+import { unsafeUserId } from "@cubby/schemas/identifiers";
 import { buildTestDB } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "~/server/db";
@@ -74,7 +69,7 @@ describe("AvailabilityService.getRecipeAvailability", () => {
         upc: null,
         ndb_number: null,
         expectedQuantity: null,
-        ingredientId: unsafeIngredientId(flour.id),
+        ingredientId: flour.id,
         unitMappings: [CUP_TO_GRAM],
         externalIds: [],
       },
@@ -84,7 +79,7 @@ describe("AvailabilityService.getRecipeAvailability", () => {
       db,
       {
         productId: prod.id,
-        locationId: unsafeLocationId(loc.id),
+        locationId: loc.id,
         amount: onHand,
       },
       ACTOR,
@@ -97,7 +92,7 @@ describe("AvailabilityService.getRecipeAvailability", () => {
     const recipe = await createFlourRecipe(flour.id, { value: 2, unit: "cup" });
 
     const result = await ctx().services.availability.getRecipeAvailability(
-      unsafeRecipeId(recipe.id),
+      recipe.id,
     );
 
     expect(result.coverage).toBe(1);
@@ -115,7 +110,7 @@ describe("AvailabilityService.getRecipeAvailability", () => {
     const recipe = await createFlourRecipe(flour.id, { value: 2, unit: "cup" });
 
     const result = await ctx().services.availability.getRecipeAvailability(
-      unsafeRecipeId(recipe.id),
+      recipe.id,
     );
 
     expect(result.coverage).toBe(0);
@@ -128,7 +123,7 @@ describe("AvailabilityService.getRecipeAvailability", () => {
     const recipe = await createFlourRecipe(flour.id, { value: 2, unit: "cup" });
 
     const result = await ctx().services.availability.getRecipeAvailability(
-      unsafeRecipeId(recipe.id),
+      recipe.id,
     );
 
     expect(result.coverage).toBe(0);
@@ -142,7 +137,7 @@ describe("AvailabilityService.getRecipeAvailability", () => {
     const recipe = await createFlourRecipe(flour.id, { value: 2, unit: "cup" });
 
     const result = await ctx().services.availability.getRecipeAvailability(
-      unsafeRecipeId(recipe.id),
+      recipe.id,
     );
 
     expect(result.ingredients[0].status).toBe("unconvertible");

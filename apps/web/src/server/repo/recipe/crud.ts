@@ -4,11 +4,7 @@
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
-import {
-  type CookbookId,
-  type RecipeId,
-  unsafeRecipeId,
-} from "@cubby/schemas/identifiers";
+import type { CookbookId, RecipeId } from "@cubby/schemas/identifiers";
 import {
   buildTakeSkip,
   type PaginationParams,
@@ -112,7 +108,7 @@ const findRecipeByShortcode = async (
     ),
     columns: { id: true },
   });
-  return rec ? unsafeRecipeId(rec.id) : null;
+  return rec ? rec.id : null;
 };
 
 /**
@@ -146,11 +142,11 @@ export const getCookbookRecipesForDiff = async (
   });
   const recipes = await getRecipesByIDs(
     db,
-    rows.map((r) => unsafeRecipeId(r.id)),
+    rows.map((r) => r.id),
   );
   const byId = new Map(recipes.map((r) => [r.id, r]));
   return rows.flatMap((r) => {
-    const full = byId.get(unsafeRecipeId(r.id));
+    const full = byId.get(r.id);
     return full
       ? [{ title: r.name, id: r.id, sig: recipeOutSignature(full) }]
       : [];
@@ -218,11 +214,11 @@ export const getNotionRecipesForDiff = async (
   });
   const recipes = await getRecipesByIDs(
     db,
-    rows.map((r) => unsafeRecipeId(r.id)),
+    rows.map((r) => r.id),
   );
   const byId = new Map(recipes.map((r) => [r.id, r]));
   return rows.flatMap((r) => {
-    const full = byId.get(unsafeRecipeId(r.id));
+    const full = byId.get(r.id);
     return r.SourceData && full
       ? [{ id: r.id, pageId: r.SourceData, recipe: full }]
       : [];
@@ -323,7 +319,7 @@ export const createRecipe = async (
       tags: recipeInput.tags ?? null,
       notes: recipeInput.notes ?? null,
     });
-    const createdRecipeId = unsafeRecipeId(createdRecipe.id);
+    const createdRecipeId = createdRecipe.id;
 
     for (const [i, section] of recipeInput.sections.entries()) {
       await createSectionWithIngredients(tx, createdRecipeId, section, i);
@@ -390,11 +386,7 @@ const upsertRecipeMatching = async (
       },
       eq(recipe.id, existingRecipe.id),
     );
-    await replaceRecipeSections(
-      tx,
-      unsafeRecipeId(updatedRecipe.id),
-      input.sections,
-    );
+    await replaceRecipeSections(tx, updatedRecipe.id, input.sections);
     return { id: updatedRecipe.id };
   });
 };
@@ -686,7 +678,7 @@ export const deleteRecipesByCookbook = async (
     where: and(eq(recipe.cookbookId, cookbookId), notDeleted(recipe)),
     columns: { id: true },
   });
-  const ids = rows.map((r) => unsafeRecipeId(r.id));
+  const ids = rows.map((r) => r.id);
   await deleteRecipes(db, ids, actor);
   return { deleted: ids.length };
 };

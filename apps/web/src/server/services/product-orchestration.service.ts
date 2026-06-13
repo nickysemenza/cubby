@@ -83,12 +83,7 @@ export async function findOrCreateByUPC(
     // Import image from UPC lookup if available (non-blocking)
     if (upcLookup.imageUrl) {
       try {
-        await importImageFromUPC(
-          db,
-          upcLookupClient,
-          upc,
-          unsafeProductId(newProduct.id),
-        );
+        await importImageFromUPC(db, upcLookupClient, upc, newProduct.id);
       } catch (error) {
         console.error(`[findOrCreateByUPC] Image import failed:`, error);
       }

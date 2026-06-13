@@ -1,11 +1,9 @@
 import type { Amount } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
-import {
-  type InventoryId,
-  type LocationId,
-  type ProductId,
-  unsafeInventoryId,
-  unsafeProductId,
+import type {
+  InventoryId,
+  LocationId,
+  ProductId,
 } from "@cubby/schemas/identifiers";
 import {
   buildTakeSkip,
@@ -174,7 +172,7 @@ export const findInventoryWithStaleValuations = async (
 
     if (isStale) {
       staleEntries.push({
-        id: unsafeInventoryId(entry.id),
+        id: entry.id,
         storedValuation: entry.valuation,
         expectedValuation,
         productName: entry.Product.name,
@@ -286,7 +284,7 @@ export const getInventoryEntryByID = async (db: Database, id: InventoryId) => {
 interface InventoryFilters {
   productNameFilter?: string;
   locationNameFilter?: string;
-  locationIdFilter?: string;
+  locationIdFilter?: LocationId;
 }
 
 /**
@@ -295,7 +293,7 @@ interface InventoryFilters {
  */
 export const getInventoryCountsByLocations = async (
   db: Database,
-  locationIds: string[],
+  locationIds: LocationId[],
 ): Promise<Record<string, number>> => {
   if (locationIds.length === 0) return {};
 
@@ -461,7 +459,7 @@ export const updateInventoryEntry = async (
         : 0;
 
     if (effectiveProductIdRaw) {
-      const effectiveProductId = unsafeProductId(effectiveProductIdRaw);
+      const effectiveProductId = effectiveProductIdRaw;
       valuation = await computeValuationForEntry(
         db,
         effectiveProductId,
@@ -606,7 +604,7 @@ export const getInventoryForProducts = async (
   });
 
   return rows.map((row) => ({
-    productId: unsafeProductId(row.productId),
+    productId: row.productId,
     amount: row.amount,
   }));
 };

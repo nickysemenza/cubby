@@ -1,4 +1,3 @@
-import { unsafeRecipeId } from "@cubby/schemas/identifiers";
 import type {
   RecipeCreateInput,
   RecipeIngredientInput,
@@ -209,7 +208,7 @@ export const recipeFormValuesToUpdateInput = (
   if (!hasFieldChanges && !hasImageChanges) return null;
 
   return {
-    id: unsafeRecipeId(recipe.id),
+    id: recipe.id,
     data: {
       ...basicUpdates,
       sections: sectionUpdates,

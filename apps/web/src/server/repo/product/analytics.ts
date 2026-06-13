@@ -4,6 +4,7 @@
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
+import type { ProductId } from "@cubby/schemas/identifiers";
 import type { ProductCategory } from "@cubby/schemas/product";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
@@ -73,7 +74,7 @@ export const findProductsNeedingFoodCategory = async (
   db: Database,
 ): Promise<
   Array<{
-    id: string;
+    id: ProductId;
     name: string;
     manufacturer: string;
     category: string | null;

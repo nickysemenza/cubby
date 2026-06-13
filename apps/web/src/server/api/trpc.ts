@@ -8,11 +8,7 @@
  */
 
 import { buildActorContext } from "@cubby/schemas/context";
-import {
-  type UserId,
-  unsafeProductId,
-  unsafeUserId,
-} from "@cubby/schemas/identifiers";
+import { type UserId, unsafeUserId } from "@cubby/schemas/identifiers";
 import {
   context,
   propagation,
@@ -53,7 +49,7 @@ const mapProductToTopLevelOut = (
   const { ingredientId: _ingredientId, id, ...rest } = dbProduct;
   return {
     ...rest,
-    id: unsafeProductId(id),
+    id: id,
   };
 };
 

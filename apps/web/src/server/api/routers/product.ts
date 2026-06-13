@@ -6,11 +6,7 @@
  * See CLAUDE.md "Service Layer Architecture" for details.
  */
 
-import {
-  type ProductId,
-  productId,
-  unsafeProductId,
-} from "@cubby/schemas/identifiers";
+import { type ProductId, productId } from "@cubby/schemas/identifiers";
 import {
   productCategory,
   productCreateInput,
@@ -109,7 +105,7 @@ const create = protectedProcedure
           ctx.db,
           ctx.upcLookupClient,
           input.upc,
-          unsafeProductId(product.id),
+          product.id,
         );
       } catch (error) {
         console.error(`[product.create] Image import failed:`, error);

@@ -4,11 +4,7 @@ import type {
   RecipeAvailability,
 } from "@cubby/schemas/availability";
 import type { Amount } from "@cubby/schemas/codec";
-import {
-  type IngredientId,
-  type RecipeId,
-  unsafeIngredientId,
-} from "@cubby/schemas/identifiers";
+import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
 import type { SectionIngredientOut } from "@cubby/schemas/recipe";
 import { safeConvertAmount } from "~/lib/recipe-costing";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
@@ -69,7 +65,7 @@ export class AvailabilityService {
           (si): si is Extract<SectionIngredientOut, { type: "ingredient" }> =>
             si.type === "ingredient",
         )
-        .map((si) => unsafeIngredientId(si.ingredient.id)),
+        .map((si) => si.ingredient.id),
     );
     const ingredientEntries = await Promise.all(
       directIds.map((id) => this.ingredientService.getIngredientByID(id)),
@@ -127,7 +123,7 @@ export class AvailabilityService {
       };
     }
 
-    const ingredientId = unsafeIngredientId(si.ingredient.id);
+    const ingredientId = si.ingredient.id;
     const name = si.ingredient.name;
     const need = si.amounts[0] ?? null;
     if (!need) {

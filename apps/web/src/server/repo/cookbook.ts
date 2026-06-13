@@ -9,7 +9,7 @@
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
-import { type CookbookId, unsafeCookbookId } from "@cubby/schemas/identifiers";
+import type { CookbookId } from "@cubby/schemas/identifiers";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import type { CookbookSummary } from "@cubby/schemas/recipe";
 import { and, eq, sql } from "drizzle-orm";
@@ -94,7 +94,7 @@ export const upsertCookbook = async (
       entityId: id,
       action: existing ? "update" : "create",
     });
-    return { id: unsafeCookbookId(id) };
+    return { id: id };
   });
 };
 
@@ -142,7 +142,7 @@ export const listCookbooks = async (
     .orderBy(cookbook.name);
   return rows.map((r) => ({
     ...r,
-    id: unsafeCookbookId(r.id),
+    id: r.id,
     coverUrl: r.coverUrl ?? null,
   }));
 };

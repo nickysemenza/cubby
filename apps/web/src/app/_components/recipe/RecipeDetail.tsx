@@ -1,4 +1,3 @@
-import { unsafeRecipeId } from "@cubby/schemas/identifiers";
 import type { RecipeOut } from "@cubby/schemas/recipe";
 import { BarChart3, BookOpen, Table2 } from "lucide-react";
 import type React from "react";
@@ -382,9 +381,7 @@ const RecipeDetailInner: React.FC<{
       )}
 
       {/* Debug mode: how the totals were produced (usage, rules, errors, paths) */}
-      {isDebugEnabled && (
-        <RecipeCostingDebugCard recipeId={unsafeRecipeId(recipe.id)} />
-      )}
+      {isDebugEnabled && <RecipeCostingDebugCard recipeId={recipe.id} />}
 
       {/* Tear line between the recipe itself and its paper trail */}
       <TicketDivider className="print:hidden" />

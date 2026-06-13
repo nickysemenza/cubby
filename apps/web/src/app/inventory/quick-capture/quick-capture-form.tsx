@@ -15,11 +15,7 @@
  * @see QuickInventoryAdd - Compact inline form for single items
  */
 
-import {
-  type ProductId,
-  unsafeLocationId,
-  unsafeProductId,
-} from "@cubby/schemas/identifiers";
+import type { ProductId } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -141,7 +137,7 @@ export default function QuickCaptureForm({
   // Fetch initial location if provided
   const { data: initialLocation } = useQuery({
     ...api.location.getByID.queryOptions({
-      id: unsafeLocationId(initialLocationId!),
+      id: initialLocationId!,
     }),
     enabled: !!initialLocationId,
   });
@@ -159,7 +155,7 @@ export default function QuickCaptureForm({
   // Fetch initial product if provided
   const { data: initialProduct } = useQuery({
     ...api.product.getByID.queryOptions({
-      id: unsafeProductId(initialProductId!),
+      id: initialProductId!,
     }),
     enabled: !!initialProductId,
   });
@@ -288,7 +284,7 @@ export default function QuickCaptureForm({
 
       try {
         await createInventoryMutation.mutateAsync({
-          productId: unsafeProductId(product.id),
+          productId: product.id,
           locationId,
           amount: { value: 1, unit: "each" },
         });

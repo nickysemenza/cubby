@@ -130,7 +130,7 @@ export function useLocationHierarchy(
 
       return {
         name: location.name,
-        id: unsafeLocationId(location.id),
+        id: location.id,
         type: location.type,
         value,
         directCount,

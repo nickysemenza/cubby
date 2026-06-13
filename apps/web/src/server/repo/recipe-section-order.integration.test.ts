@@ -1,9 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import {
-  unsafeIngredientId,
-  unsafeRecipeId,
-  unsafeUserId,
-} from "@cubby/schemas/identifiers";
+import { unsafeIngredientId, unsafeUserId } from "@cubby/schemas/identifiers";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import { buildTestDB } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -68,7 +64,7 @@ describe("recipe section ordering", () => {
   it("returns sections and ingredients in the order they were created", async () => {
     const created = await createRecipe(db, buildInput(), TEST_ACTOR);
 
-    const found = await getRecipeByID(db, unsafeRecipeId(created.id));
+    const found = await getRecipeByID(db, created.id);
 
     expect(found!.sections.map((s) => s.name)).toEqual([
       "Section A",
@@ -86,7 +82,7 @@ describe("recipe section ordering", () => {
 
   it("persists a section reorder on update", async () => {
     const created = await createRecipe(db, buildInput(), TEST_ACTOR);
-    const id = unsafeRecipeId(created.id);
+    const id = created.id;
 
     // Reorder existing sections (by id) to C, A, B
     const byName = new Map(created.sections.map((s) => [s.name, s]));
@@ -112,7 +108,7 @@ describe("recipe section ordering", () => {
 
   it("persists an ingredient reorder within a section on update", async () => {
     const created = await createRecipe(db, buildInput(), TEST_ACTOR);
-    const id = unsafeRecipeId(created.id);
+    const id = created.id;
 
     const firstSection = created.sections[0]!;
     const reversed = [...firstSection.ingredients].reverse();
@@ -128,7 +124,7 @@ describe("recipe section ordering", () => {
           ).map((ing) => ({
             id: ing.id,
             type: "ingredient" as const,
-            ingredientId: unsafeIngredientId(ing.ingredient!.id),
+            ingredientId: ing.ingredient!.id,
             recipeId: null,
             amounts: ing.amounts,
           })),

@@ -1,4 +1,4 @@
-import { type LocationId, unsafeLocationId } from "@cubby/schemas/identifiers";
+import type { LocationId } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import { extractShortcodeFromScan } from "@cubby/shared";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -67,7 +67,7 @@ export function LocationValidateForm({
   // Fetch parent location with children
   const { data: parentLocation } = useQuery({
     ...api.location.getByID.queryOptions({
-      id: unsafeLocationId(parentLocationId!),
+      id: parentLocationId!,
     }),
     enabled: !!parentLocationId,
   });
@@ -194,7 +194,7 @@ export function LocationValidateForm({
         if (parentLocationId) {
           queryClient.invalidateQueries({
             queryKey: api.location.getByID.queryKey({
-              id: unsafeLocationId(parentLocationId),
+              id: parentLocationId,
             }),
           });
         }

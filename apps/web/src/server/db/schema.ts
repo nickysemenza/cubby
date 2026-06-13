@@ -1,6 +1,14 @@
 import type { AuditEntityType } from "@cubby/schemas/audit";
 import type { Amount } from "@cubby/schemas/codec";
-import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
+import type {
+  CookbookId,
+  IngredientId,
+  InventoryId,
+  LocationId,
+  ProductId,
+  RecipeId,
+  UserId,
+} from "@cubby/schemas/identifiers";
 import { imageStatusValues } from "@cubby/schemas/image";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import { productCategoryValues } from "@cubby/schemas/product";
@@ -63,7 +71,9 @@ export const recipe = pgTable(
     // For Book recipes, the cookbook this came from. Nullable: Website/Other
     // recipes have no cookbook. SourceData is kept synced to the cookbook name
     // so the source codec stays a pure recipe-row read.
-    cookbookId: uuid("cookbookId").references(() => cookbook.id),
+    cookbookId: uuid("cookbookId")
+      .$type<CookbookId>()
+      .references(() => cookbook.id),
     yield: jsonb("yield").$type<RecipeYield>(),
     servings: integer("servings"),
     tags: text("tags").array(),
@@ -136,7 +146,10 @@ export const recipe = pgTable(
 export const cookbook = pgTable(
   "Cookbook",
   {
-    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`)
+      .$type<CookbookId>(),
     name: text("name").notNull(),
     // EPUB OPF <dc:creator> / <dc:subject>; empty arrays when the book has none.
     author: text("author").array().notNull().default(sql`'{}'::text[]`),
@@ -293,7 +306,10 @@ export const recipeSectionIngredient = pgTable(
 export const product = pgTable(
   "Product",
   {
-    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`)
+      .$type<ProductId>(),
     shortcode: text("shortcode").notNull(), // Human-readable ID (P-XXXX format)
     name: text("name").notNull(),
     manufacturer: text("manufacturer").notNull(),
@@ -363,6 +379,7 @@ export const productExternalId = pgTable(
     id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
     productId: uuid("productId")
       .notNull()
+      .$type<ProductId>()
       .references(() => product.id),
     source: text("source").notNull(), // e.g. "amazon", "mcmaster", "mouser"
     externalId: text("externalId").notNull(), // The actual identifier (ASIN, part number, etc.)
@@ -389,6 +406,7 @@ export const productUnitMappings = pgTable(
     id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
     productId: uuid("productId")
       .notNull()
+      .$type<ProductId>()
       .references(() => product.id),
     a: jsonb("a").notNull().$type<Amount>(),
     b: jsonb("b").notNull().$type<Amount>(),
@@ -411,7 +429,10 @@ export const productUnitMappings = pgTable(
 export const location = pgTable(
   "Location",
   {
-    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`)
+      .$type<LocationId>(),
     shortcode: text("shortcode").notNull(), // Human-readable ID (L-XXXX format)
     name: text("name").notNull(),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
@@ -421,7 +442,7 @@ export const location = pgTable(
       .$onUpdate(() => new Date()),
     deletedAt: timestamp("deletedAt", { mode: "date" }),
     lastBulkInventory: timestamp("lastBulkInventory", { mode: "date" }),
-    parentId: uuid("parentId"),
+    parentId: uuid("parentId").$type<LocationId>(),
     type: text("type").notNull(),
     aiDescription: text("aiDescription"),
   },
@@ -459,9 +480,13 @@ export const location = pgTable(
 export const inventoryEntry = pgTable(
   "InventoryEntry",
   {
-    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`)
+      .$type<InventoryId>(),
     productId: uuid("productId")
       .notNull()
+      .$type<ProductId>()
       .references(() => product.id),
     amount: jsonb("amount").notNull().$type<Amount>(),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
@@ -472,6 +497,7 @@ export const inventoryEntry = pgTable(
     deletedAt: timestamp("deletedAt", { mode: "date" }),
     locationId: uuid("locationId")
       .notNull()
+      .$type<LocationId>()
       .references(() => location.id),
     valuation: real("valuation"), // Precomputed: amount.value * product.price
   },
@@ -521,6 +547,7 @@ export const productImage = pgTable(
     id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
     productId: uuid("productId")
       .notNull()
+      .$type<ProductId>()
       .references(() => product.id),
     imageId: uuid("imageId")
       .notNull()
@@ -548,6 +575,7 @@ export const locationImage = pgTable(
     id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
     locationId: uuid("locationId")
       .notNull()
+      .$type<LocationId>()
       .references(() => location.id),
     imageId: uuid("imageId")
       .notNull()
@@ -575,6 +603,7 @@ export const recipeImage = pgTable(
     id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
     recipeId: uuid("recipeId")
       .notNull()
+      .$type<RecipeId>()
       .references(() => recipe.id),
     imageId: uuid("imageId")
       .notNull()
@@ -757,6 +786,7 @@ export const auditLog = pgTable(
       jsonb("changes").$type<Record<string, { from: unknown; to: unknown }>>(),
     userId: text("userId")
       .notNull()
+      .$type<UserId>()
       .references(() => user.id),
     source: text("source").notNull().default("ui"), // 'ui', 'csv_import', 'sheets_import', 'api'
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),

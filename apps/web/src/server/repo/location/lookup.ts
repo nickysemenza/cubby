@@ -3,7 +3,7 @@
  * Find locations by various identifiers (name, shortcode).
  */
 
-import { type LocationId, unsafeLocationId } from "@cubby/schemas/identifiers";
+import type { LocationId } from "@cubby/schemas/identifiers";
 import type {
   InfLocation,
   LocationOut,
@@ -35,7 +35,7 @@ const findLocationByName = async (
   const loc = await getDb(db).query.location.findFirst({
     where: and(ilike(location.name, name), notDeleted(location)),
   });
-  return loc ? unsafeLocationId(loc.id) : null;
+  return loc ? loc.id : null;
 };
 
 /**
@@ -52,7 +52,7 @@ const findLocationByShortcode = async (
       notDeleted(location),
     ),
   });
-  return loc ? unsafeLocationId(loc.id) : null;
+  return loc ? loc.id : null;
 };
 
 /**
@@ -130,7 +130,7 @@ export const findOrCreateLocationByName = async (
     ...(options?.updatedAt && { updatedAt: options.updatedAt }),
   });
 
-  return { locationId: unsafeLocationId(created.id), created: true };
+  return { locationId: created.id, created: true };
 };
 
 /**

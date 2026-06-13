@@ -3,11 +3,7 @@
  * Build location trees, type counts, and import updates.
  */
 
-import {
-  type LocationId,
-  unsafeInventoryId,
-  unsafeProductId,
-} from "@cubby/schemas/identifiers";
+import type { LocationId } from "@cubby/schemas/identifiers";
 import {
   type InfLocation,
   type InventoryItemForTree,
@@ -134,10 +130,10 @@ export const buildLocationTree = async (db: Database) => {
   for (const entry of allInventoryEntries) {
     const existing = inventoryByLocationId.get(entry.locationId) ?? [];
     existing.push({
-      id: unsafeInventoryId(entry.id),
+      id: entry.id,
       amount: entry.amount,
       productName: entry.productName,
-      productId: unsafeProductId(entry.productId),
+      productId: entry.productId,
     });
     inventoryByLocationId.set(entry.locationId, existing);
     countsByLocationId.set(
@@ -242,17 +238,16 @@ export const wouldCreateParentCycle = async (
   }
 
   // Walk up the parent chain from the proposed parent
-  let currentId: string | null = newParentId;
+  let currentId: LocationId | null = newParentId;
   while (currentId) {
     if (currentId === locationId) {
       return true; // Found a cycle
     }
-    const parentLocation: { parentId: string | null } | undefined = await getDb(
-      db,
-    ).query.location.findFirst({
-      where: eq(location.id, currentId),
-      columns: { parentId: true },
-    });
+    const parentLocation: { parentId: LocationId | null } | undefined =
+      await getDb(db).query.location.findFirst({
+        where: eq(location.id, currentId),
+        columns: { parentId: true },
+      });
     currentId = parentLocation?.parentId ?? null;
   }
 

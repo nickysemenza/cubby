@@ -15,7 +15,7 @@ interface TreeNode {
 function transformToTreeNode(location: InfLocation): TreeNode {
   return {
     name: location.name,
-    id: unsafeLocationId(location.id),
+    id: location.id,
     type: location.type,
     children: location.children?.map(transformToTreeNode),
   };

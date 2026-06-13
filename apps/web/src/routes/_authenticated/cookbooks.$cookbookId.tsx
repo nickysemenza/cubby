@@ -16,13 +16,20 @@ import { useTRPC } from "~/trpc/react";
 
 export const Route = createFileRoute("/_authenticated/cookbooks/$cookbookId")({
   ssr: false,
+  // Brand the path param at the boundary so `useParams().cookbookId` is a
+  // `CookbookId` throughout (it's compared against branded ids and passed to
+  // branded filters), instead of casting inside the component.
+  params: {
+    parse: (raw) => ({ cookbookId: unsafeCookbookId(raw.cookbookId) }),
+    stringify: (params) => ({ cookbookId: params.cookbookId }),
+  },
   component: CookbookDetailPage,
 });
 
 function CookbookDetailPage() {
   // Cookbooks are keyed by their stable FK id (rename-safe), so the route param
   // is the cookbook id; the display name comes from the browse-index query.
-  const cookbookId = unsafeCookbookId(Route.useParams().cookbookId);
+  const cookbookId = Route.useParams().cookbookId;
   const api = useTRPC();
   const queryClient = useQueryClient();
   const navigate = useNavigate();

@@ -13,11 +13,7 @@
  */
 
 import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
-import {
-  type LocationId,
-  unsafeInventoryId,
-  unsafeLocationId,
-} from "@cubby/schemas/identifiers";
+import type { LocationId } from "@cubby/schemas/identifiers";
 import type { BulkMoveItem } from "@cubby/schemas/inventory";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
@@ -56,8 +52,7 @@ export function MoveInventoryDialog({
   onSuccess,
 }: MoveInventoryDialogProps) {
   const sourceLocationId =
-    sourceLocationIdProp ??
-    (items[0] ? unsafeLocationId(items[0].location.id) : undefined);
+    sourceLocationIdProp ?? (items[0] ? items[0].location.id : undefined);
   const api = useTRPC();
   const [error, setError] = useState<string | null>(null);
 
@@ -105,7 +100,7 @@ export function MoveInventoryDialog({
     setError(null);
 
     const moveItems: BulkMoveItem[] = items.map((item) => ({
-      inventoryEntryId: unsafeInventoryId(item.id),
+      inventoryEntryId: item.id,
       quantity: item.amount,
     }));
 

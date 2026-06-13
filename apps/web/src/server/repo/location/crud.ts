@@ -4,7 +4,7 @@
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
-import { type LocationId, unsafeLocationId } from "@cubby/schemas/identifiers";
+import type { LocationId } from "@cubby/schemas/identifiers";
 import type {
   InfLocation,
   LocationCreateInput,
@@ -99,7 +99,7 @@ export const createLocation = async (
     action: "create",
   });
 
-  return getLocationById(db, unsafeLocationId(newLocation.id));
+  return getLocationById(db, newLocation.id);
 };
 
 // Update an existing location
@@ -181,7 +181,7 @@ export const updateLocation = async (
       }
     }
 
-    return getLocationById(tx, unsafeLocationId(updated.id));
+    return getLocationById(tx, updated.id);
   });
 };
 
@@ -364,7 +364,7 @@ export const findLocationsNeedingAiDescription = async (
   return locations
     .filter((loc) => loc.images.length > 0)
     .map((loc) => ({
-      id: unsafeLocationId(loc.id),
+      id: loc.id,
       name: loc.name,
       imageUrls: loc.images.map((li) => li.image.url),
     }));
@@ -399,7 +399,7 @@ export const getLocationById = async (
   // Fetch parent chain recursively (up to 10 levels)
   let parentChain: LocationWithParentChild | null = null;
   if (res.parentId) {
-    let currentParentId: string | null = res.parentId;
+    let currentParentId: LocationId | null = res.parentId;
     let depth = 0;
     const parents: Array<
       typeof location.$inferSelect & {
@@ -506,7 +506,7 @@ export const getLocationById = async (
  */
 export const getChildCountsByLocationIds = async (
   db: Database,
-  locationIds: string[],
+  locationIds: LocationId[],
 ): Promise<Record<string, number>> => {
   if (locationIds.length === 0) return {};
 

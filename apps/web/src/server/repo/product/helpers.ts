@@ -5,7 +5,6 @@
 
 import { productWithIngredientAndInventoryAndMappingsOut } from "@cubby/schemas/combo";
 import {
-  unsafeLocationId,
   unsafeLocationShortcode,
   unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
@@ -84,7 +83,7 @@ export const dbProductToAPI = (
         amount: entry.amount as { value: number; unit: string },
         location: {
           ...restOfLocation,
-          id: unsafeLocationId(restOfLocation.id),
+          id: restOfLocation.id,
           shortcode: restOfLocation.shortcode
             ? unsafeLocationShortcode(restOfLocation.shortcode)
             : null,

@@ -1,6 +1,5 @@
 import type { WCookbookChunk } from "@cubby/recipebridge";
 import { cookbookBundleSchema } from "@cubby/schemas/cookbook";
-import { unsafeCookbookId } from "@cubby/schemas/identifiers";
 import {
   ALLOWED_IMAGE_TYPES,
   type AllowedImageType,
@@ -156,7 +155,7 @@ export function CookbookImport({
   // so importBook skips upsertCookbook; BookGroupCard flags already-imported titles.
   const source = useQuery(
     api.recipe.getCookbookSource.queryOptions(
-      { cookbookId: unsafeCookbookId(loadCookbookId ?? "") },
+      { cookbookId: loadCookbookId ?? "" },
       { enabled: !!loadCookbookId },
     ),
   );
