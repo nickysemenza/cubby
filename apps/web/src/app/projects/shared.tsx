@@ -7,6 +7,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
+import { partition } from "es-toolkit";
 import { ExternalLink, Hammer, ListTodo, ShoppingCart } from "lucide-react";
 import { useMemo } from "react";
 import RTable from "~/app/_components/data-table/Table";
@@ -157,15 +158,13 @@ const taskColumns = [
 
 export function TaskList({ tasks }: { tasks: NotionTask[] }) {
   const sortedData = useMemo(() => {
-    const active = tasks
-      .filter((t) => t.status !== "Done")
-      .sort((a, b) => {
-        if (!a.due && !b.due) return 0;
-        if (!a.due) return 1;
-        if (!b.due) return -1;
-        return a.due.localeCompare(b.due);
-      });
-    const done = tasks.filter((t) => t.status === "Done");
+    const [activeTasks, done] = partition(tasks, (t) => t.status !== "Done");
+    const active = activeTasks.sort((a, b) => {
+      if (!a.due && !b.due) return 0;
+      if (!a.due) return 1;
+      if (!b.due) return -1;
+      return a.due.localeCompare(b.due);
+    });
     return [...active, ...done];
   }, [tasks]);
 

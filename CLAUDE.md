@@ -19,8 +19,12 @@ Use these instead of inline patterns:
 | `ComboboxItem.refine()` for required location              | `requiredLocationField`                         | `~/schemas/form-fields`                      |
 | `as ProductId`, `as LocationId`, etc.                      | `unsafeProductId()`, `unsafeLocationId()`, etc. | `~/schemas/identifiers`                      |
 | Inline `["inventoryItem"]` query keys                      | `queryKeys.inventoryItem.list`                  | `~/lib/query-keys`                           |
-| `Array.from(new Set(arr))` or `[...new Set(arr)]`          | `dedupe(arr)`                                   | `~/misc/array-helpers`                       |
+| `Array.from(new Set(arr))` or `[...new Set(arr)]`          | `uniq(arr)` / `uniqBy(arr, fn)`                 | `es-toolkit`                                 |
+| Hand-rolled `keyBy`/`groupBy`/`sumBy`/`partition`/`sum`    | the es-toolkit fn of the same name              | `es-toolkit`                                 |
+| `switch`/`if`-ladder on a discriminated-union tag          | `match(x).with(...).exhaustive()`               | `ts-pattern`                                 |
 | `value === "(unspecified)"`                                | `isUnspecifiedManufacturer(value)`              | `~/lib/manufacturer-utils`                   |
+
+es-toolkit / ts-pattern caveats (don't over-apply): keep `new Map(...).get(k)` as a `Map` when the lookup is guarded — `noUncheckedIndexedAccess` is off, so `keyBy(...)[k]` types as non-null and lies. `keyBy` is for `Object.fromEntries(arr.map(...))` (Record→Record). Leave pure `Record<Enum, _>` value/theme lookups, `neverthrow` `.match()`, debounce/throttle (`@tanstack/react-pacer`), and date math (`date-fns`) as they are.
 
 ## React Hooks: Preventing Infinite Render Loops
 

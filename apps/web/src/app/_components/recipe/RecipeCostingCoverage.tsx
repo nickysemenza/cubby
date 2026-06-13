@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, Sparkles } from "lucide-react";
 import { useState } from "react";
+import { match } from "ts-pattern";
 import { Button, buttonVariants } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import type { CostingGap, LineKind } from "~/lib/recipe-costing-gaps";
@@ -16,38 +17,32 @@ const purchaseExample = (lineKind: LineKind): string =>
  * add; `cta` is the link/button label. USDA is preferred wherever it applies
  * (it adds portions + nutrition at once); the price variants are unit-aware.
  */
-const suggestionFor = (gap: CostingGap): { lead: string; cta: string } => {
-  switch (gap.kind) {
-    case "no-product":
-      return {
-        lead: "No product linked. Link one (with a USDA food) to cost it.",
-        cta: "Link product",
-      };
-    case "link-usda":
-      return {
-        lead: "Link a USDA food — adds weight & nutrition conversions automatically.",
-        cta: "Link USDA",
-      };
-    case "set-per-item-price":
-      return {
-        // A count line could be a discrete item (priced per each) or something
-        // sold by weight ("1 clove" of a head of garlic) — so offer both rather
-        // than assert it's sold individually.
-        lead: "Set a per-item price (if sold individually) or add a purchase mapping.",
-        cta: "Add price",
-      };
-    case "add-purchase-mapping":
-      return {
-        lead: `No price path for this ${gap.lineKind} line. Add a purchase mapping (e.g. ${purchaseExample(gap.lineKind)}).`,
-        cta: "Add mapping",
-      };
-    case "add-weight-mapping":
-      return {
-        lead: "Add a weight mapping (e.g. 1 cup = 120 g) — or link a USDA food for portions.",
-        cta: "Add mapping",
-      };
-  }
-};
+const suggestionFor = (gap: CostingGap): { lead: string; cta: string } =>
+  match(gap)
+    .with({ kind: "no-product" }, () => ({
+      lead: "No product linked. Link one (with a USDA food) to cost it.",
+      cta: "Link product",
+    }))
+    .with({ kind: "link-usda" }, () => ({
+      lead: "Link a USDA food — adds weight & nutrition conversions automatically.",
+      cta: "Link USDA",
+    }))
+    .with({ kind: "set-per-item-price" }, () => ({
+      // A count line could be a discrete item (priced per each) or something
+      // sold by weight ("1 clove" of a head of garlic) — so offer both rather
+      // than assert it's sold individually.
+      lead: "Set a per-item price (if sold individually) or add a purchase mapping.",
+      cta: "Add price",
+    }))
+    .with({ kind: "add-purchase-mapping" }, (gap) => ({
+      lead: `No price path for this ${gap.lineKind} line. Add a purchase mapping (e.g. ${purchaseExample(gap.lineKind)}).`,
+      cta: "Add mapping",
+    }))
+    .with({ kind: "add-weight-mapping" }, () => ({
+      lead: "Add a weight mapping (e.g. 1 cup = 120 g) — or link a USDA food for portions.",
+      cta: "Add mapping",
+    }))
+    .exhaustive();
 
 /**
  * "Improve costing coverage" panel: lists the recipe's uncosted ingredients,

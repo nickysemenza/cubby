@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { partition, uniq } from "es-toolkit";
 import { Calendar, DollarSign, ExternalLink, Hammer } from "lucide-react";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { Badge } from "~/components/ui/badge";
@@ -24,7 +25,6 @@ import {
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
 import { formatCurrency } from "~/lib/utils";
-import { dedupe } from "~/misc/array-helpers";
 import type {
   NotionProject,
   NotionPurchase,
@@ -173,16 +173,15 @@ function DashboardContent({
 }) {
   const [view, setView] = useState<DashboardView>("overview");
   const availableStatuses = useMemo(
-    () =>
-      dedupe(data.projects.map((p) => p.status).filter(Boolean) as string[]),
+    () => uniq(data.projects.map((p) => p.status).filter(Boolean) as string[]),
     [data.projects],
   );
   const availableKinds = useMemo(
-    () => dedupe(data.projects.map((p) => p.kind).filter(Boolean) as string[]),
+    () => uniq(data.projects.map((p) => p.kind).filter(Boolean) as string[]),
     [data.projects],
   );
   const availableLocations = useMemo(
-    () => dedupe(data.projects.flatMap((p) => p.location)),
+    () => uniq(data.projects.flatMap((p) => p.location)),
     [data.projects],
   );
 
@@ -453,8 +452,7 @@ function statusCounts(statuses: (string | null)[]): [string, number][] {
 // -- Project Cards --
 
 function ProjectCards({ projects }: { projects: NotionProject[] }) {
-  const active = projects.filter((p) => p.status !== "Done");
-  const done = projects.filter((p) => p.status === "Done");
+  const [active, done] = partition(projects, (p) => p.status !== "Done");
 
   if (active.length === 0 && done.length === 0) {
     return (

@@ -101,6 +101,7 @@
     "date-fns": "^4.1.0",
     "drizzle-kit": "^0.31.9",
     "drizzle-orm": "^0.45.1",
+    "es-toolkit": "^1.47.1",
     "flat": "^6.0.1",
     "graphviz-react": "^1.2.5",
     "idb-keyval": "^6.2.5",
@@ -121,6 +122,7 @@
     "superjson": "^2.2.6",
     "tailwind-merge": "^3.4.0",
     "tailwindcss": "^4.3.0",
+    "ts-pattern": "^5.9.0",
     "web-vitals": "^5.3.0",
     "zod": "^4.3.6",
     "zod-to-json-schema": "^3.25.1"

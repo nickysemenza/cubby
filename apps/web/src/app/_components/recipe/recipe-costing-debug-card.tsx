@@ -4,6 +4,7 @@ import type {
   RowDiagnosticOut,
 } from "@cubby/schemas/recipe";
 import { useQuery } from "@tanstack/react-query";
+import { match } from "ts-pattern";
 import { Badge } from "~/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { formatCurrency } from "~/lib/utils";
@@ -20,20 +21,17 @@ import { CopyJsonButton } from "./copy-debug-button";
  * explain query never fires in normal use.
  */
 
-const sourceLabel = (s: RowDiagnosticOut["plan"]["cost"]): string => {
-  switch (s.kind) {
-    case "own-full":
-      return "own amount";
-    case "own-fraction":
-      return `own ×${s.fraction}`;
-    case "basis-fraction":
-      return `${Math.round(s.fraction * 100)}% of basis`;
-    case "flat-grams":
-      return `flat ${s.grams} g`;
-    case "missing":
-      return "—";
-  }
-};
+const sourceLabel = (s: RowDiagnosticOut["plan"]["cost"]): string =>
+  match(s)
+    .with({ kind: "own-full" }, () => "own amount")
+    .with({ kind: "own-fraction" }, (s) => `own ×${s.fraction}`)
+    .with(
+      { kind: "basis-fraction" },
+      (s) => `${Math.round(s.fraction * 100)}% of basis`,
+    )
+    .with({ kind: "flat-grams" }, (s) => `flat ${s.grams} g`)
+    .with({ kind: "missing" }, () => "—")
+    .exhaustive();
 
 const pathLabel = (
   path: { from_unit: string; to_unit: string; factor: number }[] | null,

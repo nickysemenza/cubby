@@ -2,13 +2,13 @@ import type { LocationType } from "@cubby/schemas/location";
 import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import { match } from "ts-pattern";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { EntityIcon } from "~/entities/entities";
-import { assertNever } from "~/lib/assert";
 import { cn } from "~/lib/utils";
 import { LocationIcon } from "./locations/location-icons";
 
@@ -79,61 +79,52 @@ export const EntityPillLink: React.FC<EntityPillLinkProps> = (props) => {
   const linkTarget = openInNewTab ? "_blank" : undefined;
   const linkRel = openInNewTab ? "noopener noreferrer" : undefined;
 
-  switch (props.entity) {
-    case "ingredient": {
-      const { data } = props;
-      return (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Link
-                to="/ingredients/$id"
-                params={{ id: data.id }}
-                target={linkTarget}
-                rel={linkRel}
-                className={linkClass}
-              />
-            }
-          >
-            <EntityLinkBody
-              icon={<EntityIcon entity="ingredient" size={12} colored />}
-              name={data.name}
-              compact={compact}
+  return match(props)
+    .with({ entity: "ingredient" }, ({ data }) => (
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Link
+              to="/ingredients/$id"
+              params={{ id: data.id }}
+              target={linkTarget}
+              rel={linkRel}
+              className={linkClass}
             />
-          </TooltipTrigger>
-          <TooltipContent className="max-w-lg">{data.name}</TooltipContent>
-        </Tooltip>
-      );
-    }
-
-    case "recipe": {
-      const { data } = props;
-      return (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Link
-                to="/recipes/$id"
-                params={{ id: data.id }}
-                target={linkTarget}
-                rel={linkRel}
-                className={linkClass}
-              />
-            }
-          >
-            <EntityLinkBody
-              icon={<EntityIcon entity="recipe" size={12} colored />}
-              name={data.name}
-              compact={compact}
+          }
+        >
+          <EntityLinkBody
+            icon={<EntityIcon entity="ingredient" size={12} colored />}
+            name={data.name}
+            compact={compact}
+          />
+        </TooltipTrigger>
+        <TooltipContent className="max-w-lg">{data.name}</TooltipContent>
+      </Tooltip>
+    ))
+    .with({ entity: "recipe" }, ({ data }) => (
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Link
+              to="/recipes/$id"
+              params={{ id: data.id }}
+              target={linkTarget}
+              rel={linkRel}
+              className={linkClass}
             />
-          </TooltipTrigger>
-          <TooltipContent className="max-w-lg">{data.name}</TooltipContent>
-        </Tooltip>
-      );
-    }
-
-    case "location": {
-      const { data } = props;
+          }
+        >
+          <EntityLinkBody
+            icon={<EntityIcon entity="recipe" size={12} colored />}
+            name={data.name}
+            compact={compact}
+          />
+        </TooltipTrigger>
+        <TooltipContent className="max-w-lg">{data.name}</TooltipContent>
+      </Tooltip>
+    ))
+    .with({ entity: "location" }, ({ data }) => {
       const fullText = data.type ? `${data.name} (${data.type})` : data.name;
       return (
         <Tooltip>
@@ -164,10 +155,8 @@ export const EntityPillLink: React.FC<EntityPillLinkProps> = (props) => {
           <TooltipContent className="max-w-lg">{fullText}</TooltipContent>
         </Tooltip>
       );
-    }
-
-    case "product": {
-      const { data } = props;
+    })
+    .with({ entity: "product" }, ({ data }) => {
       const isMisc = isMiscProduct(data.name);
       const displayName = isMisc ? getMiscDisplayName(data.name) : data.name;
       const metadata = isMisc ? "misc" : data.manufacturer;
@@ -196,10 +185,8 @@ export const EntityPillLink: React.FC<EntityPillLinkProps> = (props) => {
           <TooltipContent className="max-w-lg">{fullText}</TooltipContent>
         </Tooltip>
       );
-    }
-
-    case "usda-food": {
-      const { data } = props;
+    })
+    .with({ entity: "usda-food" }, ({ data }) => {
       const text = data.foodInfo.description || "Unnamed Food";
 
       return (
@@ -224,9 +211,6 @@ export const EntityPillLink: React.FC<EntityPillLinkProps> = (props) => {
           <TooltipContent className="max-w-lg">{text}</TooltipContent>
         </Tooltip>
       );
-    }
-
-    default:
-      return assertNever(props);
-  }
+    })
+    .exhaustive();
 };

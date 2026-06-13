@@ -16,6 +16,7 @@ import type {
   RecipeTotals,
 } from "@cubby/schemas/recipe";
 import { getNutrientValueByKey } from "@cubby/usda-schemas";
+import { keyBy } from "es-toolkit";
 import {
   type CalculateTotalsResult,
   type CostingRow,
@@ -121,7 +122,7 @@ export class RecipeCostingService {
     ]);
     const ingredients =
       await this.ingredientService.getIngredientsByIDs(ingredientIds);
-    const ingMap = Object.fromEntries(ingredients.map((i) => [i.id, i]));
+    const ingMap = keyBy(ingredients, (i) => i.id);
     return { ingMap, recipeMap };
   }
 

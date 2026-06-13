@@ -1,4 +1,5 @@
 import type { RecipeOut, SectionIngredientOut } from "@cubby/schemas/recipe";
+import { match } from "ts-pattern";
 import type { CalculateTotalsResult } from "~/lib/recipe-costing";
 
 // Recipe scaling is a purely derived, client-side transform: multiply every
@@ -46,24 +47,22 @@ export const resolveScaleFactor = (
   recipe: RecipeOut,
   totals: CalculateTotalsResult | null,
   currentFactor: number,
-): number => {
-  switch (anchor.type) {
-    case "multiplier":
-      return clampFactor(anchor.value);
-    case "totalWeight": {
+): number =>
+  match(anchor)
+    .with({ type: "multiplier" }, (a) => clampFactor(a.value))
+    .with({ type: "totalWeight" }, (a) => {
       const scaledWeight = totals?.weight ?? 0;
       if (scaledWeight <= 0 || currentFactor <= 0) return 1;
       // totals.weight = unscaledWeight × currentFactor; recover the original.
       const unscaledWeight = scaledWeight / currentFactor;
-      return clampFactor(anchor.grams / unscaledWeight);
-    }
-    case "ingredient": {
-      const orig = findRow(recipe, anchor.rowId)?.amounts[0]?.value;
+      return clampFactor(a.grams / unscaledWeight);
+    })
+    .with({ type: "ingredient" }, (a) => {
+      const orig = findRow(recipe, a.rowId)?.amounts[0]?.value;
       if (!orig || orig <= 0) return 1;
-      return clampFactor(anchor.newValue / orig);
-    }
-  }
-};
+      return clampFactor(a.newValue / orig);
+    })
+    .exhaustive();
 
 /**
  * Produce a derived recipe with every amount (and yield/servings) multiplied by

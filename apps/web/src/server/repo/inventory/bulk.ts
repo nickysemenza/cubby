@@ -6,8 +6,8 @@ import type {
   InventoryBulkOperationItem,
 } from "@cubby/schemas/inventory";
 import { and, eq, inArray } from "drizzle-orm";
+import { uniq } from "es-toolkit";
 import { computeInventoryValuation } from "~/lib/price-mapping-utils";
-import { dedupe } from "~/misc/array-helpers";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { inventoryEntry, location, product } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -74,7 +74,7 @@ export const bulkProcessInventoryEntries = async (
       );
 
       // Pre-fetch all product prices in a single query
-      const allProductIds = dedupe([
+      const allProductIds = uniq([
         ...items
           .filter((i) => i.productId)
           .map((i) => i.productId as ProductId),
@@ -278,7 +278,7 @@ export const bulkMoveInventoryEntries = async (
       }
 
       // Pre-fetch all target entries (products at target location) in a single query
-      const sourceProductIds = dedupe(sourceEntries.map((e) => e.productId));
+      const sourceProductIds = uniq(sourceEntries.map((e) => e.productId));
       const targetEntries = await tx.query.inventoryEntry.findMany({
         where: and(
           inArray(inventoryEntry.productId, sourceProductIds),

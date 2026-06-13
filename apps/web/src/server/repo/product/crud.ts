@@ -19,9 +19,9 @@ import {
 } from "@cubby/schemas/product";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { and, count, eq, inArray } from "drizzle-orm";
+import { uniq } from "es-toolkit";
 import { getSortableFields } from "~/entities/entities";
 import { parseWithContext } from "~/lib/zod-utils";
-import { dedupe } from "~/misc/array-helpers";
 import type { Database } from "~/server/db";
 import {
   image,
@@ -613,7 +613,7 @@ export const deleteProducts = async (
     });
 
     if (withInventory.length > 0) {
-      const failedProductIds = dedupe(withInventory.map((e) => e.productId));
+      const failedProductIds = uniq(withInventory.map((e) => e.productId));
       const failedProducts = await tx.query.product.findMany({
         where: inArray(product.id, failedProductIds),
         columns: { id: true, name: true },

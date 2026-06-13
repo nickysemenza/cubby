@@ -1,13 +1,14 @@
 import type { RecipeId } from "@cubby/schemas/identifiers";
 import type { RecipeOut } from "@cubby/schemas/recipe";
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
+import { chunk, keyBy } from "es-toolkit";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   collectIngredientIds,
   collectSubRecipeIds,
   recipeLinkSignature,
 } from "~/lib/recipe-graph";
-import { chunk, ID_CHUNK_SIZE } from "~/misc/array-helpers";
+import { ID_CHUNK_SIZE } from "~/misc/array-helpers";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { useTRPC } from "~/trpc/react";
 
@@ -72,9 +73,7 @@ export async function loadRecipeCostingData(
       ),
     ),
   );
-  const ingMap = Object.fromEntries(
-    chunkResults.flat().map((ing) => [ing.id, ing]),
-  ) as Record<string, IngredientWithFoodOut>;
+  const ingMap = keyBy(chunkResults.flat(), (ing) => ing.id);
 
   return { ingMap, recipeMap: fetched };
 }

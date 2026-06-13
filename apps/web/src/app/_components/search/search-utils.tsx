@@ -2,6 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { LocationType } from "@cubby/schemas/location";
 import type { ProductCategory } from "@cubby/schemas/product";
 import type { SearchableEntity, SearchResultItem } from "@cubby/schemas/search";
+import { match } from "ts-pattern";
 import { EntityIcon } from "~/entities/entities";
 import { formatCurrency } from "~/lib/utils";
 import { tryFormatAmount } from "../inventory/format-amount";
@@ -53,32 +54,34 @@ export function SearchResultItemIcon({
 
 /** Format enrichment info for display in search results */
 export function getEnrichmentText(item: SearchResultItem): string | null {
-  switch (item.entityType) {
-    case "product": {
+  return match(item)
+    .with({ entityType: "product" }, (item) => {
       const parts: string[] = [];
       if (item.price != null) parts.push(formatCurrency(item.price));
       if (item.stockCount != null && item.stockCount > 0)
         parts.push(`${item.stockCount} in stock`);
       return parts.length > 0 ? parts.join(" · ") : null;
-    }
-    case "location": {
+    })
+    .with({ entityType: "location" }, (item) => {
       const parts: string[] = [];
       if (item.itemCount != null && item.itemCount > 0)
         parts.push(`${item.itemCount} items`);
       if (item.childCount != null && item.childCount > 0)
         parts.push(`${item.childCount} sub`);
       return parts.length > 0 ? parts.join(" · ") : null;
-    }
-    case "inventory":
-      if (item.amount) return tryFormatAmount(item.amount);
-      return null;
-    case "recipe":
-      if (item.ingredientCount != null && item.ingredientCount > 0)
-        return `${item.ingredientCount} ingredients`;
-      return null;
-    case "ingredient":
-      if (item.recipeCount != null && item.recipeCount > 0)
-        return `in ${item.recipeCount} recipes`;
-      return null;
-  }
+    })
+    .with({ entityType: "inventory" }, (item) =>
+      item.amount ? tryFormatAmount(item.amount) : null,
+    )
+    .with({ entityType: "recipe" }, (item) =>
+      item.ingredientCount != null && item.ingredientCount > 0
+        ? `${item.ingredientCount} ingredients`
+        : null,
+    )
+    .with({ entityType: "ingredient" }, (item) =>
+      item.recipeCount != null && item.recipeCount > 0
+        ? `in ${item.recipeCount} recipes`
+        : null,
+    )
+    .exhaustive();
 }

@@ -4,23 +4,17 @@ import type {
   SectionIngredient,
   SectionIngredientOut,
 } from "@cubby/schemas/recipe";
-import { assertNever } from "~/lib/assert";
+import { match } from "ts-pattern";
 
 type RecipeGraphRecipe = Pick<RecipeOut, "id" | "sections">;
 
 export const getRecipeIngredientName = (
   ingredient: SectionIngredient | SectionIngredientOut,
-): string => {
-  const { type } = ingredient;
-  switch (type) {
-    case "ingredient":
-      return ingredient.ingredient.name;
-    case "recipe":
-      return ingredient.recipe.name;
-    default:
-      return assertNever(type);
-  }
-};
+): string =>
+  match(ingredient)
+    .with({ type: "ingredient" }, (i) => i.ingredient.name)
+    .with({ type: "recipe" }, (i) => i.recipe.name)
+    .exhaustive();
 
 export const collectSubRecipeIds = (
   recipes: readonly RecipeGraphRecipe[],

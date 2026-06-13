@@ -1,4 +1,5 @@
 import { ResponsivePie } from "@nivo/pie";
+import { sumBy } from "es-toolkit";
 import { ShoppingBag } from "lucide-react";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
@@ -40,7 +41,7 @@ export function PurchaseDonut({
         color: getCategoryColor(category),
       }));
 
-    const total = data.reduce((sum, d) => sum + d.value, 0);
+    const total = sumBy(data, (d) => d.value);
     return { data, total };
   }, [purchases]);
 

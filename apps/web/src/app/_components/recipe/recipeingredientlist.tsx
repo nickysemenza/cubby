@@ -5,7 +5,9 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
+import { mapValues } from "es-toolkit";
 import { useMemo } from "react";
+import { match } from "ts-pattern";
 import { NoneState } from "~/app/_components/NoneState";
 import { KEY_NUTRIENTS } from "~/app/_components/units/NutrientsSummary";
 import {
@@ -73,13 +75,9 @@ export const RecipeIngredientList: React.FC<{
   // Load unit mappings
   const mappingsMap = useMemo(() => {
     if (!ingMap) return {};
-    const entries = Object.entries(ingMap).map(([id, entry]) => {
-      const productMappings = (entry.product ?? []).flatMap((p) =>
-        getAllUnitMappingsFromProduct(p),
-      );
-      return [id, productMappings] as const;
-    });
-    return Object.fromEntries(entries);
+    return mapValues(ingMap, (entry) =>
+      (entry.product ?? []).flatMap((p) => getAllUnitMappingsFromProduct(p)),
+    );
   }, [ingMap]);
 
   const columnHelper = createColumnHelper<IngredientDataItem>();
@@ -264,11 +262,9 @@ export const RecipeIngredientList: React.FC<{
       id: "ingredientDetails",
       header: "Ingredient Details",
       meta: { className: "w-40" },
-      cell: (props) => {
-        const row = props.row.original;
-
-        if (row.type === "ingredient") {
-          return (
+      cell: (props) =>
+        match(props.row.original)
+          .with({ type: "ingredient" }, (row) => (
             <EntityPillLink
               entity="ingredient"
               data={{
@@ -277,13 +273,11 @@ export const RecipeIngredientList: React.FC<{
               }}
               compact
             />
-          );
-        } else if (row.type === "recipe") {
-          return <EntityPillLink entity="recipe" data={row.recipe} compact />;
-        }
-
-        return null;
-      },
+          ))
+          .with({ type: "recipe" }, (row) => (
+            <EntityPillLink entity="recipe" data={row.recipe} compact />
+          ))
+          .exhaustive(),
     }),
     columnHelper.display({
       id: "mappings",
@@ -294,12 +288,10 @@ export const RecipeIngredientList: React.FC<{
           return "loading";
         }
 
-        const row = props.row.original;
-        let id: string | undefined;
-
-        if (row.type === "ingredient") {
-          id = row.ingredient.id;
-        }
+        const id = match(props.row.original)
+          .with({ type: "ingredient" }, (row) => row.ingredient.id)
+          .with({ type: "recipe" }, () => undefined)
+          .exhaustive();
 
         const mappings = id ? (mappingsMap[id] ?? []) : [];
         return (
@@ -313,15 +305,18 @@ export const RecipeIngredientList: React.FC<{
       },
     }),
     // Actions column - links to ingredient or recipe detail
-    createActionsColumnBase(columnHelper, (row) => {
-      if (row.type === "ingredient") {
-        return { to: "/ingredients/$id", params: { id: row.ingredient.id } };
-      }
-      if (row.type === "recipe") {
-        return { to: "/recipes/$id", params: { id: row.recipe.id } };
-      }
-      return null;
-    }),
+    createActionsColumnBase(columnHelper, (row) =>
+      match(row)
+        .with({ type: "ingredient" }, (row) => ({
+          to: "/ingredients/$id" as const,
+          params: { id: row.ingredient.id },
+        }))
+        .with({ type: "recipe" }, (row) => ({
+          to: "/recipes/$id" as const,
+          params: { id: row.recipe.id },
+        }))
+        .exhaustive(),
+    ),
   ];
 
   const table = useReactTable({

@@ -9,6 +9,7 @@ import {
   stripSearchParams,
   useRouter,
 } from "@tanstack/react-router";
+import { uniq } from "es-toolkit";
 import {
   ArrowLeft,
   Download,
@@ -36,7 +37,6 @@ import {
   PopoverTrigger,
 } from "~/components/ui/popover";
 import { generateLabelCsv, generateQrDataUrl } from "~/lib/label-generator";
-import { dedupe } from "~/misc/array-helpers";
 import { useTRPC } from "~/trpc/react";
 
 // test layouts wiht
@@ -200,7 +200,7 @@ function AddLabelsPopover({
         ?.split(",")
         .map((c) => c.trim())
         .filter((c) => c.length > 0) ?? [];
-    const merged = dedupe([...existing, ...newShortcodes]);
+    const merged = uniq([...existing, ...newShortcodes]);
     onCodesChange(merged.join(","));
   }
 
@@ -335,7 +335,7 @@ function LabelsPage() {
         ?.split(",")
         .map((c: string) => c.trim())
         .filter((c: string) => c.length > 0) ?? [];
-    return dedupe(list);
+    return uniq(list);
   }, [codes]);
 
   const { items, isLoading } = useShortcodeLookups(shortcodes);

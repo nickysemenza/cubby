@@ -20,9 +20,9 @@ import {
   or,
   sql,
 } from "drizzle-orm";
+import { uniq } from "es-toolkit";
 import type { z } from "zod";
 import { getSortableFields } from "~/entities/entities";
-import { dedupe } from "~/misc/array-helpers";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   type image,
@@ -83,7 +83,7 @@ export const mergeIngredients = async (
     await tx
       .update(ingredient)
       .set({
-        aliases: dedupe([
+        aliases: uniq([
           ...targetRec.aliases,
           ...aliasRecs.map((a) => a.name),
           ...aliasRecs.flatMap((a) => a.aliases ?? []),
@@ -532,7 +532,7 @@ export const deleteIngredients = async (
       columns: { ingredientId: true },
     });
     if (usedInRecipes.length > 0) {
-      const failedIngredientIds = dedupe(
+      const failedIngredientIds = uniq(
         usedInRecipes.map((r) => r.ingredientId),
       );
       const failedIngredients = await tx.query.ingredient.findMany({
@@ -553,7 +553,7 @@ export const deleteIngredients = async (
       columns: { ingredientId: true },
     });
     if (linkedProducts.length > 0) {
-      const failedIngredientIds = dedupe(
+      const failedIngredientIds = uniq(
         linkedProducts
           .map((p) => p.ingredientId)
           .filter((id): id is IngredientId => id !== null),

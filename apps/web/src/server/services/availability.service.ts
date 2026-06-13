@@ -6,9 +6,9 @@ import type {
 import type { Amount } from "@cubby/schemas/codec";
 import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
 import type { SectionIngredientOut } from "@cubby/schemas/recipe";
+import { uniq } from "es-toolkit";
 import { safeConvertAmount } from "~/lib/recipe-costing";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
-import { dedupe } from "~/misc/array-helpers";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import { getInventoryForProducts } from "~/server/repo/inventory";
@@ -59,7 +59,7 @@ export class AvailabilityService {
 
     // Load each distinct direct ingredient with its products, food-enriched so
     // USDA-derived mappings (e.g. density) are available for unit conversion.
-    const directIds = dedupe(
+    const directIds = uniq(
       sectionIngredients
         .filter(
           (si): si is Extract<SectionIngredientOut, { type: "ingredient" }> =>
@@ -75,7 +75,7 @@ export class AvailabilityService {
     );
 
     // One batched inventory read across every product of every ingredient.
-    const productIds = dedupe(
+    const productIds = uniq(
       ingredientEntries.flatMap((ing) => ing.product.map((p) => p.id)),
     );
     const inventory = await getInventoryForProducts(this.db, productIds);

@@ -2,6 +2,7 @@ import type { RecipeOut } from "@cubby/schemas/recipe";
 import { Link } from "@tanstack/react-router";
 import { BookOpen, ChefHat, Equal, ExternalLink, X } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
+import { match } from "ts-pattern";
 import type { RecipeCosting } from "~/lib/recipe-costing";
 import { getRecipeIngredientName } from "~/lib/recipe-graph";
 import { formatCurrency } from "~/lib/utils";
@@ -122,42 +123,40 @@ const AverageCell: React.FC<{
   );
 };
 
-const sourceSubtitle = (recipe: RecipeOut): string | null => {
-  const s = recipe.source;
-  if (s?.type === "book") return s.book;
-  if (s?.type === "website") {
-    try {
-      return new URL(String(s.url)).host;
-    } catch {
-      return String(s.url);
-    }
-  }
-  return null;
-};
+const sourceSubtitle = (recipe: RecipeOut): string | null =>
+  match(recipe.source)
+    .with({ type: "book" }, (s) => s.book)
+    .with({ type: "website" }, (s) => {
+      try {
+        return new URL(String(s.url)).host;
+      } catch {
+        return String(s.url);
+      }
+    })
+    .otherwise(() => null);
 
-const SourceCell: React.FC<{ recipe: RecipeOut }> = ({ recipe }) => {
-  const s = recipe.source;
-  if (s?.type === "book") {
-    const label = (
-      <>
-        <BookOpen className="h-3.5 w-3.5 shrink-0" />
-        <span className="truncate">{s.book}</span>
-      </>
-    );
-    return s.cookbookId ? (
-      <Link
-        to="/cookbooks/$cookbookId"
-        params={{ cookbookId: s.cookbookId }}
-        className="flex items-center gap-1 hover:underline"
-      >
-        {label}
-      </Link>
-    ) : (
-      <span className="flex items-center gap-1">{label}</span>
-    );
-  }
-  if (s?.type === "website") {
-    return (
+const SourceCell: React.FC<{ recipe: RecipeOut }> = ({ recipe }) =>
+  match(recipe.source)
+    .with({ type: "book" }, (s) => {
+      const label = (
+        <>
+          <BookOpen className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate">{s.book}</span>
+        </>
+      );
+      return s.cookbookId ? (
+        <Link
+          to="/cookbooks/$cookbookId"
+          params={{ cookbookId: s.cookbookId }}
+          className="flex items-center gap-1 hover:underline"
+        >
+          {label}
+        </Link>
+      ) : (
+        <span className="flex items-center gap-1">{label}</span>
+      );
+    })
+    .with({ type: "website" }, (s) => (
       <a
         href={String(s.url)}
         target="_blank"
@@ -167,10 +166,8 @@ const SourceCell: React.FC<{ recipe: RecipeOut }> = ({ recipe }) => {
         <ExternalLink className="h-3.5 w-3.5 shrink-0" />
         <span className="truncate">{sourceSubtitle(recipe)}</span>
       </a>
-    );
-  }
-  return <span className="text-muted-foreground">—</span>;
-};
+    ))
+    .otherwise(() => <span className="text-muted-foreground">—</span>);
 
 const STICKY = "sticky left-0 z-10 bg-card";
 

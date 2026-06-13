@@ -1,4 +1,5 @@
 import { ResponsiveBar } from "@nivo/bar";
+import { sum } from "es-toolkit";
 import { ShoppingBag } from "lucide-react";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
@@ -52,7 +53,7 @@ export function SubcategoryBars({
       .map(([subcategory, cats]) => ({
         subcategory,
         ...cats,
-        total: Object.values(cats).reduce((a, b) => a + b, 0),
+        total: sum(Object.values(cats)),
       }))
       .filter((d) => d.total > 0)
       .sort((a, b) => a.total - b.total) as BarDatum[];

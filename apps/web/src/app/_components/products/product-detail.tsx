@@ -1,10 +1,10 @@
 import type { ProductCreateInput } from "@cubby/schemas/product";
+import { uniq } from "es-toolkit";
 import { Apple, Info } from "lucide-react";
 import type { FC } from "react";
 import { MutedBox } from "~/components/layout/muted-box";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { formatCurrency } from "~/lib/utils";
-import { dedupe } from "~/misc/array-helpers";
 import type { ProductWithFoodOut } from "~/server/services/product.service";
 import { useTRPC } from "~/trpc/react";
 import {
@@ -70,7 +70,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   ];
 
   const entries = product.inventoryEntry ?? [];
-  const locationCount = dedupe(entries.map((e) => e.location.id)).length;
+  const locationCount = uniq(entries.map((e) => e.location.id)).length;
   const heroStats: DetailHeroStat[] = [
     { label: "On hand", value: entries.length },
     { label: "Locations", value: locationCount },

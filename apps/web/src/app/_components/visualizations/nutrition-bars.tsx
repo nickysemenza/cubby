@@ -1,4 +1,5 @@
 import { TIER1_NUTRIENTS } from "@cubby/usda-schemas";
+import { sumBy } from "es-toolkit";
 import { useMemo } from "react";
 import { StatTile } from "~/components/ui/stat-tile";
 import type {
@@ -62,14 +63,14 @@ export default function NutritionBars({
 
     // Top contributors get their own segment; the tail folds into "other".
     const top = all.slice(0, 5);
-    const otherKcal = all.slice(5).reduce((acc, r) => acc + r.kcal, 0);
+    const otherKcal = sumBy(all.slice(5), (r) => r.kcal);
     const kcalRows =
       otherKcal > 0
         ? [...top, { key: "other", name: "other", kcal: otherKcal }]
         : top;
 
     // Total kcal stays row-derived so the stacked-segment widths sum to 100%.
-    const totalKcal = all.reduce((acc, r) => acc + r.kcal, 0);
+    const totalKcal = sumBy(all, (r) => r.kcal);
 
     // Macro grams come from the engine's whole-recipe totals (same source the
     // summary card uses); fall back to summing rows while totals load.
@@ -77,7 +78,7 @@ export default function NutritionBars({
       const code = TIER1_NUTRIENTS[m.key].code;
       const grams =
         totals?.nutrients[code] ??
-        ingredients.reduce((acc, ing) => acc + nutrientOf(ing, code), 0);
+        sumBy(ingredients, (ing) => nutrientOf(ing, code));
       return { ...m, grams };
     });
     const maxMacro = Math.max(...macroTotals.map((m) => m.grams), 1);

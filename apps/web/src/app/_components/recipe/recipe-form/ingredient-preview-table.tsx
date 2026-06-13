@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { uniq } from "es-toolkit";
 import { AlertCircle, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -14,7 +15,6 @@ import {
 } from "~/components/ui/table";
 import { queryKeys } from "~/lib/query-keys";
 import { cn } from "~/lib/utils";
-import { dedupe } from "~/misc/array-helpers";
 import { useTRPC } from "~/trpc/react";
 import { CreateIngredientDialog } from "../../combobox/with-search-hook";
 import { EntityPillLink } from "../../EntityPill";
@@ -274,7 +274,7 @@ export function useIngredientImport(ingredientLines: string[]) {
 
     // Parsed names with no existing match (created on import). A still-loading
     // name has no map entry yet, so it counts as missing until the lookup settles.
-    const missing = dedupe(
+    const missing = uniq(
       parsedIngredients
         .filter(
           (p) =>

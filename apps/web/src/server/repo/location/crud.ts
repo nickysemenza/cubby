@@ -16,8 +16,8 @@ import {
   type SortParams,
 } from "@cubby/schemas/pagination";
 import { and, count, eq, inArray, isNull, sql } from "drizzle-orm";
+import { uniq } from "es-toolkit";
 import { getSortableFields } from "~/entities/entities";
-import { dedupe } from "~/misc/array-helpers";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   type image,
@@ -212,7 +212,7 @@ export const deleteLocations = async (
       columns: { locationId: true },
     });
     if (withInventory.length > 0) {
-      const failedLocationIds = dedupe(withInventory.map((e) => e.locationId));
+      const failedLocationIds = uniq(withInventory.map((e) => e.locationId));
       const failedLocations = await tx.query.location.findMany({
         where: inArray(location.id, failedLocationIds),
         columns: { id: true, name: true },

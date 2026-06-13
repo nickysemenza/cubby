@@ -1,3 +1,4 @@
+import { sum } from "es-toolkit";
 import { ListChecks } from "lucide-react";
 import { useMemo } from "react";
 import { NoneState } from "~/app/_components/NoneState";
@@ -41,10 +42,7 @@ export function TaskStatusBoard({
           name,
           date: proj?.date ?? "",
           isDone: proj?.status === "Done",
-          total: Array.from(counts.get(name)?.values() ?? []).reduce(
-            (a, b) => a + b,
-            0,
-          ),
+          total: sum(Array.from(counts.get(name)?.values() ?? [])),
         };
       })
       .sort((a, b) => {

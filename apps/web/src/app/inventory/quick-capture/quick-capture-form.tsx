@@ -19,6 +19,7 @@ import type { ProductId } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { uniq } from "es-toolkit";
 import {
   Check,
   ChevronDown,
@@ -71,7 +72,6 @@ import { Switch } from "~/components/ui/switch";
 import { EntityIcon } from "~/entities/entities";
 import { getErrorMessage } from "~/lib/error-utils";
 import { queryKeys } from "~/lib/query-keys";
-import { dedupe } from "~/misc/array-helpers";
 import { useTRPC } from "~/trpc/react";
 
 // Schema for the entire form using shared field schema
@@ -367,7 +367,7 @@ export default function QuickCaptureForm({
         }
 
         // Get unique location names for success message
-        const locationNames = dedupe(
+        const locationNames = uniq(
           validItems.map((item) => item.location.name),
         );
         const locationText =

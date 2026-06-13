@@ -7,9 +7,9 @@ import {
 import { isMiscProduct } from "@cubby/shared";
 import { upc as upcSchema } from "@cubby/usda-schemas";
 import { and, eq, isNotNull, isNull, notExists, sql } from "drizzle-orm";
+import { uniq } from "es-toolkit";
 import { computeParseDrift, hasDrift } from "~/lib/parse-drift";
 import { wasm } from "~/lib/wasm";
-import { dedupe } from "~/misc/array-helpers";
 import type { Database } from "~/server/db";
 import {
   ingredient,
@@ -674,7 +674,7 @@ export const reparseStaleIngredientParses = async (
     }
   });
 
-  const recipesAffected = dedupe(stale.map((s) => unsafeRecipeId(s.recipeId)));
+  const recipesAffected = uniq(stale.map((s) => unsafeRecipeId(s.recipeId)));
   await markRecipesStale(db, recipesAffected);
   return { updated: stale.length, recipesAffected };
 };

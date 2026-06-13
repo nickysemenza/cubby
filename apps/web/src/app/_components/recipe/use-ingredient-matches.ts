@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
+import { uniq } from "es-toolkit";
 import { useMemo } from "react";
-import { dedupe } from "~/misc/array-helpers";
 import { useTRPC } from "~/trpc/react";
 
 /** A matched ingredient (DB row), or `null` when looked up but not found. */
@@ -27,7 +27,7 @@ export function useIngredientMatches(
 ): { matchMap: IngredientMatchMap; isLoading: boolean } {
   const api = useTRPC();
   const uniqueNames = useMemo(
-    () => dedupe(names.filter((n) => n.length > 0)),
+    () => uniq(names.filter((n) => n.length > 0)),
     [names],
   );
   const enabled = (opts?.enabled ?? true) && uniqueNames.length > 0;

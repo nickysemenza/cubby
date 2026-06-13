@@ -3,6 +3,7 @@ import {
   type ImportRecipe,
 } from "@cubby/schemas/import-recipe";
 import { Link } from "@tanstack/react-router";
+import { uniq } from "es-toolkit";
 import { AlertCircle, Check, ExternalLink } from "lucide-react";
 import { memo, useMemo } from "react";
 import { MarkdownText } from "~/components/markdown";
@@ -12,7 +13,6 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Spinner } from "~/components/ui/spinner";
 import { cn } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
-import { dedupe } from "~/misc/array-helpers";
 import { EntityPillLink } from "../EntityPill";
 import { normalize } from "./cookbook-import/import-order";
 import type { ImportResult } from "./cookbook-import/types";
@@ -110,7 +110,7 @@ function RecipeImportCardImpl({
   // DB and to highlight ingredients in the instructions.
   const ingredientNames = useMemo(
     () =>
-      dedupe(
+      uniq(
         recipe.sections
           .flatMap((s) => s.ingredients)
           .map((line) => wasm.parse_ingredient(line).name)

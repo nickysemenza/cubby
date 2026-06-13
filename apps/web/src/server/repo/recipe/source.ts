@@ -1,5 +1,6 @@
 import { type CookbookId, unsafeCookbookId } from "@cubby/schemas/identifiers";
 import type { RecipeSource } from "@cubby/schemas/recipe";
+import { match, P } from "ts-pattern";
 
 /**
  * Codec between a recipe's provenance discriminated union (`RecipeSource`, the
@@ -59,23 +60,31 @@ export function recipeSourceFromDb({
   SourceData,
   cookbookId,
 }: SourceColumns): RecipeSource {
-  if (SourceType === "Book" && SourceData) {
-    return {
-      type: "book",
-      book: SourceData,
-      cookbookId: cookbookId ? unsafeCookbookId(cookbookId) : null,
-    };
-  }
-  if (SourceType === "Website" && SourceData) {
-    return { type: "website", url: SourceData };
-  }
-  // Notion: SourceData holds the stable page id; derive the page URL for display.
-  if (SourceType === "Notion" && SourceData) {
-    return {
-      type: "notion",
-      pageId: SourceData,
-      url: notionUrlFromId(SourceData),
-    };
-  }
-  return { type: "other" };
+  // `P.string.minLength(1)` preserves the original `&& SourceData` truthiness
+  // guard: null and "" both fall through to `{ type: "other" }`.
+  return (
+    match({ SourceType, SourceData })
+      .with(
+        { SourceType: "Book", SourceData: P.string.minLength(1) },
+        ({ SourceData }) => ({
+          type: "book" as const,
+          book: SourceData,
+          cookbookId: cookbookId ? unsafeCookbookId(cookbookId) : null,
+        }),
+      )
+      .with(
+        { SourceType: "Website", SourceData: P.string.minLength(1) },
+        ({ SourceData }) => ({ type: "website" as const, url: SourceData }),
+      )
+      // Notion: SourceData holds the stable page id; derive the page URL for display.
+      .with(
+        { SourceType: "Notion", SourceData: P.string.minLength(1) },
+        ({ SourceData }) => ({
+          type: "notion" as const,
+          pageId: SourceData,
+          url: notionUrlFromId(SourceData),
+        }),
+      )
+      .otherwise(() => ({ type: "other" as const }))
+  );
 }

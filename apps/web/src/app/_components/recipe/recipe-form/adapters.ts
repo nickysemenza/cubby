@@ -6,6 +6,7 @@ import type {
   recipeInstructionInput,
   recipeSectionInput,
 } from "@cubby/schemas/recipe";
+import { match, P } from "ts-pattern";
 import type { z } from "zod";
 import {
   getOptionalIngredientId,
@@ -38,36 +39,36 @@ export const recipeToFormValues = (
     ? recipe.sections.map((section) => ({
         id: section.id,
         name: section.name,
-        ingredients: section.ingredients.map((ing): IngItem => {
-          if (ing.type === "ingredient") {
-            return {
-              id: ing.id,
-              type: "ingredient",
-              ingredient: {
-                id: ing.ingredient.id,
-                name: ing.ingredient.name,
-              },
-              recipe: null,
-              amounts: ing.amounts.length > 0 ? ing.amounts : [blankAmount],
-              rawLine: ing.rawLine ?? null,
-              modifier: ing.modifier ?? null,
-              aliases: ing.ingredient.aliases ?? [],
-            };
-          }
-
-          return {
-            id: ing.id,
-            type: "recipe",
-            ingredient: null,
-            recipe: {
-              id: ing.recipe.id,
-              name: ing.recipe.name,
-            },
-            amounts: ing.amounts.length > 0 ? ing.amounts : [blankAmount],
-            rawLine: ing.rawLine ?? null,
-            modifier: ing.modifier ?? null,
-          };
-        }),
+        ingredients: section.ingredients.map(
+          (ing): IngItem =>
+            match(ing)
+              .with({ type: "ingredient" }, (ing) => ({
+                id: ing.id,
+                type: "ingredient" as const,
+                ingredient: {
+                  id: ing.ingredient.id,
+                  name: ing.ingredient.name,
+                },
+                recipe: null,
+                amounts: ing.amounts.length > 0 ? ing.amounts : [blankAmount],
+                rawLine: ing.rawLine ?? null,
+                modifier: ing.modifier ?? null,
+                aliases: ing.ingredient.aliases ?? [],
+              }))
+              .with({ type: "recipe" }, (ing) => ({
+                id: ing.id,
+                type: "recipe" as const,
+                ingredient: null,
+                recipe: {
+                  id: ing.recipe.id,
+                  name: ing.recipe.name,
+                },
+                amounts: ing.amounts.length > 0 ? ing.amounts : [blankAmount],
+                rawLine: ing.rawLine ?? null,
+                modifier: ing.modifier ?? null,
+              }))
+              .exhaustive(),
+        ),
         instructions: section.instructions,
       }))
     : [
@@ -79,35 +80,32 @@ export const recipeToFormValues = (
       ],
 });
 
-const mapIngredientToApiFormat = (ing: IngItem): RecipeIngredientInput => {
-  if (ing.type === "ingredient" && ing.ingredient) {
-    return {
-      type: "ingredient",
+const mapIngredientToApiFormat = (ing: IngItem): RecipeIngredientInput =>
+  match(ing)
+    .with({ type: "ingredient", ingredient: P.nonNullable }, (ing) => ({
+      type: "ingredient" as const,
       ingredientId: getOptionalIngredientId(ing.ingredient)!,
       recipeId: null,
       amounts: normalizeAmounts(ing.amounts),
       id: ing.id,
       rawLine: ing.rawLine ?? undefined,
       modifier: ing.modifier ?? undefined,
-    };
-  }
-
-  if (ing.type === "recipe" && ing.recipe) {
-    return {
-      type: "recipe",
+    }))
+    .with({ type: "recipe", recipe: P.nonNullable }, (ing) => ({
+      type: "recipe" as const,
       recipeId: getOptionalRecipeId(ing.recipe)!,
       ingredientId: null,
       amounts: normalizeAmounts(ing.amounts),
       id: ing.id,
       rawLine: ing.rawLine ?? undefined,
       modifier: ing.modifier ?? undefined,
-    };
-  }
-
-  throw new Error(
-    `Invalid ingredient type or missing data: ${JSON.stringify(ing)}`,
-  );
-};
+    }))
+    // type says ingredient/recipe but the nested data isn't filled yet.
+    .otherwise((ing) => {
+      throw new Error(
+        `Invalid ingredient type or missing data: ${JSON.stringify(ing)}`,
+      );
+    });
 
 const mapSectionToApiFormat = (
   section: RecipeFormValues["sections"][number],

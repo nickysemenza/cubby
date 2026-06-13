@@ -6,6 +6,7 @@ import {
   stripSearchParams,
   useNavigate,
 } from "@tanstack/react-router";
+import { uniq } from "es-toolkit";
 import { ArrowLeft, Plus } from "lucide-react";
 import { useMemo } from "react";
 import { z } from "zod";
@@ -24,7 +25,6 @@ import { EntityLayout } from "~/components/layouts/entity-layout";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { computeRecipeCosting } from "~/lib/recipe-costing";
-import { dedupe } from "~/misc/array-helpers";
 import { useTRPC } from "~/trpc/react";
 
 const searchParamsSchema = z.object({
@@ -52,7 +52,7 @@ function RecipeComparePage() {
         ?.split(",")
         .map((id: string) => id.trim())
         .filter((id: string) => id.length > 0) ?? [];
-    return dedupe(list);
+    return uniq(list);
   }, [ids]);
 
   // Fetch all recipes in parallel

@@ -1,11 +1,11 @@
 import type { ImageStatus } from "@cubby/schemas/image";
 import { ImageIcon } from "lucide-react";
+import { match } from "ts-pattern";
 import { EntityPillLink } from "~/app/_components/EntityPill";
 import { HoverableTimestamp } from "~/app/_components/HoverableTimestamp";
 import { ImageStatusBadge } from "~/app/_components/table/StatusBadge";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Image } from "~/components/ui/image";
-import { assertNever } from "~/lib/assert";
 import { formatBytes } from "~/lib/format";
 
 interface ImageData {
@@ -28,7 +28,10 @@ interface ImageDetailProps {
 
 export function ImageDetail({ image }: ImageDetailProps) {
   const renderEntityLink = () => {
-    if (!image.entityType || !image.entityId || !image.entityName) {
+    // Destructure to locals so the guard's narrowing survives into the match
+    // closures below (property narrowing on `image` would be lost in callbacks).
+    const { entityType, entityId, entityName } = image;
+    if (!entityType || !entityId || !entityName) {
       return (
         <span className="text-muted-foreground italic">
           Not associated with any entity
@@ -36,47 +39,41 @@ export function ImageDetail({ image }: ImageDetailProps) {
       );
     }
 
-    switch (image.entityType) {
-      case "PRODUCT":
-        return (
-          <EntityPillLink
-            entity="product"
-            data={{
-              id: image.entityId,
-              name: image.entityName,
-              manufacturer: "",
-            }}
-          />
-        );
-      case "LOCATION":
-        return (
-          <EntityPillLink
-            entity="location"
-            data={{ id: image.entityId, name: image.entityName, type: "room" }}
-          />
-        );
-      case "RECIPE":
-        return (
-          <EntityPillLink
-            entity="recipe"
-            data={{ id: image.entityId, name: image.entityName }}
-          />
-        );
-      case "COOKBOOK":
+    return match(entityType)
+      .with("PRODUCT", () => (
+        <EntityPillLink
+          entity="product"
+          data={{
+            id: entityId,
+            name: entityName,
+            manufacturer: "",
+          }}
+        />
+      ))
+      .with("LOCATION", () => (
+        <EntityPillLink
+          entity="location"
+          data={{ id: entityId, name: entityName, type: "room" }}
+        />
+      ))
+      .with("RECIPE", () => (
+        <EntityPillLink
+          entity="recipe"
+          data={{ id: entityId, name: entityName }}
+        />
+      ))
+      .with("COOKBOOK", () => (
         // Cookbook covers are tracked by FK, not the join-table ownership this
         // view resolves, so entityId/entityName are unset and the guard above
         // returns first — this case exists only for exhaustiveness.
-        return (
-          <a
-            href={`/cookbooks/${image.entityId}`}
-            className="font-medium text-sm hover:underline"
-          >
-            {image.entityName}
-          </a>
-        );
-      default:
-        return assertNever(image.entityType);
-    }
+        <a
+          href={`/cookbooks/${entityId}`}
+          className="font-medium text-sm hover:underline"
+        >
+          {entityName}
+        </a>
+      ))
+      .exhaustive();
   };
 
   return (

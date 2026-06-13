@@ -10,7 +10,7 @@ import type {
   LocationType,
 } from "@cubby/schemas/location";
 import { and, desc, eq, ilike, inArray, sql } from "drizzle-orm";
-import { dedupe } from "~/misc/array-helpers";
+import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
 import { inventoryEntry, location } from "~/server/db/schema";
 import {
@@ -163,7 +163,7 @@ export const getRecentlyActiveLocations = async (
     .limit(10);
 
   // Merge and dedupe by ID, take first N
-  const finalIds = dedupe([
+  const finalIds = uniq([
     ...recentLocations.map((l) => l.id),
     ...inventoryLocations.map((l) => l.id),
   ]).slice(0, limit);

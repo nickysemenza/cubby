@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
+import { uniq } from "es-toolkit";
 import { useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
-import { dedupe } from "~/misc/array-helpers";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { useTRPC } from "~/trpc/react";
 import { EnrichIngredientDialog } from "../_components/ingredients/enrich-ingredient-dialog";
@@ -44,7 +44,7 @@ export function EnrichmentQueue() {
 
       <ul className="space-y-2">
         {items.map((ingredient) => {
-          const recipeCount = dedupe(
+          const recipeCount = uniq(
             ingredient.appearsInRecipes.map((r) => r.id),
           ).length;
           return (

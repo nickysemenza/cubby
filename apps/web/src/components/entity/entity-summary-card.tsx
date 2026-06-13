@@ -1,4 +1,5 @@
 import * as React from "react";
+import { match } from "ts-pattern";
 import { z } from "zod";
 import {
   perUnitSuffix,
@@ -280,20 +281,16 @@ export const EntitySummaryCard: React.FC<EntitySummaryCardProps> = ({
   summaryData,
 }) => {
   // Get formatted items based on summary type
-  const items = React.useMemo(() => {
-    switch (summaryData.type) {
-      case "recipe":
-        return formatRecipeSummary(summaryData.data);
-      case "nutrition":
-        return formatNutritionSummary(summaryData.data);
-      case "inventory":
-        return formatInventorySummary(summaryData.data);
-      case "custom":
-        return summaryData.data.items;
-      default:
-        return [];
-    }
-  }, [summaryData]);
+  const items = React.useMemo(
+    () =>
+      match(summaryData)
+        .with({ type: "recipe" }, (d) => formatRecipeSummary(d.data))
+        .with({ type: "nutrition" }, (d) => formatNutritionSummary(d.data))
+        .with({ type: "inventory" }, (d) => formatInventorySummary(d.data))
+        .with({ type: "custom" }, (d) => d.data.items)
+        .exhaustive(),
+    [summaryData],
+  );
 
   return (
     <Card className={className}>

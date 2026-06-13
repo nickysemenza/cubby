@@ -12,6 +12,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
+import { uniq } from "es-toolkit";
 import { Equal, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { MobileCard } from "~/components/entity/mobile-card";
@@ -22,7 +23,6 @@ import { EntityIcon, entities } from "~/entities/entities";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useIsMobile } from "~/hooks/useMobile";
 import { cn } from "~/lib/utils";
-import { dedupe } from "~/misc/array-helpers";
 import { useTRPC } from "~/trpc/react";
 import { getRecents, pushRecent } from "../command-menu/recents";
 import { useConversionAnswer } from "../command-menu/use-conversion-answer";
@@ -78,7 +78,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
   const commitRecent = (value: string) => {
     const trimmed = value.trim();
     if (!trimmed) return;
-    setRecents((prev) => dedupe([trimmed, ...prev]).slice(0, 8));
+    setRecents((prev) => uniq([trimmed, ...prev]).slice(0, 8));
   };
 
   // Create table instance (client-side filtering/sorting) — desktop only

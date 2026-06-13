@@ -1,6 +1,7 @@
 import type { ProductCategory } from "@cubby/schemas/product";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { sumBy } from "es-toolkit";
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
   formatCategoryLabel,
@@ -54,7 +55,7 @@ function DonutChart({ data }: DonutChartProps) {
   const [hoveredSlice, setHoveredSlice] = useState<CategoryData | null>(null);
 
   const totalProducts = useMemo(
-    () => data.reduce((sum, d) => sum + d.productCount, 0),
+    () => sumBy(data, (d) => d.productCount),
     [data],
   );
 
