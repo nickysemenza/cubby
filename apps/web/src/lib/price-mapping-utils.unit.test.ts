@@ -13,120 +13,122 @@ beforeAll(async () => {
 });
 
 describe("isMoneyUnit", () => {
-  it("returns true for dollar", () => {
-    expect(isMoneyUnit("dollar")).toBe(true);
-  });
+  const CASES: { unit: string; expected: boolean }[] = [
+    { unit: "dollar", expected: true },
+    { unit: "Dollar", expected: true }, // case insensitive
+    { unit: "gram", expected: false },
+    { unit: "kg", expected: false },
+    { unit: "lb", expected: false },
+    { unit: "each", expected: false },
+    { unit: "ml", expected: false },
+    { unit: "cup", expected: false },
+  ];
 
-  it("returns true for Dollar (case insensitive)", () => {
-    expect(isMoneyUnit("Dollar")).toBe(true);
-  });
-
-  it("returns false for weight units", () => {
-    expect(isMoneyUnit("gram")).toBe(false);
-    expect(isMoneyUnit("kg")).toBe(false);
-    expect(isMoneyUnit("lb")).toBe(false);
-  });
-
-  it("returns false for count units", () => {
-    expect(isMoneyUnit("each")).toBe(false);
-  });
-
-  it("returns false for volume units", () => {
-    expect(isMoneyUnit("ml")).toBe(false);
-    expect(isMoneyUnit("cup")).toBe(false);
+  it.each(CASES)("$unit → $expected", ({ unit, expected }) => {
+    expect(isMoneyUnit(unit)).toBe(expected);
   });
 });
 
 describe("truncateToTwoDecimals", () => {
-  it("truncates to 2 decimal places", () => {
-    expect(truncateToTwoDecimals(12.999)).toBe(13.0);
-    expect(truncateToTwoDecimals(12.994)).toBe(12.99);
-    expect(truncateToTwoDecimals(12.995)).toBe(13.0);
-  });
+  const CASES: { input: number; expected: number }[] = [
+    // truncates to 2 decimal places
+    { input: 12.999, expected: 13.0 },
+    { input: 12.994, expected: 12.99 },
+    { input: 12.995, expected: 13.0 },
+    // very small values
+    { input: 0.001, expected: 0.0 },
+    { input: 0.005, expected: 0.01 },
+    { input: 0.004, expected: 0.0 },
+    // large values
+    { input: 1000.0, expected: 1000.0 },
+    { input: 9740.6784, expected: 9740.68 },
+    { input: 1234567.895, expected: 1234567.9 },
+    // exact 2-decimal values
+    { input: 12.5, expected: 12.5 },
+    { input: 99.99, expected: 99.99 },
+    // negative values
+    { input: -12.999, expected: -13.0 },
+    { input: -12.994, expected: -12.99 },
+  ];
 
-  it("handles very small values", () => {
-    expect(truncateToTwoDecimals(0.001)).toBe(0.0);
-    expect(truncateToTwoDecimals(0.005)).toBe(0.01);
-    expect(truncateToTwoDecimals(0.004)).toBe(0.0);
-  });
-
-  it("handles large values", () => {
-    expect(truncateToTwoDecimals(1000.0)).toBe(1000.0);
-    expect(truncateToTwoDecimals(9740.6784)).toBe(9740.68);
-    expect(truncateToTwoDecimals(1234567.895)).toBe(1234567.9);
-  });
-
-  it("handles exact 2-decimal values", () => {
-    expect(truncateToTwoDecimals(12.5)).toBe(12.5);
-    expect(truncateToTwoDecimals(99.99)).toBe(99.99);
-  });
-
-  it("handles negative values", () => {
-    expect(truncateToTwoDecimals(-12.999)).toBe(-13.0);
-    expect(truncateToTwoDecimals(-12.994)).toBe(-12.99);
+  it.each(CASES)("$input → $expected", ({ input, expected }) => {
+    expect(truncateToTwoDecimals(input)).toBe(expected);
   });
 });
 
 describe("isCanonicalPriceMapping", () => {
-  it("detects 1 each <-> money in both directions", () => {
-    expect(
-      isCanonicalPriceMapping({
+  const CASES: {
+    name: string;
+    mapping: {
+      a: { value: number; unit: string };
+      b: { value: number; unit: string };
+    };
+    expected: boolean;
+  }[] = [
+    {
+      name: "1 each ↔ money",
+      mapping: {
         a: { value: 1, unit: "each" },
         b: { value: 9.99, unit: "dollar" },
-      }),
-    ).toBe(true);
-    expect(
-      isCanonicalPriceMapping({
+      },
+      expected: true,
+    },
+    {
+      name: "money ↔ 1 each (reversed)",
+      mapping: {
         a: { value: 5.99, unit: "dollar" },
         b: { value: 1, unit: "each" },
-      }),
-    ).toBe(true);
-  });
-
-  it("rejects per-measure money mappings (allowed as costing edges)", () => {
-    expect(
-      isCanonicalPriceMapping({
+      },
+      expected: true,
+    },
+    {
+      name: "per-measure money mapping (allowed as costing edge)",
+      mapping: {
         a: { value: 1, unit: "quart" },
         b: { value: 4, unit: "dollar" },
-      }),
-    ).toBe(false);
-    expect(
-      isCanonicalPriceMapping({
+      },
+      expected: false,
+    },
+    {
+      name: "multi-count money mapping",
+      mapping: {
         a: { value: 2, unit: "each" },
         b: { value: 8, unit: "dollar" },
-      }),
-    ).toBe(false);
-  });
+      },
+      expected: false,
+    },
+    {
+      name: "pure measurement conversion",
+      mapping: { a: { value: 1, unit: "each" }, b: { value: 5, unit: "lb" } },
+      expected: false,
+    },
+  ];
 
-  it("rejects pure measurement conversions", () => {
-    expect(
-      isCanonicalPriceMapping({
-        a: { value: 1, unit: "each" },
-        b: { value: 5, unit: "lb" },
-      }),
-    ).toBe(false);
+  it.each(CASES)("$name", ({ mapping, expected }) => {
+    expect(isCanonicalPriceMapping(mapping)).toBe(expected);
   });
 });
 
 describe("computeInventoryValuation", () => {
-  it("computes valuation as amount * price", () => {
-    const valuation = computeInventoryValuation(5, 10.0);
-    expect(valuation).toBe(50.0);
-  });
-
-  it("handles decimal values correctly", () => {
-    const valuation = computeInventoryValuation(2.5, 4.99);
+  const CASES: {
+    name: string;
+    amount: number;
+    price: number | null;
+    expected: number | null;
+  }[] = [
+    { name: "amount * price", amount: 5, price: 10.0, expected: 50.0 },
     // 2.5 * 4.99 = 12.475, truncated to 2 decimals = 12.48
-    expect(valuation).toBe(12.48);
-  });
+    {
+      name: "decimal values truncate",
+      amount: 2.5,
+      price: 4.99,
+      expected: 12.48,
+    },
+    { name: "null price → null", amount: 5, price: null, expected: null },
+    { name: "zero amount → 0", amount: 0, price: 10.0, expected: 0 },
+  ];
 
-  it("returns null when product price is null", () => {
-    const valuation = computeInventoryValuation(5, null);
-    expect(valuation).toBeNull();
-  });
-
-  it("returns 0 when amount is 0", () => {
-    const valuation = computeInventoryValuation(0, 10.0);
-    expect(valuation).toBe(0);
+  it.each(CASES)("$name", ({ amount, price, expected }) => {
+    expect(computeInventoryValuation(amount, price)).toBe(expected);
   });
 });

@@ -1,131 +1,22 @@
 import type { Amount } from "@cubby/schemas/codec";
+import { beforeAll, describe, expect, it } from "vitest";
 import {
-  unsafeIngredientId,
-  unsafeProductId,
-  unsafeProductShortcode,
-  unsafeRecipeId,
-} from "@cubby/schemas/identifiers";
-import type { RecipeOut, SectionIngredientOut } from "@cubby/schemas/recipe";
-import { beforeAll, describe, expect, test } from "vitest";
-import {
-  type CostingRow,
-  computeRecipeCosting,
-  type RecipeCosting,
-} from "~/lib/recipe-costing";
+  costRecipe,
+  cups,
+  each,
+  g,
+  ingredientWith,
+  lb,
+  makeEntry,
+  makeProduct,
+  type Product,
+} from "~/lib/recipe-costing.fixtures";
 import { type CostingGap, deriveCostingGaps } from "~/lib/recipe-costing-gaps";
 import { ensureWasm } from "~/lib/wasm";
-import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 
 beforeAll(async () => {
   await ensureWasm();
 });
-
-// ─── Fixture builders ────────────────────────────────────────────────────────
-const TS = new Date();
-const dates = { createdAt: TS, updatedAt: TS };
-
-type Product = IngredientWithFoodOut["product"][number];
-
-const makeProduct = (
-  idStr: string,
-  opts: {
-    price?: number | null;
-    ndb?: number | null;
-    upc?: string | null;
-    food?: Product["food"];
-    mappings?: { a: Amount; b: Amount }[];
-  } = {},
-): Product => ({
-  id: unsafeProductId(`prod-${idStr}`),
-  shortcode: unsafeProductShortcode("P-TEST"),
-  name: idStr,
-  upc: opts.upc ?? null,
-  ndb_number: opts.ndb ?? null,
-  manufacturer: "",
-  category: null,
-  model: null,
-  expectedQuantity: null,
-  price: opts.price ?? null,
-  images: [],
-  externalIds: [],
-  food: opts.food ?? null,
-  unitMappings: (opts.mappings ?? []).map(({ a, b }, i) => ({
-    id: `${idStr}-m${i}`,
-    a,
-    b,
-    source: "test",
-    sourceMetadata: { type: "manual" as const },
-    ...dates,
-  })),
-  ...dates,
-});
-
-const makeIngredient = (
-  idStr: string,
-  name: string,
-  products: Product[],
-): IngredientWithFoodOut => ({
-  id: unsafeIngredientId(idStr),
-  name,
-  recipe: null,
-  recipeUsages: [],
-  appearsInRecipes: [],
-  aliases: [],
-  ...dates,
-  product: products,
-});
-
-const makeEntry = (
-  idStr: string,
-  name: string,
-  amounts: Amount[],
-): CostingRow => ({
-  id: idStr,
-  type: "ingredient",
-  ...dates,
-  ingredient: { id: unsafeIngredientId(idStr), name, ...dates },
-  recipe: null,
-  amounts,
-  modifier: null,
-  sectionName: null,
-});
-
-const getName = (i: SectionIngredientOut): string =>
-  i.type === "ingredient" ? i.ingredient.name : "sub-recipe";
-
-const makeRoot = (rows: CostingRow[]): RecipeOut => ({
-  id: unsafeRecipeId("root"),
-  name: "root",
-  ...dates,
-  meta: null,
-  yield: null,
-  images: [],
-  sections: rows.map((row, i) => {
-    const { sectionName, ...ingredient } = row;
-    return {
-      id: `root-sec-${i}`,
-      name: sectionName,
-      instructions: [],
-      ingredients: [ingredient],
-      ...dates,
-    };
-  }),
-});
-
-const cost = (
-  rows: CostingRow[],
-  ingMap: Record<string, IngredientWithFoodOut>,
-): RecipeCosting => {
-  const root = makeRoot(rows);
-  const c = computeRecipeCosting([root], ingMap, getName).get(root.id);
-  if (!c) throw new Error("engine returned no costing for the root");
-  return c;
-};
-
-const g = (value: number): Amount => ({ value, unit: "g" });
-const each = (value: number): Amount => ({ value, unit: "each" });
-const cups = (value: number): Amount => ({ value, unit: "cup" });
-const lb = (value: number): Amount => ({ value, unit: "lb" });
 
 // One product, given fixed id "prod-p" so single-product cases can assert it.
 const prod = (opts?: Parameters<typeof makeProduct>[1]): Product =>
@@ -243,11 +134,11 @@ const CASES: Case[] = [
 ];
 
 describe("deriveCostingGaps — classification", () => {
-  test.each(CASES)("$name", ({ ingredient, line, products, expected }) => {
+  it.each(CASES)("$name", ({ ingredient, line, products, expected }) => {
     const rows = [makeEntry("ing", ingredient, line)];
-    const ingMap = { ing: makeIngredient("ing", ingredient, products) };
+    const ingMap = { ing: ingredientWith("ing", ingredient, products) };
 
-    const gaps = deriveCostingGaps(cost(rows, ingMap), ingMap);
+    const gaps = deriveCostingGaps(costRecipe(rows, ingMap), ingMap);
 
     if (expected === null) {
       expect(gaps).toHaveLength(0);
@@ -260,39 +151,39 @@ describe("deriveCostingGaps — classification", () => {
 
 // ─── Aggregation across rows (not a per-line classification) ──────────────────
 describe("deriveCostingGaps — multi-row", () => {
-  test("same ingredient on two lines → one deduped gap", () => {
+  it("same ingredient on two lines → one deduped gap", () => {
     const rows = [
       makeEntry("h", "salt", [cups(1)]),
       makeEntry("h", "salt", [cups(2)]),
     ];
-    const ingMap = { h: makeIngredient("h", "salt", []) };
+    const ingMap = { h: ingredientWith("h", "salt", []) };
 
-    const gaps = deriveCostingGaps(cost(rows, ingMap), ingMap);
+    const gaps = deriveCostingGaps(costRecipe(rows, ingMap), ingMap);
 
     expect(gaps).toHaveLength(1);
     expect(gaps[0]?.ingredientId).toBe("h");
   });
 
-  test("gaps sort by leverage; fully-costed lines drop out", () => {
+  it("gaps sort by leverage; fully-costed lines drop out", () => {
     const rows = [
       makeEntry("ok", "apple", [each(1)]), // fully costed → excluded
       makeEntry("e", "egg", [each(2)]), // add-weight-mapping (rank 3)
       makeEntry("a", "flour", [cups(2)]), // no-product (rank 0)
     ];
     const ingMap = {
-      ok: makeIngredient("ok", "apple", [
+      ok: ingredientWith("ok", "apple", [
         makeProduct("ok", {
           price: 0.5,
           mappings: [{ a: each(1), b: g(180) }],
         }),
       ]),
-      e: makeIngredient("e", "egg", [
+      e: ingredientWith("e", "egg", [
         makeProduct("e", { price: 0.25, ndb: 1234 }),
       ]),
-      a: makeIngredient("a", "flour", []),
+      a: ingredientWith("a", "flour", []),
     };
 
-    const gaps = deriveCostingGaps(cost(rows, ingMap), ingMap);
+    const gaps = deriveCostingGaps(costRecipe(rows, ingMap), ingMap);
 
     expect(gaps.map((x) => x.kind)).toEqual([
       "no-product",

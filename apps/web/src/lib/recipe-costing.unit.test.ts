@@ -1,192 +1,31 @@
 import type { Amount } from "@cubby/schemas/codec";
-import {
-  unsafeIngredientId,
-  unsafeProductId,
-  unsafeProductShortcode,
-  unsafeRecipeId,
-} from "@cubby/schemas/identifiers";
-import type { RecipeOut, SectionIngredientOut } from "@cubby/schemas/recipe";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
-import { beforeAll, describe, expect, test } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import {
-  type CostingRow,
   computeRecipeCosting,
   convertAmountToPrice,
   flattenSections,
-  type RecipeCosting,
 } from "~/lib/recipe-costing";
+import {
+  calculateTotals,
+  costRecipe,
+  emptyIngredient,
+  getName,
+  ingredientFromMappings,
+  makeEntry,
+  makeRootRecipe,
+  makeSubRecipe,
+  makeSubRecipeEntry,
+} from "~/lib/recipe-costing.fixtures";
 import { ensureWasm } from "~/lib/wasm";
-import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 
 // Initialize WASM before all tests
 beforeAll(async () => {
   await ensureWasm();
 });
 
-// ─── Shared fixture builders ─────────────────────────────────────────────────
-// Almost every field on IngredientWithFoodOut / SectionIngredientOut / RecipeOut
-// is irrelevant scaffolding for these tests. These builders state the defaults
-// once so each test shows only the values its assertions actually depend on
-// (mapping amounts, nutrient codes, names, yields).
-const TS = new Date();
-const dates = { createdAt: TS, updatedAt: TS };
-
-const getName = (i: SectionIngredientOut): string =>
-  i.type === "ingredient" ? i.ingredient.name : "sub-recipe";
-
-const ingredientWith = (
-  idStr: string,
-  name: string,
-  product: IngredientWithFoodOut["product"],
-): IngredientWithFoodOut => ({
-  id: unsafeIngredientId(idStr),
-  name,
-  recipe: null,
-  recipeUsages: [],
-  appearsInRecipes: [],
-  aliases: [],
-  ...dates,
-  product,
-});
-
-// An ingredient backed by one product carrying `mappings`. Pass `nutrientsPer100`
-// to attach USDA food data; omit it for a product with no nutrition.
-const makeIngredient = (
-  idStr: string,
-  name: string,
-  mappings: { a: Amount; b: Amount }[],
-  nutrientsPer100?: Record<string, number>,
-): IngredientWithFoodOut =>
-  ingredientWith(idStr, name, [
-    {
-      id: unsafeProductId(`prod-${idStr}`),
-      shortcode: unsafeProductShortcode("P-TEST"),
-      name,
-      upc: null,
-      ndb_number: null,
-      manufacturer: "",
-      category: null,
-      model: null,
-      expectedQuantity: null,
-      price: null,
-      images: [],
-      externalIds: [],
-      food: nutrientsPer100
-        ? {
-            legacyFoodInfo: null,
-            nutritionInfo: { nutrientsPer100, nutrientSummary: [] },
-            fdc_id: 0,
-            brandedFoodInfo: null,
-            foodInfo: { data_type: "branded_food", description: "" },
-            portionInfoRaw: [],
-          }
-        : null,
-      unitMappings: mappings.map(({ a, b }, i) => ({
-        id: `${idStr}-m${i}`,
-        a,
-        b,
-        source: "test",
-        sourceMetadata: { type: "manual" as const },
-        ...dates,
-      })),
-      ...dates,
-    },
-  ]);
-
-// An ingredient with no product at all (forces missing price/weight/nutrients).
-const emptyIngredient = (idStr: string, name: string): IngredientWithFoodOut =>
-  ingredientWith(idStr, name, []);
-
-// A section row referencing a plain ingredient (optionally with a modifier
-// and/or a section name — both feed the usage classifier).
-const makeEntry = (
-  idStr: string,
-  name: string,
-  amounts: Amount[],
-  modifier?: string,
-  sectionName?: string,
-): CostingRow => ({
-  id: idStr,
-  type: "ingredient",
-  ...dates,
-  ingredient: { id: unsafeIngredientId(idStr), name, ...dates },
-  recipe: null,
-  amounts,
-  modifier: modifier ?? null,
-  sectionName: sectionName ?? null,
-});
-
-// A section row referencing a sub-recipe (recipe-as-ingredient).
-const makeSubRecipeEntry = (sub: RecipeOut, amounts: Amount[]): CostingRow => ({
-  id: `link-${sub.id}`,
-  type: "recipe",
-  ...dates,
-  ingredient: null,
-  recipe: sub,
-  amounts,
-  sectionName: null,
-});
-
-const makeSubRecipe = (
-  idStr: string,
-  name: string,
-  yieldValue: RecipeOut["yield"],
-  ingredients: SectionIngredientOut[],
-): RecipeOut => ({
-  id: unsafeRecipeId(idStr),
-  name,
-  ...dates,
-  meta: null,
-  yield: yieldValue,
-  images: [],
-  sections: [
-    { id: `${idStr}-sec`, name: null, instructions: [], ingredients, ...dates },
-  ],
-});
-
-// Wrap loose costing rows in a root recipe (one section per row, preserving
-// each row's sectionName) and run the unified engine — the old
-// `calculateTotals(rows, …)` call sites, adapted.
-const makeRootRecipe = (rows: CostingRow[]): RecipeOut => ({
-  id: unsafeRecipeId("root"),
-  name: "root",
-  ...dates,
-  meta: null,
-  yield: null,
-  images: [],
-  sections: rows.map((row, i) => {
-    const { sectionName, ...ingredient } = row;
-    return {
-      id: `root-sec-${i}`,
-      name: sectionName,
-      instructions: [],
-      ingredients: [ingredient],
-      ...dates,
-    };
-  }),
-});
-
-const costRecipe = (
-  rows: CostingRow[],
-  ingMap: Record<string, IngredientWithFoodOut>,
-  recipeMap: Record<string, RecipeOut> = {},
-): RecipeCosting => {
-  const root = makeRootRecipe(rows);
-  const costing = computeRecipeCosting([root], ingMap, getName, recipeMap).get(
-    root.id,
-  );
-  if (!costing) throw new Error("engine returned no costing for the root");
-  return costing;
-};
-
-const calculateTotals = (
-  rows: CostingRow[],
-  ingMap: Record<string, IngredientWithFoodOut>,
-  recipeMap: Record<string, RecipeOut> = {},
-) => costRecipe(rows, ingMap, recipeMap).totals;
-
 describe("convertAmountToPrice", () => {
-  test("successfully converts amount to price", () => {
+  it("successfully converts amount to price", () => {
     // Arrange
     const amount: Amount = { value: 1, unit: "Pound" };
     const mappings: UnitMapping[] = [
@@ -209,7 +48,7 @@ describe("convertAmountToPrice", () => {
     }
   });
 
-  test("handles error when conversion fails", () => {
+  it("handles error when conversion fails", () => {
     // Arrange
     const amount: Amount = { value: 1, unit: "InvalidUnit" };
     const mappings: UnitMapping[] = [];
@@ -226,7 +65,7 @@ describe("convertAmountToPrice", () => {
 });
 
 describe("WASM Error Scenarios", () => {
-  test("handles empty mappings array", () => {
+  it("handles empty mappings array", () => {
     const amount: Amount = { value: 1, unit: "cup" };
     const mappings: UnitMapping[] = []; // Empty mappings
 
@@ -238,7 +77,7 @@ describe("WASM Error Scenarios", () => {
     }
   });
 
-  test("handles incompatible unit mappings", () => {
+  it("handles incompatible unit mappings", () => {
     const amount: Amount = { value: 1, unit: "cup" };
     const mappings: UnitMapping[] = [
       {
@@ -257,7 +96,7 @@ describe("WASM Error Scenarios", () => {
     }
   });
 
-  test("handles zero values in mappings", () => {
+  it("handles zero values in mappings", () => {
     const amount: Amount = { value: 1, unit: "cup" };
     const mappings: UnitMapping[] = [
       {
@@ -280,7 +119,7 @@ describe("WASM Error Scenarios", () => {
     }
   });
 
-  test("handles very large values", () => {
+  it("handles very large values", () => {
     const amount: Amount = { value: 1e10, unit: "cup" };
     const mappings: UnitMapping[] = [
       {
@@ -303,7 +142,7 @@ describe("WASM Error Scenarios", () => {
     }
   });
 
-  test("handles very small values", () => {
+  it("handles very small values", () => {
     const amount: Amount = { value: 1e-10, unit: "cup" };
     const mappings: UnitMapping[] = [
       {
@@ -324,7 +163,7 @@ describe("WASM Error Scenarios", () => {
     }
   });
 
-  test("handles case-insensitive unit names", () => {
+  it("handles case-insensitive unit names", () => {
     const amount: Amount = { value: 1, unit: "CUP" }; // Uppercase
     const mappings: UnitMapping[] = [
       {
@@ -345,7 +184,7 @@ describe("WASM Error Scenarios", () => {
     }
   });
 
-  test("handles chained conversions", () => {
+  it("handles chained conversions", () => {
     const amount: Amount = { value: 1, unit: "cup" };
     const mappings: UnitMapping[] = [
       {
@@ -380,7 +219,7 @@ describe("WASM Error Scenarios", () => {
     }
   });
 
-  test("handles circular mapping references", () => {
+  it("handles circular mapping references", () => {
     const amount: Amount = { value: 1, unit: "cup" };
     const mappings: UnitMapping[] = [
       {
@@ -406,7 +245,7 @@ describe("WASM Error Scenarios", () => {
     }
   });
 
-  test("handles custom unit names", () => {
+  it("handles custom unit names", () => {
     const amount: Amount = { value: 1, unit: "invalid_unit_xyz" };
     const mappings: UnitMapping[] = [
       {
@@ -430,7 +269,7 @@ describe("WASM Error Scenarios", () => {
 
 describe("calculateTotals", () => {
   // chicken: 1 lb = 453.59 g; 1 lb = $5.99; 100 g = 20 g protein = 200 kcal
-  const chicken = makeIngredient(
+  const chicken = ingredientFromMappings(
     "ing1",
     "chicken",
     [
@@ -442,9 +281,9 @@ describe("calculateTotals", () => {
     { "203": 20, "208": 200 },
   );
 
-  test("calculates totals with all data available", () => {
+  it("calculates totals with all data available", () => {
     // rice: 1 cup = 200 g; 1 cup = $2.50; 100 g = 7 g protein = 130 kcal
-    const rice = makeIngredient(
+    const rice = ingredientFromMappings(
       "ing2",
       "rice",
       [
@@ -474,7 +313,7 @@ describe("calculateTotals", () => {
     });
   });
 
-  test("handles completely missing data", () => {
+  it("handles completely missing data", () => {
     const result = calculateTotals(
       [
         makeEntry("ing1", "unknown ingredient", [
@@ -496,7 +335,7 @@ describe("calculateTotals", () => {
     });
   });
 
-  test("handles partially missing data", () => {
+  it("handles partially missing data", () => {
     const result = calculateTotals(
       [
         makeEntry("ing1", "chicken", [{ value: 1, unit: "pound" }]),
@@ -515,10 +354,10 @@ describe("calculateTotals", () => {
     });
   });
 
-  test("handles missing only specific data types", () => {
+  it("handles missing only specific data types", () => {
     const name = "ingredient with weight only";
     // weight mapping only — no price, no nutrition (food stays null).
-    const weightOnly = makeIngredient("ing1", name, [
+    const weightOnly = ingredientFromMappings("ing1", name, [
       { a: { value: 1, unit: "cup" }, b: { value: 240, unit: "gram" } },
     ]);
 
@@ -539,7 +378,7 @@ describe("calculateTotals", () => {
     });
   });
 
-  test("handles error in ingredient processing", () => {
+  it("handles error in ingredient processing", () => {
     const name = "problematic ingredient";
     const result = calculateTotals(
       [makeEntry("ing1", name, [])], // empty amounts → processing error
@@ -561,9 +400,9 @@ describe("calculateTotals", () => {
 });
 
 describe("calculateTotals with sub-recipes", () => {
-  test("rolls sub-recipe cost + calories into the parent totals, scaled by yield", () => {
+  it("rolls sub-recipe cost + calories into the parent totals, scaled by yield", () => {
     // tomato: 1 cup = 100 g = $1; 100 g = 10 g protein = 50 kcal
-    const tomato = makeIngredient(
+    const tomato = ingredientFromMappings(
       "tomato",
       "tomato",
       [
@@ -576,7 +415,7 @@ describe("calculateTotals with sub-recipes", () => {
     );
     // pasta: 1 scoop = 100 g = $3; 100 g = 5 g protein = 100 kcal. "scoop" is a
     // non-builtin unit so WASM uses the mapping (not a builtin like pound→gram).
-    const pasta = makeIngredient(
+    const pasta = ingredientFromMappings(
       "pasta",
       "pasta",
       [
@@ -624,7 +463,7 @@ describe("calculateTotals with sub-recipes", () => {
     expect(result.totalIngredients).toBe(2);
   });
 
-  test("guards against cycles (A → B → A) without hanging", () => {
+  it("guards against cycles (A → B → A) without hanging", () => {
     const recipeA = makeSubRecipe("recA", "A", { value: 1, unit: "batch" }, []);
     const recipeB = makeSubRecipe("recB", "B", { value: 1, unit: "batch" }, [
       makeSubRecipeEntry(recipeA, [{ value: 1, unit: "batch" }]),
@@ -645,7 +484,7 @@ describe("calculateTotals with sub-recipes", () => {
     expect(typeof result.price).toBe("number");
   });
 
-  test("flags a yield-less sub-recipe as missing instead of guessing", () => {
+  it("flags a yield-less sub-recipe as missing instead of guessing", () => {
     // No yield → can't scale → treated as unconvertible (missing), contributes $0.
     const sauce = makeSubRecipe("sauce", "tomato sauce", null, [
       makeEntry("tomato", "tomato", [{ value: 1, unit: "cup" }]),
@@ -675,31 +514,31 @@ describe("calculateTotals with the consumption model", () => {
     { a: { value: 100, unit: "g" }, b: { value: 10, unit: "g protein" } },
     { a: { value: 1, unit: "cup" }, b: { value: 1, unit: "dollar" } },
   ];
-  const flour = makeIngredient("flour", "flour", flourMappings);
+  const flour = ingredientFromMappings("flour", "flour", flourMappings);
   // Second flour identity, so a recipe can hold a normal flour row AND a
   // dredging flour row without colliding ids.
-  const flour2 = makeIngredient("flour2", "flour", flourMappings);
+  const flour2 = ingredientFromMappings("flour2", "flour", flourMappings);
   // oil: 100 g = 884 kcal; 1000 g = $5
-  const oil = makeIngredient("oil", "neutral oil", [
+  const oil = ingredientFromMappings("oil", "neutral oil", [
     { a: { value: 100, unit: "g" }, b: { value: 884, unit: "kcal" } },
     { a: { value: 1000, unit: "g" }, b: { value: 5, unit: "dollar" } },
   ]);
   // salt: 100 g = 38758 mg sodium; 100 g = $0.10
-  const salt = makeIngredient("salt", "salt", [
+  const salt = ingredientFromMappings("salt", "salt", [
     { a: { value: 100, unit: "g" }, b: { value: 38758, unit: "mg sodium" } },
     { a: { value: 100, unit: "g" }, b: { value: 0.1, unit: "dollar" } },
   ]);
   // butter: 100 g = 717 kcal; 100 g = $1
-  const butter = makeIngredient("butter", "butter", [
+  const butter = ingredientFromMappings("butter", "butter", [
     { a: { value: 100, unit: "g" }, b: { value: 717, unit: "kcal" } },
     { a: { value: 100, unit: "g" }, b: { value: 1, unit: "dollar" } },
   ]);
   // parsley: 100 g = 36 kcal (no price mapping on purpose)
-  const parsley = makeIngredient("parsley", "parsley", [
+  const parsley = ingredientFromMappings("parsley", "parsley", [
     { a: { value: 100, unit: "g" }, b: { value: 36, unit: "kcal" } },
   ]);
   // soy sauce: 100 g = 53 kcal; 100 g = $1
-  const soy = makeIngredient("soy", "soy sauce", [
+  const soy = ingredientFromMappings("soy", "soy sauce", [
     { a: { value: 100, unit: "g" }, b: { value: 53, unit: "kcal" } },
     { a: { value: 100, unit: "g" }, b: { value: 1, unit: "dollar" } },
   ]);
@@ -710,7 +549,7 @@ describe("calculateTotals with the consumption model", () => {
 
   // ── FryingMedium ──────────────────────────────────────────────────────────
 
-  test("unmeasured frying oil: absorbed estimate (15% of batter weight)", () => {
+  it("unmeasured frying oil: absorbed estimate (15% of batter weight)", () => {
     const r = calculateTotals([flourCup, fryingOil], ingMap);
 
     // batter = 100 g flour; absorbed oil = 0.15 * 100 = 15 g
@@ -726,14 +565,14 @@ describe("calculateTotals with the consumption model", () => {
     expect(r.totalIngredients).toBe(2);
   });
 
-  test("control: same recipe without the frying medium is unchanged", () => {
+  it("control: same recipe without the frying medium is unchanged", () => {
     const r = calculateTotals([flourCup], ingMap);
 
     expect(r.weight).toBeCloseTo(100, 0);
     expect(r.nutrients["208"]).toBeCloseTo(364, 0);
   });
 
-  test("MEASURED frying oil: full cost, absorbed weight/nutrients, excluded from basis", () => {
+  it("MEASURED frying oil: full cost, absorbed weight/nutrients, excluded from basis", () => {
     // "100 g oil, for frying" — the amount is the pot, not consumption.
     const measuredOil = makeEntry(
       "oil",
@@ -754,8 +593,8 @@ describe("calculateTotals with the consumption model", () => {
     expect(r.missingByType).toEqual({ price: [], weight: [], nutrients: [] });
   });
 
-  test("frying medium with no resolvable mapping fails gracefully", () => {
-    const noMapOil = makeIngredient("oil2", "neutral oil", []); // empty mappings
+  it("frying medium with no resolvable mapping fails gracefully", () => {
+    const noMapOil = ingredientFromMappings("oil2", "neutral oil", []); // empty mappings
 
     const r = calculateTotals(
       [flourCup, makeEntry("oil2", "neutral oil", [], "for frying")],
@@ -768,7 +607,7 @@ describe("calculateTotals with the consumption model", () => {
     expect(r.missingByType.nutrients).toContain("neutral oil");
   });
 
-  test("estimate-only recipe has no basis → estimated rows go missing", () => {
+  it("estimate-only recipe has no basis → estimated rows go missing", () => {
     const r = calculateTotals([fryingOil], ingMap);
 
     expect(r.weight).toBe(0);
@@ -777,7 +616,7 @@ describe("calculateTotals with the consumption model", () => {
     expect(r.missingByType.nutrients).toContain("neutral oil");
   });
 
-  test("totals are order-independent (estimated rows first vs last)", () => {
+  it("totals are order-independent (estimated rows first vs last)", () => {
     const saltToTaste = makeEntry("salt", "salt", [], "to taste");
     const forward = calculateTotals([flourCup, fryingOil, saltToTaste], ingMap);
     const reversed = calculateTotals(
@@ -792,7 +631,7 @@ describe("calculateTotals with the consumption model", () => {
 
   // ── Seasoning ─────────────────────────────────────────────────────────────
 
-  test("'salt, to taste': 1% of dish weight through salt's own mappings", () => {
+  it("'salt, to taste': 1% of dish weight through salt's own mappings", () => {
     const saltToTaste = makeEntry("salt", "salt", [], "to taste");
     const r = calculateTotals([flourCup, saltToTaste], ingMap);
 
@@ -803,7 +642,7 @@ describe("calculateTotals with the consumption model", () => {
     expect(r.missingByType.nutrients).toEqual([]);
   });
 
-  test("measured salt is a normal ingredient even with 'to taste'", () => {
+  it("measured salt is a normal ingredient even with 'to taste'", () => {
     const measuredSalt = makeEntry(
       "salt",
       "salt",
@@ -818,7 +657,7 @@ describe("calculateTotals with the consumption model", () => {
 
   // ── PanGrease / Garnish (flat estimates) ──────────────────────────────────
 
-  test("'butter, for the pan': flat 10 g", () => {
+  it("'butter, for the pan': flat 10 g", () => {
     const panButter = makeEntry("butter", "butter", [], "for the pan");
     const r = calculateTotals([flourCup, panButter], ingMap);
 
@@ -827,7 +666,7 @@ describe("calculateTotals with the consumption model", () => {
     expect(r.price).toBeCloseTo(1.1, 2);
   });
 
-  test("'parsley, for garnish': flat 5 g; unmapped measures still go missing", () => {
+  it("'parsley, for garnish': flat 5 g; unmapped measures still go missing", () => {
     const garnish = makeEntry("parsley", "parsley", [], "for garnish");
     const r = calculateTotals([flourCup, garnish], ingMap);
 
@@ -839,7 +678,7 @@ describe("calculateTotals with the consumption model", () => {
 
   // ── Dredging ──────────────────────────────────────────────────────────────
 
-  test("unmeasured 'flour, for dusting': 5% of dish weight", () => {
+  it("unmeasured 'flour, for dusting': 5% of dish weight", () => {
     const dusting = makeEntry("flour2", "flour", [], "for dusting");
     const r = calculateTotals([flourCup, dusting], ingMap);
 
@@ -848,7 +687,7 @@ describe("calculateTotals with the consumption model", () => {
     expect(r.nutrients["208"]).toBeCloseTo(364 + 18.2, 0);
   });
 
-  test("measured dredging flour: full cost, 20% retained, excluded from basis", () => {
+  it("measured dredging flour: full cost, 20% retained, excluded from basis", () => {
     const dredge = makeEntry(
       "flour2",
       "flour",
@@ -869,7 +708,7 @@ describe("calculateTotals with the consumption model", () => {
 
   // ── Marinade ──────────────────────────────────────────────────────────────
 
-  test("measured marinade (by section name): full cost, 15% retained", () => {
+  it("measured marinade (by section name): full cost, 15% retained", () => {
     const soyRow = makeEntry(
       "soy",
       "soy sauce",
@@ -885,7 +724,7 @@ describe("calculateTotals with the consumption model", () => {
     expect(r.price).toBeCloseTo(2, 2);
   });
 
-  test("unmeasured marinade row stays missing (no estimable basis)", () => {
+  it("unmeasured marinade row stays missing (no estimable basis)", () => {
     const soyRow = makeEntry("soy", "soy sauce", [], undefined, "Marinade");
     const r = calculateTotals([flourCup, soyRow], ingMap);
 
@@ -896,11 +735,11 @@ describe("calculateTotals with the consumption model", () => {
 
   // ── Classifier traps (through the real wasm classifier) ───────────────────
 
-  test("'refried beans' / 'stir-fry sauce' are normal ingredients", () => {
-    const beans = makeIngredient("beans", "refried beans", [
+  it("'refried beans' / 'stir-fry sauce' are normal ingredients", () => {
+    const beans = ingredientFromMappings("beans", "refried beans", [
       { a: { value: 1, unit: "can" }, b: { value: 400, unit: "gram" } },
     ]);
-    const stirfry = makeIngredient("stirfry", "stir-fry sauce", [
+    const stirfry = ingredientFromMappings("stirfry", "stir-fry sauce", [
       { a: { value: 1, unit: "tbsp" }, b: { value: 15, unit: "gram" } },
     ]);
 
@@ -918,7 +757,7 @@ describe("calculateTotals with the consumption model", () => {
 
   // ── Per-row view parity ───────────────────────────────────────────────────
 
-  test("estimated rows carry the estimate, keyed off the shared basis", () => {
+  it("estimated rows carry the estimate, keyed off the shared basis", () => {
     const costing = costRecipe([flourCup, fryingOil], ingMap);
 
     expect([...costing.estimatedRows]).toEqual([["oil", "frying_medium"]]);
@@ -937,7 +776,7 @@ describe("calculateTotals with the consumption model", () => {
     ).toBeCloseTo(100, 0);
   });
 
-  test("a MEASURED fry row displays est weight but own cost", () => {
+  it("a MEASURED fry row displays est weight but own cost", () => {
     const measuredOil = makeEntry(
       "oil",
       "neutral oil",
@@ -958,15 +797,15 @@ describe("calculateTotals with the consumption model", () => {
     ).toBeCloseTo(0.5, 2);
   });
 
-  test("no estimated rows when every row is normal", () => {
+  it("no estimated rows when every row is normal", () => {
     const costing = costRecipe([flourCup], ingMap);
 
     expect(costing.estimatedRows.size).toBe(0);
     expect(costing.rows).toHaveLength(1);
   });
 
-  test("baker's percentages: own grams over flour grams", () => {
-    const water = makeIngredient("water", "water", [
+  it("baker's percentages: own grams over flour grams", () => {
+    const water = ingredientFromMappings("water", "water", [
       { a: { value: 1, unit: "g" }, b: { value: 1, unit: "gram" } },
     ]);
     const root = makeRootRecipe([
@@ -988,18 +827,18 @@ describe("calculateTotals with the consumption model", () => {
 
 describe("calculateTotals diagnostics", () => {
   // flour: 1 cup = 100 g = $1; per-100g kcal. oil: kcal + price per kg.
-  const flour = makeIngredient("flour", "flour", [
+  const flour = ingredientFromMappings("flour", "flour", [
     { a: { value: 1, unit: "cup" }, b: { value: 100, unit: "gram" } },
     { a: { value: 100, unit: "g" }, b: { value: 364, unit: "kcal" } },
     { a: { value: 1, unit: "cup" }, b: { value: 1, unit: "dollar" } },
   ]);
-  const oil = makeIngredient("oil", "neutral oil", [
+  const oil = ingredientFromMappings("oil", "neutral oil", [
     { a: { value: 100, unit: "g" }, b: { value: 884, unit: "kcal" } },
     { a: { value: 1000, unit: "g" }, b: { value: 5, unit: "dollar" } },
   ]);
   const ingMap = { flour, oil, mystery: emptyIngredient("mystery", "mystery") };
 
-  test("records usage, fired rule, basis, and resolved values in input order", () => {
+  it("records usage, fired rule, basis, and resolved values in input order", () => {
     const r = calculateTotals(
       [
         makeEntry("flour", "flour", [{ value: 1, unit: "cup" }]),
@@ -1033,7 +872,7 @@ describe("calculateTotals diagnostics", () => {
     expect(oilDiag?.nutrient.ok && oilDiag.nutrient.kcal).toBeCloseTo(132.6, 0);
   });
 
-  test("keeps the exact error strings the cells swallow into '—'", () => {
+  it("keeps the exact error strings the cells swallow into '—'", () => {
     const r = calculateTotals(
       [
         // No amounts on a normal row → "has no amounts" on all three.

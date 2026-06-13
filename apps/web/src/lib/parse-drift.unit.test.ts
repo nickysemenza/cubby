@@ -15,34 +15,48 @@ const fresh = (
 });
 
 describe("amountsEqual", () => {
-  it("compares value + unit per element in order", () => {
-    expect(
-      amountsEqual(
-        [{ value: 1, unit: "clove" }],
-        [{ value: 1, unit: "clove" }],
-      ),
-    ).toBe(true);
-    expect(
-      amountsEqual([{ value: 1, unit: "whole" }], [{ value: 1, unit: "head" }]),
-    ).toBe(false);
-    expect(
-      amountsEqual(
-        [{ value: 1, unit: "clove" }],
-        [{ value: 2, unit: "clove" }],
-      ),
-    ).toBe(false);
-  });
+  type Amounts = { value: number; unit: string; upper_value?: number }[];
+  const CASES: { name: string; a: Amounts; b: Amounts; expected: boolean }[] = [
+    {
+      name: "equal value + unit",
+      a: [{ value: 1, unit: "clove" }],
+      b: [{ value: 1, unit: "clove" }],
+      expected: true,
+    },
+    {
+      name: "differing unit",
+      a: [{ value: 1, unit: "whole" }],
+      b: [{ value: 1, unit: "head" }],
+      expected: false,
+    },
+    {
+      name: "differing value",
+      a: [{ value: 1, unit: "clove" }],
+      b: [{ value: 2, unit: "clove" }],
+      expected: false,
+    },
+    {
+      name: "differing length (empty vs one)",
+      a: [],
+      b: [{ value: 1, unit: "clove" }],
+      expected: false,
+    },
+    {
+      name: "differing length (one vs empty)",
+      a: [{ value: 1, unit: "clove" }],
+      b: [],
+      expected: false,
+    },
+    {
+      name: "ignores upper_value (never persisted)",
+      a: [{ value: 2, unit: "clove" }],
+      b: [{ value: 2, unit: "clove", upper_value: 3 }],
+      expected: true,
+    },
+  ];
 
-  it("differs on length", () => {
-    expect(amountsEqual([], [{ value: 1, unit: "clove" }])).toBe(false);
-    expect(amountsEqual([{ value: 1, unit: "clove" }], [])).toBe(false);
-  });
-
-  it("ignores upper_value (never persisted)", () => {
-    const stored: Amount[] = [{ value: 2, unit: "clove" }];
-    expect(
-      amountsEqual(stored, [{ value: 2, unit: "clove", upper_value: 3 }]),
-    ).toBe(true);
+  it.each(CASES)("$name", ({ a, b, expected }) => {
+    expect(amountsEqual(a, b)).toBe(expected);
   });
 });
 
@@ -53,62 +67,117 @@ describe("computeParseDrift", () => {
     modifier: string | null = null,
   ) => ({ knownNames, amounts, modifier });
 
-  it("flags the {1, whole} -> {1, head} amount case with no name drift", () => {
-    // The garlic-head bug: merged ingredient name matches, but the amount drifted.
-    const drift = computeParseDrift(
-      persisted(["garlic"], [{ value: 1, unit: "whole" }]),
-      fresh("garlic", [{ value: 1, unit: "head" }]),
-    );
-    expect(drift.name).toBeNull();
-    expect(drift.amounts).toEqual([{ value: 1, unit: "head" }]);
-    expect(hasDrift(drift)).toBe(true);
-  });
+  type Drift = ReturnType<typeof computeParseDrift>;
+  interface Case {
+    name: string;
+    persisted: {
+      knownNames: string[];
+      amounts: Amount[];
+      modifier?: string | null;
+    };
+    fresh: {
+      name: string;
+      amounts?: { value: number; unit: string; upper_value?: number }[];
+      modifier?: string;
+    };
+    expectedDrift: Drift;
+    expectedHasDrift: boolean;
+  }
 
-  it("flags name drift", () => {
-    const drift = computeParseDrift(
-      persisted(["garlic clove"], [{ value: 1, unit: "clove" }]),
-      fresh("garlic", [{ value: 1, unit: "clove" }]),
-    );
-    expect(drift.name).toBe("garlic");
-    expect(drift.amounts).toBeNull();
-    expect(hasDrift(drift)).toBe(true);
-  });
+  const CASES: Case[] = [
+    {
+      // The garlic-head bug: merged ingredient name matches, but amount drifted.
+      name: "amount drift {1, whole} → {1, head} with no name drift",
+      persisted: {
+        knownNames: ["garlic"],
+        amounts: [{ value: 1, unit: "whole" }],
+      },
+      fresh: { name: "garlic", amounts: [{ value: 1, unit: "head" }] },
+      expectedDrift: {
+        name: null,
+        amounts: [{ value: 1, unit: "head" }],
+        modifier: null,
+      },
+      expectedHasDrift: true,
+    },
+    {
+      name: "name drift",
+      persisted: {
+        knownNames: ["garlic clove"],
+        amounts: [{ value: 1, unit: "clove" }],
+      },
+      fresh: { name: "garlic", amounts: [{ value: 1, unit: "clove" }] },
+      expectedDrift: { name: "garlic", amounts: null, modifier: null },
+      expectedHasDrift: true,
+    },
+    {
+      name: "alias hit is no drift (case-insensitive)",
+      persisted: {
+        knownNames: ["large brown egg", "Egg"],
+        amounts: [{ value: 2, unit: "whole" }],
+      },
+      fresh: { name: "egg", amounts: [{ value: 2, unit: "whole" }] },
+      expectedDrift: { name: null, amounts: null, modifier: null },
+      expectedHasDrift: false,
+    },
+    {
+      name: "modifier-only drift",
+      persisted: {
+        knownNames: ["onion"],
+        amounts: [{ value: 1, unit: "cup" }],
+        modifier: "chopped",
+      },
+      fresh: {
+        name: "onion",
+        amounts: [{ value: 1, unit: "cup" }],
+        modifier: "finely chopped",
+      },
+      expectedDrift: { name: null, amounts: null, modifier: "finely chopped" },
+      expectedHasDrift: true,
+    },
+    {
+      // A removed modifier is '' (drift), distinct from null (no modifier change).
+      name: "modifier removed → '' drift",
+      persisted: {
+        knownNames: ["onion"],
+        amounts: [{ value: 1, unit: "cup" }],
+        modifier: "chopped",
+      },
+      fresh: {
+        name: "onion",
+        amounts: [{ value: 1, unit: "cup" }],
+        modifier: undefined,
+      },
+      expectedDrift: { name: null, amounts: null, modifier: "" },
+      expectedHasDrift: true,
+    },
+    {
+      name: "all-clear when name, amounts, and modifier match",
+      persisted: {
+        knownNames: ["garlic"],
+        amounts: [{ value: 1, unit: "clove" }],
+        modifier: "peeled",
+      },
+      fresh: {
+        name: "garlic",
+        amounts: [{ value: 1, unit: "clove" }],
+        modifier: "peeled",
+      },
+      expectedDrift: { name: null, amounts: null, modifier: null },
+      expectedHasDrift: false,
+    },
+  ];
 
-  it("treats an alias hit as no drift (case-insensitive)", () => {
+  it.each(CASES)("$name", (c) => {
     const drift = computeParseDrift(
-      persisted(["large brown egg", "Egg"], [{ value: 2, unit: "whole" }]),
-      fresh("egg", [{ value: 2, unit: "whole" }]),
+      persisted(
+        c.persisted.knownNames,
+        c.persisted.amounts,
+        c.persisted.modifier,
+      ),
+      fresh(c.fresh.name, c.fresh.amounts, c.fresh.modifier),
     );
-    expect(drift.name).toBeNull();
-    expect(hasDrift(drift)).toBe(false);
-  });
-
-  it("flags modifier-only drift", () => {
-    const drift = computeParseDrift(
-      persisted(["onion"], [{ value: 1, unit: "cup" }], "chopped"),
-      fresh("onion", [{ value: 1, unit: "cup" }], "finely chopped"),
-    );
-    expect(drift.name).toBeNull();
-    expect(drift.amounts).toBeNull();
-    expect(drift.modifier).toBe("finely chopped");
-    expect(hasDrift(drift)).toBe(true);
-  });
-
-  it("represents a modifier removed as '' (drift), distinct from null", () => {
-    const drift = computeParseDrift(
-      persisted(["onion"], [{ value: 1, unit: "cup" }], "chopped"),
-      fresh("onion", [{ value: 1, unit: "cup" }], undefined),
-    );
-    expect(drift.modifier).toBe("");
-    expect(hasDrift(drift)).toBe(true);
-  });
-
-  it("is all-clear when name, amounts, and modifier match", () => {
-    const drift = computeParseDrift(
-      persisted(["garlic"], [{ value: 1, unit: "clove" }], "peeled"),
-      fresh("garlic", [{ value: 1, unit: "clove" }], "peeled"),
-    );
-    expect(drift).toEqual({ name: null, amounts: null, modifier: null });
-    expect(hasDrift(drift)).toBe(false);
+    expect(drift).toEqual(c.expectedDrift);
+    expect(hasDrift(drift)).toBe(c.expectedHasDrift);
   });
 });

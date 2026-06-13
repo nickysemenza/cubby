@@ -1,6 +1,6 @@
 import { unsafeProductId } from "@cubby/schemas/identifiers";
 import type { FoodSummary } from "@cubby/usda-schemas";
-import { beforeAll, describe, expect, test } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { convertAmountToPrice, safeConvertAmount } from "~/lib/recipe-costing";
 import { ensureWasm } from "~/lib/wasm";
 import {
@@ -14,88 +14,96 @@ beforeAll(async () => {
 });
 
 describe("parseUnitMappingString", () => {
-  test("parses conversion format with source", () => {
-    const result = parseUnitMappingString("4 lb = $5 @ whole foods");
-    expect(result.a.value).toBe(4);
-    expect(result.a.unit).toBe("lb");
-    expect(result.b.value).toBe(5);
-    expect(result.b.unit).toBe("$"); // Canonical form
-    expect(result.source).toBe("whole foods");
-  });
+  interface Case {
+    name: string;
+    input: string;
+    expected: {
+      a: { value: number; unit: string };
+      b: { value: number; unit: string };
+      // Only asserted when present (string or explicit null).
+      source?: string | null;
+    };
+  }
 
-  test("parses conversion format without source", () => {
-    const result = parseUnitMappingString("1 cup = 120g");
-    expect(result.a.value).toBe(1);
-    expect(result.a.unit).toBe("cup");
-    expect(result.b.value).toBe(120);
-    expect(result.b.unit).toBe("g");
-    expect(result.source).toBeNull();
-  });
-
-  test("parses price-per format", () => {
-    const result = parseUnitMappingString("$5/4lb");
-    // Note: normalized order - amount first, then price
-    expect(result.a.value).toBe(4);
-    expect(result.a.unit).toBe("lb");
-    expect(result.b.value).toBe(5);
-    expect(result.b.unit).toBe("$");
-  });
-
-  test("parses price-per format with source", () => {
-    const result = parseUnitMappingString("$5/4lb @ costco");
-    expect(result.a.value).toBe(4);
-    expect(result.a.unit).toBe("lb");
-    expect(result.b.value).toBe(5);
-    expect(result.source).toBe("costco");
-  });
-
-  test("parses decimal values", () => {
-    const result = parseUnitMappingString("2.5 cups = $3.50");
-    expect(result.a.value).toBe(2.5);
-    expect(result.a.unit).toBe("cup"); // Singularized
-    expect(result.b.value).toBe(3.5);
-    expect(result.b.unit).toBe("$");
-  });
-
-  test("parses various unit formats", () => {
-    const examples = [
-      {
-        input: "1 stick = 113g",
-        expected: {
-          a: { value: 1, unit: "stick" },
-          b: { value: 113, unit: "g" },
-        },
+  const CASES: Case[] = [
+    {
+      name: "conversion format with source",
+      input: "4 lb = $5 @ whole foods",
+      expected: {
+        a: { value: 4, unit: "lb" },
+        b: { value: 5, unit: "$" }, // canonical money form
+        source: "whole foods",
       },
-      {
-        input: "12 eggs = $7 @ store",
-        expected: {
-          a: { value: 12, unit: "egg" },
-          b: { value: 7, unit: "$" },
-          source: "store",
-        },
+    },
+    {
+      name: "conversion format without source",
+      input: "1 cup = 120g",
+      expected: {
+        a: { value: 1, unit: "cup" },
+        b: { value: 120, unit: "g" },
+        source: null,
       },
-      {
-        input: "2 lbs = $6",
-        expected: { a: { value: 2, unit: "lb" }, b: { value: 6, unit: "$" } },
+    },
+    {
+      // normalized order — amount first, then price
+      name: "price-per format",
+      input: "$5/4lb",
+      expected: { a: { value: 4, unit: "lb" }, b: { value: 5, unit: "$" } },
+    },
+    {
+      name: "price-per format with source",
+      input: "$5/4lb @ costco",
+      expected: {
+        a: { value: 4, unit: "lb" },
+        b: { value: 5, unit: "$" },
+        source: "costco",
       },
-    ];
+    },
+    {
+      name: "decimal values (singularized unit)",
+      input: "2.5 cups = $3.50",
+      expected: {
+        a: { value: 2.5, unit: "cup" },
+        b: { value: 3.5, unit: "$" },
+      },
+    },
+    {
+      name: "named unit on the left",
+      input: "1 stick = 113g",
+      expected: {
+        a: { value: 1, unit: "stick" },
+        b: { value: 113, unit: "g" },
+      },
+    },
+    {
+      name: "plural count singularized, with source",
+      input: "12 eggs = $7 @ store",
+      expected: {
+        a: { value: 12, unit: "egg" },
+        b: { value: 7, unit: "$" },
+        source: "store",
+      },
+    },
+    {
+      name: "plural weight singularized",
+      input: "2 lbs = $6",
+      expected: { a: { value: 2, unit: "lb" }, b: { value: 6, unit: "$" } },
+    },
+  ];
 
-    for (const { input, expected } of examples) {
-      const result = parseUnitMappingString(input);
-      expect(result.a.value).toBe(expected.a.value);
-      expect(result.a.unit).toBe(expected.a.unit);
-      expect(result.b.value).toBe(expected.b.value);
-      expect(result.b.unit).toBe(expected.b.unit);
-      if (expected.source) {
-        expect(result.source).toBe(expected.source);
-      }
+  it.each(CASES)("parses $name", ({ input, expected }) => {
+    const result = parseUnitMappingString(input);
+    expect(result.a.value).toBe(expected.a.value);
+    expect(result.a.unit).toBe(expected.a.unit);
+    expect(result.b.value).toBe(expected.b.value);
+    expect(result.b.unit).toBe(expected.b.unit);
+    if (expected.source !== undefined) {
+      expect(result.source).toBe(expected.source);
     }
   });
 
-  test("throws on invalid input", () => {
-    expect(() => parseUnitMappingString("invalid")).toThrow();
-    expect(() => parseUnitMappingString("4 lb")).toThrow();
-    expect(() => parseUnitMappingString("")).toThrow();
+  it.each(["invalid", "4 lb", ""])("throws on invalid input %j", (input) => {
+    expect(() => parseUnitMappingString(input)).toThrow();
   });
 });
 
@@ -133,7 +141,7 @@ describe("createServingMapping bare-count guard (serving/whole conflation)", () 
   // household serving COUNT emitted as `whole` let one serving inherit the
   // per-item price (34 g of protein powder costed $61.38 — 1.5 "bags").
 
-  test('"2 SCOOPS" emits the household word as the unit, not whole', () => {
+  it('"2 SCOOPS" emits the household word as the unit, not whole', () => {
     const mappings = getAllUnitMappingsFromProduct(promixProduct("2 SCOOPS"));
     const serving = mappings.find((m) => m.source === "USDA FDC serving");
 
@@ -143,7 +151,7 @@ describe("createServingMapping bare-count guard (serving/whole conflation)", () 
     expect(serving?.b.unit).toBe("scoop"); // normalized, NOT "whole"
   });
 
-  test("grams have no path to money (a scoop is not a purchasable item)", () => {
+  it("grams have no path to money (a scoop is not a purchasable item)", () => {
     const mappings = getAllUnitMappingsFromProduct(promixProduct("2 SCOOPS"));
 
     const fiftyGrams = convertAmountToPrice({ value: 50, unit: "g" }, mappings);
@@ -151,7 +159,7 @@ describe("createServingMapping bare-count guard (serving/whole conflation)", () 
     expect(fiftyGrams.isErr()).toBe(true);
   });
 
-  test("scoops still convert to grams (weight↔serving intact)", () => {
+  it("scoops still convert to grams (weight↔serving intact)", () => {
     const mappings = getAllUnitMappingsFromProduct(promixProduct("2 SCOOPS"));
 
     const grams = safeConvertAmount(
@@ -163,7 +171,7 @@ describe("createServingMapping bare-count guard (serving/whole conflation)", () 
     if (grams.isOk()) expect(grams.value.value).toBeCloseTo(22.15, 0);
   });
 
-  test("bare-count recipe amounts still price via each", () => {
+  it("bare-count recipe amounts still price via each", () => {
     const mappings = getAllUnitMappingsFromProduct(promixProduct("2 SCOOPS"));
 
     // "2 whole" (e.g. 2 bags) → 2 × $39.99. The each≡whole link must survive;
@@ -176,7 +184,7 @@ describe("createServingMapping bare-count guard (serving/whole conflation)", () 
     if (twoItems.isOk()) expect(twoItems.value.value).toBeCloseTo(79.98, 2);
   });
 
-  test("household text with a real unit is unchanged", () => {
+  it("household text with a real unit is unchanged", () => {
     const mappings = getAllUnitMappingsFromProduct(promixProduct("0.5 cup"));
     const serving = mappings.find((m) => m.source === "USDA FDC serving");
 
