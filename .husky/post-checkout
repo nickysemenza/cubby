@@ -2,6 +2,6 @@
 
 # Args: $1=prev HEAD  $2=new HEAD  $3=flag (1 = branch checkout, 0 = file checkout).
 # Only react to branch checkouts/rebases — refresh the gitignored WASM binary if
-# the new tree's recipebridge/ differs from the built one.
+# the new tree's recipebridge/ (or a local path-dep) differs from the built one.
 [ "$3" = "1" ] || exit 0
-sh "$(git rev-parse --show-toplevel)/scripts/ensure-wasm.sh"
+node "$(git rev-parse --show-toplevel)/scripts/ensure-wasm.mjs"

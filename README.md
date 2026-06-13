@@ -192,11 +192,17 @@ Claude Code can run parallel sessions, each in its own git worktree under
   shared cache (`~/.cache/cubby/recipebridge-target`), so worktrees reuse the
   compiled Rust deps — a worktree `pnpm run wasm` is an incremental build, not the
   ~90s cold one, and there's no 1.3GB `target/` per worktree.
-- **WASM never silently drifts.** [scripts/ensure-wasm.sh](scripts/ensure-wasm.sh)
-  runs on `git pull`/`git checkout` (husky `post-merge`/`post-checkout`) and rebuilds
-  only if `recipebridge/` is newer than the built binary (a `find -newer` check —
-  cargo does the real staleness work). So a pulled `recipebridge/` change rebuilds
-  instead of throwing `missing field …` at runtime — on the **main** checkout too.
+- **WASM never silently drifts.** [scripts/ensure-wasm.mjs](scripts/ensure-wasm.mjs)
+  rebuilds the gitignored WASM only when a source it's built from is newer than the
+  built binary. "Sources" is `recipebridge/` **plus every local path-dependency**
+  `cargo metadata` reports (`source: null`) — notably the
+  [ingredient-parser](https://github.com/nickysemenza/ingredient-parser) working
+  copy the global `~/.cargo` `[patch]` redirects to, so editing the parser locally is
+  caught too (no patch → only `recipebridge/`, same as CI). It runs on `pnpm dev`
+  (so a local parser edit rebuilds on the next dev start) and on `git pull`/`git
+  checkout` (husky `post-merge`/`post-checkout`, for a pulled rev bump or branch
+  switch) — on the **main** checkout too. cargo does the real incremental compile;
+  this is just the staleness gate that skips the ~10s wasm-bindgen/opt when fresh.
 - **Ports.** The main checkout is always `:3000` (`vite.config.ts` uses `strictPort`,
   so it fails loudly rather than drifting). Worktree dev servers auto-pick a free
   port — the preview harness via `autoPort` (injects `PORT`), or a terminal
@@ -211,9 +217,10 @@ Claude Code can run parallel sessions, each in its own git worktree under
 - **⚠ Shared prod DB:** every worktree's `DATABASE_URL` is the **same prod Neon**
   instance (dev DB *is* prod). `db:push` and data changes from one worktree are
   visible everywhere and hit prod — coordinate schema changes across parallel work.
-- Rebuild WASM manually (`pnpm run wasm`) only if you edit `recipebridge/` Rust
-  source; it needs the rust toolchain + the global cargo patch + the sibling
-  ingredient-parser checkout.
+- Editing `recipebridge/` Rust source — or the patched sibling ingredient-parser
+  checkout — is picked up automatically on the next `pnpm dev` (see "WASM never
+  silently drifts" above); `pnpm run wasm` forces it. Needs the rust toolchain + the
+  global cargo patch + the sibling ingredient-parser checkout.
 
 ## ⚡ Common Commands
 
