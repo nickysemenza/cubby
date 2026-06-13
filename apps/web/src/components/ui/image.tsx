@@ -5,6 +5,7 @@ import {
   useCallback,
   useState,
 } from "react";
+import { transformedImageUrl, transformedSrcSet } from "~/lib/image-url";
 import { cn } from "~/lib/utils";
 
 export type ImageProps = Omit<
@@ -16,6 +17,12 @@ export type ImageProps = Omit<
    * Should fill its box (h-full w-full). Defaults to a quiet muted icon tile.
    */
   fallback?: ReactNode;
+  /**
+   * Display width in CSS pixels. When set, R2 images are served through
+   * Cloudflare Image Transformations at this width (plus a 2x srcSet for
+   * retina) instead of the full-size original. No-op for non-bucket URLs.
+   */
+  displayWidth?: number;
 };
 
 // URLs that have successfully loaded this session. Virtualized tables
@@ -41,20 +48,42 @@ export function Image({
   className,
   style,
   fallback,
+  displayWidth,
   ...props
 }: ImageProps) {
   const hasSrc = typeof src === "string" && src.length > 0;
 
+  // If a CF transform fails (e.g. transformation outage), retry once with the
+  // original URL before giving up to the fallback tile.
+  const [triedOriginal, setTriedOriginal] = useState(false);
+
+  const transformedSrc =
+    hasSrc && displayWidth != null
+      ? transformedImageUrl(src as string, displayWidth)
+      : (src as string | undefined);
+  const transformApplied = hasSrc && transformedSrc !== src;
+  const useTransform = transformApplied && !triedOriginal;
+
+  const effectiveSrc = useTransform
+    ? transformedSrc
+    : (src as string | undefined);
+  const effectiveSrcSet =
+    useTransform && displayWidth != null
+      ? transformedSrcSet(src as string, displayWidth)
+      : undefined;
+
   // Skip the placeholder entirely for images already loaded this session.
+  // Keyed on the final (transformed) URL so two display widths of the same
+  // source are tracked independently.
   const [isLoading, setIsLoading] = useState(
-    () => !(hasSrc && loadedSrcs.has(src as string)),
+    () => !(effectiveSrc != null && loadedSrcs.has(effectiveSrc)),
   );
   const [errored, setErrored] = useState(false);
 
   const markLoaded = useCallback(() => {
-    if (typeof src === "string") loadedSrcs.add(src);
+    if (effectiveSrc != null) loadedSrcs.add(effectiveSrc);
     setIsLoading(false);
-  }, [src]);
+  }, [effectiveSrc]);
 
   // Belt-and-suspenders for images the browser cached on a prior page load (not
   // yet in loadedSrcs): if it's already complete at mount, skip the placeholder
@@ -95,12 +124,18 @@ export function Image({
       )}
       <img
         ref={handleRef}
-        src={src}
+        src={effectiveSrc}
+        srcSet={effectiveSrcSet}
         alt={alt}
         loading="lazy"
         decoding="async"
         onLoad={markLoaded}
         onError={() => {
+          // First failure of a transformed URL → fall back to the original.
+          if (useTransform) {
+            setTriedOriginal(true);
+            return;
+          }
           setErrored(true);
           setIsLoading(false);
         }}

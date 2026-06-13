@@ -82,6 +82,7 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
       <Image
         src={heroImage.url}
         alt={recipe.name}
+        displayWidth={800}
         className="h-64 w-full object-cover sm:h-80 md:h-96"
       />
       <figcaption className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-1 pt-2">

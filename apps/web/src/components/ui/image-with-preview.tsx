@@ -29,6 +29,8 @@ export interface ImageWithPreviewProps {
   className?: string;
   /** Graceful fallback rendered when the image is missing or fails to load. */
   fallback?: ReactNode;
+  /** Thumbnail display width in px for CF image transforms (the popup uses previewSize). */
+  displayWidth?: number;
 }
 
 /**
@@ -46,6 +48,7 @@ export function ImageWithPreview({
   lazyPreview = false,
   className,
   fallback,
+  displayWidth,
 }: ImageWithPreviewProps) {
   const thumbnailClasses = cn(
     "bg-background relative flex-shrink-0 overflow-hidden rounded border transition-transform hover:scale-105",
@@ -72,6 +75,7 @@ export function ImageWithPreview({
           src={src}
           alt={alt}
           fallback={fallback}
+          displayWidth={displayWidth}
           className="absolute inset-0 h-full w-full object-cover"
         />
       </TooltipTrigger>
@@ -86,6 +90,7 @@ export function ImageWithPreview({
           <Image
             src={src}
             alt={alt}
+            displayWidth={previewSize}
             className="absolute inset-0 h-full w-full object-cover"
           />
         </div>

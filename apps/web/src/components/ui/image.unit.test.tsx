@@ -34,4 +34,51 @@ describe("Image", () => {
     expect(screen.queryByRole("img")).toBeNull();
     expect(screen.getByText("tile")).toBeInTheDocument();
   });
+
+  const BUCKET_SRC = "https://foobucket.nicky.fun/cubby/images/a.jpg";
+
+  it("requests a CF transform + 2x srcSet when displayWidth is set on a bucket URL", () => {
+    render(<Image src={BUCKET_SRC} alt="p" displayWidth={400} />);
+    const img = screen.getByRole("img", { name: "p" });
+    expect(img.getAttribute("src")).toBe(
+      "https://foobucket.nicky.fun/cdn-cgi/image/width=400,quality=80,format=auto,fit=scale-down/cubby/images/a.jpg",
+    );
+    expect(img.getAttribute("srcset")).toContain("width=800"); // 2x
+  });
+
+  it("uses the original src (no srcSet) when displayWidth is omitted", () => {
+    render(<Image src={BUCKET_SRC} alt="p" />);
+    const img = screen.getByRole("img", { name: "p" });
+    expect(img.getAttribute("src")).toBe(BUCKET_SRC);
+    expect(img.getAttribute("srcset")).toBeNull();
+  });
+
+  it("leaves non-bucket URLs untransformed even with displayWidth", () => {
+    render(<Image src="https://example.com/a.jpg" alt="p" displayWidth={400} />);
+    expect(screen.getByRole("img", { name: "p" }).getAttribute("src")).toBe(
+      "https://example.com/a.jpg",
+    );
+  });
+
+  it("falls back to the original URL once before erroring when a transform fails", () => {
+    render(
+      <Image
+        src={BUCKET_SRC}
+        alt="p"
+        displayWidth={400}
+        fallback={<span>tile</span>}
+      />,
+    );
+    const img = screen.getByRole("img", { name: "p" });
+    expect(img.getAttribute("src")).toContain("/cdn-cgi/image/");
+    // First error: retry with the original URL, still an <img> (no fallback yet).
+    fireEvent.error(img);
+    const retried = screen.getByRole("img", { name: "p" });
+    expect(retried.getAttribute("src")).toBe(BUCKET_SRC);
+    expect(retried.getAttribute("srcset")).toBeNull();
+    // Original also fails → fallback tile.
+    fireEvent.error(retried);
+    expect(screen.queryByRole("img")).toBeNull();
+    expect(screen.getByText("tile")).toBeInTheDocument();
+  });
 });

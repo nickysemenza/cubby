@@ -33,6 +33,7 @@ export function CardThumbnail({
         to={to}
         params={params}
         lazyPreview
+        displayWidth={size}
         className="absolute inset-0 h-full w-full rounded-none border-0"
       />
       {images.length > 1 && (
