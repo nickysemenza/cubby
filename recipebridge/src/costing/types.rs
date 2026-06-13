@@ -34,10 +34,13 @@ pub struct WCostingRow {
     /// TS-resolved display name (the old `getIngredientName` output) — feeds
     /// the classifier and the missing-data labels.
     pub name: String,
-    /// The row's first written amount (all the engine ever used).
+    /// The row's written amounts, in source order. The engine resolves each
+    /// costing measure from these, PREFERRING an amount already of that measure's
+    /// kind — so a stated weight ("8½ oz") drives grams directly (via the unit
+    /// engine's mass identity) instead of a volume that needs a density mapping.
+    /// Empty when the line carries no amount ("to taste").
     #[serde(default)]
-    #[tsify(type = "WAmount | null")]
-    pub amount: Option<WAmount>,
+    pub amounts: Vec<WAmount>,
     #[serde(default)]
     #[tsify(type = "string | null")]
     pub modifier: Option<String>,

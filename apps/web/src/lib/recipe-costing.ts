@@ -175,7 +175,7 @@ const toWRow = (
     kind: row.type,
     target_id: row.type === "ingredient" ? row.ingredient.id : row.recipe.id,
     name,
-    amount: row.amounts[0] ?? null,
+    amounts: row.amounts,
     modifier: row.modifier ?? null,
     raw_line: row.rawLine ?? null,
     section_name: row.sectionName,

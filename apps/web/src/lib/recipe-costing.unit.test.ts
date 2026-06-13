@@ -601,8 +601,11 @@ describe("calculateTotals with the consumption model", () => {
       { flour, oil2: noMapOil },
     );
 
-    // flour is unaffected; the oil simply can't be estimated → missing.
-    expect(r.weight).toBeCloseTo(100, 0);
+    // 100 g flour + ~15 g estimated absorbed oil. The oil has no mappings, but
+    // its estimated weight is already in grams, so it resolves via the unit
+    // engine's mass identity (no density) and counts toward weight — consistent
+    // with a mapped frying medium. Cost/nutrients still can't resolve (no food).
+    expect(r.weight).toBeCloseTo(115, 0);
     expect(r.nutrients["208"]).toBeCloseTo(364, 0);
     expect(r.missingByType.nutrients).toContain("neutral oil");
   });

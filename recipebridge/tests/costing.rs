@@ -62,7 +62,7 @@ fn row(
         kind: WRowKind::Ingredient,
         target_id: id.to_string(),
         name: name.to_string(),
-        amount: amt.map(|(v, u)| amount(v, u)),
+        amounts: amt.map(|(v, u)| amount(v, u)).into_iter().collect(),
         modifier: modifier.map(String::from),
         raw_line: None,
         section_name: section.map(String::from),
@@ -76,7 +76,7 @@ fn sub_recipe_row(sub_id: &str, amt: (f64, &str)) -> WCostingRow {
         kind: WRowKind::Recipe,
         target_id: sub_id.to_string(),
         name: "sub-recipe".to_string(),
-        amount: Some(amount(amt.0, amt.1)),
+        amounts: vec![amount(amt.0, amt.1)],
         modifier: None,
         raw_line: None,
         section_name: None,
@@ -554,6 +554,37 @@ fn measured_frying_oil_full_cost_absorbed_weight_excluded_from_basis() {
 }
 
 #[test]
+fn prefers_stated_weight_over_volume_sharing_one_basis() {
+    // Flour written as both "2 cups" and "8½ oz", with only a cup→g density
+    // mapping (no oz mapping). The canonical amount is the ounce: weight resolves
+    // via the mass identity to 241 g (not 2×100 = 200 g from the cup density),
+    // and calories ride that same 241 g basis — not a mix.
+    let flour_row = WCostingRow {
+        id: "flour".to_string(),
+        kind: WRowKind::Ingredient,
+        target_id: "flour".to_string(),
+        name: "flour".to_string(),
+        amounts: vec![amount(2.0, "cup"), amount(8.5, "oz")],
+        modifier: None,
+        raw_line: None,
+        section_name: None,
+        is_flour: false,
+    };
+    let flour = ingredient(
+        "flour",
+        vec![
+            mapping((1.0, "cup"), (100.0, "gram")),
+            mapping((100.0, "g"), (364.0, "kcal")),
+        ],
+    );
+
+    let r = cost(vec![flour_row], vec![flour], vec![]);
+
+    assert_close(r.weight, 241.0, 0.6, "weight"); // 8.5 oz, not the 200 g cup density
+    assert_close(nutrient(&r, "208"), 877.0, 2.0, "kcal"); // 241 g basis, not 200 g
+}
+
+#[test]
 fn frying_medium_with_no_mapping_fails_gracefully() {
     let r = cost(
         vec![flour_cup(), frying_oil()],
@@ -564,7 +595,12 @@ fn frying_medium_with_no_mapping_fails_gracefully() {
         vec![],
     );
 
-    assert_close(r.weight, 100.0, 0.5, "weight");
+    // 100 g flour + ~15 g estimated absorbed oil. The oil has no mappings, but
+    // its estimated weight is already in grams, so it resolves via the unit
+    // engine's mass identity (no density needed) and counts toward total weight —
+    // consistent with a mapped frying medium. Cost/nutrients still can't resolve
+    // (no food link), so the oil stays in missing_by_type.nutrients.
+    assert_close(r.weight, 115.0, 0.5, "weight");
     assert_close(nutrient(&r, "208"), 364.0, 0.5, "kcal");
     assert!(r
         .missing_by_type

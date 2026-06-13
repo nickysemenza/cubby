@@ -58,10 +58,20 @@ fn classify_planned_rows(recipe: &WCostingRecipe) -> Vec<Planned<'_>> {
                     row.section_name.as_deref(),
                 ),
             };
-            let plan = plan_for(usage, row.amount.is_some());
+            let plan = plan_for(usage, !row.amounts.is_empty());
             Planned { row, usage, plan }
         })
         .collect()
+}
+
+/// The amount a row's measures resolve from: a mass amount when present (the
+/// stated weight, resolved exactly via the unit engine's mass identity), else
+/// the first written amount. None only for an amount-less row.
+fn canonical_amount(amounts: &[Measure]) -> Option<&Measure> {
+    amounts
+        .iter()
+        .find(|m| matches!(m.kind(), Ok(MeasureKind::Weight)))
+        .or_else(|| amounts.first())
 }
 
 /// A resolved measure's f64 view (value extracted immediately after the
@@ -252,8 +262,23 @@ impl<'a> Engine<'a> {
     /// `conv_amount_all` + `measuresFromMappings` reshaping, inline. kcal rides
     /// the dedicated Calories conversion and is appended last (TS insertion
     /// order); per-target failures simply drop that nutrient.
-    fn measures(&self, m: &Measure, graph: &MeasureGraph) -> Trio {
-        let conv = |kind: MeasureKind| convert_measure_with_graph(m, kind, graph);
+    fn measures(&self, amounts: &[Measure], graph: &MeasureGraph) -> Trio {
+        // Resolve every measure from ONE canonical amount, so a row's weight,
+        // cost, and nutrients share a single basis (a row is one physical
+        // quantity). Prefer a mass amount — the stated weight, resolved exactly
+        // via the unit engine's mass identity — over a volume that needs a
+        // density. Only fall back to another amount for a measure the canonical
+        // one genuinely can't reach.
+        let canonical = canonical_amount(amounts);
+        let conv = |kind: MeasureKind| {
+            canonical
+                .and_then(|m| convert_measure_with_graph(m, kind.clone(), graph))
+                .or_else(|| {
+                    amounts
+                        .iter()
+                        .find_map(|m| convert_measure_with_graph(m, kind.clone(), graph))
+                })
+        };
         let money = conv(MeasureKind::Money);
         let weight = conv(MeasureKind::Weight);
         let calories = conv(MeasureKind::Calories);
@@ -293,16 +318,16 @@ impl<'a> Engine<'a> {
     /// rows roll up their own totals scaled by yield; ingredient rows convert
     /// through their product mappings.
     fn own_trio(&self, row: &WCostingRow, visited: &HashSet<String>, taint: &mut bool) -> Trio {
-        let Some(amount) = &row.amount else {
+        if row.amounts.is_empty() {
             return Trio::all_err(format!("ingredient {} has no amounts", row.id));
-        };
-        let measure = amount.to_measure();
+        }
+        let measures: Vec<Measure> = row.amounts.iter().map(|a| a.to_measure()).collect();
         match row.kind {
             WRowKind::Recipe => match self.sub_recipe_pairs(&row.target_id, visited, taint) {
-                Some(pairs) => self.measures(&measure, &make_graph(&pairs)),
+                Some(pairs) => self.measures(&measures, &make_graph(&pairs)),
                 None => Trio::all_err(format!("sub-recipe {} could not be costed", row.target_id)),
             },
-            WRowKind::Ingredient => self.measures(&measure, self.ctx_for(&row.target_id).graph()),
+            WRowKind::Ingredient => self.measures(&measures, self.ctx_for(&row.target_id).graph()),
         }
     }
 
@@ -378,7 +403,7 @@ impl<'a> Engine<'a> {
             return Trio::all_err("no basis for estimate");
         }
         self.measures(
-            &Measure::new("g", grams),
+            &[Measure::new("g", grams)],
             self.ctx_for(&row.target_id).graph(),
         )
     }
@@ -470,17 +495,19 @@ impl<'a> Engine<'a> {
         if ctx.pairs.is_empty() {
             return None;
         }
-        let measure = match &row.amount {
-            Some(a) => a.to_measure(),
-            None => match plan.weight {
-                ComponentSource::BasisFraction { fraction } => {
-                    Measure::new("g", fraction * basis_grams?)
-                }
-                ComponentSource::FlatGrams { grams } => Measure::new("g", grams),
-                _ => return None,
-            },
-        };
         let graph = ctx.graph();
+        let measures: Vec<Measure> = row.amounts.iter().map(|a| a.to_measure()).collect();
+        // The estimated-grams stand-in for amount-less rows (frying oil, to-taste).
+        let estimated = match plan.weight {
+            ComponentSource::BasisFraction { fraction } => {
+                basis_grams.map(|b| Measure::new("g", fraction * b))
+            }
+            ComponentSource::FlatGrams { grams } => Some(Measure::new("g", grams)),
+            _ => None,
+        };
+        // Trace the canonical amount the measure resolution drives off (mass
+        // amount preferred), or the estimated grams when the row has none.
+        let measure = canonical_amount(&measures).cloned().or(estimated)?;
         let explain = |kind: MeasureKind| {
             convert_measure_with_graph_explained(&measure, kind, graph)
                 .map(|(_, steps)| steps.into_iter().map(WConversionStep::from).collect())
@@ -606,7 +633,7 @@ impl<'a> Engine<'a> {
                 section_name: p.row.section_name.clone(),
                 kind: p.row.kind,
                 usage: p.usage.into(),
-                measured: p.row.amount.is_some(),
+                measured: !p.row.amounts.is_empty(),
                 plan: p.plan,
                 basis_grams: basis,
                 price: to_measure_result(&trio.price),
