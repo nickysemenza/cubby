@@ -79,7 +79,7 @@ export function RecipeCostingCoverage({ gaps }: { gaps: CostingGap[] }) {
           once.
         </p>
       </CardHeader>
-      <CardContent className="p-3 pt-0">
+      <CardContent>
         <ul className="divide-y divide-border/60">
           {gaps.map((gap) => {
             const { lead, cta } = suggestionFor(gap);

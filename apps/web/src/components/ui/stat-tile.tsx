@@ -1,0 +1,74 @@
+import type * as React from "react";
+import type { SummaryItem } from "~/app/_components/SummaryCard";
+import { GridContainer } from "~/components/layout/grid-container";
+
+/**
+ * One ledger metric: a mono eyebrow label over a big tabular number, with an
+ * optional secondary line (e.g. "$0.42 / serving") and a muted caption (e.g.
+ * coverage). This markup was duplicated across the summary card, the recipe
+ * detail, and the nutrition charts — it lives here once now.
+ *
+ * Pass either a `SummaryItem` (label/value/formatter/subValue/caption) for the
+ * data-driven case, or `label` + `children` for ad-hoc values (custom units,
+ * JSX values).
+ */
+export function StatTile({
+  item,
+  label,
+  children,
+  className,
+}: {
+  item?: SummaryItem;
+  label?: string;
+  children?: React.ReactNode;
+  className?: string;
+}) {
+  const resolvedLabel = item?.label ?? label;
+  const value = item
+    ? item.formatter
+      ? item.formatter(item.value)
+      : item.value
+    : children;
+
+  return (
+    <div className={className}>
+      {resolvedLabel && (
+        <div className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
+          {resolvedLabel}
+        </div>
+      )}
+      <div className="font-mono font-semibold text-foreground text-lg tabular-nums">
+        {value}
+      </div>
+      {item?.subValue && (
+        <div className="font-mono text-2xs text-muted-foreground tabular-nums">
+          {item.subValue}
+        </div>
+      )}
+      {item?.caption && (
+        <div className="font-mono text-2xs text-muted-foreground">
+          {item.caption}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The standard row of stat tiles: an auto-fit grid that stretches the present
+ * metrics to fill the row (4 for recipe/inventory, up to 6 for nutrition) and
+ * wraps to 2–3 across on mobile. Wrapper over the shared `summary` grid.
+ */
+export function StatGrid({
+  className,
+  children,
+}: {
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <GridContainer cols="summary" className={className}>
+      {children}
+    </GridContainer>
+  );
+}

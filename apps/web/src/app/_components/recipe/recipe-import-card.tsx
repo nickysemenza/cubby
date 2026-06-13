@@ -6,6 +6,8 @@ import { Link } from "@tanstack/react-router";
 import { AlertCircle, Check, ExternalLink } from "lucide-react";
 import { memo, useMemo } from "react";
 import { MarkdownText } from "~/components/markdown";
+import { Badge, badgeVariants } from "~/components/ui/badge";
+import { Card, CardContent } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Spinner } from "~/components/ui/spinner";
 import { cn } from "~/lib/utils";
@@ -64,21 +66,15 @@ function recipeMemoKey(r: ImportRecipe): string {
 
 const STATUS_BADGE: Record<
   RecipeImportStatus,
-  { label: string; tone: string }
+  {
+    label: string;
+    variant: "positive" | "secondary" | "warning" | "destructive";
+  }
 > = {
-  new: { label: "new", tone: "bg-positive/10 text-positive" },
-  unchanged: {
-    label: "imported · no changes",
-    tone: "bg-muted text-muted-foreground",
-  },
-  "will-update": {
-    label: "imported · will update",
-    tone: "bg-amber-100 text-amber-700",
-  },
-  "needs-formatting": {
-    label: "needs formatting",
-    tone: "bg-destructive/10 text-destructive",
-  },
+  new: { label: "new", variant: "positive" },
+  unchanged: { label: "imported · no changes", variant: "secondary" },
+  "will-update": { label: "imported · will update", variant: "warning" },
+  "needs-formatting": { label: "needs formatting", variant: "destructive" },
 };
 
 export const RecipeImportCard = memo(
@@ -149,150 +145,125 @@ function RecipeImportCardImpl({
   const badge = STATUS_BADGE[status];
 
   return (
-    <div className="rounded border border-border p-2">
-      <div className="flex items-center gap-2">
-        <Checkbox
-          checked={selected}
-          disabled={disabled}
-          onCheckedChange={onToggle}
-        />
-        <div className="flex flex-1 flex-wrap items-center gap-2">
-          <span
-            className={cn("font-medium", disabled && "text-muted-foreground")}
-          >
-            {recipe.meta.title || "(untitled)"}
-          </span>
-          {recipe.meta.recipe_yield && (
-            <span className="text-muted-foreground text-xs">
-              {typeof recipe.meta.recipe_yield === "string"
-                ? recipe.meta.recipe_yield
-                : `${recipe.meta.recipe_yield.value} ${recipe.meta.recipe_yield.unit}`}
+    <Card size="sm">
+      <CardContent>
+        <div className="flex items-center gap-2">
+          <Checkbox
+            checked={selected}
+            disabled={disabled}
+            onCheckedChange={onToggle}
+          />
+          <div className="flex flex-1 flex-wrap items-center gap-2">
+            <span
+              className={cn("font-medium", disabled && "text-muted-foreground")}
+            >
+              {recipe.meta.title || "(untitled)"}
             </span>
-          )}
-          <span
-            className={cn(
-              "rounded-sm px-1.5 py-0.5 font-medium text-xs",
-              badge.tone,
-            )}
-          >
-            {badge.label}
-          </span>
-          {existingId && (
-            <EntityPillLink
-              entity="recipe"
-              data={{ id: existingId, name: recipe.meta.title }}
-              compact
-            />
-          )}
-        </div>
-        {externalUrl && (
-          <a
-            href={externalUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="text-muted-foreground hover:text-foreground"
-            title="Open source"
-          >
-            <ExternalLink className="h-3.5 w-3.5" />
-          </a>
-        )}
-        <CopyJsonButton
-          value={recipe}
-          title="Copy the full extracted recipe as JSON (for an ingredient-parser session)"
-          toastLabel="Copied recipe JSON"
-        />
-        <ImportStatus result={result} />
-      </div>
-
-      {reasons && reasons.length > 0 && (
-        <p className="mt-1 pl-6 text-destructive text-xs">
-          {reasons.join(" ")}
-        </p>
-      )}
-
-      {notesMarkdown && (
-        <MarkdownText className="mt-2 text-muted-foreground text-xs">
-          {notesMarkdown}
-        </MarkdownText>
-      )}
-
-      {references && recipe.references.length > 0 && (
-        <div className="mt-2 flex flex-wrap items-center gap-1 text-xs">
-          <span className="text-muted-foreground">Uses:</span>
-          {recipe.references.map((ref) => {
-            const linkable = references.linkableTitles.has(
-              normalize(ref.title),
-            );
-            const inPreview = references.previewTitles.has(
-              normalize(ref.title),
-            );
-            const className = cn(
-              "rounded-sm px-1.5 py-0.5 font-medium",
-              linkable
-                ? "bg-accent/20 text-accent-foreground"
-                : "bg-muted text-muted-foreground",
-            );
-            const label = (
-              <>
-                → {ref.title}
-                {!linkable && " (not imported)"}
-              </>
-            );
-            return inPreview ? (
-              <button
-                key={ref.title}
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  references.scrollToTitle(ref.title);
-                }}
-                title={
-                  linkable
-                    ? `Will link (${ref.confidence}) — click to jump`
-                    : "In this book — click to jump"
-                }
-                className={cn(className, "cursor-pointer hover:underline")}
-              >
-                {label}
-              </button>
-            ) : (
-              <span
-                key={ref.title}
-                title={
-                  linkable
-                    ? `Will link (${ref.confidence})`
-                    : "Target recipe not in this import — stays an ingredient"
-                }
-                className={className}
-              >
-                {label}
+            {recipe.meta.recipe_yield && (
+              <span className="text-muted-foreground text-xs">
+                {typeof recipe.meta.recipe_yield === "string"
+                  ? recipe.meta.recipe_yield
+                  : `${recipe.meta.recipe_yield.value} ${recipe.meta.recipe_yield.unit}`}
               </span>
-            );
-          })}
-        </div>
-      )}
-
-      <div className="mt-2 grid gap-x-4 gap-y-2 md:grid-cols-2">
-        <div className="space-y-2">
-          {recipe.sections.map((section, si) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: fixed ordered list
-            <div key={si} className="space-y-0.5">
-              {section.name && (
-                <div className="font-medium text-muted-foreground text-xs">
-                  {section.name}
-                </div>
-              )}
-              <ParsedIngredientTable
-                lines={section.ingredients}
-                matchMap={matchMap}
-                matchReady={matchReady}
+            )}
+            <Badge variant={badge.variant}>{badge.label}</Badge>
+            {existingId && (
+              <EntityPillLink
+                entity="recipe"
+                data={{ id: existingId, name: recipe.meta.title }}
+                compact
               />
-            </div>
-          ))}
+            )}
+          </div>
+          {externalUrl && (
+            <a
+              href={externalUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-muted-foreground hover:text-foreground"
+              title="Open source"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          )}
+          <CopyJsonButton
+            value={recipe}
+            title="Copy the full extracted recipe as JSON (for an ingredient-parser session)"
+            toastLabel="Copied recipe JSON"
+          />
+          <ImportStatus result={result} />
         </div>
-        <div className="space-y-2">
-          {recipe.sections.map((section, si) =>
-            section.instructions.length > 0 ? (
+
+        {reasons && reasons.length > 0 && (
+          <p className="mt-1 pl-6 text-destructive text-xs">
+            {reasons.join(" ")}
+          </p>
+        )}
+
+        {notesMarkdown && (
+          <MarkdownText className="mt-2 text-muted-foreground text-xs">
+            {notesMarkdown}
+          </MarkdownText>
+        )}
+
+        {references && recipe.references.length > 0 && (
+          <div className="mt-2 flex flex-wrap items-center gap-1 text-xs">
+            <span className="text-muted-foreground">Uses:</span>
+            {recipe.references.map((ref) => {
+              const linkable = references.linkableTitles.has(
+                normalize(ref.title),
+              );
+              const inPreview = references.previewTitles.has(
+                normalize(ref.title),
+              );
+              // Reuse badge styling so reference pills match the rest of the UI:
+              // filled (secondary) = will link, hollow (outline) = stays an ingredient.
+              const className = badgeVariants({
+                variant: linkable ? "secondary" : "outline",
+              });
+              const label = (
+                <>
+                  → {ref.title}
+                  {!linkable && " (not imported)"}
+                </>
+              );
+              return inPreview ? (
+                <button
+                  key={ref.title}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    references.scrollToTitle(ref.title);
+                  }}
+                  title={
+                    linkable
+                      ? `Will link (${ref.confidence}) — click to jump`
+                      : "In this book — click to jump"
+                  }
+                  className={cn(className, "cursor-pointer hover:underline")}
+                >
+                  {label}
+                </button>
+              ) : (
+                <span
+                  key={ref.title}
+                  title={
+                    linkable
+                      ? `Will link (${ref.confidence})`
+                      : "Target recipe not in this import — stays an ingredient"
+                  }
+                  className={className}
+                >
+                  {label}
+                </span>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="mt-2 grid gap-x-4 gap-y-2 md:grid-cols-2">
+          <div className="space-y-2">
+            {recipe.sections.map((section, si) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: fixed ordered list
               <div key={si} className="space-y-0.5">
                 {section.name && (
@@ -300,18 +271,37 @@ function RecipeImportCardImpl({
                     {section.name}
                   </div>
                 )}
-                <ol className="list-decimal space-y-0.5 pl-4 text-muted-foreground text-xs leading-snug">
-                  {richBySection[si]?.map((rich, ii) => (
-                    // biome-ignore lint/suspicious/noArrayIndexKey: ordered by line
-                    <li key={ii}>{rich}</li>
-                  ))}
-                </ol>
+                <ParsedIngredientTable
+                  lines={section.ingredients}
+                  matchMap={matchMap}
+                  matchReady={matchReady}
+                />
               </div>
-            ) : null,
-          )}
+            ))}
+          </div>
+          <div className="space-y-2">
+            {recipe.sections.map((section, si) =>
+              section.instructions.length > 0 ? (
+                // biome-ignore lint/suspicious/noArrayIndexKey: fixed ordered list
+                <div key={si} className="space-y-0.5">
+                  {section.name && (
+                    <div className="font-medium text-muted-foreground text-xs">
+                      {section.name}
+                    </div>
+                  )}
+                  <ol className="list-decimal space-y-0.5 pl-4 text-muted-foreground text-xs leading-snug">
+                    {richBySection[si]?.map((rich, ii) => (
+                      // biome-ignore lint/suspicious/noArrayIndexKey: ordered by line
+                      <li key={ii}>{rich}</li>
+                    ))}
+                  </ol>
+                </div>
+              ) : null,
+            )}
+          </div>
         </div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
 

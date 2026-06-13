@@ -127,6 +127,11 @@ function CardContent({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-content"
+      // Content owns only horizontal padding; the card container owns vertical
+      // rhythm (its `py-3` + `gap-3` between header/content). So don't pass `p-3`
+      // / `px-4 py-1` overrides — they fight the container and were the source of
+      // the per-card padding drift. `space-y-*` for inner spacing is fine; use
+      // `p-0` only to deliberately run content flush to the card edge (tables).
       className={cn("px-4 group-data-[size=sm]/card:px-3", className)}
       {...props}
     />

@@ -5,9 +5,9 @@ import {
   recipeHeadlineTotals,
 } from "~/app/_components/recipe/recipe-utils";
 import type { SummaryItem } from "~/app/_components/SummaryCard";
-import { GridContainer } from "~/components/layout/grid-container";
 import { Badge } from "~/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { StatGrid, StatTile } from "~/components/ui/stat-tile";
 import { formatCurrency } from "~/lib/utils";
 
 // Zod schemas for summary data types
@@ -304,28 +304,11 @@ export const EntitySummaryCard: React.FC<EntitySummaryCardProps> = ({
         )}
       </CardHeader>
       <CardContent>
-        <GridContainer cols="summary">
+        <StatGrid>
           {items.map((item) => (
-            <div key={item.label}>
-              <div className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
-                {item.label}
-              </div>
-              <div className="font-mono font-semibold text-foreground text-lg tabular-nums">
-                {item.formatter ? item.formatter(item.value) : item.value}
-              </div>
-              {item.subValue && (
-                <div className="font-mono text-2xs text-muted-foreground tabular-nums">
-                  {item.subValue}
-                </div>
-              )}
-              {item.caption && (
-                <div className="font-mono text-2xs text-muted-foreground">
-                  {item.caption}
-                </div>
-              )}
-            </div>
+            <StatTile key={item.label} item={item} />
           ))}
-        </GridContainer>
+        </StatGrid>
         {summaryData.type === "recipe" && (
           <MissingDataFooter missingByType={summaryData.data.missingByType} />
         )}

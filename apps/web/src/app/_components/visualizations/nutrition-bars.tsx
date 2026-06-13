@@ -1,6 +1,10 @@
 import { TIER1_NUTRIENTS } from "@cubby/usda-schemas";
 import { useMemo } from "react";
-import type { IngredientDataItem } from "~/lib/recipe-costing";
+import { StatTile } from "~/components/ui/stat-tile";
+import type {
+  CalculateTotalsResult,
+  IngredientDataItem,
+} from "~/lib/recipe-costing";
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 
 const SEGMENT_COLORS = [
@@ -38,8 +42,12 @@ function ingredientName(ing: IngredientDataItem): string {
  */
 export default function NutritionBars({
   ingredients,
+  totals,
 }: {
   ingredients: IngredientDataItem[];
+  /** Whole-recipe rollup; macro totals read from here so they can't drift from
+   *  the summary card. Null while loading — falls back to summing rows. */
+  totals?: CalculateTotalsResult | null;
 }) {
   const { kcalRows, totalKcal, macroTotals, maxMacro } = useMemo(() => {
     const kcalCode = TIER1_NUTRIENTS.kcal.code;
@@ -60,19 +68,22 @@ export default function NutritionBars({
         ? [...top, { key: "other", name: "other", kcal: otherKcal }]
         : top;
 
+    // Total kcal stays row-derived so the stacked-segment widths sum to 100%.
     const totalKcal = all.reduce((acc, r) => acc + r.kcal, 0);
 
-    const macroTotals = MACROS.map((m) => ({
-      ...m,
-      grams: ingredients.reduce(
-        (acc, ing) => acc + nutrientOf(ing, TIER1_NUTRIENTS[m.key].code),
-        0,
-      ),
-    }));
+    // Macro grams come from the engine's whole-recipe totals (same source the
+    // summary card uses); fall back to summing rows while totals load.
+    const macroTotals = MACROS.map((m) => {
+      const code = TIER1_NUTRIENTS[m.key].code;
+      const grams =
+        totals?.nutrients[code] ??
+        ingredients.reduce((acc, ing) => acc + nutrientOf(ing, code), 0);
+      return { ...m, grams };
+    });
     const maxMacro = Math.max(...macroTotals.map((m) => m.grams), 1);
 
     return { kcalRows, totalKcal, macroTotals, maxMacro };
-  }, [ingredients]);
+  }, [ingredients, totals]);
 
   if (totalKcal === 0) {
     return (
@@ -87,12 +98,9 @@ export default function NutritionBars({
   return (
     <div className="space-y-5 p-1">
       <div>
-        <div className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
-          Calories by ingredient
-        </div>
-        <div className="mt-1 font-mono font-semibold text-xl tabular-nums">
+        <StatTile label="Calories by ingredient">
           {Math.round(totalKcal)} kcal
-        </div>
+        </StatTile>
         <div className="mt-2 flex h-7 overflow-hidden rounded-md border border-[var(--border-chunky)] bg-card">
           {kcalRows.map((row, i) => (
             <div

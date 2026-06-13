@@ -85,7 +85,7 @@ export const RecipeCostingDebugCard: React.FC<{ recipeId: RecipeId }> = ({
         <CardHeader className="pb-2">
           <CardTitle>Costing Debug</CardTitle>
         </CardHeader>
-        <CardContent className="p-3 text-destructive text-sm">
+        <CardContent className="text-destructive text-sm">
           explain failed: {error.message}
         </CardContent>
       </Card>
@@ -108,7 +108,7 @@ export const RecipeCostingDebugCard: React.FC<{ recipeId: RecipeId }> = ({
           label="copy explain"
         />
       </CardHeader>
-      <CardContent className="space-y-3 p-3">
+      <CardContent className="space-y-3">
         {/* Persistence panel: stored vs live, staleness, completeness. */}
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <Badge variant={persisted.stale ? "destructive" : "secondary"}>

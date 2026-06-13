@@ -32,6 +32,38 @@ use super::types::{
 use crate::food_mappings::product_mappings;
 use crate::WConversionStep;
 
+/// One recipe row paired with its resolved usage and the consumption plan that
+/// usage implies. Built up front (before the two resolution passes) so each
+/// pass reads a stable per-row plan.
+struct Planned<'r> {
+    row: &'r WCostingRow,
+    usage: IngredientUsage,
+    plan: PlanTrio,
+}
+
+/// Classify every row's usage + consumption plan, in input order. Sub-recipe
+/// rows are always Normal (their internals already applied their own model);
+/// ingredient rows are classified from the resolved name + stored parts.
+fn classify_planned_rows(recipe: &WCostingRecipe) -> Vec<Planned<'_>> {
+    recipe
+        .rows
+        .iter()
+        .map(|row| {
+            let usage = match row.kind {
+                WRowKind::Recipe => IngredientUsage::Normal,
+                WRowKind::Ingredient => classify_usage(
+                    &row.name,
+                    row.modifier.as_deref(),
+                    row.raw_line.as_deref(),
+                    row.section_name.as_deref(),
+                ),
+            };
+            let plan = plan_for(usage, row.amount.is_some());
+            Planned { row, usage, plan }
+        })
+        .collect()
+}
+
 /// A resolved measure's f64 view (value extracted immediately after the
 /// rational conversion, like the old WASM boundary did).
 #[derive(Clone, Debug)]
@@ -484,31 +516,7 @@ impl<'a> Engine<'a> {
         explain: bool,
         taint: &mut bool,
     ) -> WRecipeCosting {
-        struct Planned<'r> {
-            row: &'r WCostingRow,
-            usage: IngredientUsage,
-            plan: PlanTrio,
-        }
-        let planned: Vec<Planned> = recipe
-            .rows
-            .iter()
-            .map(|row| {
-                // Sub-recipe rows are always normal (their internals already
-                // applied their own model); ingredient rows are classified from
-                // the resolved name + stored parts.
-                let usage = match row.kind {
-                    WRowKind::Recipe => IngredientUsage::Normal,
-                    WRowKind::Ingredient => classify_usage(
-                        &row.name,
-                        row.modifier.as_deref(),
-                        row.raw_line.as_deref(),
-                        row.section_name.as_deref(),
-                    ),
-                };
-                let plan = plan_for(usage, row.amount.is_some());
-                Planned { row, usage, plan }
-            })
-            .collect();
+        let planned = classify_planned_rows(recipe);
 
         let mut total_price = 0.0_f64;
         let mut total_weight = 0.0_f64;

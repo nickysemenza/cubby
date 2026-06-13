@@ -2,6 +2,7 @@ import type { RecipeOut } from "@cubby/schemas/recipe";
 import { BarChart3, BookOpen, Table2 } from "lucide-react";
 import type React from "react";
 import { lazy, Suspense, useMemo, useState } from "react";
+import { EntitySummaryCard } from "~/components/entity/entity-summary-card";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { TicketDivider } from "~/components/ui/ticket-divider";
@@ -12,13 +13,11 @@ import {
 import { useDebug } from "~/hooks/useDebug";
 import { PerfProfiler } from "~/lib/perf/PerfProfiler";
 import {
-  type CalculateTotalsResult,
   type CostingRow,
   computeRecipeCosting,
   flattenSections,
 } from "~/lib/recipe-costing";
 import { deriveCostingGaps } from "~/lib/recipe-costing-gaps";
-import { formatCurrency } from "~/lib/utils";
 import { AuditLogList } from "../audit-log/audit-log-list";
 import EntityImageList from "../EntityImageList";
 import { useRecipeCostingData } from "../hooks/useRecipeCostingData";
@@ -32,13 +31,9 @@ import { RecipeCostingDebugCard } from "./recipe-costing-debug-card";
 import { scaleRecipe } from "./recipe-scaling";
 import { RecipeTagList } from "./recipe-tag";
 import {
-  formatYield,
-  getEffectiveServings,
   getIngredientName,
   getServingBasis,
   isFlourIngredient,
-  perUnitLabel,
-  recipeHeadlineTotals,
 } from "./recipe-utils";
 import { RecipeIngredientList } from "./recipeingredientlist";
 
@@ -50,121 +45,6 @@ const NutritionBars = lazy(
 const RecipeCostTreemap = lazy(
   () => import("~/app/_components/visualizations/recipe-cost-treemap"),
 );
-
-/** Get effective servings: explicit servings, or yield value if unit is "servings" */
-
-/** Summary card showing yield, servings, and per-serving metrics */
-const RecipeSummaryCard: React.FC<{
-  recipe: RecipeOut;
-  totals: CalculateTotalsResult | null;
-}> = ({ recipe, totals }) => {
-  const effectiveServings = getEffectiveServings(recipe);
-  const hasYield = recipe.yield?.value && recipe.yield?.unit;
-
-  // The four headline figures (cost, weight, calories, protein), defined once.
-  const head = totals ? recipeHeadlineTotals(totals) : null;
-
-  // If no yield/servings info, don't show the card
-  if (!hasYield && !effectiveServings) return null;
-
-  // Per-portion basis: explicit servings, else the yield count labelled by its
-  // unit (e.g. "per Cup", "per Churro"); falls back to "per Serving".
-  const basis = getServingBasis(recipe);
-  const perLabel = basis ? perUnitLabel(basis.noun) : "";
-  const perServingCost = basis && head?.cost ? head.cost / basis.divisor : null;
-  const perServingCalories =
-    basis && head?.calories ? head.calories / basis.divisor : null;
-  const perServingProtein =
-    basis && head?.protein ? head.protein / basis.divisor : null;
-  const perServingWeight =
-    basis && head?.weight ? head.weight / basis.divisor : null;
-
-  return (
-    <Card>
-      <CardContent className="p-3">
-        <div className="flex flex-wrap gap-6">
-          {/* Yield info */}
-          {hasYield && (
-            <div>
-              <div className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
-                Makes
-              </div>
-              <div className="font-mono font-semibold text-lg tabular-nums">
-                {formatYield(recipe.yield!)}
-              </div>
-            </div>
-          )}
-
-          {/* Servings (only if different from yield) */}
-          {effectiveServings && recipe.yield?.unit !== "servings" && (
-            <div>
-              <div className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
-                Servings
-              </div>
-              <div className="font-mono font-semibold text-lg tabular-nums">
-                {effectiveServings}
-              </div>
-            </div>
-          )}
-
-          {/* Total cost */}
-          {head?.cost ? (
-            <div>
-              <div className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
-                Total Cost
-              </div>
-              <div className="font-mono font-semibold text-lg tabular-nums">
-                {formatCurrency(head.cost)}
-              </div>
-            </div>
-          ) : null}
-
-          {/* Per-serving metrics */}
-          {perServingCost && (
-            <div>
-              <div className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
-                Cost {perLabel}
-              </div>
-              <div className="font-mono font-semibold text-lg tabular-nums">
-                {formatCurrency(perServingCost)}
-              </div>
-            </div>
-          )}
-          {perServingCalories && (
-            <div>
-              <div className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
-                Calories {perLabel}
-              </div>
-              <div className="font-mono font-semibold text-lg tabular-nums">
-                {Math.round(perServingCalories)} kcal
-              </div>
-            </div>
-          )}
-          {perServingProtein && (
-            <div>
-              <div className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
-                Protein {perLabel}
-              </div>
-              <div className="font-mono font-semibold text-lg tabular-nums">
-                {Math.round(perServingProtein)}g
-              </div>
-            </div>
-          )}
-          {perServingWeight && (
-            <div>
-              <div className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
-                Weight {perLabel}
-              </div>
-              <div className="font-mono font-semibold text-lg tabular-nums">
-                {Math.round(perServingWeight)}g
-              </div>
-            </div>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
-};
 
 export type RecipeViewMode = "magazine" | "table" | "charts";
 
@@ -321,8 +201,24 @@ const RecipeDetailInner: React.FC<{
       )}
       {viewMode === "charts" && (
         <div className="space-y-6">
-          {/* Yield/Servings Summary */}
-          <RecipeSummaryCard recipe={scaledRecipe} totals={totals} />
+          {/* Yield/Servings Summary — the same shared card the table view uses,
+              so the two views never disagree on totals. */}
+          {totals && (
+            <EntitySummaryCard
+              title="Recipe Summary"
+              summaryData={{
+                type: "recipe",
+                data: {
+                  price: totals.price,
+                  weight: totals.weight,
+                  nutrients: totals.nutrients,
+                  totalIngredients: totals.totalIngredients,
+                  missingByType: totals.missingByType,
+                  perServing: getServingBasis(scaledRecipe),
+                },
+              }}
+            />
+          )}
 
           <Suspense
             fallback={
@@ -336,7 +232,7 @@ const RecipeDetailInner: React.FC<{
                 <CardHeader className="pb-2">
                   <CardTitle>Cost Breakdown</CardTitle>
                 </CardHeader>
-                <CardContent className="p-3">
+                <CardContent>
                   {ingredientDataItems.length > 0 ? (
                     <RecipeCostTreemap
                       ingredients={ingredientDataItems}
@@ -353,9 +249,12 @@ const RecipeDetailInner: React.FC<{
                 <CardHeader className="pb-2">
                   <CardTitle>Nutrition Breakdown</CardTitle>
                 </CardHeader>
-                <CardContent className="p-3">
+                <CardContent>
                   {ingredientDataItems.length > 0 ? (
-                    <NutritionBars ingredients={ingredientDataItems} />
+                    <NutritionBars
+                      ingredients={ingredientDataItems}
+                      totals={totals}
+                    />
                   ) : (
                     <div className="h-[300px]">
                       <SimpleLoading />
@@ -374,7 +273,7 @@ const RecipeDetailInner: React.FC<{
           <CardHeader className="pb-2">
             <CardTitle>More Images</CardTitle>
           </CardHeader>
-          <CardContent className="p-3">
+          <CardContent>
             <EntityImageList images={recipeImages.slice(1)} />
           </CardContent>
         </Card>
@@ -391,7 +290,7 @@ const RecipeDetailInner: React.FC<{
         <CardHeader className="pb-2">
           <CardTitle>History</CardTitle>
         </CardHeader>
-        <CardContent className="p-3">
+        <CardContent>
           <AuditLogList
             entityType="recipe"
             entityId={recipe.id}
