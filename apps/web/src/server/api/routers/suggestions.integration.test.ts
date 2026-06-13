@@ -64,7 +64,6 @@ describe("suggestions router", () => {
           instructions: [{ instruction: "Mix" }],
         },
       ],
-      images: [],
     });
 
   // Ingredient with a linked product (cup<->g mapped) holding `onHand`.

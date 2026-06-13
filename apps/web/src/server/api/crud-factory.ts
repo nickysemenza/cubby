@@ -84,23 +84,35 @@ const createGetByIdProcedure = <T, TId extends string = string>(
       return getByIdFn(ctx, id);
     });
 
-const createCreateProcedure = <TInput, TOutput>(
-  inputSchema: ZodSchema<TInput>,
+// `inputSchema: S` (not `ZodSchema<TInput>`): annotating the param as
+// ZodSchema<T> erases the schema's *input* type to `unknown` (Zod 4's ZodType
+// input param defaults to unknown), which tRPC then exposes as the client
+// mutation arg type — defeating compile-time checking of the payload. Keeping
+// the concrete schema type `S` preserves `z.input<S>` end-to-end.
+const createCreateProcedure = <S extends ZodSchema, TOutput>(
+  inputSchema: S,
   outputSchema: ZodSchema<TOutput>,
-  createFn: (ctx: ProtectedCrudServices, data: TInput) => Promise<TOutput>,
+  createFn: (ctx: ProtectedCrudServices, data: z.infer<S>) => Promise<TOutput>,
 ) =>
   protectedProcedure
     .input(inputSchema)
     .output(outputSchema)
-    .mutation(({ ctx, input }) => createFn(ctx, input as TInput));
+    // `input` is cast back to `z.infer<S>` because tRPC can't resolve the parsed
+    // type from the still-generic `S` inside this builder; the cast is local and
+    // doesn't affect the procedure's public (concrete) input type at call sites.
+    .mutation(({ ctx, input }) => createFn(ctx, input as z.infer<S>));
 
-const createUpdateProcedure = <TInput, TOutput, TId extends string = string>(
-  inputSchema: ZodSchema<TInput>,
+const createUpdateProcedure = <
+  S extends ZodSchema,
+  TOutput,
+  TId extends string = string,
+>(
+  inputSchema: S,
   outputSchema: ZodSchema<TOutput>,
   updateFn: (
     ctx: ProtectedCrudServices,
     id: TId,
-    data: TInput,
+    data: z.infer<S>,
   ) => Promise<TOutput>,
   idSchema?: z.ZodType<unknown>,
 ) =>
@@ -112,10 +124,11 @@ const createUpdateProcedure = <TInput, TOutput, TId extends string = string>(
     )
     .output(outputSchema)
     .mutation(({ ctx, input }) => {
-      const id = idSchema
-        ? (idSchema.parse(input.id) as TId)
-        : (input.id as TId);
-      return updateFn(ctx, id, input.data);
+      // Cast back to the concrete shape: tRPC can't resolve the parsed type from
+      // the generic `S` here (the public input type stays concrete at call sites).
+      const { id: rawId, data } = input as { id: unknown; data: z.infer<S> };
+      const id = idSchema ? (idSchema.parse(rawId) as TId) : (rawId as TId);
+      return updateFn(ctx, id, data);
     });
 
 // Simplified factory for just the list operation
@@ -167,8 +180,8 @@ export function createEntityListProcedure<TOutput, TFilters>({
 
 // Factory for getByID, create, update operations (without list)
 export function createEntityCrudWithoutListProcedures<
-  TCreateInput,
-  TUpdateInput,
+  SCreate extends ZodSchema,
+  SUpdate extends ZodSchema,
   TOutput,
   TId extends string = string,
 >({
@@ -176,8 +189,8 @@ export function createEntityCrudWithoutListProcedures<
   repository,
 }: {
   schemas: {
-    createInput: ZodSchema<TCreateInput>;
-    updateInput: ZodSchema<TUpdateInput>;
+    createInput: SCreate;
+    updateInput: SUpdate;
     output: ZodSchema<TOutput>;
     idSchema?: z.ZodType<unknown>;
   };
@@ -185,12 +198,12 @@ export function createEntityCrudWithoutListProcedures<
     getByID: (ctx: ProtectedCrudServices, id: TId) => Promise<TOutput>;
     create: (
       ctx: ProtectedCrudServices,
-      data: TCreateInput,
+      data: z.infer<SCreate>,
     ) => Promise<TOutput>;
     update: (
       ctx: ProtectedCrudServices,
       id: TId,
-      data: TUpdateInput,
+      data: z.infer<SUpdate>,
     ) => Promise<TOutput>;
   };
 }) {
@@ -216,8 +229,8 @@ export function createEntityCrudWithoutListProcedures<
 
 // Generic CRUD procedures factory for entities
 export function createEntityCrudProcedures<
-  TCreateInput,
-  TUpdateInput,
+  SCreate extends ZodSchema,
+  SUpdate extends ZodSchema,
   TOutput,
   TFilters,
   TId extends string = string,
@@ -227,8 +240,8 @@ export function createEntityCrudProcedures<
   entityName,
 }: {
   schemas: {
-    createInput: ZodSchema<TCreateInput>;
-    updateInput: ZodSchema<TUpdateInput>;
+    createInput: SCreate;
+    updateInput: SUpdate;
     output: ZodSchema<TOutput>;
     filters: ZodSchema<TFilters>;
     idSchema?: z.ZodType<unknown>;
@@ -244,12 +257,12 @@ export function createEntityCrudProcedures<
     ) => Promise<{ data: TOutput[]; count: number }>;
     create: (
       ctx: ProtectedCrudServices,
-      data: TCreateInput,
+      data: z.infer<SCreate>,
     ) => Promise<TOutput>;
     update: (
       ctx: ProtectedCrudServices,
       id: TId,
-      data: TUpdateInput,
+      data: z.infer<SUpdate>,
     ) => Promise<TOutput>;
   };
   /** Entity type for enhanced error messages */

@@ -55,7 +55,6 @@ describe("AvailabilityService.getRecipeAvailability", () => {
           instructions: [{ instruction: "Mix" }],
         },
       ],
-      images: [],
     });
 
   // Seed a "flour" ingredient with one linked product (cup<->g) holding `onHand`.
