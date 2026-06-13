@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
-import { AlertCircle, Eye, EyeOff, Plus } from "lucide-react";
+import { AlertCircle, AlertTriangle, Eye, EyeOff, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
@@ -13,6 +13,11 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/components/ui/tooltip";
 import { queryKeys } from "~/lib/query-keys";
 import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
@@ -266,9 +271,29 @@ function IngredientRow({
           )}
         </div>
       </TableCell>
+      {/* `unparsed_digit` means the line carried a number the parser couldn't
+          turn into an amount (a likely-missed quantity) — surfaced here, where
+          the amount would otherwise read as a bare "none", so it can be fixed
+          before saving. We key off `unparsed_digit` only; `fell_back` alone is
+          noisy (every legit name-only line falls back). */}
       <TableCell className="text-muted-foreground">
         {item.parsed.amounts.length > 0 ? (
           formatAmounts(item.parsed.amounts)
+        ) : item.parsed.parse_notes.unparsed_digit ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <span className="inline-flex cursor-help items-center gap-1 text-warning" />
+              }
+            >
+              <AlertTriangle className="h-3.5 w-3.5" />
+              <span className="text-xs">No amount read</span>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs">
+              This line has a number, but the parser couldn't read a quantity
+              from it. Check the line and add an amount before saving.
+            </TooltipContent>
+          </Tooltip>
         ) : (
           <NoneState />
         )}
