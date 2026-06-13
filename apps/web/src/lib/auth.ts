@@ -9,6 +9,16 @@ import * as schema from "~/server/db/auth.schema";
 
 const isDev = process.env.NODE_ENV !== "production";
 
+// Preview deploys (`wrangler versions upload`) each get a unique host
+// `<prefix>-cubby.nicky.workers.dev`, so a host-only session cookie forces a
+// fresh login on every preview. CI injects COOKIE_DOMAIN=.nicky.workers.dev via
+// `--var` on preview uploads (see ci.yaml `preview-cf`); scoping the cookie to
+// the whole account subdomain means one login on any preview carries to all of
+// them. Unset in prod (custom domain) — prod keeps a host-only cookie on
+// cubby.nickysemenza.com, unchanged. Passkeys still won't work on previews
+// (rpID is bound to cubby.nickysemenza.com below); this only covers the session.
+const previewCookieDomain = env.COOKIE_DOMAIN;
+
 export const auth = betterAuth({
   database: drizzleAdapter(drizzle, {
     provider: "pg",
@@ -47,6 +57,14 @@ export const auth = betterAuth({
     }),
     tanstackStartCookies(), // Must be last
   ],
+  advanced: previewCookieDomain
+    ? {
+        crossSubDomainCookies: {
+          enabled: true,
+          domain: previewCookieDomain,
+        },
+      }
+    : undefined,
   // In dev, trust any localhost/127.0.0.1 origin regardless of port so worktree
   // dev servers (which run on auto-assigned ports — see README "Worktrees") can
   // perform auth POSTs. The session cookie itself isn't port-scoped (RFC 6265) and

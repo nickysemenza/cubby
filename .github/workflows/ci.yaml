@@ -509,7 +509,12 @@ jobs:
           # --message carries the PR URL so it links back from the CF Versions UI
           # (deploys are by a service token, so CF shows "by Unknown" — full
           # GitHub linking would need Cloudflare Workers Builds).
+          # COOKIE_DOMAIN scopes the better-auth session cookie to the whole
+          # account subdomain (not the unique per-version host), so one login on
+          # any preview carries to every preview. Prod never sets this var, so it
+          # keeps a host-only cookie on cubby.nickysemenza.com. See auth.ts.
           wrangler versions upload --config dist/server/wrangler.json \
+            --var "COOKIE_DOMAIN:.nicky.workers.dev" \
             --tag "pr-${{ github.event.number }}" \
             --message "${{ github.event.pull_request.html_url }} @ ${{ github.sha }}" 2>&1 | tee upload.log
           # The <prefix>-cubby host is specific to this worker's preview URLs, so

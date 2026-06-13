@@ -21,6 +21,9 @@ export const env = createEnv({
     UPC_LOOKUP_API_KEY: z.string().min(1).optional(),
     BETTER_AUTH_SECRET: z.string().min(1),
     BETTER_AUTH_URL: z.string().url().optional(),
+    // Set only on preview deploys (CI `--var`) to share the session cookie
+    // across all *.nicky.workers.dev preview hosts. Unset in prod. See auth.ts.
+    COOKIE_DOMAIN: z.string().min(1).optional(),
     // Personal instance: signup is closed unless this is explicitly "true".
     ALLOW_SIGNUP: z.enum(["true", "false"]).default("false"),
     AI_GATEWAY_API_KEY: z.string().min(1).optional(),
@@ -49,6 +52,7 @@ export const env = createEnv({
     UPC_LOOKUP_API_KEY: process.env.UPC_LOOKUP_API_KEY,
     BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
     BETTER_AUTH_URL: process.env.BETTER_AUTH_URL,
+    COOKIE_DOMAIN: process.env.COOKIE_DOMAIN,
     ALLOW_SIGNUP: process.env.ALLOW_SIGNUP,
     AI_GATEWAY_API_KEY: process.env.AI_GATEWAY_API_KEY,
     NOTION_API_KEY: process.env.NOTION_API_KEY,
