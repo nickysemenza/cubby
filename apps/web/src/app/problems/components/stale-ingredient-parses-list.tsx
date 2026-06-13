@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { formatAmounts } from "~/app/_components/inventory/format-amount";
 import { DriftIndicator } from "~/app/_components/parse-drift-indicator";
+import { DecompositionView } from "~/app/_components/recipe/decomposition-view";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -99,10 +100,11 @@ export function StaleIngredientParsesList({
           </div>,
           <div
             key="rawLine"
-            className="text-muted-foreground/70 text-xs italic"
-            title="Original line from the source"
+            className="flex flex-wrap items-baseline gap-x-1 text-muted-foreground/70 text-xs"
+            title="How the current parser carves the original line"
           >
-            parsed from: {item.rawLine}
+            <span className="italic">parsed from:</span>
+            <DecompositionView rawLine={item.rawLine} />
           </div>,
         ],
         route: {

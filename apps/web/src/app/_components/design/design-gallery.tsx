@@ -6,6 +6,7 @@ import { EntityPillLink } from "~/app/_components/EntityPill";
 import { LocationTypeBadge } from "~/app/_components/locations/LocationTypeBadge";
 import { NoneState } from "~/app/_components/NoneState";
 import { CategoryBadge } from "~/app/_components/products/CategoryBadge";
+import { DecompositionView } from "~/app/_components/recipe/decomposition-view";
 import { RecipeTag } from "~/app/_components/recipe/recipe-tag";
 import { ImageStatusBadge } from "~/app/_components/table/StatusBadge";
 import { ColoredAlert } from "~/components/common/colored-alert";
@@ -254,6 +255,58 @@ export function DesignGallery() {
             <span className="text-sm">text-sm</span>
             <span className="text-base">text-base</span>
           </div>
+        </div>
+      </GallerySection>
+
+      <GallerySection
+        title="Ingredient decomposition"
+        source="components/recipe/decomposition-view"
+      >
+        <div className="space-y-3">
+          <Row label="3 parts">
+            <DecompositionView rawLine="1 ¼ cups all-purpose flour, sifted" />
+          </Row>
+          <Row label="Ranged + paren">
+            <DecompositionView rawLine="2–3 cups (240–360 g) bread flour" />
+          </Row>
+          <Row label="Amount + name">
+            <DecompositionView rawLine="2 cloves garlic" />
+          </Row>
+          <Row label="Whole = name">
+            {/* The grammar reads the whole line as the name — the digit stays put
+                (no phantom-quantity warning). One name span, no amount. */}
+            <DecompositionView rawLine="Pierre Ferrand 1840 Cognac" />
+          </Row>
+          <Row label="Recognizer">
+            {/* A whole-line recognizer produced the result → no field spans, so
+                the line renders plain. The carve has nothing to show here. */}
+            <DecompositionView rawLine="Juice of 1 lemon" />
+          </Row>
+          <Row label="Legend">
+            <span className="flex flex-wrap items-center gap-3 text-2xs text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <span
+                  className="inline-block h-0 w-3.5 border-b-2"
+                  style={{ borderBottomColor: "var(--ingredient-amount)" }}
+                />
+                amount
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span
+                  className="inline-block h-0 w-3.5 border-b-2"
+                  style={{ borderBottomColor: "var(--ingredient-name)" }}
+                />
+                name
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span
+                  className="inline-block h-0 w-3.5 border-b-2"
+                  style={{ borderBottomColor: "var(--ingredient-modifier)" }}
+                />
+                modifier
+              </span>
+            </span>
+          </Row>
         </div>
       </GallerySection>
 

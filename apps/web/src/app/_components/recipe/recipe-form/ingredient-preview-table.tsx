@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
-import { AlertCircle, Plus } from "lucide-react";
+import { AlertCircle, Eye, EyeOff, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
@@ -20,6 +20,7 @@ import { CreateIngredientDialog } from "../../combobox/with-search-hook";
 import { EntityPillLink } from "../../EntityPill";
 import { formatAmounts } from "../../inventory/format-amount";
 import { NoneState } from "../../NoneState";
+import { DecompositionView } from "../decomposition-view";
 import { useIngredientMatches } from "../use-ingredient-matches";
 import {
   type ParsedIngredientLine,
@@ -115,6 +116,8 @@ export function IngredientPreviewTable({
   // State for ingredient creation dialog
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [selectedIngredientName, setSelectedIngredientName] = useState("");
+  // Whether the optional "Raw" carve column is shown (off by default).
+  const [showRaw, setShowRaw] = useState(false);
 
   const createIngredient = useMutation(
     api.ingredient.create.mutationOptions({
@@ -154,12 +157,35 @@ export function IngredientPreviewTable({
         initialName={selectedIngredientName}
       />
 
+      {/* "Raw" shows the grammar's carve of each source line. Off by default so
+          the common view stays a tidy 3-column table; toggle it on to inspect
+          how a line parsed (the carve column wraps, the others don't). */}
+      <div className="mb-1 flex justify-end">
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          className="gap-1 text-2xs text-muted-foreground"
+          onClick={() => setShowRaw((v) => !v)}
+        >
+          {showRaw ? (
+            <EyeOff className="h-3 w-3" />
+          ) : (
+            <Eye className="h-3 w-3" />
+          )}
+          {showRaw ? "Hide raw" : "Show raw"}
+        </Button>
+      </div>
+
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[200px]">Ingredient</TableHead>
-            <TableHead>Amount</TableHead>
-            <TableHead>Modifier</TableHead>
+            <TableHead className={cn(showRaw && "w-[30%]")}>
+              Ingredient
+            </TableHead>
+            <TableHead className={cn(showRaw && "w-[20%]")}>Amount</TableHead>
+            <TableHead className={cn(showRaw && "w-[16%]")}>Modifier</TableHead>
+            {showRaw && <TableHead>Raw</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -168,12 +194,16 @@ export function IngredientPreviewTable({
               // biome-ignore lint/suspicious/noArrayIndexKey: stable order from text input
               key={idx}
               item={item}
+              showRaw={showRaw}
               onCreateClick={() => handleCreateIngredient(item.parsed.name)}
             />
           ))}
           {isLoadingIngredients && (
             <TableRow>
-              <TableCell colSpan={3} className="text-muted-foreground">
+              <TableCell
+                colSpan={showRaw ? 4 : 3}
+                className="text-muted-foreground"
+              >
                 <div className="flex items-center gap-2">
                   <Spinner />
                   Matching ingredients...
@@ -189,9 +219,11 @@ export function IngredientPreviewTable({
 
 function IngredientRow({
   item,
+  showRaw,
   onCreateClick,
 }: {
   item: ParsedIngredientWithMatch;
+  showRaw: boolean;
   onCreateClick: () => void;
 }) {
   const isMatched = item.match !== null;
@@ -244,6 +276,20 @@ function IngredientRow({
       <TableCell className="text-muted-foreground">
         {item.parsed.modifier || <NoneState />}
       </TableCell>
+      {/* Raw carve: where each refined field came from in the source line. The
+            columns above carry the parser's *structured* reading (e.g. two
+            independent amounts from "1 cup (200g)"); the carve can't show that
+            split, so it complements the columns rather than replacing them.
+            `whitespace-normal` lets the mono line wrap instead of overflowing the
+            fixed-layout column; underlines clone across wraps (box-decoration). */}
+      {showRaw && (
+        <TableCell className="whitespace-normal break-words text-xs leading-loose">
+          <DecompositionView
+            rawLine={item.raw}
+            className="text-foreground/70"
+          />
+        </TableCell>
+      )}
     </TableRow>
   );
 }

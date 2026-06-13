@@ -2,10 +2,11 @@
 //! scraped recipes, and freeform yields.
 
 use ingredient::{
-    from_str as parse_ingredient_str,
+    decompose as decompose_str, from_str as parse_ingredient_str,
     ingredient::Ingredient,
     rich_text::{Chunk, RichParser},
     usage::IngredientUsage,
+    Decomposition, Field,
 };
 use recipe_scraper::{RecipeSection, RecipeYield, ScrapedRecipe};
 use serde::{Deserialize, Serialize};
@@ -177,9 +178,92 @@ impl From<Chunk> for RichItem {
 #[serde(transparent)]
 pub struct RichItems(pub Vec<RichItem>);
 
+/// Which output field a decomposition segment became (mirrors `Field`). Renders
+/// as the TS string union `"amount" | "name" | "modifier"`, matching the keys of
+/// the `INGREDIENT_PART_COLOR` map on the TS side.
+#[derive(Tsify, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum WField {
+    Amount,
+    Name,
+    Modifier,
+}
+
+impl From<Field> for WField {
+    fn from(f: Field) -> Self {
+        match f {
+            Field::Amount => WField::Amount,
+            Field::Name => WField::Name,
+            Field::Modifier => WField::Modifier,
+        }
+    }
+}
+
+/// One contiguous chunk of the decomposed line: either a labeled field span or
+/// unlabeled gap text. The segments concatenate back to the whole source, so JS
+/// renders them in order with no byte-offset math (the Rust spans are UTF-8 byte
+/// ranges, which don't map to JS UTF-16 indices).
+#[derive(Tsify, Serialize, Deserialize)]
+pub struct WSegment {
+    pub text: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub field: Option<WField>,
+}
+
+/// How the grammar carved a line into fields (mirrors `Decomposition`), as an
+/// ordered list of segments covering the whole source. `segments` carries no
+/// labeled entries when a whole-line recognizer or the name-only fallback
+/// produced the result (then it's a single unlabeled segment = the whole line).
+#[derive(Tsify, Serialize, Deserialize)]
+#[tsify(into_wasm_abi)]
+pub struct WDecomposition {
+    pub source: String,
+    pub segments: Vec<WSegment>,
+}
+
+impl From<Decomposition> for WDecomposition {
+    fn from(d: Decomposition) -> Self {
+        // Walk the sorted, non-overlapping spans, emitting any gap text before
+        // each labeled span, then the span itself, then the trailing gap.
+        let mut segments = Vec::new();
+        let mut prev_end = 0usize;
+        for span in &d.spans {
+            if span.range.start > prev_end {
+                segments.push(WSegment {
+                    text: d.source[prev_end..span.range.start].to_string(),
+                    field: None,
+                });
+            }
+            segments.push(WSegment {
+                text: span.text.clone(),
+                field: Some(span.field.into()),
+            });
+            prev_end = span.range.end;
+        }
+        if prev_end < d.source.len() {
+            segments.push(WSegment {
+                text: d.source[prev_end..].to_string(),
+                field: None,
+            });
+        }
+        WDecomposition {
+            source: d.source,
+            segments,
+        }
+    }
+}
+
 #[wasm_bindgen]
 pub fn parse_ingredient(input: &str) -> WIngredient {
     parse_ingredient_str(input).into()
+}
+
+/// Decompose a line into ordered `{text, field?}` segments showing how the
+/// grammar carved it into amount / name / modifier spans. `source` is the
+/// *normalized* line the spans index into, not the verbatim raw input.
+#[wasm_bindgen]
+pub fn decompose_ingredient(input: &str) -> WDecomposition {
+    decompose_str(input).into()
 }
 
 #[wasm_bindgen]
@@ -310,6 +394,91 @@ mod tests {
     #[case("glasses", "glass")]
     fn singularize_unit_table(#[case] plural: &str, #[case] expected: &str) {
         assert_eq!(singularize_unit(plural.to_string()), expected);
+    }
+
+    /// `WDecomposition::from` invariant: the segments always concatenate back to
+    /// the whole `source` (no characters dropped or duplicated). This is the
+    /// contract the TS renderer relies on to draw the carve with no offset math.
+    /// Built directly from a `Decomposition` so the gap-walking is exercised
+    /// without depending on a specific parser carving.
+    #[test]
+    fn decomposition_segments_cover_source() {
+        use ingredient::FieldSpan;
+        // "AA NN, MM" — a gap (space) before NN, the ", " gap before MM.
+        let d = Decomposition {
+            source: "AA NN, MM".to_string(),
+            spans: vec![
+                FieldSpan {
+                    field: Field::Amount,
+                    range: 0..2,
+                    text: "AA".to_string(),
+                },
+                FieldSpan {
+                    field: Field::Name,
+                    range: 3..5,
+                    text: "NN".to_string(),
+                },
+                FieldSpan {
+                    field: Field::Modifier,
+                    range: 7..9,
+                    text: "MM".to_string(),
+                },
+            ],
+        };
+        let w = WDecomposition::from(d);
+        // Segments concatenate back to the source verbatim.
+        let joined: String = w.segments.iter().map(|s| s.text.as_str()).collect();
+        assert_eq!(joined, "AA NN, MM");
+        // Labeled fields appear in input order; gaps are unlabeled.
+        let labeled: Vec<(&str, bool)> = w
+            .segments
+            .iter()
+            .map(|s| (s.text.as_str(), s.field.is_some()))
+            .collect();
+        assert_eq!(
+            labeled,
+            [
+                ("AA", true),
+                (" ", false),
+                ("NN", true),
+                (", ", false),
+                ("MM", true),
+            ]
+        );
+    }
+
+    /// Empty-spans case (whole-line recognizer / name-only fallback): a single
+    /// unlabeled segment equal to the whole source, so the TS side renders plain
+    /// text with no special-casing.
+    #[test]
+    fn decomposition_empty_spans_is_one_plain_segment() {
+        let w = WDecomposition::from(Decomposition {
+            source: "whole line".to_string(),
+            spans: vec![],
+        });
+        assert_eq!(w.segments.len(), 1);
+        assert_eq!(w.segments[0].text, "whole line");
+        assert!(w.segments[0].field.is_none());
+    }
+
+    /// `decompose_ingredient` over a real parse: the carve of a standard line
+    /// covers the source and labels amount/name spans. The `"lowercase"` serde
+    /// rename (the TS string union) is pinned alongside.
+    #[test]
+    fn decompose_ingredient_real_parse() {
+        let w = decompose_ingredient("2 cups flour");
+        let joined: String = w.segments.iter().map(|s| s.text.as_str()).collect();
+        assert_eq!(joined, w.source);
+        let fields: Vec<serde_json::Value> = w
+            .segments
+            .iter()
+            .filter_map(|s| s.field.as_ref())
+            .map(|f| serde_json::to_value(f).unwrap())
+            .collect();
+        assert_eq!(
+            fields,
+            [serde_json::json!("amount"), serde_json::json!("name")]
+        );
     }
 
     /// `parse_rich_text` chunk sequence + the `{kind, value}` serde tag shape the
