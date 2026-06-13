@@ -1,5 +1,5 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
-import { BarChart3, BookOpen, Table2 } from "lucide-react";
+import { BarChart3, BookOpen, ClipboardList, Table2 } from "lucide-react";
 import type React from "react";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { EntitySummaryCard } from "~/components/entity/entity-summary-card";
@@ -27,6 +27,7 @@ import {
   type MissingWeightLink,
   RecipeScaleControl,
 } from "./RecipeScaleControl";
+import { RecipeSpecView } from "./RecipeSpecView";
 import { RecipeCostingDebugCard } from "./recipe-costing-debug-card";
 import { scaleRecipe } from "./recipe-scaling";
 import { RecipeTagList } from "./recipe-tag";
@@ -42,10 +43,11 @@ const RecipeCostTreemap = lazy(
   () => import("~/app/_components/visualizations/recipe-cost-treemap"),
 );
 
-export type RecipeViewMode = "magazine" | "table" | "charts";
+export type RecipeViewMode = "magazine" | "spec" | "table" | "charts";
 
 const RECIPE_VIEW_OPTIONS: ViewSwitcherOption<RecipeViewMode>[] = [
   { value: "magazine", label: "Magazine", icon: BookOpen },
+  { value: "spec", label: "Spec", icon: ClipboardList },
   { value: "table", label: "Table", icon: Table2 },
   { value: "charts", label: "Charts", icon: BarChart3 },
 ];
@@ -168,11 +170,20 @@ const RecipeDetailInner: React.FC<{
 
       {/* Actionable costing-coverage suggestions (table/charts views, where cost
           matters). Hidden in the reader-facing magazine view and when fully costed. */}
-      {viewMode !== "magazine" && <RecipeCostingCoverage gaps={costingGaps} />}
+      {viewMode !== "magazine" && viewMode !== "spec" && (
+        <RecipeCostingCoverage gaps={costingGaps} />
+      )}
 
       {/* View Components */}
       {viewMode === "magazine" && (
         <RecipeMagazineView
+          recipe={scaledRecipe}
+          totals={totals}
+          costing={costing}
+        />
+      )}
+      {viewMode === "spec" && (
+        <RecipeSpecView
           recipe={scaledRecipe}
           totals={totals}
           costing={costing}
