@@ -221,3 +221,127 @@ pub fn parse_rich_text(text: String, ingredient_names: Vec<String>) -> Result<Ri
         .map_err(|e| e.to_string())
         .map(|chunks| RichItems(chunks.into_iter().map(RichItem::from).collect()))
 }
+
+// ---------------------------------------------------------------------------
+// Golden tests — drift tripwires for the ingredient / recipe-scraper crates
+// (pinned by exact git rev in Cargo.toml). The parse_* fns are plain Rust under
+// the #[wasm_bindgen] attribute, so they run natively under `cargo test`. The
+// asserts pin the W-bridge serde shapes the TS side reads; a parser rev bump
+// that changes classification, the snake_case rename, yield/singularization, or
+// the rich-text chunk contract fails here instead of three layers downstream.
+// ---------------------------------------------------------------------------
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rstest::rstest;
+
+    /// One line per `WIngredientUsage` variant: the `IngredientUsage` drift
+    /// tripwire. A parser change that drops or reclassifies a role would silently
+    /// mis-cost (e.g. "oil, for frying" billed as a full ingredient) — caught here.
+    #[rstest]
+    #[case("2 cups flour", WIngredientUsage::Normal)]
+    #[case("oil, for frying", WIngredientUsage::FryingMedium)]
+    #[case("butter, for the pan", WIngredientUsage::PanGrease)]
+    #[case("salt, to taste", WIngredientUsage::Seasoning)]
+    #[case("flour, for dredging", WIngredientUsage::Dredging)]
+    #[case("parsley, for garnish", WIngredientUsage::Garnish)]
+    #[case("soy sauce, for marinating", WIngredientUsage::Marinade)]
+    fn usage_classification(#[case] line: &str, #[case] expected: WIngredientUsage) {
+        assert_eq!(parse_ingredient(line).usage, expected);
+    }
+
+    /// The snake_case wire contract the TS side reads (`frying_medium`, not
+    /// `FryingMedium`) — locks the serde rename against an accidental drop.
+    #[test]
+    fn usage_serde_is_snake_case() {
+        assert_eq!(
+            serde_json::to_value(WIngredientUsage::FryingMedium).unwrap(),
+            serde_json::json!("frying_medium")
+        );
+        assert_eq!(
+            serde_json::to_value(WIngredientUsage::Normal).unwrap(),
+            serde_json::json!("normal")
+        );
+    }
+
+    /// `parse_ingredient` golden over serde — confirms the full W-bridge shape
+    /// (name, one `{value, unit}` amount, snake_case usage, modifier omitted when
+    /// absent), mirroring `component_source_serde_matches_the_zod_contract`.
+    #[test]
+    fn parse_ingredient_golden_shape() {
+        let parsed = parse_ingredient("2 1/2 cups flour");
+        assert_eq!(parsed.name, "flour");
+        assert_eq!(parsed.usage, WIngredientUsage::Normal);
+        assert_eq!(
+            serde_json::to_value(&parsed).unwrap(),
+            serde_json::json!({
+                "name": "flour",
+                "amounts": [{ "unit": "cup", "value": 2.5 }],
+                "usage": "normal",
+            })
+        );
+    }
+
+    /// `parse_yield` pins the cookbook/web yield-consistency contract: a count
+    /// yield carries the generic `whole` unit and no servings; a "Serves N" line
+    /// populates `servings`. (Both surface the same parser the web scraper uses.)
+    #[rstest]
+    #[case("Makes about 12 pancakes", 12.0, None)]
+    #[case("Serves 4", 4.0, Some(4))]
+    fn parse_yield_table(#[case] input: &str, #[case] value: f64, #[case] servings: Option<u32>) {
+        let result = parse_yield(input);
+        let y = result.recipe_yield.expect("recipe_yield present");
+        assert_eq!(y.value, value);
+        // The parser emits a generic count unit ("whole") for bare counts; the
+        // display layer relabels using the trailing noun.
+        assert_eq!(y.unit, "whole");
+        assert_eq!(result.servings, servings);
+    }
+
+    /// `singularize_unit` for display labels. The `-es` guard is the real lock:
+    /// "glasses" → "glass" (not "glasse"). Note the singularizer's contract is
+    /// plural → singular; an already-singular "glass" is out of scope and returns
+    /// the naive strip "glas", so it isn't asserted here.
+    #[rstest]
+    #[case("cups", "cup")]
+    #[case("churros", "churro")]
+    #[case("glasses", "glass")]
+    fn singularize_unit_table(#[case] plural: &str, #[case] expected: &str) {
+        assert_eq!(singularize_unit(plural.to_string()), expected);
+    }
+
+    /// `parse_rich_text` chunk sequence + the `{kind, value}` serde tag shape the
+    /// richtext UI consumes: known ingredient names → `Ing`, an inline measure →
+    /// `Measure`, the rest → `Text`.
+    #[test]
+    fn parse_rich_text_chunks_and_tag_shape() {
+        let items = parse_rich_text(
+            "heat the oil and add 2 cups water".to_string(),
+            vec!["oil".to_string(), "water".to_string()],
+        )
+        .expect("rich text parses");
+
+        let kinds: Vec<&str> = items
+            .0
+            .iter()
+            .map(|c| match c {
+                RichItem::Text(_) => "Text",
+                RichItem::Ing(_) => "Ing",
+                RichItem::Measure(_) => "Measure",
+            })
+            .collect();
+        assert_eq!(kinds, ["Text", "Ing", "Text", "Measure", "Text", "Ing"]);
+
+        assert_eq!(
+            serde_json::to_value(&items).unwrap(),
+            serde_json::json!([
+                { "kind": "Text", "value": "heat the " },
+                { "kind": "Ing", "value": "oil" },
+                { "kind": "Text", "value": " and add " },
+                { "kind": "Measure", "value": [{ "unit": "cup", "value": 2.0 }] },
+                { "kind": "Text", "value": " " },
+                { "kind": "Ing", "value": "water" },
+            ])
+        );
+    }
+}

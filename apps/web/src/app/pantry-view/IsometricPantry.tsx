@@ -1,6 +1,10 @@
 /**
  * Isometric Pantry Visualization
  *
+ * ⚠️ HIGHLY EXPERIMENTAL — this ~2,000-line single-file canvas visualization is a
+ * prototype. It is intentionally not refactored, not unit-tested, and may change
+ * or be removed. Do not treat its internal structure as a pattern to copy.
+ *
  * A 2D Canvas isometric view of the user's inventory, inspired by
  * https://github.com/amilich/isometric-city. Each top-level location in the
  * tree becomes a separate isometric room rendered with walls, a checkerboard
