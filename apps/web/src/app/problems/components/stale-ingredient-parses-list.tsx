@@ -22,35 +22,32 @@ export function StaleIngredientParsesList({
         title: item.storedName,
         subtitle: item.recipeName,
         details: [
-          item.nameDrift ? (
-            <div key="name" className="flex items-baseline gap-1 text-xs">
+          <div
+            key="drifts"
+            className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs"
+          >
+            {item.nameDrift && (
               <DriftIndicator
+                axis="name"
                 before={item.storedName}
                 after={item.parsedName}
               />
-            </div>
-          ) : null,
-          item.amountDrift ? (
-            <div key="amounts" className="flex items-baseline gap-1 text-xs">
+            )}
+            {item.amountDrift && (
               <DriftIndicator
+                axis="amount"
                 before={formatAmounts(item.storedAmounts)}
                 after={formatAmounts(item.parsedAmounts)}
               />
-            </div>
-          ) : null,
-          item.modifierDrift ? (
-            <div
-              key="modifier"
-              className="flex items-baseline gap-1 text-muted-foreground/60 text-xs"
-            >
-              mod:{" "}
+            )}
+            {item.modifierDrift && (
               <DriftIndicator
-                tone="muted"
+                axis="modifier"
                 before={item.storedModifier ?? ""}
                 after={item.parsedModifier ?? ""}
               />
-            </div>
-          ) : null,
+            )}
+          </div>,
           <div
             key="rawLine"
             className="text-muted-foreground/70 text-xs italic"

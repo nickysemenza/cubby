@@ -12,7 +12,8 @@ export const formatRichText = (text: ReadonlyDeep<RichItem[]>) => {
       case "Ing":
         return (
           <span
-            className="rounded-sm bg-warning/20 box-decoration-clone px-1 font-medium text-accent-foreground"
+            className="border-b-2 box-decoration-clone pb-px font-medium"
+            style={{ borderBottomColor: "var(--ingredient-name)" }}
             // biome-ignore lint/suspicious/noArrayIndexKey: RichItem array has no stable IDs
             key={x}
           >
@@ -29,7 +30,8 @@ export const formatRichText = (text: ReadonlyDeep<RichItem[]>) => {
         const val = last.unit === "whole" ? { ...last, unit: "" } : last;
         return (
           <span
-            className="rounded-sm bg-secondary box-decoration-clone px-1 font-medium text-secondary-foreground"
+            className="border-b-2 box-decoration-clone pb-px font-medium"
+            style={{ borderBottomColor: "var(--ingredient-amount)" }}
             // biome-ignore lint/suspicious/noArrayIndexKey: RichItem array has no stable IDs
             key={x}
           >

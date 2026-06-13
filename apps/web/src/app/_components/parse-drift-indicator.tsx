@@ -1,38 +1,41 @@
-import { AlertCircle } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { InlineTextDiff } from "./inline-text-diff";
 
+export type DriftAxis = "amount" | "name" | "modifier";
+
+// One underline color per part of the "amount name modifier" display format. The
+// colored underline identifies *which* section a diff belongs to — replacing inline
+// text labels like "mod:". Colors live as CSS tokens (styles.css) so the rich-text
+// ingredient display can reuse them.
+const AXIS_COLOR: Record<DriftAxis, string> = {
+  amount: "var(--ingredient-amount)",
+  name: "var(--ingredient-name)",
+  modifier: "var(--ingredient-modifier)",
+};
+
 /**
- * One parser-drift axis, rendered identically everywhere it appears (ingredient detail
- * table, recipe editor, problems panel): an inline before→after word diff prefixed with
- * the ⚠ icon for cost-relevant axes (name, amount), or muted and icon-less for the
- * cosmetic modifier axis. Severity is the icon — the diff color means added/removed.
- *
- * Surfaces own their own *layout* (which column / title vs details); this owns the
- * *look* of a single indicator so the three can't drift apart.
+ * One parser-drift axis, rendered identically everywhere (ingredient detail table,
+ * recipe editor, problems panel): the red/green word diff of before→after, with a
+ * colored underline marking which part it is. All axes are equal — no icon, no priority;
+ * the underline color is the only section label.
  */
 export function DriftIndicator({
+  axis,
   before,
   after,
-  tone = "cost",
   className,
 }: {
+  axis: DriftAxis;
   before: string;
   after: string;
-  tone?: "cost" | "muted";
   className?: string;
 }) {
   return (
     <span
-      className={cn(
-        "inline-flex items-center gap-1",
-        tone === "muted" && "text-muted-foreground/60",
-        className,
-      )}
+      className={cn("inline-block border-b-2 pb-px", className)}
+      style={{ borderBottomColor: AXIS_COLOR[axis] }}
+      title={axis}
     >
-      {tone === "cost" && (
-        <AlertCircle className="h-3 w-3 shrink-0 text-amber-600" />
-      )}
       <InlineTextDiff before={before} after={after} />
     </span>
   );

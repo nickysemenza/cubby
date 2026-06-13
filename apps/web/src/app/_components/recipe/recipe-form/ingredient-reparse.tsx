@@ -111,7 +111,7 @@ export function IngredientReparse({
   };
 
   return (
-    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 pl-8">
+    <div className="mt-1 flex flex-col gap-y-0.5 pl-8">
       <span
         className="truncate text-muted-foreground/70 text-xs italic"
         title={rawLine}
@@ -119,28 +119,29 @@ export function IngredientReparse({
         from: {rawLine}
       </span>
       {drifted && (
-        <>
-          <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
-            {drift.name !== null && (
-              <DriftIndicator before={currentName ?? ""} after={drift.name} />
-            )}
-            {drift.amounts !== null && (
-              <DriftIndicator
-                before={formatAmounts(persistedAmounts)}
-                after={formatAmounts(drift.amounts)}
-              />
-            )}
-            {drift.modifier !== null && (
-              <span className="inline-flex max-w-[20rem] items-baseline gap-1 text-muted-foreground/60">
-                mod:{" "}
-                <DriftIndicator
-                  tone="muted"
-                  before={modifier ?? ""}
-                  after={drift.modifier}
-                />
-              </span>
-            )}
-          </span>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
+          {drift.name !== null && (
+            <DriftIndicator
+              axis="name"
+              before={currentName ?? ""}
+              after={drift.name}
+            />
+          )}
+          {drift.amounts !== null && (
+            <DriftIndicator
+              axis="amount"
+              before={formatAmounts(persistedAmounts)}
+              after={formatAmounts(drift.amounts)}
+            />
+          )}
+          {drift.modifier !== null && (
+            <DriftIndicator
+              axis="modifier"
+              before={modifier ?? ""}
+              after={drift.modifier}
+              className="max-w-[20rem]"
+            />
+          )}
           <Button
             type="button"
             variant="ghost"
@@ -153,7 +154,7 @@ export function IngredientReparse({
             <RefreshCw className="h-3 w-3" />
             Re-parse
           </Button>
-        </>
+        </div>
       )}
     </div>
   );

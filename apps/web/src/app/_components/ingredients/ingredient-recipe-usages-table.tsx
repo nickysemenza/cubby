@@ -84,6 +84,7 @@ export function IngredientRecipeUsagesTable({
             <td className="whitespace-nowrap py-1 pr-2 align-top text-muted-foreground">
               {row.drift.amounts !== null ? (
                 <DriftIndicator
+                  axis="amount"
                   before={formatAmounts(row.amounts)}
                   after={formatAmounts(row.drift.amounts)}
                   className="max-w-[12rem]"
@@ -106,7 +107,7 @@ export function IngredientRecipeUsagesTable({
             <td className="py-1 pr-2 align-top text-muted-foreground">
               {row.drift.modifier !== null ? (
                 <DriftIndicator
-                  tone="muted"
+                  axis="modifier"
                   before={row.modifier ?? ""}
                   after={row.drift.modifier}
                   className="max-w-[18rem]"
@@ -123,6 +124,7 @@ export function IngredientRecipeUsagesTable({
                   </span>
                   {row.drift.name !== null && (
                     <DriftIndicator
+                      axis="name"
                       before={ingredientName}
                       after={row.drift.name}
                     />

@@ -228,6 +228,13 @@
   --plum: oklch(0.55 0.14 320); /* Warm plum - recipes */
   --slate: oklch(0.55 0.06 55); /* Warm brown-slate */
 
+  /* Ingredient parts - one color per section of the "amount name modifier" display
+     format, drawn from the warm chart ramp so they stay on-brand. Used by parse-drift
+     underlines and the rich-text ingredient line. */
+  --ingredient-amount: var(--chart-1); /* terracotta */
+  --ingredient-name: var(--chart-3); /* olive-sage */
+  --ingredient-modifier: var(--chart-5); /* warm plum */
+
   /* Positive / money - warm-leaning green (replaces ad-hoc inline oklch) */
   --positive: oklch(0.52 0.1 150);
 
@@ -298,6 +305,9 @@
   --color-plum: var(--plum);
   --color-slate: var(--slate);
   --color-positive: var(--positive);
+  --color-ingredient-amount: var(--ingredient-amount);
+  --color-ingredient-name: var(--ingredient-name);
+  --color-ingredient-modifier: var(--ingredient-modifier);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
