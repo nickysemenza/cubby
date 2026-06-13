@@ -3,8 +3,17 @@ import { sanitizeSectionName } from "@cubby/schemas/codec";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import { wasm } from "~/lib/wasm";
 
+const isChefStepsHost = (url: string): boolean => {
+  try {
+    const host = new URL(url).hostname;
+    return host === "chefsteps.com" || host === "www.chefsteps.com";
+  } catch {
+    return false;
+  }
+};
+
 const scrapeRecipe = async (url: string) => {
-  if (url.includes("chefsteps.com")) {
+  if (isChefStepsHost(url)) {
     // transform https://www.chefsteps.com/activities/rich-and-moist-cornbread
     // into https://www.chefsteps.com/api/v0/activities/rich-and-moist-cornbread
     const activityId = url.split("/").pop();
