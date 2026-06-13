@@ -65,7 +65,8 @@ export function IngredientReparse({
       const resolved =
         (await queryClient.fetchQuery(
           api.ingredient.getByName.queryOptions({ nameFilter: fresh.name }),
-        )) ?? (await createMutation.mutateAsync({ name: fresh.name }));
+        )) ??
+        (await createMutation.mutateAsync({ name: fresh.name, aliases: [] }));
 
       const current = form.getValues(
         `sections.${sectionIndex}.ingredients.${ingredientIndex}`,
