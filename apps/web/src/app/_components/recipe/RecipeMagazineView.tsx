@@ -9,6 +9,7 @@ import type {
 import { cn, formatCurrency } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
 import { tryFormatAmount } from "../inventory/format-amount";
+import { EstimateMarker } from "./estimate-marker";
 import { RecipeHero } from "./RecipeHero";
 import { RecipeInstructions } from "./RecipeInstructions";
 import {
@@ -63,11 +64,6 @@ function formatWrittenQuantities(ing: SectionIngredientOut) {
 function hasWrittenWeight(ing: SectionIngredientOut): boolean {
   return ing.amounts.some((a) => wasm.amount_kind(a) === "weight");
 }
-
-/** Muted "est." tag mirroring the table — keeps modeled grams from reading as measured. */
-const EstimateMarker = () => (
-  <span className="ml-1 text-[0.9em] text-muted-foreground/70">est.</span>
-);
 
 /**
  * Ingredient ledger: mono quantity gutter + name, dashed rules, click a row

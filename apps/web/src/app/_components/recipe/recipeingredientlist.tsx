@@ -28,17 +28,12 @@ import { EntityPillLink } from "../EntityPill";
 import { tryFormatAmount } from "../inventory/format-amount";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import { CopyCorpusButton } from "./copy-corpus-button";
+import { EstimateMarker } from "./estimate-marker";
 import {
   getIngredientName,
   isFlourIngredient,
   type ServingBasis,
 } from "./recipe-utils";
-
-// Small muted marker so estimated (usage-adjusted) values don't read as
-// measured ones.
-const EstimateMarker = () => (
-  <span className="ml-1 text-2xs text-muted-foreground/70">est.</span>
-);
 
 // What an unmeasured estimated row shows in its Amounts cell, per usage.
 // "absorbed" keeps its established meaning for frying oil; the rest read as

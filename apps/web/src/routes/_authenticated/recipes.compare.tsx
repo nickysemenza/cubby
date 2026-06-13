@@ -1,5 +1,4 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
-import { getNutrientValueByKey } from "@cubby/usda-schemas";
 import { useQueries } from "@tanstack/react-query";
 import {
   createFileRoute,
@@ -11,14 +10,16 @@ import { ArrowLeft, Plus, X } from "lucide-react";
 import { useMemo } from "react";
 import { z } from "zod";
 import { useRecipeCostingData } from "~/app/_components/hooks/useRecipeCostingData";
-import { getIngredientName } from "~/app/_components/recipe/recipe-utils";
+import {
+  getEffectiveServings,
+  getIngredientName,
+  type RecipeHeadlineTotals,
+  recipeHeadlineTotals,
+} from "~/app/_components/recipe/recipe-utils";
 import { EntityLayout } from "~/components/layouts/entity-layout";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import {
-  type CalculateTotalsResult,
-  computeRecipeCosting,
-} from "~/lib/recipe-costing";
+import { computeRecipeCosting } from "~/lib/recipe-costing";
 import { formatCurrency } from "~/lib/utils";
 import { dedupe } from "~/misc/array-helpers";
 import { useTRPC } from "~/trpc/react";
@@ -36,16 +37,10 @@ export const Route = createFileRoute("/_authenticated/recipes/compare")({
   head: () => ({ meta: [{ title: "Compare Recipes | cubby" }] }),
 });
 
-/** Get effective servings: explicit servings, or yield value if unit is "servings" */
-function getEffectiveServings(recipe: RecipeOut): number | null {
-  if (recipe.servings) return recipe.servings;
-  if (recipe.yield?.unit === "servings") return recipe.yield.value;
-  return null;
-}
-
 interface RecipeWithTotals {
   recipe: RecipeOut;
-  totals: CalculateTotalsResult | null;
+  /** The four headline figures (cost/weight/calories/protein), null until costed. */
+  headline: RecipeHeadlineTotals | null;
   effectiveServings: number | null;
 }
 
@@ -95,11 +90,14 @@ function RecipeComparePage() {
       getIngredientName,
       recipeMap,
     );
-    return recipes.map((recipe) => ({
-      recipe,
-      totals: costings.get(recipe.id)?.totals ?? null,
-      effectiveServings: getEffectiveServings(recipe),
-    }));
+    return recipes.map((recipe) => {
+      const totals = costings.get(recipe.id)?.totals ?? null;
+      return {
+        recipe,
+        headline: totals ? recipeHeadlineTotals(totals) : null,
+        effectiveServings: getEffectiveServings(recipe),
+      };
+    });
   }, [recipes, ingMap, recipeMap]);
 
   // Remove a recipe from comparison
@@ -226,9 +224,9 @@ function RecipeComparePage() {
                       <td className="px-4 py-2 text-muted-foreground text-sm">
                         Total Cost
                       </td>
-                      {recipesWithTotals.map(({ recipe, totals }) => (
+                      {recipesWithTotals.map(({ recipe, headline }) => (
                         <td key={recipe.id} className="px-4 py-2 text-sm">
-                          {totals?.price ? formatCurrency(totals.price) : "-"}
+                          {headline?.cost ? formatCurrency(headline.cost) : "-"}
                         </td>
                       ))}
                     </tr>
@@ -238,16 +236,13 @@ function RecipeComparePage() {
                       <td className="px-4 py-2 text-muted-foreground text-sm">
                         Total Calories
                       </td>
-                      {recipesWithTotals.map(({ recipe, totals }) => {
-                        const calories = totals
-                          ? getNutrientValueByKey(totals.nutrients, "kcal")
-                          : 0;
-                        return (
-                          <td key={recipe.id} className="px-4 py-2 text-sm">
-                            {calories ? `${Math.round(calories)} kcal` : "-"}
-                          </td>
-                        );
-                      })}
+                      {recipesWithTotals.map(({ recipe, headline }) => (
+                        <td key={recipe.id} className="px-4 py-2 text-sm">
+                          {headline?.calories
+                            ? `${Math.round(headline.calories)} kcal`
+                            : "-"}
+                        </td>
+                      ))}
                     </tr>
 
                     {/* Total Protein */}
@@ -255,16 +250,13 @@ function RecipeComparePage() {
                       <td className="px-4 py-2 text-muted-foreground text-sm">
                         Total Protein
                       </td>
-                      {recipesWithTotals.map(({ recipe, totals }) => {
-                        const protein = totals
-                          ? getNutrientValueByKey(totals.nutrients, "protein")
-                          : 0;
-                        return (
-                          <td key={recipe.id} className="px-4 py-2 text-sm">
-                            {protein ? `${Math.round(protein)}g` : "-"}
-                          </td>
-                        );
-                      })}
+                      {recipesWithTotals.map(({ recipe, headline }) => (
+                        <td key={recipe.id} className="px-4 py-2 text-sm">
+                          {headline?.protein
+                            ? `${Math.round(headline.protein)}g`
+                            : "-"}
+                        </td>
+                      ))}
                     </tr>
                   </tbody>
                 </table>

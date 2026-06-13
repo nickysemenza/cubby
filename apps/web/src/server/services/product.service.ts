@@ -17,10 +17,7 @@ import {
   productList as productListRepo,
   updateProduct as updateProductRepo,
 } from "../repo/product";
-import {
-  findRecipeIdsUsingIngredient,
-  markRecipesStale,
-} from "../repo/recipe/totals";
+import { markRecipesStaleForIngredient } from "../repo/recipe/totals";
 import { batchEnrichWithFood } from "./usda-helpers";
 
 // Extended schema that includes food data
@@ -121,7 +118,6 @@ export class ProductService {
     ingredientId: IngredientId | undefined,
   ): Promise<void> {
     if (!ingredientId) return;
-    const recipeIds = await findRecipeIdsUsingIngredient(this.db, ingredientId);
-    await markRecipesStale(this.db, recipeIds);
+    await markRecipesStaleForIngredient(this.db, ingredientId);
   }
 }

@@ -62,6 +62,7 @@ const measureDiagnostic = z.discriminatedUnion("ok", [
   z.object({ ok: z.literal(true), value: z.number(), unit: z.string() }),
   z.object({ ok: z.literal(false), error: z.string() }),
 ]);
+export type MeasureDiagnosticOut = z.infer<typeof measureDiagnostic>;
 
 const nutrientDiagnostic = z.discriminatedUnion("ok", [
   z.object({
@@ -71,6 +72,7 @@ const nutrientDiagnostic = z.discriminatedUnion("ok", [
   }),
   z.object({ ok: z.literal(false), error: z.string() }),
 ]);
+export type NutrientDiagnosticOut = z.infer<typeof nutrientDiagnostic>;
 
 /** One hop of an explained unit-graph conversion (normalized nodes). */
 export const conversionStep = z.object({

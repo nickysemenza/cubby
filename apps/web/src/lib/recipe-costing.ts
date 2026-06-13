@@ -1,8 +1,6 @@
 import type {
   AmountKind,
-  PlanTrio,
   WAmount,
-  WConversionStep,
   WCostingInput,
   WCostingRow,
   WIngredientUsage,
@@ -13,7 +11,13 @@ import type {
   WRowResult,
 } from "@cubby/recipebridge";
 import type { Amount } from "@cubby/schemas/codec";
-import type { RecipeOut, SectionIngredientOut } from "@cubby/schemas/recipe";
+import type {
+  MeasureDiagnosticOut,
+  NutrientDiagnosticOut,
+  RecipeOut,
+  RowDiagnosticOut,
+  SectionIngredientOut,
+} from "@cubby/schemas/recipe";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import {
   getNutrientUnitString,
@@ -97,15 +101,19 @@ export type IngredientDataItem = CostingRow & {
   priceInfo: IngredientPriceInfo | undefined;
 };
 
+/**
+ * The diagnostic shapes are declared once as the zod wire contract in
+ * `@cubby/schemas/recipe` and inferred here, so the contract and the source
+ * can't silently diverge (the structural compat between the WASM types the
+ * reshaper feeds in — PlanTrio, WConversionStep, WIngredientUsage — and these
+ * is compiler-enforced at `toRowDiagnostic`).
+ */
+
 /** One resolved measure, flattened for display/serialization (no Result). */
-export type MeasureDiagnostic =
-  | { ok: true; value: number; unit: string }
-  | { ok: false; error: string };
+export type MeasureDiagnostic = MeasureDiagnosticOut;
 
 /** Nutrient summary diagnostic: kcal + how many nutrient codes resolved. */
-export type NutrientDiagnostic =
-  | { ok: true; kcal: number | null; nutrientCount: number }
-  | { ok: false; error: string };
+export type NutrientDiagnostic = NutrientDiagnosticOut;
 
 /**
  * Per-row costing trace: which usage the classifier assigned, which consumption
@@ -114,26 +122,7 @@ export type NutrientDiagnostic =
  * This is the data the per-cell "—" swallows; the debug card and the
  * explain endpoint/MCP tool surface it. JSON-serializable by construction.
  */
-export type RowDiagnostic = {
-  id: string;
-  name: string;
-  sectionName: string | null;
-  kind: "ingredient" | "recipe";
-  usage: IngredientUsage;
-  measured: boolean;
-  plan: PlanTrio;
-  /** Basis weight (g) deferred rows estimated from; null for pass-1 rows. */
-  basisGrams: number | null;
-  price: MeasureDiagnostic;
-  gram: MeasureDiagnostic;
-  nutrient: NutrientDiagnostic;
-  /** Unit-graph routes per measure (explain mode only; null = no path). */
-  paths?: {
-    money: WConversionStep[] | null;
-    weight: WConversionStep[] | null;
-    calories: WConversionStep[] | null;
-  };
-};
+export type RowDiagnostic = RowDiagnosticOut;
 
 export type CalculateTotalsResult = {
   price: number;

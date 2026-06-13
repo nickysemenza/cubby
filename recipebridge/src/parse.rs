@@ -6,7 +6,6 @@ use ingredient::{
     ingredient::Ingredient,
     rich_text::{Chunk, RichParser},
     usage::IngredientUsage,
-    util::truncate_3_decimals,
 };
 use recipe_scraper::{RecipeSection, RecipeYield, ScrapedRecipe};
 use serde::{Deserialize, Serialize};
@@ -177,11 +176,6 @@ impl From<Chunk> for RichItem {
 #[tsify(into_wasm_abi)]
 #[serde(transparent)]
 pub struct RichItems(pub Vec<RichItem>);
-
-#[wasm_bindgen]
-pub fn format_amount_value(input: WAmount) -> f64 {
-    truncate_3_decimals(input.value)
-}
 
 #[wasm_bindgen]
 pub fn parse_ingredient(input: &str) -> WIngredient {

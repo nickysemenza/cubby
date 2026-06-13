@@ -100,6 +100,23 @@ export const countStaleRecipes = async (db: Database): Promise<number> => {
 };
 
 /**
+ * The single entry point for "an ingredient's contribution to recipe totals
+ * changed" — mark every recipe using it stale so the drain recomputes its
+ * cost/calories. Callers: a product's price/USDA-link edit (via its linked
+ * ingredient), an ingredient edit, and a merge (post-merge the repointed rows
+ * reference the target, so invalidating the target covers former-alias users).
+ * Over-invalidates on benign edits, which is fine — recompute is cheap and
+ * deferred.
+ */
+export const markRecipesStaleForIngredient = async (
+  db: Database,
+  ingredientId: IngredientId,
+): Promise<void> => {
+  const ids = await findRecipeIdsUsingIngredient(db, ingredientId);
+  await markRecipesStale(db, ids);
+};
+
+/**
  * Recipes that reference an ingredient (via any section). Used to invalidate when
  * a product's price/USDA link/ingredient changes (a product feeds recipe cost via
  * its linked ingredient).

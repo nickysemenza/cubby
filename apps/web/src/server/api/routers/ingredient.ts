@@ -12,7 +12,6 @@ import { z } from "zod";
 import {
   deleteIngredients,
   getIngredientMatches,
-  mergeIngredients,
 } from "~/server/repo/ingredient";
 import { ingredientWithFoodOut } from "~/server/services/ingredient.service";
 import {
@@ -74,8 +73,10 @@ const merge = protectedProcedure
   )
   .output(ingredientWithFoodOut)
   .mutation(async ({ ctx, input }) => {
-    await mergeIngredients(ctx.db, input.target, input.aliases);
-    return await ctx.services.ingredient.getIngredientByID(input.target);
+    return await ctx.services.ingredient.mergeIngredients(
+      input.target,
+      input.aliases,
+    );
   });
 
 const getByName = protectedProcedure

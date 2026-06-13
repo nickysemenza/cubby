@@ -60,7 +60,6 @@ const CACHEABLE_METHODS = [
   "conv_amount_to_kind",
   "conv_amount_explain",
   "format_amount",
-  "format_amount_value",
   // Mapping synthesis from product/food data — pure, called per product per
   // render (table mapping columns, detail pages) with identical args.
   "unit_mappings_from_food",
