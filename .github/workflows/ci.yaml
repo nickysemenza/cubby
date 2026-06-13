@@ -506,18 +506,14 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: 9f10f078d35d86c78dedece2300a6b88
         run: |
           set -o pipefail
+          # --message carries the PR URL so it links back from the CF Versions UI
+          # (deploys are by a service token, so CF shows "by Unknown" — full
+          # GitHub linking would need Cloudflare Workers Builds).
           wrangler versions upload --config dist/server/wrangler.json \
             --tag "pr-${{ github.event.number }}" \
-            --message "PR #${{ github.event.number }} @ ${{ github.sha }}" 2>&1 | tee upload.log
-          # Prefer wrangler's explicit label; fall back to the <prefix>-cubby host
-          # (NOT a bare *.workers.dev grep — that matches the USDA/UPC var dump).
-          url=$(sed -nE 's#.*[Vv]ersion [Pp]review [Uu][Rr][Ll]:[[:space:]]*(https://[a-z0-9.-]+\.workers\.dev).*#\1#p' upload.log | head -1)
-          if [ -z "$url" ]; then
-            url=$(grep -oE 'https://[a-z0-9-]+-cubby\.[a-z0-9-]+\.workers\.dev' upload.log | head -1)
-          fi
+            --message "${{ github.event.pull_request.html_url }} @ ${{ github.sha }}" 2>&1 | tee upload.log
+          # The <prefix>-cubby host is specific to this worker's preview URLs, so
+          # it won't match the USDA/UPC vars in the bindings dump.
+          url=$(grep -oE 'https://[a-z0-9-]+-cubby\.nicky\.workers\.dev' upload.log | head -1)
           echo "url=$url" >> "$GITHUB_OUTPUT"
-          if [ -z "$url" ]; then
-            echo "::warning::No preview URL emitted — enable Preview URLs (workers.dev) for the cubby worker."
-          else
-            echo "Preview URL: $url"
-          fi
+          [ -n "$url" ] || echo "::warning::No preview URL — enable Preview URLs (workers.dev) for the cubby worker."
