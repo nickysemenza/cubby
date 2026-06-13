@@ -19,14 +19,18 @@ tsify-next = { version = "0.5", features = ["js"] }
 # recipe-scraper = { path = "dev/ingredient-parser/recipe-scraper" }
 # ingredient = { path = "dev/ingredient-parser/ingredient-parser" }
 #
-# Pin to a rev (not branch = "main"): CI's WASM build cache key hashes this
-# Cargo.toml, so a moving branch would let a stale cached pkg outlive an
-# upstream parser change. Bump these in lockstep when pulling in parser fixes.
-ingredient = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "858a85e1d072def8f429a48e44e5a284b7988b58" }
-recipe-scraper = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "858a85e1d072def8f429a48e44e5a284b7988b58" }
+# Track main (no rev pin). Previously rev-pinned because CI's WASM cache key
+# hashed this Cargo.toml, so a moving branch left a stale cached pkg outliving
+# an upstream parser change. The cache key now folds in the live upstream HEAD
+# SHA (resolved via `git ls-remote` in .github/workflows/ci.yaml), so the key
+# changes the moment main moves — a branch dep stays fresh with no manual bump.
+# recipebridge/Cargo.lock is gitignored so CI re-resolves to latest main; locally
+# the global ~/.cargo/config.toml patch (above) overrides to a working copy.
+ingredient = { git = "https://github.com/nickysemenza/ingredient-parser", branch = "main" }
+recipe-scraper = { git = "https://github.com/nickysemenza/ingredient-parser", branch = "main" }
 # EPUB cookbook extraction — the pure subset only (no reqwest/fs). `chunk_epub`
 # + `assemble_recipes` run client-side; the LLM call is proxied through Cubby.
-recipe-epub = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "858a85e1d072def8f429a48e44e5a284b7988b58", default-features = false }
+recipe-epub = { git = "https://github.com/nickysemenza/ingredient-parser", branch = "main", default-features = false }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 # 0.10 (not 0.11) to share recipe-epub's copy — a version split compiles sha2

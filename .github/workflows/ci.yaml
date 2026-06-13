@@ -49,12 +49,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      # ingredient-parser is tracked via `branch = "main"` (not a pinned rev), so
+      # resolve its live HEAD SHA and fold it into the cache key below. The key
+      # then changes the instant upstream main moves, forcing a rebuild — without
+      # this, a moving branch would serve a stale cached WASM pkg indefinitely.
+      - name: Resolve ingredient-parser HEAD
+        id: parser
+        run: echo "sha=$(git ls-remote https://github.com/nickysemenza/ingredient-parser refs/heads/main | cut -f1)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@v5
         id: wasm-cache
         name: Restore cached WASM pkg
         with:
           path: packages/wasm
-          key: wasm-pkg-${{ runner.os }}-${{ hashFiles('recipebridge/Cargo.toml') }}-${{ hashFiles('recipebridge/Cargo.lock') }}-${{ hashFiles('recipebridge/src/**') }}-${{ hashFiles('rust-toolchain.toml') }}
+          key: wasm-pkg-${{ runner.os }}-${{ hashFiles('recipebridge/Cargo.toml') }}-${{ hashFiles('recipebridge/src/**') }}-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.parser.outputs.sha }}
           restore-keys: |
             wasm-pkg-${{ runner.os }}-
       - uses: actions-rust-lang/setup-rust-toolchain@v1
