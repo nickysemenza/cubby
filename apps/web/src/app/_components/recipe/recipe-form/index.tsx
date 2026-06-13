@@ -158,10 +158,10 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
 
   // Which import tool panel is open. They're plumbing, not recipe data, so
   // they collapse behind a toolbar; scraping starts open when creating fresh.
-  const [openTool, setOpenTool] = useState<
-    "scrape" | "text" | "html" | "photos" | null
-  >(mode === "create" ? "scrape" : null);
-  const toggleTool = (tool: "scrape" | "text" | "html" | "photos") =>
+  const [openTool, setOpenTool] = useState<"scrape" | "text" | "html" | null>(
+    mode === "create" ? "scrape" : null,
+  );
+  const toggleTool = (tool: "scrape" | "text" | "html") =>
     setOpenTool((current) => (current === tool ? null : tool));
 
   // Import section state
@@ -484,17 +484,6 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                 type="button"
                 variant="outline"
                 size="sm"
-                aria-expanded={openTool === "photos"}
-                className={cn(openTool === "photos" && "bg-muted")}
-                onClick={() => toggleTool("photos")}
-              >
-                <ImageIcon className="mr-1.5 h-3.5 w-3.5" />
-                Photos
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
                 aria-expanded={openTool === "html"}
                 className={cn(openTool === "html" && "bg-muted")}
                 onClick={() => toggleTool("html")}
@@ -649,24 +638,6 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
             </div>
           </div>
 
-          {/* Photos panel (kept mounted: scraped images auto-import here) */}
-          <div
-            className={cn(
-              "rounded-lg border border-border bg-card p-3",
-              openTool !== "photos" && "hidden",
-            )}
-          >
-            <PendingImageUpload
-              entityType="RECIPE"
-              onImagesChange={handlePendingImagesChange}
-              existingImages={
-                mode === "edit" && recipe?.images ? recipe.images : []
-              }
-              onExistingImagesRemove={handleRemovedImagesChange}
-              autoImportUrl={scrapedImageUrl}
-            />
-          </div>
-
           {/* Paste-HTML panel — fallback when a URL scrape is blocked. Open the
               page in your browser, View Source, copy all, and paste it here. */}
           <div
@@ -764,6 +735,26 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                     />
                   </Field>
                 )}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Photos: a first-class field. Kept always-mounted so scraped
+              images still auto-import via autoImportUrl. */}
+          <Card>
+            <CardContent className="space-y-2 px-4 py-3">
+              <h3 className="my-0 flex items-center gap-1.5 font-medium font-mono text-2xs text-eyebrow uppercase tracking-wider">
+                <ImageIcon className="h-3.5 w-3.5" />
+                Photos
+              </h3>
+              <PendingImageUpload
+                entityType="RECIPE"
+                onImagesChange={handlePendingImagesChange}
+                existingImages={
+                  mode === "edit" && recipe?.images ? recipe.images : []
+                }
+                onExistingImagesRemove={handleRemovedImagesChange}
+                autoImportUrl={scrapedImageUrl}
               />
             </CardContent>
           </Card>

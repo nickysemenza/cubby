@@ -820,7 +820,6 @@ describe("calculateTotals with the consumption model", () => {
       { ...ingMap, water },
       getName,
       {},
-      { isFlour: (name) => name === "flour" },
     ).get(root.id);
 
     expect(costing?.bakerPct.get("flour")).toBeCloseTo(100, 5);

@@ -139,6 +139,8 @@ export type RecipeCosting = {
   estimatedRows: Map<string, IngredientUsage>;
   /** Row id → baker's percentage (own grams ÷ flour grams), null when n/a. */
   bakerPct: Map<string, number | null>;
+  /** Row id → whether the engine classified it as a flour (baker's-% base). */
+  isFlourRows: Map<string, boolean>;
 };
 
 // ---------------------------------------------------------------------------
@@ -159,21 +161,16 @@ const nutrientTargets = (): WCostingInput["nutrient_targets"] =>
 const toWRow = (
   row: CostingRow,
   getIngredientName: (i: SectionIngredientOut) => string,
-  isFlour: (name: string) => boolean,
-): WCostingRow => {
-  const name = getIngredientName(row);
-  return {
-    id: row.id,
-    kind: row.type,
-    target_id: row.type === "ingredient" ? row.ingredient.id : row.recipe.id,
-    name,
-    amounts: row.amounts,
-    modifier: row.modifier ?? null,
-    raw_line: row.rawLine ?? null,
-    section_name: row.sectionName,
-    is_flour: isFlour(name),
-  };
-};
+): WCostingRow => ({
+  id: row.id,
+  kind: row.type,
+  target_id: row.type === "ingredient" ? row.ingredient.id : row.recipe.id,
+  name: getIngredientName(row),
+  amounts: row.amounts,
+  modifier: row.modifier ?? null,
+  raw_line: row.rawLine ?? null,
+  section_name: row.sectionName,
+});
 
 const toWProductInput = (p: ProductWithMappingsAndFoodOut): WProductInput => ({
   id: p.id,
@@ -273,6 +270,7 @@ const reshape = (w: WRecipeCosting, rows: CostingRow[]): RecipeCosting => {
     bakerPct: new Map(
       w.baker_percentages.map((b) => [b.row_id, b.pct ?? null] as const),
     ),
+    isFlourRows: new Map(w.rows.map((r) => [r.id, r.is_flour] as const)),
   };
 };
 
@@ -296,10 +294,8 @@ export const computeRecipeCosting = (
   ingMap: Record<string, IngredientWithFoodOut>,
   getIngredientName: (ingredient: SectionIngredientOut) => string,
   recipeMap: Record<string, RecipeOut> = {},
-  opts: { explain?: boolean; isFlour?: (name: string) => boolean } = {},
+  opts: { explain?: boolean } = {},
 ): Map<string, RecipeCosting> => {
-  const isFlour = opts.isFlour ?? (() => false);
-
   // The closure: roots + every fetched sub-recipe, each serialized once.
   const closure = new Map<string, RecipeOut>();
   for (const r of Object.values(recipeMap)) closure.set(r.id, r);
@@ -311,7 +307,7 @@ export const computeRecipeCosting = (
       id: r.id,
       recipe_yield: r.yield,
       rows: flattenSections(r.sections).map((row) =>
-        toWRow(row, getIngredientName, isFlour),
+        toWRow(row, getIngredientName),
       ),
     })),
     ingredients: Object.entries(ingMap).map(([id, ing]) => ({

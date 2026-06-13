@@ -12,4 +12,7 @@ export type ComboboxItem<TId extends string = string> = {
   name: string;
   id: TId;
   icon?: React.ReactNode;
+  // Optional aliases, carried for ingredient items so a row's drift check can
+  // recognize an alias match on manual selection. Unused by other entity types.
+  aliases?: string[];
 };

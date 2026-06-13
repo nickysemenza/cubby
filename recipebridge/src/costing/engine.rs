@@ -39,6 +39,18 @@ struct Planned<'r> {
     row: &'r WCostingRow,
     usage: IngredientUsage,
     plan: PlanTrio,
+    /// Whether this row is a flour (the baker's-percentage base), classified
+    /// from the row name — see `is_flour`.
+    is_flour: bool,
+}
+
+/// The flour that forms a baker's-percentage base. Substring "flour" catches
+/// bread/AP/all-purpose/whole-wheat/white/cake/pastry/00/durum flour; a few
+/// common flours-by-other-name are listed explicitly. (Port of the old TS
+/// `isFlourIngredient` — owned here so the rule has one home.)
+fn is_flour(name: &str) -> bool {
+    let n = name.to_lowercase();
+    n.contains("flour") || n.contains("semolina")
 }
 
 /// Classify every row's usage + consumption plan, in input order. Sub-recipe
@@ -59,7 +71,12 @@ fn classify_planned_rows(recipe: &WCostingRecipe) -> Vec<Planned<'_>> {
                 ),
             };
             let plan = plan_for(usage, !row.amounts.is_empty());
-            Planned { row, usage, plan }
+            Planned {
+                row,
+                usage,
+                plan,
+                is_flour: is_flour(&row.name),
+            }
         })
         .collect()
 }
@@ -620,7 +637,7 @@ impl<'a> Engine<'a> {
             let own_gram = own
                 .as_ref()
                 .and_then(|o| o.gram.as_ref().ok().map(|g| g.value));
-            if p.row.is_flour {
+            if p.is_flour {
                 if let Some(g) = own_gram {
                     flour_grams += g;
                 }
@@ -641,6 +658,7 @@ impl<'a> Engine<'a> {
                 nutrients: to_nutrients_result(&trio.nutrients),
                 own_gram,
                 estimated: p.plan.is_estimated(),
+                is_flour: p.is_flour,
                 paths: if explain {
                     self.paths_for(p.row, &p.plan, basis)
                 } else {

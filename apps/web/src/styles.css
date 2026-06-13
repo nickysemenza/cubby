@@ -211,6 +211,9 @@
   /* Borders and inputs (Gallery: lighter, more neutral) */
   --border: oklch(0.9 0.008 75);
   --input: oklch(0.95 0.006 75);
+  /* Checkbox border - a clearly visible mid-gray so unchecked boxes read as
+     empty controls against cream/pink rows (--input hairline was invisible) */
+  --checkbox-border: oklch(0.78 0.012 75);
   --ring: var(--brand-terracotta);
 
   /* Selected table-row tint - warm but quiet (replaces hardcoded oklch tints
@@ -297,6 +300,7 @@
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
+  --color-checkbox-border: var(--checkbox-border);
   --color-ring: var(--ring);
   --color-eyebrow: var(--eyebrow);
   --color-highlight: var(--highlight);

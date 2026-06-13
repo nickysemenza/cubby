@@ -31,11 +31,7 @@ import { tryFormatAmount } from "../inventory/format-amount";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import { CopyCorpusButton } from "./copy-corpus-button";
 import { EstimateMarker } from "./estimate-marker";
-import {
-  getIngredientName,
-  isFlourIngredient,
-  type ServingBasis,
-} from "./recipe-utils";
+import { getIngredientName, type ServingBasis } from "./recipe-utils";
 
 // What an unmeasured estimated row shows in its Amounts cell, per usage.
 // "absorbed" keeps its established meaning for frying oil; the rest read as
@@ -212,7 +208,7 @@ export const RecipeIngredientList: React.FC<{
         // spices) don't collapse to a misleading "0%"; whole percent above.
         const label = `${pct >= 10 ? Math.round(pct) : Math.round(pct * 10) / 10}%`;
         // Mark the flour base (the 100% reference) so the column reads at a glance.
-        return isFlourIngredient(getIngredientName(row)) ? (
+        return (costing?.isFlourRows.get(row.id) ?? false) ? (
           <span className="font-semibold text-primary">{label}</span>
         ) : (
           label

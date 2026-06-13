@@ -299,7 +299,10 @@ export function useIngredientImport(ingredientLines: string[]) {
   // Create all missing ingredients and return structured form data
   const importAll = async (): Promise<IngItem[]> => {
     // Create missing ingredients first
-    const createdIngredients = new Map<string, { id: string; name: string }>();
+    const createdIngredients = new Map<
+      string,
+      { id: string; name: string; aliases: string[] }
+    >();
 
     for (const name of missingIngredients) {
       try {
@@ -307,7 +310,11 @@ export function useIngredientImport(ingredientLines: string[]) {
           name,
           aliases: [],
         });
-        createdIngredients.set(name, { id: result.id, name: result.name });
+        createdIngredients.set(name, {
+          id: result.id,
+          name: result.name,
+          aliases: result.aliases ?? [],
+        });
       } catch (error) {
         console.error(`Failed to create ingredient: ${name}`, error);
       }
@@ -386,10 +393,18 @@ export function useIngredientResolver() {
         api.ingredient.getByName.queryOptions({ nameFilter: name }),
       );
       const match = existing
-        ? { id: existing.id, name: existing.name }
+        ? {
+            id: existing.id,
+            name: existing.name,
+            aliases: existing.aliases ?? [],
+          }
         : await createIngredientMutation
             .mutateAsync({ name, aliases: [] })
-            .then((created) => ({ id: created.id, name: created.name }));
+            .then((created) => ({
+              id: created.id,
+              name: created.name,
+              aliases: created.aliases ?? [],
+            }));
       setProgress((p) => ({ ...p, done: p.done + 1 }));
       return match;
     });
