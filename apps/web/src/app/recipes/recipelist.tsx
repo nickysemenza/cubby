@@ -309,7 +309,6 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
           label: "Compare",
           icon: <Scale className="h-4 w-4" />,
           minSelection: 2,
-          maxSelection: 4,
           onExecute: (rows) => {
             const ids = rows.map((r) => r.original.id).join(",");
             navigate({ to: "/recipes/compare", search: { ids } });

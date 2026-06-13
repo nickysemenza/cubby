@@ -6,21 +6,24 @@ import {
   stripSearchParams,
   useNavigate,
 } from "@tanstack/react-router";
-import { ArrowLeft, Plus, X } from "lucide-react";
+import { ArrowLeft, Plus } from "lucide-react";
 import { useMemo } from "react";
 import { z } from "zod";
 import { useRecipeCostingData } from "~/app/_components/hooks/useRecipeCostingData";
 import {
+  type ComparedRecipe,
+  RecipeCompareGrid,
+} from "~/app/_components/recipe/compare/RecipeCompareGrid";
+import {
   getEffectiveServings,
   getIngredientName,
-  type RecipeHeadlineTotals,
+  isFlourIngredient,
   recipeHeadlineTotals,
 } from "~/app/_components/recipe/recipe-utils";
 import { EntityLayout } from "~/components/layouts/entity-layout";
 import { Button } from "~/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Card, CardContent } from "~/components/ui/card";
 import { computeRecipeCosting } from "~/lib/recipe-costing";
-import { formatCurrency } from "~/lib/utils";
 import { dedupe } from "~/misc/array-helpers";
 import { useTRPC } from "~/trpc/react";
 
@@ -36,13 +39,6 @@ export const Route = createFileRoute("/_authenticated/recipes/compare")({
   component: RecipeComparePage,
   head: () => ({ meta: [{ title: "Compare Recipes | cubby" }] }),
 });
-
-interface RecipeWithTotals {
-  recipe: RecipeOut;
-  /** The four headline figures (cost/weight/calories/protein), null until costed. */
-  headline: RecipeHeadlineTotals | null;
-  effectiveServings: number | null;
-}
 
 function RecipeComparePage() {
   const { ids } = Route.useSearch();
@@ -80,8 +76,9 @@ function RecipeComparePage() {
   const { ingMap, recipeMap } = useRecipeCostingData(recipes);
 
   // One engine call for the whole comparison set (the ingredient payload is
-  // deduped across recipes inside the call).
-  const recipesWithTotals: RecipeWithTotals[] = useMemo(() => {
+  // deduped across recipes inside the call). `isFlour` is required for baker's
+  // percentages to be computed.
+  const compared: ComparedRecipe[] = useMemo(() => {
     if (!ingMap || recipes.length === 0) return [];
 
     const costings = computeRecipeCosting(
@@ -89,12 +86,14 @@ function RecipeComparePage() {
       ingMap,
       getIngredientName,
       recipeMap,
+      { isFlour: isFlourIngredient },
     );
     return recipes.map((recipe) => {
-      const totals = costings.get(recipe.id)?.totals ?? null;
+      const costing = costings.get(recipe.id) ?? null;
       return {
         recipe,
-        headline: totals ? recipeHeadlineTotals(totals) : null,
+        costing,
+        headline: costing ? recipeHeadlineTotals(costing.totals) : null,
         effectiveServings: getEffectiveServings(recipe),
       };
     });
@@ -116,8 +115,8 @@ function RecipeComparePage() {
         <Card>
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground">
-              No recipes selected for comparison. Select 2-4 recipes from the
-              recipes list.
+              No recipes selected for comparison. Select 2 or more recipes from
+              the recipes list.
             </p>
             <Link to="/recipes" className="mt-4 inline-block">
               <Button>
@@ -134,6 +133,7 @@ function RecipeComparePage() {
   return (
     <EntityLayout
       title="Compare Recipes"
+      fullWidth
       actions={
         <Link to="/recipes">
           <Button variant="outline">
@@ -151,130 +151,16 @@ function RecipeComparePage() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {/* Comparison Table */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle>Cost & Nutrition Comparison</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="px-4 py-3 text-left font-medium text-muted-foreground text-sm">
-                        Metric
-                      </th>
-                      {recipesWithTotals.map(({ recipe }) => (
-                        <th
-                          key={recipe.id}
-                          className="min-w-[150px] px-4 py-3 text-left font-medium text-sm"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <Link
-                              to="/recipes/$id"
-                              params={{ id: recipe.id }}
-                              className="hover:underline"
-                            >
-                              {recipe.name}
-                            </Link>
-                            <button
-                              type="button"
-                              onClick={() => handleRemove(recipe.id)}
-                              className="text-muted-foreground hover:text-destructive"
-                              title="Remove from comparison"
-                            >
-                              <X className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {/* Yield */}
-                    <tr className="border-b">
-                      <td className="px-4 py-2 text-muted-foreground text-sm">
-                        Yield
-                      </td>
-                      {recipesWithTotals.map(({ recipe }) => (
-                        <td key={recipe.id} className="px-4 py-2 text-sm">
-                          {recipe.yield
-                            ? `${recipe.yield.value} ${recipe.yield.unit}`
-                            : "-"}
-                        </td>
-                      ))}
-                    </tr>
+          <RecipeCompareGrid compared={compared} onRemove={handleRemove} />
 
-                    {/* Servings */}
-                    <tr className="border-b">
-                      <td className="px-4 py-2 text-muted-foreground text-sm">
-                        Servings
-                      </td>
-                      {recipesWithTotals.map(
-                        ({ recipe, effectiveServings }) => (
-                          <td key={recipe.id} className="px-4 py-2 text-sm">
-                            {effectiveServings ?? "-"}
-                          </td>
-                        ),
-                      )}
-                    </tr>
-
-                    {/* Total Cost */}
-                    <tr className="border-b">
-                      <td className="px-4 py-2 text-muted-foreground text-sm">
-                        Total Cost
-                      </td>
-                      {recipesWithTotals.map(({ recipe, headline }) => (
-                        <td key={recipe.id} className="px-4 py-2 text-sm">
-                          {headline?.cost ? formatCurrency(headline.cost) : "-"}
-                        </td>
-                      ))}
-                    </tr>
-
-                    {/* Total Calories */}
-                    <tr className="border-b">
-                      <td className="px-4 py-2 text-muted-foreground text-sm">
-                        Total Calories
-                      </td>
-                      {recipesWithTotals.map(({ recipe, headline }) => (
-                        <td key={recipe.id} className="px-4 py-2 text-sm">
-                          {headline?.calories
-                            ? `${Math.round(headline.calories)} kcal`
-                            : "-"}
-                        </td>
-                      ))}
-                    </tr>
-
-                    {/* Total Protein */}
-                    <tr>
-                      <td className="px-4 py-2 text-muted-foreground text-sm">
-                        Total Protein
-                      </td>
-                      {recipesWithTotals.map(({ recipe, headline }) => (
-                        <td key={recipe.id} className="px-4 py-2 text-sm">
-                          {headline?.protein
-                            ? `${Math.round(headline.protein)}g`
-                            : "-"}
-                        </td>
-                      ))}
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Add more button (if less than 4) */}
-          {recipeIds.length < 4 && (
-            <div className="text-center">
-              <Link to="/recipes">
-                <Button variant="outline">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Another Recipe
-                </Button>
-              </Link>
-            </div>
-          )}
+          <div className="text-center">
+            <Link to="/recipes">
+              <Button variant="outline">
+                <Plus className="mr-2 h-4 w-4" />
+                Add Another Recipe
+              </Button>
+            </Link>
+          </div>
         </div>
       )}
     </EntityLayout>
