@@ -24,7 +24,10 @@ import { useTRPC } from "~/trpc/react";
 
 const searchSchema = z.object({
   edit: z.boolean().optional().catch(undefined),
-  view: z.enum(["magazine", "table", "charts"]).optional().catch(undefined),
+  view: z
+    .enum(["magazine", "spec", "table", "charts"])
+    .optional()
+    .catch(undefined),
   // Scaling is purely derived/display state, kept in the URL so a scaled view is
   // shareable and printable. `scale` is the resolved factor (absent = 1×).
   scale: z.number().positive().optional().catch(undefined),
