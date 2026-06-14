@@ -13,6 +13,17 @@ export interface ExternalProductData {
   sourceData: string; // Full JSON response
 }
 
+/**
+ * Outcome of an external lookup. Distinguishing `not_found` (the UPC is
+ * genuinely absent — safe to cache as a miss) from `error` (transient: rate
+ * limit / 5xx / timeout — must NOT be cached, retry later) is what keeps a
+ * temporarily rate-limited UPC from being recorded as permanently missing.
+ */
+export type ExternalLookupResult =
+  | { status: "found"; data: ExternalProductData }
+  | { status: "not_found" }
+  | { status: "error" };
+
 // UPCitemdb API response types
 export interface UPCitemdbResponse {
   code: string;

@@ -219,8 +219,15 @@ export function createMcpServer(env: Env, baseUrl: string): McpServer {
       const existing = await getProduct(db, upc);
       if (!existing) throw new Error(`Product ${upc} not found.`);
 
-      const data = await lookupExternalProduct(upc);
-      if (!data) throw new Error(`No source had data for ${upc}.`);
+      const result = await lookupExternalProduct(upc);
+      if (result.status !== "found") {
+        throw new Error(
+          result.status === "error"
+            ? `Lookup for ${upc} failed (rate limited or unavailable) — try again later.`
+            : `No source had data for ${upc}.`,
+        );
+      }
+      const data = result.data;
 
       const imageKey = data.imageUrl
         ? ((await storeImage(upc, data.imageUrl, env)) ?? existing.imageKey)
