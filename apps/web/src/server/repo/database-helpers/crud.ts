@@ -5,7 +5,7 @@
 
 import type { InferInsertModel, InferSelectModel, SQL } from "drizzle-orm";
 import { getTableName, inArray, sql } from "drizzle-orm";
-import type { IndexColumn, PgTable } from "drizzle-orm/pg-core";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { image } from "~/server/db/schema";
@@ -17,15 +17,19 @@ import { unwrapDb } from "./core";
  * Atomic find-or-create. The correct, race-free SELECT-then-INSERT primitive:
  *
  *   1. SELECT by `where` — return the row if found.
- *   2. Else INSERT ... ON CONFLICT DO NOTHING against the unique index named by
- *      `target` (+ `targetWhere` for a partial index). DO NOTHING raises no
- *      error, so it never poisons the surrounding transaction.
+ *   2. Else INSERT ... ON CONFLICT DO NOTHING. The bare (target-less) form
+ *      catches a violation of ANY of the table's unique indexes — including
+ *      partial and functional (e.g. lower(name)) ones, which drizzle can't name
+ *      as a conflict target — and raises no error, so it never poisons the
+ *      surrounding transaction.
  *   3. On conflict (no row inserted), a concurrent request created the same row
  *      between our SELECT and INSERT. DO NOTHING blocked on its lock until it
  *      committed, so a fresh SELECT (READ COMMITTED) reliably finds the winner.
  *
  * Use this instead of a hand-rolled `findFirst` + `insertAndReturn`, which 500s
  * on the unique index when two requests create the same new row concurrently.
+ * `where` must match the unique index that backs the race — it's how step 3
+ * re-finds the winner; if a conflict fires that `where` can't see, it throws.
  *
  * `values` may be a thunk so expensive prep (e.g. shortcode generation) only
  * runs on the create path, not when the row already exists.
@@ -40,10 +44,6 @@ export const findOrCreate = async <T extends PgTable>(
     values:
       | InferInsertModel<T>
       | (() => InferInsertModel<T> | Promise<InferInsertModel<T>>);
-    /** Conflict target column(s) — the unique index backing the race. */
-    target: IndexColumn | IndexColumn[];
-    /** Partial-index predicate, when the unique index is partial. */
-    targetWhere?: SQL;
   },
 ): Promise<{ row: InferSelectModel<T>; created: boolean }> => {
   return withTrace(TraceNames.db("findOrCreate"), async (span) => {
@@ -65,7 +65,7 @@ export const findOrCreate = async <T extends PgTable>(
     const [created] = (await client
       .insert(table)
       .values(values)
-      .onConflictDoNothing({ target: opts.target, where: opts.targetWhere })
+      .onConflictDoNothing()
       .returning()) as InferSelectModel<T>[];
     if (created) {
       span.setAttribute("db.created", true);

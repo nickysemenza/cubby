@@ -236,8 +236,13 @@ export const ingredient = pgTable(
       .references(() => recipe.id),
   },
   (table) => ({
+    // Case-insensitive uniqueness: the matcher finds ingredients by lower(name)
+    // (buildIngredientWhere), so the unique key must agree — otherwise "Flour"
+    // and "flour" race past the matcher and both insert. The display value keeps
+    // its original casing (first writer wins via ON CONFLICT); only the key is
+    // lowercased. See findOrCreateIngredient's ON CONFLICT (lower(name)).
     nameUnique: uniqueIndex("Ingredient_name_key")
-      .on(table.name)
+      .on(sql`lower(${table.name})`)
       .where(sql`${table.deletedAt} IS NULL`),
     recipeIdUnique: uniqueIndex("Ingredient_recipeId_key")
       .on(table.recipeId)
@@ -450,8 +455,10 @@ export const location = pgTable(
     shortcodeUnique: uniqueIndex("Location_shortcode_unique")
       .on(table.shortcode)
       .where(sql`${table.deletedAt} IS NULL`),
+    // Case-insensitive uniqueness, matching the ilike lookup in
+    // findOrCreateLocationByName (see Ingredient_name_key for the rationale).
     nameUnique: uniqueIndex("Location_name_key")
-      .on(table.name)
+      .on(sql`lower(${table.name})`)
       .where(sql`${table.deletedAt} IS NULL`),
     nameIdx: index("Location_name_idx").on(table.name),
     typeIdx: index("Location_type_idx").on(table.type),

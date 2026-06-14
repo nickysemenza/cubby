@@ -11,7 +11,7 @@ import type {
   RecipeYield,
   recipeIngredientInput,
 } from "@cubby/schemas/recipe";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { z } from "zod";
 import type { DrizzleTransaction } from "~/server/db";
 import {
@@ -43,11 +43,10 @@ export const findOrCreateRecipeLinkIngredient = async (
   tx: DrizzleTransaction,
   recipeId: RecipeId,
 ): Promise<IngredientId> => {
-  // Atomic find-or-create against the partial unique index
-  // `Ingredient_recipeId_key` (UNIQUE(recipeId) WHERE deletedAt IS NULL); see
-  // findOrCreate for the race it closes. Identity is recipeId, so that's both
-  // the match predicate and the conflict target. The name lookup is deferred to
-  // the create path via the values thunk.
+  // Atomic find-or-create. Identity is recipeId — the `Ingredient_recipeId_key`
+  // unique index (partial, WHERE deletedAt IS NULL) backs the race and the match
+  // predicate. The name lookup is deferred to the create path via the values
+  // thunk. See findOrCreate for the race it closes.
   const { row } = await findOrCreate(tx, ingredient, {
     where: eq(ingredient.recipeId, recipeId),
     values: async () => {
@@ -60,8 +59,6 @@ export const findOrCreateRecipeLinkIngredient = async (
       }
       return { name: `Recipe: ${recipeRecord.name}`, aliases: [], recipeId };
     },
-    target: ingredient.recipeId,
-    targetWhere: isNull(ingredient.deletedAt),
   });
   return row.id;
 };

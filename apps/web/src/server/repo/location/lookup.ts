@@ -9,7 +9,7 @@ import type {
   LocationOut,
   LocationType,
 } from "@cubby/schemas/location";
-import { and, desc, eq, ilike, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
 import { inventoryEntry, location } from "~/server/db/schema";
@@ -96,12 +96,16 @@ export const findOrCreateLocationByName = async (
     shortcode?: string;
   },
 ): Promise<{ locationId: LocationId; created: boolean }> => {
-  // Atomic find-or-create against the partial unique index `Location_name_key`
-  // (UNIQUE(name) WHERE deletedAt IS NULL); see findOrCreate for the race it
-  // closes. Match is case-insensitive (ilike); the shortcode thunk only runs on
-  // the create path, so existing locations don't burn a shortcode.
+  // Atomic find-or-create. The `Location_name_key` unique index is on
+  // lower(name) (partial, WHERE deletedAt IS NULL); the match is written as
+  // lower(name) = lower(value) (not ilike) so the planner can actually use that
+  // functional index. The shortcode thunk only runs on the create path, so
+  // existing locations don't burn a shortcode. See findOrCreate.
   const { row, created } = await findOrCreate(db, location, {
-    where: and(ilike(location.name, name), notDeleted(location)),
+    where: and(
+      eq(sql`lower(${location.name})`, name.toLowerCase()),
+      notDeleted(location),
+    ),
     values: async () => ({
       name,
       type,
@@ -111,8 +115,6 @@ export const findOrCreateLocationByName = async (
       ...(options?.createdAt && { createdAt: options.createdAt }),
       ...(options?.updatedAt && { updatedAt: options.updatedAt }),
     }),
-    target: location.name,
-    targetWhere: isNull(location.deletedAt),
   });
   return { locationId: row.id, created };
 };
