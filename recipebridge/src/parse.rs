@@ -303,51 +303,16 @@ pub fn format_amount(amount: WAmount) -> String {
     amount.to_measure().to_string()
 }
 
-/// Render a quantity float as an *editable* fraction string for the recipe editor's
-/// quantity cell: `0.333… → "1/3"`, `1.5 → "1 1/2"`, `34 → "34"`, falling back to a
-/// trimmed decimal when the value isn't a clean fraction (`0.37 → "0.37"`). The
-/// inverse of `parse_quantity`.
+/// Render a quantity float as an *editable* ASCII fraction for the recipe editor's
+/// quantity cell: `0.333… → "1/3"`, `1.5 → "1 1/2"`, `34 → "34"`, decimal fallback for
+/// non-fractions (`0.37 → "0.37"`). The inverse of `parse_quantity`.
 ///
-/// Unlike the parser's own `format_quantity` (15 hard-coded Unicode glyphs), this
-/// recovers *any* fraction with denominator ≤ 64 as ASCII (`1/16`, `3/16`, `1/12`),
-/// because the field is edited as text — ASCII round-trips through a keyboard, glyphs
-/// don't. `approximate_float` does the continued-fraction work; the `1e-6` recheck
-/// rejects false snaps (e.g. `0.37` is near `3/8` but not within tolerance).
+/// Thin WASM shim over `ingredient::util::format_quantity_ascii` — the algorithm lives
+/// upstream alongside the parser's glyph `format_quantity`, sharing the fraction logic
+/// (see that fn for the denominator-cap + `1e-6` recheck details).
 #[wasm_bindgen]
 pub fn format_quantity(value: f64) -> String {
-    use num_rational::Rational64;
-    const MAX_DENOM: i64 = 64;
-
-    if value == 0.0 {
-        return "0".to_string();
-    }
-    if let Some(r) = Rational64::approximate_float(value) {
-        // num-rational normalizes to a positive denominator, so the sign rides on
-        // the numerator.
-        let (numer, denom) = (*r.numer(), *r.denom());
-        if denom != 0
-            && denom.abs() <= MAX_DENOM
-            && (numer as f64 / denom as f64 - value).abs() < 1e-6
-        {
-            if denom.abs() == 1 {
-                return (numer / denom).to_string();
-            }
-            let (n, d) = (numer.abs(), denom.abs());
-            let (whole, rem) = (n / d, n % d);
-            let sign = if value < 0.0 { "-" } else { "" };
-            return if whole != 0 {
-                format!("{sign}{whole} {rem}/{d}")
-            } else {
-                format!("{sign}{rem}/{d}")
-            };
-        }
-    }
-    // Not a clean fraction: trimmed decimal (a touch more precision than the
-    // parser's `:.2`, since this is the value the user will see and edit).
-    format!("{value:.4}")
-        .trim_end_matches('0')
-        .trim_end_matches('.')
-        .to_string()
+    ingredient::util::format_quantity_ascii(value)
 }
 
 /// Parse a quantity string (`"1/3"`, `"1 1/2"`, `"⅓"`, `"0.5"`, `"34"`) back to an
@@ -546,27 +511,15 @@ mod tests {
         assert_eq!(singularize_unit(plural.to_string()), expected);
     }
 
-    /// `format_quantity` renders editor-friendly ASCII fractions, including ones
-    /// outside the parser's 15-glyph table (`1/16`, `3/16`), and falls back to a
-    /// decimal when the value isn't a clean fraction (`0.37`).
+    /// Shim sanity: `format_quantity` delegates to `ingredient::util::
+    /// format_quantity_ascii` (exhaustive cases — negatives, denom cap, decimal
+    /// fallback — live in that crate's `util` tests). Just confirms the WASM export
+    /// is wired to the upstream formatter.
     #[rstest]
     #[case(1.0 / 3.0, "1/3")]
-    #[case(2.0 / 3.0, "2/3")]
-    #[case(0.5, "1/2")]
-    #[case(0.75, "3/4")]
-    #[case(1.5, "1 1/2")]
-    #[case(2.5, "2 1/2")]
-    #[case(3.0 / 16.0, "3/16")]
     #[case(1.0 / 16.0, "1/16")]
     #[case(34.0, "34")]
-    #[case(2.0, "2")]
-    #[case(0.0, "0")]
-    #[case(0.37, "0.37")]
-    // Negatives ride the sign on the numerator (num-rational normalizes denom > 0);
-    // exercises the `sign` branch for both proper and mixed fractions.
-    #[case(-0.5, "-1/2")]
-    #[case(-1.5, "-1 1/2")]
-    fn format_quantity_table(#[case] value: f64, #[case] expected: &str) {
+    fn format_quantity_delegates(#[case] value: f64, #[case] expected: &str) {
         assert_eq!(format_quantity(value), expected);
     }
 
