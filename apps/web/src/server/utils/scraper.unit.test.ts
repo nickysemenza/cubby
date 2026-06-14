@@ -67,6 +67,25 @@ describe("parse_scraped_recipe → scrapedToImportRecipe", () => {
     expect(recipe.meta.title).toBe("The Food Lab's Chocolate Chip Cookies");
   });
 
+  // The upstream clean_text loop handles single-encoding too (a page that ships
+  // `&#39;` directly), not just the double-encoded round-trip above.
+  it("decodes single-encoded HTML entities in the title", () => {
+    const recipe = scrapedToImportRecipe(
+      parse_scraped_recipe(
+        recipeHtml({
+          "@context": "https://schema.org",
+          "@type": "Recipe",
+          name: "Rosa&#39;s Cookies",
+          recipeIngredient: ["1 cup flour"],
+          recipeInstructions: [{ "@type": "HowToStep", text: "Bake." }],
+        }),
+        "https://example.com/rosas-cookies",
+      ),
+    );
+
+    expect(recipe.meta.title).toBe("Rosa's Cookies");
+  });
+
   it("does not expose the legacy flat ingredients/instructions fields", () => {
     const raw = parse_scraped_recipe(
       recipeHtml({
