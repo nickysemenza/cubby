@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { Input } from "~/components/ui/input";
+import { QuantityInput } from "~/components/ui/quantity-input";
 import { cn } from "~/lib/utils";
 import {
   WithIngredientSearch,
@@ -75,26 +76,16 @@ const AmountInputs: FC<{
         control={form.control}
         name={`${base}.value`}
         render={({ field }) => (
-          <Input
-            type="number"
-            step="any"
-            inputMode="decimal"
+          <QuantityInput
+            value={field.value ?? null}
+            onChange={field.onChange}
+            onEnter={onEnter}
             aria-label="Amount"
             placeholder="qty"
             // Span the (empty) upper column when there's no range so unit/name
             // stay aligned across ranged and non-ranged rows — the qty just
             // widens instead of leaving a gap.
-            className={cn(
-              "text-right font-mono tabular-nums",
-              !showUpper && "col-span-2",
-            )}
-            value={field.value ?? ""}
-            onChange={(e) =>
-              field.onChange(
-                e.target.value === "" ? null : Number(e.target.value),
-              )
-            }
-            onKeyDown={handleEnter}
+            className={cn(!showUpper && "col-span-2")}
           />
         )}
       />
@@ -103,20 +94,13 @@ const AmountInputs: FC<{
           control={form.control}
           name={`${base}.upperValue`}
           render={({ field }) => (
-            <Input
-              type="number"
-              step="any"
-              inputMode="decimal"
+            <QuantityInput
+              value={field.value ?? null}
+              onChange={field.onChange}
+              onEnter={onEnter}
               aria-label="Upper amount"
               placeholder="to"
-              className="text-right font-mono text-muted-foreground tabular-nums"
-              value={field.value ?? ""}
-              onChange={(e) =>
-                field.onChange(
-                  e.target.value === "" ? null : Number(e.target.value),
-                )
-              }
-              onKeyDown={handleEnter}
+              className="text-muted-foreground"
             />
           )}
         />
