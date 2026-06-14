@@ -45,13 +45,22 @@ import type {
   IngredientWithFoodOut,
 } from "./ingredient.service";
 
-const toRecipeTotals = (t: CalculateTotalsResult): RecipeTotals => ({
-  costTotal: t.price,
-  caloriesTotal: getNutrientValueByKey(t.nutrients, "kcal") ?? 0,
-  ingredientCount: t.totalIngredients,
-  costCovered: t.totalIngredients - t.missingByType.price.length,
-  caloriesCovered: t.totalIngredients - t.missingByType.nutrients.length,
-});
+const toRecipeTotals = (t: CalculateTotalsResult): RecipeTotals => {
+  // Upper bounds only when the recipe has ranged amounts (additive — absent
+  // means "no range", so the headline renders one number).
+  const caloriesUpper = t.nutrientsUpper
+    ? getNutrientValueByKey(t.nutrientsUpper, "kcal")
+    : undefined;
+  return {
+    costTotal: t.price,
+    ...(t.priceUpper != null ? { costTotalUpper: t.priceUpper } : {}),
+    caloriesTotal: getNutrientValueByKey(t.nutrients, "kcal") ?? 0,
+    ...(caloriesUpper != null ? { caloriesTotalUpper: caloriesUpper } : {}),
+    ingredientCount: t.totalIngredients,
+    costCovered: t.totalIngredients - t.missingByType.price.length,
+    caloriesCovered: t.totalIngredients - t.missingByType.nutrients.length,
+  };
+};
 
 /**
  * Products with a confirmed USDA match (`ndb_number`) whose food failed to

@@ -61,10 +61,19 @@ export function IngredientReparse({
   if (type !== "ingredient" || !rawLine) return null;
 
   const fresh = wasm.parse_ingredient(rawLine);
-  // Project the draft amounts to the persisted {value, unit} shape (drop half-typed
-  // rows), matching exactly what the apply/import path stores.
+  // Project the draft amounts to the persisted Amount shape (drop half-typed
+  // rows), matching exactly what the apply/import path stores — including the
+  // range upper bound so a ranged row doesn't read as perpetual drift.
   const persistedAmounts: Amount[] = (amounts ?? []).flatMap((a) =>
-    a.value != null && a.unit?.trim() ? [{ value: a.value, unit: a.unit }] : [],
+    a.value != null && a.unit?.trim()
+      ? [
+          {
+            value: a.value,
+            unit: a.unit,
+            ...(a.upperValue != null ? { upperValue: a.upperValue } : {}),
+          },
+        ]
+      : [],
   );
   // Real drift only if the parse differs from what the row holds. The known-names set
   // (current name + aliases) keeps an alias hit from reading as a false positive.
@@ -98,7 +107,11 @@ export function IngredientReparse({
         type: "ingredient",
         ingredient: { id: resolved.id, name: resolved.name },
         recipe: null,
-        amounts: fresh.amounts.map((a) => ({ value: a.value, unit: a.unit })),
+        amounts: fresh.amounts.map((a) => ({
+          value: a.value,
+          unit: a.unit,
+          ...(a.upper_value != null ? { upperValue: a.upper_value } : {}),
+        })),
         modifier: fresh.modifier ?? null,
         aliases: resolved.aliases ?? [],
       });

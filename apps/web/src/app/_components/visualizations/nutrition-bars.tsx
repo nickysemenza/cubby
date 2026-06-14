@@ -2,6 +2,7 @@ import { TIER1_NUTRIENTS } from "@cubby/usda-schemas";
 import { sumBy } from "es-toolkit";
 import { useMemo } from "react";
 import { StatTile } from "~/components/ui/stat-tile";
+import { formatNumberRange, rangeMidpoint } from "~/lib/format-range";
 import type {
   CalculateTotalsResult,
   IngredientDataItem,
@@ -79,9 +80,15 @@ export default function NutritionBars({
       const grams =
         totals?.nutrients[code] ??
         sumBy(ingredients, (ing) => nutrientOf(ing, code));
-      return { ...m, grams };
+      // Upper bound only when the recipe is ranged; bar geometry uses the
+      // midpoint so segments stay deterministic, the label shows the range.
+      const gramsUpper = totals?.nutrientsUpper?.[code];
+      return { ...m, grams, gramsUpper };
     });
-    const maxMacro = Math.max(...macroTotals.map((m) => m.grams), 1);
+    const maxMacro = Math.max(
+      ...macroTotals.map((m) => rangeMidpoint(m.grams, m.gramsUpper)),
+      1,
+    );
 
     return { kcalRows, totalKcal, macroTotals, maxMacro };
   }, [ingredients, totals]);
@@ -143,14 +150,16 @@ export default function NutritionBars({
               <div className="mb-0.5 flex justify-between font-mono text-2xs text-muted-foreground uppercase">
                 <span>{m.label}</span>
                 <span className="tabular-nums">
-                  {m.grams > 0 ? `${Math.round(m.grams)} g` : "—"}
+                  {m.grams > 0
+                    ? `${formatNumberRange(m.grams, m.gramsUpper, (n) => `${Math.round(n)}`)} g`
+                    : "—"}
                 </span>
               </div>
               <div className="h-3.5 overflow-hidden rounded-sm border-[1.5px] border-[var(--border-chunky)] bg-card">
                 <div
                   className="h-full border-[var(--border-chunky)] border-r-[1.5px]"
                   style={{
-                    width: `${Math.min(100, (m.grams / maxMacro) * 100)}%`,
+                    width: `${Math.min(100, (rangeMidpoint(m.grams, m.gramsUpper) / maxMacro) * 100)}%`,
                     backgroundColor: m.color,
                     borderRightWidth: m.grams > 0 ? undefined : 0,
                   }}
