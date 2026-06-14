@@ -10,6 +10,7 @@ import {
   deleteProduct,
   listProducts,
 } from "../db/products";
+import { deleteMiss } from "../db/misses";
 import { resolveProduct } from "../services/products";
 import { lookupExternalProduct } from "../api";
 import { getStats } from "../routes/stats";
@@ -168,6 +169,8 @@ export function createMcpServer(env: Env, baseUrl: string): McpServer {
         source: "manual",
         sourceData: null,
       });
+      // The UPC now has data — drop it from the misses worklist if it was there.
+      await deleteMiss(db, args.upc);
       return json(productToJson(product, baseUrl));
     }),
   );
