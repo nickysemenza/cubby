@@ -4,12 +4,14 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { BookOpen, Plus, RefreshCw, Trash } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { IngredientUsagePanel } from "~/app/_components/ingredient/ingredient-usage-panel";
 import { RecipeList } from "~/app/recipes/recipelist";
 import { DeleteEntityDialog } from "~/components/dialogs/delete-entity-dialog";
 import { PageWrapper } from "~/components/layout/page-wrapper";
 import { PageHero } from "~/components/layouts/page-hero";
 import { Button } from "~/components/ui/button";
 import { Image } from "~/components/ui/image";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 import { queryKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
@@ -165,7 +167,18 @@ function CookbookDetailPage() {
         </div>
       </div>
 
-      <RecipeList cookbookIdFilter={cookbookId} />
+      <Tabs defaultValue="recipes" className="mt-2">
+        <TabsList variant="line">
+          <TabsTrigger value="recipes">Recipes</TabsTrigger>
+          <TabsTrigger value="ingredients">Ingredients</TabsTrigger>
+        </TabsList>
+        <TabsContent value="recipes">
+          <RecipeList cookbookIdFilter={cookbookId} />
+        </TabsContent>
+        <TabsContent value="ingredients">
+          <IngredientUsagePanel cookbookId={cookbookId} />
+        </TabsContent>
+      </Tabs>
 
       <DeleteEntityDialog
         open={showDelete}
