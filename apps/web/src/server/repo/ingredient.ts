@@ -339,12 +339,19 @@ export const findOrCreateIngredient = async (
     values: { name, aliases: aliases || [] },
   });
 
-  // add in aliases, but dedupe and make sure they don't include the name
-  const aliasesToAdd = aliases
-    ?.filter((alias) => alias !== name)
-    ?.filter((alias) => !entry.aliases.includes(alias));
+  // Add new aliases, deduped CASE-INSENSITIVELY against the name and existing
+  // aliases (and against each other). Matching is case-insensitive, so appending
+  // a casing-variant of an existing alias/name would only add noise to the array.
+  const nameLower = name.toLowerCase();
+  const seenLower = new Set(entry.aliases.map((a) => a.toLowerCase()));
+  const aliasesToAdd = (aliases ?? []).filter((alias) => {
+    const lower = alias.toLowerCase();
+    if (lower === nameLower || seenLower.has(lower)) return false;
+    seenLower.add(lower); // also dedupes casing-variants within `aliases` itself
+    return true;
+  });
 
-  if (aliasesToAdd === undefined || aliasesToAdd.length === 0) {
+  if (aliasesToAdd.length === 0) {
     return entry;
   }
 

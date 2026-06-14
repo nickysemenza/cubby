@@ -137,6 +137,17 @@ describe("ingredient", () => {
     expect(result!.count).toEqual(1);
   });
 
+  it("does not append casing-variant aliases", async () => {
+    // Alias dedup is case-insensitive: re-adding "scallion" when the ingredient
+    // already has alias "Scallion" is a no-op, not a second array entry.
+    const first = await findOrCreateIngredient(db, "Allium", ["Scallion"]);
+    expect(first.aliases).toEqual(["Scallion"]);
+
+    const second = await findOrCreateIngredient(db, "Allium", ["scallion"]);
+    expect(second.id).toEqual(first.id);
+    expect(second.aliases).toEqual(["Scallion"]); // unchanged, no "scallion" added
+  });
+
   it("ingredient merging works", async () => {
     await upsertImportRecipe(
       makeImportRecipe({
