@@ -48,7 +48,10 @@ import {
   updateAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { dbRecipeToAPIShallow } from "./recipe";
+import {
+  dbRecipeToAPIShallow,
+  liveRecipeCountForIngredientSql,
+} from "./recipe";
 
 export const mergeIngredients = async (
   db: Database,
@@ -468,11 +471,10 @@ export const ingredientList = async (
   const orderByClause =
     sort.orderBy === "appearsInRecipes"
       ? [
+          // Shared with global search so the sort key matches the displayed
+          // `appearsInRecipes.length` exactly (live recipes/sections/usages only).
           sql.raw(
-            `(SELECT count(DISTINCT rs."recipeId") FROM "RecipeSectionIngredient" rsi ` +
-              `JOIN "RecipeSection" rs ON rs."id" = rsi."recipeSectionId" ` +
-              `JOIN "Recipe" r ON r."id" = rs."recipeId" AND r."deletedAt" IS NULL ` +
-              `WHERE rsi."ingredientId" = "ingredient"."id") ${dirSql}`,
+            `${liveRecipeCountForIngredientSql('"ingredient"."id"')} ${dirSql}`,
           ),
         ]
       : sort.orderBy === "product"

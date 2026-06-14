@@ -11,7 +11,11 @@ import type {
 } from "@cubby/schemas/ingredient-cooccurrence";
 import { desc } from "drizzle-orm";
 import type { Database } from "~/server/db";
-import { recipe } from "~/server/db/schema";
+import {
+  recipe,
+  recipeSection,
+  recipeSectionIngredient,
+} from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
 /**
@@ -32,8 +36,12 @@ export const getIngredientCooccurrence = async (
     limit: 500,
     with: {
       sections: {
+        // Exclude soft-deleted sections/usages so the cooccurrence counts don't
+        // include ingredients that were removed from these (live) recipes.
+        where: notDeleted(recipeSection),
         with: {
           ingredients: {
+            where: notDeleted(recipeSectionIngredient),
             with: {
               ingredient: true,
             },
