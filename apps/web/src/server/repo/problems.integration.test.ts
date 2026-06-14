@@ -1,9 +1,13 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import type { ProductId } from "@cubby/schemas/identifiers";
+import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
+import type { UPCLookupResponse } from "@cubby/upc-lookup/schemas";
 import { eq } from "drizzle-orm";
 import { buildTestDB } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
+import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { Database } from "~/server/db";
-import { product } from "~/server/db/schema";
+import { image, product, productImage } from "~/server/db/schema";
 import { getDb } from "./database-helpers";
 import { createIngredient, getIngredientByName } from "./ingredient";
 import { findAllProblems, reparseStaleIngredientParses } from "./problems";
@@ -18,6 +22,40 @@ import {
 // Repo-layer tests for the WASM-driven, highest-logic problem scans. The private
 // find* helpers are exercised through the public findAllProblems aggregator;
 // reparseStaleIngredientParses is called directly.
+
+// Build a full UPCLookupResponse from a partial — only the fields a scan reads
+// (manufacturer/brand/priceDollars/imageUrl) usually matter per test.
+const upcResponse = (
+  upc: string,
+  overrides: Partial<UPCLookupResponse> = {},
+): UPCLookupResponse => ({
+  upc,
+  name: "Looked Up Product",
+  manufacturer: null,
+  brand: null,
+  category: null,
+  description: null,
+  priceDollars: null,
+  imageUrl: null,
+  source: "upcitemdb" as UPCLookupResponse["source"],
+  cached: false,
+  ...overrides,
+});
+
+// A fake UPC lookup client: canned responses keyed by UPC, plus a record of which
+// UPCs were actually looked up (so tests can assert the no-network pre-filter).
+const fakeUpcClient = (
+  byUpc: Record<string, UPCLookupResponse | null> = {},
+) => {
+  const calls: string[] = [];
+  const client = {
+    lookup: async (upc: string) => {
+      calls.push(upc);
+      return byUpc[upc] ?? null;
+    },
+  } as unknown as UPCLookupClient;
+  return { client, calls };
+};
 
 describe("problems repo", () => {
   let db: Database;
@@ -68,7 +106,10 @@ describe("problems repo", () => {
         rawLine: "2 cups flour",
       });
 
-      const { staleIngredientParses } = await findAllProblems(db);
+      const { staleIngredientParses } = await findAllProblems(
+        db,
+        fakeUpcClient().client,
+      );
       const driftedEntry = staleIngredientParses.find(
         (s) => s.recipeId === drifted.id,
       );
@@ -98,7 +139,10 @@ describe("problems repo", () => {
       expect(result.recipesAffected).toContain(recipe.id);
 
       // The drift is gone, and a second run finds nothing.
-      const { staleIngredientParses } = await findAllProblems(db);
+      const { staleIngredientParses } = await findAllProblems(
+        db,
+        fakeUpcClient().client,
+      );
       expect(staleIngredientParses.some((s) => s.recipeId === recipe.id)).toBe(
         false,
       );
@@ -143,7 +187,7 @@ describe("problems repo", () => {
         actor,
       );
 
-      const { invalidUPCs } = await findAllProblems(db);
+      const { invalidUPCs } = await findAllProblems(db, fakeUpcClient().client);
       const flagged = invalidUPCs.find((u) => u.id === bad.id);
       expect(flagged?.issue).toBe("invalid_format");
       expect(invalidUPCs.some((u) => u.id === good.id)).toBe(false);
@@ -197,7 +241,10 @@ describe("problems repo", () => {
         actor,
       );
 
-      const { productsWithIslandedMappings } = await findAllProblems(db);
+      const { productsWithIslandedMappings } = await findAllProblems(
+        db,
+        fakeUpcClient().client,
+      );
       const flagged = productsWithIslandedMappings.find(
         (p) => p.id === islanded.id,
       );
@@ -206,6 +253,143 @@ describe("problems repo", () => {
       expect(
         productsWithIslandedMappings.some((p) => p.id === connected.id),
       ).toBe(false);
+    });
+  });
+
+  describe("findProductsWithBetterUpcData", () => {
+    // Valid UPC-A codes (12 digits) so the products clear the candidate query.
+    const UPC_MANU = "012345678905";
+    const UPC_PRICE = "036000291452";
+    const UPC_IMAGE = "078000053258";
+    const UPC_FULL = "022000004444";
+    const UPC_MISC = "044000031091";
+
+    const attachImage = async (productId: ProductId) => {
+      const [img] = await getDb(db)
+        .insert(image)
+        .values({
+          url: "https://example.com/i.jpg",
+          key: `key-${productId}`,
+          filename: "i.jpg",
+          size: 1,
+          contentType: "image/jpeg",
+        })
+        .returning();
+      await getDb(db)
+        .insert(productImage)
+        .values({ productId, imageId: img!.id });
+    };
+
+    it("flags each fillable gap and skips fully-populated products without a lookup", async () => {
+      // (a) Unspecified manufacturer, but priced + imaged → only the manufacturer gap.
+      const noManu = await createProduct(
+        db,
+        makeProductInput({ name: "No Manufacturer", upc: UPC_MANU }),
+        actor,
+      );
+      await getDb(db)
+        .update(product)
+        .set({ manufacturer: UNSPECIFIED_MANUFACTURER, price: 5 })
+        .where(eq(product.id, noManu.id));
+      await attachImage(noManu.id);
+
+      // (b) Has manufacturer + image, but no price → only the price gap.
+      const noPrice = await createProduct(
+        db,
+        makeProductInput({ name: "No Price", upc: UPC_PRICE }),
+        actor,
+      );
+      await attachImage(noPrice.id);
+
+      // (c) Has manufacturer + price, but no image → only the image gap.
+      const noImage = await createProduct(
+        db,
+        makeProductInput({ name: "No Image", upc: UPC_IMAGE }),
+        actor,
+      );
+      await getDb(db)
+        .update(product)
+        .set({ price: 9 })
+        .where(eq(product.id, noImage.id));
+
+      // (d) Fully populated → not a candidate, must never be looked up.
+      const full = await createProduct(
+        db,
+        makeProductInput({ name: "Full Product", upc: UPC_FULL }),
+        actor,
+      );
+      await getDb(db)
+        .update(product)
+        .set({ price: 3 })
+        .where(eq(product.id, full.id));
+      await attachImage(full.id);
+
+      // (e) Misc product with a manufacturer gap → excluded regardless.
+      const misc = await createProduct(
+        db,
+        makeProductInput({ name: "misc: Loose Screw", upc: UPC_MISC }),
+        actor,
+      );
+      await getDb(db)
+        .update(product)
+        .set({ manufacturer: UNSPECIFIED_MANUFACTURER, price: 1 })
+        .where(eq(product.id, misc.id));
+      await attachImage(misc.id);
+
+      const { client, calls } = fakeUpcClient({
+        [UPC_MANU]: upcResponse(UPC_MANU, { brand: "Acme" }),
+        [UPC_PRICE]: upcResponse(UPC_PRICE, { priceDollars: 4.5 }),
+        [UPC_IMAGE]: upcResponse(UPC_IMAGE, {
+          imageUrl: "https://example.com/p.jpg",
+        }),
+        // A response for the full product would still be irrelevant — it must not be fetched.
+        [UPC_FULL]: upcResponse(UPC_FULL, { brand: "Acme", priceDollars: 1 }),
+      });
+
+      const { productsWithBetterUpcData } = await findAllProblems(db, client);
+
+      const byId = new Map(productsWithBetterUpcData.map((p) => [p.id, p]));
+
+      expect(byId.get(noManu.id)?.gaps).toEqual({
+        manufacturer: true,
+        price: false,
+        image: false,
+      });
+      expect(byId.get(noPrice.id)?.gaps).toEqual({
+        manufacturer: false,
+        price: true,
+        image: false,
+      });
+      expect(byId.get(noImage.id)?.gaps).toEqual({
+        manufacturer: false,
+        price: false,
+        image: true,
+      });
+
+      // Fully-populated and misc products are neither flagged nor looked up.
+      expect(byId.has(full.id)).toBe(false);
+      expect(byId.has(misc.id)).toBe(false);
+      expect(calls).not.toContain(UPC_FULL);
+      expect(calls).not.toContain(UPC_MISC);
+    });
+
+    it("does not flag a gap the lookup itself can't fill", async () => {
+      // Missing price, but the lookup has no price either → nothing to re-import.
+      const noPrice = await createProduct(
+        db,
+        makeProductInput({ name: "Still No Price", upc: UPC_PRICE }),
+        actor,
+      );
+      await attachImage(noPrice.id);
+
+      const { client } = fakeUpcClient({
+        [UPC_PRICE]: upcResponse(UPC_PRICE), // all-null payload
+      });
+
+      const { productsWithBetterUpcData } = await findAllProblems(db, client);
+      expect(productsWithBetterUpcData.some((p) => p.id === noPrice.id)).toBe(
+        false,
+      );
     });
   });
 });

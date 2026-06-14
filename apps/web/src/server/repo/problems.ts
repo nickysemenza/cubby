@@ -6,10 +6,20 @@ import {
 } from "@cubby/schemas/identifiers";
 import { isMiscProduct } from "@cubby/shared";
 import { upc as upcSchema } from "@cubby/usda-schemas";
-import { and, eq, isNotNull, isNull, notExists, sql } from "drizzle-orm";
-import { uniq } from "es-toolkit";
+import {
+  and,
+  eq,
+  exists,
+  isNotNull,
+  isNull,
+  notExists,
+  sql,
+} from "drizzle-orm";
+import { chunk, uniq } from "es-toolkit";
+import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { computeParseDrift, hasDrift } from "~/lib/parse-drift";
 import { wasm } from "~/lib/wasm";
+import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { Database } from "~/server/db";
 import {
   ingredient,
@@ -17,6 +27,7 @@ import {
   location,
   locationImage,
   product,
+  productImage,
   productUnitMappings,
   recipe,
   recipeSection,
@@ -51,6 +62,7 @@ interface AllProblems {
   productsWithIslandedMappings: ProductWithIslandedMappings[];
   locationsWithoutAiDescription: LocationWithoutAiDescription[];
   staleIngredientParses: StaleIngredientParse[];
+  productsWithBetterUpcData: ProductWithBetterUpcData[];
   totalProblems: number;
 }
 
@@ -524,6 +536,111 @@ const findLocationsWithoutAiDescription = async (
   }));
 };
 
+// A product whose stored UPC-sourced fields have a gap (no manufacturer, no
+// price, or no image) that a *fresh* UPC lookup could fill — i.e. re-importing
+// from the lookup would improve the record. `gaps` flags which fields the live
+// lookup can actually fill (only set when the lookup has data for them).
+export interface ProductWithBetterUpcData {
+  id: string;
+  name: string;
+  manufacturer: string;
+  upc: string;
+  gaps: {
+    manufacturer: boolean;
+    price: boolean;
+    image: boolean;
+  };
+}
+
+// Lookups are the only network calls in the whole problems scan, so cap the
+// concurrent in-flight requests (mirrors backfillUPCImages' batching).
+const UPC_LOOKUP_BATCH_SIZE = 10;
+
+// Find products that a fresh UPC lookup could enrich. The expensive part is the
+// per-product network lookup, so we first narrow to *candidates* purely from the
+// DB — products with a UPC that already have a stored gap (unspecified
+// manufacturer, null price, or no image). A fully-populated product never
+// triggers a lookup. This keeps the check cheap enough to run inside the
+// always-on scan that also backs the navbar badge.
+const findProductsWithBetterUpcData = async (
+  db: Database,
+  upcLookupClient: UPCLookupClient,
+): Promise<ProductWithBetterUpcData[]> => {
+  const dbClient = getDb(db);
+
+  const rows = await dbClient
+    .select({
+      id: product.id,
+      name: product.name,
+      manufacturer: product.manufacturer,
+      upc: product.upc,
+      price: product.price,
+      hasImage: exists(
+        dbClient
+          .select({ id: sql`1` })
+          .from(productImage)
+          .where(eq(productImage.productId, product.id)),
+      ),
+    })
+    .from(product)
+    .where(and(notDeleted(product), isNotNull(product.upc)));
+
+  // No-network candidate filter: only gappy, non-misc products need a lookup.
+  const candidates = rows.filter(
+    (r): r is typeof r & { upc: string } =>
+      r.upc != null &&
+      !isMiscProduct(r.name) &&
+      (isUnspecifiedManufacturer(r.manufacturer) ||
+        r.price == null ||
+        !r.hasImage),
+  );
+
+  const problems: ProductWithBetterUpcData[] = [];
+
+  // Run the lookups in bounded-concurrency batches.
+  for (const batch of chunk(candidates, UPC_LOOKUP_BATCH_SIZE)) {
+    const results = await Promise.all(
+      batch.map(async (cand) => {
+        try {
+          const lookup = await upcLookupClient.lookup(cand.upc);
+          if (!lookup) return null;
+
+          const gaps = {
+            manufacturer:
+              isUnspecifiedManufacturer(cand.manufacturer) &&
+              !isUnspecifiedManufacturer(lookup.manufacturer ?? lookup.brand),
+            price: cand.price == null && lookup.priceDollars != null,
+            image: !cand.hasImage && lookup.imageUrl != null,
+          };
+
+          if (!gaps.manufacturer && !gaps.price && !gaps.image) return null;
+
+          return {
+            id: cand.id,
+            name: cand.name,
+            manufacturer: cand.manufacturer,
+            upc: cand.upc,
+            gaps,
+          } satisfies ProductWithBetterUpcData;
+        } catch (error) {
+          // A single failed lookup shouldn't sink the whole scan.
+          console.error(
+            `Failed UPC lookup for product ${cand.id} (${cand.name}):`,
+            error,
+          );
+          return null;
+        }
+      }),
+    );
+
+    for (const result of results) {
+      if (result) problems.push(result);
+    }
+  }
+
+  return problems;
+};
+
 interface ProblemsCount {
   byType: {
     duplicateUniqueProducts: number;
@@ -538,6 +655,7 @@ interface ProblemsCount {
     productsWithIslandedMappings: number;
     locationsWithoutAiDescription: number;
     staleIngredientParses: number;
+    productsWithBetterUpcData: number;
   };
   total: number;
 }
@@ -690,8 +808,9 @@ export const reparseStaleIngredientParses = async (
 // parallel count queries to drift out of sync with the find* functions.
 export const findAllProblemsCount = async (
   db: Database,
+  upcLookupClient: UPCLookupClient,
 ): Promise<ProblemsCount> => {
-  const p = await findAllProblems(db);
+  const p = await findAllProblems(db, upcLookupClient);
 
   return {
     byType: {
@@ -707,13 +826,17 @@ export const findAllProblemsCount = async (
       productsWithIslandedMappings: p.productsWithIslandedMappings.length,
       locationsWithoutAiDescription: p.locationsWithoutAiDescription.length,
       staleIngredientParses: p.staleIngredientParses.length,
+      productsWithBetterUpcData: p.productsWithBetterUpcData.length,
     },
     total: p.totalProblems,
   };
 };
 
 // Main function to get all problems
-export const findAllProblems = async (db: Database): Promise<AllProblems> => {
+export const findAllProblems = async (
+  db: Database,
+  upcLookupClient: UPCLookupClient,
+): Promise<AllProblems> => {
   // Run all checks in parallel for better performance
   const [
     duplicateUniqueProducts,
@@ -728,6 +851,7 @@ export const findAllProblems = async (db: Database): Promise<AllProblems> => {
     productsWithIslandedMappings,
     locationsWithoutAiDescription,
     staleIngredientParses,
+    productsWithBetterUpcData,
   ] = await Promise.all([
     findDuplicateUniqueProducts(db),
     findOrphanedProducts(db),
@@ -741,6 +865,7 @@ export const findAllProblems = async (db: Database): Promise<AllProblems> => {
     findProductsWithIslandedMappings(db),
     findLocationsWithoutAiDescription(db),
     findStaleIngredientParses(db),
+    findProductsWithBetterUpcData(db, upcLookupClient),
   ]);
 
   // Transform to problem types
@@ -768,7 +893,8 @@ export const findAllProblems = async (db: Database): Promise<AllProblems> => {
     inventoryWithStaleValuations.length +
     productsWithIslandedMappings.length +
     locationsWithoutAiDescription.length +
-    staleIngredientParses.length;
+    staleIngredientParses.length +
+    productsWithBetterUpcData.length;
 
   return {
     duplicateUniqueProducts,
@@ -783,6 +909,7 @@ export const findAllProblems = async (db: Database): Promise<AllProblems> => {
     productsWithIslandedMappings,
     locationsWithoutAiDescription,
     staleIngredientParses,
+    productsWithBetterUpcData,
     totalProblems,
   };
 };

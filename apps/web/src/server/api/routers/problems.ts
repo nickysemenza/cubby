@@ -122,6 +122,18 @@ const staleIngredientParseSchema = z.object({
   modifierDrift: z.boolean(),
 });
 
+const productWithBetterUpcDataSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  manufacturer: z.string(),
+  upc: z.string(),
+  gaps: z.object({
+    manufacturer: z.boolean(),
+    price: z.boolean(),
+    image: z.boolean(),
+  }),
+});
+
 // Combined output schema for all problems
 const allProblemsSchema = z.object({
   duplicateUniqueProducts: z.array(duplicateUniqueProductSchema),
@@ -136,6 +148,7 @@ const allProblemsSchema = z.object({
   productsWithIslandedMappings: z.array(productWithIslandedMappingsSchema),
   locationsWithoutAiDescription: z.array(locationWithoutAiDescriptionSchema),
   staleIngredientParses: z.array(staleIngredientParseSchema),
+  productsWithBetterUpcData: z.array(productWithBetterUpcDataSchema),
   totalProblems: z.number(),
 });
 
@@ -143,7 +156,7 @@ const allProblemsSchema = z.object({
 const getAllProblems = protectedProcedure
   .output(allProblemsSchema)
   .query(async ({ ctx }) => {
-    return await findAllProblems(ctx.db);
+    return await findAllProblems(ctx.db, ctx.upcLookupClient);
   });
 
 // Count-only procedure for badge display (optimized)
@@ -164,11 +177,12 @@ const getProblemsCount = protectedProcedure
         productsWithIslandedMappings: z.number(),
         locationsWithoutAiDescription: z.number(),
         staleIngredientParses: z.number(),
+        productsWithBetterUpcData: z.number(),
       }),
     }),
   )
   .query(async ({ ctx }) => {
-    return await findAllProblemsCount(ctx.db);
+    return await findAllProblemsCount(ctx.db, ctx.upcLookupClient);
   });
 
 // Re-parse every stale ingredient line with the current parser and persist the fresh

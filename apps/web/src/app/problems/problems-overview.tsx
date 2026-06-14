@@ -18,6 +18,7 @@ import { InvalidUPCsList } from "./components/invalid-upcs-list";
 import { InventoryWithStaleValuationsList } from "./components/inventory-with-stale-valuations-list";
 import { LocationsWithoutAiDescriptionList } from "./components/locations-without-ai-description-list";
 import { OrphanedProductsList } from "./components/orphaned-products-list";
+import { ProductsWithBetterUpcDataList } from "./components/products-with-better-upc-data-list";
 import { ProductsWithIslandedMappingsList } from "./components/products-with-islanded-mappings-list";
 import { ProductsWithNoImagesList } from "./components/products-with-no-images-list";
 import { ProductsWithWrongCategoryList } from "./components/products-with-wrong-category-list";
@@ -113,6 +114,11 @@ export function ProblemsOverview() {
       id: "stale-parses",
       label: "Stale Parses",
       count: (problems.staleIngredientParses ?? []).length,
+    },
+    {
+      id: "upc-updates",
+      label: "UPC Updates",
+      count: (problems.productsWithBetterUpcData ?? []).length,
     },
   ].filter((cat) => cat.count > 0);
 
@@ -262,6 +268,15 @@ export function ProblemsOverview() {
       >
         <StaleIngredientParsesList
           items={problems.staleIngredientParses ?? []}
+        />
+      </div>
+      <div
+        ref={(el) => {
+          sectionRefs.current["upc-updates"] = el;
+        }}
+      >
+        <ProductsWithBetterUpcDataList
+          products={problems.productsWithBetterUpcData ?? []}
         />
       </div>
     </div>
