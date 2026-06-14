@@ -11,6 +11,7 @@ export type EntityDetailRoute =
   | "/cookbooks/$cookbookId"
   | "/locations/$id"
   | "/inventory/$id"
+  | "/meals/$id"
   | "/usda/$id"
   | "/images/$id";
 
@@ -22,6 +23,7 @@ type EntityListRoute =
   | "/cookbooks"
   | "/locations"
   | "/inventory"
+  | "/meals"
   | "/usda"
   | "/images";
 
@@ -31,7 +33,8 @@ type EntityNewRoute =
   | "/products/new"
   | "/recipes/new"
   | "/locations/new"
-  | "/inventory/new";
+  | "/inventory/new"
+  | "/meals/new";
 
 /** Typed routes for an entity */
 export interface EntityRoutes {

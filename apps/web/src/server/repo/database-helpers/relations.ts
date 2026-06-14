@@ -206,4 +206,19 @@ export const relations = {
       },
     },
   },
+  meal: {
+    // A meal with its planned recipes (each joined to its recipe summary, incl.
+    // the persisted `totals` used for the cost rollup). Soft-deleted mealRecipe
+    // rows are filtered in dbMealToAPI (Drizzle can't WHERE inside `with`).
+    full: {
+      with: {
+        recipes: {
+          orderBy: sectionOrder,
+          with: {
+            recipe: true,
+          },
+        },
+      },
+    },
+  },
 } as const;

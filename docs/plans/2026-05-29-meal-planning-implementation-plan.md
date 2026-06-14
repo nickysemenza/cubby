@@ -1,6 +1,6 @@
 # Meal Planning — Implementation Plan
 
-**Status:** Proposed · **Supersedes:** [2025-12-18-meal-planning-bom-design.md](2025-12-18-meal-planning-bom-design.md)
+**Status:** Phases 0–3 shipped (meal planning v1) · Phase 4 deferred to v2 · **Supersedes:** [2025-12-18-meal-planning-bom-design.md](2025-12-18-meal-planning-bom-design.md)
 
 This is the *implementation* plan (sequenced, grounded in the current codebase) for the roadmap's **Now** item. The 2025-12-18 doc is the *design* rationale and is still worth reading for the workflow sketches — but three of its assumptions are stale, corrected below.
 
@@ -75,7 +75,7 @@ No user-facing surface; everything below builds on it. Shipped:
 
 **Still to validate:** that WASM conversion runs in the `preview:cf` Workers build, not just Node/Vitest (see Risks).
 
-### Phase 1 — "What can I make?" + AI (early wins) 🎯
+### Phase 1 — "What can I make?" + AI (early wins) — ✅ DONE
 
 Falls directly out of Phase 0.
 
@@ -90,7 +90,11 @@ Falls directly out of Phase 0.
 
 **Exit criteria:** "what can I make tonight?" works from both `/meals/suggestions` and the ⌘K agent.
 
-### Phase 2 — Meal calendar + scaling
+### Phase 2 — Meal calendar + scaling — ✅ DONE
+
+> Shipped with a week calendar **and** a table view. Dates are timezone-free
+> `YYYY-MM-DD` strings (`date` column `mode:"string"`); the detail route is
+> `/meals/$id` (not `/meals/$date`). Recipe ordering uses `sortOrder`.
 
 1. **Schema** ([schema.ts](../../apps/web/src/server/db/schema.ts)): `meal` (`id`, `date`, soft-delete cols) and `mealRecipe` (`id`, `mealId`, `recipeId`, `scale` numeric default 1, soft-delete cols) + indexes + Drizzle relations. **No scoping column** (see [decision](#decision-scoping)). Migration via `db:migrate`.
 2. **Plumbing**: branded `mealId`/`mealRecipeId` + `unsafe*Id` ([identifiers.ts](../../packages/schemas/src/identifiers.ts)); add `"meal"` to the entity enum ([entity.ts](../../packages/schemas/src/entity.ts)); `queryKeys.meal` ([query-keys.ts](../../apps/web/src/lib/query-keys.ts)).
@@ -100,14 +104,23 @@ Falls directly out of Phase 0.
 
 **Exit criteria:** plan a recipe onto a day at 2× scale; see it in the calendar; scaled cost shows.
 
-### Phase 3 — Shopping list
+### Phase 3 — Shopping list — ✅ DONE (display-only)
+
+> Shipped read-only: `meal.getShoppingList({ from, to })` shows need vs. on-hand
+> with a per-meal breakdown and client-side meal exclusion. No "add missing"
+> write path (deliberately — see decision below). The aggregation counts
+> inventory **once per ingredient** (`AvailabilityService.getAggregatedNeeds`).
 
 1. `meal.getShoppingList({ from, to })`: aggregate scaled ingredient needs across meals in range, subtract inventory-on-hand via the **Phase 0 engine**, return shortages (`need` / `have` / `buy`).
 2. `/meals/shopping-list` page: date-range picker + shortage table; "add missing" entry point reuses the same coverage output as Phase 1.
 
 **Exit criteria:** a week of planned meals produces a correct buy-list net of current inventory.
 
-### Phase 4 — Cook / consume inventory
+### Phase 4 — Cook / consume inventory — ⏭️ DEFERRED to v2
+
+> Deliberately scoped out of v1 (felt too fussy for now): meals never mutate
+> inventory. The `mealRecipe` schema leaves room for a future `cookedAt`. The
+> shopping list is display-only. Below is the original plan, kept for v2.
 
 1. `meal.markCooked({ mealId })`: for each scaled ingredient, convert recipe amount → inventory unit (WASM), deduct across entries in a `withTransaction`, delete entries that hit zero, write audit logs ([audit-log.ts](../../apps/web/src/server/repo/audit-log.ts)). Edge cases per design doc §4: no inventory → log shortfall; conversion fail → skip + warn.
 2. **Tests**: `integration.test.ts` asserting atomic deduction + audit entries + partial/missing/conversion-fail paths.

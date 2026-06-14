@@ -13,6 +13,7 @@ import EditRecipeForm from "~/app/_components/recipe/edit-recipe";
 import RecipeDetail, {
   type RecipeViewMode,
 } from "~/app/_components/recipe/RecipeDetail";
+import { AddToMeal } from "~/app/meals/add-to-meal";
 import { PageWrapper } from "~/components/layout/page-wrapper";
 import { PageHero } from "~/components/layouts/page-hero";
 import { RouteErrorComponent } from "~/components/route-error";
@@ -118,6 +119,7 @@ function RecipeDetailPage() {
         actions={
           !isEditing ? (
             <>
+              <AddToMeal recipeId={recipe.id} />
               <CopyRecipeParseButton recipe={recipe} />
               <Button onClick={startEditing} variant="outline" size="sm">
                 <Edit className="mr-2 h-4 w-4" />

@@ -27,4 +27,11 @@ export const queryKeys = {
     listCookbooks: ["recipe", "listCookbooks"] as const,
     all: ["recipe"] as const,
   },
+  meal: {
+    list: ["meal", "list"] as const,
+    getByID: ["meal", "getByID"] as const,
+    byDateRange: ["meal", "byDateRange"] as const,
+    shoppingList: ["meal", "shoppingList"] as const,
+    all: ["meal"] as const,
+  },
 } as const;

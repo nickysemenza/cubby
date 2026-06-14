@@ -1,4 +1,5 @@
 import type {
+  AggregatedNeed,
   IngredientAvailability,
   IngredientAvailabilityStatus,
   RecipeAvailability,
@@ -97,6 +98,176 @@ export class AvailabilityService {
       availableIngredients: available.length,
       ingredients,
       missing: resolvable.filter((i) => i.status !== "ok").map((i) => i.name),
+    };
+  }
+
+  /**
+   * Aggregate ingredient needs across many planned recipes (the meal-planning
+   * shopping list). Each line is a recipe to make at a scale; needs are scaled and
+   * summed per ingredient, while on-hand inventory is counted ONCE per ingredient
+   * (summing per-line availability would multiply inventory by the number of
+   * recipes that use it — the load-bearing reason this isn't a sum of
+   * getRecipeAvailability calls). Reconciliation is the same gram-first basis.
+   *
+   * `sources[].lineIndex` indexes back into `lines`, so the caller can attribute
+   * each contribution to its meal/recipe. Sub-recipes are not expanded in v1.
+   */
+  async getAggregatedNeeds(
+    lines: { recipeId: RecipeId; scale: number }[],
+  ): Promise<AggregatedNeed[]> {
+    if (lines.length === 0) return [];
+
+    // Load each distinct recipe once (a recipe may be planned in several meals).
+    const distinctRecipeIds = uniq(lines.map((l) => l.recipeId));
+    const recipeEntries = await Promise.all(
+      distinctRecipeIds.map(
+        async (id) => [id, await getRecipeByID(this.db, id)] as const,
+      ),
+    );
+    const recipeMap = new Map(recipeEntries);
+
+    // Flatten to per-ingredient contributions, scaling each need by its line.
+    type Contribution = {
+      ingredientId: IngredientId;
+      name: string;
+      scaledNeed: Amount;
+      lineIndex: number;
+    };
+    const contributions: Contribution[] = [];
+    lines.forEach((line, lineIndex) => {
+      const recipe = recipeMap.get(line.recipeId);
+      if (!recipe) return; // deleted/missing recipe — skip
+      for (const section of recipe.sections) {
+        for (const si of section.ingredients) {
+          if (si.type !== "ingredient") continue; // v1: sub-recipes not expanded
+          const need = si.amounts[0];
+          if (!need) continue;
+          contributions.push({
+            ingredientId: si.ingredient.id,
+            name: si.ingredient.name,
+            scaledNeed: {
+              value: need.value * line.scale,
+              unit: need.unit,
+              ...(need.upperValue != null
+                ? { upperValue: need.upperValue * line.scale }
+                : {}),
+            },
+            lineIndex,
+          });
+        }
+      }
+    });
+    if (contributions.length === 0) return [];
+
+    // Load each distinct ingredient (food-enriched, for density mappings) + one
+    // batched inventory read across all their products.
+    const distinctIngredientIds = uniq(
+      contributions.map((c) => c.ingredientId),
+    );
+    const ingredientEntries = await Promise.all(
+      distinctIngredientIds.map((id) =>
+        this.ingredientService.getIngredientByID(id),
+      ),
+    );
+    const ingMap = new Map<IngredientId, IngredientWithFoodOut>(
+      ingredientEntries.map((ing) => [ing.id, ing]),
+    );
+    const productIds = uniq(
+      ingredientEntries.flatMap((ing) => ing.product.map((p) => p.id)),
+    );
+    const inventory = await getInventoryForProducts(this.db, productIds);
+    const inventoryByProduct = new Map<string, Amount[]>();
+    for (const { productId, amount } of inventory) {
+      const list = inventoryByProduct.get(productId);
+      if (list) list.push(amount);
+      else inventoryByProduct.set(productId, [amount]);
+    }
+
+    // Group contributions by ingredient and evaluate each once.
+    const byIngredient = new Map<IngredientId, Contribution[]>();
+    for (const c of contributions) {
+      const list = byIngredient.get(c.ingredientId);
+      if (list) list.push(c);
+      else byIngredient.set(c.ingredientId, [c]);
+    }
+
+    return Array.from(byIngredient.entries()).map(([ingredientId, contribs]) =>
+      this.evaluateAggregate(
+        ingredientId,
+        contribs,
+        ingMap,
+        inventoryByProduct,
+      ),
+    );
+  }
+
+  private evaluateAggregate(
+    ingredientId: IngredientId,
+    contribs: { scaledNeed: Amount; lineIndex: number; name: string }[],
+    ingMap: Map<IngredientId, IngredientWithFoodOut>,
+    inventoryByProduct: Map<string, Amount[]>,
+  ): AggregatedNeed {
+    const name = contribs[0]?.name ?? "";
+    const products = (ingMap.get(ingredientId)?.product ?? []).map((p) => ({
+      mappings: getAllUnitMappingsFromProduct(p),
+      amounts: inventoryByProduct.get(p.id) ?? [],
+    }));
+    const anyEntries = products.some((p) => p.amounts.length > 0);
+    const allMappings = products.flatMap((p) => p.mappings);
+
+    // Prefer a grams basis: only when EVERY contribution converts to weight, so
+    // sources are summable in one unit. Otherwise fall back to the (assumed
+    // shared) authored unit — same gram-first rule as evaluateIngredient.
+    const weights = contribs.map((c) =>
+      safeConvertAmount(c.scaledNeed, allMappings, "weight"),
+    );
+    const allWeight = weights.length > 0 && weights.every((w) => w.isOk());
+
+    let basisUnit: string;
+    const sources = contribs.map((c, i) => {
+      const w = weights[i];
+      const needValue =
+        allWeight && w?.isOk() ? w.value.value : c.scaledNeed.value;
+      return { lineIndex: c.lineIndex, needValue };
+    });
+    if (allWeight) {
+      const first = weights[0];
+      basisUnit = first?.isOk() ? first.value.unit : "g";
+    } else {
+      // v1 limitation: when not every contribution converts to weight, we sum in
+      // the first contribution's unit and assume all recipes use the same unit
+      // for this ingredient. Mixed units (e.g. "2 cup" + "300 g") produce a
+      // unit-incoherent total — the same gram-first fallback as evaluateIngredient.
+      basisUnit = contribs[0]?.scaledNeed.unit ?? "";
+    }
+    const needTotal = sources.reduce((sum, s) => sum + s.needValue, 0);
+
+    // On-hand total, counted once for the ingredient across all its products.
+    let haveTotal = 0;
+    let anyConvertible = false;
+    for (const product of products) {
+      for (const onHand of product.amounts) {
+        if (allWeight) {
+          const grams = safeConvertAmount(onHand, product.mappings, "weight");
+          if (grams.isOk()) {
+            haveTotal += grams.value.value;
+            anyConvertible = true;
+          }
+        } else if (onHand.unit === basisUnit) {
+          haveTotal += onHand.value;
+          anyConvertible = true;
+        }
+      }
+    }
+
+    return {
+      ingredientId,
+      name,
+      basisUnit,
+      needValue: needTotal,
+      haveValue: anyConvertible ? haveTotal : null,
+      status: resolveStatus(needTotal, haveTotal, anyEntries, anyConvertible),
+      sources,
     };
   }
 

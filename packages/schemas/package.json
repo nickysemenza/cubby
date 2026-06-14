@@ -22,6 +22,7 @@
     "./product": "./src/product.ts",
     "./location": "./src/location.ts",
     "./inventory": "./src/inventory.ts",
+    "./meal": "./src/meal.ts",
     "./recipe": "./src/recipe.ts",
     "./search": "./src/search.ts",
     "./audit": "./src/audit.ts",

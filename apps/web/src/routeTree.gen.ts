@@ -30,6 +30,7 @@ import { Route as AuthenticatedSearchIndexRouteImport } from './routes/_authenti
 import { Route as AuthenticatedRecipesIndexRouteImport } from './routes/_authenticated/recipes.index'
 import { Route as AuthenticatedProjectsIndexRouteImport } from './routes/_authenticated/projects.index'
 import { Route as AuthenticatedProductsIndexRouteImport } from './routes/_authenticated/products.index'
+import { Route as AuthenticatedMealsIndexRouteImport } from './routes/_authenticated/meals.index'
 import { Route as AuthenticatedLocationsIndexRouteImport } from './routes/_authenticated/locations.index'
 import { Route as AuthenticatedInventoryIndexRouteImport } from './routes/_authenticated/inventory.index'
 import { Route as AuthenticatedIngredientsIndexRouteImport } from './routes/_authenticated/ingredients.index'
@@ -48,6 +49,9 @@ import { Route as AuthenticatedProjectsIdRouteImport } from './routes/_authentic
 import { Route as AuthenticatedProductsNewRouteImport } from './routes/_authenticated/products.new'
 import { Route as AuthenticatedProductsIdRouteImport } from './routes/_authenticated/products.$id'
 import { Route as AuthenticatedMealsSuggestionsRouteImport } from './routes/_authenticated/meals.suggestions'
+import { Route as AuthenticatedMealsShoppingListRouteImport } from './routes/_authenticated/meals.shopping-list'
+import { Route as AuthenticatedMealsNewRouteImport } from './routes/_authenticated/meals.new'
+import { Route as AuthenticatedMealsIdRouteImport } from './routes/_authenticated/meals.$id'
 import { Route as AuthenticatedLocationsValidateRouteImport } from './routes/_authenticated/locations.validate'
 import { Route as AuthenticatedLocationsNewRouteImport } from './routes/_authenticated/locations.new'
 import { Route as AuthenticatedLocationsIdRouteImport } from './routes/_authenticated/locations.$id'
@@ -173,6 +177,11 @@ const AuthenticatedProductsIndexRoute =
     path: '/products/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedMealsIndexRoute = AuthenticatedMealsIndexRouteImport.update({
+  id: '/meals/',
+  path: '/meals/',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedLocationsIndexRoute =
   AuthenticatedLocationsIndexRouteImport.update({
     id: '/locations/',
@@ -273,6 +282,22 @@ const AuthenticatedMealsSuggestionsRoute =
     path: '/meals/suggestions',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedMealsShoppingListRoute =
+  AuthenticatedMealsShoppingListRouteImport.update({
+    id: '/meals/shopping-list',
+    path: '/meals/shopping-list',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedMealsNewRoute = AuthenticatedMealsNewRouteImport.update({
+  id: '/meals/new',
+  path: '/meals/new',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedMealsIdRoute = AuthenticatedMealsIdRouteImport.update({
+  id: '/meals/$id',
+  path: '/meals/$id',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedLocationsValidateRoute =
   AuthenticatedLocationsValidateRouteImport.update({
     id: '/locations/validate',
@@ -399,6 +424,9 @@ export interface FileRoutesByFullPath {
   '/locations/$id': typeof AuthenticatedLocationsIdRoute
   '/locations/new': typeof AuthenticatedLocationsNewRoute
   '/locations/validate': typeof AuthenticatedLocationsValidateRoute
+  '/meals/$id': typeof AuthenticatedMealsIdRoute
+  '/meals/new': typeof AuthenticatedMealsNewRoute
+  '/meals/shopping-list': typeof AuthenticatedMealsShoppingListRoute
   '/meals/suggestions': typeof AuthenticatedMealsSuggestionsRoute
   '/products/$id': typeof AuthenticatedProductsIdRoute
   '/products/new': typeof AuthenticatedProductsNewRoute
@@ -417,6 +445,7 @@ export interface FileRoutesByFullPath {
   '/ingredients/': typeof AuthenticatedIngredientsIndexRoute
   '/inventory/': typeof AuthenticatedInventoryIndexRoute
   '/locations/': typeof AuthenticatedLocationsIndexRoute
+  '/meals/': typeof AuthenticatedMealsIndexRoute
   '/products/': typeof AuthenticatedProductsIndexRoute
   '/projects/': typeof AuthenticatedProjectsIndexRoute
   '/recipes/': typeof AuthenticatedRecipesIndexRoute
@@ -455,6 +484,9 @@ export interface FileRoutesByTo {
   '/locations/$id': typeof AuthenticatedLocationsIdRoute
   '/locations/new': typeof AuthenticatedLocationsNewRoute
   '/locations/validate': typeof AuthenticatedLocationsValidateRoute
+  '/meals/$id': typeof AuthenticatedMealsIdRoute
+  '/meals/new': typeof AuthenticatedMealsNewRoute
+  '/meals/shopping-list': typeof AuthenticatedMealsShoppingListRoute
   '/meals/suggestions': typeof AuthenticatedMealsSuggestionsRoute
   '/products/$id': typeof AuthenticatedProductsIdRoute
   '/products/new': typeof AuthenticatedProductsNewRoute
@@ -473,6 +505,7 @@ export interface FileRoutesByTo {
   '/ingredients': typeof AuthenticatedIngredientsIndexRoute
   '/inventory': typeof AuthenticatedInventoryIndexRoute
   '/locations': typeof AuthenticatedLocationsIndexRoute
+  '/meals': typeof AuthenticatedMealsIndexRoute
   '/products': typeof AuthenticatedProductsIndexRoute
   '/projects': typeof AuthenticatedProjectsIndexRoute
   '/recipes': typeof AuthenticatedRecipesIndexRoute
@@ -513,6 +546,9 @@ export interface FileRoutesById {
   '/_authenticated/locations/$id': typeof AuthenticatedLocationsIdRoute
   '/_authenticated/locations/new': typeof AuthenticatedLocationsNewRoute
   '/_authenticated/locations/validate': typeof AuthenticatedLocationsValidateRoute
+  '/_authenticated/meals/$id': typeof AuthenticatedMealsIdRoute
+  '/_authenticated/meals/new': typeof AuthenticatedMealsNewRoute
+  '/_authenticated/meals/shopping-list': typeof AuthenticatedMealsShoppingListRoute
   '/_authenticated/meals/suggestions': typeof AuthenticatedMealsSuggestionsRoute
   '/_authenticated/products/$id': typeof AuthenticatedProductsIdRoute
   '/_authenticated/products/new': typeof AuthenticatedProductsNewRoute
@@ -531,6 +567,7 @@ export interface FileRoutesById {
   '/_authenticated/ingredients/': typeof AuthenticatedIngredientsIndexRoute
   '/_authenticated/inventory/': typeof AuthenticatedInventoryIndexRoute
   '/_authenticated/locations/': typeof AuthenticatedLocationsIndexRoute
+  '/_authenticated/meals/': typeof AuthenticatedMealsIndexRoute
   '/_authenticated/products/': typeof AuthenticatedProductsIndexRoute
   '/_authenticated/projects/': typeof AuthenticatedProjectsIndexRoute
   '/_authenticated/recipes/': typeof AuthenticatedRecipesIndexRoute
@@ -571,6 +608,9 @@ export interface FileRouteTypes {
     | '/locations/$id'
     | '/locations/new'
     | '/locations/validate'
+    | '/meals/$id'
+    | '/meals/new'
+    | '/meals/shopping-list'
     | '/meals/suggestions'
     | '/products/$id'
     | '/products/new'
@@ -589,6 +629,7 @@ export interface FileRouteTypes {
     | '/ingredients/'
     | '/inventory/'
     | '/locations/'
+    | '/meals/'
     | '/products/'
     | '/projects/'
     | '/recipes/'
@@ -627,6 +668,9 @@ export interface FileRouteTypes {
     | '/locations/$id'
     | '/locations/new'
     | '/locations/validate'
+    | '/meals/$id'
+    | '/meals/new'
+    | '/meals/shopping-list'
     | '/meals/suggestions'
     | '/products/$id'
     | '/products/new'
@@ -645,6 +689,7 @@ export interface FileRouteTypes {
     | '/ingredients'
     | '/inventory'
     | '/locations'
+    | '/meals'
     | '/products'
     | '/projects'
     | '/recipes'
@@ -684,6 +729,9 @@ export interface FileRouteTypes {
     | '/_authenticated/locations/$id'
     | '/_authenticated/locations/new'
     | '/_authenticated/locations/validate'
+    | '/_authenticated/meals/$id'
+    | '/_authenticated/meals/new'
+    | '/_authenticated/meals/shopping-list'
     | '/_authenticated/meals/suggestions'
     | '/_authenticated/products/$id'
     | '/_authenticated/products/new'
@@ -702,6 +750,7 @@ export interface FileRouteTypes {
     | '/_authenticated/ingredients/'
     | '/_authenticated/inventory/'
     | '/_authenticated/locations/'
+    | '/_authenticated/meals/'
     | '/_authenticated/products/'
     | '/_authenticated/projects/'
     | '/_authenticated/recipes/'
@@ -871,6 +920,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProductsIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/meals/': {
+      id: '/_authenticated/meals/'
+      path: '/meals'
+      fullPath: '/meals/'
+      preLoaderRoute: typeof AuthenticatedMealsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/locations/': {
       id: '/_authenticated/locations/'
       path: '/locations'
@@ -995,6 +1051,27 @@ declare module '@tanstack/react-router' {
       path: '/meals/suggestions'
       fullPath: '/meals/suggestions'
       preLoaderRoute: typeof AuthenticatedMealsSuggestionsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/meals/shopping-list': {
+      id: '/_authenticated/meals/shopping-list'
+      path: '/meals/shopping-list'
+      fullPath: '/meals/shopping-list'
+      preLoaderRoute: typeof AuthenticatedMealsShoppingListRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/meals/new': {
+      id: '/_authenticated/meals/new'
+      path: '/meals/new'
+      fullPath: '/meals/new'
+      preLoaderRoute: typeof AuthenticatedMealsNewRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/meals/$id': {
+      id: '/_authenticated/meals/$id'
+      path: '/meals/$id'
+      fullPath: '/meals/$id'
+      preLoaderRoute: typeof AuthenticatedMealsIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/locations/validate': {
@@ -1138,6 +1215,9 @@ interface AuthenticatedRouteChildren {
   AuthenticatedLocationsIdRoute: typeof AuthenticatedLocationsIdRoute
   AuthenticatedLocationsNewRoute: typeof AuthenticatedLocationsNewRoute
   AuthenticatedLocationsValidateRoute: typeof AuthenticatedLocationsValidateRoute
+  AuthenticatedMealsIdRoute: typeof AuthenticatedMealsIdRoute
+  AuthenticatedMealsNewRoute: typeof AuthenticatedMealsNewRoute
+  AuthenticatedMealsShoppingListRoute: typeof AuthenticatedMealsShoppingListRoute
   AuthenticatedMealsSuggestionsRoute: typeof AuthenticatedMealsSuggestionsRoute
   AuthenticatedProductsIdRoute: typeof AuthenticatedProductsIdRoute
   AuthenticatedProductsNewRoute: typeof AuthenticatedProductsNewRoute
@@ -1153,6 +1233,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedIngredientsIndexRoute: typeof AuthenticatedIngredientsIndexRoute
   AuthenticatedInventoryIndexRoute: typeof AuthenticatedInventoryIndexRoute
   AuthenticatedLocationsIndexRoute: typeof AuthenticatedLocationsIndexRoute
+  AuthenticatedMealsIndexRoute: typeof AuthenticatedMealsIndexRoute
   AuthenticatedProductsIndexRoute: typeof AuthenticatedProductsIndexRoute
   AuthenticatedProjectsIndexRoute: typeof AuthenticatedProjectsIndexRoute
   AuthenticatedRecipesIndexRoute: typeof AuthenticatedRecipesIndexRoute
@@ -1189,6 +1270,9 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedLocationsIdRoute: AuthenticatedLocationsIdRoute,
   AuthenticatedLocationsNewRoute: AuthenticatedLocationsNewRoute,
   AuthenticatedLocationsValidateRoute: AuthenticatedLocationsValidateRoute,
+  AuthenticatedMealsIdRoute: AuthenticatedMealsIdRoute,
+  AuthenticatedMealsNewRoute: AuthenticatedMealsNewRoute,
+  AuthenticatedMealsShoppingListRoute: AuthenticatedMealsShoppingListRoute,
   AuthenticatedMealsSuggestionsRoute: AuthenticatedMealsSuggestionsRoute,
   AuthenticatedProductsIdRoute: AuthenticatedProductsIdRoute,
   AuthenticatedProductsNewRoute: AuthenticatedProductsNewRoute,
@@ -1205,6 +1289,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedIngredientsIndexRoute: AuthenticatedIngredientsIndexRoute,
   AuthenticatedInventoryIndexRoute: AuthenticatedInventoryIndexRoute,
   AuthenticatedLocationsIndexRoute: AuthenticatedLocationsIndexRoute,
+  AuthenticatedMealsIndexRoute: AuthenticatedMealsIndexRoute,
   AuthenticatedProductsIndexRoute: AuthenticatedProductsIndexRoute,
   AuthenticatedProjectsIndexRoute: AuthenticatedProjectsIndexRoute,
   AuthenticatedRecipesIndexRoute: AuthenticatedRecipesIndexRoute,

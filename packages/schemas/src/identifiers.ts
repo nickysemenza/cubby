@@ -17,6 +17,8 @@ export const productId = z.uuid().brand("ProductId");
 export const locationId = z.uuid().brand("LocationId");
 export const inventoryId = z.uuid().brand("InventoryId");
 export const cookbookId = z.uuid().brand("CookbookId");
+export const mealId = z.uuid().brand("MealId");
+export const mealRecipeId = z.uuid().brand("MealRecipeId");
 
 // Shortcode schemas re-exported from shared package (single source of truth)
 export {
@@ -34,6 +36,8 @@ export type ProductId = z.infer<typeof productId>;
 export type LocationId = z.infer<typeof locationId>;
 export type InventoryId = z.infer<typeof inventoryId>;
 export type CookbookId = z.infer<typeof cookbookId>;
+export type MealId = z.infer<typeof mealId>;
+export type MealRecipeId = z.infer<typeof mealRecipeId>;
 
 // Helper functions for unsafe casts (use only when you're certain the value is valid).
 // Useful in tests and when working with external/untyped strings you know are valid.
@@ -66,6 +70,11 @@ export const unsafeInventoryId = <T extends string>(id: T & RejectBranded<T>) =>
   unsafeId<InventoryId>(id);
 export const unsafeCookbookId = <T extends string>(id: T & RejectBranded<T>) =>
   unsafeId<CookbookId>(id);
+export const unsafeMealId = <T extends string>(id: T & RejectBranded<T>) =>
+  unsafeId<MealId>(id);
+export const unsafeMealRecipeId = <T extends string>(
+  id: T & RejectBranded<T>,
+) => unsafeId<MealRecipeId>(id);
 export const unsafeLocationShortcode = <T extends string>(
   code: T & RejectBranded<T>,
 ) => unsafeId<LocationShortcode>(code);

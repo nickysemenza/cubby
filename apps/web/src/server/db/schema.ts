@@ -5,6 +5,8 @@ import type {
   IngredientId,
   InventoryId,
   LocationId,
+  MealId,
+  MealRecipeId,
   ProductId,
   RecipeId,
   UserId,
@@ -19,6 +21,7 @@ import {
 } from "@cubby/schemas/recipe";
 import { relations, sql } from "drizzle-orm";
 import {
+  date,
   index,
   integer,
   jsonb,
@@ -304,6 +307,70 @@ export const recipeSectionIngredient = pgTable(
     ingredientIdIdx: index("RecipeSectionIngredient_ingredientId_idx").on(
       table.ingredientId,
     ),
+  }),
+);
+
+// Meal table — a planned eating occasion on a calendar day. Groups one or more
+// recipes (see mealRecipe). Multiple meals may share a date; an optional free-text
+// name ("Dinner", "Sunday prep") and sortOrder distinguish/order them. Pure
+// planning: no inventory mutation, no denormalized cost (rolled up read-time from
+// recipe.totals × scale).
+export const meal = pgTable(
+  "Meal",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`).$type<MealId>(),
+    // Calendar day (no time/tz) — planning is day-granular. mode:"string" returns
+    // a plain "YYYY-MM-DD"; a `date` read as a JS Date lands at UTC midnight and
+    // misfilters by a day in negative-offset timezones. The Postgres column type
+    // is unchanged (still `date`), so no migration is needed.
+    date: date("date", { mode: "string" }).notNull(),
+    name: text("name"),
+    sortOrder: integer("sortOrder"),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt", { mode: "date" })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    deletedAt: timestamp("deletedAt", { mode: "date" }),
+  },
+  (table) => ({
+    // The calendar's range query (date BETWEEN from AND to) is the hot path.
+    dateActiveIdx: index("Meal_date_active_idx")
+      .on(table.date)
+      .where(sql`${table.deletedAt} IS NULL`),
+  }),
+);
+
+// MealRecipe — a recipe planned into a meal at a numeric scale multiplier.
+export const mealRecipe = pgTable(
+  "MealRecipe",
+  {
+    id: uuid("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`)
+      .$type<MealRecipeId>(),
+    mealId: uuid("mealId")
+      .notNull()
+      .$type<MealId>()
+      .references(() => meal.id),
+    recipeId: uuid("recipeId")
+      .notNull()
+      .$type<RecipeId>()
+      .references(() => recipe.id),
+    // Scale multiplier (>= 0.01, enforced at the schema/router layer). Totals are
+    // linear in this factor, so a meal's rollup is sum(recipe.totals × scale).
+    scale: real("scale").notNull().default(1),
+    sortOrder: integer("sortOrder"),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt", { mode: "date" })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    deletedAt: timestamp("deletedAt", { mode: "date" }),
+  },
+  (table) => ({
+    mealIdIdx: index("MealRecipe_mealId_idx").on(table.mealId),
+    recipeIdIdx: index("MealRecipe_recipeId_idx").on(table.recipeId),
   }),
 );
 
@@ -643,6 +710,7 @@ export const recipeRelations = relations(recipe, ({ one, many }) => ({
     references: [cookbook.id],
   }),
   images: many(recipeImage),
+  mealRecipes: many(mealRecipe),
 }));
 
 export const cookbookRelations = relations(cookbook, ({ one, many }) => ({
@@ -686,6 +754,21 @@ export const recipeSectionIngredientRelations = relations(
     }),
   }),
 );
+
+export const mealRelations = relations(meal, ({ many }) => ({
+  recipes: many(mealRecipe),
+}));
+
+export const mealRecipeRelations = relations(mealRecipe, ({ one }) => ({
+  meal: one(meal, {
+    fields: [mealRecipe.mealId],
+    references: [meal.id],
+  }),
+  recipe: one(recipe, {
+    fields: [mealRecipe.recipeId],
+    references: [recipe.id],
+  }),
+}));
 
 export const productRelations = relations(product, ({ one, many }) => ({
   Ingredient: one(ingredient, {

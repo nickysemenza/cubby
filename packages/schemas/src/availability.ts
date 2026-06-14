@@ -34,6 +34,27 @@ export const ingredientAvailabilityOut = z.object({
 });
 export type IngredientAvailability = z.infer<typeof ingredientAvailabilityOut>;
 
+/**
+ * One ingredient's aggregated need across many planned recipes (the shopping-list
+ * engine, AvailabilityService.getAggregatedNeeds). `needValue` sums the scaled
+ * needs of every contributing line; `haveValue` is the on-hand total counted
+ * ONCE for the ingredient (never per-line — that would multiply inventory).
+ * `sources[].lineIndex` indexes back into the `lines` array the caller passed,
+ * so the caller can attribute each contribution to its meal/recipe.
+ */
+export const aggregatedNeedOut = z.object({
+  ingredientId: ingredientId.nullable(),
+  name: z.string(),
+  basisUnit: z.string().nullable(),
+  needValue: z.number(),
+  haveValue: z.number().nullable(),
+  status: ingredientAvailabilityStatus,
+  sources: z.array(
+    z.object({ lineIndex: z.number().int(), needValue: z.number() }),
+  ),
+});
+export type AggregatedNeed = z.infer<typeof aggregatedNeedOut>;
+
 export const recipeAvailabilityOut = z.object({
   recipeId,
   recipeName: z.string(),
