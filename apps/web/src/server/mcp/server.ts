@@ -1,4 +1,5 @@
 import { recipeCreateInput, recipeUpdateInput } from "@cubby/schemas/recipe";
+import { unitMappingInput } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -64,24 +65,14 @@ function json(data: unknown) {
 }
 
 /**
- * A product unit mapping for MCP tools: one conversion or price edge, e.g.
- * "8 oz = $10" -> { a: { value: 8, unit: "oz" }, b: { value: 10, unit: "dollar" } }.
- * The costing engine treats these as edges in the unit graph, so a weight->money
- * edge is the cost basis for an ingredient measured by weight, and money is the
- * "dollar" unit. Nutrient edges work too (e.g. b unit "kcal" or "g protein").
+ * A product unit mapping for MCP tools: the canonical `unitMappingInput` edge
+ * (a/b/source, fully documented at its source), minus `id` (create-only) and
+ * with `source` made omittable so LLM callers needn't pass `null` explicitly —
+ * `toUnitMappingInput` restores it.
  */
-const mcpUnitMapping = z.object({
-  a: z
-    .object({ value: z.number(), unit: z.string() })
-    .describe('left side, e.g. { value: 8, unit: "oz" }'),
-  b: z
-    .object({ value: z.number(), unit: z.string() })
-    .describe('right side, e.g. { value: 10, unit: "dollar" }'),
-  source: z
-    .string()
-    .optional()
-    .describe('optional provenance note, e.g. "manual"'),
-});
+const mcpUnitMapping = unitMappingInput
+  .omit({ id: true })
+  .extend({ source: z.string().optional() });
 
 /** Normalize an MCP unit mapping to the productCreateInput shape (source: string|null). */
 function toUnitMappingInput(m: z.infer<typeof mcpUnitMapping>) {
