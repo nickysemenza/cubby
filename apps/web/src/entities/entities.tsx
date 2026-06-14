@@ -44,7 +44,9 @@ export const entities: Record<Entity, EntityDefinition> = {
       hasUnitMappings: true,
       defaultSort: "createdAt",
       standardColumns: [],
-      sortableFields: ["createdAt", "name"],
+      // appearsInRecipes/product are computed (recipe + product counts), sorted
+      // via correlated subqueries in ingredientList (not real columns).
+      sortableFields: ["createdAt", "name", "appearsInRecipes", "product"],
     },
   },
   product: {
@@ -75,6 +77,10 @@ export const entities: Record<Entity, EntityDefinition> = {
         "category",
         "ndb_number",
         "price",
+        "notes",
+        // `ingredient` sorts by the linked ingredient's name via a correlated
+        // subquery in productList (not a real column).
+        "ingredient",
       ],
     },
   },
@@ -97,8 +103,16 @@ export const entities: Record<Entity, EntityDefinition> = {
       defaultSort: "createdAt",
       standardColumns: ["image", "name", "createdAt"],
       // costTotal/caloriesTotal live in the `totals` jsonb (not real columns);
-      // recipeList sorts them via a jsonb expression. See recipe/crud.recipeList.
-      sortableFields: ["createdAt", "name", "costTotal", "caloriesTotal"],
+      // recipeList sorts them via a jsonb expression. `source` (SourceType+SourceData)
+      // and `yield` (→ servings) are also special-cased there. See recipe/crud.recipeList.
+      sortableFields: [
+        "createdAt",
+        "name",
+        "costTotal",
+        "caloriesTotal",
+        "source",
+        "yield",
+      ],
     },
   },
   cookbook: {

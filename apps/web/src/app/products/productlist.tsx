@@ -114,6 +114,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
         header: "Ingredient",
         className: "w-32",
         mobile: { slot: "meta", priority: 45 },
+        enableSorting: true,
       }),
       createTextColumn(columnHelper, "manufacturer", {
         className: "min-w-0 w-40 truncate",
@@ -165,7 +166,6 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
       }),
       columnHelper.accessor("notes", {
         header: "Notes",
-        enableSorting: false,
         meta: { className: "min-w-0 w-40" },
         cell: ({ row }) => {
           const notes = row.original.notes;

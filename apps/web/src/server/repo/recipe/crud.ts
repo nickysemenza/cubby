@@ -15,7 +15,7 @@ import type {
   RecipeOut,
   RecipeUpdateInput,
 } from "@cubby/schemas/recipe";
-import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
+import { type AnyColumn, and, eq, inArray, type SQL, sql } from "drizzle-orm";
 import { getSortableFields } from "~/entities/entities";
 import { recipeOutSignature } from "~/lib/recipe-signature";
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -249,22 +249,33 @@ export const recipeList = async (
     ],
   );
 
-  // Build orderBy using central sortableFields config. costTotal/caloriesTotal
-  // live in the `totals` jsonb (not real columns), so sort them via a jsonb
-  // expression; everything else goes through the generic buildOrderBy.
+  // Build orderBy using central sortableFields config. Several sortable columns
+  // aren't plain scalar columns, so they're special-cased here:
+  //  - costTotal/caloriesTotal live in the `totals` jsonb
+  //  - source = SourceType (groups Book/Website/Notion/Other) then SourceData (name/url)
+  //  - yield = the `servings` integer (yield-only recipes have null servings → last)
+  // everything else goes through the generic buildOrderBy.
+  const isAsc = sort.direction === "asc";
+  const dir = (col: AnyColumn): SQL =>
+    isAsc ? sql`${col} asc nulls last` : sql`${col} desc nulls last`;
   const jsonbSortKey =
     sort.orderBy === "costTotal"
       ? "costTotal"
       : sort.orderBy === "caloriesTotal"
         ? "caloriesTotal"
         : null;
-  const orderByClause = jsonbSortKey
-    ? [
-        sort.direction === "asc"
-          ? sql`(${recipe.totals}->>${jsonbSortKey})::numeric asc nulls last`
-          : sql`(${recipe.totals}->>${jsonbSortKey})::numeric desc nulls last`,
-      ]
-    : buildOrderBy(recipe, sort, [...getSortableFields("recipe")]);
+  const orderByClause =
+    sort.orderBy === "source"
+      ? [dir(recipe.SourceType), dir(recipe.SourceData)]
+      : sort.orderBy === "yield"
+        ? [dir(recipe.servings)]
+        : jsonbSortKey
+          ? [
+              isAsc
+                ? sql`(${recipe.totals}->>${jsonbSortKey})::numeric asc nulls last`
+                : sql`(${recipe.totals}->>${jsonbSortKey})::numeric desc nulls last`,
+            ]
+          : buildOrderBy(recipe, sort, [...getSortableFields("recipe")]);
 
   const { take, skip } = buildTakeSkip(pagination);
 
