@@ -364,6 +364,10 @@ const upsertRecipeMatching = async (
   actor: ActorContext,
   matchWhere: SQL | undefined,
   provenance: RecipeProvenance,
+  // The unique index this upsert races on — scopes recovery so an unrelated
+  // constraint violation re-throws immediately instead of taking the recovery
+  // path (and a spurious re-SELECT) before re-throwing.
+  constraint: string,
 ): Promise<{ id: RecipeId }> => {
   // Update an already-matched recipe: refresh provenance + replace sections.
   const updateMatched = (existingId: RecipeId): Promise<{ id: RecipeId }> =>
@@ -401,9 +405,8 @@ const upsertRecipeMatching = async (
 
   // No match: create. `createRecipe` owns its transaction, so if a concurrent
   // request created the same recipe between our SELECT and this INSERT, its txn
-  // aborts on the unique index (Recipe_name_key / book_title / notion_page) and
-  // fully rolls back. runWithConflictRecovery then re-SELECTs the committed
-  // winner and takes the update path instead of 500ing.
+  // aborts on `constraint` and fully rolls back. runWithConflictRecovery then
+  // re-SELECTs the committed winner and takes the update path instead of 500ing.
   return runWithConflictRecovery(
     async () => {
       const created = await createRecipe(db, input, actor, provenance);
@@ -417,6 +420,7 @@ const upsertRecipeMatching = async (
       if (!winner) throw error;
       return updateMatched(winner.id);
     },
+    constraint,
   );
 };
 
@@ -442,6 +446,7 @@ export const upsertRecipe = (
       sql`${recipe.SourceType} IS DISTINCT FROM 'Book'`,
     ),
     webProvenance(input.meta?.url ?? null),
+    "Recipe_name_key",
   );
 
 /**
@@ -474,6 +479,7 @@ export const upsertCookbookRecipe = (
       sourceData: cookbookRef.name,
       cookbookId: cookbookRef.id,
     },
+    "Recipe_book_title_key",
   );
 
 /**
@@ -503,6 +509,7 @@ export const upsertNotionRecipe = (
       sourceType: "Notion",
       sourceData: pageId,
     },
+    "Recipe_notion_page_key",
   );
 
 /**

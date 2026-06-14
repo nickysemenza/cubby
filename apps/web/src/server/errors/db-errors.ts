@@ -85,14 +85,18 @@ export function isUniqueViolation(
  *
  * If `create` throws a unique-violation (optionally scoped to `constraint`), a
  * concurrent request created the same row between the caller's SELECT and this
- * INSERT. Because `create` owns its transaction, that transaction has fully
- * rolled back — no poisoning leaks out — so `recover` runs fresh statements to
- * load and return/update the committed winner.
+ * INSERT. `recover` then runs fresh statements to load and return/update the
+ * committed winner.
  *
- * IMPORTANT: only safe when `create` owns its transaction. Do NOT use this with
- * a create that runs inside the caller's open transaction (a unique violation
- * there poisons the whole txn and `recover`'s queries would error). Re-throws
- * anything that isn't a matching unique violation.
+ * IMPORTANT: `recover` must run on a clean connection, so this is safe only when
+ * a failed `create` leaves no poisoned, still-open transaction behind. That
+ * holds when `create` either (a) wraps its own transaction — the abort rolls it
+ * back, e.g. `createRecipe`; or (b) runs as standalone auto-commit statements
+ * with no outer transaction, e.g. `quickCreateProduct` under `findOrCreateByUPC`
+ * (a single failed INSERT commits nothing). Do NOT use it for a `create` that
+ * runs inside the caller's *open* transaction — the violation poisons that txn
+ * and `recover`'s queries would error. Re-throws anything that isn't a matching
+ * unique violation.
  */
 export async function runWithConflictRecovery<T>(
   create: () => Promise<T>,
