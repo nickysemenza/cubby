@@ -23,8 +23,8 @@ const UnitMappingGraphInner: React.FC<{
           overlap=false;
           sep="+10";
           bgcolor="transparent";
-          node [fontsize=9, fontname="sans-serif", shape=box, style="rounded,filled", fillcolor="#efe7da", color="#a18d77"];
-          edge [fontsize=7, fontname="sans-serif", color="#8a7a64", penwidth=1.2, len=1.2];
+          node [fontsize=9, fontname="sans-serif", shape=box, style="rounded,filled", fillcolor="#eef0f3", color="#9ca0a8"];
+          edge [fontsize=7, fontname="sans-serif", color="#888c94", penwidth=1.2, len=1.2];
         `,
       );
       return { graph, error: null };

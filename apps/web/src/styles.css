@@ -142,21 +142,22 @@
 
 /*
   ---break---
-  Cubby Theme - Warm, organic palette from brand colors
+  Cubby Theme - Cool-neutral surfaces + warm accent palette
 */
 :root {
   /* Brand palette */
-  --brand-foreground: #3a3530;
+  --brand-foreground: oklch(0.27 0.008 260);
   /* Brick-deepened terracotta: reads as a printer's spot ink, not "orange UI"
      (2026-06-10 palette tune; was #c2603d / #d98a68) */
   --brand-terracotta: #ae4a28;
   --brand-terra-light: #cf7d57;
-  /* Gallery refresh (2026-06-12): brighter near-white card + lighter, more
-     neutral paper so terracotta/entity inks pop harder. Still warm, just
-     cooler than the old hearth cream (was card #fdfbf7 / paper 0.955 0.009 90). */
-  --brand-cream: #fffefb;
-  --brand-paper: oklch(0.97 0.004 95);
-  --brand-shelf: #5c5550;
+  /* Cool-neutral refresh (2026-06-14): de-warmed surfaces + ink to a slightly
+     cool neutral (hue ~255, very low chroma) so the app reads crisp/modern while
+     terracotta + the warm chart ramp stay the signature accents. Was warm
+     "Gallery": card #fffefb / paper oklch(0.97 0.004 95) / shelf #5c5550. */
+  --brand-cream: oklch(0.995 0.0015 255);
+  --brand-paper: oklch(0.975 0.003 255);
+  --brand-shelf: oklch(0.52 0.008 255);
   --brand-sage: oklch(0.94 0.025 145);
 
   /* Crisp elevation ("chunky" tokens repurposed, 2026-06-12 Linear/Figma-style
@@ -173,7 +174,7 @@
     0 8px 24px -6px oklch(from var(--brand-foreground) l c h / 0.16);
   /* Border for signature chrome - a hairline a step darker than --border so
      primary surfaces still read defined, just not outlined. */
-  --border-chunky: oklch(0.86 0.01 75);
+  --border-chunky: oklch(0.87 0.005 255);
 
   /* Core colors - 3-step surface elevation: muted < paper(bg) < cream(card) */
   --background: var(--brand-paper);
@@ -187,18 +188,19 @@
   --primary: var(--brand-terracotta);
   --primary-foreground: var(--brand-cream);
 
-  /* Secondary - Warm sage green (Gallery: slightly desaturated) */
-  --secondary: oklch(0.945 0.018 145);
-  --secondary-foreground: oklch(0.35 0.04 145);
+  /* Secondary - cool-neutral chip (was warm sage green; neutralized in the
+     2026-06-14 cool refresh so secondary buttons/badges read as quiet neutral,
+     not the one green element against the cool surfaces) */
+  --secondary: oklch(0.93 0.005 255);
+  --secondary-foreground: oklch(0.37 0.01 255);
 
-  /* Muted - light warm-neutral (Gallery: chroma pulled toward neutral) */
-  --muted: oklch(0.95 0.006 75);
+  /* Muted - light cool-neutral surface */
+  --muted: oklch(0.955 0.004 255);
   --muted-foreground: var(--brand-shelf);
 
-  /* Accent - neutral hover/focus wash (Gallery refresh: was terra-light
-     orange; color is now reserved for selection/active, not hover. Semantic
-     orange moved to --warning). --accent-foreground stays the ink. */
-  --accent: oklch(0.945 0.007 75);
+  /* Accent - neutral hover/focus wash (color is reserved for selection/active,
+     not hover; semantic orange lives in --warning). --accent-foreground = ink. */
+  --accent: oklch(0.95 0.004 255);
   --accent-foreground: var(--brand-foreground);
 
   /* Warning - the reserved semantic orange (was carried by --accent) */
@@ -208,23 +210,24 @@
   --destructive: oklch(0.45 0.18 15);
   --destructive-foreground: var(--brand-cream);
 
-  /* Borders and inputs (Gallery: lighter, more neutral) */
-  --border: oklch(0.9 0.008 75);
-  --input: oklch(0.95 0.006 75);
+  /* Borders and inputs - cool-neutral hairlines */
+  --border: oklch(0.91 0.004 255);
+  --input: oklch(0.955 0.004 255);
   /* Checkbox border - a clearly visible mid-gray so unchecked boxes read as
-     empty controls against cream/pink rows (--input hairline was invisible) */
-  --checkbox-border: oklch(0.78 0.012 75);
+     empty controls against the surfaces (--input hairline was invisible) */
+  --checkbox-border: oklch(0.79 0.006 255);
   --ring: var(--brand-terracotta);
 
-  /* Selected table-row tint - warm but quiet (replaces hardcoded oklch tints
-     in Table.tsx + table.tsx) */
+  /* Selected table-row tint - kept a faint terracotta on purpose: the surfaces
+     went cool-neutral but selection is the one place warmth = signal, so it
+     still reads as "this row is active" (paired with the terracotta row spine). */
   --row-selected: oklch(0.955 0.012 50);
 
   /* Extended palette */
-  /* Eyebrow - warm mid-brown for mono uppercase micro-labels (page-hero
-     eyebrows, table column headers, stat-card labels). Sits between
-     terracotta and shelf so labels read warm but stay quiet. */
-  --eyebrow: oklch(0.52 0.045 60);
+  /* Eyebrow - cool-neutral gray for mono uppercase micro-labels (page-hero
+     eyebrows, table column headers, stat-card labels). A step lighter than the
+     ink so labels recede and stay quiet. */
+  --eyebrow: oklch(0.55 0.012 255);
   --highlight: var(--brand-terracotta);
   --subtle: oklch(0.65 0.08 90); /* Warm olive */
   --glow: var(--brand-terra-light);
@@ -272,9 +275,9 @@
   --sidebar-foreground: var(--brand-foreground);
   --sidebar-primary: var(--brand-terracotta);
   --sidebar-primary-foreground: var(--brand-cream);
-  --sidebar-accent: oklch(0.95 0.006 75);
+  --sidebar-accent: oklch(0.955 0.004 255);
   --sidebar-accent-foreground: var(--brand-foreground);
-  --sidebar-border: oklch(0.9 0.008 75);
+  --sidebar-border: oklch(0.91 0.004 255);
   --sidebar-ring: var(--brand-terracotta);
 }
 /*
@@ -434,7 +437,7 @@
     @apply transition-all duration-150;
   }
   .table-row-hover:hover {
-    background: oklch(0.96 0.005 90);
+    background: oklch(0.965 0.003 255);
     box-shadow: inset 3px 0 0 var(--row-accent, var(--brand-terracotta));
   }
 

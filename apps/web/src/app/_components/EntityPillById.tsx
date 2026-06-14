@@ -39,6 +39,12 @@ export function EntityPillById({
         return trpc.recipe.getByID.queryOptions({ id: entityId });
       case "ingredient":
         return trpc.ingredient.getByID.queryOptions({ id: entityId });
+      default:
+        // AuditEntityType is the six cases above, but audit rows can carry a
+        // runtime entityType outside that union (legacy/other-domain entries).
+        // Return a valid (skipped) query so useQuery never receives undefined
+        // — v5 throws "only the Object form is allowed" on a non-object arg.
+        return { queryKey: ["invalid"] as const, queryFn: skipToken };
     }
   }, [entityType, entityId, trpc]);
 
@@ -68,7 +74,13 @@ export function EntityPillById({
     );
   }
 
-  if (query.isLoading) {
+  const isFetchable =
+    entityType === "product" ||
+    entityType === "location" ||
+    entityType === "recipe" ||
+    entityType === "ingredient";
+
+  if (isFetchable && query.isLoading) {
     return <Spinner className="text-muted-foreground" />;
   }
 
@@ -82,10 +94,12 @@ export function EntityPillById({
     );
   }
 
-  // Fallback for errors or missing data (entity might have been deleted)
+  // A fetchable type with no data → the entity was deleted. Any other type
+  // (an audit row carrying an entityType outside our union) → just label it.
   return (
     <span className="text-muted-foreground text-sm italic">
-      {entityType} (deleted)
+      {entityType}
+      {isFetchable ? " (deleted)" : ""}
     </span>
   );
 }
