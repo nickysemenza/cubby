@@ -6,6 +6,10 @@ import { EntityPillLink } from "~/app/_components/EntityPill";
 import { LocationTypeBadge } from "~/app/_components/locations/LocationTypeBadge";
 import { NoneState } from "~/app/_components/NoneState";
 import { CategoryBadge } from "~/app/_components/products/CategoryBadge";
+import {
+  DistributionGlyph,
+  StripPlotCell,
+} from "~/app/_components/recipe/compare/DeviationBar";
 import { DecompositionView } from "~/app/_components/recipe/decomposition-view";
 import { RecipeTag } from "~/app/_components/recipe/recipe-tag";
 import { ImageStatusBadge } from "~/app/_components/table/StatusBadge";
@@ -315,6 +319,74 @@ export function DesignGallery() {
                   {part}
                 </span>
               ))}
+            </span>
+          </Row>
+        </div>
+      </GallerySection>
+
+      <GallerySection
+        title="Comparison glyphs"
+        source="components/recipe/compare/DeviationBar"
+      >
+        <div className="space-y-3">
+          <Row label="Strip · μ75 of 100">
+            {[
+              { v: 0, isMax: true },
+              { v: 60, isMax: false },
+              { v: 75, isMax: false },
+              { v: 90, isMax: false },
+              { v: 100, isMax: false },
+            ].map((d) => (
+              <div key={d.v} className="w-32">
+                <span
+                  className={`font-mono text-sm tabular-nums ${d.isMax ? "font-medium" : ""}`}
+                  style={d.isMax ? { color: "var(--primary)" } : undefined}
+                >
+                  {d.v}%
+                </span>
+                <StripPlotCell
+                  value={d.v}
+                  mean={75}
+                  max={100}
+                  isMax={d.isMax}
+                />
+              </div>
+            ))}
+          </Row>
+          <Row label="Tight cluster">
+            {[80, 89, 59, 87].map((v) => (
+              <div key={v} className="w-32">
+                <span
+                  className={`font-mono text-sm tabular-nums ${v === 59 ? "font-medium" : ""}`}
+                  style={v === 59 ? { color: "var(--primary)" } : undefined}
+                >
+                  {v}%
+                </span>
+                <StripPlotCell value={v} mean={79} max={89} isMax={v === 59} />
+              </div>
+            ))}
+          </Row>
+          <Row label="Distribution">
+            <div className="w-40">
+              <span className="font-medium font-mono text-sm tabular-nums">
+                75%
+              </span>
+              <DistributionGlyph mean={75} min={0} max={100} std={43} />
+            </div>
+            <div className="w-40">
+              <span className="font-medium font-mono text-sm tabular-nums">
+                79%
+              </span>
+              <DistributionGlyph mean={79} min={59} max={89} std={12} />
+            </div>
+          </Row>
+          <Row label="Legend">
+            <span className="flex items-center gap-1.5 text-muted-foreground text-xs">
+              <span
+                className="inline-block size-2 rounded-full"
+                style={{ backgroundColor: "var(--primary)" }}
+              />
+              largest deviation from average
             </span>
           </Row>
         </div>
