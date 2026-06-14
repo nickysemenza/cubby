@@ -11,11 +11,9 @@ import type {
   ProductNotFoundResponse,
 } from "../schemas/product";
 import type { Product } from "../db/schema";
+import { UPC_REGEX } from "../util/upc";
 
 const lookup = new Hono<{ Bindings: Env }>();
-
-// UPC validation regex (8, 12, 13, or 14 digits)
-const UPC_REGEX = /^\d{8}$|^\d{12,14}$/;
 
 // Per-request cap on background first-try external lookups. With negative
 // caching each UPC is tried at most once, so this only paces the one-time

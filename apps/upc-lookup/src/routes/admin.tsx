@@ -22,11 +22,10 @@ import {
   flashFromQuery,
   withFlash,
 } from "../admin/layout";
+import { UPC_REGEX } from "../util/upc";
 
 const admin = new Hono<{ Bindings: Env }>();
 
-// UPC validation regex (8, 12, 13, or 14 digits) — matches routes/lookup.ts
-const UPC_REGEX = /^\d{8}$|^\d{12,14}$/;
 const PAGE_SIZE = 25;
 
 function formatUSD(dollars: number | null): string {

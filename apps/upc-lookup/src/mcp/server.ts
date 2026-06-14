@@ -15,8 +15,7 @@ import { resolveProduct } from "../services/products";
 import { lookupExternalProduct } from "../api";
 import { getStats } from "../routes/stats";
 import { storeImage, getImageUrl } from "../storage/images";
-
-const UPC_REGEX = /^\d{8}$|^\d{12,14}$/;
+import { UPC_REGEX } from "../util/upc";
 
 /** Wrap MCP responses in the text-content envelope the protocol expects. */
 function json(data: unknown) {
