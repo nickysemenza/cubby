@@ -1247,11 +1247,26 @@ fn ranged_amount_yields_ranged_totals() {
     );
 
     assert_close(r.price, 2.0, 0.005, "price lower");
-    assert_close(r.price_upper.expect("price ranged"), 3.0, 0.005, "price upper");
+    assert_close(
+        r.price_upper.expect("price ranged"),
+        3.0,
+        0.005,
+        "price upper",
+    );
     assert_close(r.weight, 200.0, 0.5, "weight lower");
-    assert_close(r.weight_upper.expect("weight ranged"), 300.0, 0.5, "weight upper");
+    assert_close(
+        r.weight_upper.expect("weight ranged"),
+        300.0,
+        0.5,
+        "weight upper",
+    );
     assert_close(nutrient(&r, "208"), 728.0, 1.0, "kcal lower");
-    assert_close(nutrient_upper(&r, "208").expect("kcal ranged"), 1092.0, 1.0, "kcal upper");
+    assert_close(
+        nutrient_upper(&r, "208").expect("kcal ranged"),
+        1092.0,
+        1.0,
+        "kcal upper",
+    );
 }
 
 #[test]
@@ -1263,8 +1278,15 @@ fn point_amount_leaves_totals_unranged() {
         vec![],
     );
     assert!(r.price_upper.is_none(), "price_upper: {:?}", r.price_upper);
-    assert!(r.weight_upper.is_none(), "weight_upper: {:?}", r.weight_upper);
-    assert!(nutrient_upper(&r, "208").is_none(), "kcal upper should be absent");
+    assert!(
+        r.weight_upper.is_none(),
+        "weight_upper: {:?}",
+        r.weight_upper
+    );
+    assert!(
+        nutrient_upper(&r, "208").is_none(),
+        "kcal upper should be absent"
+    );
 }
 
 #[test]
@@ -1283,7 +1305,12 @@ fn partial_range_sums_lower_and_upper_independently() {
         vec![],
     );
     assert_close(r.price, 3.0, 0.005, "price lower 2+1");
-    assert_close(r.price_upper.expect("price ranged"), 4.0, 0.005, "price upper 3+1");
+    assert_close(
+        r.price_upper.expect("price ranged"),
+        4.0,
+        0.005,
+        "price upper 3+1",
+    );
 }
 
 #[test]
@@ -1302,5 +1329,10 @@ fn ranged_sub_recipe_rolls_up_scaled() {
         vec![dough],
     );
     assert_close(r.price, 4.0, 0.01, "parent price lower 2×2");
-    assert_close(r.price_upper.expect("price ranged"), 6.0, 0.01, "parent price upper 2×3");
+    assert_close(
+        r.price_upper.expect("price ranged"),
+        6.0,
+        0.01,
+        "parent price upper 2×3",
+    );
 }
