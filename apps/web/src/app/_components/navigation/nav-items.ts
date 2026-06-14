@@ -3,9 +3,11 @@ import {
   AlertTriangle,
   BookOpen,
   Camera,
+  FileText,
   Hammer,
   Home,
   LayoutDashboard,
+  Palette,
   ScanBarcode,
   Search,
   Settings,
@@ -37,7 +39,7 @@ const captureShelf: NavItem = {
   isActive: (p) => p.startsWith("/capture"),
 };
 
-const inventory: NavItem = {
+export const inventory: NavItem = {
   href: "/inventory",
   label: "Inventory",
   icon: entities.inventory.lucideIcon,
@@ -45,7 +47,7 @@ const inventory: NavItem = {
     p.startsWith("/inventory") && p !== "/inventory/quick-capture",
 };
 
-const locations: NavItem = {
+export const locations: NavItem = {
   href: "/locations",
   label: "Locations",
   icon: entities.location.lucideIcon,
@@ -89,14 +91,14 @@ const search: NavItem = {
   isActive: (p) => p.startsWith("/search"),
 };
 
-const products: NavItem = {
+export const products: NavItem = {
   href: "/products",
   label: "Products",
   icon: entities.product.lucideIcon,
   isActive: (p) => p.startsWith("/products"),
 };
 
-const home: NavItem = {
+export const home: NavItem = {
   href: "/",
   label: "Home",
   icon: Home,
@@ -152,7 +154,7 @@ const images: NavItem = {
   isActive: (p) => p.startsWith("/images"),
 };
 
-const projects: NavItem = {
+export const projects: NavItem = {
   href: "/projects",
   label: "Projects",
   icon: Hammer,
@@ -166,7 +168,26 @@ const settings: NavItem = {
   isActive: (pathname) => pathname.startsWith("/settings"),
 };
 
+// Public routes reachable without signing in (see _authenticated layout guard).
+export const docs: NavItem = {
+  href: "/docs",
+  label: "Docs",
+  icon: FileText,
+  isActive: (p) => p.startsWith("/docs"),
+};
+
+export const design: NavItem = {
+  href: "/design",
+  label: "Design",
+  icon: Palette,
+  isActive: (p) => p.startsWith("/design"),
+};
+
 // Export groupings for consumers
+
+// Shown in the navbar when signed out — only routes that don't require auth.
+export const publicNavItems: NavItem[] = [home, docs, design];
+
 export const bottomNavItems: NavItem[] = [
   scan,
   inventory,
