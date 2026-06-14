@@ -9,13 +9,18 @@ import type { SummaryItem } from "~/app/_components/SummaryCard";
 import { Badge } from "~/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { StatGrid, StatTile } from "~/components/ui/stat-tile";
+import { formatNumberRange } from "~/lib/format-range";
 import { formatCurrency } from "~/lib/utils";
 
 // Zod schemas for summary data types
 const recipeSummaryDataSchema = z.object({
   price: z.number(),
+  priceUpper: z.number().optional(),
   weight: z.number(),
+  weightUpper: z.number().optional(),
   nutrients: z.record(z.string(), z.number()),
+  /** Parallel upper-bound record (only ranged codes), for min–max display. */
+  nutrientsUpper: z.record(z.string(), z.number()).optional(),
   totalIngredients: z.number(),
   missingByType: z.object({
     price: z.array(z.string()),
@@ -102,20 +107,27 @@ const formatRecipeSummary = (data: RecipeSummaryData): SummaryItem[] => {
     total: number,
     unit: string,
     prefix = "",
+    upper?: number,
   ): SummaryItem => {
     const successCount = total - missingCount;
     if (successCount === 0) {
       return { label, value: "No data available" };
     }
+    const fmt = (n: number) => format(n, unit, prefix);
+    const divisor = data.perServing?.divisor;
     return {
       label,
-      value: format(value, unit, prefix),
+      value: formatNumberRange(value, upper, fmt),
       caption:
         successCount === total
           ? undefined
           : `${successCount}/${total} ingredients`,
       subValue: data.perServing
-        ? `${format(value / data.perServing.divisor, unit, prefix)} ${perUnitSuffix(data.perServing.noun)}`
+        ? `${formatNumberRange(
+            value / divisor!,
+            upper != null ? upper / divisor! : undefined,
+            fmt,
+          )} ${perUnitSuffix(data.perServing.noun)}`
         : undefined,
     };
   };
@@ -132,6 +144,7 @@ const formatRecipeSummary = (data: RecipeSummaryData): SummaryItem[] => {
       data.totalIngredients,
       "",
       "$",
+      head.costUpper,
     ),
     buildMetric(
       "Total Weight",
@@ -139,6 +152,8 @@ const formatRecipeSummary = (data: RecipeSummaryData): SummaryItem[] => {
       data.missingByType.weight.length,
       data.totalIngredients,
       "g",
+      "",
+      head.weightUpper,
     ),
     buildMetric(
       "Total Calories",
@@ -146,6 +161,8 @@ const formatRecipeSummary = (data: RecipeSummaryData): SummaryItem[] => {
       nutrientsMissing,
       data.totalIngredients,
       " kcal",
+      "",
+      head.caloriesUpper,
     ),
     buildMetric(
       "Total Protein",
@@ -153,6 +170,8 @@ const formatRecipeSummary = (data: RecipeSummaryData): SummaryItem[] => {
       nutrientsMissing,
       data.totalIngredients,
       "g",
+      "",
+      head.proteinUpper,
     ),
   ];
 };

@@ -15,8 +15,11 @@ const fresh = (
 });
 
 describe("amountsEqual", () => {
-  type Amounts = { value: number; unit: string; upper_value?: number }[];
-  const CASES: { name: string; a: Amounts; b: Amounts; expected: boolean }[] = [
+  // `a` is persisted (Amount, camel `upperValue`); `b` is the fresh parse
+  // (WAmount, snake `upper_value`).
+  type Persisted = { value: number; unit: string; upperValue?: number }[];
+  type Fresh = { value: number; unit: string; upper_value?: number }[];
+  const CASES: { name: string; a: Persisted; b: Fresh; expected: boolean }[] = [
     {
       name: "equal value + unit",
       a: [{ value: 1, unit: "clove" }],
@@ -48,10 +51,22 @@ describe("amountsEqual", () => {
       expected: false,
     },
     {
-      name: "ignores upper_value (never persisted)",
-      a: [{ value: 2, unit: "clove" }],
+      name: "matching range upper bound is equal",
+      a: [{ value: 2, unit: "clove", upperValue: 3 }],
       b: [{ value: 2, unit: "clove", upper_value: 3 }],
       expected: true,
+    },
+    {
+      name: "legacy row missing the upper bound drifts",
+      a: [{ value: 2, unit: "clove" }],
+      b: [{ value: 2, unit: "clove", upper_value: 3 }],
+      expected: false,
+    },
+    {
+      name: "differing upper bound drifts",
+      a: [{ value: 2, unit: "clove", upperValue: 4 }],
+      b: [{ value: 2, unit: "clove", upper_value: 3 }],
+      expected: false,
     },
   ];
 

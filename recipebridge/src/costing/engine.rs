@@ -122,7 +122,9 @@ impl From<Measure> for MeasureVal {
 }
 
 type MeasureRes = Result<MeasureVal, String>;
-type NutrientsRes = Result<Vec<(String, f64)>, String>;
+/// Per-nutrient `(code, lower, upper)` — `upper` is `Some` only when the amount
+/// resolved to a range (a ranged written amount, or a ranged sub-recipe rate).
+type NutrientsRes = Result<Vec<(String, f64, Option<f64>)>, String>;
 
 /// Price, weight, and nutrient results for one row (the old IngredientPriceInfo).
 #[derive(Clone, Debug)]
@@ -158,9 +160,18 @@ fn scale_nutrients(r: &NutrientsRes, fraction: f64) -> NutrientsRes {
     match r {
         Ok(entries) => Ok(entries
             .iter()
-            .map(|(code, v)| (code.clone(), v * fraction))
+            .map(|(code, v, u)| (code.clone(), v * fraction, u.map(|x| x * fraction)))
             .collect()),
         Err(e) => Err(e.clone()),
+    }
+}
+
+/// Build a measure carrying an optional range upper bound (the sub-recipe rate
+/// edges and any ranged total). Collapses a degenerate/absent upper to a point.
+fn measure_with_optional_upper(unit: &str, value: f64, upper: Option<f64>) -> Measure {
+    match upper {
+        Some(u) if u > value => Measure::with_range(unit, value, u),
+        _ => Measure::new(unit, value),
     }
 }
 
@@ -182,9 +193,10 @@ fn to_nutrients_result(r: &NutrientsRes) -> WNutrientsResult {
             ok: true,
             entries: entries
                 .iter()
-                .map(|(code, value)| WNutrientAmount {
+                .map(|(code, value, upper)| WNutrientAmount {
                     code: code.clone(),
                     value: *value,
+                    upper_value: *upper,
                 })
                 .collect(),
         }),
@@ -221,12 +233,17 @@ impl IngredientCtx {
     }
 }
 
-/// A costed sub-recipe's totals, the inputs to its yield mappings.
+/// A costed sub-recipe's totals, the inputs to its yield mappings. Uppers are
+/// `Some` only when the sub-recipe itself contains a ranged amount, in which
+/// case the yield mapping edge becomes a range and the parent's conversion
+/// rolls it up scaled (the unit graph multiplies the interval by the factor).
 #[derive(Clone)]
 struct SubTotals {
     price: f64,
+    price_upper: Option<f64>,
     weight: f64,
-    nutrients: Vec<(String, f64)>,
+    weight_upper: Option<f64>,
+    nutrients: Vec<(String, f64, Option<f64>)>,
 }
 
 pub(crate) struct Engine<'a> {
@@ -321,20 +338,20 @@ impl<'a> Engine<'a> {
         let weight = conv(MeasureKind::Weight);
         let calories = conv(MeasureKind::Calories);
 
-        let mut entries: Vec<(String, f64)> = Vec::new();
+        let mut entries: Vec<(String, f64, Option<f64>)> = Vec::new();
         let mut kcal_code: Option<&str> = None;
         for t in &self.targets {
             match &t.kind {
                 MeasureKind::Calories => kcal_code = Some(&t.code),
                 kind => {
                     if let Some(c) = conv(kind.clone()) {
-                        entries.push((t.code.clone(), c.value()));
+                        entries.push((t.code.clone(), c.value(), c.upper_value()));
                     }
                 }
             }
         }
         if let (Some(code), Some(c)) = (kcal_code, &calories) {
-            entries.push((code.to_string(), c.value()));
+            entries.push((code.to_string(), c.value(), c.upper_value()));
         }
 
         Trio {
@@ -399,11 +416,13 @@ impl<'a> Engine<'a> {
                 let out = self.cost_recipe_inner(sub, &v, false, &mut sub_taint);
                 let t = SubTotals {
                     price: out.price,
+                    price_upper: out.price_upper,
                     weight: out.weight,
+                    weight_upper: out.weight_upper,
                     nutrients: out
                         .nutrients
                         .into_iter()
-                        .map(|n| (n.code, n.value))
+                        .map(|n| (n.code, n.value, n.upper_value))
                         .collect(),
                 };
                 if sub_taint {
@@ -419,14 +438,27 @@ impl<'a> Engine<'a> {
 
         let yield_measure = recipe_yield.to_measure();
         let mut pairs = vec![
-            (yield_measure.clone(), Measure::new("dollar", totals.price)),
-            (yield_measure.clone(), Measure::new("g", totals.weight)),
+            (
+                yield_measure.clone(),
+                measure_with_optional_upper("dollar", totals.price, totals.price_upper),
+            ),
+            (
+                yield_measure.clone(),
+                measure_with_optional_upper("g", totals.weight, totals.weight_upper),
+            ),
         ];
         // One mapping per nutrient present in the sub totals, in target order
-        // (the kcal target's unit is "kcal", matching the calories path).
+        // (the kcal target's unit is "kcal", matching the calories path). A
+        // ranged sub total makes the edge a range, which the parent conversion
+        // scales and propagates.
         for t in &self.targets {
-            if let Some((_, value)) = totals.nutrients.iter().find(|(code, _)| *code == t.code) {
-                pairs.push((yield_measure.clone(), Measure::new(&t.unit, *value)));
+            if let Some((_, value, upper)) =
+                totals.nutrients.iter().find(|(code, ..)| *code == t.code)
+            {
+                pairs.push((
+                    yield_measure.clone(),
+                    measure_with_optional_upper(&t.unit, *value, *upper),
+                ));
             }
         }
         Some(pairs)
@@ -584,8 +616,15 @@ impl<'a> Engine<'a> {
         let planned = classify_planned_rows(recipe);
 
         let mut total_price = 0.0_f64;
+        let mut total_price_upper = 0.0_f64;
+        let mut any_price_upper = false;
         let mut total_weight = 0.0_f64;
-        let mut total_nutrients: Vec<(String, f64)> = Vec::new();
+        let mut total_weight_upper = 0.0_f64;
+        let mut any_weight_upper = false;
+        // (code, lower, upper, any_upper): the upper total sums (upper ?? lower)
+        // so a partially-ranged recipe gives [Σlower, Σupper]; any_upper marks
+        // whether any contributor was ranged (else the upper is dropped on output).
+        let mut total_nutrients: Vec<(String, f64, f64, bool)> = Vec::new();
         let mut missing = WMissingByType {
             price: Vec::new(),
             weight: Vec::new(),
@@ -596,19 +635,32 @@ impl<'a> Engine<'a> {
         // missingByType (display names, in resolution order).
         let mut fold = |trio: &Trio, name: &str| {
             match &trio.price {
-                Ok(v) => total_price += v.value,
+                Ok(v) => {
+                    total_price += v.value;
+                    total_price_upper += v.upper.unwrap_or(v.value);
+                    any_price_upper |= v.upper.is_some();
+                }
                 Err(_) => missing.price.push(name.to_string()),
             }
             match &trio.gram {
-                Ok(v) => total_weight += v.value,
+                Ok(v) => {
+                    total_weight += v.value;
+                    total_weight_upper += v.upper.unwrap_or(v.value);
+                    any_weight_upper |= v.upper.is_some();
+                }
                 Err(_) => missing.weight.push(name.to_string()),
             }
             match &trio.nutrients {
                 Ok(entries) => {
-                    for (code, v) in entries {
-                        match total_nutrients.iter_mut().find(|(c, _)| c == code) {
-                            Some((_, acc)) => *acc += v,
-                            None => total_nutrients.push((code.clone(), *v)),
+                    for (code, lo, hi) in entries {
+                        let upper = hi.unwrap_or(*lo);
+                        match total_nutrients.iter_mut().find(|(c, ..)| c == code) {
+                            Some((_, acc_lo, acc_hi, acc_any)) => {
+                                *acc_lo += lo;
+                                *acc_hi += upper;
+                                *acc_any |= hi.is_some();
+                            }
+                            None => total_nutrients.push((code.clone(), *lo, upper, hi.is_some())),
                         }
                     }
                 }
@@ -704,10 +756,16 @@ impl<'a> Engine<'a> {
         WRecipeCosting {
             recipe_id: recipe.id.clone(),
             price: total_price,
+            price_upper: any_price_upper.then_some(total_price_upper),
             weight: total_weight,
+            weight_upper: any_weight_upper.then_some(total_weight_upper),
             nutrients: total_nutrients
                 .into_iter()
-                .map(|(code, value)| WNutrientAmount { code, value })
+                .map(|(code, value, upper, any)| WNutrientAmount {
+                    code,
+                    value,
+                    upper_value: any.then_some(upper),
+                })
                 .collect(),
             total_ingredients: n as u32,
             missing_by_type: missing,

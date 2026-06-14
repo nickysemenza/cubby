@@ -628,8 +628,15 @@ const findStaleIngredientParses = async (
       parsedName: fresh.name,
       nameDrift: drift.name !== null,
       storedAmounts: row.storedAmounts,
+      // Carry the range upper bound (parser WAmount snake → persisted Amount
+      // camel) so Re-parse All actually resolves range drift instead of
+      // re-flagging the row forever.
       parsedAmounts: drift.amounts
-        ? drift.amounts.map((a) => ({ value: a.value, unit: a.unit }))
+        ? drift.amounts.map((a) => ({
+            value: a.value,
+            unit: a.unit,
+            ...(a.upper_value != null ? { upperValue: a.upper_value } : {}),
+          }))
         : [],
       amountDrift: drift.amounts !== null,
       storedModifier: row.storedModifier,

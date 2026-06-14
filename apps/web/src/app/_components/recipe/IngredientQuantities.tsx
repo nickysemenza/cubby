@@ -63,7 +63,10 @@ export function buildDisplayQuantities(
   const written: DisplayQuantity[] = ing.amounts
     .filter(isCookingQuantity)
     .map((a) => ({
-      text: wasm.format_amount(a),
+      // tryFormatAmount (not wasm.format_amount directly) so a persisted Amount's
+      // camel `upperValue` is mapped to the WASM's snake `upper_value` and ranges
+      // render ("1 - 2 tsp"). format_amount alone would drop the bound.
+      text: tryFormatAmount(a),
       derived: false,
       estimated: false,
     }));

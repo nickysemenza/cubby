@@ -49,11 +49,24 @@ export const showAmountAndPrice = (
  * Safely formats a measure, returning error string on failure.
  * Re-attaches "each" - WASM renders bare counts (Unit::Whole) unit-less.
  */
-export const tryFormatAmount = (amount: ReadonlyDeep<WAmount>): string => {
+export const tryFormatAmount = (
+  // Accepts both the engine's WAmount (snake `upper_value`) and the persisted
+  // Amount (camel `upperValue`) so the written-amount cell and the resolved
+  // cost/weight cells both render ranges ("2 - 3 cup").
+  amount: ReadonlyDeep<{
+    value: number;
+    unit: string;
+    upper_value?: number;
+    upperValue?: number;
+  }>,
+): string => {
   try {
-    // Copy to a mutable WAmount: `amount` may be a frozen/readonly cached value,
-    // and format_amount's generated signature takes a mutable WAmount.
-    const formatted = wasm.format_amount({ ...amount });
+    const upper = amount.upper_value ?? amount.upperValue;
+    const formatted = wasm.format_amount({
+      value: amount.value,
+      unit: amount.unit,
+      ...(upper != null ? { upper_value: upper } : {}),
+    });
     // "each" parses to Unit::Whole, which renders unit-less ("3", "2 - 4");
     // re-attach the user's "each" so it stays visible ("3 each", "2 - 4 each").
     if (amount.unit === "each") {

@@ -3,9 +3,9 @@ import {
   getNutrientValueByKey,
   type NutrientsPer100,
 } from "@cubby/usda-schemas";
+import { formatCurrencyRange, formatNumberRange } from "~/lib/format-range";
 import type { CalculateTotalsResult } from "~/lib/recipe-costing";
 import { getRecipeIngredientName } from "~/lib/recipe-graph";
-import { formatCurrency } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
 
 /** The four headline figures every recipe-summary surface shows (table, charts,
@@ -15,20 +15,39 @@ import { wasm } from "~/lib/wasm";
  * table card's RecipeSummaryData works as well as a CalculateTotalsResult. */
 export type RecipeHeadlineTotals = {
   cost: number;
+  costUpper?: number;
   weight: number;
+  weightUpper?: number;
   calories: number;
+  caloriesUpper?: number;
   protein: number;
+  proteinUpper?: number;
 };
+
+// Range upper bound for a nutrient, or undefined when not ranged (a 0 from an
+// absent code is meaningless, so collapse it).
+const upperNutrient = (
+  rec: NutrientsPer100 | undefined,
+  key: Parameters<typeof getNutrientValueByKey>[1],
+): number | undefined =>
+  rec ? getNutrientValueByKey(rec, key) || undefined : undefined;
 
 export const recipeHeadlineTotals = (t: {
   price: number;
+  priceUpper?: number;
   weight: number;
+  weightUpper?: number;
   nutrients: NutrientsPer100;
+  nutrientsUpper?: NutrientsPer100;
 }): RecipeHeadlineTotals => ({
   cost: t.price,
+  costUpper: t.priceUpper,
   weight: t.weight,
+  weightUpper: t.weightUpper,
   calories: getNutrientValueByKey(t.nutrients, "kcal"),
+  caloriesUpper: upperNutrient(t.nutrientsUpper, "kcal"),
   protein: getNutrientValueByKey(t.nutrients, "protein"),
+  proteinUpper: upperNutrient(t.nutrientsUpper, "protein"),
 });
 
 /**
@@ -105,20 +124,26 @@ export function buildRecipeKicker(
   if (opts) {
     const head = recipeHeadlineTotals(opts.totals);
     const { basis } = opts;
+    // Per-portion division is linear, so divide both range bounds by the same
+    // divisor (an absent upper stays absent → renders one number).
+    const per = (n: number) => (basis ? n / basis.divisor : n);
+    const perUpper = (u: number | undefined) =>
+      u != null ? per(u) : undefined;
+    const round = (n: number) => `${Math.round(n)}`;
     parts.push(
       head.cost && basis
-        ? `${formatCurrency(head.cost / basis.divisor)} ${perUnitSuffix(basis.noun)}`
+        ? `${formatCurrencyRange(per(head.cost), perUpper(head.costUpper))} ${perUnitSuffix(basis.noun)}`
         : head.cost
-          ? `${formatCurrency(head.cost)} total`
+          ? `${formatCurrencyRange(head.cost, head.costUpper)} total`
           : null,
       head.calories && basis
-        ? `${Math.round(head.calories / basis.divisor)} kcal ${perUnitSuffix(basis.noun)}`
+        ? `${formatNumberRange(per(head.calories), perUpper(head.caloriesUpper), round)} kcal ${perUnitSuffix(basis.noun)}`
         : null,
       head.protein && basis
-        ? `${Math.round(head.protein / basis.divisor)}g protein ${perUnitSuffix(basis.noun)}`
+        ? `${formatNumberRange(per(head.protein), perUpper(head.proteinUpper), round)}g protein ${perUnitSuffix(basis.noun)}`
         : null,
       head.weight && basis
-        ? `${Math.round(head.weight / basis.divisor)}g ${perUnitSuffix(basis.noun)}`
+        ? `${formatNumberRange(per(head.weight), perUpper(head.weightUpper), round)}g ${perUnitSuffix(basis.noun)}`
         : null,
     );
   }

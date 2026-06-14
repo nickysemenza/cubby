@@ -6,8 +6,8 @@ import { createColumnHelper } from "@tanstack/react-table";
 import { BookOpen, ExternalLink, Scale } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef } from "react";
 import { Skeleton } from "~/components/ui/skeleton";
+import { formatCurrencyRange, formatNumberRange } from "~/lib/format-range";
 import { queryKeys } from "~/lib/query-keys";
-import { formatCurrency } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import RTable from "../_components/data-table/Table";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
@@ -173,11 +173,16 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
                 covered={totals.costCovered}
                 total={totals.ingredientCount}
               >
-                {formatCurrency(totals.costTotal)}
+                {formatCurrencyRange(totals.costTotal, totals.costTotalUpper)}
               </CoverageValue>
               {perItem && (
                 <div className="text-2xs text-muted-foreground">
-                  {formatCurrency(totals.costTotal / perItem.divisor)}{" "}
+                  {formatCurrencyRange(
+                    totals.costTotal / perItem.divisor,
+                    totals.costTotalUpper != null
+                      ? totals.costTotalUpper / perItem.divisor
+                      : undefined,
+                  )}{" "}
                   {perItem.noun === "each" ? "ea" : `/ ${perItem.noun}`}
                 </div>
               )}
@@ -206,12 +211,23 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
                 covered={totals.caloriesCovered}
                 total={totals.ingredientCount}
               >
-                {Math.round(totals.caloriesTotal)} kcal
+                {formatNumberRange(
+                  totals.caloriesTotal,
+                  totals.caloriesTotalUpper,
+                  (n) => `${Math.round(n)}`,
+                )}{" "}
+                kcal
               </CoverageValue>
               {perItem && (
                 <div className="text-2xs text-muted-foreground">
-                  {Math.round(totals.caloriesTotal / perItem.divisor)} kcal{" "}
-                  {perItem.noun === "each" ? "ea" : `/ ${perItem.noun}`}
+                  {formatNumberRange(
+                    totals.caloriesTotal / perItem.divisor,
+                    totals.caloriesTotalUpper != null
+                      ? totals.caloriesTotalUpper / perItem.divisor
+                      : undefined,
+                    (n) => `${Math.round(n)}`,
+                  )}{" "}
+                  kcal {perItem.noun === "each" ? "ea" : `/ ${perItem.noun}`}
                 </div>
               )}
             </div>

@@ -1,5 +1,6 @@
 import { ExternalLink, MoreVertical, Plus, Trash } from "lucide-react";
 import type { FC, KeyboardEvent } from "react";
+import { useState } from "react";
 import { Controller, type UseFormReturn, useFieldArray } from "react-hook-form";
 import { Button } from "~/components/ui/button";
 import {
@@ -11,6 +12,7 @@ import {
 } from "~/components/ui/dropdown-menu";
 import { Input } from "~/components/ui/input";
 import { QuantityInput } from "~/components/ui/quantity-input";
+import { cn } from "~/lib/utils";
 import {
   WithIngredientSearch,
   WithRecipeSearch,
@@ -39,14 +41,25 @@ const newRow = (type: IngItem["type"]): IngItem =>
         amounts: [{ value: null, unit: "" }],
       };
 
-/** Bare qty/unit inputs for one amount — no labels, ledger-row density. */
+/** Bare qty/unit inputs for one amount — no labels, ledger-row density. The
+ * optional "to" (upper-bound) input renders only when `showUpper` is set, so the
+ * common single-amount case stays a clean qty/unit pair; the caller reveals it
+ * via the row menu (or when a range was already entered). */
 const AmountInputs: FC<{
   form: UseFormReturn<RecipeFormValues>;
   sectionIndex: number;
   ingredientIndex: number;
   amountIndex: number;
+  showUpper: boolean;
   onEnter?: () => void;
-}> = ({ form, sectionIndex, ingredientIndex, amountIndex, onEnter }) => {
+}> = ({
+  form,
+  sectionIndex,
+  ingredientIndex,
+  amountIndex,
+  showUpper,
+  onEnter,
+}) => {
   const base =
     `sections.${sectionIndex}.ingredients.${ingredientIndex}.amounts.${amountIndex}` as const;
 
@@ -69,9 +82,29 @@ const AmountInputs: FC<{
             onEnter={onEnter}
             aria-label="Amount"
             placeholder="qty"
+            // Span the (empty) upper column when there's no range so unit/name
+            // stay aligned across ranged and non-ranged rows — the qty just
+            // widens instead of leaving a gap.
+            className={cn(!showUpper && "col-span-2")}
           />
         )}
       />
+      {showUpper && (
+        <Controller
+          control={form.control}
+          name={`${base}.upperValue`}
+          render={({ field }) => (
+            <QuantityInput
+              value={field.value ?? null}
+              onChange={field.onChange}
+              onEnter={onEnter}
+              aria-label="Upper amount"
+              placeholder="to"
+              className="text-muted-foreground"
+            />
+          )}
+        />
+      )}
       <Controller
         control={form.control}
         name={`${base}.unit`}
@@ -105,6 +138,12 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
     name: `sections.${sectionIndex}.ingredients`,
   });
 
+  // Rows whose "to" (upper-bound) input the user revealed this session, keyed by
+  // the stable field id. A row also shows it whenever a range value is present.
+  const [revealedUpper, setRevealedUpper] = useState<Set<string>>(new Set());
+  const revealUpper = (id: string) =>
+    setRevealedUpper((prev) => new Set(prev).add(id));
+
   const appendRow = () => append(newRow("ingredient"));
 
   return (
@@ -122,15 +161,21 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
             const isLast = ingredientIndex === fields.length - 1;
             const linked =
               row.type === "ingredient" ? row.ingredient : row.recipe;
+            // Show the "to" input when a range is already entered, or the user
+            // revealed it via the row menu. Otherwise the row stays qty/unit and
+            // the grid drops the upper column.
+            const showUpper =
+              row.amounts[0]?.upperValue != null || revealedUpper.has(field.id);
 
             return (
               <div key={field.id} className="py-1.5">
-                <div className="grid grid-cols-[4.5rem_4rem_minmax(0,1.6fr)_minmax(0,1fr)_auto] items-center gap-1.5">
+                <div className="grid grid-cols-[4.5rem_3.5rem_4rem_minmax(0,1.6fr)_minmax(0,1fr)_auto] items-center gap-1.5">
                   <AmountInputs
                     form={form}
                     sectionIndex={sectionIndex}
                     ingredientIndex={ingredientIndex}
                     amountIndex={0}
+                    showUpper={showUpper}
                     onEnter={isLast ? appendRow : undefined}
                   />
 
@@ -268,6 +313,11 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                       >
                         Add second amount
                       </DropdownMenuItem>
+                      {!showUpper && (
+                        <DropdownMenuItem onClick={() => revealUpper(field.id)}>
+                          Add upper amount (range)
+                        </DropdownMenuItem>
+                      )}
                       {linked?.id && (
                         <DropdownMenuItem
                           onClick={() =>
@@ -294,38 +344,44 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                   </DropdownMenu>
                 </div>
 
-                {/* Extra amounts (e.g. "250 g / 1 cup") on follow-up lines */}
-                {row.amounts.slice(1).map((_, extraIdx) => (
-                  <div
-                    key={`${field.id}-amount-${extraIdx + 1}`}
-                    className="mt-1 grid grid-cols-[4.5rem_4rem_minmax(0,1fr)_auto] items-center gap-1.5"
-                  >
-                    <AmountInputs
-                      form={form}
-                      sectionIndex={sectionIndex}
-                      ingredientIndex={ingredientIndex}
-                      amountIndex={extraIdx + 1}
-                    />
-                    <span className="font-mono text-2xs text-muted-foreground">
-                      alt. amount
-                    </span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label="Remove this amount"
-                      onClick={() => {
-                        const current = form.getValues(`${path}.amounts`);
-                        form.setValue(
-                          `${path}.amounts`,
-                          current.filter((_, i) => i !== extraIdx + 1),
-                        );
-                      }}
+                {/* Extra amounts (e.g. "250 g / 1 cup") on follow-up lines. Alt
+                    amounts are distinct unit representations, not ranges, so the
+                    "to" input only appears if one was somehow already set. */}
+                {row.amounts.slice(1).map((extra, extraIdx) => {
+                  const extraShowUpper = extra.upperValue != null;
+                  return (
+                    <div
+                      key={`${field.id}-amount-${extraIdx + 1}`}
+                      className="mt-1 grid grid-cols-[4.5rem_3.5rem_4rem_minmax(0,1fr)_auto] items-center gap-1.5"
                     >
-                      <Trash className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                ))}
+                      <AmountInputs
+                        form={form}
+                        sectionIndex={sectionIndex}
+                        ingredientIndex={ingredientIndex}
+                        amountIndex={extraIdx + 1}
+                        showUpper={extraShowUpper}
+                      />
+                      <span className="font-mono text-2xs text-muted-foreground">
+                        alt. amount
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label="Remove this amount"
+                        onClick={() => {
+                          const current = form.getValues(`${path}.amounts`);
+                          form.setValue(
+                            `${path}.amounts`,
+                            current.filter((_, i) => i !== extraIdx + 1),
+                          );
+                        }}
+                      >
+                        <Trash className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  );
+                })}
 
                 <IngredientReparse
                   form={form}

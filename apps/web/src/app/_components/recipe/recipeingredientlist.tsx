@@ -336,8 +336,11 @@ export const RecipeIngredientList: React.FC<{
     t: CalculateTotalsResult,
   ): RecipeSummaryData => ({
     price: t.price,
+    ...(t.priceUpper != null ? { priceUpper: t.priceUpper } : {}),
     weight: t.weight,
+    ...(t.weightUpper != null ? { weightUpper: t.weightUpper } : {}),
     nutrients: t.nutrients,
+    ...(t.nutrientsUpper ? { nutrientsUpper: t.nutrientsUpper } : {}),
     totalIngredients: t.totalIngredients,
     missingByType: t.missingByType,
     perServing,

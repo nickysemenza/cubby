@@ -1205,3 +1205,134 @@ fn multiple_roots_return_in_order() {
     assert_eq!(result.recipes[0].total_ingredients, 0);
     assert_eq!(result.recipes[1].total_ingredients, 1);
 }
+
+// ─── Amount ranges (min–max) ────────────────────────────────────────────────
+
+fn ranged_amount(lower: f64, upper: f64, unit: &str) -> WAmount {
+    WAmount {
+        unit: unit.to_string(),
+        value: lower,
+        upper_value: Some(upper),
+    }
+}
+
+fn ranged_row(id: &str, name: &str, lower: f64, upper: f64, unit: &str) -> WCostingRow {
+    WCostingRow {
+        id: id.to_string(),
+        kind: WRowKind::Ingredient,
+        target_id: id.to_string(),
+        name: name.to_string(),
+        amounts: vec![ranged_amount(lower, upper, unit)],
+        modifier: None,
+        raw_line: None,
+        section_name: None,
+    }
+}
+
+fn nutrient_upper(r: &WRecipeCosting, code: &str) -> Option<f64> {
+    r.nutrients
+        .iter()
+        .find(|n| n.code == code)
+        .and_then(|n| n.upper_value)
+}
+
+#[test]
+fn ranged_amount_yields_ranged_totals() {
+    // flour "2–3 cup": 1 cup = 100 g = $1 = 364 kcal = 10 g protein.
+    // price $2–3, weight 200–300 g, kcal 728–1092, protein 20–30 g.
+    let r = cost(
+        vec![ranged_row("flour", "flour", 2.0, 3.0, "cup")],
+        vec![ingredient("flour", flour_mappings())],
+        vec![],
+    );
+
+    assert_close(r.price, 2.0, 0.005, "price lower");
+    assert_close(
+        r.price_upper.expect("price ranged"),
+        3.0,
+        0.005,
+        "price upper",
+    );
+    assert_close(r.weight, 200.0, 0.5, "weight lower");
+    assert_close(
+        r.weight_upper.expect("weight ranged"),
+        300.0,
+        0.5,
+        "weight upper",
+    );
+    assert_close(nutrient(&r, "208"), 728.0, 1.0, "kcal lower");
+    assert_close(
+        nutrient_upper(&r, "208").expect("kcal ranged"),
+        1092.0,
+        1.0,
+        "kcal upper",
+    );
+}
+
+#[test]
+fn point_amount_leaves_totals_unranged() {
+    // A non-ranged recipe must not carry any upper bound (renders as one number).
+    let r = cost(
+        vec![flour_cup()],
+        vec![ingredient("flour", flour_mappings())],
+        vec![],
+    );
+    assert!(r.price_upper.is_none(), "price_upper: {:?}", r.price_upper);
+    assert!(
+        r.weight_upper.is_none(),
+        "weight_upper: {:?}",
+        r.weight_upper
+    );
+    assert!(
+        nutrient_upper(&r, "208").is_none(),
+        "kcal upper should be absent"
+    );
+}
+
+#[test]
+fn partial_range_sums_lower_and_upper_independently() {
+    // One ranged row (flour 2–3 cup → $2–3) + one point row (flour 1 cup → $1).
+    // Totals: lower $3, upper $4.
+    let r = cost(
+        vec![
+            ranged_row("flour", "flour", 2.0, 3.0, "cup"),
+            row("flour2", "flour", Some((1.0, "cup")), None, None),
+        ],
+        vec![
+            ingredient("flour", flour_mappings()),
+            ingredient("flour2", flour_mappings()),
+        ],
+        vec![],
+    );
+    assert_close(r.price, 3.0, 0.005, "price lower 2+1");
+    assert_close(
+        r.price_upper.expect("price ranged"),
+        4.0,
+        0.005,
+        "price upper 3+1",
+    );
+}
+
+#[test]
+fn ranged_sub_recipe_rolls_up_scaled() {
+    // Sub-recipe "dough" yields 1 batch and contains flour "2–3 cup" → $2–3 per
+    // batch. Parent uses 2 batches → $4–6. The range rides the yield-mapping edge
+    // through the (now range-aware) unit graph.
+    let dough = WCostingRecipe {
+        id: "dough".to_string(),
+        recipe_yield: Some(amount(1.0, "batch")),
+        rows: vec![ranged_row("flour", "flour", 2.0, 3.0, "cup")],
+    };
+    let r = cost(
+        vec![sub_recipe_row("dough", (2.0, "batch"))],
+        vec![ingredient("flour", flour_mappings())],
+        vec![dough],
+    );
+    assert_close(r.price, 4.0, 0.01, "parent price lower 2×2");
+    assert_close(
+        r.price_upper.expect("price ranged"),
+        6.0,
+        0.01,
+        "parent price upper 2×3",
+    );
+}
