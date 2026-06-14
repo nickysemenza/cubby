@@ -1,17 +1,98 @@
 import { Hono } from "hono";
 import type { Env } from "../types";
 import { createDb } from "../db";
-import { resolveProduct } from "../services/products";
+import { getProducts } from "../db/products";
+import { getFreshMisses } from "../db/misses";
+import { resolveProduct, resolveProductOutcome } from "../services/products";
 import { getImageUrl } from "../storage/images";
+import { bulkLookupRequestSchema } from "../schemas/product";
 import type {
   ProductLookupResponse,
   ProductNotFoundResponse,
 } from "../schemas/product";
+import type { Product } from "../db/schema";
+import { UPC_REGEX } from "../util/upc";
 
 const lookup = new Hono<{ Bindings: Env }>();
 
-// UPC validation regex (8, 12, 13, or 14 digits)
-const UPC_REGEX = /^\d{8}$|^\d{12,14}$/;
+// Per-request cap on background first-try external lookups. With negative
+// caching each UPC is tried at most once, so this only paces the one-time
+// backlog drain against upcitemdb's ~100/day quota.
+const BULK_FIRST_TRY_LIMIT = 10;
+
+/** Map a cached product row to the public response shape (sans `cached`). */
+function toResponse(
+  p: Product,
+  baseUrl: string,
+): Omit<ProductLookupResponse, "cached"> {
+  return {
+    upc: p.upc,
+    name: p.name,
+    manufacturer: p.manufacturer,
+    brand: p.brand,
+    category: p.category,
+    description: p.description,
+    priceDollars: p.priceDollars,
+    imageUrl: p.imageKey ? getImageUrl(p.imageKey, baseUrl) : null,
+    source: p.source,
+  };
+}
+
+/**
+ * Bulk cache-read for many UPCs. Returns the cached products immediately
+ * (one IN query, no external calls), then kicks off a bounded background
+ * first-try for never-checked UPCs so their results land on the next call.
+ * Stops the first-try loop on the first transient error (likely a 429) to
+ * avoid hammering past the external quota.
+ */
+lookup.post("/batch", async (c) => {
+  const body = await c.req.json().catch(() => null);
+  const parsed = bulkLookupRequestSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json(
+      {
+        error: "Invalid request body. Expected { upcs: string[] }.",
+        code: "INVALID_REQUEST",
+      },
+      400,
+    );
+  }
+
+  const baseUrl = new URL(c.req.url).origin;
+  const db = createDb(c.env.DB);
+
+  // Dedupe + drop malformed UPCs.
+  const upcs = [...new Set(parsed.data.upcs)].filter((u) => UPC_REGEX.test(u));
+
+  const found = await getProducts(db, upcs);
+  const foundSet = new Set(found.map((p) => p.upc));
+
+  const remaining = upcs.filter((u) => !foundSet.has(u));
+  const freshMisses = await getFreshMisses(db, remaining);
+  const neverChecked = remaining.filter((u) => !freshMisses.has(u));
+
+  const products = found.map((p) => toResponse(p, baseUrl));
+
+  if (neverChecked.length > 0) {
+    const toTry = neverChecked.slice(0, BULK_FIRST_TRY_LIMIT);
+    c.executionCtx.waitUntil(runFirstTries(c.env, toTry));
+  }
+
+  return c.json({ products, pending: neverChecked.length });
+});
+
+/**
+ * Resolve never-checked UPCs one at a time (recording hits as products and
+ * definitive misses in `upc_misses`). Stops on the first transient error so we
+ * don't keep calling upcitemdb after hitting its rate limit.
+ */
+async function runFirstTries(env: Env, upcs: string[]): Promise<void> {
+  const db = createDb(env.DB);
+  for (const upc of upcs) {
+    const outcome = await resolveProductOutcome(db, env, upc);
+    if (outcome.status === "error") break;
+  }
+}
 
 lookup.get("/:upc", async (c) => {
   const upc = c.req.param("upc");
@@ -38,15 +119,7 @@ lookup.get("/:upc", async (c) => {
 
   const { product, cached } = result;
   const response: ProductLookupResponse = {
-    upc: product.upc,
-    name: product.name,
-    manufacturer: product.manufacturer,
-    brand: product.brand,
-    category: product.category,
-    description: product.description,
-    priceDollars: product.priceDollars,
-    imageUrl: product.imageKey ? getImageUrl(product.imageKey, baseUrl) : null,
-    source: product.source,
+    ...toResponse(product, baseUrl),
     cached,
   };
   return c.json(response);

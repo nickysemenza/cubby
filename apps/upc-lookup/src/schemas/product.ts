@@ -46,6 +46,22 @@ export const searchResponseSchema = z.object({
 });
 export type SearchResponse = z.infer<typeof searchResponseSchema>;
 
+// Bulk lookup — cache-read of many UPCs at once (used by the cubby problems
+// scan). Only returns products already cached; absent UPCs are simply omitted.
+export const bulkLookupRequestSchema = z.object({
+  upcs: z.array(z.string()).min(1).max(200),
+});
+export type BulkLookupRequest = z.infer<typeof bulkLookupRequestSchema>;
+
+export const bulkLookupResponseSchema = z.object({
+  // Found products only (absent UPC = no cached data).
+  products: z.array(productLookupResponseSchema.omit({ cached: true })),
+  // Count of never-checked UPCs this call did not resolve (some may get a
+  // bounded background first-try; results surface on a later call).
+  pending: z.number(),
+});
+export type BulkLookupResponse = z.infer<typeof bulkLookupResponseSchema>;
+
 // Stats response
 export const statsResponseSchema = z.object({
   totalProducts: z.number(),

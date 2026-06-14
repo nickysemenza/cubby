@@ -1,4 +1,10 @@
-import { sqliteTable, text, real, index } from "drizzle-orm/sqlite-core";
+import {
+  sqliteTable,
+  text,
+  real,
+  integer,
+  index,
+} from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 
 export const products = sqliteTable(
@@ -26,3 +32,16 @@ export const products = sqliteTable(
 
 export type Product = typeof products.$inferSelect;
 export type NewProduct = typeof products.$inferInsert;
+
+// A UPC that was looked up but no source had data — a "miss". Cached so the
+// same dead UPC isn't re-queried against the external API on every scan
+// (the external tier is ~100 req/day). Surfaced as a worklist in the admin UI;
+// fixing one (creating a product for the UPC) deletes its miss row.
+export const upcMisses = sqliteTable("upc_misses", {
+  upc: text("upc").primaryKey(),
+  attempts: integer("attempts").notNull().default(1),
+  lastCheckedAt: text("last_checked_at").default(sql`(datetime('now'))`),
+});
+
+export type UpcMiss = typeof upcMisses.$inferSelect;
+export type NewUpcMiss = typeof upcMisses.$inferInsert;

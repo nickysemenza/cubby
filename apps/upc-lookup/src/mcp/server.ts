@@ -10,12 +10,12 @@ import {
   deleteProduct,
   listProducts,
 } from "../db/products";
+import { deleteMiss } from "../db/misses";
 import { resolveProduct } from "../services/products";
 import { lookupExternalProduct } from "../api";
 import { getStats } from "../routes/stats";
 import { storeImage, getImageUrl } from "../storage/images";
-
-const UPC_REGEX = /^\d{8}$|^\d{12,14}$/;
+import { UPC_REGEX } from "../util/upc";
 
 /** Wrap MCP responses in the text-content envelope the protocol expects. */
 function json(data: unknown) {
@@ -168,6 +168,8 @@ export function createMcpServer(env: Env, baseUrl: string): McpServer {
         source: "manual",
         sourceData: null,
       });
+      // The UPC now has data — drop it from the misses worklist if it was there.
+      await deleteMiss(db, args.upc);
       return json(productToJson(product, baseUrl));
     }),
   );
@@ -219,8 +221,15 @@ export function createMcpServer(env: Env, baseUrl: string): McpServer {
       const existing = await getProduct(db, upc);
       if (!existing) throw new Error(`Product ${upc} not found.`);
 
-      const data = await lookupExternalProduct(upc);
-      if (!data) throw new Error(`No source had data for ${upc}.`);
+      const result = await lookupExternalProduct(upc);
+      if (result.status !== "found") {
+        throw new Error(
+          result.status === "error"
+            ? `Lookup for ${upc} failed (rate limited or unavailable) — try again later.`
+            : `No source had data for ${upc}.`,
+        );
+      }
+      const data = result.data;
 
       const imageKey = data.imageUrl
         ? ((await storeImage(upc, data.imageUrl, env)) ?? existing.imageKey)

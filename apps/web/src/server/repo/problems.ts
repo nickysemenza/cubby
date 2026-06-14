@@ -15,7 +15,7 @@ import {
   notExists,
   sql,
 } from "drizzle-orm";
-import { chunk, uniq } from "es-toolkit";
+import { uniq } from "es-toolkit";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { computeParseDrift, hasDrift } from "~/lib/parse-drift";
 import { wasm } from "~/lib/wasm";
@@ -552,16 +552,14 @@ export interface ProductWithBetterUpcData {
   };
 }
 
-// Lookups are the only network calls in the whole problems scan, so cap the
-// concurrent in-flight requests (mirrors backfillUPCImages' batching).
-const UPC_LOOKUP_BATCH_SIZE = 10;
-
-// Find products that a fresh UPC lookup could enrich. The expensive part is the
-// per-product network lookup, so we first narrow to *candidates* purely from the
-// DB — products with a UPC that already have a stored gap (unspecified
-// manufacturer, null price, or no image). A fully-populated product never
-// triggers a lookup. This keeps the check cheap enough to run inside the
-// always-on scan that also backs the navbar badge.
+// Find products that a fresh UPC lookup could enrich. We first narrow to
+// *candidates* purely from the DB — products with a UPC that already have a
+// stored gap (unspecified manufacturer, null price, or no image). A
+// fully-populated product never triggers a lookup. Candidate UPCs are then
+// resolved in a single bulk cache-read (no per-UPC round-trips), so this stays
+// cheap enough to run inside the always-on scan that also backs the navbar
+// badge. The worker only returns already-cached data and never re-queries dead
+// UPCs, so the scan can't burn the external lookup quota.
 const findProductsWithBetterUpcData = async (
   db: Database,
   upcLookupClient: UPCLookupClient,
@@ -595,47 +593,32 @@ const findProductsWithBetterUpcData = async (
         !r.hasImage),
   );
 
+  const lookups = await upcLookupClient.lookupBatch(
+    candidates.map((c) => c.upc),
+  );
+
   const problems: ProductWithBetterUpcData[] = [];
+  for (const cand of candidates) {
+    const lookup = lookups.get(cand.upc);
+    if (!lookup) continue;
 
-  // Run the lookups in bounded-concurrency batches.
-  for (const batch of chunk(candidates, UPC_LOOKUP_BATCH_SIZE)) {
-    const results = await Promise.all(
-      batch.map(async (cand) => {
-        try {
-          const lookup = await upcLookupClient.lookup(cand.upc);
-          if (!lookup) return null;
+    const gaps = {
+      manufacturer:
+        isUnspecifiedManufacturer(cand.manufacturer) &&
+        !isUnspecifiedManufacturer(lookup.manufacturer ?? lookup.brand),
+      price: cand.price == null && lookup.priceDollars != null,
+      image: !cand.hasImage && lookup.imageUrl != null,
+    };
 
-          const gaps = {
-            manufacturer:
-              isUnspecifiedManufacturer(cand.manufacturer) &&
-              !isUnspecifiedManufacturer(lookup.manufacturer ?? lookup.brand),
-            price: cand.price == null && lookup.priceDollars != null,
-            image: !cand.hasImage && lookup.imageUrl != null,
-          };
+    if (!gaps.manufacturer && !gaps.price && !gaps.image) continue;
 
-          if (!gaps.manufacturer && !gaps.price && !gaps.image) return null;
-
-          return {
-            id: cand.id,
-            name: cand.name,
-            manufacturer: cand.manufacturer,
-            upc: cand.upc,
-            gaps,
-          } satisfies ProductWithBetterUpcData;
-        } catch (error) {
-          // A single failed lookup shouldn't sink the whole scan.
-          console.error(
-            `Failed UPC lookup for product ${cand.id} (${cand.name}):`,
-            error,
-          );
-          return null;
-        }
-      }),
-    );
-
-    for (const result of results) {
-      if (result) problems.push(result);
-    }
+    problems.push({
+      id: cand.id,
+      name: cand.name,
+      manufacturer: cand.manufacturer,
+      upc: cand.upc,
+      gaps,
+    });
   }
 
   return problems;

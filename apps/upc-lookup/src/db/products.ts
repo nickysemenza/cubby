@@ -1,9 +1,13 @@
-import { and, desc, eq, like, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, like, or, sql } from "drizzle-orm";
 import type { Database } from "./index";
 import { schema } from "./index";
 import type { Env } from "../types";
 import { deleteImage } from "../storage/images";
+import { chunk } from "../util/chunk";
 import type { Product, NewProduct } from "./schema";
+
+// D1 caps bound parameters per statement; chunk IN-lists well under the limit.
+const IN_CHUNK = 100;
 
 /** Fields an admin/agent may set when creating or editing a product. */
 export type ProductWriteInput = {
@@ -26,6 +30,22 @@ export async function getProduct(
   return db.query.products.findFirst({
     where: eq(schema.products.upc, upc),
   });
+}
+
+/** Get all cached products for the given UPCs in one chunked IN query. */
+export async function getProducts(
+  db: Database,
+  upcs: string[],
+): Promise<Product[]> {
+  if (upcs.length === 0) return [];
+  const out: Product[] = [];
+  for (const batch of chunk(upcs, IN_CHUNK)) {
+    const rows = await db.query.products.findMany({
+      where: inArray(schema.products.upc, batch),
+    });
+    out.push(...rows);
+  }
+  return out;
 }
 
 /** Insert a product row and return it. */

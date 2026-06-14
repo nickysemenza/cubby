@@ -22,11 +22,12 @@ export function withFlash(
   return `${path}?${params.toString()}`;
 }
 
-type NavKey = "products" | "new" | "stats";
+type NavKey = "products" | "new" | "misses" | "stats";
 
 const NAV: { key: NavKey; href: string; label: string }[] = [
   { key: "products", href: "/admin/products", label: "Products" },
   { key: "new", href: "/admin/products/new", label: "New" },
+  { key: "misses", href: "/admin/misses", label: "Misses" },
   { key: "stats", href: "/admin/stats", label: "Stats" },
 ];
 

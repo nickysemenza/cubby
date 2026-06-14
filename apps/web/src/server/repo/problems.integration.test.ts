@@ -44,14 +44,21 @@ const upcResponse = (
 
 // A fake UPC lookup client: canned responses keyed by UPC, plus a record of which
 // UPCs were actually looked up (so tests can assert the no-network pre-filter).
+// The scan calls `lookupBatch` (one bulk request), so `calls` records every UPC
+// passed to it — fully-populated/misc products are pre-filtered out beforehand.
 const fakeUpcClient = (
   byUpc: Record<string, UPCLookupResponse | null> = {},
 ) => {
   const calls: string[] = [];
   const client = {
-    lookup: async (upc: string) => {
-      calls.push(upc);
-      return byUpc[upc] ?? null;
+    lookupBatch: async (upcs: string[]) => {
+      calls.push(...upcs);
+      const result = new Map<string, UPCLookupResponse>();
+      for (const upc of upcs) {
+        const hit = byUpc[upc];
+        if (hit) result.set(upc, hit);
+      }
+      return result;
     },
   } as unknown as UPCLookupClient;
   return { client, calls };
