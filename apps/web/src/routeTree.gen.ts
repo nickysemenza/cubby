@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as DocsRouteImport } from './routes/docs'
+import { Route as DesignRouteImport } from './routes/design'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthAuthViewRouteImport } from './routes/auth.$authView'
@@ -19,7 +20,6 @@ import { Route as AuthenticatedProblemsRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedPantryViewRouteImport } from './routes/_authenticated/pantry-view'
 import { Route as AuthenticatedLabelsRouteImport } from './routes/_authenticated/labels'
 import { Route as AuthenticatedInsightsRouteImport } from './routes/_authenticated/insights'
-import { Route as AuthenticatedDesignRouteImport } from './routes/_authenticated/design'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedCaptureRouteImport } from './routes/_authenticated/capture'
 import { Route as AuthenticatedAskRouteImport } from './routes/_authenticated/ask'
@@ -74,6 +74,11 @@ const DocsRoute = DocsRouteImport.update({
   path: '/docs',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DesignRoute = DesignRouteImport.update({
+  id: '/design',
+  path: '/design',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedRoute = AuthenticatedRouteImport.update({
   id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
@@ -116,11 +121,6 @@ const AuthenticatedLabelsRoute = AuthenticatedLabelsRouteImport.update({
 const AuthenticatedInsightsRoute = AuthenticatedInsightsRouteImport.update({
   id: '/insights',
   path: '/insights',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedDesignRoute = AuthenticatedDesignRouteImport.update({
-  id: '/design',
-  path: '/design',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
@@ -396,13 +396,13 @@ const AuthenticatedUsdaNdbCodeRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/design': typeof DesignRoute
   '/docs': typeof DocsRoute
   '/$shortcode': typeof AuthenticatedShortcodeRoute
   '/activity': typeof AuthenticatedActivityRoute
   '/ask': typeof AuthenticatedAskRoute
   '/capture': typeof AuthenticatedCaptureRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
-  '/design': typeof AuthenticatedDesignRoute
   '/insights': typeof AuthenticatedInsightsRoute
   '/labels': typeof AuthenticatedLabelsRoute
   '/pantry-view': typeof AuthenticatedPantryViewRoute
@@ -456,13 +456,13 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/design': typeof DesignRoute
   '/docs': typeof DocsRoute
   '/$shortcode': typeof AuthenticatedShortcodeRoute
   '/activity': typeof AuthenticatedActivityRoute
   '/ask': typeof AuthenticatedAskRoute
   '/capture': typeof AuthenticatedCaptureRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
-  '/design': typeof AuthenticatedDesignRoute
   '/insights': typeof AuthenticatedInsightsRoute
   '/labels': typeof AuthenticatedLabelsRoute
   '/pantry-view': typeof AuthenticatedPantryViewRoute
@@ -518,13 +518,13 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteWithChildren
+  '/design': typeof DesignRoute
   '/docs': typeof DocsRoute
   '/_authenticated/$shortcode': typeof AuthenticatedShortcodeRoute
   '/_authenticated/activity': typeof AuthenticatedActivityRoute
   '/_authenticated/ask': typeof AuthenticatedAskRoute
   '/_authenticated/capture': typeof AuthenticatedCaptureRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
-  '/_authenticated/design': typeof AuthenticatedDesignRoute
   '/_authenticated/insights': typeof AuthenticatedInsightsRoute
   '/_authenticated/labels': typeof AuthenticatedLabelsRoute
   '/_authenticated/pantry-view': typeof AuthenticatedPantryViewRoute
@@ -580,13 +580,13 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/design'
     | '/docs'
     | '/$shortcode'
     | '/activity'
     | '/ask'
     | '/capture'
     | '/dashboard'
-    | '/design'
     | '/insights'
     | '/labels'
     | '/pantry-view'
@@ -640,13 +640,13 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/design'
     | '/docs'
     | '/$shortcode'
     | '/activity'
     | '/ask'
     | '/capture'
     | '/dashboard'
-    | '/design'
     | '/insights'
     | '/labels'
     | '/pantry-view'
@@ -701,13 +701,13 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_authenticated'
+    | '/design'
     | '/docs'
     | '/_authenticated/$shortcode'
     | '/_authenticated/activity'
     | '/_authenticated/ask'
     | '/_authenticated/capture'
     | '/_authenticated/dashboard'
-    | '/_authenticated/design'
     | '/_authenticated/insights'
     | '/_authenticated/labels'
     | '/_authenticated/pantry-view'
@@ -763,6 +763,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
+  DesignRoute: typeof DesignRoute
   DocsRoute: typeof DocsRoute
   ApiMcpRoute: typeof ApiMcpRoute
   AuthAuthViewRoute: typeof AuthAuthViewRoute
@@ -778,6 +779,13 @@ declare module '@tanstack/react-router' {
       path: '/docs'
       fullPath: '/docs'
       preLoaderRoute: typeof DocsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/design': {
+      id: '/design'
+      path: '/design'
+      fullPath: '/design'
+      preLoaderRoute: typeof DesignRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -841,13 +849,6 @@ declare module '@tanstack/react-router' {
       path: '/insights'
       fullPath: '/insights'
       preLoaderRoute: typeof AuthenticatedInsightsRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/design': {
-      id: '/_authenticated/design'
-      path: '/design'
-      fullPath: '/design'
-      preLoaderRoute: typeof AuthenticatedDesignRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/dashboard': {
@@ -1195,7 +1196,6 @@ interface AuthenticatedRouteChildren {
   AuthenticatedAskRoute: typeof AuthenticatedAskRoute
   AuthenticatedCaptureRoute: typeof AuthenticatedCaptureRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
-  AuthenticatedDesignRoute: typeof AuthenticatedDesignRoute
   AuthenticatedInsightsRoute: typeof AuthenticatedInsightsRoute
   AuthenticatedLabelsRoute: typeof AuthenticatedLabelsRoute
   AuthenticatedPantryViewRoute: typeof AuthenticatedPantryViewRoute
@@ -1249,7 +1249,6 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAskRoute: AuthenticatedAskRoute,
   AuthenticatedCaptureRoute: AuthenticatedCaptureRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
-  AuthenticatedDesignRoute: AuthenticatedDesignRoute,
   AuthenticatedInsightsRoute: AuthenticatedInsightsRoute,
   AuthenticatedLabelsRoute: AuthenticatedLabelsRoute,
   AuthenticatedPantryViewRoute: AuthenticatedPantryViewRoute,
@@ -1306,6 +1305,7 @@ const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
+  DesignRoute: DesignRoute,
   DocsRoute: DocsRoute,
   ApiMcpRoute: ApiMcpRoute,
   AuthAuthViewRoute: AuthAuthViewRoute,
