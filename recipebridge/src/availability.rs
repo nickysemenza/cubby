@@ -248,9 +248,11 @@ fn evaluate_group(group: &WAvailabilityGroup) -> WAvailabilityGroupResult {
         }
     }
 
-    let (status, basis_unit, have_value) = match &basis {
+    let (status, basis_unit, need_value, have_value, sources) = match &basis {
         // Mixed units with no weight basis: surface as unconvertible rather than
-        // a confident-but-wrong total (the bug class this enum removes).
+        // a confident-but-wrong total. `need_total` here is the meaningless
+        // mixed-unit sum (e.g. 2 + 300), so zero it out — both the total and the
+        // per-source values — so nothing downstream can render it as a quantity.
         Basis::Incoherent => (
             WAvailabilityStatus::Unconvertible,
             group
@@ -258,19 +260,29 @@ fn evaluate_group(group: &WAvailabilityGroup) -> WAvailabilityGroupResult {
                 .first()
                 .map(|n| n.amount.unit.clone())
                 .unwrap_or_default(),
+            0.0,
             None,
+            sources
+                .iter()
+                .map(|s| WAvailabilitySource {
+                    line_index: s.line_index,
+                    need_value: 0.0,
+                })
+                .collect(),
         ),
         Basis::Weight(unit) | Basis::Unit(unit) => (
             resolve_status(need_total, have_total, any_entries, any_convertible),
             unit.clone(),
+            need_total,
             any_convertible.then_some(have_total),
+            sources,
         ),
     };
 
     WAvailabilityGroupResult {
         key: group.key.clone(),
         basis_unit,
-        need_value: need_total,
+        need_value,
         have_value,
         status,
         sources,
@@ -460,7 +472,9 @@ mod tests {
     #[test]
     fn mixed_units_are_incoherent_not_a_bogus_total() {
         // "2 cup" + "300 g" with no shared weight basis: the old TS summed
-        // 2 + 300 = 302 "cup". Now → unconvertible, inventory not trusted.
+        // 2 + 300 = 302 "cup". Now → unconvertible, inventory not trusted, and
+        // the meaningless sum is zeroed out (total AND per-source) so nothing
+        // downstream can render "302" as a quantity.
         let g = eval(WAvailabilityGroup {
             key: "ing".into(),
             needs: vec![need(2.0, "cup", 0), need(300.0, "g", 1)],
@@ -468,6 +482,11 @@ mod tests {
         });
         assert_eq!(g.status, WAvailabilityStatus::Unconvertible);
         assert_eq!(g.have_value, None);
+        assert_eq!(g.need_value, 0.0); // not the bogus 302
+        assert!(g.sources.iter().all(|s| s.need_value == 0.0));
+        // line indices are preserved so the UI still knows which lines contributed.
+        assert_eq!(g.sources.len(), 2);
+        assert_eq!(g.sources[1].line_index, 1);
     }
 
     #[test]
