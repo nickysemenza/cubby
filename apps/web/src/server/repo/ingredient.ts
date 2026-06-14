@@ -10,16 +10,7 @@ import {
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
-import {
-  and,
-  arrayOverlaps,
-  count,
-  eq,
-  inArray,
-  isNull,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, count, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { z } from "zod";
 import { getSortableFields } from "~/entities/entities";
@@ -339,15 +330,13 @@ export const findOrCreateIngredient = async (
   name: string,
   aliases?: string[],
 ) => {
-  // Atomic find-or-create against the partial unique index `Ingredient_name_key`
-  // (UNIQUE(name) WHERE deletedAt IS NULL); see findOrCreate for the race it
-  // closes. The case-insensitive/alias `where` is the matcher; the conflict
-  // target is the exact-name index.
+  // Atomic find-or-create. The `Ingredient_name_key` unique index is on
+  // lower(name) (partial, WHERE deletedAt IS NULL), so it agrees with the
+  // case-insensitive matcher — "Flour" and "flour" collide and dedupe rather
+  // than both inserting. See findOrCreate for the race it closes.
   const { row: entry } = await findOrCreate(db, ingredient, {
     where: buildIngredientWhere(true, name, aliases),
     values: { name, aliases: aliases || [] },
-    target: ingredient.name,
-    targetWhere: isNull(ingredient.deletedAt),
   });
 
   // add in aliases, but dedupe and make sure they don't include the name
@@ -370,9 +359,21 @@ export const findOrCreateIngredient = async (
   );
 };
 
+// Case-insensitive alias match: compare lower(each alias) against the lowercased
+// list. Plain `arrayOverlaps` is case-sensitive, which would disagree with the
+// case-insensitive name match (and the lower(name) unique index) — e.g. an alias
+// "Scallion" wouldn't match a "scallion" lookup.
+const aliasMatchesCaseInsensitive = (list: string[]) => {
+  const lowered = list.map((n) => n.toLowerCase());
+  return sql`EXISTS (SELECT 1 FROM unnest(${ingredient.aliases}) AS t(val) WHERE lower(t.val) IN (${sql.join(
+    lowered.map((v) => sql`${v}`),
+    sql`, `,
+  )}))`;
+};
+
 // exact:
-//  true -> exact match on name or aliases
-//  false -> search on name, exact match on aliases
+//  true -> case-insensitive match on name or aliases
+//  false -> search on name, case-insensitive match on aliases
 const buildIngredientWhere = (
   exact: boolean,
   name: string,
@@ -384,22 +385,22 @@ const buildIngredientWhere = (
 
   // Name or aliases condition
   if (exact) {
-    // Exact match: name IN list OR aliases has any of list
+    // Exact (case-insensitive) match: lower(name) IN list OR any alias matches
     conditions.push(
       or(
         inArray(
           sql`lower(${ingredient.name})`,
           list.map((n) => n.toLowerCase()),
         ),
-        arrayOverlaps(ingredient.aliases, list),
+        aliasMatchesCaseInsensitive(list),
       ),
     );
   } else {
-    // Search on name (ilike), exact match on aliases
+    // Search on name (ilike), case-insensitive match on aliases
     conditions.push(
       or(
         formatSearchTerm(ingredient.name, name),
-        arrayOverlaps(ingredient.aliases, list),
+        aliasMatchesCaseInsensitive(list),
       ),
     );
   }

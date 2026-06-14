@@ -76,6 +76,67 @@ describe("ingredient", () => {
       .from(ingredient);
     expect(result!.count).toEqual(1);
   });
+  it("dedupes case-variant names to one row", async () => {
+    // The matcher is case-insensitive (lower(name)); the unique index now agrees
+    // (lower(name)), so "Flour" then "flour" resolves to the same row — the
+    // second find matches the first and never inserts.
+    const flour = await findOrCreateIngredient(db, "Flour");
+    const flourLower = await findOrCreateIngredient(db, "flour");
+    expect(flourLower.id).toEqual(flour.id);
+    expect(flourLower.name).toEqual("Flour"); // first writer's casing is kept
+
+    const [result] = await getDb(db)
+      .select({ count: count() })
+      .from(ingredient);
+    expect(result!.count).toEqual(1);
+  });
+
+  it("concurrent case-variant creates dedupe to one row", async () => {
+    // Same race as above, but the two requests differ only in case. Before the
+    // lower(name) index, "Flour" and "flour" both inserted (the exact-name index
+    // didn't see them as equal). Now the loser's INSERT conflicts on lower(name)
+    // and recovers onto the winner.
+    let releaseWinner!: () => void;
+    const winnerCommitted = new Promise<void>((resolve) => {
+      releaseWinner = resolve;
+    });
+
+    let winnerId = "";
+    const winner = withTransaction(db, async (tx) => {
+      const row = await findOrCreateIngredient(tx, "Flour");
+      winnerId = row.id;
+      await winnerCommitted;
+      return row;
+    });
+
+    await new Promise((r) => setTimeout(r, 100));
+    const loser = findOrCreateIngredient(db, "flour"); // different case, races
+    await new Promise((r) => setTimeout(r, 100));
+    releaseWinner();
+
+    const [, loserRow] = await Promise.all([winner, loser]);
+    expect(loserRow.id).toEqual(winnerId);
+
+    const [result] = await getDb(db)
+      .select({ count: count() })
+      .from(ingredient);
+    expect(result!.count).toEqual(1);
+  });
+
+  it("matches aliases case-insensitively", async () => {
+    // Alias matching is now case-insensitive too (lower(alias)), consistent with
+    // name matching: looking up "scallion" finds the ingredient whose alias is
+    // "Scallion" and returns it rather than creating a duplicate.
+    const allium = await findOrCreateIngredient(db, "Allium", ["Scallion"]);
+    const viaAlias = await findOrCreateIngredient(db, "scallion");
+    expect(viaAlias.id).toEqual(allium.id);
+
+    const [result] = await getDb(db)
+      .select({ count: count() })
+      .from(ingredient);
+    expect(result!.count).toEqual(1);
+  });
+
   it("ingredient merging works", async () => {
     await upsertImportRecipe(
       makeImportRecipe({
