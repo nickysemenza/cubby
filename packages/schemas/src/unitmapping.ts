@@ -17,11 +17,20 @@ const sourceMetadata = z.discriminatedUnion("type", [
   }),
 ]);
 
-// Base unit mapping without sourceMetadata (for input)
+// Base unit mapping without sourceMetadata (for input).
+// A mapping is one conversion or price/nutrient edge in the unit graph, e.g.
+// "8 oz = $10". The costing engine treats a weight->money edge as the cost basis
+// for an ingredient measured by weight; money is the "dollar" unit and nutrient
+// edges use the b unit (e.g. "kcal" or "g protein").
 const unitMappingBase = z.object({
-  a: amount.describe("first of pair"),
-  b: amount.describe("second of pair"),
-  source: z.string().nullable(),
+  a: amount.describe('left side of the pair, e.g. { value: 8, unit: "oz" }'),
+  b: amount.describe(
+    'right side of the pair, e.g. { value: 10, unit: "dollar" }',
+  ),
+  source: z
+    .string()
+    .nullable()
+    .describe('provenance note (null if unknown), e.g. "manual"'),
 });
 
 // Unit mapping with sourceMetadata (for output/computed)

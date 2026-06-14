@@ -1,4 +1,6 @@
 import { recipeCreateInput, recipeUpdateInput } from "@cubby/schemas/recipe";
+import { unitMappingInput } from "@cubby/schemas/unitmapping";
+import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
@@ -60,6 +62,21 @@ function json(data: unknown) {
   return {
     content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
   };
+}
+
+/**
+ * A product unit mapping for MCP tools: the canonical `unitMappingInput` edge
+ * (a/b/source, fully documented at its source), minus `id` (create-only) and
+ * with `source` made omittable so LLM callers needn't pass `null` explicitly —
+ * `toUnitMappingInput` restores it.
+ */
+const mcpUnitMapping = unitMappingInput
+  .omit({ id: true })
+  .extend({ source: z.string().optional() });
+
+/** Normalize an MCP unit mapping to the productCreateInput shape (source: string|null). */
+function toUnitMappingInput(m: z.infer<typeof mcpUnitMapping>) {
+  return { a: m.a, b: m.b, source: m.source ?? null };
 }
 
 /** Case-insensitive substring match for nullable string fields */
@@ -138,6 +155,17 @@ export function slimProduct(p: Record<string, unknown>) {
     ndb_number: p.ndb_number ?? null,
     usdaFdcId: food?.fdc_id ?? null,
     externalIds: p.externalIds,
+    ingredientId:
+      (p.ingredient as { id?: unknown } | null | undefined)?.id ??
+      p.ingredientId ??
+      null,
+    unitMappings: Array.isArray(p.unitMappings)
+      ? (p.unitMappings as Array<Record<string, unknown>>).map((m) => ({
+          a: m.a,
+          b: m.b,
+          source: m.source ?? null,
+        }))
+      : [],
   };
 }
 
@@ -453,7 +481,7 @@ function registerTools(server: McpServer) {
 
   server.tool(
     "create_product",
-    "Create a new product. Use for items not found via search_products.",
+    'Create a new product. Use for items not found via search_products. Pass ingredientId to link it to an ingredient and/or unitMappings (e.g. "8 oz = $10") so recipes can cost it; useful for specialty items with no USDA match.',
     {
       name: z.string().describe("Product name"),
       manufacturer: z
@@ -461,20 +489,52 @@ function registerTools(server: McpServer) {
         .optional()
         .describe("Manufacturer (defaults to '(unspecified)')"),
       upc: z.string().optional().describe("UPC barcode"),
-      price: z.number().optional().describe("Unit price in dollars"),
+      price: z.number().optional().describe("Price per each ($)"),
       expectedQuantity: z
         .number()
         .optional()
         .describe("Expected quantity (1 for unique items, null for unlimited)"),
+      ingredientId: z
+        .string()
+        .optional()
+        .describe(
+          "Link this product to an ingredient (its id). Lets recipes using that ingredient cost from this product.",
+        ),
+      unitMappings: z
+        .array(mcpUnitMapping)
+        .optional()
+        .describe(
+          'Conversion/price edges, e.g. 8 oz = $10 -> [{ a: { value: 8, unit: "oz" }, b: { value: 10, unit: "dollar" } }]. For a weight-measured ingredient an oz/g -> dollar edge is the cost basis.',
+        ),
     },
     withErrorHandling(async (params, extra) => {
       const caller = getCaller(extra);
-      const result = await caller.product.quickCreate({
+      // The quick path (name/price/upc only) preserves the original behavior.
+      // Linking an ingredient or attaching mappings needs the full create input,
+      // which quickCreate doesn't accept; route through product.create instead.
+      const unitMappings = (
+        (params.unitMappings as Array<z.infer<typeof mcpUnitMapping>>) ?? []
+      ).map(toUnitMappingInput);
+      if (params.ingredientId == null && unitMappings.length === 0) {
+        const result = await caller.product.quickCreate({
+          name: params.name,
+          manufacturer: params.manufacturer,
+          upc: params.upc,
+          price: params.price,
+          expectedQuantity: params.expectedQuantity,
+        });
+        return json(slimProduct(result as Record<string, unknown>));
+      }
+      const result = await caller.product.create({
         name: params.name,
-        manufacturer: params.manufacturer,
-        upc: params.upc,
-        price: params.price,
-        expectedQuantity: params.expectedQuantity,
+        manufacturer: params.manufacturer ?? UNSPECIFIED_MANUFACTURER,
+        upc: (params.upc as string | undefined) ?? null,
+        ndb_number: null,
+        expectedQuantity:
+          (params.expectedQuantity as number | undefined) ?? null,
+        ingredientId: (params.ingredientId as string | undefined) ?? null,
+        price: (params.price as number | undefined) ?? null,
+        unitMappings,
       });
       return json(slimProduct(result as Record<string, unknown>));
     }),
@@ -516,6 +576,30 @@ function registerTools(server: McpServer) {
         ),
     },
     updateHandler("product", slimProduct),
+  );
+
+  server.tool(
+    "update_product_unit_mappings",
+    'Replace the unit mappings on a product (conversion/price edges like "8 oz = $10"). Pass the COMPLETE desired set; existing mappings not in the list are removed. Money unit is "dollar"; nutrient edges (b unit "kcal", "g protein") also work.',
+    {
+      id: z.string().describe("Product ID"),
+      unitMappings: z
+        .array(mcpUnitMapping)
+        .describe(
+          'The complete set of mappings to keep, e.g. [{ a: { value: 8, unit: "oz" }, b: { value: 10, unit: "dollar" } }]. An empty array clears all mappings.',
+        ),
+    },
+    withErrorHandling(async (params, extra) => {
+      const caller = getCaller(extra);
+      const unitMappings = (
+        params.unitMappings as Array<z.infer<typeof mcpUnitMapping>>
+      ).map(toUnitMappingInput);
+      const result = await caller.product.update({
+        id: params.id,
+        data: { unitMappings },
+      });
+      return json(slimProduct(result as Record<string, unknown>));
+    }),
   );
 
   server.tool(
