@@ -29,8 +29,7 @@ use std::collections::{HashMap, HashSet};
 
 use ingredient::classify_usage;
 use ingredient::unit::{
-    convert_measure_with_graph, convert_measure_with_graph_explained, make_graph, Measure,
-    MeasureGraph, MeasureKind,
+    convert_measure_with_graph_explained, make_graph, Measure, MeasureGraph, MeasureKind,
 };
 use ingredient::usage::IngredientUsage;
 
@@ -40,7 +39,7 @@ use super::types::{
     WMissingByType, WNutrientAmount, WNutrientsOk, WNutrientsResult, WRecipeCosting, WRowKind,
     WRowPaths, WRowResult,
 };
-use crate::food_mappings::product_mappings;
+use crate::reconcile::{canonical_amount, convert_with_fallback, pairs_for_product};
 use crate::WConversionStep;
 
 /// One recipe row paired with its resolved usage and the consumption plan that
@@ -90,16 +89,6 @@ fn classify_planned_rows(recipe: &WCostingRecipe) -> Vec<Planned<'_>> {
             }
         })
         .collect()
-}
-
-/// The amount a row's measures resolve from: a mass amount when present (the
-/// stated weight, resolved exactly via the unit engine's mass identity), else
-/// the first written amount. None only for an amount-less row.
-fn canonical_amount(amounts: &[Measure]) -> Option<&Measure> {
-    amounts
-        .iter()
-        .find(|m| matches!(m.kind(), Ok(MeasureKind::Weight)))
-        .or_else(|| amounts.first())
 }
 
 /// A resolved measure's f64 view (value extracted immediately after the
@@ -276,12 +265,7 @@ impl<'a> Engine<'a> {
                     // the module doc — multiple priced products on one ingredient
                     // collide on the shared `each` node → arbitrary pick. Dormant
                     // today (no ingredient has 2+ priced products).
-                    let pairs = i
-                        .products
-                        .iter()
-                        .flat_map(product_mappings)
-                        .map(|m| m.to_pair())
-                        .collect();
+                    let pairs = i.products.iter().flat_map(pairs_for_product).collect();
                     (i.id.as_str(), IngredientCtx::new(pairs))
                 })
                 .collect(),
@@ -324,16 +308,7 @@ impl<'a> Engine<'a> {
         // via the unit engine's mass identity — over a volume that needs a
         // density. Only fall back to another amount for a measure the canonical
         // one genuinely can't reach.
-        let canonical = canonical_amount(amounts);
-        let conv = |kind: MeasureKind| {
-            canonical
-                .and_then(|m| convert_measure_with_graph(m, kind.clone(), graph))
-                .or_else(|| {
-                    amounts
-                        .iter()
-                        .find_map(|m| convert_measure_with_graph(m, kind.clone(), graph))
-                })
-        };
+        let conv = |kind: MeasureKind| convert_with_fallback(amounts, graph, kind);
         let money = conv(MeasureKind::Money);
         let weight = conv(MeasureKind::Weight);
         let calories = conv(MeasureKind::Calories);
