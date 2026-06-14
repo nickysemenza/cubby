@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { Input } from "~/components/ui/input";
+import { QuantityInput } from "~/components/ui/quantity-input";
 import {
   WithIngredientSearch,
   WithRecipeSearch,
@@ -62,20 +63,12 @@ const AmountInputs: FC<{
         control={form.control}
         name={`${base}.value`}
         render={({ field }) => (
-          <Input
-            type="number"
-            step="any"
-            inputMode="decimal"
+          <QuantityInput
+            value={field.value ?? null}
+            onChange={field.onChange}
+            onEnter={onEnter}
             aria-label="Amount"
             placeholder="qty"
-            className="text-right font-mono tabular-nums"
-            value={field.value ?? ""}
-            onChange={(e) =>
-              field.onChange(
-                e.target.value === "" ? null : Number(e.target.value),
-              )
-            }
-            onKeyDown={handleEnter}
           />
         )}
       />

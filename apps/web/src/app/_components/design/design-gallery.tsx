@@ -64,6 +64,7 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "~/components/ui/popover";
+import { QuantityInput } from "~/components/ui/quantity-input";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Switch } from "~/components/ui/switch";
 import {
@@ -167,6 +168,26 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
         {label}
       </span>
       <div className="flex flex-wrap items-center gap-2">{children}</div>
+    </div>
+  );
+}
+
+/** Fraction-aware quantity field beside its underlying f64, for the gallery. */
+function QtyDemo({ initial }: { initial: number | null }) {
+  const [value, setValue] = useState<number | null>(initial);
+  return (
+    <div className="flex items-center gap-2">
+      <div className="w-20">
+        <QuantityInput
+          value={value}
+          onChange={setValue}
+          aria-label="Quantity demo"
+          placeholder="qty"
+        />
+      </div>
+      <span className="font-mono text-3xs text-muted-foreground">
+        = {value ?? "null"}
+      </span>
     </div>
   );
 }
@@ -428,6 +449,20 @@ export function DesignGallery() {
           <div className="space-y-1.5 sm:col-span-2">
             <Label>Textarea</Label>
             <Textarea placeholder="Notes…" rows={2} />
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label>Quantity (fraction-aware)</Label>
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+              <QtyDemo initial={1 / 3} />
+              <QtyDemo initial={1.5} />
+              <QtyDemo initial={1 / 16} />
+              <QtyDemo initial={0.37} />
+              <QtyDemo initial={34} />
+            </div>
+            <p className="font-mono text-3xs text-muted-foreground">
+              Stored f64 shown after =. Renders fractions, parses 1/3 · ⅓ · 1
+              1/2 · decimals on blur.
+            </p>
           </div>
           <Row label="Switch">
             <Switch checked={switchOn} onCheckedChange={setSwitchOn} />
