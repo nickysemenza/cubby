@@ -287,7 +287,7 @@ export function IngredientList() {
         ),
       }),
       createCreatedAtColumn(columnHelper),
-      columnHelper.display({
+      columnHelper.accessor("appearsInRecipes", {
         id: "appearsInRecipes",
         header: "Recipes",
         meta: {
@@ -299,7 +299,6 @@ export function IngredientList() {
       columnHelper.accessor("product", {
         id: "product",
         header: "Product",
-        enableSorting: false,
         meta: {
           className: "w-48 max-w-48 overflow-hidden",
           mobile: { slot: "subtitle", priority: 10 },

@@ -18,7 +18,7 @@ import {
   productTopLevelOut,
 } from "@cubby/schemas/product";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import { and, count, eq, inArray } from "drizzle-orm";
+import { and, count, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import { getSortableFields } from "~/entities/entities";
 import { parseWithContext } from "~/lib/zod-utils";
@@ -146,13 +146,23 @@ export const productList = async (
     [category !== undefined ? eq(product.category, category) : undefined],
   );
 
-  // Build order by using central sortableFields config
-  const orderByArray = buildOrderBy(
-    product,
-    sort,
-    [...getSortableFields("product")],
-    groupBy,
-  );
+  // Build order by using central sortableFields config. `ingredient` isn't a
+  // column — sort by the linked ingredient's name via a correlated subquery
+  // (groupBy isn't combined with this sort in the UI). It MUST be sql.raw: the
+  // relational query builder (query.product.findMany) rewrites column refs in a
+  // custom orderBy to the root alias ("product"), mangling cross-table refs, so we
+  // hand-qualify "Ingredient" and correlate to "product"."ingredientId". A raw
+  // string is opaque to that rewriter. Everything else uses buildOrderBy.
+  const orderByArray =
+    sort.orderBy === "ingredient"
+      ? [
+          sql.raw(
+            `(SELECT i."name" FROM "Ingredient" i WHERE i."id" = "product"."ingredientId") ${
+              sort.direction === "asc" ? "asc nulls last" : "desc nulls last"
+            }`,
+          ),
+        ]
+      : buildOrderBy(product, sort, [...getSortableFields("product")], groupBy);
 
   const { take, skip } = buildTakeSkip(pagination);
 

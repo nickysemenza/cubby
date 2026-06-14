@@ -132,11 +132,12 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
           );
         },
       }),
-      // Yield column
-      columnHelper.display({
+      // Yield column. Accessor (not display) so it sorts server-side; the
+      // accessorFn exposes `servings` (recipeList orders "yield" by it), while
+      // the cell still shows yield-or-servings.
+      columnHelper.accessor((row) => row.servings ?? undefined, {
         id: "yield",
         header: "Yield",
-        enableSorting: false,
         meta: {
           className: "w-24",
           // Mobile: yield/servings is the most useful at-a-glance datum, and
@@ -238,7 +239,6 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
       // recipes, nothing otherwise.
       columnHelper.accessor("source", {
         header: "Source",
-        enableSorting: false,
         meta: {
           className: "w-44",
           mobile: { slot: "meta", priority: 30 },

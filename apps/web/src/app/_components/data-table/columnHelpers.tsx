@@ -697,6 +697,7 @@ export function createSingleEntityPillColumn<
     mobileCategory?: "hero" | "compact" | "medium" | "wide";
     mobile?: MobileColumnMeta;
     filterConfig?: FilterConfig;
+    enableSorting?: boolean;
   },
 ) {
   const compact = options?.compact ?? true;
@@ -710,7 +711,7 @@ export function createSingleEntityPillColumn<
     {
       id: String(accessor),
       header: options?.header,
-      enableSorting: false,
+      enableSorting: options?.enableSorting ?? false,
       meta: {
         className: options?.className,
         mobileCategory: options?.mobileCategory,

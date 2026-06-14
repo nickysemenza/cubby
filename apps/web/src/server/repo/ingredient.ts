@@ -442,10 +442,33 @@ export const ingredientList = async (
   // For missing products filter, we need to use a left join and check for null
   const whereClause = and(...conditions);
 
-  // Build order by using central sortableFields config
-  const orderByClause = buildOrderBy(ingredient, sort, [
-    ...getSortableFields("ingredient"),
-  ]);
+  // Build order by. `appearsInRecipes` and `product` are computed counts (not
+  // real columns), so sort them via correlated subqueries. These MUST be written
+  // with sql.raw: the relational query builder (query.ingredient.findMany)
+  // rewrites every column reference in a custom orderBy to the root table's alias
+  // ("ingredient"), which mangles cross-table refs. A raw string is opaque to that
+  // rewriter, so we hand-qualify the inner tables and correlate to "ingredient"."id".
+  // Everything else goes through the generic buildOrderBy.
+  const dirSql =
+    sort.direction === "asc" ? "asc nulls last" : "desc nulls last";
+  const orderByClause =
+    sort.orderBy === "appearsInRecipes"
+      ? [
+          sql.raw(
+            `(SELECT count(DISTINCT rs."recipeId") FROM "RecipeSectionIngredient" rsi ` +
+              `JOIN "RecipeSection" rs ON rs."id" = rsi."recipeSectionId" ` +
+              `JOIN "Recipe" r ON r."id" = rs."recipeId" AND r."deletedAt" IS NULL ` +
+              `WHERE rsi."ingredientId" = "ingredient"."id") ${dirSql}`,
+          ),
+        ]
+      : sort.orderBy === "product"
+        ? [
+            sql.raw(
+              `(SELECT count(*) FROM "Product" p ` +
+                `WHERE p."ingredientId" = "ingredient"."id" AND p."deletedAt" IS NULL) ${dirSql}`,
+            ),
+          ]
+        : buildOrderBy(ingredient, sort, [...getSortableFields("ingredient")]);
 
   const { take, skip } = buildTakeSkip(pagination);
 
