@@ -3,6 +3,11 @@ import { Link } from "@tanstack/react-router";
 import { BookOpen, ChefHat, Equal, ExternalLink, X } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 import { match } from "ts-pattern";
+import {
+  formatCurrencyRange,
+  formatNumberRange,
+  rangeMidpoint,
+} from "~/lib/format-range";
 import type { RecipeCosting } from "~/lib/recipe-costing";
 import { getRecipeIngredientName } from "~/lib/recipe-graph";
 import { formatCurrency } from "~/lib/utils";
@@ -212,32 +217,69 @@ export const RecipeCompareGrid: React.FC<{
     [perRecipe, basis],
   );
 
-  // Pre-compute per-recipe detail figures and their cross-recipe stats.
-  const costPerServing = (c: ComparedRecipe): number | null => {
+  // Pre-compute per-recipe detail figures and their cross-recipe stats. Each
+  // per-serving figure carries both range bounds; stats aggregate the midpoint
+  // so a ranged recipe ($3–5) compares fairly against a flat one ($4.50).
+  type Ranged = { lower: number; upper?: number };
+  const costPerServing = (c: ComparedRecipe): Ranged | null => {
     const sb = getServingBasis(c.recipe);
-    return sb && c.headline ? c.headline.cost / sb.divisor : null;
+    if (!sb || !c.headline) return null;
+    return {
+      lower: c.headline.cost / sb.divisor,
+      upper:
+        c.headline.costUpper != null
+          ? c.headline.costUpper / sb.divisor
+          : undefined,
+    };
   };
-  const caloriesPerServing = (c: ComparedRecipe): number | null => {
+  const caloriesPerServing = (c: ComparedRecipe): Ranged | null => {
     const sb = getServingBasis(c.recipe);
-    return sb && c.headline ? c.headline.calories / sb.divisor : null;
+    if (!sb || !c.headline) return null;
+    return {
+      lower: c.headline.calories / sb.divisor,
+      upper:
+        c.headline.caloriesUpper != null
+          ? c.headline.caloriesUpper / sb.divisor
+          : undefined,
+    };
   };
   const present = (xs: (number | null)[]): number[] =>
     xs.filter((x): x is number => x != null);
+  const midOf = (r: Ranged | null): number | null =>
+    r ? rangeMidpoint(r.lower, r.upper) : null;
 
   const costStats = computeStats(
-    present(compared.map((c) => c.headline?.cost ?? null)),
+    present(
+      compared.map((c) =>
+        c.headline
+          ? rangeMidpoint(c.headline.cost, c.headline.costUpper)
+          : null,
+      ),
+    ),
   );
   const costPerServingStats = computeStats(
-    present(compared.map(costPerServing)),
+    present(compared.map((c) => midOf(costPerServing(c)))),
   );
   const caloriesStats = computeStats(
-    present(compared.map((c) => c.headline?.calories ?? null)),
+    present(
+      compared.map((c) =>
+        c.headline
+          ? rangeMidpoint(c.headline.calories, c.headline.caloriesUpper)
+          : null,
+      ),
+    ),
   );
   const caloriesPerServingStats = computeStats(
-    present(compared.map(caloriesPerServing)),
+    present(compared.map((c) => midOf(caloriesPerServing(c)))),
   );
   const proteinStats = computeStats(
-    present(compared.map((c) => c.headline?.protein ?? null)),
+    present(
+      compared.map((c) =>
+        c.headline
+          ? rangeMidpoint(c.headline.protein, c.headline.proteinUpper)
+          : null,
+      ),
+    ),
   );
 
   return (
@@ -412,7 +454,9 @@ export const RecipeCompareGrid: React.FC<{
             label="Total cost"
             recipes={compared}
             renderCell={(c) =>
-              c.headline ? formatCurrency(c.headline.cost) : DASH
+              c.headline
+                ? formatCurrencyRange(c.headline.cost, c.headline.costUpper)
+                : DASH
             }
             average={<AverageCell stats={costStats} format={currencyFormat} />}
           />
@@ -424,7 +468,7 @@ export const RecipeCompareGrid: React.FC<{
               const sb = getServingBasis(c.recipe);
               return cps != null && sb ? (
                 <span>
-                  {formatCurrency(cps)}{" "}
+                  {formatCurrencyRange(cps.lower, cps.upper)}{" "}
                   <span className="text-muted-foreground text-xs">
                     {perUnitSuffix(sb.noun)}
                   </span>
@@ -444,7 +488,9 @@ export const RecipeCompareGrid: React.FC<{
             label="Calories"
             recipes={compared}
             renderCell={(c) =>
-              c.headline ? `${Math.round(c.headline.calories)} kcal` : DASH
+              c.headline
+                ? `${formatNumberRange(c.headline.calories, c.headline.caloriesUpper, (n) => `${Math.round(n)}`)} kcal`
+                : DASH
             }
             average={
               <AverageCell
@@ -458,7 +504,9 @@ export const RecipeCompareGrid: React.FC<{
             recipes={compared}
             renderCell={(c) => {
               const cps = caloriesPerServing(c);
-              return cps != null ? `${Math.round(cps)} kcal` : DASH;
+              return cps != null
+                ? `${formatNumberRange(cps.lower, cps.upper, (n) => `${Math.round(n)}`)} kcal`
+                : DASH;
             }}
             average={
               <AverageCell
@@ -471,7 +519,9 @@ export const RecipeCompareGrid: React.FC<{
             label="Protein"
             recipes={compared}
             renderCell={(c) =>
-              c.headline ? `${Math.round(c.headline.protein)}g` : DASH
+              c.headline
+                ? `${formatNumberRange(c.headline.protein, c.headline.proteinUpper, (n) => `${Math.round(n)}`)}g`
+                : DASH
             }
             average={
               <AverageCell

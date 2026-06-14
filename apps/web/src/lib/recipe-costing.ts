@@ -118,8 +118,13 @@ export type RowDiagnostic = RowDiagnosticOut;
 
 export type CalculateTotalsResult = {
   price: number;
+  /** Upper bound of the totals when the recipe has ranged amounts; else absent. */
+  priceUpper?: number;
   nutrients: NutrientsPer100;
+  /** Parallel upper-bound record, only the ranged nutrient codes present. */
+  nutrientsUpper?: NutrientsPer100;
   weight: number;
+  weightUpper?: number;
   totalIngredients: number;
   missingByType: {
     price: string[];
@@ -158,6 +163,17 @@ const nutrientTargets = (): WCostingInput["nutrient_targets"] =>
     unit: getNutrientUnitString(key),
   }));
 
+/**
+ * The persisted `Amount` (camelCase `upperValue`) → the engine's `WAmount`
+ * (snake `upper_value`). Mapping here is what lets a ranged amount ("2–3 cups")
+ * actually reach the engine — a straight passthrough would drop the bound.
+ */
+const toWAmount = (a: Amount): WAmount => ({
+  value: a.value,
+  unit: a.unit,
+  ...(a.upperValue != null ? { upper_value: a.upperValue } : {}),
+});
+
 const toWRow = (
   row: CostingRow,
   getIngredientName: (i: SectionIngredientOut) => string,
@@ -166,7 +182,7 @@ const toWRow = (
   kind: row.type,
   target_id: row.type === "ingredient" ? row.ingredient.id : row.recipe.id,
   name: getIngredientName(row),
-  amounts: row.amounts,
+  amounts: row.amounts.map(toWAmount),
   modifier: row.modifier ?? null,
   raw_line: row.rawLine ?? null,
   section_name: row.sectionName,
@@ -238,13 +254,24 @@ const toRowDiagnostic = (r: WRowResult): RowDiagnostic => ({
 
 const reshape = (w: WRecipeCosting, rows: CostingRow[]): RecipeCosting => {
   const nutrients: NutrientsPer100 = {};
-  for (const n of w.nutrients) nutrients[n.code] = n.value;
+  const nutrientsUpper: NutrientsPer100 = {};
+  let anyNutrientUpper = false;
+  for (const n of w.nutrients) {
+    nutrients[n.code] = n.value;
+    if (n.upper_value != null) {
+      nutrientsUpper[n.code] = n.upper_value;
+      anyNutrientUpper = true;
+    }
+  }
 
   return {
     totals: {
       price: w.price,
+      ...(w.price_upper != null ? { priceUpper: w.price_upper } : {}),
       nutrients,
+      ...(anyNutrientUpper ? { nutrientsUpper } : {}),
       weight: w.weight,
+      ...(w.weight_upper != null ? { weightUpper: w.weight_upper } : {}),
       totalIngredients: w.total_ingredients,
       missingByType: {
         price: [...w.missing_by_type.price],

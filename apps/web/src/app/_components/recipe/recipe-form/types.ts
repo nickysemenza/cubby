@@ -20,11 +20,21 @@ const draftAmount = z
   .object({
     value: z.number().nullish(),
     unit: z.string().nullish(),
+    // Optional range upper bound ("2–3 cups"). Must exceed the quantity and
+    // can't be set without one.
+    upperValue: z.number().nullish(),
   })
   .refine((a) => (a.value == null) === !a.unit?.trim(), {
     error: "Enter both a quantity and unit, or leave both blank",
     path: ["unit"],
-  });
+  })
+  .refine(
+    (a) => a.upperValue == null || (a.value != null && a.upperValue > a.value),
+    {
+      error: "Upper bound must be greater than the quantity",
+      path: ["upperValue"],
+    },
+  );
 
 // Fields shared by both ingredient-union variants. Mirrors the schema package's
 // sectioningredientOut base + extend idiom so the form union is defined once.

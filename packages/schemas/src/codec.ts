@@ -1,9 +1,18 @@
 import { z } from "zod";
 
-export const amount = z.object({
-  value: z.number(),
-  unit: z.string().min(1),
-});
+export const amount = z
+  .object({
+    value: z.number(),
+    unit: z.string().min(1),
+    // Range upper bound for amounts like "2–3 cups" (lower is `value`). Absent
+    // for ordinary point amounts. The ingredient parser emits this; costing and
+    // nutrition propagate both bounds.
+    upperValue: z.number().positive().optional(),
+  })
+  .refine((a) => a.upperValue === undefined || a.upperValue > a.value, {
+    error: "Upper bound must be greater than the amount",
+    path: ["upperValue"],
+  });
 export type Amount = z.infer<typeof amount>;
 
 // Section names must be 2+ chars to satisfy recipeSectionInput validation

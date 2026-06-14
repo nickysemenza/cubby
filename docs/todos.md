@@ -9,6 +9,22 @@ Now that all unit conversions go through WASM with compound unit support:
 - [ ] **Custom unit aliases**: User-defined "1 serving = X g" with automatic nutrient calculation
 - [ ] **Inventory depletion preview**: "If I make this recipe, how much of each nutrient will I have left?"
 
+## Future: Amount-Range Aggregate Materiality Threshold
+
+Amount ranges ("2–3 cups") now propagate everywhere (line + totals + list +
+compare). Line-level ranges are always shown (authored data). The open question
+is aggregate noise: a trivial spread from one tiny ingredient widens a whole
+recipe to "$2.14 – $2.26", which costs column width on dense surfaces for ~no
+decision value.
+
+- [ ] **Materiality threshold on aggregate ranges only**: render a recipe total
+  (cost/calories/weight on the detail headline, list, and compare) as a range
+  only when the spread is meaningful — e.g. `upper - lower` exceeds some % of the
+  lower (~5–10%) or an absolute floor — else collapse to the single lower/midpoint.
+  Automatic, no toggle; keep line-level ranges always-on. Candidate home: a helper
+  next to `format-range.ts` that the headline/list/compare call sites consult.
+  Decision deferred — live with always-on first and see if it's actually noisy.
+
 ## Future: Recipe Scaling — Density Coverage (Phase 2)
 
 Follow-on to client-side recipe scaling (multiplier/weight/ingredient anchors,

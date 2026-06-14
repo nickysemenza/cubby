@@ -16,13 +16,15 @@ export interface ParseDrift {
 const norm = (s: string) => s.trim().toLowerCase();
 
 /**
- * Structural amount equality, comparing only `value` + `unit` per element in order.
+ * Structural amount equality per element in order: `value`, `unit`, and the range
+ * upper bound.
  *
- * `upper_value` is intentionally ignored: the persisted {@link Amount} shape has no
- * such field and the import/apply write path stores `{ value, unit }` only, so a
- * range's upper bound is never persisted. Comparing it would false-flag every ranged
- * line ("2–3 cloves") even right after a fresh import. We compare exactly what the
- * write path persists.
+ * The bound is compared across the snake/camel boundary — persisted {@link Amount}
+ * carries `upperValue`, the fresh parse carries `upper_value` — both normalized to
+ * `?? null` so "no range" on either side matches. Now that the write paths persist
+ * the upper bound (import + re-parse), a fresh import no longer false-flags; a
+ * *legacy* row imported before range support has no `upperValue`, so a ranged line
+ * ("2–3 cloves") flags as stale until re-parsed once — a genuine, drainable flag.
  */
 export const amountsEqual = (
   persisted: readonly Amount[],
@@ -30,7 +32,10 @@ export const amountsEqual = (
 ): boolean => {
   if (persisted.length !== fresh.length) return false;
   return persisted.every(
-    (p, i) => p.value === fresh[i]?.value && p.unit === fresh[i]?.unit,
+    (p, i) =>
+      p.value === fresh[i]?.value &&
+      p.unit === fresh[i]?.unit &&
+      (p.upperValue ?? null) === (fresh[i]?.upper_value ?? null),
   );
 };
 

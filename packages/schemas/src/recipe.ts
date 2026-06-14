@@ -25,7 +25,12 @@ export type RecipeYield = z.infer<typeof recipeYieldSchema>;
 // recipe-costing.service.
 export const recipeTotals = z.object({
   costTotal: z.number(),
+  // Upper bound of the cost/calorie totals when the recipe has ranged amounts
+  // ("2–3 cups"); absent for recipes with only point amounts. Additive/optional
+  // so existing persisted rows validate unchanged.
+  costTotalUpper: z.number().optional(),
   caloriesTotal: z.number(),
+  caloriesTotalUpper: z.number().optional(),
   ingredientCount: z.number().int(),
   costCovered: z.number().int(),
   caloriesCovered: z.number().int(),

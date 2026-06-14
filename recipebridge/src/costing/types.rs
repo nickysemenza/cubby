@@ -142,10 +142,15 @@ impl WMeasureResult {
 }
 
 /// One converted nutrient (`code` is the USDA nutrient code from the target).
+/// `upper_value` is the range upper bound when the amount was a range (e.g.
+/// "2–3 cups") or a ranged sub-recipe rolled up; absent for point amounts.
 #[derive(Tsify, Serialize, Deserialize, Clone, Debug)]
 pub struct WNutrientAmount {
     pub code: String,
     pub value: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[tsify(optional)]
+    pub upper_value: Option<f64>,
 }
 
 /// All of a row's resolved nutrients, or the error every code shares. The TS
@@ -253,7 +258,15 @@ pub struct WMissingByType {
 pub struct WRecipeCosting {
     pub recipe_id: String,
     pub price: f64,
+    /// Upper bound of the total cost when any contributing row was ranged;
+    /// absent when the recipe has no ranged amounts (so it renders as one number).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[tsify(optional)]
+    pub price_upper: Option<f64>,
     pub weight: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[tsify(optional)]
+    pub weight_upper: Option<f64>,
     /// Summed nutrients, first-appearance order.
     pub nutrients: Vec<WNutrientAmount>,
     pub total_ingredients: u32,

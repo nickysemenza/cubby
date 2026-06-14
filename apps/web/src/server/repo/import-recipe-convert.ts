@@ -101,8 +101,16 @@ const importRecipeToRecipeInput = async (
                 type: "ingredient" as const,
                 ingredientId,
                 recipeId: null,
-                // Copy out of the readonly cached result into the mutable input.
-                amounts: parsed.amounts.map((a) => ({ ...a })),
+                // Map the parser's WAmount (snake `upper_value`) to the persisted
+                // Amount (camel `upperValue`). The `> value` guard drops a
+                // degenerate equal range at the source.
+                amounts: parsed.amounts.map((a) => ({
+                  value: a.value,
+                  unit: a.unit,
+                  ...(a.upper_value != null && a.upper_value > a.value
+                    ? { upperValue: a.upper_value }
+                    : {}),
+                })),
                 rawLine: line,
                 modifier: parsed.modifier ?? null,
               };
