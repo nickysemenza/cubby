@@ -161,10 +161,10 @@ function ProductPillsCell({ products }: { products: IngredientProduct[] }) {
 }
 
 /**
- * "Recipes" column cell: the deduped recipe pills (as before) plus a muted total-
- * usage count when the ingredient is used more times than it has distinct recipes
- * (i.e. it appears in multiple sections of the same recipe). `recipeUsages` and the
- * derived `appearsInRecipes` both ride on the shared list output — no extra fetch.
+ * "Recipes" column cell: the distinct-recipe count up front, followed by a single
+ * linked pill for the first recipe. The leading count (not a trailing "+N") is what
+ * the column sorts on, so it stays put even as the narrow column clips the pill.
+ * `appearsInRecipes` rides on the shared list output — no extra fetch.
  */
 function RecipeUsageCell({
   ingredient,
@@ -172,30 +172,24 @@ function RecipeUsageCell({
   ingredient: IngredientWithFoodOut;
 }) {
   const recipes = ingredient.appearsInRecipes;
-  const totalUses = ingredient.recipeUsages.length;
-  // Lead with the count so it survives the narrow column's overflow clipping;
-  // the pills' own "+N" already conveys recipe breadth, so only show when an
-  // ingredient is used more times than it has distinct recipes (multi-section).
+  if (recipes.length === 0) return <NoneState />;
   return (
-    <div className="flex min-w-0 items-center gap-1">
-      {totalUses > recipes.length && (
+    <div className="flex min-w-0 items-center gap-1.5">
+      {recipes.length > 1 && (
         <Tooltip>
           <TooltipTrigger
             render={
               <span className="shrink-0 whitespace-nowrap text-muted-foreground text-xs tabular-nums" />
             }
           >
-            {totalUses}×
+            {recipes.length}
           </TooltipTrigger>
-          <TooltipContent>
-            {totalUses} uses across {recipes.length} recipe
-            {recipes.length === 1 ? "" : "s"}
-          </TooltipContent>
+          <TooltipContent>Appears in {recipes.length} recipes</TooltipContent>
         </Tooltip>
       )}
       <EntityPillLinkList
         entity="recipe"
-        items={recipes}
+        items={recipes.slice(0, 1)}
         maxItems={1}
         compact
       />
@@ -258,6 +252,10 @@ export function IngredientList() {
     () => [
       createImageColumn(columnHelper, { entity: "ingredient" }),
       createNameColumn(columnHelper, "ingredient", "name", {
+        // Cap the name (it would otherwise absorb all leftover width under the
+        // fixed layout and leave a big gap); the flex space goes to Recipes +
+        // Product below, whose content actually benefits from it.
+        className: "w-56",
         filterConfig: { placeholder: "Filter by ingredient name..." },
         editable: {
           onSave: async (newName, ingredient) => {
@@ -291,7 +289,11 @@ export function IngredientList() {
         id: "appearsInRecipes",
         header: "Recipes",
         meta: {
-          className: "w-48 max-w-48 overflow-hidden",
+          // Generous fixed widths on the content-rich columns (vs the old w-48):
+          // under the fixed layout all columns scale proportionally, so giving
+          // Recipes/Product more weight than Name steers leftover space here
+          // instead of into a ballooning Name column.
+          className: "w-56 overflow-hidden",
           mobile: { slot: "meta", priority: 30 },
         },
         cell: (info) => <RecipeUsageCell ingredient={info.row.original} />,
@@ -300,7 +302,7 @@ export function IngredientList() {
         id: "product",
         header: "Product",
         meta: {
-          className: "w-48 max-w-48 overflow-hidden",
+          className: "w-72 overflow-hidden",
           mobile: { slot: "subtitle", priority: 10 },
         },
         cell: (info) => <ProductPillsCell products={info.getValue() ?? []} />,

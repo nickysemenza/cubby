@@ -147,7 +147,21 @@ const dbIngredientToAPI = async (
 
   // One row per usage (a recipe repeats when it uses this ingredient in multiple
   // sections); the deduped `appearsInRecipes` is derived from these.
-  const recipeUsages = mapRelation(RecipeSectionIngredient, (section) => ({
+  //
+  // `mapRelation` drops soft-deleted RecipeSectionIngredient rows, but it only
+  // inspects the top-level row — a live usage can still point at a soft-deleted
+  // section or recipe. Those must be excluded so the displayed recipe pills stay
+  // consistent with the list's recipe-count sort, whose subquery counts live
+  // recipes only (`r."deletedAt" IS NULL`, see `ingredientList`). Without this,
+  // an ingredient used solely in deleted recipes shows a pill yet sorts as zero
+  // — appearing stranded "in the middle" of the no-recipe ingredients.
+  const liveRecipeUsages = (RecipeSectionIngredient ?? []).filter(
+    (rsi) =>
+      rsi.recipeSection.deletedAt === null &&
+      rsi.recipeSection.recipe.deletedAt === null,
+  );
+
+  const recipeUsages = mapRelation(liveRecipeUsages, (section) => ({
     id: section.id,
     recipe: dbRecipeToAPIShallow(section.recipeSection.recipe),
     sectionName: section.recipeSection.name,

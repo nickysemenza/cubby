@@ -25,6 +25,13 @@ interface ConversionCapabilitiesProps {
    * clipped). The recipe table opts in; its mapping column is wide enough.
    */
   showCoverage?: boolean;
+  /**
+   * Show the one-word coverage tier (Complete/Good/Partial/None) in compact mode.
+   * The ingredient/product list columns opt in so the cell reads as an at-a-glance
+   * status rather than just a converter button. Suppressed when there are no
+   * mappings at all (nothing to grade).
+   */
+  showTier?: boolean;
 }
 
 // kindIconMap and formatKindsLabel shared in kind-icons.ts
@@ -48,11 +55,13 @@ export const ConversionCapabilities = memo(function ConversionCapabilities({
   hideConvertButton = false,
   compact = false,
   showCoverage = false,
+  showTier = false,
 }: ConversionCapabilitiesProps) {
   // Detail view (non-compact) renders the per-pair grid + tier headline; compact
-  // table cells render the kind icons (a summary of the same data) when opted
-  // in. Skip the computation entirely for compact columns that don't opt in.
-  const needCoverage = !compact || showCoverage;
+  // table cells render the kind icons and/or the tier word (summaries of the same
+  // data) when opted in. Skip the computation entirely for compact columns that
+  // don't opt into either.
+  const needCoverage = !compact || showCoverage || showTier;
   const coverage = useMemo(
     () => (needCoverage ? conversionCoverage(mappings) : null),
     [mappings, needCoverage],
@@ -66,10 +75,21 @@ export const ConversionCapabilities = memo(function ConversionCapabilities({
             <ConversionDialog mappings={mappings} compact={compact} />
           )}
 
+          {/* Compact tier word (Complete/Good/Partial/None), opt-in for list
+              columns. Only when there are mappings to grade — an unmapped stub
+              shouldn't read as a red "None". */}
+          {coverage && compact && showTier && mappings.length > 0 && (
+            <span
+              className={`font-mono text-2xs uppercase tracking-wide ${TIER_CLASS[coverage.tier]}`}
+            >
+              {TIER_LABEL[coverage.tier]}
+            </span>
+          )}
+
           {/* Compact: the kind icons are the whole story (no room for a grid).
               Lit when the kind converts to something; per-icon tooltips + sr-only
               labels carry the meaning. */}
-          {coverage && compact && (
+          {coverage && compact && showCoverage && (
             <div className="flex items-center gap-0.5">
               {BASE_KINDS.map((kind) => {
                 const { Icon, label } = kindIconMap[kind]!;
