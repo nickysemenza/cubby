@@ -1,25 +1,34 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("Main navigation", () => {
-  test("mobile bottom nav links work", async ({ page }) => {
+  test("mobile bottom nav shows the public navbar when signed out", async ({
+    page,
+  }) => {
     // Mobile viewport first so the page renders the (md:hidden) bottom nav from
-    // the start, then wait for hydration so the <Link> does a client-side nav.
+    // the start.
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/");
     await page.waitForLoadState("networkidle");
 
-    // Bottom nav should be visible on mobile
     const bottomNav = page.getByRole("navigation", { name: "Main navigation" });
     await expect(bottomNav).toBeVisible();
 
-    // Inventory link should be directly visible in bottom nav
-    const inventoryLink = bottomNav.getByRole("link", { name: "Inventory" });
-    await expect(inventoryLink).toBeVisible({ timeout: 5000 });
+    // The bar optimistically shows the authed tabs while the session is still
+    // pending, then swaps to the minimal public navbar once the session
+    // resolves to "signed out". Wait for the public "Sign In" affordance so we
+    // assert against the resolved (signed-out) state, not the optimistic one —
+    // this is the race the previous "expect Inventory" assertion tripped on.
+    const signIn = bottomNav.getByRole("link", { name: "Sign In" });
+    await expect(signIn).toBeVisible({ timeout: 15000 });
 
-    // Click the link — unauthenticated users are redirected to sign-in by the
-    // _authenticated beforeLoad, which awaits authClient.getSession(). That
-    // session check can be slow under parallel test load, so allow generous time.
-    await inventoryLink.click();
+    // Public links are present; authed-only entities (e.g. Inventory) are not.
+    await expect(bottomNav.getByRole("link", { name: "Home" })).toBeVisible();
+    await expect(
+      bottomNav.getByRole("link", { name: "Inventory" }),
+    ).toHaveCount(0);
+
+    // The sign-in link lands on the sign-in page.
+    await signIn.click();
     await page.waitForURL(/\/auth\/sign-in/, { timeout: 30000 });
   });
 });
