@@ -21,12 +21,15 @@ use wasm_bindgen::prelude::*;
 #[macro_use]
 mod macros;
 
+mod availability;
 mod conversion;
 mod costing;
 mod epub;
 mod food_mappings;
 mod parse;
+mod reconcile;
 
+pub use availability::*;
 pub use conversion::*;
 pub use costing::*;
 pub use epub::*;

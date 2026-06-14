@@ -1,6 +1,8 @@
 import type {
   AmountKind,
   WAmount,
+  WAvailabilityInput,
+  WAvailabilityResult,
   WCostingInput,
   WCostingRow,
   WIngredientUsage,
@@ -88,6 +90,17 @@ export const convertAmountToPrice = (
   return safeConvertAmount(amount, mappings, "money");
 };
 
+/**
+ * Evaluate ingredient availability for a batch of groups in ONE WASM call. The
+ * gram-first reconciliation + status verdict live in Rust (recipebridge's
+ * availability module), shared with the costing engine's conversion kernel; the
+ * AvailabilityService owns the DB loads and reshapes the result into the zod
+ * `IngredientAvailability` / `AggregatedNeed` output types.
+ */
+export const evaluateAvailability = (
+  input: WAvailabilityInput,
+): WAvailabilityResult => wasm.evaluate_availability(input);
+
 /** Price, weight, and nutrient results for one ingredient (or sub-recipe). */
 export type IngredientPriceInfo = {
   price: Result<WAmount>;
@@ -168,7 +181,7 @@ const nutrientTargets = (): WCostingInput["nutrient_targets"] =>
  * (snake `upper_value`). Mapping here is what lets a ranged amount ("2–3 cups")
  * actually reach the engine — a straight passthrough would drop the bound.
  */
-const toWAmount = (a: Amount): WAmount => ({
+export const toWAmount = (a: Amount): WAmount => ({
   value: a.value,
   unit: a.unit,
   ...(a.upperValue != null ? { upper_value: a.upperValue } : {}),
@@ -188,7 +201,9 @@ const toWRow = (
   section_name: row.sectionName,
 });
 
-const toWProductInput = (p: ProductWithMappingsAndFoodOut): WProductInput => ({
+export const toWProductInput = (
+  p: ProductWithMappingsAndFoodOut,
+): WProductInput => ({
   id: p.id,
   price: p.price,
   unit_mappings: p.unitMappings,
