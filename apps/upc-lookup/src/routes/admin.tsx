@@ -683,7 +683,9 @@ admin.post("/misses/:upc/refetch", async (c) => {
   const db = createDb(c.env.DB);
   const upc = c.req.param("upc");
 
-  const outcome = await resolveProductOutcome(db, c.env, upc);
+  // force: bypass the miss-cache TTL guard so an explicit "Re-try" actually
+  // re-hits the external API (every worklist entry is a recent miss).
+  const outcome = await resolveProductOutcome(db, c.env, upc, { force: true });
   const { message, type } =
     outcome.status === "found"
       ? {

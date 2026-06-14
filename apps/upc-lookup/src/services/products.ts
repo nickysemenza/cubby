@@ -32,6 +32,7 @@ export async function resolveProductOutcome(
   db: Database,
   env: Env,
   upc: string,
+  opts: { force?: boolean } = {},
 ): Promise<ResolveOutcome> {
   const existing = await getProduct(db, upc);
   if (existing) {
@@ -39,9 +40,13 @@ export async function resolveProductOutcome(
   }
 
   // Already tried and known-missing within the TTL — don't re-query the API.
-  const freshMisses = await getFreshMisses(db, [upc]);
-  if (freshMisses.has(upc)) {
-    return { status: "not_found" };
+  // `force` skips this guard for an explicit manual retry (the admin "Re-try"
+  // button), which must re-hit the API even inside the TTL window.
+  if (!opts.force) {
+    const freshMisses = await getFreshMisses(db, [upc]);
+    if (freshMisses.has(upc)) {
+      return { status: "not_found" };
+    }
   }
 
   const lookup = await lookupExternalProduct(upc);

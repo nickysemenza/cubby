@@ -71,6 +71,22 @@ describe("resolveProductOutcome", () => {
     expect(recordMiss).not.toHaveBeenCalled();
   });
 
+  it("force bypasses the fresh-miss guard and re-hits the API", async () => {
+    vi.mocked(getProduct).mockResolvedValue(undefined);
+    // A fresh miss exists, but force must ignore it and call the API anyway.
+    vi.mocked(getFreshMisses).mockResolvedValue(new Set(["012345678905"]));
+    vi.mocked(lookupExternalProduct).mockResolvedValue({ status: "not_found" });
+
+    const outcome = await resolveProductOutcome(db, env, "012345678905", {
+      force: true,
+    });
+
+    expect(outcome).toEqual({ status: "not_found" });
+    expect(getFreshMisses).not.toHaveBeenCalled();
+    expect(lookupExternalProduct).toHaveBeenCalledWith("012345678905");
+    expect(recordMiss).toHaveBeenCalledWith(db, "012345678905");
+  });
+
   it("records a miss on a definitive not-found", async () => {
     vi.mocked(getProduct).mockResolvedValue(undefined);
     vi.mocked(lookupExternalProduct).mockResolvedValue({ status: "not_found" });
