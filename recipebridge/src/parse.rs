@@ -562,8 +562,22 @@ mod tests {
     #[case(2.0, "2")]
     #[case(0.0, "0")]
     #[case(0.37, "0.37")]
+    // Negatives ride the sign on the numerator (num-rational normalizes denom > 0);
+    // exercises the `sign` branch for both proper and mixed fractions.
+    #[case(-0.5, "-1/2")]
+    #[case(-1.5, "-1 1/2")]
     fn format_quantity_table(#[case] value: f64, #[case] expected: &str) {
         assert_eq!(format_quantity(value), expected);
+    }
+
+    /// Unparseable input falls through the bare-measurement parse *and* the faux-line
+    /// fallback to an `Err`, rather than panicking or returning a bogus number — the
+    /// editor surfaces this as `aria-invalid` and retains the typed text.
+    #[rstest]
+    #[case("xyz")]
+    #[case("")]
+    fn parse_quantity_rejects_non_quantities(#[case] input: &str) {
+        assert!(parse_quantity(input).is_err(), "expected Err for {input:?}");
     }
 
     /// `parse_quantity` reads the leading quantity (mixed numbers, vulgar glyphs,
