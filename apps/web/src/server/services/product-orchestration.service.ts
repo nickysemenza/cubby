@@ -13,6 +13,7 @@ import { getErrorMessage } from "~/lib/error-utils";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
+import { runWithConflictRecovery } from "~/server/errors/db-errors";
 import {
   findProductByUPC,
   findProductsWithNoImages,
@@ -38,70 +39,87 @@ export async function findOrCreateByUPC(
     return existing;
   }
 
-  // 2. Lookup in USDA database (food items)
-  const food = await usdaClient.findFood({
-    kind: "upc",
-    gtin_upc: upc,
-  });
+  // Cascade create with cross-request race recovery. Each quickCreateProduct is
+  // a single product INSERT, so a concurrent creator of the same UPC makes the
+  // loser's INSERT throw a (raw) unique violation with nothing committed.
+  // runWithConflictRecovery re-SELECTs the committed winner by UPC instead of
+  // 500ing; a non-UPC duplicate (e.g. name+manufacturer) finds no UPC row and
+  // is re-thrown unchanged.
+  return runWithConflictRecovery(
+    async () => {
+      // 2. Lookup in USDA database (food items)
+      const food = await usdaClient.findFood({
+        kind: "upc",
+        gtin_upc: upc,
+      });
 
-  if (food) {
-    return await quickCreateProduct(
-      db,
-      {
-        name: food.foodInfo.description,
-        manufacturer:
-          food.brandedFoodInfo?.brand_owner ??
-          food.brandedFoodInfo?.brand_name ??
-          UNSPECIFIED_MANUFACTURER,
-        upc,
-        expectedQuantity: null,
-        model: null,
-      },
-      actor,
-    );
-  }
-
-  // 3. Lookup in UPC worker (general products - tools, electronics, etc.)
-  const upcLookup = await upcLookupClient.lookup(upc);
-
-  if (upcLookup) {
-    const newProduct = await quickCreateProduct(
-      db,
-      {
-        name: upcLookup.name,
-        manufacturer:
-          upcLookup.manufacturer ?? upcLookup.brand ?? UNSPECIFIED_MANUFACTURER,
-        upc,
-        expectedQuantity: null,
-        model: null,
-        price: upcLookup.priceDollars ?? null,
-      },
-      actor,
-    );
-
-    // Import image from UPC lookup if available (non-blocking)
-    if (upcLookup.imageUrl) {
-      try {
-        await importImageFromUPC(db, upcLookupClient, upc, newProduct.id);
-      } catch (error) {
-        console.error(`[findOrCreateByUPC] Image import failed:`, error);
+      if (food) {
+        return await quickCreateProduct(
+          db,
+          {
+            name: food.foodInfo.description,
+            manufacturer:
+              food.brandedFoodInfo?.brand_owner ??
+              food.brandedFoodInfo?.brand_name ??
+              UNSPECIFIED_MANUFACTURER,
+            upc,
+            expectedQuantity: null,
+            model: null,
+          },
+          actor,
+        );
       }
-    }
 
-    return newProduct;
-  }
+      // 3. Lookup in UPC worker (general products - tools, electronics, etc.)
+      const upcLookup = await upcLookupClient.lookup(upc);
 
-  // 4. Nothing found anywhere - create with defaults
-  return await quickCreateProduct(
-    db,
-    {
-      name: defaultName ?? `Product ${upc}`,
-      manufacturer: UNSPECIFIED_MANUFACTURER,
-      upc,
-      expectedQuantity: null,
-      model: null,
+      if (upcLookup) {
+        const newProduct = await quickCreateProduct(
+          db,
+          {
+            name: upcLookup.name,
+            manufacturer:
+              upcLookup.manufacturer ??
+              upcLookup.brand ??
+              UNSPECIFIED_MANUFACTURER,
+            upc,
+            expectedQuantity: null,
+            model: null,
+            price: upcLookup.priceDollars ?? null,
+          },
+          actor,
+        );
+
+        // Import image from UPC lookup if available (non-blocking)
+        if (upcLookup.imageUrl) {
+          try {
+            await importImageFromUPC(db, upcLookupClient, upc, newProduct.id);
+          } catch (error) {
+            console.error(`[findOrCreateByUPC] Image import failed:`, error);
+          }
+        }
+
+        return newProduct;
+      }
+
+      // 4. Nothing found anywhere - create with defaults
+      return await quickCreateProduct(
+        db,
+        {
+          name: defaultName ?? `Product ${upc}`,
+          manufacturer: UNSPECIFIED_MANUFACTURER,
+          upc,
+          expectedQuantity: null,
+          model: null,
+        },
+        actor,
+      );
     },
-    actor,
+    async (error) => {
+      const winner = await findProductByUPC(db, upc);
+      if (!winner) throw error;
+      return winner;
+    },
   );
 }
 

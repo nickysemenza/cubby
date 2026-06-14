@@ -16,6 +16,7 @@ import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { cookbook, image, recipe } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
+import { runWithConflictRecovery } from "~/server/errors/db-errors";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import {
   getDb,
@@ -52,50 +53,75 @@ export const upsertCookbook = async (
   input: CookbookUpsertInput,
   actor: ActorContext,
 ): Promise<{ id: CookbookId }> => {
-  return withTransaction(db, async (tx) => {
-    const existing = await tx.query.cookbook.findFirst({
-      where: and(eq(cookbook.name, input.name), notDeleted(cookbook)),
-      columns: { id: true },
+  const values = {
+    name: input.name,
+    rawJson: input.rawJson,
+    author: input.author ?? [],
+    subjects: input.subjects ?? [],
+    sourceLabel: input.sourceLabel,
+    importedAt: new Date(),
+    // Omit when not provided so an update can't null out an existing cover.
+    ...(input.coverImageId ? { coverImageId: input.coverImageId } : {}),
+  };
+
+  const matchWhere = and(eq(cookbook.name, input.name), notDeleted(cookbook));
+
+  // Insert (existingId === null) or update one cookbook row, then associate the
+  // cover image and log the audit entry — all in one transaction.
+  const commit = (existingId: CookbookId | null): Promise<{ id: CookbookId }> =>
+    withTransaction(db, async (tx) => {
+      const id = existingId
+        ? (
+            await updateAndReturn(
+              tx,
+              cookbook,
+              values,
+              eq(cookbook.id, existingId),
+            )
+          ).id
+        : (await insertAndReturn(tx, cookbook, values)).id;
+
+      // The cover image is now associated → mark it uploaded (it was PENDING from
+      // the presigned upload, like the recipe/product image flow).
+      if (input.coverImageId) {
+        await tx
+          .update(image)
+          .set({ status: "UPLOADED" })
+          .where(eq(image.id, input.coverImageId));
+      }
+
+      await logAuditEntry(tx, actor, {
+        entityType: "cookbook",
+        entityId: id,
+        action: existingId ? "update" : "create",
+      });
+      return { id };
     });
 
-    const values = {
-      name: input.name,
-      rawJson: input.rawJson,
-      author: input.author ?? [],
-      subjects: input.subjects ?? [],
-      sourceLabel: input.sourceLabel,
-      importedAt: new Date(),
-      // Omit when not provided so an update can't null out an existing cover.
-      ...(input.coverImageId ? { coverImageId: input.coverImageId } : {}),
-    };
-
-    const id = existing
-      ? (
-          await updateAndReturn(
-            tx,
-            cookbook,
-            values,
-            eq(cookbook.id, existing.id),
-          )
-        ).id
-      : (await insertAndReturn(tx, cookbook, values)).id;
-
-    // The cover image is now associated → mark it uploaded (it was PENDING from
-    // the presigned upload, like the recipe/product image flow).
-    if (input.coverImageId) {
-      await tx
-        .update(image)
-        .set({ status: "UPLOADED" })
-        .where(eq(image.id, input.coverImageId));
-    }
-
-    await logAuditEntry(tx, actor, {
-      entityType: "cookbook",
-      entityId: id,
-      action: existing ? "update" : "create",
-    });
-    return { id: id };
+  const existing = await getDb(db).query.cookbook.findFirst({
+    where: matchWhere,
+    columns: { id: true },
   });
+  if (existing) {
+    return commit(existing.id);
+  }
+
+  // No match: insert. `commit(null)` runs the INSERT in its own transaction, so a
+  // concurrent same-name import that wins the race makes this txn abort on
+  // `Cookbook_name_key` and fully roll back; we then re-SELECT the winner and
+  // update it instead of 500ing.
+  return runWithConflictRecovery(
+    () => commit(null),
+    async (error) => {
+      const winner = await getDb(db).query.cookbook.findFirst({
+        where: matchWhere,
+        columns: { id: true },
+      });
+      if (!winner) throw error;
+      return commit(winner.id);
+    },
+    "Cookbook_name_key",
+  );
 };
 
 /** A non-deleted cookbook by name, or null. */

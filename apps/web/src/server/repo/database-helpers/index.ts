@@ -11,6 +11,7 @@ export { getDb, unwrapDb, withTransaction } from "./core";
 export {
   associatePendingImages,
   batchUpdateWithCaseWhen,
+  findOrCreate,
   insertAndReturn,
   updateAndReturn,
 } from "./crud";

@@ -45,6 +45,7 @@ import {
   buildOrderBy,
   executeListQueryWithCount,
   extractImagesFromJoinTable,
+  findOrCreate,
   formatSearchTerm,
   getDb,
   insertAndReturn,
@@ -338,21 +339,16 @@ export const findOrCreateIngredient = async (
   name: string,
   aliases?: string[],
 ) => {
-  const findOrCreate = async (): Promise<typeof ingredient.$inferSelect> => {
-    const existing = await unwrapDb(db).query.ingredient.findFirst({
-      where: buildIngredientWhere(true, name, aliases),
-    });
-    if (existing) {
-      return existing;
-    }
-
-    return await insertAndReturn(db, ingredient, {
-      name: name,
-      aliases: aliases || [],
-    });
-  };
-
-  const entry = await findOrCreate();
+  // Atomic find-or-create against the partial unique index `Ingredient_name_key`
+  // (UNIQUE(name) WHERE deletedAt IS NULL); see findOrCreate for the race it
+  // closes. The case-insensitive/alias `where` is the matcher; the conflict
+  // target is the exact-name index.
+  const { row: entry } = await findOrCreate(db, ingredient, {
+    where: buildIngredientWhere(true, name, aliases),
+    values: { name, aliases: aliases || [] },
+    target: ingredient.name,
+    targetWhere: isNull(ingredient.deletedAt),
+  });
 
   // add in aliases, but dedupe and make sure they don't include the name
   const aliasesToAdd = aliases
