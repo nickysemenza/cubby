@@ -328,20 +328,23 @@ usdaClient.getFoodSummaryByID(fdcId);
 
 Framed as **Now / Next / Later** (no dates — it's a personal project). Canonical plans live in [docs/plans/](docs/plans/); the links are pointers, not summaries, so they don't rot.
 
+### Recently shipped
+
+- **Meal planning v1** — plan recipes onto a calendar (week + table views), scale each per meal, and a display-only shopping list (aggregated need vs. on-hand inventory, with a per-meal breakdown). Cook-and-consume inventory deduction was deliberately scoped out — it lives under *Meal planning v2* below → [docs/plans/2026-05-29-meal-planning-implementation-plan.md](docs/plans/2026-05-29-meal-planning-implementation-plan.md)
+
 ### Now
 
-- **Meal planning + shopping list + recipe scaling** — turns the recipe↔inventory tie into daily utility: plan meals on a calendar, scale recipes, generate shopping lists from shortages, and consume inventory when a meal is cooked → [docs/plans/2025-12-18-meal-planning-bom-design.md](docs/plans/2025-12-18-meal-planning-bom-design.md)
+- _Nothing active — next focus will be promoted from **Next** below._
 
 ### Next
 
-- **Mobile / offline PWA** — service-worker offline, swipe-to-delete, pull-to-refresh, performance → [docs/plans/2026-01-05-mobile-first-experience-design.md](docs/plans/2026-01-05-mobile-first-experience-design.md)
 - **AI deepening** — smarter Ask Cubby and better photo capture, building on the shipped *"what can I make tonight?"* (`find_cookable_recipes`) tool → [docs/todos.md](docs/todos.md)
 - **Nutrition & cost intelligence** — price-per-nutrient, daily-value %, and nutrient-density comparisons via WASM conversion extensions → [docs/todos.md](docs/todos.md)
 - **Household sharing** — replace the org plugin with a simple shared-household model + magic-link invites (e.g. share with a partner) → [docs/todos.md](docs/todos.md)
 
 ### Later
 
-- **Meal planning v2** — expiration-aware suggestions, FEFO consumption, meal templates, nutrition goals
+- **Meal planning v2** — cook-and-consume inventory deduction (Phase 4), expiration-aware suggestions, FEFO consumption, meal templates, nutrition goals
 - **WASM deep cuts** — batch recipe parsing, custom unit aliases, inventory depletion preview
 - **Location drag-drop** in the tree view
 - **Engineering backlog** — document test-placement criteria; persist scraped/Notion hero images on the server import path

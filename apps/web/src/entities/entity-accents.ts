@@ -14,6 +14,7 @@ export const ENTITY_ACCENTS: Record<Entity, string> = {
   cookbook: "var(--plum)",
   ingredient: "oklch(0.65 0.12 50)",
   location: "var(--slate)",
+  meal: "var(--warning)",
   image: "var(--subtle)",
   "usda-food": "var(--positive)",
 };

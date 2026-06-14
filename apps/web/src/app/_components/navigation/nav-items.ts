@@ -9,6 +9,7 @@ import {
   ScanBarcode,
   Search,
   Settings,
+  Sparkles,
   TrendingUp,
   Utensils,
 } from "lucide-react";
@@ -66,10 +67,19 @@ const cookbooks: NavItem = {
 };
 
 const meals: NavItem = {
-  href: "/meals/suggestions",
+  href: "/meals",
   label: "Meals",
   icon: Utensils,
-  isActive: (p) => p.startsWith("/meals"),
+  // The calendar + everything under /meals EXCEPT the suggestions surface,
+  // which has its own nav item below.
+  isActive: (p) => p.startsWith("/meals") && p !== "/meals/suggestions",
+};
+
+const mealSuggestions: NavItem = {
+  href: "/meals/suggestions",
+  label: "What can I make?",
+  icon: Sparkles,
+  isActive: (p) => p === "/meals/suggestions",
 };
 
 const search: NavItem = {
@@ -185,6 +195,7 @@ export const kitchenItems: NavItem[] = [
   recipes,
   cookbooks,
   meals,
+  mealSuggestions,
   usda,
 ];
 

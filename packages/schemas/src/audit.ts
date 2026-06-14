@@ -12,5 +12,6 @@ export const auditEntitySchema = entitySchema.extract([
   "recipe",
   "cookbook",
   "ingredient",
+  "meal",
 ]);
 export type AuditEntityType = z.infer<typeof auditEntitySchema>;

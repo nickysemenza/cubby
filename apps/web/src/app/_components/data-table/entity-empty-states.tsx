@@ -55,6 +55,12 @@ const entityEmptyConfig: Record<Entity, EntityEmptyConfig> = {
       "Start tracking what you have and where it lives. Scan a barcode or add it by hand.",
     actionLabel: "Add to Inventory",
   },
+  meal: {
+    title: "No meals planned",
+    description:
+      "Plan recipes onto your calendar to see costs add up and build a shopping list.",
+    actionLabel: "Plan a Meal",
+  },
   image: {
     title: "No photos yet",
     description: "Add photos to attach them to recipes, products, and places.",

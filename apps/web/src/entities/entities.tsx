@@ -2,6 +2,7 @@ import {
   Apple,
   Barcode,
   BookOpen,
+  CalendarDays,
   Carrot,
   ChefHat,
   Image,
@@ -177,6 +178,27 @@ export const entities: Record<Entity, EntityDefinition> = {
       defaultSort: "createdAt",
       standardColumns: [],
       sortableFields: ["createdAt", "amount", "valuation"],
+    },
+  },
+  meal: {
+    label: "Meal",
+    pluralLabel: "Meals",
+    basePath: "meals",
+    lucideIcon: CalendarDays,
+    color: {
+      bg: "bg-warning/20",
+      text: "text-warning",
+    },
+    routes: {
+      detail: "/meals/$id",
+      list: "/meals",
+      new: "/meals/new",
+    },
+    detail: { commonSections: ["history"] },
+    list: {
+      defaultSort: "date",
+      standardColumns: [],
+      sortableFields: ["date", "createdAt"],
     },
   },
   "usda-food": {

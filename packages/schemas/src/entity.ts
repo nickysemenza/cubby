@@ -16,6 +16,7 @@ export const entitySchema = z.enum([
   "cookbook",
   "location",
   "inventory",
+  "meal",
   "usda-food",
   "image",
 ]);
