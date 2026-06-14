@@ -18,6 +18,9 @@ use serde::{Deserialize, Serialize};
 use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
 
+#[macro_use]
+mod macros;
+
 mod conversion;
 mod costing;
 mod epub;
