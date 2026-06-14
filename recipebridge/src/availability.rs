@@ -555,4 +555,56 @@ mod tests {
             serde_json::json!("unconvertible")
         );
     }
+
+    #[test]
+    fn export_batches_groups_and_tolerates_an_empty_group() {
+        // Drives the public `evaluate_availability` wrapper (not just
+        // `evaluate_group`) and the defensive empty-needs basis.
+        let result = evaluate_availability(WAvailabilityInput {
+            groups: vec![
+                WAvailabilityGroup {
+                    key: "a".into(),
+                    needs: vec![need(100.0, "g", 0)],
+                    products: vec![product(
+                        "p",
+                        vec![mapping(1.0, "cup", 120.0, "g")],
+                        vec![amt(1.0, "cup")],
+                    )],
+                },
+                // No needs, no inventory — the empty-needs guard yields an inert
+                // result rather than panicking.
+                WAvailabilityGroup {
+                    key: "empty".into(),
+                    needs: vec![],
+                    products: vec![],
+                },
+            ],
+        });
+        assert_eq!(result.groups.len(), 2);
+        assert_eq!(result.groups[0].key, "a");
+        assert_eq!(result.groups[0].status, WAvailabilityStatus::Ok);
+        assert_eq!(result.groups[1].key, "empty");
+        assert_eq!(result.groups[1].need_value, 0.0);
+        assert_eq!(result.groups[1].status, WAvailabilityStatus::Missing);
+    }
+
+    #[test]
+    fn non_finite_values_are_dropped_not_propagated() {
+        // A non-finite need/on-hand (e.g. Inf from broken data) must be dropped
+        // before it poisons the total to Inf/NaN — the hardening guard. Use an
+        // authored-unit basis so the raw f64 reaches the finite() filter without
+        // going through the rational graph (which can't represent Inf).
+        let g = eval(WAvailabilityGroup {
+            key: "k".into(),
+            needs: vec![need(50.0, "clove", 0), need(f64::INFINITY, "clove", 1)],
+            products: vec![product(
+                "p",
+                vec![],
+                vec![amt(10.0, "clove"), amt(f64::INFINITY, "clove")],
+            )],
+        });
+        assert!(g.need_value.is_finite());
+        assert_eq!(g.need_value, 50.0); // infinite need contribution dropped
+        assert_eq!(g.have_value, Some(10.0)); // infinite on-hand dropped
+    }
 }
