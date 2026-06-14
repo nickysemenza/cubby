@@ -27,7 +27,7 @@ import {
   type Stats,
   sumNullable,
 } from "./compare-grid-utils";
-import { DeviationBar } from "./DeviationBar";
+import { DistributionGlyph, StripPlotCell } from "./DeviationBar";
 
 /** A recipe plus the figures the comparison grid renders. */
 export interface ComparedRecipe {
@@ -109,19 +109,30 @@ const AverageCell: React.FC<{
   format: AverageFormat;
 }> = ({ stats, format }) => {
   if (!stats) return DASH;
+  const hasSpread = stats.count >= 2 && stats.max > stats.min;
   return (
     <div className="space-y-0.5">
-      <div className="font-medium">{format.mean(stats.mean)}</div>
-      {stats.count >= 2 && stats.max > stats.min && (
-        <div className="text-[11px] text-muted-foreground leading-tight">
-          <div>
-            {format.num(stats.min)}–{format.num(stats.max)}
+      <div className="font-medium font-mono tabular-nums">
+        {format.mean(stats.mean)}
+      </div>
+      {hasSpread && (
+        <>
+          <div className="font-mono text-[11px] text-muted-foreground tabular-nums leading-tight">
+            <div>
+              {format.num(stats.min)}–{format.num(stats.max)}
+            </div>
+            <div>
+              σ{format.num(stats.std)}
+              {stats.cv != null && ` · cv ${Math.round(stats.cv)}%`}
+            </div>
           </div>
-          <div>
-            σ{format.num(stats.std)}
-            {stats.cv != null && ` · cv ${Math.round(stats.cv)}%`}
-          </div>
-        </div>
+          <DistributionGlyph
+            mean={stats.mean}
+            min={stats.min}
+            max={stats.max}
+            std={stats.std}
+          />
+        </>
       )}
     </div>
   );
@@ -303,8 +314,8 @@ export const RecipeCompareGrid: React.FC<{
         </div>
         <span className="flex items-center gap-1.5 text-muted-foreground text-xs">
           <span
-            className="inline-block h-2.5 w-2.5 rounded-sm"
-            style={{ backgroundColor: "var(--warning)" }}
+            className="inline-block size-2 rounded-full"
+            style={{ backgroundColor: "var(--primary)" }}
           />
           largest deviation from average
         </span>
@@ -320,52 +331,52 @@ export const RecipeCompareGrid: React.FC<{
               return (
                 <th
                   key={c.recipe.id}
-                  className="min-w-[150px] px-3 pt-3 pb-2 text-left align-bottom font-normal"
+                  className="min-w-[120px] px-3 pt-3 pb-2 text-left align-top font-normal"
                 >
-                  {hero ? (
-                    <img
-                      src={hero}
-                      alt={c.recipe.name}
-                      className="mb-2 h-14 w-full rounded-md object-cover"
-                    />
-                  ) : (
-                    <div className="mb-2 flex h-14 w-full items-center justify-center rounded-md bg-muted text-muted-foreground">
-                      <ChefHat className="h-5 w-5" />
-                    </div>
-                  )}
-                  <div className="flex items-start justify-between gap-1">
-                    <Link
-                      to="/recipes/$id"
-                      params={{ id: c.recipe.id }}
-                      className="font-medium leading-tight hover:underline"
-                    >
-                      {c.recipe.name}
-                    </Link>
+                  <div className="relative mb-1.5">
+                    {hero ? (
+                      <img
+                        src={hero}
+                        alt={c.recipe.name}
+                        className="h-10 w-full rounded-md object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-10 w-full items-center justify-center rounded-md bg-muted text-muted-foreground">
+                        <ChefHat className="h-4 w-4" />
+                      </div>
+                    )}
                     <button
                       type="button"
                       onClick={() => onRemove(c.recipe.id)}
-                      className="shrink-0 text-muted-foreground hover:text-destructive"
+                      className="absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-background/70 text-muted-foreground hover:text-destructive"
                       title="Remove from comparison"
                     >
-                      <X className="h-4 w-4" />
+                      <X className="h-3.5 w-3.5" />
                     </button>
                   </div>
+                  <Link
+                    to="/recipes/$id"
+                    params={{ id: c.recipe.id }}
+                    className="line-clamp-2 min-h-[2.5em] font-medium leading-tight hover:underline"
+                  >
+                    {c.recipe.name}
+                  </Link>
                   {subtitle && (
-                    <div className="truncate text-muted-foreground text-xs">
+                    <div className="truncate text-[11px] text-muted-foreground">
                       {subtitle}
                     </div>
                   )}
                 </th>
               );
             })}
-            <th className="min-w-[120px] border-primary/40 border-l-2 px-3 pt-3 pb-2 text-left align-bottom font-normal">
-              <div className="mb-2 flex h-14 w-full items-center justify-center rounded-md bg-primary/10 text-primary">
-                <Equal className="h-5 w-5" />
+            <th className="min-w-[110px] border-primary/40 border-l-2 px-3 pt-3 pb-2 text-left align-top font-normal">
+              <div className="mb-1.5 flex h-10 w-full items-center justify-center rounded-md bg-primary/10 text-primary">
+                <Equal className="h-4 w-4" />
               </div>
-              <div className="font-medium text-primary leading-tight">
+              <div className="min-h-[2.5em] font-medium text-primary leading-tight">
                 Average
               </div>
-              <div className="text-muted-foreground text-xs">
+              <div className="text-[11px] text-muted-foreground">
                 {compared.length} recipes
               </div>
             </th>
@@ -396,25 +407,27 @@ export const RecipeCompareGrid: React.FC<{
                 return (
                   <div>
                     <span
-                      className={
+                      className={`font-mono tabular-nums ${
                         isMax
                           ? "font-medium"
                           : isZero
                             ? "text-muted-foreground/50"
-                            : undefined
-                      }
-                      style={isMax ? { color: "var(--warning)" } : undefined}
+                            : ""
+                      }`}
+                      style={isMax ? { color: "var(--primary)" } : undefined}
                     >
                       {formatValue(v, basis)}
                     </span>
-                    {row.maxDeviationIndex != null && row.average != null && (
-                      <DeviationBar
-                        value={v}
-                        average={row.average}
-                        maxAbsDeviation={row.maxAbsDeviation}
-                        isMax={isMax}
-                      />
-                    )}
+                    {row.stats != null &&
+                      row.average != null &&
+                      row.stats.count >= 2 && (
+                        <StripPlotCell
+                          value={v}
+                          mean={row.average}
+                          max={row.stats.max}
+                          isMax={isMax}
+                        />
+                      )}
                   </div>
                 );
               }}
