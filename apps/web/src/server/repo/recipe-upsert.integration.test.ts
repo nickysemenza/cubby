@@ -166,6 +166,59 @@ describe("upsertRecipe", () => {
     expect(allRecipes).toHaveLength(1);
   });
 
+  it("recovers from a concurrent create race instead of 500ing", async () => {
+    // Cross-request race, deterministically forced (the createRecipe arm of
+    // runWithConflictRecovery): a "winner" txn inserts the same-named recipe and
+    // holds its lock open while our upsert runs. Our upsert's SELECT misses
+    // (winner uncommitted), createRecipe's INSERT blocks on the lock; once the
+    // winner commits, that INSERT raises a unique violation that aborts
+    // createRecipe's own txn. runWithConflictRecovery must then re-SELECT the
+    // committed winner and update it, not 500.
+    const name = "Race Recipe";
+
+    let releaseWinner!: () => void;
+    const winnerCommitted = new Promise<void>((resolve) => {
+      releaseWinner = resolve;
+    });
+
+    let winnerId = "";
+    const winner = getDb(db).transaction(async (tx) => {
+      const [row] = await tx
+        .insert(recipe)
+        .values({
+          name,
+          shortcode: "RACER1",
+          SourceType: "Website",
+          SourceData: "https://example.com/winner",
+        })
+        .returning();
+      winnerId = row!.id;
+      await winnerCommitted; // hold the txn (and its lock) open
+    });
+
+    // Let the winner reach (and hold) its uncommitted INSERT.
+    await new Promise((r) => setTimeout(r, 100));
+
+    const loser = upsertRecipe(
+      makeRecipeInput({ name, url: "https://example.com/loser" }),
+      db,
+      actor,
+    );
+
+    // Give the upsert time to reach its blocked INSERT, then commit the winner.
+    await new Promise((r) => setTimeout(r, 100));
+    releaseWinner();
+
+    const [, result] = await Promise.all([winner, loser]);
+
+    // The upsert recovered onto the winner's row — no throw, no duplicate.
+    expect(result.id).toBe(winnerId);
+    const allRecipes = await getDb(db).query.recipe.findMany({
+      where: eq(recipe.name, name),
+    });
+    expect(allRecipes).toHaveLength(1);
+  });
+
   it("works with recipes that have no URL (Other source type)", async () => {
     const recipeNoUrl = makeRecipeInput({
       name: "Manual Recipe",

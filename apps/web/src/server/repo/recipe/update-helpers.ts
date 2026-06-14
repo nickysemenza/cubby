@@ -11,7 +11,7 @@ import type {
   RecipeYield,
   recipeIngredientInput,
 } from "@cubby/schemas/recipe";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { z } from "zod";
 import type { DrizzleTransaction } from "~/server/db";
 import {
@@ -22,7 +22,7 @@ import {
   recipeSection,
   recipeSectionIngredient,
 } from "~/server/db/schema";
-import { insertAndReturn } from "~/server/repo/database-helpers";
+import { findOrCreate, insertAndReturn } from "~/server/repo/database-helpers";
 
 import type { ExistingRecipeWithSections } from "./internal-types";
 import { webProvenance } from "./source";
@@ -43,27 +43,27 @@ export const findOrCreateRecipeLinkIngredient = async (
   tx: DrizzleTransaction,
   recipeId: RecipeId,
 ): Promise<IngredientId> => {
-  const existing = await tx.query.ingredient.findFirst({
+  // Atomic find-or-create against the partial unique index
+  // `Ingredient_recipeId_key` (UNIQUE(recipeId) WHERE deletedAt IS NULL); see
+  // findOrCreate for the race it closes. Identity is recipeId, so that's both
+  // the match predicate and the conflict target. The name lookup is deferred to
+  // the create path via the values thunk.
+  const { row } = await findOrCreate(tx, ingredient, {
     where: eq(ingredient.recipeId, recipeId),
+    values: async () => {
+      const recipeRecord = await tx.query.recipe.findFirst({
+        where: eq(recipe.id, recipeId),
+        columns: { name: true },
+      });
+      if (!recipeRecord) {
+        throw new Error(`Recipe with ID ${recipeId} not found`);
+      }
+      return { name: `Recipe: ${recipeRecord.name}`, aliases: [], recipeId };
+    },
+    target: ingredient.recipeId,
+    targetWhere: isNull(ingredient.deletedAt),
   });
-  if (existing) {
-    return existing.id;
-  }
-
-  const recipeRecord = await tx.query.recipe.findFirst({
-    where: eq(recipe.id, recipeId),
-    columns: { name: true },
-  });
-  if (!recipeRecord) {
-    throw new Error(`Recipe with ID ${recipeId} not found`);
-  }
-
-  const newIngredient = await insertAndReturn(tx, ingredient, {
-    name: `Recipe: ${recipeRecord.name}`,
-    aliases: [],
-    recipeId,
-  });
-  return newIngredient.id;
+  return row.id;
 };
 
 type ProcessedIngredient = {

@@ -26,6 +26,7 @@ import {
   recipeSectionIngredient,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
+import { runWithConflictRecovery } from "~/server/errors/db-errors";
 import {
   computeChanges,
   logAuditEntries,
@@ -364,38 +365,59 @@ const upsertRecipeMatching = async (
   matchWhere: SQL | undefined,
   provenance: RecipeProvenance,
 ): Promise<{ id: RecipeId }> => {
+  // Update an already-matched recipe: refresh provenance + replace sections.
+  const updateMatched = (existingId: RecipeId): Promise<{ id: RecipeId }> =>
+    withTransaction(db, async (tx) => {
+      const updatedRecipe = await updateAndReturn(
+        tx,
+        recipe,
+        {
+          ...recipeSourceToColumns(provenance),
+          // Re-import reflects the source (like sections + notes — a manual edit
+          // doesn't survive a re-import). For web/cookbook recipes name is the match
+          // key, so this is a no-op; it only bites for Notion, which matches on page
+          // id — a renamed page now updates its title instead of keeping the stale
+          // one. Safe: Notion names are exempt from Recipe_name_key (identity is the
+          // page id via Recipe_notion_page_key), so the rename can't collide.
+          name: input.name,
+          // Like sections, notes are replaced from the import source on re-import
+          // (a manual edit doesn't survive a re-import).
+          notes: input.notes ?? null,
+          updatedAt: new Date(),
+        },
+        eq(recipe.id, existingId),
+      );
+      await replaceRecipeSections(tx, updatedRecipe.id, input.sections);
+      return { id: updatedRecipe.id };
+    });
+
   const existingRecipe = await getDb(db).query.recipe.findFirst({
     where: matchWhere,
+    columns: { id: true },
   });
-
-  if (!existingRecipe) {
-    const created = await createRecipe(db, input, actor, provenance);
-    return { id: created.id };
+  if (existingRecipe) {
+    return updateMatched(existingRecipe.id);
   }
 
-  return await withTransaction(db, async (tx) => {
-    const updatedRecipe = await updateAndReturn(
-      tx,
-      recipe,
-      {
-        ...recipeSourceToColumns(provenance),
-        // Re-import reflects the source (like sections + notes — a manual edit
-        // doesn't survive a re-import). For web/cookbook recipes name is the match
-        // key, so this is a no-op; it only bites for Notion, which matches on page
-        // id — a renamed page now updates its title instead of keeping the stale
-        // one. Safe: Notion names are exempt from Recipe_name_key (identity is the
-        // page id via Recipe_notion_page_key), so the rename can't collide.
-        name: input.name,
-        // Like sections, notes are replaced from the import source on re-import
-        // (a manual edit doesn't survive a re-import).
-        notes: input.notes ?? null,
-        updatedAt: new Date(),
-      },
-      eq(recipe.id, existingRecipe.id),
-    );
-    await replaceRecipeSections(tx, updatedRecipe.id, input.sections);
-    return { id: updatedRecipe.id };
-  });
+  // No match: create. `createRecipe` owns its transaction, so if a concurrent
+  // request created the same recipe between our SELECT and this INSERT, its txn
+  // aborts on the unique index (Recipe_name_key / book_title / notion_page) and
+  // fully rolls back. runWithConflictRecovery then re-SELECTs the committed
+  // winner and takes the update path instead of 500ing.
+  return runWithConflictRecovery(
+    async () => {
+      const created = await createRecipe(db, input, actor, provenance);
+      return { id: created.id };
+    },
+    async (error) => {
+      const winner = await getDb(db).query.recipe.findFirst({
+        where: matchWhere,
+        columns: { id: true },
+      });
+      if (!winner) throw error;
+      return updateMatched(winner.id);
+    },
+  );
 };
 
 /**

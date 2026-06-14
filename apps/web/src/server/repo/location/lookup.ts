@@ -9,13 +9,13 @@ import type {
   LocationOut,
   LocationType,
 } from "@cubby/schemas/location";
-import { and, desc, eq, ilike, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, isNull, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
 import { inventoryEntry, location } from "~/server/db/schema";
 import {
+  findOrCreate,
   getDb,
-  insertAndReturn,
   notDeleted,
   relations,
 } from "~/server/repo/database-helpers";
@@ -23,20 +23,6 @@ import { generateUniqueLocationShortcode } from "~/server/repo/shortcode-utils";
 
 import { getLocationById } from "./crud";
 import { dbLocationToAPI } from "./helpers";
-
-/**
- * Find a location by its unique name (case-insensitive)
- * Returns null if not found (excludes soft-deleted)
- */
-const findLocationByName = async (
-  db: Database,
-  name: string,
-): Promise<LocationId | null> => {
-  const loc = await getDb(db).query.location.findFirst({
-    where: and(ilike(location.name, name), notDeleted(location)),
-  });
-  return loc ? loc.id : null;
-};
 
 /**
  * Find a location by its shortcode
@@ -110,27 +96,25 @@ export const findOrCreateLocationByName = async (
     shortcode?: string;
   },
 ): Promise<{ locationId: LocationId; created: boolean }> => {
-  // Check if location already exists
-  const existingId = await findLocationByName(db, name);
-  if (existingId) {
-    return { locationId: existingId, created: false };
-  }
-
-  // Generate unique shortcode only if not provided
-  const shortcode =
-    options?.shortcode ?? (await generateUniqueLocationShortcode(db));
-
-  // Create new location (with optional timestamps for sheet import)
-  const created = await insertAndReturn(db, location, {
-    name,
-    type,
-    parentId,
-    shortcode,
-    ...(options?.createdAt && { createdAt: options.createdAt }),
-    ...(options?.updatedAt && { updatedAt: options.updatedAt }),
+  // Atomic find-or-create against the partial unique index `Location_name_key`
+  // (UNIQUE(name) WHERE deletedAt IS NULL); see findOrCreate for the race it
+  // closes. Match is case-insensitive (ilike); the shortcode thunk only runs on
+  // the create path, so existing locations don't burn a shortcode.
+  const { row, created } = await findOrCreate(db, location, {
+    where: and(ilike(location.name, name), notDeleted(location)),
+    values: async () => ({
+      name,
+      type,
+      parentId,
+      shortcode:
+        options?.shortcode ?? (await generateUniqueLocationShortcode(db)),
+      ...(options?.createdAt && { createdAt: options.createdAt }),
+      ...(options?.updatedAt && { updatedAt: options.updatedAt }),
+    }),
+    target: location.name,
+    targetWhere: isNull(location.deletedAt),
   });
-
-  return { locationId: created.id, created: true };
+  return { locationId: row.id, created };
 };
 
 /**

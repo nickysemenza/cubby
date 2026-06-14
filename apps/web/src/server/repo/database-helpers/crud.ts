@@ -5,13 +5,88 @@
 
 import type { InferInsertModel, InferSelectModel, SQL } from "drizzle-orm";
 import { getTableName, inArray, sql } from "drizzle-orm";
-import type { PgTable } from "drizzle-orm/pg-core";
+import type { IndexColumn, PgTable } from "drizzle-orm/pg-core";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { image } from "~/server/db/schema";
 import { TraceNames, withTrace } from "~/server/tracing";
 
 import { unwrapDb } from "./core";
+
+/**
+ * Atomic find-or-create. The correct, race-free SELECT-then-INSERT primitive:
+ *
+ *   1. SELECT by `where` — return the row if found.
+ *   2. Else INSERT ... ON CONFLICT DO NOTHING against the unique index named by
+ *      `target` (+ `targetWhere` for a partial index). DO NOTHING raises no
+ *      error, so it never poisons the surrounding transaction.
+ *   3. On conflict (no row inserted), a concurrent request created the same row
+ *      between our SELECT and INSERT. DO NOTHING blocked on its lock until it
+ *      committed, so a fresh SELECT (READ COMMITTED) reliably finds the winner.
+ *
+ * Use this instead of a hand-rolled `findFirst` + `insertAndReturn`, which 500s
+ * on the unique index when two requests create the same new row concurrently.
+ *
+ * `values` may be a thunk so expensive prep (e.g. shortcode generation) only
+ * runs on the create path, not when the row already exists.
+ */
+export const findOrCreate = async <T extends PgTable>(
+  db: Database | DrizzleTransaction,
+  table: T,
+  opts: {
+    /** Predicate to find an existing row (and to re-find the winner on conflict). */
+    where: SQL | undefined;
+    /** Row to insert when none is found; a thunk defers prep to the create path. */
+    values:
+      | InferInsertModel<T>
+      | (() => InferInsertModel<T> | Promise<InferInsertModel<T>>);
+    /** Conflict target column(s) — the unique index backing the race. */
+    target: IndexColumn | IndexColumn[];
+    /** Partial-index predicate, when the unique index is partial. */
+    targetWhere?: SQL;
+  },
+): Promise<{ row: InferSelectModel<T>; created: boolean }> => {
+  return withTrace(TraceNames.db("findOrCreate"), async (span) => {
+    span.setAttribute("db.table", getTableName(table));
+    const client = unwrapDb(db);
+
+    const [existing] = (await client
+      .select()
+      .from(table as PgTable)
+      .where(opts.where)
+      .limit(1)) as InferSelectModel<T>[];
+    if (existing) {
+      return { row: existing, created: false };
+    }
+
+    const values =
+      typeof opts.values === "function" ? await opts.values() : opts.values;
+
+    const [created] = (await client
+      .insert(table)
+      .values(values)
+      .onConflictDoNothing({ target: opts.target, where: opts.targetWhere })
+      .returning()) as InferSelectModel<T>[];
+    if (created) {
+      span.setAttribute("db.created", true);
+      return { row: created, created: true };
+    }
+
+    // Lost the create race: the winner is committed, so re-SELECT finds it.
+    span.setAttribute("db.conflict", true);
+    const [winner] = (await client
+      .select()
+      .from(table as PgTable)
+      .where(opts.where)
+      .limit(1)) as InferSelectModel<T>[];
+    if (!winner) {
+      throw new Error(
+        `findOrCreate(${getTableName(table)}): insert conflicted but no matching row was found`,
+      );
+    }
+    return { row: winner, created: false };
+  });
+};
 
 /**
  * Insert a single record and return it.

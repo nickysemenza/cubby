@@ -62,6 +62,52 @@ function referencedTableFromDetail(detail?: string): string | null {
 }
 
 /**
+ * True if `error` is (or wraps) a Postgres unique-violation (23505), optionally
+ * scoped to a specific constraint/index name. Find-then-insert helpers use this
+ * to recover from a lost create race: when a concurrent request created the same
+ * row between our SELECT and INSERT, the INSERT's transaction aborts on the
+ * unique index — caller re-SELECTs the committed winner instead of 500ing.
+ */
+export function isUniqueViolation(
+  error: unknown,
+  constraint?: string,
+): boolean {
+  const pg = findPgError(error);
+  if (!pg || pg.code !== "23505") return false;
+  return constraint ? pg.constraint === constraint : true;
+}
+
+/**
+ * Run a compound creator with cross-request race recovery. For find-then-create
+ * flows where the create is NOT a single insert (so `findOrCreate`'s ON CONFLICT
+ * can't reach it) — e.g. `createRecipe`, which inserts a recipe plus sections in
+ * its OWN transaction.
+ *
+ * If `create` throws a unique-violation (optionally scoped to `constraint`), a
+ * concurrent request created the same row between the caller's SELECT and this
+ * INSERT. Because `create` owns its transaction, that transaction has fully
+ * rolled back — no poisoning leaks out — so `recover` runs fresh statements to
+ * load and return/update the committed winner.
+ *
+ * IMPORTANT: only safe when `create` owns its transaction. Do NOT use this with
+ * a create that runs inside the caller's open transaction (a unique violation
+ * there poisons the whole txn and `recover`'s queries would error). Re-throws
+ * anything that isn't a matching unique violation.
+ */
+export async function runWithConflictRecovery<T>(
+  create: () => Promise<T>,
+  recover: (error: unknown) => Promise<T>,
+  constraint?: string,
+): Promise<T> {
+  try {
+    return await create();
+  } catch (error) {
+    if (!isUniqueViolation(error, constraint)) throw error;
+    return await recover(error);
+  }
+}
+
+/**
  * Translate a database constraint violation into a friendly TRPCError, or return
  * null if the error isn't a recognized Postgres constraint error (so the caller
  * can rethrow the original).
