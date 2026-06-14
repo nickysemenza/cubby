@@ -46,6 +46,27 @@ describe("parse_scraped_recipe → scrapedToImportRecipe", () => {
     expect(recipe.image).toBe("https://example.com/pancakes.jpg");
   });
 
+  // End-to-end coverage that the WASM scraper (recipe-scraper crate) decodes
+  // HTML entities in JSON-LD — including the double-encoding that round-trips
+  // through inner_html() + store (a page's `&#39;` becomes the literal
+  // `&amp;#39;`). Regression for titles stored as "The Food Lab&amp;#39;s …".
+  it("decodes double-encoded HTML entities in the title", () => {
+    const recipe = scrapedToImportRecipe(
+      parse_scraped_recipe(
+        recipeHtml({
+          "@context": "https://schema.org",
+          "@type": "Recipe",
+          name: "The Food Lab&amp;#39;s Chocolate Chip Cookies",
+          recipeIngredient: ["1 cup flour"],
+          recipeInstructions: [{ "@type": "HowToStep", text: "Bake." }],
+        }),
+        "https://example.com/cookies",
+      ),
+    );
+
+    expect(recipe.meta.title).toBe("The Food Lab's Chocolate Chip Cookies");
+  });
+
   it("does not expose the legacy flat ingredients/instructions fields", () => {
     const raw = parse_scraped_recipe(
       recipeHtml({
