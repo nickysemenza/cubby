@@ -16,6 +16,7 @@ import {
   recipe,
 } from "~/server/db/schema";
 import { formatSearchTerm, getDb, notDeleted } from "./database-helpers";
+import { liveRecipeCountForIngredientSql } from "./recipe";
 
 /**
  * Global search across all entity types using parallel queries.
@@ -87,8 +88,8 @@ export async function globalSearch(
           createdAt: recipe.createdAt,
           ingredientCount: sql<number>`(
             SELECT COUNT(*)::int FROM "RecipeSectionIngredient" rsi
-            JOIN "RecipeSection" rs ON rsi."recipeSectionId" = rs.id
-            WHERE rs."recipeId" = "Recipe"."id"
+            JOIN "RecipeSection" rs ON rsi."recipeSectionId" = rs.id AND rs."deletedAt" IS NULL
+            WHERE rs."recipeId" = "Recipe"."id" AND rsi."deletedAt" IS NULL
           )`.as("ingredientCount"),
         })
         .from(recipe)
@@ -105,11 +106,9 @@ export async function globalSearch(
           typeHint: sql<string | null>`null`.as("typeHint"),
           imageUrl: sql<string | null>`null`.as("imageUrl"),
           createdAt: ingredient.createdAt,
-          recipeCount: sql<number>`(
-            SELECT COUNT(DISTINCT rs."recipeId")::int FROM "RecipeSectionIngredient" rsi
-            JOIN "RecipeSection" rs ON rsi."recipeSectionId" = rs.id
-            WHERE rsi."ingredientId" = "Ingredient"."id"
-          )`.as("recipeCount"),
+          recipeCount: sql<number>`${sql.raw(
+            liveRecipeCountForIngredientSql('"Ingredient"."id"'),
+          )}::int`.as("recipeCount"),
         })
         .from(ingredient)
         .where(
