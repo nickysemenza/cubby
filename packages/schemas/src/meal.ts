@@ -26,9 +26,14 @@ export const mealDate = z
 
 /** A recipe to plan into a meal. */
 export const mealRecipeInput = z.object({
-  recipeId,
-  scale: mealScale.default(1),
-  sortOrder: z.number().int().nullable().optional(),
+  recipeId: recipeId.describe("Recipe ID to plan into the meal"),
+  scale: mealScale.default(1).describe("Scale multiplier (1 = as written)"),
+  sortOrder: z
+    .number()
+    .int()
+    .nullable()
+    .optional()
+    .describe("Sort order within the meal"),
 });
 export type MealRecipeInput = z.infer<typeof mealRecipeInput>;
 
