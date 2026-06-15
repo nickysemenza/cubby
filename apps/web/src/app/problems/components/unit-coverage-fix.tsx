@@ -61,6 +61,12 @@ const parsePositive = (raw: string): number | null => {
   return Number.isFinite(n) && n > 0 ? n : null;
 };
 
+/** Like {@link parsePositive} but allows 0 — e.g. a 0-calorie food like salt. */
+const parseNonNegative = (raw: string): number | null => {
+  const n = Number.parseFloat(raw);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+};
+
 // USDA fills these three; if they're all covered the USDA-link step is moot.
 const coversWeightVolumeCalories = (covered: string[]) =>
   ["weight", "volume", "calories"].every((k) => covered.includes(k));
@@ -124,19 +130,23 @@ export function UnitCoverageInlineFix({
     .with({ kind: "islanded" }, (i) => (
       <DisconnectedFix id={i.id} islands={i.islands} close={close} />
     ))
-    .with({ kind: "partial" }, (i) => (
-      <IngredientFix
-        id={i.id}
-        name={i.name}
-        close={close}
-        // Only offer to link USDA when it isn't linked yet — re-linking can't
-        // fill a gap the linked food doesn't cover.
-        showUsda={
-          !i.hasUsdaLink && !coversWeightVolumeCalories(i.coverage.covered)
-        }
-        showPrice={!i.hasPrice}
-      />
-    ))
+    .with({ kind: "partial" }, (i) => {
+      // Only offer to link USDA when it isn't linked yet — re-linking can't fill
+      // a gap the linked food doesn't cover. When it's already linked but the
+      // food has no calorie data (e.g. salt), offer a direct calorie input.
+      const showUsda =
+        !i.hasUsdaLink && !coversWeightVolumeCalories(i.coverage.covered);
+      return (
+        <IngredientFix
+          id={i.id}
+          name={i.name}
+          close={close}
+          showUsda={showUsda}
+          showPrice={!i.hasPrice}
+          showCalories={!showUsda && !i.coverage.covered.includes("calories")}
+        />
+      );
+    })
     .with({ kind: "none", isIngredient: true }, (i) => (
       <IngredientFix id={i.id} name={i.name} close={close} />
     ))
@@ -203,12 +213,16 @@ function IngredientFix({
   close,
   showUsda = true,
   showPrice = true,
+  showCalories = false,
 }: {
   id: string;
   name: string;
   close: () => void;
   showUsda?: boolean;
   showPrice?: boolean;
+  /** Offer a "per 100 g" calorie input — for an already-linked food whose USDA
+   * record has no calorie data (e.g. salt). Allows 0. */
+  showCalories?: boolean;
 }) {
   const api = useTRPC();
   const [food, setFood] = useState<FoodSummaryWithLinkedProducts | null>(null);
@@ -217,6 +231,7 @@ function IngredientFix({
   const [priceQty, setPriceQty] = useState("1");
   const [priceUnit, setPriceUnit] = useState("each");
   const [price, setPrice] = useState("");
+  const [kcal, setKcal] = useState("");
   // Existing mappings, so a per-measure price appends rather than replaces them
   // (product.update swaps the whole set). Cached/deduped with CurrentCore4Mappings.
   const { data: product } = useQuery(api.product.getByID.queryOptions({ id }));
@@ -226,11 +241,10 @@ function IngredientFix({
     invalidateKeys: [queryKeys.product.list],
     onSuccess: close,
   });
-  const bothSteps = showUsda && showPrice;
-  // Already linked + priced, but still incomplete (e.g. a USDA portion whose unit
-  // isn't recognized). Neither inline step helps — the gap needs a manual
-  // conversion, which lives on the product page.
-  const noSteps = !showUsda && !showPrice;
+  // Already linked + priced and no calorie gap to fill, but still incomplete
+  // (e.g. a USDA portion whose unit isn't recognized). No inline step helps —
+  // the gap needs a manual conversion, which lives on the product page.
+  const noSteps = !showUsda && !showPrice && !showCalories;
 
   const save = () => {
     const data: {
@@ -239,6 +253,10 @@ function IngredientFix({
       price?: number;
       unitMappings?: UnitMappingInput[];
     } = {};
+    // Per-measure price (e.g. 5 lb = $8) and calories (100 g = N kcal) are unit
+    // mappings; collected here and appended to the existing set in one go.
+    const newMappings: UnitMappingInput[] = [];
+
     // Mirror the product form's handleUsdaSelect: prefer the legacy NDB link,
     // fall back to the branded UPC.
     if (showUsda && food) {
@@ -260,38 +278,46 @@ function IngredientFix({
           // The per-each price is the product's own scalar field, not a mapping.
           data.price = dollars / qty;
         } else {
-          // A per-measure price (e.g. 5 lb = $8) is a money mapping — it wires
-          // money straight into the weight/volume graph. Replace-all: carry the
-          // existing rows or they'd be deleted, so refuse until they've loaded.
-          if (!product) {
-            toast.error("Couldn't load current conversions — try again");
-            return;
-          }
-          data.unitMappings = [
-            ...product.unitMappings.map((m) => ({
-              id: m.id,
-              a: m.a,
-              b: m.b,
-              source: m.source,
-            })),
-            {
-              a: { value: qty, unit },
-              b: { value: dollars, unit: "dollar" },
-              source: "manual: price (problems page)",
-            },
-          ];
+          // A per-measure price wires money straight into the weight/volume graph.
+          newMappings.push({
+            a: { value: qty, unit },
+            b: { value: dollars, unit: "dollar" },
+            source: "manual: price (problems page)",
+          });
         }
       }
     }
+    if (showCalories) {
+      const k = parseNonNegative(kcal);
+      if (k != null) {
+        newMappings.push({
+          a: { value: 100, unit: "g" },
+          b: { value: k, unit: "kcal" },
+          source: "manual: calories (problems page)",
+        });
+      }
+    }
+
+    if (newMappings.length > 0) {
+      // Replace-all: carry the existing rows or they'd be deleted, so refuse
+      // until the product has loaded.
+      if (!product) {
+        toast.error("Couldn't load current conversions — try again");
+        return;
+      }
+      data.unitMappings = [
+        ...product.unitMappings.map((m) => ({
+          id: m.id,
+          a: m.a,
+          b: m.b,
+          source: m.source,
+        })),
+        ...newMappings,
+      ];
+    }
 
     if (Object.keys(data).length === 0) {
-      toast.error(
-        bothSteps
-          ? "Link a USDA food or enter a price"
-          : showUsda
-            ? "Pick a USDA food"
-            : "Enter a price greater than 0",
-      );
+      toast.error("Fill in a field above to save");
       return;
     }
     update.mutate({ id, data });
@@ -303,7 +329,7 @@ function IngredientFix({
       {showUsda && (
         <div className="space-y-1">
           <p className="font-medium text-xs">
-            {bothSteps ? "Step 1 · link USDA" : "Link a USDA food"}{" "}
+            Link a USDA food{" "}
             <span className="font-normal text-muted-foreground">
               — fills weight, volume &amp; calories
             </span>
@@ -322,15 +348,7 @@ function IngredientFix({
       )}
       {showPrice && (
         <div className="space-y-1">
-          <p className="font-medium text-xs">
-            {bothSteps ? "Step 2 · set price" : "Set a price"}
-            {bothSteps && (
-              <span className="font-normal text-muted-foreground">
-                {" "}
-                — USDA can't supply this
-              </span>
-            )}
-          </p>
+          <p className="font-medium text-xs">Set a price</p>
           <div className="flex items-center gap-1.5 text-sm">
             <Input
               type="number"
@@ -363,6 +381,31 @@ function IngredientFix({
           <p className="text-muted-foreground text-xs">
             Bulk or generic? Price by measure, e.g. 5 lb = $8.
           </p>
+        </div>
+      )}
+      {showCalories && (
+        <div className="space-y-1">
+          <p className="font-medium text-xs">
+            Set calories{" "}
+            <span className="font-normal text-muted-foreground">
+              — USDA had none (0 is fine, e.g. salt)
+            </span>
+          </p>
+          <div className="flex items-center gap-1.5 text-sm">
+            <span>100 g =</span>
+            <Input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="any"
+              placeholder="0"
+              value={kcal}
+              onChange={(e) => setKcal(e.target.value)}
+              className="w-20"
+              aria-label="Calories per 100 g"
+            />
+            <span>kcal</span>
+          </div>
         </div>
       )}
       {noSteps ? (
