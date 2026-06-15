@@ -191,7 +191,9 @@ fn evaluate_group(group: &WAvailabilityGroup) -> WAvailabilityGroupResult {
     let all_graph: &MeasureGraph = merged_graph
         .as_ref()
         .or_else(|| product_graphs.first())
-        .expect("merged_graph is Some unless there is exactly one product");
+        .expect(
+        "invariant: merged_graph is None only when product_graphs.len() == 1, so first() is Some",
+    );
 
     // Convert each need to weight. Gram basis only when EVERY need converts, so
     // contributions are summable in one unit (the gram-first rule).
