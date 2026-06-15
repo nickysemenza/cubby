@@ -15,21 +15,27 @@ import { Field, FieldError, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
+import { useFlag } from "~/lib/flags";
 import { cn } from "~/lib/utils";
 import { DialogCompatibleCombobox } from "./combobox/combobox-dialog";
 import type { ComboboxItem } from "./combobox/combobox-types";
 
-// Guard so the bundler eliminates the @hookform/devtools import (and its
-// lodash dependency) from production builds. build:cf pins NODE_ENV=production
+// Build-time guard so the bundler eliminates the @hookform/devtools import (and
+// its lodash dependency) from production builds. build:cf pins NODE_ENV=production
 // so DEV is false there, but keep the __CF_WORKERS__ check as a belt-and-braces
 // guard (same pattern as server/db.ts) — a dev-mode CF build must never ship
 // the lodash-importing devtools, which break the Workers server build.
+//
+// At runtime the devtools are additionally gated behind the `formDevtools`
+// developer flag (Settings → Developer), so they stay off by default in dev and
+// the user opts in. The build-time constant must remain a separate gate so the
+// lazy import is tree-shaken in prod regardless of the flag.
 declare const __CF_WORKERS__: boolean | undefined;
-const SHOW_FORM_DEVTOOLS =
+const FORM_DEVTOOLS_BUNDLED =
   import.meta.env.DEV &&
   !(typeof __CF_WORKERS__ !== "undefined" && __CF_WORKERS__ === true);
 
-const DevTool = SHOW_FORM_DEVTOOLS
+const DevTool = FORM_DEVTOOLS_BUNDLED
   ? lazy(() =>
       import("@hookform/devtools").then((m) => ({ default: m.DevTool })),
     )
@@ -97,9 +103,13 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
   /** Left slot of the sticky bar (e.g. a live tally). Sticky mode only. */
   footerStart?: ReactNode;
 }) {
+  // Runtime opt-in via the `formDevtools` developer flag. The hook runs in all
+  // builds (Rules of Hooks), but the panel only mounts when the devtools are
+  // bundled (dev) AND the user has flipped the flag on in Settings → Developer.
+  const formDevtoolsEnabled = useFlag("formDevtools");
   return (
     <FormProvider {...form}>
-      {SHOW_FORM_DEVTOOLS ? (
+      {FORM_DEVTOOLS_BUNDLED && formDevtoolsEnabled ? (
         <Suspense>
           <DevTool control={form.control as never} />
         </Suspense>

@@ -17,6 +17,7 @@ import {
   FLAGS,
   type FlagGroup,
   type FlagKey,
+  isDevBuildOnlyFlag,
   useFlags,
 } from "~/lib/flags";
 import { queryKeys } from "~/lib/query-keys";
@@ -44,7 +45,13 @@ function SettingsPage() {
     <EntityLayout title="Settings">
       <div className="max-w-2xl space-y-4 pb-16">
         {GROUPS.map(({ group, blurb }) => {
-          const keys = FLAG_KEYS.filter((k) => FLAGS[k].group === group);
+          const keys = FLAG_KEYS.filter(
+            (k) =>
+              FLAGS[k].group === group &&
+              // Hide toggles whose target is build-stripped in prod — flipping
+              // them there does nothing, so the row would be a dead control.
+              (import.meta.env.DEV || !isDevBuildOnlyFlag(k)),
+          );
           if (keys.length === 0) return null;
           return (
             <Card key={group}>

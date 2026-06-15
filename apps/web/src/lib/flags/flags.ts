@@ -12,6 +12,13 @@ interface FlagDef {
   /** Default when unset. Use `import.meta.env.DEV` to be on-in-dev, off-in-prod. */
   default: boolean;
   group: FlagGroup;
+  /**
+   * The thing this flag controls is build-time stripped from production bundles
+   * (e.g. a devtools panel removed by a Vite plugin), so the toggle is a dead
+   * no-op in prod. When true, the settings page hides the row in non-dev builds
+   * instead of showing a control that can never do anything.
+   */
+  devBuildOnly?: boolean;
 }
 
 export type FlagGroup = "Developer" | "Experimental";
@@ -40,6 +47,18 @@ export const FLAGS = {
     description: "Show the Query / Router devtools panel.",
     default: false,
     group: "Developer",
+    // @tanstack/devtools-vite strips the panel from production builds.
+    devBuildOnly: true,
+  },
+  formDevtools: {
+    storageKey: "formDevtools",
+    label: "React Hook Form devtools",
+    description: "Show the react-hook-form devtools panel on forms.",
+    default: false,
+    group: "Developer",
+    // The @hookform/devtools import is tree-shaken from production builds
+    // (FORM_DEVTOOLS_BUNDLED in form-utils.tsx).
+    devBuildOnly: true,
   },
   queryLogger: {
     storageKey: "queryLogger",
@@ -75,3 +94,13 @@ export const FLAGS = {
 export type FlagKey = keyof typeof FLAGS;
 
 export const FLAG_KEYS = Object.keys(FLAGS) as FlagKey[];
+
+/**
+ * Whether a flag's target is build-stripped from production bundles, making the
+ * toggle a no-op there. The `as FlagDef` widens the `as const` literal (which
+ * omits the optional `devBuildOnly` from flags that don't set it) so the field
+ * is readable uniformly across the union.
+ */
+export function isDevBuildOnlyFlag(key: FlagKey): boolean {
+  return (FLAGS[key] as FlagDef).devBuildOnly === true;
+}
