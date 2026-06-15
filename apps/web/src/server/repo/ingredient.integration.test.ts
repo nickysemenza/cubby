@@ -1,8 +1,6 @@
-import type { ActorContext } from "@cubby/schemas/context";
 import { count, eq } from "drizzle-orm";
-import { buildTestDB } from "tooling/test-setup";
-import { beforeEach, describe, expect, it } from "vitest";
-import type { Database } from "~/server/db";
+import { withTestDb } from "tooling/test-setup";
+import { describe, expect, it } from "vitest";
 import { ingredient } from "~/server/db/schema";
 import { upsertImportRecipe } from "~/server/repo/recipe";
 import { getDb, withTransaction } from "./database-helpers";
@@ -10,21 +8,14 @@ import { findOrCreateIngredient, mergeIngredients } from "./ingredient";
 import { makeImportRecipe } from "./repo.fixtures";
 
 describe("ingredient", () => {
-  let db: Database;
-  let actor: ActorContext;
-  let teardown: () => Promise<void>;
-
-  beforeEach(async () => {
-    ({ db, actor, teardown } = await buildTestDB());
-    return teardown;
-  });
+  const ctx = withTestDb();
 
   it("ingredient upsert with aliases", async () => {
-    await withTransaction(db, async (tx) => {
+    await withTransaction(ctx.db, async (tx) => {
       await findOrCreateIngredient(tx, "alias_1");
       await findOrCreateIngredient(tx, "test", ["alias_1"]);
     });
-    const [result] = await getDb(db)
+    const [result] = await getDb(ctx.db)
       .select({ count: count() })
       .from(ingredient);
     expect(result!.count).toEqual(1);
@@ -47,7 +38,7 @@ describe("ingredient", () => {
 
     // tx1 runs findOrCreate, then holds the transaction open (lock held) until
     // we release it below.
-    const tx1 = withTransaction(db, async (tx) => {
+    const tx1 = withTransaction(ctx.db, async (tx) => {
       const row = await findOrCreateIngredient(tx, name);
       await tx1Committed;
       return row;
@@ -57,7 +48,7 @@ describe("ingredient", () => {
     await new Promise((r) => setTimeout(r, 100));
 
     // tx2 races the same name; its INSERT will block on tx1's lock.
-    const tx2 = withTransaction(db, async (tx) =>
+    const tx2 = withTransaction(ctx.db, async (tx) =>
       findOrCreateIngredient(tx, name),
     );
 
@@ -71,7 +62,7 @@ describe("ingredient", () => {
     expect(a.id).toEqual(b.id);
 
     // Exactly one row exists.
-    const [result] = await getDb(db)
+    const [result] = await getDb(ctx.db)
       .select({ count: count() })
       .from(ingredient);
     expect(result!.count).toEqual(1);
@@ -80,12 +71,12 @@ describe("ingredient", () => {
     // The matcher is case-insensitive (lower(name)); the unique index now agrees
     // (lower(name)), so "Flour" then "flour" resolves to the same row — the
     // second find matches the first and never inserts.
-    const flour = await findOrCreateIngredient(db, "Flour");
-    const flourLower = await findOrCreateIngredient(db, "flour");
+    const flour = await findOrCreateIngredient(ctx.db, "Flour");
+    const flourLower = await findOrCreateIngredient(ctx.db, "flour");
     expect(flourLower.id).toEqual(flour.id);
     expect(flourLower.name).toEqual("Flour"); // first writer's casing is kept
 
-    const [result] = await getDb(db)
+    const [result] = await getDb(ctx.db)
       .select({ count: count() })
       .from(ingredient);
     expect(result!.count).toEqual(1);
@@ -102,7 +93,7 @@ describe("ingredient", () => {
     });
 
     let winnerId = "";
-    const winner = withTransaction(db, async (tx) => {
+    const winner = withTransaction(ctx.db, async (tx) => {
       const row = await findOrCreateIngredient(tx, "Flour");
       winnerId = row.id;
       await winnerCommitted;
@@ -110,14 +101,14 @@ describe("ingredient", () => {
     });
 
     await new Promise((r) => setTimeout(r, 100));
-    const loser = findOrCreateIngredient(db, "flour"); // different case, races
+    const loser = findOrCreateIngredient(ctx.db, "flour"); // different case, races
     await new Promise((r) => setTimeout(r, 100));
     releaseWinner();
 
     const [, loserRow] = await Promise.all([winner, loser]);
     expect(loserRow.id).toEqual(winnerId);
 
-    const [result] = await getDb(db)
+    const [result] = await getDb(ctx.db)
       .select({ count: count() })
       .from(ingredient);
     expect(result!.count).toEqual(1);
@@ -127,11 +118,11 @@ describe("ingredient", () => {
     // Alias matching is now case-insensitive too (lower(alias)), consistent with
     // name matching: looking up "scallion" finds the ingredient whose alias is
     // "Scallion" and returns it rather than creating a duplicate.
-    const allium = await findOrCreateIngredient(db, "Allium", ["Scallion"]);
-    const viaAlias = await findOrCreateIngredient(db, "scallion");
+    const allium = await findOrCreateIngredient(ctx.db, "Allium", ["Scallion"]);
+    const viaAlias = await findOrCreateIngredient(ctx.db, "scallion");
     expect(viaAlias.id).toEqual(allium.id);
 
-    const [result] = await getDb(db)
+    const [result] = await getDb(ctx.db)
       .select({ count: count() })
       .from(ingredient);
     expect(result!.count).toEqual(1);
@@ -140,10 +131,10 @@ describe("ingredient", () => {
   it("does not append casing-variant aliases", async () => {
     // Alias dedup is case-insensitive: re-adding "scallion" when the ingredient
     // already has alias "Scallion" is a no-op, not a second array entry.
-    const first = await findOrCreateIngredient(db, "Allium", ["Scallion"]);
+    const first = await findOrCreateIngredient(ctx.db, "Allium", ["Scallion"]);
     expect(first.aliases).toEqual(["Scallion"]);
 
-    const second = await findOrCreateIngredient(db, "Allium", ["scallion"]);
+    const second = await findOrCreateIngredient(ctx.db, "Allium", ["scallion"]);
     expect(second.id).toEqual(first.id);
     expect(second.aliases).toEqual(["Scallion"]); // unchanged, no "scallion" added
   });
@@ -159,26 +150,26 @@ describe("ingredient", () => {
           },
         ],
       }),
-      db,
-      actor,
+      ctx.db,
+      ctx.actor,
     );
-    const a = await findOrCreateIngredient(db, "egg");
-    const b = await findOrCreateIngredient(db, "eggs");
-    const c = await findOrCreateIngredient(db, "large brown eggs", [
+    const a = await findOrCreateIngredient(ctx.db, "egg");
+    const b = await findOrCreateIngredient(ctx.db, "eggs");
+    const c = await findOrCreateIngredient(ctx.db, "large brown eggs", [
       "large eggs",
     ]);
-    const [resultAfterUpsert] = await getDb(db)
+    const [resultAfterUpsert] = await getDb(ctx.db)
       .select({ count: count() })
       .from(ingredient);
     expect(resultAfterUpsert!.count).toEqual(3);
 
-    await mergeIngredients(db, a.id, [b.id, c.id]);
-    const [resultAfterMerge] = await getDb(db)
+    await mergeIngredients(ctx.db, a.id, [b.id, c.id]);
+    const [resultAfterMerge] = await getDb(ctx.db)
       .select({ count: count() })
       .from(ingredient);
     expect(resultAfterMerge!.count).toEqual(1);
 
-    const updatedIngredient = await getDb(db).query.ingredient.findFirst({
+    const updatedIngredient = await getDb(ctx.db).query.ingredient.findFirst({
       where: eq(ingredient.id, a.id),
     });
     expect(updatedIngredient).toBeDefined();

@@ -1,8 +1,7 @@
-import type { ActorContext } from "@cubby/schemas/context";
 import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
-import { buildTestDB } from "tooling/test-setup";
-import { beforeEach, describe, expect, it } from "vitest";
+import { withTestDb } from "tooling/test-setup";
+import { describe, expect, it } from "vitest";
 import type { Database } from "~/server/db";
 import {
   recipe,
@@ -55,25 +54,18 @@ const searchRecipeCount = async (
 };
 
 describe("soft-deleted recipes stay out of ingredient recipe counts", () => {
-  let db: Database;
-  let actor: ActorContext;
-  let teardown: () => Promise<void>;
-
-  beforeEach(async () => {
-    ({ db, actor, teardown } = await buildTestDB());
-    return teardown;
-  });
+  const ctx = withTestDb();
 
   it("drops the ingredient's recipe count to zero across all surfaces when its only recipe is deleted", async () => {
     const ing = await createIngredient(
-      db,
+      ctx.db,
       { name: "Soledad pepper", aliases: [] },
-      actor,
+      ctx.actor,
     );
     const ingredientId = ing.id as IngredientId;
 
     const created = await createRecipe(
-      db,
+      ctx.db,
       makeRecipeInput({
         name: "Lone Pepper Stew",
         sections: [
@@ -88,30 +80,38 @@ describe("soft-deleted recipes stay out of ingredient recipe counts", () => {
           },
         ],
       }),
-      actor,
+      ctx.actor,
     );
 
     // Baseline: the ingredient appears in exactly one recipe everywhere.
     expect(
-      (await getIngredientByID(db, ingredientId)).appearsInRecipes,
+      (await getIngredientByID(ctx.db, ingredientId)).appearsInRecipes,
     ).toHaveLength(1);
-    expect(await appearsInRecipesFromList(db, ingredientId)).toHaveLength(1);
-    expect(await searchRecipeCount(db, ingredientId, "Soledad pepper")).toBe(1);
+    expect(await appearsInRecipesFromList(ctx.db, ingredientId)).toHaveLength(
+      1,
+    );
+    expect(
+      await searchRecipeCount(ctx.db, ingredientId, "Soledad pepper"),
+    ).toBe(1);
 
-    await deleteRecipes(db, [created.id as RecipeId], actor);
+    await deleteRecipes(ctx.db, [created.id as RecipeId], ctx.actor);
 
     // After soft-deleting the only recipe, every surface reads zero.
     expect(
-      (await getIngredientByID(db, ingredientId)).appearsInRecipes,
+      (await getIngredientByID(ctx.db, ingredientId)).appearsInRecipes,
     ).toHaveLength(0);
     expect(
-      (await getIngredientByID(db, ingredientId)).recipeUsages,
+      (await getIngredientByID(ctx.db, ingredientId)).recipeUsages,
     ).toHaveLength(0);
-    expect(await appearsInRecipesFromList(db, ingredientId)).toHaveLength(0);
-    expect(await searchRecipeCount(db, ingredientId, "Soledad pepper")).toBe(0);
+    expect(await appearsInRecipesFromList(ctx.db, ingredientId)).toHaveLength(
+      0,
+    );
+    expect(
+      await searchRecipeCount(ctx.db, ingredientId, "Soledad pepper"),
+    ).toBe(0);
 
     // Data invariant: no live section/usage row may reference the dead recipe.
-    const liveSections = await getDb(db)
+    const liveSections = await getDb(ctx.db)
       .select({ id: recipeSection.id })
       .from(recipeSection)
       .where(
@@ -119,7 +119,7 @@ describe("soft-deleted recipes stay out of ingredient recipe counts", () => {
       );
     expect(liveSections).toHaveLength(0);
 
-    const liveUsages = await getDb(db)
+    const liveUsages = await getDb(ctx.db)
       .select({ id: recipeSectionIngredient.id })
       .from(recipeSectionIngredient)
       .innerJoin(
@@ -141,14 +141,14 @@ describe("soft-deleted recipes stay out of ingredient recipe counts", () => {
     // filters (shared count subquery + the dbIngredientToAPI recipe.deletedAt
     // backstop) must still report zero despite the live usage row.
     const ing = await createIngredient(
-      db,
+      ctx.db,
       { name: "Orphan oregano", aliases: [] },
-      actor,
+      ctx.actor,
     );
     const ingredientId = ing.id as IngredientId;
 
     const created = await createRecipe(
-      db,
+      ctx.db,
       makeRecipeInput({
         name: "Orphaned Recipe",
         sections: [
@@ -163,19 +163,23 @@ describe("soft-deleted recipes stay out of ingredient recipe counts", () => {
           },
         ],
       }),
-      actor,
+      ctx.actor,
     );
 
     // Soft-delete ONLY the recipe row, leaving its section + usage rows live.
-    await getDb(db)
+    await getDb(ctx.db)
       .update(recipe)
       .set({ deletedAt: new Date() })
       .where(eq(recipe.id, created.id));
 
     expect(
-      (await getIngredientByID(db, ingredientId)).appearsInRecipes,
+      (await getIngredientByID(ctx.db, ingredientId)).appearsInRecipes,
     ).toHaveLength(0);
-    expect(await appearsInRecipesFromList(db, ingredientId)).toHaveLength(0);
-    expect(await searchRecipeCount(db, ingredientId, "Orphan oregano")).toBe(0);
+    expect(await appearsInRecipesFromList(ctx.db, ingredientId)).toHaveLength(
+      0,
+    );
+    expect(
+      await searchRecipeCount(ctx.db, ingredientId, "Orphan oregano"),
+    ).toBe(0);
   });
 });

@@ -1,42 +1,27 @@
-import type { ActorContext } from "@cubby/schemas/context";
-import { unsafeUserId } from "@cubby/schemas/identifiers";
-import { buildTestDB, seedFromCSV } from "tooling/test-setup";
-import { beforeEach, describe, expect, it } from "vitest";
-import type { Database } from "~/server/db";
+import {
+  NONEXISTENT_UUID,
+  seedFromCSV,
+  TEST_ACTOR,
+  withTestDb,
+} from "tooling/test-setup";
+import { describe, expect, it } from "vitest";
 import { createInventoryEntry } from "~/server/repo/inventory";
 import { createLocation } from "~/server/repo/location";
 import { createProduct } from "~/server/repo/product";
-import { createCallerFactory, createTestTRPCContext } from "../trpc";
+import { makeProductInput } from "~/server/repo/repo.fixtures";
+import { createTestCaller } from "../trpc";
 import { inventoryRouter } from "./inventory";
 
-const TEST_ACTOR: ActorContext = {
-  userId: unsafeUserId("test-user-id"),
-  source: "ui",
-};
-
-// Keep TEST_USER_ID for tRPC context
-const TEST_USER_ID = TEST_ACTOR.userId;
-
 describe("inventory router", () => {
-  let db: Database;
-  let teardown: () => Promise<void>;
-  beforeEach(async () => {
-    ({ db, teardown } = await buildTestDB());
-    return teardown;
-  });
+  const ctx = withTestDb();
 
   it("should create and retrieve an inventory entry", async () => {
     // Create a test caller for the inventory router
-    const createCaller = createCallerFactory(inventoryRouter);
-    const caller = createCaller(
-      createTestTRPCContext(db, {
-        auth: { userId: TEST_USER_ID },
-      }),
-    );
+    const caller = createTestCaller(inventoryRouter, ctx.db);
 
     // Create test location
     const location = await createLocation(
-      db,
+      ctx.db,
       {
         name: "Test Kitchen",
         type: "room",
@@ -47,18 +32,13 @@ describe("inventory router", () => {
 
     // Create test product
     const product = await createProduct(
-      db,
-      {
+      ctx.db,
+      makeProductInput({
         name: "Test Flour",
         manufacturer: "Test Brand",
         model: "Premium Flour",
         upc: "123456789012",
-        ndb_number: null,
-        expectedQuantity: null,
-        ingredientId: null,
-        unitMappings: [],
-        externalIds: [],
-      },
+      }),
       TEST_ACTOR,
     );
 
@@ -94,16 +74,11 @@ describe("inventory router", () => {
   });
 
   it("should list inventory entries with filtering", async () => {
-    const createCaller = createCallerFactory(inventoryRouter);
-    const caller = createCaller(
-      createTestTRPCContext(db, {
-        auth: { userId: TEST_USER_ID },
-      }),
-    );
+    const caller = createTestCaller(inventoryRouter, ctx.db);
 
     // Seed test data using CSV import (creates locations, products, and inventory)
     const seed = await seedFromCSV(
-      db,
+      ctx.db,
       [
         {
           product_name: "Flour",
@@ -189,16 +164,11 @@ describe("inventory router", () => {
   });
 
   it("should update an inventory entry", async () => {
-    const createCaller = createCallerFactory(inventoryRouter);
-    const caller = createCaller(
-      createTestTRPCContext(db, {
-        auth: { userId: TEST_USER_ID },
-      }),
-    );
+    const caller = createTestCaller(inventoryRouter, ctx.db);
 
     // Seed initial inventory
     const seed = await seedFromCSV(
-      db,
+      ctx.db,
       [
         {
           product_name: "Test Product",
@@ -238,16 +208,11 @@ describe("inventory router", () => {
   });
 
   it("should handle partial updates correctly", async () => {
-    const createCaller = createCallerFactory(inventoryRouter);
-    const caller = createCaller(
-      createTestTRPCContext(db, {
-        auth: { userId: TEST_USER_ID },
-      }),
-    );
+    const caller = createTestCaller(inventoryRouter, ctx.db);
 
     // Seed: Product 1 with inventory, Product 2 without (to avoid unique constraint when switching)
     const seed = await seedFromCSV(
-      db,
+      ctx.db,
       [
         {
           product_name: "Product 1",
@@ -262,7 +227,7 @@ describe("inventory router", () => {
     );
     // Create Location 2 separately (empty location to move to)
     const location2 = await createLocation(
-      db,
+      ctx.db,
       { name: "Location 2", type: "shelf", parentId: null },
       TEST_ACTOR,
     );
@@ -301,16 +266,11 @@ describe("inventory router", () => {
   });
 
   it("should perform bulk operations correctly", async () => {
-    const createCaller = createCallerFactory(inventoryRouter);
-    const caller = createCaller(
-      createTestTRPCContext(db, {
-        auth: { userId: TEST_USER_ID },
-      }),
-    );
+    const caller = createTestCaller(inventoryRouter, ctx.db);
 
     // Seed: 3 products, one with existing inventory
     const seed = await seedFromCSV(
-      db,
+      ctx.db,
       [
         {
           product_name: "Bulk Product 1",
@@ -392,15 +352,10 @@ describe("inventory router", () => {
 
   it("should throw error when retrieving inventory entry with invalid ID", async () => {
     // Create a test caller for the inventory router
-    const createCaller = createCallerFactory(inventoryRouter);
-    const caller = createCaller(
-      createTestTRPCContext(db, {
-        auth: { userId: TEST_USER_ID },
-      }),
-    );
+    const caller = createTestCaller(inventoryRouter, ctx.db);
 
     // Try to retrieve an inventory entry with a non-existent ID
-    const nonExistentId = "00000000-0000-0000-0000-000000000000";
+    const nonExistentId = NONEXISTENT_UUID;
 
     await expect(caller.getByID({ id: nonExistentId })).rejects.toThrow(
       "Inventory entry not found",
@@ -409,16 +364,11 @@ describe("inventory router", () => {
 
   describe("bulkMove", () => {
     it("should move full quantity to a new location", async () => {
-      const createCaller = createCallerFactory(inventoryRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(inventoryRouter, ctx.db);
 
       // Seed source with inventory, create empty target
       const seed = await seedFromCSV(
-        db,
+        ctx.db,
         [
           {
             product_name: "Move Product",
@@ -431,7 +381,7 @@ describe("inventory router", () => {
         TEST_ACTOR,
       );
       const targetLocation = await createLocation(
-        db,
+        ctx.db,
         { name: "Target Location", type: "room", parentId: null },
         TEST_ACTOR,
       );
@@ -464,15 +414,10 @@ describe("inventory router", () => {
     });
 
     it("should move partial quantity", async () => {
-      const createCaller = createCallerFactory(inventoryRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(inventoryRouter, ctx.db);
 
       const seed = await seedFromCSV(
-        db,
+        ctx.db,
         [
           {
             product_name: "Split Product",
@@ -485,7 +430,7 @@ describe("inventory router", () => {
         TEST_ACTOR,
       );
       const targetLocation = await createLocation(
-        db,
+        ctx.db,
         { name: "Target", type: "room", parentId: null },
         TEST_ACTOR,
       );
@@ -512,43 +457,31 @@ describe("inventory router", () => {
     });
 
     it("should merge with existing inventory at target", async () => {
-      const createCaller = createCallerFactory(inventoryRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(inventoryRouter, ctx.db);
 
       // Same product at two locations requires direct creation
       // (seedFromCSV inventoryIds lookup doesn't support same product at multiple locations reliably)
       const sourceLocation = await createLocation(
-        db,
+        ctx.db,
         { name: "Source", type: "room", parentId: null },
         TEST_ACTOR,
       );
       const targetLocation = await createLocation(
-        db,
+        ctx.db,
         { name: "Target", type: "room", parentId: null },
         TEST_ACTOR,
       );
       const product = await createProduct(
-        db,
-        {
+        ctx.db,
+        makeProductInput({
           name: "Merge Product",
           manufacturer: "Brand",
-          model: null,
-          upc: null,
-          ndb_number: null,
-          expectedQuantity: null,
-          ingredientId: null,
-          unitMappings: [],
-          externalIds: [],
-        },
+        }),
         TEST_ACTOR,
       );
 
       const sourceEntry = await createInventoryEntry(
-        db,
+        ctx.db,
         {
           productId: product.id,
           locationId: sourceLocation.id,
@@ -558,7 +491,7 @@ describe("inventory router", () => {
       );
 
       const targetEntry = await createInventoryEntry(
-        db,
+        ctx.db,
         {
           productId: product.id,
           locationId: targetLocation.id,
@@ -585,15 +518,10 @@ describe("inventory router", () => {
     });
 
     it("should throw error when source and target are the same", async () => {
-      const createCaller = createCallerFactory(inventoryRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(inventoryRouter, ctx.db);
 
       const seed = await seedFromCSV(
-        db,
+        ctx.db,
         [
           {
             product_name: "Error Product",
@@ -624,15 +552,10 @@ describe("inventory router", () => {
     });
 
     it("should throw error when move quantity exceeds available", async () => {
-      const createCaller = createCallerFactory(inventoryRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(inventoryRouter, ctx.db);
 
       const seed = await seedFromCSV(
-        db,
+        ctx.db,
         [
           {
             product_name: "Limited Product",
@@ -645,7 +568,7 @@ describe("inventory router", () => {
         TEST_ACTOR,
       );
       const targetLocation = await createLocation(
-        db,
+        ctx.db,
         { name: "Target", type: "room", parentId: null },
         TEST_ACTOR,
       );
@@ -669,14 +592,9 @@ describe("inventory router", () => {
   });
 
   it("should handle create and update failures gracefully", async () => {
-    const createCaller = createCallerFactory(inventoryRouter);
-    const caller = createCaller(
-      createTestTRPCContext(db, {
-        auth: { userId: TEST_USER_ID },
-      }),
-    );
+    const caller = createTestCaller(inventoryRouter, ctx.db);
 
-    const nonExistentId = "00000000-0000-0000-0000-000000000000";
+    const nonExistentId = NONEXISTENT_UUID;
 
     // Try to create inventory entry with non-existent product
     await expect(
@@ -689,7 +607,7 @@ describe("inventory router", () => {
 
     // Seed a valid entry
     const seed = await seedFromCSV(
-      db,
+      ctx.db,
       [
         {
           product_name: "Test Product",
@@ -714,16 +632,11 @@ describe("inventory router", () => {
 
   describe("backfillInventoryValuations", () => {
     it("should compute valuation on inventory creation when product has price", async () => {
-      const createCaller = createCallerFactory(inventoryRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(inventoryRouter, ctx.db);
 
       // Create location and product with price mapping
       const location = await createLocation(
-        db,
+        ctx.db,
         {
           name: "Pantry",
           type: "room",
@@ -733,19 +646,12 @@ describe("inventory router", () => {
       );
 
       const product = await createProduct(
-        db,
-        {
+        ctx.db,
+        makeProductInput({
           name: "Valued Product",
           manufacturer: "Brand",
-          model: null,
-          upc: null,
-          ndb_number: null,
-          expectedQuantity: null,
-          ingredientId: null,
           price: 10.0,
-          unitMappings: [],
-          externalIds: [],
-        },
+        }),
         TEST_ACTOR,
       );
 
@@ -761,16 +667,11 @@ describe("inventory router", () => {
     });
 
     it("should return null valuation when product has no price", async () => {
-      const createCaller = createCallerFactory(inventoryRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(inventoryRouter, ctx.db);
 
       // Create inventory without price mapping
       const seed = await seedFromCSV(
-        db,
+        ctx.db,
         [
           {
             product_name: "Unpriced Product",
@@ -792,16 +693,11 @@ describe("inventory router", () => {
     });
 
     it("should get stale valuations count", async () => {
-      const createCaller = createCallerFactory(inventoryRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(inventoryRouter, ctx.db);
 
       // Create some inventory
       await seedFromCSV(
-        db,
+        ctx.db,
         [
           {
             product_name: "Product A",
@@ -820,19 +716,14 @@ describe("inventory router", () => {
     });
 
     it("should backfill return empty when no stale valuations", async () => {
-      const createCaller = createCallerFactory(inventoryRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(inventoryRouter, ctx.db);
 
       // Create inventory WITHOUT a price - valuation is null from both
       // the import and the backfill (product.price is null), so nothing is stale.
       // Note: seedFromCSV with price creates a stale valuation because it stores
       // row.price as valuation but doesn't sync product.price via unit mappings.
       await seedFromCSV(
-        db,
+        ctx.db,
         [
           {
             product_name: "Unpriced Product",

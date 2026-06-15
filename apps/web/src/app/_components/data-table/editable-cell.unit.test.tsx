@@ -16,7 +16,6 @@ vi.mock("~/lib/wasm", () => ({
     is_valid_unit: () => true,
     amount_kind: () => "volume",
   },
-  ensureWasm: () => Promise.resolve(),
 }));
 
 import { EditableCell, useEditableCell } from "./editable-cell";

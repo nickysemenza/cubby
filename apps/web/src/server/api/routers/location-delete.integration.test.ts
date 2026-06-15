@@ -1,31 +1,16 @@
-import { unsafeUserId } from "@cubby/schemas/identifiers";
-import { buildTestDB } from "tooling/test-setup";
-import { beforeEach, describe, expect, it } from "vitest";
-import type { Database } from "~/server/db";
-import { createCallerFactory, createTestTRPCContext } from "../trpc";
+import { withTestDb } from "tooling/test-setup";
+import { describe, expect, it } from "vitest";
+import { createTestCaller } from "../trpc";
 import { inventoryRouter } from "./inventory";
 import { locationRouter } from "./location";
 import { productRouter } from "./product";
 
-const TEST_USER_ID = unsafeUserId("test-user-id");
-
 describe("location deletion", () => {
-  let db: Database;
-  let teardown: () => Promise<void>;
-  beforeEach(async () => {
-    ({ db, teardown } = await buildTestDB());
-
-    return teardown;
-  });
+  const ctx = withTestDb();
 
   describe("basic deletion", () => {
     it("should soft delete a location successfully", async () => {
-      const createCaller = createCallerFactory(locationRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(locationRouter, ctx.db);
 
       // Create a test location
       const locationData = {
@@ -58,12 +43,7 @@ describe("location deletion", () => {
     });
 
     it("should delete multiple locations in bulk", async () => {
-      const createCaller = createCallerFactory(locationRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(locationRouter, ctx.db);
 
       // Create multiple locations
       const location1 = await caller.create({
@@ -113,26 +93,11 @@ describe("location deletion", () => {
 
   describe("safety checks", () => {
     it("should prevent deletion if location has inventory entries", async () => {
-      const createLocationCaller = createCallerFactory(locationRouter);
-      const locationCaller = createLocationCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const locationCaller = createTestCaller(locationRouter, ctx.db);
 
-      const createInventoryCaller = createCallerFactory(inventoryRouter);
-      const inventoryCaller = createInventoryCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const inventoryCaller = createTestCaller(inventoryRouter, ctx.db);
 
-      const createProductCaller = createCallerFactory(productRouter);
-      const productCaller = createProductCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const productCaller = createTestCaller(productRouter, ctx.db);
 
       // Create a location
       const location = await locationCaller.create({
@@ -174,12 +139,7 @@ describe("location deletion", () => {
     });
 
     it("orphans child locations to top-level when the parent is deleted", async () => {
-      const createCaller = createCallerFactory(locationRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(locationRouter, ctx.db);
 
       // Create a parent location
       const parentLocation = await caller.create({
@@ -222,12 +182,7 @@ describe("location deletion", () => {
 
   describe("cascading behavior", () => {
     it("should cascade delete to images", async () => {
-      const createCaller = createCallerFactory(locationRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(locationRouter, ctx.db);
 
       // Create a location (images would be added via pendingImageIds if we had test images)
       const location = await caller.create({

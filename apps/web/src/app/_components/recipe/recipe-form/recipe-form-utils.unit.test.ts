@@ -23,157 +23,108 @@ describe("haveIngredientsChanged", () => {
     amounts: [{ value: 2, unit: "batch" }],
   };
 
-  it("returns false for identical ingredient arrays", () => {
-    const original = [baseIngredient];
-    const updated = [{ ...baseIngredient }];
+  const second: IngItem = {
+    id: "ing-3",
+    type: "ingredient",
+    ingredient: { id: "i-2", name: "Sugar" },
+    recipe: null,
+    amounts: [{ value: 2, unit: "tbsp" }],
+  };
 
-    expect(haveIngredientsChanged(original, updated)).toBe(false);
-  });
+  const withMultipleAmounts: IngItem = {
+    ...baseIngredient,
+    amounts: [
+      { value: 1, unit: "cup" },
+      { value: 8, unit: "oz" },
+    ],
+  };
 
-  it("returns false for empty arrays", () => {
-    expect(haveIngredientsChanged([], [])).toBe(false);
-  });
-
-  it("returns true when ingredient is added", () => {
-    const original: IngItem[] = [];
-    const updated = [baseIngredient];
-
-    expect(haveIngredientsChanged(original, updated)).toBe(true);
-  });
-
-  it("returns true when ingredient is removed", () => {
-    const original = [baseIngredient];
-    const updated: IngItem[] = [];
-
-    expect(haveIngredientsChanged(original, updated)).toBe(true);
-  });
-
-  it("returns true when ingredient ID changes", () => {
-    const original = [baseIngredient];
-    const updated = [
-      {
-        ...baseIngredient,
-        ingredient: { id: "i-2", name: "Sugar" },
-      },
-    ];
-
-    expect(haveIngredientsChanged(original, updated)).toBe(true);
-  });
-
-  it("returns true when amount value changes", () => {
-    const original = [baseIngredient];
-    const updated = [
-      {
-        ...baseIngredient,
-        amounts: [{ value: 2, unit: "cup" }],
-      },
-    ];
-
-    expect(haveIngredientsChanged(original, updated)).toBe(true);
-  });
-
-  it("returns true when amount unit changes", () => {
-    const original = [baseIngredient];
-    const updated = [
-      {
-        ...baseIngredient,
-        amounts: [{ value: 1, unit: "tbsp" }],
-      },
-    ];
-
-    expect(haveIngredientsChanged(original, updated)).toBe(true);
-  });
-
-  it("returns true when ingredient order changes", () => {
-    const second: IngItem = {
-      id: "ing-3",
-      type: "ingredient",
-      ingredient: { id: "i-2", name: "Sugar" },
-      recipe: null,
-      amounts: [{ value: 2, unit: "tbsp" }],
-    };
-
-    const original = [baseIngredient, second];
-    const updated = [second, baseIngredient];
-
-    expect(haveIngredientsChanged(original, updated)).toBe(true);
-  });
-
-  it("returns true when type changes from ingredient to recipe", () => {
-    const original = [baseIngredient];
-    const updated = [baseRecipeIngredient];
-
-    expect(haveIngredientsChanged(original, updated)).toBe(true);
-  });
-
-  it("handles recipe type ingredients correctly", () => {
-    const original = [baseRecipeIngredient];
-    const updated = [{ ...baseRecipeIngredient }];
-
-    expect(haveIngredientsChanged(original, updated)).toBe(false);
-  });
-
-  it("returns true when recipe ID changes", () => {
-    const original = [baseRecipeIngredient];
-    const updated = [
-      {
-        ...baseRecipeIngredient,
-        recipe: { id: "r-2", name: "Pasta Dough" },
-      },
-    ];
-
-    expect(haveIngredientsChanged(original, updated)).toBe(true);
-  });
-
-  it("ignores ingredient name changes (only ID matters)", () => {
-    const original = [baseIngredient];
-    const updated = [
-      {
-        ...baseIngredient,
-        ingredient: { id: "i-1", name: "All-Purpose Flour" },
-      },
-    ];
-
+  it.each<[string, IngItem[], IngItem[], boolean]>([
+    [
+      "identical ingredient arrays",
+      [baseIngredient],
+      [{ ...baseIngredient }],
+      false,
+    ],
+    ["empty arrays", [], [], false],
+    ["ingredient is added", [], [baseIngredient], true],
+    ["ingredient is removed", [baseIngredient], [], true],
+    [
+      "ingredient ID changes",
+      [baseIngredient],
+      [{ ...baseIngredient, ingredient: { id: "i-2", name: "Sugar" } }],
+      true,
+    ],
+    [
+      "amount value changes",
+      [baseIngredient],
+      [{ ...baseIngredient, amounts: [{ value: 2, unit: "cup" }] }],
+      true,
+    ],
+    [
+      "amount unit changes",
+      [baseIngredient],
+      [{ ...baseIngredient, amounts: [{ value: 1, unit: "tbsp" }] }],
+      true,
+    ],
+    [
+      "ingredient order changes",
+      [baseIngredient, second],
+      [second, baseIngredient],
+      true,
+    ],
+    [
+      "type changes from ingredient to recipe",
+      [baseIngredient],
+      [baseRecipeIngredient],
+      true,
+    ],
+    [
+      "recipe type ingredients are unchanged",
+      [baseRecipeIngredient],
+      [{ ...baseRecipeIngredient }],
+      false,
+    ],
+    [
+      "recipe ID changes",
+      [baseRecipeIngredient],
+      [{ ...baseRecipeIngredient, recipe: { id: "r-2", name: "Pasta Dough" } }],
+      true,
+    ],
     // Name change doesn't matter, only ID
-    expect(haveIngredientsChanged(original, updated)).toBe(false);
-  });
-
-  it("handles multiple amounts", () => {
-    const withMultipleAmounts: IngItem = {
-      ...baseIngredient,
-      amounts: [
-        { value: 1, unit: "cup" },
-        { value: 8, unit: "oz" },
+    [
+      "ingredient name changes (only ID matters)",
+      [baseIngredient],
+      [
+        {
+          ...baseIngredient,
+          ingredient: { id: "i-1", name: "All-Purpose Flour" },
+        },
       ],
-    };
-
-    const original = [withMultipleAmounts];
-    const updated = [{ ...withMultipleAmounts }];
-
-    expect(haveIngredientsChanged(original, updated)).toBe(false);
-  });
-
-  it("returns true when one of multiple amounts changes", () => {
-    const original: IngItem[] = [
-      {
-        ...baseIngredient,
-        amounts: [
-          { value: 1, unit: "cup" },
-          { value: 8, unit: "oz" },
-        ],
-      },
-    ];
-    const updated: IngItem[] = [
-      {
-        ...baseIngredient,
-        amounts: [
-          { value: 1, unit: "cup" },
-          { value: 16, unit: "oz" },
-        ],
-      },
-    ];
-
-    expect(haveIngredientsChanged(original, updated)).toBe(true);
+      false,
+    ],
+    [
+      "multiple amounts are unchanged",
+      [withMultipleAmounts],
+      [{ ...withMultipleAmounts }],
+      false,
+    ],
+    [
+      "one of multiple amounts changes",
+      [withMultipleAmounts],
+      [
+        {
+          ...baseIngredient,
+          amounts: [
+            { value: 1, unit: "cup" },
+            { value: 16, unit: "oz" },
+          ],
+        },
+      ],
+      true,
+    ],
+  ])("%s -> %s", (_name, original, updated, expected) => {
+    expect(haveIngredientsChanged(original, updated)).toBe(expected);
   });
 
   // An amount-less ingredient (e.g. oil for frying) loads from the DB as `[]` but
@@ -212,27 +163,34 @@ describe("haveIngredientsChanged", () => {
 });
 
 describe("normalizeAmounts", () => {
-  it("drops a fully-blank amount", () => {
-    expect(normalizeAmounts([{ value: null, unit: "" }])).toEqual([]);
-  });
-
-  it("drops a blank amount with whitespace-only unit", () => {
-    expect(normalizeAmounts([{ value: null, unit: "  " }])).toEqual([]);
-  });
-
-  it("keeps a complete amount", () => {
-    expect(normalizeAmounts([{ value: 250, unit: "g" }])).toEqual([
-      { value: 250, unit: "g" },
-    ]);
-  });
-
-  it("keeps complete amounts and drops blank ones", () => {
-    expect(
-      normalizeAmounts([
+  it.each<
+    [
+      string,
+      Array<{ value: number | null; unit: string }>,
+      Array<{ value: number | null; unit: string }>,
+    ]
+  >([
+    ["drops a fully-blank amount", [{ value: null, unit: "" }], []],
+    [
+      "drops a blank amount with whitespace-only unit",
+      [{ value: null, unit: "  " }],
+      [],
+    ],
+    [
+      "keeps a complete amount",
+      [{ value: 250, unit: "g" }],
+      [{ value: 250, unit: "g" }],
+    ],
+    [
+      "keeps complete amounts and drops blank ones",
+      [
         { value: 1, unit: "cup" },
         { value: null, unit: "" },
-      ]),
-    ).toEqual([{ value: 1, unit: "cup" }]);
+      ],
+      [{ value: 1, unit: "cup" }],
+    ],
+  ])("%s", (_name, input, expected) => {
+    expect(normalizeAmounts(input)).toEqual(expected);
   });
 });
 
@@ -242,96 +200,71 @@ describe("haveInstructionsChanged", () => {
     instruction: "Preheat oven to 350°F",
   };
 
-  it("returns false for identical instruction arrays", () => {
-    const original = [baseInstruction];
-    const updated = [{ ...baseInstruction }];
+  const threeSteps = [
+    { id: "1", instruction: "Step 1" },
+    { id: "2", instruction: "Step 2" },
+    { id: "3", instruction: "Step 3" },
+  ];
 
-    expect(haveInstructionsChanged(original, updated)).toBe(false);
-  });
+  type Instruction = { id?: string; instruction: string };
 
-  it("returns false for empty arrays", () => {
-    expect(haveInstructionsChanged([], [])).toBe(false);
-  });
-
-  it("returns true when instruction is added", () => {
-    const original: Array<{ id?: string; instruction: string }> = [];
-    const updated = [baseInstruction];
-
-    expect(haveInstructionsChanged(original, updated)).toBe(true);
-  });
-
-  it("returns true when instruction is removed", () => {
-    const original = [baseInstruction];
-    const updated: Array<{ id?: string; instruction: string }> = [];
-
-    expect(haveInstructionsChanged(original, updated)).toBe(true);
-  });
-
-  it("returns true when instruction text changes", () => {
-    const original = [baseInstruction];
-    const updated = [
-      { ...baseInstruction, instruction: "Preheat oven to 400°F" },
-    ];
-
-    expect(haveInstructionsChanged(original, updated)).toBe(true);
-  });
-
-  it("returns true when instruction ID changes", () => {
-    const original = [baseInstruction];
-    const updated = [{ ...baseInstruction, id: "inst-2" }];
-
-    expect(haveInstructionsChanged(original, updated)).toBe(true);
-  });
-
-  it("returns true when instruction order changes", () => {
-    const second = { id: "inst-2", instruction: "Mix ingredients" };
-    const original = [baseInstruction, second];
-    const updated = [second, baseInstruction];
-
-    expect(haveInstructionsChanged(original, updated)).toBe(true);
-  });
-
-  it("handles instructions without IDs", () => {
-    const original = [{ instruction: "Step 1" }];
-    const updated = [{ instruction: "Step 1" }];
-
-    expect(haveInstructionsChanged(original, updated)).toBe(false);
-  });
-
-  it("returns true when ID is added to instruction", () => {
-    const original = [{ instruction: "Step 1" }];
-    const updated = [{ id: "new-id", instruction: "Step 1" }];
-
-    expect(haveInstructionsChanged(original, updated)).toBe(true);
-  });
-
-  it("handles multiple instructions", () => {
-    const original = [
-      { id: "1", instruction: "Step 1" },
-      { id: "2", instruction: "Step 2" },
-      { id: "3", instruction: "Step 3" },
-    ];
-    const updated = [
-      { id: "1", instruction: "Step 1" },
-      { id: "2", instruction: "Step 2" },
-      { id: "3", instruction: "Step 3" },
-    ];
-
-    expect(haveInstructionsChanged(original, updated)).toBe(false);
-  });
-
-  it("returns true when middle instruction changes", () => {
-    const original = [
-      { id: "1", instruction: "Step 1" },
-      { id: "2", instruction: "Step 2" },
-      { id: "3", instruction: "Step 3" },
-    ];
-    const updated = [
-      { id: "1", instruction: "Step 1" },
-      { id: "2", instruction: "Step 2 modified" },
-      { id: "3", instruction: "Step 3" },
-    ];
-
-    expect(haveInstructionsChanged(original, updated)).toBe(true);
+  it.each<[string, Instruction[], Instruction[], boolean]>([
+    [
+      "identical instruction arrays",
+      [baseInstruction],
+      [{ ...baseInstruction }],
+      false,
+    ],
+    ["empty arrays", [], [], false],
+    ["instruction is added", [], [baseInstruction], true],
+    ["instruction is removed", [baseInstruction], [], true],
+    [
+      "instruction text changes",
+      [baseInstruction],
+      [{ ...baseInstruction, instruction: "Preheat oven to 400°F" }],
+      true,
+    ],
+    [
+      "instruction ID changes",
+      [baseInstruction],
+      [{ ...baseInstruction, id: "inst-2" }],
+      true,
+    ],
+    [
+      "instruction order changes",
+      [baseInstruction, { id: "inst-2", instruction: "Mix ingredients" }],
+      [{ id: "inst-2", instruction: "Mix ingredients" }, baseInstruction],
+      true,
+    ],
+    [
+      "instructions without IDs",
+      [{ instruction: "Step 1" }],
+      [{ instruction: "Step 1" }],
+      false,
+    ],
+    [
+      "ID is added to instruction",
+      [{ instruction: "Step 1" }],
+      [{ id: "new-id", instruction: "Step 1" }],
+      true,
+    ],
+    [
+      "multiple unchanged instructions",
+      threeSteps,
+      threeSteps.map((s) => ({ ...s })),
+      false,
+    ],
+    [
+      "middle instruction changes",
+      threeSteps,
+      [
+        { id: "1", instruction: "Step 1" },
+        { id: "2", instruction: "Step 2 modified" },
+        { id: "3", instruction: "Step 3" },
+      ],
+      true,
+    ],
+  ])("%s -> %s", (_name, original, updated, expected) => {
+    expect(haveInstructionsChanged(original, updated)).toBe(expected);
   });
 });

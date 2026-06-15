@@ -1,18 +1,12 @@
 import type { Amount } from "@cubby/schemas/codec";
-import { buildActorContext } from "@cubby/schemas/context";
-import { unsafeUserId } from "@cubby/schemas/identifiers";
-import { buildTestDB } from "tooling/test-setup";
-import { beforeEach, describe, expect, it } from "vitest";
-import type { Database } from "~/server/db";
+import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
+import { describe, expect, it } from "vitest";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";
 import { createInventoryEntry } from "~/server/repo/inventory";
 import { createLocation } from "~/server/repo/location";
 import { createProduct } from "~/server/repo/product";
 import { recipeRouter } from "../api/routers/recipe";
-import { createCallerFactory, createTestTRPCContext } from "../api/trpc";
-
-const TEST_USER_ID = unsafeUserId("test-user-id");
-const ACTOR = buildActorContext(TEST_USER_ID, "ui");
+import { createTestCaller, createTestTRPCContext } from "../api/trpc";
 
 // A product linked to "flour" with "1 cup = 120 g", so on-hand grams reconcile
 // against a recipe that asks for cups (the core unit-conversion path).
@@ -23,18 +17,13 @@ const CUP_TO_GRAM = {
 };
 
 describe("AvailabilityService.getRecipeAvailability", () => {
-  let db: Database;
-  let teardown: () => Promise<void>;
-  beforeEach(async () => {
-    ({ db, teardown } = await buildTestDB());
-    return teardown;
-  });
+  const tdb = withTestDb();
 
   const ctx = () =>
-    createTestTRPCContext(db, { auth: { userId: TEST_USER_ID } });
+    createTestTRPCContext(tdb.db, { auth: { userId: TEST_ACTOR.userId } });
 
   const createFlourRecipe = (ingredientId: string, need: Amount) =>
-    createCallerFactory(recipeRouter)(ctx()).create({
+    createTestCaller(recipeRouter, tdb.db).create({
       name: "Pancakes",
       meta: null,
       sections: [
@@ -54,15 +43,15 @@ describe("AvailabilityService.getRecipeAvailability", () => {
 
   // Seed a "flour" ingredient with one linked product (cup<->g) holding `onHand`.
   const seedFlourWithStock = async (onHand: Amount) => {
-    const flour = await findOrCreateIngredient(db, "flour");
+    const flour = await findOrCreateIngredient(tdb.db, "flour");
     const loc = await createLocation(
-      db,
+      tdb.db,
       { name: "Pantry", type: "room", parentId: null },
-      ACTOR,
+      TEST_ACTOR,
     );
     if (!loc) throw new Error("seed: location not created");
     const prod = await createProduct(
-      db,
+      tdb.db,
       {
         name: "Test Flour",
         manufacturer: "test",
@@ -73,16 +62,16 @@ describe("AvailabilityService.getRecipeAvailability", () => {
         unitMappings: [CUP_TO_GRAM],
         externalIds: [],
       },
-      ACTOR,
+      TEST_ACTOR,
     );
     await createInventoryEntry(
-      db,
+      tdb.db,
       {
         productId: prod.id,
         locationId: loc.id,
         amount: onHand,
       },
-      ACTOR,
+      TEST_ACTOR,
     );
     return flour;
   };
@@ -119,7 +108,7 @@ describe("AvailabilityService.getRecipeAvailability", () => {
   });
 
   it("reports missing when nothing is on hand", async () => {
-    const flour = await findOrCreateIngredient(db, "flour");
+    const flour = await findOrCreateIngredient(tdb.db, "flour");
     const recipe = await createFlourRecipe(flour.id, { value: 2, unit: "cup" });
 
     const result = await ctx().services.availability.getRecipeAvailability(

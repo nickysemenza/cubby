@@ -1,20 +1,9 @@
-import type { ActorContext } from "@cubby/schemas/context";
-import { unsafeUserId } from "@cubby/schemas/identifiers";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
-import { buildTestDB } from "tooling/test-setup";
-import { beforeEach, describe, expect, it } from "vitest";
-import type { Database } from "~/server/db";
+import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
+import { describe, expect, it } from "vitest";
 import { upsertImportRecipe } from "~/server/repo/import-recipe-convert";
-import { createCallerFactory, createTestTRPCContext } from "../trpc";
+import { createTestCaller } from "../trpc";
 import { recipeRouter } from "./recipe";
-
-const TEST_ACTOR: ActorContext = {
-  userId: unsafeUserId("test-user-id"),
-  source: "ui",
-};
-
-// Keep TEST_USER_ID for tRPC context
-const TEST_USER_ID = TEST_ACTOR.userId;
 
 // Minimal inline fixtures (was ~/testdata/fakeRecipes, removed with recipe.seed)
 const TEST_RECIPES: ImportRecipe[] = [
@@ -41,23 +30,13 @@ const TEST_RECIPES: ImportRecipe[] = [
 ];
 
 describe("recipe router", () => {
-  let db: Database;
-  let teardown: () => Promise<void>;
-  beforeEach(async () => {
-    ({ db, teardown } = await buildTestDB());
-    return teardown;
-  });
+  const ctx = withTestDb();
   it("recipe insert and retrieve", async () => {
     for (const recipe of TEST_RECIPES) {
-      await upsertImportRecipe(recipe, db, TEST_ACTOR);
+      await upsertImportRecipe(recipe, ctx.db, TEST_ACTOR);
     }
 
-    const createCaller = createCallerFactory(recipeRouter);
-    const caller = createCaller(
-      createTestTRPCContext(db, {
-        auth: { userId: TEST_USER_ID },
-      }),
-    );
+    const caller = createTestCaller(recipeRouter, ctx.db);
     const recipeList = await caller.list({ filters: {} });
     expect(recipeList.items.length).toEqual(TEST_RECIPES.length);
   });

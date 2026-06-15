@@ -1,8 +1,6 @@
-import type { ActorContext } from "@cubby/schemas/context";
 import { eq, inArray, ne } from "drizzle-orm";
-import { buildTestDB } from "tooling/test-setup";
-import { beforeEach, describe, expect, it } from "vitest";
-import type { Database } from "~/server/db";
+import { withTestDb } from "tooling/test-setup";
+import { describe, expect, it } from "vitest";
 import {
   recipe,
   recipeSection,
@@ -13,13 +11,7 @@ import { upsertImportRecipe } from "./import-recipe-convert";
 import { makeImportRecipe } from "./repo.fixtures";
 
 describe("upsertImportRecipe", () => {
-  let db: Database;
-  let actor: ActorContext;
-  let teardown: () => Promise<void>;
-  beforeEach(async () => {
-    ({ db, actor, teardown } = await buildTestDB());
-    return teardown;
-  });
+  const ctx = withTestDb();
 
   const mockRecipe = makeImportRecipe({
     meta: { title: "Test Recipe" },
@@ -50,12 +42,12 @@ describe("upsertImportRecipe", () => {
   });
 
   it("creates a new recipe when it doesn't exist", async () => {
-    const result = await upsertImportRecipe(mockRecipe, db, actor);
+    const result = await upsertImportRecipe(mockRecipe, ctx.db, ctx.actor);
 
     expect(result.id).toBeDefined();
 
     // Verify recipe was created
-    const foundRecipe = await getDb(db).query.recipe.findFirst({
+    const foundRecipe = await getDb(ctx.db).query.recipe.findFirst({
       where: eq(recipe.name, "Test Recipe"),
       with: {
         sections: {
@@ -76,10 +68,10 @@ describe("upsertImportRecipe", () => {
 
   it("updates an existing recipe when it already exists", async () => {
     // First, create the recipe
-    const firstResult = await upsertImportRecipe(mockRecipe, db, actor);
+    const firstResult = await upsertImportRecipe(mockRecipe, ctx.db, ctx.actor);
 
     // Verify initial state
-    const initialRecipe = await getDb(db).query.recipe.findFirst({
+    const initialRecipe = await getDb(ctx.db).query.recipe.findFirst({
       where: eq(recipe.name, "Test Recipe"),
       with: {
         sections: {
@@ -94,13 +86,17 @@ describe("upsertImportRecipe", () => {
     expect(initialRecipe!.sections[0]!.ingredients).toHaveLength(2);
 
     // Now update with different data
-    const secondResult = await upsertImportRecipe(mockRecipeUpdated, db, actor);
+    const secondResult = await upsertImportRecipe(
+      mockRecipeUpdated,
+      ctx.db,
+      ctx.actor,
+    );
 
     // Should return same recipe ID (updated, not created new)
     expect(secondResult.id).toBe(firstResult.id);
 
     // Verify the recipe was updated
-    const updatedRecipe = await getDb(db).query.recipe.findFirst({
+    const updatedRecipe = await getDb(ctx.db).query.recipe.findFirst({
       where: eq(recipe.name, "Test Recipe"),
       with: {
         sections: {
@@ -129,16 +125,16 @@ describe("upsertImportRecipe", () => {
 
   it("handles multiple upserts correctly (back-to-back npm run load-data scenario)", async () => {
     // This tests the exact scenario mentioned - running load-data multiple times
-    const firstRun = await upsertImportRecipe(mockRecipe, db, actor);
-    const secondRun = await upsertImportRecipe(mockRecipe, db, actor); // Same recipe
-    const thirdRun = await upsertImportRecipe(mockRecipe, db, actor); // Same recipe again
+    const firstRun = await upsertImportRecipe(mockRecipe, ctx.db, ctx.actor);
+    const secondRun = await upsertImportRecipe(mockRecipe, ctx.db, ctx.actor); // Same recipe
+    const thirdRun = await upsertImportRecipe(mockRecipe, ctx.db, ctx.actor); // Same recipe again
 
     // All should return the same recipe ID
     expect(secondRun.id).toBe(firstRun.id);
     expect(thirdRun.id).toBe(firstRun.id);
 
     // Should only be one recipe in the database
-    const allRecipes = await getDb(db).query.recipe.findMany({
+    const allRecipes = await getDb(ctx.db).query.recipe.findMany({
       where: eq(recipe.name, "Test Recipe"),
     });
 
@@ -147,9 +143,9 @@ describe("upsertImportRecipe", () => {
 
   it("properly cleans up old sections and ingredients", async () => {
     // Create recipe with 2 sections
-    await upsertImportRecipe(mockRecipeUpdated, db, actor);
+    await upsertImportRecipe(mockRecipeUpdated, ctx.db, ctx.actor);
 
-    const beforeUpdate = await getDb(db).query.recipe.findFirst({
+    const beforeUpdate = await getDb(ctx.db).query.recipe.findFirst({
       where: eq(recipe.name, "Test Recipe"),
       with: { sections: { with: { ingredients: true } } },
     });
@@ -162,9 +158,9 @@ describe("upsertImportRecipe", () => {
     );
 
     // Update to recipe with 1 section
-    await upsertImportRecipe(mockRecipe, db, actor);
+    await upsertImportRecipe(mockRecipe, ctx.db, ctx.actor);
 
-    const afterUpdate = await getDb(db).query.recipe.findFirst({
+    const afterUpdate = await getDb(ctx.db).query.recipe.findFirst({
       where: eq(recipe.name, "Test Recipe"),
       with: { sections: { with: { ingredients: true } } },
     });
@@ -187,13 +183,15 @@ describe("upsertImportRecipe", () => {
     // raw queries — which do NOT filter soft-deletes — must see exactly the new rows,
     // not the union of old + new. This guards against the unbounded dead-row
     // accumulation that soft-deleting old sections used to cause on repeated upserts.
-    const allSectionsForRecipe = await getDb(db).query.recipeSection.findMany({
+    const allSectionsForRecipe = await getDb(
+      ctx.db,
+    ).query.recipeSection.findMany({
       where: eq(recipeSection.recipeId, afterUpdate!.id),
     });
     expect(allSectionsForRecipe).toHaveLength(1);
 
     const allIngredientsForRecipe = await getDb(
-      db,
+      ctx.db,
     ).query.recipeSectionIngredient.findMany({
       where: inArray(
         recipeSectionIngredient.recipeSectionId,
@@ -203,7 +201,7 @@ describe("upsertImportRecipe", () => {
     expect(allIngredientsForRecipe).toHaveLength(2);
 
     // Verify no orphaned records exist for any other recipe either
-    const orphanedSections = await getDb(db).query.recipeSection.findMany({
+    const orphanedSections = await getDb(ctx.db).query.recipeSection.findMany({
       where: ne(recipeSection.recipeId, afterUpdate!.id),
     });
     expect(orphanedSections).toHaveLength(0);

@@ -1,6 +1,8 @@
 import { faker } from "@faker-js/faker";
 import { expect, test } from "@playwright/test";
 import {
+  createIngredientViaForm,
+  createProductWithIngredientMappings,
   fillInput,
   selectComboboxItem,
   waitForFormHydration,
@@ -12,58 +14,21 @@ test.describe("Create Recipe - Full Flow", () => {
   }) => {
     const ingredientName = faker.food.ingredient();
     const productName = `${ingredientName} Brand Product`;
-    const manufacturerName = faker.company.name();
     const recipeName = faker.lorem
       .words(3)
       .split(" ")
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(" ");
 
-    // Step 1: Create ingredient
-    await page.goto("/ingredients/new");
-    await waitForFormHydration(page);
-    await fillInput(page, "Enter ingredient name", ingredientName);
-    await page.getByRole("button", { name: /^Create$/ }).click();
-    await expect(page).toHaveURL(/\/ingredients\/[a-f0-9-]+/, {
-      timeout: 15000,
-    });
-
-    // Step 2: Create product with unit mappings
-    await page.goto("/products/new");
-    await waitForFormHydration(page);
-    await fillInput(page, "Enter product name", productName);
-    await fillInput(page, "Enter manufacturer", manufacturerName);
-
-    // Link ingredient
-    await selectComboboxItem(
-      page,
-      page.getByRole("combobox", { name: /ingredient/i }),
-      // The field label is "Linked ingredient" — the combobox derives its
-      // search placeholder from the lowercased label.
-      "Search linked ingredient...",
+    // Steps 1-2: Create the ingredient, then a product linked to it with the
+    // standard 1 cup = $2.50 / 100 g = $1.50 conversions (the Step 3 cost/weight
+    // assertions below depend on these exact values).
+    await createIngredientViaForm(page, ingredientName);
+    await createProductWithIngredientMappings(page, {
+      name: productName,
+      manufacturer: faker.company.name(),
       ingredientName,
-    );
-
-    // Add unit conversions (1 cup = $2.50, 100 grams = $1.50). Rows use
-    // compact "Qty"/"Unit" labels that repeat per row, so target the stable
-    // input ids instead. The "from" value defaults to 1.
-    await page.getByRole("button", { name: "Add conversion" }).click();
-    const firstFromUnit = page.locator('[id="unitMappings.0.a.unit"]');
-    await expect(firstFromUnit).toBeVisible({ timeout: 10000 });
-    await firstFromUnit.fill("cup");
-    await page.locator('[id="unitMappings.0.b.value"]').fill("2.50");
-    await page.locator('[id="unitMappings.0.b.unit"]').fill("dollar");
-
-    await page.getByRole("button", { name: "Add conversion" }).click();
-    const secondFromValue = page.locator('[id="unitMappings.1.a.value"]');
-    await expect(secondFromValue).toBeVisible({ timeout: 10000 });
-    await secondFromValue.fill("100");
-    await page.locator('[id="unitMappings.1.a.unit"]').fill("grams");
-    await page.locator('[id="unitMappings.1.b.value"]').fill("1.50");
-    await page.locator('[id="unitMappings.1.b.unit"]').fill("dollar");
-
-    await page.getByRole("button", { name: /^Create$/ }).click();
-    await expect(page).toHaveURL(/\/products\/[a-f0-9-]+/, { timeout: 15000 });
+    });
 
     // Step 3: Create recipe
     await page.goto("/recipes/new");

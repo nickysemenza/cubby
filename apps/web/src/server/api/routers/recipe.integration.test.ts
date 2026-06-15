@@ -1,34 +1,20 @@
-import { unsafeUserId } from "@cubby/schemas/identifiers";
-import { buildTestDB } from "tooling/test-setup";
-import { beforeEach, describe, expect, it } from "vitest";
-import type { Database } from "~/server/db";
+import { NONEXISTENT_UUID, withTestDb } from "tooling/test-setup";
+import { describe, expect, it } from "vitest";
 import { withTransaction } from "~/server/repo/database-helpers";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";
-import { createCallerFactory, createTestTRPCContext } from "../trpc";
+import { createTestCaller } from "../trpc";
 import { recipeRouter } from "./recipe";
 
-const TEST_USER_ID = unsafeUserId("test-user-id");
-
 describe("recipe router", () => {
-  let db: Database;
-  let teardown: () => Promise<void>;
-  beforeEach(async () => {
-    ({ db, teardown } = await buildTestDB());
-    return teardown;
-  });
+  const ctx = withTestDb();
 
   it("should create and retrieve a recipe", async () => {
     // Create a test caller for the recipe router
-    const createCaller = createCallerFactory(recipeRouter);
-    const caller = createCaller(
-      createTestTRPCContext(db, {
-        auth: { userId: TEST_USER_ID },
-      }),
-    );
+    const caller = createTestCaller(recipeRouter, ctx.db);
 
     // Create a test ingredient first
     const ingredient = await withTransaction(
-      db,
+      ctx.db,
       async (tx) => await findOrCreateIngredient(tx, "flour"),
     );
 
@@ -100,20 +86,15 @@ describe("recipe router", () => {
 
   it("should list recipes with filtering", async () => {
     // Create a test caller for the recipe router
-    const createCaller = createCallerFactory(recipeRouter);
-    const caller = createCaller(
-      createTestTRPCContext(db, {
-        auth: { userId: TEST_USER_ID },
-      }),
-    );
+    const caller = createTestCaller(recipeRouter, ctx.db);
 
     // Create test ingredients
     const flour = await withTransaction(
-      db,
+      ctx.db,
       async (tx) => await findOrCreateIngredient(tx, "flour"),
     );
     const sugar = await withTransaction(
-      db,
+      ctx.db,
       async (tx) => await findOrCreateIngredient(tx, "sugar"),
     );
 
@@ -216,20 +197,15 @@ describe("recipe router", () => {
 
   it("should update a recipe", async () => {
     // Create a test caller for the recipe router
-    const createCaller = createCallerFactory(recipeRouter);
-    const caller = createCaller(
-      createTestTRPCContext(db, {
-        auth: { userId: TEST_USER_ID },
-      }),
-    );
+    const caller = createTestCaller(recipeRouter, ctx.db);
 
     // Create test ingredients
     const flour = await withTransaction(
-      db,
+      ctx.db,
       async (tx) => await findOrCreateIngredient(tx, "flour"),
     );
     const butter = await withTransaction(
-      db,
+      ctx.db,
       async (tx) => await findOrCreateIngredient(tx, "butter"),
     );
 
@@ -303,16 +279,11 @@ describe("recipe router", () => {
 
   it("should handle partial updates correctly", async () => {
     // Create a test caller for the recipe router
-    const createCaller = createCallerFactory(recipeRouter);
-    const caller = createCaller(
-      createTestTRPCContext(db, {
-        auth: { userId: TEST_USER_ID },
-      }),
-    );
+    const caller = createTestCaller(recipeRouter, ctx.db);
 
     // Create a test ingredient
     const flour = await withTransaction(
-      db,
+      ctx.db,
       async (tx) => await findOrCreateIngredient(tx, "flour"),
     );
 
@@ -364,15 +335,10 @@ describe("recipe router", () => {
 
   it("should throw error when retrieving recipe with invalid ID", async () => {
     // Create a test caller for the recipe router
-    const createCaller = createCallerFactory(recipeRouter);
-    const caller = createCaller(
-      createTestTRPCContext(db, {
-        auth: { userId: TEST_USER_ID },
-      }),
-    );
+    const caller = createTestCaller(recipeRouter, ctx.db);
 
     // Try to retrieve a recipe with a non-existent ID
-    const nonExistentId = "00000000-0000-0000-0000-000000000000";
+    const nonExistentId = NONEXISTENT_UUID;
 
     await expect(caller.getByID({ id: nonExistentId })).rejects.toThrow(
       "Recipe not found",
@@ -381,16 +347,11 @@ describe("recipe router", () => {
 
   it("should create recipe with recipe ingredient (nested recipe)", async () => {
     // Create a test caller for the recipe router
-    const createCaller = createCallerFactory(recipeRouter);
-    const caller = createCaller(
-      createTestTRPCContext(db, {
-        auth: { userId: TEST_USER_ID },
-      }),
-    );
+    const caller = createTestCaller(recipeRouter, ctx.db);
 
     // Create an ingredient for the base recipe
     const flour = await withTransaction(
-      db,
+      ctx.db,
       async (tx) => await findOrCreateIngredient(tx, "flour"),
     );
 
@@ -458,12 +419,7 @@ describe("recipe router", () => {
 
   it("should insert import recipe", async () => {
     // Create a test caller for the recipe router
-    const createCaller = createCallerFactory(recipeRouter);
-    const caller = createCaller(
-      createTestTRPCContext(db, {
-        auth: { userId: TEST_USER_ID },
-      }),
-    );
+    const caller = createTestCaller(recipeRouter, ctx.db);
 
     // Create an import recipe (raw lines, parsed server-side)
     const importRecipeData = {

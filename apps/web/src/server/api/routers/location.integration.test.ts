@@ -1,29 +1,14 @@
-import { unsafeUserId } from "@cubby/schemas/identifiers";
-import { buildTestDB } from "tooling/test-setup";
-import { beforeEach, describe, expect, it } from "vitest";
-import type { Database } from "~/server/db";
-import { createCallerFactory, createTestTRPCContext } from "../trpc";
+import { withTestDb } from "tooling/test-setup";
+import { describe, expect, it } from "vitest";
+import { createTestCaller } from "../trpc";
 import { locationRouter } from "./location";
 
-const TEST_USER_ID = unsafeUserId("test-user-id");
-
 describe("location router", () => {
-  let db: Database;
-  let teardown: () => Promise<void>;
-  beforeEach(async () => {
-    ({ db, teardown } = await buildTestDB());
-
-    return teardown;
-  });
+  const ctx = withTestDb();
 
   it("should create and retrieve a location", async () => {
     // Create a test caller for the location router
-    const createCaller = createCallerFactory(locationRouter);
-    const caller = createCaller(
-      createTestTRPCContext(db, {
-        auth: { userId: TEST_USER_ID },
-      }),
-    );
+    const caller = createTestCaller(locationRouter, ctx.db);
 
     // Create a test location
     const locationData = {
@@ -53,12 +38,7 @@ describe("location router", () => {
 
   it("should create location with parent-child relationship", async () => {
     // Create a test caller for the location router
-    const createCaller = createCallerFactory(locationRouter);
-    const caller = createCaller(
-      createTestTRPCContext(db, {
-        auth: { userId: TEST_USER_ID },
-      }),
-    );
+    const caller = createTestCaller(locationRouter, ctx.db);
 
     // Create a parent location
     const parentLocationData = {
@@ -91,12 +71,7 @@ describe("location router", () => {
 
   it("should list locations with filtering", async () => {
     // Create a test caller for the location router
-    const createCaller = createCallerFactory(locationRouter);
-    const caller = createCaller(
-      createTestTRPCContext(db, {
-        auth: { userId: TEST_USER_ID },
-      }),
-    );
+    const caller = createTestCaller(locationRouter, ctx.db);
 
     // Create multiple test locations
     const locationData1 = {
@@ -170,12 +145,7 @@ describe("location router", () => {
 
   it("should update a location", async () => {
     // Create a test caller for the location router
-    const createCaller = createCallerFactory(locationRouter);
-    const caller = createCaller(
-      createTestTRPCContext(db, {
-        auth: { userId: TEST_USER_ID },
-      }),
-    );
+    const caller = createTestCaller(locationRouter, ctx.db);
 
     // Create a test location
     const locationData = {
@@ -209,12 +179,7 @@ describe("location router", () => {
 
   it("should handle partial updates correctly", async () => {
     // Create a test caller for the location router
-    const createCaller = createCallerFactory(locationRouter);
-    const caller = createCaller(
-      createTestTRPCContext(db, {
-        auth: { userId: TEST_USER_ID },
-      }),
-    );
+    const caller = createTestCaller(locationRouter, ctx.db);
 
     // Create a test location
     const locationData = {
@@ -247,12 +212,7 @@ describe("location router", () => {
 
   it("should build location tree correctly", async () => {
     // Create a test caller for the location router
-    const createCaller = createCallerFactory(locationRouter);
-    const caller = createCaller(
-      createTestTRPCContext(db, {
-        auth: { userId: TEST_USER_ID },
-      }),
-    );
+    const caller = createTestCaller(locationRouter, ctx.db);
 
     // Create a hierarchical structure: Kitchen -> Cabinet -> Shelf
     const kitchen = await caller.create({
@@ -304,12 +264,7 @@ describe("location router", () => {
 
   it("should get location types count", async () => {
     // Create a test caller for the location router
-    const createCaller = createCallerFactory(locationRouter);
-    const caller = createCaller(
-      createTestTRPCContext(db, {
-        auth: { userId: TEST_USER_ID },
-      }),
-    );
+    const caller = createTestCaller(locationRouter, ctx.db);
 
     // Create locations of different types
     await caller.create({
@@ -359,12 +314,7 @@ describe("location router", () => {
 
   it("should handle deep parent-child hierarchy", async () => {
     // Create a test caller for the location router
-    const createCaller = createCallerFactory(locationRouter);
-    const caller = createCaller(
-      createTestTRPCContext(db, {
-        auth: { userId: TEST_USER_ID },
-      }),
-    );
+    const caller = createTestCaller(locationRouter, ctx.db);
 
     // Create a deep hierarchy: Room -> Cabinet -> Shelf -> Crate
     const room = await caller.create({

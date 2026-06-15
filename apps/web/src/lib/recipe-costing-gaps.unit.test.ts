@@ -1,5 +1,5 @@
 import type { Amount } from "@cubby/schemas/codec";
-import { beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   costRecipe,
   cups,
@@ -12,11 +12,6 @@ import {
   type Product,
 } from "~/lib/recipe-costing.fixtures";
 import { type CostingGap, deriveCostingGaps } from "~/lib/recipe-costing-gaps";
-import { ensureWasm } from "~/lib/wasm";
-
-beforeAll(async () => {
-  await ensureWasm();
-});
 
 // One product, given fixed id "prod-p" so single-product cases can assert it.
 const prod = (opts?: Parameters<typeof makeProduct>[1]): Product =>

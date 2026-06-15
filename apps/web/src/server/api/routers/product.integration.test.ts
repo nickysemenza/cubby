@@ -1,41 +1,22 @@
-import { unsafeUserId } from "@cubby/schemas/identifiers";
-import { buildTestDB } from "tooling/test-setup";
-import { beforeEach, describe, expect, it } from "vitest";
-import type { Database } from "~/server/db";
-import { createCallerFactory, createTestTRPCContext } from "../trpc";
+import { NONEXISTENT_UUID, withTestDb } from "tooling/test-setup";
+import { describe, expect, it } from "vitest";
+import { makeProductInput } from "~/server/repo/repo.fixtures";
+import { createTestCaller } from "../trpc";
 import { productRouter } from "./product";
 
-const TEST_USER_ID = unsafeUserId("test-user-id");
-
 describe("product router", () => {
-  let db: Database;
-  let teardown: () => Promise<void>;
-  beforeEach(async () => {
-    ({ db, teardown } = await buildTestDB());
-
-    return teardown;
-  });
+  const ctx = withTestDb();
 
   it("should create and retrieve a product", async () => {
     // Create a test caller for the product router
-    const createCaller = createCallerFactory(productRouter);
-    const caller = createCaller(
-      createTestTRPCContext(db, {
-        auth: { userId: TEST_USER_ID },
-      }),
-    );
+    const caller = createTestCaller(productRouter, ctx.db);
 
     // Create a test product
-    const productData = {
-      name: "Test Product",
-      manufacturer: "Test Manufacturer",
-      model: "TEST-123",
+    const productData = makeProductInput({
       upc: "123456789012",
-      ndb_number: null,
-      ingredientId: null,
       pendingImageIds: [],
       expectedQuantity: 1,
-    };
+    });
 
     // Create the product
     const createdProduct = await caller.create(productData);
@@ -62,46 +43,35 @@ describe("product router", () => {
 
   it("should list products with filtering", async () => {
     // Create a test caller for the product router
-    const createCaller = createCallerFactory(productRouter);
-    const caller = createCaller(
-      createTestTRPCContext(db, {
-        auth: { userId: TEST_USER_ID },
-      }),
-    );
+    const caller = createTestCaller(productRouter, ctx.db);
 
     // Create multiple test products
-    const productData1 = {
+    const productData1 = makeProductInput({
       name: "Apple iPhone",
       manufacturer: "Apple",
       model: "iPhone 14",
       upc: "123456789012",
-      ndb_number: null,
-      ingredientId: null,
       pendingImageIds: [],
       expectedQuantity: 1,
-    };
+    });
 
-    const productData2 = {
+    const productData2 = makeProductInput({
       name: "Samsung Galaxy",
       manufacturer: "Samsung",
       model: "S23",
       upc: "987654321098",
-      ndb_number: null,
-      ingredientId: null,
       pendingImageIds: [],
       expectedQuantity: 1,
-    };
+    });
 
-    const productData3 = {
+    const productData3 = makeProductInput({
       name: "Apple MacBook",
       manufacturer: "Apple",
       model: "MacBook Pro",
       upc: "654321987654",
-      ndb_number: null,
-      ingredientId: null,
       pendingImageIds: [],
       expectedQuantity: 1,
-    };
+    });
 
     // Create the products
     await caller.create(productData1);
@@ -156,24 +126,17 @@ describe("product router", () => {
 
   it("should update a product", async () => {
     // Create a test caller for the product router
-    const createCaller = createCallerFactory(productRouter);
-    const caller = createCaller(
-      createTestTRPCContext(db, {
-        auth: { userId: TEST_USER_ID },
-      }),
-    );
+    const caller = createTestCaller(productRouter, ctx.db);
 
     // Create a test product
-    const productData = {
+    const productData = makeProductInput({
       name: "Original Product",
       manufacturer: "Original Manufacturer",
       model: "Original-123",
       upc: "123456789012",
-      ndb_number: null,
-      ingredientId: null,
       pendingImageIds: [],
       expectedQuantity: 1,
-    };
+    });
 
     // Create the product
     const createdProduct = await caller.create(productData);
@@ -219,24 +182,14 @@ describe("product router", () => {
 
   it("should handle partial updates correctly", async () => {
     // Create a test caller for the product router
-    const createCaller = createCallerFactory(productRouter);
-    const caller = createCaller(
-      createTestTRPCContext(db, {
-        auth: { userId: TEST_USER_ID },
-      }),
-    );
+    const caller = createTestCaller(productRouter, ctx.db);
 
     // Create a test product
-    const productData = {
-      name: "Test Product",
-      manufacturer: "Test Manufacturer",
-      model: "TEST-123",
+    const productData = makeProductInput({
       upc: "123456789012",
-      ndb_number: null,
-      ingredientId: null,
       pendingImageIds: [],
       expectedQuantity: 1,
-    };
+    });
 
     // Create the product
     const createdProduct = await caller.create(productData);
@@ -259,39 +212,27 @@ describe("product router", () => {
 
   it("should throw error when retrieving product with invalid ID", async () => {
     // Create a test caller for the product router
-    const createCaller = createCallerFactory(productRouter);
-    const caller = createCaller(
-      createTestTRPCContext(db, {
-        auth: { userId: TEST_USER_ID },
-      }),
-    );
+    const caller = createTestCaller(productRouter, ctx.db);
 
     // Try to retrieve a product with a non-existent ID
-    const nonExistentId = "00000000-0000-0000-0000-000000000000";
+    const nonExistentId = NONEXISTENT_UUID;
 
     await expect(caller.getByID({ id: nonExistentId })).rejects.toThrow();
   });
 
   describe("price", () => {
     it("persists the price field directly to the product (no mapping row)", async () => {
-      const createCaller = createCallerFactory(productRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
+      const caller = createTestCaller(productRouter, ctx.db);
+
+      const createdProduct = await caller.create(
+        makeProductInput({
+          name: "Priced Product",
+          manufacturer: "Test Brand",
+          model: null,
+          pendingImageIds: [],
+          price: 9.99,
         }),
       );
-
-      const createdProduct = await caller.create({
-        name: "Priced Product",
-        manufacturer: "Test Brand",
-        model: null,
-        upc: null,
-        ndb_number: null,
-        ingredientId: null,
-        pendingImageIds: [],
-        expectedQuantity: null,
-        price: 9.99,
-      });
 
       const retrieved = await caller.getByID({ id: createdProduct.id });
       expect(retrieved.price).toBe(9.99);
@@ -300,61 +241,47 @@ describe("product router", () => {
     });
 
     it("rejects a canonical '1 each = $X' mapping (duplicates the price field)", async () => {
-      const createCaller = createCallerFactory(productRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(productRouter, ctx.db);
 
       await expect(
-        caller.create({
-          name: "Bad Price Mapping",
-          manufacturer: "Test Brand",
-          model: null,
-          upc: null,
-          ndb_number: null,
-          ingredientId: null,
-          pendingImageIds: [],
-          expectedQuantity: null,
-          unitMappings: [
-            {
-              a: { value: 1, unit: "each" },
-              b: { value: 9.99, unit: "dollar" },
-              source: "manual",
-            },
-          ],
-        }),
+        caller.create(
+          makeProductInput({
+            name: "Bad Price Mapping",
+            manufacturer: "Test Brand",
+            model: null,
+            pendingImageIds: [],
+            unitMappings: [
+              {
+                a: { value: 1, unit: "each" },
+                b: { value: 9.99, unit: "dollar" },
+                source: "manual",
+              },
+            ],
+          }),
+        ),
       ).rejects.toThrow(/Price per Item/);
     });
 
     it("allows a per-measure money mapping (e.g. '1 quart = $4')", async () => {
-      const createCaller = createCallerFactory(productRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(productRouter, ctx.db);
 
       // Generic ingredients with no discrete "each" are priced per measure; the
       // scalar column can't express that, so it stays a (costing) mapping.
-      const created = await caller.create({
-        name: "Generic Buttermilk",
-        manufacturer: "Test Brand",
-        model: null,
-        upc: null,
-        ndb_number: null,
-        ingredientId: null,
-        pendingImageIds: [],
-        expectedQuantity: null,
-        unitMappings: [
-          {
-            a: { value: 1, unit: "quart" },
-            b: { value: 4, unit: "dollar" },
-            source: "manual",
-          },
-        ],
-      });
+      const created = await caller.create(
+        makeProductInput({
+          name: "Generic Buttermilk",
+          manufacturer: "Test Brand",
+          model: null,
+          pendingImageIds: [],
+          unitMappings: [
+            {
+              a: { value: 1, unit: "quart" },
+              b: { value: 4, unit: "dollar" },
+              source: "manual",
+            },
+          ],
+        }),
+      );
 
       const retrieved = await caller.getByID({ id: created.id });
       expect(retrieved.price).toBeNull();

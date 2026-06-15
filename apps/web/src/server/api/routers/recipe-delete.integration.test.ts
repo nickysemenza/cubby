@@ -1,30 +1,15 @@
-import { unsafeUserId } from "@cubby/schemas/identifiers";
-import { buildTestDB } from "tooling/test-setup";
-import { beforeEach, describe, expect, it } from "vitest";
-import type { Database } from "~/server/db";
-import { createCallerFactory, createTestTRPCContext } from "../trpc";
+import { withTestDb } from "tooling/test-setup";
+import { describe, expect, it } from "vitest";
+import { createTestCaller } from "../trpc";
 import { ingredientRouter } from "./ingredient";
 import { recipeRouter } from "./recipe";
 
-const TEST_USER_ID = unsafeUserId("test-user-id");
-
 describe("recipe deletion", () => {
-  let db: Database;
-  let teardown: () => Promise<void>;
-  beforeEach(async () => {
-    ({ db, teardown } = await buildTestDB());
-
-    return teardown;
-  });
+  const ctx = withTestDb();
 
   describe("basic deletion", () => {
     it("should soft delete a recipe successfully", async () => {
-      const createCaller = createCallerFactory(recipeRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(recipeRouter, ctx.db);
 
       // Create a test recipe
       const recipeData = {
@@ -65,12 +50,7 @@ describe("recipe deletion", () => {
     });
 
     it("should delete multiple recipes in bulk", async () => {
-      const createCaller = createCallerFactory(recipeRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(recipeRouter, ctx.db);
 
       // Create multiple recipes
       const recipe1 = await caller.create({
@@ -138,19 +118,9 @@ describe("recipe deletion", () => {
 
   describe("cascading behavior", () => {
     it("should cascade delete to sections and ingredients", async () => {
-      const createRecipeCaller = createCallerFactory(recipeRouter);
-      const recipeCaller = createRecipeCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const recipeCaller = createTestCaller(recipeRouter, ctx.db);
 
-      const createIngredientCaller = createCallerFactory(ingredientRouter);
-      const ingredientCaller = createIngredientCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const ingredientCaller = createTestCaller(ingredientRouter, ctx.db);
 
       // Create an ingredient first
       const ingredient = await ingredientCaller.create({
@@ -216,19 +186,9 @@ describe("recipe deletion", () => {
 
   describe("audit logging", () => {
     it("should log deletion with cascaded item counts", async () => {
-      const createRecipeCaller = createCallerFactory(recipeRouter);
-      const recipeCaller = createRecipeCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const recipeCaller = createTestCaller(recipeRouter, ctx.db);
 
-      const createIngredientCaller = createCallerFactory(ingredientRouter);
-      const ingredientCaller = createIngredientCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const ingredientCaller = createTestCaller(ingredientRouter, ctx.db);
 
       // Create ingredients
       const ingredient1 = await ingredientCaller.create({

@@ -1,17 +1,11 @@
 import { unsafeProductId } from "@cubby/schemas/identifiers";
 import type { FoodSummary } from "@cubby/usda-schemas";
-import { beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { convertAmountToPrice, safeConvertAmount } from "~/lib/recipe-costing";
-import { ensureWasm } from "~/lib/wasm";
 import {
   getAllUnitMappingsFromProduct,
   parseUnitMappingString,
 } from "./unit-mapping-utils";
-
-// Initialize WASM before all tests
-beforeAll(async () => {
-  await ensureWasm();
-});
 
 describe("parseUnitMappingString", () => {
   interface Case {

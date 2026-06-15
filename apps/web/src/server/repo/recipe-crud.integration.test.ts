@@ -1,9 +1,7 @@
-import type { ActorContext } from "@cubby/schemas/context";
 import type { RecipeId } from "@cubby/schemas/identifiers";
 import { and, desc, eq } from "drizzle-orm";
-import { buildTestDB } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
-import type { Database } from "~/server/db";
 import {
   auditLog,
   recipe,
@@ -30,24 +28,20 @@ import { ingredientRef, makeRecipeInput } from "./repo.fixtures";
 // in recipe-cookbook-upsert.integration.test.ts; this file covers the rest.)
 
 describe("recipe crud repo", () => {
-  let db: Database;
-  let actor: ActorContext;
-  let teardown: () => Promise<void>;
+  const ctx = withTestDb();
   let flourId: string;
   beforeEach(async () => {
-    ({ db, actor, teardown } = await buildTestDB());
     const flour = await createIngredient(
-      db,
+      ctx.db,
       { name: "Flour", aliases: [] },
-      actor,
+      ctx.actor,
     );
     flourId = flour.id;
-    return teardown;
   });
 
   const recipeWith = (name: string, ingredientId: string) =>
     createRecipe(
-      db,
+      ctx.db,
       makeRecipeInput({
         name,
         sections: [
@@ -62,7 +56,7 @@ describe("recipe crud repo", () => {
           },
         ],
       }),
-      actor,
+      ctx.actor,
     );
 
   describe("deleteRecipes", () => {
@@ -70,13 +64,13 @@ describe("recipe crud repo", () => {
       const recipe = await recipeWith("Doomed", flourId);
       const sectionId = recipe.sections[0]!.id;
 
-      await deleteRecipes(db, [recipe.id as RecipeId], actor);
+      await deleteRecipes(ctx.db, [recipe.id as RecipeId], ctx.actor);
 
       // Excluded from reads.
-      expect(await getRecipeByID(db, recipe.id as RecipeId)).toBeNull();
+      expect(await getRecipeByID(ctx.db, recipe.id as RecipeId)).toBeNull();
 
       // Section + ingredient rows still exist but are soft-deleted (excluded by notDeleted).
-      const liveSections = await getDb(db)
+      const liveSections = await getDb(ctx.db)
         .select({ id: recipeSection.id })
         .from(recipeSection)
         .where(
@@ -84,7 +78,7 @@ describe("recipe crud repo", () => {
         );
       expect(liveSections).toHaveLength(0);
 
-      const liveIngredients = await getDb(db)
+      const liveIngredients = await getDb(ctx.db)
         .select({ id: recipeSectionIngredient.id })
         .from(recipeSectionIngredient)
         .where(
@@ -98,9 +92,9 @@ describe("recipe crud repo", () => {
 
     it("writes a delete audit row with cascade counts", async () => {
       const recipe = await recipeWith("Audited", flourId);
-      await deleteRecipes(db, [recipe.id as RecipeId], actor);
+      await deleteRecipes(ctx.db, [recipe.id as RecipeId], ctx.actor);
 
-      const [entry] = await getDb(db)
+      const [entry] = await getDb(ctx.db)
         .select()
         .from(auditLog)
         .where(
@@ -125,8 +119,8 @@ describe("recipe crud repo", () => {
           ],
         }),
         pageId,
-        db,
-        actor,
+        ctx.db,
+        ctx.actor,
       );
       // A renamed Notion page is still the same page id → updates in place, no dup.
       const renamed = await upsertNotionRecipe(
@@ -137,12 +131,12 @@ describe("recipe crud repo", () => {
           ],
         }),
         pageId,
-        db,
-        actor,
+        ctx.db,
+        ctx.actor,
       );
 
       expect(renamed.id).toBe(first.id);
-      const rows = await getDb(db)
+      const rows = await getDb(ctx.db)
         .select({ id: recipe.id })
         .from(recipe)
         .where(and(eq(recipe.SourceData, pageId), notDeleted(recipe)));
@@ -150,15 +144,15 @@ describe("recipe crud repo", () => {
       // Page id is the identity key; re-import reflects the source, so the renamed
       // page's new title is written through (Notion names are exempt from
       // Recipe_name_key, so the rename can't collide).
-      const full = await getRecipeByID(db, renamed.id);
+      const full = await getRecipeByID(ctx.db, renamed.id);
       expect(full?.name).toBe("Renamed Title");
     });
 
     it("upsertRecipe (web) does not collide with a same-named cookbook recipe", async () => {
       const { id: cookbookId } = await upsertCookbook(
-        db,
+        ctx.db,
         { name: "Book A", rawJson: [], sourceLabel: "Book A" },
-        actor,
+        ctx.actor,
       );
       const book = await upsertCookbookRecipe(
         makeRecipeInput({
@@ -166,8 +160,8 @@ describe("recipe crud repo", () => {
           sections: [{ instructions: [{ instruction: "B" }], ingredients: [] }],
         }),
         { id: cookbookId, name: "Book A" },
-        db,
-        actor,
+        ctx.db,
+        ctx.actor,
       );
       const web = await upsertRecipe(
         makeRecipeInput({
@@ -175,8 +169,8 @@ describe("recipe crud repo", () => {
           url: "https://example.com/r",
           sections: [{ instructions: [{ instruction: "W" }], ingredients: [] }],
         }),
-        db,
-        actor,
+        ctx.db,
+        ctx.actor,
       );
 
       // The web upsert matches on `SourceType IS DISTINCT FROM 'Book'` + name, so a
@@ -188,14 +182,14 @@ describe("recipe crud repo", () => {
   describe("updateRecipe", () => {
     it("replaces a section's ingredient rows", async () => {
       const sugar = await createIngredient(
-        db,
+        ctx.db,
         { name: "Sugar", aliases: [] },
-        actor,
+        ctx.actor,
       );
       const recipe = await recipeWith("Editable", flourId);
 
       await updateRecipe(
-        db,
+        ctx.db,
         recipe.id as RecipeId,
         {
           sections: [
@@ -210,10 +204,10 @@ describe("recipe crud repo", () => {
             },
           ],
         },
-        actor,
+        ctx.actor,
       );
 
-      const full = await getRecipeByID(db, recipe.id as RecipeId);
+      const full = await getRecipeByID(ctx.db, recipe.id as RecipeId);
       const ingredients = full!.sections.flatMap((s) => s.ingredients);
       const names = ingredients.flatMap((i) =>
         i.type === "ingredient" ? [i.ingredient.name] : [],
@@ -225,13 +219,13 @@ describe("recipe crud repo", () => {
     it("writes an audit diff when the name changes", async () => {
       const recipe = await recipeWith("Old Name", flourId);
       await updateRecipe(
-        db,
+        ctx.db,
         recipe.id as RecipeId,
         { name: "New Name" },
-        actor,
+        ctx.actor,
       );
 
-      const [entry] = await getDb(db)
+      const [entry] = await getDb(ctx.db)
         .select()
         .from(auditLog)
         .where(

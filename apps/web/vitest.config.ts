@@ -44,6 +44,11 @@ export default defineConfig({
           name: "integration",
           include: ["**/*.integration.test.ts"],
           testTimeout: 10000, // Increase timeout for integration tests
+          // NB: `poolOptions.forks.isolate: false` was tried to reuse the server
+          // module graph across files — it was measurably SLOWER (~50s vs ~27s)
+          // and dropped test discovery (161 vs 164), because the per-worker pg
+          // pools / IntegreSQL client don't share cleanly across files. Keep
+          // isolation on.
         },
       },
     ],

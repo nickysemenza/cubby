@@ -1,7 +1,5 @@
-import type { ActorContext } from "@cubby/schemas/context";
-import { buildTestDB } from "tooling/test-setup";
-import { beforeEach, describe, expect, it } from "vitest";
-import type { Database } from "~/server/db";
+import { withTestDb } from "tooling/test-setup";
+import { describe, expect, it } from "vitest";
 import { createIngredient } from "./ingredient";
 import {
   createProduct,
@@ -13,19 +11,13 @@ import {
 import { makeProductInput } from "./repo.fixtures";
 
 describe("product repository", () => {
-  let db: Database;
-  let actor: ActorContext;
-  let teardown: () => Promise<void>;
-  beforeEach(async () => {
-    ({ db, actor, teardown } = await buildTestDB());
-    return teardown;
-  });
+  const ctx = withTestDb();
 
   it("should create a product and retrieve it by ID", async () => {
     const productData = makeProductInput({ upc: "123456789012" });
 
     // Create the product
-    const createdProduct = await createProduct(db, productData, actor);
+    const createdProduct = await createProduct(ctx.db, productData, ctx.actor);
 
     // Verify the product was created correctly
     expect(createdProduct.id).toBeDefined();
@@ -35,7 +27,7 @@ describe("product repository", () => {
     expect(createdProduct.upc).toEqual(productData.upc);
 
     // Retrieve the product by ID
-    const retrievedProduct = await getProductByID(db, createdProduct.id);
+    const retrievedProduct = await getProductByID(ctx.db, createdProduct.id);
 
     // Verify the retrieved product matches the created product
     expect(retrievedProduct.id).toEqual(createdProduct.id);
@@ -66,12 +58,12 @@ describe("product repository", () => {
     ];
 
     for (const product of products) {
-      await createProduct(db, makeProductInput(product), actor);
+      await createProduct(ctx.db, makeProductInput(product), ctx.actor);
     }
 
     // Test listing with pagination - first page
     const firstPage = await productList(
-      db,
+      ctx.db,
       undefined,
       undefined,
       undefined,
@@ -88,7 +80,7 @@ describe("product repository", () => {
 
     // Test listing with pagination - second page
     const secondPage = await productList(
-      db,
+      ctx.db,
       undefined,
       undefined,
       undefined,
@@ -104,7 +96,7 @@ describe("product repository", () => {
 
     // Test listing with filtering by manufacturer
     const filteredList = await productList(
-      db,
+      ctx.db,
       undefined,
       "Manufacturer X",
       undefined,
@@ -129,11 +121,11 @@ describe("product repository", () => {
     });
 
     // Create the product
-    const createdProduct = await createProduct(db, productData, actor);
+    const createdProduct = await createProduct(ctx.db, productData, ctx.actor);
 
     // Update the product
     const updatedProduct = await updateProduct(
-      db,
+      ctx.db,
       createdProduct.id,
       {
         name: "Updated Product",
@@ -146,7 +138,7 @@ describe("product repository", () => {
           },
         ],
       },
-      actor,
+      ctx.actor,
     );
 
     // Verify the product was updated correctly
@@ -157,7 +149,7 @@ describe("product repository", () => {
     expect(updatedProduct.upc).toEqual(productData.upc); // Unchanged
 
     // Retrieve the product to verify unit mappings
-    const retrievedProduct = await getProductByID(db, createdProduct.id);
+    const retrievedProduct = await getProductByID(ctx.db, createdProduct.id);
 
     // Verify unit mappings were created
     expect(retrievedProduct.unitMappings.length).toEqual(1);
@@ -175,9 +167,9 @@ describe("product repository", () => {
   it("should link a product to an ingredient", async () => {
     // First create an ingredient
     const ingredient = await createIngredient(
-      db,
+      ctx.db,
       { name: "Test Ingredient", aliases: ["test", "ingredient"] },
-      actor,
+      ctx.actor,
     );
 
     // Create a product linked to the ingredient
@@ -189,10 +181,10 @@ describe("product repository", () => {
     });
 
     // Create the product
-    const createdProduct = await createProduct(db, productData, actor);
+    const createdProduct = await createProduct(ctx.db, productData, ctx.actor);
 
     // Retrieve the product to verify ingredient association
-    const retrievedProduct = await getProductByID(db, createdProduct.id);
+    const retrievedProduct = await getProductByID(ctx.db, createdProduct.id);
 
     // Verify the ingredient association
     expect(retrievedProduct.ingredient).not.toBeNull();
@@ -203,15 +195,15 @@ describe("product repository", () => {
   it("should update ingredient association", async () => {
     // Create two ingredients
     const ingredient1 = await createIngredient(
-      db,
+      ctx.db,
       { name: "Ingredient 1", aliases: ["ing1"] },
-      actor,
+      ctx.actor,
     );
 
     const ingredient2 = await createIngredient(
-      db,
+      ctx.db,
       { name: "Ingredient 2", aliases: ["ing2"] },
-      actor,
+      ctx.actor,
     );
 
     // Create a product linked to the first ingredient
@@ -223,18 +215,18 @@ describe("product repository", () => {
     });
 
     // Create the product
-    const createdProduct = await createProduct(db, productData, actor);
+    const createdProduct = await createProduct(ctx.db, productData, ctx.actor);
 
     // Update the product to link to the second ingredient
     await updateProduct(
-      db,
+      ctx.db,
       createdProduct.id,
       { ingredientId: ingredient2.id },
-      actor,
+      ctx.actor,
     );
 
     // Retrieve the product to verify ingredient association
-    const retrievedProduct = await getProductByID(db, createdProduct.id);
+    const retrievedProduct = await getProductByID(ctx.db, createdProduct.id);
 
     // Verify the ingredient association was updated
     expect(retrievedProduct.ingredient).not.toBeNull();
@@ -242,10 +234,15 @@ describe("product repository", () => {
     expect(retrievedProduct.ingredient!.name).toEqual("Ingredient 2");
 
     // Update the product to remove ingredient association
-    await updateProduct(db, createdProduct.id, { ingredientId: null }, actor);
+    await updateProduct(
+      ctx.db,
+      createdProduct.id,
+      { ingredientId: null },
+      ctx.actor,
+    );
 
     // Retrieve the product again
-    const updatedProduct = await getProductByID(db, createdProduct.id);
+    const updatedProduct = await getProductByID(ctx.db, createdProduct.id);
 
     // Verify the ingredient association was removed
     expect(updatedProduct.ingredient).toBeNull();
@@ -254,18 +251,18 @@ describe("product repository", () => {
   describe("findProductByNameFuzzyManufacturer", () => {
     it("should find product by exact name and manufacturer match", async () => {
       await createProduct(
-        db,
+        ctx.db,
         makeProductInput({
           name: "Power Drill",
           manufacturer: "DeWalt",
           model: null,
         }),
-        actor,
+        ctx.actor,
       );
 
       // Should find exact match
       const found = await findProductByNameFuzzyManufacturer(
-        db,
+        ctx.db,
         "Power Drill",
         "DeWalt",
       );
@@ -277,18 +274,18 @@ describe("product repository", () => {
 
     it("should find product when incoming manufacturer is (unspecified)", async () => {
       await createProduct(
-        db,
+        ctx.db,
         makeProductInput({
           name: "Router Table",
           manufacturer: "Bosch",
           model: null,
         }),
-        actor,
+        ctx.actor,
       );
 
       // Should find product when searching with "(unspecified)" - matches by name only
       const found = await findProductByNameFuzzyManufacturer(
-        db,
+        ctx.db,
         "Router Table",
         "(unspecified)",
       );
@@ -300,18 +297,18 @@ describe("product repository", () => {
 
     it("should find product when incoming manufacturer is empty string", async () => {
       await createProduct(
-        db,
+        ctx.db,
         makeProductInput({
           name: "Table Saw",
           manufacturer: "Makita",
           model: null,
         }),
-        actor,
+        ctx.actor,
       );
 
       // Should find product when searching with empty string
       const found = await findProductByNameFuzzyManufacturer(
-        db,
+        ctx.db,
         "Table Saw",
         "",
       );
@@ -322,18 +319,18 @@ describe("product repository", () => {
 
     it("should find product when incoming manufacturer is null", async () => {
       await createProduct(
-        db,
+        ctx.db,
         makeProductInput({
           name: "Circular Saw",
           manufacturer: "Ryobi",
           model: null,
         }),
-        actor,
+        ctx.actor,
       );
 
       // Should find product when searching with null
       const found = await findProductByNameFuzzyManufacturer(
-        db,
+        ctx.db,
         "Circular Saw",
         null,
       );
@@ -344,18 +341,18 @@ describe("product repository", () => {
 
     it("should fallback to (unspecified) manufacturer when specific manufacturer not found", async () => {
       await createProduct(
-        db,
+        ctx.db,
         makeProductInput({
           name: "Hammer",
           manufacturer: "(unspecified)",
           model: null,
         }),
-        actor,
+        ctx.actor,
       );
 
       // Should find product with "(unspecified)" when searching for specific manufacturer
       const found = await findProductByNameFuzzyManufacturer(
-        db,
+        ctx.db,
         "Hammer",
         "Stanley",
       );
@@ -367,18 +364,18 @@ describe("product repository", () => {
 
     it("should NOT find product when both have different specific manufacturers", async () => {
       await createProduct(
-        db,
+        ctx.db,
         makeProductInput({
           name: "Jigsaw",
           manufacturer: "DeWalt",
           model: null,
         }),
-        actor,
+        ctx.actor,
       );
 
       // Should NOT find product when manufacturers are both specific and different
       const found = await findProductByNameFuzzyManufacturer(
-        db,
+        ctx.db,
         "Jigsaw",
         "Bosch",
       );
@@ -389,28 +386,28 @@ describe("product repository", () => {
     it("should prefer exact manufacturer match over (unspecified)", async () => {
       // Create two products: one with specific manufacturer, one with (unspecified)
       await createProduct(
-        db,
+        ctx.db,
         makeProductInput({
           name: "Screwdriver",
           manufacturer: "Stanley",
           model: null,
         }),
-        actor,
+        ctx.actor,
       );
 
       await createProduct(
-        db,
+        ctx.db,
         makeProductInput({
           name: "Screwdriver",
           manufacturer: "(unspecified)",
           model: null,
         }),
-        actor,
+        ctx.actor,
       );
 
       // Should find exact match first
       const found = await findProductByNameFuzzyManufacturer(
-        db,
+        ctx.db,
         "Screwdriver",
         "Stanley",
       );
@@ -421,7 +418,7 @@ describe("product repository", () => {
 
     it("should return null when product does not exist", async () => {
       const found = await findProductByNameFuzzyManufacturer(
-        db,
+        ctx.db,
         "Non-existent Product",
         "Any Manufacturer",
       );
@@ -431,18 +428,18 @@ describe("product repository", () => {
 
     it("should be case insensitive for product name", async () => {
       await createProduct(
-        db,
+        ctx.db,
         makeProductInput({
           name: "Power Drill PRO",
           manufacturer: "DeWalt",
           model: null,
         }),
-        actor,
+        ctx.actor,
       );
 
       // Should find with different case
       const found = await findProductByNameFuzzyManufacturer(
-        db,
+        ctx.db,
         "POWER DRILL PRO",
         "dewalt", // also lowercase
       );

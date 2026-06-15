@@ -1,43 +1,26 @@
-import { unsafeUserId } from "@cubby/schemas/identifiers";
-import { buildTestDB } from "tooling/test-setup";
-import { beforeEach, describe, expect, it } from "vitest";
-import type { Database } from "~/server/db";
-import { createCallerFactory, createTestTRPCContext } from "../trpc";
+import { withTestDb } from "tooling/test-setup";
+import { describe, expect, it } from "vitest";
+import { makeProductInput } from "~/server/repo/repo.fixtures";
+import { createTestCaller } from "../trpc";
 import { inventoryRouter } from "./inventory";
 import { locationRouter } from "./location";
 import { productRouter } from "./product";
 
-const TEST_USER_ID = unsafeUserId("test-user-id");
-
 describe("product deletion", () => {
-  let db: Database;
-  let teardown: () => Promise<void>;
-  beforeEach(async () => {
-    ({ db, teardown } = await buildTestDB());
-
-    return teardown;
-  });
+  const ctx = withTestDb();
 
   describe("basic deletion", () => {
     it("should soft delete a product successfully", async () => {
-      const createCaller = createCallerFactory(productRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(productRouter, ctx.db);
 
       // Create a test product
-      const productData = {
+      const productData = makeProductInput({
         name: "Test Product for Deletion",
-        manufacturer: "Test Manufacturer",
         model: "TEST-DELETE-1",
         upc: "111222333444",
-        ndb_number: null,
-        ingredientId: null,
         pendingImageIds: [],
         expectedQuantity: 1,
-      };
+      });
 
       const createdProduct = await caller.create(productData);
 
@@ -62,46 +45,38 @@ describe("product deletion", () => {
     });
 
     it("should delete multiple products in bulk", async () => {
-      const createCaller = createCallerFactory(productRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
+      const caller = createTestCaller(productRouter, ctx.db);
+
+      // Create multiple products
+      const product1 = await caller.create(
+        makeProductInput({
+          name: "Bulk Delete Product 1",
+          model: "BULK-1",
+          upc: "111111111111",
+          pendingImageIds: [],
+          expectedQuantity: 1,
         }),
       );
 
-      // Create multiple products
-      const product1 = await caller.create({
-        name: "Bulk Delete Product 1",
-        manufacturer: "Test Manufacturer",
-        model: "BULK-1",
-        upc: "111111111111",
-        ndb_number: null,
-        ingredientId: null,
-        pendingImageIds: [],
-        expectedQuantity: 1,
-      });
+      const product2 = await caller.create(
+        makeProductInput({
+          name: "Bulk Delete Product 2",
+          model: "BULK-2",
+          upc: "222222222222",
+          pendingImageIds: [],
+          expectedQuantity: 1,
+        }),
+      );
 
-      const product2 = await caller.create({
-        name: "Bulk Delete Product 2",
-        manufacturer: "Test Manufacturer",
-        model: "BULK-2",
-        upc: "222222222222",
-        ndb_number: null,
-        ingredientId: null,
-        pendingImageIds: [],
-        expectedQuantity: 1,
-      });
-
-      const product3 = await caller.create({
-        name: "Bulk Delete Product 3",
-        manufacturer: "Test Manufacturer",
-        model: "BULK-3",
-        upc: "333333333333",
-        ndb_number: null,
-        ingredientId: null,
-        pendingImageIds: [],
-        expectedQuantity: 1,
-      });
+      const product3 = await caller.create(
+        makeProductInput({
+          name: "Bulk Delete Product 3",
+          model: "BULK-3",
+          upc: "333333333333",
+          pendingImageIds: [],
+          expectedQuantity: 1,
+        }),
+      );
 
       // Delete all three products
       await caller.delete({
@@ -123,38 +98,22 @@ describe("product deletion", () => {
 
   describe("safety checks", () => {
     it("should prevent deletion if product has inventory entries", async () => {
-      const createProductCaller = createCallerFactory(productRouter);
-      const productCaller = createProductCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const productCaller = createTestCaller(productRouter, ctx.db);
 
-      const createInventoryCaller = createCallerFactory(inventoryRouter);
-      const inventoryCaller = createInventoryCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const inventoryCaller = createTestCaller(inventoryRouter, ctx.db);
 
-      const createLocationCaller = createCallerFactory(locationRouter);
-      const locationCaller = createLocationCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const locationCaller = createTestCaller(locationRouter, ctx.db);
 
       // Create a product
-      const product = await productCaller.create({
-        name: "Product with Inventory",
-        manufacturer: "Test Manufacturer",
-        model: "INV-TEST-1",
-        upc: "999888777666",
-        ndb_number: null,
-        ingredientId: null,
-        pendingImageIds: [],
-        expectedQuantity: 1,
-      });
+      const product = await productCaller.create(
+        makeProductInput({
+          name: "Product with Inventory",
+          model: "INV-TEST-1",
+          upc: "999888777666",
+          pendingImageIds: [],
+          expectedQuantity: 1,
+        }),
+      );
 
       // Create a location
       const location = await locationCaller.create({
@@ -184,31 +143,25 @@ describe("product deletion", () => {
 
   describe("cascading behavior", () => {
     it("should cascade delete to unit mappings", async () => {
-      const createCaller = createCallerFactory(productRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(productRouter, ctx.db);
 
       // Create a product with unit mappings
-      const product = await caller.create({
-        name: "Product with Unit Mappings",
-        manufacturer: "Test Manufacturer",
-        model: "UNIT-TEST-1",
-        upc: "555444333222",
-        ndb_number: null,
-        ingredientId: null,
-        pendingImageIds: [],
-        expectedQuantity: 1,
-        unitMappings: [
-          {
-            a: { value: 1, unit: "each" },
-            b: { value: 10, unit: "oz" },
-            source: "manual",
-          },
-        ],
-      });
+      const product = await caller.create(
+        makeProductInput({
+          name: "Product with Unit Mappings",
+          model: "UNIT-TEST-1",
+          upc: "555444333222",
+          pendingImageIds: [],
+          expectedQuantity: 1,
+          unitMappings: [
+            {
+              a: { value: 1, unit: "each" },
+              b: { value: 10, unit: "oz" },
+              source: "manual",
+            },
+          ],
+        }),
+      );
 
       expect(product.unitMappings).toHaveLength(1);
 
@@ -227,36 +180,30 @@ describe("product deletion", () => {
 
   describe("audit logging", () => {
     it("should log deletion with cascaded item counts", async () => {
-      const createCaller = createCallerFactory(productRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(productRouter, ctx.db);
 
       // Create a product with unit mappings
-      const product = await caller.create({
-        name: "Product for Audit Test",
-        manufacturer: "Test Manufacturer",
-        model: "AUDIT-TEST-1",
-        upc: "777666555444",
-        ndb_number: null,
-        ingredientId: null,
-        pendingImageIds: [],
-        expectedQuantity: 1,
-        unitMappings: [
-          {
-            a: { value: 1, unit: "each" },
-            b: { value: 5, unit: "oz" },
-            source: "manual",
-          },
-          {
-            a: { value: 1, unit: "pound" },
-            b: { value: 16, unit: "oz" },
-            source: "manual",
-          },
-        ],
-      });
+      const product = await caller.create(
+        makeProductInput({
+          name: "Product for Audit Test",
+          model: "AUDIT-TEST-1",
+          upc: "777666555444",
+          pendingImageIds: [],
+          expectedQuantity: 1,
+          unitMappings: [
+            {
+              a: { value: 1, unit: "each" },
+              b: { value: 5, unit: "oz" },
+              source: "manual",
+            },
+            {
+              a: { value: 1, unit: "pound" },
+              b: { value: 16, unit: "oz" },
+              source: "manual",
+            },
+          ],
+        }),
+      );
 
       // Delete the product
       await caller.delete({ ids: [product.id] });

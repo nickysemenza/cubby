@@ -1,25 +1,14 @@
 import type { Amount } from "@cubby/schemas/codec";
-import { buildActorContext } from "@cubby/schemas/context";
-import { unsafeUserId } from "@cubby/schemas/identifiers";
-import type { MealRecipeOut } from "@cubby/schemas/meal";
-import { buildTestDB } from "tooling/test-setup";
-import { beforeEach, describe, expect, it } from "vitest";
-import type { Database } from "~/server/db";
+import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
+import { describe, expect, it } from "vitest";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";
 import { createInventoryEntry } from "~/server/repo/inventory";
 import { createLocation } from "~/server/repo/location";
-import {
-  getMealsByDateRange,
-  rollupMealTotals,
-  scaleTotals,
-} from "~/server/repo/meal";
+import { getMealsByDateRange } from "~/server/repo/meal";
 import { createProduct } from "~/server/repo/product";
-import { createCallerFactory, createTestTRPCContext } from "../trpc";
+import { createTestCaller } from "../trpc";
 import { mealRouter } from "./meal";
 import { recipeRouter } from "./recipe";
-
-const TEST_USER_ID = unsafeUserId("test-user-id");
-const ACTOR = buildActorContext(TEST_USER_ID, "ui");
 
 const CUP_TO_GRAM = {
   a: { value: 1, unit: "cup" },
@@ -27,69 +16,13 @@ const CUP_TO_GRAM = {
   source: null,
 };
 
-// ---------------------------------------------------------------------------
-// Pure rollup math (no DB) — totals are linear in scale, so a meal's rollup is
-// sum(recipe.totals × scale); a missing recipe total makes the rollup pending.
-// ---------------------------------------------------------------------------
-describe("rollupMealTotals / scaleTotals", () => {
-  const totals = {
-    costTotal: 10,
-    caloriesTotal: 100,
-    ingredientCount: 3,
-    costCovered: 3,
-    caloriesCovered: 3,
-  };
-
-  it("scales totals linearly and preserves upper bounds", () => {
-    expect(scaleTotals(totals, 2)).toEqual({
-      costTotal: 20,
-      caloriesTotal: 200,
-    });
-    expect(scaleTotals({ ...totals, costTotalUpper: 12 }, 2)).toEqual({
-      costTotal: 20,
-      caloriesTotal: 200,
-      costTotalUpper: 24,
-    });
-  });
-
-  it("returns null when the recipe has no totals (never 0)", () => {
-    expect(scaleTotals(null, 2)).toBeNull();
-    expect(scaleTotals(undefined, 2)).toBeNull();
-  });
-
-  it("sums scaled totals and flags pending when any recipe is uncosted", () => {
-    const recipes = [
-      { scaledTotals: { costTotal: 10, caloriesTotal: 100 } },
-      { scaledTotals: { costTotal: 20, caloriesTotal: 200 } },
-    ] as MealRecipeOut[];
-    expect(rollupMealTotals(recipes)).toEqual({
-      costTotal: 30,
-      caloriesTotal: 300,
-      pending: false,
-    });
-
-    const withMissing = [...recipes, { scaledTotals: null }] as MealRecipeOut[];
-    const rolled = rollupMealTotals(withMissing);
-    expect(rolled.costTotal).toBe(30); // missing one contributes 0, not NaN
-    expect(rolled.pending).toBe(true);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Router behavior against a real (IntegresQL) DB.
-// ---------------------------------------------------------------------------
+// Router behavior against a real (IntegresQL) DB. The pure rollup/scale math
+// lives in repo/meal/helpers.unit.test.ts.
 describe("mealRouter", () => {
-  let db: Database;
-  let teardown: () => Promise<void>;
-  beforeEach(async () => {
-    ({ db, teardown } = await buildTestDB());
-    return teardown;
-  });
+  const ctx = withTestDb();
 
-  const ctx = () =>
-    createTestTRPCContext(db, { auth: { userId: TEST_USER_ID } });
-  const mealCaller = () => createCallerFactory(mealRouter)(ctx());
-  const recipeCaller = () => createCallerFactory(recipeRouter)(ctx());
+  const mealCaller = () => createTestCaller(mealRouter, ctx.db);
+  const recipeCaller = () => createTestCaller(recipeRouter, ctx.db);
 
   const createRecipe = (name: string, ingredientId: string, need: Amount) =>
     recipeCaller().create({
@@ -112,15 +45,15 @@ describe("mealRouter", () => {
 
   // Seed a "flour" ingredient with one linked product (cup<->g) holding `onHand`.
   const seedFlourWithStock = async (onHand: Amount) => {
-    const flour = await findOrCreateIngredient(db, "flour");
+    const flour = await findOrCreateIngredient(ctx.db, "flour");
     const loc = await createLocation(
-      db,
+      ctx.db,
       { name: "Pantry", type: "room", parentId: null },
-      ACTOR,
+      TEST_ACTOR,
     );
     if (!loc) throw new Error("seed: location not created");
     const prod = await createProduct(
-      db,
+      ctx.db,
       {
         name: "Test Flour",
         manufacturer: "test",
@@ -131,18 +64,18 @@ describe("mealRouter", () => {
         unitMappings: [CUP_TO_GRAM],
         externalIds: [],
       },
-      ACTOR,
+      TEST_ACTOR,
     );
     await createInventoryEntry(
-      db,
+      ctx.db,
       { productId: prod.id, locationId: loc.id, amount: onHand },
-      ACTOR,
+      TEST_ACTOR,
     );
     return flour;
   };
 
   it("plans recipes onto a day and lists them by date range", async () => {
-    const flour = await findOrCreateIngredient(db, "flour");
+    const flour = await findOrCreateIngredient(ctx.db, "flour");
     const recipe = await createRecipe("Pancakes", flour.id, {
       value: 2,
       unit: "cup",
@@ -176,7 +109,7 @@ describe("mealRouter", () => {
   });
 
   it("cascade-soft-deletes a meal and its planned recipes", async () => {
-    const flour = await findOrCreateIngredient(db, "flour");
+    const flour = await findOrCreateIngredient(ctx.db, "flour");
     const recipe = await createRecipe("Pancakes", flour.id, {
       value: 1,
       unit: "cup",
@@ -191,7 +124,7 @@ describe("mealRouter", () => {
     await mealCaller().delete({ ids: [meal.id] });
 
     // The meal (and, via cascade, its recipes) are gone from all reads.
-    const after = await getMealsByDateRange(db, "2026-06-14", "2026-06-16");
+    const after = await getMealsByDateRange(ctx.db, "2026-06-14", "2026-06-16");
     expect(after).toHaveLength(0);
     await expect(mealCaller().getByID({ id: meal.id })).rejects.toThrow();
   });
