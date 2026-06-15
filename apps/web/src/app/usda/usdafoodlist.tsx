@@ -2,7 +2,9 @@ import { type DataType, dataTypeEnum } from "@cubby/usda-schemas";
 import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
 import { useEffect, useRef, useState } from "react";
+import { USDA_KINDS } from "~/lib/conversion-coverage";
 import type { QueryTiming } from "~/lib/query-timing";
+import { nutrientCount } from "~/lib/usda-food-stats";
 import type { Flatten } from "~/misc/array-helpers";
 import { useTRPC } from "~/trpc/react";
 import { createEntityPillColumn } from "../_components/data-table/columnHelpers";
@@ -13,7 +15,7 @@ import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { NoneState } from "../_components/NoneState";
 import { TableLink } from "../_components/table/TableLink";
 import { UnitMappingDisplay } from "../_components/units/UnitMappingDisplay";
-import { NutritionInfoTable } from "../_components/usda/nutrition";
+import { CoreNutrientCoverage } from "../_components/usda/core-nutrient-coverage";
 
 export function USDAFoodList() {
   const api = useTRPC();
@@ -23,16 +25,25 @@ export function USDAFoodList() {
   // Set up table state
   const tableState = useTableState({ initialSort: "fdc_id" });
 
+  const nameFilter = tableState.getColumnFilter("foodinfo-description");
+
   // Query data with params from table state
   const query = useQuery(
     api.usda.list.queryOptions({
-      sort: tableState.getSortParams(),
+      // While searching by name, rank by FTS relevance (best match first) like
+      // the picker; otherwise honor the column sort.
+      sort: nameFilter
+        ? { orderBy: "relevance", direction: "asc" }
+        : tableState.getSortParams(),
       pagination: tableState.pagination,
       filters: {
-        nameFilter: tableState.getColumnFilter("foodinfo-description"),
+        nameFilter,
         dataTypeFilter: tableState.getColumnFilter("foodInfo-data_type") as
           | DataType
           | undefined,
+        // Default to the user-facing food types; picking a specific type in the
+        // column filter overrides this server-side (dataTypeFilter wins).
+        foodsOnly: true,
       },
     }),
   );
@@ -137,14 +148,14 @@ export function USDAFoodList() {
       meta: { className: "w-56" },
       cell: (info) => {
         const nutritionInfo = info.getValue();
+        const total = nutrientCount(nutritionInfo.nutrientsPer100);
+        if (total === 0) return <NoneState />;
         return (
-          <div className="w-48">
-            <NutritionInfoTable
-              n={{
-                ...nutritionInfo,
-                nutrientSummary: nutritionInfo.nutrientSummary.slice(0, 3),
-              }}
-            />
+          <div className="w-48 space-y-1.5">
+            <CoreNutrientCoverage nutrients={nutritionInfo.nutrientsPer100} />
+            <div className="text-2xs text-muted-foreground">
+              {total} nutrients total
+            </div>
           </div>
         );
       },
@@ -158,7 +169,11 @@ export function USDAFoodList() {
 
         return (
           <div className="w-full">
-            <UnitMappingDisplay mappings={inferredUnitMappings} title="" />
+            <UnitMappingDisplay
+              mappings={inferredUnitMappings}
+              title=""
+              kinds={USDA_KINDS}
+            />
           </div>
         );
       },

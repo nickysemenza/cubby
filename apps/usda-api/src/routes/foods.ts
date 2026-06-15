@@ -68,6 +68,7 @@ export function createFoodRoutes(dataSource: USDADataSource) {
     const parsed = listFoodsQuery.safeParse({
       nameFilter: queryParams.nameFilter,
       dataTypeFilter: queryParams.dataTypeFilter,
+      foodsOnly: queryParams.foodsOnly,
       orderBy: queryParams.orderBy,
       direction: queryParams.direction,
       pageIndex: queryParams.pageIndex,

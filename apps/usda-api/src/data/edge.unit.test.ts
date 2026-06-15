@@ -1,6 +1,59 @@
 import { describe, expect, it, vi } from "vitest";
-import { createEdgeUsdaDataSource } from "./edge";
+import {
+  createEdgeUsdaDataSource,
+  dataTypePredicate,
+  FOOD_DATA_TYPES,
+  normalizeUpc,
+} from "./edge";
 import type { EdgeBindings } from "./cloudflare-types";
+
+describe("normalizeUpc", () => {
+  it("left-pads leading-zero-stripped UPCs to 12 digits", () => {
+    expect(normalizeUpc("41512086489")).toBe("041512086489"); // 11 -> 12
+    expect(normalizeUpc("2593002166")).toBe("002593002166"); // 10 -> 12
+  });
+
+  it("leaves valid UPC-A/EAN-13/GTIN-14 lengths untouched", () => {
+    expect(normalizeUpc("002593002166")).toBe("002593002166"); // 12
+    expect(normalizeUpc("0025293000988")).toBe("0025293000988"); // 13
+    expect(normalizeUpc("00025293000988")).toBe("00025293000988"); // 14
+  });
+
+  it("passes non-numeric values through unchanged", () => {
+    expect(normalizeUpc("")).toBe("");
+    expect(normalizeUpc("ABC123")).toBe("ABC123");
+  });
+});
+
+describe("dataTypePredicate", () => {
+  it("returns an empty predicate when neither filter is set (all types)", () => {
+    expect(dataTypePredicate("i.data_type", undefined, undefined)).toEqual({
+      sql: "",
+      values: [],
+    });
+  });
+
+  it("filters to an explicit single type", () => {
+    expect(dataTypePredicate("i.data_type", "branded_food", undefined)).toEqual(
+      { sql: "i.data_type = ?", values: ["branded_food"] },
+    );
+  });
+
+  it("restricts to the food types when foodsOnly is set", () => {
+    const { sql, values } = dataTypePredicate("i.data_type", undefined, true);
+    expect(values).toEqual([...FOOD_DATA_TYPES]);
+    expect(sql).toBe(
+      `i.data_type IN (${FOOD_DATA_TYPES.map(() => "?").join(", ")})`,
+    );
+  });
+
+  it("lets an explicit single type win over foodsOnly", () => {
+    expect(dataTypePredicate("i.data_type", "sub_sample_food", true)).toEqual({
+      sql: "i.data_type = ?",
+      values: ["sub_sample_food"],
+    });
+  });
+});
 
 function makeEnv(bindCounts: number[]): EdgeBindings {
   const db = {
