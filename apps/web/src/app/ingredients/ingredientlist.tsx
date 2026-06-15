@@ -5,6 +5,7 @@ import { Merge, Sparkles } from "lucide-react";
 import { useId, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { MergeConfirmation } from "~/app/_components/ingredient/merge-confirmation";
+import { NoneState } from "~/app/_components/NoneState";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import {

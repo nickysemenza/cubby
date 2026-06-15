@@ -24,14 +24,20 @@ const SUFFIX_PHRASES = [
   "as needed",
 ];
 
+// Precompile once at module load — normalize runs for every ingredient row on
+// each render, so rebuilding these per-phrase per-call is wasteful.
+const SUFFIX_REGEXES = SUFFIX_PHRASES.map(
+  (phrase) => new RegExp(`\\b${phrase}\\b`, "g"),
+);
+
 export const normalizeIngredientName = (name: string): string => {
   let s = name.toLowerCase().trim();
   // Drop parentheticals, e.g. "sugar (for dusting)".
   s = s.replace(/\([^)]*\)/g, " ");
   // Drop a trailing prep note after a comma, e.g. "butter, softened".
   s = s.replace(/,\s.*$/, " ");
-  for (const phrase of SUFFIX_PHRASES) {
-    s = s.replace(new RegExp(`\\b${phrase}\\b`, "g"), " ");
+  for (const re of SUFFIX_REGEXES) {
+    s = s.replace(re, " ");
   }
   // Collapse whitespace + stray separators.
   s = s.replace(/[\s,;]+/g, " ").trim();

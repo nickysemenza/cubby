@@ -100,6 +100,11 @@ function Graph({
     initialWidth: 800,
     initialHeight: 460,
   });
+  // Read live dimensions inside the simulation without making them an effect
+  // dependency — otherwise every resize restarts the sim with fresh random
+  // positions and the whole graph reshuffles.
+  const dimsRef = useRef(dimensions);
+  dimsRef.current = dimensions;
   const [hovered, setHovered] = useState<GraphNode | null>(null);
   const [simNodes, setSimNodes] = useState<GraphNode[]>([]);
   const [simLinks, setSimLinks] = useState<GraphLink[]>([]);
@@ -133,10 +138,11 @@ function Graph({
 
   useEffect(() => {
     if (nodes.length === 0) return;
+    const { width, height } = dimsRef.current;
     const nodesCopy: GraphNode[] = nodes.map((n) => ({
       ...n,
-      x: dimensions.width / 2 + (Math.random() - 0.5) * 200,
-      y: dimensions.height / 2 + (Math.random() - 0.5) * 200,
+      x: width / 2 + (Math.random() - 0.5) * 200,
+      y: height / 2 + (Math.random() - 0.5) * 200,
     }));
     const linksCopy: GraphLink[] = edges.map((e) => ({
       source: e.source,
@@ -153,20 +159,19 @@ function Graph({
           .distance(90),
       )
       .force("charge", d3Force.forceManyBody().strength(-260))
-      .force(
-        "center",
-        d3Force.forceCenter(dimensions.width / 2, dimensions.height / 2),
-      )
+      .force("center", d3Force.forceCenter(width / 2, height / 2))
       .force(
         "collision",
         d3Force.forceCollide<GraphNode>().radius((d) => getRadius(d.id) + 6),
       );
 
     simulation.on("tick", () => {
+      // Clamp against live dimensions so nodes stay in view after a resize.
+      const { width: w, height: h } = dimsRef.current;
       for (const node of nodesCopy) {
         const r = getRadius(node.id);
-        node.x = Math.max(r, Math.min(dimensions.width - r, node.x ?? 0));
-        node.y = Math.max(r, Math.min(dimensions.height - r, node.y ?? 0));
+        node.x = Math.max(r, Math.min(w - r, node.x ?? 0));
+        node.y = Math.max(r, Math.min(h - r, node.y ?? 0));
       }
       setSimNodes([...nodesCopy]);
       setSimLinks([...linksCopy]);
@@ -175,7 +180,9 @@ function Graph({
     return () => {
       simulation.stop();
     };
-  }, [nodes, edges, dimensions, getRadius]);
+    // `dimensions` intentionally omitted — read live via dimsRef so resizes
+    // don't restart the simulation and reshuffle node positions.
+  }, [nodes, edges, getRadius]);
 
   const isAdjacent = useCallback(
     (node: GraphNode) => {
