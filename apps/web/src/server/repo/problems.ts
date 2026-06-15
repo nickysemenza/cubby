@@ -18,8 +18,10 @@ import {
 import { uniq } from "es-toolkit";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { computeParseDrift, hasDrift } from "~/lib/parse-drift";
+import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { wasm } from "~/lib/wasm";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
+import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import {
   ingredient,
@@ -46,7 +48,9 @@ import {
   findProductsNeedingFoodCategory,
   findProductsWithNoImages,
 } from "~/server/repo/product";
+import { foodLookupParamFromProduct } from "~/server/repo/product/helpers";
 import { markRecipesStale } from "~/server/repo/recipe/totals";
+import { batchEnrichWithFood } from "~/server/services/usda-helpers";
 
 // Interface for the complete problems result
 interface AllProblems {
@@ -442,19 +446,32 @@ const getFoodIndicator = (product: {
   return "ingredient";
 };
 
-// Find products with disconnected unit mapping graphs (islands)
+// Find products with disconnected unit mapping graphs (islands).
+//
+// A product is only a real problem if its *effective* mappings — stored
+// conversions PLUS the edges its USDA link and price synthesize — still split
+// into 2+ components. A product islanded on its stored mappings alone but
+// bridged into one component by USDA portion/serving edges (the same edges the
+// conversion graph and costing engine use) is fully convertible, so it isn't
+// flagged. This mirrors the "a USDA link counts as conversion coverage" rule in
+// findProductsWithoutMappings.
 const findProductsWithIslandedMappings = async (
   db: Database,
+  usdaClient: USDAClient,
 ): Promise<ProductWithIslandedMappings[]> => {
   const dbClient = getDb(db);
 
-  // Fetch all products with their unit mappings
+  // Fetch products with their stored unit mappings, plus the fields needed to
+  // synthesize their derived edges (USDA link + price).
   const productsWithMappings = await dbClient.query.product.findMany({
     where: notDeleted(product),
     columns: {
       id: true,
       name: true,
       manufacturer: true,
+      upc: true,
+      ndb_number: true,
+      price: true,
     },
     with: {
       unitMappings: {
@@ -468,42 +485,71 @@ const findProductsWithIslandedMappings = async (
     },
   });
 
-  const problems: ProductWithIslandedMappings[] = [];
-
-  // Import WASM
-  const { wasm } = await import("~/lib/wasm");
-
-  // Use WASM to detect islands for each product
-  for (const prod of productsWithMappings) {
-    // Skip products with insufficient mappings (need at least 2 to form islands)
-    if (prod.unitMappings.length < 2) continue;
-
-    // Skip misc products
-    if (isMiscProduct(prod.name)) continue;
-
+  const detectIslands = (
+    mappings: Parameters<typeof wasm.detect_unit_mapping_islands>[0],
+    prod: { id: string; name: string },
+  ): string[][] => {
     try {
-      // Detect islands using WASM
-      const islands = wasm.detect_unit_mapping_islands(prod.unitMappings);
-
-      // Only flag if there are 2+ islands
-      if (islands.length >= 2) {
-        problems.push({
-          id: prod.id,
-          name: prod.name,
-          manufacturer: prod.manufacturer,
-          islandCount: islands.length,
-          islands: islands.map((units) => ({
-            units: units.slice(0, 3), // Limit to first 3 units for display
-            exampleUnit: units[0] ?? "unknown",
-          })),
-        });
-      }
+      return wasm.detect_unit_mapping_islands(mappings);
     } catch (error) {
       // Log but don't fail - skip products with graph errors
       console.error(
         `Failed to detect islands for product ${prod.id} (${prod.name}):`,
         error,
       );
+      return [];
+    }
+  };
+
+  // First pass: candidates are products whose STORED mappings split into 2+
+  // islands. Adding the derived edges below can only merge components, never
+  // split them, so a product already connected on its stored mappings can never
+  // be islanded — skip it. This keeps the USDA fetch to the small flagged subset.
+  const candidates = productsWithMappings.filter(
+    (prod) =>
+      prod.unitMappings.length >= 2 &&
+      !isMiscProduct(prod.name) &&
+      detectIslands(prod.unitMappings, prod).length >= 2,
+  );
+
+  // Second pass: re-check each candidate against its effective mappings, dropping
+  // any that the USDA/price edges bridge into a single component.
+  const enriched = await batchEnrichWithFood(
+    candidates,
+    foodLookupParamFromProduct,
+    usdaClient,
+  );
+
+  const problems: ProductWithIslandedMappings[] = [];
+  for (const prod of enriched) {
+    let effective: ReturnType<typeof getAllUnitMappingsFromProduct>;
+    try {
+      effective = getAllUnitMappingsFromProduct({
+        id: prod.id,
+        unitMappings: prod.unitMappings,
+        food: prod.food,
+        price: prod.price,
+      });
+    } catch (error) {
+      console.error(
+        `Failed to synthesize mappings for product ${prod.id} (${prod.name}):`,
+        error,
+      );
+      continue;
+    }
+
+    const islands = detectIslands(effective, prod);
+    if (islands.length >= 2) {
+      problems.push({
+        id: prod.id,
+        name: prod.name,
+        manufacturer: prod.manufacturer,
+        islandCount: islands.length,
+        islands: islands.map((units) => ({
+          units: units.slice(0, 3), // Limit to first 3 units for display
+          exampleUnit: units[0] ?? "unknown",
+        })),
+      });
     }
   }
 
@@ -792,8 +838,9 @@ export const reparseStaleIngredientParses = async (
 export const findAllProblemsCount = async (
   db: Database,
   upcLookupClient: UPCLookupClient,
+  usdaClient: USDAClient,
 ): Promise<ProblemsCount> => {
-  const p = await findAllProblems(db, upcLookupClient);
+  const p = await findAllProblems(db, upcLookupClient, usdaClient);
 
   return {
     byType: {
@@ -819,6 +866,7 @@ export const findAllProblemsCount = async (
 export const findAllProblems = async (
   db: Database,
   upcLookupClient: UPCLookupClient,
+  usdaClient: USDAClient,
 ): Promise<AllProblems> => {
   // Run all checks in parallel for better performance
   const [
@@ -845,7 +893,7 @@ export const findAllProblems = async (
     findProductsWithNoImages(db, { excludeIngredients: true }),
     findProductsNeedingFoodCategory(db),
     findInventoryWithStaleValuations(db),
-    findProductsWithIslandedMappings(db),
+    findProductsWithIslandedMappings(db, usdaClient),
     findLocationsWithoutAiDescription(db),
     findStaleIngredientParses(db),
     findProductsWithBetterUpcData(db, upcLookupClient),

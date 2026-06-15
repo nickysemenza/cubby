@@ -94,7 +94,11 @@ export const getAllUnitMappingsFromProduct = (product: {
   // silently drop a synthesized edge — e.g. a missing `price` computes "no
   // cost" with no error. Required params make that a compile error instead.
   id: ProductId;
-  unitMappings: UnitMapping[];
+  // Stored mappings are only forwarded to WASM, which treats `sourceMetadata`
+  // as optional — so accept the metadata-less shape (`WUnitMapping`) too. This
+  // lets server callers pass raw DB rows (a/b/source) without synthesizing the
+  // provenance the synthesis ignores.
+  unitMappings: WUnitMapping[];
   food: FoodSummary | null;
   price: number | null;
 }): UnitMapping[] =>

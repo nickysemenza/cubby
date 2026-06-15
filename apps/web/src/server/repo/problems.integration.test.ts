@@ -2,10 +2,12 @@ import type { ActorContext } from "@cubby/schemas/context";
 import type { ProductId } from "@cubby/schemas/identifiers";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import type { UPCLookupResponse } from "@cubby/upc-lookup/schemas";
+import type { FoodSummary } from "@cubby/usda-schemas";
 import { eq } from "drizzle-orm";
 import { buildTestDB } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
+import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import { image, product, productImage } from "~/server/db/schema";
 import { getDb } from "./database-helpers";
@@ -64,6 +66,15 @@ const fakeUpcClient = (
   return { client, calls };
 };
 
+// USDA client stub. `findFoodsBatch` is the only method batchEnrichWithFood
+// touches; it returns the supplied foods positionally (one per valid lookup;
+// null = no link / no match). The default empty list means "no USDA data".
+const fakeUsdaClient = (foods: (FoodSummary | null)[] = []) =>
+  ({
+    findFoodsBatch: async (lookups: unknown[]) =>
+      lookups.map((_, i) => foods[i] ?? null),
+  }) as unknown as USDAClient;
+
 describe("problems repo", () => {
   let db: Database;
   let actor: ActorContext;
@@ -116,6 +127,7 @@ describe("problems repo", () => {
       const { staleIngredientParses } = await findAllProblems(
         db,
         fakeUpcClient().client,
+        fakeUsdaClient(),
       );
       const driftedEntry = staleIngredientParses.find(
         (s) => s.recipeId === drifted.id,
@@ -149,6 +161,7 @@ describe("problems repo", () => {
       const { staleIngredientParses } = await findAllProblems(
         db,
         fakeUpcClient().client,
+        fakeUsdaClient(),
       );
       expect(staleIngredientParses.some((s) => s.recipeId === recipe.id)).toBe(
         false,
@@ -194,7 +207,11 @@ describe("problems repo", () => {
         actor,
       );
 
-      const { invalidUPCs } = await findAllProblems(db, fakeUpcClient().client);
+      const { invalidUPCs } = await findAllProblems(
+        db,
+        fakeUpcClient().client,
+        fakeUsdaClient(),
+      );
       const flagged = invalidUPCs.find((u) => u.id === bad.id);
       expect(flagged?.issue).toBe("invalid_format");
       expect(invalidUPCs.some((u) => u.id === good.id)).toBe(false);
@@ -251,6 +268,7 @@ describe("problems repo", () => {
       const { productsWithIslandedMappings } = await findAllProblems(
         db,
         fakeUpcClient().client,
+        fakeUsdaClient(),
       );
       const flagged = productsWithIslandedMappings.find(
         (p) => p.id === islanded.id,
@@ -259,6 +277,71 @@ describe("problems repo", () => {
       expect(flagged!.islandCount).toBeGreaterThanOrEqual(2);
       expect(
         productsWithIslandedMappings.some((p) => p.id === connected.id),
+      ).toBe(false);
+    });
+
+    it("does not flag a product whose USDA portion bridges the stored islands", async () => {
+      // Mirrors "light brown sugar": its two STORED mappings island into
+      // {cup packed, tsp, ml} (volume) and {g, cent} (weight/money), with no
+      // stored edge between them. But its USDA link supplies a portion
+      // (1 cup packed = 220 g) that bridges the two — so it's fully convertible
+      // and must NOT be flagged. The detector now runs on effective mappings.
+      const storedIslands = [
+        // 1 cup packed = 1 cup → cup packed joins the volume cluster.
+        {
+          a: { value: 1, unit: "cup packed" },
+          b: { value: 1, unit: "cup" },
+          source: null,
+        },
+        // 2 lb = $5 → lb normalizes to g; the {g, cent} island.
+        {
+          a: { value: 2, unit: "lb" },
+          b: { value: 5, unit: "dollar" },
+          source: null,
+        },
+      ];
+      // A USDA "Sugars, brown" food whose portion bridges cup packed ↔ g.
+      const sugarFood: FoodSummary = {
+        fdc_id: 168833,
+        brandedFoodInfo: null,
+        foodInfo: { data_type: "sr_legacy_food", description: "Sugars, brown" },
+        legacyFoodInfo: { ndb_number: 19334 },
+        nutritionInfo: { nutrientSummary: [], nutrientsPer100: {} },
+        portionInfoRaw: [
+          { amount: 1, modifier: "cup packed", gram_weight: 220 },
+        ],
+      };
+
+      const product = await createProduct(
+        db,
+        makeProductInput({
+          name: "USDA-bridged sugar",
+          ndb_number: 19334,
+          unitMappings: storedIslands,
+        }),
+        actor,
+      );
+
+      // Control: WITHOUT the USDA food, stored mappings alone island → flagged.
+      const withoutFood = await findAllProblems(
+        db,
+        fakeUpcClient().client,
+        fakeUsdaClient([null]),
+      );
+      expect(
+        withoutFood.productsWithIslandedMappings.some(
+          (p) => p.id === product.id,
+        ),
+      ).toBe(true);
+
+      // With the bridging USDA portion, the product is one component → not flagged.
+      const withFood = await findAllProblems(
+        db,
+        fakeUpcClient().client,
+        fakeUsdaClient([sugarFood]),
+      );
+      expect(
+        withFood.productsWithIslandedMappings.some((p) => p.id === product.id),
       ).toBe(false);
     });
   });
@@ -353,7 +436,11 @@ describe("problems repo", () => {
         [UPC_FULL]: upcResponse(UPC_FULL, { brand: "Acme", priceDollars: 1 }),
       });
 
-      const { productsWithBetterUpcData } = await findAllProblems(db, client);
+      const { productsWithBetterUpcData } = await findAllProblems(
+        db,
+        client,
+        fakeUsdaClient(),
+      );
 
       const byId = new Map(productsWithBetterUpcData.map((p) => [p.id, p]));
 
@@ -393,7 +480,11 @@ describe("problems repo", () => {
         [UPC_PRICE]: upcResponse(UPC_PRICE), // all-null payload
       });
 
-      const { productsWithBetterUpcData } = await findAllProblems(db, client);
+      const { productsWithBetterUpcData } = await findAllProblems(
+        db,
+        client,
+        fakeUsdaClient(),
+      );
       expect(productsWithBetterUpcData.some((p) => p.id === noPrice.id)).toBe(
         false,
       );

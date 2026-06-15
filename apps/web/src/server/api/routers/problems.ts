@@ -156,7 +156,7 @@ const allProblemsSchema = z.object({
 const getAllProblems = protectedProcedure
   .output(allProblemsSchema)
   .query(async ({ ctx }) => {
-    return await findAllProblems(ctx.db, ctx.upcLookupClient);
+    return await findAllProblems(ctx.db, ctx.upcLookupClient, ctx.usdaClient);
   });
 
 // Count-only procedure for badge display (optimized)
@@ -182,7 +182,11 @@ const getProblemsCount = protectedProcedure
     }),
   )
   .query(async ({ ctx }) => {
-    return await findAllProblemsCount(ctx.db, ctx.upcLookupClient);
+    return await findAllProblemsCount(
+      ctx.db,
+      ctx.upcLookupClient,
+      ctx.usdaClient,
+    );
   });
 
 // Re-parse every stale ingredient line with the current parser and persist the fresh
