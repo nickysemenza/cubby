@@ -104,7 +104,10 @@ export function ProblemSection<T>({
     Object.keys(groups).length > 1 && Object.keys(groups)[0] !== "";
 
   return (
-    <Card>
+    // overflow-visible (Card defaults to overflow-hidden for its rounded/image
+    // styling) so an expanded inline-fix dropdown — the USDA combobox renders as
+    // an absolutely-positioned panel, not a portal — isn't clipped by the card.
+    <Card className="overflow-visible">
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle>

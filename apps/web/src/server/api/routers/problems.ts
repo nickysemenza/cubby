@@ -50,6 +50,8 @@ const ingredientWithPartialCoverageSchema = z.object({
   id: z.string(),
   name: z.string(),
   manufacturer: z.string(),
+  coverage: z.object({ covered: z.array(z.string()) }),
+  hasPrice: z.boolean(),
 });
 
 const invalidInventoryAmountSchema = z.object({

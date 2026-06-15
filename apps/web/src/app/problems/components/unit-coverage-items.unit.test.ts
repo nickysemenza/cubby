@@ -22,6 +22,8 @@ const partialProduct = (over: Partial<Partial_> = {}): Partial_ => ({
   id: "p2",
   name: "Aji amarillo",
   manufacturer: "generic",
+  coverage: { covered: [] },
+  hasPrice: true,
   ...over,
 });
 

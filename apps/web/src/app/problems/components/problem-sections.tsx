@@ -173,13 +173,7 @@ function renderUnitCoverageItem(item: UnitCoverageItem): RenderedProblemItem {
     return {
       ...base,
       inlineFix: inlineFix("Fix coverage"),
-      badges: [
-        <Badge key="partial" variant="outline" className="w-fit">
-          Price only
-        </Badge>,
-      ],
-      // Only `money` is reachable (priced, but no USDA link / mappings).
-      details: [<CoverageChips key="cov" covered={["money"]} />],
+      details: [<CoverageChips key="cov" covered={item.coverage.covered} />],
     };
   }
 
