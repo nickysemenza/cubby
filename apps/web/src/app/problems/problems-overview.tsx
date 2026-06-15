@@ -11,20 +11,7 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import { useTRPC } from "~/trpc/react";
-import { DuplicateUniqueProductsList } from "./components/duplicate-unique-products-list";
-import { EmptyLocationsList } from "./components/empty-locations-list";
-import { InvalidInventoryAmountsList } from "./components/invalid-inventory-amounts-list";
-import { InvalidUPCsList } from "./components/invalid-upcs-list";
-import { InventoryWithStaleValuationsList } from "./components/inventory-with-stale-valuations-list";
-import { LocationsWithoutAiDescriptionList } from "./components/locations-without-ai-description-list";
-import { OrphanedProductsList } from "./components/orphaned-products-list";
-import { ProductsWithBetterUpcDataList } from "./components/products-with-better-upc-data-list";
-import { ProductsWithIslandedMappingsList } from "./components/products-with-islanded-mappings-list";
-import { ProductsWithNoImagesList } from "./components/products-with-no-images-list";
-import { ProductsWithWrongCategoryList } from "./components/products-with-wrong-category-list";
-import { ProductsWithoutMappingsList } from "./components/products-without-mappings-list";
-import { StaleIngredientParsesList } from "./components/stale-ingredient-parses-list";
-import { StaleRecipeTotalsList } from "./components/stale-recipe-totals-list";
+import { PROBLEM_SECTIONS } from "./components/problem-sections";
 
 export function ProblemsOverview() {
   const api = useTRPC();
@@ -58,75 +45,13 @@ export function ProblemsOverview() {
     );
   }
 
-  // Categories with issues for the summary links
-  const categoryLinks = [
-    {
-      id: "duplicates",
-      label: "Duplicates",
-      count: problems.duplicateUniqueProducts.length,
-    },
-    {
-      id: "orphaned",
-      label: "Orphaned",
-      count: problems.orphanedProducts.length,
-    },
-    { id: "upcs", label: "UPCs", count: problems.invalidUPCs.length },
-    {
-      id: "pricing",
-      label: "Pricing",
-      count: problems.productsWithoutMappings.length,
-    },
-    {
-      id: "islands",
-      label: "Disconnected Mappings",
-      count: problems.productsWithIslandedMappings.length,
-    },
-    {
-      id: "stale-valuations",
-      label: "Stale Valuations",
-      count: problems.inventoryWithStaleValuations.length,
-    },
-    {
-      id: "amounts",
-      label: "Amounts",
-      count: problems.invalidInventoryAmounts.length,
-    },
-    {
-      id: "locations",
-      label: "Locations",
-      count: problems.emptyLocations.length,
-    },
-    {
-      id: "images",
-      label: "Images",
-      count: problems.productsWithNoImages.length,
-    },
-    {
-      id: "categories",
-      label: "Categories",
-      count: problems.productsWithWrongCategory.length,
-    },
-    {
-      id: "ai-descriptions",
-      label: "AI Descriptions",
-      count: (problems.locationsWithoutAiDescription ?? []).length,
-    },
-    {
-      id: "stale-parses",
-      label: "Stale Parses",
-      count: (problems.staleIngredientParses ?? []).length,
-    },
-    {
-      id: "stale-totals",
-      label: "Stale Totals",
-      count: (problems.staleRecipeTotals ?? []).length,
-    },
-    {
-      id: "upc-updates",
-      label: "UPC Updates",
-      count: (problems.productsWithBetterUpcData ?? []).length,
-    },
-  ].filter((cat) => cat.count > 0);
+  // Both the summary chips and the section list derive from PROBLEM_SECTIONS,
+  // so each check is declared exactly once (see ./components/problem-sections).
+  const categoryLinks = PROBLEM_SECTIONS.map((section) => ({
+    id: section.id,
+    label: section.label,
+    count: section.count(problems),
+  })).filter((cat) => cat.count > 0);
 
   const scrollToSection = (id: string) => {
     sectionRefs.current[id]?.scrollIntoView({ behavior: "smooth" });
@@ -176,122 +101,16 @@ export function ProblemsOverview() {
       )}
 
       {/* All problem sections */}
-      <div
-        ref={(el) => {
-          sectionRefs.current.duplicates = el;
-        }}
-      >
-        <DuplicateUniqueProductsList
-          products={problems.duplicateUniqueProducts}
-        />
-      </div>
-      <div
-        ref={(el) => {
-          sectionRefs.current.orphaned = el;
-        }}
-      >
-        <OrphanedProductsList products={problems.orphanedProducts} />
-      </div>
-      <div
-        ref={(el) => {
-          sectionRefs.current.upcs = el;
-        }}
-      >
-        <InvalidUPCsList products={problems.invalidUPCs} />
-      </div>
-      <div
-        ref={(el) => {
-          sectionRefs.current.pricing = el;
-        }}
-      >
-        <ProductsWithoutMappingsList
-          products={problems.productsWithoutMappings}
-        />
-      </div>
-      <div
-        ref={(el) => {
-          sectionRefs.current["stale-valuations"] = el;
-        }}
-      >
-        <InventoryWithStaleValuationsList
-          entries={problems.inventoryWithStaleValuations}
-        />
-      </div>
-      <div
-        ref={(el) => {
-          sectionRefs.current.amounts = el;
-        }}
-      >
-        <InvalidInventoryAmountsList
-          entries={problems.invalidInventoryAmounts}
-        />
-      </div>
-      <div
-        ref={(el) => {
-          sectionRefs.current.locations = el;
-        }}
-      >
-        <EmptyLocationsList locations={problems.emptyLocations} />
-      </div>
-      <div
-        ref={(el) => {
-          sectionRefs.current.images = el;
-        }}
-      >
-        <ProductsWithNoImagesList products={problems.productsWithNoImages} />
-      </div>
-      <div
-        ref={(el) => {
-          sectionRefs.current.categories = el;
-        }}
-      >
-        <ProductsWithWrongCategoryList
-          products={problems.productsWithWrongCategory}
-        />
-      </div>
-      <div
-        ref={(el) => {
-          sectionRefs.current.islands = el;
-        }}
-      >
-        <ProductsWithIslandedMappingsList
-          products={problems.productsWithIslandedMappings}
-        />
-      </div>
-      <div
-        ref={(el) => {
-          sectionRefs.current["ai-descriptions"] = el;
-        }}
-      >
-        <LocationsWithoutAiDescriptionList
-          locations={problems.locationsWithoutAiDescription ?? []}
-        />
-      </div>
-      <div
-        ref={(el) => {
-          sectionRefs.current["stale-parses"] = el;
-        }}
-      >
-        <StaleIngredientParsesList
-          items={problems.staleIngredientParses ?? []}
-        />
-      </div>
-      <div
-        ref={(el) => {
-          sectionRefs.current["stale-totals"] = el;
-        }}
-      >
-        <StaleRecipeTotalsList items={problems.staleRecipeTotals ?? []} />
-      </div>
-      <div
-        ref={(el) => {
-          sectionRefs.current["upc-updates"] = el;
-        }}
-      >
-        <ProductsWithBetterUpcDataList
-          products={problems.productsWithBetterUpcData ?? []}
-        />
-      </div>
+      {PROBLEM_SECTIONS.map((section) => (
+        <div
+          key={section.id}
+          ref={(el) => {
+            sectionRefs.current[section.id] = el;
+          }}
+        >
+          {section.node(problems)}
+        </div>
+      ))}
     </div>
   );
 }

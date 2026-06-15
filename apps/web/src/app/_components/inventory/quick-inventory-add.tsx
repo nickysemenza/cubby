@@ -32,6 +32,7 @@ import {
   NullableNumericField,
   UnifiedTextField,
 } from "~/app/_components/form-utils";
+import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { Button } from "~/components/ui/button";
 import { Collapsible, CollapsibleContent } from "~/components/ui/collapsible";
 import { Spinner } from "~/components/ui/spinner";
@@ -103,21 +104,18 @@ export function QuickInventoryAdd({
     },
   });
 
-  const addMutation = useMutation(
-    api.inventory.create.mutationOptions({
-      onSuccess: () => {
-        toast.success("Tucked it into your cubby.");
-        selectForm.reset({
-          product: undefined,
-          amount: { value: 1, unit: "" },
-        });
-        onSuccess();
-      },
-      onError: (err) => {
-        toast.error(err.message || "Failed to add item");
-      },
-    }),
-  );
+  const addMutation = useActionMutation({
+    mutationFn: api.inventory.create.mutationOptions,
+    success: "Tucked it into your cubby.",
+    onSuccess: () => {
+      selectForm.reset({
+        product: undefined,
+        amount: { value: 1, unit: "" },
+      });
+      onSuccess();
+    },
+    error: (err) => getErrorMessage(err) || "Failed to add item",
+  });
 
   const onSelectSubmit = async (values: SelectFormValues) => {
     await addMutation.mutateAsync({
