@@ -7,8 +7,7 @@ const Graphviz = lazy(() => import("graphviz-react"));
 
 const UnitMappingGraphInner: React.FC<{
   unitMapping: WUnitMapping[];
-  compact?: boolean;
-}> = ({ unitMapping, compact = false }) => {
+}> = ({ unitMapping }) => {
   // Memoize the expensive WASM graph generation
   const graphResult = useMemo(() => {
     if (unitMapping.length === 0) {
@@ -18,10 +17,12 @@ const UnitMappingGraphInner: React.FC<{
     try {
       // Factor rounding, edge collapsing, node `class=<kind>` tagging, and the
       // dashed volume bridge all happen upstream in recipebridge's print_graph.
-      // Here we only inject layout/theme: fdp star layout with a loosened spring
-      // length (K) and node separation so the hub's spokes fan out instead of
-      // collapsing onto the center. Node fills are themed per-kind via CSS
-      // (.node.<kind> in styles.css), keyed off the upstream `class` attribute.
+      // Here we inject only structure/layout: an fdp star layout with a loosened
+      // spring length (K) and node separation so the hub's spokes fan out instead
+      // of collapsing onto the center. All colors are themed via design tokens in
+      // CSS (.unit-mapping-graph in styles.css) — node fills keyed off the
+      // upstream per-kind `class`, edges/labels via the muted palette — so no
+      // hex lives here.
       const graph = wasm.graph_unit_mappings(unitMapping).replace(
         "digraph {",
         `digraph {
@@ -32,8 +33,8 @@ const UnitMappingGraphInner: React.FC<{
           sep="+18";
           esep="+10";
           bgcolor="transparent";
-          node [fontsize=10, fontname="sans-serif", shape=box, style="rounded,filled", fillcolor="#eef0f3", color="#9ca0a8", margin="0.06,0.04"];
-          edge [fontsize=7, fontname="sans-serif", color="#888c94", fontcolor="#6b7280", penwidth=1, len=1.6];
+          node [fontsize=10, fontname="sans-serif", shape=box, style="rounded,filled", margin="0.06,0.04"];
+          edge [fontsize=7, fontname="sans-serif", penwidth=1, len=1.6];
         `,
       );
       return { graph, error: null };
@@ -60,8 +61,8 @@ const UnitMappingGraphInner: React.FC<{
     return null;
   }
 
-  const width = compact ? 100 : 460;
-  const height = compact ? 60 : 320;
+  const width = 460;
+  const height = 320;
 
   return (
     <div className="unit-mapping-graph overflow-auto rounded border bg-muted p-0.5">
@@ -72,7 +73,7 @@ const UnitMappingGraphInner: React.FC<{
             fit: true,
             width,
             height,
-            zoom: !compact,
+            zoom: true,
             useWorker: false,
           }}
         />

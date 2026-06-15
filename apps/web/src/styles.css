@@ -597,4 +597,16 @@
     fill: color-mix(in oklab, var(--chart-5) 15%, var(--card));
     stroke: color-mix(in oklab, var(--chart-5) 45%, var(--border));
   }
+  /* Edges + their factor labels: subtle muted connectors. The line is a <path>,
+     the arrowheads a filled <polygon>, the factor a <text>. */
+  .unit-mapping-graph .edge > path {
+    stroke: color-mix(in oklab, var(--muted-foreground) 55%, var(--border));
+  }
+  .unit-mapping-graph .edge > polygon {
+    fill: color-mix(in oklab, var(--muted-foreground) 55%, var(--border));
+    stroke: color-mix(in oklab, var(--muted-foreground) 55%, var(--border));
+  }
+  .unit-mapping-graph .edge > text {
+    fill: var(--muted-foreground);
+  }
 }
