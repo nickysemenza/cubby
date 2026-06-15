@@ -37,5 +37,10 @@ export {
   liveRecipeCountForIngredientSql,
 } from "./helpers";
 // Analytics and queries
-export { getAllTags, getIngredientCooccurrence } from "./queries";
+export {
+  getAllTags,
+  getIngredientCooccurrence,
+  getIngredientUsage,
+  getRecipeDependencyGraph,
+} from "./queries";
 export { findOrCreateRecipeLinkIngredient } from "./update-helpers";

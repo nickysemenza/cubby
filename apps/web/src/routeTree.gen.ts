@@ -43,6 +43,7 @@ import { Route as AuthenticatedUsdaIdRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedRecipesNewRouteImport } from './routes/_authenticated/recipes.new'
 import { Route as AuthenticatedRecipesImportNotionRouteImport } from './routes/_authenticated/recipes.import-notion'
 import { Route as AuthenticatedRecipesImportCookbookRouteImport } from './routes/_authenticated/recipes.import-cookbook'
+import { Route as AuthenticatedRecipesGraphRouteImport } from './routes/_authenticated/recipes.graph'
 import { Route as AuthenticatedRecipesCompareRouteImport } from './routes/_authenticated/recipes.compare'
 import { Route as AuthenticatedRecipesIdRouteImport } from './routes/_authenticated/recipes.$id'
 import { Route as AuthenticatedProjectsIdRouteImport } from './routes/_authenticated/projects.$id'
@@ -249,6 +250,12 @@ const AuthenticatedRecipesImportCookbookRoute =
     path: '/recipes/import-cookbook',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedRecipesGraphRoute =
+  AuthenticatedRecipesGraphRouteImport.update({
+    id: '/recipes/graph',
+    path: '/recipes/graph',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedRecipesCompareRoute =
   AuthenticatedRecipesCompareRouteImport.update({
     id: '/recipes/compare',
@@ -433,6 +440,7 @@ export interface FileRoutesByFullPath {
   '/projects/$id': typeof AuthenticatedProjectsIdRoute
   '/recipes/$id': typeof AuthenticatedRecipesIdRoute
   '/recipes/compare': typeof AuthenticatedRecipesCompareRoute
+  '/recipes/graph': typeof AuthenticatedRecipesGraphRoute
   '/recipes/import-cookbook': typeof AuthenticatedRecipesImportCookbookRoute
   '/recipes/import-notion': typeof AuthenticatedRecipesImportNotionRoute
   '/recipes/new': typeof AuthenticatedRecipesNewRoute
@@ -493,6 +501,7 @@ export interface FileRoutesByTo {
   '/projects/$id': typeof AuthenticatedProjectsIdRoute
   '/recipes/$id': typeof AuthenticatedRecipesIdRoute
   '/recipes/compare': typeof AuthenticatedRecipesCompareRoute
+  '/recipes/graph': typeof AuthenticatedRecipesGraphRoute
   '/recipes/import-cookbook': typeof AuthenticatedRecipesImportCookbookRoute
   '/recipes/import-notion': typeof AuthenticatedRecipesImportNotionRoute
   '/recipes/new': typeof AuthenticatedRecipesNewRoute
@@ -555,6 +564,7 @@ export interface FileRoutesById {
   '/_authenticated/projects/$id': typeof AuthenticatedProjectsIdRoute
   '/_authenticated/recipes/$id': typeof AuthenticatedRecipesIdRoute
   '/_authenticated/recipes/compare': typeof AuthenticatedRecipesCompareRoute
+  '/_authenticated/recipes/graph': typeof AuthenticatedRecipesGraphRoute
   '/_authenticated/recipes/import-cookbook': typeof AuthenticatedRecipesImportCookbookRoute
   '/_authenticated/recipes/import-notion': typeof AuthenticatedRecipesImportNotionRoute
   '/_authenticated/recipes/new': typeof AuthenticatedRecipesNewRoute
@@ -617,6 +627,7 @@ export interface FileRouteTypes {
     | '/projects/$id'
     | '/recipes/$id'
     | '/recipes/compare'
+    | '/recipes/graph'
     | '/recipes/import-cookbook'
     | '/recipes/import-notion'
     | '/recipes/new'
@@ -677,6 +688,7 @@ export interface FileRouteTypes {
     | '/projects/$id'
     | '/recipes/$id'
     | '/recipes/compare'
+    | '/recipes/graph'
     | '/recipes/import-cookbook'
     | '/recipes/import-notion'
     | '/recipes/new'
@@ -738,6 +750,7 @@ export interface FileRouteTypes {
     | '/_authenticated/projects/$id'
     | '/_authenticated/recipes/$id'
     | '/_authenticated/recipes/compare'
+    | '/_authenticated/recipes/graph'
     | '/_authenticated/recipes/import-cookbook'
     | '/_authenticated/recipes/import-notion'
     | '/_authenticated/recipes/new'
@@ -1012,6 +1025,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRecipesImportCookbookRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/recipes/graph': {
+      id: '/_authenticated/recipes/graph'
+      path: '/recipes/graph'
+      fullPath: '/recipes/graph'
+      preLoaderRoute: typeof AuthenticatedRecipesGraphRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/recipes/compare': {
       id: '/_authenticated/recipes/compare'
       path: '/recipes/compare'
@@ -1224,6 +1244,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedProjectsIdRoute: typeof AuthenticatedProjectsIdRoute
   AuthenticatedRecipesIdRoute: typeof AuthenticatedRecipesIdRoute
   AuthenticatedRecipesCompareRoute: typeof AuthenticatedRecipesCompareRoute
+  AuthenticatedRecipesGraphRoute: typeof AuthenticatedRecipesGraphRoute
   AuthenticatedRecipesImportCookbookRoute: typeof AuthenticatedRecipesImportCookbookRoute
   AuthenticatedRecipesImportNotionRoute: typeof AuthenticatedRecipesImportNotionRoute
   AuthenticatedRecipesNewRoute: typeof AuthenticatedRecipesNewRoute
@@ -1278,6 +1299,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedProjectsIdRoute: AuthenticatedProjectsIdRoute,
   AuthenticatedRecipesIdRoute: AuthenticatedRecipesIdRoute,
   AuthenticatedRecipesCompareRoute: AuthenticatedRecipesCompareRoute,
+  AuthenticatedRecipesGraphRoute: AuthenticatedRecipesGraphRoute,
   AuthenticatedRecipesImportCookbookRoute:
     AuthenticatedRecipesImportCookbookRoute,
   AuthenticatedRecipesImportNotionRoute: AuthenticatedRecipesImportNotionRoute,
