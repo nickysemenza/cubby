@@ -67,7 +67,7 @@ export function RecipeDependencyGraph({
 
   if (isLoading) {
     return (
-      <VisualizationPlaceholder message="Loading recipe graph…" height={460} />
+      <VisualizationPlaceholder message="Loading recipe graph…" height={540} />
     );
   }
 
@@ -76,7 +76,7 @@ export function RecipeDependencyGraph({
       <VisualizationPlaceholder
         message="No recipe dependencies to display"
         subMessage="Recipes that use another recipe as an ingredient appear here"
-        height={460}
+        height={540}
       />
     );
   }
@@ -96,9 +96,9 @@ function Graph({
   // useId may contain ":" which is invalid in an SVG/CSS url() selector.
   const arrowId = useId().replace(/:/g, "");
   const dimensions = useContainerDimensions(containerRef, {
-    minHeight: 460,
+    minHeight: 540,
     initialWidth: 800,
-    initialHeight: 460,
+    initialHeight: 540,
   });
   // Read live dimensions inside the simulation without making them an effect
   // dependency — otherwise every resize restarts the sim with fresh random
@@ -156,10 +156,15 @@ function Graph({
         d3Force
           .forceLink<GraphNode, GraphLink>(linksCopy)
           .id((d) => d.id)
-          .distance(90),
+          .distance(70),
       )
-      .force("charge", d3Force.forceManyBody().strength(-260))
+      // Cap long-range repulsion so isolated nodes don't fling to the walls.
+      .force("charge", d3Force.forceManyBody().strength(-180).distanceMax(280))
       .force("center", d3Force.forceCenter(width / 2, height / 2))
+      // Gentle pull toward centre keeps everything a cohesive cloud instead of
+      // a ring clamped against the border (Y stronger — the band is wide+short).
+      .force("x", d3Force.forceX(width / 2).strength(0.06))
+      .force("y", d3Force.forceY(height / 2).strength(0.12))
       .force(
         "collision",
         d3Force.forceCollide<GraphNode>().radius((d) => getRadius(d.id) + 6),
@@ -203,7 +208,7 @@ function Graph({
   return (
     <div
       ref={containerRef}
-      className="relative h-[460px] w-full overflow-hidden rounded-md border"
+      className="relative h-[540px] w-full overflow-hidden rounded-md border"
     >
       <svg
         aria-hidden="true"

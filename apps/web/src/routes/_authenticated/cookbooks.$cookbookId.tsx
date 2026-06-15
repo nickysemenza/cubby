@@ -167,6 +167,10 @@ function CookbookDetailPage() {
         </div>
       </div>
 
+      {/* TODO: sync the active tab to a `?tab=` search param (validateSearch +
+          controlled value/onValueChange) so it's deep-linkable and survives
+          reload — and lift this into a reusable URL-synced tabs helper as we
+          adopt the pattern on more detail pages. */}
       <Tabs defaultValue="recipes" className="mt-2">
         <TabsList variant="line">
           <TabsTrigger value="recipes">Recipes</TabsTrigger>

@@ -6,6 +6,12 @@
  * exactly equal (not fuzzy), so it catches `butter` / `"Butter for the pan"`
  * without falsely merging `white sugar` / `powdered sugar`. The user always
  * confirms the merge, so a missed group is cheaper than a wrong one.
+ *
+ * TODO: name normalization/canonicalization really belongs in the shared
+ * ingredient-parser crate (it already parses ingredient lines) so the web app
+ * and the parser agree on what "the same ingredient" means. This TS heuristic
+ * is a stopgap until recipebridge exposes a `normalize_ingredient_name` (or
+ * similar) over WASM; move this there and have detectMergeGroups call it.
  */
 
 // Trailing usage notes that don't change the underlying ingredient.
