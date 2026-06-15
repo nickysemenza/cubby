@@ -142,6 +142,15 @@ fn assert_close(actual: f64, expected: f64, tol: f64, what: &str) {
     );
 }
 
+/// Assert a `WMeasureResult` is `Ok` and within `tol` of `expected`. Collapses
+/// the repeated `match { Ok(m) => assert_close(...), Err(e) => panic!(...) }`.
+fn assert_measure_close(result: &WMeasureResult, expected: f64, tol: f64, what: &str) {
+    match result {
+        WMeasureResult::Ok(m) => assert_close(m.value, expected, tol, what),
+        WMeasureResult::Err(e) => panic!("expected {what} ok, got {e:?}"),
+    }
+}
+
 // ─── Shared ingredients (the TS describe-block fixtures) ────────────────────
 
 /// chicken: 1 lb = 453.59 g; 1 lb = $5.99; 100 g = 20 g protein = 200 kcal
@@ -397,7 +406,14 @@ fn guards_against_cycles_without_hanging() {
 
     // Should terminate (visited-set cycle guard), not hang.
     let result = cost_recipes_impl(&input).expect("terminates");
-    assert!(result.recipes[0].price.is_finite());
+    let rec_a = &result.recipes[0];
+    // The cycle resolves to a *missing* contribution, not just "finite": A's only
+    // row (sub-recipe B) can't be costed because B re-enters A, so A's total is
+    // exactly 0 — a regression that terminated but produced a bogus non-zero
+    // number would pass an is_finite()-only check.
+    assert!(rec_a.price.is_finite());
+    assert_eq!(rec_a.price, 0.0, "cycle → missing contribution, total 0");
+    assert_eq!(rec_a.weight, 0.0, "cycle → missing contribution, weight 0");
 }
 
 #[test]
@@ -448,10 +464,7 @@ fn sub_recipe_referenced_both_inside_and_outside_a_cycle() {
     );
 
     // Direct S row resolves to $2 / 200 g — the cache value is correct.
-    match &r.rows[0].price {
-        WMeasureResult::Ok(m) => assert_close(m.value, 2.0, 0.005, "direct S price"),
-        WMeasureResult::Err(e) => panic!("expected direct S price ok, got {e:?}"),
-    }
+    assert_measure_close(&r.rows[0].price, 2.0, 0.005, "direct S price");
     // Both branches contribute $2 / 200 g (S directly + T→U→S), so the cycle is
     // broken cleanly and S is identical across the clean/tainted boundary.
     assert_close(r.price, 4.0, 0.005, "total price");
@@ -860,10 +873,7 @@ fn estimated_rows_carry_the_estimate_and_flag() {
     let oil_row = &r.rows[1];
     assert!(oil_row.estimated);
     assert_eq!(oil_row.usage, recipebridge::WIngredientUsage::FryingMedium);
-    match &oil_row.gram {
-        WMeasureResult::Ok(m) => assert_close(m.value, 15.0, 0.5, "oil est gram"),
-        WMeasureResult::Err(e) => panic!("expected gram ok, got {e:?}"),
-    }
+    assert_measure_close(&oil_row.gram, 15.0, 0.5, "oil est gram");
     match &oil_row.nutrients {
         WNutrientsResult::Ok(n) => {
             let kcal = n.entries.iter().find(|e| e.code == "208").expect("kcal");
@@ -894,15 +904,9 @@ fn measured_fry_row_displays_est_weight_but_own_cost() {
     let oil_row = &r.rows[1];
     assert!(oil_row.estimated);
     // Displayed weight is the absorbed estimate, not the pot…
-    match &oil_row.gram {
-        WMeasureResult::Ok(m) => assert_close(m.value, 15.0, 0.5, "est gram"),
-        WMeasureResult::Err(e) => panic!("expected gram ok, got {e:?}"),
-    }
+    assert_measure_close(&oil_row.gram, 15.0, 0.5, "est gram");
     // …while cost stays the full written amount.
-    match &oil_row.price {
-        WMeasureResult::Ok(m) => assert_close(m.value, 0.5, 0.005, "own cost"),
-        WMeasureResult::Err(e) => panic!("expected price ok, got {e:?}"),
-    }
+    assert_measure_close(&oil_row.price, 0.5, 0.005, "own cost");
     // The pot's own gram weight (100 g) feeds baker %, not the totals.
     assert_eq!(oil_row.own_gram, Some(100.0));
 }
@@ -959,10 +963,7 @@ fn baker_percentages_use_pre_estimate_gram_for_estimated_flour_rows() {
     let dredge = &r.rows[1];
     assert!(dredge.estimated);
     assert_eq!(dredge.own_gram, Some(100.0));
-    match &dredge.gram {
-        WMeasureResult::Ok(m) => assert_close(m.value, 20.0, 0.5, "dredge displayed gram"),
-        WMeasureResult::Err(e) => panic!("expected dredge gram ok, got {e:?}"),
-    }
+    assert_measure_close(&dredge.gram, 20.0, 0.5, "dredge displayed gram");
 
     let pct = |id: &str| {
         r.baker_percentages

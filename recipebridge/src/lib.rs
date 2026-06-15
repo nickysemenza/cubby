@@ -52,7 +52,9 @@ pub fn init() {
 }
 
 /// True when the host's `performance` global implements the User Timing API
-/// (browsers, Node) rather than workerd's bare now()/timeOrigin stub.
+/// (browsers, Node) rather than workerd's bare now()/timeOrigin stub. Any
+/// Reflect failure (missing global, a throwing getter) folds to `false` — the
+/// safe "don't emit timings" path — so detection never panics init.
 fn performance_supports_user_timing() -> bool {
     js_sys::Reflect::get(&js_sys::global(), &JsValue::from_str("performance"))
         .ok()

@@ -16,7 +16,9 @@
 //! instead of silently summing into a meaningless total, and non-finite values
 //! are dropped before they can poison a sum.
 
-use ingredient::unit::{convert_measure_with_graph, make_graph, Measure, MeasureKind};
+use ingredient::unit::{
+    convert_measure_with_graph, make_graph, Measure, MeasureGraph, MeasureKind,
+};
 use serde::{Deserialize, Serialize};
 use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
@@ -154,6 +156,21 @@ fn resolve_status(
 }
 
 fn evaluate_group(group: &WAvailabilityGroup) -> WAvailabilityGroupResult {
+    // No needs → nothing to satisfy. Return an inert `Ok` (a zero requirement is
+    // met), not `Missing` — `Missing` would render as "you're short on this" for
+    // a group that needs nothing. `basis_unit` is empty: there's no unit to
+    // compare in.
+    if group.needs.is_empty() {
+        return WAvailabilityGroupResult {
+            key: group.key.clone(),
+            basis_unit: String::new(),
+            need_value: 0.0,
+            have_value: None,
+            status: WAvailabilityStatus::Ok,
+            sources: Vec::new(),
+        };
+    }
+
     // Per-product graphs (for on-hand, converted via the matching product's
     // mappings) plus the merged graph (for needs, which may bridge across
     // products) — the same split the TS service used.
@@ -162,29 +179,35 @@ fn evaluate_group(group: &WAvailabilityGroup) -> WAvailabilityGroupResult {
         .iter()
         .map(|p| pairs_for_product(&p.product))
         .collect();
-    let all_pairs: Vec<(Measure, Measure)> = product_pairs.iter().flatten().cloned().collect();
-    let all_graph = make_graph(&all_pairs);
-    let product_graphs: Vec<_> = product_pairs.iter().map(|p| make_graph(p)).collect();
+    let product_graphs: Vec<MeasureGraph> = product_pairs.iter().map(|p| make_graph(p)).collect();
+    // Needs may bridge across products, so they resolve on the union of all edges.
+    // With exactly one product that union *is* its graph — reuse it instead of
+    // rebuilding a second graph and re-cloning every pair (the common case: most
+    // ingredients have a single product).
+    let merged_graph: Option<MeasureGraph> = (product_graphs.len() != 1).then(|| {
+        let all_pairs: Vec<(Measure, Measure)> = product_pairs.iter().flatten().cloned().collect();
+        make_graph(&all_pairs)
+    });
+    let all_graph: &MeasureGraph = merged_graph
+        .as_ref()
+        .or_else(|| product_graphs.first())
+        .expect("merged_graph is Some unless there is exactly one product");
 
     // Convert each need to weight. Gram basis only when EVERY need converts, so
     // contributions are summable in one unit (the gram-first rule).
     let weights: Vec<Option<Measure>> = group
         .needs
         .iter()
-        .map(|n| {
-            convert_measure_with_graph(&n.amount.to_measure(), MeasureKind::Weight, &all_graph)
-        })
+        .map(|n| convert_measure_with_graph(&n.amount.to_measure(), MeasureKind::Weight, all_graph))
         .collect();
     let all_weight = !weights.is_empty() && weights.iter().all(Option::is_some);
 
     let basis = if all_weight {
-        let unit = weights[0]
-            .as_ref()
-            .expect("all_weight ⇒ every weight is Some")
-            .unit()
-            .to_str()
-            .into_owned();
-        Basis::Weight(unit)
+        // all_weight ⇒ every entry is Some, so the first weight's unit is the basis.
+        match weights.iter().flatten().next() {
+            Some(m) => Basis::Weight(m.unit().to_str().into_owned()),
+            None => Basis::Incoherent, // unreachable (non-empty, all Some); defensive
+        }
     } else {
         match group.needs.first() {
             None => Basis::Unit(String::new()),
@@ -203,17 +226,17 @@ fn evaluate_group(group: &WAvailabilityGroup) -> WAvailabilityGroupResult {
     };
 
     // Per-need contribution in the basis unit (grams when all_weight, else the
-    // authored value — the same gram-first fallback as the TS service).
+    // authored value — the same gram-first fallback as the TS service). Zipped
+    // with `weights` so there's no parallel-index access: under a weight basis
+    // every `weight` is Some, and the authored-value fallback (never hit) keeps
+    // it panic-free.
     let sources: Vec<WAvailabilitySource> = group
         .needs
         .iter()
-        .enumerate()
-        .map(|(i, n)| {
+        .zip(&weights)
+        .map(|(n, weight)| {
             let need_value = match &basis {
-                Basis::Weight(_) => weights[i]
-                    .as_ref()
-                    .expect("all_weight ⇒ every weight is Some")
-                    .value(),
+                Basis::Weight(_) => weight.as_ref().map_or(n.amount.value, Measure::value),
                 _ => n.amount.value,
             };
             WAvailabilitySource {
@@ -248,34 +271,32 @@ fn evaluate_group(group: &WAvailabilityGroup) -> WAvailabilityGroupResult {
         }
     }
 
-    let (status, basis_unit, need_value, have_value, sources) = match &basis {
+    let mut sources = sources;
+    let (status, basis_unit, need_value, have_value) = match &basis {
         // Mixed units with no weight basis: surface as unconvertible rather than
         // a confident-but-wrong total. `need_total` here is the meaningless
         // mixed-unit sum (e.g. 2 + 300), so zero it out — both the total and the
         // per-source values — so nothing downstream can render it as a quantity.
-        Basis::Incoherent => (
-            WAvailabilityStatus::Unconvertible,
-            group
-                .needs
-                .first()
-                .map(|n| n.amount.unit.clone())
-                .unwrap_or_default(),
-            0.0,
-            None,
-            sources
-                .iter()
-                .map(|s| WAvailabilitySource {
-                    line_index: s.line_index,
-                    need_value: 0.0,
-                })
-                .collect(),
-        ),
+        Basis::Incoherent => {
+            for s in &mut sources {
+                s.need_value = 0.0;
+            }
+            (
+                WAvailabilityStatus::Unconvertible,
+                group
+                    .needs
+                    .first()
+                    .map(|n| n.amount.unit.clone())
+                    .unwrap_or_default(),
+                0.0,
+                None,
+            )
+        }
         Basis::Weight(unit) | Basis::Unit(unit) => (
             resolve_status(need_total, have_total, any_entries, any_convertible),
             unit.clone(),
             need_total,
             any_convertible.then_some(have_total),
-            sources,
         ),
     };
 
@@ -591,7 +612,7 @@ mod tests {
                     )],
                 },
                 // No needs, no inventory — the empty-needs guard yields an inert
-                // result rather than panicking.
+                // `Ok` (a zero requirement is satisfied) rather than panicking.
                 WAvailabilityGroup {
                     key: "empty".into(),
                     needs: vec![],
@@ -604,7 +625,7 @@ mod tests {
         assert_eq!(result.groups[0].status, WAvailabilityStatus::Ok);
         assert_eq!(result.groups[1].key, "empty");
         assert_eq!(result.groups[1].need_value, 0.0);
-        assert_eq!(result.groups[1].status, WAvailabilityStatus::Missing);
+        assert_eq!(result.groups[1].status, WAvailabilityStatus::Ok);
     }
 
     #[test]

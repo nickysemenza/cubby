@@ -155,6 +155,23 @@ fn scale_nutrients(r: &NutrientsRes, fraction: f64) -> NutrientsRes {
     }
 }
 
+/// Drop non-finite values before they enter a total — a NaN/Inf from a broken
+/// mapping otherwise poisons the whole recipe's price/weight/nutrient sum, which
+/// then persists into `Recipe.totals` with no way to notice downstream. (Mirrors
+/// the same guard the availability evaluator already applies.)
+fn finite(x: f64) -> Option<f64> {
+    x.is_finite().then_some(x)
+}
+
+/// Running per-nutrient accumulator: lower sum, upper sum, and whether any
+/// contributor was ranged (else the upper is dropped on output). Replaces the
+/// positional `(f64, f64, bool)` tuple the fold used to carry.
+struct NutrientAcc {
+    lo: f64,
+    hi: f64,
+    any_upper: bool,
+}
+
 /// Build a measure carrying an optional range upper bound (the sub-recipe rate
 /// edges and any ranged total). Collapses a degenerate/absent upper to a point.
 fn measure_with_optional_upper(unit: &str, value: f64, upper: Option<f64>) -> Measure {
@@ -247,8 +264,30 @@ pub(crate) struct Engine<'a> {
     sub_totals: RefCell<HashMap<String, SubTotals>>,
 }
 
+/// Ingredient ids carrying ≥2 *priced* products. Their synthesized
+/// `1 each = $price` edges collide on the shared `each` node (the
+/// multi-priced-product hazard in the module doc), so the costed price is picked
+/// arbitrarily. Dormant today — surfaced as a warn tripwire so a future
+/// violation is visible rather than silently mis-costing.
+fn multi_priced_ingredients(input: &WCostingInput) -> Vec<&str> {
+    input
+        .ingredients
+        .iter()
+        .filter(|i| i.products.iter().filter(|p| p.price.is_some()).count() > 1)
+        .map(|i| i.id.as_str())
+        .collect()
+}
+
 impl<'a> Engine<'a> {
     pub fn new(input: &'a WCostingInput) -> Self {
+        for id in multi_priced_ingredients(input) {
+            tracing::warn!(
+                ingredient_id = id,
+                "multiple priced products on one ingredient: their `each → dollar` \
+                 edges collide on the shared `each` node, so the costed price is \
+                 arbitrary (multi-priced-product hazard)"
+            );
+        }
         Self {
             recipes: input.recipes.iter().map(|r| (r.id.as_str(), r)).collect(),
             ingredients: input
@@ -444,7 +483,9 @@ impl<'a> Engine<'a> {
     /// from the linked food with no hardcoded per-food constants. Errors when
     /// there's no estimable basis (renders as "—").
     fn estimated_trio(&self, grams: f64, row: &WCostingRow) -> Trio {
-        if row.kind != WRowKind::Ingredient || grams <= 0.0 {
+        // `!(grams > 0.0)` also rejects NaN (every NaN comparison is false), so a
+        // non-finite basis can't slip past into a poisoned conversion.
+        if row.kind != WRowKind::Ingredient || !grams.is_finite() || grams <= 0.0 {
             return Trio::all_err("no basis for estimate");
         }
         self.measures(
@@ -471,25 +512,22 @@ impl<'a> Engine<'a> {
             .any(|s| matches!(s, OwnFull | OwnFraction { .. }));
         let own = needs_own.then(|| self.own_trio(row, visited, taint));
 
-        // One estimate trio per distinct gram value (in practice: one).
-        // Keyed by the f64's bit pattern: the lookup re-derives the grams from
-        // the same expression, so bitwise equality is exact.
-        let mut est: Vec<(u64, Trio)> = Vec::new();
+        // One estimate trio per distinct gram value (in practice: one). Keyed by
+        // the f64's bit pattern: the lookup re-derives the grams from the same
+        // expression, so bitwise equality is exact.
+        let mut est: HashMap<u64, Trio> = HashMap::new();
         for s in plan.sources() {
             let grams = match s {
                 BasisFraction { fraction } => fraction * basis_grams,
                 FlatGrams { grams } => grams,
                 _ => continue,
             };
-            if !est.iter().any(|(g, _)| *g == grams.to_bits()) {
-                est.push((grams.to_bits(), self.estimated_trio(grams, row)));
-            }
+            est.entry(grams.to_bits())
+                .or_insert_with(|| self.estimated_trio(grams, row));
         }
         let est_for = |grams: f64| -> &Trio {
-            &est.iter()
-                .find(|(g, _)| *g == grams.to_bits())
+            est.get(&grams.to_bits())
                 .expect("estimate precomputed for every estimate source")
-                .1
         };
         let own_ref = || {
             own.as_ref()
@@ -596,10 +634,10 @@ impl<'a> Engine<'a> {
         let mut total_weight = 0.0_f64;
         let mut total_weight_upper = 0.0_f64;
         let mut any_weight_upper = false;
-        // (code, lower, upper, any_upper): the upper total sums (upper ?? lower)
-        // so a partially-ranged recipe gives [Σlower, Σupper]; any_upper marks
+        // Per nutrient, in first-appearance order: the upper sum adds (upper ?? lower)
+        // so a partially-ranged recipe gives [Σlower, Σupper]; `any_upper` marks
         // whether any contributor was ranged (else the upper is dropped on output).
-        let mut total_nutrients: Vec<(String, f64, f64, bool)> = Vec::new();
+        let mut total_nutrients: Vec<(String, NutrientAcc)> = Vec::new();
         let mut missing = WMissingByType {
             price: Vec::new(),
             weight: Vec::new(),
@@ -608,34 +646,48 @@ impl<'a> Engine<'a> {
 
         // Collect a trio into the running totals, routing failures to
         // missingByType (display names, in resolution order).
+        // A non-finite measure (NaN/Inf from a broken mapping) is routed to
+        // missingByType, never summed — one poisoned value would otherwise turn
+        // the whole persisted total into NaN/Inf.
         let mut fold = |trio: &Trio, name: &str| {
             match &trio.price {
-                Ok(v) => {
+                Ok(v) if v.value.is_finite() => {
+                    let upper = v.upper.and_then(finite);
                     total_price += v.value;
-                    total_price_upper += v.upper.unwrap_or(v.value);
-                    any_price_upper |= v.upper.is_some();
+                    total_price_upper += upper.unwrap_or(v.value);
+                    any_price_upper |= upper.is_some();
                 }
-                Err(_) => missing.price.push(name.to_string()),
+                _ => missing.price.push(name.to_string()),
             }
             match &trio.gram {
-                Ok(v) => {
+                Ok(v) if v.value.is_finite() => {
+                    let upper = v.upper.and_then(finite);
                     total_weight += v.value;
-                    total_weight_upper += v.upper.unwrap_or(v.value);
-                    any_weight_upper |= v.upper.is_some();
+                    total_weight_upper += upper.unwrap_or(v.value);
+                    any_weight_upper |= upper.is_some();
                 }
-                Err(_) => missing.weight.push(name.to_string()),
+                _ => missing.weight.push(name.to_string()),
             }
             match &trio.nutrients {
                 Ok(entries) => {
                     for (code, lo, hi) in entries {
-                        let upper = hi.unwrap_or(*lo);
-                        match total_nutrients.iter_mut().find(|(c, ..)| c == code) {
-                            Some((_, acc_lo, acc_hi, acc_any)) => {
-                                *acc_lo += lo;
-                                *acc_hi += upper;
-                                *acc_any |= hi.is_some();
+                        let Some(lo) = finite(*lo) else { continue };
+                        let hi = (*hi).and_then(finite);
+                        let upper = hi.unwrap_or(lo);
+                        match total_nutrients.iter_mut().find(|(c, _)| c == code) {
+                            Some((_, acc)) => {
+                                acc.lo += lo;
+                                acc.hi += upper;
+                                acc.any_upper |= hi.is_some();
                             }
-                            None => total_nutrients.push((code.clone(), *lo, upper, hi.is_some())),
+                            None => total_nutrients.push((
+                                code.clone(),
+                                NutrientAcc {
+                                    lo,
+                                    hi: upper,
+                                    any_upper: hi.is_some(),
+                                },
+                            )),
                         }
                     }
                 }
@@ -736,16 +788,62 @@ impl<'a> Engine<'a> {
             weight_upper: any_weight_upper.then_some(total_weight_upper),
             nutrients: total_nutrients
                 .into_iter()
-                .map(|(code, value, upper, any)| WNutrientAmount {
+                .map(|(code, acc)| WNutrientAmount {
                     code,
-                    value,
-                    upper_value: any.then_some(upper),
+                    value: acc.lo,
+                    upper_value: acc.any_upper.then_some(acc.hi),
                 })
                 .collect(),
-            total_ingredients: n as u32,
+            total_ingredients: u32::try_from(n).unwrap_or(u32::MAX),
             missing_by_type: missing,
             rows: rows_out,
             baker_percentages,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::food_mappings::WProductInput;
+    use crate::WCostingIngredient;
+
+    fn product(id: &str, price: Option<f64>) -> WProductInput {
+        WProductInput {
+            id: id.to_string(),
+            price,
+            unit_mappings: vec![],
+            food: None,
+        }
+    }
+
+    fn input_with(ingredients: Vec<WCostingIngredient>) -> WCostingInput {
+        WCostingInput {
+            root_ids: vec![],
+            recipes: vec![],
+            ingredients,
+            nutrient_targets: vec![],
+            explain: false,
+        }
+    }
+
+    /// The multi-priced-product tripwire fires only when an ingredient carries
+    /// ≥2 *priced* products (the `each → dollar` collision); one priced product
+    /// (with any number of unpriced ones) is fine.
+    #[test]
+    fn multi_priced_tripwire_flags_only_collisions() {
+        let input = input_with(vec![
+            // 2 priced products → collision.
+            WCostingIngredient {
+                id: "collide".to_string(),
+                products: vec![product("a", Some(1.0)), product("b", Some(2.0))],
+            },
+            // 1 priced + 1 unpriced → no collision.
+            WCostingIngredient {
+                id: "fine".to_string(),
+                products: vec![product("c", Some(1.0)), product("d", None)],
+            },
+        ]);
+        assert_eq!(multi_priced_ingredients(&input), vec!["collide"]);
     }
 }

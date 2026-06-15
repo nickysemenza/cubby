@@ -197,27 +197,27 @@ impl From<ScrapedRecipe> for WScrapedRecipe {
 /// One span of measurement-aware instruction text (mirrors `Chunk`).
 #[derive(Tsify, Serialize, Deserialize)]
 #[serde(tag = "kind", content = "value")]
-pub enum RichItem {
+pub enum WRichItem {
     Text(String),
     Ing(String),
     Measure(Vec<WAmount>),
 }
 
-impl From<Chunk> for RichItem {
+impl From<Chunk> for WRichItem {
     fn from(c: Chunk) -> Self {
         match c {
-            Chunk::Text(t) => RichItem::Text(t),
-            Chunk::Ing(i) => RichItem::Ing(i),
-            Chunk::Measure(ms) => RichItem::Measure(ms.iter().map(WAmount::from).collect()),
+            Chunk::Text(t) => WRichItem::Text(t),
+            Chunk::Ing(i) => WRichItem::Ing(i),
+            Chunk::Measure(ms) => WRichItem::Measure(ms.iter().map(WAmount::from).collect()),
         }
     }
 }
 
-/// `RichItem[]` (`transparent` → `type RichItems = RichItem[]`).
+/// `WRichItem[]` (`transparent` → `type WRichItems = WRichItem[]`).
 #[derive(Tsify, Serialize, Deserialize)]
 #[tsify(into_wasm_abi)]
 #[serde(transparent)]
-pub struct RichItems(pub Vec<RichItem>);
+pub struct WRichItems(pub Vec<WRichItem>);
 
 mirror_enum! {
     /// Which output field a decomposition segment became (mirrors `Field`).
@@ -257,14 +257,21 @@ impl From<Decomposition> for WDecomposition {
     fn from(d: Decomposition) -> Self {
         // Walk the sorted, non-overlapping spans, emitting any gap text before
         // each labeled span, then the span itself, then the trailing gap.
+        //
+        // Slice via `get` (not `[..]`): the spans are upstream byte ranges from a
+        // parser pinned to a moving `branch = main`. A range that's out of bounds,
+        // overlapping (`start < prev_end`), or lands mid-UTF-8 would panic an
+        // index — `get` yields `None` and we skip that gap instead of trapping.
         let mut segments = Vec::new();
         let mut prev_end = 0usize;
         for span in &d.spans {
             if span.range.start > prev_end {
-                segments.push(WSegment {
-                    text: d.source[prev_end..span.range.start].to_string(),
-                    field: None,
-                });
+                if let Some(gap) = d.source.get(prev_end..span.range.start) {
+                    segments.push(WSegment {
+                        text: gap.to_string(),
+                        field: None,
+                    });
+                }
             }
             segments.push(WSegment {
                 text: span.text.clone(),
@@ -273,10 +280,12 @@ impl From<Decomposition> for WDecomposition {
             prev_end = span.range.end;
         }
         if prev_end < d.source.len() {
-            segments.push(WSegment {
-                text: d.source[prev_end..].to_string(),
-                field: None,
-            });
+            if let Some(tail) = d.source.get(prev_end..) {
+                segments.push(WSegment {
+                    text: tail.to_string(),
+                    field: None,
+                });
+            }
         }
         WDecomposition {
             source: d.source,
@@ -322,14 +331,17 @@ pub fn format_quantity(value: f64) -> String {
 /// up the bare-measurement parse when the grammar wants a trailing token.
 #[wasm_bindgen]
 pub fn parse_quantity(input: &str) -> Result<f64, String> {
+    // Trim once up front so both parse paths (bare-measurement and the faux-line
+    // fallback) see the same normalized input.
+    let trimmed = input.trim();
     let parser = ingredient::IngredientParser::new();
-    if let Ok(measures) = parser.parse_amount(input) {
+    if let Ok(measures) = parser.parse_amount(trimmed) {
         if let Some(m) = measures.first() {
             return Ok(m.value());
         }
     }
     parser
-        .from_str(&format!("{} x", input.trim()))
+        .from_str(&format!("{trimmed} x"))
         .amounts
         .first()
         .map(|m| m.value())
@@ -366,11 +378,11 @@ pub fn parse_yield(input: &str) -> WYieldResult {
 }
 
 #[wasm_bindgen]
-pub fn parse_rich_text(text: String, ingredient_names: Vec<String>) -> Result<RichItems, String> {
+pub fn parse_rich_text(text: String, ingredient_names: Vec<String>) -> Result<WRichItems, String> {
     RichParser::new(ingredient_names)
         .parse(&text)
         .map_err(|e| e.to_string())
-        .map(|chunks| RichItems(chunks.into_iter().map(RichItem::from).collect()))
+        .map(|chunks| WRichItems(chunks.into_iter().map(WRichItem::from).collect()))
 }
 
 // ---------------------------------------------------------------------------
@@ -480,6 +492,24 @@ mod tests {
         assert_eq!(
             notes.unparsed_digit, unparsed_digit,
             "unparsed_digit for: {line}"
+        );
+    }
+
+    /// `parse_scraped_recipe` drift tripwire: pins the `From<ScrapedRecipe>`
+    /// reshaping the TS import relies on — `name`/`url` wrapped in `Some`, sections
+    /// carried through, yield parsed. A scraper field rename would surface here
+    /// rather than silently producing an empty import.
+    #[test]
+    fn parse_scraped_recipe_reshapes_jsonld() {
+        let html = r#"<html><head><script type="application/ld+json">{"name":"Test Cake","recipeIngredient":["2 cups flour","1 cup sugar"],"recipeInstructions":"Mix. Bake.","recipeYield":"8 servings"}</script></head><body></body></html>"#;
+        let r = parse_scraped_recipe(html, "https://example.com/cake").expect("scrapes");
+        assert_eq!(r.name.as_deref(), Some("Test Cake"));
+        assert_eq!(r.url.as_deref(), Some("https://example.com/cake"));
+        assert!(
+            r.sections
+                .iter()
+                .any(|s| s.ingredients.iter().any(|i| i.contains("flour"))),
+            "ingredient lines carried through into sections"
         );
     }
 
@@ -613,6 +643,24 @@ mod tests {
         );
     }
 
+    /// Defensive: the spans are upstream byte ranges from a parser pinned to a
+    /// moving `branch = main`. A range landing mid-UTF-8 (here byte 1 of the
+    /// 2-byte 'é') must not panic the gap slice — pre-fix `source[0..1]` did.
+    #[test]
+    fn decomposition_tolerates_non_char_boundary_span() {
+        use ingredient::FieldSpan;
+        let w = WDecomposition::from(Decomposition {
+            source: "é".to_string(), // bytes [0xC3, 0xA9]
+            spans: vec![FieldSpan {
+                field: Field::Name,
+                range: 1..2, // starts mid-codepoint
+                text: "x".to_string(),
+            }],
+        });
+        // No panic; the mid-char gap is skipped, the span text still emitted.
+        assert!(w.segments.iter().any(|s| s.text == "x"));
+    }
+
     /// Empty-spans case (whole-line recognizer / name-only fallback): a single
     /// unlabeled segment equal to the whole source, so the TS side renders plain
     /// text with no special-casing.
@@ -662,9 +710,9 @@ mod tests {
             .0
             .iter()
             .map(|c| match c {
-                RichItem::Text(_) => "Text",
-                RichItem::Ing(_) => "Ing",
-                RichItem::Measure(_) => "Measure",
+                WRichItem::Text(_) => "Text",
+                WRichItem::Ing(_) => "Ing",
+                WRichItem::Measure(_) => "Measure",
             })
             .collect();
         assert_eq!(kinds, ["Text", "Ing", "Text", "Measure", "Text", "Ing"]);
