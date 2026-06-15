@@ -3,6 +3,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { LocationType } from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
 import type { CellContext, ColumnHelper } from "@tanstack/react-table";
+import { uniqBy } from "es-toolkit";
 import { Eye, ImageIcon, MoreHorizontal } from "lucide-react";
 import type { ReactNode } from "react";
 import { SpacedContainer } from "~/components/layout/spaced-container";
@@ -302,10 +303,7 @@ export function createEntityPillColumn<
       cell: (info) => {
         let items = info.getValue() ?? [];
         if (options?.dedupe) {
-          items = items.filter(
-            (item, i, arr) =>
-              arr.findIndex((other) => other.id === item.id) === i,
-          );
+          items = uniqBy(items, (item) => item.id);
         }
         return (
           <EntityPillLinkList

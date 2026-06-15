@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { partition, uniq } from "es-toolkit";
+import { partition, sumBy, uniq } from "es-toolkit";
 import { Calendar, DollarSign, ExternalLink, Hammer } from "lucide-react";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { Badge } from "~/components/ui/badge";
@@ -385,7 +385,7 @@ function SummaryCards({
 }) {
   const activeProjects = projects.filter((p) => p.status !== "Done").length;
   const activeTasks = tasks.filter((t) => t.status !== "Done").length;
-  const totalSpend = purchases.reduce((sum, p) => sum + (p.cost ?? 0), 0);
+  const totalSpend = sumBy(purchases, (p) => p.cost ?? 0);
 
   return (
     <div className="grid gap-4 sm:grid-cols-3">

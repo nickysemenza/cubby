@@ -1,4 +1,5 @@
 import { ResponsiveTreeMap } from "@nivo/treemap";
+import { sumBy } from "es-toolkit";
 import { ShoppingBag } from "lucide-react";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
@@ -43,8 +44,8 @@ export function CategoryTreemap({
       }))
       .sort(
         (a, b) =>
-          b.children.reduce((s, c) => s + (c.value ?? 0), 0) -
-          a.children.reduce((s, c) => s + (c.value ?? 0), 0),
+          sumBy(b.children, (c) => c.value ?? 0) -
+          sumBy(a.children, (c) => c.value ?? 0),
       );
 
     return { name: "root", children };

@@ -2,6 +2,7 @@ import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useMutation } from "@tanstack/react-query";
+import { sumBy } from "es-toolkit";
 import {
   ChevronDown,
   ChevronUp,
@@ -131,10 +132,8 @@ const EditorTally: FC<{ control: Control<RecipeFormValues> }> = ({
   // their objects ({url: undefined} vs null), which trips isDirty on load.
   const { dirtyFields } = useFormState({ control });
   const isDirty = Object.keys(dirtyFields).length > 0;
-  const ingredients =
-    sections?.reduce((acc, s) => acc + (s?.ingredients?.length ?? 0), 0) ?? 0;
-  const steps =
-    sections?.reduce((acc, s) => acc + (s?.instructions?.length ?? 0), 0) ?? 0;
+  const ingredients = sumBy(sections ?? [], (s) => s?.ingredients?.length ?? 0);
+  const steps = sumBy(sections ?? [], (s) => s?.instructions?.length ?? 0);
 
   return (
     <div className="flex min-w-0 items-center gap-2.5 font-mono text-2xs text-muted-foreground uppercase">

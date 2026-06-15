@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { sumBy } from "es-toolkit";
 import { ArrowLeft, Calendar, DollarSign, ExternalLink } from "lucide-react";
 import { useMemo } from "react";
 import { Badge } from "~/components/ui/badge";
@@ -61,7 +62,7 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
     );
   }
 
-  const totalCost = purchases.reduce((sum, p) => sum + (p.cost ?? 0), 0);
+  const totalCost = sumBy(purchases, (p) => p.cost ?? 0);
 
   return (
     <div className="space-y-4">

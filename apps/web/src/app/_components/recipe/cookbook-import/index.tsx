@@ -9,6 +9,7 @@ import {
   importRecipesSchema,
 } from "@cubby/schemas/import-recipe";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { clamp, sum } from "es-toolkit";
 import { Upload } from "lucide-react";
 import { useCallback, useEffect, useId, useState } from "react";
 import { toast } from "sonner";
@@ -51,7 +52,7 @@ async function mapLimit<T, R>(
     }
   };
   await Promise.all(
-    Array.from({ length: Math.min(Math.max(limit, 1), items.length) }, worker),
+    Array.from({ length: clamp(limit, 1, items.length) }, worker),
   );
   return results;
 }
@@ -393,13 +394,13 @@ export function CookbookImport({
       observer?.disconnect();
       const wallMs = performance.now() - tBook;
       const sorted = [...latencies].sort((a, b) => a - b);
-      const totalCallMs = latencies.reduce((a, b) => a + b, 0);
+      const totalCallMs = sum(latencies);
       const pct = (p: number) =>
         Math.round(
           sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))] ??
             0,
         );
-      const sumSizes = chunkSizes.reduce((a, b) => a + b, 0);
+      const sumSizes = sum(chunkSizes);
       console.info(`[cookbook-profile] ${deriveBookName(source)}`, {
         chunks: chunks.length,
         networkCalls: latencies.length,

@@ -6,6 +6,8 @@
  * already-extracted per-recipe rows and does the deviation math.
  */
 
+import { sum, sumBy } from "es-toolkit";
+
 /** Which amount the grid plots: scale-invariant baker's % or absolute grams. */
 export type CompareBasis = "baker" | "gram";
 
@@ -67,8 +69,8 @@ const DEV_EPSILON = 1e-6;
 export const computeStats = (xs: number[]): Stats | null => {
   if (xs.length === 0) return null;
   const n = xs.length;
-  const mean = xs.reduce((a, b) => a + b, 0) / n;
-  const variance = xs.reduce((a, b) => a + (b - mean) ** 2, 0) / n;
+  const mean = sum(xs) / n;
+  const variance = sumBy(xs, (b) => (b - mean) ** 2) / n;
   const std = Math.sqrt(variance);
   return {
     mean,

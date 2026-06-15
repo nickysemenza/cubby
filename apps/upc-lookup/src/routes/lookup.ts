@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { uniq } from "es-toolkit";
 import type { Env } from "../types";
 import { createDb } from "../db";
 import { getProducts } from "../db/products";
@@ -62,7 +63,7 @@ lookup.post("/batch", async (c) => {
   const db = createDb(c.env.DB);
 
   // Dedupe + drop malformed UPCs.
-  const upcs = [...new Set(parsed.data.upcs)].filter((u) => UPC_REGEX.test(u));
+  const upcs = uniq(parsed.data.upcs).filter((u) => UPC_REGEX.test(u));
 
   const found = await getProducts(db, upcs);
   const foundSet = new Set(found.map((p) => p.upc));

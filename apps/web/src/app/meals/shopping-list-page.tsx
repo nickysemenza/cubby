@@ -3,6 +3,7 @@ import type { ShoppingListItem } from "@cubby/schemas/meal";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { addDays, format, parseISO, startOfWeek } from "date-fns";
+import { sumBy } from "es-toolkit";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
@@ -54,9 +55,10 @@ export function ShoppingListPage() {
     if (!data) return [];
     return data.items
       .map((item) => {
-        const need = item.perMeal
-          .filter((c) => !excluded.has(c.mealId))
-          .reduce((sum, c) => sum + c.needValue, 0);
+        const need = sumBy(
+          item.perMeal.filter((c) => !excluded.has(c.mealId)),
+          (c) => c.needValue,
+        );
         const have = item.haveValue ?? 0;
         return {
           item,

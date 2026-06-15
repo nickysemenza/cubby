@@ -1,9 +1,9 @@
 import { and, desc, eq, inArray, like, or, sql } from "drizzle-orm";
+import { chunk, clamp } from "es-toolkit";
 import type { Database } from "./index";
 import { schema } from "./index";
 import type { Env } from "../types";
 import { deleteImage } from "../storage/images";
-import { chunk } from "../util/chunk";
 import type { Product, NewProduct } from "./schema";
 
 // D1 caps bound parameters per statement; chunk IN-lists well under the limit.
@@ -120,7 +120,7 @@ export async function listProducts(
   { q, source, page = 1, pageSize = 25 }: ListProductsOptions = {},
 ): Promise<ListProductsResult> {
   const safePage = Math.max(page, 1);
-  const safePageSize = Math.min(Math.max(pageSize, 1), 100);
+  const safePageSize = clamp(pageSize, 1, 100);
 
   const conditions = [];
   if (q && q.trim().length > 0) {

@@ -1,6 +1,7 @@
 import type { LocationId } from "@cubby/schemas/identifiers";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
+import { sumBy } from "es-toolkit";
 import { useMemo } from "react";
 import {
   calculateInventoryValuation,
@@ -111,10 +112,8 @@ export function useLocationHierarchy(
       const directPricingStatus =
         locationData?.pricingStatus ?? emptyPricingStatus();
 
-      const childrenCount =
-        children?.reduce((sum, c) => sum + c.totalCount, 0) ?? 0;
-      const childrenValuation =
-        children?.reduce((sum, c) => sum + c.totalValuation, 0) ?? 0;
+      const childrenCount = sumBy(children ?? [], (c) => c.totalCount);
+      const childrenValuation = sumBy(children ?? [], (c) => c.totalValuation);
       const childrenPricingStatuses =
         children?.map((c) => c.totalPricingStatus) ?? [];
 
@@ -147,11 +146,8 @@ export function useLocationHierarchy(
     const allNodes = data.map(transformNode);
     if (allNodes.length === 0) return null;
 
-    const totalCount = allNodes.reduce((sum, n) => sum + n.totalCount, 0);
-    const totalValuation = allNodes.reduce(
-      (sum, n) => sum + n.totalValuation,
-      0,
-    );
+    const totalCount = sumBy(allNodes, (n) => n.totalCount);
+    const totalValuation = sumBy(allNodes, (n) => n.totalValuation);
     const totalPricingStatus = mergePricingStatus(
       allNodes.map((n) => n.totalPricingStatus),
     );
