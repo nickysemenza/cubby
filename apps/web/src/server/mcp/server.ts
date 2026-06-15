@@ -1397,6 +1397,15 @@ function registerTools(server: McpServer) {
         .optional()
         .describe("Optional bias toward a USDA data type"),
       ...mcpPaginationParams,
+      // Smaller default than the shared param: USDA rows carry nutrient data, so
+      // fewer-per-page keeps payloads light. Override the description to match.
+      pageSize: z
+        .number()
+        .int()
+        .min(1)
+        .max(100)
+        .optional()
+        .describe("Items per page (default 25, max 100)"),
     },
     withErrorHandling(async (params, extra) => {
       const caller = getCaller(extra);
