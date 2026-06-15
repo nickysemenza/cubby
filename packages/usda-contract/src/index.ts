@@ -32,6 +32,10 @@ export const errorSchema = z.object({
 export const listFoodsQuery = z.object({
   nameFilter: z.string().optional(),
   dataTypeFilter: dataTypeEnum.optional(),
+  // Comma-joined data types for multi-type filtering (e.g. "generic" = all
+  // non-branded food types). A querystring is always a string, so this is the
+  // serialized form; the single `dataTypeFilter` takes precedence over it.
+  dataTypes: z.string().optional(),
   // Restrict to the four user-facing food types (branded / foundation / SR
   // legacy / survey), hiding the Foundation sampling pipeline + experimental
   // records. An explicit dataTypeFilter takes precedence. Union so the web

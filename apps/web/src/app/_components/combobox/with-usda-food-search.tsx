@@ -1,5 +1,6 @@
 import type { Confidence } from "@cubby/schemas/ai";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
+import type { DataType } from "@cubby/usda-schemas";
 import { useQuery } from "@tanstack/react-query";
 import { Sparkles } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
@@ -38,6 +39,17 @@ const CONFIDENCE_COLOR: Record<Confidence, string> = {
   low: "text-destructive",
 };
 
+// Search scope → data types. "Generic" is the non-branded reference foods
+// (Foundation / SR Legacy / Survey), which branded items otherwise out-rank;
+// "All" leaves it to foodsOnly. Undefined ⇒ no dataTypes filter.
+type SearchScope = "all" | "generic" | "branded";
+const SCOPE_DATA_TYPES: Record<SearchScope, DataType[] | undefined> = {
+  all: undefined,
+  generic: ["foundation_food", "sr_legacy_food", "survey_fndds_food"],
+  branded: ["branded_food"],
+};
+const SCOPES: SearchScope[] = ["all", "generic", "branded"];
+
 /**
  * Searches USDA foods by name and reports the picked food to the parent. Unlike
  * the entity comboboxes, this does NOT bind a value to a form field — selecting a
@@ -55,6 +67,7 @@ export function UsdaFoodSearchField({
   const api = useTRPC();
   const trpcClient = useTRPCClient();
   const [searchQuery, setSearchQuery] = useState("");
+  const [scope, setScope] = useState<SearchScope>("all");
   const [value, setValue] = useState<ComboboxItem | null>(null);
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [suggestion, setSuggestion] = useState<{
@@ -69,8 +82,13 @@ export function UsdaFoodSearchField({
   const { data, isLoading } = useQuery(
     api.usda.list.queryOptions({
       // foodsOnly hides the Foundation sampling pipeline + experimental records,
-      // which are provenance noise, not pickable foods.
-      filters: { nameFilter: effectiveQuery, foodsOnly: true },
+      // which are provenance noise, not pickable foods. dataTypes narrows further
+      // (e.g. "Generic" surfaces the reference foods branded items out-rank).
+      filters: {
+        nameFilter: effectiveQuery,
+        foodsOnly: true,
+        dataTypes: SCOPE_DATA_TYPES[scope],
+      },
       // Rank by FTS relevance so the best name match leads (not alphabetical).
       sort: { orderBy: "relevance", direction: "asc" },
       // Over-fetch: USDA returns many UPC-duplicate records, so we pull extra and
@@ -141,6 +159,20 @@ export function UsdaFoodSearchField({
   return (
     <Field>
       <FieldLabel>{label}</FieldLabel>
+      <div className="flex gap-1">
+        {SCOPES.map((s) => (
+          <Button
+            key={s}
+            type="button"
+            size="sm"
+            variant={scope === s ? "secondary" : "outline"}
+            className="h-6 px-2 text-xs capitalize"
+            onClick={() => setScope(s)}
+          >
+            {s}
+          </Button>
+        ))}
+      </div>
       <div className="flex items-center gap-2">
         <div className="flex-1">
           <DialogCompatibleCombobox

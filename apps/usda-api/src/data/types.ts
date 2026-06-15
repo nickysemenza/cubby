@@ -11,7 +11,9 @@ export type Counts = z.infer<typeof countsSchema>;
 export interface ListFoodsArgs {
   nameFilter?: string;
   dataTypeFilter?: DataType;
-  /** Restrict to the four user-facing food types; dataTypeFilter takes precedence. */
+  /** Comma-joined data types (multi-type filter). `dataTypeFilter` takes precedence. */
+  dataTypes?: string;
+  /** Restrict to the four user-facing food types; dataTypeFilter/dataTypes take precedence. */
   foodsOnly?: boolean;
   /** "relevance" orders by FTS bm25 rank (only meaningful with a nameFilter). */
   orderBy?: "description" | "data_type" | "fdc_id" | "relevance";

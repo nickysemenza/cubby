@@ -51,6 +51,7 @@ export class USDAService {
     sort: SortParams,
     pagination: PaginationParams,
     foodsOnly?: boolean,
+    dataTypes?: DataType[],
   ): Promise<{
     data: FoodSummaryWithLinkedProducts[];
     count: number;
@@ -61,6 +62,7 @@ export class USDAService {
       sort,
       pagination,
       foodsOnly,
+      dataTypes,
     );
 
     // Load linked products and unit mappings for each food
