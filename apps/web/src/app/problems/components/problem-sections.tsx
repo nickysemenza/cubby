@@ -480,6 +480,9 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     // DriftIndicator in the details — the card title is string-typed, so a colored
     // diff can't live there.
     renderItem: (item) => ({
+      // The same ingredient name can appear twice in one recipe, so key on the
+      // row id rather than the default storedName-recipeId composite.
+      key: item.recipeSectionIngredientId,
       title: item.storedName,
       subtitle: item.recipeName,
       details: [

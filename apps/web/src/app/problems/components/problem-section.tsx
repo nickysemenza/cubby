@@ -26,6 +26,12 @@ export type IconProp =
 
 /** What a section's `renderItem` returns for a single card. */
 export type RenderedProblemItem = {
+  /**
+   * Stable React key. Defaults to `title`-`route.params.id`, which collides
+   * when two cards share both (e.g. the same ingredient name twice in one
+   * recipe) — set this to a row-unique id in that case.
+   */
+  key?: string;
   title: string;
   subtitle?: string;
   badges?: ReactNode[];
@@ -115,6 +121,7 @@ export function ProblemSection<T>({
               <GridContainer cols="cards3">
                 {groupItems.map((item) => {
                   const {
+                    key,
                     title: itemTitle,
                     subtitle,
                     badges = [],
@@ -127,7 +134,7 @@ export function ProblemSection<T>({
 
                   return (
                     <MobileCard
-                      key={`${itemTitle}-${route.params.id}`}
+                      key={key ?? `${itemTitle}-${route.params.id}`}
                       title={itemTitle}
                       subtitle={subtitle}
                       imageSlot={imageSlot}
