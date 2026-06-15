@@ -157,7 +157,10 @@ export function UnitCoverageInlineFix({
           name={i.name}
           close={close}
           showUsda={showUsda}
-          showManual={!showUsda && !(has("weight") && has("volume"))}
+          // When USDA can't help, always offer the free-form conversion as the
+          // universal connector — it covers a missing volume *and* bridging an
+          // islanded each-price to grams (`1 each = N g`).
+          showManual={!showUsda}
           showCalories={!showUsda && !has("calories")}
           showPrice={!i.hasPrice}
           allowMarkNoUsda={showUsda}

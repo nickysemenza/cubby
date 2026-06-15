@@ -471,20 +471,17 @@ const findIngredientsWithPartialCoverage = async (
 
     const cov = conversionCoverage(effective, BASE_KINDS);
 
-    // The two actionable gaps: USDA fills weight/volume/calories, a price fills
-    // money. A scalar price (or any money-unit edge) counts as "has price" even
-    // though conversionCoverage won't light `money` from a bare "1 each = $X"
-    // (it isn't reachable from a measure). Flag only when one of these is
-    // genuinely addable, so every card maps to a concrete fix — and we don't
-    // nag count-priced foods (USDA-linked + priced) over money-from-measure.
-    const coversWVC =
-      cov.covered.has("weight") &&
-      cov.covered.has("volume") &&
-      cov.covered.has("calories");
+    // Flag any food whose effective graph can't reach all four base kinds. This
+    // includes the subtle case where a scalar/each price exists but isn't
+    // reachable from a measure (e.g. russet potato: `1 each = $1` islanded from
+    // the gram graph because no portion maps `each`→g) — money stays uncovered,
+    // and the fix is to connect the price to grams (a manual `1 each = N g`).
+    // `hasPrice` no longer exempts: a price you can't convert from a measure is
+    // still a gap.
     const hasPrice =
       p.price != null ||
       effective.some((m) => isMoneyUnit(m.a.unit) || isMoneyUnit(m.b.unit));
-    if (coversWVC && hasPrice) continue;
+    if (cov.tier === "complete") continue;
 
     problems.push({
       id: p.id,
