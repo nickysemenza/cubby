@@ -6,7 +6,7 @@ use std::{collections::HashSet, str::FromStr};
 use ingredient::{
     unit::{
         convert_measure_with_graph_explained, find_connected_components, is_valid, make_graph,
-        print_graph, ConversionStep, MeasureKind,
+        print_graph, ConversionStep, Measure, MeasureKind,
     },
     unit_mapping::{parse_unit_mapping as parse_unit_mapping_internal, ParsedUnitMapping},
 };
@@ -95,26 +95,35 @@ pub fn detect_unit_mapping_islands(mappings: WUnitMappings) -> WUnitIslands {
     WUnitIslands(find_connected_components(&make_graph(&mappings.to_pairs())))
 }
 
+/// The native core of `conv_amount_to_kind`: everything after the JsValue
+/// `target_kind` is deserialized to `kind_str`, so the from_str + convert + error
+/// logic is exercised under `cargo test` without a wasm runtime.
+///
+/// `from_str` is currently infallible (an unknown kind becomes `other:<s>`), so
+/// the `map_err` is dead today — but keep it: it returns an error rather than
+/// panicking if upstream ever makes the parse fallible. `measure_kind_from_str_contract`
+/// pins the current behavior and would flag that change.
+fn conv_to_kind_core(
+    pairs: &[(Measure, Measure)],
+    kind_str: &str,
+    measure: &Measure,
+) -> Result<WAmount, String> {
+    let kind =
+        MeasureKind::from_str(kind_str).map_err(|_| format!("Invalid amount kind: {kind_str}"))?;
+    measure
+        .convert_measure_via_mappings(kind.clone(), pairs)
+        .ok_or_else(|| format!("Failed to convert '{measure}' to '{kind}'"))
+        .map(WAmount::from)
+}
+
 #[wasm_bindgen]
 pub fn conv_amount_to_kind(
     mappings: WUnitMappings,
     target_kind_w: WAmountKind,
     amount_w: WAmount,
 ) -> Result<WAmount, String> {
-    let pairs = mappings.to_pairs();
-    let measure = amount_w.to_measure();
     let kind_str: String = from_js(target_kind_w, "amount kind")?;
-    // `from_str` is currently infallible (an unknown kind becomes `other:<s>`), so
-    // this map_err is dead today — but keep it: it returns an error rather than
-    // panicking if upstream ever makes the parse fallible. `measure_kind_from_str_contract`
-    // pins the current behavior and would flag that change.
-    let kind =
-        MeasureKind::from_str(&kind_str).map_err(|_| format!("Invalid amount kind: {kind_str}"))?;
-
-    measure
-        .convert_measure_via_mappings(kind.clone(), &pairs)
-        .ok_or_else(|| format!("Failed to convert '{measure}' to '{kind}'"))
-        .map(WAmount::from)
+    conv_to_kind_core(&mappings.to_pairs(), &kind_str, &amount_w.to_measure())
 }
 
 /// Convert an amount to a target kind AND return the conversion path traversed
@@ -282,6 +291,18 @@ mod tests {
             MeasureKind::from_str("not-a-kind").unwrap().to_str(),
             "other:not-a-kind"
         );
+    }
+
+    /// `conv_amount_to_kind`'s own logic (from_str + convert + the documented-dead
+    /// error branch), exercised natively via the extracted core: a reachable kind
+    /// converts; an unreachable one returns the public fn's error (not a panic).
+    #[test]
+    fn conv_to_kind_core_converts_and_errors() {
+        let pairs = WUnitMappings(vec![mapping(1.0, "cup", 120.0, "g")]).to_pairs();
+        let ok = conv_to_kind_core(&pairs, "weight", &Measure::new("cup", 2.0)).expect("cup→g");
+        assert_eq!((ok.unit.as_str(), ok.value), ("g", 240.0));
+        // No volume→money edge → the public fn's error path.
+        assert!(conv_to_kind_core(&pairs, "money", &Measure::new("cup", 2.0)).is_err());
     }
 
     /// `conv_amount_explain`'s happy path: the engine it wraps converts 2 cup → g

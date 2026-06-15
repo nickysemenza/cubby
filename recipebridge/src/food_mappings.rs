@@ -9,7 +9,10 @@
 //! Pure serde + parser code (no JsValue except the export shims) so
 //! `cargo test` runs natively.
 
-use ingredient::{from_str as parse_ingredient_str, unit::singular};
+use ingredient::{
+    from_str as parse_ingredient_str,
+    unit::{singular, Measure},
+};
 use serde::{Deserialize, Serialize};
 use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
@@ -213,9 +216,10 @@ pub fn mappings_from_food(food: &WFoodInput) -> Vec<WUnitMapping> {
 /// lands on the same `each` node, so two priced products on one ingredient yield
 /// two `each → dollar` edges the conversion picks between arbitrarily.
 fn price_mapping(price: Option<f64>, product_id: &str) -> Option<WUnitMapping> {
+    let price = price?;
     Some(WUnitMapping {
         a: amount(1.0, "each"),
-        b: amount(price?, "dollar"),
+        b: amount(price, "dollar"),
         source: Some("price".to_string()),
         source_metadata: Some(WSourceMetadata::Product {
             product_id: product_id.to_string(),
@@ -238,6 +242,27 @@ pub fn product_mappings(product: &WProductInput) -> Vec<WUnitMapping> {
                 .unwrap_or_default(),
         )
         .chain(price_mapping(product.price, &product.id))
+        .collect()
+}
+
+/// One product's conversion-graph edges as `(Measure, Measure)` pairs — what the
+/// costing + availability engines actually consume. Unlike `product_mappings`
+/// (which clones the stored rows to return owned `WUnitMapping`s for the public
+/// export), the stored rows are borrowed straight to pairs; only the food + price
+/// edges are synthesized. Same edges, same order as `product_mappings`.
+pub(crate) fn product_mapping_pairs(product: &WProductInput) -> Vec<(Measure, Measure)> {
+    let food = product
+        .food
+        .as_ref()
+        .map(mappings_from_food)
+        .unwrap_or_default();
+    let price = price_mapping(product.price, &product.id);
+    product
+        .unit_mappings
+        .iter()
+        .chain(food.iter())
+        .chain(price.iter())
+        .map(WUnitMapping::to_pair)
         .collect()
 }
 
@@ -336,6 +361,20 @@ mod tests {
         let price = convert(&mappings, Measure::new("whole", 2.0), MeasureKind::Money)
             .expect("whole→money path");
         assert!((price.value() - 79.98).abs() < 0.005);
+    }
+
+    /// The empty-household-word branch: a bare count with no trailing noun ("2")
+    /// parses to `2 ⟨whole⟩` with an empty name, so the relabel has no household
+    /// word to use and falls back to the generic "serving" unit (never the
+    /// price-bearing "whole").
+    #[test]
+    fn bare_count_serving_with_no_word_falls_back_to_serving() {
+        let mappings = product_mappings(&promix_product("2"));
+        let serving = mappings
+            .iter()
+            .find(|m| m.source.as_deref() == Some("USDA FDC serving"))
+            .expect("serving mapping present");
+        assert_eq!(serving.b.unit, "serving");
     }
 
     #[test]

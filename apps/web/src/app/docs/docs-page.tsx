@@ -37,7 +37,7 @@ interface RichTextInput {
 }
 
 function RichTextDemoInner({ data }: { data: RichTextInput }) {
-  // Parse the raw text into RichItems using WASM, then format for display
+  // Parse the raw text into WRichItems using WASM, then format for display
   const richItems = wasm.parse_rich_text(data.text, data.ingredientNames);
   return <div className="text-lg">{formatRichText(richItems)}</div>;
 }

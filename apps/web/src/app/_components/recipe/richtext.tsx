@@ -1,10 +1,10 @@
-import type { RichItem } from "@cubby/recipebridge";
+import type { WRichItem } from "@cubby/recipebridge";
 import { match } from "ts-pattern";
 import type { ReadonlyDeep } from "type-fest";
 import { INGREDIENT_PART_COLOR } from "~/lib/ingredient-part-colors";
 import { tryFormatAmount } from "../inventory/format-amount";
 
-export const formatRichText = (text: ReadonlyDeep<RichItem[]>) => {
+export const formatRichText = (text: ReadonlyDeep<WRichItem[]>) => {
   return text.map((t, x) =>
     match(t)
       .with({ kind: "Text" }, (t) => t.value)
@@ -12,7 +12,7 @@ export const formatRichText = (text: ReadonlyDeep<RichItem[]>) => {
         <span
           className="border-b-2 box-decoration-clone pb-px font-medium"
           style={{ borderBottomColor: INGREDIENT_PART_COLOR.name }}
-          // biome-ignore lint/suspicious/noArrayIndexKey: RichItem array has no stable IDs
+          // biome-ignore lint/suspicious/noArrayIndexKey: WRichItem array has no stable IDs
           key={x}
         >
           {t.value}
@@ -30,7 +30,7 @@ export const formatRichText = (text: ReadonlyDeep<RichItem[]>) => {
           <span
             className="border-b-2 box-decoration-clone pb-px font-medium"
             style={{ borderBottomColor: INGREDIENT_PART_COLOR.amount }}
-            // biome-ignore lint/suspicious/noArrayIndexKey: RichItem array has no stable IDs
+            // biome-ignore lint/suspicious/noArrayIndexKey: WRichItem array has no stable IDs
             key={x}
           >
             {tryFormatAmount(val)}
