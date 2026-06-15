@@ -4,6 +4,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { BookOpen, Plus, RefreshCw, Trash } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 import { IngredientUsagePanel } from "~/app/_components/ingredient/ingredient-usage-panel";
 import { RecipeList } from "~/app/recipes/recipelist";
 import { DeleteEntityDialog } from "~/components/dialogs/delete-entity-dialog";
@@ -13,11 +14,18 @@ import { Button } from "~/components/ui/button";
 import { Image } from "~/components/ui/image";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
+import { useTabParam } from "~/hooks/useTabParam";
 import { queryKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 
+const searchSchema = z.object({
+  // Active tab, deep-linkable. Default ("recipes") is omitted from the URL.
+  tab: z.enum(["recipes", "ingredients"]).optional().catch(undefined),
+});
+
 export const Route = createFileRoute("/_authenticated/cookbooks/$cookbookId")({
   ssr: false,
+  validateSearch: searchSchema,
   // Brand the path param at the boundary so `useParams().cookbookId` is a
   // `CookbookId` throughout (it's compared against branded ids and passed to
   // branded filters), instead of casting inside the component.
@@ -32,10 +40,15 @@ function CookbookDetailPage() {
   // Cookbooks are keyed by their stable FK id (rename-safe), so the route param
   // is the cookbook id; the display name comes from the browse-index query.
   const cookbookId = Route.useParams().cookbookId;
+  const { tab } = Route.useSearch();
   const api = useTRPC();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [showDelete, setShowDelete] = useState(false);
+
+  const tabs = useTabParam(tab, "recipes", (next) =>
+    navigate({ to: ".", search: (prev) => ({ ...prev, tab: next }) }),
+  );
 
   // Name + recipe count for the hero. Reuses the browse-index query, which is
   // already cached after navigating from /cookbooks; falls back gracefully.
@@ -167,11 +180,11 @@ function CookbookDetailPage() {
         </div>
       </div>
 
-      {/* TODO: sync the active tab to a `?tab=` search param (validateSearch +
-          controlled value/onValueChange) so it's deep-linkable and survives
-          reload — and lift this into a reusable URL-synced tabs helper as we
-          adopt the pattern on more detail pages. */}
-      <Tabs defaultValue="recipes" className="mt-2">
+      <Tabs
+        value={tabs.value}
+        onValueChange={tabs.onValueChange}
+        className="mt-2"
+      >
         <TabsList variant="line">
           <TabsTrigger value="recipes">Recipes</TabsTrigger>
           <TabsTrigger value="ingredients">Ingredients</TabsTrigger>
