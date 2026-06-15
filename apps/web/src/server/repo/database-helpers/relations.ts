@@ -219,7 +219,9 @@ export const relations = {
   meal: {
     // A meal with its planned recipes (each joined to its recipe summary, incl.
     // the persisted `totals` used for the cost rollup). Soft-deleted mealRecipe
-    // rows are filtered in dbMealToAPI (Drizzle can't WHERE inside `with`).
+    // rows are filtered in dbMealToAPI as a backstop; this relation can also adopt
+    // `where: notDeleted(mealRecipe)` (see the recipe relations above) — not yet
+    // annotated.
     full: {
       with: {
         recipes: {
