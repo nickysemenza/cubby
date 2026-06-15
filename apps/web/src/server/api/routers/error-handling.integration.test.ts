@@ -1,44 +1,28 @@
-import { unsafeUserId } from "@cubby/schemas/identifiers";
-import { buildTestDB } from "tooling/test-setup";
-import { beforeEach, describe, expect, it } from "vitest";
-import type { Database } from "~/server/db";
-import { createCallerFactory, createTestTRPCContext } from "../trpc";
+import { unsafeIngredientId } from "@cubby/schemas/identifiers";
+import { NONEXISTENT_UUID, withTestDb } from "tooling/test-setup";
+import { describe, expect, it } from "vitest";
+import { makeProductInput } from "~/server/repo/repo.fixtures";
+import { createTestCaller } from "../trpc";
 import { ingredientRouter } from "./ingredient";
 import { locationRouter } from "./location";
 import { productRouter } from "./product";
 import { recipeRouter } from "./recipe";
 
-const TEST_USER_ID = unsafeUserId("test-user-id");
-
 describe("API Error Handling", () => {
-  let db: Database;
-  let teardown: () => Promise<void>;
-  beforeEach(async () => {
-    ({ db, teardown } = await buildTestDB());
-
-    return teardown;
-  });
+  const ctx = withTestDb();
 
   describe("Product Router Error Cases", () => {
     it("should allow creating product with empty name (schema permits it)", async () => {
-      const createCaller = createCallerFactory(productRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(productRouter, ctx.db);
 
       // Empty name is actually allowed by the current schema
-      const result = await caller.create({
-        name: "", // Empty name is permitted
-        manufacturer: "Test Manufacturer",
-        model: "TEST-123",
-        upc: null,
-        ndb_number: null,
-        ingredientId: null,
-        pendingImageIds: [],
-        expectedQuantity: 1,
-      });
+      const result = await caller.create(
+        makeProductInput({
+          name: "", // Empty name is permitted
+          pendingImageIds: [],
+          expectedQuantity: 1,
+        }),
+      );
 
       expect(result).toBeDefined();
       expect(result.name).toBe("");
@@ -46,14 +30,9 @@ describe("API Error Handling", () => {
     });
 
     it("should throw error when updating non-existent product", async () => {
-      const createCaller = createCallerFactory(productRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(productRouter, ctx.db);
 
-      const nonExistentId = "00000000-0000-0000-0000-000000000000";
+      const nonExistentId = NONEXISTENT_UUID;
 
       await expect(
         caller.update({
@@ -64,23 +43,13 @@ describe("API Error Handling", () => {
     });
 
     it("should handle duplicate product constraint violations", async () => {
-      const createCaller = createCallerFactory(productRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(productRouter, ctx.db);
 
-      const productData = {
-        name: "Test Product",
-        manufacturer: "Test Manufacturer",
-        model: "TEST-123",
+      const productData = makeProductInput({
         upc: "123456789012",
-        ndb_number: null,
-        ingredientId: null,
         pendingImageIds: [],
         expectedQuantity: 1,
-      };
+      });
 
       // Create first product
       await caller.create(productData);
@@ -90,37 +59,24 @@ describe("API Error Handling", () => {
     });
 
     it("should handle invalid foreign key relationships", async () => {
-      const createCaller = createCallerFactory(productRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(productRouter, ctx.db);
 
       // Try to create product with non-existent ingredient ID
       await expect(
-        caller.create({
-          name: "Test Product",
-          manufacturer: "Test Manufacturer",
-          model: "TEST-123",
-          upc: null,
-          ndb_number: null,
-          ingredientId: "00000000-0000-0000-0000-000000000000", // Non-existent
-          pendingImageIds: [],
-          expectedQuantity: 1,
-        }),
+        caller.create(
+          makeProductInput({
+            ingredientId: unsafeIngredientId(NONEXISTENT_UUID), // Non-existent
+            pendingImageIds: [],
+            expectedQuantity: 1,
+          }),
+        ),
       ).rejects.toThrow();
     });
   });
 
   describe("Recipe Router Error Cases", () => {
     it("should allow creating recipe with empty name (schema permits it)", async () => {
-      const createCaller = createCallerFactory(recipeRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(recipeRouter, ctx.db);
 
       // Empty name is actually allowed by the current schema
       const result = await caller.create({
@@ -135,14 +91,9 @@ describe("API Error Handling", () => {
     });
 
     it("should throw error when updating non-existent recipe", async () => {
-      const createCaller = createCallerFactory(recipeRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(recipeRouter, ctx.db);
 
-      const nonExistentId = "00000000-0000-0000-0000-000000000000";
+      const nonExistentId = NONEXISTENT_UUID;
 
       await expect(
         caller.update({
@@ -153,12 +104,7 @@ describe("API Error Handling", () => {
     });
 
     it("should handle recipe with invalid ingredient references", async () => {
-      const createCaller = createCallerFactory(recipeRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(recipeRouter, ctx.db);
 
       // Try to create recipe with non-existent ingredient
       await expect(
@@ -171,7 +117,7 @@ describe("API Error Handling", () => {
                 {
                   type: "ingredient" as const,
                   recipeId: null,
-                  ingredientId: "00000000-0000-0000-0000-000000000000", // Non-existent
+                  ingredientId: NONEXISTENT_UUID, // Non-existent
                   amounts: [{ value: 1, unit: "cup" }],
                 },
               ],
@@ -185,12 +131,7 @@ describe("API Error Handling", () => {
     });
 
     it("should handle recipe with invalid recipe references", async () => {
-      const createCaller = createCallerFactory(recipeRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(recipeRouter, ctx.db);
 
       // Try to create recipe referencing non-existent sub-recipe
       await expect(
@@ -202,7 +143,7 @@ describe("API Error Handling", () => {
               ingredients: [
                 {
                   type: "recipe" as const,
-                  recipeId: "00000000-0000-0000-0000-000000000000", // Non-existent
+                  recipeId: NONEXISTENT_UUID, // Non-existent
                   ingredientId: null,
                   amounts: [{ value: 1, unit: "serving" }],
                 },
@@ -219,12 +160,7 @@ describe("API Error Handling", () => {
 
   describe("Ingredient Router Error Cases", () => {
     it("should allow creating ingredient with empty name (schema permits it)", async () => {
-      const createCaller = createCallerFactory(ingredientRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(ingredientRouter, ctx.db);
 
       // Empty name is actually allowed by the current schema
       const result = await caller.create({
@@ -237,12 +173,7 @@ describe("API Error Handling", () => {
     });
 
     it("should handle duplicate ingredient names", async () => {
-      const createCaller = createCallerFactory(ingredientRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(ingredientRouter, ctx.db);
 
       const ingredientData = {
         name: "Flour",
@@ -257,14 +188,9 @@ describe("API Error Handling", () => {
     });
 
     it("should throw error when updating non-existent ingredient", async () => {
-      const createCaller = createCallerFactory(ingredientRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(ingredientRouter, ctx.db);
 
-      const nonExistentId = "00000000-0000-0000-0000-000000000000";
+      const nonExistentId = NONEXISTENT_UUID;
 
       await expect(
         caller.update({
@@ -277,12 +203,7 @@ describe("API Error Handling", () => {
 
   describe("Location Router Error Cases", () => {
     it("should allow creating location with empty name (schema permits it)", async () => {
-      const createCaller = createCallerFactory(locationRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(locationRouter, ctx.db);
 
       // Empty names are allowed per schema
       const result = await caller.create({
@@ -297,18 +218,13 @@ describe("API Error Handling", () => {
     });
 
     it("should create location with non-existent parent (no FK constraint)", async () => {
-      const createCaller = createCallerFactory(locationRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(locationRouter, ctx.db);
 
       // Location with non-existent parent is created (no FK constraint on parentId)
       const result = await caller.create({
         name: "Child Location",
         type: "shelf",
-        parentId: "00000000-0000-0000-0000-000000000000", // Non-existent parent
+        parentId: NONEXISTENT_UUID, // Non-existent parent
         pendingImageIds: [],
       });
 
@@ -318,12 +234,7 @@ describe("API Error Handling", () => {
     });
 
     it("should throw error when creating circular parent-child relationship", async () => {
-      const createCaller = createCallerFactory(locationRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(locationRouter, ctx.db);
 
       // Create parent location (using valid location type)
       const parent = await caller.create({
@@ -353,12 +264,7 @@ describe("API Error Handling", () => {
 
   describe("Input Validation Error Cases", () => {
     it("should validate pagination parameters at database level", async () => {
-      const createCaller = createCallerFactory(productRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(productRouter, ctx.db);
 
       // Test that negative pageIndex is caught by validation
       await expect(
@@ -381,12 +287,7 @@ describe("API Error Handling", () => {
     });
 
     it("should handle sort parameters gracefully", async () => {
-      const createCaller = createCallerFactory(productRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(productRouter, ctx.db);
 
       // Test valid sort parameters work
       const result1 = await caller.list({
@@ -406,37 +307,24 @@ describe("API Error Handling", () => {
     });
 
     it("should validate UPC format", async () => {
-      const createCaller = createCallerFactory(productRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(productRouter, ctx.db);
 
       // Try to create product with invalid UPC format
       await expect(
-        caller.create({
-          name: "Test Product",
-          manufacturer: "Test Manufacturer",
-          model: "TEST-123",
-          upc: "invalid-upc-format", // Should be numeric
-          ndb_number: null,
-          ingredientId: null,
-          pendingImageIds: [],
-          expectedQuantity: 1,
-        }),
+        caller.create(
+          makeProductInput({
+            upc: "invalid-upc-format", // Should be numeric
+            pendingImageIds: [],
+            expectedQuantity: 1,
+          }),
+        ),
       ).rejects.toThrow();
     });
   });
 
   describe("Database Constraint Violations", () => {
     it("should handle database transaction failures gracefully", async () => {
-      const createCaller = createCallerFactory(recipeRouter);
-      const caller = createCaller(
-        createTestTRPCContext(db, {
-          auth: { userId: TEST_USER_ID },
-        }),
-      );
+      const caller = createTestCaller(recipeRouter, ctx.db);
 
       // Create a recipe that should cause a database constraint violation
       // by trying to create multiple sections with ingredients that reference
@@ -451,7 +339,7 @@ describe("API Error Handling", () => {
                 {
                   type: "ingredient" as const,
                   recipeId: null,
-                  ingredientId: "00000000-0000-0000-0000-000000000000",
+                  ingredientId: NONEXISTENT_UUID,
                   amounts: [{ value: 1, unit: "cup" }],
                 },
               ],
@@ -463,7 +351,7 @@ describe("API Error Handling", () => {
                 {
                   type: "ingredient" as const,
                   recipeId: null,
-                  ingredientId: "00000000-0000-0000-0000-000000000000",
+                  ingredientId: NONEXISTENT_UUID,
                   amounts: [{ value: 2, unit: "tbsp" }],
                 },
               ],

@@ -1,16 +1,10 @@
-import { beforeAll, describe, expect, it } from "vitest";
-import { ensureWasm } from "~/lib/wasm";
+import { describe, expect, it } from "vitest";
 import {
   computeInventoryValuation,
   isCanonicalPriceMapping,
   isMoneyUnit,
   truncateToTwoDecimals,
 } from "./price-mapping-utils";
-
-// Initialize WASM before tests run
-beforeAll(async () => {
-  await ensureWasm();
-});
 
 describe("isMoneyUnit", () => {
   const CASES: { unit: string; expected: boolean }[] = [

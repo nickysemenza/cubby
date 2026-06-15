@@ -1,9 +1,7 @@
-import type { ActorContext } from "@cubby/schemas/context";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import { asc, eq } from "drizzle-orm";
-import { buildTestDB } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
-import type { Database } from "~/server/db";
 import {
   recipe,
   recipeSection,
@@ -18,22 +16,16 @@ import {
 } from "./repo.fixtures";
 
 describe("upsertRecipe", () => {
-  let db: Database;
-  let actor: ActorContext;
-  let teardown: () => Promise<void>;
+  const ctx = withTestDb();
 
   let testIngredients: { id: string; name: string }[] = [];
   beforeEach(async () => {
-    ({ db, actor, teardown } = await buildTestDB());
-
     // Create the required ingredients for the tests and store their IDs
     testIngredients = await createIngredients(
-      db,
+      ctx.db,
       ["Test Ingredient 1", "Test Ingredient 2", "Test Ingredient 3"],
-      actor,
+      ctx.actor,
     );
-
-    return teardown;
   });
 
   const getMockRecipeInput = (): RecipeCreateInput =>
@@ -86,12 +78,12 @@ describe("upsertRecipe", () => {
     });
 
   it("creates a new recipe when it doesn't exist", async () => {
-    const result = await upsertRecipe(getMockRecipeInput(), db, actor);
+    const result = await upsertRecipe(getMockRecipeInput(), ctx.db, ctx.actor);
 
     expect(result.id).toBeDefined();
 
     // Verify recipe was created
-    const foundRecipe = await getDb(db).query.recipe.findFirst({
+    const foundRecipe = await getDb(ctx.db).query.recipe.findFirst({
       where: eq(recipe.name, "Test Recipe Direct"),
       with: {
         sections: {
@@ -112,16 +104,24 @@ describe("upsertRecipe", () => {
 
   it("updates an existing recipe when it already exists", async () => {
     // First, create the recipe
-    const firstResult = await upsertRecipe(getMockRecipeInput(), db, actor);
+    const firstResult = await upsertRecipe(
+      getMockRecipeInput(),
+      ctx.db,
+      ctx.actor,
+    );
 
     // Now update with different data
-    const secondResult = await upsertRecipe(getMockRecipeUpdated(), db, actor);
+    const secondResult = await upsertRecipe(
+      getMockRecipeUpdated(),
+      ctx.db,
+      ctx.actor,
+    );
 
     // Should return same recipe ID (updated, not created new)
     expect(secondResult.id).toBe(firstResult.id);
 
     // Verify the recipe was updated
-    const updatedRecipe = await getDb(db).query.recipe.findFirst({
+    const updatedRecipe = await getDb(ctx.db).query.recipe.findFirst({
       where: eq(recipe.name, "Test Recipe Direct"),
       with: {
         sections: {
@@ -150,16 +150,28 @@ describe("upsertRecipe", () => {
 
   it("can be called multiple times without conflicts", async () => {
     // This tests that the function is idempotent
-    const firstRun = await upsertRecipe(getMockRecipeInput(), db, actor);
-    const secondRun = await upsertRecipe(getMockRecipeInput(), db, actor); // Same input
-    const thirdRun = await upsertRecipe(getMockRecipeInput(), db, actor); // Same input again
+    const firstRun = await upsertRecipe(
+      getMockRecipeInput(),
+      ctx.db,
+      ctx.actor,
+    );
+    const secondRun = await upsertRecipe(
+      getMockRecipeInput(),
+      ctx.db,
+      ctx.actor,
+    ); // Same input
+    const thirdRun = await upsertRecipe(
+      getMockRecipeInput(),
+      ctx.db,
+      ctx.actor,
+    ); // Same input again
 
     // All should return the same recipe ID
     expect(secondRun.id).toBe(firstRun.id);
     expect(thirdRun.id).toBe(firstRun.id);
 
     // Should only be one recipe in the database
-    const allRecipes = await getDb(db).query.recipe.findMany({
+    const allRecipes = await getDb(ctx.db).query.recipe.findMany({
       where: eq(recipe.name, "Test Recipe Direct"),
     });
 
@@ -182,7 +194,7 @@ describe("upsertRecipe", () => {
     });
 
     let winnerId = "";
-    const winner = getDb(db).transaction(async (tx) => {
+    const winner = getDb(ctx.db).transaction(async (tx) => {
       const [row] = await tx
         .insert(recipe)
         .values({
@@ -201,8 +213,8 @@ describe("upsertRecipe", () => {
 
     const loser = upsertRecipe(
       makeRecipeInput({ name, url: "https://example.com/loser" }),
-      db,
-      actor,
+      ctx.db,
+      ctx.actor,
     );
 
     // Give the upsert time to reach its blocked INSERT, then commit the winner.
@@ -213,7 +225,7 @@ describe("upsertRecipe", () => {
 
     // The upsert recovered onto the winner's row — no throw, no duplicate.
     expect(result.id).toBe(winnerId);
-    const allRecipes = await getDb(db).query.recipe.findMany({
+    const allRecipes = await getDb(ctx.db).query.recipe.findMany({
       where: eq(recipe.name, name),
     });
     expect(allRecipes).toHaveLength(1);
@@ -230,9 +242,9 @@ describe("upsertRecipe", () => {
       ],
     });
 
-    await upsertRecipe(recipeNoUrl, db, actor);
+    await upsertRecipe(recipeNoUrl, ctx.db, ctx.actor);
 
-    const foundRecipe = await getDb(db).query.recipe.findFirst({
+    const foundRecipe = await getDb(ctx.db).query.recipe.findFirst({
       where: eq(recipe.name, "Manual Recipe"),
     });
 
@@ -262,8 +274,8 @@ describe("upsertRecipe", () => {
       ],
     });
 
-    const { id } = await upsertRecipe(input, db, actor);
-    const sections = await getDb(db).query.recipeSection.findMany({
+    const { id } = await upsertRecipe(input, ctx.db, ctx.actor);
+    const sections = await getDb(ctx.db).query.recipeSection.findMany({
       where: eq(recipeSection.recipeId, id),
       orderBy: [asc(recipeSection.sortOrder)],
       with: { ingredients: true },
@@ -274,7 +286,7 @@ describe("upsertRecipe", () => {
     expect(sections[1]!.instructions).toEqual([{ text: "Bake until set" }]);
     expect(sections[1]!.ingredients).toEqual([]);
 
-    const [row] = await getDb(db)
+    const [row] = await getDb(ctx.db)
       .select()
       .from(recipeSectionIngredient)
       .where(eq(recipeSectionIngredient.recipeSectionId, sections[0]!.id));

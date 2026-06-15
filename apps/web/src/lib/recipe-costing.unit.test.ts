@@ -1,6 +1,6 @@
 import type { Amount } from "@cubby/schemas/codec";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
-import { beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   computeRecipeCosting,
   convertAmountToPrice,
@@ -17,94 +17,90 @@ import {
   makeSubRecipe,
   makeSubRecipeEntry,
 } from "~/lib/recipe-costing.fixtures";
-import { ensureWasm } from "~/lib/wasm";
 
-// Initialize WASM before all tests
-beforeAll(async () => {
-  await ensureWasm();
+// Build a single UnitMapping with the canonical test source/metadata, matching
+// the object shape used throughout this file ({ a, b, source, sourceMetadata }).
+const m = (
+  aVal: number,
+  aUnit: string,
+  bVal: number,
+  bUnit: string,
+): UnitMapping => ({
+  a: { value: aVal, unit: aUnit },
+  b: { value: bVal, unit: bUnit },
+  source: "test",
+  sourceMetadata: { type: "manual" },
 });
 
 describe("convertAmountToPrice", () => {
-  it("successfully converts amount to price", () => {
-    // Arrange
-    const amount: Amount = { value: 1, unit: "Pound" };
-    const mappings: UnitMapping[] = [
-      {
-        a: { value: 1, unit: "Pound" },
-        b: { value: 2.99, unit: "Dollar" },
-        source: "test",
-        sourceMetadata: { type: "manual" },
-      },
-    ];
-
-    // Act
+  // Single-mapping conversions that succeed: assert the exact value + unit.
+  it.each([
+    {
+      name: "successfully converts amount to price",
+      amount: { value: 1, unit: "Pound" } satisfies Amount,
+      mappings: [m(1, "Pound", 2.99, "Dollar")],
+      expectedValue: 2.99,
+    },
+    {
+      name: "handles case-insensitive unit names",
+      // WASM actually handles case-insensitive unit matching
+      amount: { value: 1, unit: "CUP" } satisfies Amount, // Uppercase vs lowercase
+      mappings: [m(1, "cup", 2.99, "dollar")],
+      expectedValue: 2.99,
+    },
+    {
+      name: "handles custom unit names",
+      // WASM handles custom unit names as "Other" type and can convert them
+      amount: { value: 1, unit: "invalid_unit_xyz" } satisfies Amount,
+      mappings: [m(1, "invalid_unit_xyz", 2.99, "dollar")],
+      expectedValue: 2.99,
+    },
+  ])("$name", ({ amount, mappings, expectedValue }) => {
     const result = convertAmountToPrice(amount, mappings);
 
-    // Assert
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
+      expect(result.value.value).toBe(expectedValue);
       expect(result.value.unit).toBe("$");
-      expect(result.value.value).toBe(2.99);
     }
   });
 
-  it("handles error when conversion fails", () => {
-    // Arrange
-    const amount: Amount = { value: 1, unit: "InvalidUnit" };
-    const mappings: UnitMapping[] = [];
-
-    // Act
+  // Conversions that fail: assert the error message substring.
+  it.each([
+    {
+      name: "handles error when conversion fails",
+      amount: { value: 1, unit: "InvalidUnit" } satisfies Amount,
+      mappings: [] as UnitMapping[],
+      errorContains: "Error converting to money:",
+    },
+    {
+      name: "handles empty mappings array",
+      amount: { value: 1, unit: "cup" } satisfies Amount,
+      mappings: [] as UnitMapping[], // Empty mappings
+      errorContains: "Failed to convert",
+    },
+    {
+      name: "handles incompatible unit mappings",
+      amount: { value: 1, unit: "cup" } satisfies Amount,
+      // Length units - no path to money
+      mappings: [m(1, "meter", 100, "centimeter")],
+      errorContains: "Failed to convert",
+    },
+  ])("$name", ({ amount, mappings, errorContains }) => {
     const result = convertAmountToPrice(amount, mappings);
 
-    // Assert
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
-      expect(result.error).toContain("Error converting to money:");
+      expect(result.error).toContain(errorContains);
     }
   });
 });
 
 describe("WASM Error Scenarios", () => {
-  it("handles empty mappings array", () => {
-    const amount: Amount = { value: 1, unit: "cup" };
-    const mappings: UnitMapping[] = []; // Empty mappings
-
-    const result = convertAmountToPrice(amount, mappings);
-
-    expect(result.isErr()).toBe(true);
-    if (result.isErr()) {
-      expect(result.error).toContain("Failed to convert");
-    }
-  });
-
-  it("handles incompatible unit mappings", () => {
-    const amount: Amount = { value: 1, unit: "cup" };
-    const mappings: UnitMapping[] = [
-      {
-        a: { value: 1, unit: "meter" }, // Length unit
-        b: { value: 100, unit: "centimeter" }, // Length unit - no path to money
-        source: "test",
-        sourceMetadata: { type: "manual" },
-      },
-    ];
-
-    const result = convertAmountToPrice(amount, mappings);
-
-    expect(result.isErr()).toBe(true);
-    if (result.isErr()) {
-      expect(result.error).toContain("Failed to convert");
-    }
-  });
-
   it("handles zero values in mappings", () => {
     const amount: Amount = { value: 1, unit: "cup" };
     const mappings: UnitMapping[] = [
-      {
-        a: { value: 0, unit: "cup" }, // Zero value
-        b: { value: 5.99, unit: "dollar" },
-        source: "test",
-        sourceMetadata: { type: "manual" },
-      },
+      m(0, "cup", 5.99, "dollar"), // Zero value
     ];
 
     const result = convertAmountToPrice(amount, mappings);
@@ -121,14 +117,7 @@ describe("WASM Error Scenarios", () => {
 
   it("handles very large values", () => {
     const amount: Amount = { value: 1e10, unit: "cup" };
-    const mappings: UnitMapping[] = [
-      {
-        a: { value: 1, unit: "cup" },
-        b: { value: 2.99, unit: "dollar" },
-        source: "test",
-        sourceMetadata: { type: "manual" },
-      },
-    ];
+    const mappings: UnitMapping[] = [m(1, "cup", 2.99, "dollar")];
 
     const result = convertAmountToPrice(amount, mappings);
 
@@ -144,14 +133,7 @@ describe("WASM Error Scenarios", () => {
 
   it("handles very small values", () => {
     const amount: Amount = { value: 1e-10, unit: "cup" };
-    const mappings: UnitMapping[] = [
-      {
-        a: { value: 1, unit: "cup" },
-        b: { value: 2.99, unit: "dollar" },
-        source: "test",
-        sourceMetadata: { type: "manual" },
-      },
-    ];
+    const mappings: UnitMapping[] = [m(1, "cup", 2.99, "dollar")];
 
     const result = convertAmountToPrice(amount, mappings);
 
@@ -163,48 +145,12 @@ describe("WASM Error Scenarios", () => {
     }
   });
 
-  it("handles case-insensitive unit names", () => {
-    const amount: Amount = { value: 1, unit: "CUP" }; // Uppercase
-    const mappings: UnitMapping[] = [
-      {
-        a: { value: 1, unit: "cup" }, // Lowercase
-        b: { value: 2.99, unit: "dollar" },
-        source: "test",
-        sourceMetadata: { type: "manual" },
-      },
-    ];
-
-    const result = convertAmountToPrice(amount, mappings);
-
-    // WASM actually handles case-insensitive unit matching
-    expect(result.isOk()).toBe(true);
-    if (result.isOk()) {
-      expect(result.value.value).toBe(2.99);
-      expect(result.value.unit).toBe("$");
-    }
-  });
-
   it("handles chained conversions", () => {
     const amount: Amount = { value: 1, unit: "cup" };
     const mappings: UnitMapping[] = [
-      {
-        a: { value: 1, unit: "cup" },
-        b: { value: 240, unit: "ml" }, // Volume to volume
-        source: "test",
-        sourceMetadata: { type: "manual" },
-      },
-      {
-        a: { value: 1000, unit: "ml" },
-        b: { value: 1, unit: "liter" }, // Volume to volume
-        source: "test",
-        sourceMetadata: { type: "manual" },
-      },
-      {
-        a: { value: 1, unit: "liter" },
-        b: { value: 3.99, unit: "dollar" }, // Volume to price
-        source: "test",
-        sourceMetadata: { type: "manual" },
-      },
+      m(1, "cup", 240, "ml"), // Volume to volume
+      m(1000, "ml", 1, "liter"), // Volume to volume
+      m(1, "liter", 3.99, "dollar"), // Volume to price
     ];
 
     const result = convertAmountToPrice(amount, mappings);
@@ -222,18 +168,8 @@ describe("WASM Error Scenarios", () => {
   it("handles circular mapping references", () => {
     const amount: Amount = { value: 1, unit: "cup" };
     const mappings: UnitMapping[] = [
-      {
-        a: { value: 1, unit: "cup" },
-        b: { value: 240, unit: "ml" },
-        source: "test",
-        sourceMetadata: { type: "manual" },
-      },
-      {
-        a: { value: 240, unit: "ml" },
-        b: { value: 1, unit: "cup" }, // Circular reference
-        source: "test",
-        sourceMetadata: { type: "manual" },
-      },
+      m(1, "cup", 240, "ml"),
+      m(240, "ml", 1, "cup"), // Circular reference
     ];
 
     const result = convertAmountToPrice(amount, mappings);
@@ -242,27 +178,6 @@ describe("WASM Error Scenarios", () => {
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
       expect(result.error).toContain("Failed to convert");
-    }
-  });
-
-  it("handles custom unit names", () => {
-    const amount: Amount = { value: 1, unit: "invalid_unit_xyz" };
-    const mappings: UnitMapping[] = [
-      {
-        a: { value: 1, unit: "invalid_unit_xyz" },
-        b: { value: 2.99, unit: "dollar" },
-        source: "test",
-        sourceMetadata: { type: "manual" },
-      },
-    ];
-
-    const result = convertAmountToPrice(amount, mappings);
-
-    // WASM handles custom unit names as "Other" type and can convert them
-    expect(result.isOk()).toBe(true);
-    if (result.isOk()) {
-      expect(result.value.value).toBe(2.99);
-      expect(result.value.unit).toBe("$");
     }
   });
 });

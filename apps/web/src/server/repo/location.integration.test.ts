@@ -1,29 +1,34 @@
 import { count, eq } from "drizzle-orm";
-import { buildTestDB } from "tooling/test-setup";
-import { beforeEach, describe, expect, it } from "vitest";
-import type { Database } from "~/server/db";
+import { withTestDb } from "tooling/test-setup";
+import { describe, expect, it } from "vitest";
 import { location } from "~/server/db/schema";
 import { getDb } from "./database-helpers";
 import { findOrCreateLocationByName } from "./location";
 
 describe("findOrCreateLocationByName", () => {
-  let db: Database;
-  let teardown: () => Promise<void>;
-
-  beforeEach(async () => {
-    ({ db, teardown } = await buildTestDB());
-    return teardown;
-  });
+  const ctx = withTestDb();
 
   it("returns the existing location on a repeat call (no duplicate)", async () => {
-    const first = await findOrCreateLocationByName(db, "Pantry", null, "room");
+    const first = await findOrCreateLocationByName(
+      ctx.db,
+      "Pantry",
+      null,
+      "room",
+    );
     expect(first.created).toBe(true);
 
-    const second = await findOrCreateLocationByName(db, "Pantry", null, "room");
+    const second = await findOrCreateLocationByName(
+      ctx.db,
+      "Pantry",
+      null,
+      "room",
+    );
     expect(second.created).toBe(false);
     expect(second.locationId).toEqual(first.locationId);
 
-    const [result] = await getDb(db).select({ count: count() }).from(location);
+    const [result] = await getDb(ctx.db)
+      .select({ count: count() })
+      .from(location);
     expect(result!.count).toEqual(1);
   });
 
@@ -42,7 +47,7 @@ describe("findOrCreateLocationByName", () => {
     });
 
     let winnerId = "";
-    const winner = getDb(db).transaction(async (tx) => {
+    const winner = getDb(ctx.db).transaction(async (tx) => {
       const [row] = await tx
         .insert(location)
         .values({ name, type: "room", shortcode: "LRACE1" })
@@ -54,7 +59,7 @@ describe("findOrCreateLocationByName", () => {
     // Let the winner reach (and hold) its uncommitted INSERT.
     await new Promise((r) => setTimeout(r, 100));
 
-    const loser = findOrCreateLocationByName(db, name, null, "room");
+    const loser = findOrCreateLocationByName(ctx.db, name, null, "room");
 
     // Give the call time to reach its blocked INSERT, then commit the winner.
     await new Promise((r) => setTimeout(r, 100));
@@ -66,7 +71,7 @@ describe("findOrCreateLocationByName", () => {
     expect(result.created).toBe(false);
     expect(result.locationId).toEqual(winnerId);
 
-    const [countRow] = await getDb(db)
+    const [countRow] = await getDb(ctx.db)
       .select({ count: count() })
       .from(location)
       .where(eq(location.name, name));

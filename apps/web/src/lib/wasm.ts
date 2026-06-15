@@ -34,9 +34,6 @@ type ImmutableWasm<T> = {
 // Load WASM at module initialization (Vite handles top-level await)
 const instance: WasmType = await import("@cubby/recipebridge");
 
-/** For tests - now a no-op since WASM loads at module init */
-export const ensureWasm = (): Promise<void> => Promise.resolve();
-
 /**
  * Warn when a single synchronous WASM call exceeds one 60fps frame
  * (~16ms) and thus janks the UI. Set above normal-but-slow calls (parse_rich_text

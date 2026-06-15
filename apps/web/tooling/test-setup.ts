@@ -15,6 +15,7 @@ import { pushSchema } from "drizzle-kit/api";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
+import { beforeEach } from "vitest";
 import type { Database } from "../src/server/db/database";
 import * as schema from "../src/server/db/schema";
 
@@ -24,6 +25,22 @@ let hash = "";
 
 // Standard test IDs used across all tests
 export const TEST_USER_ID = "test-user-id";
+
+/**
+ * The authenticated actor every integration test runs as. Mirrors what
+ * `buildTestDB()` returns — import this instead of redefining a local
+ * `TEST_ACTOR` (or `unsafeUserId("test-user-id")`) per file.
+ */
+export const TEST_ACTOR: ActorContext = {
+  userId: unsafeUserId(TEST_USER_ID),
+  source: "ui",
+};
+
+/**
+ * A syntactically-valid UUID guaranteed absent from a fresh test DB — for
+ * "operate on a non-existent entity" assertions.
+ */
+export const NONEXISTENT_UUID = "00000000-0000-0000-0000-000000000000";
 
 /**
  * Generate a hash for IntegreSQL template identification.
@@ -102,16 +119,50 @@ export async function buildTestDB() {
     await pool.end();
   };
 
-  const actor: ActorContext = {
-    userId: unsafeUserId(TEST_USER_ID),
-    source: "ui",
-  };
-
   return {
     db: rawDb as unknown as Database,
-    actor,
+    actor: TEST_ACTOR,
     teardown,
   };
+}
+
+/** Holder returned by {@link withTestDb}; fields are live before each test. */
+export interface TestDbContext {
+  db: Database;
+  actor: ActorContext;
+}
+
+/**
+ * Per-test database scaffold. Call once at the top of a `describe`: it registers
+ * a `beforeEach` that provisions a fresh IntegreSQL database (with seeded test
+ * user) and tears it down afterward, and returns a holder whose `.db`/`.actor`
+ * are populated before each test body runs.
+ *
+ * ```ts
+ * const ctx = withTestDb();
+ * it("creates a product", async () => {
+ *   await createProduct(ctx.db, makeProductInput(), ctx.actor);
+ * });
+ * ```
+ *
+ * Replaces the hand-rolled `let db; let teardown; beforeEach(() => ({ db,
+ * teardown } = await buildTestDB()))` block. Files that need a non-"ui" actor
+ * (e.g. `epub_import`) should keep calling {@link buildTestDB} directly.
+ */
+export function withTestDb(): TestDbContext {
+  // `db` is assigned in the beforeEach below before any test reads it; the cast
+  // keeps call sites free of an `undefined` union they'd otherwise have to narrow.
+  const ctx: TestDbContext = {
+    db: undefined as unknown as Database,
+    actor: TEST_ACTOR,
+  };
+  beforeEach(async () => {
+    const { db, actor, teardown } = await buildTestDB();
+    ctx.db = db;
+    ctx.actor = actor;
+    return teardown;
+  });
+  return ctx;
 }
 
 const remapDBConfig = (

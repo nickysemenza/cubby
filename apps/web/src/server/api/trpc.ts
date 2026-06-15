@@ -16,7 +16,7 @@ import {
   SpanStatusCode,
 } from "@opentelemetry/api";
 import * as Sentry from "@sentry/tanstackstart-react";
-import { initTRPC } from "@trpc/server";
+import { initTRPC, type TRPCRouterRecord } from "@trpc/server";
 import { flatten } from "flat";
 import superjson from "superjson";
 import { ZodError } from "zod";
@@ -350,3 +350,21 @@ export const createTestTRPCContext = (
     headers: opts.headers ?? new Headers(),
   };
 };
+
+/**
+ * Test helper: build an authenticated caller for `router` in one call.
+ *
+ * Collapses the per-test `createCallerFactory(router)(createTestTRPCContext(db,
+ * { auth: { userId } }))` boilerplate. Defaults to the standard test actor
+ * (same id as tooling/test-setup.ts's TEST_USER_ID); pass `userId` only when a
+ * test needs a different actor. The caller's type is fully inferred from
+ * `router`, so `caller.create(...)` etc. stay type-checked.
+ */
+export const createTestCaller = <TRecord extends TRPCRouterRecord>(
+  router: Parameters<typeof createCallerFactory<TRecord>>[0],
+  db: Database,
+  userId: UserId = unsafeUserId("test-user-id"),
+): ReturnType<ReturnType<typeof createCallerFactory<TRecord>>> =>
+  createCallerFactory<TRecord>(router)(
+    createTestTRPCContext(db, { auth: { userId } }),
+  );

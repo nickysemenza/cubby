@@ -1,16 +1,11 @@
 import type { Amount } from "@cubby/schemas/codec";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
-import { beforeAll, describe, expect, it } from "vitest";
-import { ensureWasm } from "~/lib/wasm";
+import { describe, expect, it } from "vitest";
 import {
   BASE_KINDS,
   conversionCoverage,
   USDA_KINDS,
 } from "./conversion-coverage";
-
-beforeAll(async () => {
-  await ensureWasm();
-});
 
 const map = (a: Amount, b: Amount): UnitMapping => ({
   a,

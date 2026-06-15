@@ -1,20 +1,14 @@
 import { recipeAvailabilityOut } from "@cubby/schemas/availability";
 import type { Amount } from "@cubby/schemas/codec";
-import { buildActorContext } from "@cubby/schemas/context";
-import { unsafeUserId } from "@cubby/schemas/identifiers";
-import { buildTestDB } from "tooling/test-setup";
+import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
-import type { Database } from "~/server/db";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";
 import { createInventoryEntry } from "~/server/repo/inventory";
 import { createLocation } from "~/server/repo/location";
 import { createProduct } from "~/server/repo/product";
-import { createCallerFactory, createTestTRPCContext } from "../trpc";
+import { createTestCaller } from "../trpc";
 import { recipeRouter } from "./recipe";
 import { suggestionsRouter } from "./suggestions";
-
-const TEST_USER_ID = unsafeUserId("test-user-id");
-const ACTOR = buildActorContext(TEST_USER_ID, "ui");
 
 const CUP_TO_GRAM = {
   a: { value: 1, unit: "cup" },
@@ -22,23 +16,20 @@ const CUP_TO_GRAM = {
   source: null,
 };
 
-const makeRecipeCaller = createCallerFactory(recipeRouter);
-const makeSuggestionsCaller = createCallerFactory(suggestionsRouter);
-
 describe("suggestions router", () => {
-  let db: Database;
-  let teardown: () => Promise<void>;
-  // Built fresh per test from a single shared context — multiple independent
-  // contexts can land on divergent pooled-connection snapshots.
-  let recipeCaller: ReturnType<typeof makeRecipeCaller>;
-  let suggestionsCaller: ReturnType<typeof makeSuggestionsCaller>;
+  const ctx = withTestDb();
+  // Built fresh per test — multiple independent contexts can land on divergent
+  // pooled-connection snapshots, so callers read the current `db` closure.
+  let recipeCaller: ReturnType<
+    typeof createTestCaller<(typeof recipeRouter)["_def"]["record"]>
+  >;
+  let suggestionsCaller: ReturnType<
+    typeof createTestCaller<(typeof suggestionsRouter)["_def"]["record"]>
+  >;
 
-  beforeEach(async () => {
-    ({ db, teardown } = await buildTestDB());
-    const ctx = createTestTRPCContext(db, { auth: { userId: TEST_USER_ID } });
-    recipeCaller = makeRecipeCaller(ctx);
-    suggestionsCaller = makeSuggestionsCaller(ctx);
-    return teardown;
+  beforeEach(() => {
+    recipeCaller = createTestCaller(recipeRouter, ctx.db);
+    suggestionsCaller = createTestCaller(suggestionsRouter, ctx.db);
   });
 
   // Single-ingredient recipe asking for `need` of `ingredientId`.
@@ -63,15 +54,15 @@ describe("suggestions router", () => {
 
   // Ingredient with a linked product (cup<->g mapped) holding `onHand`.
   const seedIngredientWithStock = async (name: string, onHand: Amount) => {
-    const ing = await findOrCreateIngredient(db, name);
+    const ing = await findOrCreateIngredient(ctx.db, name);
     const loc = await createLocation(
-      db,
+      ctx.db,
       { name: `Pantry-${name}`, type: "room", parentId: null },
-      ACTOR,
+      TEST_ACTOR,
     );
     if (!loc) throw new Error("seed: location not created");
     const prod = await createProduct(
-      db,
+      ctx.db,
       {
         name: `Test ${name}`,
         manufacturer: "test",
@@ -82,16 +73,16 @@ describe("suggestions router", () => {
         unitMappings: [CUP_TO_GRAM],
         externalIds: [],
       },
-      ACTOR,
+      TEST_ACTOR,
     );
     await createInventoryEntry(
-      db,
+      ctx.db,
       {
         productId: prod.id,
         locationId: loc.id,
         amount: onHand,
       },
-      ACTOR,
+      TEST_ACTOR,
     );
     return ing;
   };

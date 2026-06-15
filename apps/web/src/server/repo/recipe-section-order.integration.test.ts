@@ -1,8 +1,6 @@
-import type { ActorContext } from "@cubby/schemas/context";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
-import { buildTestDB } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
-import type { Database } from "~/server/db";
 import { createRecipe, getRecipeByID, updateRecipe } from "./recipe";
 import { createIngredients, ingredientRef } from "./repo.fixtures";
 
@@ -14,23 +12,17 @@ import { createIngredients, ingredientRef } from "./repo.fixtures";
  * the transaction timestamp.
  */
 describe("recipe section ordering", () => {
-  let db: Database;
-  let actor: ActorContext;
-  let teardown: () => Promise<void>;
+  const ctx = withTestDb();
 
   let ingredientIds: string[] = [];
 
   beforeEach(async () => {
-    ({ db, actor, teardown } = await buildTestDB());
-
     const created = await createIngredients(
-      db,
+      ctx.db,
       ["Flour", "Sugar", "Butter", "Salt"],
-      actor,
+      ctx.actor,
     );
     ingredientIds = created.map((i) => i.id);
-
-    return teardown;
   });
 
   const buildInput = (): RecipeCreateInput => ({
@@ -47,9 +39,9 @@ describe("recipe section ordering", () => {
   });
 
   it("returns sections and ingredients in the order they were created", async () => {
-    const created = await createRecipe(db, buildInput(), actor);
+    const created = await createRecipe(ctx.db, buildInput(), ctx.actor);
 
-    const found = await getRecipeByID(db, created.id);
+    const found = await getRecipeByID(ctx.db, created.id);
 
     expect(found!.sections.map((s) => s.name)).toEqual([
       "Section A",
@@ -66,13 +58,13 @@ describe("recipe section ordering", () => {
   });
 
   it("persists a section reorder on update", async () => {
-    const created = await createRecipe(db, buildInput(), actor);
+    const created = await createRecipe(ctx.db, buildInput(), ctx.actor);
     const id = created.id;
 
     // Reorder existing sections (by id) to C, A, B
     const byName = new Map(created.sections.map((s) => [s.name, s]));
     await updateRecipe(
-      db,
+      ctx.db,
       id,
       {
         sections: ["Section C", "Section A", "Section B"].map((name) => ({
@@ -80,10 +72,10 @@ describe("recipe section ordering", () => {
           name,
         })),
       },
-      actor,
+      ctx.actor,
     );
 
-    const found = await getRecipeByID(db, id);
+    const found = await getRecipeByID(ctx.db, id);
     expect(found!.sections.map((s) => s.name)).toEqual([
       "Section C",
       "Section A",
@@ -92,13 +84,13 @@ describe("recipe section ordering", () => {
   });
 
   it("persists an ingredient reorder within a section on update", async () => {
-    const created = await createRecipe(db, buildInput(), actor);
+    const created = await createRecipe(ctx.db, buildInput(), ctx.actor);
     const id = created.id;
 
     const firstSection = created.sections[0]!;
     const reversed = [...firstSection.ingredients].reverse();
     await updateRecipe(
-      db,
+      ctx.db,
       id,
       {
         sections: created.sections.map((section) => ({
@@ -115,10 +107,10 @@ describe("recipe section ordering", () => {
           })),
         })),
       },
-      actor,
+      ctx.actor,
     );
 
-    const found = await getRecipeByID(db, id);
+    const found = await getRecipeByID(ctx.db, id);
     expect(
       found!.sections[0]!.ingredients.map((i) => i.ingredient!.id),
     ).toEqual(reversed.map((i) => i.ingredient!.id));

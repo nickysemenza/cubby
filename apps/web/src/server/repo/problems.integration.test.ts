@@ -1,14 +1,12 @@
-import type { ActorContext } from "@cubby/schemas/context";
 import type { ProductId } from "@cubby/schemas/identifiers";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import type { UPCLookupResponse } from "@cubby/upc-lookup/schemas";
 import type { FoodSummary } from "@cubby/usda-schemas";
 import { eq } from "drizzle-orm";
-import { buildTestDB } from "tooling/test-setup";
-import { beforeEach, describe, expect, it } from "vitest";
+import { withTestDb } from "tooling/test-setup";
+import { describe, expect, it } from "vitest";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { USDAClient } from "~/server/clients/usda";
-import type { Database } from "~/server/db";
 import { image, product, productImage } from "~/server/db/schema";
 import { getDb } from "./database-helpers";
 import { createIngredient, getIngredientByName } from "./ingredient";
@@ -77,13 +75,7 @@ const fakeUsdaClient = (foods: (FoodSummary | null)[] = []) =>
   }) as unknown as USDAClient;
 
 describe("problems repo", () => {
-  let db: Database;
-  let actor: ActorContext;
-  let teardown: () => Promise<void>;
-  beforeEach(async () => {
-    ({ db, actor, teardown } = await buildTestDB());
-    return teardown;
-  });
+  const ctx = withTestDb();
 
   // A recipe whose single ingredient row stores `amounts`/`rawLine`; a mismatch
   // between rawLine's fresh parse and the stored amounts is parse drift.
@@ -93,7 +85,7 @@ describe("problems repo", () => {
     opts: { amounts: { value: number; unit: string }[]; rawLine: string },
   ) =>
     createRecipe(
-      db,
+      ctx.db,
       makeRecipeInput({
         name,
         sections: [
@@ -103,15 +95,15 @@ describe("problems repo", () => {
           },
         ],
       }),
-      actor,
+      ctx.actor,
     );
 
   describe("findStaleIngredientParses", () => {
     it("flags a row whose stored parse drifted and leaves a matching row alone", async () => {
       const flour = await createIngredient(
-        db,
+        ctx.db,
         { name: "flour", aliases: [] },
-        actor,
+        ctx.actor,
       );
 
       // Drift: rawLine parses to 2 cup, but 99 cup is stored.
@@ -126,7 +118,7 @@ describe("problems repo", () => {
       });
 
       const { staleIngredientParses } = await findAllProblems(
-        db,
+        ctx.db,
         fakeUpcClient().client,
         fakeUsdaClient(),
       );
@@ -145,9 +137,9 @@ describe("problems repo", () => {
   describe("findStaleRecipeTotals", () => {
     it("flags a recipe with NULL totalsComputedAt and not a freshly-stamped one", async () => {
       const flour = await createIngredient(
-        db,
+        ctx.db,
         { name: "flour", aliases: [] },
-        actor,
+        ctx.actor,
       );
       // New recipes start stale (totalsComputedAt NULL).
       const stale = await recipeWithRow("Stale Totals", flour.id, {
@@ -159,7 +151,7 @@ describe("problems repo", () => {
         rawLine: "1 cup flour",
       });
       // Stamp `fresh` as computed so it drops out of the stale set.
-      await updateRecipeTotals(db, fresh.id, {
+      await updateRecipeTotals(ctx.db, fresh.id, {
         costTotal: 0,
         caloriesTotal: 0,
         ingredientCount: 1,
@@ -168,7 +160,7 @@ describe("problems repo", () => {
       });
 
       const { staleRecipeTotals } = await findAllProblems(
-        db,
+        ctx.db,
         fakeUpcClient().client,
         fakeUsdaClient(),
       );
@@ -182,46 +174,46 @@ describe("problems repo", () => {
   describe("reparseStaleIngredientParses", () => {
     it("re-parses drifted amounts, marks the recipe affected, and is idempotent", async () => {
       const flour = await createIngredient(
-        db,
+        ctx.db,
         { name: "flour", aliases: [] },
-        actor,
+        ctx.actor,
       );
       const recipe = await recipeWithRow("Reparse", flour.id, {
         amounts: [{ value: 99, unit: "cup" }],
         rawLine: "2 cups flour",
       });
 
-      const result = await reparseStaleIngredientParses(db);
+      const result = await reparseStaleIngredientParses(ctx.db);
       expect(result.updated).toBeGreaterThanOrEqual(1);
       expect(result.recipesAffected).toContain(recipe.id);
 
       // The drift is gone, and a second run finds nothing.
       const { staleIngredientParses } = await findAllProblems(
-        db,
+        ctx.db,
         fakeUpcClient().client,
         fakeUsdaClient(),
       );
       expect(staleIngredientParses.some((s) => s.recipeId === recipe.id)).toBe(
         false,
       );
-      expect((await reparseStaleIngredientParses(db)).updated).toBe(0);
+      expect((await reparseStaleIngredientParses(ctx.db)).updated).toBe(0);
     });
 
     it("find-or-creates the ingredient when the parsed name drifted", async () => {
       // Stored name "flour" but the raw line parses to "sugar" → name drift.
       const flour = await createIngredient(
-        db,
+        ctx.db,
         { name: "flour", aliases: [] },
-        actor,
+        ctx.actor,
       );
       await recipeWithRow("NameDrift", flour.id, {
         amounts: [{ value: 2, unit: "cup" }],
         rawLine: "2 cups sugar",
       });
 
-      await reparseStaleIngredientParses(db);
+      await reparseStaleIngredientParses(ctx.db);
       // The re-parse find-or-created the drifted-to ingredient.
-      expect(await getIngredientByName(db, "sugar")).not.toBeNull();
+      expect(await getIngredientByName(ctx.db, "sugar")).not.toBeNull();
     });
   });
 
@@ -230,23 +222,23 @@ describe("problems repo", () => {
       // Seed an invalid UPC by writing it past the input schema (which would
       // reject it) — the scan exists precisely for rows the schema can't catch.
       const bad = await createProduct(
-        db,
+        ctx.db,
         makeProductInput({ name: "Bad UPC Product" }),
-        actor,
+        ctx.actor,
       );
-      await getDb(db)
+      await getDb(ctx.db)
         .update(product)
         .set({ upc: "123" }) // too short for UPC-A (min 12)
         .where(eq(product.id, bad.id));
 
       const good = await createProduct(
-        db,
+        ctx.db,
         makeProductInput({ name: "Good UPC Product", upc: "012345678905" }),
-        actor,
+        ctx.actor,
       );
 
       const { invalidUPCs } = await findAllProblems(
-        db,
+        ctx.db,
         fakeUpcClient().client,
         fakeUsdaClient(),
       );
@@ -264,7 +256,7 @@ describe("problems repo", () => {
       // widget↔gadget are custom units unreachable from the standard unit graph,
       // so they island off from cup↔g.
       const islanded = await createProduct(
-        db,
+        ctx.db,
         makeProductInput({
           name: "Islanded Product",
           unitMappings: [
@@ -280,11 +272,11 @@ describe("problems repo", () => {
             },
           ],
         }),
-        actor,
+        ctx.actor,
       );
       // cup↔g and tsp↔ml all sit in the one connected standard graph.
       const connected = await createProduct(
-        db,
+        ctx.db,
         makeProductInput({
           name: "Connected Product",
           unitMappings: [
@@ -300,11 +292,11 @@ describe("problems repo", () => {
             },
           ],
         }),
-        actor,
+        ctx.actor,
       );
 
       const { productsWithIslandedMappings } = await findAllProblems(
-        db,
+        ctx.db,
         fakeUpcClient().client,
         fakeUsdaClient(),
       );
@@ -351,18 +343,18 @@ describe("problems repo", () => {
       };
 
       const product = await createProduct(
-        db,
+        ctx.db,
         makeProductInput({
           name: "USDA-bridged sugar",
           ndb_number: 19334,
           unitMappings: storedIslands,
         }),
-        actor,
+        ctx.actor,
       );
 
       // Control: WITHOUT the USDA food, stored mappings alone island → flagged.
       const withoutFood = await findAllProblems(
-        db,
+        ctx.db,
         fakeUpcClient().client,
         fakeUsdaClient([null]),
       );
@@ -374,7 +366,7 @@ describe("problems repo", () => {
 
       // With the bridging USDA portion, the product is one component → not flagged.
       const withFood = await findAllProblems(
-        db,
+        ctx.db,
         fakeUpcClient().client,
         fakeUsdaClient([sugarFood]),
       );
@@ -393,7 +385,7 @@ describe("problems repo", () => {
     const UPC_MISC = "044000031091";
 
     const attachImage = async (productId: ProductId) => {
-      const [img] = await getDb(db)
+      const [img] = await getDb(ctx.db)
         .insert(image)
         .values({
           url: "https://example.com/i.jpg",
@@ -403,7 +395,7 @@ describe("problems repo", () => {
           contentType: "image/jpeg",
         })
         .returning();
-      await getDb(db)
+      await getDb(ctx.db)
         .insert(productImage)
         .values({ productId, imageId: img!.id });
     };
@@ -411,11 +403,11 @@ describe("problems repo", () => {
     it("flags each fillable gap and skips fully-populated products without a lookup", async () => {
       // (a) Unspecified manufacturer, but priced + imaged → only the manufacturer gap.
       const noManu = await createProduct(
-        db,
+        ctx.db,
         makeProductInput({ name: "No Manufacturer", upc: UPC_MANU }),
-        actor,
+        ctx.actor,
       );
-      await getDb(db)
+      await getDb(ctx.db)
         .update(product)
         .set({ manufacturer: UNSPECIFIED_MANUFACTURER, price: 5 })
         .where(eq(product.id, noManu.id));
@@ -423,30 +415,30 @@ describe("problems repo", () => {
 
       // (b) Has manufacturer + image, but no price → only the price gap.
       const noPrice = await createProduct(
-        db,
+        ctx.db,
         makeProductInput({ name: "No Price", upc: UPC_PRICE }),
-        actor,
+        ctx.actor,
       );
       await attachImage(noPrice.id);
 
       // (c) Has manufacturer + price, but no image → only the image gap.
       const noImage = await createProduct(
-        db,
+        ctx.db,
         makeProductInput({ name: "No Image", upc: UPC_IMAGE }),
-        actor,
+        ctx.actor,
       );
-      await getDb(db)
+      await getDb(ctx.db)
         .update(product)
         .set({ price: 9 })
         .where(eq(product.id, noImage.id));
 
       // (d) Fully populated → not a candidate, must never be looked up.
       const full = await createProduct(
-        db,
+        ctx.db,
         makeProductInput({ name: "Full Product", upc: UPC_FULL }),
-        actor,
+        ctx.actor,
       );
-      await getDb(db)
+      await getDb(ctx.db)
         .update(product)
         .set({ price: 3 })
         .where(eq(product.id, full.id));
@@ -454,11 +446,11 @@ describe("problems repo", () => {
 
       // (e) Misc product with a manufacturer gap → excluded regardless.
       const misc = await createProduct(
-        db,
+        ctx.db,
         makeProductInput({ name: "misc: Loose Screw", upc: UPC_MISC }),
-        actor,
+        ctx.actor,
       );
-      await getDb(db)
+      await getDb(ctx.db)
         .update(product)
         .set({ manufacturer: UNSPECIFIED_MANUFACTURER, price: 1 })
         .where(eq(product.id, misc.id));
@@ -475,7 +467,7 @@ describe("problems repo", () => {
       });
 
       const { productsWithBetterUpcData } = await findAllProblems(
-        db,
+        ctx.db,
         client,
         fakeUsdaClient(),
       );
@@ -508,9 +500,9 @@ describe("problems repo", () => {
     it("does not flag a gap the lookup itself can't fill", async () => {
       // Missing price, but the lookup has no price either → nothing to re-import.
       const noPrice = await createProduct(
-        db,
+        ctx.db,
         makeProductInput({ name: "Still No Price", upc: UPC_PRICE }),
-        actor,
+        ctx.actor,
       );
       await attachImage(noPrice.id);
 
@@ -519,7 +511,7 @@ describe("problems repo", () => {
       });
 
       const { productsWithBetterUpcData } = await findAllProblems(
-        db,
+        ctx.db,
         client,
         fakeUsdaClient(),
       );

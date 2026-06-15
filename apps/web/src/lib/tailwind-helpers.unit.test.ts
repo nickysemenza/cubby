@@ -2,24 +2,10 @@ import { describe, expect, it } from "vitest";
 import { cn } from "./utils";
 
 describe("cn", () => {
-  it("should merge tailwind classes correctly", () => {
-    expect(cn("px-4", "py-2")).toBe("px-4 py-2");
-  });
-
-  it("should handle conflicting classes by using the last one", () => {
-    expect(cn("px-4", "px-8")).toBe("px-8");
-  });
-
-  it("should handle conditional classes", () => {
-    expect(cn("px-4", true && "py-2", false && "py-4")).toBe("px-4 py-2");
-  });
-
-  it("should handle arrays of classes", () => {
-    expect(cn(["px-4", "py-2"], "bg-red-500")).toBe("px-4 py-2 bg-red-500");
-  });
-
-  it("should handle empty inputs", () => {
-    expect(cn()).toBe("");
-    expect(cn("", null, undefined)).toBe("");
+  // `cn` is just `twMerge(clsx(...))` — clsx/tailwind-merge own their own test
+  // suites. One smoke test proves both are wired: clsx drops the falsy arg and
+  // flattens the array, tailwind-merge dedupes the conflicting `px-*`.
+  it("flattens conditionals/arrays (clsx) and dedupes conflicts (twMerge)", () => {
+    expect(cn(["px-4"], false && "px-2", "px-8")).toBe("px-8");
   });
 });

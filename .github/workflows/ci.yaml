@@ -194,12 +194,10 @@ jobs:
       - name: Setup web environment
         uses: ./.github/actions/setup-web-env
 
-      - name: Enable pg_trgm extension
-        run: psql -h localhost -U postgres -d cubby -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm;'
-
-      - name: Push database schema
-        run: pnpm --filter @cubby/web db:push
-
+      # NOTE: no manual `pg_trgm` / `db:push` against the `cubby` service DB —
+      # nothing reads it. The integration tests provision their own IntegreSQL
+      # template entirely in-process (tooling/test-setup.ts: CREATE EXTENSION
+      # pg_trgm + drizzle-kit pushSchema), and unit/ui tests don't touch a DB.
       - name: Create test results directory
         run: mkdir -p apps/web/test-results
 

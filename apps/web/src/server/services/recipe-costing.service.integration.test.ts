@@ -1,8 +1,6 @@
-import type { ActorContext } from "@cubby/schemas/context";
 import type { RecipeId } from "@cubby/schemas/identifiers";
-import { buildTestDB } from "tooling/test-setup";
-import { beforeEach, describe, expect, it } from "vitest";
-import type { Database } from "~/server/db";
+import { withTestDb } from "tooling/test-setup";
+import { describe, expect, it } from "vitest";
 import { createProduct } from "~/server/repo/product";
 import {
   createRecipe,
@@ -24,33 +22,27 @@ import {
 // which is exactly the "incomplete / transient miss" path the service branches on.
 
 describe("RecipeCostingService", () => {
-  let db: Database;
-  let actor: ActorContext;
-  let teardown: () => Promise<void>;
-  beforeEach(async () => {
-    ({ db, actor, teardown } = await buildTestDB());
-    return teardown;
-  });
+  const ctx = withTestDb();
 
   const service = () =>
-    createTestTRPCContext(db, { auth: { userId: actor.userId } }).services
-      .recipeCosting;
+    createTestTRPCContext(ctx.db, { auth: { userId: ctx.actor.userId } })
+      .services.recipeCosting;
 
   // A recipe whose single ingredient is linked to a priced product. Price-only
   // (no ndb_number) means no USDA lookup, so it costs "complete".
   const seedPricedRecipe = async (name: string) => {
-    const ing = await findOrCreateIngredient(db, `${name} flour`);
+    const ing = await findOrCreateIngredient(ctx.db, `${name} flour`);
     await createProduct(
-      db,
+      ctx.db,
       makeProductInput({
         name: `${name} product`,
         ingredientId: ing.id,
         price: 4,
       }),
-      actor,
+      ctx.actor,
     );
     return createRecipe(
-      db,
+      ctx.db,
       makeRecipeInput({
         name,
         sections: [
@@ -62,7 +54,7 @@ describe("RecipeCostingService", () => {
           },
         ],
       }),
-      actor,
+      ctx.actor,
     );
   };
 
@@ -78,20 +70,20 @@ describe("RecipeCostingService", () => {
     });
 
     it("marks a recipe with an unresolved USDA link incomplete", async () => {
-      const ing = await findOrCreateIngredient(db, "usda flour");
+      const ing = await findOrCreateIngredient(ctx.db, "usda flour");
       // ndb_number set but the USDA backend is unreachable in tests, so `food`
       // resolves null → a transient miss → complete: false.
       await createProduct(
-        db,
+        ctx.db,
         makeProductInput({
           name: "usda product",
           ingredientId: ing.id,
           ndb_number: 20081,
         }),
-        actor,
+        ctx.actor,
       );
       const recipe = await createRecipe(
-        db,
+        ctx.db,
         makeRecipeInput({
           name: "Incomplete Recipe",
           sections: [
@@ -103,7 +95,7 @@ describe("RecipeCostingService", () => {
             },
           ],
         }),
-        actor,
+        ctx.actor,
       );
 
       const entry = (await service().computeTotals([recipe])).get(
@@ -120,7 +112,7 @@ describe("RecipeCostingService", () => {
     it("loads a transitive sub-recipe closure", async () => {
       const c = await seedPricedRecipe("Leaf C");
       const b = await createRecipe(
-        db,
+        ctx.db,
         makeRecipeInput({
           name: "Mid B",
           sections: [
@@ -137,10 +129,10 @@ describe("RecipeCostingService", () => {
             },
           ],
         }),
-        actor,
+        ctx.actor,
       );
       const a = await createRecipe(
-        db,
+        ctx.db,
         makeRecipeInput({
           name: "Top A",
           sections: [
@@ -157,7 +149,7 @@ describe("RecipeCostingService", () => {
             },
           ],
         }),
-        actor,
+        ctx.actor,
       );
 
       const result = await service().computeTotals([a]);
@@ -168,7 +160,7 @@ describe("RecipeCostingService", () => {
       // A links B; then B links A — a cycle. loadContext's `seen` set must break it.
       const a = await seedPricedRecipe("Cycle A");
       const b = await createRecipe(
-        db,
+        ctx.db,
         makeRecipeInput({
           name: "Cycle B",
           sections: [
@@ -185,10 +177,10 @@ describe("RecipeCostingService", () => {
             },
           ],
         }),
-        actor,
+        ctx.actor,
       );
       await updateRecipe(
-        db,
+        ctx.db,
         a.id as RecipeId,
         {
           sections: [
@@ -205,10 +197,10 @@ describe("RecipeCostingService", () => {
             },
           ],
         },
-        actor,
+        ctx.actor,
       );
 
-      const [reloadedA] = await getRecipesByIDs(db, [a.id as RecipeId]);
+      const [reloadedA] = await getRecipesByIDs(ctx.db, [a.id as RecipeId]);
       // Should resolve (not hang); the result map contains A.
       const result = await service().computeTotals([reloadedA!]);
       expect(result.get(a.id as RecipeId)).toBeDefined();
@@ -220,24 +212,24 @@ describe("RecipeCostingService", () => {
       const recipe = await seedPricedRecipe("Persist Recipe");
       await service().recompute([recipe.id as RecipeId]);
 
-      const state = await getRecipeTotalsState(db, recipe.id as RecipeId);
+      const state = await getRecipeTotalsState(ctx.db, recipe.id as RecipeId);
       expect(state?.totals).not.toBeNull();
       expect(state?.totalsComputedAt).not.toBeNull();
     });
 
     it("leaves an incomplete recipe stale (best-effort blob, null timestamp)", async () => {
-      const ing = await findOrCreateIngredient(db, "stale flour");
+      const ing = await findOrCreateIngredient(ctx.db, "stale flour");
       await createProduct(
-        db,
+        ctx.db,
         makeProductInput({
           name: "stale product",
           ingredientId: ing.id,
           ndb_number: 20081,
         }),
-        actor,
+        ctx.actor,
       );
       const recipe = await createRecipe(
-        db,
+        ctx.db,
         makeRecipeInput({
           name: "Stale Recipe",
           sections: [
@@ -249,11 +241,11 @@ describe("RecipeCostingService", () => {
             },
           ],
         }),
-        actor,
+        ctx.actor,
       );
 
       await service().recompute([recipe.id as RecipeId]);
-      const state = await getRecipeTotalsState(db, recipe.id as RecipeId);
+      const state = await getRecipeTotalsState(ctx.db, recipe.id as RecipeId);
       // Best-effort totals are written so the UI shows something...
       expect(state?.totals).not.toBeNull();
       // ...but the row stays stale so the drain retries the USDA lookup.
@@ -263,7 +255,7 @@ describe("RecipeCostingService", () => {
     it("nulls a parent's totals when a child recompute changes (cascade staleness)", async () => {
       const child = await seedPricedRecipe("Cascade Child");
       const parent = await createRecipe(
-        db,
+        ctx.db,
         makeRecipeInput({
           name: "Cascade Parent",
           sections: [
@@ -280,13 +272,13 @@ describe("RecipeCostingService", () => {
             },
           ],
         }),
-        actor,
+        ctx.actor,
       );
 
       // Stamp the parent fresh first.
       await service().recompute([parent.id as RecipeId]);
       expect(
-        (await getRecipeTotalsState(db, parent.id as RecipeId))
+        (await getRecipeTotalsState(ctx.db, parent.id as RecipeId))
           ?.totalsComputedAt,
       ).not.toBeNull();
 
@@ -295,7 +287,7 @@ describe("RecipeCostingService", () => {
       await service().recompute([child.id as RecipeId]);
 
       expect(
-        (await getRecipeTotalsState(db, parent.id as RecipeId))
+        (await getRecipeTotalsState(ctx.db, parent.id as RecipeId))
           ?.totalsComputedAt,
       ).toBeNull();
     });

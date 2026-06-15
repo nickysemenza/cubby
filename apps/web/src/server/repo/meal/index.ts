@@ -9,7 +9,6 @@ export {
   updateMeal,
   updateMealRecipe,
 } from "./crud";
-// dbMealToAPI is intentionally not re-exported — it's only used internally by
-// crud.ts (which imports it from ./helpers directly). rollupMealTotals/scaleTotals
-// are re-exported because the integration test imports them from the package root.
-export { rollupMealTotals, scaleTotals } from "./helpers";
+// Helpers (dbMealToAPI, rollupMealTotals, scaleTotals) are intentionally not
+// re-exported here — they're used internally within ./helpers and ./crud, and
+// their unit test imports them from "./helpers" directly.
