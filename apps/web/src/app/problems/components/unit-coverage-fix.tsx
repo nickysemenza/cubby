@@ -168,9 +168,25 @@ export function UnitCoverageInlineFix({
         />
       );
     })
-    .with({ kind: "none", isIngredient: true }, (i) => (
-      <IngredientFix id={i.id} name={i.name} close={close} />
-    ))
+    .with({ kind: "none", isIngredient: true }, (i) => {
+      // Truly-empty ingredient: nothing covered, never linked. Offer the USDA
+      // search (+ a "no USDA" mark) unless it's already marked unavailable — in
+      // which case switch to full manual entry. (A `none` product has no price,
+      // so the price step always applies.)
+      const showUsda = !i.usdaUnavailable;
+      return (
+        <IngredientFix
+          id={i.id}
+          name={i.name}
+          close={close}
+          showUsda={showUsda}
+          showManual={!showUsda}
+          showCalories={!showUsda}
+          showPrice
+          allowMarkNoUsda={showUsda}
+        />
+      );
+    })
     .with({ kind: "none" }, (i) => <PriceFix id={i.id} close={close} />)
     .exhaustive();
 }
@@ -271,10 +287,13 @@ function IngredientFix({
   // Existing mappings, so a per-measure price appends rather than replaces them
   // (product.update swaps the whole set). Cached/deduped with CurrentCore4Mappings.
   const { data: product } = useQuery(api.product.getByID.queryOptions({ id }));
+  // Also invalidate this product's detail query so the "Current conversions"
+  // table (CurrentCore4Mappings reads getByID) reflects the save, not a stale cache.
+  const productKey = api.product.getByID.queryKey({ id });
   const update = useProblemCardMutation({
     mutationFn: api.product.update.mutationOptions,
     success: "Coverage updated",
-    invalidateKeys: [queryKeys.product.list],
+    invalidateKeys: [queryKeys.product.list, productKey],
     onSuccess: close,
   });
   // Marking "no USDA entry" doesn't close the card — it flips this same card into
@@ -282,7 +301,7 @@ function IngredientFix({
   const markNoUsda = useProblemCardMutation({
     mutationFn: api.product.update.mutationOptions,
     success: "Marked: no USDA entry — enter values manually",
-    invalidateKeys: [queryKeys.product.list],
+    invalidateKeys: [queryKeys.product.list, productKey],
   });
 
   const save = () => {
@@ -570,7 +589,10 @@ function DisconnectedFix({
   const update = useProblemCardMutation({
     mutationFn: api.product.update.mutationOptions,
     success: "Conversion saved",
-    invalidateKeys: [queryKeys.product.list],
+    invalidateKeys: [
+      queryKeys.product.list,
+      api.product.getByID.queryKey({ id }),
+    ],
     onSuccess: close,
   });
 

@@ -119,6 +119,8 @@ interface ProductWithoutMappings {
    * non-foods just need a price.
    */
   isIngredient: boolean;
+  /** Operator-set: no USDA food exists — the fix switches to manual entry. */
+  usdaUnavailable: boolean;
 }
 
 // An ingredient product that has *some* coverage but can't reach all four base
@@ -372,6 +374,7 @@ const findProductsWithoutMappings = async (
       manufacturer: product.manufacturer,
       createdAt: product.createdAt,
       ingredientId: product.ingredientId,
+      usdaUnavailable: product.usdaUnavailable,
     })
     .from(product)
     .where(
@@ -392,9 +395,10 @@ const findProductsWithoutMappings = async (
   // Filter out misc products - they don't need pricing
   return productsWithoutMappings
     .filter((p) => !isMiscProduct(p.name))
-    .map(({ ingredientId, ...rest }) => ({
+    .map(({ ingredientId, usdaUnavailable, ...rest }) => ({
       ...rest,
       isIngredient: ingredientId != null,
+      usdaUnavailable: usdaUnavailable ?? false,
     }));
 };
 

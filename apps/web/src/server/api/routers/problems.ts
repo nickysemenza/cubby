@@ -45,6 +45,7 @@ const productWithoutMappingsSchema = z.object({
   manufacturer: z.string(),
   createdAt: z.date(),
   isIngredient: z.boolean(),
+  usdaUnavailable: z.boolean(),
 });
 
 const ingredientWithPartialCoverageSchema = z.object({

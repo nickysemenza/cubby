@@ -15,6 +15,7 @@ const noMappingProduct = (over: Partial<NoMappings> = {}): NoMappings => ({
   manufacturer: "generic",
   createdAt: new Date(0),
   isIngredient: true,
+  usdaUnavailable: false,
   ...over,
 });
 
