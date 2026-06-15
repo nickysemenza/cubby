@@ -13,7 +13,9 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { getErrorMessage } from "~/lib/error-utils";
+import { type DedupedFood, dedupeUsdaFoodsByUpc } from "~/lib/usda-food-stats";
 import { useTRPC, useTRPCClient } from "~/trpc/react";
+import { UsdaFoodResultRow } from "../usda/usda-food-result-row";
 import { DialogCompatibleCombobox } from "./combobox-dialog";
 import type { ComboboxItem } from "./combobox-types";
 
@@ -66,8 +68,14 @@ export function UsdaFoodSearchField({
 
   const { data, isLoading } = useQuery(
     api.usda.list.queryOptions({
-      filters: { nameFilter: effectiveQuery },
-      pagination: { pageIndex: 0, pageSize: 20 },
+      // foodsOnly hides the Foundation sampling pipeline + experimental records,
+      // which are provenance noise, not pickable foods.
+      filters: { nameFilter: effectiveQuery, foodsOnly: true },
+      // Rank by FTS relevance so the best name match leads (not alphabetical).
+      sort: { orderBy: "relevance", direction: "asc" },
+      // Over-fetch: USDA returns many UPC-duplicate records, so we pull extra and
+      // collapse them client-side to still show a full list of distinct foods.
+      pagination: { pageIndex: 0, pageSize: 50 },
     }),
   );
 
@@ -77,16 +85,19 @@ export function UsdaFoodSearchField({
     }),
   );
 
-  const foods = useMemo(() => data?.items ?? [], [data]);
+  const deduped = useMemo(
+    () => dedupeUsdaFoodsByUpc(data?.items ?? []),
+    [data],
+  );
   const foodsById = useMemo(() => {
-    const map = new Map<string, FoodSummaryWithLinkedProducts>();
-    for (const food of foods) map.set(String(food.fdc_id), food);
+    const map = new Map<string, DedupedFood>();
+    for (const entry of deduped) map.set(String(entry.food.fdc_id), entry);
     return map;
-  }, [foods]);
+  }, [deduped]);
 
-  const items: ComboboxItem[] = foods.map((food) => ({
-    id: String(food.fdc_id),
-    name: food.foodInfo.description,
+  const items: ComboboxItem[] = deduped.map((entry) => ({
+    id: String(entry.food.fdc_id),
+    name: entry.food.foodInfo.description,
   }));
 
   // Shared by manual pick and AI: reflect the choice in the combobox and notify parent.
@@ -138,13 +149,25 @@ export function UsdaFoodSearchField({
             isLoading={isLoading}
             onSearchChange={setSearchQuery}
             value={value}
+            wide
+            renderItem={(item) => {
+              const entry = foodsById.get(item.id);
+              return entry ? (
+                <UsdaFoodResultRow
+                  food={entry.food}
+                  duplicateCount={entry.duplicateCount}
+                />
+              ) : (
+                item.name
+              );
+            }}
             setValue={(item) => {
               if (!item) {
                 setValue(null);
                 return;
               }
-              const food = foodsById.get(item.id);
-              if (food) applyFood(food);
+              const entry = foodsById.get(item.id);
+              if (entry) applyFood(entry.food);
               else setValue(item);
             }}
           />

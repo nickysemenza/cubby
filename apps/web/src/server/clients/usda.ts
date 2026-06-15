@@ -134,7 +134,8 @@ export class USDAClient {
   private async fetchListFoods(params: {
     nameFilter?: string;
     dataTypeFilter?: DataType;
-    orderBy?: "description" | "data_type" | "fdc_id";
+    foodsOnly?: boolean;
+    orderBy?: "description" | "data_type" | "fdc_id" | "relevance";
     direction?: "asc" | "desc";
     pageIndex?: number | null;
     pageSize?: number | null;
@@ -144,6 +145,9 @@ export class USDAClient {
         query: {
           nameFilter: params.nameFilter,
           dataTypeFilter: params.dataTypeFilter,
+          // Omit when false so the querystring stays clean (and z.coerce.boolean
+          // never sees a falsey-but-present value).
+          foodsOnly: params.foodsOnly || undefined,
           orderBy: params.orderBy,
           direction: params.direction,
           pageIndex: params.pageIndex ?? undefined,
@@ -189,19 +193,25 @@ export class USDAClient {
     dataTypeFilter: DataType | undefined,
     sort: SortParams,
     pagination: PaginationParams,
+    foodsOnly?: boolean,
   ) {
     // Map generic sort fields to USDA-specific fields
-    const orderByMap: Record<string, "description" | "data_type" | "fdc_id"> = {
+    const orderByMap: Record<
+      string,
+      "description" | "data_type" | "fdc_id" | "relevance"
+    > = {
       name: "description",
       description: "description",
       data_type: "data_type",
       fdc_id: "fdc_id",
+      relevance: "relevance",
     };
     const orderBy = orderByMap[sort.orderBy] ?? "description";
 
     const data = await this.fetchListFoods({
       nameFilter,
       dataTypeFilter,
+      foodsOnly,
       orderBy,
       direction: sort.direction,
       pageIndex: pagination.pageIndex,

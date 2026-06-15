@@ -3,6 +3,7 @@ import {
   getNutrientUnit,
   type NutrientsPer100,
 } from "@cubby/usda-schemas";
+import { cn } from "~/lib/utils";
 
 // The key nutrients shown in summaries and the recipe table, in display order.
 // A deliberate whitelist — only these appear, even when more nutrient data is
@@ -20,13 +21,22 @@ export const KEY_NUTRIENTS = [
 ] as const;
 
 const KEY_NUTRIENT_CODES = KEY_NUTRIENTS.map((n) => n.code);
+const KEY_NUTRIENT_LABELS = new Map(
+  KEY_NUTRIENTS.map((n) => [n.code, n.label]),
+);
+
+// Trim trailing-zero decimals: 450.0 → "450", 11.7 → "11.7".
+const trimAmount = (v: number) => Number(v.toFixed(1)).toString();
 
 export function NutrientsSummary({
   nutrients,
   compact = false,
+  dense = false,
 }: {
   nutrients: NutrientsPer100;
   compact?: boolean;
+  /** Tighter chips with short labels + trimmed decimals, for space-tight rows. */
+  dense?: boolean;
 }) {
   // Show only the key nutrients that are present in the data, in priority order.
   const presentNutrients = KEY_NUTRIENT_CODES.filter(
@@ -43,19 +53,31 @@ export function NutrientsSummary({
   }
 
   return (
-    <div className="flex flex-wrap gap-1 text-xs">
+    <div
+      className={cn(
+        "flex flex-wrap",
+        dense ? "gap-0.5 text-2xs" : "gap-1 text-xs",
+      )}
+    >
       {displayNutrients.map((code) => {
         const value = nutrients[code] ?? 0;
         const unit = getNutrientUnit(code).toLowerCase();
-        const displayName = getNutrientDisplayName(code).toUpperCase();
+        const displayName = dense
+          ? (KEY_NUTRIENT_LABELS.get(code) ?? code).toUpperCase()
+          : getNutrientDisplayName(code).toUpperCase();
 
         return (
           <span
             key={code}
-            className="inline-flex items-baseline gap-1 whitespace-nowrap rounded-sm bg-muted px-1.5 py-0.5"
+            className={cn(
+              "inline-flex items-baseline gap-1 whitespace-nowrap rounded-sm bg-muted",
+              dense ? "px-1 py-0" : "px-1.5 py-0.5",
+            )}
           >
             <span className="font-medium text-subtle">{displayName}</span>
-            <span className="text-highlight">{value.toFixed(1)}</span>
+            <span className="text-highlight">
+              {dense ? trimAmount(value) : value.toFixed(1)}
+            </span>
             <span className="text-muted-foreground">{unit}</span>
           </span>
         );

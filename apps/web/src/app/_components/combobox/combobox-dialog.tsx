@@ -49,6 +49,8 @@ export function DialogCompatibleCombobox<TId extends string = string>({
   value,
   setValue,
   onCreateNew,
+  renderItem,
+  wide,
 }: {
   label: string;
   items: ComboboxItem<TId>[];
@@ -57,6 +59,15 @@ export function DialogCompatibleCombobox<TId extends string = string>({
   value: ComboboxItem<TId> | null;
   setValue: (item: ComboboxItem<TId> | null) => void;
   onCreateNew?: (name: string) => Promise<ComboboxItem<TId>>;
+  /**
+   * Optional custom renderer for each dropdown row. When provided it replaces the
+   * default truncated-name span, and rows switch to a multi-line layout. The
+   * trigger button still shows `value.name`. Used by the USDA food search to show
+   * rich per-result metadata.
+   */
+  renderItem?: (item: ComboboxItem<TId>) => React.ReactNode;
+  /** Widen the panel and give the list more height (for rich `renderItem` rows). */
+  wide?: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
   const [inputValue, setInputValue] = React.useState("");
@@ -138,7 +149,14 @@ export function DialogCompatibleCombobox<TId extends string = string>({
       </Button>
 
       {open && (
-        <div className="fade-in-0 zoom-in-95 absolute z-[200] mt-1 w-full min-w-[200px] max-w-[400px] animate-in rounded-md border bg-popover shadow-md">
+        <div
+          className={cn(
+            "fade-in-0 zoom-in-95 absolute z-[200] mt-1 w-full min-w-[200px] animate-in rounded-md border bg-popover shadow-md",
+            wide
+              ? "max-w-[400px] sm:w-[480px] sm:max-w-[520px]"
+              : "max-w-[400px]",
+          )}
+        >
           <div className="flex h-9 items-center gap-2 border-b px-3">
             <input
               ref={inputRef}
@@ -156,7 +174,10 @@ export function DialogCompatibleCombobox<TId extends string = string>({
           <div
             id={listboxId}
             role="listbox"
-            className="max-h-[300px] overflow-y-auto"
+            className={cn(
+              "overflow-y-auto",
+              wide ? "max-h-[420px]" : "max-h-[300px]",
+            )}
           >
             {isLoading ? (
               <SimpleLoading />
@@ -193,7 +214,10 @@ export function DialogCompatibleCombobox<TId extends string = string>({
                     variant="ghost"
                     type="button" // Explicitly mark as a button type to prevent form submission
                     className={cn(
-                      "relative flex w-full cursor-default items-center justify-start rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground",
+                      "relative flex w-full cursor-default justify-start rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground",
+                      renderItem
+                        ? "h-auto items-start whitespace-normal py-2"
+                        : "items-center",
                       value?.id === result.id &&
                         "bg-accent text-accent-foreground",
                     )}
@@ -213,10 +237,17 @@ export function DialogCompatibleCombobox<TId extends string = string>({
                     <Check
                       className={cn(
                         "mr-2 h-4 w-4 flex-shrink-0",
+                        renderItem && "mt-0.5",
                         value?.id === result.id ? "opacity-100" : "opacity-0",
                       )}
                     />
-                    <span className="flex-1 truncate">{result.name}</span>
+                    {renderItem ? (
+                      <span className="min-w-0 flex-1">
+                        {renderItem(result)}
+                      </span>
+                    ) : (
+                      <span className="flex-1 truncate">{result.name}</span>
+                    )}
                     {result.icon && (
                       <span className="ml-1 shrink-0">{result.icon}</span>
                     )}

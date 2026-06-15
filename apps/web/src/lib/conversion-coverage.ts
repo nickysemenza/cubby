@@ -18,7 +18,15 @@ import { safeConvertAmount } from "~/lib/recipe-costing";
  */
 
 export const BASE_KINDS = ["weight", "volume", "money", "calories"] as const;
-type BaseKind = (typeof BASE_KINDS)[number];
+export type BaseKind = (typeof BASE_KINDS)[number];
+
+/**
+ * Kind set for USDA foods. A USDA record has no price by definition, so money
+ * can never participate — grading it against the full 4-kind universe would peg
+ * every food below "complete". Restricting to weight/volume/calories lets a
+ * fully-convertible USDA food read as "complete".
+ */
+export const USDA_KINDS = ["weight", "volume", "calories"] as const;
 
 export type CoverageTier = "complete" | "good" | "partial" | "none";
 
@@ -50,8 +58,14 @@ const PROBES: { unit: string; from: BaseKind; to: BaseKind }[] = [
 
 export function conversionCoverage(
   mappings: UnitMapping[],
+  kinds: readonly BaseKind[] = BASE_KINDS,
 ): ConversionCoverage {
-  const pairs: CoveragePair[] = PROBES.map((p) => ({
+  // Only probe pairs whose endpoints are both in the requested kind universe, so
+  // e.g. USDA foods (weight/volume/calories) aren't graded against money.
+  const kindSet = new Set(kinds);
+  const pairs: CoveragePair[] = PROBES.filter(
+    (p) => kindSet.has(p.from) && kindSet.has(p.to),
+  ).map((p) => ({
     from: p.from,
     to: p.to,
     success: safeConvertAmount(
@@ -71,11 +85,15 @@ export function conversionCoverage(
     }
   }
 
+  // Tiers are relative to the size of the requested universe so the thresholds
+  // hold for both 4-kind (products: 4→complete, 3→good, 2→partial) and 3-kind
+  // (USDA: 3→complete, 2→good).
+  const total = kinds.length;
   const kindsCovered = covered.size;
   const tier: CoverageTier =
-    kindsCovered >= 4
+    kindsCovered >= total
       ? "complete"
-      : kindsCovered === 3
+      : kindsCovered >= total - 1
         ? "good"
         : kindsCovered >= 2
           ? "partial"

@@ -101,6 +101,35 @@ function sqlDirection(direction: ListFoodsArgs["direction"]): string {
   return direction === "desc" ? "DESC" : "ASC";
 }
 
+// The four user-facing food types. The other five (agricultural_acquisition,
+// market_acquisition, sample_food, sub_sample_food, experimental_food) are the
+// Foundation sampling pipeline + research records — provenance, not pickable
+// foods — which USDA FDC itself doesn't surface in food search.
+export const FOOD_DATA_TYPES = [
+  "branded_food",
+  "foundation_food",
+  "sr_legacy_food",
+  "survey_fndds_food",
+] as const;
+
+// Builds the data_type SQL predicate + bind values for a given column. An
+// explicit single-type filter wins; otherwise `foodsOnly` restricts to the
+// user-facing food types. Returns empty sql when neither applies (all types).
+export function dataTypePredicate(
+  column: string,
+  dataTypeFilter: string | undefined,
+  foodsOnly: boolean | undefined,
+): { sql: string; values: string[] } {
+  if (dataTypeFilter) return { sql: `${column} = ?`, values: [dataTypeFilter] };
+  if (foodsOnly) {
+    return {
+      sql: `${column} IN (${FOOD_DATA_TYPES.map(() => "?").join(", ")})`,
+      values: [...FOOD_DATA_TYPES],
+    };
+  }
+  return { sql: "", values: [] };
+}
+
 // The seeded v20260611 artifacts predate build-time normalization and still
 // contain the `market_acquistion` typo in R2 bundles, so this must run at
 // read time until a re-seeded version is activated.
@@ -116,7 +145,29 @@ function normalizeFoodSummaryPayload(payload: unknown): unknown {
   ) {
     payload.foodInfo.data_type = normalizeDataType(payload.foodInfo.data_type);
   }
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "brandedFoodInfo" in payload &&
+    payload.brandedFoodInfo &&
+    typeof payload.brandedFoodInfo === "object" &&
+    "gtin_upc" in payload.brandedFoodInfo &&
+    typeof payload.brandedFoodInfo.gtin_upc === "string"
+  ) {
+    payload.brandedFoodInfo.gtin_upc = normalizeUpc(
+      payload.brandedFoodInfo.gtin_upc,
+    );
+  }
   return payload;
+}
+
+// USDA branded UPCs are sometimes stored with leading zeros stripped (e.g. an
+// 11-digit value for a 12-digit UPC-A), which fails the >=12-char schema and
+// 500s response validation. Left-pad short numeric UPCs to 12 — both fixing the
+// crash and matching how products store UPCs for linking. Non-numeric or
+// already-valid values pass through untouched.
+export function normalizeUpc(upc: string): string {
+  return /^\d{1,11}$/.test(upc) ? upc.padStart(12, "0") : upc;
 }
 
 function rowsFromResult<T>(result: { results?: T[]; success: boolean }): T[] {
@@ -302,6 +353,7 @@ export function createEdgeUsdaDataSource(
     async listFoods({
       nameFilter,
       dataTypeFilter,
+      foodsOnly,
       orderBy = "description",
       direction = "asc",
       pageIndex = 0,
@@ -309,34 +361,49 @@ export function createEdgeUsdaDataSource(
     }) {
       const tables = await getActiveVersion(env.DB);
       const offset = pageIndex * pageSize;
+      const hasName = !!nameFilter && nameFilter.trim().length > 0;
       let dataFrom: string;
       let countFrom: string;
       let where: string;
       let values: string[];
 
-      if (nameFilter && nameFilter.trim().length > 0) {
+      if (hasName) {
         dataFrom = `${tables.foodSearch}
              INNER JOIN ${tables.foodIndex} i
                ON i.fdc_id = ${tables.foodSearch}.fdc_id`;
         countFrom = tables.foodSearch;
-        where = dataTypeFilter
-          ? `WHERE ${tables.foodSearch} MATCH ? AND ${tables.foodSearch}.data_type = ?`
-          : `WHERE ${tables.foodSearch} MATCH ?`;
-        values = dataTypeFilter
-          ? [toFtsQuery(nameFilter), dataTypeFilter]
-          : [toFtsQuery(nameFilter)];
+        const dt = dataTypePredicate(
+          `${tables.foodSearch}.data_type`,
+          dataTypeFilter,
+          foodsOnly,
+        );
+        where =
+          `WHERE ${tables.foodSearch} MATCH ?` +
+          (dt.sql ? ` AND ${dt.sql}` : "");
+        values = [toFtsQuery(nameFilter), ...dt.values];
       } else {
         dataFrom = `${tables.foodIndex} i`;
         countFrom = `${tables.foodIndex} i`;
-        where = dataTypeFilter ? "WHERE i.data_type = ?" : "";
-        values = dataTypeFilter ? [dataTypeFilter] : [];
+        const dt = dataTypePredicate("i.data_type", dataTypeFilter, foodsOnly);
+        where = dt.sql ? `WHERE ${dt.sql}` : "";
+        values = dt.values;
       }
+
+      // Relevance ordering only means something with an FTS query: bm25 `rank`
+      // (ascending = best match first), which lives on the FTS table. Without a
+      // name filter, fall back to alphabetical so the option stays well-defined.
+      const orderClause =
+        orderBy === "relevance"
+          ? hasName
+            ? `${tables.foodSearch}.rank ASC`
+            : "i.description ASC"
+          : `i.${sqlOrderBy(orderBy)} ${sqlDirection(direction)}`;
 
       const result = await env.DB.prepare(
         `SELECT i.*
            FROM ${dataFrom}
            ${where}
-           ORDER BY i.${sqlOrderBy(orderBy)} ${sqlDirection(direction)}
+           ORDER BY ${orderClause}
            LIMIT ? OFFSET ?`,
       )
         .bind(...values, pageSize, offset)
