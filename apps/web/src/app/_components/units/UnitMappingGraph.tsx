@@ -89,8 +89,13 @@ const UnitMappingGraphInner: React.FC<{
     return null;
   }
 
-  const width = 460;
-  const height = 320;
+  // Scale the canvas with the graph's size so dense graphs (a USDA food has a
+  // node per nutrient — 25+) aren't crammed into a tiny box. fit=true still
+  // scales to fit, but a taller/wider canvas means bigger, readable nodes; the
+  // wrapper scrolls + zooms for anything past these bounds.
+  const approxNodes = unitMapping.length + 2;
+  const width = Math.min(900, Math.max(460, approxNodes * 26));
+  const height = Math.min(900, Math.max(320, approxNodes * 24));
 
   return (
     <div className="unit-mapping-graph overflow-auto rounded border bg-muted p-0.5">
