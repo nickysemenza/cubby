@@ -13,6 +13,8 @@
  * every merge, so a missed group is cheaper than a wrong one.
  */
 
+import { groupBy } from "es-toolkit";
+
 type MergeGroup<T> = { normalized: string; members: T[] };
 
 /**
@@ -24,18 +26,8 @@ export const detectMergeGroups = <T extends { name: string }>(
   rows: readonly T[],
   normalize: (name: string) => string,
 ): MergeGroup<T>[] => {
-  const groups = new Map<string, T[]>();
-  for (const row of rows) {
-    const key = normalize(row.name);
-    if (!key) continue;
-    const existing = groups.get(key);
-    if (existing) {
-      existing.push(row);
-    } else {
-      groups.set(key, [row]);
-    }
-  }
-  return [...groups.entries()]
-    .filter(([, members]) => members.length >= 2)
+  const grouped = groupBy(rows, (row) => normalize(row.name));
+  return Object.entries(grouped)
+    .filter(([normalized, members]) => normalized !== "" && members.length >= 2)
     .map(([normalized, members]) => ({ normalized, members }));
 };
