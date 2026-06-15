@@ -11,6 +11,7 @@ import type { EmptyLocation } from "~/server/repo/problems";
 import { useTRPC } from "~/trpc/react";
 import { AddInventoryDialog } from "./add-inventory-dialog";
 import { ProblemSection } from "./problem-section";
+import { createdAgoDetail } from "./render-helpers";
 
 export function EmptyLocationsList({
   locations,
@@ -44,15 +45,7 @@ export function EmptyLocationsList({
             );
           }
 
-          details.push(
-            <div
-              key="created"
-              className="flex items-center gap-1 text-muted-foreground text-sm"
-            >
-              <Calendar className="h-3 w-3" />
-              Created {formatDistanceToNow(location.createdAt)} ago
-            </div>,
-          );
+          details.push(createdAgoDetail(location.createdAt));
 
           if (location.lastBulkInventory) {
             details.push(
