@@ -44,7 +44,7 @@ export const normalizeIngredientName = (name: string): string => {
   return s;
 };
 
-export type MergeGroup<T> = { normalized: string; members: T[] };
+type MergeGroup<T> = { normalized: string; members: T[] };
 
 /**
  * Group rows by normalized name; returns only groups with ≥2 members (the merge
