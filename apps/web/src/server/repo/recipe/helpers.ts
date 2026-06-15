@@ -21,6 +21,29 @@ import { recipeSourceFromDb } from "./source";
 type RecipeSelect = typeof recipe.$inferSelect;
 
 /**
+ * Correlated subquery counting the DISTINCT *live* recipes an ingredient appears
+ * in. Single source of truth for every "appears in N recipes" surface (ingredient
+ * list sort, global search, etc.) so they can't silently diverge.
+ *
+ * `ingredientRef` is the SQL reference to the ingredient id column in the OUTER
+ * query — the alias differs by builder: `"Ingredient"."id"` for the query builder
+ * (`.from(ingredient)`), `"ingredient"."id"` for the relational query builder. It
+ * is interpolated verbatim into SQL, so it MUST be a trusted, hardcoded column
+ * expression — never user input.
+ *
+ * The subquery filters EVERY join level (`rsi`, `rs`, `r`), so a soft-deleted
+ * usage, section, or recipe can never inflate the count — even if the
+ * cascade/backfill invariant is ever temporarily violated.
+ */
+export const liveRecipeCountForIngredientSql = (
+  ingredientRef: string,
+): string =>
+  `(SELECT count(DISTINCT rs."recipeId") FROM "RecipeSectionIngredient" rsi ` +
+  `JOIN "RecipeSection" rs ON rs."id" = rsi."recipeSectionId" AND rs."deletedAt" IS NULL ` +
+  `JOIN "Recipe" r ON r."id" = rs."recipeId" AND r."deletedAt" IS NULL ` +
+  `WHERE rsi."ingredientId" = ${ingredientRef} AND rsi."deletedAt" IS NULL)`;
+
+/**
  * Convert a recipe section ingredient DB record to API type.
  * Handles both regular ingredients and recipe references.
  */

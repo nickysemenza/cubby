@@ -32,7 +32,10 @@ export {
   upsertRecipe,
 } from "./crud";
 // Helpers
-export { dbRecipeToAPIShallow } from "./helpers";
+export {
+  dbRecipeToAPIShallow,
+  liveRecipeCountForIngredientSql,
+} from "./helpers";
 // Analytics and queries
 export {
   getAllTags,

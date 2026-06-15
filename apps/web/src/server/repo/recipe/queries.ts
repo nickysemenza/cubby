@@ -18,7 +18,12 @@ import type {
 } from "@cubby/schemas/recipe-dependency-graph";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import type { Database } from "~/server/db";
-import { cookbook, recipe } from "~/server/db/schema";
+import {
+  cookbook,
+  recipe,
+  recipeSection,
+  recipeSectionIngredient,
+} from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
 /**
@@ -39,8 +44,12 @@ export const getIngredientCooccurrence = async (
     limit: 500,
     with: {
       sections: {
+        // Exclude soft-deleted sections/usages so the cooccurrence counts don't
+        // include ingredients that were removed from these (live) recipes.
+        where: notDeleted(recipeSection),
         with: {
           ingredients: {
+            where: notDeleted(recipeSectionIngredient),
             with: {
               ingredient: true,
             },
@@ -180,8 +189,12 @@ export const getRecipeDependencyGraph = async (
     columns: { id: true, name: true, cookbookId: true },
     with: {
       sections: {
+        // Exclude soft-deleted sections/usages so removed sub-recipe links
+        // don't produce phantom edges (matches getIngredientCooccurrence).
+        where: notDeleted(recipeSection),
         with: {
           ingredients: {
+            where: notDeleted(recipeSectionIngredient),
             with: {
               ingredient: { columns: { recipeId: true, deletedAt: true } },
             },
@@ -262,8 +275,12 @@ export const getIngredientUsage = async (
     columns: { id: true },
     with: {
       sections: {
+        // Exclude soft-deleted sections/usages so usage counts don't include
+        // ingredients removed from these live recipes (matches cooccurrence).
+        where: notDeleted(recipeSection),
         with: {
           ingredients: {
+            where: notDeleted(recipeSectionIngredient),
             with: {
               ingredient: {
                 columns: {
