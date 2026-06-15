@@ -1,11 +1,10 @@
 import type { LocationId } from "@cubby/schemas/identifiers";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Eye, Sparkles } from "lucide-react";
 import type { FC } from "react";
-import { toast } from "sonner";
+import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
-import { getErrorMessage } from "~/lib/error-utils";
 import { useTRPC } from "~/trpc/react";
 
 interface AiDescriptionSectionProps {
@@ -28,19 +27,17 @@ export const AiDescriptionSection: FC<AiDescriptionSectionProps> = ({
     }),
   );
 
-  const describeMutation = useMutation(
-    api.ai.describeLocation.mutationOptions({
-      onSuccess: () => {
-        toast.success("Description saved.");
-        void queryClient.invalidateQueries({
-          queryKey: api.location.getByID.queryKey({ id: locationId }),
-        });
-      },
-      onError: (error) => {
-        toast.error(getErrorMessage(error));
-      },
-    }),
-  );
+  const describeMutation = useActionMutation({
+    mutationFn: api.ai.describeLocation.mutationOptions,
+    success: "Description saved.",
+    // getByID returns a full tRPC key (not a wrappable list key), so invalidate
+    // it directly rather than through `invalidateKeys`.
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: api.location.getByID.queryKey({ id: locationId }),
+      });
+    },
+  });
 
   const canAnalyze = aiStatus?.available && hasImages;
 

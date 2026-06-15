@@ -4,14 +4,14 @@ import type {
   ProductCreateInput,
   ProductTopLevelOut,
 } from "@cubby/schemas/product";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
   type ComponentProps,
   type ReactNode,
   useCallback,
   useState,
 } from "react";
-import { toast } from "sonner";
+import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { IngredientForm } from "~/app/_components/ingredients/ingredient-form";
 import { LocationForm } from "~/app/_components/locations/location-form";
 import { ProductForm } from "~/app/_components/products/product-form";
@@ -21,6 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
+import { getErrorMessage } from "~/lib/error-utils";
 import { queryKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 import {
@@ -258,7 +259,6 @@ function CreateProductDialog({
 
 export function WithIngredientSearch({ children }: WithEntitySearchProps) {
   const api = useTRPC();
-  const queryClient = useQueryClient();
   const {
     searchQuery,
     onSearchChange,
@@ -277,21 +277,15 @@ export function WithIngredientSearch({ children }: WithEntitySearchProps) {
     }),
   );
 
-  const createMutation = useMutation(
-    api.ingredient.create.mutationOptions({
-      onSuccess: (newIngredient: IngredientWithRecipesAndProductOut) => {
-        toast.success(`Added ${newIngredient.name} to your pantry.`);
-        // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
-        queryClient.invalidateQueries({
-          queryKey: [queryKeys.ingredient.list],
-        });
-        resolveWithEntity(buildIngredientComboboxItem(newIngredient));
-      },
-      onError: (error) => {
-        toast.error(`Failed to create ingredient: ${error.message}`);
-      },
-    }),
-  );
+  const createMutation = useActionMutation({
+    mutationFn: api.ingredient.create.mutationOptions,
+    success: (newIngredient: IngredientWithRecipesAndProductOut) =>
+      `Added ${newIngredient.name} to your pantry.`,
+    invalidateKeys: [queryKeys.ingredient.list],
+    onSuccess: (newIngredient) =>
+      resolveWithEntity(buildIngredientComboboxItem(newIngredient)),
+    error: (err) => `Failed to create ingredient: ${getErrorMessage(err)}`,
+  });
 
   return (
     <>
@@ -316,7 +310,6 @@ export function WithIngredientSearch({ children }: WithEntitySearchProps) {
 
 export function WithLocationSearch({ children }: WithEntitySearchProps) {
   const api = useTRPC();
-  const queryClient = useQueryClient();
   const {
     searchQuery,
     onSearchChange,
@@ -335,19 +328,15 @@ export function WithLocationSearch({ children }: WithEntitySearchProps) {
     }),
   );
 
-  const createMutation = useMutation(
-    api.location.create.mutationOptions({
-      onSuccess: (newLocation: LocationOut) => {
-        toast.success(`Made a place for ${newLocation.name}.`);
-        // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
-        queryClient.invalidateQueries({ queryKey: [queryKeys.location.list] });
-        resolveWithEntity(buildLocationComboboxItem(newLocation));
-      },
-      onError: (error) => {
-        toast.error(`Failed to create location: ${error.message}`);
-      },
-    }),
-  );
+  const createMutation = useActionMutation({
+    mutationFn: api.location.create.mutationOptions,
+    success: (newLocation: LocationOut) =>
+      `Made a place for ${newLocation.name}.`,
+    invalidateKeys: [queryKeys.location.list],
+    onSuccess: (newLocation) =>
+      resolveWithEntity(buildLocationComboboxItem(newLocation)),
+    error: (err) => `Failed to create location: ${getErrorMessage(err)}`,
+  });
 
   return (
     <>
@@ -372,7 +361,6 @@ export function WithLocationSearch({ children }: WithEntitySearchProps) {
 
 export function WithProductSearch({ children }: WithEntitySearchProps) {
   const api = useTRPC();
-  const queryClient = useQueryClient();
   const {
     searchQuery,
     onSearchChange,
@@ -391,19 +379,15 @@ export function WithProductSearch({ children }: WithEntitySearchProps) {
     }),
   );
 
-  const createMutation = useMutation(
-    api.product.create.mutationOptions({
-      onSuccess: (newProduct: ProductTopLevelOut) => {
-        toast.success(`Added ${newProduct.name} to your shelves.`);
-        // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
-        queryClient.invalidateQueries({ queryKey: [queryKeys.product.list] });
-        resolveWithEntity(buildProductComboboxItem(newProduct));
-      },
-      onError: (error) => {
-        toast.error(`Failed to create product: ${error.message}`);
-      },
-    }),
-  );
+  const createMutation = useActionMutation({
+    mutationFn: api.product.create.mutationOptions,
+    success: (newProduct: ProductTopLevelOut) =>
+      `Added ${newProduct.name} to your shelves.`,
+    invalidateKeys: [queryKeys.product.list],
+    onSuccess: (newProduct) =>
+      resolveWithEntity(buildProductComboboxItem(newProduct)),
+    error: (err) => `Failed to create product: ${getErrorMessage(err)}`,
+  });
 
   return (
     <>
