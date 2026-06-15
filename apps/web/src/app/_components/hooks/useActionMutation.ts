@@ -62,7 +62,7 @@ export function useActionMutation<TFn extends MutationOptionsFn>({
       toast.success(typeof success === "function" ? success(data) : success);
       for (const key of invalidateKeys) {
         // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
-        queryClient.invalidateQueries({ queryKey: [key] });
+        void queryClient.invalidateQueries({ queryKey: [key] });
       }
       onSuccess?.(data);
     },
