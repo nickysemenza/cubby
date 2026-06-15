@@ -17,6 +17,11 @@ import {
   sql,
 } from "drizzle-orm";
 import { uniq } from "es-toolkit";
+import {
+  BASE_KINDS,
+  type BaseKind,
+  conversionCoverage,
+} from "~/lib/conversion-coverage";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { computeParseDrift, hasDrift } from "~/lib/parse-drift";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
@@ -104,6 +109,12 @@ interface ProductWithoutMappings {
   name: string;
   manufacturer: string;
   createdAt: Date;
+  /**
+   * Whether the product is linked to an ingredient — i.e. a food. Drives the
+   * inline fix: ingredients get the USDA-link + price path (the "core 4"),
+   * non-foods just need a price.
+   */
+  isIngredient: boolean;
 }
 
 interface InvalidInventoryAmount {
@@ -160,6 +171,12 @@ interface ProductWithIslandedMappings {
     units: string[]; // Up to 3 representative units from this island
     exampleUnit: string; // Most important unit for badge display
   }>;
+  /**
+   * Which of the 4 base kinds (weight/volume/money/calories) the effective graph
+   * can already reach. Computed from the same synthesized mappings used for island
+   * detection, so the card's core-4 chips and the island split never disagree.
+   */
+  coverage: { covered: BaseKind[] };
 }
 
 interface LocationWithoutAiDescription {
@@ -316,6 +333,7 @@ const findProductsWithoutMappings = async (
       name: product.name,
       manufacturer: product.manufacturer,
       createdAt: product.createdAt,
+      ingredientId: product.ingredientId,
     })
     .from(product)
     .where(
@@ -334,7 +352,12 @@ const findProductsWithoutMappings = async (
     );
 
   // Filter out misc products - they don't need pricing
-  return productsWithoutMappings.filter((p) => !isMiscProduct(p.name));
+  return productsWithoutMappings
+    .filter((p) => !isMiscProduct(p.name))
+    .map(({ ingredientId, ...rest }) => ({
+      ...rest,
+      isIngredient: ingredientId != null,
+    }));
 };
 
 // Find inventory entries with zero or negative amounts
@@ -551,6 +574,9 @@ const findProductsWithIslandedMappings = async (
           units: units.slice(0, 3), // Limit to first 3 units for display
           exampleUnit: units[0] ?? "unknown",
         })),
+        coverage: {
+          covered: [...conversionCoverage(effective, BASE_KINDS).covered],
+        },
       });
     }
   }

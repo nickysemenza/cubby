@@ -34,6 +34,18 @@ import {
   createdAgoDetail,
   locationDetail,
 } from "./render-helpers";
+import {
+  InventoryAmountFix,
+  OrphanedDeleteFix,
+  ProductUpcFix,
+} from "./tier2-fixes";
+import {
+  buildUnitCoverageItems,
+  CoverageChips,
+  UnitCoverageInlineFix,
+  type UnitCoverageItem,
+  unitCoverageGroup,
+} from "./unit-coverage-fix";
 
 type AllProblems = RouterOutputs["problems"]["getAllProblems"];
 
@@ -119,6 +131,59 @@ const INDICATOR_LABELS: Record<"ndb" | "ingredient", string> = {
   ingredient: "Has Ingredient",
 };
 
+/** Card for the merged "Unit coverage" section — core-4 chips + the inline fix. */
+function renderUnitCoverageItem(item: UnitCoverageItem): RenderedProblemItem {
+  const base = {
+    title: item.name,
+    subtitle: byManufacturer(item.manufacturer),
+    route: { to: "/products/$id" as const, params: { id: item.id } },
+    editLabel: "Open product",
+    inlineFix: {
+      label:
+        item.kind === "islanded"
+          ? "Add conversion"
+          : item.isIngredient
+            ? "Fix coverage"
+            : "Set price",
+      render: (close: () => void) => (
+        <UnitCoverageInlineFix item={item} close={close} />
+      ),
+    },
+  };
+
+  if (item.kind === "islanded") {
+    return {
+      ...base,
+      badges: [
+        <Badge key="islands" variant="destructive">
+          {item.islandCount} groups
+        </Badge>,
+      ],
+      details: [
+        <CoverageChips key="cov" covered={item.coverage.covered} />,
+        ...item.islands.map((island, i) => (
+          <div
+            key={island.exampleUnit}
+            className="text-muted-foreground text-sm"
+          >
+            Group {i + 1}: {island.units.join(", ")}
+          </div>
+        )),
+      ],
+    };
+  }
+
+  return {
+    ...base,
+    badges: [
+      <Badge key="none" variant="outline" className="w-fit">
+        No conversions
+      </Badge>,
+    ],
+    details: [<CoverageChips key="cov" covered={[]} />],
+  };
+}
+
 /**
  * The Problems page in declaration order — the summary chips and the section
  * list both derive from this, so adding a check is a single entry here.
@@ -170,6 +235,16 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       subtitle: byManufacturer(product.manufacturer),
       details: [createdAgoDetail(product.createdAt)],
       route: { to: "/products/$id", params: { id: product.id } },
+      inlineFix: {
+        label: "Delete",
+        render: (close) => (
+          <OrphanedDeleteFix
+            id={product.id}
+            name={product.name}
+            close={close}
+          />
+        ),
+      },
     }),
   }),
   section({
@@ -196,29 +271,31 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       ],
       route: { to: "/products/$id", params: { id: product.id } },
       editLabel: "Fix",
+      inlineFix: {
+        label: "Fix UPC",
+        render: (close) => (
+          <ProductUpcFix id={product.id} upc={product.upc} close={close} />
+        ),
+      },
     }),
   }),
   section({
-    id: "pricing",
-    label: "Pricing",
-    select: (p) => p.productsWithoutMappings,
-    icon: DollarSign,
-    title: "Products Without Pricing",
+    id: "unit-coverage",
+    label: "Unit coverage",
+    // Merge the two "can't fully convert" problems — empty graph (no price/USDA/
+    // mappings) and fragmented graph (islands) — into one discriminated list.
+    select: (p) =>
+      buildUnitCoverageItems(
+        p.productsWithoutMappings,
+        p.productsWithIslandedMappings,
+      ),
+    icon: Network,
+    title: "Unit coverage",
     description:
-      "Products missing unit mappings. Add pricing information to enable value calculations.",
-    emptyMessage: "All products have unit mappings for pricing information.",
-    renderItem: (product) => ({
-      title: product.name,
-      subtitle: byManufacturer(product.manufacturer),
-      details: [createdAgoDetail(product.createdAt)],
-      badges: [
-        <Badge key="no-mappings" variant="outline" className="w-fit">
-          No unit mappings
-        </Badge>,
-      ],
-      route: { to: "/products/$id", params: { id: product.id } },
-      editLabel: "Add Pricing",
-    }),
+      "Products that can't fully convert between their units (including to price). Link a USDA food, set a price, or bridge disconnected groups.",
+    emptyMessage: "All products can fully convert between their units.",
+    groupBy: (items) => groupBy(items, unitCoverageGroup),
+    renderItem: renderUnitCoverageItem,
   }),
   section({
     id: "stale-valuations",
@@ -293,6 +370,16 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       ],
       route: { to: "/inventory/$id", params: { id: entry.id } },
       editLabel: "Fix",
+      inlineFix: {
+        label: "Fix amount",
+        render: (close) => (
+          <InventoryAmountFix
+            id={entry.id}
+            unit={entry.amount.unit}
+            close={close}
+          />
+        ),
+      },
     }),
   }),
   customSection({
@@ -378,37 +465,6 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
         </Badge>,
       ],
       route: { to: "/products/$id", params: { id: product.id } },
-    }),
-  }),
-  section({
-    id: "islands",
-    label: "Disconnected Mappings",
-    select: (p) => p.productsWithIslandedMappings,
-    icon: Network,
-    title: "Disconnected Unit Mappings",
-    description:
-      "Products with unit mappings split into isolated groups that can't convert between each other. Add connecting mappings to enable full conversions.",
-    emptyMessage: "All products have connected unit mapping graphs.",
-    renderItem: (product) => ({
-      title: product.name,
-      subtitle: byManufacturer(product.manufacturer),
-      badges: [
-        <Badge key="islands" variant="destructive">
-          {product.islandCount} islands
-        </Badge>,
-        ...product.islands.map((island) => (
-          <Badge key={island.exampleUnit} variant="outline" className="text-xs">
-            {island.exampleUnit}
-          </Badge>
-        )),
-      ],
-      details: product.islands.map((island, i) => (
-        <div key={island.exampleUnit} className="text-muted-foreground text-sm">
-          Island {i + 1}: {island.units.join(", ")}
-        </div>
-      )),
-      route: { to: "/products/$id", params: { id: product.id } },
-      editLabel: "View",
     }),
   }),
   section({

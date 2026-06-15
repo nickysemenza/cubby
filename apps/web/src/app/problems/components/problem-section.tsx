@@ -1,7 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { Link } from "@tanstack/react-router";
-import { ExternalLink, type LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { ExternalLink, type LucideIcon, Wrench, X } from "lucide-react";
+import { type ReactNode, useState } from "react";
 import { MobileCard } from "~/components/entity/mobile-card";
 import { GridContainer } from "~/components/layout/grid-container";
 import { Badge } from "~/components/ui/badge";
@@ -40,6 +40,14 @@ export type RenderedProblemItem = {
   editLabel?: string;
   customActions?: ReactNode;
   imageSlot?: ReactNode;
+  /**
+   * Opt-in inline quick-fix. When set, the card grows a toggle button that
+   * expands `render(close)` below the details — resolving the problem without
+   * leaving the page. The navigation link stays as an escape hatch. The form
+   * owns its own mutation hook (mounted only while open), so `renderItem` stays
+   * a pure data function with no hooks.
+   */
+  inlineFix?: { label: string; render: (close: () => void) => ReactNode };
 };
 
 type ProblemSectionProps<T> = {
@@ -120,44 +128,15 @@ export function ProblemSection<T>({
               )}
               <GridContainer cols="cards3">
                 {groupItems.map((item) => {
-                  const {
-                    key,
-                    title: itemTitle,
-                    subtitle,
-                    badges = [],
-                    details = [],
-                    route,
-                    editLabel = "Edit",
-                    customActions,
-                    imageSlot,
-                  } = renderItem(item);
-
+                  const rendered = renderItem(item);
                   return (
-                    <MobileCard
-                      key={key ?? `${itemTitle}-${route.params.id}`}
-                      title={itemTitle}
-                      subtitle={subtitle}
-                      imageSlot={imageSlot}
-                      className="border-l border-l-border p-3"
-                      actions={
-                        <div className="flex gap-1">
-                          <Link to={route.to} params={route.params}>
-                            <Button variant="outline" size="sm">
-                              <ExternalLink className="mr-1 h-3 w-3" />
-                              {editLabel}
-                            </Button>
-                          </Link>
-                          {customActions}
-                        </div>
+                    <ProblemCard
+                      key={
+                        rendered.key ??
+                        `${rendered.title}-${rendered.route.params.id}`
                       }
-                    >
-                      {details.length > 0 && (
-                        <div className="space-y-0.5">{details}</div>
-                      )}
-                      {badges.length > 0 && (
-                        <div className="flex flex-wrap gap-1">{badges}</div>
-                      )}
-                    </MobileCard>
+                      rendered={rendered}
+                    />
                   );
                 })}
               </GridContainer>
@@ -166,5 +145,68 @@ export function ProblemSection<T>({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * One problem card. Holds its own expand state so opening an inline fix on one
+ * card doesn't re-render or collapse the others.
+ */
+function ProblemCard({ rendered }: { rendered: RenderedProblemItem }) {
+  const [open, setOpen] = useState(false);
+  const {
+    title,
+    subtitle,
+    badges = [],
+    details = [],
+    route,
+    editLabel = "Edit",
+    customActions,
+    imageSlot,
+    inlineFix,
+  } = rendered;
+
+  return (
+    <MobileCard
+      title={title}
+      subtitle={subtitle}
+      imageSlot={imageSlot}
+      className="border-l border-l-border p-3"
+      actions={
+        <div className="flex gap-1">
+          {inlineFix && (
+            <Button
+              variant={open ? "secondary" : "default"}
+              size="sm"
+              onClick={() => setOpen((o) => !o)}
+            >
+              {open ? (
+                <X className="mr-1 h-3 w-3" />
+              ) : (
+                <Wrench className="mr-1 h-3 w-3" />
+              )}
+              {open ? "Cancel" : inlineFix.label}
+            </Button>
+          )}
+          <Link to={route.to} params={route.params}>
+            <Button variant="outline" size="sm">
+              <ExternalLink className="mr-1 h-3 w-3" />
+              {editLabel}
+            </Button>
+          </Link>
+          {customActions}
+        </div>
+      }
+    >
+      {details.length > 0 && <div className="space-y-0.5">{details}</div>}
+      {badges.length > 0 && (
+        <div className="flex flex-wrap gap-1">{badges}</div>
+      )}
+      {inlineFix && open && (
+        <div className="mt-3 border-t pt-3">
+          {inlineFix.render(() => setOpen(false))}
+        </div>
+      )}
+    </MobileCard>
   );
 }
