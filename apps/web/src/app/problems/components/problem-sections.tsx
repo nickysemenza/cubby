@@ -173,7 +173,13 @@ function renderUnitCoverageItem(item: UnitCoverageItem): RenderedProblemItem {
     return {
       ...base,
       inlineFix: inlineFix("Fix coverage"),
-      details: [<CoverageChips key="cov" covered={item.coverage.covered} />],
+      details: [
+        <CoverageChips
+          key="cov"
+          covered={item.coverage.covered}
+          usdaLinked={item.hasUsdaLink}
+        />,
+      ],
     };
   }
 

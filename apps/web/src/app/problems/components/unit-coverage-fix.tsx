@@ -33,24 +33,34 @@ const KIND_LABEL: Record<(typeof BASE_KINDS)[number], string> = {
   calories: "calories",
 };
 
-/** The four base measurement kinds, lit when the graph can already reach them. */
-export function CoverageChips({ covered }: { covered: string[] }) {
+/**
+ * The four base measurement kinds, lit when the graph can already reach them.
+ * When `usdaLinked` is provided, also shows a "USDA" chip — so it's clear
+ * whether a gap (e.g. calories) is because nothing's linked, or because the
+ * linked food simply has no data for that kind.
+ */
+export function CoverageChips({
+  covered,
+  usdaLinked,
+}: {
+  covered: string[];
+  usdaLinked?: boolean;
+}) {
   const lit = new Set(covered);
+  const chip = (key: string, label: string, on: boolean) => (
+    <Badge
+      key={key}
+      variant={on ? "secondary" : "outline"}
+      className={on ? undefined : "text-muted-foreground/50"}
+    >
+      {on && <Check className="mr-1 h-3 w-3" />}
+      {label}
+    </Badge>
+  );
   return (
     <div className="flex flex-wrap gap-1">
-      {BASE_KINDS.map((kind) => {
-        const on = lit.has(kind);
-        return (
-          <Badge
-            key={kind}
-            variant={on ? "secondary" : "outline"}
-            className={on ? undefined : "text-muted-foreground/50"}
-          >
-            {on && <Check className="mr-1 h-3 w-3" />}
-            {KIND_LABEL[kind]}
-          </Badge>
-        );
-      })}
+      {BASE_KINDS.map((kind) => chip(kind, KIND_LABEL[kind], lit.has(kind)))}
+      {usdaLinked !== undefined && chip("usda", "USDA", usdaLinked)}
     </div>
   );
 }
