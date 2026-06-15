@@ -43,6 +43,7 @@ const productWithoutMappingsSchema = z.object({
   name: z.string(),
   manufacturer: z.string(),
   createdAt: z.date(),
+  isIngredient: z.boolean(),
 });
 
 const invalidInventoryAmountSchema = z.object({
@@ -98,6 +99,7 @@ const productWithIslandedMappingsSchema = z.object({
       exampleUnit: z.string(),
     }),
   ),
+  coverage: z.object({ covered: z.array(z.string()) }),
 });
 
 const locationWithoutAiDescriptionSchema = z.object({
