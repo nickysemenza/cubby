@@ -15,7 +15,7 @@ import {
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
-import { and, count, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import { getSortableFields } from "~/entities/entities";
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -36,6 +36,7 @@ import {
   buildOrderBy,
   buildPartialUpdateValues,
   buildSearchConditions,
+  countWhere,
   executeListQueryWithCount,
   getDb,
   insertAndReturn,
@@ -319,7 +320,7 @@ export const locationList = async (
       limit: take,
       offset: skip,
     }),
-    getDb(db).select({ count: count() }).from(location).where(whereClause),
+    countWhere(db, location, whereClause),
   );
 
   const items = results.map(dbLocationToAPIWithChildren);

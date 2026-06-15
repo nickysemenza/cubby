@@ -1,1 +1,0 @@
-ALTER TABLE "Location" ADD COLUMN "aiDescription" text;

@@ -7,7 +7,7 @@
 
 import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
 import type { RecipeTotals } from "@cubby/schemas/recipe";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import {
   ingredient,
@@ -15,7 +15,7 @@ import {
   recipeSection,
   recipeSectionIngredient,
 } from "~/server/db/schema";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { countWhere, getDb, notDeleted } from "~/server/repo/database-helpers";
 
 /**
  * Persist a recipe's computed totals. Stamps it fresh unless `stale` is set —
@@ -91,13 +91,12 @@ export const selectAllActiveRecipeIds = async (
 };
 
 /** How many recipes still need (re)computing. */
-export const countStaleRecipes = async (db: Database): Promise<number> => {
-  const [row] = await getDb(db)
-    .select({ count: sql<number>`count(*)::int` })
-    .from(recipe)
-    .where(and(notDeleted(recipe), isNull(recipe.totalsComputedAt)));
-  return row?.count ?? 0;
-};
+export const countStaleRecipes = async (db: Database): Promise<number> =>
+  countWhere(
+    db,
+    recipe,
+    and(notDeleted(recipe), isNull(recipe.totalsComputedAt)),
+  );
 
 /**
  * The single entry point for "an ingredient's contribution to recipe totals

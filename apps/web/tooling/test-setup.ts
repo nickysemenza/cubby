@@ -11,8 +11,9 @@ import {
   IntegreSQLClient,
   type IntegreSQLDatabaseConfig,
 } from "@devoxa/integresql-client";
+import { pushSchema } from "drizzle-kit/api";
+import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
 import type { Database } from "../src/server/db/database";
 import * as schema from "../src/server/db/schema";
@@ -25,14 +26,12 @@ let hash = "";
 export const TEST_USER_ID = "test-user-id";
 
 /**
- * Generate a hash for IntegreSSQL template identification
- * Includes both schema and migrations journal to detect any DB changes
+ * Generate a hash for IntegreSQL template identification.
+ * Schema.ts is the single source of truth — the template is pushed from it
+ * directly (see setup), so hashing the schema alone detects any DB change.
  */
 async function getTemplateHash(): Promise<string> {
-  return integreSQL.hashFiles([
-    "./src/server/db/schema.ts",
-    "./drizzle/meta/_journal.json",
-  ]);
+  return integreSQL.hashFiles(["./src/server/db/schema.ts"]);
 }
 
 export async function setup() {
@@ -45,15 +44,27 @@ export async function setup() {
       remapDBConfig(databaseConfig),
     );
 
-    console.log("Migrating template database");
+    console.log("Pushing schema to template database");
     const pool = new Pool({ connectionString: connectionUrl });
     const db = drizzle(pool);
 
     try {
-      await migrate(db, { migrationsFolder: "./drizzle" });
-      console.log("Template database migrated");
+      // pushSchema doesn't manage extensions; the GIN trigram indexes need
+      // pg_trgm, so create it before pushing (mirrors CI's pre-push step).
+      await db.execute(sql`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
+      // `db` and drizzle-kit are typed against different physical copies of
+      // drizzle-orm (an @opentelemetry/api peer-dep dupe), so bridge the
+      // structurally-identical PgDatabase types. Runtime parity is covered by
+      // the integration + E2E suites.
+      const { apply } = await pushSchema(
+        schema,
+        db as unknown as Parameters<typeof pushSchema>[1],
+        ["public"],
+      );
+      await apply();
+      console.log("Template database schema pushed");
     } catch (err) {
-      console.error("Migration failed:", err);
+      console.error("Schema push failed:", err);
       throw err;
     } finally {
       await pool.end();

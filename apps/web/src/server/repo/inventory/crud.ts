@@ -26,6 +26,7 @@ import {
   buildOrderBy,
   buildPartialUpdateValues,
   buildSearchConditions,
+  countWhere,
   getDb,
   insertAndReturn,
   notDeleted,
@@ -418,7 +419,7 @@ export const inventoryentryList = async (
       )
     : notDeleted(inventoryEntry);
 
-  const [results, [countResult]] = await Promise.all([
+  const [results, totalCount] = await Promise.all([
     getDb(db).query.inventoryEntry.findMany({
       where: whereClause,
       ...relations.inventory.full,
@@ -426,14 +427,11 @@ export const inventoryentryList = async (
       limit: take,
       offset: skip,
     }),
-    getDb(db)
-      .select({ count: count() })
-      .from(inventoryEntry)
-      .where(whereClause),
+    countWhere(db, inventoryEntry, whereClause),
   ]);
 
   const inventoryEntries = results.map((r) => dbInventoryEntryToAPI(r));
-  return { data: inventoryEntries, count: countResult?.count ?? 0 };
+  return { data: inventoryEntries, count: totalCount };
 };
 
 export const updateInventoryEntry = async (
