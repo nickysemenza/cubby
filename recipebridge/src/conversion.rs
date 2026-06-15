@@ -154,11 +154,8 @@ pub fn is_valid_unit(unit: &str, extra_units: Vec<String>) -> bool {
 
 #[wasm_bindgen]
 pub fn amount_kind(amount: WAmount) -> Result<WAmountKind, String> {
-    amount
-        .to_measure()
-        .kind()
-        .map_err(|_| "Unknown unit kind".to_string())
-        .and_then(|k| to_js(&k.to_str(), "amount kind").map(Into::into))
+    let kind = amount.to_measure().kind();
+    to_js(&kind.to_str(), "amount kind").map(Into::into)
 }
 
 /// Parse a unit mapping string in multiple formats:
@@ -268,7 +265,7 @@ mod tests {
     #[case("g protein", "nutrient:g protein")]
     #[case("bogusunit", "other:bogusunit")]
     fn amount_kind_classification(#[case] unit: &str, #[case] expected: &str) {
-        let kind = amt(1.0, unit).to_measure().kind().expect("kind resolves");
+        let kind = amt(1.0, unit).to_measure().kind();
         assert_eq!(&*kind.to_str(), expected);
     }
 

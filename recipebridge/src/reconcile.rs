@@ -22,7 +22,7 @@ use crate::food_mappings::{product_mappings, WProductInput};
 pub(crate) fn canonical_amount(amounts: &[Measure]) -> Option<&Measure> {
     amounts
         .iter()
-        .find(|m| matches!(m.kind(), Ok(MeasureKind::Weight)))
+        .find(|m| matches!(m.kind(), MeasureKind::Weight))
         .or_else(|| amounts.first())
 }
 
