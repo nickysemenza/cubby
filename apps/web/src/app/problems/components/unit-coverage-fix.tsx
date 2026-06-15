@@ -77,6 +77,10 @@ const parseNonNegative = (raw: string): number | null => {
   return Number.isFinite(n) && n >= 0 ? n : null;
 };
 
+// A comma in a unit breaks the conversion-graph DOT rendering (print_graph
+// doesn't escape it), so reject it at entry — a real unit never has one.
+const unitHasComma = (u: string) => u.includes(",");
+
 // USDA fills these three; if they're all covered the USDA-link step is moot.
 const coversWeightVolumeCalories = (covered: string[]) =>
   ["weight", "volume", "calories"].every((k) => covered.includes(k));
@@ -309,6 +313,10 @@ function IngredientFix({
       if (dollars != null) {
         const qty = parsePositive(priceQty) ?? 1;
         const unit = priceUnit.trim() || "each";
+        if (unitHasComma(unit)) {
+          toast.error("Unit can't contain a comma");
+          return;
+        }
         if (unit.toLowerCase() === "each") {
           // The per-each price is the product's own scalar field, not a mapping.
           data.price = dollars / qty;
@@ -337,6 +345,10 @@ function IngredientFix({
       const toQty = parsePositive(cToQty);
       const fromUnit = cFromUnit.trim();
       const toUnit = cToUnit.trim();
+      if (unitHasComma(fromUnit) || unitHasComma(toUnit)) {
+        toast.error("Units can't contain a comma");
+        return;
+      }
       if (fromQty != null && toQty != null && fromUnit && toUnit) {
         newMappings.push({
           a: { value: fromQty, unit: fromUnit },
