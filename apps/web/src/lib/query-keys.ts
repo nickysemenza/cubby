@@ -25,8 +25,6 @@ export const queryKeys = {
     // The cookbook browse index lives on the recipe router (`recipe.listCookbooks`),
     // so its key mirrors that tRPC path.
     listCookbooks: ["recipe", "listCookbooks"] as const,
-    dependencyGraph: ["recipe", "getDependencyGraph"] as const,
-    ingredientUsage: ["recipe", "getIngredientUsage"] as const,
     all: ["recipe"] as const,
   },
   meal: {

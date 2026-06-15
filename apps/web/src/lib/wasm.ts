@@ -57,7 +57,6 @@ const SLOW_WASM_THRESHOLD_MS = 16;
 const CACHEABLE_METHODS = [
   "parse_ingredient",
   "decompose_ingredient",
-  "normalize_ingredient_name",
   "parse_rich_text",
   "conv_amount_to_kind",
   "conv_amount_explain",
