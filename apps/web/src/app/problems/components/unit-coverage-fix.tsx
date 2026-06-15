@@ -242,6 +242,13 @@ function IngredientFix({
   const [priceUnit, setPriceUnit] = useState("each");
   const [price, setPrice] = useState("");
   const [kcal, setKcal] = useState("");
+  // Free-form conversion "<qty> <unit> = <qty> <unit>" for the residual gaps the
+  // guided steps can't express (e.g. a volume the linked food's unit doesn't
+  // cover, or connecting an islanded each-price into the weight graph).
+  const [cFromQty, setCFromQty] = useState("1");
+  const [cFromUnit, setCFromUnit] = useState("");
+  const [cToQty, setCToQty] = useState("");
+  const [cToUnit, setCToUnit] = useState("g");
   // Existing mappings, so a per-measure price appends rather than replaces them
   // (product.update swaps the whole set). Cached/deduped with CurrentCore4Mappings.
   const { data: product } = useQuery(api.product.getByID.queryOptions({ id }));
@@ -252,9 +259,9 @@ function IngredientFix({
     onSuccess: close,
   });
   // Already linked + priced and no calorie gap to fill, but still incomplete
-  // (e.g. a USDA portion whose unit isn't recognized). No inline step helps —
-  // the gap needs a manual conversion, which lives on the product page.
-  const noSteps = !showUsda && !showPrice && !showCalories;
+  // (e.g. a USDA portion whose unit isn't recognized). The guided steps can't
+  // express it, so offer a free-form conversion row.
+  const showManual = !showUsda && !showPrice && !showCalories;
 
   const save = () => {
     const data: {
@@ -305,6 +312,23 @@ function IngredientFix({
           b: { value: k, unit: "kcal" },
           source: "manual: calories (problems page)",
         });
+      }
+    }
+    if (showManual) {
+      const fromQty = parsePositive(cFromQty);
+      const toQty = parsePositive(cToQty);
+      const fromUnit = cFromUnit.trim();
+      const toUnit = cToUnit.trim();
+      if (fromQty != null && toQty != null && fromUnit && toUnit) {
+        newMappings.push({
+          a: { value: fromQty, unit: fromUnit },
+          b: { value: toQty, unit: toUnit },
+          source: "manual: conversion (problems page)",
+        });
+      } else if (cFromUnit.trim() || cToQty.trim()) {
+        // Partially filled — tell them rather than silently saving nothing.
+        toast.error("Fill in both sides of the conversion");
+        return;
       }
     }
 
@@ -418,16 +442,56 @@ function IngredientFix({
           </div>
         </div>
       )}
-      {noSteps ? (
-        <p className="text-muted-foreground text-xs">
-          USDA is linked and a price is set — the remaining gap needs a manual
-          conversion. Use “Open product” to add one.
-        </p>
-      ) : (
-        <Button size="sm" onClick={save} disabled={update.isPending}>
-          Save
-        </Button>
+      {showManual && (
+        <div className="space-y-1">
+          <p className="font-medium text-xs">
+            Add a conversion{" "}
+            <span className="font-normal text-muted-foreground">
+              — e.g. 1 cup = 240 g
+            </span>
+          </p>
+          <div className="flex items-center gap-1.5 text-sm">
+            <Input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="any"
+              value={cFromQty}
+              onChange={(e) => setCFromQty(e.target.value)}
+              className="w-12"
+              aria-label="From quantity"
+            />
+            <Input
+              value={cFromUnit}
+              onChange={(e) => setCFromUnit(e.target.value)}
+              placeholder="cup"
+              className="w-16"
+              aria-label="From unit"
+            />
+            <span>=</span>
+            <Input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="any"
+              value={cToQty}
+              onChange={(e) => setCToQty(e.target.value)}
+              className="w-14"
+              aria-label="To quantity"
+            />
+            <Input
+              value={cToUnit}
+              onChange={(e) => setCToUnit(e.target.value)}
+              placeholder="g"
+              className="w-16"
+              aria-label="To unit"
+            />
+          </div>
+        </div>
       )}
+      <Button size="sm" onClick={save} disabled={update.isPending}>
+        Save
+      </Button>
     </div>
   );
 }

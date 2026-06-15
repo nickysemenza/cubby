@@ -15,6 +15,7 @@ import {
 } from "~/components/ui/card";
 import { EntityIcon } from "~/entities/entities";
 import type { EntityDetailRoute } from "~/entities/types";
+import { useRecipeUsage } from "./recipe-usage-context";
 
 // Type-safe route patterns for entity detail pages
 type RoutePattern = { to: EntityDetailRoute; params: { id: string } };
@@ -169,6 +170,12 @@ function ProblemCard({ rendered }: { rendered: RenderedProblemItem }) {
     inlineFix,
   } = rendered;
 
+  // How many recipes use this product (via its ingredient) — a "how much does
+  // fixing this matter" signal. Only set for ingredient-linked products.
+  const recipeUsage = useRecipeUsage();
+  const recipeCount =
+    route.to === "/products/$id" ? recipeUsage[route.params.id] : undefined;
+
   return (
     <MobileCard
       title={title}
@@ -204,6 +211,11 @@ function ProblemCard({ rendered }: { rendered: RenderedProblemItem }) {
       {details.length > 0 && <div className="space-y-0.5">{details}</div>}
       {badges.length > 0 && (
         <div className="flex flex-wrap gap-1">{badges}</div>
+      )}
+      {recipeCount !== undefined && (
+        <div className="text-muted-foreground text-xs">
+          Used in {recipeCount} {recipeCount === 1 ? "recipe" : "recipes"}
+        </div>
       )}
       {inlineFix && open && (
         <div className="mt-3 border-t pt-3">

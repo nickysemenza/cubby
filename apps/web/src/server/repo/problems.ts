@@ -2,6 +2,7 @@ import type { Amount } from "@cubby/schemas/codec";
 import {
   type IngredientId,
   type RecipeId,
+  unsafeProductId,
   unsafeRecipeId,
 } from "@cubby/schemas/identifiers";
 import type { RecipeTotals } from "@cubby/schemas/recipe";
@@ -11,6 +12,7 @@ import {
   and,
   eq,
   exists,
+  inArray,
   isNotNull,
   isNull,
   notExists,
@@ -1015,6 +1017,54 @@ const findStaleRecipeTotals = async (
     })
     .from(recipe)
     .where(and(notDeleted(recipe), isNull(recipe.totalsComputedAt)));
+};
+
+// Distinct non-deleted recipes each product feeds into, via its linked
+// ingredient (product → ingredient → recipeSectionIngredient → recipe). A
+// prioritization signal for the Problems page: a data gap on a product used in
+// 12 recipes matters more than one used in none. Only products that HAVE an
+// ingredient are returned (with a count that may be 0); non-food products are
+// omitted, so the card can tell "0 recipes" apart from "no ingredient link".
+export const recipeUsageCountsByProduct = async (
+  db: Database,
+  productIds: string[],
+): Promise<Record<string, number>> => {
+  if (productIds.length === 0) return {};
+
+  const rows = await getDb(db)
+    .select({
+      productId: product.id,
+      count: sql<number>`count(distinct ${recipe.id})`,
+    })
+    .from(product)
+    .leftJoin(
+      recipeSectionIngredient,
+      and(
+        eq(recipeSectionIngredient.ingredientId, product.ingredientId),
+        notDeleted(recipeSectionIngredient),
+      ),
+    )
+    .leftJoin(
+      recipeSection,
+      and(
+        eq(recipeSection.id, recipeSectionIngredient.recipeSectionId),
+        notDeleted(recipeSection),
+      ),
+    )
+    .leftJoin(
+      recipe,
+      and(eq(recipe.id, recipeSection.recipeId), notDeleted(recipe)),
+    )
+    .where(
+      and(
+        notDeleted(product),
+        isNotNull(product.ingredientId),
+        inArray(product.id, productIds.map(unsafeProductId)),
+      ),
+    )
+    .groupBy(product.id);
+
+  return Object.fromEntries(rows.map((r) => [r.productId, Number(r.count)]));
 };
 
 export const findAllProblemsCount = async (

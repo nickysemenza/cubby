@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
+import { uniq } from "es-toolkit";
 import { CheckCircle } from "lucide-react";
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Badge } from "~/components/ui/badge";
@@ -12,6 +13,7 @@ import {
 } from "~/components/ui/card";
 import { useTRPC } from "~/trpc/react";
 import { PROBLEM_SECTIONS } from "./components/problem-sections";
+import { RecipeUsageContext } from "./components/recipe-usage-context";
 
 export function ProblemsOverview() {
   const api = useTRPC();
@@ -22,6 +24,31 @@ export function ProblemsOverview() {
     isLoading,
     error,
   } = useQuery(api.problems.getAllProblems.queryOptions());
+
+  // Every product id across the product-bearing sections, so we fetch recipe
+  // usage once for the whole page rather than per card.
+  const productIds = useMemo(
+    () =>
+      problems
+        ? uniq(
+            [
+              ...problems.duplicateUniqueProducts,
+              ...problems.orphanedProducts,
+              ...problems.invalidUPCs,
+              ...problems.productsWithoutMappings,
+              ...problems.ingredientsWithPartialCoverage,
+              ...problems.productsWithIslandedMappings,
+              ...problems.productsWithNoImages,
+              ...problems.productsWithWrongCategory,
+              ...problems.productsWithBetterUpcData,
+            ].map((p) => p.id),
+          )
+        : [],
+    [problems],
+  );
+  const { data: recipeUsage } = useQuery(
+    api.problems.recipeUsageByProduct.queryOptions({ productIds }),
+  );
 
   if (isLoading) {
     return <SimpleLoading text="Analyzing data consistency..." />;
@@ -58,59 +85,61 @@ export function ProblemsOverview() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Summary header */}
-      {problems.totalProblems > 0 ? (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle>
-              <Badge variant="destructive" className="text-base">
-                {problems.totalProblems}
-              </Badge>
-              {problems.totalProblems === 1 ? "Issue" : "Issues"} Found
-            </CardTitle>
-            <div className="flex flex-wrap gap-2 pt-2">
-              {categoryLinks.map((cat) => (
-                <button
-                  key={cat.id}
-                  type="button"
-                  onClick={() => scrollToSection(cat.id)}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2.5 py-1 text-sm transition-colors hover:bg-muted/80"
-                >
-                  {cat.label}
-                  <Badge variant="destructive" className="ml-0.5">
-                    {cat.count}
-                  </Badge>
-                </button>
-              ))}
-            </div>
-          </CardHeader>
-        </Card>
-      ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              <CheckCircle className="h-5 w-5 text-secondary-foreground" />
-              All Good!
-            </CardTitle>
-            <CardDescription>
-              All data consistency checks passed. No issues found.
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      )}
+    <RecipeUsageContext.Provider value={recipeUsage ?? {}}>
+      <div className="space-y-6">
+        {/* Summary header */}
+        {problems.totalProblems > 0 ? (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle>
+                <Badge variant="destructive" className="text-base">
+                  {problems.totalProblems}
+                </Badge>
+                {problems.totalProblems === 1 ? "Issue" : "Issues"} Found
+              </CardTitle>
+              <div className="flex flex-wrap gap-2 pt-2">
+                {categoryLinks.map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => scrollToSection(cat.id)}
+                    className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2.5 py-1 text-sm transition-colors hover:bg-muted/80"
+                  >
+                    {cat.label}
+                    <Badge variant="destructive" className="ml-0.5">
+                      {cat.count}
+                    </Badge>
+                  </button>
+                ))}
+              </div>
+            </CardHeader>
+          </Card>
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                <CheckCircle className="h-5 w-5 text-secondary-foreground" />
+                All Good!
+              </CardTitle>
+              <CardDescription>
+                All data consistency checks passed. No issues found.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        )}
 
-      {/* All problem sections */}
-      {PROBLEM_SECTIONS.map((section) => (
-        <div
-          key={section.id}
-          ref={(el) => {
-            sectionRefs.current[section.id] = el;
-          }}
-        >
-          {section.node(problems)}
-        </div>
-      ))}
-    </div>
+        {/* All problem sections */}
+        {PROBLEM_SECTIONS.map((section) => (
+          <div
+            key={section.id}
+            ref={(el) => {
+              sectionRefs.current[section.id] = el;
+            }}
+          >
+            {section.node(problems)}
+          </div>
+        ))}
+      </div>
+    </RecipeUsageContext.Provider>
   );
 }
