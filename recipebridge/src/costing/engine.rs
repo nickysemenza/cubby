@@ -846,4 +846,19 @@ mod tests {
         ]);
         assert_eq!(multi_priced_ingredients(&input), vec!["collide"]);
     }
+
+    /// `Engine::new` runs the tripwire warn path for a colliding ingredient
+    /// without panicking (exercises the `tracing::warn!` branch, and confirms the
+    /// dormant multi-priced-product hazard is non-fatal — engine construction
+    /// still succeeds).
+    #[test]
+    fn engine_new_warns_but_succeeds_on_collision() {
+        let input = input_with(vec![WCostingIngredient {
+            id: "collide".to_string(),
+            products: vec![product("a", Some(1.0)), product("b", Some(2.0))],
+        }]);
+        let engine = Engine::new(&input);
+        // The colliding ingredient is still merged into one graph context.
+        assert!(engine.ingredients.contains_key("collide"));
+    }
 }
