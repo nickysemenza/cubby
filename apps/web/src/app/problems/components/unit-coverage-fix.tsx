@@ -70,7 +70,7 @@ export function UnitCoverageInlineFix({
       <DisconnectedFix id={i.id} islands={i.islands} close={close} />
     ))
     .with({ kind: "partial" }, (i) => (
-      <IngredientFix id={i.id} name={i.name} close={close} />
+      <IngredientFix id={i.id} name={i.name} close={close} showPrice={false} />
     ))
     .with({ kind: "none", isIngredient: true }, (i) => (
       <IngredientFix id={i.id} name={i.name} close={close} />
@@ -125,18 +125,25 @@ function PriceFix({ id, close }: { id: string; close: () => void }) {
 }
 
 /**
- * Ingredient with no coverage: link a USDA food (synthesizes weight/volume/
- * calories edges live) and set a price (the one kind USDA can't supply). Both
- * land in a single product.update.
+ * Ingredient missing coverage: link a USDA food (synthesizes weight/volume/
+ * calories edges live). When the product has no price either (`showPrice`), also
+ * offer the price field — the one kind USDA can't supply. Lands in one update.
  */
 function IngredientFix({
   id,
   name,
   close,
+  showPrice = true,
 }: {
   id: string;
   name: string;
   close: () => void;
+  /**
+   * Whether to offer the price field. False for the `partial` case — the product
+   * already has a price, so only the USDA link is missing and showing a blank
+   * price input would imply it's unset (and overwrite the real one on submit).
+   */
+  showPrice?: boolean;
 }) {
   const api = useTRPC();
   const [food, setFood] = useState<FoodSummaryWithLinkedProducts | null>(null);
@@ -165,11 +172,15 @@ function IngredientFix({
         return;
       }
     }
-    const value = parsePositive(price);
-    if (value != null) data.price = value;
+    if (showPrice) {
+      const value = parsePositive(price);
+      if (value != null) data.price = value;
+    }
 
     if (Object.keys(data).length === 0) {
-      toast.error("Link a USDA food or enter a price");
+      toast.error(
+        showPrice ? "Link a USDA food or enter a price" : "Pick a USDA food",
+      );
       return;
     }
     update.mutate({ id, data });
@@ -179,7 +190,7 @@ function IngredientFix({
     <div className="space-y-3">
       <div className="space-y-1">
         <p className="font-medium text-xs">
-          Step 1 · link USDA{" "}
+          {showPrice ? "Step 1 · link USDA" : "Link a USDA food"}{" "}
           <span className="font-normal text-muted-foreground">
             — fills weight, volume &amp; calories
           </span>
@@ -191,27 +202,29 @@ function IngredientFix({
           </p>
         )}
       </div>
-      <div className="space-y-1">
-        <p className="font-medium text-xs">
-          Step 2 · set price{" "}
-          <span className="font-normal text-muted-foreground">
-            — USDA can't supply this
-          </span>
-        </p>
-        <div className="flex items-center gap-2 text-sm">
-          <span>1 each = $</span>
-          <Input
-            type="number"
-            inputMode="decimal"
-            min="0"
-            step="0.01"
-            placeholder="0.00"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            className="w-24"
-          />
+      {showPrice && (
+        <div className="space-y-1">
+          <p className="font-medium text-xs">
+            Step 2 · set price{" "}
+            <span className="font-normal text-muted-foreground">
+              — USDA can't supply this
+            </span>
+          </p>
+          <div className="flex items-center gap-2 text-sm">
+            <span>1 each = $</span>
+            <Input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="0.01"
+              placeholder="0.00"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              className="w-24"
+            />
+          </div>
         </div>
-      </div>
+      )}
       <Button size="sm" onClick={save} disabled={update.isPending}>
         Save
       </Button>
