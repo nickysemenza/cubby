@@ -26,6 +26,34 @@ import { globalSearch } from "./search";
 // test guards against any one of them drifting — the bug where an ingredient used
 // only in a deleted recipe still showed a recipe pill / non-zero count.
 
+// Read the same two "appears in N recipes" surfaces every assertion checks: the
+// list-sort pill array (which sorts on `liveRecipeCountForIngredientSql`) and the
+// global-search recipe count (which uses the same helper).
+const appearsInRecipesFromList = async (
+  db: Database,
+  ingredientId: IngredientId,
+) => {
+  const { data } = await ingredientList(
+    db,
+    undefined,
+    { orderBy: "appearsInRecipes", direction: "desc" },
+    { pageIndex: 0, pageSize: 50 },
+  );
+  return data.find((i) => i.id === ingredientId)?.appearsInRecipes ?? [];
+};
+
+const searchRecipeCount = async (
+  db: Database,
+  ingredientId: IngredientId,
+  query: string,
+) => {
+  const results = await globalSearch(db, query);
+  const hit = results.find(
+    (r) => r.entityType === "ingredient" && r.id === ingredientId,
+  );
+  return hit && "recipeCount" in hit ? hit.recipeCount : undefined;
+};
+
 describe("soft-deleted recipes stay out of ingredient recipe counts", () => {
   let db: Database;
   let actor: ActorContext;
@@ -63,29 +91,12 @@ describe("soft-deleted recipes stay out of ingredient recipe counts", () => {
       actor,
     );
 
-    const recipeCountFromSearch = async () => {
-      const results = await globalSearch(db, "Soledad pepper");
-      const hit = results.find(
-        (r) => r.entityType === "ingredient" && r.id === ingredientId,
-      );
-      return hit && "recipeCount" in hit ? hit.recipeCount : undefined;
-    };
-    const pillsFromList = async () => {
-      const { data } = await ingredientList(
-        db,
-        undefined,
-        { orderBy: "appearsInRecipes", direction: "desc" },
-        { pageIndex: 0, pageSize: 50 },
-      );
-      return data.find((i) => i.id === ingredientId)?.appearsInRecipes ?? [];
-    };
-
     // Baseline: the ingredient appears in exactly one recipe everywhere.
     expect(
       (await getIngredientByID(db, ingredientId)).appearsInRecipes,
     ).toHaveLength(1);
-    expect(await pillsFromList()).toHaveLength(1);
-    expect(await recipeCountFromSearch()).toBe(1);
+    expect(await appearsInRecipesFromList(db, ingredientId)).toHaveLength(1);
+    expect(await searchRecipeCount(db, ingredientId, "Soledad pepper")).toBe(1);
 
     await deleteRecipes(db, [created.id as RecipeId], actor);
 
@@ -96,8 +107,8 @@ describe("soft-deleted recipes stay out of ingredient recipe counts", () => {
     expect(
       (await getIngredientByID(db, ingredientId)).recipeUsages,
     ).toHaveLength(0);
-    expect(await pillsFromList()).toHaveLength(0);
-    expect(await recipeCountFromSearch()).toBe(0);
+    expect(await appearsInRecipesFromList(db, ingredientId)).toHaveLength(0);
+    expect(await searchRecipeCount(db, ingredientId, "Soledad pepper")).toBe(0);
 
     // Data invariant: no live section/usage row may reference the dead recipe.
     const liveSections = await getDb(db)
@@ -164,11 +175,7 @@ describe("soft-deleted recipes stay out of ingredient recipe counts", () => {
     expect(
       (await getIngredientByID(db, ingredientId)).appearsInRecipes,
     ).toHaveLength(0);
-
-    const results = await globalSearch(db, "Orphan oregano");
-    const hit = results.find(
-      (r) => r.entityType === "ingredient" && r.id === ingredientId,
-    );
-    expect(hit && "recipeCount" in hit ? hit.recipeCount : undefined).toBe(0);
+    expect(await appearsInRecipesFromList(db, ingredientId)).toHaveLength(0);
+    expect(await searchRecipeCount(db, ingredientId, "Orphan oregano")).toBe(0);
   });
 });

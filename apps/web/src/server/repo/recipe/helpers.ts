@@ -27,10 +27,13 @@ type RecipeSelect = typeof recipe.$inferSelect;
  *
  * `ingredientRef` is the SQL reference to the ingredient id column in the OUTER
  * query — the alias differs by builder: `"Ingredient"."id"` for the query builder
- * (`.from(ingredient)`), `"ingredient"."id"` for the relational query builder. The
- * subquery filters EVERY join level (`rsi`, `rs`, `r`), so a soft-deleted usage,
- * section, or recipe can never inflate the count — even if the cascade/backfill
- * invariant is ever temporarily violated.
+ * (`.from(ingredient)`), `"ingredient"."id"` for the relational query builder. It
+ * is interpolated verbatim into SQL, so it MUST be a trusted, hardcoded column
+ * expression — never user input.
+ *
+ * The subquery filters EVERY join level (`rsi`, `rs`, `r`), so a soft-deleted
+ * usage, section, or recipe can never inflate the count — even if the
+ * cascade/backfill invariant is ever temporarily violated.
  */
 export const liveRecipeCountForIngredientSql = (
   ingredientRef: string,
