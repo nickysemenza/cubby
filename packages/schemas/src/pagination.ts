@@ -10,6 +10,28 @@ const paginationParams = z.object({
   pageSize: z.number().min(1).default(10),
 });
 
+/**
+ * Pagination fields for MCP list/search tools, as a raw shape to spread into a
+ * tool's input schema: `{ ...mcpPaginationParams }`. Both are optional (the MCP
+ * list handler defaults to page 0 / size 50) and the descriptions surface to MCP
+ * clients. Kept here so every list tool stops re-declaring the same two fields.
+ */
+export const mcpPaginationParams = {
+  pageIndex: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe("Page index, 0-based (default 0)"),
+  pageSize: z
+    .number()
+    .int()
+    .min(1)
+    .max(100)
+    .optional()
+    .describe("Items per page (default 50, max 100)"),
+};
+
 export const sortPaginationCombo = z.object({
   sort: sortParams
     .optional()

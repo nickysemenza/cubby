@@ -1,6 +1,16 @@
+import { ingredientFiltersSchema } from "@cubby/schemas/ingredient";
+import {
+  mealCreateInput,
+  mealDate,
+  mealRecipeInput,
+  mealScale,
+  mealUpdateData,
+} from "@cubby/schemas/meal";
+import { mcpPaginationParams } from "@cubby/schemas/pagination";
 import { recipeCreateInput, recipeUpdateInput } from "@cubby/schemas/recipe";
-import { unitMappingInput } from "@cubby/schemas/unitmapping";
+import { mcpUnitMappingInput } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
+import { dataTypeEnum } from "@cubby/usda-schemas";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
@@ -64,18 +74,8 @@ function json(data: unknown) {
   };
 }
 
-/**
- * A product unit mapping for MCP tools: the canonical `unitMappingInput` edge
- * (a/b/source, fully documented at its source), minus `id` (create-only) and
- * with `source` made omittable so LLM callers needn't pass `null` explicitly —
- * `toUnitMappingInput` restores it.
- */
-const mcpUnitMapping = unitMappingInput
-  .omit({ id: true })
-  .extend({ source: z.string().optional() });
-
 /** Normalize an MCP unit mapping to the productCreateInput shape (source: string|null). */
-function toUnitMappingInput(m: z.infer<typeof mcpUnitMapping>) {
+function toUnitMappingInput(m: z.infer<typeof mcpUnitMappingInput>) {
   return { a: m.a, b: m.b, source: m.source ?? null };
 }
 
@@ -194,6 +194,50 @@ function slimIngredient(i: Record<string, unknown>) {
   };
 }
 
+/** Strip a meal to its essentials and summarize each planned recipe. The per-recipe
+ * `id` is the mealRecipe id — pass it to update_meal_recipe / remove_meal_recipe. */
+export function slimMeal(m: Record<string, unknown>) {
+  const recipes = (m.recipes as Record<string, unknown>[] | undefined) ?? [];
+  return {
+    id: m.id,
+    date: m.date,
+    name: m.name,
+    sortOrder: m.sortOrder,
+    totals: m.totals,
+    recipes: recipes.map((mr) => {
+      const recipe = mr.recipe as Record<string, unknown> | null;
+      return {
+        id: mr.id,
+        recipeId: mr.recipeId,
+        name: recipe?.name ?? null,
+        scale: mr.scale,
+        scaledTotals: mr.scaledTotals,
+      };
+    }),
+  };
+}
+
+/** Strip a USDA food to id, description, link keys, and compact nutrition;
+ * drops portions and the verbose nutrient summary array. */
+export function slimUsdaFood(f: Record<string, unknown>) {
+  const foodInfo = f.foodInfo as Record<string, unknown> | undefined;
+  const branded = f.brandedFoodInfo as Record<string, unknown> | null;
+  const legacy = f.legacyFoodInfo as Record<string, unknown> | null;
+  const nutrition = f.nutritionInfo as Record<string, unknown> | undefined;
+  const linked =
+    (f.linkedProducts as Record<string, unknown>[] | undefined) ?? [];
+  return {
+    fdc_id: f.fdc_id,
+    description: foodInfo?.description ?? null,
+    data_type: foodInfo?.data_type ?? null,
+    brand_owner: branded?.brand_owner ?? null,
+    gtin_upc: branded?.gtin_upc ?? null,
+    ndb_number: legacy?.ndb_number ?? null,
+    nutrientsPer100: nutrition?.nutrientsPer100 ?? null,
+    linkedProducts: linked.map((p) => ({ id: p.id, name: p.name })),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // CRUD tool-handler factories
 //
@@ -298,20 +342,6 @@ export async function handleMcpRequest(
   return transport.handleRequest(request, { authInfo });
 }
 
-const pageSize = z
-  .number()
-  .int()
-  .min(1)
-  .max(100)
-  .optional()
-  .describe("Items per page (default 50, max 100)");
-const pageIndex = z
-  .number()
-  .int()
-  .min(0)
-  .optional()
-  .describe("Page index, 0-based (default 0)");
-
 function registerTools(server: McpServer) {
   // ---------------------------------------------------------------------------
   // Inventory tools
@@ -324,8 +354,7 @@ function registerTools(server: McpServer) {
       productName: z.string().optional().describe("Filter by product name"),
       locationName: z.string().optional().describe("Filter by location name"),
       locationId: z.string().optional().describe("Filter by exact location ID"),
-      pageIndex,
-      pageSize,
+      ...mcpPaginationParams,
     },
     listHandler("inventory", slimInventory, {
       orderBy: "createdAt",
@@ -458,8 +487,7 @@ function registerTools(server: McpServer) {
       manufacturer: z.string().optional().describe("Filter by manufacturer"),
       upc: z.string().optional().describe("Filter by UPC code"),
       category: z.string().optional().describe("Filter by category"),
-      pageIndex,
-      pageSize,
+      ...mcpPaginationParams,
     },
     listHandler("product", slimProduct, {
       orderBy: "name",
@@ -501,7 +529,7 @@ function registerTools(server: McpServer) {
           "Link this product to an ingredient (its id). Lets recipes using that ingredient cost from this product.",
         ),
       unitMappings: z
-        .array(mcpUnitMapping)
+        .array(mcpUnitMappingInput)
         .optional()
         .describe(
           'Conversion/price edges, e.g. 8 oz = $10 -> [{ a: { value: 8, unit: "oz" }, b: { value: 10, unit: "dollar" } }]. For a weight-measured ingredient an oz/g -> dollar edge is the cost basis.',
@@ -513,7 +541,8 @@ function registerTools(server: McpServer) {
       // Linking an ingredient or attaching mappings needs the full create input,
       // which quickCreate doesn't accept; route through product.create instead.
       const unitMappings = (
-        (params.unitMappings as Array<z.infer<typeof mcpUnitMapping>>) ?? []
+        (params.unitMappings as Array<z.infer<typeof mcpUnitMappingInput>>) ??
+        []
       ).map(toUnitMappingInput);
       if (params.ingredientId == null && unitMappings.length === 0) {
         const result = await caller.product.quickCreate({
@@ -584,7 +613,7 @@ function registerTools(server: McpServer) {
     {
       id: z.string().describe("Product ID"),
       unitMappings: z
-        .array(mcpUnitMapping)
+        .array(mcpUnitMappingInput)
         .describe(
           'The complete set of mappings to keep, e.g. [{ a: { value: 8, unit: "oz" }, b: { value: 10, unit: "dollar" } }]. An empty array clears all mappings.',
         ),
@@ -592,7 +621,7 @@ function registerTools(server: McpServer) {
     withErrorHandling(async (params, extra) => {
       const caller = getCaller(extra);
       const unitMappings = (
-        params.unitMappings as Array<z.infer<typeof mcpUnitMapping>>
+        params.unitMappings as Array<z.infer<typeof mcpUnitMappingInput>>
       ).map(toUnitMappingInput);
       const result = await caller.product.update({
         id: params.id,
@@ -638,7 +667,10 @@ function registerTools(server: McpServer) {
     "List all locations with optional name filter. Use to resolve location names to IDs.",
     {
       nameFilter: z.string().optional().describe("Filter by location name"),
-      pageIndex,
+      // Locations intentionally diverge: only nameFilter is exposed (not
+      // itemTypeFilter) and the page size is capped higher (200) since the
+      // location tree is small and usually wanted whole.
+      pageIndex: mcpPaginationParams.pageIndex,
       pageSize: z
         .number()
         .int()
@@ -752,16 +784,9 @@ function registerTools(server: McpServer) {
     "search_ingredients",
     "Search ingredients by name. Returns id, name, aliases, linked products, and recipe count.",
     {
-      nameFilter: z
-        .string()
-        .optional()
-        .describe("Filter by ingredient name (substring)"),
-      missingProductsOnly: z
-        .boolean()
-        .optional()
-        .describe("Only return ingredients with no linked products"),
-      pageIndex,
-      pageSize,
+      // Field names match the router filter exactly — reuse its shape + docs.
+      ...ingredientFiltersSchema.shape,
+      ...mcpPaginationParams,
     },
     listHandler("ingredient", slimIngredient, {
       orderBy: "name",
@@ -852,8 +877,7 @@ function registerTools(server: McpServer) {
         .string()
         .optional()
         .describe("Filter by recipe name (substring)"),
-      pageIndex,
-      pageSize,
+      ...mcpPaginationParams,
     },
     listHandler("recipe", slimRecipe, {
       orderBy: "name",
@@ -1200,6 +1224,243 @@ function registerTools(server: McpServer) {
       });
       if (content === null) return notionUnavailable();
       return json(content);
+    }),
+  );
+
+  // ---------------------------------------------------------------------------
+  // Meal-planning tools
+  //
+  // A meal is a planned eating occasion on a calendar day grouping one or more
+  // recipes (each at a `scale` multiplier). Cost/calorie rollups derive from
+  // recipe.totals × scale. The per-recipe `id` in a meal's `recipes[]` is the
+  // mealRecipe id — pass THAT (not the recipe id) to update/remove_meal_recipe.
+  // ---------------------------------------------------------------------------
+
+  server.tool(
+    "list_meals",
+    "List meals (planned eating occasions), most recent first, optionally bounded by a date range.",
+    {
+      from: mealDate.optional().describe("Only meals on or after this day"),
+      to: mealDate.optional().describe("Only meals on or before this day"),
+      ...mcpPaginationParams,
+    },
+    listHandler("meal", slimMeal, {
+      orderBy: "date",
+      direction: "desc",
+      buildFilters: (p) => ({ from: p.from, to: p.to }),
+    }),
+  );
+
+  server.tool(
+    "get_meal",
+    "Get a single meal by ID, including its planned recipes and cost/calorie totals.",
+    { id: idParam("Meal") },
+    getByIdHandler("meal", slimMeal),
+  );
+
+  server.tool(
+    "create_meal",
+    "Create a meal on a calendar day. Optionally include recipes (by recipe ID) to plan in one call; use list_recipes/get_recipe to resolve IDs.",
+    mealCreateInput.shape,
+    withErrorHandling(async (params, extra) => {
+      const caller = getCaller(extra);
+      const result = await caller.meal.create(params);
+      return json(slimMeal(result as Record<string, unknown>));
+    }),
+  );
+
+  server.tool(
+    "update_meal",
+    "Update a meal's date, name, or sort order. Recipes are managed via add/update/remove_meal_recipe.",
+    {
+      id: idParam("Meal"),
+      ...mealUpdateData.shape,
+    },
+    updateHandler("meal", slimMeal),
+  );
+
+  server.tool(
+    "delete_meals",
+    "Soft-delete meals by IDs. Cascades to the meal's planned recipes.",
+    { ids: idsParam("meal") },
+    deleteHandler("meal"),
+  );
+
+  server.tool(
+    "get_meals_by_date_range",
+    "Get all meals between two days (inclusive) — the calendar view for a week/range.",
+    {
+      from: mealDate.describe("Start day (inclusive)"),
+      to: mealDate.describe("End day (inclusive)"),
+    },
+    withErrorHandling(async (params, extra) => {
+      const caller = getCaller(extra);
+      const result = await caller.meal.getByDateRange({
+        from: params.from,
+        to: params.to,
+      });
+      return json((result as Record<string, unknown>[]).map(slimMeal));
+    }),
+  );
+
+  server.tool(
+    "get_shopping_list",
+    "Build a shopping list across all meals in a date range: aggregated need vs. on-hand inventory, the shortfall to buy, and a per-meal breakdown of who needs each item. Read-only — never mutates inventory.",
+    {
+      from: mealDate.describe("Start day (inclusive)"),
+      to: mealDate.describe("End day (inclusive)"),
+    },
+    withErrorHandling(async (params, extra) => {
+      const caller = getCaller(extra);
+      const result = await caller.meal.getShoppingList({
+        from: params.from,
+        to: params.to,
+      });
+      return json(result);
+    }),
+  );
+
+  server.tool(
+    "add_recipe_to_meal",
+    "Plan a recipe into a meal at a given scale multiplier (1 = as-written).",
+    {
+      mealId: idParam("Meal"),
+      ...mealRecipeInput.shape,
+    },
+    withErrorHandling(async (params, extra) => {
+      const caller = getCaller(extra);
+      const result = await caller.meal.addRecipe({
+        mealId: params.mealId,
+        recipeId: params.recipeId,
+        scale: params.scale,
+        sortOrder: params.sortOrder,
+      });
+      return json(slimMeal(result as Record<string, unknown>));
+    }),
+  );
+
+  server.tool(
+    "update_meal_recipe",
+    "Adjust a planned recipe's scale or sort order within its meal.",
+    {
+      id: z
+        .string()
+        .describe(
+          "Meal-recipe ID (the `id` inside a meal's recipes[], NOT the recipe id)",
+        ),
+      scale: mealScale.optional().describe("New scale multiplier (e.g. 1.5)"),
+      sortOrder: z
+        .number()
+        .int()
+        .nullable()
+        .optional()
+        .describe("New sort order"),
+    },
+    withErrorHandling(async (params, extra) => {
+      const caller = getCaller(extra);
+      const result = await caller.meal.updateRecipe({
+        id: params.id,
+        scale: params.scale,
+        sortOrder: params.sortOrder,
+      });
+      return json(slimMeal(result as Record<string, unknown>));
+    }),
+  );
+
+  server.tool(
+    "remove_meal_recipe",
+    "Remove a planned recipe from its meal.",
+    {
+      id: z
+        .string()
+        .describe(
+          "Meal-recipe ID (the `id` inside a meal's recipes[], NOT the recipe id)",
+        ),
+    },
+    withErrorHandling(async (params, extra) => {
+      const caller = getCaller(extra);
+      const result = await caller.meal.removeRecipe({ id: params.id });
+      return json(slimMeal(result as Record<string, unknown>));
+    }),
+  );
+
+  // ---------------------------------------------------------------------------
+  // USDA food-data tools (read-only lookups against USDA FoodData Central)
+  // ---------------------------------------------------------------------------
+
+  server.tool(
+    "search_usda_foods",
+    "Search USDA FoodData Central by name (full-text). foundation_food & sr_legacy_food are generic whole foods; branded_food is specific products. Use to find a food's FDC id / UPC / NDB for nutrition or for linking a product.",
+    {
+      query: z.string().describe("Food name to search for"),
+      dataType: dataTypeEnum
+        .optional()
+        .describe("Optional bias toward a USDA data type"),
+      ...mcpPaginationParams,
+    },
+    withErrorHandling(async (params, extra) => {
+      const caller = getCaller(extra);
+      const result = await caller.usda.list({
+        filters: {
+          nameFilter: params.query,
+          dataTypeFilter: params.dataType,
+        },
+        sort: { orderBy: "description", direction: "asc" },
+        pagination: {
+          pageIndex: (params.pageIndex as number) ?? 0,
+          pageSize: (params.pageSize as number) ?? 25,
+        },
+      });
+      return json({
+        meta: result.meta,
+        items: (result.items as Record<string, unknown>[]).map(slimUsdaFood),
+      });
+    }),
+  );
+
+  server.tool(
+    "get_usda_food",
+    "Get a USDA food by its FDC id (from search_usda_foods), including compact nutrients-per-100g and any linked Cubby products.",
+    { fdcId: z.number().int().describe("USDA FDC id") },
+    withErrorHandling(async (params, extra) => {
+      const caller = getCaller(extra);
+      const result = await caller.usda.getByID({ id: params.fdcId });
+      return json(
+        result ? slimUsdaFood(result as Record<string, unknown>) : null,
+      );
+    }),
+  );
+
+  server.tool(
+    "find_usda_food",
+    "Look up a USDA food by barcode (UPC/GTIN, 12-14 digits) or NDB number. Provide exactly one.",
+    {
+      upc: z.string().optional().describe("UPC-A/EAN-13/GTIN-14 barcode"),
+      ndbNumber: z.number().int().optional().describe("USDA NDB number"),
+    },
+    withErrorHandling(async (params, extra) => {
+      const caller = getCaller(extra);
+      const upc = params.upc as string | undefined;
+      const ndbNumber = params.ndbNumber as number | undefined;
+      if ((upc == null) === (ndbNumber == null)) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: "Provide exactly one of `upc` or `ndbNumber`.",
+            },
+          ],
+          isError: true,
+        };
+      }
+      const lookup =
+        upc != null
+          ? ({ kind: "upc", gtin_upc: upc } as const)
+          : ({ kind: "ndb", ndb_number: ndbNumber as number } as const);
+      const result = await caller.usda.getByAlternateID(lookup);
+      return json(
+        result ? slimUsdaFood(result as Record<string, unknown>) : null,
+      );
     }),
   );
 }

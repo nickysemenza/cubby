@@ -308,15 +308,34 @@ export const recipeSectionInput = z.object({
   id: id.optional(),
 });
 
+// Descriptions live at the field level here (rather than on the shared building
+// blocks, which are also reused by the output/form layers) so they reliably
+// surface to MCP clients via `recipeCreateInput.shape` — see the create_recipe /
+// update_recipe tools. `recipeUpdateInput` inherits them through `.partial()`.
 export const recipeCreateInput = z
   .object({
-    name: z.string(),
-    meta: recipeMeta,
-    yield: recipeYieldSchema.nullable().optional(),
-    servings: recipeServings.nullable().optional(),
-    tags: recipeTags.nullable().optional(),
-    notes: recipeNotes.nullable().optional(),
-    sections: z.array(recipeSectionInput),
+    name: z.string().describe("Recipe name"),
+    meta: recipeMeta.describe(
+      "Source metadata, e.g. { url } of the web source",
+    ),
+    yield: recipeYieldSchema
+      .nullable()
+      .optional()
+      .describe('What the recipe produces, e.g. { value: 2, unit: "loaves" }'),
+    servings: recipeServings
+      .nullable()
+      .optional()
+      .describe("Number of servings (positive integer)"),
+    tags: recipeTags.nullable().optional().describe("Free-form tags"),
+    notes: recipeNotes
+      .nullable()
+      .optional()
+      .describe("Freeform markdown headnote/intro plus tips"),
+    sections: z
+      .array(recipeSectionInput)
+      .describe(
+        "Recipe sections, each with ingredients (by ingredient/recipe id) and instructions",
+      ),
   })
   .extend(createInputImages.shape);
 

@@ -17,7 +17,8 @@ export const mealScale = z.number().min(0.01).max(1000);
 /** A calendar day as a plain "YYYY-MM-DD" string — timezone-free (see schema.ts). */
 export const mealDate = z
   .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD");
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD")
+  .describe('Calendar day as "YYYY-MM-DD"');
 
 // ---------------------------------------------------------------------------
 // Inputs
