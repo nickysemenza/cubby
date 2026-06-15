@@ -33,6 +33,7 @@ const list = publicProcedure
         filters: z.object({
           nameFilter: z.string().optional(),
           dataTypeFilter: dataTypeEnum.optional(),
+          foodsOnly: z.boolean().optional(),
         }),
       })
       .extend(sortPaginationCombo.shape),
@@ -45,6 +46,7 @@ const list = publicProcedure
         input.filters.dataTypeFilter,
         input.sort,
         input.pagination,
+        input.filters.foodsOnly,
       );
 
       return buildPaginatedResponse(input.pagination, data, count);

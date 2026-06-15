@@ -1,16 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
-import { Check, Merge, Sparkles } from "lucide-react";
-import {
-  type RefObject,
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { Merge, Sparkles } from "lucide-react";
+import { useId, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { MergeConfirmation } from "~/app/_components/ingredient/merge-confirmation";
 import { NoneState } from "~/app/_components/NoneState";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -22,7 +16,6 @@ import {
 import { EntityIcon } from "~/entities/entities";
 import { queryKeys } from "~/lib/query-keys";
 import { getIngredientMappings } from "~/lib/unit-mapping-utils";
-import { cn } from "~/lib/utils";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { useTRPC, useTRPCClient } from "~/trpc/react";
 import {
@@ -38,84 +31,6 @@ import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { TruncatedList } from "../_components/TruncatedList";
-
-/**
- * Merge confirmation body. Holds its own selected-target state so the radios
- * re-render on click (the bulk-action dialog doesn't re-render on parent state
- * changes), and mirrors the choice into `targetRef` so `onExecute` — which can't
- * read this component's state — picks the right keeper.
- */
-function MergeConfirmation({
-  ingredients,
-  targetRef,
-}: {
-  ingredients: Array<{ id: string; name: string }>;
-  targetRef: RefObject<string | null>;
-}) {
-  const [targetId, setTargetId] = useState<string>(
-    () => ingredients[0]?.id ?? "",
-  );
-  useEffect(() => {
-    targetRef.current = targetId;
-  }, [targetId, targetRef]);
-
-  const aliases = ingredients.filter((i) => i.id !== targetId);
-  return (
-    <div className="space-y-3">
-      <div>
-        <div className="mb-1 font-medium text-muted-foreground text-sm">
-          Keep (target):
-        </div>
-        <div className="flex flex-col gap-1">
-          {ingredients.map((ing) => {
-            const selected = ing.id === targetId;
-            return (
-              <Button
-                key={ing.id}
-                type="button"
-                variant={selected ? "default" : "outline"}
-                size="sm"
-                className="justify-start"
-                onClick={() => setTargetId(ing.id)}
-              >
-                <Check
-                  className={cn(
-                    "h-4 w-4 shrink-0",
-                    selected ? "opacity-100" : "opacity-0",
-                  )}
-                />
-                <span className="truncate">{ing.name}</span>
-              </Button>
-            );
-          })}
-        </div>
-      </div>
-      <div>
-        <div className="mb-1 font-medium text-muted-foreground text-sm">
-          Merge into aliases:
-        </div>
-        <div className="flex flex-wrap gap-1">
-          {aliases.length > 0 ? (
-            aliases.map((a) => (
-              <EntityPillLink
-                key={a.id}
-                entity="ingredient"
-                data={{ name: a.name, id: a.id }}
-              />
-            ))
-          ) : (
-            <NoneState />
-          )}
-        </div>
-      </div>
-      <p className="text-muted-foreground text-xs">
-        The other selected ingredient{aliases.length === 1 ? "" : "s"} will be
-        deleted — their names become aliases of the kept one, and their products
-        and recipe uses move over.
-      </p>
-    </div>
-  );
-}
 
 type IngredientProduct = IngredientWithFoodOut["product"][number];
 

@@ -6,9 +6,11 @@ import {
   type IntegreSQLDatabaseConfig,
 } from "@devoxa/integresql-client";
 import { chromium, type FullConfig } from "@playwright/test";
+import { pushSchema } from "drizzle-kit/api";
+import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
+import * as schema from "../../src/server/db/schema";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -46,11 +48,8 @@ async function globalSetup(config: FullConfig): Promise<void> {
   console.log("[E2E Setup] Getting fresh database from IntegresQL...");
 
   // 1. Get fresh database from IntegresQL
-  // Include both schema and migrations journal in hash to detect migration changes
-  const hash = await integreSQL.hashFiles([
-    "./src/server/db/schema.ts",
-    "./drizzle/meta/_journal.json",
-  ]);
+  // Schema.ts is the single source of truth — the template is pushed from it.
+  const hash = await integreSQL.hashFiles(["./src/server/db/schema.ts"]);
 
   // Initialize template if needed
   await integreSQL.initializeTemplate(hash, async (databaseConfig) => {
@@ -58,11 +57,20 @@ async function globalSetup(config: FullConfig): Promise<void> {
       remapDBConfig(databaseConfig),
     );
 
-    console.log("[E2E Setup] Migrating template database...");
+    console.log("[E2E Setup] Pushing schema to template database...");
     const pool = new Pool({ connectionString: connectionUrl });
     const db = drizzle(pool);
-    await migrate(db, { migrationsFolder: "./drizzle" });
-    console.log("[E2E Setup] Template database migrated");
+    // pushSchema doesn't manage extensions; pg_trgm is needed for the GIN
+    // trigram indexes, so create it before pushing.
+    await db.execute(sql`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
+    // See test-setup.ts: bridge the duplicated drizzle-orm PgDatabase types.
+    const { apply } = await pushSchema(
+      schema,
+      db as unknown as Parameters<typeof pushSchema>[1],
+      ["public"],
+    );
+    await apply();
+    console.log("[E2E Setup] Template database schema pushed");
     await pool.end();
   });
 

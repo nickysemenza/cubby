@@ -20,12 +20,20 @@ import {
   ingredientCooccurrenceSchema,
 } from "@cubby/schemas/ingredient-cooccurrence";
 import {
+  type IngredientUsage,
+  ingredientUsageSchema,
+} from "@cubby/schemas/ingredient-usage";
+import {
   cookbookSummary,
   recipeCostingExplain,
   recipeCreateInput,
   recipeOut,
   recipeUpdateInput,
 } from "@cubby/schemas/recipe";
+import {
+  type RecipeDependencyGraph,
+  recipeDependencyGraphSchema,
+} from "@cubby/schemas/recipe-dependency-graph";
 import { z } from "zod";
 import {
   importRecipeSignature,
@@ -46,10 +54,12 @@ import {
   getAllTags,
   getCookbookRecipesForDiff,
   getIngredientCooccurrence,
+  getIngredientUsage,
   getNotionRecipePageIds,
   getNotionRecipesForDiff,
   getRecipeByID,
   getRecipeByShortcode,
+  getRecipeDependencyGraph,
   getRecipesByIDs,
   recipeList,
   updateRecipe,
@@ -383,6 +393,20 @@ const getIngredientCooccurrenceEndpoint = protectedProcedure
     return await getIngredientCooccurrence(ctx.db, input?.minEdgeWeight ?? 2);
   });
 
+const getDependencyGraphEndpoint = protectedProcedure
+  .input(z.object({ cookbookId: cookbookId.optional() }).optional())
+  .output(recipeDependencyGraphSchema)
+  .query(async ({ ctx, input }): Promise<RecipeDependencyGraph> => {
+    return await getRecipeDependencyGraph(ctx.db, input?.cookbookId);
+  });
+
+const getIngredientUsageEndpoint = protectedProcedure
+  .input(z.object({ cookbookId: cookbookId.optional() }).optional())
+  .output(ingredientUsageSchema)
+  .query(async ({ ctx, input }): Promise<IngredientUsage> => {
+    return await getIngredientUsage(ctx.db, input?.cookbookId);
+  });
+
 const getAllTagsEndpoint = protectedProcedure
   .output(z.array(z.string()))
   .query(async ({ ctx }) => {
@@ -472,5 +496,7 @@ export const recipeRouter = createTRPCRouter({
   recomputeAll,
   explainCosting,
   getIngredientCooccurrence: getIngredientCooccurrenceEndpoint,
+  getDependencyGraph: getDependencyGraphEndpoint,
+  getIngredientUsage: getIngredientUsageEndpoint,
   getAllTags: getAllTagsEndpoint,
 });

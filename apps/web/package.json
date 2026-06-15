@@ -14,8 +14,6 @@
     "check": "biome check && pnpm typecheck",
     "typecheck": "tsgo --noEmit && tsgo --noEmit -p tsconfig.sw.json",
     "typecheck:stable": "tsc --noEmit && tsc --noEmit -p tsconfig.sw.json",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:pull": "drizzle-kit pull",
     "db:rebuild": "pnpm run db:push",

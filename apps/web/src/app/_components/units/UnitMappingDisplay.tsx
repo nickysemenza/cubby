@@ -1,4 +1,5 @@
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
+import type { BaseKind } from "~/lib/conversion-coverage";
 import { ConversionCapabilities } from "./ConversionCapabilities";
 
 interface UnitMappingDisplayProps {
@@ -10,6 +11,8 @@ interface UnitMappingDisplayProps {
   showCoverage?: boolean;
   /** Show the one-word coverage tier (Complete/Good/Partial/None) in compact mode. */
   showTier?: boolean;
+  /** Measurement-kind universe to grade against (USDA passes USDA_KINDS). */
+  kinds?: readonly BaseKind[];
 }
 
 export const UnitMappingDisplay: React.FC<UnitMappingDisplayProps> = ({
@@ -18,6 +21,7 @@ export const UnitMappingDisplay: React.FC<UnitMappingDisplayProps> = ({
   compact = false,
   showCoverage = false,
   showTier = false,
+  kinds,
 }) => {
   return (
     <div>
@@ -28,6 +32,7 @@ export const UnitMappingDisplay: React.FC<UnitMappingDisplayProps> = ({
           compact={compact}
           showCoverage={showCoverage}
           showTier={showTier}
+          kinds={kinds}
         />
       </div>
     </div>

@@ -8,6 +8,7 @@ import {
   UtensilsCrossed,
 } from "lucide-react";
 import { useMemo } from "react";
+import { USDA_KINDS } from "~/lib/conversion-coverage";
 import { unitMappingsFromFood } from "~/lib/unit-mapping-utils";
 import { DetailPage, type DetailSection } from "../data-table/detail-page";
 import { EntityPillLinkList } from "../EntityPillLinkList";
@@ -129,7 +130,7 @@ export const USDAFoodDetail: React.FC<{
   );
 
   const unitMappingsSection = (
-    <UnitMappingDisplay mappings={mappings} title="" />
+    <UnitMappingDisplay mappings={mappings} title="" kinds={USDA_KINDS} />
   );
 
   // Section for displaying linked products

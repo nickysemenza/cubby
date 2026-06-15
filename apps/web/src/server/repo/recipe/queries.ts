@@ -3,15 +3,23 @@
  * Ingredient co-occurrence, tags, and other analytics.
  */
 
+import type { CookbookId, IngredientId } from "@cubby/schemas/identifiers";
 import { unsafeIngredientId, unsafeRecipeId } from "@cubby/schemas/identifiers";
 import type {
   IngredientCooccurrence,
   IngredientEdge,
   IngredientNode,
 } from "@cubby/schemas/ingredient-cooccurrence";
-import { desc } from "drizzle-orm";
+import type { IngredientUsage } from "@cubby/schemas/ingredient-usage";
+import type {
+  RecipeDepEdge,
+  RecipeDependencyGraph,
+  RecipeDepNode,
+} from "@cubby/schemas/recipe-dependency-graph";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import {
+  cookbook,
   recipe,
   recipeSection,
   recipeSectionIngredient,
@@ -145,6 +153,178 @@ export const getIngredientCooccurrence = async (
   nodes.sort((a, b) => b.recipeCount - a.recipeCount);
 
   return { nodes, edges };
+};
+
+// Map of cookbook id → display name, for labelling/colouring graph nodes.
+const getCookbookNameMap = async (
+  db: Database,
+): Promise<Map<CookbookId, string>> => {
+  const rows = await getDb(db).query.cookbook.findMany({
+    where: notDeleted(cookbook),
+    columns: { id: true, name: true },
+  });
+  return new Map(rows.map((c) => [c.id, c.name]));
+};
+
+/**
+ * Build the recipe-as-ingredient dependency graph. Each edge is parent → sub
+ * ("uses / depends on"): a recipe that contains an ingredient whose `recipeId`
+ * points at another recipe. Optionally scoped to one cookbook — sub-recipes that
+ * fall outside that cookbook are still emitted as `external` nodes so their
+ * inbound edge isn't dangling.
+ */
+export const getRecipeDependencyGraph = async (
+  db: Database,
+  cookbookId?: CookbookId,
+): Promise<RecipeDependencyGraph> => {
+  const dbClient = getDb(db);
+  const cookbookNames = await getCookbookNameMap(db);
+  const nameFor = (id: CookbookId | null) =>
+    id ? (cookbookNames.get(id) ?? null) : null;
+
+  const recipes = await dbClient.query.recipe.findMany({
+    where: cookbookId
+      ? and(notDeleted(recipe), eq(recipe.cookbookId, cookbookId))
+      : notDeleted(recipe),
+    columns: { id: true, name: true, cookbookId: true },
+    with: {
+      sections: {
+        // Exclude soft-deleted sections/usages so removed sub-recipe links
+        // don't produce phantom edges (matches getIngredientCooccurrence).
+        where: notDeleted(recipeSection),
+        with: {
+          ingredients: {
+            where: notDeleted(recipeSectionIngredient),
+            with: {
+              ingredient: { columns: { recipeId: true, deletedAt: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const nodes = new Map<string, RecipeDepNode>();
+  for (const r of recipes) {
+    nodes.set(r.id, {
+      id: r.id,
+      name: r.name,
+      cookbookId: r.cookbookId,
+      cookbookName: nameFor(r.cookbookId),
+      external: false,
+    });
+  }
+
+  const edges: RecipeDepEdge[] = [];
+  const externalSubIds = new Set<string>();
+  for (const r of recipes) {
+    const seen = new Set<string>();
+    for (const section of r.sections) {
+      for (const si of section.ingredients) {
+        const ing = si.ingredient;
+        const subId = ing?.recipeId;
+        // Skip soft-deleted pointer rows so they don't create phantom edges
+        // (mirrors getIngredientUsage's deletedAt guard).
+        if (!subId || ing?.deletedAt || seen.has(subId)) continue;
+        seen.add(subId);
+        edges.push({ source: r.id, target: subId });
+        if (!nodes.has(subId)) externalSubIds.add(subId);
+      }
+    }
+  }
+
+  // Resolve names for sub-recipes outside the current scope (cookbook filter).
+  if (externalSubIds.size > 0) {
+    const externals = await dbClient.query.recipe.findMany({
+      where: and(
+        notDeleted(recipe),
+        inArray(recipe.id, [...externalSubIds].map(unsafeRecipeId)),
+      ),
+      columns: { id: true, name: true, cookbookId: true },
+    });
+    for (const e of externals) {
+      nodes.set(e.id, {
+        id: e.id,
+        name: e.name,
+        cookbookId: e.cookbookId,
+        cookbookName: nameFor(e.cookbookId),
+        external: true,
+      });
+    }
+  }
+
+  // Drop edges whose target couldn't be resolved (e.g. soft-deleted sub-recipe).
+  const resolved = edges.filter((e) => nodes.has(e.target));
+  return { nodes: [...nodes.values()], edges: resolved };
+};
+
+/**
+ * Count how many distinct recipes use each real ingredient, optionally scoped to
+ * one cookbook. Excludes sub-recipe pointers (ingredient.recipeId set) and
+ * soft-deleted ingredients. Rows are sorted most-used first.
+ */
+export const getIngredientUsage = async (
+  db: Database,
+  cookbookId?: CookbookId,
+): Promise<IngredientUsage> => {
+  const dbClient = getDb(db);
+  const recipes = await dbClient.query.recipe.findMany({
+    where: cookbookId
+      ? and(notDeleted(recipe), eq(recipe.cookbookId, cookbookId))
+      : notDeleted(recipe),
+    columns: { id: true },
+    with: {
+      sections: {
+        // Exclude soft-deleted sections/usages so usage counts don't include
+        // ingredients removed from these live recipes (matches cooccurrence).
+        where: notDeleted(recipeSection),
+        with: {
+          ingredients: {
+            where: notDeleted(recipeSectionIngredient),
+            with: {
+              ingredient: {
+                columns: {
+                  id: true,
+                  name: true,
+                  recipeId: true,
+                  deletedAt: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const recipeCount = new Map<IngredientId, number>();
+  const names = new Map<IngredientId, string>();
+  for (const r of recipes) {
+    const ids = new Set<IngredientId>();
+    for (const section of r.sections) {
+      for (const si of section.ingredients) {
+        const ing = si.ingredient;
+        // Real, live ingredients only — skip sub-recipe pointers + deleted rows.
+        if (ing && !ing.recipeId && !ing.deletedAt) {
+          ids.add(ing.id);
+          names.set(ing.id, ing.name);
+        }
+      }
+    }
+    for (const id of ids) {
+      recipeCount.set(id, (recipeCount.get(id) ?? 0) + 1);
+    }
+  }
+
+  const rows = [...recipeCount.entries()]
+    .map(([ingredientId, count]) => ({
+      ingredientId,
+      name: names.get(ingredientId) ?? "Unknown",
+      recipeCount: count,
+    }))
+    .sort((a, b) => b.recipeCount - a.recipeCount);
+
+  return { rows, totalRecipes: recipes.length };
 };
 
 /**

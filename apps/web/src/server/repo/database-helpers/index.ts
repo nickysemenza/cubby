@@ -19,6 +19,7 @@ export {
 export {
   buildOrderBy,
   buildSearchConditions,
+  countWhere,
   executeListQueryWithCount,
   formatSearchTerm,
   lockAndValidateForDelete,

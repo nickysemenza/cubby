@@ -89,8 +89,8 @@ export const recipe = pgTable(
     totals: jsonb("totals").$type<RecipeTotals | null>(),
     totalsComputedAt: timestamp("totalsComputedAt", { mode: "date" }),
   },
-  (table) => ({
-    shortcodeUnique: uniqueIndex("Recipe_shortcode_unique")
+  (table) => [
+    uniqueIndex("Recipe_shortcode_unique")
       .on(table.shortcode)
       .where(sql`${table.deletedAt} IS NULL`),
     // Non-cookbook recipes keep a globally-unique name. EPUB-imported (Book) and
@@ -98,7 +98,7 @@ export const recipe = pgTable(
     // by Notion page id respectively — so the same title can appear across a
     // cookbook, a Notion page, and a web recipe. `IS DISTINCT FROM` (not NOT IN)
     // keeps NULL-SourceType legacy rows inside the index.
-    nameUnique: uniqueIndex("Recipe_name_key")
+    uniqueIndex("Recipe_name_key")
       .on(table.name)
       .where(
         sql`${table.deletedAt} IS NULL AND ${table.SourceType} IS DISTINCT FROM 'Book' AND ${table.SourceType} IS DISTINCT FROM 'Notion'`,
@@ -107,37 +107,32 @@ export const recipe = pgTable(
     // same title may recur across books. The upsert keys on `cookbookId`; this DB
     // guard uses `SourceData` (kept synced to the cookbook name, which is itself
     // unique) so it's equivalent and needs no nullable-FK partial index.
-    bookTitleUnique: uniqueIndex("Recipe_book_title_key")
+    uniqueIndex("Recipe_book_title_key")
       .on(table.name, table.SourceData)
       .where(sql`${table.deletedAt} IS NULL AND ${table.SourceType} = 'Book'`),
     // A Notion-synced recipe's identity is its Notion page id, stored in
     // SourceData. This makes re-importing a page idempotent (and a renamed page
     // still hits the same row) — the analogue of bookTitleUnique for Notion.
-    notionPageUnique: uniqueIndex("Recipe_notion_page_key")
+    uniqueIndex("Recipe_notion_page_key")
       .on(table.SourceData)
       .where(
         sql`${table.deletedAt} IS NULL AND ${table.SourceType} = 'Notion'`,
       ),
-    createdAtIdx: index("Recipe_createdAt_idx").on(table.createdAt),
-    sourceTypeIdx: index("Recipe_SourceType_idx").on(table.SourceType),
-    cookbookIdIdx: index("Recipe_cookbookId_idx").on(table.cookbookId),
+    index("Recipe_createdAt_idx").on(table.createdAt),
+    index("Recipe_SourceType_idx").on(table.SourceType),
+    index("Recipe_cookbookId_idx").on(table.cookbookId),
     // GIN index for full-text search on name
-    nameGinIdx: index("Recipe_name_gin_idx").using(
-      "gin",
-      sql`${table.name} gin_trgm_ops`,
-    ),
-    createdAtDescIdx: index("Recipe_created_at_desc_idx").on(
-      table.createdAt.desc(),
-    ),
+    index("Recipe_name_gin_idx").using("gin", sql`${table.name} gin_trgm_ops`),
+    index("Recipe_created_at_desc_idx").on(table.createdAt.desc()),
     // Partial index for soft delete queries
-    nameActiveIdx: index("Recipe_name_active_idx")
+    index("Recipe_name_active_idx")
       .on(table.name)
       .where(sql`${table.deletedAt} IS NULL`),
     // Drain target: recipes whose totals need (re)computing.
-    totalsStaleIdx: index("Recipe_totals_stale_idx")
+    index("Recipe_totals_stale_idx")
       .on(table.totalsComputedAt)
       .where(sql`${table.totalsComputedAt} IS NULL`),
-  }),
+  ],
 );
 
 // Cookbook table — a first-class recipe source (the book a set of EPUB-extracted
@@ -174,17 +169,17 @@ export const cookbook = pgTable(
       .$onUpdate(() => new Date()),
     deletedAt: timestamp("deletedAt", { mode: "date" }),
   },
-  (table) => ({
-    nameUnique: uniqueIndex("Cookbook_name_key")
+  (table) => [
+    uniqueIndex("Cookbook_name_key")
       .on(table.name)
       .where(sql`${table.deletedAt} IS NULL`),
-    createdAtIdx: index("Cookbook_createdAt_idx").on(table.createdAt),
-    coverImageIdIdx: index("Cookbook_coverImageId_idx").on(table.coverImageId),
-    nameGinIdx: index("Cookbook_name_gin_idx").using(
+    index("Cookbook_createdAt_idx").on(table.createdAt),
+    index("Cookbook_coverImageId_idx").on(table.coverImageId),
+    index("Cookbook_name_gin_idx").using(
       "gin",
       sql`${table.name} gin_trgm_ops`,
     ),
-  }),
+  ],
 );
 
 // RecipeSection table
@@ -212,10 +207,10 @@ export const recipeSection = pgTable(
     // identical across one save) — reads tiebreak on createdAt/id for those.
     sortOrder: integer("sortOrder"),
   },
-  (table) => ({
-    recipeIdIdx: index("RecipeSection_recipeId_idx").on(table.recipeId),
-    createdAtIdx: index("RecipeSection_createdAt_idx").on(table.createdAt),
-  }),
+  (table) => [
+    index("RecipeSection_recipeId_idx").on(table.recipeId),
+    index("RecipeSection_createdAt_idx").on(table.createdAt),
+  ],
 );
 
 // Ingredient table
@@ -238,34 +233,31 @@ export const ingredient = pgTable(
       .$type<RecipeId>()
       .references(() => recipe.id),
   },
-  (table) => ({
+  (table) => [
     // Case-insensitive uniqueness: the matcher finds ingredients by lower(name)
     // (buildIngredientWhere), so the unique key must agree — otherwise "Flour"
     // and "flour" race past the matcher and both insert. The display value keeps
     // its original casing (first writer wins via ON CONFLICT); only the key is
     // lowercased. See findOrCreateIngredient's ON CONFLICT (lower(name)).
-    nameUnique: uniqueIndex("Ingredient_name_key")
+    uniqueIndex("Ingredient_name_key")
       .on(sql`lower(${table.name})`)
       .where(sql`${table.deletedAt} IS NULL`),
-    recipeIdUnique: uniqueIndex("Ingredient_recipeId_key")
+    uniqueIndex("Ingredient_recipeId_key")
       .on(table.recipeId)
       .where(sql`${table.deletedAt} IS NULL`),
-    recipeIdIdx: index("Ingredient_recipeId_idx").on(table.recipeId),
-    createdAtIdx: index("Ingredient_createdAt_idx").on(table.createdAt),
+    index("Ingredient_recipeId_idx").on(table.recipeId),
+    index("Ingredient_createdAt_idx").on(table.createdAt),
     // GIN indexes for full-text search
-    nameGinIdx: index("Ingredient_name_gin_idx").using(
+    index("Ingredient_name_gin_idx").using(
       "gin",
       sql`${table.name} gin_trgm_ops`,
     ),
-    aliasesGinIdx: index("Ingredient_aliases_gin_idx").using(
-      "gin",
-      table.aliases,
-    ),
+    index("Ingredient_aliases_gin_idx").using("gin", table.aliases),
     // Partial index for soft delete queries
-    nameActiveIdx: index("Ingredient_name_active_idx")
+    index("Ingredient_name_active_idx")
       .on(table.name)
       .where(sql`${table.deletedAt} IS NULL`),
-  }),
+  ],
 );
 
 // RecipeSectionIngredient table
@@ -300,14 +292,12 @@ export const recipeSectionIngredient = pgTable(
       .$onUpdate(() => new Date()),
     deletedAt: timestamp("deletedAt", { mode: "date" }),
   },
-  (table) => ({
-    recipeSectionIdIdx: index("RecipeSectionIngredient_recipeSectionId_idx").on(
+  (table) => [
+    index("RecipeSectionIngredient_recipeSectionId_idx").on(
       table.recipeSectionId,
     ),
-    ingredientIdIdx: index("RecipeSectionIngredient_ingredientId_idx").on(
-      table.ingredientId,
-    ),
-  }),
+    index("RecipeSectionIngredient_ingredientId_idx").on(table.ingredientId),
+  ],
 );
 
 // Meal table — a planned eating occasion on a calendar day. Groups one or more
@@ -333,12 +323,12 @@ export const meal = pgTable(
       .$onUpdate(() => new Date()),
     deletedAt: timestamp("deletedAt", { mode: "date" }),
   },
-  (table) => ({
+  (table) => [
     // The calendar's range query (date BETWEEN from AND to) is the hot path.
-    dateActiveIdx: index("Meal_date_active_idx")
+    index("Meal_date_active_idx")
       .on(table.date)
       .where(sql`${table.deletedAt} IS NULL`),
-  }),
+  ],
 );
 
 // MealRecipe — a recipe planned into a meal at a numeric scale multiplier.
@@ -368,10 +358,10 @@ export const mealRecipe = pgTable(
       .$onUpdate(() => new Date()),
     deletedAt: timestamp("deletedAt", { mode: "date" }),
   },
-  (table) => ({
-    mealIdIdx: index("MealRecipe_mealId_idx").on(table.mealId),
-    recipeIdIdx: index("MealRecipe_recipeId_idx").on(table.recipeId),
-  }),
+  (table) => [
+    index("MealRecipe_mealId_idx").on(table.mealId),
+    index("MealRecipe_recipeId_idx").on(table.recipeId),
+  ],
 );
 
 // Product table
@@ -404,44 +394,38 @@ export const product = pgTable(
     }), // product category for filtering
     price: real("price"), // Unit price in dollars, null if no price mapping
   },
-  (table) => ({
-    shortcodeUnique: uniqueIndex("Product_shortcode_unique")
+  (table) => [
+    uniqueIndex("Product_shortcode_unique")
       .on(table.shortcode)
       .where(sql`${table.deletedAt} IS NULL`),
-    categoryIdx: index("Product_category_idx").on(table.category),
-    nameMfgUnique: uniqueIndex("Product_name_manufacturer_key")
+    index("Product_category_idx").on(table.category),
+    uniqueIndex("Product_name_manufacturer_key")
       .on(table.name, table.manufacturer)
       .where(sql`${table.deletedAt} IS NULL`),
-    upcUnique: uniqueIndex("Product_upc_key")
+    uniqueIndex("Product_upc_key")
       .on(table.upc)
       .where(sql`${table.deletedAt} IS NULL`),
-    ndbUnique: uniqueIndex("Product_ndb_number_key")
+    uniqueIndex("Product_ndb_number_key")
       .on(table.ndb_number)
       .where(sql`${table.deletedAt} IS NULL`),
-    ingredientIdIdx: index("Product_ingredientId_idx").on(table.ingredientId),
-    createdAtIdx: index("Product_createdAt_idx").on(table.createdAt),
-    nameIdx: index("Product_name_idx").on(table.name),
+    index("Product_ingredientId_idx").on(table.ingredientId),
+    index("Product_createdAt_idx").on(table.createdAt),
+    index("Product_name_idx").on(table.name),
     // GIN indexes for full-text search
-    nameGinIdx: index("Product_name_gin_idx").using(
-      "gin",
-      sql`${table.name} gin_trgm_ops`,
-    ),
-    manufacturerGinIdx: index("Product_manufacturer_gin_idx").using(
+    index("Product_name_gin_idx").using("gin", sql`${table.name} gin_trgm_ops`),
+    index("Product_manufacturer_gin_idx").using(
       "gin",
       sql`${table.manufacturer} gin_trgm_ops`,
     ),
-    nameMfgIdx: index("Product_name_manufacturer_idx").on(
-      table.name,
-      table.manufacturer,
-    ),
+    index("Product_name_manufacturer_idx").on(table.name, table.manufacturer),
     // Partial indexes for soft delete queries
-    nameActiveIdx: index("Product_name_active_idx")
+    index("Product_name_active_idx")
       .on(table.name)
       .where(sql`${table.deletedAt} IS NULL`),
-    manufacturerActiveIdx: index("Product_manufacturer_active_idx")
+    index("Product_manufacturer_active_idx")
       .on(table.manufacturer)
       .where(sql`${table.deletedAt} IS NULL`),
-  }),
+  ],
 );
 
 // ProductExternalId table - generic external identifiers (Amazon ASIN, McMaster part number, etc.)
@@ -463,12 +447,12 @@ export const productExternalId = pgTable(
       .$onUpdate(() => new Date()),
     deletedAt: timestamp("deletedAt", { mode: "date" }),
   },
-  (table) => ({
-    productIdIdx: index("ProductExternalId_productId_idx").on(table.productId),
-    sourceProductUnique: uniqueIndex("ProductExternalId_product_source_key")
+  (table) => [
+    index("ProductExternalId_productId_idx").on(table.productId),
+    uniqueIndex("ProductExternalId_product_source_key")
       .on(table.productId, table.source)
       .where(sql`${table.deletedAt} IS NULL`),
-  }),
+  ],
 );
 
 // ProductUnitMappings table
@@ -490,11 +474,7 @@ export const productUnitMappings = pgTable(
       .$onUpdate(() => new Date()),
     deletedAt: timestamp("deletedAt", { mode: "date" }),
   },
-  (table) => ({
-    productIdIdx: index("ProductUnitMappings_productId_idx").on(
-      table.productId,
-    ),
-  }),
+  (table) => [index("ProductUnitMappings_productId_idx").on(table.productId)],
 );
 
 // Location table
@@ -518,36 +498,34 @@ export const location = pgTable(
     type: text("type").notNull(),
     aiDescription: text("aiDescription"),
   },
-  (table) => ({
-    shortcodeUnique: uniqueIndex("Location_shortcode_unique")
+  (table) => [
+    uniqueIndex("Location_shortcode_unique")
       .on(table.shortcode)
       .where(sql`${table.deletedAt} IS NULL`),
     // Case-insensitive uniqueness, matching the ilike lookup in
     // findOrCreateLocationByName (see Ingredient_name_key for the rationale).
-    nameUnique: uniqueIndex("Location_name_key")
+    uniqueIndex("Location_name_key")
       .on(sql`lower(${table.name})`)
       .where(sql`${table.deletedAt} IS NULL`),
-    nameIdx: index("Location_name_idx").on(table.name),
-    typeIdx: index("Location_type_idx").on(table.type),
-    parentIdIdx: index("Location_parentId_idx").on(table.parentId),
-    createdAtIdx: index("Location_createdAt_idx").on(table.createdAt),
-    lastBulkInventoryIdx: index("Location_lastBulkInventory_idx").on(
-      table.lastBulkInventory,
-    ),
+    index("Location_name_idx").on(table.name),
+    index("Location_type_idx").on(table.type),
+    index("Location_parentId_idx").on(table.parentId),
+    index("Location_createdAt_idx").on(table.createdAt),
+    index("Location_lastBulkInventory_idx").on(table.lastBulkInventory),
     // GIN index for full-text search
-    nameGinIdx: index("Location_name_gin_idx").using(
+    index("Location_name_gin_idx").using(
       "gin",
       sql`${table.name} gin_trgm_ops`,
     ),
-    typeNameIdx: index("Location_type_name_idx").on(table.type, table.name),
+    index("Location_type_name_idx").on(table.type, table.name),
     // Partial indexes for soft delete queries
-    nameActiveIdx: index("Location_name_active_idx")
+    index("Location_name_active_idx")
       .on(table.name)
       .where(sql`${table.deletedAt} IS NULL`),
-    typeActiveIdx: index("Location_type_active_idx")
+    index("Location_type_active_idx")
       .on(table.type)
       .where(sql`${table.deletedAt} IS NULL`),
-  }),
+  ],
 );
 
 // InventoryEntry table
@@ -575,16 +553,14 @@ export const inventoryEntry = pgTable(
       .references(() => location.id),
     valuation: real("valuation"), // Precomputed: amount.value * product.price
   },
-  (table) => ({
-    productLocationUnique: uniqueIndex(
-      "InventoryEntry_productId_locationId_key",
-    )
+  (table) => [
+    uniqueIndex("InventoryEntry_productId_locationId_key")
       .on(table.productId, table.locationId)
       .where(sql`${table.deletedAt} IS NULL`),
-    productIdIdx: index("InventoryEntry_productId_idx").on(table.productId),
-    locationIdIdx: index("InventoryEntry_locationId_idx").on(table.locationId),
-    createdAtIdx: index("InventoryEntry_createdAt_idx").on(table.createdAt),
-  }),
+    index("InventoryEntry_productId_idx").on(table.productId),
+    index("InventoryEntry_locationId_idx").on(table.locationId),
+    index("InventoryEntry_createdAt_idx").on(table.createdAt),
+  ],
 );
 
 // Image table
@@ -605,13 +581,13 @@ export const image = pgTable(
       .$onUpdate(() => new Date()),
     deletedAt: timestamp("deletedAt", { mode: "date" }),
   },
-  (table) => ({
-    keyUnique: uniqueIndex("Image_key_key")
+  (table) => [
+    uniqueIndex("Image_key_key")
       .on(table.key)
       .where(sql`${table.deletedAt} IS NULL`),
-    createdAtIdx: index("Image_createdAt_idx").on(table.createdAt),
-    statusIdx: index("Image_status_idx").on(table.status),
-  }),
+    index("Image_createdAt_idx").on(table.createdAt),
+    index("Image_status_idx").on(table.status),
+  ],
 );
 
 // ProductImage table
@@ -633,13 +609,13 @@ export const productImage = pgTable(
       .$onUpdate(() => new Date()),
     deletedAt: timestamp("deletedAt", { mode: "date" }),
   },
-  (table) => ({
-    productImageUnique: uniqueIndex("ProductImage_productId_imageId_key")
+  (table) => [
+    uniqueIndex("ProductImage_productId_imageId_key")
       .on(table.productId, table.imageId)
       .where(sql`${table.deletedAt} IS NULL`),
-    productIdIdx: index("ProductImage_productId_idx").on(table.productId),
-    imageIdIdx: index("ProductImage_imageId_idx").on(table.imageId),
-  }),
+    index("ProductImage_productId_idx").on(table.productId),
+    index("ProductImage_imageId_idx").on(table.imageId),
+  ],
 );
 
 // LocationImage table
@@ -661,13 +637,13 @@ export const locationImage = pgTable(
       .$onUpdate(() => new Date()),
     deletedAt: timestamp("deletedAt", { mode: "date" }),
   },
-  (table) => ({
-    locationImageUnique: uniqueIndex("LocationImage_locationId_imageId_key")
+  (table) => [
+    uniqueIndex("LocationImage_locationId_imageId_key")
       .on(table.locationId, table.imageId)
       .where(sql`${table.deletedAt} IS NULL`),
-    locationIdIdx: index("LocationImage_locationId_idx").on(table.locationId),
-    imageIdIdx: index("LocationImage_imageId_idx").on(table.imageId),
-  }),
+    index("LocationImage_locationId_idx").on(table.locationId),
+    index("LocationImage_imageId_idx").on(table.imageId),
+  ],
 );
 
 // RecipeImage table
@@ -689,13 +665,13 @@ export const recipeImage = pgTable(
       .$onUpdate(() => new Date()),
     deletedAt: timestamp("deletedAt", { mode: "date" }),
   },
-  (table) => ({
-    recipeImageUnique: uniqueIndex("RecipeImage_recipeId_imageId_key")
+  (table) => [
+    uniqueIndex("RecipeImage_recipeId_imageId_key")
       .on(table.recipeId, table.imageId)
       .where(sql`${table.deletedAt} IS NULL`),
-    recipeIdIdx: index("RecipeImage_recipeId_idx").on(table.recipeId),
-    imageIdIdx: index("RecipeImage_imageId_idx").on(table.imageId),
-  }),
+    index("RecipeImage_recipeId_idx").on(table.recipeId),
+    index("RecipeImage_imageId_idx").on(table.imageId),
+  ],
 );
 
 // Relations

@@ -7,7 +7,7 @@ import type { SortParams } from "@cubby/schemas/pagination";
 import type { AnyColumn, SQL } from "drizzle-orm";
 import { and, asc, ilike, inArray, isNull, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
-import type { DrizzleTransaction } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import { TraceNames, withTrace } from "~/server/tracing";
 
@@ -55,6 +55,18 @@ export const formatSearchTerm = (
  */
 export const notDeleted = <T extends { deletedAt: AnyColumn }>(table: T) =>
   isNull(table.deletedAt);
+
+/**
+ * Count rows in a table matching an optional WHERE clause.
+ * Wraps Drizzle's `db.$count`, which resolves directly to a number — replaces
+ * the hand-rolled `select({ count: count() }).from(t).where(w)` + destructure.
+ * For counts that need joins/group-by, query directly instead.
+ */
+export const countWhere = (
+  db: Database | DrizzleTransaction,
+  table: PgTable,
+  where?: SQL,
+): Promise<number> => unwrapDb(db).$count(table, where);
 
 /**
  * Build order by clause from sort parameters.
@@ -109,15 +121,15 @@ export const buildOrderBy = <T extends PgTable>(
  */
 export async function executeListQueryWithCount<T>(
   dataQuery: Promise<T[]>,
-  countQuery: Promise<{ count: number }[]>,
+  countQuery: Promise<number>,
 ): Promise<{ data: T[]; count: number }> {
   return withTrace(TraceNames.db("listQueryWithCount"), async (span) => {
-    const [data, [countResult]] = await Promise.all([dataQuery, countQuery]);
+    const [data, count] = await Promise.all([dataQuery, countQuery]);
     span.setAttributes({
       "db.result_count": data.length,
-      "db.total_count": countResult?.count ?? 0,
+      "db.total_count": count,
     });
-    return { data, count: countResult?.count ?? 0 };
+    return { data, count };
   });
 }
 

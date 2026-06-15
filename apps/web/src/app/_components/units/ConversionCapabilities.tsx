@@ -8,6 +8,7 @@ import {
 } from "~/components/ui/tooltip";
 import {
   BASE_KINDS,
+  type BaseKind,
   type CoverageTier,
   conversionCoverage,
 } from "~/lib/conversion-coverage";
@@ -32,6 +33,12 @@ interface ConversionCapabilitiesProps {
    * mappings at all (nothing to grade).
    */
   showTier?: boolean;
+  /**
+   * The measurement-kind universe to grade against. Defaults to all four
+   * (weight/volume/money/calories). USDA contexts pass USDA_KINDS to drop money,
+   * which a USDA food can never have.
+   */
+  kinds?: readonly BaseKind[];
 }
 
 // kindIconMap and formatKindsLabel shared in kind-icons.ts
@@ -56,6 +63,7 @@ export const ConversionCapabilities = memo(function ConversionCapabilities({
   compact = false,
   showCoverage = false,
   showTier = false,
+  kinds = BASE_KINDS,
 }: ConversionCapabilitiesProps) {
   // Detail view (non-compact) renders the per-pair grid + tier headline; compact
   // table cells render the kind icons and/or the tier word (summaries of the same
@@ -63,8 +71,8 @@ export const ConversionCapabilities = memo(function ConversionCapabilities({
   // don't opt into either.
   const needCoverage = !compact || showCoverage || showTier;
   const coverage = useMemo(
-    () => (needCoverage ? conversionCoverage(mappings) : null),
-    [mappings, needCoverage],
+    () => (needCoverage ? conversionCoverage(mappings, kinds) : null),
+    [mappings, needCoverage, kinds],
   );
 
   return (
@@ -91,7 +99,7 @@ export const ConversionCapabilities = memo(function ConversionCapabilities({
               labels carry the meaning. */}
           {coverage && compact && showCoverage && (
             <div className="flex items-center gap-0.5">
-              {BASE_KINDS.map((kind) => {
+              {kinds.map((kind) => {
                 const { Icon, label } = kindIconMap[kind]!;
                 const lit = coverage.covered.has(kind);
                 const state = lit ? "convertible" : "no conversion";
