@@ -20,7 +20,15 @@ type BackfillButtonProps<TFn extends MutationOptionsFn> = {
   toastResult: (data: DataOf<TFn>) => BackfillToast;
   idleLabel: string;
   pendingLabel: string;
-  /** Mutation input, when the procedure takes one (e.g. `{ limit: 500 }`). */
+  /**
+   * Mutation input, when the procedure takes one (e.g. `{ limit: 500 }`).
+   * Intentionally always-optional: making it required when `VariablesOf<TFn>`
+   * is non-void (via a conditional type on the props) regresses inference in
+   * tsgo — `TFn` can't be pinned from `selectMutation` while the props type is
+   * itself conditional on `TFn`, collapsing `DataOf<TFn>`/`VariablesOf<TFn>` to
+   * `unknown` for every call site. A future required-input backfill that omits
+   * this fails as a runtime tRPC validation error instead of a compile error.
+   */
   variables?: VariablesOf<TFn>;
 };
 
