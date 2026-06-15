@@ -25,6 +25,7 @@ const partialProduct = (over: Partial<Partial_> = {}): Partial_ => ({
   coverage: { covered: [] },
   hasPrice: true,
   hasUsdaLink: false,
+  usdaUnavailable: false,
   ...over,
 });
 

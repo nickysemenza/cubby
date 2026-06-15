@@ -70,6 +70,11 @@ export const productCreateInput = productBase
       .describe("price per each ($), source of truth"),
     unitMappings: z.array(unitMappingInput).default([]),
     externalIds: z.array(externalIdInput).default([]),
+    usdaUnavailable: z
+      .boolean()
+      .nullable()
+      .optional()
+      .describe("no USDA food exists — expect manual weight/volume/calories"),
   })
   .merge(updateInputImages);
 
@@ -87,6 +92,7 @@ export const productTopLevelOut = z
     images: z.array(imageOut).default([]),
     externalIds: z.array(externalIdOut).default([]),
     price: z.number().nullable(), // Price per each ($); source of truth (the 1 each -> $X costing edge is synthesized from this at compute time)
+    usdaUnavailable: z.boolean().nullable(),
   })
   .extend(productBase.shape)
   .extend(dbTimestampsOut.shape);

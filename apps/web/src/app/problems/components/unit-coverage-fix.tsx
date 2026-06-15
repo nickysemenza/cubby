@@ -141,19 +141,26 @@ export function UnitCoverageInlineFix({
       <DisconnectedFix id={i.id} islands={i.islands} close={close} />
     ))
     .with({ kind: "partial" }, (i) => {
-      // Only offer to link USDA when it isn't linked yet — re-linking can't fill
-      // a gap the linked food doesn't cover. When it's already linked but the
-      // food has no calorie data (e.g. salt), offer a direct calorie input.
+      const cov = i.coverage.covered;
+      const has = (k: string) => cov.includes(k);
+      // Offer the USDA search only when there's something to find: not linked,
+      // not marked unavailable, and weight/volume/calories aren't all covered.
       const showUsda =
-        !i.hasUsdaLink && !coversWeightVolumeCalories(i.coverage.covered);
+        !i.hasUsdaLink &&
+        !i.usdaUnavailable &&
+        !coversWeightVolumeCalories(cov);
+      // Otherwise (already linked, or marked no-USDA) USDA won't fill the gap —
+      // so guide manual entry of whatever's still missing.
       return (
         <IngredientFix
           id={i.id}
           name={i.name}
           close={close}
           showUsda={showUsda}
+          showManual={!showUsda && !(has("weight") && has("volume"))}
+          showCalories={!showUsda && !has("calories")}
           showPrice={!i.hasPrice}
-          showCalories={!showUsda && !i.coverage.covered.includes("calories")}
+          allowMarkNoUsda={showUsda}
         />
       );
     })
@@ -222,17 +229,25 @@ function IngredientFix({
   name,
   close,
   showUsda = true,
+  showManual = false,
   showPrice = true,
   showCalories = false,
+  allowMarkNoUsda = false,
 }: {
   id: string;
   name: string;
   close: () => void;
   showUsda?: boolean;
+  /** Offer a free-form "<qty> <unit> = <qty> <unit>" conversion — for gaps the
+   * guided steps can't express (a volume the linked food misses; manual entry
+   * when there's no USDA food). */
+  showManual?: boolean;
   showPrice?: boolean;
-  /** Offer a "per 100 g" calorie input — for an already-linked food whose USDA
-   * record has no calorie data (e.g. salt). Allows 0. */
+  /** Offer a "per 100 g" calorie input — for a food whose USDA record has no
+   * calorie data (e.g. salt), or that has no USDA entry. Allows 0. */
   showCalories?: boolean;
+  /** Show a "no USDA entry" action that flips the product to manual mode. */
+  allowMarkNoUsda?: boolean;
 }) {
   const api = useTRPC();
   const [food, setFood] = useState<FoodSummaryWithLinkedProducts | null>(null);
@@ -258,10 +273,13 @@ function IngredientFix({
     invalidateKeys: [queryKeys.product.list],
     onSuccess: close,
   });
-  // Already linked + priced and no calorie gap to fill, but still incomplete
-  // (e.g. a USDA portion whose unit isn't recognized). The guided steps can't
-  // express it, so offer a free-form conversion row.
-  const showManual = !showUsda && !showPrice && !showCalories;
+  // Marking "no USDA entry" doesn't close the card — it flips this same card into
+  // manual-entry mode (the refetched item re-renders the steps).
+  const markNoUsda = useProblemCardMutation({
+    mutationFn: api.product.update.mutationOptions,
+    success: "Marked: no USDA entry — enter values manually",
+    invalidateKeys: [queryKeys.product.list],
+  });
 
   const save = () => {
     const data: {
@@ -377,6 +395,18 @@ function IngredientFix({
             <p className="text-positive text-xs">
               Linked: {food.foodInfo.description}
             </p>
+          )}
+          {allowMarkNoUsda && (
+            <button
+              type="button"
+              className="text-muted-foreground text-xs underline underline-offset-2 hover:text-foreground"
+              onClick={() =>
+                markNoUsda.mutate({ id, data: { usdaUnavailable: true } })
+              }
+              disabled={markNoUsda.isPending}
+            >
+              No USDA entry exists — enter values manually
+            </button>
           )}
         </div>
       )}

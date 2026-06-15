@@ -54,6 +54,7 @@ const ingredientWithPartialCoverageSchema = z.object({
   coverage: z.object({ covered: z.array(z.string()) }),
   hasPrice: z.boolean(),
   hasUsdaLink: z.boolean(),
+  usdaUnavailable: z.boolean(),
 });
 
 const invalidInventoryAmountSchema = z.object({

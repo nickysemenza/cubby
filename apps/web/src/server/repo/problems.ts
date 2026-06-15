@@ -144,9 +144,15 @@ interface IngredientWithPartialCoverage {
    * Whether a USDA food already resolves for this product. When true, the fix
    * won't offer "link a USDA food" — re-linking the same food can't fill a gap
    * the food doesn't cover (e.g. a portion with an unrecognized unit); that
-   * needs a manual conversion on the product page.
+   * needs a manual conversion.
    */
   hasUsdaLink: boolean;
+  /**
+   * Operator-set: no USDA food exists for this product. The fix then stops
+   * suggesting a (futile) USDA link and switches to manual entry of the missing
+   * kinds. Does NOT suppress — still flagged until they're filled.
+   */
+  usdaUnavailable: boolean;
 }
 
 interface InvalidInventoryAmount {
@@ -415,6 +421,7 @@ const findIngredientsWithPartialCoverage = async (
       upc: true,
       ndb_number: true,
       price: true,
+      usdaUnavailable: true,
     },
     with: {
       unitMappings: {
@@ -482,6 +489,7 @@ const findIngredientsWithPartialCoverage = async (
       coverage: { covered: [...cov.covered] },
       hasPrice,
       hasUsdaLink: p.food != null,
+      usdaUnavailable: p.usdaUnavailable ?? false,
     });
   }
 
