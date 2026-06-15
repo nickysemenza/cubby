@@ -24,6 +24,7 @@ const partialProduct = (over: Partial<Partial_> = {}): Partial_ => ({
   manufacturer: "generic",
   coverage: { covered: [] },
   hasPrice: true,
+  hasUsdaLink: false,
   ...over,
 });
 

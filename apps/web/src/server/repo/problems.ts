@@ -138,6 +138,13 @@ interface IngredientWithPartialCoverage {
    * no price exists at all, so we never blank-overwrite an existing one.
    */
   hasPrice: boolean;
+  /**
+   * Whether a USDA food already resolves for this product. When true, the fix
+   * won't offer "link a USDA food" — re-linking the same food can't fill a gap
+   * the food doesn't cover (e.g. a portion with an unrecognized unit); that
+   * needs a manual conversion on the product page.
+   */
+  hasUsdaLink: boolean;
 }
 
 interface InvalidInventoryAmount {
@@ -472,6 +479,7 @@ const findIngredientsWithPartialCoverage = async (
       manufacturer: p.manufacturer,
       coverage: { covered: [...cov.covered] },
       hasPrice,
+      hasUsdaLink: p.food != null,
     });
   }
 

@@ -129,7 +129,11 @@ export function UnitCoverageInlineFix({
         id={i.id}
         name={i.name}
         close={close}
-        showUsda={!coversWeightVolumeCalories(i.coverage.covered)}
+        // Only offer to link USDA when it isn't linked yet — re-linking can't
+        // fill a gap the linked food doesn't cover.
+        showUsda={
+          !i.hasUsdaLink && !coversWeightVolumeCalories(i.coverage.covered)
+        }
         showPrice={!i.hasPrice}
       />
     ))
@@ -223,6 +227,10 @@ function IngredientFix({
     onSuccess: close,
   });
   const bothSteps = showUsda && showPrice;
+  // Already linked + priced, but still incomplete (e.g. a USDA portion whose unit
+  // isn't recognized). Neither inline step helps — the gap needs a manual
+  // conversion, which lives on the product page.
+  const noSteps = !showUsda && !showPrice;
 
   const save = () => {
     const data: {
@@ -357,9 +365,16 @@ function IngredientFix({
           </p>
         </div>
       )}
-      <Button size="sm" onClick={save} disabled={update.isPending}>
-        Save
-      </Button>
+      {noSteps ? (
+        <p className="text-muted-foreground text-xs">
+          USDA is linked and a price is set — the remaining gap needs a manual
+          conversion. Use “Open product” to add one.
+        </p>
+      ) : (
+        <Button size="sm" onClick={save} disabled={update.isPending}>
+          Save
+        </Button>
+      )}
     </div>
   );
 }
