@@ -4,6 +4,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import type { Database } from "~/server/db";
 import {
+  ingredient,
   recipe,
   recipeSection,
   recipeSectionIngredient,
@@ -11,6 +12,7 @@ import {
 import { getDb, notDeleted } from "./database-helpers";
 import {
   createIngredient,
+  deleteIngredients,
   getIngredientByID,
   ingredientList,
 } from "./ingredient";
@@ -181,5 +183,89 @@ describe("soft-deleted recipes stay out of ingredient recipe counts", () => {
     expect(
       await searchRecipeCount(ctx.db, ingredientId, "Orphan oregano"),
     ).toBe(0);
+  });
+});
+
+describe("ingredient delete guard agrees with the live recipe count", () => {
+  const ctx = withTestDb();
+
+  it("allows deleting an ingredient whose only usage is in a soft-deleted recipe", async () => {
+    // Same orphan shape as above: recipe soft-deleted without cascading, so a
+    // live usage row dangles. The guard must NOT block deletion — its liveness
+    // filter must match the (zero) recipe count the read surfaces report.
+    const ing = await createIngredient(
+      ctx.db,
+      { name: "Orphan tarragon", aliases: [] },
+      ctx.actor,
+    );
+    const ingredientId = ing.id as IngredientId;
+
+    const created = await createRecipe(
+      ctx.db,
+      makeRecipeInput({
+        name: "Orphaned Guard Recipe",
+        sections: [
+          {
+            name: "Main",
+            instructions: [{ instruction: "Mix" }],
+            ingredients: [
+              ingredientRef(ingredientId, {
+                amounts: [{ value: 1, unit: "cup" }],
+              }),
+            ],
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+
+    // Soft-delete ONLY the recipe row, leaving its section + usage rows live.
+    await getDb(ctx.db)
+      .update(recipe)
+      .set({ deletedAt: new Date() })
+      .where(eq(recipe.id, created.id));
+
+    await expect(
+      deleteIngredients(ctx.db, [ingredientId], ctx.actor),
+    ).resolves.toBeUndefined();
+
+    // The ingredient row is now soft-deleted.
+    const [row] = await getDb(ctx.db)
+      .select({ deletedAt: ingredient.deletedAt })
+      .from(ingredient)
+      .where(eq(ingredient.id, ingredientId));
+    expect(row?.deletedAt).not.toBeNull();
+  });
+
+  it("still blocks deleting an ingredient used in a live recipe", async () => {
+    const ing = await createIngredient(
+      ctx.db,
+      { name: "Live thyme", aliases: [] },
+      ctx.actor,
+    );
+    const ingredientId = ing.id as IngredientId;
+
+    await createRecipe(
+      ctx.db,
+      makeRecipeInput({
+        name: "Live Guard Recipe",
+        sections: [
+          {
+            name: "Main",
+            instructions: [{ instruction: "Mix" }],
+            ingredients: [
+              ingredientRef(ingredientId, {
+                amounts: [{ value: 1, unit: "cup" }],
+              }),
+            ],
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+
+    await expect(
+      deleteIngredients(ctx.db, [ingredientId], ctx.actor),
+    ).rejects.toThrow(/used in recipes/);
   });
 });

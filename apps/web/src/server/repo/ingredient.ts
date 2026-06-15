@@ -21,8 +21,8 @@ import {
   product,
   type productExternalId,
   type productUnitMappings,
-  type recipe,
-  type recipeSection,
+  recipe,
+  recipeSection,
   recipeSectionIngredient,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -565,14 +565,33 @@ export const deleteIngredients = async (
     // Prevents race conditions by acquiring row-level locks
     await lockAndValidateForDelete(tx, ingredient, ids, "Ingredient");
 
-    // Safety check: don't delete if any are used in recipes
-    const usedInRecipes = await tx.query.recipeSectionIngredient.findMany({
-      where: and(
-        inArray(recipeSectionIngredient.ingredientId, ids),
-        notDeleted(recipeSectionIngredient),
-      ),
-      columns: { ingredientId: true },
-    });
+    // Safety check: don't delete if any are used in *live* recipes. Must filter
+    // all three join levels (usage → section → recipe) so an ingredient whose
+    // only usages live in soft-deleted recipes doesn't block deletion — this
+    // matches the liveness semantics of `liveRecipeCountForIngredientSql` used by
+    // the read surfaces, so the guard and the displayed recipe count never
+    // disagree. A shallow `notDeleted(rsi)`-only check trips on orphaned usage
+    // rows whose parent recipe was soft-deleted (legacy/out-of-band rows).
+    const usedInRecipes = await tx
+      .selectDistinct({ ingredientId: recipeSectionIngredient.ingredientId })
+      .from(recipeSectionIngredient)
+      .innerJoin(
+        recipeSection,
+        and(
+          eq(recipeSection.id, recipeSectionIngredient.recipeSectionId),
+          notDeleted(recipeSection),
+        ),
+      )
+      .innerJoin(
+        recipe,
+        and(eq(recipe.id, recipeSection.recipeId), notDeleted(recipe)),
+      )
+      .where(
+        and(
+          inArray(recipeSectionIngredient.ingredientId, ids),
+          notDeleted(recipeSectionIngredient),
+        ),
+      );
     if (usedInRecipes.length > 0) {
       const failedIngredientIds = uniq(
         usedInRecipes.map((r) => r.ingredientId),
