@@ -73,7 +73,7 @@ interface AllProblems {
 }
 
 // Type definitions for each problem type
-export interface DuplicateUniqueProduct {
+interface DuplicateUniqueProduct {
   id: string;
   name: string;
   manufacturer: string;
@@ -84,14 +84,14 @@ export interface DuplicateUniqueProduct {
   }>;
 }
 
-export interface OrphanedProduct {
+interface OrphanedProduct {
   id: string;
   name: string;
   manufacturer: string;
   createdAt: Date;
 }
 
-export interface InvalidUPC {
+interface InvalidUPC {
   id: string;
   name: string;
   manufacturer: string;
@@ -99,14 +99,14 @@ export interface InvalidUPC {
   issue: "invalid_format" | "duplicate";
 }
 
-export interface ProductWithoutMappings {
+interface ProductWithoutMappings {
   id: string;
   name: string;
   manufacturer: string;
   createdAt: Date;
 }
 
-export interface InvalidInventoryAmount {
+interface InvalidInventoryAmount {
   id: string;
   productName: string;
   locationName: string;
@@ -128,14 +128,14 @@ export interface EmptyLocation {
   firstImageId: string | null;
 }
 
-export interface ProductWithNoImages {
+interface ProductWithNoImages {
   id: string;
   name: string;
   manufacturer: string;
   upc: string | null;
 }
 
-export interface ProductWithWrongCategory {
+interface ProductWithWrongCategory {
   id: string;
   name: string;
   manufacturer: string;
@@ -143,7 +143,7 @@ export interface ProductWithWrongCategory {
   indicator: "ndb" | "ingredient";
 }
 
-export interface InventoryWithStaleValuation {
+interface InventoryWithStaleValuation {
   id: string;
   productName: string;
   locationName: string;
@@ -151,7 +151,7 @@ export interface InventoryWithStaleValuation {
   expectedValuation: number | null;
 }
 
-export interface ProductWithIslandedMappings {
+interface ProductWithIslandedMappings {
   id: string;
   name: string;
   manufacturer: string;
@@ -162,7 +162,7 @@ export interface ProductWithIslandedMappings {
   }>;
 }
 
-export interface LocationWithoutAiDescription {
+interface LocationWithoutAiDescription {
   id: string;
   name: string;
   type: string;
@@ -696,7 +696,7 @@ interface ProblemsCount {
 // *current* parser, now differs from what's stored on any axis — name, amounts, or
 // modifier — i.e. it was parsed by an older parser and a re-parse would change it.
 // All drift is equal; the per-axis booleans drive only how the panel sorts/styles.
-export interface StaleIngredientParse {
+interface StaleIngredientParse {
   recipeSectionIngredientId: string;
   recipeId: string;
   recipeName: string;
@@ -843,7 +843,7 @@ export const reparseStaleIngredientParses = async (
 // product's price / USDA enrichment) changed. The list shows the last-known totals
 // (which may be null if never computed) so the card has something to display; the
 // fix action recomputes them. See recipe-costing.service / repo/recipe/totals.
-export interface StaleRecipeTotals {
+interface StaleRecipeTotals {
   recipeId: RecipeId;
   recipeName: string;
   totals: RecipeTotals | null;

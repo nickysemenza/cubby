@@ -20,25 +20,28 @@ import type { EntityDetailRoute } from "~/entities/types";
 type RoutePattern = { to: EntityDetailRoute; params: { id: string } };
 
 // Icon can be either a LucideIcon component or an entity key
-type IconProp =
+export type IconProp =
   | { icon: LucideIcon; entity?: never }
   | { entity: Entity; icon?: never };
+
+/** What a section's `renderItem` returns for a single card. */
+export type RenderedProblemItem = {
+  title: string;
+  subtitle?: string;
+  badges?: ReactNode[];
+  details?: ReactNode[];
+  route: RoutePattern;
+  editLabel?: string;
+  customActions?: ReactNode;
+  imageSlot?: ReactNode;
+};
 
 type ProblemSectionProps<T> = {
   title: string;
   description: string;
   items: T[];
   emptyMessage: string;
-  renderItem: (item: T) => {
-    title: string;
-    subtitle?: string;
-    badges?: ReactNode[];
-    details?: ReactNode[];
-    route: RoutePattern;
-    editLabel?: string;
-    customActions?: ReactNode;
-    imageSlot?: ReactNode;
-  };
+  renderItem: (item: T) => RenderedProblemItem;
   groupBy?: (items: T[]) => { [key: string]: T[] };
   /** Only rendered when items exist */
   headerAction?: ReactNode;
