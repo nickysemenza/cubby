@@ -154,6 +154,12 @@ function IngredientFix({
         data.ndb_number = food.legacyFoodInfo.ndb_number;
       } else if (food.brandedFoodInfo?.gtin_upc) {
         data.upc = food.brandedFoodInfo.gtin_upc;
+      } else {
+        // A food was picked but it carries neither an NDB number nor a UPC, so
+        // there's nothing to link it by — say that, rather than the generic
+        // "link a food or set a price" (the "Linked: …" line is showing).
+        toast.error("That USDA food has no NDB or UPC to link by");
+        return;
       }
     }
     const value = parsePositive(price);
@@ -234,9 +240,11 @@ function DisconnectedFix({
 
   // Load the current mappings so we can resend them — product.update replaces the
   // whole set, so omitting them would silently delete every existing mapping.
-  const { data: product, isLoading } = useQuery(
-    api.product.getByID.queryOptions({ id }),
-  );
+  const {
+    data: product,
+    isLoading,
+    isError,
+  } = useQuery(api.product.getByID.queryOptions({ id }));
   const update = useProblemCardMutation({
     mutationFn: api.product.update.mutationOptions,
     success: "Conversion saved",
@@ -261,8 +269,13 @@ function DisconnectedFix({
       return;
     }
     // Replace-all merge: carry every existing row (with its id) plus the new
-    // bridge(s). Dropping the existing rows here would delete them.
-    const existing = (product?.unitMappings ?? []).map((m) => ({
+    // bridge(s). If the product hasn't loaded we'd send only the new rows and
+    // delete every existing mapping — so refuse to save until it's resolved.
+    if (!product) {
+      toast.error("Couldn't load current conversions — try again");
+      return;
+    }
+    const existing = product.unitMappings.map((m) => ({
       id: m.id,
       a: m.a,
       b: m.b,
@@ -300,7 +313,16 @@ function DisconnectedFix({
           <span>{b.to}</span>
         </div>
       ))}
-      <Button size="sm" onClick={save} disabled={update.isPending || isLoading}>
+      {isError && (
+        <p className="text-destructive text-xs">
+          Couldn't load this product's current conversions.
+        </p>
+      )}
+      <Button
+        size="sm"
+        onClick={save}
+        disabled={update.isPending || isLoading || !product}
+      >
         {isLoading ? "Loading…" : "Save conversion"}
       </Button>
     </div>
