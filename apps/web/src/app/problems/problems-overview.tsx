@@ -24,6 +24,7 @@ import { ProductsWithNoImagesList } from "./components/products-with-no-images-l
 import { ProductsWithWrongCategoryList } from "./components/products-with-wrong-category-list";
 import { ProductsWithoutMappingsList } from "./components/products-without-mappings-list";
 import { StaleIngredientParsesList } from "./components/stale-ingredient-parses-list";
+import { StaleRecipeTotalsList } from "./components/stale-recipe-totals-list";
 
 export function ProblemsOverview() {
   const api = useTRPC();
@@ -114,6 +115,11 @@ export function ProblemsOverview() {
       id: "stale-parses",
       label: "Stale Parses",
       count: (problems.staleIngredientParses ?? []).length,
+    },
+    {
+      id: "stale-totals",
+      label: "Stale Totals",
+      count: (problems.staleRecipeTotals ?? []).length,
     },
     {
       id: "upc-updates",
@@ -269,6 +275,13 @@ export function ProblemsOverview() {
         <StaleIngredientParsesList
           items={problems.staleIngredientParses ?? []}
         />
+      </div>
+      <div
+        ref={(el) => {
+          sectionRefs.current["stale-totals"] = el;
+        }}
+      >
+        <StaleRecipeTotalsList items={problems.staleRecipeTotals ?? []} />
       </div>
       <div
         ref={(el) => {

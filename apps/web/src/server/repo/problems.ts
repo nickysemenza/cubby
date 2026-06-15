@@ -4,6 +4,7 @@ import {
   type RecipeId,
   unsafeRecipeId,
 } from "@cubby/schemas/identifiers";
+import type { RecipeTotals } from "@cubby/schemas/recipe";
 import { isMiscProduct } from "@cubby/shared";
 import { upc as upcSchema } from "@cubby/usda-schemas";
 import {
@@ -66,6 +67,7 @@ interface AllProblems {
   productsWithIslandedMappings: ProductWithIslandedMappings[];
   locationsWithoutAiDescription: LocationWithoutAiDescription[];
   staleIngredientParses: StaleIngredientParse[];
+  staleRecipeTotals: StaleRecipeTotals[];
   productsWithBetterUpcData: ProductWithBetterUpcData[];
   totalProblems: number;
 }
@@ -684,6 +686,7 @@ interface ProblemsCount {
     productsWithIslandedMappings: number;
     locationsWithoutAiDescription: number;
     staleIngredientParses: number;
+    staleRecipeTotals: number;
     productsWithBetterUpcData: number;
   };
   total: number;
@@ -835,6 +838,32 @@ export const reparseStaleIngredientParses = async (
 
 // Badge counts derive from the full problems scan — one source of truth, no
 // parallel count queries to drift out of sync with the find* functions.
+// A recipe whose persisted cost/calorie rollups are out of date — `totalsComputedAt`
+// is NULL because the recipe is new, was edited, or a costing input (a linked
+// product's price / USDA enrichment) changed. The list shows the last-known totals
+// (which may be null if never computed) so the card has something to display; the
+// fix action recomputes them. See recipe-costing.service / repo/recipe/totals.
+export interface StaleRecipeTotals {
+  recipeId: RecipeId;
+  recipeName: string;
+  totals: RecipeTotals | null;
+}
+
+// Stale rows only (normally 0 or a handful) — indexed by Recipe_totals_stale_idx —
+// so this is cheap and never a full-table read.
+const findStaleRecipeTotals = async (
+  db: Database,
+): Promise<StaleRecipeTotals[]> => {
+  return await getDb(db)
+    .select({
+      recipeId: recipe.id,
+      recipeName: recipe.name,
+      totals: recipe.totals,
+    })
+    .from(recipe)
+    .where(and(notDeleted(recipe), isNull(recipe.totalsComputedAt)));
+};
+
 export const findAllProblemsCount = async (
   db: Database,
   upcLookupClient: UPCLookupClient,
@@ -856,6 +885,7 @@ export const findAllProblemsCount = async (
       productsWithIslandedMappings: p.productsWithIslandedMappings.length,
       locationsWithoutAiDescription: p.locationsWithoutAiDescription.length,
       staleIngredientParses: p.staleIngredientParses.length,
+      staleRecipeTotals: p.staleRecipeTotals.length,
       productsWithBetterUpcData: p.productsWithBetterUpcData.length,
     },
     total: p.totalProblems,
@@ -882,6 +912,7 @@ export const findAllProblems = async (
     productsWithIslandedMappings,
     locationsWithoutAiDescription,
     staleIngredientParses,
+    staleRecipeTotals,
     productsWithBetterUpcData,
   ] = await Promise.all([
     findDuplicateUniqueProducts(db),
@@ -896,6 +927,7 @@ export const findAllProblems = async (
     findProductsWithIslandedMappings(db, usdaClient),
     findLocationsWithoutAiDescription(db),
     findStaleIngredientParses(db),
+    findStaleRecipeTotals(db),
     findProductsWithBetterUpcData(db, upcLookupClient),
   ]);
 
@@ -925,6 +957,7 @@ export const findAllProblems = async (
     productsWithIslandedMappings.length +
     locationsWithoutAiDescription.length +
     staleIngredientParses.length +
+    staleRecipeTotals.length +
     productsWithBetterUpcData.length;
 
   return {
@@ -940,6 +973,7 @@ export const findAllProblems = async (
     productsWithIslandedMappings,
     locationsWithoutAiDescription,
     staleIngredientParses,
+    staleRecipeTotals,
     productsWithBetterUpcData,
     totalProblems,
   };

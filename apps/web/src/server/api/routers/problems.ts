@@ -1,4 +1,6 @@
 import { amount } from "@cubby/schemas/codec";
+import { recipeId } from "@cubby/schemas/identifiers";
+import { recipeTotals } from "@cubby/schemas/recipe";
 import { z } from "zod";
 import {
   findAllProblems,
@@ -134,6 +136,12 @@ const productWithBetterUpcDataSchema = z.object({
   }),
 });
 
+const staleRecipeTotalsSchema = z.object({
+  recipeId,
+  recipeName: z.string(),
+  totals: recipeTotals.nullable(),
+});
+
 // Combined output schema for all problems
 const allProblemsSchema = z.object({
   duplicateUniqueProducts: z.array(duplicateUniqueProductSchema),
@@ -148,6 +156,7 @@ const allProblemsSchema = z.object({
   productsWithIslandedMappings: z.array(productWithIslandedMappingsSchema),
   locationsWithoutAiDescription: z.array(locationWithoutAiDescriptionSchema),
   staleIngredientParses: z.array(staleIngredientParseSchema),
+  staleRecipeTotals: z.array(staleRecipeTotalsSchema),
   productsWithBetterUpcData: z.array(productWithBetterUpcDataSchema),
   totalProblems: z.number(),
 });
@@ -177,6 +186,7 @@ const getProblemsCount = protectedProcedure
         productsWithIslandedMappings: z.number(),
         locationsWithoutAiDescription: z.number(),
         staleIngredientParses: z.number(),
+        staleRecipeTotals: z.number(),
         productsWithBetterUpcData: z.number(),
       }),
     }),

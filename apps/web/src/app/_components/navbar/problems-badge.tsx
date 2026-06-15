@@ -63,6 +63,11 @@ export const ProblemsBadge = () => {
         `${problems.byType.staleIngredientParses} stale parse${problems.byType.staleIngredientParses > 1 ? "s" : ""}`,
       );
     }
+    if (problems.byType.staleRecipeTotals > 0) {
+      tooltipParts.push(
+        `${problems.byType.staleRecipeTotals} stale total${problems.byType.staleRecipeTotals > 1 ? "s" : ""}`,
+      );
+    }
   }
 
   const tooltipText = hasProblems

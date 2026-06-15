@@ -1,10 +1,9 @@
 import type { CookbookId } from "@cubby/schemas/identifiers";
 import type { RecipeOut } from "@cubby/schemas/recipe";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { BookOpen, ExternalLink, Scale } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useRef } from "react";
+import { type ReactNode, useMemo } from "react";
 import { Skeleton } from "~/components/ui/skeleton";
 import { formatCurrencyRange, formatNumberRange } from "~/lib/format-range";
 import { queryKeys } from "~/lib/query-keys";
@@ -48,48 +47,6 @@ const CoverageValue: React.FC<{
   );
 };
 
-/**
- * Presence-driven drain for stale recipe totals. While the recipes page is open,
- * recompute the persisted cost/calorie rollups in batches until none remain
- * (recipes start stale, and product/recipe edits mark them stale again), then
- * idle. Costs nothing on days the app isn't opened — there's no cron. Each batch
- * that does work invalidates the list so fresh totals appear.
- */
-function useRecipeTotalsDrain() {
-  const api = useTRPC();
-  const queryClient = useQueryClient();
-  const drain = useMutation(api.recipe.recomputeStale.mutationOptions());
-  // Stable handle so the effect can run once (mutateAsync identity isn't guaranteed).
-  const drainRef = useRef(drain.mutateAsync);
-  drainRef.current = drain.mutateAsync;
-
-  useEffect(() => {
-    let stopped = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const tick = async () => {
-      if (stopped) return;
-      try {
-        const { processed, remaining } = await drainRef.current({ limit: 25 });
-        if (processed > 0 && !stopped) {
-          await queryClient.invalidateQueries({
-            queryKey: [...queryKeys.recipe.list],
-          });
-        }
-        // Drain quickly while work remains; otherwise re-check occasionally for
-        // rows newly invalidated by edits made while the page stays open.
-        if (!stopped) timer = setTimeout(tick, remaining > 0 ? 600 : 60_000);
-      } catch {
-        if (!stopped) timer = setTimeout(tick, 60_000);
-      }
-    };
-    void tick();
-    return () => {
-      stopped = true;
-      if (timer) clearTimeout(timer);
-    };
-  }, [queryClient]);
-}
-
 interface RecipeListProps {
   /** Actions to display in the table toolbar (e.g., "Create New" button) */
   actions?: ReactNode;
@@ -106,9 +63,6 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
   const navigate = useNavigate();
   const columnHelper = createColumnHelper<RecipeOut>();
   const { onRowClick, PreviewSheet } = useEntityPreview("recipe");
-
-  // Keep persisted cost/calorie totals fresh while this page is open.
-  useRecipeTotalsDrain();
 
   const columns = useMemo(
     () => [

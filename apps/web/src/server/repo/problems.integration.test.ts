@@ -15,6 +15,7 @@ import { createIngredient, getIngredientByName } from "./ingredient";
 import { findAllProblems, reparseStaleIngredientParses } from "./problems";
 import { createProduct } from "./product";
 import { createRecipe } from "./recipe";
+import { updateRecipeTotals } from "./recipe/totals";
 import {
   ingredientRef,
   makeProductInput,
@@ -136,6 +137,43 @@ describe("problems repo", () => {
       expect(driftedEntry?.amountDrift).toBe(true);
       expect(driftedEntry?.nameDrift).toBe(false);
       expect(staleIngredientParses.some((s) => s.recipeId === clean.id)).toBe(
+        false,
+      );
+    });
+  });
+
+  describe("findStaleRecipeTotals", () => {
+    it("flags a recipe with NULL totalsComputedAt and not a freshly-stamped one", async () => {
+      const flour = await createIngredient(
+        db,
+        { name: "flour", aliases: [] },
+        actor,
+      );
+      // New recipes start stale (totalsComputedAt NULL).
+      const stale = await recipeWithRow("Stale Totals", flour.id, {
+        amounts: [{ value: 1, unit: "cup" }],
+        rawLine: "1 cup flour",
+      });
+      const fresh = await recipeWithRow("Fresh Totals", flour.id, {
+        amounts: [{ value: 1, unit: "cup" }],
+        rawLine: "1 cup flour",
+      });
+      // Stamp `fresh` as computed so it drops out of the stale set.
+      await updateRecipeTotals(db, fresh.id, {
+        costTotal: 0,
+        caloriesTotal: 0,
+        ingredientCount: 1,
+        costCovered: 0,
+        caloriesCovered: 0,
+      });
+
+      const { staleRecipeTotals } = await findAllProblems(
+        db,
+        fakeUpcClient().client,
+        fakeUsdaClient(),
+      );
+      expect(staleRecipeTotals.some((s) => s.recipeId === stale.id)).toBe(true);
+      expect(staleRecipeTotals.some((s) => s.recipeId === fresh.id)).toBe(
         false,
       );
     });
