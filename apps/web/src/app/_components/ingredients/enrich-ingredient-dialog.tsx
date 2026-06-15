@@ -1,7 +1,6 @@
 import type { ProductCreateInput } from "@cubby/schemas/product";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
-import { toast } from "sonner";
+import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { ProductForm } from "~/app/_components/products/product-form";
 import {
   Dialog,
@@ -33,25 +32,21 @@ export function EnrichIngredientDialog({
   onEnriched,
 }: EnrichIngredientDialogProps) {
   const api = useTRPC();
-  const queryClient = useQueryClient();
   const router = useRouter();
 
-  const createProduct = useMutation(
-    api.product.create.mutationOptions({
-      onSuccess: () => {
-        toast.success(`Enriched ${ingredient?.name ?? "ingredient"}.`);
-        // Refresh react-query consumers (list, preview getByID) and any route
-        // loader (the full /ingredients/$id detail) so the new product shows.
-        queryClient.invalidateQueries({ queryKey: [["ingredient"]] });
-        void router.invalidate();
-        onOpenChange(false);
-        onEnriched?.();
-      },
-      onError: (err) => {
-        toast.error(`Failed to create product: ${getErrorMessage(err)}`);
-      },
-    }),
-  );
+  const createProduct = useActionMutation({
+    mutationFn: api.product.create.mutationOptions,
+    success: `Enriched ${ingredient?.name ?? "ingredient"}.`,
+    // Refresh react-query consumers (list, preview getByID)...
+    invalidateKeys: [["ingredient"]],
+    onSuccess: () => {
+      // ...and any route loader (the full /ingredients/$id detail).
+      void router.invalidate();
+      onOpenChange(false);
+      onEnriched?.();
+    },
+    error: (err) => `Failed to create product: ${getErrorMessage(err)}`,
+  });
 
   return (
     <Dialog
