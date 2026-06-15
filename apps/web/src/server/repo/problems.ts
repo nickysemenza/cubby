@@ -64,6 +64,7 @@ interface AllProblems {
   orphanedProducts: OrphanedProduct[];
   invalidUPCs: InvalidUPC[];
   productsWithoutMappings: ProductWithoutMappings[];
+  ingredientsWithPartialCoverage: IngredientWithPartialCoverage[];
   invalidInventoryAmounts: InvalidInventoryAmount[];
   emptyLocations: EmptyLocation[];
   productsWithNoImages: ProductWithNoImages[];
@@ -115,6 +116,17 @@ interface ProductWithoutMappings {
    * non-foods just need a price.
    */
   isIngredient: boolean;
+}
+
+// An ingredient product that has *some* coverage (a price) but no USDA link and
+// no stored conversions — so it can only convert each↔dollar, missing
+// weight/volume/calories. The zero-coverage detector skips it (price is set),
+// but as a food it's still under-covered. Cheap to detect with a pure SQL check:
+// no USDA link + no mappings means those kinds are unreachable, no synthesis needed.
+interface IngredientWithPartialCoverage {
+  id: string;
+  name: string;
+  manufacturer: string;
 }
 
 interface InvalidInventoryAmount {
@@ -358,6 +370,43 @@ const findProductsWithoutMappings = async (
       ...rest,
       isIngredient: ingredientId != null,
     }));
+};
+
+// Find ingredient products that are under-covered: they have a price (so they
+// escape findProductsWithoutMappings) but no USDA link and no stored mappings,
+// so they can only reach `money` — missing weight/volume/calories. The USDA-link
+// + price inline fix (the "core 4") resolves them. Pure SQL: with no USDA link
+// and no mappings, those kinds are provably unreachable, so no per-product USDA
+// enrichment is needed (keeps this cheap enough for the always-on scan).
+const findIngredientsWithPartialCoverage = async (
+  db: Database,
+): Promise<IngredientWithPartialCoverage[]> => {
+  const dbClient = getDb(db);
+
+  const rows = await dbClient
+    .select({
+      id: product.id,
+      name: product.name,
+      manufacturer: product.manufacturer,
+    })
+    .from(product)
+    .where(
+      and(
+        notDeleted(product),
+        isNotNull(product.ingredientId),
+        isNotNull(product.price),
+        isNull(product.ndb_number),
+        isNull(product.upc),
+        notExists(
+          dbClient
+            .select({ id: sql`1` })
+            .from(productUnitMappings)
+            .where(eq(productUnitMappings.productId, product.id)),
+        ),
+      ),
+    );
+
+  return rows.filter((p) => !isMiscProduct(p.name));
 };
 
 // Find inventory entries with zero or negative amounts
@@ -704,6 +753,7 @@ interface ProblemsCount {
     orphanedProducts: number;
     invalidUPCs: number;
     productsWithoutMappings: number;
+    ingredientsWithPartialCoverage: number;
     invalidInventoryAmounts: number;
     emptyLocations: number;
     productsWithNoImages: number;
@@ -903,6 +953,7 @@ export const findAllProblemsCount = async (
       orphanedProducts: p.orphanedProducts.length,
       invalidUPCs: p.invalidUPCs.length,
       productsWithoutMappings: p.productsWithoutMappings.length,
+      ingredientsWithPartialCoverage: p.ingredientsWithPartialCoverage.length,
       invalidInventoryAmounts: p.invalidInventoryAmounts.length,
       emptyLocations: p.emptyLocations.length,
       productsWithNoImages: p.productsWithNoImages.length,
@@ -930,6 +981,7 @@ export const findAllProblems = async (
     orphanedProducts,
     invalidUPCs,
     productsWithoutMappings,
+    ingredientsWithPartialCoverage,
     invalidInventoryAmounts,
     emptyLocations,
     productsWithNoImages,
@@ -945,6 +997,7 @@ export const findAllProblems = async (
     findOrphanedProducts(db),
     findInvalidUPCs(db),
     findProductsWithoutMappings(db),
+    findIngredientsWithPartialCoverage(db),
     findInvalidInventoryAmounts(db),
     findEmptyLocations(db),
     findProductsWithNoImages(db, { excludeIngredients: true }),
@@ -975,6 +1028,7 @@ export const findAllProblems = async (
     orphanedProducts.length +
     invalidUPCs.length +
     productsWithoutMappings.length +
+    ingredientsWithPartialCoverage.length +
     invalidInventoryAmounts.length +
     emptyLocations.length +
     productsWithNoImages.length +
@@ -991,6 +1045,7 @@ export const findAllProblems = async (
     orphanedProducts,
     invalidUPCs,
     productsWithoutMappings,
+    ingredientsWithPartialCoverage,
     invalidInventoryAmounts,
     emptyLocations,
     productsWithNoImages,

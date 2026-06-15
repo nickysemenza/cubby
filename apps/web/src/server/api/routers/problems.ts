@@ -46,6 +46,12 @@ const productWithoutMappingsSchema = z.object({
   isIngredient: z.boolean(),
 });
 
+const ingredientWithPartialCoverageSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  manufacturer: z.string(),
+});
+
 const invalidInventoryAmountSchema = z.object({
   id: z.string(),
   productName: z.string(),
@@ -150,6 +156,7 @@ const allProblemsSchema = z.object({
   orphanedProducts: z.array(orphanedProductSchema),
   invalidUPCs: z.array(invalidUPCSchema),
   productsWithoutMappings: z.array(productWithoutMappingsSchema),
+  ingredientsWithPartialCoverage: z.array(ingredientWithPartialCoverageSchema),
   inventoryWithStaleValuations: z.array(inventoryWithStaleValuationSchema),
   invalidInventoryAmounts: z.array(invalidInventoryAmountSchema),
   emptyLocations: z.array(emptyLocationSchema),
@@ -180,6 +187,7 @@ const getProblemsCount = protectedProcedure
         orphanedProducts: z.number(),
         invalidUPCs: z.number(),
         productsWithoutMappings: z.number(),
+        ingredientsWithPartialCoverage: z.number(),
         invalidInventoryAmounts: z.number(),
         emptyLocations: z.number(),
         productsWithNoImages: z.number(),

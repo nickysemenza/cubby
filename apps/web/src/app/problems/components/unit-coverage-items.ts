@@ -8,24 +8,29 @@ import type { RouterOutputs } from "~/trpc/react";
 type AllProblems = RouterOutputs["problems"]["getAllProblems"];
 type NoMappings = AllProblems["productsWithoutMappings"][number];
 type Islanded = AllProblems["productsWithIslandedMappings"][number];
+type PartialCoverage = AllProblems["ingredientsWithPartialCoverage"][number];
 
 /**
- * The two "can't fully convert" problems unified into one list: a product with
- * no conversion graph at all (`none`) or one fragmented into islands
+ * The "can't fully convert" problems unified into one list: a product with no
+ * conversion graph at all (`none`), an ingredient that has only a price so it
+ * can reach nothing but money (`partial`), or one fragmented into islands
  * (`islanded`). They share the inline fix (add conversions) and differ only in
  * the pre-fill hint, so they render in one "Unit coverage" section.
  */
 export type UnitCoverageItem =
   | ({ kind: "none" } & NoMappings)
+  | ({ kind: "partial" } & PartialCoverage)
   | ({ kind: "islanded" } & Islanded);
 
-/** Concatenate the two source arrays into the merged, discriminated list. */
+/** Concatenate the source arrays into the merged, discriminated list. */
 export function buildUnitCoverageItems(
   noMappings: readonly NoMappings[],
+  partial: readonly PartialCoverage[],
   islanded: readonly Islanded[],
 ): UnitCoverageItem[] {
   return [
     ...noMappings.map((p) => ({ kind: "none" as const, ...p })),
+    ...partial.map((p) => ({ kind: "partial" as const, ...p })),
     ...islanded.map((p) => ({ kind: "islanded" as const, ...p })),
   ];
 }
@@ -33,6 +38,7 @@ export function buildUnitCoverageItems(
 /** Subgroup heading for an item — drives the section's `groupBy`. */
 export function unitCoverageGroup(item: UnitCoverageItem): string {
   if (item.kind === "islanded") return "Disconnected";
+  if (item.kind === "partial") return "Incomplete coverage";
   return item.isIngredient
     ? "No conversions · ingredient"
     : "No conversions · other";

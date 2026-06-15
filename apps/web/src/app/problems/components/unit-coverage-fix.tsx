@@ -69,6 +69,9 @@ export function UnitCoverageInlineFix({
     .with({ kind: "islanded" }, (i) => (
       <DisconnectedFix id={i.id} islands={i.islands} close={close} />
     ))
+    .with({ kind: "partial" }, (i) => (
+      <IngredientFix id={i.id} name={i.name} close={close} />
+    ))
     .with({ kind: "none", isIngredient: true }, (i) => (
       <IngredientFix id={i.id} name={i.name} close={close} />
     ))
