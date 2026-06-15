@@ -1,4 +1,5 @@
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
+import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { useQuery } from "@tanstack/react-query";
 import { Check } from "lucide-react";
 import { useState } from "react";
@@ -6,11 +7,14 @@ import { toast } from "sonner";
 import { match } from "ts-pattern";
 import { UsdaFoodSearchField } from "~/app/_components/combobox/with-usda-food-search";
 import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
+import { UnitMappingsTable } from "~/app/_components/units/unitmappingstable";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { BASE_KINDS } from "~/lib/conversion-coverage";
 import { queryKeys } from "~/lib/query-keys";
+import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
+import { wasm } from "~/lib/wasm";
 import { useTRPC } from "~/trpc/react";
 import type { UnitCoverageItem } from "./unit-coverage-items";
 
@@ -60,6 +64,53 @@ const parsePositive = (raw: string): number | null => {
 // USDA fills these three; if they're all covered the USDA-link step is moot.
 const coversWeightVolumeCalories = (covered: string[]) =>
   ["weight", "volume", "calories"].every((k) => covered.includes(k));
+
+const CORE_4: ReadonlySet<string> = new Set([
+  "weight",
+  "volume",
+  "money",
+  "calories",
+]);
+
+// A mapping is "core-4 related" if it connects to one of the four base kinds and
+// isn't a non-calorie nutrient edge (the USDA nutrition synthesis emits a
+// "100 g = N g protein/fat/…" row per tier-1 nutrient — noise for this view).
+const isCore4Edge = (m: UnitMapping): boolean => {
+  const ka = wasm.amount_kind(m.a);
+  const kb = wasm.amount_kind(m.b);
+  if (ka.startsWith("nutrient:") || kb.startsWith("nutrient:")) return false;
+  return CORE_4.has(ka) || CORE_4.has(kb);
+};
+
+/**
+ * The product's existing conversions that bear on the core-4 coverage, with
+ * their source (USDA portion / nutrition / price / manual) — so it's clear what
+ * already covers which kinds before adding more. Loads the product on expand and
+ * synthesizes the effective edges (the same set the chips are graded from).
+ */
+function CurrentCore4Mappings({ productId }: { productId: string }) {
+  const api = useTRPC();
+  const { data: product } = useQuery(
+    api.product.getByID.queryOptions({ id: productId }),
+  );
+  if (!product) return null;
+
+  let effective: UnitMapping[];
+  try {
+    effective = getAllUnitMappingsFromProduct(product);
+  } catch {
+    return null;
+  }
+  const core4 = effective.filter(isCore4Edge);
+  if (core4.length === 0) return null;
+
+  return (
+    <div className="space-y-1">
+      <p className="font-medium text-xs">Current conversions</p>
+      <UnitMappingsTable mappings={core4} />
+    </div>
+  );
+}
 
 /** The inline fix body — variant chosen by the item's kind / ingredient flag. */
 export function UnitCoverageInlineFix({
@@ -200,6 +251,7 @@ function IngredientFix({
 
   return (
     <div className="space-y-3">
+      <CurrentCore4Mappings productId={id} />
       {showUsda && (
         <div className="space-y-1">
           <p className="font-medium text-xs">
