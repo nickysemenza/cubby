@@ -1,5 +1,5 @@
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
-import type { UnitMapping } from "@cubby/schemas/unitmapping";
+import type { UnitMapping, UnitMappingInput } from "@cubby/schemas/unitmapping";
 import { useQuery } from "@tanstack/react-query";
 import { Check } from "lucide-react";
 import { useState } from "react";
@@ -208,7 +208,14 @@ function IngredientFix({
 }) {
   const api = useTRPC();
   const [food, setFood] = useState<FoodSummaryWithLinkedProducts | null>(null);
+  // Price entry is "<qty> <unit> = $<price>". Defaults to "1 each" (the scalar
+  // per-each price), but any measure unit (e.g. "5 lb") becomes a money mapping.
+  const [priceQty, setPriceQty] = useState("1");
+  const [priceUnit, setPriceUnit] = useState("each");
   const [price, setPrice] = useState("");
+  // Existing mappings, so a per-measure price appends rather than replaces them
+  // (product.update swaps the whole set). Cached/deduped with CurrentCore4Mappings.
+  const { data: product } = useQuery(api.product.getByID.queryOptions({ id }));
   const update = useProblemCardMutation({
     mutationFn: api.product.update.mutationOptions,
     success: "Coverage updated",
@@ -218,7 +225,12 @@ function IngredientFix({
   const bothSteps = showUsda && showPrice;
 
   const save = () => {
-    const data: { ndb_number?: number; upc?: string; price?: number } = {};
+    const data: {
+      ndb_number?: number;
+      upc?: string;
+      price?: number;
+      unitMappings?: UnitMappingInput[];
+    } = {};
     // Mirror the product form's handleUsdaSelect: prefer the legacy NDB link,
     // fall back to the branded UPC.
     if (showUsda && food) {
@@ -232,8 +244,36 @@ function IngredientFix({
       }
     }
     if (showPrice) {
-      const value = parsePositive(price);
-      if (value != null) data.price = value;
+      const dollars = parsePositive(price);
+      if (dollars != null) {
+        const qty = parsePositive(priceQty) ?? 1;
+        const unit = priceUnit.trim() || "each";
+        if (unit.toLowerCase() === "each") {
+          // The per-each price is the product's own scalar field, not a mapping.
+          data.price = dollars / qty;
+        } else {
+          // A per-measure price (e.g. 5 lb = $8) is a money mapping — it wires
+          // money straight into the weight/volume graph. Replace-all: carry the
+          // existing rows or they'd be deleted, so refuse until they've loaded.
+          if (!product) {
+            toast.error("Couldn't load current conversions — try again");
+            return;
+          }
+          data.unitMappings = [
+            ...product.unitMappings.map((m) => ({
+              id: m.id,
+              a: m.a,
+              b: m.b,
+              source: m.source,
+            })),
+            {
+              a: { value: qty, unit },
+              b: { value: dollars, unit: "dollar" },
+              source: "manual: price (problems page)",
+            },
+          ];
+        }
+      }
     }
 
     if (Object.keys(data).length === 0) {
@@ -283,8 +323,24 @@ function IngredientFix({
               </span>
             )}
           </p>
-          <div className="flex items-center gap-2 text-sm">
-            <span>1 each = $</span>
+          <div className="flex items-center gap-1.5 text-sm">
+            <Input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="any"
+              value={priceQty}
+              onChange={(e) => setPriceQty(e.target.value)}
+              className="w-12"
+              aria-label="Price quantity"
+            />
+            <Input
+              value={priceUnit}
+              onChange={(e) => setPriceUnit(e.target.value)}
+              className="w-16"
+              aria-label="Price unit"
+            />
+            <span>= $</span>
             <Input
               type="number"
               inputMode="decimal"
@@ -293,9 +349,12 @@ function IngredientFix({
               placeholder="0.00"
               value={price}
               onChange={(e) => setPrice(e.target.value)}
-              className="w-24"
+              className="w-20"
             />
           </div>
+          <p className="text-muted-foreground text-xs">
+            Bulk or generic? Price by measure, e.g. 5 lb = $8.
+          </p>
         </div>
       )}
       <Button size="sm" onClick={save} disabled={update.isPending}>
