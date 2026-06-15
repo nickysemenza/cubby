@@ -57,6 +57,10 @@ const parsePositive = (raw: string): number | null => {
   return Number.isFinite(n) && n > 0 ? n : null;
 };
 
+// USDA fills these three; if they're all covered the USDA-link step is moot.
+const coversWeightVolumeCalories = (covered: string[]) =>
+  ["weight", "volume", "calories"].every((k) => covered.includes(k));
+
 /** The inline fix body — variant chosen by the item's kind / ingredient flag. */
 export function UnitCoverageInlineFix({
   item,
@@ -74,6 +78,7 @@ export function UnitCoverageInlineFix({
         id={i.id}
         name={i.name}
         close={close}
+        showUsda={!coversWeightVolumeCalories(i.coverage.covered)}
         showPrice={!i.hasPrice}
       />
     ))
@@ -130,24 +135,24 @@ function PriceFix({ id, close }: { id: string; close: () => void }) {
 }
 
 /**
- * Ingredient missing coverage: link a USDA food (synthesizes weight/volume/
- * calories edges live). When the product has no price either (`showPrice`), also
- * offer the price field — the one kind USDA can't supply. Lands in one update.
+ * Ingredient missing coverage. Renders only the steps for what's actually
+ * missing: the USDA-link step when weight/volume/calories aren't all covered
+ * (`showUsda`), and/or the price step when there's no price (`showPrice`).
+ * Re-linking an already-linked food or blanking an existing price would be
+ * wrong, so the caller derives these from the graded coverage. Lands in one
+ * product.update.
  */
 function IngredientFix({
   id,
   name,
   close,
+  showUsda = true,
   showPrice = true,
 }: {
   id: string;
   name: string;
   close: () => void;
-  /**
-   * Whether to offer the price field. False for the `partial` case — the product
-   * already has a price, so only the USDA link is missing and showing a blank
-   * price input would imply it's unset (and overwrite the real one on submit).
-   */
+  showUsda?: boolean;
   showPrice?: boolean;
 }) {
   const api = useTRPC();
@@ -159,20 +164,18 @@ function IngredientFix({
     invalidateKeys: [queryKeys.product.list],
     onSuccess: close,
   });
+  const bothSteps = showUsda && showPrice;
 
   const save = () => {
     const data: { ndb_number?: number; upc?: string; price?: number } = {};
     // Mirror the product form's handleUsdaSelect: prefer the legacy NDB link,
     // fall back to the branded UPC.
-    if (food) {
+    if (showUsda && food) {
       if (food.legacyFoodInfo?.ndb_number != null) {
         data.ndb_number = food.legacyFoodInfo.ndb_number;
       } else if (food.brandedFoodInfo?.gtin_upc) {
         data.upc = food.brandedFoodInfo.gtin_upc;
       } else {
-        // A food was picked but it carries neither an NDB number nor a UPC, so
-        // there's nothing to link it by — say that, rather than the generic
-        // "link a food or set a price" (the "Linked: …" line is showing).
         toast.error("That USDA food has no NDB or UPC to link by");
         return;
       }
@@ -184,7 +187,11 @@ function IngredientFix({
 
     if (Object.keys(data).length === 0) {
       toast.error(
-        showPrice ? "Link a USDA food or enter a price" : "Pick a USDA food",
+        bothSteps
+          ? "Link a USDA food or enter a price"
+          : showUsda
+            ? "Pick a USDA food"
+            : "Enter a price greater than 0",
       );
       return;
     }
@@ -193,27 +200,36 @@ function IngredientFix({
 
   return (
     <div className="space-y-3">
-      <div className="space-y-1">
-        <p className="font-medium text-xs">
-          {showPrice ? "Step 1 · link USDA" : "Link a USDA food"}{" "}
-          <span className="font-normal text-muted-foreground">
-            — fills weight, volume &amp; calories
-          </span>
-        </p>
-        <UsdaFoodSearchField initialQuery={name} label="" onSelect={setFood} />
-        {food && (
-          <p className="text-positive text-xs">
-            Linked: {food.foodInfo.description}
+      {showUsda && (
+        <div className="space-y-1">
+          <p className="font-medium text-xs">
+            {bothSteps ? "Step 1 · link USDA" : "Link a USDA food"}{" "}
+            <span className="font-normal text-muted-foreground">
+              — fills weight, volume &amp; calories
+            </span>
           </p>
-        )}
-      </div>
+          <UsdaFoodSearchField
+            initialQuery={name}
+            label=""
+            onSelect={setFood}
+          />
+          {food && (
+            <p className="text-positive text-xs">
+              Linked: {food.foodInfo.description}
+            </p>
+          )}
+        </div>
+      )}
       {showPrice && (
         <div className="space-y-1">
           <p className="font-medium text-xs">
-            Step 2 · set price{" "}
-            <span className="font-normal text-muted-foreground">
-              — USDA can't supply this
-            </span>
+            {bothSteps ? "Step 2 · set price" : "Set a price"}
+            {bothSteps && (
+              <span className="font-normal text-muted-foreground">
+                {" "}
+                — USDA can't supply this
+              </span>
+            )}
           </p>
           <div className="flex items-center gap-2 text-sm">
             <span>1 each = $</span>

@@ -450,18 +450,28 @@ const findIngredientsWithPartialCoverage = async (
     }
 
     const cov = conversionCoverage(effective, BASE_KINDS);
-    if (cov.tier === "complete") continue;
+
+    // The two actionable gaps: USDA fills weight/volume/calories, a price fills
+    // money. A scalar price (or any money-unit edge) counts as "has price" even
+    // though conversionCoverage won't light `money` from a bare "1 each = $X"
+    // (it isn't reachable from a measure). Flag only when one of these is
+    // genuinely addable, so every card maps to a concrete fix — and we don't
+    // nag count-priced foods (USDA-linked + priced) over money-from-measure.
+    const coversWVC =
+      cov.covered.has("weight") &&
+      cov.covered.has("volume") &&
+      cov.covered.has("calories");
+    const hasPrice =
+      p.price != null ||
+      effective.some((m) => isMoneyUnit(m.a.unit) || isMoneyUnit(m.b.unit));
+    if (coversWVC && hasPrice) continue;
 
     problems.push({
       id: p.id,
       name: p.name,
       manufacturer: p.manufacturer,
       coverage: { covered: [...cov.covered] },
-      // A scalar price, or any money-unit edge (synthesized or a stored money
-      // mapping), means price info already exists.
-      hasPrice:
-        p.price != null ||
-        effective.some((m) => isMoneyUnit(m.a.unit) || isMoneyUnit(m.b.unit)),
+      hasPrice,
     });
   }
 
