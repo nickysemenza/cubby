@@ -2,7 +2,7 @@ import type {
   ImageWithEntity,
   InitiateUploadWithoutEntityInput,
 } from "@cubby/schemas/image";
-import { and, eq, inArray, lt, sql } from "drizzle-orm";
+import { and, eq, inArray, lt } from "drizzle-orm";
 import { getSortableFields } from "~/entities/entities";
 import type { Database } from "~/server/db";
 import {
@@ -15,6 +15,7 @@ import { createAppError } from "~/server/errors/app-error";
 import {
   associatePendingImages,
   buildOrderBy,
+  countWhere,
   formatSearchTerm,
   getDb,
   insertAndReturn,
@@ -235,7 +236,7 @@ export const imageList = async (
   const skip = pagination.pageIndex * pagination.pageSize;
 
   // Execute queries in parallel - load entity relations in single query
-  const [images, countResult] = await Promise.all([
+  const [images, count] = await Promise.all([
     dbClient.query.image.findMany({
       where: whereClause,
       orderBy: orderByClause,
@@ -243,10 +244,7 @@ export const imageList = async (
       offset: skip,
       with: imageEntityRelations,
     }),
-    dbClient
-      .select({ count: sql<number>`count(*)::int` })
-      .from(image)
-      .where(whereClause),
+    countWhere(db, image, whereClause),
   ]);
 
   // Transform images with pre-loaded relations (no additional queries)
@@ -254,7 +252,7 @@ export const imageList = async (
 
   return {
     data: processedImages,
-    count: countResult[0]?.count ?? 0,
+    count,
   };
 };
 

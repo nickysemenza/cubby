@@ -18,7 +18,7 @@ import {
   productTopLevelOut,
 } from "@cubby/schemas/product";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import { and, count, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import { getSortableFields } from "~/entities/entities";
 import { parseWithContext } from "~/lib/zod-utils";
@@ -42,6 +42,7 @@ import {
   associatePendingImages,
   buildOrderBy,
   buildSearchConditions,
+  countWhere,
   executeListQueryWithCount,
   extractImagesFromJoinTable,
   getDb,
@@ -175,7 +176,7 @@ export const productList = async (
       offset: skip,
       ...relations.product.full,
     }),
-    getDb(db).select({ count: count() }).from(product).where(whereClause),
+    countWhere(db, product, whereClause),
   );
 
   const products = results.map((prod: ProductDeepDB) => dbProductToAPI(prod));

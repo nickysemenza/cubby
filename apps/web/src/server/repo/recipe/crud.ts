@@ -36,6 +36,7 @@ import {
   associatePendingImages,
   buildOrderBy,
   buildSearchConditions,
+  countWhere,
   executeListQueryWithCount,
   getDb,
   insertAndReturn,
@@ -288,10 +289,7 @@ export const recipeList = async (
       offset: skip,
       ...relations.recipe.list,
     }),
-    dbClient
-      .select({ count: sql<number>`count(*)::int` })
-      .from(recipe)
-      .where(whereClause),
+    countWhere(db, recipe, whereClause),
   );
 
   const items = results.map(dbRecipeToAPI);

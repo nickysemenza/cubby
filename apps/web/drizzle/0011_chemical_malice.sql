@@ -1,1 +1,0 @@
-ALTER TABLE "Recipe" ADD COLUMN "notes" text;

@@ -11,7 +11,7 @@ import {
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
-import { and, count, eq, gte, inArray, lte } from "drizzle-orm";
+import { and, eq, gte, inArray, lte } from "drizzle-orm";
 import { getSortableFields } from "~/entities/entities";
 import type { Database } from "~/server/db";
 import { meal, mealRecipe } from "~/server/db/schema";
@@ -19,6 +19,7 @@ import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntries, logAuditEntry } from "~/server/repo/audit-log";
 import {
   buildOrderBy,
+  countWhere,
   getDb,
   insertAndReturn,
   notDeleted,
@@ -79,7 +80,7 @@ export const mealList = async (
     filters.to ? lte(meal.date, filters.to) : undefined,
   );
 
-  const [rows, [countResult]] = await Promise.all([
+  const [rows, count] = await Promise.all([
     getDb(db).query.meal.findMany({
       where: whereCondition,
       orderBy: orderByArray,
@@ -87,10 +88,10 @@ export const mealList = async (
       offset: skip,
       ...relations.meal.full,
     }),
-    getDb(db).select({ count: count() }).from(meal).where(whereCondition),
+    countWhere(db, meal, whereCondition),
   ]);
 
-  return { data: rows.map(dbMealToAPI), count: countResult?.count ?? 0 };
+  return { data: rows.map(dbMealToAPI), count };
 };
 
 export const createMeal = async (

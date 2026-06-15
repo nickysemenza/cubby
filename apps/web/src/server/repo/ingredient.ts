@@ -34,6 +34,7 @@ import {
 import {
   addProductSourceMetadata,
   buildOrderBy,
+  countWhere,
   executeListQueryWithCount,
   extractImagesFromJoinTable,
   findOrCreate,
@@ -516,7 +517,8 @@ export const ingredientList = async (
           .select({ count: count() })
           .from(ingredient)
           .leftJoin(product, eq(product.ingredientId, ingredient.id))
-          .where(and(whereClause, isNull(product.id))),
+          .where(and(whereClause, isNull(product.id)))
+          .then((rows) => rows[0]?.count ?? 0),
       );
 
     const ingredients = await Promise.all(
@@ -535,10 +537,7 @@ export const ingredientList = async (
           limit: take,
           offset: skip,
         }),
-        getDb(db)
-          .select({ count: count() })
-          .from(ingredient)
-          .where(whereClause),
+        countWhere(db, ingredient, whereClause),
       );
 
     const ingredients = await Promise.all(
