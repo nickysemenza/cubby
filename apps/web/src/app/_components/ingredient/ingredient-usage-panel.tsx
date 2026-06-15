@@ -6,6 +6,7 @@ import { Merge } from "lucide-react";
 import { useMemo, useState } from "react";
 import { detectMergeGroups } from "~/lib/ingredient-merge-candidates";
 import { cn } from "~/lib/utils";
+import { wasm } from "~/lib/wasm";
 import { useTRPC } from "~/trpc/react";
 import { VisualizationPlaceholder } from "../visualizations/visualization-placeholder";
 import { IngredientUsageChart } from "./ingredient-usage-chart";
@@ -35,7 +36,10 @@ export function IngredientUsagePanel({
   const groupByIngredient = useMemo(() => {
     const map = new Map<string, MergeCandidate[]>();
     if (!data) return map;
-    for (const group of detectMergeGroups(data.rows)) {
+    for (const group of detectMergeGroups(
+      data.rows,
+      wasm.normalize_ingredient_name,
+    )) {
       const members: MergeCandidate[] = group.members.map((m) => ({
         id: m.ingredientId,
         name: m.name,

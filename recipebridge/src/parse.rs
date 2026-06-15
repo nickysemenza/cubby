@@ -346,6 +346,101 @@ pub fn singularize_unit(unit: String) -> String {
     ingredient::unit::singular(&unit).to_string()
 }
 
+/// Trailing usage notes that don't change the underlying ingredient.
+const NORMALIZE_SUFFIX_PHRASES: &[&str] = &[
+    "for the pan",
+    "for the topping",
+    "for dusting",
+    "for greasing",
+    "for brushing",
+    "for sprinkling",
+    "for rolling",
+    "for garnish",
+    "for serving",
+    "for frying",
+    "to taste",
+    "as needed",
+];
+
+/// Canonicalize an ingredient name for near-duplicate grouping: lowercase, drop
+/// parentheticals + trailing prep notes, strip usage suffix phrases, and collapse
+/// separators — so `butter` and `"Butter for the pan"` map to the same key while
+/// `white sugar` and `powdered sugar` stay distinct.
+///
+/// Lives in the bridge crate (not the web app) so the parser and app agree on
+/// ingredient identity. Pure std — no regex dependency.
+#[wasm_bindgen]
+pub fn normalize_ingredient_name(name: &str) -> String {
+    let mut s = strip_parens(&name.to_lowercase());
+    // Drop a trailing prep note after a comma+space, e.g. "butter, softened".
+    if let Some(idx) = find_comma_space(&s) {
+        s.truncate(idx);
+    }
+    for phrase in NORMALIZE_SUFFIX_PHRASES {
+        s = strip_word_phrase(&s, phrase);
+    }
+    // Collapse whitespace + stray separators.
+    s.split(|c: char| c.is_whitespace() || c == ',' || c == ';')
+        .filter(|t| !t.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Replace each parenthetical span (depth-aware) with a space.
+fn strip_parens(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut depth = 0u32;
+    for ch in s.chars() {
+        match ch {
+            '(' => {
+                depth += 1;
+                out.push(' ');
+            }
+            ')' => {
+                depth = depth.saturating_sub(1);
+                out.push(' ');
+            }
+            _ if depth == 0 => out.push(ch),
+            _ => {}
+        }
+    }
+    out
+}
+
+/// Byte index of the first comma that is immediately followed by whitespace.
+fn find_comma_space(s: &str) -> Option<usize> {
+    let b = s.as_bytes();
+    (0..b.len()).find(|&i| b[i] == b',' && b.get(i + 1).is_some_and(u8::is_ascii_whitespace))
+}
+
+fn is_word_byte(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_'
+}
+
+/// Replace word-boundary occurrences of `phrase` (ASCII, lowercase) with a space.
+fn strip_word_phrase(s: &str, phrase: &str) -> String {
+    let bytes = s.as_bytes();
+    let plen = phrase.len();
+    let mut out = String::with_capacity(s.len());
+    let mut i = 0;
+    while i < s.len() {
+        if s[i..].starts_with(phrase) {
+            let before_ok = i == 0 || !is_word_byte(bytes[i - 1]);
+            let after = i + plen;
+            let after_ok = bytes.get(after).is_none_or(|&b| !is_word_byte(b));
+            if before_ok && after_ok {
+                out.push(' ');
+                i = after;
+                continue;
+            }
+        }
+        let ch = s[i..].chars().next().expect("char boundary");
+        out.push(ch);
+        i += ch.len_utf8();
+    }
+    out
+}
+
 #[wasm_bindgen]
 pub fn parse_scraped_recipe(body: &str, url: &str) -> Result<WScrapedRecipe, String> {
     recipe_scraper::scrape(body, url)
@@ -385,6 +480,21 @@ pub fn parse_rich_text(text: String, ingredient_names: Vec<String>) -> Result<Ri
 mod tests {
     use super::*;
     use rstest::rstest;
+
+    /// Ingredient-name canonicalization for the usage table's "merge?" affordance.
+    /// Near-duplicates collapse to one key; genuinely distinct names stay apart.
+    #[rstest]
+    #[case("butter", "butter")]
+    #[case("Butter for the pan", "butter")]
+    #[case("sugar (for dusting)", "sugar")]
+    #[case("butter, softened", "butter")]
+    #[case("  Salt ", "salt")]
+    #[case("White sugar", "white sugar")]
+    #[case("powdered sugar", "powdered sugar")]
+    #[case("All-purpose flour", "all-purpose flour")]
+    fn normalize_ingredient_name_cases(#[case] input: &str, #[case] expected: &str) {
+        assert_eq!(normalize_ingredient_name(input), expected);
+    }
 
     /// One line per `WIngredientUsage` variant: the `IngredientUsage` drift
     /// tripwire. A parser change that drops or reclassifies a role would silently
