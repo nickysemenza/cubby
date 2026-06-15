@@ -1,7 +1,6 @@
 import type { LocationCreateInput, LocationOut } from "@cubby/schemas/location";
-import { useMutation } from "@tanstack/react-query";
 import type { FC } from "react";
-import { toast } from "sonner";
+import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import {
   Dialog,
   DialogContent,
@@ -28,18 +27,14 @@ export const CreateChildLocationDialog: FC<CreateChildLocationDialogProps> = ({
 }) => {
   const api = useTRPC();
 
-  const createMutation = useMutation(
-    api.location.create.mutationOptions({
-      onSuccess: (newLocation) => {
-        toast.success(`Created "${newLocation.name}"`);
-        onOpenChange(false);
-        onSuccess(newLocation);
-      },
-      onError: (error) => {
-        toast.error(getErrorMessage(error));
-      },
-    }),
-  );
+  const createMutation = useActionMutation({
+    mutationFn: api.location.create.mutationOptions,
+    success: (newLocation) => `Created "${newLocation.name}"`,
+    onSuccess: (newLocation) => {
+      onOpenChange(false);
+      onSuccess(newLocation);
+    },
+  });
 
   const handleCreate = async (data: LocationCreateInput) => {
     return createMutation.mutateAsync(data);

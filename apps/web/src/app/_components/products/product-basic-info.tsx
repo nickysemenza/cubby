@@ -1,10 +1,10 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Package } from "lucide-react";
 import type { FC } from "react";
-import { toast } from "sonner";
+import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Button } from "~/components/ui/button";
+import { getErrorMessage } from "~/lib/error-utils";
 import { queryKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import type { ProductWithFoodOut } from "~/server/services/product.service";
@@ -28,23 +28,14 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
   onEdit,
 }) => {
   const api = useTRPC();
-  const queryClient = useQueryClient();
 
   // Mutation for inline editing (price, category, etc.)
-  const updateProductMutation = useMutation(
-    api.product.update.mutationOptions({
-      onSuccess: () => {
-        toast.success("Saved your changes.");
-        // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
-        void queryClient.invalidateQueries({
-          queryKey: [queryKeys.product.list],
-        });
-      },
-      onError: (err) => {
-        toast.error(err.message || "Failed to update product");
-      },
-    }),
-  );
+  const updateProductMutation = useActionMutation({
+    mutationFn: api.product.update.mutationOptions,
+    success: "Saved your changes.",
+    invalidateKeys: [queryKeys.product.list],
+    error: (err) => getErrorMessage(err) || "Failed to update product",
+  });
 
   const { DeleteButton, DeleteDialog } = useEntityDelete({
     id: product.id,

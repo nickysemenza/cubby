@@ -1,10 +1,10 @@
 import { unsafeCookbookId } from "@cubby/schemas/identifiers";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { BookOpen, Plus, RefreshCw, Trash } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 import { z } from "zod";
+import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { IngredientUsagePanel } from "~/app/_components/ingredient/ingredient-usage-panel";
 import { RecipeList } from "~/app/recipes/recipelist";
 import { DeleteEntityDialog } from "~/components/dialogs/delete-entity-dialog";
@@ -15,6 +15,7 @@ import { Image } from "~/components/ui/image";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 import { useTabParam } from "~/hooks/useTabParam";
+import { getErrorMessage } from "~/lib/error-utils";
 import { queryKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 
@@ -42,7 +43,6 @@ function CookbookDetailPage() {
   const cookbookId = Route.useParams().cookbookId;
   const { tab } = Route.useSearch();
   const api = useTRPC();
-  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [showDelete, setShowDelete] = useState(false);
 
@@ -65,45 +65,29 @@ function CookbookDetailPage() {
 
   useDocumentTitle(`Cookbook: ${name}`);
 
-  const reprocessMutation = useMutation(
-    api.recipe.reprocessCookbook.mutationOptions({
-      onSuccess: ({ reprocessed, importableExtras }) => {
-        const extra =
-          importableExtras.length > 0
-            ? ` (${importableExtras.length} more in the source not yet imported)`
-            : "";
-        toast.success(
-          `Reprocessed ${reprocessed} recipe${reprocessed === 1 ? "" : "s"} from ${name}${extra}`,
-        );
-        void queryClient.invalidateQueries({
-          queryKey: [queryKeys.recipe.list],
-        });
-      },
-      onError: (err) => {
-        toast.error(err.message || "Failed to reprocess cookbook");
-      },
-    }),
-  );
+  const reprocessMutation = useActionMutation({
+    mutationFn: api.recipe.reprocessCookbook.mutationOptions,
+    success: ({ reprocessed, importableExtras }) => {
+      const extra =
+        importableExtras.length > 0
+          ? ` (${importableExtras.length} more in the source not yet imported)`
+          : "";
+      return `Reprocessed ${reprocessed} recipe${reprocessed === 1 ? "" : "s"} from ${name}${extra}`;
+    },
+    invalidateKeys: [queryKeys.recipe.list],
+    error: (err) => getErrorMessage(err) || "Failed to reprocess cookbook",
+  });
 
-  const deleteMutation = useMutation(
-    api.recipe.deleteByCookbook.mutationOptions({
-      onSuccess: ({ deleted }) => {
-        toast.success(
-          `Deleted ${deleted} recipe${deleted === 1 ? "" : "s"} from ${name}`,
-        );
-        void queryClient.invalidateQueries({
-          queryKey: [queryKeys.recipe.list],
-        });
-        void queryClient.invalidateQueries({
-          queryKey: [queryKeys.recipe.listCookbooks],
-        });
-        void navigate({ to: "/cookbooks" });
-      },
-      onError: (err) => {
-        toast.error(err.message || "Failed to delete cookbook recipes");
-      },
-    }),
-  );
+  const deleteMutation = useActionMutation({
+    mutationFn: api.recipe.deleteByCookbook.mutationOptions,
+    success: ({ deleted }) =>
+      `Deleted ${deleted} recipe${deleted === 1 ? "" : "s"} from ${name}`,
+    invalidateKeys: [queryKeys.recipe.list, queryKeys.recipe.listCookbooks],
+    onSuccess: () => {
+      void navigate({ to: "/cookbooks" });
+    },
+    error: (err) => getErrorMessage(err) || "Failed to delete cookbook recipes",
+  });
 
   return (
     <PageWrapper fullWidth>
