@@ -182,7 +182,9 @@ export const getRecipeDependencyGraph = async (
       sections: {
         with: {
           ingredients: {
-            with: { ingredient: { columns: { recipeId: true } } },
+            with: {
+              ingredient: { columns: { recipeId: true, deletedAt: true } },
+            },
           },
         },
       },
@@ -206,8 +208,11 @@ export const getRecipeDependencyGraph = async (
     const seen = new Set<string>();
     for (const section of r.sections) {
       for (const si of section.ingredients) {
-        const subId = si.ingredient?.recipeId;
-        if (!subId || seen.has(subId)) continue;
+        const ing = si.ingredient;
+        const subId = ing?.recipeId;
+        // Skip soft-deleted pointer rows so they don't create phantom edges
+        // (mirrors getIngredientUsage's deletedAt guard).
+        if (!subId || ing?.deletedAt || seen.has(subId)) continue;
         seen.add(subId);
         edges.push({ source: r.id, target: subId });
         if (!nodes.has(subId)) externalSubIds.add(subId);
