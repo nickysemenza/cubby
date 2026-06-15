@@ -350,7 +350,12 @@ export function createUnitMappingsColumn<T extends { id: string }>(
       const mappings = mappingsMap[entity.id] ?? [];
       return (
         <div className="w-full">
-          <UnitMappingDisplay mappings={mappings} title="" compact={compact} />
+          <UnitMappingDisplay
+            mappings={mappings}
+            title=""
+            compact={compact}
+            showTier={compact}
+          />
         </div>
       );
     },

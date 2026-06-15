@@ -8,6 +8,8 @@ interface UnitMappingDisplayProps {
   compact?: boolean;
   /** Show the kind-coverage icons even in compact mode (opt-in per column width). */
   showCoverage?: boolean;
+  /** Show the one-word coverage tier (Complete/Good/Partial/None) in compact mode. */
+  showTier?: boolean;
 }
 
 export const UnitMappingDisplay: React.FC<UnitMappingDisplayProps> = ({
@@ -15,6 +17,7 @@ export const UnitMappingDisplay: React.FC<UnitMappingDisplayProps> = ({
   title = "Unit Conversions",
   compact = false,
   showCoverage = false,
+  showTier = false,
 }) => {
   return (
     <div>
@@ -24,6 +27,7 @@ export const UnitMappingDisplay: React.FC<UnitMappingDisplayProps> = ({
           mappings={mappings}
           compact={compact}
           showCoverage={showCoverage}
+          showTier={showTier}
         />
       </div>
     </div>
