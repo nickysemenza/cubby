@@ -63,16 +63,20 @@ export const ConversionCapabilities = memo(function ConversionCapabilities({
   compact = false,
   showCoverage = false,
   showTier = false,
-  kinds = BASE_KINDS,
+  kinds,
 }: ConversionCapabilitiesProps) {
+  // Grade against the requested universe, defaulting to all four base kinds.
+  // `kinds` is kept raw (possibly undefined) for forwarding to ConversionDialog,
+  // which otherwise shows all 8 amount kinds — only USDA narrows it.
+  const coverageKinds = kinds ?? BASE_KINDS;
   // Detail view (non-compact) renders the per-pair grid + tier headline; compact
   // table cells render the kind icons and/or the tier word (summaries of the same
   // data) when opted in. Skip the computation entirely for compact columns that
   // don't opt into either.
   const needCoverage = !compact || showCoverage || showTier;
   const coverage = useMemo(
-    () => (needCoverage ? conversionCoverage(mappings, kinds) : null),
-    [mappings, needCoverage, kinds],
+    () => (needCoverage ? conversionCoverage(mappings, coverageKinds) : null),
+    [mappings, needCoverage, coverageKinds],
   );
 
   return (
@@ -80,7 +84,11 @@ export const ConversionCapabilities = memo(function ConversionCapabilities({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           {!hideConvertButton && (
-            <ConversionDialog mappings={mappings} compact={compact} />
+            <ConversionDialog
+              mappings={mappings}
+              compact={compact}
+              kinds={kinds}
+            />
           )}
 
           {/* Compact tier word (Complete/Good/Partial/None), opt-in for list
@@ -99,7 +107,7 @@ export const ConversionCapabilities = memo(function ConversionCapabilities({
               labels carry the meaning. */}
           {coverage && compact && showCoverage && (
             <div className="flex items-center gap-0.5">
-              {kinds.map((kind) => {
+              {coverageKinds.map((kind) => {
                 const { Icon, label } = kindIconMap[kind]!;
                 const lit = coverage.covered.has(kind);
                 const state = lit ? "convertible" : "no conversion";

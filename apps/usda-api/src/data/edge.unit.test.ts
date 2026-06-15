@@ -103,4 +103,69 @@ describe("createEdgeUsdaDataSource", () => {
 
     expect(bindCounts).toEqual([100, 50]);
   });
+
+  it("drops a record that fails schema validation instead of 500ing the page", async () => {
+    // gtin_upc "ABC" is non-numeric + <12 chars, so normalizeUpc can't fix it
+    // and foodSummary.parse rejects it — exactly the kind of bad source data
+    // that used to throw and surface as empty/"no results" for the whole query.
+    const badFood = JSON.stringify({
+      fdc_id: 1,
+      foodInfo: { data_type: "branded_food", description: "BAD" },
+      legacyFoodInfo: null,
+      brandedFoodInfo: {
+        brand_owner: null,
+        brand_name: null,
+        branded_food_category: null,
+        gtin_upc: "ABC",
+        ingredients: null,
+        serving: {
+          serving_size: null,
+          serving_size_unit: null,
+          household_serving_fulltext: null,
+        },
+      },
+      nutritionInfo: { nutrientSummary: [], nutrientsPer100: {} },
+      portionInfoRaw: [],
+    });
+    const row = {
+      fdc_id: 1,
+      data_type: "branded_food",
+      description: "BAD",
+      gtin_upc: "ABC",
+      ndb_number: null,
+      bundle_key: "b",
+      byte_offset: 0,
+      byte_length: badFood.length,
+    };
+    const env = {
+      DB: {
+        prepare(query: string) {
+          const stmt = {
+            bind() {
+              return stmt;
+            },
+            async first<T>() {
+              if (query.includes("usda_edge_meta"))
+                return { value: "vtest" } as T;
+              if (query.includes("count(")) return { count: 1 } as T;
+              return null;
+            },
+            async all<T>() {
+              return { success: true, results: [row] as T[] };
+            },
+          };
+          return stmt;
+        },
+      },
+      USDA_BUNDLES: {
+        get: async () => ({ text: async () => badFood }),
+      },
+    } as unknown as EdgeBindings;
+
+    const dataSource = createEdgeUsdaDataSource(env);
+    const result = await dataSource.listFoods({ pageIndex: 0, pageSize: 10 });
+
+    expect(result.count).toBe(1); // count comes from the index, unaffected
+    expect(result.data).toHaveLength(0); // bad row dropped, not a thrown 500
+  });
 });

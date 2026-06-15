@@ -34,9 +34,10 @@ export const listFoodsQuery = z.object({
   dataTypeFilter: dataTypeEnum.optional(),
   // Restrict to the four user-facing food types (branded / foundation / SR
   // legacy / survey), hiding the Foundation sampling pipeline + experimental
-  // records. An explicit dataTypeFilter takes precedence over this. Only ever
-  // sent as `true`, so coerce-from-querystring is safe.
-  foodsOnly: z.coerce.boolean().optional(),
+  // records. An explicit dataTypeFilter takes precedence. Union so the web
+  // client can pass a real boolean while the HTTP querystring (always a string)
+  // parses correctly — unlike z.coerce.boolean(), which turns "false" into true.
+  foodsOnly: z.union([z.boolean(), z.stringbool()]).optional(),
   orderBy: z
     .enum(["description", "data_type", "fdc_id", "relevance"])
     .optional()

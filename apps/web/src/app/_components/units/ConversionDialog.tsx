@@ -25,6 +25,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
+import type { BaseKind } from "~/lib/conversion-coverage";
 import { safeConvertAmount } from "~/lib/recipe-costing";
 import { wasm } from "~/lib/wasm";
 import type { Result } from "~/misc/result-types";
@@ -43,6 +44,8 @@ interface ConversionDialogProps {
   mappings: UnitMapping[];
   /** Icon-only, no label — for dense table cells where the coverage icons lead. */
   compact?: boolean;
+  /** Restrict the kinds shown (USDA passes USDA_KINDS to drop money). */
+  kinds?: readonly BaseKind[];
 }
 
 const amountKinds: AmountKind[] = [
@@ -77,10 +80,14 @@ const formatConversionPath = (path: readonly WConversionStep[]): string => {
 function ConversionDialogContent({
   mappings,
   onClose,
+  kinds,
 }: {
   mappings: UnitMapping[];
   onClose: () => void;
+  kinds?: readonly BaseKind[];
 }) {
+  // BaseKind ⊆ AmountKind, so a restricted set just narrows the rows shown.
+  const effectiveKinds: readonly AmountKind[] = kinds ?? amountKinds;
   const showNutrientsId = useId();
   const [showNutrients, setShowNutrients] = useState(true);
   const [conversions, setConversions] = useState<
@@ -116,7 +123,7 @@ function ConversionDialogContent({
         Record<AmountKind, readonly WConversionStep[]>
       > = {};
 
-      for (const kind of amountKinds) {
+      for (const kind of effectiveKinds) {
         results[kind] = safeConvertAmount(currentAmount, mappings, kind);
         // The traversed unit-graph path ("show your work") for convertible
         // kinds — surfaces e.g. a price reached via a bogus whole-count edge.
@@ -137,7 +144,7 @@ function ConversionDialogContent({
       setConversions(results);
       setPaths(resultPaths);
     },
-    [mappings],
+    [mappings, effectiveKinds],
   );
 
   // Update conversions whenever form values change
@@ -191,6 +198,7 @@ function ConversionDialogContent({
           <ConversionCapabilities
             mappings={filteredMappings}
             hideConvertButton={true}
+            kinds={kinds}
           />
 
           <div className="space-y-2">
@@ -225,7 +233,7 @@ function ConversionDialogContent({
               <div className="mt-4 space-y-2">
                 <h4 className="font-medium text-sm">Conversion Results</h4>
                 <div className="space-y-2">
-                  {amountKinds.map((kind) => {
+                  {effectiveKinds.map((kind) => {
                     const result = conversions[kind];
                     const path = paths[kind];
                     const Meta = kindIconMap[kind];
@@ -264,6 +272,7 @@ function ConversionDialogContent({
 export function ConversionDialog({
   mappings,
   compact = false,
+  kinds,
 }: ConversionDialogProps) {
   const [open, setOpen] = useState(false);
 
@@ -292,6 +301,7 @@ export function ConversionDialog({
         <ConversionDialogContent
           mappings={mappings}
           onClose={() => setOpen(false)}
+          kinds={kinds}
         />
       )}
     </Dialog>

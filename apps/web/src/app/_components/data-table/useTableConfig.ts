@@ -26,6 +26,8 @@ interface UseTableConfigOptions<TData, GlobalFilterData = unknown> {
   manualPagination?: boolean;
   manualSorting?: boolean;
   manualFiltering?: boolean;
+  /** Disable column sorting entirely (hides header arrows + click). Default: enabled. */
+  enableSorting?: boolean;
   globalFilter?: GlobalFilterData;
   onGlobalFilterChange?: (value: GlobalFilterData) => void;
   /** Custom row ID function for row selection */
@@ -48,6 +50,7 @@ export function useTableConfig<TData, GlobalFilterData>({
   manualPagination = true,
   manualSorting = true,
   manualFiltering = true,
+  enableSorting,
   globalFilter,
   onGlobalFilterChange,
   getRowId,
@@ -98,6 +101,7 @@ export function useTableConfig<TData, GlobalFilterData>({
       manualSorting,
       manualFiltering,
       manualPagination,
+      ...(enableSorting !== undefined ? { enableSorting } : {}),
       rowCount: totalCount,
       // Row selection
       ...(getRowId ? { getRowId } : {}),
@@ -132,6 +136,7 @@ export function useTableConfig<TData, GlobalFilterData>({
       manualSorting,
       manualFiltering,
       manualPagination,
+      enableSorting,
       totalCount,
       getRowId,
       enableRowSelection,

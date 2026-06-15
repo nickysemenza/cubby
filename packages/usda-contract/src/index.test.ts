@@ -141,6 +141,25 @@ describe("USDA Contract", () => {
         };
         expect(() => listFoodsQuery.parse(invalidQuery)).toThrow();
       });
+
+      it("accepts the relevance orderBy", () => {
+        expect(listFoodsQuery.parse({ orderBy: "relevance" }).orderBy).toBe(
+          "relevance",
+        );
+      });
+
+      it("parses foodsOnly from a querystring without the coerce footgun", () => {
+        // The bug being guarded: z.coerce.boolean() turned "false" into true.
+        expect(listFoodsQuery.parse({ foodsOnly: "true" }).foodsOnly).toBe(
+          true,
+        );
+        expect(listFoodsQuery.parse({ foodsOnly: "false" }).foodsOnly).toBe(
+          false,
+        );
+        // And the web client's real boolean still works.
+        expect(listFoodsQuery.parse({ foodsOnly: true }).foodsOnly).toBe(true);
+        expect(listFoodsQuery.parse({}).foodsOnly).toBeUndefined();
+      });
     });
 
     describe("fdcIdParam", () => {

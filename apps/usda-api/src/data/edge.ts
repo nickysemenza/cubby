@@ -227,9 +227,18 @@ export function createEdgeUsdaDataSource(
     if (!object) return null;
 
     const text = await object.text();
-    const parsed = foodSummary.parse(
-      normalizeFoodSummaryPayload(JSON.parse(text)),
-    );
+    // A single malformed record must not 500 the whole page: drop it (callers
+    // filter nulls / treat null as not-found). This makes a page slightly
+    // shorter than totalCount (the count is from the index, not hydrated rows) —
+    // an acceptable trade for resilience against bad source data. Pointer
+    // mismatch below still throws: that's index corruption, not data quality.
+    let parsed: FoodSummary;
+    try {
+      parsed = foodSummary.parse(normalizeFoodSummaryPayload(JSON.parse(text)));
+    } catch (err) {
+      console.warn(`[hydrate] skipping unparseable food ${row.fdc_id}`, err);
+      return null;
+    }
     if (parsed.fdc_id !== row.fdc_id) {
       throw new Error(
         `R2 pointer mismatch for ${row.fdc_id}: read ${parsed.fdc_id}`,
