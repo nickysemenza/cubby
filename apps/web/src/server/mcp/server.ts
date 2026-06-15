@@ -15,6 +15,7 @@ import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { TRPCError } from "@trpc/server";
+import { omitBy } from "es-toolkit";
 import { z } from "zod";
 
 /**
@@ -280,9 +281,7 @@ function deleteHandler(routerName: string) {
 function updateHandler(routerName: string, slim: Slim = identity) {
   return withErrorHandling(async (params, extra) => {
     const { id, ...rest } = params;
-    const data = Object.fromEntries(
-      Object.entries(rest).filter(([, v]) => v !== undefined),
-    );
+    const data = omitBy(rest, (v) => v === undefined);
     const result = await getCaller(extra)[routerName].update({ id, data });
     return json(slim(result as Row));
   });
@@ -968,9 +967,7 @@ function registerTools(server: McpServer) {
     withErrorHandling(async (params, extra) => {
       const caller = getCaller(extra);
       const { id, ...rest } = params;
-      const data = Object.fromEntries(
-        Object.entries(rest).filter(([, v]) => v !== undefined),
-      );
+      const data = omitBy(rest, (v) => v === undefined);
       const result = await caller.recipe.update({ id, data });
       return json(slimRecipe(result as Record<string, unknown>));
     }),

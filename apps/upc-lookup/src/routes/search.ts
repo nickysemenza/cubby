@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { like, or, sql } from "drizzle-orm";
+import { clamp } from "es-toolkit";
 import type { Env } from "../types";
 import { createDb, schema } from "../db";
 import { getImageUrl } from "../storage/images";
@@ -11,7 +12,7 @@ search.get("/", async (c) => {
   const query = c.req.query("q");
   const baseUrl = new URL(c.req.url).origin;
   const limitStr = c.req.query("limit");
-  const limit = Math.min(Math.max(parseInt(limitStr || "20", 10), 1), 100);
+  const limit = clamp(parseInt(limitStr || "20", 10), 1, 100);
   const offset = Math.max(parseInt(c.req.query("offset") || "0", 10) || 0, 0);
 
   if (!query || query.trim().length === 0) {

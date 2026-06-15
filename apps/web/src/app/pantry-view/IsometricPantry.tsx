@@ -64,6 +64,7 @@ import {
 } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
+import { sum, sumBy } from "es-toolkit";
 import { ArrowLeft, Loader2, Maximize2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "~/components/ui/button";
@@ -829,7 +830,7 @@ function calculateZoneWidth(pieces: FurniturePiece[]): number {
   const floorPieces = pieces.filter(
     (p) => getFurnitureSpec(p.locationType).zone !== "back-wall",
   );
-  const backWallWidth = backWall.reduce((sum, p) => sum + p.w + 0.8, 1);
+  const backWallWidth = 1 + sumBy(backWall, (p) => p.w + 0.8);
   const floorCols = Math.max(1, Math.ceil(Math.sqrt(floorPieces.length)));
   return Math.max(4, Math.ceil(backWallWidth) + 1, floorCols * 3 + 2);
 }
@@ -1017,7 +1018,7 @@ function buildRooms(
 
     // Calculate zone widths and room dimensions
     const zoneWidths = zones.map((z) => calculateZoneWidth(z.pieces));
-    const totalZoneWidth = zoneWidths.reduce((sum, w) => sum + w, 0);
+    const totalZoneWidth = sum(zoneWidths);
     const gapCount = Math.max(0, zones.length - 1);
     const zoneGap = 0.6;
     const roomW = Math.max(6, totalZoneWidth + gapCount * zoneGap + 1);

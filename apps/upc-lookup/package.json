@@ -28,6 +28,7 @@
     "@modelcontextprotocol/sdk": "^1.28.0",
     "@scalar/hono-api-reference": "^0.10.0",
     "drizzle-orm": "^0.45.1",
+    "es-toolkit": "^1.47.1",
     "hono": "^4.11.9",
     "zod": "^4.3.6"
   },

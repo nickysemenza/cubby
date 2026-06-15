@@ -1,5 +1,5 @@
 import { and, desc, eq, gt, inArray, like, sql } from "drizzle-orm";
-import { chunk } from "../util/chunk";
+import { chunk, clamp } from "es-toolkit";
 import type { Database } from "./index";
 import { schema } from "./index";
 import type { UpcMiss } from "./schema";
@@ -83,7 +83,7 @@ export async function listMisses(
   { q, page = 1, pageSize = 25 }: ListMissesOptions = {},
 ): Promise<ListMissesResult> {
   const safePage = Math.max(page, 1);
-  const safePageSize = Math.min(Math.max(pageSize, 1), 100);
+  const safePageSize = clamp(pageSize, 1, 100);
 
   const where =
     q && q.trim().length > 0

@@ -1,4 +1,5 @@
 import { ResponsiveLine } from "@nivo/line";
+import { sumBy } from "es-toolkit";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
 import type { NotionPurchase } from "~/server/clients/notion";
@@ -46,8 +47,8 @@ export function MonthlyTrend({ purchases }: { purchases: NotionPurchase[] }) {
         })),
       }))
       .sort((a, b) => {
-        const totalA = a.data.reduce((s, d) => s + d.y, 0);
-        const totalB = b.data.reduce((s, d) => s + d.y, 0);
+        const totalA = sumBy(a.data, (d) => d.y);
+        const totalB = sumBy(b.data, (d) => d.y);
         return totalB - totalA;
       });
   }, [purchases]);
