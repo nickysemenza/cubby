@@ -7,7 +7,10 @@
  */
 
 import { type IngredientId, ingredientId } from "@cubby/schemas/identifiers";
-import { ingredientBase } from "@cubby/schemas/ingredient";
+import {
+  ingredientBase,
+  ingredientFiltersSchema,
+} from "@cubby/schemas/ingredient";
 import { z } from "zod";
 import {
   deleteIngredients,
@@ -19,12 +22,6 @@ import {
   createEntityCrudProcedures,
 } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
-
-// Define filters schema for ingredients
-const ingredientFiltersSchema = z.object({
-  nameFilter: z.string().optional(),
-  missingProductsOnly: z.boolean().optional().default(false),
-});
 
 // Create standardized CRUD procedures using factory
 const { getByID, list, create, update } = createEntityCrudProcedures({

@@ -42,6 +42,17 @@ export const unitMappingInput = unitMappingBase.extend({
   id: z.uuid().optional(),
 });
 
+/**
+ * A unit mapping shaped for MCP tools: the canonical edge minus `id` (create-only)
+ * with `source` made omittable so LLM callers needn't pass `null` explicitly. Field
+ * docs for `a`/`b`/`source` come from `unitMappingBase`. Normalize back to
+ * `unitMappingInput` (source: string|null) at the tool boundary.
+ */
+export const mcpUnitMappingInput = unitMappingInput
+  .omit({ id: true })
+  .extend({ source: z.string().optional() });
+export type McpUnitMappingInput = z.infer<typeof mcpUnitMappingInput>;
+
 export const unitMappingOut = z
   .object({
     id: z.uuid(),
