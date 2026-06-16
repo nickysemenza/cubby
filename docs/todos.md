@@ -55,6 +55,29 @@ parse-clarification, and the baker's-% compare "X-ray".
 
 - [ ] **Scraped/Notion image not persisted on the server import path**: the scrape *form* imports the image client-side via `image.importFromUrl`, but `insertImportRecipe`/`insertNotionRecipe` drop `ImportRecipe.image`. Fix: call the existing `importImageFromUrl(db, …)` (`apps/web/src/server/repo/image.ts`) during server-side import and attach the resulting image id. This is also the path for the deferred Notion hero-image import — note Notion image URLs are signed/expiring, so they must be fetched at import time.
 
+## Future: MCP Recipe Authoring (from real-use feedback)
+
+Follow-ons to the batch `resolve_ingredients` + `create_recipe_from_text` MCP tools
+(shipped 2026-06-15). Both are downstream of macro-aware nutrition: once a
+`get_recipe_nutrition(recipeId, servings) → {P,F,C,kcal}` tool exists (and ingredients
+auto-link to a USDA FDC entry on creation), much of #4 dissolves into an agent loop and
+#6 becomes mostly templating.
+
+- [ ] **Portion solver**: a tool that takes a recipe + macro constraints (e.g. `<850
+  kcal, >60g protein`, "lighter for person X") and solves the component gram weights in
+  one shot, instead of the agent hand-iterating amounts. Niche; largely subsumed by the
+  agent once `get_recipe_nutrition` makes macros queryable. Build only if the
+  iterate-and-recheck loop stays painful in practice.
+- [ ] **Recipe → prep-sheet export**: a render tool that flattens sub-recipes, scales to
+  N servings, and emits a prep card + shopping list (compose with the existing
+  `get_shopping_list`). Mostly agent-composable once nutrition + per-ingredient unit
+  conversion (g↔cup density) are exposed as tools.
+
+Prereq for both (separate work, item #3 from the discussion): **macro-aware nutrition** —
+add an ingredient-level USDA `fdc_id` link (today `fdc_id` lives only on `Product`; for
+nutrition you want a canonical per-ingredient link, falling back to the product's), auto-
+attach a best-guess FDC entry during resolve-or-create, and surface P/F/C/kcal per serving.
+
 ## Future: Background Jobs (cron + queue)
 
 CF Workers cron triggers + a CF Queue (free tier: 10k ops/day — plenty) would

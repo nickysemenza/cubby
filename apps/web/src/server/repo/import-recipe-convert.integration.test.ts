@@ -66,6 +66,49 @@ describe("upsertImportRecipe", () => {
     expect(foundRecipe!.sections[0]!.ingredients).toHaveLength(2);
   });
 
+  it("parses raw lines into amounts + rawLine and resolves servings (create_recipe_from_text path)", async () => {
+    // The `create_recipe_from_text` MCP tool builds exactly this ImportRecipe
+    // (raw ingredient/instruction lines, top-level servings) and calls
+    // recipe.insertImport → upsertImportRecipe. This asserts the effective output.
+    const fromText = makeImportRecipe({
+      meta: { title: "Test Prep Sheet" },
+      servings: 2,
+      sections: [
+        {
+          instructions: ["Cook rice.", "Add aromatics."],
+          ingredients: [
+            "1 cup jasmine rice",
+            "2 scallions, sliced",
+            "1 tbsp soy sauce",
+          ],
+        },
+      ],
+    });
+
+    const result = await upsertImportRecipe(fromText, ctx.db, ctx.actor);
+
+    const found = await getDb(ctx.db).query.recipe.findFirst({
+      where: eq(recipe.id, result.id),
+      with: { sections: { with: { ingredients: true } } },
+    });
+
+    expect(found!.servings).toBe(2);
+    expect(found!.sections).toHaveLength(1);
+    const ingredients = found!.sections[0]!.ingredients;
+    expect(ingredients).toHaveLength(3);
+
+    // Each ingredient keeps its raw line and a parsed amount (value + unit).
+    const rice = ingredients.find((i) => i.rawLine === "1 cup jasmine rice");
+    expect(rice).toBeTruthy();
+    expect(rice!.amounts?.[0]).toMatchObject({ value: 1, unit: "cup" });
+
+    const soy = ingredients.find((i) => i.rawLine === "1 tbsp soy sauce");
+    expect(soy!.amounts?.[0]).toMatchObject({ value: 1, unit: "tbsp" });
+
+    // No duplicate ingredient rows were created for the three distinct names.
+    expect(new Set(ingredients.map((i) => i.ingredientId)).size).toBe(3);
+  });
+
   it("updates an existing recipe when it already exists", async () => {
     // First, create the recipe
     const firstResult = await upsertImportRecipe(mockRecipe, ctx.db, ctx.actor);

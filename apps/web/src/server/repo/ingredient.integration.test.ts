@@ -4,7 +4,11 @@ import { describe, expect, it } from "vitest";
 import { ingredient } from "~/server/db/schema";
 import { upsertImportRecipe } from "~/server/repo/recipe";
 import { getDb, withTransaction } from "./database-helpers";
-import { findOrCreateIngredient, mergeIngredients } from "./ingredient";
+import {
+  findOrCreateIngredient,
+  mergeIngredients,
+  resolveOrCreateIngredients,
+} from "./ingredient";
 import { makeImportRecipe } from "./repo.fixtures";
 
 describe("ingredient", () => {
@@ -137,6 +141,68 @@ describe("ingredient", () => {
     const second = await findOrCreateIngredient(ctx.db, "Allium", ["scallion"]);
     expect(second.id).toEqual(first.id);
     expect(second.aliases).toEqual(["Scallion"]); // unchanged, no "scallion" added
+  });
+
+  it("resolveOrCreateIngredients: matches existing, creates misses, in order", async () => {
+    // Seed one existing ingredient with an alias.
+    const allium = await findOrCreateIngredient(ctx.db, "Allium", ["Scallion"]);
+
+    const result = await resolveOrCreateIngredients(ctx.db, [
+      "Allium", // exact existing
+      "scallion", // existing via alias (case-insensitive)
+      "jasmine rice", // new
+    ]);
+
+    // One entry per input name, in order.
+    expect(result.map((r) => r.name)).toEqual([
+      "Allium",
+      "scallion",
+      "jasmine rice",
+    ]);
+
+    expect(result[0]).toMatchObject({
+      id: allium.id,
+      matched: true,
+      created: false,
+    });
+    expect(result[1]).toMatchObject({
+      id: allium.id,
+      matched: true,
+      created: false,
+    });
+    expect(result[2]!.matched).toBe(false);
+    expect(result[2]!.created).toBe(true);
+
+    // Only the one new row was added (Allium + jasmine rice = 2 total).
+    const [rows] = await getDb(ctx.db)
+      .select({ count: count() })
+      .from(ingredient);
+    expect(rows!.count).toEqual(2);
+  });
+
+  it("resolveOrCreateIngredients: idempotent on re-run and dedupes casing within a call", async () => {
+    const first = await resolveOrCreateIngredients(ctx.db, [
+      "Soy Sauce",
+      "soy sauce", // casing-variant duplicate within the same call
+    ]);
+    // Both input names resolve to the same row; the second is a same-call match.
+    expect(first[0]!.id).toEqual(first[1]!.id);
+    expect(first[0]!.created).toBe(true);
+
+    const [afterFirst] = await getDb(ctx.db)
+      .select({ count: count() })
+      .from(ingredient);
+    expect(afterFirst!.count).toEqual(1);
+
+    // Re-running resolves everything as an existing match — no new rows.
+    const second = await resolveOrCreateIngredients(ctx.db, ["soy sauce"]);
+    expect(second[0]!.id).toEqual(first[0]!.id);
+    expect(second[0]).toMatchObject({ matched: true, created: false });
+
+    const [afterSecond] = await getDb(ctx.db)
+      .select({ count: count() })
+      .from(ingredient);
+    expect(afterSecond!.count).toEqual(1);
   });
 
   it("ingredient merging works", async () => {

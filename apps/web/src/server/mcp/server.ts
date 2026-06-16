@@ -828,6 +828,25 @@ function registerTools(server: McpServer) {
   );
 
   server.tool(
+    "resolve_ingredients",
+    "Batch-resolve a list of ingredient names to IDs in one call: each name is matched to an existing ingredient (case-insensitive, including aliases) or created if missing. Returns one entry per name with `matched`/`created` flags and the resolved id. Use this instead of calling search_ingredients then create_ingredient one name at a time.",
+    {
+      names: z
+        .array(z.string().min(1))
+        .describe(
+          "Ingredient names to resolve or create, e.g. ['jasmine rice', 'scallion', 'soy sauce']",
+        ),
+    },
+    withErrorHandling(async (params, extra) => {
+      const caller = getCaller(extra);
+      const result = await caller.ingredient.resolveOrCreate({
+        names: params.names,
+      });
+      return json(result);
+    }),
+  );
+
+  server.tool(
     "update_ingredient",
     "Update an ingredient's name or aliases.",
     {
@@ -945,6 +964,80 @@ function registerTools(server: McpServer) {
       const caller = getCaller(extra);
       const imported = await caller.recipe.scrape(params.url);
       const result = await caller.recipe.insertImport(imported);
+      return json({ id: result.id });
+    }),
+  );
+
+  // Raw-text recipe input: ingredient/instruction lines as plain strings (no
+  // pre-resolved IDs). The server WASM-parses each ingredient line and
+  // find-or-creates ingredients — the same pipeline as URL/Notion import. Maps
+  // onto the `ImportRecipe` carrier consumed by `recipe.insertImport`.
+  const createRecipeFromTextInput = z.object({
+    name: z.string().min(1).describe("Recipe name"),
+    servings: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe("Number of servings"),
+    yield: z
+      .string()
+      .optional()
+      .describe(
+        "Freeform yield, e.g. '2 loaves' or 'Makes 12 pancakes' (parsed server-side)",
+      ),
+    notes: z.string().optional().describe("Headnote / notes markdown"),
+    sections: z
+      .array(
+        z.object({
+          name: z
+            .string()
+            .optional()
+            .describe(
+              "Section name, e.g. 'Sauce' (omit for a single unnamed section)",
+            ),
+          ingredients: z
+            .array(z.string())
+            .describe(
+              "Raw ingredient lines, e.g. '1 cup jasmine rice' — NOT ingredient IDs",
+            ),
+          instructions: z
+            .array(z.string())
+            .default([])
+            .describe("Instruction step lines, one string per step"),
+        }),
+      )
+      .min(1)
+      .describe(
+        "Recipe sections; each holds raw ingredient lines and instruction steps",
+      ),
+  });
+
+  server.tool(
+    "create_recipe_from_text",
+    "Create a recipe from raw text lines WITHOUT pre-resolving ingredient IDs. Pass ingredient and instruction lines as plain strings; the server parses each ingredient line (quantity/unit/name) and find-or-creates ingredients automatically. Mirrors the app's 'from text' / Notion import. Prefer this over resolve_ingredients + create_recipe when building a recipe from a prep sheet or pasted text. Returns the new recipe's id.",
+    createRecipeFromTextInput.shape,
+    withErrorHandling(async (params, extra) => {
+      const caller = getCaller(extra);
+      const input = createRecipeFromTextInput.parse(params);
+      // Build the ImportRecipe carrier. `meta.recipe_yield` is re-parsed and
+      // top-level `servings` wins over the yield-derived count (see
+      // normalizeImportRecipe); `meta.description` flows into composed notes.
+      const importRecipe = {
+        meta: {
+          title: input.name,
+          ...(input.notes ? { description: input.notes } : {}),
+          ...(input.yield ? { recipe_yield: input.yield } : {}),
+        },
+        sections: input.sections.map((s) => ({
+          ...(s.name ? { name: s.name } : {}),
+          ingredients: s.ingredients,
+          instructions: s.instructions,
+        })),
+        references: [],
+        ...(input.servings != null ? { servings: input.servings } : {}),
+      };
+      const result = await caller.recipe.insertImport(importRecipe);
       return json({ id: result.id });
     }),
   );

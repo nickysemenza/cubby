@@ -15,6 +15,7 @@ import { z } from "zod";
 import {
   deleteIngredients,
   getIngredientMatches,
+  resolveOrCreateIngredients,
 } from "~/server/repo/ingredient";
 import { ingredientWithFoodOut } from "~/server/services/ingredient.service";
 import {
@@ -108,6 +109,26 @@ const matchNames = protectedProcedure
     return await getIngredientMatches(ctx.db, input.names);
   });
 
+// Batch resolve-or-create in one round-trip: each name is matched to an existing
+// standalone ingredient (case-insensitive on name/aliases) or created. Returns one
+// entry per name with `matched`/`created` flags, so an agent can collapse the
+// search_ingredients-then-create_ingredient loop (dozens of calls) into one.
+const resolveOrCreate = protectedProcedure
+  .input(z.object({ names: z.array(z.string().min(1)) }))
+  .output(
+    z.array(
+      z.object({
+        name: z.string(),
+        id: ingredientId,
+        matched: z.boolean(),
+        created: z.boolean(),
+      }),
+    ),
+  )
+  .mutation(async ({ ctx, input }) => {
+    return await resolveOrCreateIngredients(ctx.db, input.names);
+  });
+
 // Batched id→ingredient lookup in one query (+ one cross-ingredient USDA enrich).
 // The recipe list uses this to load every ingredient for its cost/calorie columns
 // in a single round-trip instead of one getByID per ingredient (hundreds).
@@ -129,6 +150,7 @@ const deleteItem = createDeleteProcedure<IngredientId>(
 export const ingredientRouter = createTRPCRouter({
   getByName,
   matchNames,
+  resolveOrCreate,
   getByID,
   getManyByIDs,
   list,

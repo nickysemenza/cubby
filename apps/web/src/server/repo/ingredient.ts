@@ -384,6 +384,51 @@ export const findOrCreateIngredient = async (
   );
 };
 
+type ResolvedIngredient = {
+  name: string;
+  id: IngredientId;
+  matched: boolean;
+  created: boolean;
+};
+
+// Batch resolve-or-create: for each requested name, find the existing standalone
+// ingredient (case-insensitive on name/aliases) or atomically create it, reusing
+// the same matcher + race-safe `findOrCreate` primitive as findOrCreateIngredient.
+// Returns one entry per non-blank input name in order, so an agent/MCP caller can
+// collapse dozens of search+create round-trips into one call. Duplicate or
+// casing-variant names dedupe to a single DB op; a name matching another's alias
+// resolves to that existing ingredient (no duplicate row).
+export const resolveOrCreateIngredients = async (
+  db: Database | DrizzleTransaction,
+  names: string[],
+): Promise<ResolvedIngredient[]> => {
+  const resolved = new Map<string, { id: IngredientId; created: boolean }>();
+
+  for (const rawName of names) {
+    const name = rawName.trim();
+    const key = name.toLowerCase();
+    if (key.length === 0 || resolved.has(key)) continue;
+    const { row, created } = await findOrCreate(db, ingredient, {
+      where: buildIngredientWhere(true, name),
+      values: { name, aliases: [] },
+    });
+    resolved.set(key, { id: row.id, created });
+  }
+
+  const out: ResolvedIngredient[] = [];
+  for (const rawName of names) {
+    const entry = resolved.get(rawName.trim().toLowerCase());
+    if (!entry) continue; // blank/whitespace-only name
+    out.push({
+      name: rawName,
+      id: entry.id,
+      matched: !entry.created,
+      created: entry.created,
+    });
+  }
+  return out;
+};
+
 // Case-insensitive alias match: compare lower(each alias) against the lowercased
 // list. Plain `arrayOverlaps` is case-sensitive, which would disagree with the
 // case-insensitive name match (and the lower(name) unique index) — e.g. an alias
