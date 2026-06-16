@@ -71,15 +71,13 @@ export class USDAService {
         // Get all inferred unit mappings from the food
         const inferredUnitMappings = unitMappingsFromFood(food);
 
-        // Get linked products for this food
-        const { brandedFoodInfo, legacyFoodInfo } = food;
-        const upc = brandedFoodInfo?.gtin_upc;
+        // Get linked products for this food. Branded products link by barcode
+        // (UPC); everything else by the explicit fdc_id (every food has one).
+        const upc = food.brandedFoodInfo?.gtin_upc;
         const lookup =
           upc !== undefined
             ? { kind: "upc" as const, gtin_upc: upc }
-            : legacyFoodInfo !== null
-              ? { kind: "ndb" as const, ndb_number: legacyFoodInfo.ndb_number }
-              : undefined;
+            : { kind: "fdc" as const, fdc_id: food.fdc_id };
 
         const linkedProducts = await this.getLinkedProducts(lookup);
 
@@ -100,15 +98,12 @@ export class USDAService {
   private async enrichWithLinkedProducts(
     foodSummary: FoodSummary,
   ): Promise<FoodSummaryWithLinkedProducts> {
-    const { brandedFoodInfo, legacyFoodInfo } = foodSummary;
-    const upc = brandedFoodInfo?.gtin_upc;
+    const upc = foodSummary.brandedFoodInfo?.gtin_upc;
 
     const linkedProducts: ProductTopLevelOut[] = await this.getLinkedProducts(
       upc !== undefined
         ? { kind: "upc", gtin_upc: upc }
-        : legacyFoodInfo !== null
-          ? { kind: "ndb", ndb_number: legacyFoodInfo.ndb_number }
-          : undefined,
+        : { kind: "fdc", fdc_id: foodSummary.fdc_id },
     );
 
     // Get all inferred unit mappings from the food

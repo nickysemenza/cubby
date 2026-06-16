@@ -78,7 +78,6 @@ describe("RecipeCostingService", () => {
         makeProductInput({
           name: "usda product",
           ingredientId: ing.id,
-          ndb_number: 20081,
         }),
         ctx.actor,
       );
@@ -224,7 +223,6 @@ describe("RecipeCostingService", () => {
         makeProductInput({
           name: "stale product",
           ingredientId: ing.id,
-          ndb_number: 20081,
         }),
         ctx.actor,
       );

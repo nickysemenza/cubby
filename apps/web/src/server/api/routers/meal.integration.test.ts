@@ -58,7 +58,6 @@ describe("mealRouter", () => {
         name: "Test Flour",
         manufacturer: "test",
         upc: null,
-        ndb_number: null,
         fdc_id: null,
         expectedQuantity: null,
         ingredientId: flour.id,

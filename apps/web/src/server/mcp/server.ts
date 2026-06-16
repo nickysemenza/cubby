@@ -561,7 +561,6 @@ function registerTools(server: McpServer) {
         name: params.name,
         manufacturer: params.manufacturer ?? UNSPECIFIED_MANUFACTURER,
         upc: (params.upc as string | undefined) ?? null,
-        ndb_number: null,
         fdc_id: null,
         expectedQuantity:
           (params.expectedQuantity as number | undefined) ?? null,

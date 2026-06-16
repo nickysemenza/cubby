@@ -1,5 +1,5 @@
 import { productCategoryValues, UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import { ndb, upc } from "@cubby/usda-schemas";
+import { upc } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { dbTimestampsOut } from "./common";
 import { externalIdInput, externalIdOut } from "./external-id";
@@ -30,23 +30,20 @@ export { productCategoryValues } from "@cubby/shared";
  * Note: UPC is intentionally NOT included - barcodes are on all products, not just food
  */
 export const hasFoodIndicators = (product: {
-  ndb_number?: number | null;
   fdc_id?: number | null;
   ingredientId?: IngredientId | null;
 }): boolean =>
   (product.fdc_id != null && product.fdc_id > 0) ||
-  (product.ndb_number != null && product.ndb_number > 0) ||
   (product.ingredientId != null && product.ingredientId.length > 0);
 
 // Base schema for product data (without relationships)
 const productBase = z.object({
   name: z.string(),
   upc: upc.nullable(),
-  ndb_number: ndb.nullable(),
-  // Explicit USDA link by FoodData Central id (supersedes ndb_number; reaches
-  // any food type). Resolution prefers this over UPC auto-matching. Defaults to
-  // null so product summaries from queries that don't select it (inventory /
-  // ingredient embeds) validate instead of 500ing, and inputs may omit it.
+  // Explicit USDA link by FoodData Central id (the universal PK across all food
+  // types). Resolution prefers this over UPC auto-matching. Defaults to null so
+  // product summaries from queries that don't select it (inventory / ingredient
+  // embeds) validate instead of 500ing, and inputs may omit it.
   fdc_id: z.number().int().positive().nullable().default(null),
   manufacturer: z.string().describe("Manufacturer or 'generic'"),
   model: z.string().nullish().describe("model number"),

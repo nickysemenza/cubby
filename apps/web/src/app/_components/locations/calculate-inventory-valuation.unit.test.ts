@@ -50,7 +50,6 @@ function makeInventoryItem(params: {
       category: null,
       model: null,
       upc: null,
-      ndb_number: null,
       fdc_id: null,
       expectedQuantity: null,
       price: null,

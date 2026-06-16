@@ -75,7 +75,6 @@ export const dbLocationToAPIWithChildren = (
           manufacturer: Product.manufacturer,
           category: Product.category,
           upc: Product.upc,
-          ndb_number: Product.ndb_number,
           fdc_id: Product.fdc_id,
           model: Product.model,
           expectedQuantity: Product.expectedQuantity,

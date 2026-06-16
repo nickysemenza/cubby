@@ -74,9 +74,9 @@ const classifyKind = (acc: GapAccumulator): CostingGapKind => {
   if (acc.products.length === 0) return "no-product";
 
   // A product is USDA-associated if it carries (or intends to carry) food data:
-  // resolved `food`, or an NDB/UPC link whose lookup may be transiently missing.
+  // resolved `food`, or an fdc_id/UPC link whose lookup may be transiently missing.
   const usdaLinked = acc.products.some(
-    (p) => p.food != null || p.ndb_number != null || p.upc != null,
+    (p) => p.food != null || p.fdc_id != null || p.upc != null,
   );
   const hasPrice = acc.products.some((p) => p.price != null);
 

@@ -96,7 +96,7 @@ const CASES: Case[] = [
     name: "USDA-linked + priced, weight unreachable → weight mapping",
     ingredient: "egg",
     line: [each(2)], // ndb set so don't re-suggest USDA; price ok, grams aren't
-    products: [prod({ price: 0.25, ndb: 1234 })],
+    products: [prod({ price: 0.25, fdc: 1234 })],
     expected: {
       kind: "add-weight-mapping",
       missing: { price: false, weight: true },
@@ -173,7 +173,7 @@ describe("deriveCostingGaps — multi-row", () => {
         }),
       ]),
       e: ingredientWith("e", "egg", [
-        makeProduct("e", { price: 0.25, ndb: 1234 }),
+        makeProduct("e", { price: 0.25, fdc: 1234 }),
       ]),
       a: ingredientWith("a", "flour", []),
     };

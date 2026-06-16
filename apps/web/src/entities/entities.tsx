@@ -76,7 +76,7 @@ export const entities: Record<Entity, EntityDefinition> = {
         "model",
         "upc",
         "category",
-        "ndb_number",
+        "fdc_id",
         "price",
         "notes",
         // `ingredient` sorts by the linked ingredient's name via a correlated

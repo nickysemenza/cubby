@@ -346,7 +346,6 @@ describe("problems repo", () => {
         ctx.db,
         makeProductInput({
           name: "USDA-bridged sugar",
-          ndb_number: 19334,
           unitMappings: storedIslands,
         }),
         ctx.actor,

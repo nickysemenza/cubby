@@ -13,7 +13,6 @@ import type { MobileColumnMeta, MobileSlot } from "./columnHelpers";
 const DEFAULT_HIDDEN_COLUMN_IDS = new Set([
   "createdAt",
   "notes",
-  "ndb_number",
   "model",
   "fdc_id",
   "unitMapping",

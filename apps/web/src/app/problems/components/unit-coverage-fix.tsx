@@ -300,8 +300,7 @@ function IngredientFix({
 
   const save = () => {
     const data: {
-      ndb_number?: number;
-      upc?: string;
+      fdc_id?: number;
       price?: number;
       unitMappings?: UnitMappingInput[];
     } = {};
@@ -309,17 +308,10 @@ function IngredientFix({
     // mappings; collected here and appended to the existing set in one go.
     const newMappings: UnitMappingInput[] = [];
 
-    // Mirror the product form's handleUsdaSelect: prefer the legacy NDB link,
-    // fall back to the branded UPC.
+    // Mirror the product form's handleUsdaSelect: store the food's fdc_id (the
+    // universal link, works for any food type).
     if (showUsda && food) {
-      if (food.legacyFoodInfo?.ndb_number != null) {
-        data.ndb_number = food.legacyFoodInfo.ndb_number;
-      } else if (food.brandedFoodInfo?.gtin_upc) {
-        data.upc = food.brandedFoodInfo.gtin_upc;
-      } else {
-        toast.error("That USDA food has no NDB or UPC to link by");
-        return;
-      }
+      data.fdc_id = food.fdc_id;
     }
     if (showPrice) {
       const dollars = parsePositive(price);

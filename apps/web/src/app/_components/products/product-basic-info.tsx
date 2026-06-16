@@ -112,14 +112,14 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
       ) : undefined,
     },
     {
-      label: "NDB Number",
-      value: product.ndb_number ? (
+      label: "USDA FDC ID",
+      value: product.fdc_id ? (
         <Link
-          to="/usda/ndb/$code"
-          params={{ code: String(product.ndb_number) }}
+          to="/usda/$id"
+          params={{ id: String(product.fdc_id) }}
           className="text-primary hover:underline"
         >
-          {product.ndb_number}
+          {product.fdc_id}
         </Link>
       ) : undefined,
     },

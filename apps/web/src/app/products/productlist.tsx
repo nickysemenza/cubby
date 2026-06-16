@@ -141,14 +141,14 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
           },
         },
       }),
-      createExternalLinkColumn(columnHelper, "ndb_number", "/usda/ndb/$code", {
-        header: "NDB",
+      createExternalLinkColumn(columnHelper, "fdc_id", "/usda/$id", {
+        header: "FDC",
         className: "w-32",
         editable: {
           onSave: async (newValue, product) => {
             await updateProductMutation.mutateAsync({
               id: product.id,
-              data: { ndb_number: newValue ? Number(newValue) : null },
+              data: { fdc_id: newValue ? Number(newValue) : null },
             });
           },
         },
@@ -321,7 +321,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
     extraActions,
     infinite: true,
     initialColumnVisibility: {
-      ndb_number: false,
+      fdc_id: false,
       model: false,
       manufacturer: false,
       createdAt: false,

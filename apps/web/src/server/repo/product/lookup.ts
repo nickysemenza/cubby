@@ -10,7 +10,7 @@ import {
 } from "@cubby/schemas/product";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { type FoodLookupParam, foodLookupParam } from "@cubby/usda-schemas";
-import { and, eq, ilike, type SQL } from "drizzle-orm";
+import { and, eq, ilike, type SQL, sql } from "drizzle-orm";
 import { match } from "ts-pattern";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { parseWithContext } from "~/lib/zod-utils";
@@ -38,11 +38,13 @@ export const findProductsByFoodIdentifier = async (
   const lookup = foodLookupParam.parse(rawLookup);
 
   // Find all matching products (exclude soft-deleted). A product links to a food
-  // by its explicit fdc_id, its barcode (upc), or its NDB number.
+  // by its explicit fdc_id or its barcode (upc). Products no longer store an NDB
+  // number, so an NDB-keyed lookup (still a valid way to identify a USDA food)
+  // matches nothing on the product side.
   const linkCondition = match(lookup)
     .with({ kind: "upc" }, (l) => eq(product.upc, l.gtin_upc))
-    .with({ kind: "ndb" }, (l) => eq(product.ndb_number, l.ndb_number))
     .with({ kind: "fdc" }, (l) => eq(product.fdc_id, l.fdc_id))
+    .with({ kind: "ndb" }, () => sql`false`)
     .exhaustive();
 
   const res = await getDb(db).query.product.findMany({

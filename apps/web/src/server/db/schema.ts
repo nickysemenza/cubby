@@ -377,11 +377,10 @@ export const product = pgTable(
     name: text("name").notNull(),
     manufacturer: text("manufacturer").notNull(),
     upc: text("upc"),
-    ndb_number: integer("ndb_number"),
     // Explicit USDA link by FoodData Central id (the universal PK across all food
     // types). Takes precedence over UPC auto-resolution and can reach
     // Foundation/Survey foods that have no UPC or NDB number. Non-unique: many
-    // products can share one reference food. Supersedes ndb_number.
+    // products can share one reference food.
     fdc_id: integer("fdc_id"),
     model: text("model"),
     expectedQuantity: integer("expectedQuantity"),
@@ -415,9 +414,6 @@ export const product = pgTable(
       .where(sql`${table.deletedAt} IS NULL`),
     uniqueIndex("Product_upc_key")
       .on(table.upc)
-      .where(sql`${table.deletedAt} IS NULL`),
-    uniqueIndex("Product_ndb_number_key")
-      .on(table.ndb_number)
       .where(sql`${table.deletedAt} IS NULL`),
     index("Product_ingredientId_idx").on(table.ingredientId),
     index("Product_createdAt_idx").on(table.createdAt),

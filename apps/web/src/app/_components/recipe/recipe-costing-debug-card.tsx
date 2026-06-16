@@ -139,8 +139,7 @@ export const RecipeCostingDebugCard: React.FC<{ recipeId: RecipeId }> = ({
             USDA misses:{" "}
             {computed.usdaMisses
               .map(
-                (m) =>
-                  `${m.ingredientName} (${m.productName} ndb ${m.ndbNumber})`,
+                (m) => `${m.ingredientName} (${m.productName} fdc ${m.fdcId})`,
               )
               .join(", ")}
           </div>

@@ -67,7 +67,6 @@ describe("suggestions router", () => {
         name: `Test ${name}`,
         manufacturer: "test",
         upc: null,
-        ndb_number: null,
         fdc_id: null,
         expectedQuantity: null,
         ingredientId: ing.id,

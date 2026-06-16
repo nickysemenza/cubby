@@ -63,19 +63,18 @@ const toRecipeTotals = (t: CalculateTotalsResult): RecipeTotals => {
 };
 
 /**
- * Products with a confirmed USDA match (`ndb_number`) whose food failed to
- * resolve — a transient backend miss, not real no-data. Doubles as the
- * completeness predicate (empty ⇒ complete) and the named list the explain
- * payload surfaces.
+ * Products with a confirmed USDA match (`fdc_id`) whose food failed to resolve —
+ * a transient backend miss, not real no-data. Doubles as the completeness
+ * predicate (empty ⇒ complete) and the named list the explain payload surfaces.
  */
 const usdaMissesFor = (
   rows: CostingRow[],
   ingMap: Record<string, IngredientWithFoodOut>,
-): { ingredientName: string; productName: string; ndbNumber: number }[] => {
+): { ingredientName: string; productName: string; fdcId: number }[] => {
   const misses: {
     ingredientName: string;
     productName: string;
-    ndbNumber: number;
+    fdcId: number;
   }[] = [];
   const seen = new Set<string>();
   for (const row of rows) {
@@ -83,11 +82,11 @@ const usdaMissesFor = (
     seen.add(row.ingredient.id);
     const entry = ingMap[row.ingredient.id];
     for (const p of entry?.product ?? []) {
-      if (p.ndb_number != null && p.food == null) {
+      if (p.fdc_id != null && p.food == null) {
         misses.push({
           ingredientName: entry?.name ?? row.ingredient.name,
           productName: p.name,
-          ndbNumber: p.ndb_number,
+          fdcId: p.fdc_id,
         });
       }
     }

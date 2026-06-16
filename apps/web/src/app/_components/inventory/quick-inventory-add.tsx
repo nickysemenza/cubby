@@ -14,7 +14,7 @@ import type { LocationId } from "@cubby/schemas/identifiers";
 import { productCategory } from "@cubby/schemas/product";
 import { unitMappingInput } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import { ndb, upc } from "@cubby/usda-schemas";
+import { upc } from "@cubby/usda-schemas";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Plus, X } from "lucide-react";
@@ -67,7 +67,6 @@ const createFormSchema = z
     notes: z.string().nullable(),
     category: productCategory.nullable(),
     upc: upc.nullable(),
-    ndb_number: ndb.nullable(),
     expectedQuantity: z.number().int().positive().nullable(),
     price: z.number().positive().nullable(),
     ingredient: ComboboxItem.nullable(),
@@ -77,7 +76,6 @@ const createFormSchema = z
   .transform((data) => ({
     ...data,
     upc: data.upc === "" ? null : data.upc,
-    ndb_number: data.ndb_number === 0 ? null : data.ndb_number,
   }));
 type CreateFormValues = z.infer<typeof createFormSchema>;
 
@@ -135,7 +133,6 @@ export function QuickInventoryAdd({
       notes: null,
       category: null,
       upc: null,
-      ndb_number: null,
       expectedQuantity: null,
       price: null,
       ingredient: null,
@@ -163,7 +160,6 @@ export function QuickInventoryAdd({
         model: values.model,
         category: values.category,
         upc: values.upc,
-        ndb_number: values.ndb_number,
         fdc_id: null,
         expectedQuantity: values.expectedQuantity,
         price: values.price,
@@ -214,7 +210,6 @@ export function QuickInventoryAdd({
         notes: null,
         category: null,
         upc: null,
-        ndb_number: null,
         expectedQuantity: null,
         price: null,
         ingredient: null,

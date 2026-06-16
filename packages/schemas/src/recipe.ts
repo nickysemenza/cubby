@@ -130,7 +130,7 @@ export const recipeCostingExplain = z.object({
       z.object({
         ingredientName: z.string(),
         productName: z.string(),
-        ndbNumber: z.number(),
+        fdcId: z.number(),
       }),
     ),
   }),

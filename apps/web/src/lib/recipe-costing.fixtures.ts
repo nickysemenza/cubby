@@ -41,7 +41,6 @@ export const makeProduct = (
   idStr: string,
   opts: {
     price?: number | null;
-    ndb?: number | null;
     fdc?: number | null;
     upc?: string | null;
     food?: Product["food"];
@@ -54,7 +53,6 @@ export const makeProduct = (
   shortcode: unsafeProductShortcode("P-TEST"),
   name: idStr,
   upc: opts.upc ?? null,
-  ndb_number: opts.ndb ?? null,
   fdc_id: opts.fdc ?? null,
   manufacturer: "",
   category: null,

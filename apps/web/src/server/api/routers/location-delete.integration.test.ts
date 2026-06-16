@@ -113,7 +113,6 @@ describe("location deletion", () => {
         manufacturer: "Test Manufacturer",
         model: "LOC-TEST-1",
         upc: "888777666555",
-        ndb_number: null,
         fdc_id: null,
         ingredientId: null,
         pendingImageIds: [],

@@ -25,7 +25,6 @@ import { parseWithContext } from "~/lib/zod-utils";
 import type { Database } from "~/server/db";
 import {
   image,
-  ingredient,
   inventoryEntry,
   product,
   productExternalId,
@@ -217,7 +216,6 @@ function findUniqueViolation(
 async function throwIfDuplicateProduct(
   db: Database,
   data: Pick<ProductCreateInput, "name" | "manufacturer"> & {
-    ndb_number?: number | null;
     upc?: string | null;
   },
   error: unknown,
@@ -225,33 +223,6 @@ async function throwIfDuplicateProduct(
   const violation = findUniqueViolation(error);
   if (!violation) return;
   const { constraint } = violation;
-
-  if (constraint.includes("ndb_number") && data.ndb_number != null) {
-    const existing = await getDb(db).query.product.findFirst({
-      where: and(eq(product.ndb_number, data.ndb_number), notDeleted(product)),
-      columns: { name: true, ingredientId: true },
-    });
-    const ownerName = existing?.ingredientId
-      ? (
-          await getDb(db).query.ingredient.findFirst({
-            where: eq(ingredient.id, existing.ingredientId),
-            columns: { name: true },
-          })
-        )?.name
-      : null;
-    throw createAppError(
-      "PRODUCT_ALREADY_EXISTS",
-      `USDA food (NDB ${data.ndb_number}) is already linked to ${
-        existing ? `product “${existing.name}”` : "another product"
-      }${ownerName ? ` on ingredient “${ownerName}”` : ""}. A USDA food can ` +
-        `belong to only one product${
-          ownerName
-            ? ` — merge this ingredient into “${ownerName}” to share it.`
-            : "."
-        }`,
-      error,
-    );
-  }
 
   if (constraint.includes("upc") && data.upc) {
     const existing = await getDb(db).query.product.findFirst({
@@ -435,7 +406,6 @@ export const updateProduct = async (
       manufacturer?: string;
       category?: ProductCategory | null;
       upc?: string | null;
-      ndb_number?: number | null;
       fdc_id?: number | null;
       model?: string | null;
       expectedQuantity?: number | null;
@@ -451,7 +421,6 @@ export const updateProduct = async (
     // Auto-correct category to "food" if the resulting product will have food indicators
     const resultingProduct = {
       fdc_id: updateData.fdc_id ?? beforeProduct.fdc_id,
-      ndb_number: updateData.ndb_number ?? beforeProduct.ndb_number,
       ingredientId: updateData.ingredientId ?? beforeProduct.ingredientId,
     };
     if (
@@ -497,7 +466,6 @@ export const updateProduct = async (
       "manufacturer",
       "category",
       "upc",
-      "ndb_number",
       "fdc_id",
       "model",
       "expectedQuantity",
@@ -545,7 +513,6 @@ export const quickCreateProduct = async (
     upc?: string | null;
     expectedQuantity?: number | null;
     model?: string | null;
-    ndb_number?: number | null;
     fdc_id?: number | null;
     ingredientId?: IngredientId | null;
     price?: number | null;
@@ -568,7 +535,6 @@ export const quickCreateProduct = async (
     name: data.name,
     manufacturer: data.manufacturer ?? UNSPECIFIED_MANUFACTURER,
     upc: data.upc ?? null,
-    ndb_number: data.ndb_number ?? null,
     fdc_id: data.fdc_id ?? null,
     model: data.model ?? null,
     expectedQuantity: data.expectedQuantity ?? null,

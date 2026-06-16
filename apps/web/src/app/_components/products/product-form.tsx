@@ -11,7 +11,7 @@ import {
   unitMappingInput,
 } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import { ndb, upc } from "@cubby/usda-schemas";
+import { upc } from "@cubby/usda-schemas";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { FC } from "react";
 import { type Control, useForm, useFormState, useWatch } from "react-hook-form";
@@ -46,7 +46,6 @@ const productFormSchema = z
     notes: z.string().nullable(),
     category: productCategory.nullable(),
     upc: upc.nullable(), // Allow empty string and transform to null
-    ndb_number: ndb.nullable(), // Allow empty string and transform to null
     fdc_id: z.number().int().positive().nullable(), // Explicit USDA link (set via search)
     expectedQuantity: z.number().int().positive().nullable(),
     price: z.number().positive().nullable(), // Price per each ($); own field, not a mapping
@@ -73,7 +72,7 @@ const productFormSchema = z
   .transform((data) => ({
     ...data,
     upc: data.upc === "" ? null : data.upc,
-    ndb_number: data.ndb_number === 0 ? null : data.ndb_number,
+    fdc_id: data.fdc_id === 0 ? null : data.fdc_id,
   }));
 
 type ProductFormValues = z.infer<typeof productFormSchema>;
@@ -124,10 +123,8 @@ const ProductLivePreview: FC<{ control: Control<ProductFormValues> }> = ({
         <InfoRow label="UPC">
           {v.upc ? <span className="font-mono">{v.upc}</span> : undefined}
         </InfoRow>
-        <InfoRow label="NDB">
-          {v.ndb_number ? (
-            <span className="font-mono">{v.ndb_number}</span>
-          ) : undefined}
+        <InfoRow label="USDA FDC ID">
+          {v.fdc_id ? <span className="font-mono">{v.fdc_id}</span> : undefined}
         </InfoRow>
         <InfoRow label="Ingredient">{v.ingredient?.name || undefined}</InfoRow>
         <InfoRow label="Conversions">
@@ -201,7 +198,6 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
       notes: product ? product.notes : null,
       category: product?.category ?? null,
       upc: product ? product.upc : null,
-      ndb_number: product ? product.ndb_number : null,
       fdc_id: product ? product.fdc_id : null,
       expectedQuantity: product
         ? product.expectedQuantity
@@ -222,7 +218,6 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
         model: values.model,
         category: values.category,
         upc: values.upc,
-        ndb_number: values.ndb_number,
         fdc_id: values.fdc_id,
         expectedQuantity: values.expectedQuantity,
         price: values.price,
@@ -247,7 +242,6 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
           "notes",
           "category",
           "upc",
-          "ndb_number",
           "fdc_id",
           "expectedQuantity",
           "price",
