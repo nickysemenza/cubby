@@ -402,6 +402,24 @@ const findProductsWithoutMappings = async (
     }));
 };
 
+// Synthesize a product's *effective* conversion edges (stored mappings + price
+// edge + USDA portion/serving/nutrient edges) — the same set the conversion
+// graph and costing engine use. Returns null (after logging) when the WASM
+// synthesis throws, so callers can skip the product instead of failing the scan.
+const synthesizeEffectiveMappings = (
+  p: { name: string } & Parameters<typeof getAllUnitMappingsFromProduct>[0],
+): ReturnType<typeof getAllUnitMappingsFromProduct> | null => {
+  try {
+    return getAllUnitMappingsFromProduct(p);
+  } catch (error) {
+    console.error(
+      `Failed to synthesize mappings for product ${p.id} (${p.name}):`,
+      error,
+    );
+    return null;
+  }
+};
+
 // Find ingredient products that are under-covered: they have *some* coverage (so
 // findProductsWithoutMappings skips them) but their effective conversion graph
 // can't reach all four base kinds. Graded with conversionCoverage on the
@@ -453,21 +471,8 @@ const findIngredientsWithPartialCoverage = async (
 
   const problems: IngredientWithPartialCoverage[] = [];
   for (const p of enriched) {
-    let effective: ReturnType<typeof getAllUnitMappingsFromProduct>;
-    try {
-      effective = getAllUnitMappingsFromProduct({
-        id: p.id,
-        unitMappings: p.unitMappings,
-        food: p.food,
-        price: p.price,
-      });
-    } catch (error) {
-      console.error(
-        `Failed to synthesize mappings for product ${p.id} (${p.name}):`,
-        error,
-      );
-      continue;
-    }
+    const effective = synthesizeEffectiveMappings(p);
+    if (!effective) continue;
 
     const cov = conversionCoverage(effective, BASE_KINDS);
 
@@ -684,21 +689,8 @@ const findProductsWithIslandedMappings = async (
 
   const problems: ProductWithIslandedMappings[] = [];
   for (const prod of enriched) {
-    let effective: ReturnType<typeof getAllUnitMappingsFromProduct>;
-    try {
-      effective = getAllUnitMappingsFromProduct({
-        id: prod.id,
-        unitMappings: prod.unitMappings,
-        food: prod.food,
-        price: prod.price,
-      });
-    } catch (error) {
-      console.error(
-        `Failed to synthesize mappings for product ${prod.id} (${prod.name}):`,
-        error,
-      );
-      continue;
-    }
+    const effective = synthesizeEffectiveMappings(prod);
+    if (!effective) continue;
 
     const islands = detectIslands(effective, prod);
     if (islands.length >= 2) {
