@@ -2,6 +2,7 @@ import { z } from "zod";
 import { initContract } from "@ts-rest/core";
 import {
   // core shared schemas
+  fdcId,
   foodSummary,
   nutrient_unit_name,
   dataTypeEnum,
@@ -57,7 +58,8 @@ export const listFoodsResponse = z.object({
 });
 
 // Path params
-export const fdcIdParam = z.object({ fdc_id: z.coerce.number() });
+// Path param: arrives as a string, so coerce then validate as a real fdcId.
+export const fdcIdParam = z.object({ fdc_id: z.coerce.number().pipe(fdcId) });
 
 // Pre-define batch schemas to avoid ts-rest type depth issues
 export const batchLookupBody = z.object({

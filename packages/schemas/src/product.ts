@@ -1,5 +1,5 @@
 import { productCategoryValues, UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import { upc } from "@cubby/usda-schemas";
+import { fdcId, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { dbTimestampsOut } from "./common";
 import { externalIdInput, externalIdOut } from "./external-id";
@@ -41,10 +41,11 @@ const productBase = z.object({
   name: z.string(),
   upc: upc.nullable(),
   // Explicit USDA link by FoodData Central id (the universal PK across all food
-  // types). Resolution prefers this over UPC auto-matching. Defaults to null so
-  // product summaries from queries that don't select it (inventory / ingredient
-  // embeds) validate instead of 500ing, and inputs may omit it.
-  fdc_id: z.number().int().positive().nullable().default(null),
+  // types — see `fdcId`). Resolution prefers this over UPC auto-matching.
+  // Defaults to null so product summaries from queries that don't select it
+  // (inventory / ingredient embeds) validate instead of 500ing, and inputs may
+  // omit it.
+  fdc_id: fdcId.nullable().default(null),
   manufacturer: z.string().describe("Manufacturer or 'generic'"),
   model: z.string().nullish().describe("model number"),
   notes: z.string().nullish().describe("product notes, URLs, or other details"),

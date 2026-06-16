@@ -11,7 +11,7 @@ import {
   unitMappingInput,
 } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import { upc } from "@cubby/usda-schemas";
+import { fdcId, upc } from "@cubby/usda-schemas";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { FC } from "react";
 import { type Control, useForm, useFormState, useWatch } from "react-hook-form";
@@ -46,7 +46,7 @@ const productFormSchema = z
     notes: z.string().nullable(),
     category: productCategory.nullable(),
     upc: upc.nullable(), // Allow empty string and transform to null
-    fdc_id: z.number().int().positive().nullable(), // Explicit USDA link (set via search)
+    fdc_id: fdcId.nullable(), // Explicit USDA link (set via search)
     expectedQuantity: z.number().int().positive().nullable(),
     price: z.number().positive().nullable(), // Price per each ($); own field, not a mapping
     ingredient: ComboboxItem.nullable(), // Ingredient association

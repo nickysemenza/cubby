@@ -10,7 +10,7 @@ import { mcpPaginationParams } from "@cubby/schemas/pagination";
 import { recipeCreateInput, recipeUpdateInput } from "@cubby/schemas/recipe";
 import { mcpUnitMappingInput } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import { dataTypeEnum } from "@cubby/usda-schemas";
+import { dataTypeEnum, fdcId } from "@cubby/usda-schemas";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
@@ -580,10 +580,7 @@ function registerTools(server: McpServer) {
       name: z.string().optional().describe("New name"),
       manufacturer: z.string().optional().describe("New manufacturer"),
       upc: z.string().optional().describe("New UPC"),
-      fdc_id: z
-        .number()
-        .int()
-        .positive()
+      fdc_id: fdcId
         .nullable()
         .optional()
         .describe(

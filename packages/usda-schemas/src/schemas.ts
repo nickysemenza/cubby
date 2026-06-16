@@ -8,6 +8,18 @@ export const upc = z
 // NDB (Nutrient Data Bank) number - USDA-specific identifier
 export const ndb = z.number().max(99999).min(1000).describe("NDB number");
 
+// FDC ID — FoodData Central's universal food identifier. Every USDA food
+// (branded, foundation, sr_legacy, survey) has exactly one positive-integer
+// fdc_id, so it's the canonical, type-agnostic key for linking a product to any
+// food — unlike `upc` (branded only) or `ndb` (sr_legacy only). Use this schema
+// everywhere an fdc_id is validated.
+export const fdcId = z
+  .number()
+  .int()
+  .positive()
+  .describe("USDA FoodData Central id (universal food primary key)");
+export type FdcId = z.infer<typeof fdcId>;
+
 // select distinct unit_name from nutrient;
 export const nutrient_unit_name = z.enum([
   "MG_ATE",
@@ -146,14 +158,14 @@ export const legacyFoodInfo = z.object({
 export type LegacyFoodInfo = z.infer<typeof legacyFoodInfo>;
 
 export const brandedFoodRaw = z.object({
-  fdc_id: z.number(),
+  fdc_id: fdcId,
   serving_size: z.number().nullable(),
   serving_size_unit: z.string().nullable(),
   household_serving_fulltext: z.string().nullable(),
 });
 export type BrandedFoodRaw = z.infer<typeof brandedFoodRaw>;
 export const foodSummary = z.object({
-  fdc_id: z.number(),
+  fdc_id: fdcId,
   brandedFoodInfo: brandedFoodInfo.nullable(),
   foodInfo,
   legacyFoodInfo: legacyFoodInfo.nullable(),
@@ -169,10 +181,9 @@ export type FoodPortion = z.infer<typeof foodPortion>;
 export const foodLookupParam = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("upc"), gtin_upc: upc }),
   z.object({ kind: z.literal("ndb"), ndb_number: ndb }),
-  // fdc_id is FDC's universal primary key (every food type has one), so it's the
-  // explicit, type-agnostic link — used to reach Foundation/Survey foods that
-  // have neither a UPC nor an NDB number.
-  z.object({ kind: z.literal("fdc"), fdc_id: z.number() }),
+  // The explicit, type-agnostic link — reaches Foundation/Survey foods that have
+  // neither a UPC nor an NDB number. See `fdcId`.
+  z.object({ kind: z.literal("fdc"), fdc_id: fdcId }),
 ]);
 
 export type FoodLookupParam = z.infer<typeof foodLookupParam>;
