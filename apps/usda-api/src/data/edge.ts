@@ -112,15 +112,27 @@ export const FOOD_DATA_TYPES = [
   "survey_fndds_food",
 ] as const;
 
-// Builds the data_type SQL predicate + bind values for a given column. An
-// explicit single-type filter wins; otherwise `foodsOnly` restricts to the
-// user-facing food types. Returns empty sql when neither applies (all types).
+// Builds the data_type SQL predicate + bind values for a given column.
+// Precedence: an explicit single `dataTypeFilter` wins, then a multi-type
+// `dataTypes` list (comma-joined), then `foodsOnly` (the user-facing food
+// types). Returns empty sql when none apply (all types).
 export function dataTypePredicate(
   column: string,
   dataTypeFilter: string | undefined,
   foodsOnly: boolean | undefined,
+  dataTypes?: string,
 ): { sql: string; values: string[] } {
   if (dataTypeFilter) return { sql: `${column} = ?`, values: [dataTypeFilter] };
+  const multi = (dataTypes ?? "")
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
+  if (multi.length > 0) {
+    return {
+      sql: `${column} IN (${multi.map(() => "?").join(", ")})`,
+      values: multi,
+    };
+  }
   if (foodsOnly) {
     return {
       sql: `${column} IN (${FOOD_DATA_TYPES.map(() => "?").join(", ")})`,
@@ -362,6 +374,7 @@ export function createEdgeUsdaDataSource(
     async listFoods({
       nameFilter,
       dataTypeFilter,
+      dataTypes,
       foodsOnly,
       orderBy = "description",
       direction = "asc",
@@ -385,6 +398,7 @@ export function createEdgeUsdaDataSource(
           `${tables.foodSearch}.data_type`,
           dataTypeFilter,
           foodsOnly,
+          dataTypes,
         );
         where =
           `WHERE ${tables.foodSearch} MATCH ?` +
@@ -393,7 +407,12 @@ export function createEdgeUsdaDataSource(
       } else {
         dataFrom = `${tables.foodIndex} i`;
         countFrom = `${tables.foodIndex} i`;
-        const dt = dataTypePredicate("i.data_type", dataTypeFilter, foodsOnly);
+        const dt = dataTypePredicate(
+          "i.data_type",
+          dataTypeFilter,
+          foodsOnly,
+          dataTypes,
+        );
         where = dt.sql ? `WHERE ${dt.sql}` : "";
         values = dt.values;
       }

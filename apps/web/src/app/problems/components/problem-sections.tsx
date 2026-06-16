@@ -138,22 +138,18 @@ function renderUnitCoverageItem(item: UnitCoverageItem): RenderedProblemItem {
     subtitle: byManufacturer(item.manufacturer),
     route: { to: "/products/$id" as const, params: { id: item.id } },
     editLabel: "Open product",
-    inlineFix: {
-      label:
-        item.kind === "islanded"
-          ? "Add conversion"
-          : item.isIngredient
-            ? "Fix coverage"
-            : "Set price",
-      render: (close: () => void) => (
-        <UnitCoverageInlineFix item={item} close={close} />
-      ),
-    },
   };
+  const inlineFix = (label: string) => ({
+    label,
+    render: (close: () => void) => (
+      <UnitCoverageInlineFix item={item} close={close} />
+    ),
+  });
 
   if (item.kind === "islanded") {
     return {
       ...base,
+      inlineFix: inlineFix("Add conversion"),
       badges: [
         <Badge key="islands" variant="destructive">
           {item.islandCount} groups
@@ -173,8 +169,23 @@ function renderUnitCoverageItem(item: UnitCoverageItem): RenderedProblemItem {
     };
   }
 
+  if (item.kind === "partial") {
+    return {
+      ...base,
+      inlineFix: inlineFix("Fix coverage"),
+      details: [
+        <CoverageChips
+          key="cov"
+          covered={item.coverage.covered}
+          usdaLinked={item.hasUsdaLink}
+        />,
+      ],
+    };
+  }
+
   return {
     ...base,
+    inlineFix: inlineFix(item.isIngredient ? "Fix coverage" : "Set price"),
     badges: [
       <Badge key="none" variant="outline" className="w-fit">
         No conversions
@@ -282,11 +293,13 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
   section({
     id: "unit-coverage",
     label: "Unit coverage",
-    // Merge the two "can't fully convert" problems — empty graph (no price/USDA/
-    // mappings) and fragmented graph (islands) — into one discriminated list.
+    // Merge the "can't fully convert" problems — empty graph (no price/USDA/
+    // mappings), priced-but-bare ingredient (money-only), and fragmented graph
+    // (islands) — into one discriminated list.
     select: (p) =>
       buildUnitCoverageItems(
         p.productsWithoutMappings,
+        p.ingredientsWithPartialCoverage,
         p.productsWithIslandedMappings,
       ),
     icon: Network,

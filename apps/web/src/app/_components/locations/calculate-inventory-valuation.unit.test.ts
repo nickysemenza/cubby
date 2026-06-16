@@ -53,6 +53,7 @@ function makeInventoryItem(params: {
       ndb_number: null,
       expectedQuantity: null,
       price: null,
+      usdaUnavailable: null,
       images: [],
       createdAt: now,
       updatedAt: now,

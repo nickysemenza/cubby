@@ -5,6 +5,34 @@ import { wasm } from "~/lib/wasm";
 
 const Graphviz = lazy(() => import("graphviz-react"));
 
+/**
+ * graphviz-react parses the DOT during render, so a malformed graph (e.g. a unit
+ * label with a comma like USDA's "cup, diced", which print_graph doesn't escape)
+ * throws past the WASM try/catch and would crash the whole route. Contain it: a
+ * failed graph degrades to a note instead of taking the page down. Keyed on the
+ * dot string upstream so it retries when the graph changes.
+ */
+// biome-ignore lint/style/useReactFunctionComponents: error boundaries have no hook equivalent
+class GraphErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    if (this.state.failed) {
+      return (
+        <div className="p-2 text-muted-foreground text-xs">
+          Couldn't render the conversion graph.
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const UnitMappingGraphInner: React.FC<{
   unitMapping: WUnitMapping[];
 }> = ({ unitMapping }) => {
@@ -61,23 +89,30 @@ const UnitMappingGraphInner: React.FC<{
     return null;
   }
 
-  const width = 460;
-  const height = 320;
+  // Scale the canvas with the graph's size so dense graphs (a USDA food has a
+  // node per nutrient — 25+) aren't crammed into a tiny box. fit=true still
+  // scales to fit, but a taller/wider canvas means bigger, readable nodes; the
+  // wrapper scrolls + zooms for anything past these bounds.
+  const approxNodes = unitMapping.length + 2;
+  const width = Math.min(900, Math.max(460, approxNodes * 26));
+  const height = Math.min(900, Math.max(320, approxNodes * 24));
 
   return (
     <div className="unit-mapping-graph overflow-auto rounded border bg-muted p-0.5">
-      <Suspense fallback={<div style={{ width, height }} />}>
-        <Graphviz
-          dot={graphResult.graph}
-          options={{
-            fit: true,
-            width,
-            height,
-            zoom: true,
-            useWorker: false,
-          }}
-        />
-      </Suspense>
+      <GraphErrorBoundary key={graphResult.graph}>
+        <Suspense fallback={<div style={{ width, height }} />}>
+          <Graphviz
+            dot={graphResult.graph}
+            options={{
+              fit: true,
+              width,
+              height,
+              zoom: true,
+              useWorker: false,
+            }}
+          />
+        </Suspense>
+      </GraphErrorBoundary>
     </div>
   );
 };

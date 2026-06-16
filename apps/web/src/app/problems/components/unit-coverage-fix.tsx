@@ -1,18 +1,28 @@
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
+import type { UnitMapping, UnitMappingInput } from "@cubby/schemas/unitmapping";
 import { useQuery } from "@tanstack/react-query";
 import { Check } from "lucide-react";
-import { useState } from "react";
+import { type ComponentProps, useState } from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
 import { UsdaFoodSearchField } from "~/app/_components/combobox/with-usda-food-search";
 import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
+import { UnitMappingsTable } from "~/app/_components/units/unitmappingstable";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { BASE_KINDS } from "~/lib/conversion-coverage";
 import { queryKeys } from "~/lib/query-keys";
-import { useTRPC } from "~/trpc/react";
-import type { UnitCoverageItem } from "./unit-coverage-items";
+import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
+import { wasm } from "~/lib/wasm";
+import { type RouterOutputs, useTRPC } from "~/trpc/react";
+import {
+  type IngredientFixSteps,
+  ingredientFixSteps,
+  type UnitCoverageItem,
+} from "./unit-coverage-items";
+
+type ProductDetail = NonNullable<RouterOutputs["product"]["getByID"]>;
 
 // Re-export the pure core (defined in unit-coverage-items.ts so it stays
 // unit-testable) so the registry can import everything from one place.
@@ -22,6 +32,13 @@ export {
   unitCoverageGroup,
 } from "./unit-coverage-items";
 
+/** The recurring number input in these fixes, with its shared defaults. */
+function NumberInput({ step = "any", ...props }: ComponentProps<typeof Input>) {
+  return (
+    <Input type="number" inputMode="decimal" min="0" step={step} {...props} />
+  );
+}
+
 const KIND_LABEL: Record<(typeof BASE_KINDS)[number], string> = {
   weight: "weight",
   volume: "volume",
@@ -29,24 +46,34 @@ const KIND_LABEL: Record<(typeof BASE_KINDS)[number], string> = {
   calories: "calories",
 };
 
-/** The four base measurement kinds, lit when the graph can already reach them. */
-export function CoverageChips({ covered }: { covered: string[] }) {
+/**
+ * The four base measurement kinds, lit when the graph can already reach them.
+ * When `usdaLinked` is provided, also shows a "USDA" chip — so it's clear
+ * whether a gap (e.g. calories) is because nothing's linked, or because the
+ * linked food simply has no data for that kind.
+ */
+export function CoverageChips({
+  covered,
+  usdaLinked,
+}: {
+  covered: string[];
+  usdaLinked?: boolean;
+}) {
   const lit = new Set(covered);
+  const chip = (key: string, label: string, on: boolean) => (
+    <Badge
+      key={key}
+      variant={on ? "secondary" : "outline"}
+      className={on ? undefined : "text-muted-foreground/50"}
+    >
+      {on && <Check className="mr-1 h-3 w-3" />}
+      {label}
+    </Badge>
+  );
   return (
     <div className="flex flex-wrap gap-1">
-      {BASE_KINDS.map((kind) => {
-        const on = lit.has(kind);
-        return (
-          <Badge
-            key={kind}
-            variant={on ? "secondary" : "outline"}
-            className={on ? undefined : "text-muted-foreground/50"}
-          >
-            {on && <Check className="mr-1 h-3 w-3" />}
-            {KIND_LABEL[kind]}
-          </Badge>
-        );
-      })}
+      {BASE_KINDS.map((kind) => chip(kind, KIND_LABEL[kind], lit.has(kind)))}
+      {usdaLinked !== undefined && chip("usda", "USDA", usdaLinked)}
     </div>
   );
 }
@@ -56,6 +83,76 @@ const parsePositive = (raw: string): number | null => {
   const n = Number.parseFloat(raw);
   return Number.isFinite(n) && n > 0 ? n : null;
 };
+
+/** Like {@link parsePositive} but allows 0 — e.g. a 0-calorie food like salt. */
+const parseNonNegative = (raw: string): number | null => {
+  const n = Number.parseFloat(raw);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+};
+
+const CORE_4: ReadonlySet<string> = new Set(BASE_KINDS);
+
+/**
+ * Merge new mappings onto a product's existing rows for a `product.update`,
+ * which replace-all's the whole set — so omitting the existing rows (carried
+ * with their ids) would silently delete every current mapping. Returns null
+ * when the product hasn't loaded yet, so callers refuse rather than wipe.
+ */
+function withExistingMappings(
+  product: ProductDetail | null | undefined,
+  newMappings: UnitMappingInput[],
+): UnitMappingInput[] | null {
+  if (!product) return null;
+  return [
+    ...product.unitMappings.map((m) => ({
+      id: m.id,
+      a: m.a,
+      b: m.b,
+      source: m.source,
+    })),
+    ...newMappings,
+  ];
+}
+
+// A mapping is "core-4 related" if it connects to one of the four base kinds and
+// isn't a non-calorie nutrient edge (the USDA nutrition synthesis emits a
+// "100 g = N g protein/fat/…" row per tier-1 nutrient — noise for this view).
+const isCore4Edge = (m: UnitMapping): boolean => {
+  const ka = wasm.amount_kind(m.a);
+  const kb = wasm.amount_kind(m.b);
+  if (ka.startsWith("nutrient:") || kb.startsWith("nutrient:")) return false;
+  return CORE_4.has(ka) || CORE_4.has(kb);
+};
+
+/**
+ * The product's existing conversions that bear on the core-4 coverage, with
+ * their source (USDA portion / nutrition / price / manual) — so it's clear what
+ * already covers which kinds before adding more. Loads the product on expand and
+ * synthesizes the effective edges (the same set the chips are graded from).
+ */
+function CurrentCore4Mappings({ productId }: { productId: string }) {
+  const api = useTRPC();
+  const { data: product } = useQuery(
+    api.product.getByID.queryOptions({ id: productId }),
+  );
+  if (!product) return null;
+
+  let effective: UnitMapping[];
+  try {
+    effective = getAllUnitMappingsFromProduct(product);
+  } catch {
+    return null;
+  }
+  const core4 = effective.filter(isCore4Edge);
+  if (core4.length === 0) return null;
+
+  return (
+    <div className="space-y-1">
+      <p className="font-medium text-xs">Current conversions</p>
+      <UnitMappingsTable mappings={core4} />
+    </div>
+  );
+}
 
 /** The inline fix body — variant chosen by the item's kind / ingredient flag. */
 export function UnitCoverageInlineFix({
@@ -69,8 +166,34 @@ export function UnitCoverageInlineFix({
     .with({ kind: "islanded" }, (i) => (
       <DisconnectedFix id={i.id} islands={i.islands} close={close} />
     ))
+    .with({ kind: "partial" }, (i) => (
+      <IngredientFix
+        id={i.id}
+        name={i.name}
+        close={close}
+        {...ingredientFixSteps({
+          covered: i.coverage.covered,
+          hasPrice: i.hasPrice,
+          hasUsdaLink: i.hasUsdaLink,
+          usdaUnavailable: i.usdaUnavailable,
+        })}
+      />
+    ))
     .with({ kind: "none", isIngredient: true }, (i) => (
-      <IngredientFix id={i.id} name={i.name} close={close} />
+      // Truly-empty ingredient: it's a `partial` with empty coverage and no
+      // price/USDA link (its DB filter guarantees that), so the same step
+      // derivation applies.
+      <IngredientFix
+        id={i.id}
+        name={i.name}
+        close={close}
+        {...ingredientFixSteps({
+          covered: [],
+          hasPrice: false,
+          hasUsdaLink: false,
+          usdaUnavailable: i.usdaUnavailable,
+        })}
+      />
     ))
     .with({ kind: "none" }, (i) => <PriceFix id={i.id} close={close} />)
     .exhaustive();
@@ -103,10 +226,7 @@ function PriceFix({ id, close }: { id: string; close: () => void }) {
       </p>
       <div className="flex items-center gap-2 text-sm">
         <span>1 each = $</span>
-        <Input
-          type="number"
-          inputMode="decimal"
-          min="0"
+        <NumberInput
           step="0.01"
           placeholder="0.00"
           value={price}
@@ -122,51 +242,142 @@ function PriceFix({ id, close }: { id: string; close: () => void }) {
 }
 
 /**
- * Ingredient with no coverage: link a USDA food (synthesizes weight/volume/
- * calories edges live) and set a price (the one kind USDA can't supply). Both
- * land in a single product.update.
+ * Ingredient missing coverage. Renders only the steps for what's actually
+ * missing: the USDA-link step when weight/volume/calories aren't all covered
+ * (`showUsda`), and/or the price step when there's no price (`showPrice`).
+ * Re-linking an already-linked food or blanking an existing price would be
+ * wrong, so the caller derives these from the graded coverage. Lands in one
+ * product.update.
  */
 function IngredientFix({
   id,
   name,
   close,
+  showUsda,
+  showManual,
+  showPrice,
+  showCalories,
+  allowMarkNoUsda,
 }: {
   id: string;
   name: string;
   close: () => void;
-}) {
+} & IngredientFixSteps) {
   const api = useTRPC();
   const [food, setFood] = useState<FoodSummaryWithLinkedProducts | null>(null);
+  // Price entry is "<qty> <unit> = $<price>". Defaults to "1 each" (the scalar
+  // per-each price), but any measure unit (e.g. "5 lb") becomes a money mapping.
+  const [priceQty, setPriceQty] = useState("1");
+  const [priceUnit, setPriceUnit] = useState("each");
   const [price, setPrice] = useState("");
+  const [kcal, setKcal] = useState("");
+  // Free-form conversion "<qty> <unit> = <qty> <unit>" for the residual gaps the
+  // guided steps can't express (e.g. a volume the linked food's unit doesn't
+  // cover, or connecting an islanded each-price into the weight graph).
+  const [cFromQty, setCFromQty] = useState("1");
+  const [cFromUnit, setCFromUnit] = useState("");
+  const [cToQty, setCToQty] = useState("");
+  const [cToUnit, setCToUnit] = useState("g");
+  // Existing mappings, so a per-measure price appends rather than replaces them
+  // (product.update swaps the whole set). Cached/deduped with CurrentCore4Mappings.
+  const { data: product } = useQuery(api.product.getByID.queryOptions({ id }));
+  // Also invalidate this product's detail query so the "Current conversions"
+  // table (CurrentCore4Mappings reads getByID) reflects the save, not a stale cache.
+  const productKey = api.product.getByID.queryKey({ id });
   const update = useProblemCardMutation({
     mutationFn: api.product.update.mutationOptions,
     success: "Coverage updated",
-    invalidateKeys: [queryKeys.product.list],
+    invalidateKeys: [queryKeys.product.list, productKey],
     onSuccess: close,
+  });
+  // Marking "no USDA entry" doesn't close the card — it flips this same card into
+  // manual-entry mode (the refetched item re-renders the steps).
+  const markNoUsda = useProblemCardMutation({
+    mutationFn: api.product.update.mutationOptions,
+    success: "Marked: no USDA entry — enter values manually",
+    invalidateKeys: [queryKeys.product.list, productKey],
   });
 
   const save = () => {
-    const data: { ndb_number?: number; upc?: string; price?: number } = {};
+    const data: {
+      ndb_number?: number;
+      upc?: string;
+      price?: number;
+      unitMappings?: UnitMappingInput[];
+    } = {};
+    // Per-measure price (e.g. 5 lb = $8) and calories (100 g = N kcal) are unit
+    // mappings; collected here and appended to the existing set in one go.
+    const newMappings: UnitMappingInput[] = [];
+
     // Mirror the product form's handleUsdaSelect: prefer the legacy NDB link,
     // fall back to the branded UPC.
-    if (food) {
+    if (showUsda && food) {
       if (food.legacyFoodInfo?.ndb_number != null) {
         data.ndb_number = food.legacyFoodInfo.ndb_number;
       } else if (food.brandedFoodInfo?.gtin_upc) {
         data.upc = food.brandedFoodInfo.gtin_upc;
       } else {
-        // A food was picked but it carries neither an NDB number nor a UPC, so
-        // there's nothing to link it by — say that, rather than the generic
-        // "link a food or set a price" (the "Linked: …" line is showing).
         toast.error("That USDA food has no NDB or UPC to link by");
         return;
       }
     }
-    const value = parsePositive(price);
-    if (value != null) data.price = value;
+    if (showPrice) {
+      const dollars = parsePositive(price);
+      if (dollars != null) {
+        const qty = parsePositive(priceQty) ?? 1;
+        const unit = priceUnit.trim() || "each";
+        if (unit.toLowerCase() === "each") {
+          // The per-each price is the product's own scalar field, not a mapping.
+          data.price = dollars / qty;
+        } else {
+          // A per-measure price wires money straight into the weight/volume graph.
+          newMappings.push({
+            a: { value: qty, unit },
+            b: { value: dollars, unit: "dollar" },
+            source: "manual: price (problems page)",
+          });
+        }
+      }
+    }
+    if (showCalories) {
+      const k = parseNonNegative(kcal);
+      if (k != null) {
+        newMappings.push({
+          a: { value: 100, unit: "g" },
+          b: { value: k, unit: "kcal" },
+          source: "manual: calories (problems page)",
+        });
+      }
+    }
+    if (showManual) {
+      const fromQty = parsePositive(cFromQty);
+      const toQty = parsePositive(cToQty);
+      const fromUnit = cFromUnit.trim();
+      const toUnit = cToUnit.trim();
+      if (fromQty != null && toQty != null && fromUnit && toUnit) {
+        newMappings.push({
+          a: { value: fromQty, unit: fromUnit },
+          b: { value: toQty, unit: toUnit },
+          source: "manual: conversion (problems page)",
+        });
+      } else if (cFromUnit.trim() || cToQty.trim()) {
+        // Partially filled — tell them rather than silently saving nothing.
+        toast.error("Fill in both sides of the conversion");
+        return;
+      }
+    }
+
+    if (newMappings.length > 0) {
+      const merged = withExistingMappings(product, newMappings);
+      if (!merged) {
+        toast.error("Couldn't load current conversions — try again");
+        return;
+      }
+      data.unitMappings = merged;
+    }
 
     if (Object.keys(data).length === 0) {
-      toast.error("Link a USDA food or enter a price");
+      toast.error("Fill in a field above to save");
       return;
     }
     update.mutate({ id, data });
@@ -174,41 +385,129 @@ function IngredientFix({
 
   return (
     <div className="space-y-3">
-      <div className="space-y-1">
-        <p className="font-medium text-xs">
-          Step 1 · link USDA{" "}
-          <span className="font-normal text-muted-foreground">
-            — fills weight, volume &amp; calories
-          </span>
-        </p>
-        <UsdaFoodSearchField initialQuery={name} label="" onSelect={setFood} />
-        {food && (
-          <p className="text-positive text-xs">
-            Linked: {food.foodInfo.description}
+      <CurrentCore4Mappings productId={id} />
+      {showUsda && (
+        <div className="space-y-1">
+          <p className="font-medium text-xs">
+            Link a USDA food{" "}
+            <span className="font-normal text-muted-foreground">
+              — fills weight, volume &amp; calories
+            </span>
           </p>
-        )}
-      </div>
-      <div className="space-y-1">
-        <p className="font-medium text-xs">
-          Step 2 · set price{" "}
-          <span className="font-normal text-muted-foreground">
-            — USDA can't supply this
-          </span>
-        </p>
-        <div className="flex items-center gap-2 text-sm">
-          <span>1 each = $</span>
-          <Input
-            type="number"
-            inputMode="decimal"
-            min="0"
-            step="0.01"
-            placeholder="0.00"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            className="w-24"
+          <UsdaFoodSearchField
+            initialQuery={name}
+            label=""
+            onSelect={setFood}
           />
+          {food && (
+            <p className="text-positive text-xs">
+              Linked: {food.foodInfo.description}
+            </p>
+          )}
+          {allowMarkNoUsda && (
+            <button
+              type="button"
+              className="text-muted-foreground text-xs underline underline-offset-2 hover:text-foreground"
+              onClick={() =>
+                markNoUsda.mutate({ id, data: { usdaUnavailable: true } })
+              }
+              disabled={markNoUsda.isPending}
+            >
+              No USDA entry exists — enter values manually
+            </button>
+          )}
         </div>
-      </div>
+      )}
+      {showPrice && (
+        <div className="space-y-1">
+          <p className="font-medium text-xs">Set a price</p>
+          <div className="flex items-center gap-1.5 text-sm">
+            <NumberInput
+              value={priceQty}
+              onChange={(e) => setPriceQty(e.target.value)}
+              className="w-12"
+              aria-label="Price quantity"
+            />
+            <Input
+              value={priceUnit}
+              onChange={(e) => setPriceUnit(e.target.value)}
+              className="w-16"
+              aria-label="Price unit"
+            />
+            <span>= $</span>
+            <NumberInput
+              step="0.01"
+              placeholder="0.00"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              className="w-20"
+            />
+          </div>
+          <p className="text-muted-foreground text-xs">
+            Bulk or generic? Price by measure, e.g. 5 lb = $8.
+          </p>
+        </div>
+      )}
+      {showCalories && (
+        <div className="space-y-1">
+          <p className="font-medium text-xs">
+            Set calories{" "}
+            <span className="font-normal text-muted-foreground">
+              — USDA had none (0 is fine, e.g. salt)
+            </span>
+          </p>
+          <div className="flex items-center gap-1.5 text-sm">
+            <span>100 g =</span>
+            <NumberInput
+              placeholder="0"
+              value={kcal}
+              onChange={(e) => setKcal(e.target.value)}
+              className="w-20"
+              aria-label="Calories per 100 g"
+            />
+            <span>kcal</span>
+          </div>
+        </div>
+      )}
+      {showManual && (
+        <div className="space-y-1">
+          <p className="font-medium text-xs">
+            Add a conversion{" "}
+            <span className="font-normal text-muted-foreground">
+              — e.g. 1 cup = 240 g
+            </span>
+          </p>
+          <div className="flex items-center gap-1.5 text-sm">
+            <NumberInput
+              value={cFromQty}
+              onChange={(e) => setCFromQty(e.target.value)}
+              className="w-12"
+              aria-label="From quantity"
+            />
+            <Input
+              value={cFromUnit}
+              onChange={(e) => setCFromUnit(e.target.value)}
+              placeholder="cup"
+              className="w-16"
+              aria-label="From unit"
+            />
+            <span>=</span>
+            <NumberInput
+              value={cToQty}
+              onChange={(e) => setCToQty(e.target.value)}
+              className="w-14"
+              aria-label="To quantity"
+            />
+            <Input
+              value={cToUnit}
+              onChange={(e) => setCToUnit(e.target.value)}
+              placeholder="g"
+              className="w-16"
+              aria-label="To unit"
+            />
+          </div>
+        </div>
+      )}
       <Button size="sm" onClick={save} disabled={update.isPending}>
         Save
       </Button>
@@ -248,7 +547,10 @@ function DisconnectedFix({
   const update = useProblemCardMutation({
     mutationFn: api.product.update.mutationOptions,
     success: "Conversion saved",
-    invalidateKeys: [queryKeys.product.list],
+    invalidateKeys: [
+      queryKeys.product.list,
+      api.product.getByID.queryKey({ id }),
+    ],
     onSuccess: close,
   });
 
@@ -268,23 +570,12 @@ function DisconnectedFix({
       toast.error("Fill in at least one conversion");
       return;
     }
-    // Replace-all merge: carry every existing row (with its id) plus the new
-    // bridge(s). If the product hasn't loaded we'd send only the new rows and
-    // delete every existing mapping — so refuse to save until it's resolved.
-    if (!product) {
+    const merged = withExistingMappings(product, newMappings);
+    if (!merged) {
       toast.error("Couldn't load current conversions — try again");
       return;
     }
-    const existing = product.unitMappings.map((m) => ({
-      id: m.id,
-      a: m.a,
-      b: m.b,
-      source: m.source,
-    }));
-    update.mutate({
-      id,
-      data: { unitMappings: [...existing, ...newMappings] },
-    });
+    update.mutate({ id, data: { unitMappings: merged } });
   };
 
   return (
@@ -298,11 +589,7 @@ function DisconnectedFix({
           className="flex items-center gap-2 text-sm"
         >
           <span>1 {b.from} =</span>
-          <Input
-            type="number"
-            inputMode="decimal"
-            min="0"
-            step="any"
+          <NumberInput
             placeholder="?"
             value={values[i] ?? ""}
             onChange={(e) =>

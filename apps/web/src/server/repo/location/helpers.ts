@@ -79,6 +79,7 @@ export const dbLocationToAPIWithChildren = (
           model: Product.model,
           expectedQuantity: Product.expectedQuantity,
           price: Product.price,
+          usdaUnavailable: Product.usdaUnavailable,
           // Product images/externalIds are not fetched in this query for performance reasons
           images: [],
           externalIds: [],

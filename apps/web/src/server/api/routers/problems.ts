@@ -5,6 +5,7 @@ import { z } from "zod";
 import {
   findAllProblems,
   findAllProblemsCount,
+  recipeUsageCountsByProduct,
   reparseStaleIngredientParses,
 } from "~/server/repo/problems";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
@@ -44,6 +45,17 @@ const productWithoutMappingsSchema = z.object({
   manufacturer: z.string(),
   createdAt: z.date(),
   isIngredient: z.boolean(),
+  usdaUnavailable: z.boolean(),
+});
+
+const ingredientWithPartialCoverageSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  manufacturer: z.string(),
+  coverage: z.object({ covered: z.array(z.string()) }),
+  hasPrice: z.boolean(),
+  hasUsdaLink: z.boolean(),
+  usdaUnavailable: z.boolean(),
 });
 
 const invalidInventoryAmountSchema = z.object({
@@ -150,6 +162,7 @@ const allProblemsSchema = z.object({
   orphanedProducts: z.array(orphanedProductSchema),
   invalidUPCs: z.array(invalidUPCSchema),
   productsWithoutMappings: z.array(productWithoutMappingsSchema),
+  ingredientsWithPartialCoverage: z.array(ingredientWithPartialCoverageSchema),
   inventoryWithStaleValuations: z.array(inventoryWithStaleValuationSchema),
   invalidInventoryAmounts: z.array(invalidInventoryAmountSchema),
   emptyLocations: z.array(emptyLocationSchema),
@@ -180,6 +193,7 @@ const getProblemsCount = protectedProcedure
         orphanedProducts: z.number(),
         invalidUPCs: z.number(),
         productsWithoutMappings: z.number(),
+        ingredientsWithPartialCoverage: z.number(),
         invalidInventoryAmounts: z.number(),
         emptyLocations: z.number(),
         productsWithNoImages: z.number(),
@@ -219,8 +233,19 @@ const reparseStale = protectedProcedure
     return { updated, recipesAffected: recipesAffected.length };
   });
 
+// Batch: distinct non-deleted recipe count per product (via its ingredient).
+// Powers the "used in N recipes" signal on product problem cards. Only
+// ingredient-linked products are returned; absence ⇒ no ingredient link.
+const recipeUsageByProduct = protectedProcedure
+  .input(z.object({ productIds: z.array(z.string()) }))
+  .output(z.record(z.string(), z.number()))
+  .query(async ({ ctx, input }) => {
+    return await recipeUsageCountsByProduct(ctx.db, input.productIds);
+  });
+
 export const problemsRouter = createTRPCRouter({
   getAllProblems,
   getProblemsCount,
   reparseStale,
+  recipeUsageByProduct,
 });

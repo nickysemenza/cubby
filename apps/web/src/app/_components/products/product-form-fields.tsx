@@ -118,6 +118,7 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
   const ndbValue = form.watch("ndb_number" as Path<TFieldValues>) as
     | number
     | null;
+  const upcValue = form.watch("upc" as Path<TFieldValues>) as string | null;
   const ingredientValue = form.watch("ingredient" as Path<TFieldValues>) as {
     id?: IngredientId;
   } | null;
@@ -360,6 +361,20 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
                 />
                 {upcBlock}
               </SideBySideFields>
+            )}
+
+            {/* Which control is the active USDA link. Resolution is UPC-first,
+                NDB-fallback (foodLookupParamFromProduct), so surface that
+                precedence instead of leaving it implicit. */}
+            {(upcValue || ndbValue) && (
+              <p className="text-muted-foreground text-xs">
+                USDA link:{" "}
+                {upcValue && ndbValue
+                  ? "UPC (primary) · NDB (fallback)"
+                  : upcValue
+                    ? "via UPC"
+                    : "via NDB"}
+              </p>
             )}
           </FormSection>
 

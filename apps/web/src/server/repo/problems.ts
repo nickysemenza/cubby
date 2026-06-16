@@ -2,6 +2,7 @@ import type { Amount } from "@cubby/schemas/codec";
 import {
   type IngredientId,
   type RecipeId,
+  unsafeProductId,
   unsafeRecipeId,
 } from "@cubby/schemas/identifiers";
 import type { RecipeTotals } from "@cubby/schemas/recipe";
@@ -11,6 +12,7 @@ import {
   and,
   eq,
   exists,
+  inArray,
   isNotNull,
   isNull,
   notExists,
@@ -24,6 +26,7 @@ import {
 } from "~/lib/conversion-coverage";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { computeParseDrift, hasDrift } from "~/lib/parse-drift";
+import { isMoneyUnit } from "~/lib/price-mapping-utils";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { wasm } from "~/lib/wasm";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
@@ -64,6 +67,7 @@ interface AllProblems {
   orphanedProducts: OrphanedProduct[];
   invalidUPCs: InvalidUPC[];
   productsWithoutMappings: ProductWithoutMappings[];
+  ingredientsWithPartialCoverage: IngredientWithPartialCoverage[];
   invalidInventoryAmounts: InvalidInventoryAmount[];
   emptyLocations: EmptyLocation[];
   productsWithNoImages: ProductWithNoImages[];
@@ -115,6 +119,42 @@ interface ProductWithoutMappings {
    * non-foods just need a price.
    */
   isIngredient: boolean;
+  /** Operator-set: no USDA food exists — the fix switches to manual entry. */
+  usdaUnavailable: boolean;
+}
+
+// An ingredient product that has *some* coverage but can't reach all four base
+// kinds (weight/volume/money/calories) — e.g. a price but no weight/volume link,
+// or a volume↔money mapping but no calories. Graded with the real conversion
+// graph (conversionCoverage on synthesized mappings), so money living in a unit
+// mapping counts just like a scalar price. Truly-empty products are left to
+// findProductsWithoutMappings.
+interface IngredientWithPartialCoverage {
+  id: string;
+  name: string;
+  manufacturer: string;
+  /** Which of the 4 base kinds the effective graph can reach (lit chips). */
+  coverage: { covered: BaseKind[] };
+  /**
+   * Whether the product already has price info — a scalar price OR a money unit
+   * mapping. Distinct from `coverage` having `money` (which means money is
+   * reachable *from a measure*). Drives the fix: only offer the price step when
+   * no price exists at all, so we never blank-overwrite an existing one.
+   */
+  hasPrice: boolean;
+  /**
+   * Whether a USDA food already resolves for this product. When true, the fix
+   * won't offer "link a USDA food" — re-linking the same food can't fill a gap
+   * the food doesn't cover (e.g. a portion with an unrecognized unit); that
+   * needs a manual conversion.
+   */
+  hasUsdaLink: boolean;
+  /**
+   * Operator-set: no USDA food exists for this product. The fix then stops
+   * suggesting a (futile) USDA link and switches to manual entry of the missing
+   * kinds. Does NOT suppress — still flagged until they're filled.
+   */
+  usdaUnavailable: boolean;
 }
 
 interface InvalidInventoryAmount {
@@ -334,6 +374,7 @@ const findProductsWithoutMappings = async (
       manufacturer: product.manufacturer,
       createdAt: product.createdAt,
       ingredientId: product.ingredientId,
+      usdaUnavailable: product.usdaUnavailable,
     })
     .from(product)
     .where(
@@ -354,10 +395,111 @@ const findProductsWithoutMappings = async (
   // Filter out misc products - they don't need pricing
   return productsWithoutMappings
     .filter((p) => !isMiscProduct(p.name))
-    .map(({ ingredientId, ...rest }) => ({
+    .map(({ ingredientId, usdaUnavailable, ...rest }) => ({
       ...rest,
       isIngredient: ingredientId != null,
+      usdaUnavailable: usdaUnavailable ?? false,
     }));
+};
+
+// Synthesize a product's *effective* conversion edges (stored mappings + price
+// edge + USDA portion/serving/nutrient edges) — the same set the conversion
+// graph and costing engine use. Returns null (after logging) when the WASM
+// synthesis throws, so callers can skip the product instead of failing the scan.
+const synthesizeEffectiveMappings = (
+  p: { name: string } & Parameters<typeof getAllUnitMappingsFromProduct>[0],
+): ReturnType<typeof getAllUnitMappingsFromProduct> | null => {
+  try {
+    return getAllUnitMappingsFromProduct(p);
+  } catch (error) {
+    console.error(
+      `Failed to synthesize mappings for product ${p.id} (${p.name}):`,
+      error,
+    );
+    return null;
+  }
+};
+
+// Find ingredient products that are under-covered: they have *some* coverage (so
+// findProductsWithoutMappings skips them) but their effective conversion graph
+// can't reach all four base kinds. Graded with conversionCoverage on the
+// synthesized mappings (stored conversions + price edge + USDA edges), so money
+// in a unit mapping counts like a scalar price — not just the scalar field.
+//
+// Cost: like the islanded detector, this enriches candidates with USDA food and
+// synthesizes their mappings. The DB pre-filter drops truly-empty products
+// (owned by findProductsWithoutMappings); batchEnrichWithFood only hits the
+// network for candidates that actually have a upc/ndb to look up.
+const findIngredientsWithPartialCoverage = async (
+  db: Database,
+  usdaClient: USDAClient,
+): Promise<IngredientWithPartialCoverage[]> => {
+  const products = await getDb(db).query.product.findMany({
+    where: and(notDeleted(product), isNotNull(product.ingredientId)),
+    columns: {
+      id: true,
+      name: true,
+      manufacturer: true,
+      upc: true,
+      ndb_number: true,
+      price: true,
+      usdaUnavailable: true,
+    },
+    with: {
+      unitMappings: {
+        where: notDeleted(productUnitMappings),
+        columns: { a: true, b: true, source: true },
+      },
+    },
+  });
+
+  const candidates = products.filter(
+    (p) =>
+      !isMiscProduct(p.name) &&
+      // Skip truly-empty products — findProductsWithoutMappings owns those.
+      (p.price != null ||
+        p.ndb_number != null ||
+        p.upc != null ||
+        p.unitMappings.length > 0),
+  );
+
+  const enriched = await batchEnrichWithFood(
+    candidates,
+    foodLookupParamFromProduct,
+    usdaClient,
+  );
+
+  const problems: IngredientWithPartialCoverage[] = [];
+  for (const p of enriched) {
+    const effective = synthesizeEffectiveMappings(p);
+    if (!effective) continue;
+
+    const cov = conversionCoverage(effective, BASE_KINDS);
+
+    // Flag any food whose effective graph can't reach all four base kinds. This
+    // includes the subtle case where a scalar/each price exists but isn't
+    // reachable from a measure (e.g. russet potato: `1 each = $1` islanded from
+    // the gram graph because no portion maps `each`→g) — money stays uncovered,
+    // and the fix is to connect the price to grams (a manual `1 each = N g`).
+    // `hasPrice` no longer exempts: a price you can't convert from a measure is
+    // still a gap.
+    const hasPrice =
+      p.price != null ||
+      effective.some((m) => isMoneyUnit(m.a.unit) || isMoneyUnit(m.b.unit));
+    if (cov.tier === "complete") continue;
+
+    problems.push({
+      id: p.id,
+      name: p.name,
+      manufacturer: p.manufacturer,
+      coverage: { covered: [...cov.covered] },
+      hasPrice,
+      hasUsdaLink: p.food != null,
+      usdaUnavailable: p.usdaUnavailable ?? false,
+    });
+  }
+
+  return problems;
 };
 
 // Find inventory entries with zero or negative amounts
@@ -547,21 +689,8 @@ const findProductsWithIslandedMappings = async (
 
   const problems: ProductWithIslandedMappings[] = [];
   for (const prod of enriched) {
-    let effective: ReturnType<typeof getAllUnitMappingsFromProduct>;
-    try {
-      effective = getAllUnitMappingsFromProduct({
-        id: prod.id,
-        unitMappings: prod.unitMappings,
-        food: prod.food,
-        price: prod.price,
-      });
-    } catch (error) {
-      console.error(
-        `Failed to synthesize mappings for product ${prod.id} (${prod.name}):`,
-        error,
-      );
-      continue;
-    }
+    const effective = synthesizeEffectiveMappings(prod);
+    if (!effective) continue;
 
     const islands = detectIslands(effective, prod);
     if (islands.length >= 2) {
@@ -704,6 +833,7 @@ interface ProblemsCount {
     orphanedProducts: number;
     invalidUPCs: number;
     productsWithoutMappings: number;
+    ingredientsWithPartialCoverage: number;
     invalidInventoryAmounts: number;
     emptyLocations: number;
     productsWithNoImages: number;
@@ -890,6 +1020,54 @@ const findStaleRecipeTotals = async (
     .where(and(notDeleted(recipe), isNull(recipe.totalsComputedAt)));
 };
 
+// Distinct non-deleted recipes each product feeds into, via its linked
+// ingredient (product → ingredient → recipeSectionIngredient → recipe). A
+// prioritization signal for the Problems page: a data gap on a product used in
+// 12 recipes matters more than one used in none. Only products that HAVE an
+// ingredient are returned (with a count that may be 0); non-food products are
+// omitted, so the card can tell "0 recipes" apart from "no ingredient link".
+export const recipeUsageCountsByProduct = async (
+  db: Database,
+  productIds: string[],
+): Promise<Record<string, number>> => {
+  if (productIds.length === 0) return {};
+
+  const rows = await getDb(db)
+    .select({
+      productId: product.id,
+      count: sql<number>`count(distinct ${recipe.id})`,
+    })
+    .from(product)
+    .leftJoin(
+      recipeSectionIngredient,
+      and(
+        eq(recipeSectionIngredient.ingredientId, product.ingredientId),
+        notDeleted(recipeSectionIngredient),
+      ),
+    )
+    .leftJoin(
+      recipeSection,
+      and(
+        eq(recipeSection.id, recipeSectionIngredient.recipeSectionId),
+        notDeleted(recipeSection),
+      ),
+    )
+    .leftJoin(
+      recipe,
+      and(eq(recipe.id, recipeSection.recipeId), notDeleted(recipe)),
+    )
+    .where(
+      and(
+        notDeleted(product),
+        isNotNull(product.ingredientId),
+        inArray(product.id, productIds.map(unsafeProductId)),
+      ),
+    )
+    .groupBy(product.id);
+
+  return Object.fromEntries(rows.map((r) => [r.productId, Number(r.count)]));
+};
+
 export const findAllProblemsCount = async (
   db: Database,
   upcLookupClient: UPCLookupClient,
@@ -903,6 +1081,7 @@ export const findAllProblemsCount = async (
       orphanedProducts: p.orphanedProducts.length,
       invalidUPCs: p.invalidUPCs.length,
       productsWithoutMappings: p.productsWithoutMappings.length,
+      ingredientsWithPartialCoverage: p.ingredientsWithPartialCoverage.length,
       invalidInventoryAmounts: p.invalidInventoryAmounts.length,
       emptyLocations: p.emptyLocations.length,
       productsWithNoImages: p.productsWithNoImages.length,
@@ -930,6 +1109,7 @@ export const findAllProblems = async (
     orphanedProducts,
     invalidUPCs,
     productsWithoutMappings,
+    ingredientsWithPartialCoverage,
     invalidInventoryAmounts,
     emptyLocations,
     productsWithNoImages,
@@ -945,6 +1125,7 @@ export const findAllProblems = async (
     findOrphanedProducts(db),
     findInvalidUPCs(db),
     findProductsWithoutMappings(db),
+    findIngredientsWithPartialCoverage(db, usdaClient),
     findInvalidInventoryAmounts(db),
     findEmptyLocations(db),
     findProductsWithNoImages(db, { excludeIngredients: true }),
@@ -975,6 +1156,7 @@ export const findAllProblems = async (
     orphanedProducts.length +
     invalidUPCs.length +
     productsWithoutMappings.length +
+    ingredientsWithPartialCoverage.length +
     invalidInventoryAmounts.length +
     emptyLocations.length +
     productsWithNoImages.length +
@@ -991,6 +1173,7 @@ export const findAllProblems = async (
     orphanedProducts,
     invalidUPCs,
     productsWithoutMappings,
+    ingredientsWithPartialCoverage,
     invalidInventoryAmounts,
     emptyLocations,
     productsWithNoImages,

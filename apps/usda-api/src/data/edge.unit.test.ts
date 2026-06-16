@@ -53,6 +53,29 @@ describe("dataTypePredicate", () => {
       values: ["sub_sample_food"],
     });
   });
+
+  it("builds an IN clause from a comma-joined dataTypes list", () => {
+    expect(
+      dataTypePredicate(
+        "i.data_type",
+        undefined,
+        true,
+        "foundation_food,sr_legacy_food,survey_fndds_food",
+      ),
+    ).toEqual({
+      sql: "i.data_type IN (?, ?, ?)",
+      values: ["foundation_food", "sr_legacy_food", "survey_fndds_food"],
+    });
+  });
+
+  it("lets the single type win over the dataTypes list, and ignores blanks", () => {
+    expect(
+      dataTypePredicate("i.data_type", "branded_food", undefined, "foo,bar"),
+    ).toEqual({ sql: "i.data_type = ?", values: ["branded_food"] });
+    expect(
+      dataTypePredicate("i.data_type", undefined, undefined, " , "),
+    ).toEqual({ sql: "", values: [] });
+  });
 });
 
 function makeEnv(bindCounts: number[]): EdgeBindings {

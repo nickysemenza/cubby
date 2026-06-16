@@ -134,6 +134,7 @@ export class USDAClient {
   private async fetchListFoods(params: {
     nameFilter?: string;
     dataTypeFilter?: DataType;
+    dataTypes?: DataType[];
     foodsOnly?: boolean;
     orderBy?: "description" | "data_type" | "fdc_id" | "relevance";
     direction?: "asc" | "desc";
@@ -145,6 +146,10 @@ export class USDAClient {
         query: {
           nameFilter: params.nameFilter,
           dataTypeFilter: params.dataTypeFilter,
+          // Comma-join for the querystring; omit when empty.
+          dataTypes: params.dataTypes?.length
+            ? params.dataTypes.join(",")
+            : undefined,
           // Omit when false so the querystring stays clean (and z.coerce.boolean
           // never sees a falsey-but-present value).
           foodsOnly: params.foodsOnly || undefined,
@@ -194,6 +199,7 @@ export class USDAClient {
     sort: SortParams,
     pagination: PaginationParams,
     foodsOnly?: boolean,
+    dataTypes?: DataType[],
   ) {
     // Map generic sort fields to USDA-specific fields
     const orderByMap: Record<
@@ -211,6 +217,7 @@ export class USDAClient {
     const data = await this.fetchListFoods({
       nameFilter,
       dataTypeFilter,
+      dataTypes,
       foodsOnly,
       orderBy,
       direction: sort.direction,

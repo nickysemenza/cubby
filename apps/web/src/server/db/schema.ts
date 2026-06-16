@@ -21,6 +21,7 @@ import {
 } from "@cubby/schemas/recipe";
 import { relations, sql } from "drizzle-orm";
 import {
+  boolean,
   date,
   index,
   integer,
@@ -393,6 +394,11 @@ export const product = pgTable(
       enum: productCategoryValues,
     }), // product category for filtering
     price: real("price"), // Unit price in dollars, null if no price mapping
+    // Operator confirmed there's no USDA food for this product, so the coverage
+    // fix stops suggesting a (futile) USDA link and expects manual entry of
+    // weight/volume/calories instead. Does not suppress the problem — the card
+    // stays flagged until those are filled manually.
+    usdaUnavailable: boolean("usdaUnavailable"),
   },
   (table) => [
     uniqueIndex("Product_shortcode_unique")
