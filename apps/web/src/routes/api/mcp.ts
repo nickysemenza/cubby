@@ -20,6 +20,15 @@ async function handler({ request }: { request: Request }) {
       headers.delete("authorization");
     }
 
+    // Fallback: accept the API key as a `?key=` query param. The claude.ai
+    // custom-connector dialog only takes a URL (no header field), so a
+    // single-user instance can paste `…/api/mcp?key=<apiKey>` instead of
+    // standing up an OAuth flow. Header still wins if both are present.
+    if (!headers.has("x-api-key")) {
+      const key = new URL(request.url).searchParams.get("key");
+      if (key) headers.set("x-api-key", key);
+    }
+
     const ctx = await createTRPCContext({ headers });
 
     if (!ctx.auth.userId) {
