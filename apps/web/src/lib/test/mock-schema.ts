@@ -17,6 +17,10 @@
 // - `.refine()` does NOT wrap — `amount` stays `type: "object"`, so the
 //   omit-optionals policy below makes `{ value, unit }` (no `upperValue`) which
 //   satisfies its `upperValue > value` refinement for free.
+// - Value policy: `.optional()` is OMITTED and `.nullable()`/`.nullish()` are
+//   always `null` in the generated base (both satisfy round-trips). When a
+//   nullable field's inner value is what a test actually needs, pass it via
+//   `overrides` — the base will never synthesize the inner type for you.
 // - Faker hints live in schema `.meta({ mock: "food.ingredient" })` as dot-paths
 //   (strings, so `@cubby/schemas` stays faker-free); resolved here at gen time.
 
