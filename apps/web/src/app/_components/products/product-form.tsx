@@ -47,6 +47,7 @@ const productFormSchema = z
     category: productCategory.nullable(),
     upc: upc.nullable(), // Allow empty string and transform to null
     ndb_number: ndb.nullable(), // Allow empty string and transform to null
+    fdc_id: z.number().int().positive().nullable(), // Explicit USDA link (set via search)
     expectedQuantity: z.number().int().positive().nullable(),
     price: z.number().positive().nullable(), // Price per each ($); own field, not a mapping
     ingredient: ComboboxItem.nullable(), // Ingredient association
@@ -201,6 +202,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
       category: product?.category ?? null,
       upc: product ? product.upc : null,
       ndb_number: product ? product.ndb_number : null,
+      fdc_id: product ? product.fdc_id : null,
       expectedQuantity: product
         ? product.expectedQuantity
         : (initialExpectedQuantity ?? null),
@@ -221,6 +223,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
         category: values.category,
         upc: values.upc,
         ndb_number: values.ndb_number,
+        fdc_id: values.fdc_id,
         expectedQuantity: values.expectedQuantity,
         price: values.price,
         ingredientId: getOptionalIngredientId(values.ingredient) ?? null,
@@ -245,6 +248,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
           "category",
           "upc",
           "ndb_number",
+          "fdc_id",
           "expectedQuantity",
           "price",
         ],

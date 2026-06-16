@@ -68,6 +68,7 @@ describe("suggestions router", () => {
         manufacturer: "test",
         upc: null,
         ndb_number: null,
+        fdc_id: null,
         expectedQuantity: null,
         ingredientId: ing.id,
         unitMappings: [CUP_TO_GRAM],

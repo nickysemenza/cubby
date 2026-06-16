@@ -89,7 +89,7 @@ const productWithWrongCategorySchema = z.object({
   name: z.string(),
   manufacturer: z.string(),
   category: z.string().nullable(),
-  indicator: z.enum(["ndb", "ingredient"]),
+  indicator: z.enum(["fdc", "ingredient"]),
 });
 
 const inventoryWithStaleValuationSchema = z.object({

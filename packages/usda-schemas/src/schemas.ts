@@ -169,6 +169,10 @@ export type FoodPortion = z.infer<typeof foodPortion>;
 export const foodLookupParam = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("upc"), gtin_upc: upc }),
   z.object({ kind: z.literal("ndb"), ndb_number: ndb }),
+  // fdc_id is FDC's universal primary key (every food type has one), so it's the
+  // explicit, type-agnostic link — used to reach Foundation/Survey foods that
+  // have neither a UPC nor an NDB number.
+  z.object({ kind: z.literal("fdc"), fdc_id: z.number() }),
 ]);
 
 export type FoodLookupParam = z.infer<typeof foodLookupParam>;

@@ -138,11 +138,12 @@ function slimInventory(entry: Record<string, unknown>) {
 
 /** Strip heavy fields from product objects */
 export function slimProduct(p: Record<string, unknown>) {
-  // USDA linkage is resolved at query time (UPC-first, ndb_number fallback) and
-  // surfaced as `p.food`; a non-null `usdaFdcId` is the canonical "is it linked"
-  // signal and covers BOTH paths. `ndb_number` alone is insufficient — a product
-  // linked only by UPC (e.g. Diamond Crystal salt) has a null ndb_number but is
-  // still linked. `externalIds` is unrelated (Amazon ASIN / McMaster part #, etc.).
+  // USDA linkage is resolved at query time (explicit fdc_id, else UPC
+  // auto-match) and surfaced as `p.food`; a non-null `usdaFdcId` is the canonical
+  // "is it linked" signal and covers BOTH paths — a product linked only by UPC
+  // (e.g. Diamond Crystal salt) has a null stored `fdc_id` but still resolves a
+  // food. `fdc_id` is the explicit link to set via update_product.
+  // `externalIds` is unrelated (Amazon ASIN / McMaster part #, etc.).
   const food = p.food as { fdc_id?: number } | null | undefined;
   return {
     id: p.id,
@@ -153,7 +154,7 @@ export function slimProduct(p: Record<string, unknown>) {
     category: p.category,
     price: p.price,
     expectedQuantity: p.expectedQuantity,
-    ndb_number: p.ndb_number ?? null,
+    fdc_id: p.fdc_id ?? null,
     usdaFdcId: food?.fdc_id ?? null,
     // Operator flag: no USDA food exists for this product. Lets an agent tell a
     // deliberately-unlinked product apart from one that just hasn't been linked.
@@ -561,6 +562,7 @@ function registerTools(server: McpServer) {
         manufacturer: params.manufacturer ?? UNSPECIFIED_MANUFACTURER,
         upc: (params.upc as string | undefined) ?? null,
         ndb_number: null,
+        fdc_id: null,
         expectedQuantity:
           (params.expectedQuantity as number | undefined) ?? null,
         ingredientId: (params.ingredientId as string | undefined) ?? null,
@@ -579,13 +581,14 @@ function registerTools(server: McpServer) {
       name: z.string().optional().describe("New name"),
       manufacturer: z.string().optional().describe("New manufacturer"),
       upc: z.string().optional().describe("New UPC"),
-      ndb_number: z
+      fdc_id: z
         .number()
         .int()
+        .positive()
         .nullable()
         .optional()
         .describe(
-          "USDA NDB number — links the product to a generic/legacy USDA food (use find_usda_food/search_usda_foods to get it). null to unlink.",
+          "USDA FoodData Central id — links the product to any USDA food (use find_usda_food/search_usda_foods to get it; takes precedence over the product's UPC). null to unlink.",
         ),
       usdaUnavailable: z
         .boolean()

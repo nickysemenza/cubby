@@ -300,7 +300,7 @@ export function createEdgeUsdaDataSource(
   }
 
   async function findRowsByColumn(
-    column: "gtin_upc" | "ndb_number",
+    column: "gtin_upc" | "ndb_number" | "fdc_id",
     values: Array<string | number>,
   ): Promise<Map<string | number, FoodIndexRow>> {
     const tables = await getActiveVersion(env.DB);
@@ -318,7 +318,12 @@ export function createEdgeUsdaDataSource(
         .all<FoodIndexRow>();
 
       for (const row of rowsFromResult(result)) {
-        const key = column === "gtin_upc" ? row.gtin_upc : row.ndb_number;
+        const key =
+          column === "gtin_upc"
+            ? row.gtin_upc
+            : column === "ndb_number"
+              ? row.ndb_number
+              : row.fdc_id;
         if (key !== null && !rows.has(key)) rows.set(key, row);
       }
     }
@@ -367,17 +372,26 @@ export function createEdgeUsdaDataSource(
             .map((lookup) => lookup.ndb_number),
         ),
       );
+      const fdcIds = Array.from(
+        new Set(
+          lookups
+            .filter((lookup) => lookup.kind === "fdc")
+            .map((lookup) => lookup.fdc_id),
+        ),
+      );
 
-      const [upcRows, ndbRows] = await Promise.all([
+      const [upcRows, ndbRows, fdcRows] = await Promise.all([
         findRowsByColumn("gtin_upc", upcs),
         findRowsByColumn("ndb_number", ndbNumbers),
+        findRowsByColumn("fdc_id", fdcIds),
       ]);
 
-      const rows = lookups.map((lookup) =>
-        lookup.kind === "upc"
-          ? (upcRows.get(lookup.gtin_upc) ?? null)
-          : (ndbRows.get(lookup.ndb_number) ?? null),
-      );
+      const rows = lookups.map((lookup) => {
+        if (lookup.kind === "upc") return upcRows.get(lookup.gtin_upc) ?? null;
+        if (lookup.kind === "ndb")
+          return ndbRows.get(lookup.ndb_number) ?? null;
+        return fdcRows.get(lookup.fdc_id) ?? null;
+      });
 
       const uniqueRows = new Map<number, FoodIndexRow>();
       for (const row of rows) {

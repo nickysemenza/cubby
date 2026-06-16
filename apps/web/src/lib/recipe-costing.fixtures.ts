@@ -42,6 +42,7 @@ export const makeProduct = (
   opts: {
     price?: number | null;
     ndb?: number | null;
+    fdc?: number | null;
     upc?: string | null;
     food?: Product["food"];
     // Attach USDA food data from per-100g nutrient codes (shorthand for `food`).
@@ -54,6 +55,7 @@ export const makeProduct = (
   name: idStr,
   upc: opts.upc ?? null,
   ndb_number: opts.ndb ?? null,
+  fdc_id: opts.fdc ?? null,
   manufacturer: "",
   category: null,
   model: null,

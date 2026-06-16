@@ -4,33 +4,33 @@ import { createMcpServer, slimMeal, slimProduct, slimUsdaFood } from "./server";
 describe("slimProduct USDA signal", () => {
   // Regression: get_product/list_products gave no USDA signal at all, so an
   // agent couldn't tell a product was linked. USDA resolves at query time
-  // (UPC-first, ndb_number fallback) onto `food`; usdaFdcId is the canonical
-  // "is it linked" flag and must reflect BOTH paths.
+  // (explicit fdc_id, else UPC auto-match) onto `food`; usdaFdcId is the
+  // canonical "is it linked" flag and must reflect BOTH paths.
 
-  it("surfaces usdaFdcId for a UPC-only link (ndb_number null)", () => {
-    // e.g. Diamond Crystal salt: UPC resolves, ndb_number is null
+  it("surfaces usdaFdcId for a UPC-only link (no stored fdc_id)", () => {
+    // e.g. Diamond Crystal salt: UPC resolves, no explicit fdc_id stored
     const slim = slimProduct({
       id: "p-1",
       name: "kosher salt",
       upc: "013600020019",
-      ndb_number: null,
+      fdc_id: null,
       food: { fdc_id: 2571981 },
     });
     expect(slim.usdaFdcId).toBe(2571981);
-    expect(slim.ndb_number).toBeNull();
+    expect(slim.fdc_id).toBeNull();
   });
 
-  it("surfaces usdaFdcId for an ndb-only link (no UPC)", () => {
-    // e.g. lard: no UPC, resolves via ndb_number
+  it("surfaces the explicit stored fdc_id link (no UPC)", () => {
+    // e.g. lard: no UPC, linked explicitly by fdc_id
     const slim = slimProduct({
       id: "p-2",
       name: "lard",
       upc: null,
-      ndb_number: 4002,
+      fdc_id: 999,
       food: { fdc_id: 999 },
     });
     expect(slim.usdaFdcId).toBe(999);
-    expect(slim.ndb_number).toBe(4002);
+    expect(slim.fdc_id).toBe(999);
   });
 
   it("reports null usdaFdcId when nothing resolved", () => {
@@ -38,7 +38,7 @@ describe("slimProduct USDA signal", () => {
       id: "p-3",
       name: "Bob's Red Mill flour",
       upc: "039978533012",
-      ndb_number: null,
+      fdc_id: null,
       food: null,
     });
     expect(slim.usdaFdcId).toBeNull();

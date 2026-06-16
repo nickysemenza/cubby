@@ -115,9 +115,7 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
   const manufacturerValue = form.watch(
     "manufacturer" as Path<TFieldValues>,
   ) as string;
-  const ndbValue = form.watch("ndb_number" as Path<TFieldValues>) as
-    | number
-    | null;
+  const fdcValue = form.watch("fdc_id" as Path<TFieldValues>) as number | null;
   const upcValue = form.watch("upc" as Path<TFieldValues>) as string | null;
   const ingredientValue = form.watch("ingredient" as Path<TFieldValues>) as {
     id?: IngredientId;
@@ -125,7 +123,7 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
 
   const isMisc = isMiscProduct(nameValue);
   const isFoodForced = hasFoodIndicators({
-    ndb_number: ndbValue,
+    fdc_id: fdcValue,
     ingredientId: ingredientValue?.id,
   });
 
@@ -173,21 +171,15 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
     }
   };
 
-  // Pick a USDA food by name → fill ndb_number (or upc for branded foods). The
-  // linked food then supplies nutrition + portion conversions at read time, so we
-  // don't store those mappings.
+  // Pick a USDA food by name → store its fdc_id (the universal link, works for
+  // any food type). The linked food then supplies nutrition + portion
+  // conversions at read time, so we don't store those mappings. We deliberately
+  // don't touch `upc` — that's the product's own barcode, not the food's.
   const handleUsdaSelect = (food: FoodSummaryWithLinkedProducts) => {
-    if (food.legacyFoodInfo?.ndb_number != null) {
-      form.setValue(
-        "ndb_number" as Path<TFieldValues>,
-        food.legacyFoodInfo.ndb_number as TFieldValues[Path<TFieldValues>],
-      );
-    } else if (food.brandedFoodInfo?.gtin_upc) {
-      form.setValue(
-        "upc" as Path<TFieldValues>,
-        food.brandedFoodInfo.gtin_upc as TFieldValues[Path<TFieldValues>],
-      );
-    }
+    form.setValue(
+      "fdc_id" as Path<TFieldValues>,
+      food.fdc_id as TFieldValues[Path<TFieldValues>],
+    );
     const currentName = form.getValues("name" as Path<TFieldValues>) as string;
     if (!currentName) {
       form.setValue(
@@ -310,11 +302,9 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
                 <NullableNumericField
                   form={form}
                   step="1"
-                  name={"ndb_number" as Path<TFieldValues>}
-                  label={compact ? "NDB Number" : "NDB Number (Optional)"}
-                  placeholder={
-                    compact ? "1000-99999" : "NDB number (1000-99999)"
-                  }
+                  name={"fdc_id" as Path<TFieldValues>}
+                  label={compact ? "FDC ID" : "USDA FDC ID (Optional)"}
+                  placeholder={compact ? "FDC id" : "set via USDA search above"}
                 />
               </SideBySideFields>
             ) : (
@@ -346,7 +336,7 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
               />
             )}
 
-            {/* Full form pairs NDB beside UPC; compact renders NDB up in
+            {/* Full form pairs FDC ID beside UPC; compact renders FDC up in
                 "Quantity & price" (hidePrice), so only the UPC block shows here. */}
             {hidePrice ? (
               upcBlock
@@ -355,25 +345,21 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
                 <NullableNumericField
                   form={form}
                   step="1"
-                  name={"ndb_number" as Path<TFieldValues>}
-                  label="NDB Number (Optional)"
-                  placeholder="NDB number (1000-99999)"
+                  name={"fdc_id" as Path<TFieldValues>}
+                  label="USDA FDC ID (Optional)"
+                  placeholder="set via USDA search above"
                 />
                 {upcBlock}
               </SideBySideFields>
             )}
 
-            {/* Which control is the active USDA link. Resolution is UPC-first,
-                NDB-fallback (foodLookupParamFromProduct), so surface that
-                precedence instead of leaving it implicit. */}
-            {(upcValue || ndbValue) && (
+            {/* Which control is the active USDA link. An explicit FDC id wins
+                over UPC auto-resolution (foodLookupParamFromProduct), so surface
+                that precedence instead of leaving it implicit. */}
+            {(upcValue || fdcValue) && (
               <p className="text-muted-foreground text-xs">
                 USDA link:{" "}
-                {upcValue && ndbValue
-                  ? "UPC (primary) · NDB (fallback)"
-                  : upcValue
-                    ? "via UPC"
-                    : "via NDB"}
+                {fdcValue ? "via FDC id (explicit)" : "via UPC (auto)"}
               </p>
             )}
           </FormSection>

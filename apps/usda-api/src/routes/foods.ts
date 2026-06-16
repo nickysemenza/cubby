@@ -38,7 +38,9 @@ export function createFoodRoutes(dataSource: USDADataSource) {
     const food =
       lookup.kind === "upc"
         ? await dataSource.findFoodByUpc(lookup.gtin_upc)
-        : await dataSource.findFoodByNdb(lookup.ndb_number);
+        : lookup.kind === "ndb"
+          ? await dataSource.findFoodByNdb(lookup.ndb_number)
+          : await dataSource.getFoodById(lookup.fdc_id);
 
     return c.json(food, 200);
   });

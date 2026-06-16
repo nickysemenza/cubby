@@ -79,7 +79,7 @@ export const findProductsNeedingFoodCategory = async (
     manufacturer: string;
     category: string | null;
     upc: string | null;
-    ndb_number: number | null;
+    fdc_id: number | null;
     ingredientId: string | null;
   }>
 > => {
@@ -92,7 +92,7 @@ export const findProductsNeedingFoodCategory = async (
       manufacturer: product.manufacturer,
       category: product.category,
       upc: product.upc,
-      ndb_number: product.ndb_number,
+      fdc_id: product.fdc_id,
       ingredientId: product.ingredientId,
     })
     .from(product)
@@ -100,7 +100,7 @@ export const findProductsNeedingFoodCategory = async (
       and(
         notDeleted(product),
         sql`${product.category} IS DISTINCT FROM 'food'`,
-        sql`((${product.ndb_number} IS NOT NULL AND ${product.ndb_number} > 0) OR ${product.ingredientId} IS NOT NULL)`,
+        sql`((${product.fdc_id} IS NOT NULL AND ${product.fdc_id} > 0) OR ${product.ingredientId} IS NOT NULL)`,
       ),
     );
 };

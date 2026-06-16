@@ -57,6 +57,7 @@ describe("AvailabilityService.getRecipeAvailability", () => {
         manufacturer: "test",
         upc: null,
         ndb_number: null,
+        fdc_id: null,
         expectedQuantity: null,
         ingredientId: flour.id,
         unitMappings: [CUP_TO_GRAM],

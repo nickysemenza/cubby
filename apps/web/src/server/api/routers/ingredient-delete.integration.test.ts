@@ -102,6 +102,7 @@ describe("ingredient deletion", () => {
         model: "ING-TEST-1",
         upc: "444555666777",
         ndb_number: null,
+        fdc_id: null,
         ingredientId: ingredient.id,
         pendingImageIds: [],
         expectedQuantity: 1,

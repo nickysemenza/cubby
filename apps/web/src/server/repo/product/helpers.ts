@@ -21,26 +21,30 @@ import {
 import type { ProductDeepDB } from "./types";
 
 /**
- * Convert product to food lookup parameter.
- * Only returns a lookup param if UPC/NDB values pass schema validation.
+ * Convert a product to a USDA food lookup parameter.
+ *
+ * An explicit `fdc_id` (the deliberate link a user picks) wins over UPC
+ * auto-matching, so a product can override its sparse branded record with a
+ * richer reference food. `ndb_number` is no longer consulted — the migration
+ * folded every NDB link into `fdc_id`. Only returns a param if values validate.
  */
 export const foodLookupParamFromProduct = (product: {
   upc: string | null;
-  ndb_number: number | null;
+  fdc_id: number | null;
 }): FoodLookupParam | null => {
-  // Try UPC lookup first
+  // Explicit FDC link wins.
+  if (product.fdc_id !== null) {
+    const result = foodLookupParam.safeParse({
+      kind: "fdc",
+      fdc_id: product.fdc_id,
+    });
+    if (result.success) return result.data;
+  }
+  // Otherwise auto-resolve a branded food from the barcode.
   if (product.upc !== null) {
     const result = foodLookupParam.safeParse({
       kind: "upc",
       gtin_upc: product.upc,
-    });
-    if (result.success) return result.data;
-  }
-  // Fall back to NDB lookup
-  if (product.ndb_number !== null) {
-    const result = foodLookupParam.safeParse({
-      kind: "ndb",
-      ndb_number: product.ndb_number,
     });
     if (result.success) return result.data;
   }

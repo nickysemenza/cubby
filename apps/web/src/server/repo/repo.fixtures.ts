@@ -27,6 +27,7 @@ export const makeProductInput = (
   model: "TEST-123",
   upc: null,
   ndb_number: null,
+  fdc_id: null,
   expectedQuantity: null,
   ingredientId: null,
   unitMappings: [],

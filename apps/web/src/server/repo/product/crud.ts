@@ -436,6 +436,7 @@ export const updateProduct = async (
       category?: ProductCategory | null;
       upc?: string | null;
       ndb_number?: number | null;
+      fdc_id?: number | null;
       model?: string | null;
       expectedQuantity?: number | null;
       ingredientId?: IngredientId | null;
@@ -449,7 +450,7 @@ export const updateProduct = async (
 
     // Auto-correct category to "food" if the resulting product will have food indicators
     const resultingProduct = {
-      upc: updateData.upc ?? beforeProduct.upc,
+      fdc_id: updateData.fdc_id ?? beforeProduct.fdc_id,
       ndb_number: updateData.ndb_number ?? beforeProduct.ndb_number,
       ingredientId: updateData.ingredientId ?? beforeProduct.ingredientId,
     };
@@ -497,6 +498,7 @@ export const updateProduct = async (
       "category",
       "upc",
       "ndb_number",
+      "fdc_id",
       "model",
       "expectedQuantity",
       "ingredientId",
@@ -544,6 +546,7 @@ export const quickCreateProduct = async (
     expectedQuantity?: number | null;
     model?: string | null;
     ndb_number?: number | null;
+    fdc_id?: number | null;
     ingredientId?: IngredientId | null;
     price?: number | null;
     category?: ProductCategory | null;
@@ -566,6 +569,7 @@ export const quickCreateProduct = async (
     manufacturer: data.manufacturer ?? UNSPECIFIED_MANUFACTURER,
     upc: data.upc ?? null,
     ndb_number: data.ndb_number ?? null,
+    fdc_id: data.fdc_id ?? null,
     model: data.model ?? null,
     expectedQuantity: data.expectedQuantity ?? null,
     ingredientId: data.ingredientId ?? null,

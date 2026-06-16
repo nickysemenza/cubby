@@ -126,8 +126,8 @@ const GAP_LABELS: Record<keyof ProductWithBetterUpcData["gaps"], string> = {
   image: "Image",
 };
 
-const INDICATOR_LABELS: Record<"ndb" | "ingredient", string> = {
-  ndb: "Has NDB",
+const INDICATOR_LABELS: Record<"fdc" | "ingredient", string> = {
+  fdc: "USDA-linked",
   ingredient: "Has Ingredient",
 };
 

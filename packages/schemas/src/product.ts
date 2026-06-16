@@ -31,8 +31,10 @@ export { productCategoryValues } from "@cubby/shared";
  */
 export const hasFoodIndicators = (product: {
   ndb_number?: number | null;
+  fdc_id?: number | null;
   ingredientId?: IngredientId | null;
 }): boolean =>
+  (product.fdc_id != null && product.fdc_id > 0) ||
   (product.ndb_number != null && product.ndb_number > 0) ||
   (product.ingredientId != null && product.ingredientId.length > 0);
 
@@ -41,6 +43,11 @@ const productBase = z.object({
   name: z.string(),
   upc: upc.nullable(),
   ndb_number: ndb.nullable(),
+  // Explicit USDA link by FoodData Central id (supersedes ndb_number; reaches
+  // any food type). Resolution prefers this over UPC auto-matching. Defaults to
+  // null so product summaries from queries that don't select it (inventory /
+  // ingredient embeds) validate instead of 500ing, and inputs may omit it.
+  fdc_id: z.number().int().positive().nullable().default(null),
   manufacturer: z.string().describe("Manufacturer or 'generic'"),
   model: z.string().nullish().describe("model number"),
   notes: z.string().nullish().describe("product notes, URLs, or other details"),

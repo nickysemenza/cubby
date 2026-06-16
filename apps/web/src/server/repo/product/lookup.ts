@@ -11,6 +11,7 @@ import {
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { type FoodLookupParam, foodLookupParam } from "@cubby/usda-schemas";
 import { and, eq, ilike, type SQL } from "drizzle-orm";
+import { match } from "ts-pattern";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { parseWithContext } from "~/lib/zod-utils";
 import type { Database } from "~/server/db";
@@ -36,14 +37,16 @@ export const findProductsByFoodIdentifier = async (
   // validate that lookup zod schema is good
   const lookup = foodLookupParam.parse(rawLookup);
 
-  // Find all matching products (exclude soft-deleted)
+  // Find all matching products (exclude soft-deleted). A product links to a food
+  // by its explicit fdc_id, its barcode (upc), or its NDB number.
+  const linkCondition = match(lookup)
+    .with({ kind: "upc" }, (l) => eq(product.upc, l.gtin_upc))
+    .with({ kind: "ndb" }, (l) => eq(product.ndb_number, l.ndb_number))
+    .with({ kind: "fdc" }, (l) => eq(product.fdc_id, l.fdc_id))
+    .exhaustive();
+
   const res = await getDb(db).query.product.findMany({
-    where: and(
-      lookup.kind === "upc"
-        ? eq(product.upc, lookup.gtin_upc)
-        : eq(product.ndb_number, lookup.ndb_number),
-      notDeleted(product),
-    ),
+    where: and(linkCondition, notDeleted(product)),
     ...relations.product.full,
   });
 

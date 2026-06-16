@@ -191,7 +191,7 @@ interface ProductWithWrongCategory {
   name: string;
   manufacturer: string;
   category: string | null;
-  indicator: "ndb" | "ingredient";
+  indicator: "fdc" | "ingredient";
 }
 
 interface InventoryWithStaleValuation {
@@ -381,7 +381,7 @@ const findProductsWithoutMappings = async (
       and(
         notDeleted(product),
         isNull(product.price),
-        isNull(product.ndb_number),
+        isNull(product.fdc_id),
         isNull(product.upc),
         notExists(
           dbClient
@@ -441,7 +441,7 @@ const findIngredientsWithPartialCoverage = async (
       name: true,
       manufacturer: true,
       upc: true,
-      ndb_number: true,
+      fdc_id: true,
       price: true,
       usdaUnavailable: true,
     },
@@ -458,7 +458,7 @@ const findIngredientsWithPartialCoverage = async (
       !isMiscProduct(p.name) &&
       // Skip truly-empty products — findProductsWithoutMappings owns those.
       (p.price != null ||
-        p.ndb_number != null ||
+        p.fdc_id != null ||
         p.upc != null ||
         p.unitMappings.length > 0),
   );
@@ -604,12 +604,12 @@ const findEmptyLocations = async (db: Database): Promise<EmptyLocation[]> => {
 };
 
 // Helper to determine the primary food indicator for a product
-// Note: hasFoodIndicators only checks NDB and ingredient, not UPC
+// Note: hasFoodIndicators only checks the USDA link (fdc_id) and ingredient, not UPC
 const getFoodIndicator = (product: {
-  ndb_number: number | null;
+  fdc_id: number | null;
   ingredientId: string | null;
-}): "ndb" | "ingredient" => {
-  if (product.ndb_number != null && product.ndb_number > 0) return "ndb";
+}): "fdc" | "ingredient" => {
+  if (product.fdc_id != null && product.fdc_id > 0) return "fdc";
   return "ingredient";
 };
 
@@ -637,7 +637,7 @@ const findProductsWithIslandedMappings = async (
       name: true,
       manufacturer: true,
       upc: true,
-      ndb_number: true,
+      fdc_id: true,
       price: true,
     },
     with: {

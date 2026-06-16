@@ -1,17 +1,10 @@
-import {
-  type FoodLookupParam,
-  type FoodSummary,
-  foodLookupParam,
-} from "@cubby/usda-schemas";
+import type { FoodLookupParam, FoodSummary } from "@cubby/usda-schemas";
 import type { USDAClient } from "../clients/usda";
 
 /**
- * Generic helper to enrich an array of items with USDA food data.
- *
- * This helper:
- * 1. Extracts lookup parameters from each item
- * 2. Batch fetches food data for valid lookups
- * 3. Maps food results back to original items
+ * Generic helper to enrich an array of items with USDA food data: extract a
+ * lookup param per item (fdc_id or UPC — see foodLookupParamFromProduct), batch
+ * fetch, and map results back. Items without a valid param get `food: null`.
  */
 export async function batchEnrichWithFood<T extends object>(
   items: T[],
@@ -22,73 +15,22 @@ export async function batchEnrichWithFood<T extends object>(
     return [];
   }
 
-  // Phase 1: Try primary lookups (UPC prioritized by getLookupParam)
   const lookupParams = items.map((item) => getLookupParam(item));
   const validLookups = lookupParams.filter(
     (param): param is NonNullable<typeof param> => param !== null,
   );
 
-  const primaryResults =
+  const results =
     validLookups.length > 0
       ? await usdaClient.findFoodsBatch(validLookups)
       : [];
 
-  // Map primary results back to items
-  const resultsMap = new Map<number, FoodSummary | null>();
+  // Walk the per-item params and the dense results in lockstep: each item with a
+  // param consumes the next result; items without one stay null.
   let resultIndex = 0;
-  items.forEach((item, itemIndex) => {
-    const lookupParam = getLookupParam(item);
-    if (lookupParam) {
-      resultsMap.set(itemIndex, primaryResults[resultIndex++] || null);
-    } else {
-      resultsMap.set(itemIndex, null);
-    }
-  });
-
-  // Phase 2: Identify failures that have NDB fallback available
-  type ItemWithIndex = { item: T; itemIndex: number };
-  const failedItems: ItemWithIndex[] = [];
-  const fallbackLookups: FoodLookupParam[] = [];
-
-  items.forEach((item, itemIndex) => {
-    const result = resultsMap.get(itemIndex);
-    const primaryLookup = getLookupParam(item);
-
-    // Check if: (1) primary failed, (2) primary was UPC, (3) item has NDB
-    if (
-      result === null &&
-      primaryLookup?.kind === "upc" &&
-      "ndb_number" in item &&
-      item.ndb_number !== null
-    ) {
-      const ndbParam = foodLookupParam.safeParse({
-        kind: "ndb",
-        ndb_number: item.ndb_number,
-      });
-      if (ndbParam.success) {
-        failedItems.push({ item, itemIndex });
-        fallbackLookups.push(ndbParam.data);
-      }
-    }
-  });
-
-  // Batch retry with NDB if any failures have fallback available
-  if (fallbackLookups.length > 0) {
-    const fallbackResults = await usdaClient.findFoodsBatch(fallbackLookups);
-
-    // Update results map with successful fallbacks
-    fallbackResults.forEach((food, i) => {
-      if (food) {
-        const { itemIndex } = failedItems[i]!;
-        resultsMap.set(itemIndex, food);
-      }
-    });
-  }
-
-  // Return items with food data
   return items.map((item, itemIndex) => ({
     ...item,
-    food: resultsMap.get(itemIndex) || null,
+    food: lookupParams[itemIndex] ? (results[resultIndex++] ?? null) : null,
   }));
 }
 

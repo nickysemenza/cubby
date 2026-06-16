@@ -6,7 +6,7 @@ import type {
   ProductCategory,
   ProductCreateInput,
 } from "@cubby/schemas/product";
-import { foodLookupParam, foodSummary } from "@cubby/usda-schemas";
+import { foodSummary } from "@cubby/usda-schemas";
 import type { z } from "zod";
 import type { Database } from "~/server/db";
 import type { USDAClient } from "../clients/usda";
@@ -37,20 +37,11 @@ export class ProductService {
   async getProductByID(id: ProductId): Promise<ProductWithFoodOut> {
     const product = await getProductByIDRepo(this.db, id);
 
-    // Try UPC lookup first (prioritized by foodLookupParamFromProduct)
+    // Resolve the linked food: explicit fdc_id wins, else UPC auto-match.
     const lookupParam = foodLookupParamFromProduct(product);
-    let food = lookupParam ? await this.usdaClient.findFood(lookupParam) : null;
-
-    // If UPC failed and product has NDB, try NDB as fallback
-    if (!food && product.upc && product.ndb_number) {
-      const ndbParam = foodLookupParam.safeParse({
-        kind: "ndb",
-        ndb_number: product.ndb_number,
-      });
-      if (ndbParam.success) {
-        food = await this.usdaClient.findFood(ndbParam.data);
-      }
-    }
+    const food = lookupParam
+      ? await this.usdaClient.findFood(lookupParam)
+      : null;
 
     return {
       ...product,

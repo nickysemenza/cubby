@@ -164,6 +164,7 @@ export function QuickInventoryAdd({
         category: values.category,
         upc: values.upc,
         ndb_number: values.ndb_number,
+        fdc_id: null,
         expectedQuantity: values.expectedQuantity,
         price: values.price,
         ingredientId: getOptionalIngredientId(values.ingredient) ?? null,
