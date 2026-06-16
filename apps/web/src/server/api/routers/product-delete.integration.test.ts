@@ -1,6 +1,10 @@
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { makeProductInput } from "~/server/repo/repo.fixtures";
+import {
+  listParams,
+  makeLocationInput,
+  makeProductInput,
+} from "~/server/repo/repo.fixtures";
 import { createTestCaller } from "../trpc";
 import { inventoryRouter } from "./inventory";
 import { locationRouter } from "./location";
@@ -28,11 +32,7 @@ describe("product deletion", () => {
       await caller.delete({ ids: [createdProduct.id] });
 
       // Verify product is not in list
-      const products = await caller.list({
-        filters: {},
-        sort: { orderBy: "name", direction: "asc" },
-        pagination: { pageSize: 10, pageIndex: 0 },
-      });
+      const products = await caller.list(listParams());
 
       expect(
         products.items.find((p) => p.id === createdProduct.id),
@@ -84,11 +84,7 @@ describe("product deletion", () => {
       });
 
       // Verify all products are gone from list
-      const products = await caller.list({
-        filters: {},
-        sort: { orderBy: "name", direction: "asc" },
-        pagination: { pageSize: 100, pageIndex: 0 },
-      });
+      const products = await caller.list(listParams({ pageSize: 100 }));
 
       expect(products.items.find((p) => p.id === product1.id)).toBeUndefined();
       expect(products.items.find((p) => p.id === product2.id)).toBeUndefined();
@@ -116,12 +112,9 @@ describe("product deletion", () => {
       );
 
       // Create a location
-      const location = await locationCaller.create({
-        name: "Test Location for Inventory",
-        type: "room",
-        parentId: null,
-        pendingImageIds: [],
-      });
+      const location = await locationCaller.create(
+        makeLocationInput({ name: "Test Location for Inventory" }),
+      );
 
       // Add inventory entry
       await inventoryCaller.create({

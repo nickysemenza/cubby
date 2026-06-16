@@ -1,6 +1,6 @@
 import { NONEXISTENT_UUID, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { makeProductInput } from "~/server/repo/repo.fixtures";
+import { listParams, makeProductInput } from "~/server/repo/repo.fixtures";
 import { createTestCaller } from "../trpc";
 import { productRouter } from "./product";
 
@@ -79,21 +79,16 @@ describe("product router", () => {
     await caller.create(productData3);
 
     // Test listing without filters
-    const allProducts = await caller.list({
-      filters: {},
-      pagination: { pageSize: 10, pageIndex: 0 },
-      sort: { orderBy: "name", direction: "asc" },
-    });
+    const allProducts = await caller.list(listParams());
 
     // Should return all products
     expect(allProducts.items.length).toEqual(3);
     expect(allProducts.meta.totalCount).toEqual(3);
 
     // Test filtering by name
-    const appleProducts = await caller.list({
-      filters: { nameFilter: "Apple" },
-      pagination: { pageSize: 10, pageIndex: 0 },
-    });
+    const appleProducts = await caller.list(
+      listParams({ filters: { nameFilter: "Apple" } }),
+    );
 
     // Should return only Apple products
     expect(appleProducts.items.length).toEqual(2);
@@ -102,10 +97,9 @@ describe("product router", () => {
     expect(appleProducts.items[1]!.name).toContain("Apple");
 
     // Test filtering by manufacturer
-    const samsungProducts = await caller.list({
-      filters: { manufacturerFilter: "Samsung" },
-      pagination: { pageSize: 10, pageIndex: 0 },
-    });
+    const samsungProducts = await caller.list(
+      listParams({ filters: { manufacturerFilter: "Samsung" } }),
+    );
 
     // Should return only Samsung products
     expect(samsungProducts.items.length).toEqual(1);
@@ -113,10 +107,9 @@ describe("product router", () => {
     expect(samsungProducts.items[0]!.manufacturer).toEqual("Samsung");
 
     // Test filtering by UPC
-    const upcProducts = await caller.list({
-      filters: { upcFilter: "123456789012" },
-      pagination: { pageSize: 10, pageIndex: 0 },
-    });
+    const upcProducts = await caller.list(
+      listParams({ filters: { upcFilter: "123456789012" } }),
+    );
 
     // Should return product with matching UPC
     expect(upcProducts.items.length).toEqual(1);

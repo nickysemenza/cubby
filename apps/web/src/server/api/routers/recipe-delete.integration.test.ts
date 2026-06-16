@@ -1,5 +1,6 @@
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { listParams } from "~/server/repo/repo.fixtures";
 import { createTestCaller } from "../trpc";
 import { ingredientRouter } from "./ingredient";
 import { recipeRouter } from "./recipe";
@@ -33,11 +34,7 @@ describe("recipe deletion", () => {
       await caller.delete({ ids: [createdRecipe.id] });
 
       // Verify recipe is not in list
-      const recipes = await caller.list({
-        filters: {},
-        sort: { orderBy: "name", direction: "asc" },
-        pagination: { pageSize: 10, pageIndex: 0 },
-      });
+      const recipes = await caller.list(listParams());
 
       expect(
         recipes.items.find((r) => r.id === createdRecipe.id),
@@ -104,11 +101,7 @@ describe("recipe deletion", () => {
       });
 
       // Verify all recipes are gone from list
-      const recipes = await caller.list({
-        filters: {},
-        sort: { orderBy: "name", direction: "asc" },
-        pagination: { pageSize: 100, pageIndex: 0 },
-      });
+      const recipes = await caller.list(listParams({ pageSize: 100 }));
 
       expect(recipes.items.find((r) => r.id === recipe1.id)).toBeUndefined();
       expect(recipes.items.find((r) => r.id === recipe2.id)).toBeUndefined();

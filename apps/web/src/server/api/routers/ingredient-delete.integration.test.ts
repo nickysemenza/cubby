@@ -1,5 +1,6 @@
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { listParams } from "~/server/repo/repo.fixtures";
 import { createTestCaller } from "../trpc";
 import { ingredientRouter } from "./ingredient";
 import { productRouter } from "./product";
@@ -24,11 +25,9 @@ describe("ingredient deletion", () => {
       await caller.delete({ ids: [createdIngredient.id] });
 
       // Verify ingredient is not in list
-      const ingredients = await caller.list({
-        filters: { missingProductsOnly: false },
-        sort: { orderBy: "name", direction: "asc" },
-        pagination: { pageSize: 10, pageIndex: 0 },
-      });
+      const ingredients = await caller.list(
+        listParams({ filters: { missingProductsOnly: false } }),
+      );
 
       expect(
         ingredients.items.find((i) => i.id === createdIngredient.id),
@@ -65,11 +64,9 @@ describe("ingredient deletion", () => {
       });
 
       // Verify all ingredients are gone from list
-      const ingredients = await caller.list({
-        filters: { missingProductsOnly: false },
-        sort: { orderBy: "name", direction: "asc" },
-        pagination: { pageSize: 100, pageIndex: 0 },
-      });
+      const ingredients = await caller.list(
+        listParams({ filters: { missingProductsOnly: false }, pageSize: 100 }),
+      );
 
       expect(
         ingredients.items.find((i) => i.id === ingredient1.id),
