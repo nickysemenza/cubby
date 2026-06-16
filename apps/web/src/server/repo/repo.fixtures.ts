@@ -1,10 +1,18 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { unsafeIngredientId } from "@cubby/schemas/identifiers";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
+import {
+  type LocationCreateInput,
+  locationCreateInput,
+} from "@cubby/schemas/location";
 import type { ProductCreateInput } from "@cubby/schemas/product";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
+import { mock } from "~/lib/test/mock-schema";
 import type { Database } from "~/server/db";
-import { createIngredient } from "./ingredient";
+import { createIngredient, findOrCreateIngredient } from "./ingredient";
+import { createInventoryEntry } from "./inventory";
+import { createLocation } from "./location";
+import { createProduct } from "./product";
 
 // Shared fixture builders for the repo integration tests. Each factory states
 // the irrelevant scaffolding fields once so a test only spells out the values
@@ -33,6 +41,43 @@ export const makeProductInput = (
   externalIds: [],
   ...overrides,
 });
+
+/** Standard tRPC `list` input ({ filters, pagination, sort }). Defaults match the
+ * dominant call shape (name/asc, page 0 × 10); override only what a test varies.
+ * `filters` is generic so the entity's filter type is inferred at the call site. */
+export const listParams = <F = Record<string, never>>(
+  overrides: {
+    filters?: F;
+    pageSize?: number;
+    pageIndex?: number;
+    orderBy?: string;
+    direction?: "asc" | "desc";
+  } = {},
+) => ({
+  filters: (overrides.filters ?? {}) as F,
+  pagination: {
+    pageSize: overrides.pageSize ?? 10,
+    pageIndex: overrides.pageIndex ?? 0,
+  },
+  sort: {
+    orderBy: overrides.orderBy ?? "name",
+    direction: overrides.direction ?? ("asc" as const),
+  },
+});
+
+/** A location create input; `mock()` fills the scaffolding (parentId/images) so a
+ * call site need only spell out the name (and type, when it matters). */
+export const makeLocationInput = (
+  overrides: Partial<LocationCreateInput> = {},
+): LocationCreateInput =>
+  mock(locationCreateInput, {
+    overrides: {
+      name: "Test Location",
+      type: "room",
+      parentId: null,
+      ...overrides,
+    },
+  });
 
 /** A section's ingredient row (collapses the type/recipeId/amounts boilerplate). */
 export const ingredientRef = (
@@ -96,3 +141,44 @@ export const createIngredients = (
     },
     Promise.resolve([]),
   );
+
+// The 1 cup = 120 g conversion every stock-seed product carries, so an `onHand`
+// in grams is costable/convertible.
+const CUP_TO_GRAM = {
+  a: { value: 1, unit: "cup" },
+  b: { value: 120, unit: "g" },
+  source: null,
+};
+
+/** Seed an ingredient backed by a "Test <name>" product (1 cup = 120 g) with
+ * `onHand` stock at a "Pantry-<name>" location — the shared ingredient+stock setup
+ * for the meal/suggestions/availability suites. Returns the ingredient. */
+export const seedIngredientWithStock = async (
+  db: Database,
+  opts: { name: string; onHand: Amount },
+  actor: ActorContext,
+) => {
+  const ingredient = await findOrCreateIngredient(db, opts.name);
+  const location = await createLocation(
+    db,
+    makeLocationInput({ name: `Pantry-${opts.name}` }),
+    actor,
+  );
+  if (!location) throw new Error("seed: location not created");
+  const product = await createProduct(
+    db,
+    makeProductInput({
+      name: `Test ${opts.name}`,
+      manufacturer: "test",
+      ingredientId: ingredient.id,
+      unitMappings: [CUP_TO_GRAM],
+    }),
+    actor,
+  );
+  await createInventoryEntry(
+    db,
+    { productId: product.id, locationId: location.id, amount: opts.onHand },
+    actor,
+  );
+  return ingredient;
+};

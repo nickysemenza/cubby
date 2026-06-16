@@ -2,19 +2,11 @@ import type { Amount } from "@cubby/schemas/codec";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";
-import { createInventoryEntry } from "~/server/repo/inventory";
-import { createLocation } from "~/server/repo/location";
 import { getMealsByDateRange } from "~/server/repo/meal";
-import { createProduct } from "~/server/repo/product";
+import { seedIngredientWithStock } from "~/server/repo/repo.fixtures";
 import { createTestCaller } from "../trpc";
 import { mealRouter } from "./meal";
 import { recipeRouter } from "./recipe";
-
-const CUP_TO_GRAM = {
-  a: { value: 1, unit: "cup" },
-  b: { value: 120, unit: "g" },
-  source: null,
-};
 
 // Router behavior against a real (IntegresQL) DB. The pure rollup/scale math
 // lives in repo/meal/helpers.unit.test.ts.
@@ -43,36 +35,8 @@ describe("mealRouter", () => {
       ],
     });
 
-  // Seed a "flour" ingredient with one linked product (cup<->g) holding `onHand`.
-  const seedFlourWithStock = async (onHand: Amount) => {
-    const flour = await findOrCreateIngredient(ctx.db, "flour");
-    const loc = await createLocation(
-      ctx.db,
-      { name: "Pantry", type: "room", parentId: null },
-      TEST_ACTOR,
-    );
-    if (!loc) throw new Error("seed: location not created");
-    const prod = await createProduct(
-      ctx.db,
-      {
-        name: "Test Flour",
-        manufacturer: "test",
-        upc: null,
-        fdc_id: null,
-        expectedQuantity: null,
-        ingredientId: flour.id,
-        unitMappings: [CUP_TO_GRAM],
-        externalIds: [],
-      },
-      TEST_ACTOR,
-    );
-    await createInventoryEntry(
-      ctx.db,
-      { productId: prod.id, locationId: loc.id, amount: onHand },
-      TEST_ACTOR,
-    );
-    return flour;
-  };
+  const seedFlourWithStock = (onHand: Amount) =>
+    seedIngredientWithStock(ctx.db, { name: "flour", onHand }, TEST_ACTOR);
 
   it("plans recipes onto a day and lists them by date range", async () => {
     const flour = await findOrCreateIngredient(ctx.db, "flour");

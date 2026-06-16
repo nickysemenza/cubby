@@ -2,6 +2,7 @@ import { NONEXISTENT_UUID, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { withTransaction } from "~/server/repo/database-helpers";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";
+import { listParams } from "~/server/repo/repo.fixtures";
 import { createTestCaller } from "../trpc";
 import { recipeRouter } from "./recipe";
 
@@ -162,21 +163,16 @@ describe("recipe router", () => {
     await caller.create(recipeData3);
 
     // Test listing without filters
-    const allRecipes = await caller.list({
-      filters: {},
-      pagination: { pageSize: 10, pageIndex: 0 },
-      sort: { orderBy: "name", direction: "asc" },
-    });
+    const allRecipes = await caller.list(listParams());
 
     // Should return all recipes
     expect(allRecipes.items.length).toEqual(3);
     expect(allRecipes.meta.totalCount).toEqual(3);
 
     // Test filtering by name
-    const chocolateRecipes = await caller.list({
-      filters: { nameFilter: "Chocolate" },
-      pagination: { pageSize: 10, pageIndex: 0 },
-    });
+    const chocolateRecipes = await caller.list(
+      listParams({ filters: { nameFilter: "Chocolate" } }),
+    );
 
     // Should return only recipes with "Chocolate" in name
     expect(chocolateRecipes.items.length).toEqual(2);
@@ -185,10 +181,9 @@ describe("recipe router", () => {
     expect(chocolateRecipes.items[1]!.name).toContain("Chocolate");
 
     // Test filtering with no matches
-    const pizzaRecipes = await caller.list({
-      filters: { nameFilter: "Pizza" },
-      pagination: { pageSize: 10, pageIndex: 0 },
-    });
+    const pizzaRecipes = await caller.list(
+      listParams({ filters: { nameFilter: "Pizza" } }),
+    );
 
     // Should return no recipes
     expect(pizzaRecipes.items.length).toEqual(0);

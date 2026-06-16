@@ -8,7 +8,11 @@ import { describe, expect, it } from "vitest";
 import { createInventoryEntry } from "~/server/repo/inventory";
 import { createLocation } from "~/server/repo/location";
 import { createProduct } from "~/server/repo/product";
-import { makeProductInput } from "~/server/repo/repo.fixtures";
+import {
+  listParams,
+  makeLocationInput,
+  makeProductInput,
+} from "~/server/repo/repo.fixtures";
 import { createTestCaller } from "../trpc";
 import { inventoryRouter } from "./inventory";
 
@@ -22,11 +26,7 @@ describe("inventory router", () => {
     // Create test location
     const location = await createLocation(
       ctx.db,
-      {
-        name: "Test Kitchen",
-        type: "room",
-        parentId: null,
-      },
+      makeLocationInput({ name: "Test Kitchen" }),
       TEST_ACTOR,
     );
 
@@ -108,21 +108,16 @@ describe("inventory router", () => {
     const pantryId = seed.locationIds.get("Pantry")!;
 
     // Test listing without filters
-    const allEntries = await caller.list({
-      filters: {},
-      pagination: { pageSize: 10, pageIndex: 0 },
-      sort: { orderBy: "createdAt", direction: "asc" },
-    });
+    const allEntries = await caller.list(listParams({ orderBy: "createdAt" }));
 
     // Should return all entries
     expect(allEntries.items.length).toEqual(3);
     expect(allEntries.meta.totalCount).toEqual(3);
 
     // Test filtering by product name
-    const flourEntries = await caller.list({
-      filters: { productNameFilter: "Flour" },
-      pagination: { pageSize: 10, pageIndex: 0 },
-    });
+    const flourEntries = await caller.list(
+      listParams({ filters: { productNameFilter: "Flour" } }),
+    );
 
     // Should return only flour entries
     expect(flourEntries.items.length).toEqual(1);
@@ -130,10 +125,9 @@ describe("inventory router", () => {
     expect(flourEntries.items[0]!.product.name).toEqual("Flour");
 
     // Test filtering by location name
-    const kitchenEntries = await caller.list({
-      filters: { locationNameFilter: "Kitchen" },
-      pagination: { pageSize: 10, pageIndex: 0 },
-    });
+    const kitchenEntries = await caller.list(
+      listParams({ filters: { locationNameFilter: "Kitchen" } }),
+    );
 
     // Should return only kitchen entries
     expect(kitchenEntries.items.length).toEqual(2);
@@ -142,10 +136,9 @@ describe("inventory router", () => {
     expect(kitchenEntries.items[1]!.location.name).toEqual("Kitchen");
 
     // Test filtering by location ID
-    const pantryEntries = await caller.list({
-      filters: { locationIdFilter: pantryId },
-      pagination: { pageSize: 10, pageIndex: 0 },
-    });
+    const pantryEntries = await caller.list(
+      listParams({ filters: { locationIdFilter: pantryId } }),
+    );
 
     // Should return only pantry entries
     expect(pantryEntries.items.length).toEqual(1);
@@ -153,10 +146,9 @@ describe("inventory router", () => {
     expect(pantryEntries.items[0]!.location.id).toEqual(pantryId);
 
     // Test filtering with no matches
-    const noMatches = await caller.list({
-      filters: { productNameFilter: "Nonexistent" },
-      pagination: { pageSize: 10, pageIndex: 0 },
-    });
+    const noMatches = await caller.list(
+      listParams({ filters: { productNameFilter: "Nonexistent" } }),
+    );
 
     // Should return no entries
     expect(noMatches.items.length).toEqual(0);
@@ -228,7 +220,7 @@ describe("inventory router", () => {
     // Create Location 2 separately (empty location to move to)
     const location2 = await createLocation(
       ctx.db,
-      { name: "Location 2", type: "shelf", parentId: null },
+      makeLocationInput({ name: "Location 2", type: "shelf" }),
       TEST_ACTOR,
     );
 
@@ -382,7 +374,7 @@ describe("inventory router", () => {
       );
       const targetLocation = await createLocation(
         ctx.db,
-        { name: "Target Location", type: "room", parentId: null },
+        makeLocationInput({ name: "Target Location" }),
         TEST_ACTOR,
       );
 
@@ -406,10 +398,9 @@ describe("inventory router", () => {
       expect(result[0]!.amount.value).toEqual(10);
 
       // Verify source location is empty
-      const sourceEntries = await caller.list({
-        filters: { locationIdFilter: sourceLocationId },
-        pagination: { pageSize: 10, pageIndex: 0 },
-      });
+      const sourceEntries = await caller.list(
+        listParams({ filters: { locationIdFilter: sourceLocationId } }),
+      );
       expect(sourceEntries.items.length).toEqual(0);
     });
 
@@ -431,7 +422,7 @@ describe("inventory router", () => {
       );
       const targetLocation = await createLocation(
         ctx.db,
-        { name: "Target", type: "room", parentId: null },
+        makeLocationInput({ name: "Target" }),
         TEST_ACTOR,
       );
 
@@ -463,12 +454,12 @@ describe("inventory router", () => {
       // (seedFromCSV inventoryIds lookup doesn't support same product at multiple locations reliably)
       const sourceLocation = await createLocation(
         ctx.db,
-        { name: "Source", type: "room", parentId: null },
+        makeLocationInput({ name: "Source" }),
         TEST_ACTOR,
       );
       const targetLocation = await createLocation(
         ctx.db,
-        { name: "Target", type: "room", parentId: null },
+        makeLocationInput({ name: "Target" }),
         TEST_ACTOR,
       );
       const product = await createProduct(
@@ -569,7 +560,7 @@ describe("inventory router", () => {
       );
       const targetLocation = await createLocation(
         ctx.db,
-        { name: "Target", type: "room", parentId: null },
+        makeLocationInput({ name: "Target" }),
         TEST_ACTOR,
       );
 
@@ -637,11 +628,7 @@ describe("inventory router", () => {
       // Create location and product with price mapping
       const location = await createLocation(
         ctx.db,
-        {
-          name: "Pantry",
-          type: "room",
-          parentId: null,
-        },
+        makeLocationInput({ name: "Pantry" }),
         TEST_ACTOR,
       );
 

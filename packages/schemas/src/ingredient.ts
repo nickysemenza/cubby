@@ -3,7 +3,9 @@ import { dbTimestampsOut } from "./common";
 import { ingredientId } from "./identifiers";
 
 export const ingredientBase = z.object({
-  name: z.string(),
+  // `mock` is a faker dot-path consumed by the test mock generator
+  // (apps/web .../test/mock-schema.ts); it is plain metadata, faker-free here.
+  name: z.string().meta({ mock: "food.ingredient" }),
   aliases: z.array(z.string()),
 });
 

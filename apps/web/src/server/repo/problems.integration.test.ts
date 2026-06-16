@@ -346,6 +346,9 @@ describe("problems repo", () => {
         ctx.db,
         makeProductInput({
           name: "USDA-bridged sugar",
+          // The USDA link is what pulls in the bridging portion below; without an
+          // fdc_id no lookup fires and the stored mappings island on their own.
+          fdc_id: sugarFood.fdc_id,
           unitMappings: storedIslands,
         }),
         ctx.actor,

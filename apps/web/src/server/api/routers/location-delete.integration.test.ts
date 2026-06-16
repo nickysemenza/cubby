@@ -1,5 +1,6 @@
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { listParams, makeLocationInput } from "~/server/repo/repo.fixtures";
 import { createTestCaller } from "../trpc";
 import { inventoryRouter } from "./inventory";
 import { locationRouter } from "./location";
@@ -13,12 +14,9 @@ describe("location deletion", () => {
       const caller = createTestCaller(locationRouter, ctx.db);
 
       // Create a test location
-      const locationData = {
+      const locationData = makeLocationInput({
         name: "Test Location for Deletion",
-        type: "room" as const,
-        parentId: null,
-        pendingImageIds: [],
-      };
+      });
 
       const createdLocation = await caller.create(locationData);
 
@@ -26,11 +24,7 @@ describe("location deletion", () => {
       await caller.delete({ ids: [createdLocation.id] });
 
       // Verify location is not in list
-      const locations = await caller.list({
-        filters: {},
-        sort: { orderBy: "name", direction: "asc" },
-        pagination: { pageSize: 10, pageIndex: 0 },
-      });
+      const locations = await caller.list(listParams());
 
       expect(
         locations.items.find((l) => l.id === createdLocation.id),
@@ -46,26 +40,17 @@ describe("location deletion", () => {
       const caller = createTestCaller(locationRouter, ctx.db);
 
       // Create multiple locations
-      const location1 = await caller.create({
-        name: "Bulk Delete Location 1",
-        type: "room" as const,
-        parentId: null,
-        pendingImageIds: [],
-      });
+      const location1 = await caller.create(
+        makeLocationInput({ name: "Bulk Delete Location 1" }),
+      );
 
-      const location2 = await caller.create({
-        name: "Bulk Delete Location 2",
-        type: "shelf" as const,
-        parentId: null,
-        pendingImageIds: [],
-      });
+      const location2 = await caller.create(
+        makeLocationInput({ name: "Bulk Delete Location 2", type: "shelf" }),
+      );
 
-      const location3 = await caller.create({
-        name: "Bulk Delete Location 3",
-        type: "box" as const,
-        parentId: null,
-        pendingImageIds: [],
-      });
+      const location3 = await caller.create(
+        makeLocationInput({ name: "Bulk Delete Location 3", type: "box" }),
+      );
 
       // Delete all three locations
       await caller.delete({
@@ -73,11 +58,7 @@ describe("location deletion", () => {
       });
 
       // Verify all locations are gone from list
-      const locations = await caller.list({
-        filters: {},
-        sort: { orderBy: "name", direction: "asc" },
-        pagination: { pageSize: 100, pageIndex: 0 },
-      });
+      const locations = await caller.list(listParams({ pageSize: 100 }));
 
       expect(
         locations.items.find((l) => l.id === location1.id),
@@ -100,12 +81,9 @@ describe("location deletion", () => {
       const productCaller = createTestCaller(productRouter, ctx.db);
 
       // Create a location
-      const location = await locationCaller.create({
-        name: "Location with Inventory",
-        type: "room" as const,
-        parentId: null,
-        pendingImageIds: [],
-      });
+      const location = await locationCaller.create(
+        makeLocationInput({ name: "Location with Inventory" }),
+      );
 
       // Create a product
       const product = await productCaller.create({
@@ -142,20 +120,18 @@ describe("location deletion", () => {
       const caller = createTestCaller(locationRouter, ctx.db);
 
       // Create a parent location
-      const parentLocation = await caller.create({
-        name: "Parent Location",
-        type: "room" as const,
-        parentId: null,
-        pendingImageIds: [],
-      });
+      const parentLocation = await caller.create(
+        makeLocationInput({ name: "Parent Location" }),
+      );
 
       // Create a child location
-      const childLocation = await caller.create({
-        name: "Child Location",
-        type: "shelf" as const,
-        parentId: parentLocation.id,
-        pendingImageIds: [],
-      });
+      const childLocation = await caller.create(
+        makeLocationInput({
+          name: "Child Location",
+          type: "shelf",
+          parentId: parentLocation.id,
+        }),
+      );
 
       // Deleting the parent succeeds: children are orphaned (parentId -> null)
       // and become top-level locations rather than blocking the delete.
@@ -164,11 +140,7 @@ describe("location deletion", () => {
       ).resolves.toBeUndefined();
 
       // Parent is gone from the list
-      const locations = await caller.list({
-        filters: {},
-        sort: { orderBy: "name", direction: "asc" },
-        pagination: { pageSize: 100, pageIndex: 0 },
-      });
+      const locations = await caller.list(listParams({ pageSize: 100 }));
       expect(
         locations.items.find((l) => l.id === parentLocation.id),
       ).toBeUndefined();
@@ -185,12 +157,9 @@ describe("location deletion", () => {
       const caller = createTestCaller(locationRouter, ctx.db);
 
       // Create a location (images would be added via pendingImageIds if we had test images)
-      const location = await caller.create({
-        name: "Location for Cascade Test",
-        type: "room" as const,
-        parentId: null,
-        pendingImageIds: [],
-      });
+      const location = await caller.create(
+        makeLocationInput({ name: "Location for Cascade Test" }),
+      );
 
       // Delete the location
       await caller.delete({ ids: [location.id] });

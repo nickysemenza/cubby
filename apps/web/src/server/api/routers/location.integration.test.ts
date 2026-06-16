@@ -1,5 +1,6 @@
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { listParams, makeLocationInput } from "~/server/repo/repo.fixtures";
 import { createTestCaller } from "../trpc";
 import { locationRouter } from "./location";
 
@@ -11,11 +12,7 @@ describe("location router", () => {
     const caller = createTestCaller(locationRouter, ctx.db);
 
     // Create a test location
-    const locationData = {
-      name: "Test Kitchen",
-      type: "room" as const,
-      parentId: null,
-    };
+    const locationData = makeLocationInput({ name: "Test Kitchen" });
 
     // Create the location
     const createdLocation = await caller.create(locationData);
@@ -41,20 +38,16 @@ describe("location router", () => {
     const caller = createTestCaller(locationRouter, ctx.db);
 
     // Create a parent location
-    const parentLocationData = {
-      name: "Kitchen",
-      type: "room" as const,
-      parentId: null,
-    };
+    const parentLocationData = makeLocationInput({ name: "Kitchen" });
 
     const parentLocation = await caller.create(parentLocationData);
 
     // Create a child location
-    const childLocationData = {
+    const childLocationData = makeLocationInput({
       name: "Kitchen Cabinet",
-      type: "cabinet" as const,
+      type: "cabinet",
       parentId: parentLocation.id,
-    };
+    });
 
     const childLocation = await caller.create(childLocationData);
 
@@ -74,23 +67,14 @@ describe("location router", () => {
     const caller = createTestCaller(locationRouter, ctx.db);
 
     // Create multiple test locations
-    const locationData1 = {
-      name: "Kitchen",
-      type: "room" as const,
-      parentId: null,
-    };
+    const locationData1 = makeLocationInput({ name: "Kitchen" });
 
-    const locationData2 = {
-      name: "Living Room",
-      type: "room" as const,
-      parentId: null,
-    };
+    const locationData2 = makeLocationInput({ name: "Living Room" });
 
-    const locationData3 = {
+    const locationData3 = makeLocationInput({
       name: "Kitchen Shelf",
-      type: "shelf" as const,
-      parentId: null,
-    };
+      type: "shelf",
+    });
 
     // Create the locations
     await caller.create(locationData1);
@@ -98,21 +82,16 @@ describe("location router", () => {
     await caller.create(locationData3);
 
     // Test listing without filters
-    const allLocations = await caller.list({
-      filters: {},
-      pagination: { pageSize: 10, pageIndex: 0 },
-      sort: { orderBy: "name", direction: "asc" },
-    });
+    const allLocations = await caller.list(listParams());
 
     // Should return all locations
     expect(allLocations.items.length).toEqual(3);
     expect(allLocations.meta.totalCount).toEqual(3);
 
     // Test filtering by name
-    const kitchenLocations = await caller.list({
-      filters: { nameFilter: "Kitchen" },
-      pagination: { pageSize: 10, pageIndex: 0 },
-    });
+    const kitchenLocations = await caller.list(
+      listParams({ filters: { nameFilter: "Kitchen" } }),
+    );
 
     // Should return only locations with "Kitchen" in name
     expect(kitchenLocations.items.length).toEqual(2);
@@ -121,10 +100,9 @@ describe("location router", () => {
     expect(kitchenLocations.items[1]!.name).toContain("Kitchen");
 
     // Test filtering by type
-    const roomLocations = await caller.list({
-      filters: { itemTypeFilter: "room" },
-      pagination: { pageSize: 10, pageIndex: 0 },
-    });
+    const roomLocations = await caller.list(
+      listParams({ filters: { itemTypeFilter: "room" } }),
+    );
 
     // Should return only room type locations
     expect(roomLocations.items.length).toEqual(2);
@@ -133,10 +111,9 @@ describe("location router", () => {
     expect(roomLocations.items[1]!.type).toEqual("room");
 
     // Test filtering with no matches
-    const drawerLocations = await caller.list({
-      filters: { itemTypeFilter: "drawer" },
-      pagination: { pageSize: 10, pageIndex: 0 },
-    });
+    const drawerLocations = await caller.list(
+      listParams({ filters: { itemTypeFilter: "drawer" } }),
+    );
 
     // Should return no locations
     expect(drawerLocations.items.length).toEqual(0);
@@ -148,11 +125,7 @@ describe("location router", () => {
     const caller = createTestCaller(locationRouter, ctx.db);
 
     // Create a test location
-    const locationData = {
-      name: "Original Name",
-      type: "room" as const,
-      parentId: null,
-    };
+    const locationData = makeLocationInput({ name: "Original Name" });
 
     // Create the location
     const createdLocation = await caller.create(locationData);
@@ -182,11 +155,7 @@ describe("location router", () => {
     const caller = createTestCaller(locationRouter, ctx.db);
 
     // Create a test location
-    const locationData = {
-      name: "Test Location",
-      type: "room" as const,
-      parentId: null,
-    };
+    const locationData = makeLocationInput({ name: "Test Location" });
 
     // Create the location
     const createdLocation = await caller.create(locationData);
@@ -215,30 +184,26 @@ describe("location router", () => {
     const caller = createTestCaller(locationRouter, ctx.db);
 
     // Create a hierarchical structure: Kitchen -> Cabinet -> Shelf
-    const kitchen = await caller.create({
-      name: "Kitchen",
-      type: "room" as const,
-      parentId: null,
-    });
+    const kitchen = await caller.create(makeLocationInput({ name: "Kitchen" }));
 
-    const cabinet = await caller.create({
-      name: "Kitchen Cabinet",
-      type: "cabinet" as const,
-      parentId: kitchen.id,
-    });
+    const cabinet = await caller.create(
+      makeLocationInput({
+        name: "Kitchen Cabinet",
+        type: "cabinet",
+        parentId: kitchen.id,
+      }),
+    );
 
-    await caller.create({
-      name: "Cabinet Shelf",
-      type: "shelf" as const,
-      parentId: cabinet.id,
-    });
+    await caller.create(
+      makeLocationInput({
+        name: "Cabinet Shelf",
+        type: "shelf",
+        parentId: cabinet.id,
+      }),
+    );
 
     // Also create a separate room
-    await caller.create({
-      name: "Living Room",
-      type: "room" as const,
-      parentId: null,
-    });
+    await caller.create(makeLocationInput({ name: "Living Room" }));
 
     // Get the location tree
     const tree = await caller.makeTree();
@@ -267,35 +232,21 @@ describe("location router", () => {
     const caller = createTestCaller(locationRouter, ctx.db);
 
     // Create locations of different types
-    await caller.create({
-      name: "Kitchen",
-      type: "room" as const,
-      parentId: null,
-    });
+    await caller.create(makeLocationInput({ name: "Kitchen" }));
 
-    await caller.create({
-      name: "Living Room",
-      type: "room" as const,
-      parentId: null,
-    });
+    await caller.create(makeLocationInput({ name: "Living Room" }));
 
-    await caller.create({
-      name: "Kitchen Cabinet",
-      type: "cabinet" as const,
-      parentId: null,
-    });
+    await caller.create(
+      makeLocationInput({ name: "Kitchen Cabinet", type: "cabinet" }),
+    );
 
-    await caller.create({
-      name: "Kitchen Shelf",
-      type: "shelf" as const,
-      parentId: null,
-    });
+    await caller.create(
+      makeLocationInput({ name: "Kitchen Shelf", type: "shelf" }),
+    );
 
-    await caller.create({
-      name: "Another Shelf",
-      type: "shelf" as const,
-      parentId: null,
-    });
+    await caller.create(
+      makeLocationInput({ name: "Another Shelf", type: "shelf" }),
+    );
 
     // Get location types count
     const typesCount = await caller.getLocationTypesCount();
@@ -317,29 +268,33 @@ describe("location router", () => {
     const caller = createTestCaller(locationRouter, ctx.db);
 
     // Create a deep hierarchy: Room -> Cabinet -> Shelf -> Crate
-    const room = await caller.create({
-      name: "Storage Room",
-      type: "room" as const,
-      parentId: null,
-    });
+    const room = await caller.create(
+      makeLocationInput({ name: "Storage Room" }),
+    );
 
-    const cabinet = await caller.create({
-      name: "Storage Cabinet",
-      type: "cabinet" as const,
-      parentId: room.id,
-    });
+    const cabinet = await caller.create(
+      makeLocationInput({
+        name: "Storage Cabinet",
+        type: "cabinet",
+        parentId: room.id,
+      }),
+    );
 
-    const shelf = await caller.create({
-      name: "Top Shelf",
-      type: "shelf" as const,
-      parentId: cabinet.id,
-    });
+    const shelf = await caller.create(
+      makeLocationInput({
+        name: "Top Shelf",
+        type: "shelf",
+        parentId: cabinet.id,
+      }),
+    );
 
-    const crate = await caller.create({
-      name: "Small Crate",
-      type: "crate" as const,
-      parentId: shelf.id,
-    });
+    const crate = await caller.create(
+      makeLocationInput({
+        name: "Small Crate",
+        type: "crate",
+        parentId: shelf.id,
+      }),
+    );
 
     // Retrieve the deepest location and verify parent hierarchy
     const retrievedCrate = await caller.getByID({ id: crate.id });

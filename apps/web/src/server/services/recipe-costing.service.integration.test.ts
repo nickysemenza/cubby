@@ -18,8 +18,13 @@ import {
 
 // Exercises RecipeCostingService end-to-end against a real DB (IntegresQL). The
 // costing WASM is pure, so nothing is mocked; the USDA backend is unreachable in
-// tests, so any `ndb_number` lookup degrades to `food: null` (best-effort) —
-// which is exactly the "incomplete / transient miss" path the service branches on.
+// tests, so any `fdc_id` lookup degrades to `food: null` (best-effort) — which is
+// exactly the "incomplete / transient miss" path the service branches on
+// (`usdaMissesFor`: fdc_id set but food unresolved ⇒ incomplete).
+
+// An arbitrary FoodData Central id; the test USDA backend is unreachable, so the
+// lookup always degrades to `food: null` → a transient miss.
+const UNRESOLVABLE_FDC_ID = 999_999;
 
 describe("RecipeCostingService", () => {
   const ctx = withTestDb();
@@ -29,7 +34,7 @@ describe("RecipeCostingService", () => {
       .services.recipeCosting;
 
   // A recipe whose single ingredient is linked to a priced product. Price-only
-  // (no ndb_number) means no USDA lookup, so it costs "complete".
+  // (no fdc_id) means no USDA lookup, so it costs "complete".
   const seedPricedRecipe = async (name: string) => {
     const ing = await findOrCreateIngredient(ctx.db, `${name} flour`);
     await createProduct(
@@ -71,13 +76,14 @@ describe("RecipeCostingService", () => {
 
     it("marks a recipe with an unresolved USDA link incomplete", async () => {
       const ing = await findOrCreateIngredient(ctx.db, "usda flour");
-      // ndb_number set but the USDA backend is unreachable in tests, so `food`
+      // fdc_id set but the USDA backend is unreachable in tests, so `food`
       // resolves null → a transient miss → complete: false.
       await createProduct(
         ctx.db,
         makeProductInput({
           name: "usda product",
           ingredientId: ing.id,
+          fdc_id: UNRESOLVABLE_FDC_ID,
         }),
         ctx.actor,
       );
@@ -223,6 +229,7 @@ describe("RecipeCostingService", () => {
         makeProductInput({
           name: "stale product",
           ingredientId: ing.id,
+          fdc_id: UNRESOLVABLE_FDC_ID,
         }),
         ctx.actor,
       );

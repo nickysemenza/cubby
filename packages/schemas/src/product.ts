@@ -40,7 +40,8 @@ export const hasFoodIndicators = (product: {
 
 // Base schema for product data (without relationships)
 const productBase = z.object({
-  name: z.string(),
+  // `mock` is a faker dot-path read by the test mock generator (faker-free here).
+  name: z.string().meta({ mock: "commerce.productName" }),
   upc: upc.nullable(),
   // Explicit USDA link by FoodData Central id (the universal PK across all food
   // types — see `fdcId`). Resolution prefers this over UPC auto-matching.
@@ -48,7 +49,10 @@ const productBase = z.object({
   // (inventory / ingredient embeds) validate instead of 500ing, and inputs may
   // omit it.
   fdc_id: fdcId.nullable().default(null),
-  manufacturer: z.string().describe("Manufacturer or 'generic'"),
+  manufacturer: z
+    .string()
+    .describe("Manufacturer or 'generic'")
+    .meta({ mock: "company.name" }),
   model: z.string().nullish().describe("model number"),
   notes: z.string().nullish().describe("product notes, URLs, or other details"),
   expectedQuantity: z

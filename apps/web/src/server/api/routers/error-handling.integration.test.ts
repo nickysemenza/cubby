@@ -1,7 +1,14 @@
-import { unsafeIngredientId } from "@cubby/schemas/identifiers";
+import {
+  unsafeIngredientId,
+  unsafeLocationId,
+} from "@cubby/schemas/identifiers";
 import { NONEXISTENT_UUID, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { makeProductInput } from "~/server/repo/repo.fixtures";
+import {
+  listParams,
+  makeLocationInput,
+  makeProductInput,
+} from "~/server/repo/repo.fixtures";
 import { createTestCaller } from "../trpc";
 import { ingredientRouter } from "./ingredient";
 import { locationRouter } from "./location";
@@ -206,12 +213,7 @@ describe("API Error Handling", () => {
       const caller = createTestCaller(locationRouter, ctx.db);
 
       // Empty names are allowed per schema
-      const result = await caller.create({
-        name: "", // Empty name is allowed
-        type: "room",
-        parentId: null,
-        pendingImageIds: [],
-      });
+      const result = await caller.create(makeLocationInput({ name: "" }));
 
       expect(result.name).toBe("");
       expect(result.type).toBe("room");
@@ -221,12 +223,13 @@ describe("API Error Handling", () => {
       const caller = createTestCaller(locationRouter, ctx.db);
 
       // Location with non-existent parent is created (no FK constraint on parentId)
-      const result = await caller.create({
-        name: "Child Location",
-        type: "shelf",
-        parentId: NONEXISTENT_UUID, // Non-existent parent
-        pendingImageIds: [],
-      });
+      const result = await caller.create(
+        makeLocationInput({
+          name: "Child Location",
+          type: "shelf",
+          parentId: unsafeLocationId(NONEXISTENT_UUID), // Non-existent parent
+        }),
+      );
 
       // Location is created but parent is undefined since it doesn't exist
       expect(result.name).toBe("Child Location");
@@ -237,20 +240,18 @@ describe("API Error Handling", () => {
       const caller = createTestCaller(locationRouter, ctx.db);
 
       // Create parent location (using valid location type)
-      const parent = await caller.create({
-        name: "Parent Location",
-        type: "room", // Valid enum value
-        parentId: null, // Correct field name
-        pendingImageIds: [],
-      });
+      const parent = await caller.create(
+        makeLocationInput({ name: "Parent Location" }),
+      );
 
       // Create child location
-      const child = await caller.create({
-        name: "Child Location",
-        type: "shelf", // Valid enum value
-        parentId: parent.id, // Correct field name
-        pendingImageIds: [],
-      });
+      const child = await caller.create(
+        makeLocationInput({
+          name: "Child Location",
+          type: "shelf",
+          parentId: parent.id,
+        }),
+      );
 
       // Try to make parent a child of its own child (circular reference)
       await expect(
@@ -268,19 +269,12 @@ describe("API Error Handling", () => {
 
       // Test that negative pageIndex is caught by validation
       await expect(
-        caller.list({
-          filters: {},
-          pagination: { pageSize: 10, pageIndex: -1 }, // Validation should reject negative pageIndex
-          sort: { orderBy: "name", direction: "asc" },
-        }),
+        // negative pageIndex should be rejected by validation
+        caller.list(listParams({ pageIndex: -1 })),
       ).rejects.toThrow(/too_small/);
 
       // Test normal pagination works
-      const result = await caller.list({
-        filters: {},
-        pagination: { pageSize: 10, pageIndex: 0 },
-        sort: { orderBy: "name", direction: "asc" },
-      });
+      const result = await caller.list(listParams());
       expect(result).toBeDefined();
       expect(result.meta.pageSize).toBe(10);
       expect(result.meta.pageIndex).toBe(0);
@@ -290,19 +284,13 @@ describe("API Error Handling", () => {
       const caller = createTestCaller(productRouter, ctx.db);
 
       // Test valid sort parameters work
-      const result1 = await caller.list({
-        filters: {},
-        pagination: { pageSize: 10, pageIndex: 0 },
-        sort: { orderBy: "name", direction: "asc" },
-      });
+      const result1 = await caller.list(listParams());
       expect(result1).toBeDefined();
 
       // Test another valid sort field
-      const result2 = await caller.list({
-        filters: {},
-        pagination: { pageSize: 10, pageIndex: 0 },
-        sort: { orderBy: "createdAt", direction: "desc" },
-      });
+      const result2 = await caller.list(
+        listParams({ orderBy: "createdAt", direction: "desc" }),
+      );
       expect(result2).toBeDefined();
     });
 
@@ -364,11 +352,7 @@ describe("API Error Handling", () => {
       ).rejects.toThrow();
 
       // Verify that no partial data was created (transaction rolled back)
-      const recipes = await caller.list({
-        filters: {},
-        pagination: { pageSize: 10, pageIndex: 0 },
-        sort: { orderBy: "name", direction: "asc" },
-      });
+      const recipes = await caller.list(listParams());
 
       expect(recipes.items).toHaveLength(0);
     });
