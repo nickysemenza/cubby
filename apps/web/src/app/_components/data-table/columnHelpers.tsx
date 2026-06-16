@@ -42,6 +42,11 @@ export interface FilterConfig {
   placeholder: string;
   filterType?: "text" | "select";
   options?: FilterableComboboxItem[];
+  // Append a `(count)` of matching rows to each select option. Off by default:
+  // the count comes from TanStack's client-side faceting, which only sees the
+  // current page — meaningless (and misleading) on server-paginated tables.
+  // Opt in only for tables that load their full dataset client-side.
+  facetCount?: boolean;
 }
 
 export type MobileSlot =

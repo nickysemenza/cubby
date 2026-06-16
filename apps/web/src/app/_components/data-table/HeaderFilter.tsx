@@ -45,11 +45,12 @@ export function HeaderFilter<TData>({
   const inputClassName =
     "h-5 text-2xs px-1.5 border shadow-none bg-background/80 border-border/60 placeholder:text-muted-foreground/50 focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:border-primary/40";
 
-  // Enrich select options with faceted counts
+  // Enrich select options with faceted counts (opt-in — see FilterConfig).
   // biome-ignore lint/correctness/useExhaustiveDependencies: column.getFacetedUniqueValues is stable API
   const facetedOptions = useMemo(() => {
     if (filterConfig.filterType !== "select" || !filterConfig.options)
       return [];
+    if (!filterConfig.facetCount) return filterConfig.options;
     let facetMap: Map<string, number>;
     try {
       facetMap = column.getFacetedUniqueValues();
@@ -63,7 +64,7 @@ export function HeaderFilter<TData>({
         ? { ...opt, label: `${opt.label} (${count})` }
         : opt;
     });
-  }, [filterConfig.options, filterConfig.filterType]);
+  }, [filterConfig.options, filterConfig.filterType, filterConfig.facetCount]);
 
   if (filterConfig.filterType === "select") {
     return (

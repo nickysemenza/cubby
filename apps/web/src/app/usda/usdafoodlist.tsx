@@ -1,9 +1,14 @@
-import { type DataType, dataTypeEnum } from "@cubby/usda-schemas";
+import {
+  type DataType,
+  dataTypeEnum,
+  dataTypeLabel,
+} from "@cubby/usda-schemas";
 import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
 import { useEffect, useRef, useState } from "react";
 import { USDA_KINDS } from "~/lib/conversion-coverage";
 import type { QueryTiming } from "~/lib/query-timing";
+import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
 import { nutrientCount } from "~/lib/usda-food-stats";
 import type { Flatten } from "~/misc/array-helpers";
 import { useTRPC } from "~/trpc/react";
@@ -93,13 +98,22 @@ export function USDAFoodList() {
           filterType: "select" as const,
           options: Object.values(dataTypeEnum.enum).map((type) => ({
             value: type,
-            label: type,
+            label: dataTypeLabel(type),
+            color: dataTypeColor(type),
           })),
         },
       },
       id: "foodInfo-data_type",
       header: "Type",
-      cell: (info) => info.getValue(),
+      cell: (info) => {
+        const type = info.getValue();
+        return (
+          <span className="inline-flex items-center gap-1.5">
+            <UsdaDataTypeDot dataType={type} />
+            {dataTypeLabel(type)}
+          </span>
+        );
+      },
     }),
     columnHelper.accessor("foodInfo.description", {
       meta: {

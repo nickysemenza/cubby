@@ -1,5 +1,7 @@
 import type { LocationType } from "@cubby/schemas/location";
 import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
+import type { DataType } from "@cubby/usda-schemas";
+import { dataTypeLabel } from "@cubby/usda-schemas";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { match } from "ts-pattern";
@@ -9,6 +11,7 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { EntityIcon } from "~/entities/entities";
+import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
 import { cn } from "~/lib/utils";
 import { LocationIcon } from "./locations/location-icons";
 
@@ -33,7 +36,10 @@ type EntityPillLinkProps = {
     }
   | {
       entity: "usda-food";
-      data: { foodInfo: { description: string | null }; fdc_id: number };
+      data: {
+        foodInfo: { description: string | null; data_type?: DataType };
+        fdc_id: number;
+      };
     }
 );
 
@@ -48,11 +54,13 @@ function EntityLinkBody({
   name,
   metadata,
   compact,
+  trailing,
 }: {
   icon: ReactNode;
   name: string;
   metadata?: string;
   compact?: boolean;
+  trailing?: ReactNode;
 }) {
   return (
     <>
@@ -70,6 +78,7 @@ function EntityLinkBody({
           · {metadata}
         </span>
       )}
+      {trailing && <span className="shrink-0 self-center">{trailing}</span>}
     </>
   );
 }
@@ -188,6 +197,21 @@ export const EntityPillLink: React.FC<EntityPillLinkProps> = (props) => {
     })
     .with({ entity: "usda-food" }, ({ data }) => {
       const text = data.foodInfo.description || "Unnamed Food";
+      const dataType = data.foodInfo.data_type;
+
+      // Tint the apple + trail a dot by data_type so the source quality reads at
+      // a glance in dense lists (terracotta SR Legacy = richest, plum = branded).
+      const icon = dataType ? (
+        <EntityIcon
+          entity="usda-food"
+          size={12}
+          style={{ color: dataTypeColor(dataType) }}
+        />
+      ) : (
+        <EntityIcon entity="usda-food" size={12} colored />
+      );
+
+      const tooltip = dataType ? `${text} · ${dataTypeLabel(dataType)}` : text;
 
       return (
         <Tooltip>
@@ -203,12 +227,15 @@ export const EntityPillLink: React.FC<EntityPillLinkProps> = (props) => {
             }
           >
             <EntityLinkBody
-              icon={<EntityIcon entity="usda-food" size={12} colored />}
+              icon={icon}
               name={text}
               compact={compact}
+              trailing={
+                dataType ? <UsdaDataTypeDot dataType={dataType} /> : undefined
+              }
             />
           </TooltipTrigger>
-          <TooltipContent className="max-w-lg">{text}</TooltipContent>
+          <TooltipContent className="max-w-lg">{tooltip}</TooltipContent>
         </Tooltip>
       );
     })

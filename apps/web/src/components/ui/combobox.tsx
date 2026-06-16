@@ -137,17 +137,17 @@ export function FilterableCombobox({
                     // Disabled
                     "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
                   )}
-                  style={
-                    item.color
-                      ? {
-                          backgroundColor: `color-mix(in srgb, ${item.color} 15%, transparent)`,
-                        }
-                      : undefined
-                  }
                 >
                   <ComboboxPrimitive.ItemIndicator className="shrink-0">
                     <CheckIcon className="size-3.5" />
                   </ComboboxPrimitive.ItemIndicator>
+                  {item.color && (
+                    <span
+                      aria-hidden
+                      className="inline-block size-2 shrink-0 rounded-full"
+                      style={{ backgroundColor: item.color }}
+                    />
+                  )}
                   <span className="flex-1 truncate">{item.label}</span>
                   {item.icon && (
                     <span className="shrink-0">{item.icon}</span>

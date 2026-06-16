@@ -1,34 +1,11 @@
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
-import type { FoodInfo } from "@cubby/usda-schemas";
+import { dataTypeLabel } from "@cubby/usda-schemas";
 import { Copy, Link2 } from "lucide-react";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
+import { UsdaDataTypeDot } from "~/lib/usda-data-type";
 import { nutrientCount } from "~/lib/usda-food-stats";
 import { KEY_NUTRIENTS, NutrientsSummary } from "../units/NutrientsSummary";
 import { CoreNutrientCoverage } from "./core-nutrient-coverage";
-
-// Human-friendly labels for the USDA data_type enum. Anything not listed falls
-// back to a title-cased version of the raw value.
-const DATA_TYPE_LABELS: Partial<Record<FoodInfo["data_type"], string>> = {
-  branded_food: "Branded",
-  sr_legacy_food: "SR Legacy",
-  foundation_food: "Foundation",
-  survey_fndds_food: "Survey",
-  experimental_food: "Experimental",
-  agricultural_acquisition: "Agricultural",
-  market_acquisition: "Market",
-  sample_food: "Sample",
-  sub_sample_food: "Sub-sample",
-};
-
-function dataTypeLabel(dataType: FoodInfo["data_type"]): string {
-  return (
-    DATA_TYPE_LABELS[dataType] ??
-    dataType
-      .split("_")
-      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-      .join(" ")
-  );
-}
 
 function MetaChip({ children }: { children: React.ReactNode }) {
   return (
@@ -88,7 +65,10 @@ export function UsdaFoodResultRow({
       </span>
 
       <div className="flex flex-wrap gap-1.5 text-muted-foreground text-xs">
-        <MetaChip>{dataTypeLabel(foodInfo.data_type)}</MetaChip>
+        <MetaChip>
+          <UsdaDataTypeDot dataType={foodInfo.data_type} />
+          {dataTypeLabel(foodInfo.data_type)}
+        </MetaChip>
         {brand && <MetaChip>{brand}</MetaChip>}
         {brandedFoodInfo?.branded_food_category && (
           <MetaChip>{brandedFoodInfo.branded_food_category}</MetaChip>

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createEdgeUsdaDataSource,
   dataTypePredicate,
+  dataTypePriorityCase,
   FOOD_DATA_TYPES,
   normalizeUpc,
 } from "./edge";
@@ -75,6 +76,30 @@ describe("dataTypePredicate", () => {
     expect(
       dataTypePredicate("i.data_type", undefined, undefined, " , "),
     ).toEqual({ sql: "", values: [] });
+  });
+});
+
+describe("dataTypePriorityCase", () => {
+  // Ranking order is load-bearing for the picker: richer reference foods must
+  // out-rank sparse branded label data (median nutrient counts in FDC are
+  // SR Legacy ~85 > Survey ~65 > Foundation ~30 > Branded ~14). Guard the
+  // monotonic order so a future edit to DATA_TYPE_PRIORITY can't silently
+  // invert it.
+  it("orders the four food types SR Legacy < Survey < Foundation < Branded, others last", () => {
+    const sql = dataTypePriorityCase("s.data_type");
+    const rank = (dt: string) => {
+      const m = sql.match(new RegExp(`WHEN '${dt}' THEN (\\d+)`));
+      if (!m) throw new Error(`no WHEN for ${dt}`);
+      return Number(m[1]);
+    };
+    expect(rank("sr_legacy_food")).toBeLessThan(rank("survey_fndds_food"));
+    expect(rank("survey_fndds_food")).toBeLessThan(rank("foundation_food"));
+    expect(rank("foundation_food")).toBeLessThan(rank("branded_food"));
+    // Everything not spelled out (sampling/research records) sorts after all
+    // four food types via the ELSE bucket.
+    expect(sql).toMatch(/ELSE 99 END$/);
+    expect(rank("branded_food")).toBeLessThan(99);
+    expect(sql.startsWith("CASE s.data_type ")).toBe(true);
   });
 });
 

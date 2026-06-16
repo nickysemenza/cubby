@@ -1,5 +1,6 @@
 import { countsSchema } from "@cubby/usda-contract";
 import {
+  DATA_TYPE_PRIORITY,
   foodSummary,
   type FoodLookupParam,
   type FoodSummary,
@@ -99,6 +100,28 @@ function sqlOrderBy(orderBy: ListFoodsArgs["orderBy"]): string {
 
 function sqlDirection(direction: ListFoodsArgs["direction"]): string {
   return direction === "desc" ? "DESC" : "ASC";
+}
+
+// SQL CASE that maps the `data_type` column to a richness/preference rank
+// (lower = surfaced first), so a name search leads with the most data-complete
+// reference foods (SR Legacy > Survey > Foundation) before sparse branded label
+// data. Only the four food types are spelled out; everything else (the rare,
+// near-empty sampling/research records) falls to the ELSE bucket — so the
+// expression is robust to raw-value spelling quirks in those types. Priorities
+// are bind-safe (integer literals from a trusted constant), data_type is a fixed
+// column name, so this is not a SQL-injection surface.
+export function dataTypePriorityCase(column: string): string {
+  const whens = (
+    [
+      "sr_legacy_food",
+      "survey_fndds_food",
+      "foundation_food",
+      "branded_food",
+    ] as const
+  )
+    .map((dt) => `WHEN '${dt}' THEN ${DATA_TYPE_PRIORITY[dt]}`)
+    .join(" ");
+  return `CASE ${column} ${whens} ELSE 99 END`;
 }
 
 // The four user-facing food types. The other five (agricultural_acquisition,
@@ -418,12 +441,15 @@ export function createEdgeUsdaDataSource(
       }
 
       // Relevance ordering only means something with an FTS query: bm25 `rank`
-      // (ascending = best match first), which lives on the FTS table. Without a
-      // name filter, fall back to alphabetical so the option stays well-defined.
+      // (ascending = best match first), which lives on the FTS table. We bucket
+      // by data_type richness FIRST so the complete reference foods lead and the
+      // ~2M branded duplicates don't bury them (the long-standing picker pain),
+      // then by bm25 within each bucket. Without a name filter, fall back to
+      // alphabetical so the option stays well-defined.
       const orderClause =
         orderBy === "relevance"
           ? hasName
-            ? `${tables.foodSearch}.rank ASC`
+            ? `${dataTypePriorityCase(`${tables.foodSearch}.data_type`)} ASC, ${tables.foodSearch}.rank ASC`
             : "i.description ASC"
           : `i.${sqlOrderBy(orderBy)} ${sqlDirection(direction)}`;
 

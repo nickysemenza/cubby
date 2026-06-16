@@ -38,6 +38,48 @@ export const dataTypeEnum = z.enum([
 ]);
 export type DataType = z.infer<typeof dataTypeEnum>;
 
+// Human-friendly labels for the USDA data_type enum. Anything not listed falls
+// back to a title-cased version of the raw value.
+const DATA_TYPE_LABELS: Partial<Record<DataType, string>> = {
+  branded_food: "Branded",
+  sr_legacy_food: "SR Legacy",
+  foundation_food: "Foundation",
+  survey_fndds_food: "Survey",
+  experimental_food: "Experimental",
+  agricultural_acquisition: "Agricultural",
+  market_acquisition: "Market",
+  sample_food: "Sample",
+  sub_sample_food: "Sub-sample",
+};
+
+export function dataTypeLabel(dataType: DataType): string {
+  return (
+    DATA_TYPE_LABELS[dataType] ??
+    dataType
+      .split("_")
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ")
+  );
+}
+
+// Preference order for ranking USDA search results, lower = surfaced first.
+// This is EMPIRICAL: median nutrient count per food in the FDC dataset is
+// SR Legacy ~85 > Survey ~65 > Foundation ~30 > Branded ~14, so richer
+// (more-complete) reference foods out-rank sparse branded label data. The five
+// sampling/research types carry ~0 nutrients and sort last (and are normally
+// hidden by foodsOnly). Drives SQL ordering in usda-api (dataTypePriorityCase).
+export const DATA_TYPE_PRIORITY: Record<DataType, number> = {
+  sr_legacy_food: 0,
+  survey_fndds_food: 1,
+  foundation_food: 2,
+  branded_food: 3,
+  agricultural_acquisition: 4,
+  market_acquisition: 4,
+  sample_food: 4,
+  sub_sample_food: 4,
+  experimental_food: 4,
+};
+
 //select distinct serving_size_unit from branded_food;
 export const branded_food_serving_size_unit = z.enum([
   "g",
