@@ -155,6 +155,9 @@ export function slimProduct(p: Record<string, unknown>) {
     expectedQuantity: p.expectedQuantity,
     ndb_number: p.ndb_number ?? null,
     usdaFdcId: food?.fdc_id ?? null,
+    // Operator flag: no USDA food exists for this product. Lets an agent tell a
+    // deliberately-unlinked product apart from one that just hasn't been linked.
+    usdaUnavailable: (p.usdaUnavailable as boolean | null | undefined) ?? null,
     externalIds: p.externalIds,
     ingredientId:
       (p.ingredient as { id?: unknown } | null | undefined)?.id ??
@@ -576,6 +579,21 @@ function registerTools(server: McpServer) {
       name: z.string().optional().describe("New name"),
       manufacturer: z.string().optional().describe("New manufacturer"),
       upc: z.string().optional().describe("New UPC"),
+      ndb_number: z
+        .number()
+        .int()
+        .nullable()
+        .optional()
+        .describe(
+          "USDA NDB number — links the product to a generic/legacy USDA food (use find_usda_food/search_usda_foods to get it). null to unlink.",
+        ),
+      usdaUnavailable: z
+        .boolean()
+        .nullable()
+        .optional()
+        .describe(
+          "Mark that no USDA food exists for this product (expect manual weight/volume/calorie conversions instead of a link).",
+        ),
       price: z.number().optional().describe("New price"),
       category: z.string().optional().describe("New category"),
       notes: z.string().optional().describe("Notes or URLs"),
