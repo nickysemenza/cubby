@@ -13,11 +13,10 @@ import {
   buildProductComboboxItem,
 } from "~/app/_components/combobox/combobox-builders";
 import {
-  amountField,
   getLocationId,
   getProductId,
+  inventoryItemWithIdFields,
   requiredLocationField,
-  requiredProductField,
 } from "~/app/_components/form-fields";
 import {
   ComboboxFieldWithSearch,
@@ -31,11 +30,7 @@ import { Button } from "~/components/ui/button";
 import { useTRPC } from "~/trpc/react";
 
 // Schema for a single inventory item using shared field schemas
-const inventoryItemSchema = z.object({
-  product: requiredProductField,
-  amount: amountField,
-  id: z.string().optional(), // For existing items
-});
+const inventoryItemSchema = inventoryItemWithIdFields;
 
 // Schema for the entire form
 const formSchema = z.object({

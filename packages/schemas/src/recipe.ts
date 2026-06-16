@@ -1,3 +1,4 @@
+import { fdcId } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { amount } from "./codec";
 import { baseEntitySchema, dbTimestampsOut } from "./common";
@@ -130,7 +131,7 @@ export const recipeCostingExplain = z.object({
       z.object({
         ingredientName: z.string(),
         productName: z.string(),
-        fdcId: z.number(),
+        fdcId,
       }),
     ),
   }),

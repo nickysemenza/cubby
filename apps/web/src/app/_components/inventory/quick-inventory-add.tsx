@@ -25,6 +25,7 @@ import { z } from "zod";
 import {
   getOptionalIngredientId,
   getOptionalProductId,
+  optionalIngredientField,
   requiredProductField,
 } from "~/app/_components/form-fields";
 import {
@@ -41,7 +42,7 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { queryKeys } from "~/lib/query-keys";
 import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
-import { ComboboxItem } from "../combobox/combobox-types";
+import type { ComboboxItem } from "../combobox/combobox-types";
 import { ProductFormFields } from "../products/product-form-fields";
 import { useProductSearch } from "../products/use-product-search";
 import { AmountFieldGroup } from "./amount-field-group";
@@ -69,7 +70,7 @@ const createFormSchema = z
     upc: upc.nullable(),
     expectedQuantity: z.number().int().positive().nullable(),
     price: z.number().positive().nullable(),
-    ingredient: ComboboxItem.nullable(),
+    ingredient: optionalIngredientField,
     unitMappings: z.array(unitMappingInput),
     amount: amount,
   })

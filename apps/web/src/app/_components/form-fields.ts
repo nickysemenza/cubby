@@ -39,6 +39,15 @@ export const requiredLocationField = ComboboxItem.nullable().refine(
   { message: "Please select a location" },
 );
 
+/**
+ * Optional combobox fields for location / ingredient selection.
+ *
+ * Use these instead of inlining `ComboboxItem.nullable()` in form schemas.
+ * Pair with the matching `getOptional*Id` extractor below to read the id.
+ */
+export const optionalLocationField = ComboboxItem.nullable();
+export const optionalIngredientField = ComboboxItem.nullable();
+
 // -----------------------------------------------------------------------------
 // ID Extraction Helpers
 // -----------------------------------------------------------------------------
@@ -110,17 +119,21 @@ export function getOptionalRecipeId(
 }
 
 /**
- * Amount field schema (value + unit).
- * Re-exported from codec for convenience.
- */
-export const amountField = amount;
-
-/**
  * Schema for a single inventory item with product, location, and amount.
  * Used in forms where each item has its own location (e.g., quick-capture-form).
  */
 export const inventoryItemWithLocationFields = z.object({
   product: requiredProductField,
   location: requiredLocationField,
-  amount: amountField,
+  amount,
+});
+
+/**
+ * Variant of {@link inventoryItemWithLocationFields} carrying an optional id,
+ * for bulk-edit forms that mix existing (with id) and new (without) rows.
+ */
+export const inventoryItemWithIdFields = z.object({
+  product: requiredProductField,
+  amount,
+  id: z.string().optional(),
 });

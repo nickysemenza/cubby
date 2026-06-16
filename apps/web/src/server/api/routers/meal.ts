@@ -11,7 +11,7 @@ import type { RecipeId } from "@cubby/schemas/identifiers";
 import { type MealId, mealId, mealRecipeId } from "@cubby/schemas/identifiers";
 import {
   mealCreateInput,
-  mealDate,
+  mealDateRange,
   mealFiltersSchema,
   mealOut,
   mealRecipeInput,
@@ -70,7 +70,7 @@ const deleteItem = createDeleteProcedure<MealId>(async (services, ids) => {
 }, mealId);
 
 const getByDateRange = protectedProcedure
-  .input(z.object({ from: mealDate, to: mealDate }))
+  .input(mealDateRange)
   .output(z.array(mealOut))
   .query(({ ctx, input }) => getMealsByDateRange(ctx.db, input.from, input.to));
 
@@ -116,7 +116,7 @@ const removeRecipe = protectedProcedure
   );
 
 const getShoppingList = protectedProcedure
-  .input(z.object({ from: mealDate, to: mealDate }))
+  .input(mealDateRange)
   .output(shoppingListOut)
   .query(async ({ ctx, input }) => {
     const meals = await getMealsByDateRange(ctx.db, input.from, input.to);

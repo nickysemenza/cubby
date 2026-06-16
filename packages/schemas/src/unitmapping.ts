@@ -1,3 +1,4 @@
+import { fdcId } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { amount } from "./codec";
 import { dbTimestampsOut } from "./common";
@@ -10,7 +11,7 @@ const sourceMetadata = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal("food"),
-    fdcId: z.number(),
+    fdcId,
   }),
   z.object({
     type: z.literal("manual"),

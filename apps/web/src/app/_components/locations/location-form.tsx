@@ -11,10 +11,12 @@ import type { FC } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { buildLocationComboboxItem } from "~/app/_components/combobox/combobox-builders";
-import { getOptionalLocationId } from "~/app/_components/form-fields";
+import {
+  getOptionalLocationId,
+  optionalLocationField,
+} from "~/app/_components/form-fields";
 import { Card, CardContent } from "~/components/ui/card";
 import { useImageState } from "~/hooks/useImageState";
-import { ComboboxItem } from "../combobox/combobox-types";
 import {
   buildUpdateObject,
   ComboboxFieldWithSearch,
@@ -33,7 +35,7 @@ import { TypeFieldWithAI } from "./type-field-with-ai";
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
   type: locationType,
-  parent: ComboboxItem.nullable(),
+  parent: optionalLocationField,
 });
 
 type LocationFormValues = z.infer<typeof formSchema>;

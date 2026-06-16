@@ -16,7 +16,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import type { FC } from "react";
 import { type Control, useForm, useFormState, useWatch } from "react-hook-form";
 import { z } from "zod";
-import { getOptionalIngredientId } from "~/app/_components/form-fields";
+import {
+  getOptionalIngredientId,
+  optionalIngredientField,
+} from "~/app/_components/form-fields";
 import { InfoRow } from "~/components/common/info-row";
 import { InkStamp } from "~/components/ui/ink-stamp";
 import { useImageState } from "~/hooks/useImageState";
@@ -25,7 +28,7 @@ import {
   isMoneyUnit,
 } from "~/lib/price-mapping-utils";
 import { formatCurrency } from "~/lib/utils";
-import { ComboboxItem } from "../combobox/combobox-types";
+import type { ComboboxItem } from "../combobox/combobox-types";
 import {
   buildUpdateObject,
   type CreateModeProps,
@@ -49,7 +52,7 @@ const productFormSchema = z
     fdc_id: fdcId.nullable(), // Explicit USDA link (set via search)
     expectedQuantity: z.number().int().positive().nullable(),
     price: z.number().positive().nullable(), // Price per each ($); own field, not a mapping
-    ingredient: ComboboxItem.nullable(), // Ingredient association
+    ingredient: optionalIngredientField, // Ingredient association
     // Per-each price has its own field, so a canonical "1 each = $X" conversion
     // is forbidden (it would duplicate the price). Per-measure money mappings
     // like "1 quart = $4" are allowed. Mirrors the server-side invariant so a

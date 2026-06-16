@@ -1,4 +1,9 @@
-import { ingredientFiltersSchema } from "@cubby/schemas/ingredient";
+import { externalIdInput } from "@cubby/schemas/external-id";
+import {
+  ingredientBase,
+  ingredientFiltersSchema,
+} from "@cubby/schemas/ingredient";
+import { locationType } from "@cubby/schemas/location";
 import {
   mealCreateInput,
   mealDate,
@@ -7,10 +12,11 @@ import {
   mealUpdateData,
 } from "@cubby/schemas/meal";
 import { mcpPaginationParams } from "@cubby/schemas/pagination";
+import { productCategory } from "@cubby/schemas/product";
 import { recipeCreateInput, recipeUpdateInput } from "@cubby/schemas/recipe";
 import { mcpUnitMappingInput } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import { dataTypeEnum, fdcId } from "@cubby/usda-schemas";
+import { dataTypeEnum, fdcId, ndb, upc } from "@cubby/usda-schemas";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
@@ -381,8 +387,8 @@ function registerTools(server: McpServer) {
     "create_inventory_entry",
     "Add a product to a location. Use search_products and list_locations first to get IDs.",
     {
-      productId: z.string().describe("Product ID"),
-      locationId: z.string().describe("Location ID"),
+      productId: idParam("Product"),
+      locationId: idParam("Location"),
       value: z.number().describe("Quantity value"),
       unit: z.string().describe("Unit (e.g. 'each', 'lb', 'oz', 'cup')"),
     },
@@ -401,14 +407,14 @@ function registerTools(server: McpServer) {
     "update_inventory_entry",
     "Update an inventory entry's amount, product, or location. When updating amount, both value and unit must be provided together.",
     {
-      id: z.string().describe("Inventory entry ID"),
+      id: idParam("Inventory entry"),
       value: z
         .number()
         .optional()
         .describe("New quantity value (requires unit)"),
       unit: z.string().optional().describe("New unit (requires value)"),
-      productId: z.string().optional().describe("New product ID"),
-      locationId: z.string().optional().describe("New location ID"),
+      productId: idParam("Product").optional().describe("New product ID"),
+      locationId: idParam("Location").optional().describe("New location ID"),
     },
     withErrorHandling(async (params, extra) => {
       const caller = getCaller(extra);
@@ -445,12 +451,12 @@ function registerTools(server: McpServer) {
     "bulk_move_inventory",
     "Move inventory entries between locations. Supports partial moves.",
     {
-      sourceLocationId: z.string().describe("Source location ID"),
-      targetLocationId: z.string().describe("Target location ID"),
+      sourceLocationId: idParam("Source location"),
+      targetLocationId: idParam("Target location"),
       items: z
         .array(
           z.object({
-            inventoryEntryId: z.string().describe("Inventory entry ID to move"),
+            inventoryEntryId: idParam("Inventory entry"),
             value: z.number().describe("Quantity to move"),
             unit: z.string().describe("Unit"),
           }),
@@ -489,7 +495,7 @@ function registerTools(server: McpServer) {
       name: z.string().optional().describe("Filter by product name"),
       manufacturer: z.string().optional().describe("Filter by manufacturer"),
       upc: z.string().optional().describe("Filter by UPC code"),
-      category: z.string().optional().describe("Filter by category"),
+      category: productCategory.optional().describe("Filter by category"),
       ...mcpPaginationParams,
     },
     listHandler("product", slimProduct, {
@@ -519,14 +525,13 @@ function registerTools(server: McpServer) {
         .string()
         .optional()
         .describe("Manufacturer (defaults to '(unspecified)')"),
-      upc: z.string().optional().describe("UPC barcode"),
+      upc: upc.optional(),
       price: z.number().optional().describe("Price per each ($)"),
       expectedQuantity: z
         .number()
         .optional()
         .describe("Expected quantity (1 for unique items, null for unlimited)"),
-      ingredientId: z
-        .string()
+      ingredientId: idParam("Ingredient")
         .optional()
         .describe(
           "Link this product to an ingredient (its id). Lets recipes using that ingredient cost from this product.",
@@ -576,10 +581,10 @@ function registerTools(server: McpServer) {
     "update_product",
     "Update a product's fields.",
     {
-      id: z.string().describe("Product ID"),
+      id: idParam("Product"),
       name: z.string().optional().describe("New name"),
       manufacturer: z.string().optional().describe("New manufacturer"),
-      upc: z.string().optional().describe("New UPC"),
+      upc: upc.optional().describe("New UPC"),
       fdc_id: fdcId
         .nullable()
         .optional()
@@ -594,27 +599,10 @@ function registerTools(server: McpServer) {
           "Mark that no USDA food exists for this product (expect manual weight/volume/calorie conversions instead of a link).",
         ),
       price: z.number().optional().describe("New price"),
-      category: z.string().optional().describe("New category"),
+      category: productCategory.optional().describe("New category"),
       notes: z.string().optional().describe("Notes or URLs"),
       externalIds: z
-        .array(
-          z.object({
-            id: z
-              .string()
-              .optional()
-              .describe("Existing external ID record ID (for updates)"),
-            source: z
-              .string()
-              .describe("Source name (e.g. 'amazon', 'mcmaster', 'mouser')"),
-            externalId: z
-              .string()
-              .describe("The identifier (ASIN, part number, etc.)"),
-            url: z
-              .string()
-              .optional()
-              .describe("Direct link to the product page"),
-          }),
-        )
+        .array(externalIdInput)
         .optional()
         .describe(
           "External identifiers. Replaces all existing IDs when provided.",
@@ -627,7 +615,7 @@ function registerTools(server: McpServer) {
     "update_product_unit_mappings",
     'Replace the unit mappings on a product (conversion/price edges like "8 oz = $10"). Pass the COMPLETE desired set; existing mappings not in the list are removed. Money unit is "dollar"; nutrient edges (b unit "kcal", "g protein") also work.',
     {
-      id: z.string().describe("Product ID"),
+      id: idParam("Product"),
       unitMappings: z
         .array(mcpUnitMappingInput)
         .describe(
@@ -658,7 +646,7 @@ function registerTools(server: McpServer) {
     "find_product_by_upc",
     "Find or create a product by UPC barcode. Checks local DB, then USDA, then UPC lookup service.",
     {
-      upc: z.string().describe("UPC barcode (12-14 digits)"),
+      upc,
       defaultName: z
         .string()
         .optional()
@@ -726,12 +714,10 @@ function registerTools(server: McpServer) {
     "Create a new location. Use list_locations to find a parent location ID.",
     {
       name: z.string().describe("Location name"),
-      type: z
-        .string()
+      type: locationType
         .optional()
         .describe("Location type (e.g. 'room', 'shelf', 'drawer', 'box')"),
-      parentId: z
-        .string()
+      parentId: idParam("Parent location")
         .optional()
         .describe("Parent location ID for nesting"),
     },
@@ -750,10 +736,12 @@ function registerTools(server: McpServer) {
     "update_location",
     "Update a location's name, type, or parent.",
     {
-      id: z.string().describe("Location ID"),
+      id: idParam("Location"),
       name: z.string().optional().describe("New name"),
-      type: z.string().optional().describe("New type"),
-      parentId: z.string().optional().describe("New parent location ID"),
+      type: locationType.optional().describe("New type"),
+      parentId: idParam("Parent location")
+        .optional()
+        .describe("New parent location ID"),
     },
     updateHandler("location", slimLocation),
   );
@@ -824,9 +812,8 @@ function registerTools(server: McpServer) {
     "create_ingredient",
     "Create a new ingredient. Use search_ingredients first to avoid duplicates.",
     {
-      name: z.string().describe("Ingredient name"),
-      aliases: z
-        .array(z.string())
+      name: ingredientBase.shape.name.describe("Ingredient name"),
+      aliases: ingredientBase.shape.aliases
         .optional()
         .describe("Alternate names for this ingredient"),
     },
@@ -844,10 +831,9 @@ function registerTools(server: McpServer) {
     "update_ingredient",
     "Update an ingredient's name or aliases.",
     {
-      id: z.string().describe("Ingredient ID"),
-      name: z.string().optional().describe("New name"),
-      aliases: z
-        .array(z.string())
+      id: idParam("Ingredient"),
+      name: ingredientBase.shape.name.optional().describe("New name"),
+      aliases: ingredientBase.shape.aliases
         .optional()
         .describe("New aliases (replaces)"),
     },
@@ -858,9 +844,9 @@ function registerTools(server: McpServer) {
     "merge_ingredients",
     "Merge duplicate ingredients into one. Aliases are absorbed into the target, and their recipes/products are re-pointed to it.",
     {
-      target: z.string().describe("ID of the ingredient to keep"),
+      target: idParam("Ingredient").describe("ID of the ingredient to keep"),
       aliases: z
-        .array(z.string())
+        .array(idParam("Ingredient"))
         .min(1)
         .describe("IDs of duplicate ingredients to merge into the target"),
     },
@@ -978,7 +964,7 @@ function registerTools(server: McpServer) {
     "update_recipe",
     "Update a recipe's fields. Only provided fields are changed.",
     {
-      id: z.string().describe("Recipe ID"),
+      id: idParam("Recipe"),
       ...recipeUpdateInput.shape.data.shape,
     },
     withErrorHandling(async (params, extra) => {
@@ -1444,7 +1430,7 @@ function registerTools(server: McpServer) {
   server.tool(
     "get_usda_food",
     "Get a USDA food by its FDC id (from search_usda_foods), including compact nutrients-per-100g and any linked Cubby products.",
-    { fdcId: z.number().int().describe("USDA FDC id") },
+    { fdcId },
     withErrorHandling(async (params, extra) => {
       const caller = getCaller(extra);
       const result = await caller.usda.getByID({ id: params.fdcId });
@@ -1458,8 +1444,8 @@ function registerTools(server: McpServer) {
     "find_usda_food",
     "Look up a USDA food by barcode (UPC/GTIN, 12-14 digits) or NDB number. Provide exactly one.",
     {
-      upc: z.string().optional().describe("UPC-A/EAN-13/GTIN-14 barcode"),
-      ndbNumber: z.number().int().optional().describe("USDA NDB number"),
+      upc: upc.optional(),
+      ndbNumber: ndb.optional(),
     },
     withErrorHandling(async (params, extra) => {
       const caller = getCaller(extra);

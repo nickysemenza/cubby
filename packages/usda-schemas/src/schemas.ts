@@ -6,7 +6,7 @@ export const upc = z
   .max(14)
   .describe("UPC-A (12), EAN-13 (13), or GTIN-14 (14) barcode");
 // NDB (Nutrient Data Bank) number - USDA-specific identifier
-export const ndb = z.number().max(99999).min(1000).describe("NDB number");
+export const ndb = z.number().max(99999).min(1000).describe("USDA NDB number");
 
 // FDC ID — FoodData Central's universal food identifier. Every USDA food
 // (branded, foundation, sr_legacy, survey) has exactly one positive-integer

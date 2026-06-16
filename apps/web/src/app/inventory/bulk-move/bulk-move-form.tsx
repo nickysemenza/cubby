@@ -25,8 +25,10 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { buildLocationComboboxItem } from "~/app/_components/combobox/combobox-builders";
-import { ComboboxItem as ComboboxItemSchema } from "~/app/_components/combobox/combobox-types";
-import { getLocationId } from "~/app/_components/form-fields";
+import {
+  getLocationId,
+  optionalLocationField,
+} from "~/app/_components/form-fields";
 import {
   ComboboxFieldWithSearch,
   FormWrapper,
@@ -53,8 +55,8 @@ interface MoveItem {
 
 // Schema for the form
 const formSchema = z.object({
-  sourceLocation: ComboboxItemSchema.nullable(),
-  targetLocation: ComboboxItemSchema.nullable(),
+  sourceLocation: optionalLocationField,
+  targetLocation: optionalLocationField,
 });
 
 type BulkMoveFormValues = z.infer<typeof formSchema>;

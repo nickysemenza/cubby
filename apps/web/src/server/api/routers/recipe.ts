@@ -89,6 +89,9 @@ const recipeFiltersSchema = z.object({
   cookbookId: cookbookId.optional(),
 });
 
+// Shared output for endpoints that just return a newly upserted recipe's id.
+const recipeIdOut = z.object({ id: recipeId });
+
 // Create standardized CRUD procedures using factory
 const { getByID, list, create, update } = createEntityCrudProcedures({
   schemas: {
@@ -145,7 +148,7 @@ const parseHtml = protectedProcedure
   .mutation(({ input }) => htmlToImportRecipe(input.html, input.url));
 const insertImport = protectedProcedure
   .input(importRecipeSchema)
-  .output(z.object({ id: z.uuid() }))
+  .output(recipeIdOut)
   .mutation(async ({ ctx, input }) => {
     // TODO: enqueue imported recipe ids for async Cloudflare Queue recompute
     // instead of blocking per-recipe import requests.
@@ -198,7 +201,7 @@ const insertCookbook = protectedProcedure
       book: z.string().min(1),
     }),
   )
-  .output(z.object({ id: z.uuid() }))
+  .output(recipeIdOut)
   .mutation(async ({ ctx, input }) => {
     // TODO: enqueue cookbook import recipe ids for batched Cloudflare Queue
     // recompute instead of blocking each EPUB recipe insert.

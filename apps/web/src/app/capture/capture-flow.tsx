@@ -6,13 +6,11 @@ import { Camera, Check, Sparkles } from "lucide-react";
 import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
-import { z } from "zod";
+import type { z } from "zod";
 import {
-  amountField,
   getLocationId,
   getProductId,
-  requiredLocationField,
-  requiredProductField,
+  inventoryItemWithLocationFields,
 } from "~/app/_components/form-fields";
 import { ComboboxFieldWithSearch } from "~/app/_components/form-utils";
 import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
@@ -173,11 +171,7 @@ export function CaptureFlow() {
   );
 }
 
-const itemFormSchema = z.object({
-  product: requiredProductField,
-  location: requiredLocationField,
-  amount: amountField,
-});
+const itemFormSchema = inventoryItemWithLocationFields;
 type ItemFormValues = z.input<typeof itemFormSchema>;
 
 function CaptureItemCard({ proposal }: { proposal: ProposedItem }) {

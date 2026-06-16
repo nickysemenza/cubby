@@ -8,17 +8,15 @@ import type {
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { FC } from "react";
 import { useForm } from "react-hook-form";
-import { z } from "zod";
+import type { z } from "zod";
 import {
   buildLocationComboboxItem,
   buildProductComboboxItem,
 } from "~/app/_components/combobox/combobox-builders";
 import {
-  amountField,
   getLocationId,
   getProductId,
-  requiredLocationField,
-  requiredProductField,
+  inventoryItemWithLocationFields,
 } from "~/app/_components/form-fields";
 import { Card, CardContent } from "~/components/ui/card";
 import {
@@ -34,11 +32,7 @@ import {
 import { AmountFieldGroup } from "./amount-field-group";
 
 // Form schema using shared field schemas
-const formSchema = z.object({
-  product: requiredProductField,
-  location: requiredLocationField,
-  amount: amountField,
-});
+const formSchema = inventoryItemWithLocationFields;
 
 type InventoryFormValues = z.input<typeof formSchema>;
 

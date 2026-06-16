@@ -20,6 +20,9 @@ export const mealDate = z
   .regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD")
   .describe('Calendar day as "YYYY-MM-DD"');
 
+/** An inclusive [from, to] calendar-day range (both required). */
+export const mealDateRange = z.object({ from: mealDate, to: mealDate });
+
 // ---------------------------------------------------------------------------
 // Inputs
 // ---------------------------------------------------------------------------
@@ -156,9 +159,7 @@ export const shoppingListItem = z.object({
 });
 export type ShoppingListItem = z.infer<typeof shoppingListItem>;
 
-export const shoppingListOut = z.object({
-  from: mealDate,
-  to: mealDate,
+export const shoppingListOut = mealDateRange.extend({
   meals: z.array(
     z.object({ id: mealId, name: z.string().nullable(), date: mealDate }),
   ),

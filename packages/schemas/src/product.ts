@@ -13,7 +13,9 @@ import { imageOut, updateInputImages } from "./image";
 import { unitMappingInput } from "./unitmapping";
 
 // Product category enum for filtering/organization
-export const productCategory = z.enum(productCategoryValues);
+export const productCategory = z
+  .enum(productCategoryValues)
+  .describe("Product category");
 
 export type ProductCategory = z.infer<typeof productCategory>;
 

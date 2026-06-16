@@ -9,7 +9,7 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { buildLocationComboboxItem } from "~/app/_components/combobox/combobox-builders";
-import { ComboboxItem as ComboboxItemSchema } from "~/app/_components/combobox/combobox-types";
+import { optionalLocationField } from "~/app/_components/form-fields";
 import { ComboboxFieldWithSearch } from "~/app/_components/form-utils";
 import {
   PersistentScanner,
@@ -34,13 +34,13 @@ interface ScannedLocation {
 
 // Form schema for location picker
 const locationPickerSchema = z.object({
-  parentLocation: ComboboxItemSchema.nullable(),
+  parentLocation: optionalLocationField,
 });
 type LocationPickerValues = z.infer<typeof locationPickerSchema>;
 
 // Inline reassignment form schema
 const reassignSchema = z.object({
-  newParent: ComboboxItemSchema.nullable(),
+  newParent: optionalLocationField,
 });
 type ReassignValues = z.infer<typeof reassignSchema>;
 

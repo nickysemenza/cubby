@@ -18,6 +18,7 @@ import {
   inventoryCreatePayloadData,
   inventoryUpdateInput,
 } from "@cubby/schemas/inventory";
+import { duplicateUniqueProductSchema } from "@cubby/schemas/problems";
 import { z } from "zod";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -139,25 +140,10 @@ const bulkMove = protectedProcedure
 const findDuplicates = protectedProcedure
   .input(
     z.object({
-      excludeLocationId: z.string().optional(),
+      excludeLocationId: locationId.optional(),
     }),
   )
-  .output(
-    z.array(
-      z.object({
-        id: z.string(),
-        name: z.string(),
-        manufacturer: z.string(),
-        expectedQuantity: z.number().nullable(),
-        locations: z.array(
-          z.object({
-            id: z.string(),
-            name: z.string(),
-          }),
-        ),
-      }),
-    ),
-  )
+  .output(z.array(duplicateUniqueProductSchema))
   .query(async ({ ctx }) => {
     const duplicates = await findDuplicateUniqueProducts(ctx.db);
 

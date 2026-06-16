@@ -21,8 +21,10 @@ import { useState } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
-import { ComboboxItem as ComboboxItemSchema } from "~/app/_components/combobox/combobox-types";
-import { getOptionalLocationId } from "~/app/_components/form-fields";
+import {
+  getOptionalLocationId,
+  optionalLocationField,
+} from "~/app/_components/form-fields";
 import { ComboboxFieldWithSearch } from "~/app/_components/form-utils";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { useTRPC } from "~/trpc/react";
@@ -39,7 +41,7 @@ interface MoveInventoryDialogProps {
 }
 
 const formSchema = z.object({
-  targetLocation: ComboboxItemSchema.nullable(),
+  targetLocation: optionalLocationField,
 });
 
 type FormValues = z.infer<typeof formSchema>;
