@@ -31,6 +31,7 @@ import { tryFormatAmount } from "../inventory/format-amount";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import { CopyCorpusButton } from "./copy-corpus-button";
 import { EstimateMarker } from "./estimate-marker";
+import { IngredientModifier } from "./IngredientQuantities";
 import { getIngredientName, type ServingBasis } from "./recipe-utils";
 
 // What an unmeasured estimated row shows in its Amounts cell, per usage.
@@ -93,7 +94,10 @@ export const RecipeIngredientList: React.FC<{
         const name = info.getValue();
         return (
           <div className="min-w-0">
-            <div className="truncate">{name}</div>
+            <div className="truncate">
+              {name}
+              <IngredientModifier modifier={row.modifier} />
+            </div>
             {rawLine && rawLine !== name && (
               <div
                 className="truncate text-muted-foreground/70 text-xs italic"

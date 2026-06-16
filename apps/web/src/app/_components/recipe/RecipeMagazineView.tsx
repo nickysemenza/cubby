@@ -10,6 +10,7 @@ import { cn } from "~/lib/utils";
 import {
   buildDisplayQuantities,
   gramMapFromCosting,
+  IngredientModifier,
   IngredientQuantities,
   ingredientRowGrid,
 } from "./IngredientQuantities";
@@ -111,6 +112,7 @@ function IngredientLedger({
                       )}
                     >
                       {name}
+                      <IngredientModifier modifier={ing.modifier} />
                     </span>
                   </button>
                 </li>

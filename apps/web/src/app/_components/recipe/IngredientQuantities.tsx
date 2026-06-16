@@ -81,6 +81,23 @@ export function buildDisplayQuantities(
   return written;
 }
 
+/** Dim italic prep note shown inline after an ingredient name (e.g.
+ * "butter, softened"). Renders nothing when there's no modifier. */
+export function IngredientModifier({
+  modifier,
+  className,
+}: {
+  modifier: string | null | undefined;
+  className?: string;
+}) {
+  if (!modifier) return null;
+  return (
+    <span className={cn("text-muted-foreground/80 italic", className)}>
+      , {modifier}
+    </span>
+  );
+}
+
 /** The single source of truth for the quantity gutter width + wrap behavior. */
 export const ingredientRowGrid =
   "grid grid-cols-[7rem_minmax(0,1fr)] items-baseline gap-2";

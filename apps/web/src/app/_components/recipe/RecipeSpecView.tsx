@@ -11,6 +11,7 @@ import { cn } from "~/lib/utils";
 import {
   buildDisplayQuantities,
   gramMapFromCosting,
+  IngredientModifier,
   IngredientQuantities,
 } from "./IngredientQuantities";
 import {
@@ -175,6 +176,7 @@ export function RecipeSpecView({
                     <tr key={ing.id} className="align-top">
                       <td className="py-1.5 pr-3 font-medium text-sm leading-snug">
                         {name}
+                        <IngredientModifier modifier={ing.modifier} />
                         {isBase && (
                           <span className="ml-1.5 rounded-sm bg-primary/10 px-1 py-px align-middle font-mono text-[9px] text-primary uppercase tracking-wide">
                             100% base
