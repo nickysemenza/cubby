@@ -36,8 +36,7 @@ const getMakeable = protectedProcedure
 
     // Score every (capped) recipe against inventory, then rank by coverage.
     // This is O(recipes × ingredients × inventory) — fine at current scale, but a
-    // known scaling cost. CANDIDATE_CAP bounds the fan-out; see the Risks note in
-    // docs/plans/2026-05-29-meal-planning-implementation-plan.md.
+    // known scaling cost. CANDIDATE_CAP bounds the fan-out.
     const { data: recipes } = await recipeList(
       ctx.db,
       {},

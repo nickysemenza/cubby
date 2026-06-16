@@ -330,7 +330,7 @@ Framed as **Now / Next / Later** (no dates — it's a personal project). Canonic
 
 ### Recently shipped
 
-- **Meal planning v1** — plan recipes onto a calendar (week + table views), scale each per meal, and a display-only shopping list (aggregated need vs. on-hand inventory, with a per-meal breakdown). Cook-and-consume inventory deduction was deliberately scoped out — it lives under *Meal planning v2* below → [docs/plans/2026-05-29-meal-planning-implementation-plan.md](docs/plans/2026-05-29-meal-planning-implementation-plan.md)
+- **Meal planning v1** — plan recipes onto a calendar (week + table views), scale each per meal, and a display-only shopping list (aggregated need vs. on-hand inventory, with a per-meal breakdown). Cook-and-consume inventory deduction was deliberately scoped out — it lives under *Meal planning v2* below → [docs/todos.md](docs/todos.md)
 
 ### Now
 
