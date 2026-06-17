@@ -1,5 +1,6 @@
 import { memo, useMemo } from "react";
 import { cn } from "~/lib/utils";
+import { dottedEntityLink, EntityPreviewLink } from "../EntityPreviewLink";
 import {
   buildIngredientMatrix,
   flattenComponents,
@@ -73,7 +74,15 @@ export const RecipeIngredientMatrixView = memo(
                       key={node.recipe.id}
                       className="px-2 py-2 text-right align-bottom font-medium"
                     >
-                      <div>{node.recipe.name}</div>
+                      <div>
+                        <EntityPreviewLink
+                          entity="recipe"
+                          id={node.recipe.id}
+                          className={dottedEntityLink}
+                        >
+                          {node.recipe.name}
+                        </EntityPreviewLink>
+                      </div>
                       {makes && (
                         <div className="font-normal text-[9px] text-muted-foreground/70 normal-case tracking-normal">
                           makes {makes}
@@ -97,7 +106,13 @@ export const RecipeIngredientMatrixView = memo(
                     scope="row"
                     className="sticky left-0 z-10 bg-card px-2 py-1.5 text-left font-medium text-sm"
                   >
-                    {row.name}
+                    <EntityPreviewLink
+                      entity="ingredient"
+                      id={row.ingredientId}
+                      className={dottedEntityLink}
+                    >
+                      {row.name}
+                    </EntityPreviewLink>
                   </th>
                   {components.map((node) => {
                     const grams = row.byComponent.get(node.recipe.id);

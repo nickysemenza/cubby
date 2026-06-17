@@ -1,18 +1,12 @@
 import type { LocationType } from "@cubby/schemas/location";
 import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
 import type { DataType } from "@cubby/usda-schemas";
-import { dataTypeLabel } from "@cubby/usda-schemas";
-import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { match } from "ts-pattern";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "~/components/ui/tooltip";
 import { EntityIcon } from "~/entities/entities";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
 import { cn } from "~/lib/utils";
+import { EntityPreviewLink } from "./EntityPreviewLink";
 import { LocationIcon } from "./locations/location-icons";
 
 // Minimal data shape - just id and name
@@ -85,114 +79,76 @@ function EntityLinkBody({
 
 export const EntityPillLink: React.FC<EntityPillLinkProps> = (props) => {
   const { openInNewTab, compact } = props;
-  const linkTarget = openInNewTab ? "_blank" : undefined;
-  const linkRel = openInNewTab ? "noopener noreferrer" : undefined;
 
   return match(props)
     .with({ entity: "ingredient" }, ({ data }) => (
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Link
-              to="/ingredients/$id"
-              params={{ id: data.id }}
-              target={linkTarget}
-              rel={linkRel}
-              className={linkClass}
-            />
-          }
-        >
-          <EntityLinkBody
-            icon={<EntityIcon entity="ingredient" size={12} colored />}
-            name={data.name}
-            compact={compact}
-          />
-        </TooltipTrigger>
-        <TooltipContent className="max-w-lg">{data.name}</TooltipContent>
-      </Tooltip>
+      <EntityPreviewLink
+        entity="ingredient"
+        id={data.id}
+        openInNewTab={openInNewTab}
+        className={linkClass}
+      >
+        <EntityLinkBody
+          icon={<EntityIcon entity="ingredient" size={12} colored />}
+          name={data.name}
+          compact={compact}
+        />
+      </EntityPreviewLink>
     ))
     .with({ entity: "recipe" }, ({ data }) => (
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Link
-              to="/recipes/$id"
-              params={{ id: data.id }}
-              target={linkTarget}
-              rel={linkRel}
-              className={linkClass}
-            />
-          }
-        >
-          <EntityLinkBody
-            icon={<EntityIcon entity="recipe" size={12} colored />}
-            name={data.name}
-            compact={compact}
-          />
-        </TooltipTrigger>
-        <TooltipContent className="max-w-lg">{data.name}</TooltipContent>
-      </Tooltip>
+      <EntityPreviewLink
+        entity="recipe"
+        id={data.id}
+        openInNewTab={openInNewTab}
+        className={linkClass}
+      >
+        <EntityLinkBody
+          icon={<EntityIcon entity="recipe" size={12} colored />}
+          name={data.name}
+          compact={compact}
+        />
+      </EntityPreviewLink>
     ))
-    .with({ entity: "location" }, ({ data }) => {
-      const fullText = data.type ? `${data.name} (${data.type})` : data.name;
-      return (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Link
-                to="/locations/$id"
-                params={{ id: data.id }}
-                target={linkTarget}
-                rel={linkRel}
-                className={linkClass}
-              />
-            }
-          >
-            <EntityLinkBody
-              icon={
-                data.type ? (
-                  <LocationIcon type={data.type} size={12} colored />
-                ) : (
-                  <EntityIcon entity="location" size={12} colored />
-                )
-              }
-              name={data.name}
-              metadata={data.type}
-              compact={compact}
-            />
-          </TooltipTrigger>
-          <TooltipContent className="max-w-lg">{fullText}</TooltipContent>
-        </Tooltip>
-      );
-    })
+    .with({ entity: "location" }, ({ data }) => (
+      <EntityPreviewLink
+        entity="location"
+        id={data.id}
+        openInNewTab={openInNewTab}
+        className={linkClass}
+      >
+        <EntityLinkBody
+          icon={
+            data.type ? (
+              <LocationIcon type={data.type} size={12} colored />
+            ) : (
+              <EntityIcon entity="location" size={12} colored />
+            )
+          }
+          name={data.name}
+          metadata={data.type}
+          compact={compact}
+        />
+      </EntityPreviewLink>
+    ))
     .with({ entity: "product" }, ({ data }) => {
       const isMisc = isMiscProduct(data.name);
       const displayName = isMisc ? getMiscDisplayName(data.name) : data.name;
       const metadata = isMisc ? "misc" : data.manufacturer;
-      const fullText = metadata ? `${displayName} (${metadata})` : displayName;
 
       return (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Link
-                to="/products/$id"
-                params={{ id: data.id }}
-                target={linkTarget}
-                rel={linkRel}
-                className={linkClass}
-              />
-            }
-          >
-            <EntityLinkBody
-              icon={<EntityIcon entity="product" size={12} colored />}
-              name={displayName}
-              metadata={metadata}
-              compact={compact}
-            />
-          </TooltipTrigger>
-          <TooltipContent className="max-w-lg">{fullText}</TooltipContent>
-        </Tooltip>
+        <EntityPreviewLink
+          entity="product"
+          id={data.id}
+          openInNewTab={openInNewTab}
+          className={linkClass}
+        >
+          <EntityLinkBody
+            icon={<EntityIcon entity="product" size={12} colored />}
+            name={displayName}
+            metadata={metadata}
+            compact={compact}
+          />
+        </EntityPreviewLink>
       );
     })
     .with({ entity: "usda-food" }, ({ data }) => {
@@ -211,32 +167,22 @@ export const EntityPillLink: React.FC<EntityPillLinkProps> = (props) => {
         <EntityIcon entity="usda-food" size={12} colored />
       );
 
-      const tooltip = dataType ? `${text} · ${dataTypeLabel(dataType)}` : text;
-
       return (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Link
-                to="/usda/$id"
-                params={{ id: String(data.fdc_id) }}
-                target={linkTarget}
-                rel={linkRel}
-                className={linkClass}
-              />
+        <EntityPreviewLink
+          entity="usda-food"
+          id={String(data.fdc_id)}
+          openInNewTab={openInNewTab}
+          className={linkClass}
+        >
+          <EntityLinkBody
+            icon={icon}
+            name={text}
+            compact={compact}
+            trailing={
+              dataType ? <UsdaDataTypeDot dataType={dataType} /> : undefined
             }
-          >
-            <EntityLinkBody
-              icon={icon}
-              name={text}
-              compact={compact}
-              trailing={
-                dataType ? <UsdaDataTypeDot dataType={dataType} /> : undefined
-              }
-            />
-          </TooltipTrigger>
-          <TooltipContent className="max-w-lg">{tooltip}</TooltipContent>
-        </Tooltip>
+          />
+        </EntityPreviewLink>
       );
     })
     .exhaustive();

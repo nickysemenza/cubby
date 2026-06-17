@@ -1,6 +1,7 @@
 import { Fragment, memo, useMemo } from "react";
 import { MarkdownText } from "~/components/markdown";
 import { cn } from "~/lib/utils";
+import { dottedEntityLink, EntityPreviewLink } from "../EntityPreviewLink";
 import {
   buildDisplayQuantities,
   gramMapFromCosting,
@@ -9,7 +10,11 @@ import {
 } from "./IngredientQuantities";
 import { formatScalingPct } from "./recipe-scaling-pct";
 import type { RecipeTreeNode, RecipeTreeRow } from "./recipe-tree";
-import { formatYield, getIngredientName } from "./recipe-utils";
+import {
+  entityRefForRow,
+  formatYield,
+  getIngredientName,
+} from "./recipe-utils";
 
 // Modernist-Cuisine-style spec sheet: the recipe and every sub-recipe expanded
 // inline, recursively. Each node is a self-contained batch with its own
@@ -116,6 +121,7 @@ function SpecRow({
   const noWeight = row.grams == null;
   const quantities = buildDisplayQuantities(row.row, gramById);
   const name = getIngredientName(row.row);
+  const ref = entityRefForRow(row);
   // Tie a sub-recipe row's marker to the colored panel it opens below.
   const isSubrecipe = row.kind === "subrecipe";
   const isExpanded = isSubrecipe && expanded.has(row.id);
@@ -129,7 +135,17 @@ function SpecRow({
             {isExpanded ? "▾" : "▸"}
           </span>
         )}
-        {name}
+        {ref ? (
+          <EntityPreviewLink
+            entity={ref.entity}
+            id={ref.id}
+            className={dottedEntityLink}
+          >
+            {name}
+          </EntityPreviewLink>
+        ) : (
+          name
+        )}
         <IngredientModifier modifier={row.row.modifier} />
         {isSubrecipe && !isExpanded && (
           <span className="ml-1.5 align-middle font-mono text-[10px] text-muted-foreground/60 lowercase">
@@ -186,12 +202,15 @@ function SpecNode({
     <div className="space-y-1">
       {!isRoot && (
         <div className="mb-1 flex flex-wrap items-center gap-x-1.5 font-mono text-2xs uppercase tracking-wider">
-          <span
-            className="font-semibold"
-            style={{ color: depthRule(node.depth) }}
+          <EntityPreviewLink
+            entity="recipe"
+            id={node.recipe.id}
+            className={cn(dottedEntityLink, "font-semibold")}
           >
-            {node.recipe.name}
-          </span>
+            <span style={{ color: depthRule(node.depth) }}>
+              {node.recipe.name}
+            </span>
+          </EntityPreviewLink>
           {node.recipe.yield?.value ? (
             <span className="text-eyebrow">
               · yields {formatYield(node.recipe.yield)}

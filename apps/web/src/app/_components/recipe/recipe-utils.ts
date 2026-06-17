@@ -3,11 +3,13 @@ import {
   getNutrientValueByKey,
   type NutrientsPer100,
 } from "@cubby/usda-schemas";
+import { match } from "ts-pattern";
 import { formatCurrencyRange, formatNumberRange } from "~/lib/format-range";
 import type { CalculateTotalsResult } from "~/lib/recipe-costing";
 import { getRecipeIngredientName } from "~/lib/recipe-graph";
 import { wasm } from "~/lib/wasm";
 import { tryFormatAmount } from "../inventory/format-amount";
+import type { RecipeTreeRow } from "./recipe-tree";
 
 /** Format a gram weight as a display amount, e.g. 184.2 → "184 g". The single
  * grams formatter for the prep sheet, matrix, and shopping list. */
@@ -172,3 +174,25 @@ export function buildRecipeKicker(
 }
 
 export const getIngredientName = getRecipeIngredientName;
+
+/**
+ * The entity a tree row links to: ingredient leaves → their ingredient,
+ * sub-recipe rows → their child recipe. Stub rows (cycle/missing) have no
+ * target and render as plain text. Drives the link + hover-preview in the prep,
+ * matrix, and nested-spec views.
+ */
+export const entityRefForRow = (
+  row: RecipeTreeRow,
+): { entity: "recipe" | "ingredient"; id: string } | null =>
+  match(row)
+    .with({ kind: "subrecipe" }, (r) => ({
+      entity: "recipe" as const,
+      id: r.child.recipe.id,
+    }))
+    .with({ kind: "ingredient" }, (r) =>
+      r.row.type === "ingredient"
+        ? { entity: "ingredient" as const, id: r.row.ingredient.id }
+        : null,
+    )
+    .with({ kind: "stub" }, () => null)
+    .exhaustive();

@@ -1,6 +1,7 @@
 import { ShoppingCart } from "lucide-react";
 import { memo, useMemo } from "react";
 import { MarkdownText } from "~/components/markdown";
+import { dottedEntityLink, EntityPreviewLink } from "../EntityPreviewLink";
 import {
   buildDisplayQuantities,
   gramMapFromCosting,
@@ -17,6 +18,7 @@ import {
   type RecipeTreeRow,
 } from "./recipe-tree";
 import {
+  entityRefForRow,
   formatMakes,
   formatYield,
   getIngredientName,
@@ -83,13 +85,16 @@ function PrepRow({
   // Full batch — the row's own authored amounts, plus engine-derived grams.
   const quantities = buildDisplayQuantities(row.row, gramById);
   const name = getIngredientName(row.row);
+  const ref = entityRefForRow(row);
 
+  // A div, not a label: the name is now a link, and an interactive <a> can't
+  // live inside a <label> (the checkbox stays individually clickable).
   return (
-    <label className="flex cursor-pointer items-baseline gap-3 border-border/60 border-b border-dashed py-2">
+    <div className="flex items-baseline gap-3 border-border/60 border-b border-dashed py-2">
       <input
         type="checkbox"
         aria-label={`Prep ${name}`}
-        className="size-3.5 shrink-0 self-center accent-primary"
+        className="size-3.5 shrink-0 cursor-pointer self-center accent-primary"
       />
       <span className="flex-1 text-sm leading-snug">
         {row.kind === "subrecipe" && (
@@ -97,7 +102,17 @@ function PrepRow({
             ›
           </span>
         )}
-        {name}
+        {ref ? (
+          <EntityPreviewLink
+            entity={ref.entity}
+            id={ref.id}
+            className={dottedEntityLink}
+          >
+            {name}
+          </EntityPreviewLink>
+        ) : (
+          name
+        )}
         <IngredientModifier modifier={row.row.modifier} />
       </span>
       <IngredientQuantities
@@ -105,7 +120,7 @@ function PrepRow({
         className="shrink-0 whitespace-nowrap text-xs"
         emptyText="—"
       />
-    </label>
+    </div>
   );
 }
 
@@ -139,7 +154,13 @@ function Component({
           {index + 1}
         </span>
         <h3 className="my-0 font-heading font-medium text-base leading-tight tracking-tight">
-          {node.recipe.name}
+          <EntityPreviewLink
+            entity="recipe"
+            id={node.recipe.id}
+            className={dottedEntityLink}
+          >
+            {node.recipe.name}
+          </EntityPreviewLink>
         </h3>
         <div className="ml-auto text-right font-mono text-2xs text-eyebrow uppercase leading-tight tracking-wider">
           {makes && (

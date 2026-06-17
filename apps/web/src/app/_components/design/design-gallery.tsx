@@ -4,6 +4,18 @@ import { Bell, FileText, Layers, Package, Wrench } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
 import { EntityPillLink } from "~/app/_components/EntityPill";
+import {
+  type IngredientPreview,
+  IngredientPreviewBody,
+  type LocationPreview,
+  LocationPreviewBody,
+  type ProductPreview,
+  ProductPreviewBody,
+  type RecipePreview,
+  RecipePreviewBody,
+  UsdaFoodPreviewBody,
+  type UsdaPreview,
+} from "~/app/_components/EntityPreviewContent";
 import { LocationTypeBadge } from "~/app/_components/locations/LocationTypeBadge";
 import { NoneState } from "~/app/_components/NoneState";
 import { CategoryBadge } from "~/app/_components/products/CategoryBadge";
@@ -832,6 +844,88 @@ export function DesignGallery() {
           <UnitMappingGraph unitMapping={GRAPH_FIXTURE} />
         </div>
       </GallerySection>
+
+      <GallerySection
+        title="Entity preview"
+        source="EntityPreviewContent · ui/preview-card"
+      >
+        <div className="space-y-2">
+          <p className="font-mono text-3xs text-muted-foreground uppercase tracking-wider">
+            Manifest hovercard shown on any entity link — shared header (icon ·
+            name · open · tag · identity) + cross-links + entity-specific body
+          </p>
+          <div className="flex flex-wrap gap-3">
+            {PREVIEW_DEMOS.map(({ key, node }) => (
+              <div
+                key={key}
+                className="w-80 rounded-lg border border-[var(--border-chunky)] bg-popover p-3 text-popover-foreground text-xs shadow-[var(--shadow-chunky-sm)]"
+              >
+                {node}
+              </div>
+            ))}
+          </div>
+        </div>
+      </GallerySection>
     </div>
   );
 }
+
+// Static sample data so the manifest bodies render on the (data-less) design
+// gallery exactly as they do behind a live hover. Held as typed objects (and
+// spread) so the entity-id fields stay out of JSX `id` attributes. Nutrient
+// codes: 208 kcal, 203 protein, 204 fat, 205 carbs, 291 fiber, 307 sodium.
+const RECIPE_SAMPLE: RecipePreview = {
+  id: "sample-recipe",
+  name: "RT-Style Chicken Rice Bowl",
+  yieldText: "makes 1 serving",
+  cost: 0.48,
+  calories: 90,
+  ingredientCount: 13,
+  stepCount: 5,
+};
+const INGREDIENT_SAMPLE: IngredientPreview = {
+  id: "sample-ingredient",
+  name: "cilantro",
+  aliases: ["coriander", "fresh coriander"],
+  nutrients: { "208": 23, "203": 2.1, "204": 0.5, "205": 3.7, "291": 2.8 },
+  cheapestPrice: 1.99,
+  multiplePrices: true,
+  recipeCount: 2,
+  usdaFdcId: 1103349,
+  products: [
+    { id: "sample-product", name: "cilantro", manufacturer: "generic" },
+  ],
+};
+const PRODUCT_SAMPLE: ProductPreview = {
+  id: "sample-product",
+  name: "kosher salt",
+  identity: "Diamond Crystal · food",
+  nutrients: { "307": 40000 },
+  price: 11,
+  upc: "013600020019",
+  usdaFdcId: 2571981,
+};
+const USDA_SAMPLE: UsdaPreview = {
+  fdcId: 2571981,
+  name: "KOSHER SALT, KOSHER",
+  dataType: "branded_food",
+  brand: "Diamond Crystal",
+  nutrients: { "307": 40000 },
+  linkedProductId: "sample-product",
+};
+const LOCATION_SAMPLE: LocationPreview = {
+  id: "sample-location",
+  name: "Top Shelf",
+  type: "shelf",
+  parent: { id: "sample-parent", name: "Pantry" },
+  itemCount: 12,
+  subCount: 3,
+};
+
+const PREVIEW_DEMOS = [
+  { key: "recipe", node: <RecipePreviewBody {...RECIPE_SAMPLE} /> },
+  { key: "ingredient", node: <IngredientPreviewBody {...INGREDIENT_SAMPLE} /> },
+  { key: "product", node: <ProductPreviewBody {...PRODUCT_SAMPLE} /> },
+  { key: "usda-food", node: <UsdaFoodPreviewBody {...USDA_SAMPLE} /> },
+  { key: "location", node: <LocationPreviewBody {...LOCATION_SAMPLE} /> },
+] as const;
