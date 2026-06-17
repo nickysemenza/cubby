@@ -7,6 +7,26 @@ import { formatCurrencyRange, formatNumberRange } from "~/lib/format-range";
 import type { CalculateTotalsResult } from "~/lib/recipe-costing";
 import { getRecipeIngredientName } from "~/lib/recipe-graph";
 import { wasm } from "~/lib/wasm";
+import { tryFormatAmount } from "../inventory/format-amount";
+
+/** Format a gram weight as a display amount, e.g. 184.2 → "184 g". The single
+ * grams formatter for the prep sheet, matrix, and shopping list. */
+export const gramText = (grams: number): string =>
+  tryFormatAmount({ value: Math.round(grams * 100) / 100, unit: "g" });
+
+/**
+ * A component's full-batch yield for the "makes …" label — the recipe's own
+ * yield when set ("8 servings", "1.2 kg"), else the resolved batch weight in
+ * grams. One helper so the prep header and the matrix column header always
+ * agree on how a batch is described.
+ */
+export const formatMakes = (
+  recipeYield: { value: number; unit: string } | null | undefined,
+  batchWeightGrams: number | null,
+): string | null => {
+  if (recipeYield?.value) return formatYield(recipeYield);
+  return batchWeightGrams != null ? gramText(batchWeightGrams) : null;
+};
 
 /** The four headline figures every recipe-summary surface shows (table, charts,
  * magazine kicker), pulled from a costing result in one place so all three agree

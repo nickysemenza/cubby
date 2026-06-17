@@ -45,15 +45,27 @@ export const getRouter = () => {
     Sentry.init({
       dsn: "https://a50b2f76dd1586f95cdd29cd13a6c0dc@o83311.ingest.us.sentry.io/4508775559135232",
       sendDefaultPii: true,
-      tracesSampleRate: 1.0,
+      // Tracing OFF in dev. React 19's dev build emits a `performance.measure`
+      // per component render; Sentry's browser tracing turns each into a span and
+      // builds the span tree in O(n²) (`addSpanChildren`). On component-heavy
+      // views (recipe prep/nested/matrix render every sub-recipe) that's an ~8s
+      // main-thread freeze on load — confirmed via JS self-profiling (60% of
+      // samples in `addSpanChildren`). Prod's React build emits no such measures,
+      // so full tracing there is safe.
+      tracesSampleRate: isProd ? 1.0 : 0,
       replaysSessionSampleRate: isProd ? 0.1 : 0,
       replaysOnErrorSampleRate: isProd ? 1.0 : 0,
+      // No browser-tracing integration in dev: its pageload transaction collects
+      // React 19's per-render `performance.measure` entries and builds the span
+      // tree in O(n²) (`addSpanChildren`) — an ~8s load freeze on the
+      // component-heavy recipe views (confirmed via JS self-profiling). Error
+      // reporting still works without it. Prod keeps full tracing + replay.
       integrations: isProd
         ? [
             Sentry.tanstackRouterBrowserTracingIntegration(router),
             Sentry.replayIntegration(),
           ]
-        : [Sentry.tanstackRouterBrowserTracingIntegration(router)],
+        : [],
       // Don't record console output as breadcrumbs in dev — capturing hundreds
       // of warnings per second is the work that balloons into the freeze.
       beforeBreadcrumb: isProd

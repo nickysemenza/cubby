@@ -69,6 +69,7 @@ import { Route as AuthenticatedCookbooksCookbookIdRouteImport } from './routes/_
 import { Route as AuthenticatedAccountAccountViewRouteImport } from './routes/_authenticated/account.$accountView'
 import { Route as AuthenticatedUsdaUpcCodeRouteImport } from './routes/_authenticated/usda.upc.$code'
 import { Route as AuthenticatedUsdaNdbCodeRouteImport } from './routes/_authenticated/usda.ndb.$code'
+import { Route as AuthenticatedRecipesIdExportRouteImport } from './routes/_authenticated/recipes.$id_.export'
 
 const DocsRoute = DocsRouteImport.update({
   id: '/docs',
@@ -400,6 +401,12 @@ const AuthenticatedUsdaNdbCodeRoute =
     path: '/usda/ndb/$code',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedRecipesIdExportRoute =
+  AuthenticatedRecipesIdExportRouteImport.update({
+    id: '/recipes/$id_/export',
+    path: '/recipes/$id/export',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -459,6 +466,7 @@ export interface FileRoutesByFullPath {
   '/recipes/': typeof AuthenticatedRecipesIndexRoute
   '/search/': typeof AuthenticatedSearchIndexRoute
   '/usda/': typeof AuthenticatedUsdaIndexRoute
+  '/recipes/$id/export': typeof AuthenticatedRecipesIdExportRoute
   '/usda/ndb/$code': typeof AuthenticatedUsdaNdbCodeRoute
   '/usda/upc/$code': typeof AuthenticatedUsdaUpcCodeRoute
 }
@@ -520,6 +528,7 @@ export interface FileRoutesByTo {
   '/recipes': typeof AuthenticatedRecipesIndexRoute
   '/search': typeof AuthenticatedSearchIndexRoute
   '/usda': typeof AuthenticatedUsdaIndexRoute
+  '/recipes/$id/export': typeof AuthenticatedRecipesIdExportRoute
   '/usda/ndb/$code': typeof AuthenticatedUsdaNdbCodeRoute
   '/usda/upc/$code': typeof AuthenticatedUsdaUpcCodeRoute
 }
@@ -583,6 +592,7 @@ export interface FileRoutesById {
   '/_authenticated/recipes/': typeof AuthenticatedRecipesIndexRoute
   '/_authenticated/search/': typeof AuthenticatedSearchIndexRoute
   '/_authenticated/usda/': typeof AuthenticatedUsdaIndexRoute
+  '/_authenticated/recipes/$id_/export': typeof AuthenticatedRecipesIdExportRoute
   '/_authenticated/usda/ndb/$code': typeof AuthenticatedUsdaNdbCodeRoute
   '/_authenticated/usda/upc/$code': typeof AuthenticatedUsdaUpcCodeRoute
 }
@@ -646,6 +656,7 @@ export interface FileRouteTypes {
     | '/recipes/'
     | '/search/'
     | '/usda/'
+    | '/recipes/$id/export'
     | '/usda/ndb/$code'
     | '/usda/upc/$code'
   fileRoutesByTo: FileRoutesByTo
@@ -707,6 +718,7 @@ export interface FileRouteTypes {
     | '/recipes'
     | '/search'
     | '/usda'
+    | '/recipes/$id/export'
     | '/usda/ndb/$code'
     | '/usda/upc/$code'
   id:
@@ -769,6 +781,7 @@ export interface FileRouteTypes {
     | '/_authenticated/recipes/'
     | '/_authenticated/search/'
     | '/_authenticated/usda/'
+    | '/_authenticated/recipes/$id_/export'
     | '/_authenticated/usda/ndb/$code'
     | '/_authenticated/usda/upc/$code'
   fileRoutesById: FileRoutesById
@@ -1207,6 +1220,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedUsdaNdbCodeRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/recipes/$id_/export': {
+      id: '/_authenticated/recipes/$id_/export'
+      path: '/recipes/$id/export'
+      fullPath: '/recipes/$id/export'
+      preLoaderRoute: typeof AuthenticatedRecipesIdExportRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
   }
 }
 
@@ -1260,6 +1280,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedRecipesIndexRoute: typeof AuthenticatedRecipesIndexRoute
   AuthenticatedSearchIndexRoute: typeof AuthenticatedSearchIndexRoute
   AuthenticatedUsdaIndexRoute: typeof AuthenticatedUsdaIndexRoute
+  AuthenticatedRecipesIdExportRoute: typeof AuthenticatedRecipesIdExportRoute
   AuthenticatedUsdaNdbCodeRoute: typeof AuthenticatedUsdaNdbCodeRoute
   AuthenticatedUsdaUpcCodeRoute: typeof AuthenticatedUsdaUpcCodeRoute
 }
@@ -1316,6 +1337,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedRecipesIndexRoute: AuthenticatedRecipesIndexRoute,
   AuthenticatedSearchIndexRoute: AuthenticatedSearchIndexRoute,
   AuthenticatedUsdaIndexRoute: AuthenticatedUsdaIndexRoute,
+  AuthenticatedRecipesIdExportRoute: AuthenticatedRecipesIdExportRoute,
   AuthenticatedUsdaNdbCodeRoute: AuthenticatedUsdaNdbCodeRoute,
   AuthenticatedUsdaUpcCodeRoute: AuthenticatedUsdaUpcCodeRoute,
 }

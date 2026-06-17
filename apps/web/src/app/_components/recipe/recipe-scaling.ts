@@ -76,7 +76,12 @@ export const scaleRecipe = (recipe: RecipeOut, factor: number): RecipeOut => {
     ...section,
     ingredients: section.ingredients.map((row) => ({
       ...row,
-      amounts: row.amounts.map((a) => ({ ...a, value: a.value * factor })),
+      amounts: row.amounts.map((a) => ({
+        ...a,
+        value: a.value * factor,
+        // Scale the range upper bound too, else "2–3 cups" scales to "4–3 cups".
+        ...(a.upperValue != null ? { upperValue: a.upperValue * factor } : {}),
+      })),
     })),
   }));
 

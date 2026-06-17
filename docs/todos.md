@@ -32,10 +32,12 @@ agent loop and the prep-sheet becomes mostly templating.
   one shot, instead of the agent hand-iterating amounts. Niche; largely subsumed by the
   agent once `get_recipe_nutrition` makes macros queryable. Build only if the
   iterate-and-recheck loop stays painful in practice.
-- [ ] **Recipe → prep-sheet export**: a render tool that flattens sub-recipes, scales to
-  N servings, and emits a prep card + shopping list (compose with the existing
-  `get_shopping_list`). Mostly agent-composable once nutrition + per-ingredient unit
-  conversion (g↔cup density) are exposed as tools.
+- [x] ~~**Recipe → prep-sheet export**~~ — shipped as a **UI feature**, not an MCP tool:
+  three recipe-detail views — `prep` (components + combined shop), `nested` (Modernist-Cuisine
+  spec), and `matrix` (ingredient × component grid, row totals = combined shop) — plus a
+  print/export route (`/recipes/$id/export`) with Print + Copy-Markdown for each. All expand
+  the full sub-recipe closure (`recipe-tree.ts` + `useRecipeTree`); prep quantities are
+  as-used scaled, nested shows each batch at its own 100% base.
 - [ ] **Macro-aware nutrition (prereq for both above)**: add an ingredient-level USDA
   `fdc_id` link (today `fdc_id` lives only on `Product`; for nutrition you want a
   canonical per-ingredient link, falling back to the product's), auto-attach a
