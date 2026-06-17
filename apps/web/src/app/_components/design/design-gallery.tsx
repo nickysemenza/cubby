@@ -6,18 +6,19 @@ import { toast } from "sonner";
 import { EntityPillLink } from "~/app/_components/EntityPill";
 import {
   type IngredientPreview,
-  IngredientPreviewBody,
   type LocationPreview,
-  LocationPreviewBody,
   type ProductPreview,
-  ProductPreviewBody,
   type RecipePreview,
-  RecipePreviewBody,
-  UsdaFoodPreviewBody,
+  toIngredientCard,
+  toLocationCard,
+  toProductCard,
+  toRecipeCard,
+  toUsdaCard,
   type UsdaPreview,
 } from "~/app/_components/EntityPreviewContent";
 import { LocationTypeBadge } from "~/app/_components/locations/LocationTypeBadge";
 import { NoneState } from "~/app/_components/NoneState";
+import { ManifestCard } from "~/app/_components/preview/manifest-card";
 import { CategoryBadge } from "~/app/_components/products/CategoryBadge";
 import {
   DistributionGlyph,
@@ -923,9 +924,15 @@ const LOCATION_SAMPLE: LocationPreview = {
 };
 
 const PREVIEW_DEMOS = [
-  { key: "recipe", node: <RecipePreviewBody {...RECIPE_SAMPLE} /> },
-  { key: "ingredient", node: <IngredientPreviewBody {...INGREDIENT_SAMPLE} /> },
-  { key: "product", node: <ProductPreviewBody {...PRODUCT_SAMPLE} /> },
-  { key: "usda-food", node: <UsdaFoodPreviewBody {...USDA_SAMPLE} /> },
-  { key: "location", node: <LocationPreviewBody {...LOCATION_SAMPLE} /> },
+  { key: "recipe", node: <ManifestCard {...toRecipeCard(RECIPE_SAMPLE)} /> },
+  {
+    key: "ingredient",
+    node: <ManifestCard {...toIngredientCard(INGREDIENT_SAMPLE)} />,
+  },
+  { key: "product", node: <ManifestCard {...toProductCard(PRODUCT_SAMPLE)} /> },
+  { key: "usda-food", node: <ManifestCard {...toUsdaCard(USDA_SAMPLE)} /> },
+  {
+    key: "location",
+    node: <ManifestCard {...toLocationCard(LOCATION_SAMPLE)} />,
+  },
 ] as const;

@@ -1,0 +1,204 @@
+import { Link } from "@tanstack/react-router";
+import { ArrowUpRight } from "lucide-react";
+import type { ReactNode } from "react";
+import { match } from "ts-pattern";
+import { Spinner } from "~/components/ui/spinner";
+import { entities } from "~/entities/entities";
+import type { Entity, EntityDetailRoute } from "~/entities/types";
+import { formatCurrency } from "~/lib/utils";
+import { EntityPillLink } from "../EntityPill";
+import { NutrientsSummary } from "../units/NutrientsSummary";
+
+// The single "manifest" hovercard renderer. Every entity preview is expressed
+// as a declarative ManifestCardProps (built by a per-entity toXCard spec) and
+// rendered here — shared header (icon · name · Open · type tag · identity),
+// a navigation cross-link strip, then a body of declarative blocks. Mirrors the
+// Problems page (one ProblemSection renderer + per-type renderItem shapes).
+
+// ── Declarative shape ───────────────────────────────────────────────────────
+
+export type CrossLink = {
+  to: EntityDetailRoute;
+  params: { id: string };
+  search?: Record<string, unknown>;
+  label: string;
+};
+
+export type BodyBlock =
+  | { kind: "thumb"; url: string }
+  | { kind: "nutrients"; nutrients: Record<string, number> }
+  | { kind: "stats"; stats: { label: string; value: ReactNode }[] }
+  | {
+      kind: "products";
+      products: { id: string; name: string; manufacturer: string }[];
+    };
+
+export type ManifestCardProps = {
+  /** Drives the Open link's route via the entities registry. */
+  entity: Entity;
+  /** `id` param for the Open link. */
+  routeParam: string;
+  icon: ReactNode;
+  name: string;
+  tag: string;
+  identity?: ReactNode;
+  crossLinks?: CrossLink[];
+  body?: BodyBlock[];
+};
+
+const actionLink =
+  "inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-primary hover:underline";
+const openIcon =
+  "shrink-0 text-primary transition-colors hover:text-primary/70";
+
+export function ManifestCard({
+  entity,
+  routeParam,
+  icon,
+  name,
+  tag,
+  identity,
+  crossLinks,
+  body,
+}: ManifestCardProps) {
+  return (
+    <div className="flex flex-col gap-2.5">
+      <div className="flex items-start gap-2">
+        <span className="mt-0.5 shrink-0 self-start">{icon}</span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start gap-2">
+            <span className="min-w-0 flex-1 font-heading font-medium text-sm leading-tight">
+              {name}
+            </span>
+            <div className="mt-px flex shrink-0 items-center gap-1.5">
+              <Link
+                to={entities[entity].routes.detail}
+                params={{ id: routeParam }}
+                aria-label="Open"
+                className={openIcon}
+              >
+                <ArrowUpRight className="size-3.5" />
+              </Link>
+              <span className="rounded-sm bg-muted px-1.5 py-px font-mono text-[9px] text-muted-foreground uppercase tracking-wide">
+                {tag}
+              </span>
+            </div>
+          </div>
+          {identity && (
+            <div className="mt-0.5 flex items-center gap-1.5 text-muted-foreground text-xs">
+              {identity}
+            </div>
+          )}
+        </div>
+      </div>
+      {crossLinks && crossLinks.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-border/60 border-y border-dashed py-1.5 text-xs">
+          {crossLinks.map((cl) => (
+            <Link
+              key={cl.label}
+              to={cl.to}
+              params={cl.params}
+              // TanStack can't statically validate search across a route union.
+              search={cl.search as never}
+              className={actionLink}
+            >
+              {cl.label}
+            </Link>
+          ))}
+        </div>
+      )}
+      {body?.map((block, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: body blocks are a fixed positional list
+        <BodyBlockView key={i} block={block} />
+      ))}
+    </div>
+  );
+}
+
+// ── Body blocks ─────────────────────────────────────────────────────────────
+
+function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <span className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
+      {children}
+    </span>
+  );
+}
+
+function BodyBlockView({ block }: { block: BodyBlock }) {
+  return match(block)
+    .with({ kind: "thumb" }, (b) => (
+      <img
+        src={b.url}
+        alt=""
+        className="h-24 w-full rounded-md border border-border object-cover"
+      />
+    ))
+    .with({ kind: "nutrients" }, (b) => (
+      <div className="flex flex-col gap-1">
+        <SectionLabel>Per 100g</SectionLabel>
+        <NutrientsSummary nutrients={b.nutrients} dense />
+      </div>
+    ))
+    .with({ kind: "stats" }, (b) => (
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+        {b.stats.map((s) => (
+          <div key={s.label} className="flex flex-col">
+            <SectionLabel>{s.label}</SectionLabel>
+            <span className="font-medium text-sm tabular-nums">{s.value}</span>
+          </div>
+        ))}
+      </div>
+    ))
+    .with({ kind: "products" }, (b) => (
+      <div className="flex flex-col gap-1">
+        <SectionLabel>Product{b.products.length === 1 ? "" : "s"}</SectionLabel>
+        <div className="flex flex-col gap-0.5">
+          {b.products.slice(0, 4).map((p) => (
+            <EntityPillLink key={p.id} entity="product" data={p} compact />
+          ))}
+          {b.products.length > 4 && (
+            <span className="text-2xs text-muted-foreground">
+              +{b.products.length - 4} more
+            </span>
+          )}
+        </div>
+      </div>
+    ))
+    .exhaustive();
+}
+
+// ── Shared bits used by per-entity specs / fetch wrappers ────────────────────
+
+/** A per-each price figure, e.g. "from $1.99/ea". */
+export function PriceValue({
+  amount,
+  from,
+}: {
+  amount: number;
+  from?: boolean;
+}) {
+  return (
+    <>
+      {from && <span className="text-muted-foreground text-xs">from </span>}
+      {formatCurrency(amount)}
+      <span className="text-muted-foreground text-xs">/ea</span>
+    </>
+  );
+}
+
+export function PreviewLoading() {
+  return (
+    <div className="flex items-center justify-center py-3">
+      <Spinner className="text-muted-foreground" />
+    </div>
+  );
+}
+
+export function PreviewDeleted({ label }: { label: string }) {
+  return (
+    <span className="text-muted-foreground text-sm italic">
+      {label} (deleted)
+    </span>
+  );
+}

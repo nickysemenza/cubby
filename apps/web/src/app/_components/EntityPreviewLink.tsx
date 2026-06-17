@@ -6,6 +6,7 @@ import {
   PreviewCardContent,
   PreviewCardTrigger,
 } from "~/components/ui/preview-card";
+import { entities } from "~/entities/entities";
 import {
   IngredientPreviewContent,
   LocationPreviewContent,
@@ -37,14 +38,6 @@ type PreviewEntity =
   | "usda-food"
   | "location";
 
-const ROUTE: Record<PreviewEntity, string> = {
-  recipe: "/recipes/$id",
-  ingredient: "/ingredients/$id",
-  product: "/products/$id",
-  "usda-food": "/usda/$id",
-  location: "/locations/$id",
-};
-
 type EntityPreviewLinkProps = {
   entity: PreviewEntity;
   /** Route param id. For usda-food this is String(fdc_id). */
@@ -70,7 +63,7 @@ export function EntityPreviewLink({
         closeDelay={150}
         render={
           <Link
-            to={ROUTE[entity]}
+            to={entities[entity].routes.detail}
             params={{ id }}
             target={openInNewTab ? "_blank" : undefined}
             rel={openInNewTab ? "noopener noreferrer" : undefined}
