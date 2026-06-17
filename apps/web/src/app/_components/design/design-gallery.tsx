@@ -913,6 +913,7 @@ const USDA_SAMPLE: UsdaPreview = {
   brand: "Diamond Crystal",
   nutrients: { "307": 40000 },
   linkedProductId: "sample-product",
+  linkedProductName: "kosher salt",
 };
 const LOCATION_SAMPLE: LocationPreview = {
   id: "sample-location",

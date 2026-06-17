@@ -21,6 +21,8 @@ export type CrossLink = {
   to: EntityDetailRoute;
   params: { id: string };
   search?: Record<string, unknown>;
+  /** Leading icon — the target entity's icon (or a view icon for self-views). */
+  icon?: ReactNode;
   label: string;
 };
 
@@ -102,6 +104,7 @@ export function ManifestCard({
               search={cl.search as never}
               className={actionLink}
             >
+              {cl.icon}
               {cl.label}
             </Link>
           ))}

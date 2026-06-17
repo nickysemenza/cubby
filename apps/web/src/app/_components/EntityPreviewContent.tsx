@@ -4,6 +4,7 @@ import type { DataType } from "@cubby/usda-schemas";
 import { dataTypeLabel } from "@cubby/usda-schemas";
 import { useQuery } from "@tanstack/react-query";
 import { sumBy } from "es-toolkit";
+import { ListChecks } from "lucide-react";
 import type { ReactNode } from "react";
 import { EntityIcon } from "~/entities/entities";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
@@ -13,6 +14,7 @@ import { useTRPC } from "~/trpc/react";
 import { LocationIcon } from "./locations/location-icons";
 import {
   type BodyBlock,
+  type CrossLink,
   ManifestCard,
   type ManifestCardProps,
   PreviewDeleted,
@@ -20,6 +22,16 @@ import {
   PriceValue,
 } from "./preview/manifest-card";
 import { formatYield } from "./recipe/recipe-utils";
+
+// Cross-link to the USDA food behind an ingredient/product (built identically
+// for both). The food description is too long to use as the label, so the
+// apple icon + type label carry it.
+const usdaCrossLink = (fdcId: number): CrossLink => ({
+  to: "/usda/$id",
+  params: { id: String(fdcId) },
+  icon: <EntityIcon entity="usda-food" size={12} colored />,
+  label: "USDA food",
+});
 
 // Per-entity preview "specs": each toXCard maps a small view-model into the
 // declarative ManifestCardProps the shared <ManifestCard> renders. The fetch
@@ -65,6 +77,7 @@ export function toRecipeCard(vm: RecipePreview): ManifestCardProps {
         to: "/recipes/$id",
         params: { id: vm.id },
         search: { view: "prep" },
+        icon: <ListChecks className="size-3" />,
         label: "Prep sheet",
       },
     ],
@@ -141,15 +154,7 @@ export function toIngredientCard(vm: IngredientPreview): ManifestCardProps {
     identity:
       vm.aliases.length > 0 ? `aka ${vm.aliases.join(", ")}` : undefined,
     crossLinks:
-      vm.usdaFdcId != null
-        ? [
-            {
-              to: "/usda/$id",
-              params: { id: String(vm.usdaFdcId) },
-              label: "USDA food",
-            },
-          ]
-        : undefined,
+      vm.usdaFdcId != null ? [usdaCrossLink(vm.usdaFdcId)] : undefined,
     body,
   };
 }
@@ -228,15 +233,7 @@ export function toProductCard(vm: ProductPreview): ManifestCardProps {
     tag: "product",
     identity: vm.identity,
     crossLinks:
-      vm.usdaFdcId != null
-        ? [
-            {
-              to: "/usda/$id",
-              params: { id: String(vm.usdaFdcId) },
-              label: "USDA food",
-            },
-          ]
-        : undefined,
+      vm.usdaFdcId != null ? [usdaCrossLink(vm.usdaFdcId)] : undefined,
     body,
   };
 }
@@ -287,6 +284,7 @@ export type UsdaPreview = {
   brand?: string;
   nutrients: Record<string, number>;
   linkedProductId?: string;
+  linkedProductName?: string;
 };
 
 export function toUsdaCard(vm: UsdaPreview): ManifestCardProps {
@@ -316,7 +314,8 @@ export function toUsdaCard(vm: UsdaPreview): ManifestCardProps {
           {
             to: "/products/$id",
             params: { id: vm.linkedProductId },
-            label: "Product",
+            icon: <EntityIcon entity="product" size={12} colored />,
+            label: vm.linkedProductName ?? "Product",
           },
         ]
       : undefined,
@@ -345,6 +344,7 @@ export function UsdaFoodPreviewContent({ fdcId }: { fdcId: number }) {
           undefined,
         nutrients: data.nutritionInfo.nutrientsPer100,
         linkedProductId: data.linkedProducts?.[0]?.id,
+        linkedProductName: data.linkedProducts?.[0]?.name,
       })}
     />
   );
@@ -374,18 +374,15 @@ export function toLocationCard(vm: LocationPreview): ManifestCardProps {
     icon: <LocationIcon type={vm.type} size={14} colored />,
     name: vm.name,
     tag: "location",
-    identity: (
-      <>
-        <span>{vm.type}</span>
-        {vm.parent && <span>· in {vm.parent.name}</span>}
-      </>
-    ),
+    // Parent isn't repeated here — it lives in the cross-link below.
+    identity: vm.type,
     crossLinks: vm.parent
       ? [
           {
             to: "/locations/$id",
             params: { id: vm.parent.id },
-            label: `↑ ${vm.parent.name}`,
+            icon: <EntityIcon entity="location" size={12} colored />,
+            label: vm.parent.name,
           },
         ]
       : undefined,
