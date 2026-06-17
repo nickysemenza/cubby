@@ -3,6 +3,7 @@ import { createRouter } from "@tanstack/react-router";
 import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
 import { RouteErrorComponent } from "~/components/route-error";
 import { RoutePending } from "~/components/route-pending";
+import { installJsProfiler } from "~/lib/perf/js-self-profile";
 import * as TanstackQuery from "./integrations/tanstack-query/root-provider";
 
 // Import the generated route tree
@@ -35,11 +36,12 @@ export const getRouter = () => {
     defaultPendingMinMs: 400,
   });
 
-  // Initialize Sentry on client only. Dev keeps error reporting AND tracing,
-  // but drops Replay and console-breadcrumb capture: those two are what turn a
-  // flood of console.error warnings (e.g. a React setState-in-render warning)
-  // into a 30s+ main-thread freeze — Replay serializes the DOM and captures
-  // every console call. Tracing is safe; it doesn't run per console.error.
+  // Initialize Sentry on client only. Dev keeps error reporting but drops
+  // tracing, Replay, and console-breadcrumb capture — each turns a busy moment
+  // into a multi-second main-thread freeze in dev: Replay serializes the DOM on
+  // every console call, and browser tracing builds an O(n²) span tree from React
+  // 19's dev per-render `performance.measure` entries (see below). Prod keeps all
+  // three (its React build emits no such measures; Replay is sampled).
   if (!router.isServer) {
     const isProd = import.meta.env.PROD;
     Sentry.init({
@@ -73,6 +75,9 @@ export const getRouter = () => {
         : (breadcrumb) =>
             breadcrumb.category === "console" ? null : breadcrumb,
     });
+
+    // Dev-only on-demand CPU profiler: `await __jsProfile(5000)` in the console.
+    if (!isProd) installJsProfiler();
 
     // Register the app-shell service worker. Gate on the CF build (the SW only
     // exists there; `vite dev` has no /sw.js and SW + HMR is noisy anyway).

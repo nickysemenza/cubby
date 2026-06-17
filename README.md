@@ -239,6 +239,8 @@ Claude Code can run parallel sessions, each in its own git worktree under
 | `pnpm --filter @cubby/web run deploy:cf` | Deploy to Cloudflare Workers |
 | `pnpm run wasm` | Rebuild `@cubby/recipebridge` from Rust source |
 
+In dev, `await __jsProfile(5000)` in the browser console captures a CPU flame summary (the hottest main-thread frames over the next N ms) — it catches "every measurement is fast but the page is slow" jank that React's profiler can't see (commit-phase / native / third-party work).
+
 ## 🧪 Testing
 
 | Suffix | Purpose | Runner |

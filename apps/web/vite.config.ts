@@ -177,6 +177,20 @@ export default defineConfig(async () => {
           ],
     },
     plugins: [
+      // Permit the JS Self-Profiling API in dev (`window.__jsProfile`, see
+      // lib/perf/js-self-profile.ts). The header must be on the SSR document, and
+      // `server.headers` doesn't reach TanStack Start's response — set it via
+      // middleware. `configureServer` only runs under `vite dev`, so prod never
+      // gets it.
+      {
+        name: "js-self-profiling-header",
+        configureServer(server) {
+          server.middlewares.use((_req, res, next) => {
+            res.setHeader("Document-Policy", "js-profiling");
+            next();
+          });
+        },
+      } satisfies Plugin,
       // Deploy plugin must come first (Cloudflare plugin needs early hook)
       ...deployPlugin,
       // CF Workers WASM instantiation plugin must run before vite-plugin-wasm
