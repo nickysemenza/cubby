@@ -6,11 +6,24 @@ import {
 } from "@cubby/schemas/identifiers";
 import type {
   AllProblems,
+  DuplicateUniqueProduct,
+  EmptyLocation,
+  IngredientWithPartialCoverage,
+  InvalidInventoryAmount,
+  InvalidUPC,
+  InventoryWithStaleValuation,
+  LocationWithoutAiDescription,
   MaintenanceCounts,
+  OrphanedProduct,
   ProblemsCount,
+  ProductWithBetterUpcData,
+  ProductWithIslandedMappings,
+  ProductWithoutMappings,
+  ProductWithWrongCategory,
+  StaleIngredientParse,
+  StaleRecipeTotals,
 } from "@cubby/schemas/problems";
 import { hasFdcLink } from "@cubby/schemas/product";
-import type { RecipeTotals } from "@cubby/schemas/recipe";
 import { isMiscProduct } from "@cubby/shared";
 import { upc as upcSchema } from "@cubby/usda-schemas";
 import {
@@ -24,11 +37,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { mapValues, omit, sum, uniq } from "es-toolkit";
-import {
-  BASE_KINDS,
-  type BaseKind,
-  conversionCoverage,
-} from "~/lib/conversion-coverage";
+import { BASE_KINDS, conversionCoverage } from "~/lib/conversion-coverage";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { computeParseDrift, hasDrift } from "~/lib/parse-drift";
 import { isMoneyUnit } from "~/lib/price-mapping-utils";
@@ -66,148 +75,12 @@ import { foodLookupParamFromProduct } from "~/server/repo/product/helpers";
 import { markRecipesStale } from "~/server/repo/recipe/totals";
 import { batchEnrichWithFood } from "~/server/services/usda-helpers";
 
-// AllProblems / ProblemsCount are the canonical Zod-derived shapes from
-// @cubby/schemas/problems — this repo is checked against them rather than
-// re-declaring a parallel interface. The per-item types below stay local
-// (they carry repo-only branding like BaseKind coverage).
-
-// Type definitions for each problem type
-interface DuplicateUniqueProduct {
-  id: string;
-  name: string;
-  manufacturer: string;
-  expectedQuantity: number | null;
-  locations: Array<{
-    id: string;
-    name: string;
-  }>;
-}
-
-interface OrphanedProduct {
-  id: string;
-  name: string;
-  manufacturer: string;
-  createdAt: Date;
-}
-
-interface InvalidUPC {
-  id: string;
-  name: string;
-  manufacturer: string;
-  upc: string;
-  issue: "invalid_format" | "duplicate";
-}
-
-interface ProductWithoutMappings {
-  id: string;
-  name: string;
-  manufacturer: string;
-  createdAt: Date;
-  /**
-   * Whether the product is linked to an ingredient — i.e. a food. Drives the
-   * inline fix: ingredients get the USDA-link + price path (the "core 4"),
-   * non-foods just need a price.
-   */
-  isIngredient: boolean;
-  /** Operator-set: no USDA food exists — the fix switches to manual entry. */
-  usdaUnavailable: boolean;
-}
-
-// An ingredient product that has *some* coverage but can't reach all four base
-// kinds (weight/volume/money/calories) — e.g. a price but no weight/volume link,
-// or a volume↔money mapping but no calories. Graded with the real conversion
-// graph (conversionCoverage on synthesized mappings), so money living in a unit
-// mapping counts just like a scalar price. Truly-empty products are left to
-// findProductsWithoutMappings.
-interface IngredientWithPartialCoverage {
-  id: string;
-  name: string;
-  manufacturer: string;
-  /** Which of the 4 base kinds the effective graph can reach (lit chips). */
-  coverage: { covered: BaseKind[] };
-  /**
-   * Whether the product already has price info — a scalar price OR a money unit
-   * mapping. Distinct from `coverage` having `money` (which means money is
-   * reachable *from a measure*). Drives the fix: only offer the price step when
-   * no price exists at all, so we never blank-overwrite an existing one.
-   */
-  hasPrice: boolean;
-  /**
-   * Whether a USDA food already resolves for this product. When true, the fix
-   * won't offer "link a USDA food" — re-linking the same food can't fill a gap
-   * the food doesn't cover (e.g. a portion with an unrecognized unit); that
-   * needs a manual conversion.
-   */
-  hasUsdaLink: boolean;
-  /**
-   * Operator-set: no USDA food exists for this product. The fix then stops
-   * suggesting a (futile) USDA link and switches to manual entry of the missing
-   * kinds. Does NOT suppress — still flagged until they're filled.
-   */
-  usdaUnavailable: boolean;
-}
-
-interface InvalidInventoryAmount {
-  id: string;
-  productName: string;
-  locationName: string;
-  amount: {
-    value: number;
-    unit: string;
-  };
-  issue: "zero" | "negative";
-}
-
-export interface EmptyLocation {
-  id: string;
-  name: string;
-  type: string;
-  createdAt: Date;
-  lastBulkInventory: Date | null;
-  aiDescription: string | null;
-  firstImageUrl: string | null;
-  firstImageId: string | null;
-}
-
-interface ProductWithWrongCategory {
-  id: string;
-  name: string;
-  manufacturer: string;
-  category: string | null;
-  indicator: "fdc" | "ingredient";
-}
-
-interface InventoryWithStaleValuation {
-  id: string;
-  productName: string;
-  locationName: string;
-  storedValuation: number | null;
-  expectedValuation: number | null;
-}
-
-interface ProductWithIslandedMappings {
-  id: string;
-  name: string;
-  manufacturer: string;
-  islandCount: number;
-  islands: Array<{
-    units: string[]; // Up to 3 representative units from this island
-    exampleUnit: string; // Most important unit for badge display
-  }>;
-  /**
-   * Which of the 4 base kinds (weight/volume/money/calories) the effective graph
-   * can already reach. Computed from the same synthesized mappings used for island
-   * detection, so the card's core-4 chips and the island split never disagree.
-   */
-  coverage: { covered: BaseKind[] };
-}
-
-interface LocationWithoutAiDescription {
-  id: string;
-  name: string;
-  type: string;
-  imageCount: number;
-}
+// Every problem item type is the canonical Zod-derived shape from
+// @cubby/schemas/problems (imported above) — this repo is checked against those
+// rather than re-declaring parallel interfaces. EmptyLocation and
+// ProductWithBetterUpcData are re-exported for the Problems-page components that
+// import them from here.
+export type { EmptyLocation, ProductWithBetterUpcData };
 
 // Find products with expectedQuantity=1 that appear in multiple locations
 const findDuplicateUniqueProducts = async (
@@ -719,21 +592,10 @@ const findLocationsWithoutAiDescription = async (
   }));
 };
 
-// A product whose stored UPC-sourced fields have a gap (no manufacturer, no
-// price, or no image) that a *fresh* UPC lookup could fill — i.e. re-importing
-// from the lookup would improve the record. `gaps` flags which fields the live
-// lookup can actually fill (only set when the lookup has data for them).
-export interface ProductWithBetterUpcData {
-  id: string;
-  name: string;
-  manufacturer: string;
-  upc: string;
-  gaps: {
-    manufacturer: boolean;
-    price: boolean;
-    image: boolean;
-  };
-}
+// ProductWithBetterUpcData (productWithBetterUpcDataSchema): a product whose
+// stored UPC-sourced fields have a gap (no manufacturer, price, or image) that a
+// *fresh* UPC lookup could fill. `gaps` flags which fields the live lookup can
+// actually fill (only set when the lookup has data for them).
 
 // Find products that a fresh UPC lookup could enrich. We first narrow to
 // *candidates* purely from the DB — products with a UPC that already have a
@@ -807,27 +669,11 @@ const findProductsWithBetterUpcData = async (
   return problems;
 };
 
-// A stored ingredient occurrence whose original raw line, re-parsed with the
-// *current* parser, now differs from what's stored on any axis — name, amounts, or
-// modifier — i.e. it was parsed by an older parser and a re-parse would change it.
-// All drift is equal; the per-axis booleans drive only how the panel sorts/styles.
-interface StaleIngredientParse {
-  recipeSectionIngredientId: string;
-  recipeId: RecipeId;
-  recipeName: string;
-  ingredientId: IngredientId;
-  storedName: string;
-  rawLine: string;
-  parsedName: string;
-  nameDrift: boolean;
-  storedAmounts: Amount[];
-  parsedAmounts: Amount[];
-  amountDrift: boolean;
-  storedModifier: string | null;
-  parsedModifier: string | null;
-  modifierDrift: boolean;
-}
-
+// StaleIngredientParse (staleIngredientParseSchema): a stored ingredient
+// occurrence whose original raw line, re-parsed with the *current* parser, now
+// differs from what's stored on any axis (name, amounts, modifier) — parsed by an
+// older parser; a re-parse would change it. All drift is equal; the per-axis
+// booleans drive only how the panel sorts/styles.
 const findStaleIngredientParses = async (
   db: Database,
 ): Promise<StaleIngredientParse[]> => {
@@ -951,18 +797,11 @@ export const reparseStaleIngredientParses = async (
   return { updated: stale.length, recipesAffected };
 };
 
-// Badge counts derive from the full problems scan — one source of truth, no
-// parallel count queries to drift out of sync with the find* functions.
-// A recipe whose persisted cost/calorie rollups are out of date — `totalsComputedAt`
-// is NULL because the recipe is new, was edited, or a costing input (a linked
-// product's price / USDA enrichment) changed. The list shows the last-known totals
-// (which may be null if never computed) so the card has something to display; the
-// fix action recomputes them. See recipe-costing.service / repo/recipe/totals.
-interface StaleRecipeTotals {
-  recipeId: RecipeId;
-  recipeName: string;
-  totals: RecipeTotals | null;
-}
+// StaleRecipeTotals (staleRecipeTotalsSchema): a recipe whose persisted
+// cost/calorie rollups are out of date — `totalsComputedAt` is NULL because the
+// recipe is new, was edited, or a costing input (a linked product's price / USDA
+// enrichment) changed. The list shows the last-known totals (may be null if never
+// computed); the fix recomputes them. See recipe-costing.service / repo/recipe/totals.
 
 // Stale rows only (normally 0 or a handful) — indexed by Recipe_totals_stale_idx —
 // so this is cheap and never a full-table read.
