@@ -1,5 +1,5 @@
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
-import type { UnitMappingInput } from "@cubby/schemas/unitmapping";
+import type { UnitMapping, UnitMappingInput } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { match } from "ts-pattern";
 import { UsdaFoodSearchField } from "~/app/_components/combobox/with-usda-food-search";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { UnitMappingsTable } from "~/app/_components/units/unitmappingstable";
 import { CoverageChips } from "~/app/problems/components/unit-coverage-fix";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -21,7 +22,9 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
 import { getErrorMessage } from "~/lib/error-utils";
+import { getIngredientMappings } from "~/lib/unit-mapping-utils";
 import { cn } from "~/lib/utils";
+import { wasm } from "~/lib/wasm";
 import type { EnrichmentRow } from "~/server/services/ingredient.service";
 import { useTRPC } from "~/trpc/react";
 
@@ -29,6 +32,18 @@ import { useTRPC } from "~/trpc/react";
 const parsePositive = (raw: string): number | null => {
   const n = Number.parseFloat(raw);
   return Number.isFinite(n) && n > 0 ? n : null;
+};
+
+const CORE_4 = new Set(["weight", "volume", "money", "calories"]);
+
+// A mapping bears on the core-4 coverage and isn't a non-calorie nutrient edge
+// (USDA synthesis emits a "100 g = N g protein" row per nutrient — noise here).
+// Mirrors the Problems page's isCore4Edge so both show the same current set.
+const isCore4Edge = (m: UnitMapping): boolean => {
+  const ka = wasm.amount_kind(m.a);
+  const kb = wasm.amount_kind(m.b);
+  if (ka.startsWith("nutrient:") || kb.startsWith("nutrient:")) return false;
+  return CORE_4.has(ka) || CORE_4.has(kb);
 };
 
 type FilterKey = "all" | "no-product" | "partial" | "no-usda";
@@ -477,6 +492,20 @@ function WorkbenchEditor({
   const product = row.product[0] ?? null;
   const usdaLinked = hasUsdaLink(row);
 
+  // Current state shown before the inputs (same as the Problems inline fix):
+  // the linked USDA food(s) and the effective core-4 conversions, derived from
+  // the row's already-loaded products — no refetch.
+  const linkedFoods = row.product
+    .map((p) => p.food)
+    .filter((f): f is NonNullable<typeof f> => f != null);
+  const currentMappings = useMemo<UnitMapping[]>(() => {
+    try {
+      return getIngredientMappings(row).filter(isCore4Edge);
+    } catch {
+      return [];
+    }
+  }, [row]);
+
   const [food, setFood] = useState<FoodSummaryWithLinkedProducts | null>(
     initialFood,
   );
@@ -598,6 +627,24 @@ function WorkbenchEditor({
 
   return (
     <div className="space-y-3">
+      {product && (linkedFoods.length > 0 || currentMappings.length > 0) && (
+        <div className="space-y-2 rounded-md border bg-background/60 p-2">
+          {linkedFoods.length > 0 && (
+            <p className="flex items-center gap-1 text-xs">
+              <Check className="h-3 w-3 text-positive" />
+              <span className="text-muted-foreground">Linked USDA:</span>{" "}
+              {linkedFoods.map((f) => f.foodInfo.description).join(", ")}
+            </p>
+          )}
+          {currentMappings.length > 0 && (
+            <div className="space-y-1">
+              <p className="font-medium text-xs">Current conversions</p>
+              <UnitMappingsTable mappings={currentMappings} />
+            </div>
+          )}
+        </div>
+      )}
+
       {!usdaLinked && (
         <div className="space-y-1">
           <p className="font-medium text-xs">

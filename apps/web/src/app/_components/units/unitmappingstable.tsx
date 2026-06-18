@@ -58,6 +58,23 @@ const LazyProductPillLink: React.FC<{ productId: string }> = ({
   return <EntityPillLink entity="product" data={displayProduct} compact />;
 };
 
+// Source label + provenance pill, shared by the desktop cell and the mobile card.
+const MappingSource: React.FC<{ mapping: UnitMapping }> = ({ mapping }) => {
+  const { source, sourceMetadata } = mapping;
+  if (!sourceMetadata) return <>{source || ""}</>;
+  return (
+    <span className="flex items-center gap-1">
+      <span>{source || ""}</span>
+      {sourceMetadata.type === "food" && (
+        <LazyFoodPillLink fdcId={sourceMetadata.fdcId} />
+      )}
+      {sourceMetadata.type === "product" && (
+        <LazyProductPillLink productId={sourceMetadata.productId} />
+      )}
+    </span>
+  );
+};
+
 export const UnitMappingsTable: React.FC<{
   mappings: UnitMapping[];
 }> = ({ mappings }) => {
@@ -86,26 +103,7 @@ export const UnitMappingsTable: React.FC<{
         // Unspecified width: in table-layout:fixed this column absorbs the
         // remaining space; truncate ellipsizes the long source label/pill.
         meta: { className: "truncate p-0.5" },
-        cell: (info) => {
-          const mapping = info.row.original;
-          const { source, sourceMetadata } = mapping;
-
-          if (!sourceMetadata) {
-            return source || "";
-          }
-
-          return (
-            <div className="flex items-center gap-1">
-              <span>{source || ""}</span>
-              {sourceMetadata.type === "food" && (
-                <LazyFoodPillLink fdcId={sourceMetadata.fdcId} />
-              )}
-              {sourceMetadata.type === "product" && (
-                <LazyProductPillLink productId={sourceMetadata.productId} />
-              )}
-            </div>
-          );
-        },
+        cell: (info) => <MappingSource mapping={info.row.original} />,
       }),
     ],
     [columnHelper],
@@ -120,5 +118,24 @@ export const UnitMappingsTable: React.FC<{
     getRowId: (row, i) => `${i}-${row.source}`,
   });
 
-  return <RTable table={table} />;
+  // A mapping row has no entity name, so the generic mobile card derives a
+  // "Unknown" title. Render the conversion itself instead: "from = to · source".
+  return (
+    <RTable
+      table={table}
+      renderMobileCard={(row) => {
+        const m = row.original;
+        return (
+          <div className="flex items-center justify-between gap-2 border-b px-1 py-2 text-sm">
+            <span className="whitespace-nowrap font-medium">
+              {wasm.format_amount(m.a)} = {wasm.format_amount(m.b)}
+            </span>
+            <span className="flex min-w-0 items-center gap-1 truncate text-muted-foreground text-xs">
+              <MappingSource mapping={m} />
+            </span>
+          </div>
+        );
+      }}
+    />
+  );
 };
