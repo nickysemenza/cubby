@@ -59,10 +59,7 @@ import {
   findProductsWithNoImages,
 } from "~/server/repo/product";
 import { foodLookupParamFromProduct } from "~/server/repo/product/helpers";
-import {
-  markRecipesStale,
-  selectAllActiveRecipeIds,
-} from "~/server/repo/recipe/totals";
+import { markRecipesStale } from "~/server/repo/recipe/totals";
 import { batchEnrichWithFood } from "~/server/services/usda-helpers";
 
 // Interface for the complete problems result
@@ -1108,24 +1105,16 @@ export const findAllProblemsCount = async (
 export const findMaintenanceCounts = async (
   db: Database,
 ): Promise<MaintenanceCounts> => {
-  const [
-    recipeIds,
-    staleParses,
-    staleValuations,
-    noImages,
-    wrongCategory,
-    noDescription,
-  ] = await Promise.all([
-    selectAllActiveRecipeIds(db),
-    findStaleIngredientParses(db),
-    findInventoryWithStaleValuations(db),
-    findProductsWithNoImages(db, { excludeIngredients: true }),
-    findProductsNeedingFoodCategory(db),
-    findLocationsWithoutAiDescription(db),
-  ]);
+  const [staleParses, staleValuations, noImages, wrongCategory, noDescription] =
+    await Promise.all([
+      findStaleIngredientParses(db),
+      findInventoryWithStaleValuations(db),
+      findProductsWithNoImages(db, { excludeIngredients: true }),
+      findProductsNeedingFoodCategory(db),
+      findLocationsWithoutAiDescription(db),
+    ]);
 
   return {
-    recipesTotal: recipeIds.length,
     staleParses: staleParses.length,
     staleValuations: staleValuations.length,
     // backfillUPCImages only acts on products that have a UPC to look up.

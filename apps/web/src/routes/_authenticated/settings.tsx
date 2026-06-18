@@ -198,12 +198,15 @@ function DiagnosticsCard() {
 function MaintenanceRow({
   label,
   description,
+  showCount = false,
   count,
   action,
 }: {
   label: string;
   description: string;
-  /** "N affected" dry-run figure; undefined while the counts query loads. */
+  /** Whether this tool has an always-on affected count. */
+  showCount?: boolean;
+  /** "N affected" figure; undefined while the counts query loads. */
   count?: number;
   action: ReactNode;
 }) {
@@ -214,11 +217,52 @@ function MaintenanceRow({
         <p className="text-muted-foreground text-xs">{description}</p>
       </div>
       <div className="flex shrink-0 items-center gap-3">
-        <span className="font-mono text-2xs text-muted-foreground tabular-nums">
-          {count == null ? "—" : `${count} affected`}
-        </span>
+        {showCount && (
+          <span className="font-mono text-2xs text-muted-foreground tabular-nums">
+            {count == null ? "—" : `${count} affected`}
+          </span>
+        )}
         {action}
       </div>
+    </div>
+  );
+}
+
+// Recompute's accurate "would change" needs a full compute+diff (~as costly as
+// recomputing), so it's an on-demand dry run rather than an always-on count. The
+// force-recompute button stays — it's the only path that catches logic-change
+// drift the stale flag misses.
+function RecomputeAction() {
+  const trpc = useTRPC();
+  const dryRun = useQuery({
+    ...trpc.recipe.dryRunRecomputeTotals.queryOptions(),
+    enabled: false,
+  });
+  return (
+    <div className="flex items-center gap-3">
+      {dryRun.data && (
+        <span className="font-mono text-2xs text-muted-foreground tabular-nums">
+          {dryRun.data.wouldChange} of {dryRun.data.total} would change
+        </span>
+      )}
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => dryRun.refetch()}
+        disabled={dryRun.isFetching}
+      >
+        {dryRun.isFetching ? "Checking…" : "Dry run"}
+      </Button>
+      <BackfillButton
+        selectMutation={(api) => api.recipe.recomputeAll.mutationOptions}
+        invalidateKeys={(api) => [api.recipe.list.queryKey()]}
+        idleLabel="Recompute all"
+        pendingLabel="Recomputing…"
+        toastResult={(r) => ({
+          tone: "success",
+          message: `Recomputed ${r.processed} recipe${r.processed === 1 ? "" : "s"}.`,
+        })}
+      />
     </div>
   );
 }
@@ -231,26 +275,16 @@ function MaintenanceRow({
 const MAINTENANCE_TOOLS: {
   label: string;
   description: string;
-  count: (c: MaintenanceCounts) => number;
+  // Always-on affected count; omitted for tools whose accurate count is
+  // expensive (recompute uses an on-demand dry run instead).
+  count?: (c: MaintenanceCounts) => number;
   action: ReactNode;
 }[] = [
   {
     label: "Recompute recipe totals",
     description:
       "Rebuild every recipe's cost / calorie / macro rollup, even when not marked stale.",
-    count: (c) => c.recipesTotal,
-    action: (
-      <BackfillButton
-        selectMutation={(api) => api.recipe.recomputeAll.mutationOptions}
-        invalidateKeys={(api) => [api.recipe.list.queryKey()]}
-        idleLabel="Recompute all"
-        pendingLabel="Recomputing…"
-        toastResult={(r) => ({
-          tone: "success",
-          message: `Recomputed ${r.processed} recipe${r.processed === 1 ? "" : "s"}.`,
-        })}
-      />
-    ),
+    action: <RecomputeAction />,
   },
   {
     label: "Re-parse recipe lines",
@@ -382,7 +416,8 @@ function MaintenanceCard() {
             key={t.label}
             label={t.label}
             description={t.description}
-            count={counts ? t.count(counts) : undefined}
+            showCount={!!t.count}
+            count={t.count && counts ? t.count(counts) : undefined}
             action={t.action}
           />
         ))}

@@ -203,7 +203,6 @@ export type ProblemsCount = z.infer<typeof problemsCountSchema>;
 // subset (the six batch tools shown there), kept separate from problemsCount so
 // it can run only cheap DB/WASM detectors — no USDA/UPC network.
 export const maintenanceCountsSchema = z.object({
-  recipesTotal: z.number().int(),
   staleParses: z.number().int(),
   staleValuations: z.number().int(),
   productsNoImages: z.number().int(),

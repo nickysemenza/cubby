@@ -463,6 +463,20 @@ const recomputeAll = protectedProcedure
     return await ctx.services.recipeCosting.recomputeAll();
   });
 
+// Dry run for the force-recompute: how many recipes' totals would actually
+// change vs persisted, without writing. Read-only but ~as costly as recomputeAll
+// (full engine pass), so the UI triggers it on demand, not on load.
+const dryRunRecomputeTotals = protectedProcedure
+  .output(
+    z.object({
+      wouldChange: z.number().int(),
+      total: z.number().int(),
+    }),
+  )
+  .query(async ({ ctx }) => {
+    return await ctx.services.recipeCosting.dryRunRecomputeTotals();
+  });
+
 // Full costing explanation: persisted totals state vs a fresh compute with
 // per-row diagnostics (usage classification, fired consumption rule, exact
 // per-measure errors, unit-graph conversion paths), named USDA misses, and
@@ -497,6 +511,7 @@ export const recipeRouter = createTRPCRouter({
   delete: deleteItem,
   recomputeStale,
   recomputeAll,
+  dryRunRecomputeTotals,
   explainCosting,
   getIngredientCooccurrence: getIngredientCooccurrenceEndpoint,
   getDependencyGraph: getDependencyGraphEndpoint,

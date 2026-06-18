@@ -68,6 +68,33 @@ const toRecipeTotals = (t: CalculateTotalsResult): RecipeTotals => {
   };
 };
 
+// Whether a fresh compute differs from what's persisted — the honest "would
+// change" predicate behind the dry-run (catches logic-change drift the stale
+// flag misses). Small epsilon swallows float noise; recompute is deterministic,
+// so equal inputs+code produce identical numbers (diff 0). Null persisted ⇒ new.
+const TOTALS_FIELDS = [
+  "costTotal",
+  "costTotalUpper",
+  "caloriesTotal",
+  "caloriesTotalUpper",
+  "proteinTotal",
+  "fatTotal",
+  "carbsTotal",
+  "fiberTotal",
+  "sodiumTotal",
+  "ingredientCount",
+  "costCovered",
+  "caloriesCovered",
+] as const;
+
+const totalsDiffer = (
+  a: RecipeTotals | null | undefined,
+  b: RecipeTotals,
+): boolean => {
+  if (!a) return true;
+  return TOTALS_FIELDS.some((k) => Math.abs((a[k] ?? 0) - (b[k] ?? 0)) > 0.005);
+};
+
 /**
  * Products with a confirmed USDA match (`fdc_id`) whose food failed to resolve —
  * a transient backend miss, not real no-data. Doubles as the completeness
@@ -283,6 +310,29 @@ export class RecipeCostingService {
       );
     }
     return { processed: ids.length, remaining };
+  }
+
+  /**
+   * Dry run: compute every recipe's totals in memory and count how many would
+   * actually change vs what's persisted — without writing. ~As costly as
+   * recomputeAll (full engine pass, no DB write), so call it on demand only.
+   */
+  async dryRunRecomputeTotals(): Promise<{
+    wouldChange: number;
+    total: number;
+  }> {
+    const ids = await selectAllActiveRecipeIds(this.db);
+    const CHUNK = 25;
+    let wouldChange = 0;
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const recipes = await getRecipesByIDs(this.db, ids.slice(i, i + CHUNK));
+      const totalsMap = await this.computeTotals(recipes);
+      for (const r of recipes) {
+        const computed = totalsMap.get(r.id as RecipeId);
+        if (computed && totalsDiffer(r.totals, computed.totals)) wouldChange++;
+      }
+    }
+    return { wouldChange, total: ids.length };
   }
 
   /**
