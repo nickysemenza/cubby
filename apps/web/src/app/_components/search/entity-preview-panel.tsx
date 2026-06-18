@@ -7,6 +7,7 @@ import { Button } from "~/components/ui/button";
 import { SheetHeader, SheetTitle } from "~/components/ui/sheet";
 import { Spinner } from "~/components/ui/spinner";
 import { entities } from "~/entities/entities";
+import { entityQueryOptions, fdcIdFromParam } from "~/entities/entity-query";
 import { useTRPC } from "~/trpc/react";
 import { ImageDetail } from "../images/image-detail";
 import { IngredientDetail } from "../ingredients/ingredient-detail";
@@ -27,28 +28,14 @@ export function EntityPreviewPanel({
 }: EntityPreviewPanelProps) {
   const api = useTRPC();
 
-  // Get query options based on entity type (stable reference with useMemo)
-  const queryOptions = useMemo(() => {
-    switch (entityType) {
-      case "product":
-        return api.product.getByID.queryOptions({ id });
-      case "recipe":
-        return api.recipe.getByID.queryOptions({ id });
-      case "ingredient":
-        return api.ingredient.getByID.queryOptions({ id });
-      case "location":
-        return api.location.getByID.queryOptions({ id });
-      case "inventory":
-        return api.inventory.getByID.queryOptions({ id });
-      case "usda-food":
-        return api.usda.getByID.queryOptions({ id: parseInt(id, 10) });
-      case "image":
-        return api.image.getImageById.queryOptions({ id });
-    }
-  }, [entityType, id, api]);
+  // One shared entity→getByID mapping (entity-query), stable for useQuery.
+  const queryOptions = useMemo(
+    () => entityQueryOptions(api, entityType, id),
+    [entityType, id, api],
+  );
 
   // Single query hook instead of 7 disabled ones
-  // biome-ignore lint/suspicious/noExplicitAny: TypeScript can't narrow discriminated union in switch statement
+  // biome-ignore lint/suspicious/noExplicitAny: useQuery can't narrow the union of getByID queryOptions
   const query = useQuery(queryOptions as any);
   const { isLoading, error, data } = query;
 
@@ -115,7 +102,7 @@ export function EntityPreviewPanel({
         ) : null}
         {entityType === "usda-food" ? (
           data ? (
-            <USDAFoodDetail id={parseInt(id, 10)} food={data as never} />
+            <USDAFoodDetail id={fdcIdFromParam(id)} food={data as never} />
           ) : null
         ) : null}
         {entityType === "image" ? (

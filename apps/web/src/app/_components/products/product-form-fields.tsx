@@ -93,7 +93,7 @@ interface ProductFormFieldsProps<TFieldValues extends FieldValues> {
 /**
  * Standalone product form fields component.
  * Renders all product-related fields (name, model, notes, manufacturer, category,
- * UPC, price, NDB, ingredient, images, unit mappings).
+ * UPC, price, fdc_id, ingredient, images, unit mappings).
  *
  * Used by both ProductForm (full form) and QuickInventoryAdd (inline create mode).
  */
@@ -273,7 +273,7 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
               disabled={isFoodForced}
               description={
                 isFoodForced
-                  ? "Forced to 'food' (has NDB number or ingredient)"
+                  ? "Forced to 'food' (has USDA link or ingredient)"
                   : undefined
               }
             />

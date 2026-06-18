@@ -1,4 +1,4 @@
-import { fdcId } from "@cubby/usda-schemas";
+import { fdcId, type NutrientKey } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { amount } from "./codec";
 import { baseEntitySchema, dbTimestampsOut } from "./common";
@@ -44,6 +44,19 @@ export const recipeTotals = z.object({
   caloriesCovered: z.number().int(),
 });
 export type RecipeTotals = z.infer<typeof recipeTotals>;
+
+// The five whole-recipe macros carried on RecipeTotals as flat `${key}Total`
+// columns (proteinTotal, fatTotal, …). One roster so the costing service (write)
+// and the preview card (read) drive the same set — add a macro here only, and
+// the `${key}Total` convention keeps the column names in lockstep with the keys.
+export const RECIPE_MACRO_KEYS = [
+  "protein",
+  "fat",
+  "carbs",
+  "fiber",
+  "sodium",
+] as const satisfies readonly NutrientKey[];
+export type RecipeMacroColumn = `${(typeof RECIPE_MACRO_KEYS)[number]}Total`;
 
 // ---------------------------------------------------------------------------
 // Costing explain payload (recipe.explainCosting + the MCP explain tool).

@@ -1,29 +1,44 @@
 import {
   getNutrientDisplayName,
   getNutrientUnit,
+  type NutrientKey,
   type NutrientsPer100,
+  TIER1_NUTRIENTS,
 } from "@cubby/usda-schemas";
 import { cn } from "~/lib/utils";
 
 // The key nutrients shown in summaries and the recipe table, in display order.
 // A deliberate whitelist — only these appear, even when more nutrient data is
-// present, to keep things scannable. Macros first, then the two most
-// diet-relevant extras. `label` is the short header used by the table's
-// per-nutrient columns. Single source of truth so the summary and table can't
-// drift apart.
-export const KEY_NUTRIENTS = [
-  { code: "208", label: "Cal", unit: "kcal" },
-  { code: "203", label: "Protein", unit: "g" },
-  { code: "204", label: "Fat", unit: "g" },
-  { code: "205", label: "Carbs", unit: "g" },
-  { code: "291", label: "Fiber", unit: "g" },
-  { code: "307", label: "Sodium", unit: "mg" },
-] as const;
+// present, to keep things scannable. Macros first, then the most diet-relevant
+// extra. Codes derive from TIER1_NUTRIENTS by key (no raw nutrient_nbr lives
+// here); `label` is the short table header — the one per-surface override of the
+// long displayName. Single source of truth so summary and table can't drift.
+const KEY_NUTRIENT_SHORT_LABELS = [
+  ["kcal", "Cal"],
+  ["protein", "Protein"],
+  ["fat", "Fat"],
+  ["carbs", "Carbs"],
+  ["fiber", "Fiber"],
+  ["sodium", "Sodium"],
+] as const satisfies ReadonlyArray<readonly [NutrientKey, string]>;
+
+export const KEY_NUTRIENTS = KEY_NUTRIENT_SHORT_LABELS.map(([key, label]) => ({
+  code: TIER1_NUTRIENTS[key].code,
+  label,
+  // Lowercased display unit ("kcal" / "g" / "mg") for the table column subhead.
+  unit: TIER1_NUTRIENTS[key].unit.toLowerCase(),
+}));
 
 const KEY_NUTRIENT_CODES = KEY_NUTRIENTS.map((n) => n.code);
 const KEY_NUTRIENT_LABELS = new Map(
   KEY_NUTRIENTS.map((n) => [n.code, n.label]),
 );
+
+// Compact view shows kcal + protein only — derived, not raw code literals.
+const COMPACT_CODES: readonly string[] = [
+  TIER1_NUTRIENTS.kcal.code,
+  TIER1_NUTRIENTS.protein.code,
+];
 
 // Trim trailing-zero decimals: 450.0 → "450", 11.7 → "11.7".
 const trimAmount = (v: number) => Number(v.toFixed(1)).toString();
@@ -45,7 +60,7 @@ export function NutrientsSummary({
 
   // In compact mode, only show kcal and protein
   const displayNutrients = compact
-    ? presentNutrients.filter((code) => code === "208" || code === "203")
+    ? presentNutrients.filter((code) => COMPACT_CODES.includes(code))
     : presentNutrients;
 
   if (displayNutrients.length === 0) {

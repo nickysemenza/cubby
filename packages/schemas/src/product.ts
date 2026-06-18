@@ -23,10 +23,18 @@ export type ProductCategory = z.infer<typeof productCategory>;
 export { productCategoryValues } from "@cubby/shared";
 
 /**
+ * The explicit USDA food link: a positive `fdc_id`. One definition shared by
+ * {@link hasFoodIndicators} and the problems repo's food-category detector, so
+ * "what counts as an fdc link" can't drift between them.
+ */
+export const hasFdcLink = (fdc_id: number | null | undefined): boolean =>
+  fdc_id != null && fdc_id > 0;
+
+/**
  * Check if a product has USDA food data indicators that should force category to "food"
  *
  * A product is considered to have food data if it has:
- * - A valid NDB number (USDA National Nutrient Database)
+ * - A USDA food link (`fdc_id`)
  * - An associated ingredient (used in recipes)
  *
  * Note: UPC is intentionally NOT included - barcodes are on all products, not just food
@@ -35,7 +43,7 @@ export const hasFoodIndicators = (product: {
   fdc_id?: number | null;
   ingredientId?: IngredientId | null;
 }): boolean =>
-  (product.fdc_id != null && product.fdc_id > 0) ||
+  hasFdcLink(product.fdc_id) ||
   (product.ingredientId != null && product.ingredientId.length > 0);
 
 // Base schema for product data (without relationships)

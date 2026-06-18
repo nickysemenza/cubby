@@ -1,6 +1,7 @@
 import { formatScalingPct } from "./recipe-scaling-pct";
 import {
   buildIngredientMatrix,
+  firstExpansionRowIds,
   flattenComponents,
   fullBatchNeeds,
   type RecipeTreeNode,
@@ -97,8 +98,9 @@ const nestedMarkdown = (
   lines.push("");
 
   // A sub-recipe used in several places is expanded once; later references are
-  // pointer bullets ("see above"), matching the nested view.
-  const seenRecipes = new Set<string>();
+  // pointer bullets ("see above"). Share the nested view's "which rows expand"
+  // decision so the two surfaces can't disagree on what counts as "first".
+  const expandIds = firstExpansionRowIds(tree);
   const walk = (node: RecipeTreeNode, indent: string) => {
     for (const section of node.sections) {
       for (const row of section.rows) {
@@ -109,15 +111,13 @@ const nestedMarkdown = (
         const qty = quantityText(node, row);
         const pct = row.pct != null ? ` (${formatScalingPct(row.pct)})` : "";
         if (row.kind === "subrecipe") {
-          const recipeId = row.child.recipe.id;
-          const first = !seenRecipes.has(recipeId);
+          const first = expandIds.has(row.id);
           lines.push(
             `${indent}- **${rowName(row)}**${qty ? ` — ${qty}` : ""}${pct}${
               first ? "" : " — see above"
             }`,
           );
           if (first) {
-            seenRecipes.add(recipeId);
             walk(row.child, `${indent}  `);
           }
         } else {

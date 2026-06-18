@@ -12,10 +12,11 @@
 import type { RecipeId } from "@cubby/schemas/identifiers";
 import type {
   RecipeCostingExplain,
+  RecipeMacroColumn,
   RecipeOut,
   RecipeTotals,
 } from "@cubby/schemas/recipe";
-import { recipeTotals } from "@cubby/schemas/recipe";
+import { RECIPE_MACRO_KEYS, recipeTotals } from "@cubby/schemas/recipe";
 import { getNutrientValueByKey } from "@cubby/usda-schemas";
 import { keyBy } from "es-toolkit";
 import {
@@ -58,24 +59,45 @@ const toRecipeTotals = (t: CalculateTotalsResult): RecipeTotals => {
     ...(t.priceUpper != null ? { costTotalUpper: t.priceUpper } : {}),
     caloriesTotal: getNutrientValueByKey(t.nutrients, "kcal") ?? 0,
     ...(caloriesUpper != null ? { caloriesTotalUpper: caloriesUpper } : {}),
-    // Whole-recipe macros — already computed by the engine, just carried through.
-    proteinTotal: getNutrientValueByKey(t.nutrients, "protein"),
-    fatTotal: getNutrientValueByKey(t.nutrients, "fat"),
-    carbsTotal: getNutrientValueByKey(t.nutrients, "carbs"),
-    fiberTotal: getNutrientValueByKey(t.nutrients, "fiber"),
-    sodiumTotal: getNutrientValueByKey(t.nutrients, "sodium"),
+    // Whole-recipe macros — already computed by the engine, carried through from
+    // the single RECIPE_MACRO_KEYS roster (no per-macro list to drift from read).
+    ...RECIPE_MACRO_KEYS.reduce<Pick<RecipeTotals, RecipeMacroColumn>>(
+      (acc, key) => {
+        acc[`${key}Total`] = getNutrientValueByKey(t.nutrients, key);
+        return acc;
+      },
+      {},
+    ),
     ingredientCount: t.totalIngredients,
     costCovered: t.totalIngredients - t.missingByType.price.length,
     caloriesCovered: t.totalIngredients - t.missingByType.nutrients.length,
   };
 };
 
+// Per-field tolerance for "persisted differs from a fresh compute". Cost is
+// near-exact (only float-summation noise), but calories are integer-rounded
+// downstream, so a looser 0.5 avoids flagging rounding-only churn. Everything
+// else defaults to a small epsilon. One map so the dry-run predicate
+// (totalsDiffer) and explainRecipe's drift can't diverge.
+const DEFAULT_EPSILON = 0.005;
+const TOTALS_EPSILON: Partial<Record<keyof RecipeTotals, number>> = {
+  caloriesTotal: 0.5,
+};
+
+/** Whether one RecipeTotals field differs beyond its tolerance. */
+const fieldDiffers = (
+  a: RecipeTotals,
+  b: RecipeTotals,
+  field: keyof RecipeTotals,
+): boolean =>
+  Math.abs((a[field] ?? 0) - (b[field] ?? 0)) >
+  (TOTALS_EPSILON[field] ?? DEFAULT_EPSILON);
+
 // Whether a fresh compute differs from what's persisted — the honest "would
 // change" predicate behind the dry-run (catches logic-change drift the stale
 // flag misses). Every recipeTotals field is numeric, so we compare them all
-// (derived from the schema, so new fields are covered automatically) with a
-// small epsilon — matching the drift tolerance in explainRecipe and swallowing
-// float-summation noise rather than exact-equality. Null persisted ⇒ new.
+// (derived from the schema, so new fields are covered automatically) via the
+// shared per-field tolerance. Null persisted ⇒ new.
 const TOTALS_FIELDS = Object.keys(recipeTotals.shape) as (keyof RecipeTotals)[];
 
 const totalsDiffer = (
@@ -83,7 +105,7 @@ const totalsDiffer = (
   b: RecipeTotals,
 ): boolean => {
   if (!a) return true;
-  return TOTALS_FIELDS.some((k) => Math.abs((a[k] ?? 0) - (b[k] ?? 0)) > 0.005);
+  return TOTALS_FIELDS.some((k) => fieldDiffers(a, b, k));
 };
 
 /**
@@ -170,9 +192,9 @@ export class RecipeCostingService {
 
   /**
    * Compute totals for the given (fully-loaded) recipes. `complete` is false
-   * when a USDA lookup that should have resolved (a product with an
-   * `ndb_number`) came back null — a transient backend miss the caller should
-   * retry rather than bake in.
+   * when a USDA lookup that should have resolved (a product with an `fdc_id`)
+   * came back null — a transient backend miss the caller should retry rather
+   * than bake in.
    */
   async computeTotals(
     recipes: RecipeOut[],
@@ -259,10 +281,10 @@ export class RecipeCostingService {
     const drift = {
       cost:
         persisted != null &&
-        Math.abs(persisted.costTotal - computedTotals.costTotal) > 0.005,
+        fieldDiffers(persisted, computedTotals, "costTotal"),
       calories:
         persisted != null &&
-        Math.abs(persisted.caloriesTotal - computedTotals.caloriesTotal) > 0.5,
+        fieldDiffers(persisted, computedTotals, "caloriesTotal"),
     };
 
     return {

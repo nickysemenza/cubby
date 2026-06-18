@@ -2,6 +2,7 @@ import * as React from "react";
 import { match } from "ts-pattern";
 import { z } from "zod";
 import {
+  perServingRange,
   perUnitSuffix,
   recipeHeadlineTotals,
 } from "~/app/_components/recipe/recipe-utils";
@@ -114,7 +115,8 @@ const formatRecipeSummary = (data: RecipeSummaryData): SummaryItem[] => {
       return { label, value: "No data available" };
     }
     const fmt = (n: number) => format(n, unit, prefix);
-    const divisor = data.perServing?.divisor;
+    const basis = data.perServing;
+    const per = basis && perServingRange(value, upper, basis.divisor);
     return {
       label,
       value: formatNumberRange(value, upper, fmt),
@@ -122,13 +124,10 @@ const formatRecipeSummary = (data: RecipeSummaryData): SummaryItem[] => {
         successCount === total
           ? undefined
           : `${successCount}/${total} ingredients`,
-      subValue: data.perServing
-        ? `${formatNumberRange(
-            value / divisor!,
-            upper != null ? upper / divisor! : undefined,
-            fmt,
-          )} ${perUnitSuffix(data.perServing.noun)}`
-        : undefined,
+      subValue:
+        basis && per
+          ? `${formatNumberRange(per.value, per.upper, fmt)} ${perUnitSuffix(basis.noun)}`
+          : undefined,
     };
   };
 

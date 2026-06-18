@@ -256,6 +256,31 @@ export const flattenComponents = (root: RecipeTreeNode): RecipeTreeNode[] => {
   return out;
 };
 
+/**
+ * The set of sub-recipe ROW ids that get the full inline expansion: each
+ * distinct sub-recipe is expanded only on its first occurrence in render order;
+ * later references collapse to a "see above" pointer. Shared by the nested-spec
+ * view and the markdown exporter so both agree on which rows are "first".
+ */
+export const firstExpansionRowIds = (root: RecipeTreeNode): Set<string> => {
+  const seenRecipes = new Set<string>();
+  const expand = new Set<string>();
+  const walk = (node: RecipeTreeNode) => {
+    for (const section of node.sections) {
+      for (const row of section.rows) {
+        if (row.kind !== "subrecipe") continue;
+        const recipeId = row.child.recipe.id;
+        if (seenRecipes.has(recipeId)) continue;
+        seenRecipes.add(recipeId);
+        expand.add(row.id);
+        walk(row.child);
+      }
+    }
+  };
+  walk(root);
+  return expand;
+};
+
 /** One ingredient's full-batch shopping need across all components. */
 export type CombinedNeed = {
   ingredientId: string;
