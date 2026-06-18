@@ -7,7 +7,9 @@ import {
   ChevronDown,
   ChevronRight,
   GitMerge,
+  Plus,
   Sparkles,
+  X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -15,6 +17,7 @@ import { match } from "ts-pattern";
 import { UsdaFoodSearchField } from "~/app/_components/combobox/with-usda-food-search";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { ConversionCapabilities } from "~/app/_components/units/ConversionCapabilities";
+import { UnitMappingGraph } from "~/app/_components/units/unit-mapping-graph";
 import { UnitMappingsTable } from "~/app/_components/units/unitmappingstable";
 import { CoverageChips } from "~/app/problems/components/unit-coverage-fix";
 import { Badge } from "~/components/ui/badge";
@@ -55,6 +58,23 @@ type FilterKey = "all" | "no-product" | "partial" | "no-usda";
 
 /** An AI USDA suggestion for one row, kept at the table level for bulk review. */
 type Suggestion = { food: FoodSummaryWithLinkedProducts; reasoning: string };
+
+/** One editable conversion row in the editor (the user can add several). */
+type ConvRow = {
+  id: string;
+  fromQty: string;
+  fromUnit: string;
+  toQty: string;
+  toUnit: string;
+};
+let convRowSeq = 0;
+const blankConvRow = (fromUnit = ""): ConvRow => ({
+  id: `c${convRowSeq++}`,
+  fromQty: "1",
+  fromUnit,
+  toQty: "",
+  toUnit: "g",
+});
 
 const FIX_LABEL: Record<EnrichmentRow["recommendedFix"], string> = {
   "no-product": "Link product",
@@ -574,11 +594,18 @@ function WorkbenchEditor({
     row.priceMode === "per-each" ? "each" : "lb",
   );
   const [price, setPrice] = useState("");
-  // Pre-seed the conversion to bridge an islanded price into grams.
-  const [cFromQty, setCFromQty] = useState("1");
-  const [cFromUnit, setCFromUnit] = useState(islandedUnit ?? "");
-  const [cToQty, setCToQty] = useState("");
-  const [cToUnit, setCToUnit] = useState("g");
+  // One or more conversion rows; the first is pre-seeded to bridge an islanded
+  // price into grams when applicable.
+  const [convRows, setConvRows] = useState<ConvRow[]>([
+    blankConvRow(islandedUnit ?? ""),
+  ]);
+  const patchConvRow = (id: string, patch: Partial<ConvRow>) =>
+    setConvRows((rows) =>
+      rows.map((r) => (r.id === id ? { ...r, ...patch } : r)),
+    );
+  const addConvRow = () => setConvRows((rows) => [...rows, blankConvRow()]);
+  const removeConvRow = (id: string) =>
+    setConvRows((rows) => rows.filter((r) => r.id !== id));
 
   // The mapping graph as it *would* be after this edit: the product's current
   // effective edges, plus the USDA food being picked and whatever price/
@@ -611,30 +638,22 @@ function WorkbenchEditor({
         sourceMetadata: { type: "manual" },
       });
     }
-    const fq = parsePositive(cFromQty);
-    const tq = parsePositive(cToQty);
-    const fu = cFromUnit.trim();
-    const tu = cToUnit.trim();
-    if (fq != null && tq != null && fu && tu) {
-      base.push({
-        a: { value: fq, unit: fu },
-        b: { value: tq, unit: tu },
-        source: "preview",
-        sourceMetadata: { type: "manual" },
-      });
+    for (const c of convRows) {
+      const fq = parsePositive(c.fromQty);
+      const tq = parsePositive(c.toQty);
+      const fu = c.fromUnit.trim();
+      const tu = c.toUnit.trim();
+      if (fq != null && tq != null && fu && tu) {
+        base.push({
+          a: { value: fq, unit: fu },
+          b: { value: tq, unit: tu },
+          source: "preview",
+          sourceMetadata: { type: "manual" },
+        });
+      }
     }
     return base;
-  }, [
-    row,
-    food,
-    price,
-    priceQty,
-    priceUnit,
-    cFromQty,
-    cToQty,
-    cFromUnit,
-    cToUnit,
-  ]);
+  }, [row, food, price, priceQty, priceUnit, convRows]);
 
   const createProduct = useActionMutation({
     mutationFn: api.product.create.mutationOptions,
@@ -670,21 +689,21 @@ function WorkbenchEditor({
       }
     }
 
-    const fromQty = parsePositive(cFromQty);
-    const toQty = parsePositive(cToQty);
-    const fromUnit = cFromUnit.trim();
-    const toUnit = cToUnit.trim();
-    if (fromQty != null && toQty != null && fromUnit && toUnit) {
-      newMappings.push({
-        a: { value: fromQty, unit: fromUnit },
-        b: { value: toQty, unit: toUnit },
-        source: "manual: conversion (workbench)",
-      });
-    } else if (
-      (cFromUnit.trim() || cToQty.trim()) &&
-      newMappings.length === 0
-    ) {
-      return { error: "Fill in both sides of the conversion" as const };
+    for (const c of convRows) {
+      const fromQty = parsePositive(c.fromQty);
+      const toQty = parsePositive(c.toQty);
+      const fromUnit = c.fromUnit.trim();
+      const toUnit = c.toUnit.trim();
+      if (fromQty != null && toQty != null && fromUnit && toUnit) {
+        newMappings.push({
+          a: { value: fromQty, unit: fromUnit },
+          b: { value: toQty, unit: toUnit },
+          source: "manual: conversion (workbench)",
+        });
+      } else if (fromUnit || c.toQty.trim()) {
+        // A half-filled row is a mistake, not an empty extra — tell the user.
+        return { error: "Fill in both sides of each conversion" as const };
+      }
     }
 
     return { eachPrice, newMappings };
@@ -847,9 +866,9 @@ function WorkbenchEditor({
             </div>
           )}
 
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <p className="font-medium text-xs">
-              {priceIslanded ? "Connect the price" : "Add a conversion"}{" "}
+              {priceIslanded ? "Connect the price" : "Add conversions"}{" "}
               <span className="font-normal text-muted-foreground">
                 {priceIslanded
                   ? `— links “${islandedUnit}” to grams so your price is reachable`
@@ -858,41 +877,68 @@ function WorkbenchEditor({
                     : "— optional, e.g. 1 cup = 240 g"}
               </span>
             </p>
-            <div className="flex items-center gap-1.5 text-sm">
-              <Input
-                type="number"
-                inputMode="decimal"
-                min="0"
-                value={cFromQty}
-                onChange={(e) => setCFromQty(e.target.value)}
-                className="w-12"
-                aria-label="From quantity"
-              />
-              <Input
-                value={cFromUnit}
-                onChange={(e) => setCFromUnit(e.target.value)}
-                placeholder="cup"
-                className="w-16"
-                aria-label="From unit"
-              />
-              <span>=</span>
-              <Input
-                type="number"
-                inputMode="decimal"
-                min="0"
-                value={cToQty}
-                onChange={(e) => setCToQty(e.target.value)}
-                className="w-14"
-                aria-label="To quantity"
-              />
-              <Input
-                value={cToUnit}
-                onChange={(e) => setCToUnit(e.target.value)}
-                placeholder="g"
-                className="w-16"
-                aria-label="To unit"
-              />
-            </div>
+            {convRows.map((c) => (
+              <div key={c.id} className="flex items-center gap-1.5 text-sm">
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  value={c.fromQty}
+                  onChange={(e) =>
+                    patchConvRow(c.id, { fromQty: e.target.value })
+                  }
+                  className="w-12"
+                  aria-label="From quantity"
+                />
+                <Input
+                  value={c.fromUnit}
+                  onChange={(e) =>
+                    patchConvRow(c.id, { fromUnit: e.target.value })
+                  }
+                  placeholder="cup"
+                  className="w-16"
+                  aria-label="From unit"
+                />
+                <span>=</span>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  value={c.toQty}
+                  onChange={(e) =>
+                    patchConvRow(c.id, { toQty: e.target.value })
+                  }
+                  className="w-14"
+                  aria-label="To quantity"
+                />
+                <Input
+                  value={c.toUnit}
+                  onChange={(e) =>
+                    patchConvRow(c.id, { toUnit: e.target.value })
+                  }
+                  placeholder="g"
+                  className="w-16"
+                  aria-label="To unit"
+                />
+                {convRows.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removeConvRow(c.id)}
+                    className="text-muted-foreground hover:text-destructive"
+                    aria-label="Remove conversion"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={addConvRow}
+              className="flex items-center gap-1 text-muted-foreground text-xs hover:text-foreground"
+            >
+              <Plus className="h-3 w-3" /> Add another
+            </button>
           </div>
 
           <div className="flex items-center gap-2">
@@ -909,19 +955,29 @@ function WorkbenchEditor({
           </div>
         </div>
 
-        <div className="shrink-0 space-y-1 lg:w-64">
-          <p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
-            Coverage (live)
-          </p>
-          <div className="rounded-md border bg-background/60 p-2">
-            <ConversionCapabilities
-              mappings={previewMappings}
-              hideConvertButton
-            />
+        <div className="shrink-0 space-y-2 lg:w-72">
+          <div className="space-y-1">
+            <p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+              Unit graph (live)
+            </p>
+            <UnitMappingGraph mappings={previewMappings} />
+            <p className="text-[10px] text-muted-foreground leading-tight">
+              Units as nodes, conversions as edges. A disconnected cluster (e.g.
+              an islanded price) floats off on its own.
+            </p>
           </div>
-          <p className="text-[10px] text-muted-foreground leading-tight">
-            Updates as you type. Each tile is a convertible pair of base kinds.
-          </p>
+
+          <div className="space-y-1">
+            <p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+              Coverage (live)
+            </p>
+            <div className="rounded-md border bg-background/60 p-2">
+              <ConversionCapabilities
+                mappings={previewMappings}
+                hideConvertButton
+              />
+            </div>
+          </div>
         </div>
       </div>
     </div>
