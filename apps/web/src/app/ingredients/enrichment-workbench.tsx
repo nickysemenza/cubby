@@ -940,14 +940,14 @@ function WorkbenchEditor({
         </div>
       )}
 
-      <div className="shrink-0 space-y-1 lg:w-64">
+      <div className="shrink-0 space-y-1 lg:w-72">
         <p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
           Unit graph (live)
         </p>
         <UnitMappingGraph mappings={previewMappings} />
         <p className="text-[10px] text-muted-foreground leading-tight">
-          Units as nodes, conversions as edges. A disconnected cluster (e.g. an
-          islanded price) floats off on its own.
+          Units as nodes, conversions as edges (dashed = built-in, e.g. g↔lb). A
+          disconnected cluster (e.g. an islanded price) floats off on its own.
         </p>
       </div>
 

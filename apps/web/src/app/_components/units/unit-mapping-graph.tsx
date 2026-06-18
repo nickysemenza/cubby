@@ -2,6 +2,7 @@ import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import * as d3Force from "d3-force";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
+import { safeConvertAmount } from "~/lib/recipe-costing";
 import { wasm } from "~/lib/wasm";
 
 /**
@@ -20,7 +21,17 @@ interface UNode extends d3Force.SimulationNodeDatum {
 interface ULink extends d3Force.SimulationLinkDatum<UNode> {
   source: string | UNode;
   target: string | UNode;
+  /** A built-in conversion (e.g. g↔lb) rather than a stored mapping. */
+  native?: boolean;
 }
+
+// A unit the engine can convert with no custom mappings — a standard weight/
+// volume unit (g, lb, cup, ml), as opposed to a food-specific portion ("cup
+// packed") which only converts via its stored mapping. Used to draw the
+// implicit same-kind edges the engine knows about but no mapping records.
+const isNativeUnit = (unit: string, kind: string): boolean =>
+  (kind === "weight" || kind === "volume") &&
+  safeConvertAmount({ value: 1, unit }, [], kind).isOk();
 
 const KIND_COLOR: Record<string, string> = {
   weight: "var(--chart-1)",
@@ -34,7 +45,19 @@ const kindColor = (kind: string): string => {
   return KIND_COLOR[kind] ?? "var(--muted-foreground)";
 };
 
-const unitLabel = (unit: string): string => (unit === "dollar" ? "$" : unit);
+// Shorten the verbose USDA portion units that clutter the graph — drop the
+// parenthetical size ("(2-3/8 inch dia)"), the "NLEA" prefix, and "… or X"
+// tails, keeping the head noun. Full unit stays as the node id (hover <title>).
+const unitLabel = (unit: string): string => {
+  if (unit === "dollar") return "$";
+  const short = unit
+    .replace(/\([^)]*\)/g, "")
+    .replace(/\bNLEA\b/gi, "")
+    .replace(/\s+or\s+.*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return short || unit;
+};
 
 // USDA nutrition synthesis emits a per-nutrient edge (100 g = N g protein, mg
 // zinc, ug folate…). Those explode the node count and aren't relevant to
@@ -64,7 +87,7 @@ const amountKind = (unit: string): string => {
 
 export function UnitMappingGraph({
   mappings,
-  height = 200,
+  height = 260,
 }: {
   mappings: UnitMapping[];
   height?: number;
@@ -95,6 +118,29 @@ export function UnitMappingGraph({
       ensure(m.b.unit);
       linkArr.push({ source: m.a.unit, target: m.b.unit });
     }
+
+    // Add the engine's built-in conversions: standard same-kind units (g↔lb,
+    // cup↔ml) aren't stored as mappings, so without this they'd look islanded
+    // even though the engine converts between them. Chain each kind's native
+    // units so they form one connected cluster.
+    const nativeByKind = new Map<string, string[]>();
+    for (const n of nodeMap.values()) {
+      if (isNativeUnit(n.id, n.kind)) {
+        const arr = nativeByKind.get(n.kind) ?? [];
+        arr.push(n.id);
+        nativeByKind.set(n.kind, arr);
+      }
+    }
+    for (const units of nativeByKind.values()) {
+      for (let i = 1; i < units.length; i++) {
+        linkArr.push({
+          source: units[0] as string,
+          target: units[i] as string,
+          native: true,
+        });
+      }
+    }
+
     return { nodes: [...nodeMap.values()], links: linkArr };
   }, [mappings]);
 
@@ -130,19 +176,18 @@ export function UnitMappingGraph({
         d3Force
           .forceLink<UNode, ULink>(linksCopy)
           .id((d) => d.id)
-          .distance(44),
+          .distance(62),
       )
-      .force("charge", d3Force.forceManyBody().strength(-130))
+      .force("charge", d3Force.forceManyBody().strength(-280))
       .force("center", d3Force.forceCenter(width / 2, height / 2))
-      .force("collision", d3Force.forceCollide<UNode>().radius(17));
+      .force("collision", d3Force.forceCollide<UNode>().radius(28));
 
     sim.on("tick", () => {
-      // Clamp with enough margin for the centered label, which is wider than the
-      // 11px circle — otherwise edge nodes (e.g. a drifting islanded cluster)
-      // clip against the container's overflow-hidden.
+      // Labels sit beside the dot pointing inward, so only the small dot needs
+      // margin against the container's overflow-hidden.
       for (const n of nodesCopy) {
-        n.x = Math.max(24, Math.min(width - 24, n.x ?? 0));
-        n.y = Math.max(16, Math.min(height - 16, n.y ?? 0));
+        n.x = Math.max(12, Math.min(width - 12, n.x ?? 0));
+        n.y = Math.max(12, Math.min(height - 12, n.y ?? 0));
         posRef.current.set(n.id, { x: n.x, y: n.y });
       }
       setSimNodes([...nodesCopy]);
@@ -182,29 +227,39 @@ export function UnitMappingGraph({
                   y2={t.y}
                   stroke="var(--border)"
                   strokeWidth={1.5}
+                  strokeDasharray={link.native ? "3 3" : undefined}
+                  strokeOpacity={link.native ? 0.5 : 1}
                 />
               );
             })}
           </g>
           <g>
-            {simNodes.map((n) => (
-              <g key={n.id} transform={`translate(${n.x ?? 0}, ${n.y ?? 0})`}>
-                <circle
-                  r={11}
-                  fill={kindColor(n.kind)}
-                  stroke="var(--card)"
-                  strokeWidth={1.5}
-                />
-                <text
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  className="pointer-events-none fill-white font-medium text-2xs"
-                  style={{ textShadow: "0 1px 2px rgba(0,0,0,0.6)" }}
-                >
-                  {n.label.length > 5 ? `${n.label.slice(0, 4)}…` : n.label}
-                </text>
-              </g>
-            ))}
+            {simNodes.map((n) => {
+              // Label beside the dot, pointing toward center so it never clips
+              // the container edge — far more readable than cramming text into a
+              // tiny circle. Full unit on hover via <title>.
+              const onRight = (n.x ?? 0) > width / 2;
+              return (
+                <g key={n.id} transform={`translate(${n.x ?? 0}, ${n.y ?? 0})`}>
+                  <title>{n.id}</title>
+                  <circle
+                    r={5}
+                    fill={kindColor(n.kind)}
+                    stroke="var(--card)"
+                    strokeWidth={1.5}
+                  />
+                  <text
+                    x={onRight ? -8 : 8}
+                    textAnchor={onRight ? "end" : "start"}
+                    dominantBaseline="middle"
+                    className="pointer-events-none fill-foreground"
+                    style={{ fontSize: 11 }}
+                  >
+                    {n.label.length > 13 ? `${n.label.slice(0, 12)}…` : n.label}
+                  </text>
+                </g>
+              );
+            })}
           </g>
         </svg>
       )}
