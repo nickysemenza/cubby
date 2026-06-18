@@ -342,7 +342,6 @@ Framed as **Now / Next / Later** (no dates — it's a personal project). Canonic
 
 - **AI deepening** — smarter Ask Cubby and better photo capture, building on the shipped *"what can I make tonight?"* (`find_cookable_recipes`) tool → [docs/todos.md](docs/todos.md)
 - **Nutrition & cost intelligence** — price-per-nutrient, daily-value %, and nutrient-density comparisons via WASM conversion extensions → [docs/todos.md](docs/todos.md)
-- **Household sharing** — replace the org plugin with a simple shared-household model + magic-link invites (e.g. share with a partner) → [docs/todos.md](docs/todos.md)
 
 ### Later
 

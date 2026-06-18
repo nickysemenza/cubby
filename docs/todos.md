@@ -166,6 +166,3 @@ Cron (periodic, no trigger):
 ## Architecture / engineering
 
 - [ ] **Document test placement criteria** (unit vs integration vs e2e)
-- [ ] **Simplify household sharing** — replace organization plugin with a simple
-  household model (users share one household UUID, magic-link invites, no hierarchy).
-  Cross-cutting: scopes **all** entities uniformly in one migration, not bolted onto meals.
