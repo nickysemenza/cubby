@@ -61,11 +61,17 @@ export const computeScalingPercentages = (
 };
 
 /**
- * Format a scaling percentage: one decimal below 10% so small-but-meaningful
- * amounts (salt, leavening, spices) don't collapse to a misleading "0%"; whole
- * percent at/above 10%. Mirrors the table view's Baker's % column.
+ * Round for compact display: one decimal below 10 so small-but-meaningful values
+ * (salt, leavening, spices) don't collapse to a misleading "0"; whole numbers
+ * at/above 10. The single rule behind scaling-% labels and the compare grid's
+ * gram/baker-% figures.
  */
-export const formatScalingPct = (pct: number): string => {
-  const rounded = pct >= 10 ? Math.round(pct) : Math.round(pct * 10) / 10;
-  return `${rounded}%`;
-};
+export const compactRound = (n: number): number =>
+  n >= 10 ? Math.round(n) : Math.round(n * 10) / 10;
+
+/**
+ * Format a scaling percentage. Mirrors the table view's Baker's % column — both
+ * round via {@link compactRound}.
+ */
+export const formatScalingPct = (pct: number): string =>
+  `${compactRound(pct)}%`;

@@ -1,8 +1,8 @@
 import type { CookbookId } from "@cubby/schemas/identifiers";
 import type { RecipeOut } from "@cubby/schemas/recipe";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
-import { BookOpen, ExternalLink, Scale } from "lucide-react";
+import { Scale } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
 import { Skeleton } from "~/components/ui/skeleton";
 import { formatCurrencyRange, formatNumberRange } from "~/lib/format-range";
@@ -13,6 +13,10 @@ import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { NoneState } from "../_components/NoneState";
+import {
+  RecipeSourceLink,
+  sourceLabel,
+} from "../_components/recipe/recipe-source";
 import { RecipeTag } from "../_components/recipe/recipe-tag";
 import {
   coverageLabel,
@@ -202,7 +206,7 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
         },
       }),
       // Source column: cookbook link for book recipes, external URL for web
-      // recipes, nothing otherwise.
+      // recipes, nothing otherwise — via the shared RecipeSourceLink.
       columnHelper.accessor("source", {
         header: "Source",
         meta: {
@@ -211,43 +215,14 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
         },
         cell: (info) => {
           const source = info.getValue();
-          if (source?.type === "book") {
-            const label = (
-              <>
-                <BookOpen size={14} />
-                <span className="max-w-[200px] truncate">{source.book}</span>
-              </>
-            );
-            // Link to the cookbook by id when known; older book rows without a
-            // cookbook FK just show the name.
-            return source.cookbookId ? (
-              <Link
-                to="/cookbooks/$cookbookId"
-                params={{ cookbookId: source.cookbookId }}
-                className="flex items-center gap-1.5 hover:underline"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {label}
-              </Link>
-            ) : (
-              <span className="flex items-center gap-1.5">{label}</span>
-            );
-          }
-          if (source?.type === "website") {
-            return (
-              <a
-                href={source.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 hover:underline"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <ExternalLink size={14} />
-                <span className="max-w-[200px] truncate">{source.url}</span>
-              </a>
-            );
-          }
-          return <NoneState />;
+          if (!sourceLabel(source)) return <NoneState />;
+          return (
+            <RecipeSourceLink
+              source={source}
+              text="url"
+              onClick={(e) => e.stopPropagation()}
+            />
+          );
         },
       }),
     ],
