@@ -15,6 +15,7 @@ import type {
   RecipeOut,
   RecipeTotals,
 } from "@cubby/schemas/recipe";
+import { recipeTotals } from "@cubby/schemas/recipe";
 import { getNutrientValueByKey } from "@cubby/usda-schemas";
 import { keyBy } from "es-toolkit";
 import {
@@ -70,22 +71,11 @@ const toRecipeTotals = (t: CalculateTotalsResult): RecipeTotals => {
 
 // Whether a fresh compute differs from what's persisted — the honest "would
 // change" predicate behind the dry-run (catches logic-change drift the stale
-// flag misses). Small epsilon swallows float noise; recompute is deterministic,
-// so equal inputs+code produce identical numbers (diff 0). Null persisted ⇒ new.
-const TOTALS_FIELDS = [
-  "costTotal",
-  "costTotalUpper",
-  "caloriesTotal",
-  "caloriesTotalUpper",
-  "proteinTotal",
-  "fatTotal",
-  "carbsTotal",
-  "fiberTotal",
-  "sodiumTotal",
-  "ingredientCount",
-  "costCovered",
-  "caloriesCovered",
-] as const;
+// flag misses). Every recipeTotals field is numeric, so we compare them all
+// (derived from the schema, so new fields are covered automatically) with a
+// small epsilon — matching the drift tolerance in explainRecipe and swallowing
+// float-summation noise rather than exact-equality. Null persisted ⇒ new.
+const TOTALS_FIELDS = Object.keys(recipeTotals.shape) as (keyof RecipeTotals)[];
 
 const totalsDiffer = (
   a: RecipeTotals | null | undefined,
