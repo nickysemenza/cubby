@@ -200,14 +200,20 @@ function MaintenanceRow({
   description,
   showCount = false,
   count,
+  approximate = false,
   action,
 }: {
   label: string;
   description: string;
   /** Whether this tool has an always-on affected count. */
   showCount?: boolean;
-  /** "N affected" figure; undefined while the counts query loads. */
+  /** The affected figure; undefined while the counts query loads. */
   count?: number;
+  /**
+   * Count is a candidate set the action only *attempts* (an external lookup/API
+   * may not change every one) → render "up to N" instead of "N affected".
+   */
+  approximate?: boolean;
   action: ReactNode;
 }) {
   return (
@@ -219,7 +225,11 @@ function MaintenanceRow({
       <div className="flex shrink-0 items-center gap-3">
         {showCount && (
           <span className="font-mono text-2xs text-muted-foreground tabular-nums">
-            {count == null ? "—" : `${count} affected`}
+            {count == null
+              ? "—"
+              : approximate
+                ? `up to ${count}`
+                : `${count} affected`}
           </span>
         )}
         {action}
@@ -278,6 +288,9 @@ const MAINTENANCE_TOOLS: {
   // Always-on affected count; omitted for tools whose accurate count is
   // expensive (recompute uses an on-demand dry run instead).
   count?: (c: MaintenanceCounts) => number;
+  // Count is a candidate set the action only attempts (external lookup/API may
+  // not change every one) → shown as "up to N" rather than "N affected".
+  approximate?: boolean;
   action: ReactNode;
 }[] = [
   {
@@ -335,6 +348,8 @@ const MAINTENANCE_TOOLS: {
     description:
       "Pull product images from the UPC database for products missing one.",
     count: (c) => c.productsNoImages,
+    // A UPC lookup can return no image, so not every candidate gets one.
+    approximate: true,
     action: (
       <BackfillButton
         selectMutation={(api) => api.product.backfillUPCImages.mutationOptions}
@@ -375,6 +390,8 @@ const MAINTENANCE_TOOLS: {
     description:
       "Generate AI descriptions for locations that don't have one yet.",
     count: (c) => c.locationsNoDescription,
+    // An AI generation can fail, so not every candidate ends up described.
+    approximate: true,
     action: (
       <BackfillButton
         selectMutation={(api) =>
@@ -418,6 +435,7 @@ function MaintenanceCard() {
             description={t.description}
             showCount={!!t.count}
             count={t.count && counts ? t.count(counts) : undefined}
+            approximate={t.approximate}
             action={t.action}
           />
         ))}
