@@ -21,6 +21,7 @@ import { formatCurrencyRange, formatNumberRange } from "~/lib/format-range";
 import { formatCurrency } from "~/lib/utils";
 import type { ProductWithBetterUpcData } from "~/server/repo/problems";
 import type { RouterOutputs } from "~/trpc/react";
+import { BACKFILL } from "./backfill-registry";
 import { EmptyLocationsList } from "./empty-locations-list";
 import { BackfillButton } from "./problem-backfill-action";
 import {
@@ -319,27 +320,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     description:
       "Inventory entries where the stored valuation doesn't match amount × product price.",
     emptyMessage: "All inventory valuations are in sync.",
-    headerAction: (
-      <BackfillButton
-        selectMutation={(api) =>
-          api.inventory.backfillInventoryValuations.mutationOptions
-        }
-        invalidateKeys={(api) => [api.inventory.list.queryKey()]}
-        idleLabel="Sync All Valuations"
-        pendingLabel="Syncing..."
-        toastResult={(result) =>
-          result.updated > 0
-            ? {
-                tone: "success",
-                message: `Synced ${result.updated} inventory valuation${result.updated !== 1 ? "s" : ""}`,
-              }
-            : {
-                tone: "info",
-                message: "No inventory entries need valuation sync",
-              }
-        }
-      />
-    ),
+    headerAction: <BackfillButton {...BACKFILL.syncValuations} />,
     renderItem: (entry) => ({
       title: entry.productName,
       details: [locationDetail(entry.locationName)],
@@ -409,29 +390,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     title: "Missing Images",
     description: "Products that don't have any images.",
     emptyMessage: "All products have images.",
-    headerAction: (
-      <BackfillButton
-        selectMutation={(api) => api.product.backfillUPCImages.mutationOptions}
-        invalidateKeys={(api) => [api.product.list.queryKey()]}
-        idleLabel="Fetch UPC Images"
-        pendingLabel="Fetching..."
-        toastResult={(result) => {
-          if (result.imported > 0) {
-            return {
-              tone: "success",
-              message: `Imported ${result.imported} image${result.imported !== 1 ? "s" : ""}`,
-            };
-          }
-          if (result.found === 0) {
-            return { tone: "info", message: "No products need UPC images" };
-          }
-          return {
-            tone: "info",
-            message: `No images found for ${result.skipped} product(s)`,
-          };
-        }}
-      />
-    ),
+    headerAction: <BackfillButton {...BACKFILL.fetchUpcImages} />,
     renderItem: (product) => ({
       title: product.name,
       subtitle: byManufacturer(product.manufacturer),
@@ -448,24 +407,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     description:
       "Products with food indicators (UPC, NDB, or ingredient link) but category is not set to 'food'.",
     emptyMessage: "All products with food indicators have correct categories.",
-    headerAction: (
-      <BackfillButton
-        selectMutation={(api) =>
-          api.product.backfillFoodCategories.mutationOptions
-        }
-        invalidateKeys={(api) => [api.product.list.queryKey()]}
-        idleLabel="Fix All Categories"
-        pendingLabel="Fixing..."
-        toastResult={(result) =>
-          result.updated > 0
-            ? {
-                tone: "success",
-                message: `Updated ${result.updated} product${result.updated !== 1 ? "s" : ""} to food category`,
-              }
-            : { tone: "info", message: "No products need category update" }
-        }
-      />
-    ),
+    headerAction: <BackfillButton {...BACKFILL.fixCategories} />,
     renderItem: (product) => ({
       title: product.name,
       subtitle: byManufacturer(product.manufacturer),
@@ -489,23 +431,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     description:
       "Locations with photos that haven't been analyzed by AI yet. Run backfill to generate descriptions for all.",
     emptyMessage: "All locations with photos have AI descriptions.",
-    headerAction: (
-      <BackfillButton
-        selectMutation={(api) =>
-          api.ai.backfillLocationDescriptions.mutationOptions
-        }
-        idleLabel="Analyze All"
-        pendingLabel="Analyzing..."
-        toastResult={(result) =>
-          result.analyzed > 0
-            ? {
-                tone: "success",
-                message: `Analyzed ${result.analyzed} location${result.analyzed !== 1 ? "s" : ""}`,
-              }
-            : { tone: "info", message: "No locations need AI description" }
-        }
-      />
-    ),
+    headerAction: <BackfillButton {...BACKFILL.analyzeDescriptions} />,
     renderItem: (location) => ({
       title: location.name,
       badges: [
@@ -529,22 +455,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       "Ingredient lines whose original text, re-parsed with the current parser, would now differ from what's stored — on name, amounts, or modifier. Re-parsing would update them.",
     emptyMessage:
       "No stale parses — every stored ingredient matches a fresh parse of its original line.",
-    headerAction: (
-      <BackfillButton
-        selectMutation={(api) => api.problems.reparseStale.mutationOptions}
-        invalidateKeys={(api) => [api.recipe.list.queryKey()]}
-        idleLabel="Re-parse All"
-        pendingLabel="Re-parsing..."
-        toastResult={(result) =>
-          result.updated > 0
-            ? {
-                tone: "success",
-                message: `Re-parsed ${result.updated} ingredient line${result.updated !== 1 ? "s" : ""}`,
-              }
-            : { tone: "info", message: "No stale parses to re-parse" }
-        }
-      />
-    ),
+    headerAction: <BackfillButton {...BACKFILL.reparse} />,
     // Title is the stable ingredient name; every drifted axis (name included) is a
     // DriftIndicator in the details — the card title is string-typed, so a colored
     // diff can't live there.

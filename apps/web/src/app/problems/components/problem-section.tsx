@@ -13,12 +13,25 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/components/ui/tooltip";
 import { EntityIcon } from "~/entities/entities";
 import type { EntityDetailRoute } from "~/entities/types";
 import { useRecipeUsage } from "./recipe-usage-context";
 
 // Type-safe route patterns for entity detail pages
 type RoutePattern = { to: EntityDetailRoute; params: { id: string } };
+
+// Noun for the "open the full ___" tooltip, keyed by the card's detail route.
+const ROUTE_NOUN: Record<string, string> = {
+  "/products/$id": "product",
+  "/recipes/$id": "recipe",
+  "/inventory/$id": "inventory entry",
+  "/locations/$id": "location",
+};
 
 // Icon can be either a LucideIcon component or an entity key
 export type IconProp =
@@ -116,7 +129,17 @@ export function ProblemSection<T>({
             {title}
             <Badge variant="destructive">{items.length}</Badge>
           </CardTitle>
-          {headerAction}
+          {headerAction && (
+            <Tooltip>
+              <TooltipTrigger render={<span className="contents" />}>
+                {headerAction}
+              </TooltipTrigger>
+              <TooltipContent>
+                Fixes all {items.length} detected{" "}
+                {items.length === 1 ? "item" : "items"} in this section
+              </TooltipContent>
+            </Tooltip>
+          )}
         </div>
         <CardDescription>{description}</CardDescription>
       </CardHeader>
@@ -185,25 +208,44 @@ function ProblemCard({ rendered }: { rendered: RenderedProblemItem }) {
       actions={
         <div className="flex gap-1">
           {inlineFix && (
-            <Button
-              variant={open ? "secondary" : "default"}
-              size="sm"
-              onClick={() => setOpen((o) => !o)}
-            >
-              {open ? (
-                <X className="mr-1 h-3 w-3" />
-              ) : (
-                <Wrench className="mr-1 h-3 w-3" />
-              )}
-              {open ? "Cancel" : inlineFix.label}
-            </Button>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant={open ? "secondary" : "default"}
+                    size="sm"
+                    onClick={() => setOpen((o) => !o)}
+                  />
+                }
+              >
+                {open ? (
+                  <X className="mr-1 h-3 w-3" />
+                ) : (
+                  <Wrench className="mr-1 h-3 w-3" />
+                )}
+                {open ? "Cancel" : inlineFix.label}
+              </TooltipTrigger>
+              <TooltipContent>Quick fix — just this item</TooltipContent>
+            </Tooltip>
           )}
-          <Link to={route.to} params={route.params}>
-            <Button variant="outline" size="sm">
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  render={<Link to={route.to} params={route.params} />}
+                  nativeButton={false}
+                />
+              }
+            >
               <ExternalLink className="mr-1 h-3 w-3" />
               {editLabel}
-            </Button>
-          </Link>
+            </TooltipTrigger>
+            <TooltipContent>
+              Open the full {ROUTE_NOUN[route.to] ?? "record"} page
+            </TooltipContent>
+          </Tooltip>
           {customActions}
         </div>
       }

@@ -1,3 +1,4 @@
+import type { ProblemsCount } from "@cubby/schemas/problems";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { AlertTriangle, Check } from "lucide-react";
@@ -10,6 +11,35 @@ import {
 } from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
+
+const pl = (n: number, sing: string, plur = `${sing}s`) =>
+  `${n} ${n === 1 ? sing : plur}`;
+
+// Every `byType` key with its tooltip phrase, in Problems-page section order.
+// Exhaustive on purpose: the breakdown must sum to `total`, so adding a problem
+// category to the count schema should add a row here.
+const PROBLEM_LABELS: Array<
+  [keyof ProblemsCount["byType"], (n: number) => string]
+> = [
+  ["duplicateUniqueProducts", (n) => pl(n, "duplicate")],
+  ["orphanedProducts", (n) => `${n} orphaned`],
+  ["invalidUPCs", (n) => pl(n, "invalid UPC")],
+  ["productsWithoutMappings", (n) => `${n} without pricing`],
+  ["ingredientsWithPartialCoverage", (n) => `${n} partial coverage`],
+  ["productsWithIslandedMappings", (n) => pl(n, "islanded mapping")],
+  ["inventoryWithStaleValuations", (n) => pl(n, "stale valuation")],
+  ["invalidInventoryAmounts", (n) => pl(n, "invalid amount")],
+  ["emptyLocations", (n) => pl(n, "empty location")],
+  ["productsWithNoImages", (n) => pl(n, "missing image")],
+  [
+    "productsWithWrongCategory",
+    (n) => pl(n, "wrong category", "wrong categories"),
+  ],
+  ["locationsWithoutAiDescription", (n) => pl(n, "missing AI description")],
+  ["staleIngredientParses", (n) => pl(n, "stale parse")],
+  ["staleRecipeTotals", (n) => pl(n, "stale total")],
+  ["productsWithBetterUpcData", (n) => pl(n, "UPC update")],
+];
 
 export const ProblemsBadge = () => {
   const api = useTRPC();
@@ -31,44 +61,14 @@ export const ProblemsBadge = () => {
   const totalProblems = problems?.total ?? 0;
   const hasProblems = totalProblems > 0;
 
-  // Build tooltip content
-  const tooltipParts: string[] = [];
-  if (problems) {
-    if (problems.byType.duplicateUniqueProducts > 0) {
-      tooltipParts.push(
-        `${problems.byType.duplicateUniqueProducts} duplicate${problems.byType.duplicateUniqueProducts > 1 ? "s" : ""}`,
-      );
-    }
-    if (problems.byType.orphanedProducts > 0) {
-      tooltipParts.push(`${problems.byType.orphanedProducts} orphaned`);
-    }
-    if (problems.byType.invalidUPCs > 0) {
-      tooltipParts.push(`${problems.byType.invalidUPCs} invalid UPC`);
-    }
-    if (problems.byType.productsWithoutMappings > 0) {
-      tooltipParts.push(
-        `${problems.byType.productsWithoutMappings} without pricing`,
-      );
-    }
-    if (problems.byType.invalidInventoryAmounts > 0) {
-      tooltipParts.push(
-        `${problems.byType.invalidInventoryAmounts} invalid amount`,
-      );
-    }
-    if (problems.byType.emptyLocations > 0) {
-      tooltipParts.push(`${problems.byType.emptyLocations} empty location`);
-    }
-    if (problems.byType.staleIngredientParses > 0) {
-      tooltipParts.push(
-        `${problems.byType.staleIngredientParses} stale parse${problems.byType.staleIngredientParses > 1 ? "s" : ""}`,
-      );
-    }
-    if (problems.byType.staleRecipeTotals > 0) {
-      tooltipParts.push(
-        `${problems.byType.staleRecipeTotals} stale total${problems.byType.staleRecipeTotals > 1 ? "s" : ""}`,
-      );
-    }
-  }
+  // One phrase per category, in Problems-page section order, so the breakdown
+  // sums to `total` (every byType key is listed — no silent omissions).
+  const tooltipParts = problems
+    ? PROBLEM_LABELS.flatMap(([key, phrase]) => {
+        const n = problems.byType[key];
+        return n > 0 ? [phrase(n)] : [];
+      })
+    : [];
 
   const tooltipText = hasProblems
     ? `${tooltipParts.join(", ")} — Click to view`

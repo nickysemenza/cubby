@@ -12,7 +12,7 @@ import {
 
 type TRPCApi = ReturnType<typeof useTRPC>;
 
-type BackfillButtonProps<TFn extends MutationOptionsFn> = {
+export type BackfillButtonProps<TFn extends MutationOptionsFn> = {
   /** Picks the mutation off the tRPC proxy, e.g. `(api) => api.problems.reparseStale.mutationOptions`. */
   selectMutation: (api: TRPCApi) => TFn;
   /** Entity lists to invalidate alongside the problems list. */

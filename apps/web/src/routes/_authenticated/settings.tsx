@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { useTableDensity } from "~/app/_components/data-table/useTableDensity";
+import { BACKFILL } from "~/app/problems/components/backfill-registry";
 import { BackfillButton } from "~/app/problems/components/problem-backfill-action";
 import { EntityLayout } from "~/components/layouts/entity-layout";
 import { Button } from "~/components/ui/button";
@@ -304,44 +305,14 @@ const MAINTENANCE_TOOLS: {
     description:
       "Re-run the ingredient parser over imported lines (rawLine). Reverts manual structured edits — intended.",
     count: (c) => c.staleParses,
-    action: (
-      <BackfillButton
-        selectMutation={(api) => api.problems.reparseStale.mutationOptions}
-        invalidateKeys={(api) => [api.recipe.list.queryKey()]}
-        idleLabel="Re-parse all"
-        pendingLabel="Re-parsing…"
-        toastResult={(r) => ({
-          tone: r.updated > 0 ? "success" : "info",
-          message:
-            r.updated > 0
-              ? `Re-parsed ${r.updated} line${r.updated === 1 ? "" : "s"} across ${r.recipesAffected} recipe${r.recipesAffected === 1 ? "" : "s"}.`
-              : "Nothing to re-parse.",
-        })}
-      />
-    ),
+    action: <BackfillButton {...BACKFILL.reparse} />,
   },
   {
     label: "Sync inventory valuations",
     description:
       "Recompute the dollar value of every inventory entry from current product prices.",
     count: (c) => c.staleValuations,
-    action: (
-      <BackfillButton
-        selectMutation={(api) =>
-          api.inventory.backfillInventoryValuations.mutationOptions
-        }
-        invalidateKeys={(api) => [api.inventory.list.queryKey()]}
-        idleLabel="Sync all"
-        pendingLabel="Syncing…"
-        toastResult={(r) => ({
-          tone: r.updated > 0 ? "success" : "info",
-          message:
-            r.updated > 0
-              ? `Synced ${r.updated} entr${r.updated === 1 ? "y" : "ies"}.`
-              : "All valuations already current.",
-        })}
-      />
-    ),
+    action: <BackfillButton {...BACKFILL.syncValuations} />,
   },
   {
     label: "Fetch UPC images",
@@ -350,40 +321,13 @@ const MAINTENANCE_TOOLS: {
     count: (c) => c.productsNoImages,
     // A UPC lookup can return no image, so not every candidate gets one.
     approximate: true,
-    action: (
-      <BackfillButton
-        selectMutation={(api) => api.product.backfillUPCImages.mutationOptions}
-        invalidateKeys={(api) => [api.product.list.queryKey()]}
-        idleLabel="Fetch images"
-        pendingLabel="Fetching…"
-        toastResult={(r) => ({
-          tone: r.imported > 0 ? "success" : "info",
-          message: `Imported ${r.imported} image${r.imported === 1 ? "" : "s"} · ${r.found} found, ${r.skipped} skipped.`,
-        })}
-      />
-    ),
+    action: <BackfillButton {...BACKFILL.fetchUpcImages} />,
   },
   {
     label: "Fix product categories",
     description: "Re-derive product categories from their linked USDA food.",
     count: (c) => c.wrongCategory,
-    action: (
-      <BackfillButton
-        selectMutation={(api) =>
-          api.product.backfillFoodCategories.mutationOptions
-        }
-        invalidateKeys={(api) => [api.product.list.queryKey()]}
-        idleLabel="Fix all"
-        pendingLabel="Fixing…"
-        toastResult={(r) => ({
-          tone: r.updated > 0 ? "success" : "info",
-          message:
-            r.updated > 0
-              ? `Fixed ${r.updated} categor${r.updated === 1 ? "y" : "ies"}.`
-              : "All categories already set.",
-        })}
-      />
-    ),
+    action: <BackfillButton {...BACKFILL.fixCategories} />,
   },
   {
     label: "Analyze location descriptions",
@@ -392,20 +336,7 @@ const MAINTENANCE_TOOLS: {
     count: (c) => c.locationsNoDescription,
     // An AI generation can fail, so not every candidate ends up described.
     approximate: true,
-    action: (
-      <BackfillButton
-        selectMutation={(api) =>
-          api.ai.backfillLocationDescriptions.mutationOptions
-        }
-        invalidateKeys={(api) => [api.location.list.queryKey()]}
-        idleLabel="Analyze all"
-        pendingLabel="Analyzing…"
-        toastResult={(r) => ({
-          tone: r.analyzed > 0 ? "success" : "info",
-          message: `Analyzed ${r.analyzed} of ${r.total} location${r.total === 1 ? "" : "s"}.`,
-        })}
-      />
-    ),
+    action: <BackfillButton {...BACKFILL.analyzeDescriptions} />,
   },
 ];
 
