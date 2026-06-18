@@ -5,6 +5,7 @@ import {
   unsafeProductId,
   unsafeRecipeId,
 } from "@cubby/schemas/identifiers";
+import type { MaintenanceCounts } from "@cubby/schemas/problems";
 import type { RecipeTotals } from "@cubby/schemas/recipe";
 import { isMiscProduct } from "@cubby/shared";
 import { upc as upcSchema } from "@cubby/usda-schemas";
@@ -58,7 +59,10 @@ import {
   findProductsWithNoImages,
 } from "~/server/repo/product";
 import { foodLookupParamFromProduct } from "~/server/repo/product/helpers";
-import { markRecipesStale } from "~/server/repo/recipe/totals";
+import {
+  markRecipesStale,
+  selectAllActiveRecipeIds,
+} from "~/server/repo/recipe/totals";
 import { batchEnrichWithFood } from "~/server/services/usda-helpers";
 
 // Interface for the complete problems result
@@ -1094,6 +1098,40 @@ export const findAllProblemsCount = async (
       productsWithBetterUpcData: p.productsWithBetterUpcData.length,
     },
     total: p.totalProblems,
+  };
+};
+
+// Counts for the Settings → Maintenance "N affected" dry-run. Runs only the six
+// detectors behind that panel's buttons — all DB/WASM, no USDA/UPC network — so
+// it's far cheaper than findAllProblemsCount. Recompute is a forced full pass,
+// so its number is every active recipe, not just the stale ones.
+export const findMaintenanceCounts = async (
+  db: Database,
+): Promise<MaintenanceCounts> => {
+  const [
+    recipeIds,
+    staleParses,
+    staleValuations,
+    noImages,
+    wrongCategory,
+    noDescription,
+  ] = await Promise.all([
+    selectAllActiveRecipeIds(db),
+    findStaleIngredientParses(db),
+    findInventoryWithStaleValuations(db),
+    findProductsWithNoImages(db, { excludeIngredients: true }),
+    findProductsNeedingFoodCategory(db),
+    findLocationsWithoutAiDescription(db),
+  ]);
+
+  return {
+    recipesTotal: recipeIds.length,
+    staleParses: staleParses.length,
+    staleValuations: staleValuations.length,
+    // backfillUPCImages only acts on products that have a UPC to look up.
+    productsNoImages: noImages.filter((p) => p.upc != null).length,
+    wrongCategory: wrongCategory.length,
+    locationsNoDescription: noDescription.length,
   };
 };
 

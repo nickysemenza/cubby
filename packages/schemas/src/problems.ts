@@ -198,3 +198,16 @@ export const problemsCountSchema = z.object({
 
 export type AllProblems = z.infer<typeof allProblemsSchema>;
 export type ProblemsCount = z.infer<typeof problemsCountSchema>;
+
+// Counts powering the Settings → Maintenance "N affected" dry-run. A focused
+// subset (the six batch tools shown there), kept separate from problemsCount so
+// it can run only cheap DB/WASM detectors — no USDA/UPC network.
+export const maintenanceCountsSchema = z.object({
+  recipesTotal: z.number().int(),
+  staleParses: z.number().int(),
+  staleValuations: z.number().int(),
+  productsNoImages: z.number().int(),
+  wrongCategory: z.number().int(),
+  locationsNoDescription: z.number().int(),
+});
+export type MaintenanceCounts = z.infer<typeof maintenanceCountsSchema>;

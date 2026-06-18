@@ -1,3 +1,4 @@
+import type { MaintenanceCounts } from "@cubby/schemas/problems";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import type { ReactNode } from "react";
@@ -24,6 +25,7 @@ import {
 } from "~/lib/flags";
 import { queryKeys } from "~/lib/query-keys";
 import type { TimingResponse } from "~/routes/api/debug/timing";
+import { useTRPC } from "~/trpc/react";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   component: SettingsPage,
@@ -192,14 +194,17 @@ function DiagnosticsCard() {
   );
 }
 
-/** One labeled maintenance action: description on the left, run-button on the right. */
+/** One labeled maintenance action: description left, dry-run count + run-button right. */
 function MaintenanceRow({
   label,
   description,
+  count,
   action,
 }: {
   label: string;
   description: string;
+  /** "N affected" dry-run figure; undefined while the counts query loads. */
+  count?: number;
   action: ReactNode;
 }) {
   return (
@@ -208,7 +213,12 @@ function MaintenanceRow({
         <span className="font-medium text-sm">{label}</span>
         <p className="text-muted-foreground text-xs">{description}</p>
       </div>
-      <div className="shrink-0">{action}</div>
+      <div className="flex shrink-0 items-center gap-3">
+        <span className="font-mono text-2xs text-muted-foreground tabular-nums">
+          {count == null ? "—" : `${count} affected`}
+        </span>
+        {action}
+      </div>
     </div>
   );
 }
@@ -221,12 +231,14 @@ function MaintenanceRow({
 const MAINTENANCE_TOOLS: {
   label: string;
   description: string;
+  count: (c: MaintenanceCounts) => number;
   action: ReactNode;
 }[] = [
   {
     label: "Recompute recipe totals",
     description:
       "Rebuild every recipe's cost / calorie / macro rollup, even when not marked stale.",
+    count: (c) => c.recipesTotal,
     action: (
       <BackfillButton
         selectMutation={(api) => api.recipe.recomputeAll.mutationOptions}
@@ -244,6 +256,7 @@ const MAINTENANCE_TOOLS: {
     label: "Re-parse recipe lines",
     description:
       "Re-run the ingredient parser over imported lines (rawLine). Reverts manual structured edits — intended.",
+    count: (c) => c.staleParses,
     action: (
       <BackfillButton
         selectMutation={(api) => api.problems.reparseStale.mutationOptions}
@@ -264,6 +277,7 @@ const MAINTENANCE_TOOLS: {
     label: "Sync inventory valuations",
     description:
       "Recompute the dollar value of every inventory entry from current product prices.",
+    count: (c) => c.staleValuations,
     action: (
       <BackfillButton
         selectMutation={(api) =>
@@ -286,6 +300,7 @@ const MAINTENANCE_TOOLS: {
     label: "Fetch UPC images",
     description:
       "Pull product images from the UPC database for products missing one.",
+    count: (c) => c.productsNoImages,
     action: (
       <BackfillButton
         selectMutation={(api) => api.product.backfillUPCImages.mutationOptions}
@@ -302,6 +317,7 @@ const MAINTENANCE_TOOLS: {
   {
     label: "Fix product categories",
     description: "Re-derive product categories from their linked USDA food.",
+    count: (c) => c.wrongCategory,
     action: (
       <BackfillButton
         selectMutation={(api) =>
@@ -324,6 +340,7 @@ const MAINTENANCE_TOOLS: {
     label: "Analyze location descriptions",
     description:
       "Generate AI descriptions for locations that don't have one yet.",
+    count: (c) => c.locationsNoDescription,
     action: (
       <BackfillButton
         selectMutation={(api) =>
@@ -342,6 +359,14 @@ const MAINTENANCE_TOOLS: {
 ];
 
 function MaintenanceCard() {
+  const trpc = useTRPC();
+  // Dry-run "N affected" figures — one cheap DB/WASM query (no USDA/UPC network).
+  const { data: counts } = useQuery(
+    trpc.problems.getMaintenanceCounts.queryOptions(undefined, {
+      staleTime: 30_000,
+    }),
+  );
+
   return (
     <Card>
       <CardHeader>
@@ -353,7 +378,13 @@ function MaintenanceCard() {
       </CardHeader>
       <CardContent className="divide-y divide-border/60">
         {MAINTENANCE_TOOLS.map((t) => (
-          <MaintenanceRow key={t.label} {...t} />
+          <MaintenanceRow
+            key={t.label}
+            label={t.label}
+            description={t.description}
+            count={counts ? t.count(counts) : undefined}
+            action={t.action}
+          />
         ))}
       </CardContent>
     </Card>

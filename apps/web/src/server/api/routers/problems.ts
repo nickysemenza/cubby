@@ -1,11 +1,13 @@
 import {
   allProblemsSchema,
+  maintenanceCountsSchema,
   problemsCountSchema,
 } from "@cubby/schemas/problems";
 import { z } from "zod";
 import {
   findAllProblems,
   findAllProblemsCount,
+  findMaintenanceCounts,
   recipeUsageCountsByProduct,
   reparseStaleIngredientParses,
 } from "~/server/repo/problems";
@@ -27,6 +29,14 @@ const getProblemsCount = protectedProcedure
       ctx.upcLookupClient,
       ctx.usdaClient,
     );
+  });
+
+// Counts behind the Settings → Maintenance "N affected" dry-run. Focused subset
+// of detectors (no USDA/UPC network), separate from getProblemsCount.
+const getMaintenanceCounts = protectedProcedure
+  .output(maintenanceCountsSchema)
+  .query(async ({ ctx }) => {
+    return await findMaintenanceCounts(ctx.db);
   });
 
 // Re-parse every stale ingredient line with the current parser and persist the fresh
@@ -60,6 +70,7 @@ const recipeUsageByProduct = protectedProcedure
 export const problemsRouter = createTRPCRouter({
   getAllProblems,
   getProblemsCount,
+  getMaintenanceCounts,
   reparseStale,
   recipeUsageByProduct,
 });
