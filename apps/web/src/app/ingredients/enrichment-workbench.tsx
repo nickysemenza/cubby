@@ -23,6 +23,7 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
 import { getErrorMessage } from "~/lib/error-utils";
+import { isMoneyUnit } from "~/lib/price-mapping-utils";
 import {
   getIngredientMappings,
   unitMappingsFromFood,
@@ -66,6 +67,32 @@ const FIX_LABEL: Record<EnrichmentRow["recommendedFix"], string> = {
 
 const hasUsdaLink = (row: EnrichmentRow): boolean =>
   row.product.some((p) => p.food != null || p.fdc_id != null || p.upc != null);
+
+// True when a price exists on the product (scalar or a money mapping) — used to
+// tell "no price yet" apart from "priced but unreachable" (islanded).
+const hasPriceEntry = (row: EnrichmentRow): boolean =>
+  row.product.some(
+    (p) =>
+      p.price != null ||
+      p.unitMappings.some(
+        (m) => isMoneyUnit(m.a.unit) || isMoneyUnit(m.b.unit),
+      ),
+  );
+
+// The "Next" badge label. A priced-but-money-uncovered row is islanded — the fix
+// is to connect the existing price, not set a new one, so say so.
+const fixBadgeLabel = (row: EnrichmentRow): string => {
+  if (
+    !row.coverage.covered.includes("money") &&
+    hasPriceEntry(row) &&
+    (row.recommendedFix === "set-per-item-price" ||
+      row.recommendedFix === "add-purchase-mapping" ||
+      row.recommendedFix === "add-weight-mapping")
+  ) {
+    return "Connect price";
+  }
+  return FIX_LABEL[row.recommendedFix];
+};
 
 /**
  * Dense bulk-enrichment table for ingredients that can't be fully costed yet —
@@ -453,7 +480,7 @@ function WorkbenchRow({
         </td>
         <td className="px-2 py-2.5">
           <Badge variant="outline" className="font-normal">
-            {FIX_LABEL[row.recommendedFix]}
+            {fixBadgeLabel(row)}
           </Badge>
         </td>
       </tr>
@@ -525,6 +552,20 @@ function WorkbenchEditor({
   const conversionNeeded =
     conversionGaps.length > 0 && (usdaLinked || usdaUnavailable);
 
+  // Islanded price: a price exists but money is unreachable from a measure (e.g.
+  // a per-each price on a food whose portions only map "large"/"cup" → g, never
+  // "each" → g). The fix is to *connect* the existing price, not add a new one —
+  // bridge its measure-side unit into the weight graph (`1 each = N g`).
+  const priceEdge = currentMappings.find(
+    (m) => isMoneyUnit(m.a.unit) || isMoneyUnit(m.b.unit),
+  );
+  const priceIslanded = moneyMissing && priceEdge != null;
+  const islandedUnit = priceEdge
+    ? isMoneyUnit(priceEdge.a.unit)
+      ? priceEdge.b.unit
+      : priceEdge.a.unit
+    : null;
+
   const [food, setFood] = useState<FoodSummaryWithLinkedProducts | null>(
     initialFood,
   );
@@ -533,8 +574,9 @@ function WorkbenchEditor({
     row.priceMode === "per-each" ? "each" : "lb",
   );
   const [price, setPrice] = useState("");
+  // Pre-seed the conversion to bridge an islanded price into grams.
   const [cFromQty, setCFromQty] = useState("1");
-  const [cFromUnit, setCFromUnit] = useState("");
+  const [cFromUnit, setCFromUnit] = useState(islandedUnit ?? "");
   const [cToQty, setCToQty] = useState("");
   const [cToUnit, setCToUnit] = useState("g");
 
@@ -728,7 +770,8 @@ function WorkbenchEditor({
               {[
                 !covered.has("weight") && "weight",
                 !covered.has("volume") && "volume",
-                moneyMissing && "price",
+                moneyMissing &&
+                  (priceIslanded ? "price (not connected)" : "price"),
                 !covered.has("calories") && "calories",
               ]
                 .filter(Boolean)
@@ -758,7 +801,15 @@ function WorkbenchEditor({
             </div>
           )}
 
-          {moneyMissing && (
+          {priceIslanded && (
+            <p className="rounded-md border bg-warning/10 px-2 py-1.5 text-warning text-xs">
+              Already priced, but “{islandedUnit}” isn’t linked to a weight — so
+              the price can’t be reached from a recipe measure. Connect it below
+              (e.g. 1 {islandedUnit} = N&nbsp;g) instead of adding a new price.
+            </p>
+          )}
+
+          {moneyMissing && !priceIslanded && (
             <div className="space-y-1">
               <p className="font-medium text-xs">Set a price</p>
               <div className="flex items-center gap-1.5 text-sm">
@@ -798,11 +849,13 @@ function WorkbenchEditor({
 
           <div className="space-y-1">
             <p className="font-medium text-xs">
-              Add a conversion{" "}
+              {priceIslanded ? "Connect the price" : "Add a conversion"}{" "}
               <span className="font-normal text-muted-foreground">
-                {conversionNeeded
-                  ? `— covers ${conversionGaps.join(", ")} (e.g. 1 cup = 240 g)`
-                  : "— optional, e.g. 1 cup = 240 g"}
+                {priceIslanded
+                  ? `— links “${islandedUnit}” to grams so your price is reachable`
+                  : conversionNeeded
+                    ? `— covers ${conversionGaps.join(", ")} (e.g. 1 cup = 240 g)`
+                    : "— optional, e.g. 1 cup = 240 g"}
               </span>
             </p>
             <div className="flex items-center gap-1.5 text-sm">
