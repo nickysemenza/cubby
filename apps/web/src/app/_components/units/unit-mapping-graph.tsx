@@ -44,6 +44,16 @@ const unitLabel = (unit: string): string => (unit === "dollar" ? "$" : unit);
 const NUTRIENT_UNIT_RE = /^(g|mg|ug|µg|mcg|iu|kj)\s+\S/i;
 const isDisplayUnit = (unit: string): boolean => !NUTRIENT_UNIT_RE.test(unit);
 
+/**
+ * A mapping worth showing to the user: both endpoints are real units, not USDA
+ * per-nutrient edges. Unlike a core-4 filter this keeps bridge conversions
+ * between two count/other units (e.g. `1 each = 1 large`) — which matter, since
+ * they connect an islanded unit into the rest of the graph. Shared by the
+ * graph and the workbench's "Current conversions" table so they never disagree.
+ */
+export const isDisplayMapping = (m: UnitMapping): boolean =>
+  isDisplayUnit(m.a.unit) && isDisplayUnit(m.b.unit);
+
 const amountKind = (unit: string): string => {
   try {
     return wasm.amount_kind({ value: 1, unit });
@@ -80,7 +90,7 @@ export function UnitMappingGraph({
       }
     };
     for (const m of mappings) {
-      if (!isDisplayUnit(m.a.unit) || !isDisplayUnit(m.b.unit)) continue;
+      if (!isDisplayMapping(m)) continue;
       ensure(m.a.unit);
       ensure(m.b.unit);
       linkArr.push({ source: m.a.unit, target: m.b.unit });
