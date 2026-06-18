@@ -1,4 +1,4 @@
-import { countLabel, pluralize } from "~/lib/pluralize";
+import { countLabel } from "~/lib/pluralize";
 import type { BackfillButtonProps } from "./problem-backfill-action";
 import type { MutationOptionsFn } from "./use-problem-backfill";
 
@@ -82,7 +82,7 @@ export const BACKFILL = {
     pendingLabel: "Analyzing…",
     toastResult: (r) => ({
       tone: r.analyzed > 0 ? "success" : "info",
-      message: `Analyzed ${r.analyzed} of ${pluralize(r.total, "location")}.`,
+      message: `Analyzed ${r.analyzed} of ${countLabel(r.total, "location")}.`,
     }),
   }),
 };
