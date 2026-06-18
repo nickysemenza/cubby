@@ -3,13 +3,18 @@ import {
   type ProductWithMappingsOut,
 } from "@cubby/schemas/combo";
 import type { ActorContext } from "@cubby/schemas/context";
-import type { IngredientId } from "@cubby/schemas/identifiers";
+import { type IngredientId, ingredientId } from "@cubby/schemas/identifiers";
 import type { ingredientBase } from "@cubby/schemas/ingredient";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
+import { baseKind } from "@cubby/schemas/problems";
 import { productTopLevelOut } from "@cubby/schemas/product";
 import { unitMappingOut } from "@cubby/schemas/unitmapping";
 import { foodSummary } from "@cubby/usda-schemas";
+import { uniq } from "es-toolkit";
 import { z } from "zod";
+import { BASE_KINDS, conversionCoverage } from "~/lib/conversion-coverage";
+import { classifyIngredientFix } from "~/lib/recipe-costing-gaps";
+import { getIngredientMappings } from "~/lib/unit-mapping-utils";
 // Extended schemas that include food data
 import type { Database } from "~/server/db";
 import type { USDAClient } from "../clients/usda";
@@ -41,6 +46,34 @@ export const ingredientWithFoodOut = ingredientWithRecipesAndProductOut.extend({
 });
 
 export type IngredientWithFoodOut = z.infer<typeof ingredientWithFoodOut>;
+
+/** The single highest-leverage fix for an ingredient, or "done" when complete. */
+export const enrichmentFixKind = z.enum([
+  "no-product",
+  "link-usda",
+  "set-per-item-price",
+  "add-purchase-mapping",
+  "add-weight-mapping",
+  "done",
+]);
+
+/**
+ * A workbench row: the full ingredient (products + food, so the inline editor
+ * can create/update directly) decorated with its conversion coverage, the
+ * recommended next fix, a price-entry mode, and merge candidates.
+ */
+export const enrichmentRowOut = ingredientWithFoodOut.extend({
+  recipeCount: z.number(),
+  coverage: z.object({
+    covered: z.array(baseKind),
+    tier: z.enum(["complete", "good", "partial", "none"]),
+  }),
+  recommendedFix: enrichmentFixKind,
+  priceMode: z.enum(["per-each", "package"]),
+  mergeCandidates: z.array(z.object({ id: ingredientId, name: z.string() })),
+});
+
+export type EnrichmentRow = z.infer<typeof enrichmentRowOut>;
 
 export class IngredientService {
   constructor(
@@ -132,6 +165,61 @@ export class IngredientService {
     );
 
     return { data: ingredientsWithFood, count };
+  }
+
+  /**
+   * The enrichment workbench worklist: every recipe-used ingredient that isn't
+   * fully costable yet (no product, or a product whose conversion graph can't
+   * reach all four base kinds), decorated with coverage + the recommended fix.
+   *
+   * Coverage/fix are computed here (WASM, not SQL-expressible) over the
+   * USDA-enriched products. We scope to recipe-used ingredients up front so the
+   * enrichment pass only hits the USDA network for products that matter, then
+   * drop the fully-covered rows — the workbench is a list of gaps.
+   */
+  async enrichmentWorkbench(): Promise<EnrichmentRow[]> {
+    const { data: ingredients } = await ingredientListRepo(
+      this.db,
+      undefined,
+      { orderBy: "appearsInRecipes", direction: "desc" },
+      { pageIndex: 0, pageSize: 5000 },
+      false,
+    );
+
+    const candidates = ingredients.filter(
+      (ing) => ing.appearsInRecipes.length > 0,
+    );
+
+    const enriched = await batchEnrichNestedItems(
+      candidates,
+      (ing) => ing.product,
+      (products) => this.enrichProductsWithFood(products),
+      (ing, enrichedProducts) => ({ ...ing, product: enrichedProducts }),
+    );
+
+    const rows = enriched.map((ing): EnrichmentRow => {
+      const coverage = conversionCoverage(
+        getIngredientMappings(ing),
+        BASE_KINDS,
+      );
+      const recommendedFix = classifyIngredientFix({
+        products: ing.product,
+        coverage,
+        // No recipe-line context here; default to a measured (package) price
+        // suggestion — the inline editor still lets the user pick "each".
+        sampleLineKind: "weight",
+      });
+      return {
+        ...ing,
+        recipeCount: uniq(ing.appearsInRecipes.map((r) => r.id)).length,
+        coverage: { covered: [...coverage.covered], tier: coverage.tier },
+        recommendedFix,
+        priceMode: "package",
+        mergeCandidates: [],
+      };
+    });
+
+    return rows.filter((r) => r.recommendedFix !== "done");
   }
 
   async createIngredient(

@@ -1,3 +1,4 @@
+import type { ConversionCoverage } from "~/lib/conversion-coverage";
 import type { RecipeCosting } from "~/lib/recipe-costing";
 import { wasm } from "~/lib/wasm";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
@@ -70,7 +71,19 @@ interface GapAccumulator {
   missing: { price: boolean; weight: boolean; nutrients: boolean };
 }
 
-const classifyKind = (acc: GapAccumulator): CostingGapKind => {
+/**
+ * The shared classifier inputs — just the signals the fix decision needs, so the
+ * per-recipe path (deriveCostingGaps) and the global workbench path
+ * (classifyIngredientFix) share one body. `GapAccumulator` is a structural
+ * supertype, so it passes straight through.
+ */
+interface FixInputs {
+  products: IngredientWithFoodOut["product"];
+  missing: { price: boolean; weight: boolean; nutrients: boolean };
+  lineKind: LineKind;
+}
+
+const classifyKind = (acc: FixInputs): CostingGapKind => {
   if (acc.products.length === 0) return "no-product";
 
   // A product is USDA-associated if it carries (or intends to carry) food data:
@@ -97,6 +110,37 @@ const classifyKind = (acc: GapAccumulator): CostingGapKind => {
   // Price resolved but weight didn't (and a USDA link already exists / price is
   // set) → a direct weight mapping is the remaining fix.
   return "add-weight-mapping";
+};
+
+/**
+ * The global (non-recipe) twin of {@link classifyKind}: the single
+ * highest-leverage fix for an ingredient, graded from its products' aggregate
+ * conversion coverage instead of a specific recipe line. `"done"` means the
+ * coverage graph is complete — nothing left to suggest. Used by the enrichment
+ * workbench, which has no recipe context, only the ingredient's own products.
+ *
+ * Reads `coverage.covered` (not "has a price"): an islanded per-each price on a
+ * weight-used food has money present but unreachable from a measure, so it's
+ * still a gap (add-weight-mapping), exactly as the per-recipe path treats it.
+ */
+export const classifyIngredientFix = (input: {
+  products: IngredientWithFoodOut["product"];
+  coverage: ConversionCoverage;
+  sampleLineKind: LineKind;
+}): CostingGapKind | "done" => {
+  if (input.products.length === 0) return "no-product";
+  if (input.coverage.tier === "complete") return "done";
+
+  const covered = input.coverage.covered;
+  return classifyKind({
+    products: input.products,
+    missing: {
+      price: !covered.has("money"),
+      weight: !covered.has("weight"),
+      nutrients: !covered.has("calories"),
+    },
+    lineKind: input.sampleLineKind,
+  });
 };
 
 /**

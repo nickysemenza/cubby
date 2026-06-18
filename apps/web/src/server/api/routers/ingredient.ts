@@ -17,7 +17,10 @@ import {
   getIngredientMatches,
   resolveOrCreateIngredients,
 } from "~/server/repo/ingredient";
-import { ingredientWithFoodOut } from "~/server/services/ingredient.service";
+import {
+  enrichmentRowOut,
+  ingredientWithFoodOut,
+} from "~/server/services/ingredient.service";
 import {
   createDeleteProcedure,
   createEntityCrudProcedures,
@@ -75,6 +78,14 @@ const merge = protectedProcedure
       input.target,
       input.aliases,
     );
+  });
+
+// The enrichment workbench worklist: recipe-used ingredients that aren't fully
+// costable, with coverage + recommended fix computed server-side.
+const enrichmentWorkbench = protectedProcedure
+  .output(z.array(enrichmentRowOut))
+  .query(async ({ ctx }) => {
+    return await ctx.services.ingredient.enrichmentWorkbench();
   });
 
 const getByName = protectedProcedure
@@ -149,6 +160,7 @@ const deleteItem = createDeleteProcedure<IngredientId>(
 
 export const ingredientRouter = createTRPCRouter({
   getByName,
+  enrichmentWorkbench,
   matchNames,
   resolveOrCreate,
   getByID,

@@ -39,7 +39,7 @@ interface CoveragePair {
   success: boolean;
 }
 
-interface ConversionCoverage {
+export interface ConversionCoverage {
   /** Base kinds that participate in at least one working conversion (lit icons). */
   covered: Set<BaseKind>;
   /** |covered| ∈ {0,2,3,4} (a lone kind has no pair, so never 1). */
