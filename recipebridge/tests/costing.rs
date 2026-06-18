@@ -8,9 +8,9 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use recipebridge::{
-    cost_recipes_impl, ComponentSource, WAmount, WCostingIngredient, WCostingInput, WCostingRecipe,
-    WCostingRow, WMeasureResult, WNutrientTarget, WNutrientsResult, WProductInput, WRecipeCosting,
-    WRowKind, WSourceMetadata, WUnitMapping,
+    ComponentSource, WAmount, WCostingIngredient, WCostingInput, WCostingRecipe, WCostingRow,
+    WMeasureResult, WNutrientTarget, WNutrientsResult, WProductInput, WRecipeCosting, WRowKind,
+    WSourceMetadata, WUnitMapping, cost_recipes_impl,
 };
 
 // ─── Fixture builders (mirror the TS test builders) ─────────────────────────
@@ -616,10 +616,11 @@ fn frying_medium_with_no_mapping_fails_gracefully() {
     // (no food link), so the oil stays in missing_by_type.nutrients.
     assert_close(r.weight, 115.0, 0.5, "weight");
     assert_close(nutrient(&r, "208"), 364.0, 0.5, "kcal");
-    assert!(r
-        .missing_by_type
-        .nutrients
-        .contains(&"neutral oil".to_string()));
+    assert!(
+        r.missing_by_type
+            .nutrients
+            .contains(&"neutral oil".to_string())
+    );
 }
 
 #[test]
@@ -628,14 +629,16 @@ fn estimate_only_recipe_has_no_basis() {
 
     assert_eq!(r.weight, 0.0);
     assert!(r.missing_by_type.price.contains(&"neutral oil".to_string()));
-    assert!(r
-        .missing_by_type
-        .weight
-        .contains(&"neutral oil".to_string()));
-    assert!(r
-        .missing_by_type
-        .nutrients
-        .contains(&"neutral oil".to_string()));
+    assert!(
+        r.missing_by_type
+            .weight
+            .contains(&"neutral oil".to_string())
+    );
+    assert!(
+        r.missing_by_type
+            .nutrients
+            .contains(&"neutral oil".to_string())
+    );
 }
 
 /// salt: 100 g = 38758 mg sodium; 100 g = $0.10

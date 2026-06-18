@@ -11,7 +11,7 @@
 
 use ingredient::{
     from_str as parse_ingredient_str,
-    unit::{singular, Measure},
+    unit::{Measure, singular},
 };
 use serde::{Deserialize, Serialize};
 use tsify_next::Tsify;
@@ -296,7 +296,7 @@ pub fn product_unit_mappings(product: WProductInput) -> WUnitMappings {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ingredient::unit::{convert_measure_with_graph, make_graph, Measure, MeasureKind};
+    use ingredient::unit::{Measure, MeasureKind, convert_measure_with_graph, make_graph};
     use rstest::rstest;
 
     fn promix_product(household_text: &str) -> WProductInput {

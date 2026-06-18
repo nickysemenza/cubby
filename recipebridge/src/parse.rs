@@ -12,11 +12,11 @@
 //! to compile until mirrored.
 
 use ingredient::{
-    decompose as decompose_str, from_str as parse_ingredient_str,
+    Confidence, Decomposition, Field, ParseNotes, decompose as decompose_str,
+    from_str as parse_ingredient_str,
     ingredient::Ingredient,
     rich_text::{Chunk, RichParser},
     usage::IngredientUsage,
-    Confidence, Decomposition, Field, ParseNotes,
 };
 use recipe_scraper::{RecipeSection, RecipeYield, ScrapedRecipe};
 use serde::{Deserialize, Serialize};

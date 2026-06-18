@@ -17,15 +17,15 @@
 //! are dropped before they can poison a sum.
 
 use ingredient::unit::{
-    convert_measure_with_graph, make_graph, Measure, MeasureGraph, MeasureKind,
+    Measure, MeasureGraph, MeasureKind, convert_measure_with_graph, make_graph,
 };
 use serde::{Deserialize, Serialize};
 use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
 
+use crate::WAmount;
 use crate::food_mappings::WProductInput;
 use crate::reconcile::pairs_for_product;
-use crate::WAmount;
 
 /// Tiny tolerance so float rounding doesn't flip an exact match to "short".
 /// Mirrors the TS `COVERAGE_EPSILON`.

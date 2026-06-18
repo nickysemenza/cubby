@@ -29,18 +29,18 @@ use std::collections::{HashMap, HashSet};
 
 use ingredient::classify_usage;
 use ingredient::unit::{
-    convert_measure_with_graph_explained, make_graph, Measure, MeasureGraph, MeasureKind,
+    Measure, MeasureGraph, MeasureKind, convert_measure_with_graph_explained, make_graph,
 };
 use ingredient::usage::IngredientUsage;
 
-use super::consumption::{plan_for, ComponentSource, PlanTrio};
+use super::consumption::{ComponentSource, PlanTrio, plan_for};
 use super::types::{
     WBakerPct, WCostingInput, WCostingRecipe, WCostingRow, WMeasureOk, WMeasureResult,
     WMissingByType, WNutrientAmount, WNutrientsOk, WNutrientsResult, WRecipeCosting, WRowKind,
     WRowPaths, WRowResult,
 };
-use crate::reconcile::{canonical_amount, convert_with_fallback, pairs_for_product};
 use crate::WConversionStep;
+use crate::reconcile::{canonical_amount, convert_with_fallback, pairs_for_product};
 
 /// One recipe row paired with its resolved usage and the consumption plan that
 /// usage implies. Built up front (before the two resolution passes) so each
@@ -822,8 +822,8 @@ impl<'a> Engine<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::food_mappings::WProductInput;
     use crate::WCostingIngredient;
+    use crate::food_mappings::WProductInput;
 
     fn product(id: &str, price: Option<f64>) -> WProductInput {
         WProductInput {

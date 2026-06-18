@@ -5,16 +5,16 @@ use std::{collections::HashSet, str::FromStr};
 
 use ingredient::{
     unit::{
-        convert_measure_with_graph_explained, find_connected_components, is_valid, make_graph,
-        print_graph, ConversionStep, Measure, MeasureKind,
+        ConversionStep, Measure, MeasureKind, convert_measure_with_graph_explained,
+        find_connected_components, is_valid, make_graph, print_graph,
     },
-    unit_mapping::{parse_unit_mapping as parse_unit_mapping_internal, ParsedUnitMapping},
+    unit_mapping::{ParsedUnitMapping, parse_unit_mapping as parse_unit_mapping_internal},
 };
 use serde::{Deserialize, Serialize};
 use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
 
-use crate::{from_js, to_js, WAmount, WUnitMapping, WUnitMappings};
+use crate::{WAmount, WUnitMapping, WUnitMappings, from_js, to_js};
 
 /// One hop of an explained conversion path (mirrors `ConversionStep`). Units are
 /// the normalized graph nodes (cup amounts enter at `tsp`, money at `cent`).
@@ -190,7 +190,7 @@ pub fn parse_unit_mapping(input: String) -> Result<WUnitMapping, String> {
 mod tests {
     use super::*;
     use ingredient::unit::{
-        convert_measure_with_graph_explained, make_graph, Measure, MeasureKind,
+        Measure, MeasureKind, convert_measure_with_graph_explained, make_graph,
     };
     use rstest::rstest;
     use std::str::FromStr;
@@ -247,9 +247,11 @@ mod tests {
         ]);
         let islands = detect_unit_mapping_islands(two).0;
         assert_eq!(islands.len(), 2);
-        assert!(islands
-            .iter()
-            .any(|g| { g.contains(&"widget".to_string()) && g.contains(&"gadget".to_string()) }));
+        assert!(
+            islands.iter().any(|g| {
+                g.contains(&"widget".to_string()) && g.contains(&"gadget".to_string())
+            })
+        );
     }
 
     /// `is_valid_unit`: a known unit is valid, a bogus one isn't, and one supplied
@@ -326,11 +328,13 @@ mod tests {
     #[test]
     fn conv_explain_no_path_is_none() {
         let graph = make_graph(&WUnitMappings(vec![mapping(1.0, "cup", 120.0, "g")]).to_pairs());
-        assert!(convert_measure_with_graph_explained(
-            &Measure::new("cup", 2.0),
-            MeasureKind::Money,
-            &graph,
-        )
-        .is_none());
+        assert!(
+            convert_measure_with_graph_explained(
+                &Measure::new("cup", 2.0),
+                MeasureKind::Money,
+                &graph,
+            )
+            .is_none()
+        );
     }
 }

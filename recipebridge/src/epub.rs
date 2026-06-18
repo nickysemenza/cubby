@@ -7,10 +7,11 @@
 //! recipe logic stays in Rust — TS only moves bytes.
 
 use recipe_epub::{
+    Chunk as EpubChunk, EpubMeta, ImageRef, Link as EpubLink,
     assemble_recipes as assemble_recipes_internal, build_chunk_request,
     chunk_epub as chunk_epub_internal, cover_image_ref as cover_image_ref_internal,
     epub_metadata as epub_metadata_internal, parse_recipes_payload,
-    read_image as read_image_internal, Chunk as EpubChunk, EpubMeta, ImageRef, Link as EpubLink,
+    read_image as read_image_internal,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};

@@ -1,7 +1,11 @@
 [package]
 name = "recipebridge"
 version = "0.1.0"
-edition = "2021"
+# Edition 2024 (matches the ingredient-parser workspace). Edition 2024 makes 1.85
+# the hard compiler floor, declared via rust-version. `cargo fix --edition`
+# confirmed the migration is code-change-free.
+edition = "2024"
+rust-version = "1.85"
 [lib]
 crate-type = ["cdylib", "rlib"]
 

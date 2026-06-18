@@ -12,9 +12,9 @@
 //! `costing::engine`, so costing stays bit-identical. Hardening (newtypes,
 //! coherence enum) layers on in a later pass.
 
-use ingredient::unit::{convert_measure_with_graph, Measure, MeasureGraph, MeasureKind};
+use ingredient::unit::{Measure, MeasureGraph, MeasureKind, convert_measure_with_graph};
 
-use crate::food_mappings::{product_mapping_pairs, WProductInput};
+use crate::food_mappings::{WProductInput, product_mapping_pairs};
 
 /// The amount a row's measures resolve from: a mass amount when present (the
 /// stated weight, resolved exactly via the unit engine's mass identity), else
