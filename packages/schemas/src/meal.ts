@@ -2,7 +2,7 @@ import { z } from "zod";
 import { ingredientAvailabilityStatus } from "./availability";
 import { dbTimestampsOut } from "./common";
 import { ingredientId, mealId, mealRecipeId, recipeId } from "./identifiers";
-import { recipeTotals, recipeYieldSchema } from "./recipe";
+import { costCalorieTotals, recipeTotals, recipeYieldSchema } from "./recipe";
 
 /**
  * Meal-planning schemas. A `meal` is a planned eating occasion on a calendar day
@@ -72,13 +72,9 @@ export type MealFilters = z.infer<typeof mealFiltersSchema>;
 // ---------------------------------------------------------------------------
 
 /** Cost/calorie totals scaled by a meal-recipe's multiplier, or null if the
- * recipe's totals haven't been computed yet (don't show 0 — show pending). */
-export const scaledTotals = z.object({
-  costTotal: z.number(),
-  costTotalUpper: z.number().optional(),
-  caloriesTotal: z.number(),
-  caloriesTotalUpper: z.number().optional(),
-});
+ * recipe's totals haven't been computed yet (don't show 0 — show pending).
+ * The cost/calorie subset of recipeTotals, single-sourced via costCalorieTotals. */
+export const scaledTotals = costCalorieTotals;
 export type ScaledTotals = z.infer<typeof scaledTotals>;
 
 /** A recipe as summarized inside a meal (no ingredient graph). */
@@ -105,13 +101,7 @@ export const mealRecipeOut = z
 export type MealRecipeOut = z.infer<typeof mealRecipeOut>;
 
 /** Roll-up across a meal's recipes. `pending` ⇒ at least one recipe lacked totals. */
-export const mealTotals = z.object({
-  costTotal: z.number(),
-  costTotalUpper: z.number().optional(),
-  caloriesTotal: z.number(),
-  caloriesTotalUpper: z.number().optional(),
-  pending: z.boolean(),
-});
+export const mealTotals = costCalorieTotals.extend({ pending: z.boolean() });
 export type MealTotals = z.infer<typeof mealTotals>;
 
 export const mealOut = z

@@ -16,6 +16,7 @@ import {
 import { getErrorMessage } from "~/lib/error-utils";
 import { type DedupedFood, dedupeUsdaFoodsByUpc } from "~/lib/usda-food-stats";
 import { useTRPC, useTRPCClient } from "~/trpc/react";
+import { confidenceColor } from "../ai/ai-suggest";
 import { UsdaFoodResultRow } from "../usda/usda-food-result-row";
 import { DialogCompatibleCombobox } from "./combobox-dialog";
 import type { ComboboxItem } from "./combobox-types";
@@ -32,12 +33,6 @@ interface UsdaFoodSearchFieldProps {
   /** Called with the full enriched food when the user picks one. */
   onSelect: (food: FoodSummaryWithLinkedProducts) => void;
 }
-
-const CONFIDENCE_COLOR: Record<Confidence, string> = {
-  high: "text-positive",
-  medium: "text-yellow-600",
-  low: "text-destructive",
-};
 
 // Search scope → data types. "Generic" is the non-branded reference foods
 // (Foundation / SR Legacy / Survey), which branded items otherwise out-rank;
@@ -234,7 +229,7 @@ export function UsdaFoodSearchField({
           <div className="flex items-center gap-2">
             <Sparkles className="h-3 w-3 text-muted-foreground" />
             <span className="font-medium">AI match:</span>
-            <span className={CONFIDENCE_COLOR[suggestion.confidence]}>
+            <span className={confidenceColor[suggestion.confidence]}>
               {suggestion.confidence} confidence
             </span>
           </div>

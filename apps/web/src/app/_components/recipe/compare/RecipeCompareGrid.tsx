@@ -1,8 +1,7 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
 import { Link } from "@tanstack/react-router";
-import { BookOpen, ChefHat, Equal, ExternalLink, X } from "lucide-react";
+import { ChefHat, Equal, X } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
-import { match } from "ts-pattern";
 import {
   formatCurrencyRange,
   formatNumberRange,
@@ -11,9 +10,13 @@ import {
 import type { RecipeCosting } from "~/lib/recipe-costing";
 import { getRecipeIngredientName } from "~/lib/recipe-graph";
 import { formatCurrency } from "~/lib/utils";
+import { compactRound } from "../recipe-scaling-pct";
+import { RecipeSourceLink, sourceLabel } from "../recipe-source";
 import {
+  coverageLabel,
   formatYield,
   getServingBasis,
+  perServingRange,
   perUnitSuffix,
   type RecipeHeadlineTotals,
 } from "../recipe-utils";
@@ -70,10 +73,9 @@ const extractRecipeRows = (costing: RecipeCosting | null): RecipeRowMap => {
   return map;
 };
 
-// One decimal below 10 so small-but-real amounts (salt, leavening) don't read as
-// a misleading round number; whole units above.
-const compareNum = (v: number): number =>
-  v >= 10 ? Math.round(v) : Math.round(v * 10) / 10;
+// Shared "1 decimal below 10, whole above" rule (compactRound) so the grid's
+// gram/baker-% figures round exactly like the scaling-% labels.
+const compareNum = compactRound;
 
 const formatValue = (v: number, basis: CompareBasis): string =>
   basis === "baker" ? `${compareNum(v)}%` : `${compareNum(v)} g`;
@@ -138,51 +140,12 @@ const AverageCell: React.FC<{
   );
 };
 
-const sourceSubtitle = (recipe: RecipeOut): string | null =>
-  match(recipe.source)
-    .with({ type: "book" }, (s) => s.book)
-    .with({ type: "website" }, (s) => {
-      try {
-        return new URL(String(s.url)).host;
-      } catch {
-        return String(s.url);
-      }
-    })
-    .otherwise(() => null);
-
 const SourceCell: React.FC<{ recipe: RecipeOut }> = ({ recipe }) =>
-  match(recipe.source)
-    .with({ type: "book" }, (s) => {
-      const label = (
-        <>
-          <BookOpen className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate">{s.book}</span>
-        </>
-      );
-      return s.cookbookId ? (
-        <Link
-          to="/cookbooks/$cookbookId"
-          params={{ cookbookId: s.cookbookId }}
-          className="flex items-center gap-1 hover:underline"
-        >
-          {label}
-        </Link>
-      ) : (
-        <span className="flex items-center gap-1">{label}</span>
-      );
-    })
-    .with({ type: "website" }, (s) => (
-      <a
-        href={String(s.url)}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="flex items-center gap-1 hover:underline"
-      >
-        <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-        <span className="truncate">{sourceSubtitle(recipe)}</span>
-      </a>
-    ))
-    .otherwise(() => <span className="text-muted-foreground">—</span>);
+  sourceLabel(recipe.source) ? (
+    <RecipeSourceLink source={recipe.source} />
+  ) : (
+    <span className="text-muted-foreground">—</span>
+  );
 
 const STICKY = "sticky left-0 z-10 bg-card";
 
@@ -232,27 +195,27 @@ export const RecipeCompareGrid: React.FC<{
   // per-serving figure carries both range bounds; stats aggregate the midpoint
   // so a ranged recipe ($3–5) compares fairly against a flat one ($4.50).
   type Ranged = { lower: number; upper?: number };
+  // Per-serving figures via the shared perServingRange (its {value,upper} maps
+  // to this view's {lower,upper}), so the division lives in one place.
   const costPerServing = (c: ComparedRecipe): Ranged | null => {
     const sb = getServingBasis(c.recipe);
     if (!sb || !c.headline) return null;
-    return {
-      lower: c.headline.cost / sb.divisor,
-      upper:
-        c.headline.costUpper != null
-          ? c.headline.costUpper / sb.divisor
-          : undefined,
-    };
+    const per = perServingRange(
+      c.headline.cost,
+      c.headline.costUpper,
+      sb.divisor,
+    );
+    return { lower: per.value, upper: per.upper };
   };
   const caloriesPerServing = (c: ComparedRecipe): Ranged | null => {
     const sb = getServingBasis(c.recipe);
     if (!sb || !c.headline) return null;
-    return {
-      lower: c.headline.calories / sb.divisor,
-      upper:
-        c.headline.caloriesUpper != null
-          ? c.headline.caloriesUpper / sb.divisor
-          : undefined,
-    };
+    const per = perServingRange(
+      c.headline.calories,
+      c.headline.caloriesUpper,
+      sb.divisor,
+    );
+    return { lower: per.value, upper: per.upper };
   };
   const present = (xs: (number | null)[]): number[] =>
     xs.filter((x): x is number => x != null);
@@ -326,7 +289,7 @@ export const RecipeCompareGrid: React.FC<{
           <tr>
             <th className={`${STICKY} z-20 w-32 px-3 pt-3 pb-2`} />
             {compared.map((c) => {
-              const subtitle = sourceSubtitle(c.recipe);
+              const subtitle = sourceLabel(c.recipe.source);
               const hero = c.recipe.images[0]?.url;
               return (
                 <th
@@ -553,7 +516,7 @@ export const RecipeCompareGrid: React.FC<{
                 total - c.costing.totals.missingByType.price.length;
               return (
                 <span className="text-muted-foreground text-xs">
-                  {covered}/{total}
+                  {coverageLabel(covered, total).fraction}
                 </span>
               );
             }}

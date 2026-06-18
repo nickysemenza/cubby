@@ -1,7 +1,6 @@
-import type { RecipeOut, RecipeSource } from "@cubby/schemas/recipe";
+import type { RecipeOut } from "@cubby/schemas/recipe";
 import { uniq } from "es-toolkit";
 import { Fragment, useMemo, useState } from "react";
-import { match, P } from "ts-pattern";
 import { MarkdownText } from "~/components/markdown";
 import type {
   CalculateTotalsResult,
@@ -19,6 +18,7 @@ import {
   formatScalingPct,
   pickDefaultBaseRowId,
 } from "./recipe-scaling-pct";
+import { sourceFootnote } from "./recipe-source";
 import { formatYield, getIngredientName } from "./recipe-utils";
 
 interface RecipeSpecViewProps {
@@ -27,23 +27,6 @@ interface RecipeSpecViewProps {
   totals: CalculateTotalsResult | null;
   /** Per-row engine result — null while loading; grams/scaling degrade to "—". */
   costing: RecipeCosting | null;
-}
-
-/** A short italic attribution from the recipe's source, MC's footer line. */
-function sourceFootnote(
-  source: RecipeSource | null | undefined,
-): string | null {
-  if (!source) return null;
-  return match(source)
-    .with({ type: "book" }, (s) => `(from ${s.book})`)
-    .with({ type: P.union("website", "notion") }, (s) => {
-      try {
-        return `(via ${new URL(s.url).hostname.replace(/^www\./, "")})`;
-      } catch {
-        return null;
-      }
-    })
-    .otherwise(() => null);
 }
 
 export function RecipeSpecView({

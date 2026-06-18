@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { ArrowUpRight } from "lucide-react";
 import type { ReactNode } from "react";
 import { match } from "ts-pattern";
+import { Eyebrow } from "~/components/ui/eyebrow";
 import { Spinner } from "~/components/ui/spinner";
 import { entities } from "~/entities/entities";
 import type { Entity, EntityDetailRoute } from "~/entities/types";
@@ -124,11 +125,7 @@ export function ManifestCard({
 // ── Body blocks ─────────────────────────────────────────────────────────────
 
 function SectionLabel({ children }: { children: ReactNode }) {
-  return (
-    <span className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
-      {children}
-    </span>
-  );
+  return <Eyebrow as="span">{children}</Eyebrow>;
 }
 
 function BodyBlockView({ block }: { block: BodyBlock }) {

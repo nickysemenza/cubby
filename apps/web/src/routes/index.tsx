@@ -5,6 +5,7 @@ import { QuickActionsCard } from "~/app/_components/home/QuickActionsCard";
 import { RecentActivityFeed } from "~/app/_components/home/RecentActivityFeed";
 import EntityCount from "~/app/_components/homepage/entitycount";
 import { PageWrapper } from "~/components/layout/page-wrapper";
+import { Eyebrow } from "~/components/ui/eyebrow";
 import { authClient } from "~/lib/auth-client";
 
 export const Route = createFileRoute("/")({
@@ -36,9 +37,9 @@ function Home() {
       {/* Warm greeting with a ledger-style date stamp */}
       <div className="page-header-accent flex items-end justify-between pb-2">
         <div>
-          <p className="mb-1 font-medium font-mono text-2xs text-eyebrow uppercase tracking-[0.18em]">
+          <Eyebrow className="mb-1 font-medium tracking-[0.18em]">
             Keep everything in its place
-          </p>
+          </Eyebrow>
           <h1 className="font-bold font-heading text-2xl tracking-tight sm:text-4xl">
             {greeting}
           </h1>

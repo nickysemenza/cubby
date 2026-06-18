@@ -16,6 +16,7 @@ import type {
   RecipeUpdateInput,
 } from "@cubby/schemas/recipe";
 import { type AnyColumn, and, eq, inArray, type SQL, sql } from "drizzle-orm";
+import { countBy } from "es-toolkit";
 import { getSortableFields } from "~/entities/entities";
 import { recipeOutSignature } from "~/lib/recipe-signature";
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -28,6 +29,7 @@ import {
 import { createAppError } from "~/server/errors/app-error";
 import { runWithConflictRecovery } from "~/server/errors/db-errors";
 import {
+  buildCascadeAuditEntries,
   computeChanges,
   logAuditEntries,
   logAuditEntry,
@@ -611,10 +613,10 @@ export const deleteRecipes = async (
 
     const sectionIds = sections.map((s) => s.id);
 
-    // Get counts of cascaded items for audit trail
+    // Get counts of cascaded items (per recipe) for the audit trail.
     const cascadedImages = await tx.query.recipeImage.findMany({
       where: inArray(recipeImage.recipeId, ids),
-      columns: { id: true, recipeId: true },
+      columns: { recipeId: true },
     });
 
     let cascadedIngredients: Array<{ recipeSectionId: string }> = [];
@@ -625,39 +627,16 @@ export const deleteRecipes = async (
       });
     }
 
-    // Group cascaded items by recipe ID for audit logging
-    const sectionsByRecipe = new Map<string, number>();
-    const ingredientsByRecipe = new Map<string, number>();
-    const imagesByRecipe = new Map<string, number>();
-
-    // Map sections to recipes
-    const sectionToRecipe = new Map<string, string>();
-    for (const section of sections) {
-      sectionToRecipe.set(section.id, section.recipeId);
-      sectionsByRecipe.set(
-        section.recipeId,
-        (sectionsByRecipe.get(section.recipeId) ?? 0) + 1,
-      );
-    }
-
-    // Count ingredients per recipe (via section mapping)
-    for (const ing of cascadedIngredients) {
-      const recipeId = sectionToRecipe.get(ing.recipeSectionId);
-      if (recipeId) {
-        ingredientsByRecipe.set(
-          recipeId,
-          (ingredientsByRecipe.get(recipeId) ?? 0) + 1,
-        );
-      }
-    }
-
-    // Count images per recipe
-    for (const img of cascadedImages) {
-      imagesByRecipe.set(
-        img.recipeId,
-        (imagesByRecipe.get(img.recipeId) ?? 0) + 1,
-      );
-    }
+    // Ingredients are counted via their section's recipe (no direct recipeId).
+    const sectionToRecipe = new Map(sections.map((s) => [s.id, s.recipeId]));
+    const sectionsByRecipe = countBy(sections, (s) => s.recipeId);
+    const imagesByRecipe = countBy(cascadedImages, (i) => i.recipeId);
+    const ingredientsByRecipe = countBy(
+      cascadedIngredients
+        .map((ing) => sectionToRecipe.get(ing.recipeSectionId))
+        .filter((id): id is RecipeId => id != null),
+      (id) => id,
+    );
 
     // Soft delete recipe section ingredients
     if (sectionIds.length > 0) {
@@ -685,29 +664,10 @@ export const deleteRecipes = async (
       .set({ deletedAt: now })
       .where(inArray(recipe.id, ids));
 
-    // Log audit entries with cascaded item counts (batch operation)
-    const auditEntries = ids.map((id) => {
-      const sectionCount = sectionsByRecipe.get(id) ?? 0;
-      const ingredientCount = ingredientsByRecipe.get(id) ?? 0;
-      const imageCount = imagesByRecipe.get(id) ?? 0;
-
-      const changes: Record<string, { from: unknown; to: unknown }> = {};
-      if (sectionCount > 0) {
-        changes.cascadedSections = { from: sectionCount, to: 0 };
-      }
-      if (ingredientCount > 0) {
-        changes.cascadedIngredients = { from: ingredientCount, to: 0 };
-      }
-      if (imageCount > 0) {
-        changes.cascadedImages = { from: imageCount, to: 0 };
-      }
-
-      return {
-        entityType: "recipe" as const,
-        entityId: id,
-        action: "delete" as const,
-        changes: Object.keys(changes).length > 0 ? changes : undefined,
-      };
+    const auditEntries = buildCascadeAuditEntries("recipe", ids, {
+      cascadedSections: sectionsByRecipe,
+      cascadedIngredients: ingredientsByRecipe,
+      cascadedImages: imagesByRecipe,
     });
 
     await logAuditEntries(tx, actor, auditEntries);

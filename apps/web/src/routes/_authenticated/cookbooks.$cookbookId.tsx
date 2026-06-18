@@ -7,7 +7,7 @@ import { z } from "zod";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { IngredientUsagePanel } from "~/app/_components/ingredient/ingredient-usage-panel";
 import { RecipeList } from "~/app/recipes/recipelist";
-import { DeleteEntityDialog } from "~/components/dialogs/delete-entity-dialog";
+import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { PageWrapper } from "~/components/layout/page-wrapper";
 import { PageHero } from "~/components/layouts/page-hero";
 import { Button } from "~/components/ui/button";
@@ -181,13 +181,18 @@ function CookbookDetailPage() {
         </TabsContent>
       </Tabs>
 
-      <DeleteEntityDialog
+      <BulkActionDialog
         open={showDelete}
         onOpenChange={setShowDelete}
         items={[{ id: cookbookId, name }]}
-        entityType="cookbook"
-        onDelete={async () => {
+        itemNoun="cookbook"
+        action="Delete"
+        variant="destructive"
+        pendingLabel="Deleting..."
+        description={`This will permanently remove cookbook from your workspace. This action cannot be undone.`}
+        onSubmit={async () => {
           await deleteMutation.mutateAsync({ cookbookId });
+          setShowDelete(false);
         }}
         isPending={deleteMutation.isPending}
         renderItem={() =>

@@ -4,9 +4,11 @@
  */
 
 import type { SortParams } from "@cubby/schemas/pagination";
+import type { AppErrorReason } from "@cubby/shared";
 import type { AnyColumn, SQL } from "drizzle-orm";
 import { and, asc, ilike, inArray, isNull, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
+import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import { TraceNames, withTrace } from "~/server/tracing";
@@ -164,4 +166,26 @@ export async function lockAndValidateForDelete<TId extends string>(
       `${entityName}s not found or already deleted: ${missingIds.join(", ")}`,
     );
   }
+}
+
+/**
+ * Guard a soft-delete against orphaning dependents. Given the dependent rows'
+ * parent ids (the offending entities), dedupes them, refetches their names, and
+ * throws a typed AppError naming them. No-op when there are no dependents. The
+ * caller runs its own (entity-specific) dependent query and supplies the name
+ * fetch — the shared part is the dedupe + refetch + count + join + throw.
+ */
+export async function assertNoDependents<TId extends string>(opts: {
+  offendingParentIds: ReadonlyArray<TId | null | undefined>;
+  fetchNames: (ids: TId[]) => Promise<ReadonlyArray<{ name: string }>>;
+  reason: AppErrorReason;
+  message: (count: number, names: string) => string;
+}): Promise<void> {
+  const ids = uniq(
+    opts.offendingParentIds.filter((id): id is TId => id != null),
+  );
+  if (ids.length === 0) return;
+  const offenders = await opts.fetchNames(ids);
+  const names = offenders.map((o) => o.name).join(", ");
+  throw createAppError(opts.reason, opts.message(offenders.length, names));
 }

@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
+import { pluralize } from "~/lib/pluralize";
 
 interface BulkActionDialogProps<T extends { id: string }> {
   open: boolean;
@@ -17,15 +18,14 @@ interface BulkActionDialogProps<T extends { id: string }> {
   actionLabel?: string;
   pendingLabel?: string;
   description: string;
+  /** Noun for the title count, e.g. "Product" → "Delete 3 Products?". Defaults to "Item". */
+  itemNoun?: string;
   renderItem: (item: T) => ReactNode;
   onSubmit: () => Promise<void>;
   isPending: boolean;
   variant?: "default" | "destructive";
   children?: ReactNode;
 }
-
-const pluralize = (count: number, singular: string) =>
-  count === 1 ? singular : `${singular}s`;
 
 export function BulkActionDialog<T extends { id: string }>({
   open,
@@ -35,6 +35,7 @@ export function BulkActionDialog<T extends { id: string }>({
   actionLabel,
   pendingLabel,
   description,
+  itemNoun = "Item",
   renderItem,
   onSubmit,
   isPending,
@@ -42,7 +43,7 @@ export function BulkActionDialog<T extends { id: string }>({
   children,
 }: BulkActionDialogProps<T>) {
   const count = items.length;
-  const itemWord = pluralize(count, "Item");
+  const itemWord = pluralize(count, itemNoun);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

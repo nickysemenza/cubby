@@ -9,6 +9,7 @@ import {
 import type { SummaryItem } from "~/app/_components/SummaryCard";
 import { Badge } from "~/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Eyebrow } from "~/components/ui/eyebrow";
 import { StatGrid, StatTile } from "~/components/ui/stat-tile";
 import { formatNumberRange } from "~/lib/format-range";
 import { formatCurrency } from "~/lib/utils";
@@ -192,9 +193,9 @@ const MissingDataFooter: React.FC<{
 
   return (
     <div className="mt-4 space-y-2 border-foreground/10 border-t pt-3">
-      <div className="font-medium font-mono text-2xs text-eyebrow uppercase tracking-wider">
+      <Eyebrow as="div" className="font-medium">
         Missing data
-      </div>
+      </Eyebrow>
       {categories.map((category) => (
         <div
           key={category.label}

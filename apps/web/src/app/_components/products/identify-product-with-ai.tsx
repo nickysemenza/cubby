@@ -8,6 +8,7 @@ import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { getErrorMessage } from "~/lib/error-utils";
 import { useTRPC, useTRPCClient } from "~/trpc/react";
+import { ConfidenceReasoningCard } from "../ai/ai-suggest";
 import type { PendingImage } from "../PendingImageUpload";
 
 interface IdentifyProductButtonProps<
@@ -79,12 +80,6 @@ export function IdentifyProductButton<
     return null;
   }
 
-  const confidenceColor = {
-    high: "text-positive",
-    medium: "text-yellow-600",
-    low: "text-destructive",
-  };
-
   return (
     <div className="space-y-2">
       <Button
@@ -99,16 +94,11 @@ export function IdentifyProductButton<
       </Button>
 
       {result && (
-        <div className="rounded-md bg-muted/50 p-2 text-sm">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-3 w-3 text-muted-foreground" />
-            <span className="font-medium">AI Identification:</span>
-            <span className={confidenceColor[result.confidence]}>
-              {result.confidence} confidence
-            </span>
-          </div>
-          <p className="mt-1 text-muted-foreground">{result.reasoning}</p>
-        </div>
+        <ConfidenceReasoningCard
+          label="AI Identification"
+          confidence={result.confidence}
+          reasoning={result.reasoning}
+        />
       )}
     </div>
   );

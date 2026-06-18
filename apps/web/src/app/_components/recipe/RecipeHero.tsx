@@ -1,7 +1,7 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
-import { Link } from "@tanstack/react-router";
-import { BookOpen, Clock, ExternalLink, Users } from "lucide-react";
+import { Clock, ExternalLink, Users } from "lucide-react";
 import { Image } from "~/components/ui/image";
+import { RecipeSourceLink } from "./recipe-source";
 
 interface RecipeHeroProps {
   recipe: RecipeOut;
@@ -45,22 +45,9 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
           <span>Source</span>
         </a>
       )}
-      {recipe.source?.type === "book" &&
-        (recipe.source.cookbookId ? (
-          <Link
-            to="/cookbooks/$cookbookId"
-            params={{ cookbookId: recipe.source.cookbookId }}
-            className="flex items-center gap-1.5 hover:underline"
-          >
-            <BookOpen size={12} />
-            <span>{recipe.source.book}</span>
-          </Link>
-        ) : (
-          <span className="flex items-center gap-1.5">
-            <BookOpen size={12} />
-            <span>{recipe.source.book}</span>
-          </span>
-        ))}
+      {recipe.source?.type === "book" && (
+        <RecipeSourceLink source={recipe.source} iconSize={12} />
+      )}
     </div>
   );
 

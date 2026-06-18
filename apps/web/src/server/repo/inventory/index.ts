@@ -7,7 +7,6 @@ export {
   checkUniqueProductDuplicate,
   createInventoryEntry,
   deleteInventoryEntries,
-  findInventoryWithStaleValuations,
   getInventoryByLocationIds,
   getInventoryCountsByLocations,
   getInventoryEntryByID,

@@ -1,6 +1,7 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
 import { type ReactNode, useMemo, useState } from "react";
 import { MarkdownText } from "~/components/markdown";
+import { Eyebrow } from "~/components/ui/eyebrow";
 import { sectionRuleClass } from "~/components/ui/section-rule";
 import type {
   CalculateTotalsResult,
@@ -22,7 +23,7 @@ import {
   getIngredientName,
   getServingBasis,
 } from "./recipe-utils";
-import { Eyebrow, SectionHeading } from "./section-heading";
+import { SectionHeading } from "./section-heading";
 
 interface RecipeMagazineViewProps {
   recipe: RecipeOut;

@@ -679,29 +679,6 @@ describe("inventory router", () => {
       expect(entry.valuation).toBeNull();
     });
 
-    it("should get stale valuations count", async () => {
-      const caller = createTestCaller(inventoryRouter, ctx.db);
-
-      // Create some inventory
-      await seedFromCSV(
-        ctx.db,
-        [
-          {
-            product_name: "Product A",
-            manufacturer: "Brand",
-            location_name: "Pantry",
-            quantity: 2,
-            unit: "each",
-          },
-        ],
-        TEST_ACTOR,
-      );
-
-      // Should be 0 stale since valuations are synced on creation
-      const count = await caller.getStaleValuationsCount();
-      expect(count).toBe(0);
-    });
-
     it("should backfill return empty when no stale valuations", async () => {
       const caller = createTestCaller(inventoryRouter, ctx.db);
 

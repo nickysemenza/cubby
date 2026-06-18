@@ -32,6 +32,7 @@ import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import { CopyCorpusButton } from "./copy-corpus-button";
 import { EstimateMarker } from "./estimate-marker";
 import { IngredientModifier } from "./IngredientQuantities";
+import { formatScalingPct } from "./recipe-scaling-pct";
 import { getIngredientName, type ServingBasis } from "./recipe-utils";
 
 // What an unmeasured estimated row shows in its Amounts cell, per usage.
@@ -208,9 +209,7 @@ export const RecipeIngredientList: React.FC<{
         if (pct == null) {
           return <NoneState />;
         }
-        // One decimal below 10% so small-but-meaningful amounts (salt, leavening,
-        // spices) don't collapse to a misleading "0%"; whole percent above.
-        const label = `${pct >= 10 ? Math.round(pct) : Math.round(pct * 10) / 10}%`;
+        const label = formatScalingPct(pct);
         // Mark the flour base (the 100% reference) so the column reads at a glance.
         return (costing?.isFlourRows.get(row.id) ?? false) ? (
           <span className="font-semibold text-primary">{label}</span>

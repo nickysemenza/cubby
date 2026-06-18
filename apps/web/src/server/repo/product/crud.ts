@@ -19,7 +19,7 @@ import {
 } from "@cubby/schemas/product";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { uniq } from "es-toolkit";
+import { countBy } from "es-toolkit";
 import { getSortableFields } from "~/entities/entities";
 import { parseWithContext } from "~/lib/zod-utils";
 import type { Database } from "~/server/db";
@@ -33,11 +33,13 @@ import {
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
+  buildCascadeAuditEntries,
   computeChanges,
   logAuditEntries,
   logAuditEntry,
 } from "~/server/repo/audit-log";
 import {
+  assertNoDependents,
   associatePendingImages,
   buildOrderBy,
   buildSearchConditions,
@@ -592,64 +594,35 @@ export const deleteProducts = async (
       ),
       columns: { productId: true },
     });
-
-    if (withInventory.length > 0) {
-      const failedProductIds = uniq(withInventory.map((e) => e.productId));
-      const failedProducts = await tx.query.product.findMany({
-        where: inArray(product.id, failedProductIds),
-        columns: { id: true, name: true },
-      });
-      const names = failedProducts.map((p) => p.name).join(", ");
-      const count = failedProducts.length;
-      throw createAppError(
-        "PRODUCT_HAS_INVENTORY",
+    await assertNoDependents({
+      offendingParentIds: withInventory.map((e) => e.productId),
+      fetchNames: (failedIds) =>
+        tx.query.product.findMany({
+          where: inArray(product.id, failedIds),
+          columns: { name: true },
+        }),
+      reason: "PRODUCT_HAS_INVENTORY",
+      message: (count, names) =>
         `Cannot delete ${count} product(s): ${names} have inventory entries. Remove inventory items first.`,
-      );
-    }
+    });
 
     const now = new Date();
 
-    // Get counts of cascaded items for audit trail
+    // Get counts of cascaded items (per product) for the audit trail.
     const cascadedMappings = await tx.query.productUnitMappings.findMany({
       where: inArray(productUnitMappings.productId, ids),
-      columns: { id: true, productId: true },
+      columns: { productId: true },
     });
 
     const cascadedImages = await tx.query.productImage.findMany({
       where: inArray(productImage.productId, ids),
-      columns: { id: true, productId: true },
+      columns: { productId: true },
     });
 
     const cascadedExternalIds = await tx.query.productExternalId.findMany({
       where: inArray(productExternalId.productId, ids),
-      columns: { id: true, productId: true },
+      columns: { productId: true },
     });
-
-    // Group cascaded items by product ID for audit logging
-    const mappingsByProduct = new Map<string, number>();
-    const imagesByProduct = new Map<string, number>();
-    const externalIdsByProduct = new Map<string, number>();
-
-    for (const mapping of cascadedMappings) {
-      mappingsByProduct.set(
-        mapping.productId,
-        (mappingsByProduct.get(mapping.productId) ?? 0) + 1,
-      );
-    }
-
-    for (const img of cascadedImages) {
-      imagesByProduct.set(
-        img.productId,
-        (imagesByProduct.get(img.productId) ?? 0) + 1,
-      );
-    }
-
-    for (const eid of cascadedExternalIds) {
-      externalIdsByProduct.set(
-        eid.productId,
-        (externalIdsByProduct.get(eid.productId) ?? 0) + 1,
-      );
-    }
 
     // Soft delete unit mappings
     await tx
@@ -675,30 +648,10 @@ export const deleteProducts = async (
       .set({ deletedAt: now })
       .where(inArray(product.id, ids));
 
-    // Log audit entries with cascaded item counts (batch operation)
-    const auditEntries = ids.map((id) => {
-      const mappingCount = mappingsByProduct.get(id) ?? 0;
-      const imageCount = imagesByProduct.get(id) ?? 0;
-
-      const externalIdCount = externalIdsByProduct.get(id) ?? 0;
-
-      const changes: Record<string, { from: unknown; to: unknown }> = {};
-      if (mappingCount > 0) {
-        changes.cascadedUnitMappings = { from: mappingCount, to: 0 };
-      }
-      if (imageCount > 0) {
-        changes.cascadedImages = { from: imageCount, to: 0 };
-      }
-      if (externalIdCount > 0) {
-        changes.cascadedExternalIds = { from: externalIdCount, to: 0 };
-      }
-
-      return {
-        entityType: "product" as const,
-        entityId: id,
-        action: "delete" as const,
-        changes: Object.keys(changes).length > 0 ? changes : undefined,
-      };
+    const auditEntries = buildCascadeAuditEntries("product", ids, {
+      cascadedUnitMappings: countBy(cascadedMappings, (m) => m.productId),
+      cascadedImages: countBy(cascadedImages, (i) => i.productId),
+      cascadedExternalIds: countBy(cascadedExternalIds, (e) => e.productId),
     });
 
     await logAuditEntries(tx, actor, auditEntries);

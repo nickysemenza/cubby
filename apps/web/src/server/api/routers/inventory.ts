@@ -28,7 +28,6 @@ import {
   checkUniqueProductDuplicate,
   createInventoryEntry,
   deleteInventoryEntries,
-  findInventoryWithStaleValuations,
   getInventoryByLocationIds,
   getInventoryCountsByLocations,
   getInventoryEntryByID,
@@ -159,14 +158,6 @@ const findDuplicates = protectedProcedure
     }));
   });
 
-// Get count of inventory entries with stale/missing valuations
-const getStaleValuationsCount = protectedProcedure
-  .output(z.number())
-  .query(async ({ ctx }) => {
-    const staleEntries = await findInventoryWithStaleValuations(ctx.db);
-    return staleEntries.length;
-  });
-
 // Backfill inventory valuations from product prices
 const backfillInventoryValuationsEndpoint = protectedProcedure
   .output(
@@ -204,7 +195,6 @@ export const inventoryRouter = createTRPCRouter({
   bulkProcess,
   bulkMove,
   findDuplicates,
-  getStaleValuationsCount,
   backfillInventoryValuations: backfillInventoryValuationsEndpoint,
   getCountsByLocations,
   getByLocationIds,

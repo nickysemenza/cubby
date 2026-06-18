@@ -215,14 +215,3 @@ export async function backfillUPCImages(
     details,
   };
 }
-
-/**
- * Get count of products eligible for UPC image backfill
- * (products with a UPC but no images).
- */
-export async function getUPCImageBackfillCount(
-  db: Database,
-): Promise<{ count: number }> {
-  const products = await findProductsWithNoImages(db);
-  return { count: products.filter((p) => p.upc != null).length };
-}

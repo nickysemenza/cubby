@@ -1,30 +1,5 @@
-import type { ElementType, ReactNode } from "react";
+import { Eyebrow } from "~/components/ui/eyebrow";
 import { cn } from "~/lib/utils";
-
-/**
- * The mono eyebrow label, one home: `font-mono text-2xs text-eyebrow uppercase
- * tracking-wider`. Override tracking/spacing via className (cn is twMerge-backed).
- */
-export function Eyebrow({
-  children,
-  className,
-  as: As = "p",
-}: {
-  children: ReactNode;
-  className?: string;
-  as?: ElementType;
-}) {
-  return (
-    <As
-      className={cn(
-        "font-mono text-2xs text-eyebrow uppercase tracking-wider",
-        className,
-      )}
-    >
-      {children}
-    </As>
-  );
-}
 
 /**
  * A recipe section heading with the shared "show when >1 section or named"

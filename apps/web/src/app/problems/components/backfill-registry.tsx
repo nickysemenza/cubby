@@ -1,3 +1,4 @@
+import { countLabel } from "~/lib/pluralize";
 import type { BackfillButtonProps } from "./problem-backfill-action";
 import type { MutationOptionsFn } from "./use-problem-backfill";
 
@@ -32,7 +33,7 @@ export const BACKFILL = {
       tone: r.updated > 0 ? "success" : "info",
       message:
         r.updated > 0
-          ? `Re-parsed ${r.updated} line${r.updated === 1 ? "" : "s"} across ${r.recipesAffected} recipe${r.recipesAffected === 1 ? "" : "s"}.`
+          ? `Re-parsed ${countLabel(r.updated, "line")} across ${countLabel(r.recipesAffected, "recipe")}.`
           : "Nothing to re-parse.",
     }),
   }),
@@ -57,7 +58,7 @@ export const BACKFILL = {
     pendingLabel: "Fetching…",
     toastResult: (r) => ({
       tone: r.imported > 0 ? "success" : "info",
-      message: `Imported ${r.imported} image${r.imported === 1 ? "" : "s"} · ${r.found} found, ${r.skipped} skipped.`,
+      message: `Imported ${countLabel(r.imported, "image")} · ${r.found} found, ${r.skipped} skipped.`,
     }),
   }),
   fixCategories: def({
@@ -81,7 +82,7 @@ export const BACKFILL = {
     pendingLabel: "Analyzing…",
     toastResult: (r) => ({
       tone: r.analyzed > 0 ? "success" : "info",
-      message: `Analyzed ${r.analyzed} of ${r.total} location${r.total === 1 ? "" : "s"}.`,
+      message: `Analyzed ${r.analyzed} of ${countLabel(r.total, "location")}.`,
     }),
   }),
 };

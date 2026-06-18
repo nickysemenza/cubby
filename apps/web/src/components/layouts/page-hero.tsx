@@ -1,6 +1,7 @@
 import { cva, type VariantProps } from "class-variance-authority";
 import type { LucideIcon } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
+import { Eyebrow } from "~/components/ui/eyebrow";
 import { entities } from "~/entities/entities";
 import { ENTITY_ACCENTS } from "~/entities/entity-accents";
 import type { Entity } from "~/entities/types";
@@ -103,9 +104,9 @@ export function PageHero({
     >
       <div className="min-w-0 flex-1">
         {effectiveEyebrow && (
-          <p className="mb-1 font-medium font-mono text-2xs text-eyebrow uppercase tracking-[0.18em]">
+          <Eyebrow className="mb-1 font-medium tracking-[0.18em]">
             {effectiveEyebrow}
-          </p>
+          </Eyebrow>
         )}
         <div
           className={cn(

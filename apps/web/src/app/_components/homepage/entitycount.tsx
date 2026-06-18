@@ -4,6 +4,7 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { AlertTriangle } from "lucide-react";
 import { Card } from "~/components/ui/card";
+import { Eyebrow } from "~/components/ui/eyebrow";
 import { Skeleton } from "~/components/ui/skeleton";
 import { entities } from "~/entities/entities";
 import { useHydrated } from "~/hooks/useHydrated";
@@ -138,9 +139,7 @@ function StatCard({ entity, count, isLoading, isError }: StatCardProps) {
                 {formatCount(count ?? 0)}
               </p>
             )}
-            <p className="mt-1 truncate font-mono text-2xs text-eyebrow uppercase tracking-wider">
-              {def.pluralLabel}
-            </p>
+            <Eyebrow className="mt-1 truncate">{def.pluralLabel}</Eyebrow>
           </div>
         </div>
       </Card>

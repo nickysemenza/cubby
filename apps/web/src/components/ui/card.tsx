@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import * as React from "react";
 
+import { EYEBROW_CLASS } from "~/components/ui/eyebrow";
 import { cn } from "~/lib/utils";
 
 function Card({
@@ -88,10 +89,7 @@ function CardTitle({
       // read as mono eyebrows (INGREDIENTS, HISTORY, ...). Pass `icon` for the
       // common eyebrow-with-leading-icon header. The one sanctioned className
       // override is a size bump for "numeral-as-title" stat cards (text-2xl).
-      className={cn(
-        "flex items-center gap-2 font-mono text-2xs font-medium uppercase tracking-wider text-eyebrow",
-        className,
-      )}
+      className={cn("flex items-center gap-2 font-medium", EYEBROW_CLASS, className)}
       {...props}
     >
       {Icon && <Icon className="size-3.5 shrink-0" />}

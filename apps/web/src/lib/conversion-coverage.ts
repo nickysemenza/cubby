@@ -1,3 +1,4 @@
+import { baseKind } from "@cubby/schemas/problems";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { safeConvertAmount } from "~/lib/recipe-costing";
 
@@ -17,7 +18,9 @@ import { safeConvertAmount } from "~/lib/recipe-costing";
  * the same test.)
  */
 
-export const BASE_KINDS = ["weight", "volume", "money", "calories"] as const;
+// Single-sourced from the `baseKind` Zod enum so the problem schemas' coverage
+// type and this costing module share one definition of the four kinds.
+export const BASE_KINDS = baseKind.options;
 export type BaseKind = (typeof BASE_KINDS)[number];
 
 /**

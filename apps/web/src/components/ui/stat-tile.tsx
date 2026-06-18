@@ -1,5 +1,6 @@
 import type * as React from "react";
 import type { SummaryItem } from "~/app/_components/SummaryCard";
+import { Eyebrow } from "~/components/ui/eyebrow";
 import { GridContainer } from "~/components/layout/grid-container";
 
 /**
@@ -32,11 +33,7 @@ export function StatTile({
 
   return (
     <div className={className}>
-      {resolvedLabel && (
-        <div className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
-          {resolvedLabel}
-        </div>
-      )}
+      {resolvedLabel && <Eyebrow as="div">{resolvedLabel}</Eyebrow>}
       <div className="font-mono font-semibold text-foreground text-lg tabular-nums">
         {value}
       </div>

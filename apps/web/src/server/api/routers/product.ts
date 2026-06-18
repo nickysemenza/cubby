@@ -19,7 +19,6 @@ import { z } from "zod";
 import {
   backfillFoodCategories,
   deleteProducts,
-  findProductsNeedingFoodCategory,
   getCategoryDistribution,
   getProductByShortcode,
   getProductsByShortcodes,
@@ -30,7 +29,6 @@ import { productWithFoodOut } from "~/server/services/product.service";
 import {
   backfillUPCImages as backfillUPCImagesService,
   findOrCreateByUPC as findOrCreateByUPCService,
-  getUPCImageBackfillCount as getUPCImageBackfillCountService,
 } from "~/server/services/product-orchestration.service";
 import {
   createDeleteProcedure,
@@ -178,21 +176,6 @@ const backfillUPCImages = protectedProcedure
     return backfillUPCImagesService(ctx.db, ctx.upcLookupClient);
   });
 
-// Get count of products with UPC but no images (for UI preview)
-const getUPCImageBackfillCount = protectedProcedure
-  .output(z.object({ count: z.number() }))
-  .query(async ({ ctx }) => {
-    return getUPCImageBackfillCountService(ctx.db);
-  });
-
-// Get count of products with food indicators but wrong category
-const getFoodCategoryBackfillCount = protectedProcedure
-  .output(z.object({ count: z.number() }))
-  .query(async ({ ctx }) => {
-    const products = await findProductsNeedingFoodCategory(ctx.db);
-    return { count: products.length };
-  });
-
 // Backfill food category for products with UPC/NDB/ingredient
 const backfillFoodCategoriesEndpoint = protectedProcedure
   .output(
@@ -263,8 +246,6 @@ export const productRouter = createTRPCRouter({
   quickCreate,
   findOrCreateByUPC,
   backfillUPCImages,
-  getUPCImageBackfillCount,
-  getFoodCategoryBackfillCount,
   backfillFoodCategories: backfillFoodCategoriesEndpoint,
   categoryDistribution,
 });
