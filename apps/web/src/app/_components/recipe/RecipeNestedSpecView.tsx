@@ -9,7 +9,11 @@ import {
   IngredientQuantities,
 } from "./IngredientQuantities";
 import { formatScalingPct } from "./recipe-scaling-pct";
-import type { RecipeTreeNode, RecipeTreeRow } from "./recipe-tree";
+import {
+  firstExpansionRowIds,
+  type RecipeTreeNode,
+  type RecipeTreeRow,
+} from "./recipe-tree";
 import {
   entityRefForRow,
   formatYield,
@@ -37,28 +41,6 @@ const DEPTH_RULE = [
 ];
 const depthRule = (depth: number): string =>
   DEPTH_RULE[Math.min(depth, DEPTH_RULE.length - 1)] ?? "var(--chart-1)";
-
-// A sub-recipe used in several places is expanded in full only the first time
-// (in render order); later references render as a collapsed "see above" pointer
-// row. Returns the set of sub-recipe row ids that get the full panel.
-const firstExpansionRowIds = (root: RecipeTreeNode): Set<string> => {
-  const seenRecipes = new Set<string>();
-  const expand = new Set<string>();
-  const walk = (node: RecipeTreeNode) => {
-    for (const section of node.sections) {
-      for (const row of section.rows) {
-        if (row.kind !== "subrecipe") continue;
-        const recipeId = row.child.recipe.id;
-        if (seenRecipes.has(recipeId)) continue;
-        seenRecipes.add(recipeId);
-        expand.add(row.id);
-        walk(row.child);
-      }
-    }
-  };
-  walk(root);
-  return expand;
-};
 
 const rowGrid =
   "grid grid-cols-[minmax(0,1fr)_5rem_3.5rem] items-baseline gap-x-3";

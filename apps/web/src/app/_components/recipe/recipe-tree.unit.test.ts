@@ -6,6 +6,7 @@ import {
   batchYieldGrams,
   buildIngredientMatrix,
   buildRecipeTree,
+  firstExpansionRowIds,
   flattenComponents,
   fullBatchNeeds,
   type RecipeTreeNode,
@@ -313,5 +314,36 @@ describe("buildIngredientMatrix", () => {
     expect(
       fullBatchNeeds(tree).find((n) => n.ingredientId === "i-x")?.grams,
     ).toBe(100);
+  });
+});
+
+describe("firstExpansionRowIds", () => {
+  it("marks only the first occurrence of a repeated sub-recipe", () => {
+    const sof = recipe(
+      "r-sof",
+      "Soffritto",
+      [ing("si-onion", "i-onion", "onion")],
+      { yield: { value: 360, unit: "g" } },
+    );
+    // Same sub-recipe (r-sof) referenced by two different rows, with a leaf in
+    // between: only the first row expands; the second is a "see above" pointer.
+    const root = recipe("r-root", "R", [
+      sub("sr-sof-1", "r-sof", "Soffritto"),
+      ing("ri-x", "i-x", "x"),
+      sub("sr-sof-2", "r-sof", "Soffritto"),
+    ]);
+    const costingById = new Map<string, RecipeCosting>([
+      [
+        "r-root",
+        mkCosting({ "sr-sof-1": 360, "ri-x": 100, "sr-sof-2": 360 }, 820),
+      ],
+      ["r-sof", mkCosting({ "si-onion": 360 }, 360)],
+    ]);
+
+    const tree = buildRecipeTree(root, costingById, { "r-sof": sof });
+    const ids = firstExpansionRowIds(tree);
+    expect(ids.has("sr-sof-1")).toBe(true);
+    expect(ids.has("sr-sof-2")).toBe(false);
+    expect(ids.size).toBe(1);
   });
 });

@@ -15,8 +15,11 @@ import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { NoneState } from "../_components/NoneState";
 import { RecipeTag } from "../_components/recipe/recipe-tag";
 import {
+  coverageLabel,
   formatYield,
   getServingBasis,
+  perServingRange,
+  perUnitSuffix,
 } from "../_components/recipe/recipe-utils";
 import { TruncatedList } from "../_components/TruncatedList";
 
@@ -31,16 +34,16 @@ const CoverageValue: React.FC<{
   total: number;
   children: ReactNode;
 }> = ({ covered, total, children }) => {
-  const complete = covered >= total;
+  const { complete, fraction } = coverageLabel(covered, total);
   return (
     <span
       className={complete ? undefined : "opacity-60"}
-      title={`${covered}/${total} ingredients`}
+      title={`${fraction} ingredients`}
     >
       {children}
       {!complete && (
         <span className="ml-1 hidden text-2xs text-muted-foreground sm:inline">
-          ({covered}/{total})
+          ({fraction})
         </span>
       )}
     </span>
@@ -130,17 +133,20 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
               >
                 {formatCurrencyRange(totals.costTotal, totals.costTotalUpper)}
               </CoverageValue>
-              {perItem && (
-                <div className="text-2xs text-muted-foreground">
-                  {formatCurrencyRange(
-                    totals.costTotal / perItem.divisor,
-                    totals.costTotalUpper != null
-                      ? totals.costTotalUpper / perItem.divisor
-                      : undefined,
-                  )}{" "}
-                  {perItem.noun === "each" ? "ea" : `/ ${perItem.noun}`}
-                </div>
-              )}
+              {perItem &&
+                (() => {
+                  const per = perServingRange(
+                    totals.costTotal,
+                    totals.costTotalUpper,
+                    perItem.divisor,
+                  );
+                  return (
+                    <div className="text-2xs text-muted-foreground">
+                      {formatCurrencyRange(per.value, per.upper)}{" "}
+                      {perUnitSuffix(perItem.noun, { short: true })}
+                    </div>
+                  );
+                })()}
             </div>
           );
         },
@@ -173,18 +179,24 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
                 )}{" "}
                 kcal
               </CoverageValue>
-              {perItem && (
-                <div className="text-2xs text-muted-foreground">
-                  {formatNumberRange(
-                    totals.caloriesTotal / perItem.divisor,
-                    totals.caloriesTotalUpper != null
-                      ? totals.caloriesTotalUpper / perItem.divisor
-                      : undefined,
-                    (n) => `${Math.round(n)}`,
-                  )}{" "}
-                  kcal {perItem.noun === "each" ? "ea" : `/ ${perItem.noun}`}
-                </div>
-              )}
+              {perItem &&
+                (() => {
+                  const per = perServingRange(
+                    totals.caloriesTotal,
+                    totals.caloriesTotalUpper,
+                    perItem.divisor,
+                  );
+                  return (
+                    <div className="text-2xs text-muted-foreground">
+                      {formatNumberRange(
+                        per.value,
+                        per.upper,
+                        (n) => `${Math.round(n)}`,
+                      )}{" "}
+                      kcal {perUnitSuffix(perItem.noun, { short: true })}
+                    </div>
+                  );
+                })()}
             </div>
           );
         },

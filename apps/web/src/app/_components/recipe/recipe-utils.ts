@@ -113,10 +113,38 @@ export const getServingBasis = (recipe: RecipeOut): ServingBasis | null => {
   return null;
 };
 
-/** Inline suffix for a per-unit figure: "each", else "/ {noun}".
+/** Inline suffix for a per-unit figure: "each" (short "ea"), else "/ {noun}".
  * → "$0.29 each", "$0.42 / serving", "$1.10 / cup". */
-export const perUnitSuffix = (noun: string): string =>
-  noun === "each" ? "each" : `/ ${noun}`;
+export const perUnitSuffix = (
+  noun: string,
+  opts?: { short?: boolean },
+): string => (noun === "each" ? (opts?.short ? "ea" : "each") : `/ ${noun}`);
+
+/** Divide a total and its optional range upper by a per-serving divisor.
+ * Per-portion division is linear, so both bounds divide by the same number; an
+ * absent upper stays absent (renders one number). Shared by the recipe list
+ * columns and the entity summary card so the per-portion math lives in one place. */
+export const perServingRange = (
+  total: number,
+  upper: number | undefined,
+  divisor: number,
+): { value: number; upper: number | undefined } => ({
+  value: total / divisor,
+  upper: upper != null ? upper / divisor : undefined,
+});
+
+/** Coverage of a computed total (cost/calories) by the ingredients that had the
+ * underlying data. `complete` drives dimming / caption suppression (unknown
+ * coverage counts as complete); `fraction` is the bare "9/13" label shown when
+ * partial. Shared by the recipe list cell and the preview card so the predicate
+ * and the label can't disagree. */
+export const coverageLabel = (
+  covered: number | undefined,
+  total: number,
+): { complete: boolean; fraction: string } => ({
+  complete: covered == null || covered >= total,
+  fraction: `${covered ?? total}/${total}`,
+});
 
 /**
  * The recipe vitals line — "Makes X · Serves Y · $cost / serving · kcal · g

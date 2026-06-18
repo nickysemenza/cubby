@@ -22,7 +22,7 @@ import {
   PreviewLoading,
   PriceValue,
 } from "./preview/manifest-card";
-import { formatYield } from "./recipe/recipe-utils";
+import { coverageLabel, formatYield } from "./recipe/recipe-utils";
 
 // Cross-link to the USDA food behind an ingredient/product (built identically
 // for both). The food description is too long to use as the label, so the
@@ -63,8 +63,10 @@ export type RecipePreview = {
 const coverageCaption = (
   covered: number | undefined,
   total: number,
-): string | undefined =>
-  covered != null && covered < total ? `${covered}/${total}` : undefined;
+): string | undefined => {
+  const { complete, fraction } = coverageLabel(covered, total);
+  return complete ? undefined : fraction;
+};
 
 export function toRecipeCard(vm: RecipePreview): ManifestCardProps {
   const stats: { label: string; value: ReactNode; caption?: string }[] = [];
