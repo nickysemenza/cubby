@@ -61,8 +61,8 @@ import { Route as AuthenticatedInventoryNewRouteImport } from './routes/_authent
 import { Route as AuthenticatedInventoryBulkMoveRouteImport } from './routes/_authenticated/inventory.bulk-move'
 import { Route as AuthenticatedInventoryBulkEditRouteImport } from './routes/_authenticated/inventory.bulk-edit'
 import { Route as AuthenticatedInventoryIdRouteImport } from './routes/_authenticated/inventory.$id'
+import { Route as AuthenticatedIngredientsWorkbenchRouteImport } from './routes/_authenticated/ingredients.workbench'
 import { Route as AuthenticatedIngredientsNewRouteImport } from './routes/_authenticated/ingredients.new'
-import { Route as AuthenticatedIngredientsEnrichRouteImport } from './routes/_authenticated/ingredients.enrich'
 import { Route as AuthenticatedIngredientsIdRouteImport } from './routes/_authenticated/ingredients.$id'
 import { Route as AuthenticatedImagesIdRouteImport } from './routes/_authenticated/images.$id'
 import { Route as AuthenticatedCookbooksCookbookIdRouteImport } from './routes/_authenticated/cookbooks.$cookbookId'
@@ -354,16 +354,16 @@ const AuthenticatedInventoryIdRoute =
     path: '/inventory/$id',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedIngredientsWorkbenchRoute =
+  AuthenticatedIngredientsWorkbenchRouteImport.update({
+    id: '/ingredients/workbench',
+    path: '/ingredients/workbench',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedIngredientsNewRoute =
   AuthenticatedIngredientsNewRouteImport.update({
     id: '/ingredients/new',
     path: '/ingredients/new',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedIngredientsEnrichRoute =
-  AuthenticatedIngredientsEnrichRouteImport.update({
-    id: '/ingredients/enrich',
-    path: '/ingredients/enrich',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedIngredientsIdRoute =
@@ -428,8 +428,8 @@ export interface FileRoutesByFullPath {
   '/cookbooks/$cookbookId': typeof AuthenticatedCookbooksCookbookIdRoute
   '/images/$id': typeof AuthenticatedImagesIdRoute
   '/ingredients/$id': typeof AuthenticatedIngredientsIdRoute
-  '/ingredients/enrich': typeof AuthenticatedIngredientsEnrichRoute
   '/ingredients/new': typeof AuthenticatedIngredientsNewRoute
+  '/ingredients/workbench': typeof AuthenticatedIngredientsWorkbenchRoute
   '/inventory/$id': typeof AuthenticatedInventoryIdRoute
   '/inventory/bulk-edit': typeof AuthenticatedInventoryBulkEditRoute
   '/inventory/bulk-move': typeof AuthenticatedInventoryBulkMoveRoute
@@ -490,8 +490,8 @@ export interface FileRoutesByTo {
   '/cookbooks/$cookbookId': typeof AuthenticatedCookbooksCookbookIdRoute
   '/images/$id': typeof AuthenticatedImagesIdRoute
   '/ingredients/$id': typeof AuthenticatedIngredientsIdRoute
-  '/ingredients/enrich': typeof AuthenticatedIngredientsEnrichRoute
   '/ingredients/new': typeof AuthenticatedIngredientsNewRoute
+  '/ingredients/workbench': typeof AuthenticatedIngredientsWorkbenchRoute
   '/inventory/$id': typeof AuthenticatedInventoryIdRoute
   '/inventory/bulk-edit': typeof AuthenticatedInventoryBulkEditRoute
   '/inventory/bulk-move': typeof AuthenticatedInventoryBulkMoveRoute
@@ -554,8 +554,8 @@ export interface FileRoutesById {
   '/_authenticated/cookbooks/$cookbookId': typeof AuthenticatedCookbooksCookbookIdRoute
   '/_authenticated/images/$id': typeof AuthenticatedImagesIdRoute
   '/_authenticated/ingredients/$id': typeof AuthenticatedIngredientsIdRoute
-  '/_authenticated/ingredients/enrich': typeof AuthenticatedIngredientsEnrichRoute
   '/_authenticated/ingredients/new': typeof AuthenticatedIngredientsNewRoute
+  '/_authenticated/ingredients/workbench': typeof AuthenticatedIngredientsWorkbenchRoute
   '/_authenticated/inventory/$id': typeof AuthenticatedInventoryIdRoute
   '/_authenticated/inventory/bulk-edit': typeof AuthenticatedInventoryBulkEditRoute
   '/_authenticated/inventory/bulk-move': typeof AuthenticatedInventoryBulkMoveRoute
@@ -618,8 +618,8 @@ export interface FileRouteTypes {
     | '/cookbooks/$cookbookId'
     | '/images/$id'
     | '/ingredients/$id'
-    | '/ingredients/enrich'
     | '/ingredients/new'
+    | '/ingredients/workbench'
     | '/inventory/$id'
     | '/inventory/bulk-edit'
     | '/inventory/bulk-move'
@@ -680,8 +680,8 @@ export interface FileRouteTypes {
     | '/cookbooks/$cookbookId'
     | '/images/$id'
     | '/ingredients/$id'
-    | '/ingredients/enrich'
     | '/ingredients/new'
+    | '/ingredients/workbench'
     | '/inventory/$id'
     | '/inventory/bulk-edit'
     | '/inventory/bulk-move'
@@ -743,8 +743,8 @@ export interface FileRouteTypes {
     | '/_authenticated/cookbooks/$cookbookId'
     | '/_authenticated/images/$id'
     | '/_authenticated/ingredients/$id'
-    | '/_authenticated/ingredients/enrich'
     | '/_authenticated/ingredients/new'
+    | '/_authenticated/ingredients/workbench'
     | '/_authenticated/inventory/$id'
     | '/_authenticated/inventory/bulk-edit'
     | '/_authenticated/inventory/bulk-move'
@@ -1164,18 +1164,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedInventoryIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/ingredients/workbench': {
+      id: '/_authenticated/ingredients/workbench'
+      path: '/ingredients/workbench'
+      fullPath: '/ingredients/workbench'
+      preLoaderRoute: typeof AuthenticatedIngredientsWorkbenchRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/ingredients/new': {
       id: '/_authenticated/ingredients/new'
       path: '/ingredients/new'
       fullPath: '/ingredients/new'
       preLoaderRoute: typeof AuthenticatedIngredientsNewRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/ingredients/enrich': {
-      id: '/_authenticated/ingredients/enrich'
-      path: '/ingredients/enrich'
-      fullPath: '/ingredients/enrich'
-      preLoaderRoute: typeof AuthenticatedIngredientsEnrichRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/ingredients/$id': {
@@ -1245,8 +1245,8 @@ interface AuthenticatedRouteChildren {
   AuthenticatedCookbooksCookbookIdRoute: typeof AuthenticatedCookbooksCookbookIdRoute
   AuthenticatedImagesIdRoute: typeof AuthenticatedImagesIdRoute
   AuthenticatedIngredientsIdRoute: typeof AuthenticatedIngredientsIdRoute
-  AuthenticatedIngredientsEnrichRoute: typeof AuthenticatedIngredientsEnrichRoute
   AuthenticatedIngredientsNewRoute: typeof AuthenticatedIngredientsNewRoute
+  AuthenticatedIngredientsWorkbenchRoute: typeof AuthenticatedIngredientsWorkbenchRoute
   AuthenticatedInventoryIdRoute: typeof AuthenticatedInventoryIdRoute
   AuthenticatedInventoryBulkEditRoute: typeof AuthenticatedInventoryBulkEditRoute
   AuthenticatedInventoryBulkMoveRoute: typeof AuthenticatedInventoryBulkMoveRoute
@@ -1300,8 +1300,9 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedCookbooksCookbookIdRoute: AuthenticatedCookbooksCookbookIdRoute,
   AuthenticatedImagesIdRoute: AuthenticatedImagesIdRoute,
   AuthenticatedIngredientsIdRoute: AuthenticatedIngredientsIdRoute,
-  AuthenticatedIngredientsEnrichRoute: AuthenticatedIngredientsEnrichRoute,
   AuthenticatedIngredientsNewRoute: AuthenticatedIngredientsNewRoute,
+  AuthenticatedIngredientsWorkbenchRoute:
+    AuthenticatedIngredientsWorkbenchRoute,
   AuthenticatedInventoryIdRoute: AuthenticatedInventoryIdRoute,
   AuthenticatedInventoryBulkEditRoute: AuthenticatedInventoryBulkEditRoute,
   AuthenticatedInventoryBulkMoveRoute: AuthenticatedInventoryBulkMoveRoute,

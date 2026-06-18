@@ -306,7 +306,7 @@ export function IngredientList() {
             {stubCount > 0 && (
               <Button
                 variant="outline"
-                render={<Link to="/ingredients/enrich" />}
+                render={<Link to="/ingredients/workbench" />}
                 nativeButton={false}
               >
                 <Sparkles className="h-4 w-4" />
