@@ -506,6 +506,21 @@ function WorkbenchEditor({
     }
   }, [row]);
 
+  // Which base kinds are still uncovered, so the steps reflect what each fix
+  // actually closes: price closes money; a conversion closes a measure/calorie
+  // gap. The conversion is only "optional" once nothing measurable is missing —
+  // setting a price won't cover volume, so don't pretend it's optional then.
+  const covered = new Set(row.coverage.covered);
+  const moneyMissing = !covered.has("money");
+  const usdaUnavailable = row.product.some((p) => p.usdaUnavailable);
+  const conversionGaps = (["weight", "volume", "calories"] as const).filter(
+    (k) => !covered.has(k),
+  );
+  // A conversion is the path for those gaps only once USDA can't fill them
+  // (already linked, or there's no USDA entry). Before that, linking USDA is.
+  const conversionNeeded =
+    conversionGaps.length > 0 && (usdaLinked || usdaUnavailable);
+
   const [food, setFood] = useState<FoodSummaryWithLinkedProducts | null>(
     initialFood,
   );
@@ -645,6 +660,20 @@ function WorkbenchEditor({
         </div>
       )}
 
+      {product && row.coverage.tier !== "complete" && (
+        <p className="text-xs">
+          <span className="font-medium text-warning">Still missing:</span>{" "}
+          {[
+            !covered.has("weight") && "weight",
+            !covered.has("volume") && "volume",
+            moneyMissing && "price",
+            !covered.has("calories") && "calories",
+          ]
+            .filter(Boolean)
+            .join(", ")}
+        </p>
+      )}
+
       {!usdaLinked && (
         <div className="space-y-1">
           <p className="font-medium text-xs">
@@ -667,47 +696,51 @@ function WorkbenchEditor({
         </div>
       )}
 
-      <div className="space-y-1">
-        <p className="font-medium text-xs">Set a price</p>
-        <div className="flex items-center gap-1.5 text-sm">
-          <Input
-            type="number"
-            inputMode="decimal"
-            min="0"
-            value={priceQty}
-            onChange={(e) => setPriceQty(e.target.value)}
-            className="w-12"
-            aria-label="Price quantity"
-          />
-          <Input
-            value={priceUnit}
-            onChange={(e) => setPriceUnit(e.target.value)}
-            className="w-16"
-            aria-label="Price unit"
-          />
-          <span>= $</span>
-          <Input
-            type="number"
-            inputMode="decimal"
-            min="0"
-            step="0.01"
-            placeholder="0.00"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            className="w-20"
-          />
+      {moneyMissing && (
+        <div className="space-y-1">
+          <p className="font-medium text-xs">Set a price</p>
+          <div className="flex items-center gap-1.5 text-sm">
+            <Input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              value={priceQty}
+              onChange={(e) => setPriceQty(e.target.value)}
+              className="w-12"
+              aria-label="Price quantity"
+            />
+            <Input
+              value={priceUnit}
+              onChange={(e) => setPriceUnit(e.target.value)}
+              className="w-16"
+              aria-label="Price unit"
+            />
+            <span>= $</span>
+            <Input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="0.01"
+              placeholder="0.00"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              className="w-20"
+            />
+          </div>
+          <p className="text-muted-foreground text-xs">
+            For foods, price by the package, e.g. 2&nbsp;lb = $5.99. Use “each”
+            for count items.
+          </p>
         </div>
-        <p className="text-muted-foreground text-xs">
-          For foods, price by the package, e.g. 2&nbsp;lb = $5.99. Use “each”
-          for count items.
-        </p>
-      </div>
+      )}
 
       <div className="space-y-1">
         <p className="font-medium text-xs">
           Add a conversion{" "}
           <span className="font-normal text-muted-foreground">
-            — optional, e.g. 1 cup = 240 g
+            {conversionNeeded
+              ? `— covers ${conversionGaps.join(", ")} (e.g. 1 cup = 240 g)`
+              : "— optional, e.g. 1 cup = 240 g"}
           </span>
         </p>
         <div className="flex items-center gap-1.5 text-sm">
