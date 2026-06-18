@@ -10,7 +10,7 @@ import { cn } from "~/lib/utils";
 // list, compare grid, hero, and spec footnote can't drift on labels or links.
 
 /** Host of a source URL, www-stripped; falls back to the raw string on parse error. */
-export const sourceHost = (url: string): string => {
+const sourceHost = (url: string): string => {
   try {
     return new URL(url).hostname.replace(/^www\./, "");
   } catch {
