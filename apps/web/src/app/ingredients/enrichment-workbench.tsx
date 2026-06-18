@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { match } from "ts-pattern";
 import { UsdaFoodSearchField } from "~/app/_components/combobox/with-usda-food-search";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { getHoverableMeasureUnitIcon } from "~/app/_components/inventory/format-amount";
 import { ConversionCapabilities } from "~/app/_components/units/ConversionCapabilities";
 import {
   isDisplayMapping,
@@ -103,6 +104,41 @@ const fixBadgeLabel = (row: EnrichmentRow): string => {
   }
   return FIX_LABEL[row.recommendedFix];
 };
+
+/**
+ * A unit text input with the shared valid-unit check / measure-kind tooltip
+ * adornment (the same `getHoverableMeasureUnitIcon` the amount fields use), so a
+ * recognized unit shows a check and hovering reveals its kind. Plain (not RHF-
+ * bound) since the workbench editor holds its fields in local state.
+ */
+function UnitInput({
+  value,
+  onChange,
+  placeholder,
+  ariaLabel,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  ariaLabel: string;
+}) {
+  return (
+    <div className="relative w-16">
+      <Input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        aria-label={ariaLabel}
+        className="w-full pr-6"
+      />
+      {value.trim() && (
+        <span className="absolute top-1/2 right-1 flex -translate-y-1/2 items-center">
+          {getHoverableMeasureUnitIcon(value.trim())}
+        </span>
+      )}
+    </div>
+  );
+}
 
 /**
  * Dense bulk-enrichment table for ingredients that can't be fully costed yet —
@@ -812,11 +848,10 @@ function WorkbenchEditor({
                 className="w-12"
                 aria-label="Price quantity"
               />
-              <Input
+              <UnitInput
                 value={priceUnit}
-                onChange={(e) => setPriceUnit(e.target.value)}
-                className="w-16"
-                aria-label="Price unit"
+                onChange={setPriceUnit}
+                ariaLabel="Price unit"
               />
               <span>= $</span>
               <Input
@@ -861,14 +896,11 @@ function WorkbenchEditor({
                 className="w-12"
                 aria-label="From quantity"
               />
-              <Input
+              <UnitInput
                 value={c.fromUnit}
-                onChange={(e) =>
-                  patchConvRow(c.id, { fromUnit: e.target.value })
-                }
+                onChange={(v) => patchConvRow(c.id, { fromUnit: v })}
                 placeholder="cup"
-                className="w-16"
-                aria-label="From unit"
+                ariaLabel="From unit"
               />
               <span>=</span>
               <Input
@@ -880,12 +912,11 @@ function WorkbenchEditor({
                 className="w-14"
                 aria-label="To quantity"
               />
-              <Input
+              <UnitInput
                 value={c.toUnit}
-                onChange={(e) => patchConvRow(c.id, { toUnit: e.target.value })}
+                onChange={(v) => patchConvRow(c.id, { toUnit: v })}
                 placeholder="g"
-                className="w-16"
-                aria-label="To unit"
+                ariaLabel="To unit"
               />
               {convRows.length > 1 && (
                 <button

@@ -124,6 +124,24 @@ export function dataTypePriorityCase(column: string): string {
   return `CASE ${column} ${whens} ELSE 99 END`;
 }
 
+// Backslash-escapes the SQL LIKE metacharacters (`%`, `_`, `\`) in a raw search
+// term so user punctuation can't act as a wildcard in the prefix match below.
+// Pairs with `... LIKE ? ESCAPE '\\'`.
+export function escapeLike(term: string): string {
+  return term.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
+
+// SQL CASE that scores how closely a row's description matches the raw search
+// term (lower = surfaced first): exact (case-insensitive) beats prefix beats
+// everything else. This is the "smart" tier that mimics USDA FDC's own search —
+// it floats a literal "VANILLA BEAN" above noisy long descriptions like
+// "VANILLA BEAN COCONUTMILK, VANILLA BEAN" that BM25 over-rewards because the
+// query tokens repeat. Two `?` placeholders: the exact term, then the escaped
+// `term%` prefix pattern. `column` is a fixed column name (not a bind surface).
+export function matchQualityCase(column: string): string {
+  return `CASE WHEN ${column} = ? COLLATE NOCASE THEN 0 WHEN ${column} LIKE ? ESCAPE '\\' THEN 1 ELSE 2 END`;
+}
+
 // The four user-facing food types. The other five (agricultural_acquisition,
 // market_acquisition, sample_food, sub_sample_food, experimental_food) are the
 // Foundation sampling pipeline + research records — provenance, not pickable
@@ -454,18 +472,28 @@ export function createEdgeUsdaDataSource(
         values = dt.values;
       }
 
-      // Relevance ordering only means something with an FTS query: bm25 `rank`
-      // (ascending = best match first), which lives on the FTS table. We bucket
-      // by data_type richness FIRST so the complete reference foods lead and the
-      // ~2M branded duplicates don't bury them (the long-standing picker pain),
-      // then by bm25 within each bucket. Without a name filter, fall back to
-      // alphabetical so the option stays well-defined.
-      const orderClause =
-        orderBy === "relevance"
-          ? hasName
-            ? `${dataTypePriorityCase(`${tables.foodSearch}.data_type`)} ASC, ${tables.foodSearch}.rank ASC`
-            : "i.description ASC"
-          : `i.${sqlOrderBy(orderBy)} ${sqlDirection(direction)}`;
+      // Relevance ordering only means something with an FTS query. We bucket by
+      // data_type richness FIRST so the complete reference foods lead and the
+      // ~2M branded duplicates don't bury them (the long-standing picker pain).
+      // WITHIN a bucket we then prefer exact/prefix description matches and
+      // shorter descriptions (mimicking USDA FDC) BEFORE bm25 `rank` — because
+      // raw bm25 over-rewards rows that repeat the query tokens (e.g. "VANILLA
+      // BEAN COCONUTMILK, VANILLA BEAN") and sinks the literal short match.
+      // These extra `?`s bind AFTER the WHERE values and BEFORE LIMIT/OFFSET, by
+      // SQL appearance order. Without a name filter, fall back to alphabetical.
+      const orderValues: string[] = [];
+      let orderClause: string;
+      if (orderBy === "relevance") {
+        if (hasName) {
+          const term = nameFilter?.trim() ?? "";
+          orderValues.push(term, `${escapeLike(term)}%`);
+          orderClause = `${dataTypePriorityCase(`${tables.foodSearch}.data_type`)} ASC, ${matchQualityCase("i.description")} ASC, LENGTH(i.description) ASC, ${tables.foodSearch}.rank ASC`;
+        } else {
+          orderClause = "i.description ASC";
+        }
+      } else {
+        orderClause = `i.${sqlOrderBy(orderBy)} ${sqlDirection(direction)}`;
+      }
 
       const result = await env.DB.prepare(
         `SELECT i.*
@@ -474,7 +502,7 @@ export function createEdgeUsdaDataSource(
            ORDER BY ${orderClause}
            LIMIT ? OFFSET ?`,
       )
-        .bind(...values, pageSize, offset)
+        .bind(...values, ...orderValues, pageSize, offset)
         .all<FoodIndexRow>();
       const rows = rowsFromResult(result);
 

@@ -14,6 +14,7 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { getErrorMessage } from "~/lib/error-utils";
+import { parseUsdaFoodRef } from "~/lib/parse-usda-food-ref";
 import { type DedupedFood, dedupeUsdaFoodsByUpc } from "~/lib/usda-food-stats";
 import { useTRPC, useTRPCClient } from "~/trpc/react";
 import { confidenceColor } from "../ai/ai-suggest";
@@ -70,26 +71,47 @@ export function UsdaFoodSearchField({
     reasoning: string;
   } | null>(null);
 
+  // A pasted USDA food URL / bare fdc_id jumps straight to that one food — name
+  // search can't surface every exact match (e.g. a literal "VANILLA BEAN" sits
+  // behind thousands of branded rows). When parsed, we resolve by id and bypass FTS.
+  const parsedFdcId = useMemo(
+    () => parseUsdaFoodRef(searchQuery),
+    [searchQuery],
+  );
+
   // Until the user types, search for the seed name so the dropdown is pre-populated.
   const effectiveQuery =
-    searchQuery.trim() || initialQuery?.trim() || undefined;
+    parsedFdcId != null
+      ? undefined
+      : searchQuery.trim() || initialQuery?.trim() || undefined;
 
   const { data, isLoading } = useQuery(
-    api.usda.list.queryOptions({
-      // foodsOnly hides the Foundation sampling pipeline + experimental records,
-      // which are provenance noise, not pickable foods. dataTypes narrows further
-      // (e.g. "Generic" surfaces the reference foods branded items out-rank).
-      filters: {
-        nameFilter: effectiveQuery,
-        foodsOnly: true,
-        dataTypes: SCOPE_DATA_TYPES[scope],
+    api.usda.list.queryOptions(
+      {
+        // foodsOnly hides the Foundation sampling pipeline + experimental records,
+        // which are provenance noise, not pickable foods. dataTypes narrows further
+        // (e.g. "Generic" surfaces the reference foods branded items out-rank).
+        filters: {
+          nameFilter: effectiveQuery,
+          foodsOnly: true,
+          dataTypes: SCOPE_DATA_TYPES[scope],
+        },
+        // Rank by FTS relevance so the best name match leads (not alphabetical).
+        sort: { orderBy: "relevance", direction: "asc" },
+        // Over-fetch: USDA returns many UPC-duplicate records, so we pull extra and
+        // collapse them client-side to still show a full list of distinct foods.
+        pagination: { pageIndex: 0, pageSize: 50 },
       },
-      // Rank by FTS relevance so the best name match leads (not alphabetical).
-      sort: { orderBy: "relevance", direction: "asc" },
-      // Over-fetch: USDA returns many UPC-duplicate records, so we pull extra and
-      // collapse them client-side to still show a full list of distinct foods.
-      pagination: { pageIndex: 0, pageSize: 50 },
-    }),
+      // Skip FTS entirely when the input is a URL/id — getByID drives the list.
+      { enabled: parsedFdcId == null },
+    ),
+  );
+
+  const { data: byIdFood, isLoading: byIdLoading } = useQuery(
+    api.usda.getByID.queryOptions(
+      { id: parsedFdcId ?? 0 },
+      { enabled: parsedFdcId != null },
+    ),
   );
 
   const { data: aiStatus } = useQuery(
@@ -99,8 +121,13 @@ export function UsdaFoodSearchField({
   );
 
   const deduped = useMemo(
-    () => dedupeUsdaFoodsByUpc(data?.items ?? []),
-    [data],
+    () =>
+      parsedFdcId != null
+        ? byIdFood
+          ? [{ food: byIdFood, duplicateCount: 0 }]
+          : []
+        : dedupeUsdaFoodsByUpc(data?.items ?? []),
+    [parsedFdcId, byIdFood, data],
   );
   const foodsById = useMemo(() => {
     const map = new Map<string, DedupedFood>();
@@ -173,7 +200,7 @@ export function UsdaFoodSearchField({
           <DialogCompatibleCombobox
             label="USDA food"
             items={items}
-            isLoading={isLoading}
+            isLoading={parsedFdcId != null ? byIdLoading : isLoading}
             onSearchChange={setSearchQuery}
             value={value}
             wide

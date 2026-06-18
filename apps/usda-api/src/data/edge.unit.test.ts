@@ -3,7 +3,9 @@ import {
   createEdgeUsdaDataSource,
   dataTypePredicate,
   dataTypePriorityCase,
+  escapeLike,
   FOOD_DATA_TYPES,
+  matchQualityCase,
   normalizeUpc,
 } from "./edge";
 import type { EdgeBindings } from "./cloudflare-types";
@@ -100,6 +102,39 @@ describe("dataTypePriorityCase", () => {
     expect(sql).toMatch(/ELSE 99 END$/);
     expect(rank("branded_food")).toBeLessThan(99);
     expect(sql.startsWith("CASE s.data_type ")).toBe(true);
+  });
+});
+
+describe("escapeLike", () => {
+  it("backslash-escapes LIKE metacharacters so they match literally", () => {
+    expect(escapeLike("50% milk")).toBe("50\\% milk");
+    expect(escapeLike("a_b")).toBe("a\\_b");
+    expect(escapeLike("back\\slash")).toBe("back\\\\slash");
+  });
+
+  it("leaves ordinary search terms untouched", () => {
+    expect(escapeLike("vanilla bean")).toBe("vanilla bean");
+  });
+});
+
+describe("matchQualityCase", () => {
+  // Tier order is the "smart match" signal: an exact description beats a prefix
+  // beats everything else, so a literal "VANILLA BEAN" outranks the long noisy
+  // descriptions bm25 would otherwise float. Guard the monotonic order + the two
+  // bind placeholders (exact term, then `term%` prefix pattern).
+  it("scores exact < prefix < other and exposes exactly two placeholders", () => {
+    const sql = matchQualityCase("i.description");
+    const tier = (clause: RegExp) => {
+      const m = sql.match(clause);
+      if (!m) throw new Error(`no THEN for ${clause}`);
+      return Number(m[1]);
+    };
+    const exact = tier(/= \? COLLATE NOCASE THEN (\d+)/);
+    const prefix = tier(/LIKE \? ESCAPE '\\' THEN (\d+)/);
+    const other = tier(/ELSE (\d+) END$/);
+    expect(exact).toBeLessThan(prefix);
+    expect(prefix).toBeLessThan(other);
+    expect((sql.match(/\?/g) ?? []).length).toBe(2);
   });
 });
 
