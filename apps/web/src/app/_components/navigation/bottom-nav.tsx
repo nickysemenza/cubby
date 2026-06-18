@@ -11,7 +11,7 @@ import {
   SheetTrigger,
 } from "~/components/ui/sheet";
 import { useDebug } from "~/hooks/useDebug";
-import { authClient } from "~/lib/auth-client";
+import { useNavAuthed } from "~/hooks/useNavAuthed";
 import { cn, formatBuildDate } from "~/lib/utils";
 import { bottomNavItems, moreNavItems, publicNavItems } from "./nav-items";
 
@@ -21,12 +21,9 @@ export function BottomNav() {
   const pathname = useLocation().pathname;
   const [isOpen, setIsOpen] = useState(false);
   const { isDebugEnabled, toggleDebug } = useDebug();
-  const session = authClient.useSession();
-  // Optimistically show the full (authed) tab bar until the session resolves —
-  // see MainNav for the rationale (avoids flashing for the signed-in primary
-  // user, keeps SSR + first client render identical). Collapse to the minimal
-  // public tabs only once we've confirmed signed-out.
-  const showAuthedNav = session.isPending || !!session.data?.user;
+  // SSR-accurate auth (see useNavAuthed): the tab bar renders the right state
+  // on the first paint instead of flashing the authed tabs and collapsing.
+  const authed = useNavAuthed();
 
   // Check if any "more" item is active
   const isMoreActive = moreNavItems.some((item) => item.isActive(pathname));
@@ -38,7 +35,7 @@ export function BottomNav() {
       aria-label="Main navigation"
     >
       <div className="flex h-16 items-center justify-around">
-        {showAuthedNav ? (
+        {authed ? (
           <>
             {bottomNavItems.map((item) => {
               const active = item.isActive(pathname);
@@ -123,7 +120,7 @@ export function BottomNav() {
                     const Icon = item.icon;
 
                     // Only show Dashboard if signed in
-                    if (item.href === "/dashboard" && !session.data?.user) {
+                    if (item.href === "/dashboard" && !authed) {
                       return null;
                     }
 

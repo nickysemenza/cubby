@@ -17,7 +17,15 @@ export const UserAvatarDropdown = () => {
   const user = session.data?.user;
 
   if (!user) {
-    return null;
+    // Mounted only when the server-side session says we're authed (see
+    // MainNav), so a missing user here means the client session is still
+    // resolving — show a neutral placeholder rather than collapsing to nothing.
+    return (
+      <div
+        className="h-7 w-7 animate-pulse rounded-full bg-muted/60"
+        aria-hidden
+      />
+    );
   }
 
   // Get initials for fallback

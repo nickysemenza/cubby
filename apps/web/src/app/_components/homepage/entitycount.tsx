@@ -61,7 +61,7 @@ function ProblemsStatCard({ enabled }: { enabled: boolean }) {
             <AlertTriangle className="h-4 w-4" />
           </div>
           <div className="min-w-0 flex-1">
-            {isLoading ? (
+            {!enabled || isLoading ? (
               <Skeleton className="h-6 w-10" />
             ) : (
               <p
@@ -197,7 +197,11 @@ export default function EntityCount() {
           key={entity}
           entity={entity}
           count={results[i]?.count}
-          isLoading={results[i]?.isLoading ?? true}
+          // While auth is still resolving the queries are disabled, so their
+          // `isLoading` is false and `count` is undefined — without this the
+          // card would flash "0" before the real fetch starts. Treat the
+          // pre-auth window as loading so it shows the skeleton throughout.
+          isLoading={!isAuthenticated || (results[i]?.isLoading ?? true)}
           isError={results[i]?.isError ?? false}
         />
       ))}

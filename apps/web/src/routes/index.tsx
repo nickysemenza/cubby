@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { PantryValueCard } from "~/app/_components/home/PantryValueCard";
 import { QuickActionsCard } from "~/app/_components/home/QuickActionsCard";
@@ -9,6 +9,18 @@ import { Eyebrow } from "~/components/ui/eyebrow";
 import { authClient } from "~/lib/auth-client";
 
 export const Route = createFileRoute("/")({
+  // The home dashboard is authenticated-only (the counts/feeds are all
+  // per-user). Guard it like `_authenticated` so a logged-out load redirects
+  // to sign-in instead of rendering a dashboard of zeros. Reuses the root's
+  // server-side session read via context.
+  beforeLoad: ({ context }) => {
+    if (!context.isAuthed) {
+      throw redirect({
+        to: "/auth/$authView",
+        params: { authView: "sign-in" },
+      });
+    }
+  },
   component: Home,
 });
 

@@ -4,7 +4,7 @@ import { FlexContainer } from "~/components/layout/flex-container";
 import { Button } from "~/components/ui/button";
 import { entities } from "~/entities/entities";
 import { useDebug } from "~/hooks/useDebug";
-import { authClient } from "~/lib/auth-client";
+import { useNavAuthed } from "~/hooks/useNavAuthed";
 import { cn } from "~/lib/utils";
 import { NavDropdown } from "./navbar/nav-dropdown";
 import { NavLink } from "./navbar/nav-link";
@@ -36,14 +36,10 @@ interface MainNavProps extends React.HTMLAttributes<HTMLElement> {
 // cf https://github.com/shadcn-ui/ui/blob/main/apps/www/app/(app)/examples/dashboard/components/main-nav.tsx
 export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
   const { isDebugEnabled, toggleDebug } = useDebug();
-  const { data: sessionData, isPending } = authClient.useSession();
-
-  const isAuthed = !!sessionData?.user;
-  // Optimistically show the full (authed) nav until the session resolves: the
-  // primary user is almost always signed in, so this avoids a flash for them,
-  // and keeps SSR + first client render identical (no hydration mismatch). Only
-  // once we've confirmed signed-out do we collapse to the minimal public nav.
-  const showAuthedNav = isPending || isAuthed;
+  // SSR-accurate auth (see useNavAuthed): correct logged-in/out on the first
+  // paint from the signed cookie, then live once the client session resolves —
+  // so the nav never flashes the wrong state in either direction.
+  const authed = useNavAuthed();
 
   return (
     <div className="flex w-full items-center justify-between">
@@ -66,7 +62,7 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
       >
         <NavLink item={home} />
 
-        {showAuthedNav ? (
+        {authed ? (
           <>
             <NavLink item={products} />
             <NavDropdown
@@ -77,13 +73,11 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
             <NavLink item={locations} />
             <NavLink item={inventory} />
             <NavLink item={projects} />
-            {isAuthed && (
-              <NavDropdown
-                label="Reports"
-                items={reportsItems}
-                icon={ReportsIcon}
-              />
-            )}
+            <NavDropdown
+              label="Reports"
+              items={reportsItems}
+              icon={ReportsIcon}
+            />
             <NavDropdown
               label="Settings"
               items={desktopMoreItems}
@@ -114,10 +108,10 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
         )}
 
         {/* Quick Actions */}
-        {isAuthed && <QuickActionsMenu />}
+        {authed && <QuickActionsMenu />}
 
         {/* Status Badges */}
-        {isAuthed && <ProblemsBadge />}
+        {authed && <ProblemsBadge />}
 
         {/* Debug Toggle */}
         <Button
@@ -138,14 +132,9 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
           <span className="sr-only">Toggle debug mode</span>
         </Button>
 
-        {isPending ? (
-          // Avoid flashing "Sign In" before the session resolves on an
-          // authenticated PWA — show a neutral avatar placeholder instead.
-          <div
-            className="h-7 w-7 animate-pulse rounded-full bg-muted/60"
-            aria-hidden
-          />
-        ) : isAuthed ? (
+        {authed ? (
+          // The avatar dropdown shows its own neutral placeholder while the
+          // client session is still resolving (see UserAvatarDropdown).
           <UserAvatarDropdown />
         ) : (
           <Link

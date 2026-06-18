@@ -21,6 +21,7 @@ import { RouteErrorComponent } from "~/components/route-error";
 import { Toaster } from "~/components/ui/sonner";
 import { DebugContextProvider, useDebug } from "~/hooks/useDebug";
 import type { TRPCRouter } from "~/integrations/trpc/router";
+import { getGuardSession } from "~/lib/auth-guard";
 import { useFlag } from "~/lib/flags";
 import { PerfProfiler } from "~/lib/perf/PerfProfiler";
 import TanStackQueryDevtools from "../integrations/tanstack-query/devtools";
@@ -59,6 +60,15 @@ interface MyRouterContext {
 }
 
 export const Route = createRootRouteWithContext<MyRouterContext>()({
+  // Read the signed session cookie server-side on every route so nav chrome
+  // (MainNav, BottomNav) can render the correct logged-in/out state on the
+  // first paint instead of flashing. Cheap — cookie only, no DB (see
+  // getGuardSession). Child guards (`/`, `_authenticated`) reuse this via
+  // `context.isAuthed` rather than reading the session again.
+  beforeLoad: async () => {
+    const session = await getGuardSession();
+    return { isAuthed: !!session };
+  },
   head: () => ({
     meta: [
       {
