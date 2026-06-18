@@ -762,9 +762,178 @@ function WorkbenchEditor({
   const isPending = createProduct.isPending || updateProduct.isPending;
 
   return (
-    <div className="space-y-3">
-      {product && (linkedFoods.length > 0 || currentMappings.length > 0) && (
-        <div className="max-w-2xl space-y-2 rounded-md border bg-background/60 p-2">
+    <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+      <div className="shrink-0 space-y-3 lg:w-80">
+        {product && row.coverage.tier !== "complete" && (
+          <p className="text-xs">
+            <span className="font-medium text-warning">Still missing:</span>{" "}
+            {[
+              !covered.has("weight") && "weight",
+              !covered.has("volume") && "volume",
+              moneyMissing &&
+                (priceIslanded ? "price (not connected)" : "price"),
+              !covered.has("calories") && "calories",
+            ]
+              .filter(Boolean)
+              .join(", ")}
+          </p>
+        )}
+
+        {!usdaLinked && (
+          <div className="space-y-1">
+            <p className="font-medium text-xs">
+              Link a USDA food{" "}
+              <span className="font-normal text-muted-foreground">
+                — fills weight, volume &amp; calories
+              </span>
+            </p>
+            <UsdaFoodSearchField
+              initialQuery={row.name}
+              label=""
+              onSelect={setFood}
+            />
+            {food && (
+              <p className="flex items-center gap-1 text-positive text-xs">
+                <Check className="h-3 w-3" />
+                {food.foodInfo.description}
+              </p>
+            )}
+          </div>
+        )}
+
+        {priceIslanded && (
+          <p className="rounded-md border bg-warning/10 px-2 py-1.5 text-warning text-xs">
+            Already priced, but “{islandedUnit}” isn’t linked to a weight — so
+            the price can’t be reached from a recipe measure. Connect it below
+            (e.g. 1 {islandedUnit} = N&nbsp;g) instead of adding a new price.
+          </p>
+        )}
+
+        {moneyMissing && !priceIslanded && (
+          <div className="space-y-1">
+            <p className="font-medium text-xs">Set a price</p>
+            <div className="flex items-center gap-1.5 text-sm">
+              <Input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                value={priceQty}
+                onChange={(e) => setPriceQty(e.target.value)}
+                className="w-12"
+                aria-label="Price quantity"
+              />
+              <Input
+                value={priceUnit}
+                onChange={(e) => setPriceUnit(e.target.value)}
+                className="w-16"
+                aria-label="Price unit"
+              />
+              <span>= $</span>
+              <Input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                className="w-20"
+              />
+            </div>
+            <p className="text-muted-foreground text-xs">
+              For foods, price by the package, e.g. 2&nbsp;lb = $5.99. Use
+              “each” for count items.
+            </p>
+          </div>
+        )}
+
+        <div className="space-y-1.5">
+          <p className="font-medium text-xs">
+            {priceIslanded ? "Connect the price" : "Add conversions"}{" "}
+            <span className="font-normal text-muted-foreground">
+              {priceIslanded
+                ? `— links “${islandedUnit}” to grams so your price is reachable`
+                : conversionNeeded
+                  ? `— covers ${conversionGaps.join(", ")} (e.g. 1 cup = 240 g)`
+                  : "— optional, e.g. 1 cup = 240 g"}
+            </span>
+          </p>
+          {convRows.map((c) => (
+            <div key={c.id} className="flex items-center gap-1.5 text-sm">
+              <Input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                value={c.fromQty}
+                onChange={(e) =>
+                  patchConvRow(c.id, { fromQty: e.target.value })
+                }
+                className="w-12"
+                aria-label="From quantity"
+              />
+              <Input
+                value={c.fromUnit}
+                onChange={(e) =>
+                  patchConvRow(c.id, { fromUnit: e.target.value })
+                }
+                placeholder="cup"
+                className="w-16"
+                aria-label="From unit"
+              />
+              <span>=</span>
+              <Input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                value={c.toQty}
+                onChange={(e) => patchConvRow(c.id, { toQty: e.target.value })}
+                className="w-14"
+                aria-label="To quantity"
+              />
+              <Input
+                value={c.toUnit}
+                onChange={(e) => patchConvRow(c.id, { toUnit: e.target.value })}
+                placeholder="g"
+                className="w-16"
+                aria-label="To unit"
+              />
+              {convRows.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => removeConvRow(c.id)}
+                  className="text-muted-foreground hover:text-destructive"
+                  aria-label="Remove conversion"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={addConvRow}
+            className="flex items-center gap-1 text-muted-foreground text-xs hover:text-foreground"
+          >
+            <Plus className="h-3 w-3" /> Add another
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button size="sm" onClick={save} disabled={isPending}>
+            {isPending
+              ? "Saving…"
+              : product == null
+                ? "Create product"
+                : "Save"}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={onDone}>
+            Cancel
+          </Button>
+        </div>
+      </div>
+
+      {(linkedFoods.length > 0 || currentMappings.length > 0) && (
+        <div className="min-w-0 flex-1 space-y-1 rounded-md border bg-background/60 p-2">
           {linkedFoods.length > 0 && (
             <p className="flex items-center gap-1 text-xs">
               <Check className="h-3 w-3 text-positive" />
@@ -781,203 +950,26 @@ function WorkbenchEditor({
         </div>
       )}
 
-      <div className="flex flex-col gap-4 lg:flex-row">
-        <div className="flex-1 space-y-3 lg:max-w-md">
-          {product && row.coverage.tier !== "complete" && (
-            <p className="text-xs">
-              <span className="font-medium text-warning">Still missing:</span>{" "}
-              {[
-                !covered.has("weight") && "weight",
-                !covered.has("volume") && "volume",
-                moneyMissing &&
-                  (priceIslanded ? "price (not connected)" : "price"),
-                !covered.has("calories") && "calories",
-              ]
-                .filter(Boolean)
-                .join(", ")}
-            </p>
-          )}
+      <div className="shrink-0 space-y-1 lg:w-64">
+        <p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+          Unit graph (live)
+        </p>
+        <UnitMappingGraph mappings={previewMappings} />
+        <p className="text-[10px] text-muted-foreground leading-tight">
+          Units as nodes, conversions as edges. A disconnected cluster (e.g. an
+          islanded price) floats off on its own.
+        </p>
+      </div>
 
-          {!usdaLinked && (
-            <div className="space-y-1">
-              <p className="font-medium text-xs">
-                Link a USDA food{" "}
-                <span className="font-normal text-muted-foreground">
-                  — fills weight, volume &amp; calories
-                </span>
-              </p>
-              <UsdaFoodSearchField
-                initialQuery={row.name}
-                label=""
-                onSelect={setFood}
-              />
-              {food && (
-                <p className="flex items-center gap-1 text-positive text-xs">
-                  <Check className="h-3 w-3" />
-                  {food.foodInfo.description}
-                </p>
-              )}
-            </div>
-          )}
-
-          {priceIslanded && (
-            <p className="rounded-md border bg-warning/10 px-2 py-1.5 text-warning text-xs">
-              Already priced, but “{islandedUnit}” isn’t linked to a weight — so
-              the price can’t be reached from a recipe measure. Connect it below
-              (e.g. 1 {islandedUnit} = N&nbsp;g) instead of adding a new price.
-            </p>
-          )}
-
-          {moneyMissing && !priceIslanded && (
-            <div className="space-y-1">
-              <p className="font-medium text-xs">Set a price</p>
-              <div className="flex items-center gap-1.5 text-sm">
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  value={priceQty}
-                  onChange={(e) => setPriceQty(e.target.value)}
-                  className="w-12"
-                  aria-label="Price quantity"
-                />
-                <Input
-                  value={priceUnit}
-                  onChange={(e) => setPriceUnit(e.target.value)}
-                  className="w-16"
-                  aria-label="Price unit"
-                />
-                <span>= $</span>
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  step="0.01"
-                  placeholder="0.00"
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value)}
-                  className="w-20"
-                />
-              </div>
-              <p className="text-muted-foreground text-xs">
-                For foods, price by the package, e.g. 2&nbsp;lb = $5.99. Use
-                “each” for count items.
-              </p>
-            </div>
-          )}
-
-          <div className="space-y-1.5">
-            <p className="font-medium text-xs">
-              {priceIslanded ? "Connect the price" : "Add conversions"}{" "}
-              <span className="font-normal text-muted-foreground">
-                {priceIslanded
-                  ? `— links “${islandedUnit}” to grams so your price is reachable`
-                  : conversionNeeded
-                    ? `— covers ${conversionGaps.join(", ")} (e.g. 1 cup = 240 g)`
-                    : "— optional, e.g. 1 cup = 240 g"}
-              </span>
-            </p>
-            {convRows.map((c) => (
-              <div key={c.id} className="flex items-center gap-1.5 text-sm">
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  value={c.fromQty}
-                  onChange={(e) =>
-                    patchConvRow(c.id, { fromQty: e.target.value })
-                  }
-                  className="w-12"
-                  aria-label="From quantity"
-                />
-                <Input
-                  value={c.fromUnit}
-                  onChange={(e) =>
-                    patchConvRow(c.id, { fromUnit: e.target.value })
-                  }
-                  placeholder="cup"
-                  className="w-16"
-                  aria-label="From unit"
-                />
-                <span>=</span>
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  value={c.toQty}
-                  onChange={(e) =>
-                    patchConvRow(c.id, { toQty: e.target.value })
-                  }
-                  className="w-14"
-                  aria-label="To quantity"
-                />
-                <Input
-                  value={c.toUnit}
-                  onChange={(e) =>
-                    patchConvRow(c.id, { toUnit: e.target.value })
-                  }
-                  placeholder="g"
-                  className="w-16"
-                  aria-label="To unit"
-                />
-                {convRows.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeConvRow(c.id)}
-                    className="text-muted-foreground hover:text-destructive"
-                    aria-label="Remove conversion"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-            ))}
-            <button
-              type="button"
-              onClick={addConvRow}
-              className="flex items-center gap-1 text-muted-foreground text-xs hover:text-foreground"
-            >
-              <Plus className="h-3 w-3" /> Add another
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button size="sm" onClick={save} disabled={isPending}>
-              {isPending
-                ? "Saving…"
-                : product == null
-                  ? "Create product"
-                  : "Save"}
-            </Button>
-            <Button size="sm" variant="ghost" onClick={onDone}>
-              Cancel
-            </Button>
-          </div>
-        </div>
-
-        <div className="shrink-0 space-y-2 lg:w-72">
-          <div className="space-y-1">
-            <p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
-              Unit graph (live)
-            </p>
-            <UnitMappingGraph mappings={previewMappings} />
-            <p className="text-[10px] text-muted-foreground leading-tight">
-              Units as nodes, conversions as edges. A disconnected cluster (e.g.
-              an islanded price) floats off on its own.
-            </p>
-          </div>
-
-          <div className="space-y-1">
-            <p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
-              Coverage (live)
-            </p>
-            <div className="rounded-md border bg-background/60 p-2">
-              <ConversionCapabilities
-                mappings={previewMappings}
-                hideConvertButton
-              />
-            </div>
-          </div>
+      <div className="shrink-0 space-y-1 lg:w-56">
+        <p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+          Coverage (live)
+        </p>
+        <div className="rounded-md border bg-background/60 p-2">
+          <ConversionCapabilities
+            mappings={previewMappings}
+            hideConvertButton
+          />
         </div>
       </div>
     </div>

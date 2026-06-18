@@ -127,9 +127,12 @@ export function UnitMappingGraph({
       .force("collision", d3Force.forceCollide<UNode>().radius(17));
 
     sim.on("tick", () => {
+      // Clamp with enough margin for the centered label, which is wider than the
+      // 11px circle — otherwise edge nodes (e.g. a drifting islanded cluster)
+      // clip against the container's overflow-hidden.
       for (const n of nodesCopy) {
-        n.x = Math.max(14, Math.min(width - 14, n.x ?? 0));
-        n.y = Math.max(14, Math.min(height - 14, n.y ?? 0));
+        n.x = Math.max(24, Math.min(width - 24, n.x ?? 0));
+        n.y = Math.max(16, Math.min(height - 16, n.y ?? 0));
         posRef.current.set(n.id, { x: n.x, y: n.y });
       }
       setSimNodes([...nodesCopy]);
