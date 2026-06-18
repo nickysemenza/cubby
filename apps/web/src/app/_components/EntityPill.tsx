@@ -4,6 +4,7 @@ import type { DataType } from "@cubby/usda-schemas";
 import type { ReactNode } from "react";
 import { match } from "ts-pattern";
 import { EntityIcon } from "~/entities/entities";
+import { usdaRouteId } from "~/entities/entity-query";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
 import { cn } from "~/lib/utils";
 import { EntityPreviewLink } from "./EntityPreviewLink";
@@ -170,7 +171,7 @@ export const EntityPillLink: React.FC<EntityPillLinkProps> = (props) => {
       return (
         <EntityPreviewLink
           entity="usda-food"
-          id={String(data.fdc_id)}
+          id={usdaRouteId(data.fdc_id)}
           openInNewTab={openInNewTab}
           className={linkClass}
         >

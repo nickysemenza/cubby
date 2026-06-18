@@ -7,6 +7,7 @@ import {
   PreviewCardTrigger,
 } from "~/components/ui/preview-card";
 import { entities } from "~/entities/entities";
+import { fdcIdFromParam } from "~/entities/entity-query";
 import {
   IngredientPreviewContent,
   LocationPreviewContent,
@@ -81,7 +82,7 @@ export function EntityPreviewLink({
           ))
           .with("product", () => <ProductPreviewContent productId={id} />)
           .with("usda-food", () => (
-            <UsdaFoodPreviewContent fdcId={Number(id)} />
+            <UsdaFoodPreviewContent fdcId={fdcIdFromParam(id)} />
           ))
           .with("location", () => <LocationPreviewContent locationId={id} />)
           .exhaustive()}

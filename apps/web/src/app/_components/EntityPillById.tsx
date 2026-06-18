@@ -1,9 +1,20 @@
 import type { AuditEntityType } from "@cubby/schemas/audit";
+import type { Entity } from "@cubby/schemas/entity";
 import { skipToken, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { Spinner } from "~/components/ui/spinner";
+import { entityQueryOptions } from "~/entities/entity-query";
 import { useTRPC } from "~/trpc/react";
 import { EntityPillLink } from "./EntityPill";
+
+// Entity types this pill resolves to a name via getByID. Inventory & cookbook
+// are intentionally excluded — they render as plain links below, not fetched.
+const PILL_FETCHABLE = [
+  "product",
+  "location",
+  "recipe",
+  "ingredient",
+] as const satisfies readonly Entity[];
 
 interface EntityPillByIdProps {
   entityType: AuditEntityType;
@@ -23,33 +34,23 @@ export function EntityPillById({
 }: EntityPillByIdProps) {
   const trpc = useTRPC();
 
-  // Get query options based on entity type (stable reference with useMemo)
-  const queryOptions = useMemo(() => {
-    switch (entityType) {
-      case "inventory":
-      case "cookbook":
-        // No getByID for these — rendered via an early return below. Return a
-        // valid (skipped) query so useQuery never receives undefined (v5 throws).
-        return { queryKey: ["invalid"] as const, queryFn: skipToken };
-      case "product":
-        return trpc.product.getByID.queryOptions({ id: entityId });
-      case "location":
-        return trpc.location.getByID.queryOptions({ id: entityId });
-      case "recipe":
-        return trpc.recipe.getByID.queryOptions({ id: entityId });
-      case "ingredient":
-        return trpc.ingredient.getByID.queryOptions({ id: entityId });
-      default:
-        // AuditEntityType is the six cases above, but audit rows can carry a
-        // runtime entityType outside that union (legacy/other-domain entries).
-        // Return a valid (skipped) query so useQuery never receives undefined
-        // — v5 throws "only the Object form is allowed" on a non-object arg.
-        return { queryKey: ["invalid"] as const, queryFn: skipToken };
-    }
-  }, [entityType, entityId, trpc]);
+  // Resolve the name via the shared entity→getByID mapping for the fetchable
+  // pill types; everything else (inventory, cookbook, or an out-of-union runtime
+  // entityType from a legacy audit row) gets a skipped query so useQuery never
+  // receives a non-object arg — v5 throws "only the Object form is allowed".
+  const isFetchable = (PILL_FETCHABLE as readonly string[]).includes(
+    entityType,
+  );
+  const queryOptions = useMemo(
+    () =>
+      isFetchable
+        ? entityQueryOptions(trpc, entityType as Entity, entityId)
+        : { queryKey: ["invalid"] as const, queryFn: skipToken },
+    [isFetchable, entityType, entityId, trpc],
+  );
 
   // Single query hook instead of 4 disabled ones
-  // biome-ignore lint/suspicious/noExplicitAny: TypeScript can't narrow discriminated union in switch statement
+  // biome-ignore lint/suspicious/noExplicitAny: useQuery can't narrow the union of getByID queryOptions
   const query = useQuery(queryOptions as any);
 
   // Inventory entries don't have a getByID that returns product info
@@ -73,12 +74,6 @@ export function EntityPillById({
       </a>
     );
   }
-
-  const isFetchable =
-    entityType === "product" ||
-    entityType === "location" ||
-    entityType === "recipe" ||
-    entityType === "ingredient";
 
   if (isFetchable && query.isLoading) {
     return <Spinner className="text-muted-foreground" />;
