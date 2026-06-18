@@ -2,7 +2,13 @@ import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
 import type { UnitMappingInput } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Check, ChevronDown, ChevronRight, Sparkles } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  ChevronRight,
+  GitMerge,
+  Sparkles,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
@@ -57,6 +63,9 @@ export function EnrichmentWorkbench() {
   const [suggestions, setSuggestions] = useState<Record<string, Suggestion>>(
     {},
   );
+  const [mergeSuggestions, setMergeSuggestions] = useState<
+    Record<string, { targetId: string; targetName: string }>
+  >({});
 
   const { data, isLoading, error } = useQuery(
     api.ingredient.enrichmentWorkbench.queryOptions(),
@@ -124,6 +133,47 @@ export function EnrichmentWorkbench() {
     onSuccess: clearSelection,
     error: (err) => `Failed: ${getErrorMessage(err)}`,
   });
+  const suggestMerges = useMutation(
+    api.ai.suggestIngredientMergeBatch.mutationOptions(),
+  );
+  const mergeMutation = useActionMutation({
+    mutationFn: api.ingredient.merge.mutationOptions,
+    success: "Merged.",
+    invalidateKeys: [["ingredient"]],
+    error: (err) => `Merge failed: ${getErrorMessage(err)}`,
+  });
+
+  const handleSuggestMerges = async () => {
+    const ingredients = selectedRows.map((r) => ({ id: r.id, name: r.name }));
+    if (ingredients.length === 0) return;
+    try {
+      const results = await suggestMerges.mutateAsync({ ingredients });
+      const next: Record<string, { targetId: string; targetName: string }> = {};
+      let matched = 0;
+      for (const r of results) {
+        if (r.target) {
+          next[r.source.id] = {
+            targetId: r.target.id,
+            targetName: r.target.name,
+          };
+          matched++;
+        }
+      }
+      setMergeSuggestions((prev) => ({ ...prev, ...next }));
+      toast.success(`AI found ${matched} merge${matched === 1 ? "" : "s"}.`);
+    } catch (err) {
+      toast.error(`Merge suggestion failed: ${getErrorMessage(err)}`);
+    }
+  };
+
+  const handleMerge = (sourceId: string, targetId: string) => {
+    mergeMutation.mutate({ target: targetId, aliases: [sourceId] });
+    setMergeSuggestions((prev) => {
+      const next = { ...prev };
+      delete next[sourceId];
+      return next;
+    });
+  };
 
   const handleSuggest = async () => {
     const names = selectedRows.map((r) => r.name);
@@ -237,6 +287,8 @@ export function EnrichmentWorkbench() {
                   selected={selected.has(row.id)}
                   onToggle={() => toggle(row.id)}
                   suggestion={suggestions[row.id] ?? null}
+                  mergeSuggestion={mergeSuggestions[row.id] ?? null}
+                  onMerge={handleMerge}
                 />
               ))}
             </tbody>
@@ -262,6 +314,15 @@ export function EnrichmentWorkbench() {
           >
             <Sparkles className="h-4 w-4" />
             {suggestUsda.isPending ? "Suggesting…" : "Suggest USDA"}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleSuggestMerges}
+            disabled={suggestMerges.isPending}
+          >
+            <Sparkles className="h-4 w-4" />
+            {suggestMerges.isPending ? "Checking…" : "Suggest merges"}
           </Button>
           <Button
             size="sm"
@@ -292,11 +353,15 @@ function WorkbenchRow({
   selected,
   onToggle,
   suggestion,
+  mergeSuggestion,
+  onMerge,
 }: {
   row: EnrichmentRow;
   selected: boolean;
   onToggle: () => void;
   suggestion: Suggestion | null;
+  mergeSuggestion: { targetId: string; targetName: string } | null;
+  onMerge: (sourceId: string, targetId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -307,13 +372,23 @@ function WorkbenchRow({
           "cursor-pointer border-b transition-colors hover:bg-accent/40",
           (open || selected) && "bg-accent/30",
         )}
-        onClick={() => setOpen((v) => !v)}
+        onClick={(e) => {
+          // Don't toggle the row when the click came from the checkbox, the
+          // merge button, or any other interactive control inside it.
+          if (
+            (e.target as HTMLElement).closest(
+              'button, input, a, [role="checkbox"]',
+            )
+          ) {
+            return;
+          }
+          setOpen((v) => !v);
+        }}
       >
         <td className="px-2 py-2.5">
           <Checkbox
             checked={selected}
             onCheckedChange={onToggle}
-            onClick={(e) => e.stopPropagation()}
             aria-label={`Select ${row.name}`}
           />
         </td>
@@ -334,6 +409,25 @@ function WorkbenchRow({
               </span>
             )}
           </div>
+          {mergeSuggestion && (
+            <div className="mt-1 flex items-center gap-1.5">
+              <span className="text-info text-xs">
+                ≈ {mergeSuggestion.targetName}
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-6 px-2 text-xs"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMerge(row.id, mergeSuggestion.targetId);
+                }}
+              >
+                <GitMerge className="h-3 w-3" />
+                Merge
+              </Button>
+            </div>
+          )}
         </td>
         <td className="px-2 py-2.5">
           <CoverageChips covered={row.coverage.covered} />

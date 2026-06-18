@@ -10,7 +10,7 @@ import {
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
-import { and, count, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, count, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { z } from "zod";
 import { getSortableFields } from "~/entities/entities";
@@ -55,6 +55,38 @@ import {
   dbRecipeToAPIShallow,
   liveRecipeCountForIngredientSql,
 } from "./recipe";
+
+/**
+ * Name-search standalone ingredients for the AI merge suggester's `search`
+ * tool — excludes the source ingredient and surfaces each candidate's product
+ * count so the model can prefer an already-enriched target (merging inherits its
+ * products). Light projection (no relations); capped for the agent loop.
+ */
+export const searchIngredientsForMerge = async (
+  db: Database,
+  query: string,
+  excludeId: IngredientId,
+  limit = 12,
+): Promise<{ id: IngredientId; name: string; productCount: number }[]> => {
+  const term = formatSearchTerm(ingredient.name, query);
+  const rows = await getDb(db)
+    .select({
+      id: ingredient.id,
+      name: ingredient.name,
+      productCount: sql<number>`(SELECT count(*) FROM "Product" p WHERE p."ingredientId" = ${ingredient.id} AND p."deletedAt" IS NULL)`,
+    })
+    .from(ingredient)
+    .where(
+      and(
+        notDeleted(ingredient),
+        isNull(ingredient.recipeId),
+        ne(ingredient.id, excludeId),
+        ...(term ? [term] : []),
+      ),
+    )
+    .limit(limit);
+  return rows.map((r) => ({ ...r, productCount: Number(r.productCount) }));
+};
 
 export const mergeIngredients = async (
   db: Database,

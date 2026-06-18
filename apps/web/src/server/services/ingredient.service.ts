@@ -48,7 +48,7 @@ export const ingredientWithFoodOut = ingredientWithRecipesAndProductOut.extend({
 export type IngredientWithFoodOut = z.infer<typeof ingredientWithFoodOut>;
 
 /** The single highest-leverage fix for an ingredient, or "done" when complete. */
-export const enrichmentFixKind = z.enum([
+const enrichmentFixKind = z.enum([
   "no-product",
   "link-usda",
   "set-per-item-price",

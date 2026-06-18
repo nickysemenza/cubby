@@ -9,7 +9,7 @@ import {
   productIdentificationSchema,
 } from "@cubby/schemas/ai";
 import { foodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
-import { locationId } from "@cubby/schemas/identifiers";
+import { ingredientId, locationId } from "@cubby/schemas/identifiers";
 import { z } from "zod";
 import {
   CATEGORY_DESCRIPTIONS,
@@ -21,6 +21,7 @@ import {
   backfillLocationDescriptions,
   describeLocation,
   detectInventoryItems,
+  suggestIngredientMergeBatch,
   suggestUsdaFood,
   suggestUsdaFoodBatch,
 } from "~/server/services/ai-enrichment.service";
@@ -127,6 +128,30 @@ export const aiRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       return suggestUsdaFoodBatch(ctx.usdaService, input.ingredientNames);
+    }),
+  // Batch AI merge suggester for the workbench's "Suggest merges" action. Tool-
+  // calling agent searches existing ingredients; read-only, the user confirms.
+  suggestIngredientMergeBatch: protectedProcedure
+    .input(
+      z.object({
+        ingredients: z
+          .array(z.object({ id: ingredientId, name: z.string().min(1) }))
+          .min(1)
+          .max(20),
+      }),
+    )
+    .output(
+      z.array(
+        z.object({
+          source: z.object({ id: ingredientId, name: z.string() }),
+          target: z.object({ id: ingredientId, name: z.string() }).nullable(),
+          confidence,
+          reasoning: z.string(),
+        }),
+      ),
+    )
+    .mutation(async ({ ctx, input }) => {
+      return suggestIngredientMergeBatch(ctx.db, input.ingredients);
     }),
   parseSearch: protectedProcedure
     .input(z.object({ query: z.string().min(1) }))

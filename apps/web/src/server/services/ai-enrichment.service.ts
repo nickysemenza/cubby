@@ -6,12 +6,13 @@
 
 import type { Confidence, LocationDescription } from "@cubby/schemas/ai";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
-import type { LocationId } from "@cubby/schemas/identifiers";
+import type { IngredientId, LocationId } from "@cubby/schemas/identifiers";
 import { type DataType, dataTypeEnum } from "@cubby/usda-schemas";
 import { chat, maxIterations, toolDefinition } from "@tanstack/ai";
 import { getAnthropicClient } from "~/server/clients/anthropic";
 import { getGatewayOpenAIAdapter } from "~/server/clients/openai";
 import type { Database } from "~/server/db";
+import { searchIngredientsForMerge } from "~/server/repo/ingredient";
 import { getInventoryByLocationIds } from "~/server/repo/inventory";
 import {
   findLocationsNeedingAiDescription,
@@ -283,7 +284,7 @@ export async function suggestUsdaFood(
 }
 
 /** One batch entry: the input name plus its suggestion (food null = no match). */
-export interface UsdaFoodBatchSuggestion extends UsdaFoodSuggestion {
+interface UsdaFoodBatchSuggestion extends UsdaFoodSuggestion {
   name: string;
 }
 
@@ -313,6 +314,183 @@ export async function suggestUsdaFoodBatch(
         out.push({
           name,
           food: null,
+          confidence: "low",
+          reasoning: "Lookup failed.",
+        });
+      }
+    });
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// AI-assisted ingredient merge suggestions
+//
+// EPUB imports create near-duplicate ingredients that string matching can't
+// catch (scallion≈green onion, cilantro≈coriander, garbanzo≈chickpea). Same
+// agentic loop as the USDA matcher: a search tool over existing ingredients + a
+// terminal select tool, with a `seen` map so the model can only target an id it
+// actually saw. Suggestions only — merge is destructive, so the user confirms.
+// ---------------------------------------------------------------------------
+
+interface IngredientMergeSuggestion {
+  target: { id: IngredientId; name: string } | null;
+  confidence: Confidence;
+  reasoning: string;
+}
+
+function buildMergePrompt(): string {
+  return `You decide whether a recipe ingredient is the SAME purchasable item as an existing ingredient, so the two can be merged (deduplicated).
+
+Merge ONLY when they are the same thing you would buy — synonyms, alternate names, or spelling/case variants. Examples to merge: scallion = green onion; cilantro = coriander (leaf); garbanzo beans = chickpeas; confectioners' sugar = powdered sugar.
+
+NEVER merge distinct variants a cook treats differently: light vs dark brown sugar; whole vs 2% milk; salted vs unsalted butter; fresh vs dried herbs.
+
+Tools:
+- search_ingredients(query): existing ingredients by name, as "id [N products]: name". Prefer a target that already has products — the merge inherits them.
+- select_merge_target(ingredientId, confidence, reasoning): your decision. ingredientId must be an id from a search result, or null if there is no genuine duplicate. Call exactly once.
+
+Default to null when unsure. A wrong merge is destructive, so be conservative.`;
+}
+
+/**
+ * Suggest an existing ingredient to merge a bare/imported one into. Read-only —
+ * returns a candidate (or null) for the user to confirm; merges nothing.
+ */
+async function suggestIngredientMerge(
+  db: Database,
+  source: { id: IngredientId; name: string },
+): Promise<IngredientMergeSuggestion> {
+  const isProd =
+    typeof __CF_WORKERS__ !== "undefined" && __CF_WORKERS__ === true;
+  const adapter = getGatewayOpenAIAdapter({
+    feature: "ingredient-merge",
+    ingredient: source.name,
+    env: isProd ? "prod" : "dev",
+  });
+
+  const seen = new Map<string, { id: IngredientId; name: string }>();
+  const state: {
+    selection: {
+      ingredientId: string | null;
+      confidence: Confidence;
+      reasoning: string;
+    } | null;
+  } = { selection: null };
+
+  const searchTool = toolDefinition({
+    name: "search_ingredients",
+    description:
+      "Search existing ingredients by name. Returns up to 12 candidates as `id [N products]: name`.",
+    inputSchema: {
+      type: "object",
+      properties: { query: { type: "string", description: "Name to search" } },
+      required: ["query"],
+    },
+  }).server(async (rawArgs) => {
+    const args = (rawArgs ?? {}) as { query?: string };
+    if (!args.query) return "Provide a query.";
+    const rows = await searchIngredientsForMerge(db, args.query, source.id, 12);
+    for (const r of rows) seen.set(r.id, { id: r.id, name: r.name });
+    if (rows.length === 0) return "No results.";
+    return rows
+      .map((r) => `${r.id} [${r.productCount} products]: ${r.name}`)
+      .join("\n");
+  });
+
+  const selectTool = toolDefinition({
+    name: "select_merge_target",
+    description:
+      "Record your decision. Call exactly once. ingredientId must come from a search result, or null if there is no genuine duplicate.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ingredientId: { type: ["string", "null"] },
+        confidence: { type: "string", enum: ["high", "medium", "low"] },
+        reasoning: { type: "string" },
+      },
+      required: ["ingredientId", "confidence", "reasoning"],
+    },
+  }).server(async (rawArgs) => {
+    const args = (rawArgs ?? {}) as {
+      ingredientId?: string | null;
+      confidence?: Confidence;
+      reasoning?: string;
+    };
+    state.selection = {
+      ingredientId: args.ingredientId ?? null,
+      confidence: args.confidence ?? "low",
+      reasoning: args.reasoning ?? "",
+    };
+    return "Recorded.";
+  });
+
+  const stream = chat({
+    adapter,
+    systemPrompts: [buildMergePrompt()],
+    messages: [
+      {
+        role: "user",
+        content: `Is the recipe ingredient "${source.name}" the same purchasable item as an existing ingredient? Search, then call select_merge_target.`,
+      },
+    ],
+    tools: [searchTool, selectTool],
+    agentLoopStrategy: maxIterations(6),
+  });
+  for await (const chunk of stream) {
+    const type = (chunk as { type?: string })?.type ?? "";
+    if (type.includes("ERROR")) {
+      console.error(
+        "[suggestIngredientMerge] run error:",
+        (chunk as { message?: string }).message ?? JSON.stringify(chunk),
+      );
+    }
+  }
+
+  const { selection } = state;
+  if (!selection || selection.ingredientId == null) {
+    return {
+      target: null,
+      confidence: selection?.confidence ?? "low",
+      reasoning: selection?.reasoning || "No duplicate found.",
+    };
+  }
+  // Only honor an id the model actually saw (anti-hallucination).
+  return {
+    target: seen.get(selection.ingredientId) ?? null,
+    confidence: selection.confidence,
+    reasoning: selection.reasoning,
+  };
+}
+
+interface IngredientMergeBatchSuggestion extends IngredientMergeSuggestion {
+  source: { id: IngredientId; name: string };
+}
+
+/** Batch {@link suggestIngredientMerge} for the workbench's "Suggest merges". */
+export async function suggestIngredientMergeBatch(
+  db: Database,
+  sources: { id: IngredientId; name: string }[],
+): Promise<IngredientMergeBatchSuggestion[]> {
+  const capped = sources.slice(0, 20);
+  const out: IngredientMergeBatchSuggestion[] = [];
+  for (let i = 0; i < capped.length; i += 5) {
+    const batch = capped.slice(i, i + 5);
+    const results = await Promise.allSettled(
+      batch.map((s) => suggestIngredientMerge(db, s)),
+    );
+    results.forEach((result, j) => {
+      const source = batch[j] as { id: IngredientId; name: string };
+      if (result.status === "fulfilled") {
+        out.push({ source, ...result.value });
+      } else {
+        console.error(
+          `[suggestIngredientMergeBatch] ${source.name} failed:`,
+          result.reason,
+        );
+        out.push({
+          source,
+          target: null,
           confidence: "low",
           reasoning: "Lookup failed.",
         });
