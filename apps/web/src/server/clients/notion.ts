@@ -8,7 +8,7 @@ import type { QueryDataSourceResponse } from "@notionhq/client/build/src/api-end
 import { LRUCache } from "lru-cache";
 import pRetry from "p-retry";
 import { getErrorMessage } from "~/lib/error-utils";
-import { getTracer, TraceNames } from "~/server/tracing";
+import { TraceNames, withTrace } from "~/server/tracing";
 
 // Data source IDs from the Notion "Project Tracker" page (collection:// URLs)
 const DATA_SOURCE_IDS = {
@@ -309,22 +309,7 @@ export class NotionClient {
   }
 
   private async traced<T>(operation: string, fn: () => Promise<T>): Promise<T> {
-    const tracer = getTracer();
-    return tracer.startActiveSpan(
-      TraceNames.api("notion", operation),
-      async (span) => {
-        try {
-          const res = await fn();
-          span.setStatus({ code: 1 });
-          return res;
-        } catch (e) {
-          span.setStatus({ code: 2, message: getErrorMessage(e) });
-          throw e;
-        } finally {
-          span.end();
-        }
-      },
-    );
+    return withTrace(TraceNames.api("notion", operation), fn);
   }
 
   private async cachedTrace<T>(

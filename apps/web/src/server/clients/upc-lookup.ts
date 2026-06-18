@@ -3,10 +3,8 @@ import {
   type UPCLookupResponse,
   upcLookupResponseSchema,
 } from "@cubby/upc-lookup/schemas";
-import { context, propagation } from "@opentelemetry/api";
 import { chunk } from "es-toolkit";
-import { getErrorMessage } from "~/lib/error-utils";
-import { getTracer, TraceNames } from "~/server/tracing";
+import { injectTraceContext, TraceNames, withTrace } from "~/server/tracing";
 
 const DEFAULT_TIMEOUT_MS = 5000;
 
@@ -32,8 +30,9 @@ export class UPCLookupClient {
       "user-agent": "cubby",
     };
 
-    // Inject OpenTelemetry trace context for distributed tracing
-    propagation.inject(context.active(), headers);
+    // Inject trace context for distributed tracing (dev only — the CF platform
+    // propagates across service bindings in prod).
+    injectTraceContext(headers);
 
     if (this.apiKey) {
       headers["x-api-key"] = this.apiKey;
@@ -43,22 +42,7 @@ export class UPCLookupClient {
   }
 
   private async traced<T>(operation: string, fn: () => Promise<T>): Promise<T> {
-    const tracer = getTracer();
-    return tracer.startActiveSpan(
-      TraceNames.api("upc-lookup", operation),
-      async (span) => {
-        try {
-          const res = await fn();
-          span.setStatus({ code: 1 });
-          return res;
-        } catch (e) {
-          span.setStatus({ code: 2, message: getErrorMessage(e) });
-          throw e;
-        } finally {
-          span.end();
-        }
-      },
-    );
+    return withTrace(TraceNames.api("upc-lookup", operation), fn);
   }
 
   async lookup(upc: string): Promise<UPCLookupResponse | null> {

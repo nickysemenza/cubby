@@ -6,10 +6,8 @@ import type {
   FoodLookupParam,
   FoodSummary,
 } from "@cubby/usda-schemas";
-import { context, propagation } from "@opentelemetry/api";
 import { initClient } from "@ts-rest/core";
-import { getErrorMessage } from "~/lib/error-utils";
-import { getTracer, TraceNames } from "~/server/tracing";
+import { injectTraceContext, TraceNames, withTrace } from "~/server/tracing";
 
 export class USDAClient {
   private client;
@@ -21,10 +19,11 @@ export class USDAClient {
   ) {
     // Service binding fetch in prod, global fetch (public URL) in dev
     this.fetcher = fetcher ?? fetch;
-    // Helper to get trace context headers for each request
+    // Helper to get trace context headers for each request (dev only — in the
+    // CF Worker the platform propagates trace context across service bindings).
     const getTraceHeaders = () => {
       const headers: Record<string, string> = {};
-      propagation.inject(context.active(), headers);
+      injectTraceContext(headers);
       return headers;
     };
 
@@ -104,22 +103,7 @@ export class USDAClient {
 
   // Transport helpers
   private async traced<T>(operation: string, fn: () => Promise<T>): Promise<T> {
-    const tracer = getTracer();
-    return tracer.startActiveSpan(
-      TraceNames.api("usda", operation),
-      async (span) => {
-        try {
-          const res = await fn();
-          span.setStatus({ code: 1 });
-          return res;
-        } catch (e) {
-          span.setStatus({ code: 2, message: getErrorMessage(e) });
-          throw e;
-        } finally {
-          span.end();
-        }
-      },
-    );
+    return withTrace(TraceNames.api("usda", operation), fn);
   }
 
   // Raw calls via ts-rest client

@@ -9,12 +9,6 @@
 
 import { buildActorContext } from "@cubby/schemas/context";
 import { type UserId, unsafeUserId } from "@cubby/schemas/identifiers";
-import {
-  context,
-  propagation,
-  type Span,
-  SpanStatusCode,
-} from "@opentelemetry/api";
 import * as Sentry from "@sentry/tanstackstart-react";
 import { initTRPC, type TRPCRouterRecord } from "@trpc/server";
 import { flatten } from "flat";
@@ -37,7 +31,12 @@ import { IngredientService } from "~/server/services/ingredient.service";
 import { ProductService } from "~/server/services/product.service";
 import { RecipeCostingService } from "~/server/services/recipe-costing.service";
 import { USDAService } from "~/server/services/usda.service";
-import { getTracer, TraceNames } from "~/server/tracing";
+import {
+  type AppSpan,
+  extractTraceContext,
+  TraceNames,
+  withTrace,
+} from "~/server/tracing";
 
 /**
  * Map database product record to ProductTopLevelOut format
@@ -105,14 +104,14 @@ const buildCrudServices = (db: Database) => {
  */
 
 export const createTRPCContext = async (opts: { headers: Headers }) => {
-  // Extract trace context from headers and set it as active context
+  // Extract trace context from headers and set it as active context (dev only —
+  // in the CF Worker the platform manages context, so this just runs the body).
   const headersObj: Record<string, string> = {};
   opts.headers.forEach((value, key) => {
     headersObj[key] = value;
   });
-  const parentContext = propagation.extract(context.active(), headersObj);
 
-  return await context.with(parentContext, async () => {
+  return await extractTraceContext(headersObj, async () => {
     const crudServices = buildCrudServices(db);
     const betterSession = await betterAuth.api.getSession({
       headers: opts.headers,
@@ -224,7 +223,7 @@ const INPUT_BYTES_CAP = 4096;
  * `rpc.input.truncated`), and redacts secret-ish keys — so traces stay lean and
  * never leak credentials.
  */
-const recordInput = (span: Span, input: unknown): void => {
+const recordInput = (span: AppSpan, input: unknown): void => {
   if (input == null || typeof input !== "object") return;
   let serialized: string;
   try {
@@ -250,58 +249,38 @@ const recordInput = (span: Span, input: unknown): void => {
   }
 };
 
-const tracingMiddleWare = t.middleware(async (opts) => {
-  const tracer = getTracer();
-  return tracer.startActiveSpan(
-    TraceNames.trpc(opts.type, opts.path),
-    async (span: Span) => {
-      span.setAttributes({
-        "rpc.system": "trpc",
-        "rpc.method": opts.path,
-        "rpc.type": opts.type,
-        "enduser.id": opts.ctx.auth?.userId ?? "guest",
-      });
-      recordInput(span, await opts.getRawInput());
-      try {
-        const result = await opts.next();
+const tracingMiddleWare = t.middleware(async (opts) =>
+  withTrace(TraceNames.trpc(opts.type, opts.path), async (span) => {
+    span.setAttributes({
+      "rpc.system": "trpc",
+      "rpc.method": opts.path,
+      "rpc.type": opts.type,
+      "enduser.id": opts.ctx.auth?.userId ?? "guest",
+    });
+    recordInput(span, await opts.getRawInput());
+    try {
+      const result = await opts.next();
 
-        // tRPC returns errors as results with ok: false, not thrown
-        if (!result.ok) {
-          span.setStatus({
-            code: SpanStatusCode.ERROR,
-            message: getErrorMessage(result.error),
-          });
-          // Capture tRPC errors to Sentry
-          Sentry.captureException(result.error, {
-            extra: {
-              trpcPath: opts.path,
-              trpcType: opts.type,
-            },
-          });
-        } else {
-          span.setStatus({ code: SpanStatusCode.OK });
-        }
-
-        return result;
-      } catch (error) {
-        // Unexpected errors that bypass tRPC error handling
-        span.setStatus({
-          code: SpanStatusCode.ERROR,
-          message: getErrorMessage(error),
+      // tRPC returns errors as results with ok: false, not thrown.
+      if (!result.ok) {
+        span.setError(getErrorMessage(result.error));
+        // Capture tRPC errors to Sentry
+        Sentry.captureException(result.error, {
+          extra: { trpcPath: opts.path, trpcType: opts.type },
         });
-        Sentry.captureException(error, {
-          extra: {
-            trpcPath: opts.path,
-            trpcType: opts.type,
-          },
-        });
-        throw error;
-      } finally {
-        span.end();
       }
-    },
-  );
-});
+
+      return result;
+    } catch (error) {
+      // Unexpected errors that bypass tRPC error handling. withTrace marks the
+      // span errored + records the exception; we add the Sentry capture.
+      Sentry.captureException(error, {
+        extra: { trpcPath: opts.path, trpcType: opts.type },
+      });
+      throw error;
+    }
+  }),
+);
 
 /**
  * Translate raw Postgres constraint errors (unique, FK, not-null, check) into

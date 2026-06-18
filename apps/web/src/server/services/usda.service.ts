@@ -6,9 +6,8 @@ import type {
   FoodLookupParam,
   FoodSummary,
 } from "@cubby/usda-schemas";
-import type { Span } from "@opentelemetry/api";
 import { unitMappingsFromFood } from "~/lib/unit-mapping-utils";
-import { getTracer, TraceNames } from "~/server/tracing";
+import { TraceNames, withTrace } from "~/server/tracing";
 import type { USDAClient } from "../clients/usda";
 
 export class USDAService {
@@ -22,9 +21,9 @@ export class USDAService {
   async findFood(
     lookup: FoodLookupParam,
   ): Promise<FoodSummaryWithLinkedProducts | null> {
-    const foodSummary = await getTracer().startActiveSpan(
+    const foodSummary = await withTrace(
       TraceNames.service("usda", "findFood"),
-      async (span: Span) => {
+      async (span) => {
         span.setAttributes(lookup);
         return await this.usdaClient.findFood(lookup);
       },

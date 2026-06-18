@@ -1,7 +1,9 @@
 {
   "name": "cubby",
   "main": "src/cf-server.ts",
-  "compatibility_date": "2026-02-05",
+  // Bumped to 2026-06-16 for the cloudflare:workers `tracing.enterSpan` custom-spans
+  // API (shipped 2026-06-16) — see src/server/tracing.ts prod backend.
+  "compatibility_date": "2026-06-16",
   "compatibility_flags": ["nodejs_compat"],
   "observability": {
     "enabled": true,
@@ -10,12 +12,18 @@
       "enabled": true,
       "head_sampling_rate": 1,
       "persist": true,
-      "invocation_logs": true
+      "invocation_logs": true,
+      // Named OTLP destination configured in the CF dashboard (Workers
+      // Observability → Destinations) pointing at Grafana Cloud Loki.
+      "destinations": ["grafana-logs"]
     },
     "traces": {
       "enabled": true,
       "persist": true,
-      "head_sampling_rate": 1
+      "head_sampling_rate": 1,
+      // Named OTLP destination pointing at Grafana Cloud Tempo. Captures CF
+      // platform auto-spans + our cloudflare:workers custom spans.
+      "destinations": ["grafana-traces"]
     }
   },
   "routes": [

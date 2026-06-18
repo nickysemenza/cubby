@@ -6,9 +6,9 @@
  */
 
 import { type AppErrorReason, AppErrors } from "@cubby/shared";
-import { SpanStatusCode, trace } from "@opentelemetry/api";
 import { TRPCError } from "@trpc/server";
 import type { TRPC_ERROR_CODE_KEY } from "@trpc/server/rpc";
+import { annotateActiveSpanError } from "~/server/tracing";
 
 // Expected 4xx errors that shouldn't be logged as failures
 const EXPECTED_ERROR_CODES: Set<string> = new Set([
@@ -44,20 +44,12 @@ export function createAppError(
     }
   }
 
-  // Annotate tracing span (but don't mark expected errors as ERROR status)
-  const span = trace.getActiveSpan();
-  if (span) {
-    span.setAttributes({
-      "error.reason": reason,
-      "error.message": message,
-    });
-    if (!isExpectedError) {
-      span.setStatus({ code: SpanStatusCode.ERROR, message });
-      if (originalError instanceof Error || typeof originalError === "string") {
-        span.recordException(originalError);
-      }
-    }
-  }
+  // Annotate the active tracing span (but don't mark expected errors as ERROR
+  // status). No-op in the CF backend, which exposes no out-of-band active span.
+  annotateActiveSpanError(
+    { "error.reason": reason, "error.message": message },
+    isExpectedError ? undefined : { message, exception: originalError },
+  );
 
   return new TRPCError({
     code,
