@@ -215,8 +215,132 @@ function MaintenanceRow({
 
 // Batch operations that also surface on the Problems page when something needs
 // attention — here they run on demand regardless of state, via the same
-// BackfillButton plumbing (toast + invalidate). Rarely needed; this is their
-// always-available home.
+// BackfillButton plumbing (toast + invalidate). Declared as data (each row's
+// typed BackfillButton lives in `action`, mirroring the Problems registry's
+// `headerAction`); the card just maps over them.
+const MAINTENANCE_TOOLS: {
+  label: string;
+  description: string;
+  action: ReactNode;
+}[] = [
+  {
+    label: "Recompute recipe totals",
+    description:
+      "Rebuild every recipe's cost / calorie / macro rollup, even when not marked stale.",
+    action: (
+      <BackfillButton
+        selectMutation={(api) => api.recipe.recomputeAll.mutationOptions}
+        invalidateKeys={(api) => [api.recipe.list.queryKey()]}
+        idleLabel="Recompute all"
+        pendingLabel="Recomputing…"
+        toastResult={(r) => ({
+          tone: "success",
+          message: `Recomputed ${r.processed} recipe${r.processed === 1 ? "" : "s"}.`,
+        })}
+      />
+    ),
+  },
+  {
+    label: "Re-parse recipe lines",
+    description:
+      "Re-run the ingredient parser over imported lines (rawLine). Reverts manual structured edits — intended.",
+    action: (
+      <BackfillButton
+        selectMutation={(api) => api.problems.reparseStale.mutationOptions}
+        invalidateKeys={(api) => [api.recipe.list.queryKey()]}
+        idleLabel="Re-parse all"
+        pendingLabel="Re-parsing…"
+        toastResult={(r) => ({
+          tone: r.updated > 0 ? "success" : "info",
+          message:
+            r.updated > 0
+              ? `Re-parsed ${r.updated} line${r.updated === 1 ? "" : "s"} across ${r.recipesAffected} recipe${r.recipesAffected === 1 ? "" : "s"}.`
+              : "Nothing to re-parse.",
+        })}
+      />
+    ),
+  },
+  {
+    label: "Sync inventory valuations",
+    description:
+      "Recompute the dollar value of every inventory entry from current product prices.",
+    action: (
+      <BackfillButton
+        selectMutation={(api) =>
+          api.inventory.backfillInventoryValuations.mutationOptions
+        }
+        invalidateKeys={(api) => [api.inventory.list.queryKey()]}
+        idleLabel="Sync all"
+        pendingLabel="Syncing…"
+        toastResult={(r) => ({
+          tone: r.updated > 0 ? "success" : "info",
+          message:
+            r.updated > 0
+              ? `Synced ${r.updated} entr${r.updated === 1 ? "y" : "ies"}.`
+              : "All valuations already current.",
+        })}
+      />
+    ),
+  },
+  {
+    label: "Fetch UPC images",
+    description:
+      "Pull product images from the UPC database for products missing one.",
+    action: (
+      <BackfillButton
+        selectMutation={(api) => api.product.backfillUPCImages.mutationOptions}
+        invalidateKeys={(api) => [api.product.list.queryKey()]}
+        idleLabel="Fetch images"
+        pendingLabel="Fetching…"
+        toastResult={(r) => ({
+          tone: r.imported > 0 ? "success" : "info",
+          message: `Imported ${r.imported} image${r.imported === 1 ? "" : "s"} · ${r.found} found, ${r.skipped} skipped.`,
+        })}
+      />
+    ),
+  },
+  {
+    label: "Fix product categories",
+    description: "Re-derive product categories from their linked USDA food.",
+    action: (
+      <BackfillButton
+        selectMutation={(api) =>
+          api.product.backfillFoodCategories.mutationOptions
+        }
+        invalidateKeys={(api) => [api.product.list.queryKey()]}
+        idleLabel="Fix all"
+        pendingLabel="Fixing…"
+        toastResult={(r) => ({
+          tone: r.updated > 0 ? "success" : "info",
+          message:
+            r.updated > 0
+              ? `Fixed ${r.updated} categor${r.updated === 1 ? "y" : "ies"}.`
+              : "All categories already set.",
+        })}
+      />
+    ),
+  },
+  {
+    label: "Analyze location descriptions",
+    description:
+      "Generate AI descriptions for locations that don't have one yet.",
+    action: (
+      <BackfillButton
+        selectMutation={(api) =>
+          api.ai.backfillLocationDescriptions.mutationOptions
+        }
+        invalidateKeys={(api) => [api.location.list.queryKey()]}
+        idleLabel="Analyze all"
+        pendingLabel="Analyzing…"
+        toastResult={(r) => ({
+          tone: r.analyzed > 0 ? "success" : "info",
+          message: `Analyzed ${r.analyzed} of ${r.total} location${r.total === 1 ? "" : "s"}.`,
+        })}
+      />
+    ),
+  },
+];
+
 function MaintenanceCard() {
   return (
     <Card>
@@ -228,121 +352,9 @@ function MaintenanceCard() {
         </CardDescription>
       </CardHeader>
       <CardContent className="divide-y divide-border/60">
-        <MaintenanceRow
-          label="Recompute recipe totals"
-          description="Rebuild every recipe's cost / calorie / macro rollup, even when not marked stale."
-          action={
-            <BackfillButton
-              selectMutation={(api) => api.recipe.recomputeAll.mutationOptions}
-              invalidateKeys={(api) => [api.recipe.list.queryKey()]}
-              idleLabel="Recompute all"
-              pendingLabel="Recomputing…"
-              toastResult={(r) => ({
-                tone: "success",
-                message: `Recomputed ${r.processed} recipe${r.processed === 1 ? "" : "s"}.`,
-              })}
-            />
-          }
-        />
-        <MaintenanceRow
-          label="Re-parse recipe lines"
-          description="Re-run the ingredient parser over imported lines (rawLine). Reverts manual structured edits — intended."
-          action={
-            <BackfillButton
-              selectMutation={(api) =>
-                api.problems.reparseStale.mutationOptions
-              }
-              invalidateKeys={(api) => [api.recipe.list.queryKey()]}
-              idleLabel="Re-parse all"
-              pendingLabel="Re-parsing…"
-              toastResult={(r) => ({
-                tone: r.updated > 0 ? "success" : "info",
-                message:
-                  r.updated > 0
-                    ? `Re-parsed ${r.updated} line${r.updated === 1 ? "" : "s"} across ${r.recipesAffected} recipe${r.recipesAffected === 1 ? "" : "s"}.`
-                    : "Nothing to re-parse.",
-              })}
-            />
-          }
-        />
-        <MaintenanceRow
-          label="Sync inventory valuations"
-          description="Recompute the dollar value of every inventory entry from current product prices."
-          action={
-            <BackfillButton
-              selectMutation={(api) =>
-                api.inventory.backfillInventoryValuations.mutationOptions
-              }
-              invalidateKeys={(api) => [api.inventory.list.queryKey()]}
-              idleLabel="Sync all"
-              pendingLabel="Syncing…"
-              toastResult={(r) => ({
-                tone: r.updated > 0 ? "success" : "info",
-                message:
-                  r.updated > 0
-                    ? `Synced ${r.updated} entr${r.updated === 1 ? "y" : "ies"}.`
-                    : "All valuations already current.",
-              })}
-            />
-          }
-        />
-        <MaintenanceRow
-          label="Fetch UPC images"
-          description="Pull product images from the UPC database for products missing one."
-          action={
-            <BackfillButton
-              selectMutation={(api) =>
-                api.product.backfillUPCImages.mutationOptions
-              }
-              invalidateKeys={(api) => [api.product.list.queryKey()]}
-              idleLabel="Fetch images"
-              pendingLabel="Fetching…"
-              toastResult={(r) => ({
-                tone: r.imported > 0 ? "success" : "info",
-                message: `Imported ${r.imported} image${r.imported === 1 ? "" : "s"} · ${r.found} found, ${r.skipped} skipped.`,
-              })}
-            />
-          }
-        />
-        <MaintenanceRow
-          label="Fix product categories"
-          description="Re-derive product categories from their linked USDA food."
-          action={
-            <BackfillButton
-              selectMutation={(api) =>
-                api.product.backfillFoodCategories.mutationOptions
-              }
-              invalidateKeys={(api) => [api.product.list.queryKey()]}
-              idleLabel="Fix all"
-              pendingLabel="Fixing…"
-              toastResult={(r) => ({
-                tone: r.updated > 0 ? "success" : "info",
-                message:
-                  r.updated > 0
-                    ? `Fixed ${r.updated} categor${r.updated === 1 ? "y" : "ies"}.`
-                    : "All categories already set.",
-              })}
-            />
-          }
-        />
-        <MaintenanceRow
-          label="Analyze location descriptions"
-          description="Generate AI descriptions for locations that don't have one yet."
-          action={
-            <BackfillButton
-              selectMutation={(api) =>
-                api.ai.backfillLocationDescriptions.mutationOptions
-              }
-              invalidateKeys={(api) => [api.location.list.queryKey()]}
-              idleLabel="Analyze all"
-              pendingLabel="Analyzing…"
-              toastResult={(r) => ({
-                tone: r.analyzed > 0 ? "success" : "info",
-                message: `Analyzed ${r.analyzed} of ${r.total} location${r.total === 1 ? "" : "s"}.`,
-              })}
-            />
-          }
-        />
+        {MAINTENANCE_TOOLS.map((t) => (
+          <MaintenanceRow key={t.label} {...t} />
+        ))}
       </CardContent>
     </Card>
   );
