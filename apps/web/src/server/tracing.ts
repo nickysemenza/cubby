@@ -1,7 +1,7 @@
 /**
  * Unified tracing utilities for consistent span naming and tracer instances
  */
-import { trace } from "@opentelemetry/api";
+import { SpanStatusCode, trace } from "@opentelemetry/api";
 import { getErrorMessage } from "~/lib/error-utils";
 
 // Single tracer instance for the entire application
@@ -50,13 +50,13 @@ export const withTrace = async <T>(
     }
     try {
       const result = await fn(span);
-      span.setStatus({ code: 1 }); // OK
+      span.setStatus({ code: SpanStatusCode.OK });
       return result;
     } catch (error) {
       span.setStatus({
-        code: 2,
+        code: SpanStatusCode.ERROR,
         message: getErrorMessage(error),
-      }); // ERROR
+      });
       throw error;
     } finally {
       span.end();

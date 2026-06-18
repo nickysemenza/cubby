@@ -16,6 +16,7 @@ import {
   recipeSectionIngredient,
 } from "~/server/db/schema";
 import { countWhere, getDb, notDeleted } from "~/server/repo/database-helpers";
+import { TraceNames, withTrace } from "~/server/tracing";
 
 /**
  * Persist a recipe's computed totals. Stamps it fresh unless `stale` is set —
@@ -51,14 +52,17 @@ export const markRecipesStale = async (
 export const selectStaleRecipeIds = async (
   db: Database,
   limit: number,
-): Promise<RecipeId[]> => {
-  const rows = await getDb(db)
-    .select({ id: recipe.id })
-    .from(recipe)
-    .where(and(notDeleted(recipe), isNull(recipe.totalsComputedAt)))
-    .limit(limit);
-  return rows.map((r) => r.id as RecipeId);
-};
+): Promise<RecipeId[]> =>
+  withTrace(TraceNames.db("recipe.selectStaleRecipeIds"), async (span) => {
+    span.setAttribute("db.table", "recipe");
+    const rows = await getDb(db)
+      .select({ id: recipe.id })
+      .from(recipe)
+      .where(and(notDeleted(recipe), isNull(recipe.totalsComputedAt)))
+      .limit(limit);
+    span.setAttribute("db.result_count", rows.length);
+    return rows.map((r) => r.id as RecipeId);
+  });
 
 /** Persisted totals state for one recipe (explain endpoint). Null = not found. */
 export const getRecipeTotalsState = async (
@@ -67,36 +71,44 @@ export const getRecipeTotalsState = async (
 ): Promise<{
   totals: RecipeTotals | null;
   totalsComputedAt: Date | null;
-} | null> => {
-  const [row] = await getDb(db)
-    .select({
-      totals: recipe.totals,
-      totalsComputedAt: recipe.totalsComputedAt,
-    })
-    .from(recipe)
-    .where(and(eq(recipe.id, id), notDeleted(recipe)))
-    .limit(1);
-  return row ?? null;
-};
+} | null> =>
+  withTrace(TraceNames.db("recipe.getRecipeTotalsState"), async (span) => {
+    span.setAttribute("db.table", "recipe");
+    const [row] = await getDb(db)
+      .select({
+        totals: recipe.totals,
+        totalsComputedAt: recipe.totalsComputedAt,
+      })
+      .from(recipe)
+      .where(and(eq(recipe.id, id), notDeleted(recipe)))
+      .limit(1);
+    return row ?? null;
+  });
 
 /** All active recipe ids — for a full backfill/recompute. */
 export const selectAllActiveRecipeIds = async (
   db: Database,
-): Promise<RecipeId[]> => {
-  const rows = await getDb(db)
-    .select({ id: recipe.id })
-    .from(recipe)
-    .where(notDeleted(recipe));
-  return rows.map((r) => r.id as RecipeId);
-};
+): Promise<RecipeId[]> =>
+  withTrace(TraceNames.db("recipe.selectAllActiveRecipeIds"), async (span) => {
+    span.setAttribute("db.table", "recipe");
+    const rows = await getDb(db)
+      .select({ id: recipe.id })
+      .from(recipe)
+      .where(notDeleted(recipe));
+    span.setAttribute("db.result_count", rows.length);
+    return rows.map((r) => r.id as RecipeId);
+  });
 
 /** How many recipes still need (re)computing. */
 export const countStaleRecipes = async (db: Database): Promise<number> =>
-  countWhere(
-    db,
-    recipe,
-    and(notDeleted(recipe), isNull(recipe.totalsComputedAt)),
-  );
+  withTrace(TraceNames.db("recipe.countStaleRecipes"), async (span) => {
+    span.setAttribute("db.table", "recipe");
+    return countWhere(
+      db,
+      recipe,
+      and(notDeleted(recipe), isNull(recipe.totalsComputedAt)),
+    );
+  });
 
 /**
  * The single entry point for "an ingredient's contribution to recipe totals

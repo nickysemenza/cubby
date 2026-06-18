@@ -3,28 +3,31 @@
  * Traces all server-side requests including auth routes that bypass tRPC
  */
 
-import { SpanStatusCode, trace } from "@opentelemetry/api";
+import { SpanStatusCode } from "@opentelemetry/api";
 import { createMiddleware } from "@tanstack/react-start";
 import { getErrorMessage } from "~/lib/error-utils";
-
-const tracer = trace.getTracer("tanstack-start");
+import { getTracer, TraceNames } from "~/server/tracing";
 
 export const tracingMiddleware = createMiddleware().server(
   async ({ next, request }) => {
     const url = new URL(request.url);
 
-    return tracer.startActiveSpan(
-      `${request.method} ${url.pathname}`,
+    return getTracer().startActiveSpan(
+      TraceNames.route(request.method, url.pathname),
       async (span) => {
+        // Stable OTel HTTP semantic conventions.
         span.setAttributes({
-          "http.method": request.method,
-          "http.url": request.url,
+          "http.request.method": request.method,
+          "url.full": request.url,
           "http.route": url.pathname,
         });
 
         try {
           const result = await next();
-          span.setAttribute("http.status_code", result.response.status);
+          span.setAttribute(
+            "http.response.status_code",
+            result.response.status,
+          );
           span.setStatus({ code: SpanStatusCode.OK });
           return result;
         } catch (error) {

@@ -41,6 +41,7 @@ import {
   selectStaleRecipeIds,
   updateRecipeTotals,
 } from "~/server/repo/recipe/totals";
+import { TraceNames, withTrace } from "~/server/tracing";
 import type {
   IngredientService,
   IngredientWithFoodOut,
@@ -132,29 +133,39 @@ export class RecipeCostingService {
     ingMap: Record<string, IngredientWithFoodOut>;
     recipeMap: Record<string, RecipeOut>;
   }> {
-    const recipeMap: Record<string, RecipeOut> = {};
-    const seen = new Set<string>();
-    let frontier = collectSubRecipeIds(recipes);
-    while (frontier.length > 0) {
-      const toFetch = frontier.filter((id) => !seen.has(id));
-      for (const id of toFetch) seen.add(id);
-      if (toFetch.length === 0) break;
-      const fetched = await getRecipesByIDs(this.db, toFetch);
-      frontier = [];
-      for (const r of fetched) {
-        recipeMap[r.id] = r;
-        frontier.push(...collectSubRecipeIds([r]));
-      }
-    }
+    return withTrace(
+      TraceNames.service("recipeCosting", "loadContext"),
+      async (span) => {
+        const recipeMap: Record<string, RecipeOut> = {};
+        const seen = new Set<string>();
+        let frontier = collectSubRecipeIds(recipes);
+        while (frontier.length > 0) {
+          const toFetch = frontier.filter((id) => !seen.has(id));
+          for (const id of toFetch) seen.add(id);
+          if (toFetch.length === 0) break;
+          const fetched = await getRecipesByIDs(this.db, toFetch);
+          frontier = [];
+          for (const r of fetched) {
+            recipeMap[r.id] = r;
+            frontier.push(...collectSubRecipeIds([r]));
+          }
+        }
 
-    const ingredientIds = collectIngredientIds([
-      ...recipes,
-      ...Object.values(recipeMap),
-    ]);
-    const ingredients =
-      await this.ingredientService.getIngredientsByIDs(ingredientIds);
-    const ingMap = keyBy(ingredients, (i) => i.id);
-    return { ingMap, recipeMap };
+        const ingredientIds = collectIngredientIds([
+          ...recipes,
+          ...Object.values(recipeMap),
+        ]);
+        span.setAttribute(
+          "recipe.subrecipe_count",
+          Object.keys(recipeMap).length,
+        );
+        span.setAttribute("ingredient.count", ingredientIds.length);
+        const ingredients =
+          await this.ingredientService.getIngredientsByIDs(ingredientIds);
+        const ingMap = keyBy(ingredients, (i) => i.id);
+        return { ingMap, recipeMap };
+      },
+    );
   }
 
   /**
@@ -166,14 +177,31 @@ export class RecipeCostingService {
   async computeTotals(
     recipes: RecipeOut[],
   ): Promise<Map<RecipeId, { totals: RecipeTotals; complete: boolean }>> {
+    return withTrace(
+      TraceNames.service("recipeCosting", "computeTotals"),
+      async (span) => {
+        span.setAttribute("recipe.count", recipes.length);
+        return this.computeTotalsInner(recipes);
+      },
+    );
+  }
+
+  private async computeTotalsInner(
+    recipes: RecipeOut[],
+  ): Promise<Map<RecipeId, { totals: RecipeTotals; complete: boolean }>> {
     const { ingMap, recipeMap } = await this.loadContext(recipes);
 
-    // One engine call for the whole batch (ingredients serialized once).
-    const costings = computeRecipeCosting(
-      recipes,
-      ingMap,
-      getRecipeIngredientName,
-      recipeMap,
+    // One engine call for the whole batch (ingredients serialized once). Traced
+    // separately so WASM engine time is visible apart from DB/USDA IO.
+    const costings = await withTrace(
+      TraceNames.wasm("computeRecipeCosting"),
+      async () =>
+        computeRecipeCosting(
+          recipes,
+          ingMap,
+          getRecipeIngredientName,
+          recipeMap,
+        ),
     );
 
     const result = new Map<
@@ -311,18 +339,41 @@ export class RecipeCostingService {
     wouldChange: number;
     total: number;
   }> {
-    const ids = await selectAllActiveRecipeIds(this.db);
-    const CHUNK = 25;
-    let wouldChange = 0;
-    for (let i = 0; i < ids.length; i += CHUNK) {
-      const recipes = await getRecipesByIDs(this.db, ids.slice(i, i + CHUNK));
-      const totalsMap = await this.computeTotals(recipes);
-      for (const r of recipes) {
-        const computed = totalsMap.get(r.id as RecipeId);
-        if (computed && totalsDiffer(r.totals, computed.totals)) wouldChange++;
-      }
-    }
-    return { wouldChange, total: ids.length };
+    return withTrace(
+      TraceNames.service("recipeCosting", "dryRunRecomputeTotals"),
+      async (span) => {
+        const ids = await selectAllActiveRecipeIds(this.db);
+        const CHUNK = 25;
+        const chunkCount = Math.ceil(ids.length / CHUNK);
+        span.setAttributes({
+          "recipe.total": ids.length,
+          "chunk.size": CHUNK,
+          "chunk.count": chunkCount,
+        });
+        let wouldChange = 0;
+        for (let i = 0; i < ids.length; i += CHUNK) {
+          const chunkIds = ids.slice(i, i + CHUNK);
+          await withTrace(
+            TraceNames.service("recipeCosting", "computeTotalsChunk"),
+            async (chunkSpan) => {
+              chunkSpan.setAttributes({
+                "chunk.index": i / CHUNK,
+                "chunk.recipe_count": chunkIds.length,
+              });
+              const recipes = await getRecipesByIDs(this.db, chunkIds);
+              const totalsMap = await this.computeTotals(recipes);
+              for (const r of recipes) {
+                const computed = totalsMap.get(r.id as RecipeId);
+                if (computed && totalsDiffer(r.totals, computed.totals))
+                  wouldChange++;
+              }
+            },
+          );
+        }
+        span.setAttribute("recipe.would_change", wouldChange);
+        return { wouldChange, total: ids.length };
+      },
+    );
   }
 
   /**

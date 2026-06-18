@@ -48,6 +48,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { generateUniqueRecipeShortcode } from "~/server/repo/shortcode-utils";
+import { TraceNames, withTrace } from "~/server/tracing";
 
 import { dbRecipeToAPI } from "./helpers";
 import type { RecipeFilters } from "./internal-types";
@@ -89,11 +90,16 @@ export const getRecipesByIDs = async (
   ids: RecipeId[],
 ): Promise<RecipeOut[]> => {
   if (ids.length === 0) return [];
-  const rows = await getDb(db).query.recipe.findMany({
-    where: and(inArray(recipe.id, ids), notDeleted(recipe)),
-    ...relations.recipe.list,
+  return withTrace(TraceNames.db("recipe.getRecipesByIDs"), async (span) => {
+    span.setAttribute("db.table", "recipe");
+    span.setAttribute("db.requested_count", ids.length);
+    const rows = await getDb(db).query.recipe.findMany({
+      where: and(inArray(recipe.id, ids), notDeleted(recipe)),
+      ...relations.recipe.list,
+    });
+    span.setAttribute("db.result_count", rows.length);
+    return rows.map(dbRecipeToAPI);
   });
-  return rows.map(dbRecipeToAPI);
 };
 
 /**

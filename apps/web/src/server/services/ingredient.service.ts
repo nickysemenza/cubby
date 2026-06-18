@@ -24,6 +24,7 @@ import {
 } from "../repo/ingredient";
 import { foodLookupParamFromProduct } from "../repo/product";
 import { markRecipesStaleForIngredient } from "../repo/recipe/totals";
+import { TraceNames, withTrace } from "../tracing";
 import { batchEnrichNestedItems, batchEnrichWithFood } from "./usda-helpers";
 
 const productWithMappingsAndFoodOut = productTopLevelOut.extend({
@@ -77,12 +78,18 @@ export class IngredientService {
   async getIngredientsByIDs(
     ids: IngredientId[],
   ): Promise<IngredientWithFoodOut[]> {
-    const ingredients = await getIngredientsByIDsRepo(this.db, ids);
-    return batchEnrichNestedItems(
-      ingredients,
-      (ing) => ing.product,
-      (products) => this.enrichProductsWithFood(products),
-      (ing, enrichedProducts) => ({ ...ing, product: enrichedProducts }),
+    return withTrace(
+      TraceNames.service("ingredient", "getIngredientsByIDs"),
+      async (span) => {
+        span.setAttribute("ingredient.requested_count", ids.length);
+        const ingredients = await getIngredientsByIDsRepo(this.db, ids);
+        return batchEnrichNestedItems(
+          ingredients,
+          (ing) => ing.product,
+          (products) => this.enrichProductsWithFood(products),
+          (ing, enrichedProducts) => ({ ...ing, product: enrichedProducts }),
+        );
+      },
     );
   }
 

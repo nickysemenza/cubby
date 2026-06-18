@@ -213,20 +213,57 @@ export const createCallerFactory = t.createCallerFactory;
  */
 export const createTRPCRouter = t.router;
 
+/** Keys whose values must never reach a trace. */
+const SENSITIVE_KEY = /pass|token|secret|cookie|authorization/i;
+/** Above this serialized size we record the byte count but not the values. */
+const INPUT_BYTES_CAP = 4096;
+
+/**
+ * Record a tRPC input on the span under `rpc.input.*`, guarded: always emits
+ * `rpc.input.bytes`, skips the value dump past {@link INPUT_BYTES_CAP} (setting
+ * `rpc.input.truncated`), and redacts secret-ish keys — so traces stay lean and
+ * never leak credentials.
+ */
+const recordInput = (span: Span, input: unknown): void => {
+  if (input == null || typeof input !== "object") return;
+  let serialized: string;
+  try {
+    serialized = JSON.stringify(input);
+  } catch {
+    return; // non-serializable (e.g. a stream) — skip rather than throw
+  }
+  span.setAttribute("rpc.input.bytes", serialized.length);
+  if (serialized.length > INPUT_BYTES_CAP) {
+    span.setAttribute("rpc.input.truncated", true);
+    return;
+  }
+  const flat = flatten({ "rpc.input": input }) as Record<string, unknown>;
+  for (const [key, value] of Object.entries(flat)) {
+    if (
+      typeof value !== "string" &&
+      typeof value !== "number" &&
+      typeof value !== "boolean"
+    ) {
+      continue; // skip null/undefined/nested — primitives only
+    }
+    span.setAttribute(key, SENSITIVE_KEY.test(key) ? "[redacted]" : value);
+  }
+};
+
 const tracingMiddleWare = t.middleware(async (opts) => {
   const tracer = getTracer();
   return tracer.startActiveSpan(
     TraceNames.trpc(opts.type, opts.path),
     async (span: Span) => {
-      const input = await opts.getRawInput();
-      if (typeof input === "object") {
-        span.setAttributes(flatten({ input }));
-      }
-      span.setAttribute("userId", opts.ctx.auth?.userId ?? "guest");
-      span.setAttributes({ path: opts.path });
+      span.setAttributes({
+        "rpc.system": "trpc",
+        "rpc.method": opts.path,
+        "rpc.type": opts.type,
+        "enduser.id": opts.ctx.auth?.userId ?? "guest",
+      });
+      recordInput(span, await opts.getRawInput());
       try {
         const result = await opts.next();
-        span.setAttributes({ ok: result.ok });
 
         // tRPC returns errors as results with ok: false, not thrown
         if (!result.ok) {
