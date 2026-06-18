@@ -32,6 +32,13 @@ export const recipeTotals = z.object({
   costTotalUpper: z.number().optional(),
   caloriesTotal: z.number(),
   caloriesTotalUpper: z.number().optional(),
+  // Whole-recipe macro rollup (grams; sodium in mg). Optional/additive so rows
+  // persisted before this was added still validate — they backfill on recompute.
+  proteinTotal: z.number().optional(),
+  fatTotal: z.number().optional(),
+  carbsTotal: z.number().optional(),
+  fiberTotal: z.number().optional(),
+  sodiumTotal: z.number().optional(),
   ingredientCount: z.number().int(),
   costCovered: z.number().int(),
   caloriesCovered: z.number().int(),

@@ -28,7 +28,7 @@ export type CrossLink = {
 
 export type BodyBlock =
   | { kind: "thumb"; url: string }
-  | { kind: "nutrients"; nutrients: Record<string, number> }
+  | { kind: "nutrients"; nutrients: Record<string, number>; label?: string }
   | { kind: "stats"; stats: { label: string; value: ReactNode }[] }
   | {
       kind: "products";
@@ -139,7 +139,7 @@ function BodyBlockView({ block }: { block: BodyBlock }) {
     ))
     .with({ kind: "nutrients" }, (b) => (
       <div className="flex flex-col gap-1">
-        <SectionLabel>Per 100g</SectionLabel>
+        <SectionLabel>{b.label ?? "Per 100g"}</SectionLabel>
         <NutrientsSummary nutrients={b.nutrients} dense />
       </div>
     ))

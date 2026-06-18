@@ -56,6 +56,12 @@ const toRecipeTotals = (t: CalculateTotalsResult): RecipeTotals => {
     ...(t.priceUpper != null ? { costTotalUpper: t.priceUpper } : {}),
     caloriesTotal: getNutrientValueByKey(t.nutrients, "kcal") ?? 0,
     ...(caloriesUpper != null ? { caloriesTotalUpper: caloriesUpper } : {}),
+    // Whole-recipe macros — already computed by the engine, just carried through.
+    proteinTotal: getNutrientValueByKey(t.nutrients, "protein"),
+    fatTotal: getNutrientValueByKey(t.nutrients, "fat"),
+    carbsTotal: getNutrientValueByKey(t.nutrients, "carbs"),
+    fiberTotal: getNutrientValueByKey(t.nutrients, "fiber"),
+    sodiumTotal: getNutrientValueByKey(t.nutrients, "sodium"),
     ingredientCount: t.totalIngredients,
     costCovered: t.totalIngredients - t.missingByType.price.length,
     caloriesCovered: t.totalIngredients - t.missingByType.nutrients.length,

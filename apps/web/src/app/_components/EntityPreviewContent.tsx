@@ -47,6 +47,9 @@ export type RecipePreview = {
   yieldText?: string;
   cost?: number;
   calories?: number;
+  /** Whole-recipe macros (nutrient-code map); paired with nutrientsLabel. */
+  nutrients?: Record<string, number>;
+  nutrientsLabel?: string;
   ingredientCount: number;
   stepCount: number;
   thumbUrl?: string;
@@ -63,6 +66,12 @@ export function toRecipeCard(vm: RecipePreview): ManifestCardProps {
 
   const body: BodyBlock[] = [];
   if (vm.thumbUrl) body.push({ kind: "thumb", url: vm.thumbUrl });
+  if (vm.nutrients)
+    body.push({
+      kind: "nutrients",
+      nutrients: vm.nutrients,
+      label: vm.nutrientsLabel,
+    });
   body.push({ kind: "stats", stats });
 
   return {
@@ -94,6 +103,17 @@ export function RecipePreviewContent({ recipeId }: { recipeId: string }) {
   if (isLoading) return <PreviewLoading />;
   if (!data) return <PreviewDeleted label="Recipe" />;
 
+  // Whole-recipe macros from persisted totals (kept off the row until a recipe
+  // is recomputed — older rows lack these fields, so the block is omitted).
+  // Truthy checks drop both undefined and 0 so we never render an empty row.
+  const t = data.totals;
+  const macros: Record<string, number> = {};
+  if (t?.proteinTotal) macros["203"] = t.proteinTotal;
+  if (t?.fatTotal) macros["204"] = t.fatTotal;
+  if (t?.carbsTotal) macros["205"] = t.carbsTotal;
+  if (t?.fiberTotal) macros["291"] = t.fiberTotal;
+  if (t?.sodiumTotal) macros["307"] = t.sodiumTotal;
+
   return (
     <ManifestCard
       {...toRecipeCard({
@@ -106,6 +126,8 @@ export function RecipePreviewContent({ recipeId }: { recipeId: string }) {
             : undefined,
         cost: data.totals?.costTotal,
         calories: data.totals?.caloriesTotal,
+        nutrients: Object.keys(macros).length > 0 ? macros : undefined,
+        nutrientsLabel: "Per recipe",
         ingredientCount:
           data.totals?.ingredientCount ??
           sumBy(data.sections, (s) => s.ingredients.length),
