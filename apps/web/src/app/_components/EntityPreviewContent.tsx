@@ -1,7 +1,7 @@
 import type { LocationType } from "@cubby/schemas/location";
 import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
 import type { DataType } from "@cubby/usda-schemas";
-import { dataTypeLabel } from "@cubby/usda-schemas";
+import { buildNutrients, dataTypeLabel } from "@cubby/usda-schemas";
 import { useQuery } from "@tanstack/react-query";
 import { sumBy } from "es-toolkit";
 import { ListChecks } from "lucide-react";
@@ -122,15 +122,16 @@ export function RecipePreviewContent({ recipeId }: { recipeId: string }) {
   if (!data) return <PreviewDeleted label="Recipe" />;
 
   // Whole-recipe macros from persisted totals (kept off the row until a recipe
-  // is recomputed — older rows lack these fields, so the block is omitted).
-  // Truthy checks drop both undefined and 0 so we never render an empty row.
+  // is recomputed — older rows lack these fields, so buildNutrients drops them
+  // and the block is omitted).
   const t = data.totals;
-  const macros: Record<string, number> = {};
-  if (t?.proteinTotal) macros["203"] = t.proteinTotal;
-  if (t?.fatTotal) macros["204"] = t.fatTotal;
-  if (t?.carbsTotal) macros["205"] = t.carbsTotal;
-  if (t?.fiberTotal) macros["291"] = t.fiberTotal;
-  if (t?.sodiumTotal) macros["307"] = t.sodiumTotal;
+  const macros = buildNutrients({
+    protein: t?.proteinTotal,
+    fat: t?.fatTotal,
+    carbs: t?.carbsTotal,
+    fiber: t?.fiberTotal,
+    sodium: t?.sodiumTotal,
+  });
 
   return (
     <ManifestCard

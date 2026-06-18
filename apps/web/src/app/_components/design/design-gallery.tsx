@@ -1,5 +1,6 @@
 import type { WUnitMapping } from "@cubby/recipebridge";
 import { locationTypeValues, productCategoryValues } from "@cubby/shared";
+import { buildNutrients } from "@cubby/usda-schemas";
 import { Bell, FileText, Layers, Package, Wrench } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
@@ -881,7 +882,7 @@ const RECIPE_SAMPLE: RecipePreview = {
   yieldText: "makes 1 serving",
   cost: 0.48,
   calories: 90,
-  nutrients: { "203": 7.2, "204": 3.1, "205": 6.8, "291": 1.4 },
+  nutrients: buildNutrients({ protein: 7.2, fat: 3.1, carbs: 6.8, fiber: 1.4 }),
   nutrientsLabel: "Per recipe",
   costCovered: 9,
   nutritionCovered: 8,
@@ -892,7 +893,13 @@ const INGREDIENT_SAMPLE: IngredientPreview = {
   id: "sample-ingredient",
   name: "cilantro",
   aliases: ["coriander", "fresh coriander"],
-  nutrients: { "208": 23, "203": 2.1, "204": 0.5, "205": 3.7, "291": 2.8 },
+  nutrients: buildNutrients({
+    kcal: 23,
+    protein: 2.1,
+    fat: 0.5,
+    carbs: 3.7,
+    fiber: 2.8,
+  }),
   cheapestPrice: 1.99,
   multiplePrices: true,
   recipeCount: 2,
@@ -905,7 +912,7 @@ const PRODUCT_SAMPLE: ProductPreview = {
   id: "sample-product",
   name: "kosher salt",
   identity: "Diamond Crystal · food",
-  nutrients: { "307": 40000 },
+  nutrients: buildNutrients({ sodium: 40000 }),
   price: 11,
   upc: "013600020019",
   usdaFdcId: 2571981,
@@ -915,7 +922,7 @@ const USDA_SAMPLE: UsdaPreview = {
   name: "KOSHER SALT, KOSHER",
   dataType: "branded_food",
   brand: "Diamond Crystal",
-  nutrients: { "307": 40000 },
+  nutrients: buildNutrients({ sodium: 40000 }),
   linkedProductId: "sample-product",
   linkedProductName: "kosher salt",
 };

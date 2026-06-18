@@ -136,6 +136,23 @@ export function getNutrientValueByKey(
 }
 
 /**
+ * Build a nutrients record from human-readable keys — the inverse of
+ * {@link getNutrientValueByKey}. e.g. `{ protein: 7.2, fat: 3.1 }` →
+ * `{ "203": 7.2, "204": 3.1 }`. Entries with a falsy value (0 / undefined) are
+ * dropped, so callers never have to hand-write USDA code strings or filter
+ * empties themselves.
+ */
+export function buildNutrients(
+  values: Partial<Record<NutrientKey, number | undefined>>,
+): NutrientsPer100 {
+  const out: NutrientsPer100 = {};
+  for (const [key, value] of Object.entries(values)) {
+    if (value) out[TIER1_NUTRIENTS[key as NutrientKey].code] = value;
+  }
+  return out;
+}
+
+/**
  * Get the canonical unit string for a nutrient (e.g., "g protein", "kcal").
  * Used by both mapping creation and conversion targets.
  * Avoids duplication like "kcal kcal" - uses just the unit when they match.
