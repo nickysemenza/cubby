@@ -883,6 +883,8 @@ const RECIPE_SAMPLE: RecipePreview = {
   calories: 90,
   nutrients: { "203": 7.2, "204": 3.1, "205": 6.8, "291": 1.4 },
   nutrientsLabel: "Per recipe",
+  costCovered: 9,
+  nutritionCovered: 8,
   ingredientCount: 13,
   stepCount: 5,
 };

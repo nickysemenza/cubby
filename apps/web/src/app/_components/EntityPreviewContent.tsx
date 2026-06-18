@@ -51,16 +51,34 @@ export type RecipePreview = {
   nutrients?: Record<string, number>;
   nutrientsLabel?: string;
   ingredientCount: number;
+  /** Ingredients contributing to cost / nutrition — drives a "N/total" caption. */
+  costCovered?: number;
+  nutritionCovered?: number;
   stepCount: number;
   thumbUrl?: string;
 };
 
+/** "9/13" when partial, undefined when fully covered (or unknown). */
+const coverageCaption = (
+  covered: number | undefined,
+  total: number,
+): string | undefined =>
+  covered != null && covered < total ? `${covered}/${total}` : undefined;
+
 export function toRecipeCard(vm: RecipePreview): ManifestCardProps {
-  const stats: { label: string; value: ReactNode }[] = [];
+  const stats: { label: string; value: ReactNode; caption?: string }[] = [];
   if (vm.cost != null)
-    stats.push({ label: "Cost", value: formatCurrency(vm.cost) });
+    stats.push({
+      label: "Cost",
+      value: formatCurrency(vm.cost),
+      caption: coverageCaption(vm.costCovered, vm.ingredientCount),
+    });
   if (vm.calories != null)
-    stats.push({ label: "Calories", value: `${Math.round(vm.calories)} kcal` });
+    stats.push({
+      label: "Calories",
+      value: `${Math.round(vm.calories)} kcal`,
+      caption: coverageCaption(vm.nutritionCovered, vm.ingredientCount),
+    });
   stats.push({ label: "Ingredients", value: vm.ingredientCount });
   if (vm.stepCount > 0) stats.push({ label: "Steps", value: vm.stepCount });
 
@@ -128,6 +146,8 @@ export function RecipePreviewContent({ recipeId }: { recipeId: string }) {
         calories: data.totals?.caloriesTotal,
         nutrients: Object.keys(macros).length > 0 ? macros : undefined,
         nutrientsLabel: "Per recipe",
+        costCovered: data.totals?.costCovered,
+        nutritionCovered: data.totals?.caloriesCovered,
         ingredientCount:
           data.totals?.ingredientCount ??
           sumBy(data.sections, (s) => s.ingredients.length),

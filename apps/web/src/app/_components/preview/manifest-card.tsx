@@ -29,7 +29,10 @@ export type CrossLink = {
 export type BodyBlock =
   | { kind: "thumb"; url: string }
   | { kind: "nutrients"; nutrients: Record<string, number>; label?: string }
-  | { kind: "stats"; stats: { label: string; value: ReactNode }[] }
+  | {
+      kind: "stats";
+      stats: { label: string; value: ReactNode; caption?: string }[];
+    }
   | {
       kind: "products";
       products: { id: string; name: string; manufacturer: string }[];
@@ -149,6 +152,11 @@ function BodyBlockView({ block }: { block: BodyBlock }) {
           <div key={s.label} className="flex flex-col">
             <SectionLabel>{s.label}</SectionLabel>
             <span className="font-medium text-sm tabular-nums">{s.value}</span>
+            {s.caption && (
+              <span className="font-mono text-2xs text-muted-foreground">
+                {s.caption}
+              </span>
+            )}
           </div>
         ))}
       </div>
