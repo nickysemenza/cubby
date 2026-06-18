@@ -88,6 +88,18 @@ function ProblemsStatCard({ enabled }: { enabled: boolean }) {
   );
 }
 
+/**
+ * Query input for the dashboard count cards: pageSize 1 (we only read
+ * `meta.totalCount`). Exported so the home route loader can prefetch the exact
+ * same query keys for SSR — keep this the single source of truth so the loader
+ * prefetch and the component's `useQueries` can't drift apart.
+ */
+export const DASHBOARD_COUNT_OPTS = {
+  filters: {},
+  sort: { orderBy: "name", direction: "asc" } satisfies SortParams,
+  pagination: { pageIndex: 0, pageSize: 1 },
+};
+
 /** Format large numbers with compact notation (e.g., 2.1M, 15K) */
 const compactFormatter = new Intl.NumberFormat("en", { notation: "compact" });
 const formatCount = (count: number): string => compactFormatter.format(count);
@@ -154,12 +166,7 @@ export default function EntityCount() {
   // branching on it alone makes the first client render diverge from SSR.
   const isAuthenticated = useHydrated() && !!session.data?.user;
 
-  const sort: SortParams = { orderBy: "name", direction: "asc" };
-  const opts = {
-    filters: {},
-    sort,
-    pagination: { pageIndex: 0, pageSize: 1 },
-  };
+  const opts = DASHBOARD_COUNT_OPTS;
 
   const results = useQueries({
     queries: [

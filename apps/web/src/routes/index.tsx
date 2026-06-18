@@ -3,7 +3,9 @@ import { useEffect, useState } from "react";
 import { PantryValueCard } from "~/app/_components/home/PantryValueCard";
 import { QuickActionsCard } from "~/app/_components/home/QuickActionsCard";
 import { RecentActivityFeed } from "~/app/_components/home/RecentActivityFeed";
-import EntityCount from "~/app/_components/homepage/entitycount";
+import EntityCount, {
+  DASHBOARD_COUNT_OPTS,
+} from "~/app/_components/homepage/entitycount";
 import { PageWrapper } from "~/components/layout/page-wrapper";
 import { Eyebrow } from "~/components/ui/eyebrow";
 import { authClient } from "~/lib/auth-client";
@@ -20,6 +22,26 @@ export const Route = createFileRoute("/")({
         params: { authView: "sign-in" },
       });
     }
+  },
+  // Warm the count-card queries during route load so they're already in flight
+  // when EntityCount mounts (most useful on client-side navigation). Inputs must
+  // match EntityCount's exactly (DASHBOARD_COUNT_OPTS) or the cache won't be
+  // reused. Non-blocking `void prefetch` (not awaited ensure): the SSR tRPC
+  // client targets localhost, which is unreachable on CF Workers — so awaiting
+  // here would break prod. EntityCount's own gate + skeleton covers cold loads.
+  loader: ({ context }) => {
+    const { queryClient, trpc } = context;
+    const o = DASHBOARD_COUNT_OPTS;
+    void queryClient.prefetchQuery(trpc.location.list.queryOptions(o));
+    void queryClient.prefetchQuery(trpc.product.list.queryOptions(o));
+    void queryClient.prefetchQuery(trpc.inventory.list.queryOptions(o));
+    void queryClient.prefetchQuery(trpc.recipe.list.queryOptions(o));
+    void queryClient.prefetchQuery(trpc.ingredient.list.queryOptions(o));
+    void queryClient.prefetchQuery(trpc.image.list.queryOptions(o));
+    void queryClient.prefetchQuery(trpc.usda.list.queryOptions(o));
+    void queryClient.prefetchQuery(
+      trpc.problems.getProblemsCount.queryOptions(),
+    );
   },
   component: Home,
 });

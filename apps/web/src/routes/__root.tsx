@@ -7,7 +7,6 @@ import type { QueryClient } from "@tanstack/react-query";
 import {
   createRootRouteWithContext,
   HeadContent,
-  Link,
   Outlet,
   Scripts,
 } from "@tanstack/react-router";
@@ -18,6 +17,7 @@ import { AppFooter } from "~/app/_components/footer";
 import { MainNav } from "~/app/_components/MainNav";
 import { BottomNav } from "~/app/_components/navigation/bottom-nav";
 import { RouteErrorComponent } from "~/components/route-error";
+import { RouteNotFound } from "~/components/route-not-found";
 import { Toaster } from "~/components/ui/sonner";
 import { DebugContextProvider, useDebug } from "~/hooks/useDebug";
 import type { TRPCRouter } from "~/integrations/trpc/router";
@@ -195,7 +195,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 
   component: RootComponent,
   shellComponent: RootDocument,
-  notFoundComponent: NotFoundComponent,
+  notFoundComponent: RouteNotFound,
   errorComponent: RouteErrorComponent,
 });
 
@@ -286,40 +286,6 @@ function DevtoolsWrapper() {
         ]}
       />
     </>
-  );
-}
-
-function NotFoundComponent() {
-  return (
-    <div className="flex min-h-screen flex-col items-center justify-center space-y-6 p-4">
-      <div className="flex items-center space-x-3">
-        <svg viewBox="0 0 64 64" className="h-12 w-12" aria-hidden="true">
-          <rect x="0" y="0" width="64" height="64" rx="10" fill="#212329" />
-          <rect x="8" y="10" width="48" height="3" rx="1" fill="#6f7279" />
-          <rect x="8" y="30" width="48" height="3" rx="1" fill="#6f7279" />
-          <rect x="8" y="50" width="48" height="3" rx="1" fill="#6f7279" />
-          <rect x="12" y="15" width="10" height="13" rx="2" fill="#ae4a28" />
-          <circle cx="32" cy="22" r="6" fill="#cf7d57" />
-          <rect x="42" y="17" width="10" height="11" rx="2" fill="#fdfdfe" />
-          <circle cx="16" cy="42" r="5" fill="#cf7d57" />
-          <rect x="26" y="35" width="12" height="13" rx="2" fill="#ae4a28" />
-          <rect x="44" y="38" width="8" height="10" rx="2" fill="#fdfdfe" />
-        </svg>
-        <h1 className="font-bold text-4xl">404</h1>
-      </div>
-      <div className="space-y-2 text-center">
-        <h2 className="font-semibold text-2xl">Page Not Found</h2>
-        <p className="max-w-md text-muted-foreground">
-          The page you're looking for doesn't exist or has been moved.
-        </p>
-      </div>
-      <Link
-        to="/"
-        className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground text-sm shadow transition-colors hover:bg-primary/90"
-      >
-        Return Home
-      </Link>
-    </div>
   );
 }
 

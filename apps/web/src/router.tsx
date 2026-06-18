@@ -2,6 +2,7 @@ import * as Sentry from "@sentry/tanstackstart-react";
 import { createRouter } from "@tanstack/react-router";
 import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
 import { RouteErrorComponent } from "~/components/route-error";
+import { RouteNotFound } from "~/components/route-not-found";
 import { RoutePending } from "~/components/route-pending";
 import { installJsProfiler } from "~/lib/perf/js-self-profile";
 import * as TanstackQuery from "./integrations/tanstack-query/root-provider";
@@ -26,8 +27,16 @@ export const getRouter = () => {
 
     defaultPreload: "intent",
     defaultPreloadDelay: 120,
+    // We use TanStack Query as the data cache (see setupRouterSsrQueryIntegration).
+    // Setting the router's own preload stale time to 0 hands freshness back to
+    // React Query: loaders run on every preload and ensureQueryData consults
+    // RQ's staleTime, instead of the router short-circuiting with its own cache.
+    defaultPreloadStaleTime: 0,
+    // Preserve scroll position across back/forward navigation (long list pages).
+    scrollRestoration: true,
     defaultViewTransition: true,
     defaultErrorComponent: RouteErrorComponent,
+    defaultNotFoundComponent: RouteNotFound,
     // Route-transition skeleton instead of a blank flash. Thresholds chosen so
     // preloaded (instant) navs show nothing, only genuinely-not-ready ones do;
     // pendingMinMs holds it long enough to avoid a flicker once shown.
