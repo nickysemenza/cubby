@@ -525,31 +525,41 @@ impl<'a> Engine<'a> {
             est.entry(grams.to_bits())
                 .or_insert_with(|| self.estimated_trio(grams, row));
         }
-        let est_for = |grams: f64| -> &Trio {
-            est.get(&grams.to_bits())
-                .expect("estimate precomputed for every estimate source")
-        };
-        let own_ref = || {
-            own.as_ref()
-                .expect("own trio precomputed for own-* sources")
-        };
+        // Both lookups are Some on the happy path — `est` is filled for every
+        // estimate source above, and `own` is Some whenever `needs_own`. The
+        // `None` arms below are unreachable today; they exist so a future
+        // plan/source mismatch degrades to an error measure instead of panicking
+        // at the wasm boundary (a hard browser crash).
+        let est_for = |grams: f64| est.get(&grams.to_bits());
+        let own_ref = || own.as_ref();
         let missing_err = || format!("ingredient {} has no amounts", row.id);
+        let internal_err = || format!("internal: trio not precomputed for {}", row.id);
 
         let amount_for = |source: ComponentSource, pick: fn(&Trio) -> &MeasureRes| -> MeasureRes {
             match source {
-                OwnFull => pick(own_ref()).clone(),
-                OwnFraction { fraction } => scale_measure(pick(own_ref()), fraction),
-                BasisFraction { fraction } => pick(est_for(fraction * basis_grams)).clone(),
-                FlatGrams { grams } => pick(est_for(grams)).clone(),
+                OwnFull => own_ref().map_or_else(|| Err(internal_err()), |o| pick(o).clone()),
+                OwnFraction { fraction } => own_ref()
+                    .map_or_else(|| Err(internal_err()), |o| scale_measure(pick(o), fraction)),
+                BasisFraction { fraction } => est_for(fraction * basis_grams)
+                    .map_or_else(|| Err(internal_err()), |t| pick(t).clone()),
+                FlatGrams { grams } => {
+                    est_for(grams).map_or_else(|| Err(internal_err()), |t| pick(t).clone())
+                }
                 Missing => Err(missing_err()),
             }
         };
         let nutrients_for = |source: ComponentSource| -> NutrientsRes {
             match source {
-                OwnFull => own_ref().nutrients.clone(),
-                OwnFraction { fraction } => scale_nutrients(&own_ref().nutrients, fraction),
-                BasisFraction { fraction } => est_for(fraction * basis_grams).nutrients.clone(),
-                FlatGrams { grams } => est_for(grams).nutrients.clone(),
+                OwnFull => own_ref().map_or_else(|| Err(internal_err()), |o| o.nutrients.clone()),
+                OwnFraction { fraction } => own_ref().map_or_else(
+                    || Err(internal_err()),
+                    |o| scale_nutrients(&o.nutrients, fraction),
+                ),
+                BasisFraction { fraction } => est_for(fraction * basis_grams)
+                    .map_or_else(|| Err(internal_err()), |t| t.nutrients.clone()),
+                FlatGrams { grams } => {
+                    est_for(grams).map_or_else(|| Err(internal_err()), |t| t.nutrients.clone())
+                }
                 Missing => Err(missing_err()),
             }
         };
@@ -731,9 +741,16 @@ impl<'a> Engine<'a> {
         let mut flour_grams = 0.0_f64;
         let mut rows_out: Vec<WRowResult> = Vec::with_capacity(n);
         for (idx, p) in planned.iter().enumerate() {
-            let (trio, own, basis) = outcomes[idx]
-                .take()
-                .expect("every row resolved in pass 1 or pass 2");
+            // Every row is filled by pass 1 (non-deferred) or pass 2 (deferred),
+            // so this is always Some. Degrade an unfilled row to an error outcome
+            // rather than panic — keeps own_grams / rows_out index-aligned.
+            let (trio, own, basis) = outcomes[idx].take().unwrap_or_else(|| {
+                (
+                    Trio::all_err(format!("internal: row {idx} not resolved")),
+                    None,
+                    None,
+                )
+            });
             let own_gram = own
                 .as_ref()
                 .and_then(|o| o.gram.as_ref().ok().map(|g| g.value));

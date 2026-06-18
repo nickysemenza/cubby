@@ -3,6 +3,10 @@
 //! The TS suite re-verifies the same numbers through the wasm boundary; this
 //! file is the native-target net that runs in CI without a wasm runtime.
 
+// Integration tests are a separate crate, so lib.rs's `cfg_attr(test, …)` allow
+// doesn't reach here — test assertions legitimately unwrap/expect.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
 use recipebridge::{
     cost_recipes_impl, ComponentSource, WAmount, WCostingIngredient, WCostingInput, WCostingRecipe,
     WCostingRow, WMeasureResult, WNutrientTarget, WNutrientsResult, WProductInput, WRecipeCosting,

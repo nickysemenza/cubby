@@ -46,6 +46,18 @@ console_error_panic_hook = "0.1.7"
 # serde/ingredient code, so the parity suite runs without a wasm runtime.
 rstest = "0.26"
 
+# Mirror upstream ingredient-parser's gate. A panic at the wasm boundary is a hard
+# browser crash, so forbid the macros that produce one in production code. Tests
+# legitimately unwrap/expect — allowed via `#![cfg_attr(test, allow(...))]` in
+# lib.rs (recipebridge has no separate tests/ dir, only inline `mod tests`).
+# `uninlined_format_args` warns on `format!("{}", x)` (no current hits; future
+# guard). CI runs `cargo clippy --all-targets -- -D warnings`, so these bite.
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+uninlined_format_args = "warn"
+
 # Release profile tuned for the wasm consumer (mirrors ingredient-parser's): LTO +
 # a single codegen unit let the linker drop cross-crate dead code, `panic = "abort"`
 # removes unwind tables, and `opt-level = "z"` favors download size over raw speed.

@@ -184,16 +184,19 @@ fn evaluate_group(group: &WAvailabilityGroup) -> WAvailabilityGroupResult {
     // With exactly one product that union *is* its graph — reuse it instead of
     // rebuilding a second graph and re-cloning every pair (the common case: most
     // ingredients have a single product).
-    let merged_graph: Option<MeasureGraph> = (product_graphs.len() != 1).then(|| {
-        let all_pairs: Vec<(Measure, Measure)> = product_pairs.iter().flatten().cloned().collect();
-        make_graph(&all_pairs)
-    });
-    let all_graph: &MeasureGraph = merged_graph
-        .as_ref()
-        .or_else(|| product_graphs.first())
-        .expect(
-        "invariant: merged_graph is None only when product_graphs.len() == 1, so first() is Some",
-    );
+    let mut merged_graph: Option<MeasureGraph> = None;
+    let all_graph: &MeasureGraph = match product_graphs.as_slice() {
+        // Single product: its graph already is the union — reuse it (the common
+        // case), no rebuild or pair re-clone.
+        [single] => single,
+        // 0 or ≥2 products: resolve needs on the union of all edges. With zero
+        // products the union is empty, so nothing converts.
+        _ => {
+            let all_pairs: Vec<(Measure, Measure)> =
+                product_pairs.iter().flatten().cloned().collect();
+            merged_graph.insert(make_graph(&all_pairs))
+        }
+    };
 
     // Convert each need to weight. Gram basis only when EVERY need converts, so
     // contributions are summable in one unit (the gram-first rule).

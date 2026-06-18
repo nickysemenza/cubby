@@ -13,6 +13,11 @@
 //! and the `From<upstream>` impls are the compile-time drift check against
 //! ingredient-parser.
 
+// Production code is held to the `[lints.clippy]` gate in Cargo.toml (no
+// unwrap/expect/panic — a panic here is a hard browser crash). Tests legitimately
+// use them; allow only under `cfg(test)`, which covers every inline `mod tests`.
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
+
 use ingredient::unit::Measure;
 use serde::{Deserialize, Serialize};
 use tsify_next::Tsify;
