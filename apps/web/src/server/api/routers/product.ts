@@ -12,6 +12,7 @@ import {
   productCreateInput,
   productQuickCreatePayload,
   productTopLevelOut,
+  productUpdateData,
 } from "@cubby/schemas/product";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { upc } from "@cubby/usda-schemas";
@@ -49,7 +50,9 @@ const productFiltersSchema = z.object({
 const { getByID, list, update } = createEntityCrudProcedures({
   schemas: {
     createInput: productCreateInput,
-    updateInput: productCreateInput.partial(),
+    // Defaults-stripped so a partial update never resets an omitted field (e.g.
+    // wiping fdc_id / unitMappings). See productUpdateData.
+    updateInput: productUpdateData,
     output: productWithFoodOut,
     filters: productFiltersSchema,
     idSchema: productId,

@@ -97,10 +97,22 @@ export const productCreateInput = productBase
   })
   .merge(updateInputImages);
 
+// A partial update must leave omitted fields UNCHANGED. `.partial()` keeps the
+// create-time `.default()`s, so an omitted `fdc_id` (default null) or
+// `unitMappings`/`externalIds` (default []) would be reset on any partial update
+// — e.g. adding one conversion to an already-USDA-linked product nulled its
+// fdc_id (audit: 171287 → null, 2026-06-19). Override those fields to plain
+// optional (no default) so omitting them is a true no-op.
+export const productUpdateData = productCreateInput.partial().extend({
+  fdc_id: fdcId.nullable().optional(),
+  unitMappings: z.array(unitMappingInput).optional(),
+  externalIds: z.array(externalIdInput).optional(),
+});
+
 // Input schema for updating products (matches location/recipe/ingredient pattern)
 export const productUpdateInput = z.object({
   id: productId,
-  data: productCreateInput.partial(),
+  data: productUpdateData,
 });
 
 // Response schema for product data
