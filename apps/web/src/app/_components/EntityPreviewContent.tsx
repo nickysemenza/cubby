@@ -1,6 +1,7 @@
 import type { LocationType } from "@cubby/schemas/location";
+import { RECIPE_MACRO_KEYS } from "@cubby/schemas/recipe";
 import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
-import type { DataType } from "@cubby/usda-schemas";
+import type { DataType, NutrientKey } from "@cubby/usda-schemas";
 import { buildNutrients, dataTypeLabel } from "@cubby/usda-schemas";
 import { useQuery } from "@tanstack/react-query";
 import { sumBy } from "es-toolkit";
@@ -125,13 +126,15 @@ export function RecipePreviewContent({ recipeId }: { recipeId: string }) {
   // is recomputed — older rows lack these fields, so buildNutrients drops them
   // and the block is omitted).
   const t = data.totals;
-  const macros = buildNutrients({
-    protein: t?.proteinTotal,
-    fat: t?.fatTotal,
-    carbs: t?.carbsTotal,
-    fiber: t?.fiberTotal,
-    sodium: t?.sodiumTotal,
-  });
+  const macros = buildNutrients(
+    RECIPE_MACRO_KEYS.reduce<Partial<Record<NutrientKey, number | undefined>>>(
+      (acc, key) => {
+        acc[key] = t?.[`${key}Total`];
+        return acc;
+      },
+      {},
+    ),
+  );
 
   return (
     <ManifestCard

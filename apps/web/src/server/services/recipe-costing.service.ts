@@ -12,10 +12,11 @@
 import type { RecipeId } from "@cubby/schemas/identifiers";
 import type {
   RecipeCostingExplain,
+  RecipeMacroColumn,
   RecipeOut,
   RecipeTotals,
 } from "@cubby/schemas/recipe";
-import { recipeTotals } from "@cubby/schemas/recipe";
+import { RECIPE_MACRO_KEYS, recipeTotals } from "@cubby/schemas/recipe";
 import { getNutrientValueByKey } from "@cubby/usda-schemas";
 import { keyBy } from "es-toolkit";
 import {
@@ -58,12 +59,15 @@ const toRecipeTotals = (t: CalculateTotalsResult): RecipeTotals => {
     ...(t.priceUpper != null ? { costTotalUpper: t.priceUpper } : {}),
     caloriesTotal: getNutrientValueByKey(t.nutrients, "kcal") ?? 0,
     ...(caloriesUpper != null ? { caloriesTotalUpper: caloriesUpper } : {}),
-    // Whole-recipe macros — already computed by the engine, just carried through.
-    proteinTotal: getNutrientValueByKey(t.nutrients, "protein"),
-    fatTotal: getNutrientValueByKey(t.nutrients, "fat"),
-    carbsTotal: getNutrientValueByKey(t.nutrients, "carbs"),
-    fiberTotal: getNutrientValueByKey(t.nutrients, "fiber"),
-    sodiumTotal: getNutrientValueByKey(t.nutrients, "sodium"),
+    // Whole-recipe macros — already computed by the engine, carried through from
+    // the single RECIPE_MACRO_KEYS roster (no per-macro list to drift from read).
+    ...RECIPE_MACRO_KEYS.reduce<Pick<RecipeTotals, RecipeMacroColumn>>(
+      (acc, key) => {
+        acc[`${key}Total`] = getNutrientValueByKey(t.nutrients, key);
+        return acc;
+      },
+      {},
+    ),
     ingredientCount: t.totalIngredients,
     costCovered: t.totalIngredients - t.missingByType.price.length,
     caloriesCovered: t.totalIngredients - t.missingByType.nutrients.length,

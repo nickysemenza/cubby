@@ -15,31 +15,30 @@ import { useTRPC } from "~/trpc/react";
 const pl = (n: number, sing: string, plur = `${sing}s`) =>
   `${n} ${n === 1 ? sing : plur}`;
 
-// Every `byType` key with its tooltip phrase, in Problems-page section order.
-// Exhaustive on purpose: the breakdown must sum to `total`, so adding a problem
-// category to the count schema should add a row here.
-const PROBLEM_LABELS: Array<
-  [keyof ProblemsCount["byType"], (n: number) => string]
-> = [
-  ["duplicateUniqueProducts", (n) => pl(n, "duplicate")],
-  ["orphanedProducts", (n) => `${n} orphaned`],
-  ["invalidUPCs", (n) => pl(n, "invalid UPC")],
-  ["productsWithoutMappings", (n) => `${n} without pricing`],
-  ["ingredientsWithPartialCoverage", (n) => `${n} partial coverage`],
-  ["productsWithIslandedMappings", (n) => pl(n, "islanded mapping")],
-  ["inventoryWithStaleValuations", (n) => pl(n, "stale valuation")],
-  ["invalidInventoryAmounts", (n) => pl(n, "invalid amount")],
-  ["emptyLocations", (n) => pl(n, "empty location")],
-  ["productsWithNoImages", (n) => pl(n, "missing image")],
-  [
-    "productsWithWrongCategory",
-    (n) => pl(n, "wrong category", "wrong categories"),
-  ],
-  ["locationsWithoutAiDescription", (n) => pl(n, "missing AI description")],
-  ["staleIngredientParses", (n) => pl(n, "stale parse")],
-  ["staleRecipeTotals", (n) => pl(n, "stale total")],
-  ["productsWithBetterUpcData", (n) => pl(n, "UPC update")],
-];
+// One tooltip phrase per `byType` key, in Problems-page section order. A Record
+// (not a list) so adding a category to the count schema is a *compile error*
+// here until its phrase is added — the breakdown always sums to `total`. Object
+// insertion order drives the tooltip order.
+const PROBLEM_LABELS: Record<
+  keyof ProblemsCount["byType"],
+  (n: number) => string
+> = {
+  duplicateUniqueProducts: (n) => pl(n, "duplicate"),
+  orphanedProducts: (n) => `${n} orphaned`,
+  invalidUPCs: (n) => pl(n, "invalid UPC"),
+  productsWithoutMappings: (n) => `${n} without pricing`,
+  ingredientsWithPartialCoverage: (n) => `${n} partial coverage`,
+  productsWithIslandedMappings: (n) => pl(n, "islanded mapping"),
+  inventoryWithStaleValuations: (n) => pl(n, "stale valuation"),
+  invalidInventoryAmounts: (n) => pl(n, "invalid amount"),
+  emptyLocations: (n) => pl(n, "empty location"),
+  productsWithNoImages: (n) => pl(n, "missing image"),
+  productsWithWrongCategory: (n) => pl(n, "wrong category", "wrong categories"),
+  locationsWithoutAiDescription: (n) => pl(n, "missing AI description"),
+  staleIngredientParses: (n) => pl(n, "stale parse"),
+  staleRecipeTotals: (n) => pl(n, "stale total"),
+  productsWithBetterUpcData: (n) => pl(n, "UPC update"),
+};
 
 export const ProblemsBadge = () => {
   const api = useTRPC();
@@ -64,8 +63,8 @@ export const ProblemsBadge = () => {
   // One phrase per category, in Problems-page section order, so the breakdown
   // sums to `total` (every byType key is listed — no silent omissions).
   const tooltipParts = problems
-    ? PROBLEM_LABELS.flatMap(([key, phrase]) => {
-        const n = problems.byType[key];
+    ? Object.entries(PROBLEM_LABELS).flatMap(([key, phrase]) => {
+        const n = problems.byType[key as keyof ProblemsCount["byType"]];
         return n > 0 ? [phrase(n)] : [];
       })
     : [];

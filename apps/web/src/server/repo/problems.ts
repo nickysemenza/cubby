@@ -3,9 +3,12 @@ import {
   type IngredientId,
   type RecipeId,
   unsafeProductId,
-  unsafeRecipeId,
 } from "@cubby/schemas/identifiers";
-import type { MaintenanceCounts } from "@cubby/schemas/problems";
+import type {
+  AllProblems,
+  MaintenanceCounts,
+  ProblemsCount,
+} from "@cubby/schemas/problems";
 import type { RecipeTotals } from "@cubby/schemas/recipe";
 import { isMiscProduct } from "@cubby/shared";
 import { upc as upcSchema } from "@cubby/usda-schemas";
@@ -19,7 +22,7 @@ import {
   notExists,
   sql,
 } from "drizzle-orm";
-import { uniq } from "es-toolkit";
+import { mapValues, omit, sum, uniq } from "es-toolkit";
 import {
   BASE_KINDS,
   type BaseKind,
@@ -62,25 +65,10 @@ import { foodLookupParamFromProduct } from "~/server/repo/product/helpers";
 import { markRecipesStale } from "~/server/repo/recipe/totals";
 import { batchEnrichWithFood } from "~/server/services/usda-helpers";
 
-// Interface for the complete problems result
-interface AllProblems {
-  duplicateUniqueProducts: DuplicateUniqueProduct[];
-  orphanedProducts: OrphanedProduct[];
-  invalidUPCs: InvalidUPC[];
-  productsWithoutMappings: ProductWithoutMappings[];
-  ingredientsWithPartialCoverage: IngredientWithPartialCoverage[];
-  invalidInventoryAmounts: InvalidInventoryAmount[];
-  emptyLocations: EmptyLocation[];
-  productsWithNoImages: ProductWithNoImages[];
-  productsWithWrongCategory: ProductWithWrongCategory[];
-  inventoryWithStaleValuations: InventoryWithStaleValuation[];
-  productsWithIslandedMappings: ProductWithIslandedMappings[];
-  locationsWithoutAiDescription: LocationWithoutAiDescription[];
-  staleIngredientParses: StaleIngredientParse[];
-  staleRecipeTotals: StaleRecipeTotals[];
-  productsWithBetterUpcData: ProductWithBetterUpcData[];
-  totalProblems: number;
-}
+// AllProblems / ProblemsCount are the canonical Zod-derived shapes from
+// @cubby/schemas/problems — this repo is checked against them rather than
+// re-declaring a parallel interface. The per-item types below stay local
+// (they carry repo-only branding like BaseKind coverage).
 
 // Type definitions for each problem type
 interface DuplicateUniqueProduct {
@@ -178,13 +166,6 @@ export interface EmptyLocation {
   aiDescription: string | null;
   firstImageUrl: string | null;
   firstImageId: string | null;
-}
-
-interface ProductWithNoImages {
-  id: string;
-  name: string;
-  manufacturer: string;
-  upc: string | null;
 }
 
 interface ProductWithWrongCategory {
@@ -828,36 +809,15 @@ const findProductsWithBetterUpcData = async (
   return problems;
 };
 
-interface ProblemsCount {
-  byType: {
-    duplicateUniqueProducts: number;
-    orphanedProducts: number;
-    invalidUPCs: number;
-    productsWithoutMappings: number;
-    ingredientsWithPartialCoverage: number;
-    invalidInventoryAmounts: number;
-    emptyLocations: number;
-    productsWithNoImages: number;
-    productsWithWrongCategory: number;
-    inventoryWithStaleValuations: number;
-    productsWithIslandedMappings: number;
-    locationsWithoutAiDescription: number;
-    staleIngredientParses: number;
-    staleRecipeTotals: number;
-    productsWithBetterUpcData: number;
-  };
-  total: number;
-}
-
 // A stored ingredient occurrence whose original raw line, re-parsed with the
 // *current* parser, now differs from what's stored on any axis — name, amounts, or
 // modifier — i.e. it was parsed by an older parser and a re-parse would change it.
 // All drift is equal; the per-axis booleans drive only how the panel sorts/styles.
 interface StaleIngredientParse {
   recipeSectionIngredientId: string;
-  recipeId: string;
+  recipeId: RecipeId;
   recipeName: string;
-  ingredientId: string;
+  ingredientId: IngredientId;
   storedName: string;
   rawLine: string;
   parsedName: string;
@@ -988,7 +948,7 @@ export const reparseStaleIngredientParses = async (
     }
   });
 
-  const recipesAffected = uniq(stale.map((s) => unsafeRecipeId(s.recipeId)));
+  const recipesAffected = uniq(stale.map((s) => s.recipeId));
   await markRecipesStale(db, recipesAffected);
   return { updated: stale.length, recipesAffected };
 };
@@ -1076,24 +1036,10 @@ export const findAllProblemsCount = async (
 ): Promise<ProblemsCount> => {
   const p = await findAllProblems(db, upcLookupClient, usdaClient);
 
+  // Counts derive mechanically from the find* arrays, so byType can never drift
+  // from the set of detectors (no hand-maintained per-type list to forget).
   return {
-    byType: {
-      duplicateUniqueProducts: p.duplicateUniqueProducts.length,
-      orphanedProducts: p.orphanedProducts.length,
-      invalidUPCs: p.invalidUPCs.length,
-      productsWithoutMappings: p.productsWithoutMappings.length,
-      ingredientsWithPartialCoverage: p.ingredientsWithPartialCoverage.length,
-      invalidInventoryAmounts: p.invalidInventoryAmounts.length,
-      emptyLocations: p.emptyLocations.length,
-      productsWithNoImages: p.productsWithNoImages.length,
-      productsWithWrongCategory: p.productsWithWrongCategory.length,
-      inventoryWithStaleValuations: p.inventoryWithStaleValuations.length,
-      productsWithIslandedMappings: p.productsWithIslandedMappings.length,
-      locationsWithoutAiDescription: p.locationsWithoutAiDescription.length,
-      staleIngredientParses: p.staleIngredientParses.length,
-      staleRecipeTotals: p.staleRecipeTotals.length,
-      productsWithBetterUpcData: p.productsWithBetterUpcData.length,
-    },
+    byType: mapValues(omit(p, ["totalProblems"]), (items) => items.length),
     total: p.totalProblems,
   };
 };
@@ -1178,24 +1124,7 @@ export const findAllProblems = async (
   const inventoryWithStaleValuations: InventoryWithStaleValuation[] =
     inventoryWithStaleValuationsRaw;
 
-  const totalProblems =
-    duplicateUniqueProducts.length +
-    orphanedProducts.length +
-    invalidUPCs.length +
-    productsWithoutMappings.length +
-    ingredientsWithPartialCoverage.length +
-    invalidInventoryAmounts.length +
-    emptyLocations.length +
-    productsWithNoImages.length +
-    productsWithWrongCategory.length +
-    inventoryWithStaleValuations.length +
-    productsWithIslandedMappings.length +
-    locationsWithoutAiDescription.length +
-    staleIngredientParses.length +
-    staleRecipeTotals.length +
-    productsWithBetterUpcData.length;
-
-  return {
+  const sections = {
     duplicateUniqueProducts,
     orphanedProducts,
     invalidUPCs,
@@ -1211,6 +1140,12 @@ export const findAllProblems = async (
     staleIngredientParses,
     staleRecipeTotals,
     productsWithBetterUpcData,
-    totalProblems,
+  };
+
+  // totalProblems is the sum of every section length — derived, never
+  // hand-summed, so adding a detector can't silently undercount the badge.
+  return {
+    ...sections,
+    totalProblems: sum(Object.values(sections).map((items) => items.length)),
   };
 };
