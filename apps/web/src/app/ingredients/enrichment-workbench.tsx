@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { match } from "ts-pattern";
 import { UsdaFoodSearchField } from "~/app/_components/combobox/with-usda-food-search";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { ConversionCapabilities } from "~/app/_components/units/ConversionCapabilities";
 import { UnitMappingsTable } from "~/app/_components/units/unitmappingstable";
 import { CoverageChips } from "~/app/problems/components/unit-coverage-fix";
 import { Badge } from "~/components/ui/badge";
@@ -22,7 +23,10 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
 import { getErrorMessage } from "~/lib/error-utils";
-import { getIngredientMappings } from "~/lib/unit-mapping-utils";
+import {
+  getIngredientMappings,
+  unitMappingsFromFood,
+} from "~/lib/unit-mapping-utils";
 import { cn } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
 import type { EnrichmentRow } from "~/server/services/ingredient.service";
@@ -534,6 +538,62 @@ function WorkbenchEditor({
   const [cToQty, setCToQty] = useState("");
   const [cToUnit, setCToUnit] = useState("g");
 
+  // The mapping graph as it *would* be after this edit: the product's current
+  // effective edges, plus the USDA food being picked and whatever price/
+  // conversion is half-typed. Feeds the live coverage panel so kinds light up as
+  // you type, before saving.
+  const previewMappings = useMemo<UnitMapping[]>(() => {
+    const base: UnitMapping[] = (() => {
+      try {
+        return getIngredientMappings(row);
+      } catch {
+        return [];
+      }
+    })();
+    if (food) {
+      try {
+        base.push(...unitMappingsFromFood(food));
+      } catch {
+        // ignore an un-synthesizable food preview
+      }
+    }
+    const dollars = parsePositive(price);
+    if (dollars != null) {
+      base.push({
+        a: {
+          value: parsePositive(priceQty) ?? 1,
+          unit: priceUnit.trim() || "each",
+        },
+        b: { value: dollars, unit: "dollar" },
+        source: "preview",
+        sourceMetadata: { type: "manual" },
+      });
+    }
+    const fq = parsePositive(cFromQty);
+    const tq = parsePositive(cToQty);
+    const fu = cFromUnit.trim();
+    const tu = cToUnit.trim();
+    if (fq != null && tq != null && fu && tu) {
+      base.push({
+        a: { value: fq, unit: fu },
+        b: { value: tq, unit: tu },
+        source: "preview",
+        sourceMetadata: { type: "manual" },
+      });
+    }
+    return base;
+  }, [
+    row,
+    food,
+    price,
+    priceQty,
+    priceUnit,
+    cFromQty,
+    cToQty,
+    cFromUnit,
+    cToUnit,
+  ]);
+
   const createProduct = useActionMutation({
     mutationFn: api.product.create.mutationOptions,
     success: `Enriched ${row.name}.`,
@@ -643,7 +703,7 @@ function WorkbenchEditor({
   return (
     <div className="space-y-3">
       {product && (linkedFoods.length > 0 || currentMappings.length > 0) && (
-        <div className="space-y-2 rounded-md border bg-background/60 p-2">
+        <div className="max-w-2xl space-y-2 rounded-md border bg-background/60 p-2">
           {linkedFoods.length > 0 && (
             <p className="flex items-center gap-1 text-xs">
               <Check className="h-3 w-3 text-positive" />
@@ -660,133 +720,156 @@ function WorkbenchEditor({
         </div>
       )}
 
-      {product && row.coverage.tier !== "complete" && (
-        <p className="text-xs">
-          <span className="font-medium text-warning">Still missing:</span>{" "}
-          {[
-            !covered.has("weight") && "weight",
-            !covered.has("volume") && "volume",
-            moneyMissing && "price",
-            !covered.has("calories") && "calories",
-          ]
-            .filter(Boolean)
-            .join(", ")}
-        </p>
-      )}
-
-      {!usdaLinked && (
-        <div className="space-y-1">
-          <p className="font-medium text-xs">
-            Link a USDA food{" "}
-            <span className="font-normal text-muted-foreground">
-              — fills weight, volume &amp; calories
-            </span>
-          </p>
-          <UsdaFoodSearchField
-            initialQuery={row.name}
-            label=""
-            onSelect={setFood}
-          />
-          {food && (
-            <p className="flex items-center gap-1 text-positive text-xs">
-              <Check className="h-3 w-3" />
-              {food.foodInfo.description}
+      <div className="flex flex-col gap-4 lg:flex-row">
+        <div className="flex-1 space-y-3 lg:max-w-md">
+          {product && row.coverage.tier !== "complete" && (
+            <p className="text-xs">
+              <span className="font-medium text-warning">Still missing:</span>{" "}
+              {[
+                !covered.has("weight") && "weight",
+                !covered.has("volume") && "volume",
+                moneyMissing && "price",
+                !covered.has("calories") && "calories",
+              ]
+                .filter(Boolean)
+                .join(", ")}
             </p>
           )}
-        </div>
-      )}
 
-      {moneyMissing && (
-        <div className="space-y-1">
-          <p className="font-medium text-xs">Set a price</p>
-          <div className="flex items-center gap-1.5 text-sm">
-            <Input
-              type="number"
-              inputMode="decimal"
-              min="0"
-              value={priceQty}
-              onChange={(e) => setPriceQty(e.target.value)}
-              className="w-12"
-              aria-label="Price quantity"
-            />
-            <Input
-              value={priceUnit}
-              onChange={(e) => setPriceUnit(e.target.value)}
-              className="w-16"
-              aria-label="Price unit"
-            />
-            <span>= $</span>
-            <Input
-              type="number"
-              inputMode="decimal"
-              min="0"
-              step="0.01"
-              placeholder="0.00"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              className="w-20"
+          {!usdaLinked && (
+            <div className="space-y-1">
+              <p className="font-medium text-xs">
+                Link a USDA food{" "}
+                <span className="font-normal text-muted-foreground">
+                  — fills weight, volume &amp; calories
+                </span>
+              </p>
+              <UsdaFoodSearchField
+                initialQuery={row.name}
+                label=""
+                onSelect={setFood}
+              />
+              {food && (
+                <p className="flex items-center gap-1 text-positive text-xs">
+                  <Check className="h-3 w-3" />
+                  {food.foodInfo.description}
+                </p>
+              )}
+            </div>
+          )}
+
+          {moneyMissing && (
+            <div className="space-y-1">
+              <p className="font-medium text-xs">Set a price</p>
+              <div className="flex items-center gap-1.5 text-sm">
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  value={priceQty}
+                  onChange={(e) => setPriceQty(e.target.value)}
+                  className="w-12"
+                  aria-label="Price quantity"
+                />
+                <Input
+                  value={priceUnit}
+                  onChange={(e) => setPriceUnit(e.target.value)}
+                  className="w-16"
+                  aria-label="Price unit"
+                />
+                <span>= $</span>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  className="w-20"
+                />
+              </div>
+              <p className="text-muted-foreground text-xs">
+                For foods, price by the package, e.g. 2&nbsp;lb = $5.99. Use
+                “each” for count items.
+              </p>
+            </div>
+          )}
+
+          <div className="space-y-1">
+            <p className="font-medium text-xs">
+              Add a conversion{" "}
+              <span className="font-normal text-muted-foreground">
+                {conversionNeeded
+                  ? `— covers ${conversionGaps.join(", ")} (e.g. 1 cup = 240 g)`
+                  : "— optional, e.g. 1 cup = 240 g"}
+              </span>
+            </p>
+            <div className="flex items-center gap-1.5 text-sm">
+              <Input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                value={cFromQty}
+                onChange={(e) => setCFromQty(e.target.value)}
+                className="w-12"
+                aria-label="From quantity"
+              />
+              <Input
+                value={cFromUnit}
+                onChange={(e) => setCFromUnit(e.target.value)}
+                placeholder="cup"
+                className="w-16"
+                aria-label="From unit"
+              />
+              <span>=</span>
+              <Input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                value={cToQty}
+                onChange={(e) => setCToQty(e.target.value)}
+                className="w-14"
+                aria-label="To quantity"
+              />
+              <Input
+                value={cToUnit}
+                onChange={(e) => setCToUnit(e.target.value)}
+                placeholder="g"
+                className="w-16"
+                aria-label="To unit"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={save} disabled={isPending}>
+              {isPending
+                ? "Saving…"
+                : product == null
+                  ? "Create product"
+                  : "Save"}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={onDone}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+
+        <div className="shrink-0 space-y-1 lg:w-64">
+          <p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+            Coverage (live)
+          </p>
+          <div className="rounded-md border bg-background/60 p-2">
+            <ConversionCapabilities
+              mappings={previewMappings}
+              hideConvertButton
             />
           </div>
-          <p className="text-muted-foreground text-xs">
-            For foods, price by the package, e.g. 2&nbsp;lb = $5.99. Use “each”
-            for count items.
+          <p className="text-[10px] text-muted-foreground leading-tight">
+            Updates as you type. Each tile is a convertible pair of base kinds.
           </p>
         </div>
-      )}
-
-      <div className="space-y-1">
-        <p className="font-medium text-xs">
-          Add a conversion{" "}
-          <span className="font-normal text-muted-foreground">
-            {conversionNeeded
-              ? `— covers ${conversionGaps.join(", ")} (e.g. 1 cup = 240 g)`
-              : "— optional, e.g. 1 cup = 240 g"}
-          </span>
-        </p>
-        <div className="flex items-center gap-1.5 text-sm">
-          <Input
-            type="number"
-            inputMode="decimal"
-            min="0"
-            value={cFromQty}
-            onChange={(e) => setCFromQty(e.target.value)}
-            className="w-12"
-            aria-label="From quantity"
-          />
-          <Input
-            value={cFromUnit}
-            onChange={(e) => setCFromUnit(e.target.value)}
-            placeholder="cup"
-            className="w-16"
-            aria-label="From unit"
-          />
-          <span>=</span>
-          <Input
-            type="number"
-            inputMode="decimal"
-            min="0"
-            value={cToQty}
-            onChange={(e) => setCToQty(e.target.value)}
-            className="w-14"
-            aria-label="To quantity"
-          />
-          <Input
-            value={cToUnit}
-            onChange={(e) => setCToUnit(e.target.value)}
-            placeholder="g"
-            className="w-16"
-            aria-label="To unit"
-          />
-        </div>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <Button size="sm" onClick={save} disabled={isPending}>
-          {isPending ? "Saving…" : product == null ? "Create product" : "Save"}
-        </Button>
-        <Button size="sm" variant="ghost" onClick={onDone}>
-          Cancel
-        </Button>
       </div>
     </div>
   );
