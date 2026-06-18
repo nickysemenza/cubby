@@ -69,3 +69,14 @@ lto = true
 codegen-units = 1
 panic = "abort"
 strip = "debuginfo"
+
+# Dev-iteration tuning (mirrors ingredient-parser's). Optimizing dependencies even
+# in debug builds keeps `cargo test`/`cargo clippy` fast despite the heavy
+# `ingredient`/`serde` deps; a light opt-level on the test profile trims runtime
+# without the slow full-release compile. Neither affects the wasm consumer (that's
+# `profile.release` above).
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.test]
+opt-level = 1
