@@ -9,6 +9,7 @@ import type {
   MaintenanceCounts,
   ProblemsCount,
 } from "@cubby/schemas/problems";
+import { hasFdcLink } from "@cubby/schemas/product";
 import type { RecipeTotals } from "@cubby/schemas/recipe";
 import { isMiscProduct } from "@cubby/shared";
 import { upc as upcSchema } from "@cubby/usda-schemas";
@@ -341,7 +342,7 @@ const findInvalidUPCs = async (db: Database): Promise<InvalidUPC[]> => {
 
 // Find products with no conversion/price coverage at all. A product is covered
 // if it has a manual unit mapping OR a price (synthesizes a `1 each = $price`
-// edge) OR a USDA link (ndb_number/upc synthesizes portion/serving/nutrient
+// edge) OR a USDA link (fdc_id/upc synthesizes portion/serving/nutrient
 // edges). Mirrors the costing-gap classifier in lib/recipe-costing-gaps.ts.
 // Excludes misc products since they don't need pricing.
 const findProductsWithoutMappings = async (
@@ -411,7 +412,7 @@ const synthesizeEffectiveMappings = (
 // Cost: like the islanded detector, this enriches candidates with USDA food and
 // synthesizes their mappings. The DB pre-filter drops truly-empty products
 // (owned by findProductsWithoutMappings); batchEnrichWithFood only hits the
-// network for candidates that actually have a upc/ndb to look up.
+// network for candidates that actually have a upc/fdc_id to look up.
 const findIngredientsWithPartialCoverage = async (
   db: Database,
   usdaClient: USDAClient,
@@ -585,15 +586,12 @@ const findEmptyLocations = async (db: Database): Promise<EmptyLocation[]> => {
   return emptyLocations;
 };
 
-// Helper to determine the primary food indicator for a product
-// Note: hasFoodIndicators only checks the USDA link (fdc_id) and ingredient, not UPC
+// Helper to determine the primary food indicator for a product. Reuses the
+// shared hasFdcLink predicate so the fdc-link threshold has one definition.
 const getFoodIndicator = (product: {
   fdc_id: number | null;
   ingredientId: string | null;
-}): "fdc" | "ingredient" => {
-  if (product.fdc_id != null && product.fdc_id > 0) return "fdc";
-  return "ingredient";
-};
+}): "fdc" | "ingredient" => (hasFdcLink(product.fdc_id) ? "fdc" : "ingredient");
 
 // Find products with disconnected unit mapping graphs (islands).
 //
@@ -1061,12 +1059,14 @@ export const findMaintenanceCounts = async (
     ]);
 
   return {
-    staleParses: staleParses.length,
-    staleValuations: staleValuations.length,
-    // backfillUPCImages only acts on products that have a UPC to look up.
-    productsNoImages: noImages.filter((p) => p.upc != null).length,
-    wrongCategory: wrongCategory.length,
-    locationsNoDescription: noDescription.length,
+    staleIngredientParses: staleParses.length,
+    inventoryWithStaleValuations: staleValuations.length,
+    // Deliberately a SUBSET of the Problems-page productsWithNoImages count:
+    // backfillUPCImages can only act on products that have a UPC to look up, so
+    // this counts just those. Same canonical key, intentionally narrower number.
+    productsWithNoImages: noImages.filter((p) => p.upc != null).length,
+    productsWithWrongCategory: wrongCategory.length,
+    locationsWithoutAiDescription: noDescription.length,
   };
 };
 

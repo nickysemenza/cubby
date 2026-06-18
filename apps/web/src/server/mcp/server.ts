@@ -66,10 +66,7 @@ function withErrorHandling(
       } else {
         message = String(error);
       }
-      return {
-        content: [{ type: "text" as const, text: message }],
-        isError: true,
-      };
+      return jsonError(message);
     }
   };
 }
@@ -78,6 +75,14 @@ function withErrorHandling(
 function json(data: unknown) {
   return {
     content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
+  };
+}
+
+/** Error response helper — the `isError` counterpart to {@link json}. */
+function jsonError(text: string) {
+  return {
+    content: [{ type: "text" as const, text }],
+    isError: true,
   };
 }
 
@@ -100,15 +105,9 @@ function matchesArrayFilter(values: string[], filter: unknown): boolean {
 }
 
 function notionUnavailable() {
-  return {
-    content: [
-      {
-        type: "text" as const,
-        text: "Notion integration is not configured. Set the NOTION_API_KEY environment variable.",
-      },
-    ],
-    isError: true,
-  };
+  return jsonError(
+    "Notion integration is not configured. Set the NOTION_API_KEY environment variable.",
+  );
 }
 
 /** Strip heavy fields from location objects */
@@ -262,6 +261,17 @@ type Row = Record<string, unknown>;
 type Slim = (row: Row) => unknown;
 const identity: Slim = (row) => row;
 
+/** The success tail every create/action tool shares: cast the tRPC result to a
+ * Row and slim it into a JSON response. Mirrors the get/update/list factories. */
+function respond(result: unknown, slim: Slim = identity) {
+  return json(slim(result as Row));
+}
+
+/** Like {@link respond} for tools that return an array of rows. */
+function respondList(result: unknown, slim: Slim = identity) {
+  return json((result as Row[]).map(slim));
+}
+
 /** Schema for a single `{ id }` input field. */
 const idParam = (label: string) => z.string().describe(`${label} ID`);
 /** Schema for a `{ ids }` input field on delete tools. */
@@ -399,7 +409,7 @@ function registerTools(server: McpServer) {
         locationId: params.locationId,
         amount: { value: params.value, unit: params.unit },
       });
-      return json(slimInventory(result as Record<string, unknown>));
+      return respond(result, slimInventory);
     }),
   );
 
@@ -423,20 +433,14 @@ function registerTools(server: McpServer) {
       if (params.value !== undefined && params.unit !== undefined) {
         data.amount = { value: params.value, unit: params.unit };
       } else if (params.value !== undefined || params.unit !== undefined) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: "Both value and unit must be provided together when updating amount.",
-            },
-          ],
-          isError: true,
-        };
+        return jsonError(
+          "Both value and unit must be provided together when updating amount.",
+        );
       }
       if (params.productId !== undefined) data.productId = params.productId;
       if (params.locationId !== undefined) data.locationId = params.locationId;
       const result = await caller.inventory.update({ id: params.id, data });
-      return json(slimInventory(result as Record<string, unknown>));
+      return respond(result, slimInventory);
     }),
   );
 
@@ -478,9 +482,7 @@ function registerTools(server: McpServer) {
           quantity: { value: item.value, unit: item.unit },
         })),
       });
-      return json(
-        (result as Record<string, unknown>[]).map((i) => slimInventory(i)),
-      );
+      return respondList(result, slimInventory);
     }),
   );
 
@@ -560,7 +562,7 @@ function registerTools(server: McpServer) {
           price: params.price,
           expectedQuantity: params.expectedQuantity,
         });
-        return json(slimProduct(result as Record<string, unknown>));
+        return respond(result, slimProduct);
       }
       const result = await caller.product.create({
         name: params.name,
@@ -573,7 +575,7 @@ function registerTools(server: McpServer) {
         price: (params.price as number | undefined) ?? null,
         unitMappings,
       });
-      return json(slimProduct(result as Record<string, unknown>));
+      return respond(result, slimProduct);
     }),
   );
 
@@ -631,7 +633,7 @@ function registerTools(server: McpServer) {
         id: params.id,
         data: { unitMappings },
       });
-      return json(slimProduct(result as Record<string, unknown>));
+      return respond(result, slimProduct);
     }),
   );
 
@@ -658,7 +660,7 @@ function registerTools(server: McpServer) {
         upc: params.upc,
         defaultName: params.defaultName,
       });
-      return json(slimProduct(result as Record<string, unknown>));
+      return respond(result, slimProduct);
     }),
   );
 
@@ -728,7 +730,7 @@ function registerTools(server: McpServer) {
         type: params.type,
         parentId: params.parentId,
       });
-      return json(slimLocation(result as Record<string, unknown>));
+      return respond(result, slimLocation);
     }),
   );
 
@@ -823,7 +825,7 @@ function registerTools(server: McpServer) {
         name: params.name,
         aliases: params.aliases ?? [],
       });
-      return json(slimIngredient(result as Record<string, unknown>));
+      return respond(result, slimIngredient);
     }),
   );
 
@@ -875,7 +877,7 @@ function registerTools(server: McpServer) {
         target: params.target,
         aliases: params.aliases,
       });
-      return json(slimIngredient(result as Record<string, unknown>));
+      return respond(result, slimIngredient);
     }),
   );
 
@@ -1049,7 +1051,7 @@ function registerTools(server: McpServer) {
     withErrorHandling(async (params, extra) => {
       const caller = getCaller(extra);
       const result = await caller.recipe.create(params);
-      return json(slimRecipe(result as Record<string, unknown>));
+      return respond(result, slimRecipe);
     }),
   );
 
@@ -1065,7 +1067,7 @@ function registerTools(server: McpServer) {
       const { id, ...rest } = params;
       const data = omitBy(rest, (v) => v === undefined);
       const result = await caller.recipe.update({ id, data });
-      return json(slimRecipe(result as Record<string, unknown>));
+      return respond(result, slimRecipe);
     }),
   );
 
@@ -1358,7 +1360,7 @@ function registerTools(server: McpServer) {
     withErrorHandling(async (params, extra) => {
       const caller = getCaller(extra);
       const result = await caller.meal.create(params);
-      return json(slimMeal(result as Record<string, unknown>));
+      return respond(result, slimMeal);
     }),
   );
 
@@ -1392,7 +1394,7 @@ function registerTools(server: McpServer) {
         from: params.from,
         to: params.to,
       });
-      return json((result as Record<string, unknown>[]).map(slimMeal));
+      return respondList(result, slimMeal);
     }),
   );
 
@@ -1428,7 +1430,7 @@ function registerTools(server: McpServer) {
         scale: params.scale,
         sortOrder: params.sortOrder,
       });
-      return json(slimMeal(result as Record<string, unknown>));
+      return respond(result, slimMeal);
     }),
   );
 
@@ -1456,7 +1458,7 @@ function registerTools(server: McpServer) {
         scale: params.scale,
         sortOrder: params.sortOrder,
       });
-      return json(slimMeal(result as Record<string, unknown>));
+      return respond(result, slimMeal);
     }),
   );
 
@@ -1473,7 +1475,7 @@ function registerTools(server: McpServer) {
     withErrorHandling(async (params, extra) => {
       const caller = getCaller(extra);
       const result = await caller.meal.removeRecipe({ id: params.id });
-      return json(slimMeal(result as Record<string, unknown>));
+      return respond(result, slimMeal);
     }),
   );
 
@@ -1545,15 +1547,7 @@ function registerTools(server: McpServer) {
       const upc = params.upc as string | undefined;
       const ndbNumber = params.ndbNumber as number | undefined;
       if ((upc == null) === (ndbNumber == null)) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: "Provide exactly one of `upc` or `ndbNumber`.",
-            },
-          ],
-          isError: true,
-        };
+        return jsonError("Provide exactly one of `upc` or `ndbNumber`.");
       }
       const lookup =
         upc != null

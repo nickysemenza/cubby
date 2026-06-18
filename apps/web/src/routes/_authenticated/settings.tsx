@@ -304,21 +304,21 @@ const MAINTENANCE_TOOLS: {
     label: "Re-parse recipe lines",
     description:
       "Re-run the ingredient parser over imported lines (rawLine). Reverts manual structured edits — intended.",
-    count: (c) => c.staleParses,
+    count: (c) => c.staleIngredientParses,
     action: <BackfillButton {...BACKFILL.reparse} />,
   },
   {
     label: "Sync inventory valuations",
     description:
       "Recompute the dollar value of every inventory entry from current product prices.",
-    count: (c) => c.staleValuations,
+    count: (c) => c.inventoryWithStaleValuations,
     action: <BackfillButton {...BACKFILL.syncValuations} />,
   },
   {
     label: "Fetch UPC images",
     description:
       "Pull product images from the UPC database for products missing one.",
-    count: (c) => c.productsNoImages,
+    count: (c) => c.productsWithNoImages,
     // A UPC lookup can return no image, so not every candidate gets one.
     approximate: true,
     action: <BackfillButton {...BACKFILL.fetchUpcImages} />,
@@ -326,14 +326,14 @@ const MAINTENANCE_TOOLS: {
   {
     label: "Fix product categories",
     description: "Re-derive product categories from their linked USDA food.",
-    count: (c) => c.wrongCategory,
+    count: (c) => c.productsWithWrongCategory,
     action: <BackfillButton {...BACKFILL.fixCategories} />,
   },
   {
     label: "Analyze location descriptions",
     description:
       "Generate AI descriptions for locations that don't have one yet.",
-    count: (c) => c.locationsNoDescription,
+    count: (c) => c.locationsWithoutAiDescription,
     // An AI generation can fail, so not every candidate ends up described.
     approximate: true,
     action: <BackfillButton {...BACKFILL.analyzeDescriptions} />,
