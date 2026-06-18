@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { NoneState } from "~/app/_components/NoneState";
+import { Eyebrow } from "~/components/ui/eyebrow";
 import { cn } from "~/lib/utils";
 
 interface InfoRowProps {
@@ -15,9 +16,9 @@ interface InfoRowProps {
  */
 export const InfoRow = ({ label, children, className }: InfoRowProps) => (
   <div className={cn("flex items-baseline gap-2 py-1.5", className)}>
-    <span className="shrink-0 font-mono text-2xs text-eyebrow uppercase tracking-wider">
+    <Eyebrow as="span" className="shrink-0">
       {label}
-    </span>
+    </Eyebrow>
     {/* Empty flex items baseline-align on their bottom border box edge, which
         lands the dots right on the text baseline. */}
     <span

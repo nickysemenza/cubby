@@ -3,7 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { Trash } from "lucide-react";
 import { type FC, useCallback, useState } from "react";
 import { toast } from "sonner";
-import { DeleteEntityDialog } from "~/components/dialogs/delete-entity-dialog";
+import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { Button } from "~/components/ui/button";
 
 interface UseEntityDeleteOptions {
@@ -82,13 +82,19 @@ export function useEntityDelete({
   );
 
   const DeleteDialog: FC = () => (
-    <DeleteEntityDialog
+    <BulkActionDialog
       open={showDialog}
       onOpenChange={setShowDialog}
       items={[{ id, name }]}
-      entityType={entityLabel}
-      onDelete={async () => {
+      itemNoun={entityLabel}
+      action="Delete"
+      variant="destructive"
+      pendingLabel="Deleting..."
+      description={`This will permanently remove ${entityLabel.toLowerCase()} from your workspace. This action cannot be undone.`}
+      renderItem={(item) => item.name}
+      onSubmit={async () => {
         await deleteMutation.mutateAsync({ ids: [id] });
+        setShowDialog(false);
       }}
       isPending={deleteMutation.isPending}
     />

@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { z } from "zod";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
+import { countLabel, pluralize } from "~/lib/pluralize";
 import { queryKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 
@@ -41,9 +42,7 @@ export function DeleteInventoryDialog({
         items.map((item) => deleteMutation.mutateAsync({ ids: [item.id] })),
       );
 
-      toast.success(
-        `Successfully deleted ${items.length} item${items.length !== 1 ? "s" : ""}`,
-      );
+      toast.success(`Successfully deleted ${countLabel(items.length, "item")}`);
       onSuccess();
       onOpenChange(false);
     } catch {
@@ -58,7 +57,7 @@ export function DeleteInventoryDialog({
       items={items}
       action="Delete"
       pendingLabel="Deleting..."
-      description={`This action cannot be undone. The following inventory item${items.length !== 1 ? "s" : ""} will be permanently deleted.`}
+      description={`This action cannot be undone. The following ${pluralize(items.length, "inventory item")} will be permanently deleted.`}
       renderItem={(item) =>
         `${item.product.name} - ${item.amount.value} ${item.amount.unit}`
       }

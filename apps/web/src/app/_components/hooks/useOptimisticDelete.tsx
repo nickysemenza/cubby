@@ -3,7 +3,7 @@ import { Trash } from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { DeleteEntityDialog } from "~/components/dialogs/delete-entity-dialog";
+import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import {
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -213,7 +213,7 @@ export function useOptimisticDelete<
   const deleteDialog = useMemo(
     () =>
       deletable ? (
-        <DeleteEntityDialog
+        <BulkActionDialog
           open={deleteTarget !== null}
           onOpenChange={(open) => !open && setDeleteTarget(null)}
           items={
@@ -226,8 +226,13 @@ export function useOptimisticDelete<
                 ]
               : []
           }
-          entityType={deletable.entityLabel}
-          onDelete={async () => {
+          itemNoun={deletable.entityLabel}
+          action="Delete"
+          variant="destructive"
+          pendingLabel="Deleting..."
+          description={`This will permanently remove ${deletable.entityLabel.toLowerCase()} from your workspace. This action cannot be undone.`}
+          renderItem={(item) => item.name}
+          onSubmit={async () => {
             if (deleteTarget) {
               await deleteMutation.mutateAsync({ ids: [deleteTarget.id] });
               setDeleteTarget(null);

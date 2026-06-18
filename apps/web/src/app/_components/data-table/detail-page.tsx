@@ -3,6 +3,7 @@ import type { FC, ReactNode } from "react";
 import { Fragment } from "react";
 import { ImageGallery } from "~/components/media/image-gallery";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Eyebrow } from "~/components/ui/eyebrow";
 import { InkStamp } from "~/components/ui/ink-stamp";
 import { entities } from "~/entities/entities";
 import { useDebug } from "~/hooks/useDebug";
@@ -90,10 +91,10 @@ export const DetailPage: FC<DetailPageProps> = ({
         <CardContent className="px-4 py-1 sm:px-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="font-mono text-2xs text-eyebrow uppercase tracking-[0.14em]">
+              <Eyebrow className="tracking-[0.14em]">
                 {entityDef.pluralLabel}
                 {heroNo ? ` / No. ${heroNo}` : ""}
-              </p>
+              </Eyebrow>
               <h1 className="break-words font-bold font-heading text-2xl tracking-tight sm:text-3xl">
                 {name}
               </h1>
@@ -119,9 +120,7 @@ export const DetailPage: FC<DetailPageProps> = ({
                     i > 0 && "border-foreground/25 border-l border-dashed pl-4",
                   )}
                 >
-                  <div className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
-                    {stat.label}
-                  </div>
+                  <Eyebrow as="div">{stat.label}</Eyebrow>
                   <div className="truncate font-mono font-semibold text-base tabular-nums">
                     {stat.value}
                   </div>

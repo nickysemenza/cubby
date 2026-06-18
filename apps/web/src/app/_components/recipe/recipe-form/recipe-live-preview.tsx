@@ -1,6 +1,7 @@
 import type { FC } from "react";
 import { type Control, useWatch } from "react-hook-form";
 import { MarkdownText } from "~/components/markdown";
+import { Eyebrow } from "~/components/ui/eyebrow";
 import { cn } from "~/lib/utils";
 import { tryFormatAmount } from "../../inventory/format-amount";
 import {
@@ -9,7 +10,7 @@ import {
   ingredientRowGridNarrow,
 } from "../IngredientQuantities";
 import { buildRecipeKicker } from "../recipe-utils";
-import { Eyebrow, SectionHeading } from "../section-heading";
+import { SectionHeading } from "../section-heading";
 import type { RecipeFormValues } from "./types";
 
 /** Safe quantity formatting over possibly-partial draft amounts. */
