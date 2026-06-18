@@ -27,12 +27,14 @@ import {
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
+  buildCascadeAuditEntries,
   computeChanges,
   logAuditEntries,
   logAuditEntry,
 } from "~/server/repo/audit-log";
 import {
   addProductSourceMetadata,
+  assertNoDependents,
   buildOrderBy,
   countWhere,
   executeListQueryWithCount,
@@ -637,44 +639,31 @@ export const deleteIngredients = async (
           notDeleted(recipeSectionIngredient),
         ),
       );
-    if (usedInRecipes.length > 0) {
-      const failedIngredientIds = uniq(
-        usedInRecipes.map((r) => r.ingredientId),
-      );
-      const failedIngredients = await tx.query.ingredient.findMany({
-        where: inArray(ingredient.id, failedIngredientIds),
-        columns: { id: true, name: true },
+    const fetchIngredientNames = (failedIds: IngredientId[]) =>
+      tx.query.ingredient.findMany({
+        where: inArray(ingredient.id, failedIds),
+        columns: { name: true },
       });
-      const names = failedIngredients.map((i) => i.name).join(", ");
-      const count = failedIngredients.length;
-      throw createAppError(
-        "INGREDIENT_HAS_RECIPES",
+    await assertNoDependents({
+      offendingParentIds: usedInRecipes.map((r) => r.ingredientId),
+      fetchNames: fetchIngredientNames,
+      reason: "INGREDIENT_HAS_RECIPES",
+      message: (count, names) =>
         `Cannot delete ${count} ingredient(s): ${names} are used in recipes.`,
-      );
-    }
+    });
 
     // Safety check: don't delete if any are linked to products
     const linkedProducts = await tx.query.product.findMany({
       where: and(inArray(product.ingredientId, ids), notDeleted(product)),
       columns: { ingredientId: true },
     });
-    if (linkedProducts.length > 0) {
-      const failedIngredientIds = uniq(
-        linkedProducts
-          .map((p) => p.ingredientId)
-          .filter((id): id is IngredientId => id !== null),
-      );
-      const failedIngredients = await tx.query.ingredient.findMany({
-        where: inArray(ingredient.id, failedIngredientIds),
-        columns: { id: true, name: true },
-      });
-      const names = failedIngredients.map((i) => i.name).join(", ");
-      const count = failedIngredients.length;
-      throw createAppError(
-        "INGREDIENT_HAS_PRODUCTS",
+    await assertNoDependents({
+      offendingParentIds: linkedProducts.map((p) => p.ingredientId),
+      fetchNames: fetchIngredientNames,
+      reason: "INGREDIENT_HAS_PRODUCTS",
+      message: (count, names) =>
         `Cannot delete ${count} ingredient(s): ${names} have linked products.`,
-      );
-    }
+    });
 
     const now = new Date();
 
@@ -683,12 +672,8 @@ export const deleteIngredients = async (
       .set({ deletedAt: now })
       .where(inArray(ingredient.id, ids));
 
-    // Log audit entries - no cascaded items for ingredients (batch operation)
-    const auditEntries = ids.map((id) => ({
-      entityType: "ingredient" as const,
-      entityId: id,
-      action: "delete" as const,
-    }));
+    // No cascaded items for ingredients — plain delete audit entries.
+    const auditEntries = buildCascadeAuditEntries("ingredient", ids);
 
     await logAuditEntries(tx, actor, auditEntries);
   });

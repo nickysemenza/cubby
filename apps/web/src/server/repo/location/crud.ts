@@ -16,7 +16,7 @@ import {
   type SortParams,
 } from "@cubby/schemas/pagination";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
-import { uniq } from "es-toolkit";
+import { countBy } from "es-toolkit";
 import { getSortableFields } from "~/entities/entities";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -27,11 +27,13 @@ import {
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
+  buildCascadeAuditEntries,
   computeChanges,
   logAuditEntries,
   logAuditEntry,
 } from "~/server/repo/audit-log";
 import {
+  assertNoDependents,
   associatePendingImages,
   buildOrderBy,
   buildPartialUpdateValues,
@@ -212,19 +214,17 @@ export const deleteLocations = async (
       ),
       columns: { locationId: true },
     });
-    if (withInventory.length > 0) {
-      const failedLocationIds = uniq(withInventory.map((e) => e.locationId));
-      const failedLocations = await tx.query.location.findMany({
-        where: inArray(location.id, failedLocationIds),
-        columns: { id: true, name: true },
-      });
-      const names = failedLocations.map((l) => l.name).join(", ");
-      const count = failedLocations.length;
-      throw createAppError(
-        "LOCATION_HAS_INVENTORY",
+    await assertNoDependents({
+      offendingParentIds: withInventory.map((e) => e.locationId),
+      fetchNames: (failedIds) =>
+        tx.query.location.findMany({
+          where: inArray(location.id, failedIds),
+          columns: { name: true },
+        }),
+      reason: "LOCATION_HAS_INVENTORY",
+      message: (count, names) =>
         `Cannot delete ${count} location(s): ${names} have inventory entries. Move or remove them first.`,
-      );
-    }
+    });
 
     // Orphan any children by setting their parentId to null
     // This makes them top-level locations instead of blocking deletion
@@ -235,20 +235,11 @@ export const deleteLocations = async (
 
     const now = new Date();
 
-    // Get counts of cascaded items for audit trail
+    // Get counts of cascaded images (per location) for the audit trail.
     const cascadedImages = await tx.query.locationImage.findMany({
       where: inArray(locationImage.locationId, ids),
-      columns: { id: true, locationId: true },
+      columns: { locationId: true },
     });
-
-    // Group cascaded images by location ID for audit logging
-    const imagesByLocation = new Map<string, number>();
-    for (const img of cascadedImages) {
-      imagesByLocation.set(
-        img.locationId,
-        (imagesByLocation.get(img.locationId) ?? 0) + 1,
-      );
-    }
 
     // Soft delete location images
     await tx
@@ -262,21 +253,8 @@ export const deleteLocations = async (
       .set({ deletedAt: now })
       .where(inArray(location.id, ids));
 
-    // Log audit entries with cascaded item counts (batch operation)
-    const auditEntries = ids.map((id) => {
-      const imageCount = imagesByLocation.get(id) ?? 0;
-
-      const changes: Record<string, { from: unknown; to: unknown }> = {};
-      if (imageCount > 0) {
-        changes.cascadedImages = { from: imageCount, to: 0 };
-      }
-
-      return {
-        entityType: "location" as const,
-        entityId: id,
-        action: "delete" as const,
-        changes: Object.keys(changes).length > 0 ? changes : undefined,
-      };
+    const auditEntries = buildCascadeAuditEntries("location", ids, {
+      cascadedImages: countBy(cascadedImages, (i) => i.locationId),
     });
 
     await logAuditEntries(tx, actor, auditEntries);

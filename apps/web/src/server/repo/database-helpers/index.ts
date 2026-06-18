@@ -17,6 +17,7 @@ export {
 } from "./crud";
 // Query helpers
 export {
+  assertNoDependents,
   buildOrderBy,
   buildSearchConditions,
   countWhere,

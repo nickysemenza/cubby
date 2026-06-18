@@ -65,28 +65,10 @@ export class USDAService {
       dataTypes,
     );
 
-    // Load linked products and unit mappings for each food
+    // Load linked products + inferred unit mappings for each food (the UPC-first
+    // / fdc-fallback enrichment lives in one place — enrichWithLinkedProducts).
     const enhancedData: FoodSummaryWithLinkedProducts[] = await Promise.all(
-      result.data.map(async (food) => {
-        // Get all inferred unit mappings from the food
-        const inferredUnitMappings = unitMappingsFromFood(food);
-
-        // Get linked products for this food. Branded products link by barcode
-        // (UPC); everything else by the explicit fdc_id (every food has one).
-        const upc = food.brandedFoodInfo?.gtin_upc;
-        const lookup =
-          upc !== undefined
-            ? { kind: "upc" as const, gtin_upc: upc }
-            : { kind: "fdc" as const, fdc_id: food.fdc_id };
-
-        const linkedProducts = await this.getLinkedProducts(lookup);
-
-        return {
-          ...food,
-          inferredUnitMappings,
-          linkedProducts,
-        };
-      }),
+      result.data.map((food) => this.enrichWithLinkedProducts(food)),
     );
 
     return {

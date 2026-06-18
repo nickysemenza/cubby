@@ -98,6 +98,33 @@ export async function logAuditEntries(
 }
 
 /**
+ * Build delete audit entries for a batch of parent ids, attaching per-parent
+ * cascade counts. `cascades` maps each change key (e.g. "cascadedImages") to a
+ * parentId→count record; only counts > 0 are emitted, and an entry with no
+ * cascades gets `changes: undefined`. Shared by the product/location/recipe
+ * delete paths so the count-and-assemble shape lives in one place.
+ */
+export function buildCascadeAuditEntries(
+  entityType: AuditEntityType,
+  ids: string[],
+  cascades: Record<string, Record<string, number>> = {},
+): AuditEntryInput[] {
+  return ids.map((id) => {
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    for (const [key, byParent] of Object.entries(cascades)) {
+      const count = byParent[id] ?? 0;
+      if (count > 0) changes[key] = { from: count, to: 0 };
+    }
+    return {
+      entityType,
+      entityId: id,
+      action: "delete" as const,
+      changes: Object.keys(changes).length > 0 ? changes : undefined,
+    };
+  });
+}
+
+/**
  * Query audit log entries with pagination.
  */
 export async function getAuditLog(
