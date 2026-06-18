@@ -8,6 +8,7 @@ import type {
   AllProblems,
   DuplicateUniqueProduct,
   EmptyLocation,
+  IngredientWithoutProduct,
   IngredientWithPartialCoverage,
   InvalidInventoryAmount,
   InvalidUPC,
@@ -356,6 +357,60 @@ const findIngredientsWithPartialCoverage = async (
   }
 
   return problems;
+};
+
+// Find ingredients used in a recipe but linked to no product, so they can't be
+// costed at all. This is the ingredient-side blind spot of the product-centric
+// detectors above (findProductsWithoutMappings / findIngredientsWithPartialCoverage
+// both require a product row to exist). Sub-recipe ingredients (recipeId set) are
+// costed by their recipe, never a product, so they're excluded.
+const findIngredientsWithoutProduct = async (
+  db: Database,
+): Promise<IngredientWithoutProduct[]> => {
+  const dbClient = getDb(db);
+
+  const rows = await dbClient
+    .select({
+      id: ingredient.id,
+      name: ingredient.name,
+      recipeCount: sql<number>`count(distinct ${recipe.id})`,
+    })
+    .from(ingredient)
+    .innerJoin(
+      recipeSectionIngredient,
+      and(
+        eq(recipeSectionIngredient.ingredientId, ingredient.id),
+        notDeleted(recipeSectionIngredient),
+      ),
+    )
+    .innerJoin(
+      recipeSection,
+      and(
+        eq(recipeSection.id, recipeSectionIngredient.recipeSectionId),
+        notDeleted(recipeSection),
+      ),
+    )
+    .innerJoin(
+      recipe,
+      and(eq(recipe.id, recipeSection.recipeId), notDeleted(recipe)),
+    )
+    .where(
+      and(
+        notDeleted(ingredient),
+        isNull(ingredient.recipeId),
+        notExists(
+          dbClient
+            .select({ one: sql`1` })
+            .from(product)
+            .where(
+              and(eq(product.ingredientId, ingredient.id), notDeleted(product)),
+            ),
+        ),
+      ),
+    )
+    .groupBy(ingredient.id, ingredient.name);
+
+  return rows.map((r) => ({ ...r, recipeCount: Number(r.recipeCount) }));
 };
 
 // Find inventory entries with zero or negative amounts
@@ -922,6 +977,7 @@ export const findAllProblems = async (
     invalidUPCs,
     productsWithoutMappings,
     ingredientsWithPartialCoverage,
+    ingredientsWithoutProduct,
     invalidInventoryAmounts,
     emptyLocations,
     productsWithNoImages,
@@ -938,6 +994,7 @@ export const findAllProblems = async (
     findInvalidUPCs(db),
     findProductsWithoutMappings(db),
     findIngredientsWithPartialCoverage(db, usdaClient),
+    findIngredientsWithoutProduct(db),
     findInvalidInventoryAmounts(db),
     findEmptyLocations(db),
     findProductsWithNoImages(db, { excludeIngredients: true }),
@@ -969,6 +1026,7 @@ export const findAllProblems = async (
     invalidUPCs,
     productsWithoutMappings,
     ingredientsWithPartialCoverage,
+    ingredientsWithoutProduct,
     invalidInventoryAmounts,
     emptyLocations,
     productsWithNoImages,

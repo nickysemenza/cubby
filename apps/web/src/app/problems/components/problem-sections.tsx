@@ -312,6 +312,23 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     renderItem: renderUnitCoverageItem,
   }),
   section({
+    id: "no-product-ingredients",
+    label: "No product",
+    select: (p) => p.ingredientsWithoutProduct,
+    entity: "ingredient",
+    title: "Ingredients without a product",
+    description:
+      "Ingredients used in recipes but not linked to any product, so they can't be costed. Link a product (ideally with a USDA food) to each.",
+    emptyMessage: "Every recipe ingredient is linked to a product.",
+    renderItem: (ing) => ({
+      title: ing.name,
+      details: [
+        `Used in ${ing.recipeCount} recipe${ing.recipeCount === 1 ? "" : "s"}`,
+      ],
+      route: { to: "/ingredients/$id", params: { id: ing.id } },
+    }),
+  }),
+  section({
     id: "stale-valuations",
     label: "Stale Valuations",
     select: (p) => p.inventoryWithStaleValuations,

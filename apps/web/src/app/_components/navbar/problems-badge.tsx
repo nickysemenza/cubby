@@ -28,6 +28,7 @@ const PROBLEM_LABELS: Record<
   invalidUPCs: (n) => pl(n, "invalid UPC"),
   productsWithoutMappings: (n) => `${n} without pricing`,
   ingredientsWithPartialCoverage: (n) => `${n} partial coverage`,
+  ingredientsWithoutProduct: (n) => `${n} without a product`,
   productsWithIslandedMappings: (n) => pl(n, "islanded mapping"),
   inventoryWithStaleValuations: (n) => pl(n, "stale valuation"),
   invalidInventoryAmounts: (n) => pl(n, "invalid amount"),

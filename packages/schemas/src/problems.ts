@@ -57,6 +57,12 @@ export const ingredientWithPartialCoverageSchema = productProblemBase.extend({
   usdaUnavailable: z.boolean(),
 });
 
+export const ingredientWithoutProductSchema = z.object({
+  id: ingredientId,
+  name: z.string(),
+  recipeCount: z.number(),
+});
+
 export const invalidInventoryAmountSchema = z.object({
   id: z.string(),
   productName: z.string(),
@@ -150,6 +156,7 @@ export const allProblemsSchema = z.object({
   invalidUPCs: z.array(invalidUPCSchema),
   productsWithoutMappings: z.array(productWithoutMappingsSchema),
   ingredientsWithPartialCoverage: z.array(ingredientWithPartialCoverageSchema),
+  ingredientsWithoutProduct: z.array(ingredientWithoutProductSchema),
   inventoryWithStaleValuations: z.array(inventoryWithStaleValuationSchema),
   invalidInventoryAmounts: z.array(invalidInventoryAmountSchema),
   emptyLocations: z.array(emptyLocationSchema),
@@ -192,6 +199,9 @@ export type ProductWithoutMappings = z.infer<
 >;
 export type IngredientWithPartialCoverage = z.infer<
   typeof ingredientWithPartialCoverageSchema
+>;
+export type IngredientWithoutProduct = z.infer<
+  typeof ingredientWithoutProductSchema
 >;
 export type InvalidInventoryAmount = z.infer<
   typeof invalidInventoryAmountSchema
