@@ -16,6 +16,7 @@ import {
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { upc } from "@cubby/usda-schemas";
 import { z } from "zod";
+import { getErrorMessage } from "~/lib/error-utils";
 import {
   backfillFoodCategories,
   deleteProducts,
@@ -231,6 +232,55 @@ const getByShortcode = protectedProcedure
   });
 
 // Delete procedure using standalone factory
+// Batch-create products for the enrichment workbench's "Create products" action.
+// Sequential single-row creates (each its own tx) so one bad row doesn't abort
+// the rest; failures are reported per index for the client to surface/retry.
+const createMany = protectedProcedure
+  .input(z.array(productCreateInput).min(1).max(50))
+  .output(
+    z.object({
+      created: z.number(),
+      failed: z.array(
+        z.object({
+          index: z.number(),
+          name: z.string(),
+          error: z.string(),
+        }),
+      ),
+    }),
+  )
+  .mutation(async ({ ctx, input }) => {
+    const failed: { index: number; name: string; error: string }[] = [];
+    let created = 0;
+    for (const [index, item] of input.entries()) {
+      try {
+        await ctx.services.product.createProduct(item, ctx.actorContext);
+        created++;
+      } catch (error) {
+        failed.push({ index, name: item.name, error: getErrorMessage(error) });
+      }
+    }
+    return { created, failed };
+  });
+
+// Batch "no USDA food exists" flag for the workbench's "Mark no-USDA" action, so
+// those products drop out of the link-USDA worklist and switch to manual entry.
+const markUsdaUnavailableMany = protectedProcedure
+  .input(z.object({ ids: z.array(productId).min(1).max(100) }))
+  .output(z.object({ updated: z.number() }))
+  .mutation(async ({ ctx, input }) => {
+    let updated = 0;
+    for (const id of input.ids) {
+      await ctx.services.product.updateProduct(
+        id,
+        { usdaUnavailable: true },
+        ctx.actorContext,
+      );
+      updated++;
+    }
+    return { updated };
+  });
+
 const deleteItem = createDeleteProcedure<ProductId>(async (services, ids) => {
   await deleteProducts(services.db, ids, services.actorContext);
 }, productId);
@@ -241,6 +291,8 @@ export const productRouter = createTRPCRouter({
   getByShortcodes,
   list,
   create,
+  createMany,
+  markUsdaUnavailableMany,
   update,
   delete: deleteItem,
   quickCreate,

@@ -1,8 +1,8 @@
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
 import type { UnitMappingInput } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import { useQuery } from "@tanstack/react-query";
-import { Check, ChevronDown, ChevronRight } from "lucide-react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { Check, ChevronDown, ChevronRight, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
@@ -11,6 +11,7 @@ import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { CoverageChips } from "~/app/problems/components/unit-coverage-fix";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -25,6 +26,9 @@ const parsePositive = (raw: string): number | null => {
 };
 
 type FilterKey = "all" | "no-product" | "partial" | "no-usda";
+
+/** An AI USDA suggestion for one row, kept at the table level for bulk review. */
+type Suggestion = { food: FoodSummaryWithLinkedProducts; reasoning: string };
 
 const FIX_LABEL: Record<EnrichmentRow["recommendedFix"], string> = {
   "no-product": "Link product",
@@ -43,11 +47,16 @@ const hasUsdaLink = (row: EnrichmentRow): boolean =>
  * the bare ones EPUB imports leave behind (no product) plus those with a product
  * whose conversion graph is still incomplete. Each row shows its coverage and the
  * single recommended fix, and expands inline to link a USDA food, set a price,
- * and add conversions in one save — without the modal-per-ingredient grind.
+ * and add conversions. Select rows to run AI USDA suggestions and create products
+ * in bulk, or mark "no USDA exists" — without the modal-per-ingredient grind.
  */
 export function EnrichmentWorkbench() {
   const api = useTRPC();
   const [filter, setFilter] = useState<FilterKey>("all");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [suggestions, setSuggestions] = useState<Record<string, Suggestion>>(
+    {},
+  );
 
   const { data, isLoading, error } = useQuery(
     api.ingredient.enrichmentWorkbench.queryOptions(),
@@ -80,6 +89,98 @@ export function EnrichmentWorkbench() {
         .exhaustive(),
     [rows, filter],
   );
+
+  const selectedRows = useMemo(
+    () => rows.filter((r) => selected.has(r.id)),
+    [rows, selected],
+  );
+
+  const toggle = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  const clearSelection = () => setSelected(new Set());
+
+  const suggestUsda = useMutation(
+    api.ai.suggestUsdaFoodBatch.mutationOptions(),
+  );
+  const createMany = useActionMutation({
+    mutationFn: api.product.createMany.mutationOptions,
+    success: "Products created.",
+    invalidateKeys: [["ingredient"], ["product"]],
+    onSuccess: () => {
+      setSuggestions({});
+      clearSelection();
+    },
+    error: (err) => `Create failed: ${getErrorMessage(err)}`,
+  });
+  const markNoUsda = useActionMutation({
+    mutationFn: api.product.markUsdaUnavailableMany.mutationOptions,
+    success: "Marked: no USDA entry.",
+    invalidateKeys: [["ingredient"], ["product"]],
+    onSuccess: clearSelection,
+    error: (err) => `Failed: ${getErrorMessage(err)}`,
+  });
+
+  const handleSuggest = async () => {
+    const names = selectedRows.map((r) => r.name);
+    if (names.length === 0) return;
+    const byName = new Map(
+      selectedRows.map((r) => [r.name.toLowerCase(), r.id]),
+    );
+    try {
+      const results = await suggestUsda.mutateAsync({ ingredientNames: names });
+      const next: Record<string, Suggestion> = {};
+      let matched = 0;
+      for (const r of results) {
+        const id = byName.get(r.name.toLowerCase());
+        if (id && r.food) {
+          next[id] = { food: r.food, reasoning: r.reasoning };
+          matched++;
+        }
+      }
+      setSuggestions((prev) => ({ ...prev, ...next }));
+      toast.success(`AI matched ${matched}/${names.length}.`);
+    } catch (err) {
+      toast.error(`Suggestion failed: ${getErrorMessage(err)}`);
+    }
+  };
+
+  const creatable = selectedRows.filter(
+    (r) => r.product.length === 0 && suggestions[r.id],
+  );
+  const handleCreate = () => {
+    if (creatable.length === 0) {
+      toast.error("No selected rows have an AI suggestion yet. Suggest first.");
+      return;
+    }
+    createMany.mutate(
+      creatable.map((r) => ({
+        name: r.name,
+        manufacturer: UNSPECIFIED_MANUFACTURER,
+        upc: null,
+        expectedQuantity: null,
+        ingredientId: r.id,
+        fdc_id: suggestions[r.id]!.food.fdc_id,
+        price: null,
+        unitMappings: [],
+      })),
+    );
+  };
+
+  const markable = selectedRows.flatMap((r) =>
+    r.product.length > 0 && !hasUsdaLink(r) ? [r.product[0]!.id] : [],
+  );
+  const handleMarkNoUsda = () => {
+    if (markable.length === 0) {
+      toast.error("No selected rows have a product missing a USDA link.");
+      return;
+    }
+    markNoUsda.mutate({ ids: markable });
+  };
 
   return (
     <div className="space-y-4">
@@ -122,6 +223,7 @@ export function EnrichmentWorkbench() {
             <thead>
               <tr className="border-b bg-muted/40 text-left text-2xs text-muted-foreground uppercase tracking-wide">
                 <th className="w-8 px-2 py-2" />
+                <th className="w-8 px-2 py-2" />
                 <th className="px-2 py-2 font-medium">Ingredient</th>
                 <th className="px-2 py-2 font-medium">Coverage</th>
                 <th className="px-2 py-2 font-medium">Next</th>
@@ -129,7 +231,13 @@ export function EnrichmentWorkbench() {
             </thead>
             <tbody>
               {visible.map((row) => (
-                <WorkbenchRow key={row.id} row={row} />
+                <WorkbenchRow
+                  key={row.id}
+                  row={row}
+                  selected={selected.has(row.id)}
+                  onToggle={() => toggle(row.id)}
+                  suggestion={suggestions[row.id] ?? null}
+                />
               ))}
             </tbody>
           </table>
@@ -141,11 +249,55 @@ export function EnrichmentWorkbench() {
           <Spinner />
         </div>
       )}
+
+      {selected.size > 0 && (
+        <div className="sticky bottom-4 flex flex-wrap items-center gap-2 rounded-lg border bg-background/95 px-4 py-2.5 shadow-sm backdrop-blur">
+          <span className="font-medium text-sm">{selected.size} selected</span>
+          <span className="text-border">|</span>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleSuggest}
+            disabled={suggestUsda.isPending}
+          >
+            <Sparkles className="h-4 w-4" />
+            {suggestUsda.isPending ? "Suggesting…" : "Suggest USDA"}
+          </Button>
+          <Button
+            size="sm"
+            onClick={handleCreate}
+            disabled={createMany.isPending || creatable.length === 0}
+          >
+            Create {creatable.length} product{creatable.length === 1 ? "" : "s"}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleMarkNoUsda}
+            disabled={markNoUsda.isPending || markable.length === 0}
+          >
+            Mark no-USDA ({markable.length})
+          </Button>
+          <Button size="sm" variant="ghost" onClick={clearSelection}>
+            Clear
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
 
-function WorkbenchRow({ row }: { row: EnrichmentRow }) {
+function WorkbenchRow({
+  row,
+  selected,
+  onToggle,
+  suggestion,
+}: {
+  row: EnrichmentRow;
+  selected: boolean;
+  onToggle: () => void;
+  suggestion: Suggestion | null;
+}) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -153,10 +305,18 @@ function WorkbenchRow({ row }: { row: EnrichmentRow }) {
       <tr
         className={cn(
           "cursor-pointer border-b transition-colors hover:bg-accent/40",
-          open && "bg-accent/30",
+          (open || selected) && "bg-accent/30",
         )}
         onClick={() => setOpen((v) => !v)}
       >
+        <td className="px-2 py-2.5">
+          <Checkbox
+            checked={selected}
+            onCheckedChange={onToggle}
+            onClick={(e) => e.stopPropagation()}
+            aria-label={`Select ${row.name}`}
+          />
+        </td>
         <td className="px-2 py-2.5 text-muted-foreground">
           {open ? (
             <ChevronDown className="h-4 w-4" />
@@ -168,6 +328,11 @@ function WorkbenchRow({ row }: { row: EnrichmentRow }) {
           <div className="font-medium">{row.name}</div>
           <div className="text-muted-foreground text-xs">
             × {row.recipeCount} recipe{row.recipeCount === 1 ? "" : "s"}
+            {suggestion && (
+              <span className="ml-1.5 text-info">
+                · AI: {suggestion.food.foodInfo.description}
+              </span>
+            )}
           </div>
         </td>
         <td className="px-2 py-2.5">
@@ -182,8 +347,13 @@ function WorkbenchRow({ row }: { row: EnrichmentRow }) {
       {open && (
         <tr className="border-b bg-muted/20">
           <td />
+          <td />
           <td colSpan={3} className="px-2 py-3 pr-4">
-            <WorkbenchEditor row={row} onDone={() => setOpen(false)} />
+            <WorkbenchEditor
+              row={row}
+              initialFood={suggestion?.food ?? null}
+              onDone={() => setOpen(false)}
+            />
           </td>
         </tr>
       )}
@@ -202,16 +372,20 @@ function WorkbenchRow({ row }: { row: EnrichmentRow }) {
  */
 function WorkbenchEditor({
   row,
+  initialFood,
   onDone,
 }: {
   row: EnrichmentRow;
+  initialFood: FoodSummaryWithLinkedProducts | null;
   onDone: () => void;
 }) {
   const api = useTRPC();
   const product = row.product[0] ?? null;
   const usdaLinked = hasUsdaLink(row);
 
-  const [food, setFood] = useState<FoodSummaryWithLinkedProducts | null>(null);
+  const [food, setFood] = useState<FoodSummaryWithLinkedProducts | null>(
+    initialFood,
+  );
   const [priceQty, setPriceQty] = useState("1");
   const [priceUnit, setPriceUnit] = useState(
     row.priceMode === "per-each" ? "each" : "lb",

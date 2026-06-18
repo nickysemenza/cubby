@@ -22,6 +22,7 @@ import {
   describeLocation,
   detectInventoryItems,
   suggestUsdaFood,
+  suggestUsdaFoodBatch,
 } from "~/server/services/ai-enrichment.service";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 
@@ -107,6 +108,25 @@ export const aiRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       return suggestUsdaFood(ctx.usdaService, input.ingredientName);
+    }),
+  // Batch USDA matcher for the workbench's "Suggest USDA for selected" action.
+  // Read-only: returns one suggestion per name for review; links nothing.
+  suggestUsdaFoodBatch: protectedProcedure
+    .input(
+      z.object({ ingredientNames: z.array(z.string().min(1)).min(1).max(20) }),
+    )
+    .output(
+      z.array(
+        z.object({
+          name: z.string(),
+          food: foodSummaryWithLinkedProducts.nullable(),
+          confidence,
+          reasoning: z.string(),
+        }),
+      ),
+    )
+    .mutation(async ({ ctx, input }) => {
+      return suggestUsdaFoodBatch(ctx.usdaService, input.ingredientNames);
     }),
   parseSearch: protectedProcedure
     .input(z.object({ query: z.string().min(1) }))

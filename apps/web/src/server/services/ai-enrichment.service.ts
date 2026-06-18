@@ -281,3 +281,43 @@ export async function suggestUsdaFood(
     reasoning: selection.reasoning,
   };
 }
+
+/** One batch entry: the input name plus its suggestion (food null = no match). */
+export interface UsdaFoodBatchSuggestion extends UsdaFoodSuggestion {
+  name: string;
+}
+
+/**
+ * Batch {@link suggestUsdaFood} for the enrichment workbench's "Suggest USDA for
+ * selected" action. Read-only — returns one suggestion per name for the user to
+ * review and commit; it never links anything. Each name is its own agent loop
+ * (several USDA searches), so concurrency is bounded and the batch is capped.
+ */
+export async function suggestUsdaFoodBatch(
+  usdaService: USDAService,
+  names: string[],
+): Promise<UsdaFoodBatchSuggestion[]> {
+  const capped = names.slice(0, 20);
+  const out: UsdaFoodBatchSuggestion[] = [];
+  for (let i = 0; i < capped.length; i += 5) {
+    const batch = capped.slice(i, i + 5);
+    const results = await Promise.allSettled(
+      batch.map((name) => suggestUsdaFood(usdaService, name)),
+    );
+    results.forEach((result, j) => {
+      const name = batch[j] as string;
+      if (result.status === "fulfilled") {
+        out.push({ name, ...result.value });
+      } else {
+        console.error(`[suggestUsdaFoodBatch] ${name} failed:`, result.reason);
+        out.push({
+          name,
+          food: null,
+          confidence: "low",
+          reasoning: "Lookup failed.",
+        });
+      }
+    });
+  }
+  return out;
+}
