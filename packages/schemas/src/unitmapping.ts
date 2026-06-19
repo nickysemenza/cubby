@@ -63,3 +63,16 @@ export const unitMappingOut = z
 
 export type UnitMapping = z.infer<typeof unitMappingWithMetadata>;
 export type UnitMappingInput = z.infer<typeof unitMappingInput>;
+
+/**
+ * Build a `UnitMapping` edge with the "manual" provenance stamp — the shape that
+ * the enrichment workbench's live preview, design fixtures, and unit tests all
+ * hand-rolled identically (`{ a, b, source, sourceMetadata: { type: "manual" } }`).
+ * For DB-backed rows that also carry `id`/timestamps, build `unitMappingOut`
+ * directly; this is only for the in-memory edge type.
+ */
+export const manualUnitMapping = (
+  a: UnitMapping["a"],
+  b: UnitMapping["b"],
+  source: string | null = "manual",
+): UnitMapping => ({ a, b, source, sourceMetadata: { type: "manual" } });

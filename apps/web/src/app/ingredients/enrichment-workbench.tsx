@@ -1,5 +1,9 @@
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
-import type { UnitMapping, UnitMappingInput } from "@cubby/schemas/unitmapping";
+import {
+  manualUnitMapping,
+  type UnitMapping,
+  type UnitMappingInput,
+} from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
@@ -654,15 +658,16 @@ function WorkbenchEditor({
     }
     const dollars = parsePositive(price);
     if (dollars != null) {
-      base.push({
-        a: {
-          value: parsePositive(priceQty) ?? 1,
-          unit: priceUnit.trim() || "each",
-        },
-        b: { value: dollars, unit: "dollar" },
-        source: "preview",
-        sourceMetadata: { type: "manual" },
-      });
+      base.push(
+        manualUnitMapping(
+          {
+            value: parsePositive(priceQty) ?? 1,
+            unit: priceUnit.trim() || "each",
+          },
+          { value: dollars, unit: "dollar" },
+          "preview",
+        ),
+      );
     }
     for (const c of convRows) {
       const fq = parsePositive(c.fromQty);
@@ -670,12 +675,13 @@ function WorkbenchEditor({
       const fu = c.fromUnit.trim();
       const tu = c.toUnit.trim();
       if (fq != null && tq != null && fu && tu) {
-        base.push({
-          a: { value: fq, unit: fu },
-          b: { value: tq, unit: tu },
-          source: "preview",
-          sourceMetadata: { type: "manual" },
-        });
+        base.push(
+          manualUnitMapping(
+            { value: fq, unit: fu },
+            { value: tq, unit: tu },
+            "preview",
+          ),
+        );
       }
     }
     return base;

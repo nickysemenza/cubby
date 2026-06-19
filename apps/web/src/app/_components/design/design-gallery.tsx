@@ -1,4 +1,4 @@
-import type { UnitMapping } from "@cubby/schemas/unitmapping";
+import { manualUnitMapping } from "@cubby/schemas/unitmapping";
 import { locationTypeValues, productCategoryValues } from "@cubby/shared";
 import { buildNutrients } from "@cubby/usda-schemas";
 import { Bell, FileText, Layers, Package, Wrench } from "lucide-react";
@@ -142,21 +142,32 @@ const CHART_SEQ_TOKENS = [
 // Spans every node kind so the conversion-graph theming (volume/weight/money/
 // nutrient/calories/other) is all visible on one canvas. Module-level keeps the
 // reference stable for the memoized graph.
-const fixtureEdge = (
-  a: UnitMapping["a"],
-  b: UnitMapping["b"],
-): UnitMapping => ({
-  a,
-  b,
-  source: "fixture",
-  sourceMetadata: { type: "manual" },
-});
-const GRAPH_FIXTURE: UnitMapping[] = [
-  fixtureEdge({ value: 1, unit: "cup" }, { value: 120, unit: "g" }),
-  fixtureEdge({ value: 2, unit: "lb" }, { value: 5, unit: "dollar" }),
-  fixtureEdge({ value: 100, unit: "g" }, { value: 281, unit: "mg potassium" }),
-  fixtureEdge({ value: 100, unit: "g" }, { value: 387, unit: "kcal" }),
-  fixtureEdge({ value: 1, unit: "cup packed" }, { value: 1, unit: "cup" }),
+const GRAPH_FIXTURE = [
+  manualUnitMapping(
+    { value: 1, unit: "cup" },
+    { value: 120, unit: "g" },
+    "fixture",
+  ),
+  manualUnitMapping(
+    { value: 2, unit: "lb" },
+    { value: 5, unit: "dollar" },
+    "fixture",
+  ),
+  manualUnitMapping(
+    { value: 100, unit: "g" },
+    { value: 281, unit: "mg potassium" },
+    "fixture",
+  ),
+  manualUnitMapping(
+    { value: 100, unit: "g" },
+    { value: 387, unit: "kcal" },
+    "fixture",
+  ),
+  manualUnitMapping(
+    { value: 1, unit: "cup packed" },
+    { value: 1, unit: "cup" },
+    "fixture",
+  ),
 ];
 
 function Swatch({ token }: { token: string }) {

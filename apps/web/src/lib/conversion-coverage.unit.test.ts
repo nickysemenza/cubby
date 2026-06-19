@@ -1,5 +1,5 @@
 import type { Amount } from "@cubby/schemas/codec";
-import type { UnitMapping } from "@cubby/schemas/unitmapping";
+import { manualUnitMapping } from "@cubby/schemas/unitmapping";
 import { describe, expect, it } from "vitest";
 import {
   BASE_KINDS,
@@ -7,12 +7,7 @@ import {
   USDA_KINDS,
 } from "./conversion-coverage";
 
-const map = (a: Amount, b: Amount): UnitMapping => ({
-  a,
-  b,
-  source: "test",
-  sourceMetadata: { type: "manual" },
-});
+const map = (a: Amount, b: Amount) => manualUnitMapping(a, b, "test");
 
 // weight↔volume (density), weight↔calories, weight↔money — enough edges that the
 // graph can reach the other base-kind pairs by chaining through grams.

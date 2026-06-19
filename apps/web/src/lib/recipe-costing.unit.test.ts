@@ -1,5 +1,8 @@
 import type { Amount } from "@cubby/schemas/codec";
-import type { UnitMapping } from "@cubby/schemas/unitmapping";
+import {
+  manualUnitMapping,
+  type UnitMapping,
+} from "@cubby/schemas/unitmapping";
 import { describe, expect, it } from "vitest";
 import {
   computeRecipeCosting,
@@ -20,17 +23,12 @@ import {
 
 // Build a single UnitMapping with the canonical test source/metadata, matching
 // the object shape used throughout this file ({ a, b, source, sourceMetadata }).
-const m = (
-  aVal: number,
-  aUnit: string,
-  bVal: number,
-  bUnit: string,
-): UnitMapping => ({
-  a: { value: aVal, unit: aUnit },
-  b: { value: bVal, unit: bUnit },
-  source: "test",
-  sourceMetadata: { type: "manual" },
-});
+const m = (aVal: number, aUnit: string, bVal: number, bUnit: string) =>
+  manualUnitMapping(
+    { value: aVal, unit: aUnit },
+    { value: bVal, unit: bUnit },
+    "test",
+  );
 
 describe("convertAmountToPrice", () => {
   // Single-mapping conversions that succeed: assert the exact value + unit.
