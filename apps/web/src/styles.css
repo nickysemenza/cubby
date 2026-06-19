@@ -564,49 +564,4 @@
       oklch(from var(--brand-terra-light) l c h / 0.03) 100%
     );
   }
-
-  /* Unit-mapping conversion graph (graphviz). recipebridge's print_graph tags
-     each node with class="node <measure-kind>"; theme the rounded-box fill and
-     stroke per kind so the graph's structure (volume vs weight vs nutrient vs
-     money …) reads at a glance. Light token tints keep labels legible, and CSS
-     beats graphviz's fill/stroke presentation attributes. */
-  .unit-mapping-graph .node > path {
-    fill: var(--card);
-    stroke: var(--border);
-  }
-  .unit-mapping-graph .node > text {
-    fill: var(--foreground);
-  }
-  .unit-mapping-graph .node.weight > path {
-    fill: color-mix(in oklab, var(--chart-1) 16%, var(--card));
-    stroke: color-mix(in oklab, var(--chart-1) 50%, var(--border));
-  }
-  .unit-mapping-graph .node.volume > path {
-    fill: color-mix(in oklab, var(--chart-6) 18%, var(--card));
-    stroke: color-mix(in oklab, var(--chart-6) 50%, var(--border));
-  }
-  .unit-mapping-graph .node.money > path {
-    fill: color-mix(in oklab, var(--positive) 16%, var(--card));
-    stroke: color-mix(in oklab, var(--positive) 50%, var(--border));
-  }
-  .unit-mapping-graph .node.calories > path {
-    fill: color-mix(in oklab, var(--chart-2) 20%, var(--card));
-    stroke: color-mix(in oklab, var(--chart-2) 55%, var(--border));
-  }
-  .unit-mapping-graph .node.nutrient > path {
-    fill: color-mix(in oklab, var(--chart-5) 15%, var(--card));
-    stroke: color-mix(in oklab, var(--chart-5) 45%, var(--border));
-  }
-  /* Edges + their factor labels: subtle muted connectors. The line is a <path>,
-     the arrowheads a filled <polygon>, the factor a <text>. */
-  .unit-mapping-graph .edge > path {
-    stroke: color-mix(in oklab, var(--muted-foreground) 55%, var(--border));
-  }
-  .unit-mapping-graph .edge > polygon {
-    fill: color-mix(in oklab, var(--muted-foreground) 55%, var(--border));
-    stroke: color-mix(in oklab, var(--muted-foreground) 55%, var(--border));
-  }
-  .unit-mapping-graph .edge > text {
-    fill: var(--muted-foreground);
-  }
 }

@@ -1,4 +1,4 @@
-import type { WUnitMapping } from "@cubby/recipebridge";
+import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { locationTypeValues, productCategoryValues } from "@cubby/shared";
 import { buildNutrients } from "@cubby/usda-schemas";
 import { Bell, FileText, Layers, Package, Wrench } from "lucide-react";
@@ -28,7 +28,7 @@ import {
 import { DecompositionView } from "~/app/_components/recipe/decomposition-view";
 import { RecipeTag } from "~/app/_components/recipe/recipe-tag";
 import { ImageStatusBadge } from "~/app/_components/table/StatusBadge";
-import { UnitMappingGraph } from "~/app/_components/units/UnitMappingGraph";
+import { UnitMappingGraph } from "~/app/_components/units/unit-mapping-graph";
 import { ColoredAlert } from "~/components/common/colored-alert";
 import { InfoRow } from "~/components/common/info-row";
 import { DashboardCard } from "~/components/layout/dashboard-card";
@@ -142,12 +142,21 @@ const CHART_SEQ_TOKENS = [
 // Spans every node kind so the conversion-graph theming (volume/weight/money/
 // nutrient/calories/other) is all visible on one canvas. Module-level keeps the
 // reference stable for the memoized graph.
-const GRAPH_FIXTURE: WUnitMapping[] = [
-  { a: { value: 1, unit: "cup" }, b: { value: 120, unit: "g" } },
-  { a: { value: 2, unit: "lb" }, b: { value: 5, unit: "dollar" } },
-  { a: { value: 100, unit: "g" }, b: { value: 281, unit: "mg potassium" } },
-  { a: { value: 100, unit: "g" }, b: { value: 387, unit: "kcal" } },
-  { a: { value: 1, unit: "cup packed" }, b: { value: 1, unit: "cup" } },
+const fixtureEdge = (
+  a: UnitMapping["a"],
+  b: UnitMapping["b"],
+): UnitMapping => ({
+  a,
+  b,
+  source: "fixture",
+  sourceMetadata: { type: "manual" },
+});
+const GRAPH_FIXTURE: UnitMapping[] = [
+  fixtureEdge({ value: 1, unit: "cup" }, { value: 120, unit: "g" }),
+  fixtureEdge({ value: 2, unit: "lb" }, { value: 5, unit: "dollar" }),
+  fixtureEdge({ value: 100, unit: "g" }, { value: 281, unit: "mg potassium" }),
+  fixtureEdge({ value: 100, unit: "g" }, { value: 387, unit: "kcal" }),
+  fixtureEdge({ value: 1, unit: "cup packed" }, { value: 1, unit: "cup" }),
 ];
 
 function Swatch({ token }: { token: string }) {
@@ -836,14 +845,14 @@ export function DesignGallery() {
 
       <GallerySection
         title="Conversion graph"
-        source="units/UnitMappingGraph · recipebridge print_graph"
+        source="units/unit-mapping-graph · d3-force"
       >
         <div className="space-y-2">
           <p className="font-mono text-3xs text-muted-foreground uppercase tracking-wider">
-            Nodes themed per measure kind · collapsed bidirectional edges ·
-            dashed tsp↔ml bridge
+            Nodes themed per measure kind · dashed native bridges (g↔lb) ·
+            nutrient edges opt-in
           </p>
-          <UnitMappingGraph unitMapping={GRAPH_FIXTURE} />
+          <UnitMappingGraph mappings={GRAPH_FIXTURE} includeNutrients />
         </div>
       </GallerySection>
 

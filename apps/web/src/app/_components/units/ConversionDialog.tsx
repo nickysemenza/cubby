@@ -31,7 +31,7 @@ import { wasm } from "~/lib/wasm";
 import type { Result } from "~/misc/result-types";
 import { ConversionCapabilities } from "./ConversionCapabilities";
 import { kindIconMap } from "./kind-icons";
-import { UnitMappingGraph } from "./UnitMappingGraph";
+import { UnitMappingGraph } from "./unit-mapping-graph";
 import { UnitMappingsTable } from "./unitmappingstable";
 
 const formSchema = z.object({
@@ -89,7 +89,7 @@ function ConversionDialogContent({
   // BaseKind ⊆ AmountKind, so a restricted set just narrows the rows shown.
   const effectiveKinds: readonly AmountKind[] = kinds ?? amountKinds;
   const showNutrientsId = useId();
-  const [showNutrients, setShowNutrients] = useState(true);
+  const [showNutrients, setShowNutrients] = useState(false);
   const [conversions, setConversions] = useState<
     Partial<Record<AmountKind, Result<WAmount>>>
   >({});
@@ -203,7 +203,11 @@ function ConversionDialogContent({
 
           <div className="space-y-2">
             <h4 className="font-medium text-sm">Conversion Graph</h4>
-            <UnitMappingGraph unitMapping={filteredMappings} />
+            <UnitMappingGraph
+              mappings={mappings}
+              includeNutrients={showNutrients}
+              height={220}
+            />
           </div>
         </div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">

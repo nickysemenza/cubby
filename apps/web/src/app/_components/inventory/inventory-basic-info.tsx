@@ -6,7 +6,7 @@ import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { MutedBox } from "~/components/layout/muted-box";
 import { Button } from "~/components/ui/button";
 import { EntityPillLink } from "../EntityPill";
-import { UnitMappingGraph } from "../units/UnitMappingGraph";
+import { UnitMappingGraph } from "../units/unit-mapping-graph";
 import { showAmountAndPrice } from "./format-amount";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
@@ -47,7 +47,7 @@ export const InventoryBasicInfo: FC<InventoryBasicInfoProps> = ({
       fields={fields}
       footer={
         <MutedBox>
-          <UnitMappingGraph unitMapping={inventoryitem.product.unitMappings} />
+          <UnitMappingGraph mappings={inventoryitem.product.unitMappings} />
         </MutedBox>
       }
       actions={

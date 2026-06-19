@@ -88,9 +88,16 @@ const amountKind = (unit: string): string => {
 export function UnitMappingGraph({
   mappings,
   height = 260,
+  includeNutrients = false,
 }: {
   mappings: UnitMapping[];
   height?: number;
+  /**
+   * Show the USDA per-nutrient edges (100 g = N mg potassium…). Off by default —
+   * they explode the node count and aren't about convertibility — but the
+   * conversion dialog's "Show nutrient mappings" toggle opts in.
+   */
+  includeNutrients?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const dim = useContainerDimensions(containerRef, {
@@ -113,7 +120,7 @@ export function UnitMappingGraph({
       }
     };
     for (const m of mappings) {
-      if (!isDisplayMapping(m)) continue;
+      if (!includeNutrients && !isDisplayMapping(m)) continue;
       ensure(m.a.unit);
       ensure(m.b.unit);
       linkArr.push({ source: m.a.unit, target: m.b.unit });
@@ -142,7 +149,7 @@ export function UnitMappingGraph({
     }
 
     return { nodes: [...nodeMap.values()], links: linkArr };
-  }, [mappings]);
+  }, [mappings, includeNutrients]);
 
   // Persist node positions across re-layouts so typing nudges the graph instead
   // of teleporting every node to a new random spot.
@@ -167,6 +174,9 @@ export function UnitMappingGraph({
     const linksCopy: ULink[] = links.map((l) => ({
       source: l.source,
       target: l.target,
+      // Preserve `native` so the tick handler's setSimLinks carries it to render
+      // (these draw dashed); without it every edge would render solid.
+      native: l.native,
     }));
 
     const sim = d3Force
