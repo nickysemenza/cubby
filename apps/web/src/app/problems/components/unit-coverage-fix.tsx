@@ -1,26 +1,17 @@
-import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
-import type { UnitMapping, UnitMappingInput } from "@cubby/schemas/unitmapping";
+import type { UnitMappingInput } from "@cubby/schemas/unitmapping";
 import { useQuery } from "@tanstack/react-query";
 import { Check } from "lucide-react";
 import { type ComponentProps, useState } from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
-import { UsdaFoodSearchField } from "~/app/_components/combobox/with-usda-food-search";
 import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
-import { UnitMappingsTable } from "~/app/_components/units/unitmappingstable";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { BASE_KINDS } from "~/lib/conversion-coverage";
 import { queryKeys } from "~/lib/query-keys";
-import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
-import { wasm } from "~/lib/wasm";
 import { type RouterOutputs, useTRPC } from "~/trpc/react";
-import {
-  type IngredientFixSteps,
-  ingredientFixSteps,
-  type UnitCoverageItem,
-} from "./unit-coverage-items";
+import type { UnitCoverageItem } from "./unit-coverage-items";
 
 type ProductDetail = NonNullable<RouterOutputs["product"]["getByID"]>;
 
@@ -84,14 +75,6 @@ const parsePositive = (raw: string): number | null => {
   return Number.isFinite(n) && n > 0 ? n : null;
 };
 
-/** Like {@link parsePositive} but allows 0 — e.g. a 0-calorie food like salt. */
-const parseNonNegative = (raw: string): number | null => {
-  const n = Number.parseFloat(raw);
-  return Number.isFinite(n) && n >= 0 ? n : null;
-};
-
-const CORE_4: ReadonlySet<string> = new Set(BASE_KINDS);
-
 /**
  * Merge new mappings onto a product's existing rows for a `product.update`,
  * which replace-all's the whole set — so omitting the existing rows (carried
@@ -114,46 +97,6 @@ function withExistingMappings(
   ];
 }
 
-// A mapping is "core-4 related" if it connects to one of the four base kinds and
-// isn't a non-calorie nutrient edge (the USDA nutrition synthesis emits a
-// "100 g = N g protein/fat/…" row per tier-1 nutrient — noise for this view).
-const isCore4Edge = (m: UnitMapping): boolean => {
-  const ka = wasm.amount_kind(m.a);
-  const kb = wasm.amount_kind(m.b);
-  if (ka.startsWith("nutrient:") || kb.startsWith("nutrient:")) return false;
-  return CORE_4.has(ka) || CORE_4.has(kb);
-};
-
-/**
- * The product's existing conversions that bear on the core-4 coverage, with
- * their source (USDA portion / nutrition / price / manual) — so it's clear what
- * already covers which kinds before adding more. Loads the product on expand and
- * synthesizes the effective edges (the same set the chips are graded from).
- */
-function CurrentCore4Mappings({ productId }: { productId: string }) {
-  const api = useTRPC();
-  const { data: product } = useQuery(
-    api.product.getByID.queryOptions({ id: productId }),
-  );
-  if (!product) return null;
-
-  let effective: UnitMapping[];
-  try {
-    effective = getAllUnitMappingsFromProduct(product);
-  } catch {
-    return null;
-  }
-  const core4 = effective.filter(isCore4Edge);
-  if (core4.length === 0) return null;
-
-  return (
-    <div className="space-y-1">
-      <p className="font-medium text-xs">Current conversions</p>
-      <UnitMappingsTable mappings={core4} />
-    </div>
-  );
-}
-
 /** The inline fix body — variant chosen by the item's kind / ingredient flag. */
 export function UnitCoverageInlineFix({
   item,
@@ -162,41 +105,18 @@ export function UnitCoverageInlineFix({
   item: UnitCoverageItem;
   close: () => void;
 }) {
+  // Ingredient cases (`partial`, `none` + ingredient) are handled by a "Fix in
+  // workbench" link in the section — the workbench is the one editor for
+  // ingredient enrichment — so they never reach here. Only the non-ingredient
+  // inline fixes remain: bridge islands, or set a price on a non-food product.
   return match(item)
     .with({ kind: "islanded" }, (i) => (
       <DisconnectedFix id={i.id} islands={i.islands} close={close} />
     ))
-    .with({ kind: "partial" }, (i) => (
-      <IngredientFix
-        id={i.id}
-        name={i.name}
-        close={close}
-        {...ingredientFixSteps({
-          covered: i.coverage.covered,
-          hasPrice: i.hasPrice,
-          hasUsdaLink: i.hasUsdaLink,
-          usdaUnavailable: i.usdaUnavailable,
-        })}
-      />
+    .with({ kind: "none", isIngredient: false }, (i) => (
+      <PriceFix id={i.id} close={close} />
     ))
-    .with({ kind: "none", isIngredient: true }, (i) => (
-      // Truly-empty ingredient: it's a `partial` with empty coverage and no
-      // price/USDA link (its DB filter guarantees that), so the same step
-      // derivation applies.
-      <IngredientFix
-        id={i.id}
-        name={i.name}
-        close={close}
-        {...ingredientFixSteps({
-          covered: [],
-          hasPrice: false,
-          hasUsdaLink: false,
-          usdaUnavailable: i.usdaUnavailable,
-        })}
-      />
-    ))
-    .with({ kind: "none" }, (i) => <PriceFix id={i.id} close={close} />)
-    .exhaustive();
+    .otherwise(() => null);
 }
 
 /** Non-food product: a price is the whole fix. */
@@ -237,272 +157,6 @@ function PriceFix({ id, close }: { id: string; close: () => void }) {
           Save price
         </Button>
       </div>
-    </div>
-  );
-}
-
-/**
- * Ingredient missing coverage. Renders only the steps for what's actually
- * missing: the USDA-link step when weight/volume/calories aren't all covered
- * (`showUsda`), and/or the price step when there's no price (`showPrice`).
- * Re-linking an already-linked food or blanking an existing price would be
- * wrong, so the caller derives these from the graded coverage. Lands in one
- * product.update.
- */
-function IngredientFix({
-  id,
-  name,
-  close,
-  showUsda,
-  showManual,
-  showPrice,
-  showCalories,
-  allowMarkNoUsda,
-}: {
-  id: string;
-  name: string;
-  close: () => void;
-} & IngredientFixSteps) {
-  const api = useTRPC();
-  const [food, setFood] = useState<FoodSummaryWithLinkedProducts | null>(null);
-  // Price entry is "<qty> <unit> = $<price>". Defaults to "1 each" (the scalar
-  // per-each price), but any measure unit (e.g. "5 lb") becomes a money mapping.
-  const [priceQty, setPriceQty] = useState("1");
-  const [priceUnit, setPriceUnit] = useState("each");
-  const [price, setPrice] = useState("");
-  const [kcal, setKcal] = useState("");
-  // Free-form conversion "<qty> <unit> = <qty> <unit>" for the residual gaps the
-  // guided steps can't express (e.g. a volume the linked food's unit doesn't
-  // cover, or connecting an islanded each-price into the weight graph).
-  const [cFromQty, setCFromQty] = useState("1");
-  const [cFromUnit, setCFromUnit] = useState("");
-  const [cToQty, setCToQty] = useState("");
-  const [cToUnit, setCToUnit] = useState("g");
-  // Existing mappings, so a per-measure price appends rather than replaces them
-  // (product.update swaps the whole set). Cached/deduped with CurrentCore4Mappings.
-  const { data: product } = useQuery(api.product.getByID.queryOptions({ id }));
-  // Also invalidate this product's detail query so the "Current conversions"
-  // table (CurrentCore4Mappings reads getByID) reflects the save, not a stale cache.
-  const productKey = api.product.getByID.queryKey({ id });
-  const update = useProblemCardMutation({
-    mutationFn: api.product.update.mutationOptions,
-    success: "Coverage updated",
-    invalidateKeys: [queryKeys.product.list, productKey],
-    onSuccess: close,
-  });
-  // Marking "no USDA entry" doesn't close the card — it flips this same card into
-  // manual-entry mode (the refetched item re-renders the steps).
-  const markNoUsda = useProblemCardMutation({
-    mutationFn: api.product.update.mutationOptions,
-    success: "Marked: no USDA entry — enter values manually",
-    invalidateKeys: [queryKeys.product.list, productKey],
-  });
-
-  const save = () => {
-    const data: {
-      fdc_id?: number;
-      price?: number;
-      unitMappings?: UnitMappingInput[];
-    } = {};
-    // Per-measure price (e.g. 5 lb = $8) and calories (100 g = N kcal) are unit
-    // mappings; collected here and appended to the existing set in one go.
-    const newMappings: UnitMappingInput[] = [];
-
-    // Mirror the product form's handleUsdaSelect: store the food's fdc_id (the
-    // universal link, works for any food type).
-    if (showUsda && food) {
-      data.fdc_id = food.fdc_id;
-    }
-    if (showPrice) {
-      const dollars = parsePositive(price);
-      if (dollars != null) {
-        const qty = parsePositive(priceQty) ?? 1;
-        const unit = priceUnit.trim() || "each";
-        if (unit.toLowerCase() === "each") {
-          // The per-each price is the product's own scalar field, not a mapping.
-          data.price = dollars / qty;
-        } else {
-          // A per-measure price wires money straight into the weight/volume graph.
-          newMappings.push({
-            a: { value: qty, unit },
-            b: { value: dollars, unit: "dollar" },
-            source: "manual: price (problems page)",
-          });
-        }
-      }
-    }
-    if (showCalories) {
-      const k = parseNonNegative(kcal);
-      if (k != null) {
-        newMappings.push({
-          a: { value: 100, unit: "g" },
-          b: { value: k, unit: "kcal" },
-          source: "manual: calories (problems page)",
-        });
-      }
-    }
-    if (showManual) {
-      const fromQty = parsePositive(cFromQty);
-      const toQty = parsePositive(cToQty);
-      const fromUnit = cFromUnit.trim();
-      const toUnit = cToUnit.trim();
-      if (fromQty != null && toQty != null && fromUnit && toUnit) {
-        newMappings.push({
-          a: { value: fromQty, unit: fromUnit },
-          b: { value: toQty, unit: toUnit },
-          source: "manual: conversion (problems page)",
-        });
-      } else if (cFromUnit.trim() || cToQty.trim()) {
-        // Partially filled — tell them rather than silently saving nothing.
-        toast.error("Fill in both sides of the conversion");
-        return;
-      }
-    }
-
-    if (newMappings.length > 0) {
-      const merged = withExistingMappings(product, newMappings);
-      if (!merged) {
-        toast.error("Couldn't load current conversions — try again");
-        return;
-      }
-      data.unitMappings = merged;
-    }
-
-    if (Object.keys(data).length === 0) {
-      toast.error("Fill in a field above to save");
-      return;
-    }
-    update.mutate({ id, data });
-  };
-
-  return (
-    <div className="space-y-3">
-      <CurrentCore4Mappings productId={id} />
-      {showUsda && (
-        <div className="space-y-1">
-          <p className="font-medium text-xs">
-            Link a USDA food{" "}
-            <span className="font-normal text-muted-foreground">
-              — fills weight, volume &amp; calories
-            </span>
-          </p>
-          <UsdaFoodSearchField
-            initialQuery={name}
-            label=""
-            onSelect={setFood}
-          />
-          {food && (
-            <p className="text-positive text-xs">
-              Linked: {food.foodInfo.description}
-            </p>
-          )}
-          {allowMarkNoUsda && (
-            <button
-              type="button"
-              className="text-muted-foreground text-xs underline underline-offset-2 hover:text-foreground"
-              onClick={() =>
-                markNoUsda.mutate({ id, data: { usdaUnavailable: true } })
-              }
-              disabled={markNoUsda.isPending}
-            >
-              No USDA entry exists — enter values manually
-            </button>
-          )}
-        </div>
-      )}
-      {showPrice && (
-        <div className="space-y-1">
-          <p className="font-medium text-xs">Set a price</p>
-          <div className="flex items-center gap-1.5 text-sm">
-            <NumberInput
-              value={priceQty}
-              onChange={(e) => setPriceQty(e.target.value)}
-              className="w-12"
-              aria-label="Price quantity"
-            />
-            <Input
-              value={priceUnit}
-              onChange={(e) => setPriceUnit(e.target.value)}
-              className="w-16"
-              aria-label="Price unit"
-            />
-            <span>= $</span>
-            <NumberInput
-              step="0.01"
-              placeholder="0.00"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              className="w-20"
-            />
-          </div>
-          <p className="text-muted-foreground text-xs">
-            Bulk or generic? Price by measure, e.g. 5 lb = $8.
-          </p>
-        </div>
-      )}
-      {showCalories && (
-        <div className="space-y-1">
-          <p className="font-medium text-xs">
-            Set calories{" "}
-            <span className="font-normal text-muted-foreground">
-              — USDA had none (0 is fine, e.g. salt)
-            </span>
-          </p>
-          <div className="flex items-center gap-1.5 text-sm">
-            <span>100 g =</span>
-            <NumberInput
-              placeholder="0"
-              value={kcal}
-              onChange={(e) => setKcal(e.target.value)}
-              className="w-20"
-              aria-label="Calories per 100 g"
-            />
-            <span>kcal</span>
-          </div>
-        </div>
-      )}
-      {showManual && (
-        <div className="space-y-1">
-          <p className="font-medium text-xs">
-            Add a conversion{" "}
-            <span className="font-normal text-muted-foreground">
-              — e.g. 1 cup = 240 g
-            </span>
-          </p>
-          <div className="flex items-center gap-1.5 text-sm">
-            <NumberInput
-              value={cFromQty}
-              onChange={(e) => setCFromQty(e.target.value)}
-              className="w-12"
-              aria-label="From quantity"
-            />
-            <Input
-              value={cFromUnit}
-              onChange={(e) => setCFromUnit(e.target.value)}
-              placeholder="cup"
-              className="w-16"
-              aria-label="From unit"
-            />
-            <span>=</span>
-            <NumberInput
-              value={cToQty}
-              onChange={(e) => setCToQty(e.target.value)}
-              className="w-14"
-              aria-label="To quantity"
-            />
-            <Input
-              value={cToUnit}
-              onChange={(e) => setCToUnit(e.target.value)}
-              placeholder="g"
-              className="w-16"
-              aria-label="To unit"
-            />
-          </div>
-        </div>
-      )}
-      <Button size="sm" onClick={save} disabled={update.isPending}>
-        Save
-      </Button>
     </div>
   );
 }

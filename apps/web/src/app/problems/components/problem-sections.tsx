@@ -9,6 +9,7 @@ import {
   Network,
   Sparkles,
   Utensils,
+  Wrench,
   Zap,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -16,6 +17,7 @@ import { formatAmounts } from "~/app/_components/inventory/format-amount";
 import { DriftIndicator } from "~/app/_components/parse-drift-indicator";
 import { DecompositionView } from "~/app/_components/recipe/decomposition-view";
 import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
 import { EntityIcon } from "~/entities/entities";
 import { formatCurrencyRange, formatNumberRange } from "~/lib/format-range";
 import { formatCurrency } from "~/lib/utils";
@@ -133,6 +135,30 @@ const INDICATOR_LABELS: Record<"fdc" | "ingredient", string> = {
 };
 
 /** Card for the merged "Unit coverage" section — core-4 chips + the inline fix. */
+/**
+ * "Fix in workbench" action — the ingredient-enrichment workbench is the one
+ * place to link USDA / set price / add conversions / merge (the Problems page no
+ * longer hosts a second, worse inline editor for that). Deep-links to the exact
+ * ingredient row via `?focus=` so a click lands ready to edit.
+ */
+function WorkbenchFixLink({ ingredientId }: { ingredientId: string | null }) {
+  return (
+    <Button
+      size="sm"
+      render={
+        <Link
+          to="/ingredients/workbench"
+          search={ingredientId ? { focus: ingredientId } : {}}
+        />
+      }
+      nativeButton={false}
+    >
+      <Wrench className="mr-1 h-3 w-3" />
+      Fix in workbench
+    </Button>
+  );
+}
+
 function renderUnitCoverageItem(item: UnitCoverageItem): RenderedProblemItem {
   const base = {
     title: item.name,
@@ -146,6 +172,35 @@ function renderUnitCoverageItem(item: UnitCoverageItem): RenderedProblemItem {
       <UnitCoverageInlineFix item={item} close={close} />
     ),
   });
+
+  if (item.kind === "partial") {
+    // Ingredient enrichment → the workbench (not a second inline editor).
+    return {
+      ...base,
+      customActions: <WorkbenchFixLink ingredientId={item.ingredientId} />,
+      details: [
+        <CoverageChips
+          key="cov"
+          covered={item.coverage.covered}
+          usdaLinked={item.hasUsdaLink}
+        />,
+      ],
+    };
+  }
+
+  if (item.kind === "none" && item.isIngredient) {
+    // Bare ingredient product → the workbench creates/links it properly.
+    return {
+      ...base,
+      customActions: <WorkbenchFixLink ingredientId={item.ingredientId} />,
+      badges: [
+        <Badge key="none" variant="outline" className="w-fit">
+          No conversions
+        </Badge>,
+      ],
+      details: [<CoverageChips key="cov" covered={[]} />],
+    };
+  }
 
   if (item.kind === "islanded") {
     return {
@@ -170,23 +225,11 @@ function renderUnitCoverageItem(item: UnitCoverageItem): RenderedProblemItem {
     };
   }
 
-  if (item.kind === "partial") {
-    return {
-      ...base,
-      inlineFix: inlineFix("Fix coverage"),
-      details: [
-        <CoverageChips
-          key="cov"
-          covered={item.coverage.covered}
-          usdaLinked={item.hasUsdaLink}
-        />,
-      ],
-    };
-  }
-
+  // Remaining: `none` and not an ingredient — a non-food product that just needs
+  // a price. Keep the lightweight inline PriceFix.
   return {
     ...base,
-    inlineFix: inlineFix(item.isIngredient ? "Fix coverage" : "Set price"),
+    inlineFix: inlineFix("Set price"),
     badges: [
       <Badge key="none" variant="outline" className="w-fit">
         No conversions
@@ -326,6 +369,8 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
         `Used in ${ing.recipeCount} recipe${ing.recipeCount === 1 ? "" : "s"}`,
       ],
       route: { to: "/ingredients/$id", params: { id: ing.id } },
+      // The workbench can actually create the product; the detail page can't.
+      customActions: <WorkbenchFixLink ingredientId={ing.id} />,
     }),
   }),
   section({

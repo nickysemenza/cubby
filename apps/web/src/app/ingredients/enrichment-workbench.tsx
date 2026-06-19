@@ -15,7 +15,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { type Ref, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
 import { UsdaFoodSearchField } from "~/app/_components/combobox/with-usda-food-search";
@@ -152,7 +152,7 @@ function UnitInput({
  * and add conversions. Select rows to run AI USDA suggestions and create products
  * in bulk, or mark "no USDA exists" — without the modal-per-ingredient grind.
  */
-export function EnrichmentWorkbench() {
+export function EnrichmentWorkbench({ focus }: { focus?: string }) {
   const api = useTRPC();
   const [filter, setFilter] = useState<FilterKey>("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -168,6 +168,26 @@ export function EnrichmentWorkbench() {
   );
 
   const rows = useMemo(() => data ?? [], [data]);
+
+  // Arriving from a Problems "Fix in workbench" link: scroll the targeted
+  // ingredient's row into view once the data loads (it auto-expands via
+  // WorkbenchRow's defaultOpen). `focus` stays on the default "all" filter so the
+  // row is never filtered out.
+  const focusRowRef = useRef<HTMLTableRowElement>(null);
+  useEffect(() => {
+    if (!focus || isLoading) return;
+    // The worklist is recipe-used ingredients that aren't fully costable yet, so
+    // a focus target can be absent (e.g. a partial-coverage product whose
+    // ingredient isn't in any recipe). Say so rather than silently doing nothing.
+    if (!rows.some((r) => r.id === focus)) {
+      toast.info("That ingredient isn't in the workbench worklist.");
+      return;
+    }
+    focusRowRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
+  }, [focus, rows, isLoading]);
 
   const counts = useMemo(
     () => ({
@@ -385,6 +405,8 @@ export function EnrichmentWorkbench() {
                   suggestion={suggestions[row.id] ?? null}
                   mergeSuggestion={mergeSuggestions[row.id] ?? null}
                   onMerge={handleMerge}
+                  defaultOpen={row.id === focus}
+                  rowRef={row.id === focus ? focusRowRef : undefined}
                 />
               ))}
             </tbody>
@@ -451,6 +473,8 @@ function WorkbenchRow({
   suggestion,
   mergeSuggestion,
   onMerge,
+  defaultOpen = false,
+  rowRef,
 }: {
   row: EnrichmentRow;
   selected: boolean;
@@ -458,12 +482,17 @@ function WorkbenchRow({
   suggestion: Suggestion | null;
   mergeSuggestion: { targetId: string; targetName: string } | null;
   onMerge: (sourceId: string, targetId: string) => void;
+  /** Start expanded (deep-link focus from the Problems page). */
+  defaultOpen?: boolean;
+  /** Ref on the row's first <tr>, so the parent can scroll it into view. */
+  rowRef?: Ref<HTMLTableRowElement>;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
 
   return (
     <>
       <tr
+        ref={rowRef}
         className={cn(
           "cursor-pointer border-b transition-colors hover:bg-accent/40",
           (open || selected) && "bg-accent/30",

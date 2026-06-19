@@ -1,7 +1,7 @@
+import { unsafeIngredientId } from "@cubby/schemas/identifiers";
 import { describe, expect, it } from "vitest";
 import {
   buildUnitCoverageItems,
-  ingredientFixSteps,
   type UnitCoverageItem,
   unitCoverageGroup,
 } from "./unit-coverage-items";
@@ -17,6 +17,7 @@ const noMappingProduct = (over: Partial<NoMappings> = {}): NoMappings => ({
   createdAt: new Date(0),
   isIngredient: true,
   usdaUnavailable: false,
+  ingredientId: null,
   ...over,
 });
 
@@ -28,6 +29,7 @@ const partialProduct = (over: Partial<Partial_> = {}): Partial_ => ({
   hasPrice: true,
   hasUsdaLink: false,
   usdaUnavailable: false,
+  ingredientId: unsafeIngredientId("i2"),
   ...over,
 });
 
@@ -71,59 +73,6 @@ describe("buildUnitCoverageItems", () => {
 
   it("returns an empty list when all sources are empty", () => {
     expect(buildUnitCoverageItems([], [], [])).toEqual([]);
-  });
-});
-
-describe("ingredientFixSteps", () => {
-  // Each case mirrors a bug-fix iteration the derivation was tuned for.
-  const steps = (over: Partial<Parameters<typeof ingredientFixSteps>[0]>) =>
-    ingredientFixSteps({
-      covered: [],
-      hasPrice: false,
-      hasUsdaLink: false,
-      usdaUnavailable: false,
-      ...over,
-    });
-
-  it("empty ingredient: offers USDA + price + mark-no-USDA", () => {
-    expect(steps({})).toEqual({
-      showUsda: true,
-      showManual: false,
-      showPrice: true,
-      showCalories: false,
-      allowMarkNoUsda: true,
-    });
-  });
-
-  it("already-linked: drops USDA, switches to manual entry", () => {
-    const s = steps({ hasUsdaLink: true, covered: ["weight", "volume"] });
-    expect(s.showUsda).toBe(false);
-    expect(s.showManual).toBe(true);
-    expect(s.allowMarkNoUsda).toBe(false);
-  });
-
-  it("already-priced: drops the price step", () => {
-    expect(steps({ hasPrice: true }).showPrice).toBe(false);
-  });
-
-  it("marked no-USDA: drops USDA, offers manual + calories", () => {
-    const s = steps({ usdaUnavailable: true });
-    expect(s.showUsda).toBe(false);
-    expect(s.showManual).toBe(true);
-    expect(s.showCalories).toBe(true);
-    expect(s.allowMarkNoUsda).toBe(false);
-  });
-
-  it("linked food missing only calories: offers the calorie step via manual mode", () => {
-    const s = steps({ hasUsdaLink: true, covered: ["weight", "volume"] });
-    expect(s.showUsda).toBe(false);
-    expect(s.showCalories).toBe(true);
-  });
-
-  it("weight+volume+calories all covered: USDA link is moot even when unlinked", () => {
-    const s = steps({ covered: ["weight", "volume", "calories"] });
-    expect(s.showUsda).toBe(false);
-    expect(s.showCalories).toBe(false);
   });
 });
 

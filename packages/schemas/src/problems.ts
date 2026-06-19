@@ -48,6 +48,9 @@ export const productWithoutMappingsSchema = productProblemBase.extend({
   createdAt: z.date(),
   isIngredient: z.boolean(),
   usdaUnavailable: z.boolean(),
+  // The linked ingredient (null for non-food products), so the Problems card can
+  // deep-link the ingredient-enrichment workbench to this exact row.
+  ingredientId: ingredientId.nullable(),
 });
 
 export const ingredientWithPartialCoverageSchema = productProblemBase.extend({
@@ -55,6 +58,8 @@ export const ingredientWithPartialCoverageSchema = productProblemBase.extend({
   hasPrice: z.boolean(),
   hasUsdaLink: z.boolean(),
   usdaUnavailable: z.boolean(),
+  // Always set here (these rows are ingredient products) — see above.
+  ingredientId,
 });
 
 export const ingredientWithoutProductSchema = z.object({

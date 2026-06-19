@@ -256,6 +256,7 @@ const findProductsWithoutMappings = async (
       ...rest,
       isIngredient: ingredientId != null,
       usdaUnavailable: usdaUnavailable ?? false,
+      ingredientId,
     }));
 };
 
@@ -301,6 +302,7 @@ const findIngredientsWithPartialCoverage = async (
       fdc_id: true,
       price: true,
       usdaUnavailable: true,
+      ingredientId: true,
     },
     with: {
       unitMappings: {
@@ -331,6 +333,10 @@ const findIngredientsWithPartialCoverage = async (
     const effective = synthesizeEffectiveMappings(p);
     if (!effective) continue;
 
+    // The query filters isNotNull(ingredientId), so this never skips; it just
+    // narrows the type for the non-nullable schema field.
+    if (p.ingredientId == null) continue;
+
     const cov = conversionCoverage(effective, BASE_KINDS);
 
     // Flag any food whose effective graph can't reach all four base kinds. This
@@ -353,6 +359,7 @@ const findIngredientsWithPartialCoverage = async (
       hasPrice,
       hasUsdaLink: p.food != null,
       usdaUnavailable: p.usdaUnavailable ?? false,
+      ingredientId: p.ingredientId,
     });
   }
 
