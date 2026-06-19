@@ -404,6 +404,13 @@ const upsertRecipeMatching = async (
           // Like sections, notes are replaced from the import source on re-import
           // (a manual edit doesn't survive a re-import).
           notes: input.notes ?? null,
+          // yield/servings also reflect the source on re-import (every importer
+          // carries them, null when unparsed). Previously omitted -> stale forever.
+          yield: input.yield ?? null,
+          servings: input.servings ?? null,
+          // Tags only when the importer actually supplies them (Notion page columns).
+          // Web/cookbook imports leave tags undefined, so don't clobber manual tags.
+          ...(input.tags !== undefined ? { tags: input.tags } : {}),
           updatedAt: new Date(),
         },
         eq(recipe.id, existingId),

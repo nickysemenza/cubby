@@ -148,6 +148,37 @@ describe("recipe crud repo", () => {
       expect(full?.name).toBe("Renamed Title");
     });
 
+    it("upsertNotionRecipe re-import syncs changed tags and servings", async () => {
+      const pageId = "notion-page-tags";
+      const first = await upsertNotionRecipe(
+        {
+          ...makeRecipeInput({ name: "Tagged" }),
+          servings: 4,
+          tags: ["dinner"],
+        },
+        pageId,
+        ctx.db,
+        ctx.actor,
+      );
+      // Notion supplies tags from page columns, so a re-import reflects them
+      // (including changes) — unlike a manual edit, which doesn't survive.
+      const reimport = await upsertNotionRecipe(
+        {
+          ...makeRecipeInput({ name: "Tagged" }),
+          servings: 8,
+          tags: ["lunch", "quick"],
+        },
+        pageId,
+        ctx.db,
+        ctx.actor,
+      );
+      expect(reimport.id).toBe(first.id);
+
+      const full = await getRecipeByID(ctx.db, reimport.id);
+      expect(full?.servings).toBe(8);
+      expect(full?.tags).toEqual(["lunch", "quick"]);
+    });
+
     it("upsertRecipe (web) does not collide with a same-named cookbook recipe", async () => {
       const { id: cookbookId } = await upsertCookbook(
         ctx.db,

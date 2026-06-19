@@ -166,6 +166,52 @@ describe("upsertImportRecipe", () => {
     expect(secondSection!.ingredients).toHaveLength(1); // cinnamon
   });
 
+  it("re-import updates yield/servings and preserves manually-set tags", async () => {
+    // First import: 4 servings, makes 2 loaves.
+    const first = await upsertImportRecipe(
+      makeImportRecipe({
+        meta: {
+          title: "Yield Recipe",
+          recipe_yield: { value: 2, unit: "loaves" },
+        },
+        servings: 4,
+        sections: [{ instructions: ["Mix"], ingredients: ["2 cups flour"] }],
+      }),
+      ctx.db,
+      ctx.actor,
+    );
+
+    // A manual edit a web import can't express: tag the recipe.
+    await getDb(ctx.db)
+      .update(recipe)
+      .set({ tags: ["dinner"] })
+      .where(eq(recipe.id, first.id));
+
+    // Re-import the same recipe (matched by name) with changed yield + servings.
+    const second = await upsertImportRecipe(
+      makeImportRecipe({
+        meta: {
+          title: "Yield Recipe",
+          recipe_yield: { value: 4, unit: "loaves" },
+        },
+        servings: 8,
+        sections: [{ instructions: ["Mix"], ingredients: ["2 cups flour"] }],
+      }),
+      ctx.db,
+      ctx.actor,
+    );
+    expect(second.id).toBe(first.id); // updated in place, not a new row
+
+    const updated = await getDb(ctx.db).query.recipe.findFirst({
+      where: eq(recipe.id, first.id),
+    });
+    // yield/servings reflect the re-import source (the bug: previously stale)...
+    expect(updated!.servings).toBe(8);
+    expect(updated!.yield).toEqual({ value: 4, unit: "loaves" });
+    // ...but the manually-added tag survives, since web imports carry no tags.
+    expect(updated!.tags).toEqual(["dinner"]);
+  });
+
   it("handles multiple upserts correctly (back-to-back npm run load-data scenario)", async () => {
     // This tests the exact scenario mentioned - running load-data multiple times
     const firstRun = await upsertImportRecipe(mockRecipe, ctx.db, ctx.actor);
