@@ -1,6 +1,6 @@
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, Import, RefreshCw } from "lucide-react";
+import { AlertCircle, Import } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
@@ -9,7 +9,6 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Spinner } from "~/components/ui/spinner";
 import { getErrorMessage } from "~/lib/error-utils";
 import { queryKeys } from "~/lib/query-keys";
-import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import type { ImportResult } from "../cookbook-import/types";
 import { RecipeImportCard } from "../recipe-import-card";
@@ -26,22 +25,25 @@ type PreviewItem = {
 
 /**
  * Import recipes from the Notion "Recipes" database. Mirrors the cookbook
- * importer's preview-then-commit flow, minus the EPUB acquisition phase: one
- * "Load from Notion" fetch parses every row server-side, the list (the shared
- * {@link RecipeImportCard}) lets you pick a subset (non-conforming rows are
- * disabled with reasons), and a per-recipe loop commits with live status.
+ * importer's preview-then-commit flow, minus the EPUB acquisition phase: the
+ * preview auto-loads on mount (parsing every row server-side), the list (the
+ * shared {@link RecipeImportCard}) lets you pick a subset (non-conforming rows
+ * are disabled with reasons), and a per-recipe loop commits with live status.
  * Re-import is keyed on the Notion page id.
  */
 export function NotionImport() {
   const api = useTRPC();
   const queryClient = useQueryClient();
-  const [loaded, setLoaded] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [results, setResults] = useState<Map<string, ImportResult>>(new Map());
   const [importing, setImporting] = useState(false);
 
+  // Auto-loads on mount: reading the Notion Recipes DB is the whole point of the
+  // page, so there's no reason to gate it behind a click. staleTime: 0 means every
+  // visit (refresh or in-app nav) refetches the current Notion state, which is what
+  // a refresh button would have done — so we don't need one.
   const preview = useQuery(
-    api.recipe.previewNotionSync.queryOptions(undefined, { enabled: loaded }),
+    api.recipe.previewNotionSync.queryOptions(undefined, { staleTime: 0 }),
   );
   const importMut = useMutation(
     api.recipe.importNotionRecipe.mutationOptions(),
@@ -124,22 +126,7 @@ export function NotionImport() {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={() => {
-            setLoaded(true);
-            if (loaded) void preview.refetch();
-          }}
-          disabled={preview.isFetching}
-        >
-          <RefreshCw
-            className={cn("mr-1 h-4 w-4", preview.isFetching && "animate-spin")}
-          />
-          {loaded ? "Reload from Notion" : "Load from Notion"}
-        </Button>
-        {loaded && !preview.isFetching && (
+        {preview.isSuccess && (
           <span className="text-muted-foreground text-sm">
             {items.length} recipe{items.length === 1 ? "" : "s"}
             {summary && ` · ${summary}`}
@@ -166,7 +153,7 @@ export function NotionImport() {
         </p>
       )}
 
-      {loaded && preview.isFetching && items.length === 0 && (
+      {preview.isFetching && items.length === 0 && (
         <p className="flex items-center gap-2 text-muted-foreground text-sm">
           <Spinner className="h-4 w-4" /> Reading the Notion Recipes database…
         </p>
