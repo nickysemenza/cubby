@@ -85,10 +85,13 @@ const { getByID, list } = createEntityCrudProcedures({
   entityName: "product",
 });
 
-// Custom create procedure that imports UPC images after product creation
+// Custom create procedure: imports UPC images + eagerly recomputes the new
+// product's recipes (linking a product makes its ingredient costable). The bulk
+// `createMany` path stays deferred (mark-stale → drain) so it doesn't recompute
+// shared recipes once per product.
 const create = protectedProcedure
   .input(productCreateInput)
-  .output(productWithFoodOut)
+  .output(productWithFoodOut.extend({ sideEffects: recomputeSummary }))
   .mutation(async ({ ctx, input }) => {
     // Create the product
     const product = await ctx.services.product.createProduct(
@@ -110,7 +113,14 @@ const create = protectedProcedure
       }
     }
 
-    return product;
+    const ingredientId = product.ingredient?.id;
+    const recipesRecomputed = ingredientId
+      ? await ctx.services.recipeCosting.recomputeForIngredient(ingredientId)
+      : 0;
+    return {
+      ...product,
+      sideEffects: { recipesRecomputed, inventoryValuationsUpdated: 0 },
+    };
   });
 
 // Custom update: a product's price/USDA link feeds recipe cost via its linked
