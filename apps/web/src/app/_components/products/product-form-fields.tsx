@@ -23,8 +23,8 @@ import {
   SideBySideFields,
   UnifiedTextField,
 } from "../form-utils";
-import { AmountFieldGroup } from "../inventory/amount-field-group";
 import { type PendingImage, PendingImageUpload } from "../PendingImageUpload";
+import { UnitMappingPairField } from "../units/unit-mapping-pair-field";
 import { CategoryFieldWithAI } from "./category-field-with-ai";
 import { IdentifyProductButton } from "./identify-product-with-ai";
 
@@ -403,42 +403,11 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
           }}
         >
           {(_, index) => (
-            <>
-              <div className="min-w-[11rem] flex-1">
-                <AmountFieldGroup
-                  compact
-                  form={form}
-                  valuePath={
-                    `unitMappings.${index}.a.value` as Path<TFieldValues>
-                  }
-                  unitPath={
-                    `unitMappings.${index}.a.unit` as Path<TFieldValues>
-                  }
-                />
-              </div>
-              <span className="pb-1.5 text-muted-foreground">=</span>
-              <div className="min-w-[11rem] flex-1">
-                <AmountFieldGroup
-                  compact
-                  form={form}
-                  valuePath={
-                    `unitMappings.${index}.b.value` as Path<TFieldValues>
-                  }
-                  unitPath={
-                    `unitMappings.${index}.b.unit` as Path<TFieldValues>
-                  }
-                />
-              </div>
-              <div className="min-w-[8rem] flex-1">
-                <UnifiedTextField
-                  form={form}
-                  name={`unitMappings.${index}.source` as Path<TFieldValues>}
-                  label="Source"
-                  placeholder="Optional"
-                  nullable={true}
-                />
-              </div>
-            </>
+            <UnitMappingPairField
+              form={form}
+              path={`unitMappings.${index}`}
+              showSource
+            />
           )}
         </ArrayFieldManager>
       )}

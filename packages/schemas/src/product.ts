@@ -115,6 +115,15 @@ export const productUpdateInput = z.object({
   data: productUpdateData,
 });
 
+// Filters accepted by the product list endpoint. Canonical shape shared by the
+// tRPC router (and available to any other list caller).
+export const productFiltersSchema = z.object({
+  nameFilter: z.string().optional(),
+  manufacturerFilter: z.string().optional(),
+  upcFilter: z.string().optional(),
+  categoryFilter: productCategory.optional(),
+});
+
 // Response schema for product data
 export const productTopLevelOut = z
   .object({

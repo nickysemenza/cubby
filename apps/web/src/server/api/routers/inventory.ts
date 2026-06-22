@@ -16,6 +16,7 @@ import {
   bulkMovePayload,
   inventoryBulkOperationPayload,
   inventoryCreatePayloadData,
+  inventoryFiltersSchema,
   inventoryUpdateInput,
 } from "@cubby/schemas/inventory";
 import { duplicateUniqueProductSchema } from "@cubby/schemas/problems";
@@ -40,13 +41,6 @@ import {
   createEntityCrudProcedures,
 } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
-
-// Define filters schema for inventory entries
-const inventoryFiltersSchema = z.object({
-  productNameFilter: z.string().optional(),
-  locationNameFilter: z.string().optional(),
-  locationIdFilter: locationId.optional(),
-});
 
 // Create standardized CRUD procedures using factory
 const { getByID, list, create, update } = createEntityCrudProcedures({

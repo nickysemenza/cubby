@@ -27,6 +27,7 @@ import {
   cookbookSummary,
   recipeCostingExplain,
   recipeCreateInput,
+  recipeFiltersSchema,
   recipeOut,
   recipeUpdateInput,
 } from "@cubby/schemas/recipe";
@@ -81,13 +82,6 @@ import {
   createEntityCrudProcedures,
 } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
-
-// Define filters schema for recipes
-const recipeFiltersSchema = z.object({
-  nameFilter: z.string().optional(),
-  // Scope the list to one cookbook by FK id (cookbook detail page).
-  cookbookId: cookbookId.optional(),
-});
 
 // Shared output for endpoints that just return a newly upserted recipe's id.
 const recipeIdOut = z.object({ id: recipeId });

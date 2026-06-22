@@ -896,7 +896,7 @@ function registerTools(server: McpServer) {
     "list_recipes",
     "List recipes by name. Returns id, name, shortcode, yield, servings, tags.",
     {
-      query: z
+      nameFilter: z
         .string()
         .optional()
         .describe("Filter by recipe name (substring)"),
@@ -904,7 +904,7 @@ function registerTools(server: McpServer) {
     },
     listHandler("recipe", slimRecipe, {
       orderBy: "name",
-      buildFilters: (p) => ({ nameFilter: p.query }),
+      buildFilters: (p) => ({ nameFilter: p.nameFilter }),
     }),
   );
 

@@ -19,6 +19,12 @@ export type LocationType = z.infer<typeof locationType>;
 // Re-export for consumers that need the values array
 export { locationTypeValues } from "@cubby/shared";
 
+// Filters accepted by the location list endpoint.
+export const locationFiltersSchema = z.object({
+  nameFilter: z.string().optional(),
+  itemTypeFilter: locationType.optional(),
+});
+
 const locationBase = z.object({
   name: z.string().describe("name of location"),
   type: locationType,

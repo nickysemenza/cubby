@@ -11,6 +11,7 @@ import { type LocationId, locationId } from "@cubby/schemas/identifiers";
 import {
   infLocation,
   locationCreateInput,
+  locationFiltersSchema,
   locationOut,
   locationType,
   locationUpdateInput,
@@ -36,12 +37,6 @@ import {
   createEntityListProcedure,
 } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
-
-// Define filters schema for locations
-const locationFiltersSchema = z.object({
-  nameFilter: z.string().optional(),
-  itemTypeFilter: locationType.optional(),
-});
 
 // Create standardized list procedure using factory
 const { list } = createEntityListProcedure({

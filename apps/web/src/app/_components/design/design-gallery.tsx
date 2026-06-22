@@ -1,9 +1,19 @@
 import { manualUnitMapping } from "@cubby/schemas/unitmapping";
 import { locationTypeValues, productCategoryValues } from "@cubby/shared";
 import { buildNutrients } from "@cubby/usda-schemas";
-import { Bell, FileText, Layers, Package, Wrench } from "lucide-react";
+import {
+  Bell,
+  ChevronsUpDown,
+  FileText,
+  Inbox,
+  Layers,
+  Package,
+  Wrench,
+} from "lucide-react";
 import { type ReactNode, useState } from "react";
+import { useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { DotLabel } from "~/app/_components/DotLabel";
 import { EntityPillLink } from "~/app/_components/EntityPill";
 import {
   type IngredientPreview,
@@ -17,6 +27,8 @@ import {
   toUsdaCard,
   type UsdaPreview,
 } from "~/app/_components/EntityPreviewContent";
+import { HoverableTimestamp } from "~/app/_components/HoverableTimestamp";
+import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
 import { LocationTypeBadge } from "~/app/_components/locations/LocationTypeBadge";
 import { NoneState } from "~/app/_components/NoneState";
 import { ManifestCard } from "~/app/_components/preview/manifest-card";
@@ -29,6 +41,7 @@ import { DecompositionView } from "~/app/_components/recipe/decomposition-view";
 import { RecipeTag } from "~/app/_components/recipe/recipe-tag";
 import { ImageStatusBadge } from "~/app/_components/table/StatusBadge";
 import { UnitMappingGraph } from "~/app/_components/units/unit-mapping-graph";
+import { UnitMappingPairField } from "~/app/_components/units/unit-mapping-pair-field";
 import { ColoredAlert } from "~/components/common/colored-alert";
 import { InfoRow } from "~/components/common/info-row";
 import { DashboardCard } from "~/components/layout/dashboard-card";
@@ -45,7 +58,21 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "~/components/ui/alert-dialog";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarGroup,
+  AvatarGroupCount,
+} from "~/components/ui/avatar";
 import { Badge } from "~/components/ui/badge";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "~/components/ui/breadcrumb";
 import { Button } from "~/components/ui/button";
 import {
   Card,
@@ -55,6 +82,11 @@ import {
   SelectableCard,
 } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "~/components/ui/collapsible";
 import { FilterableCombobox } from "~/components/ui/combobox";
 import {
   Dialog,
@@ -74,8 +106,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "~/components/ui/empty";
 import { InkStamp } from "~/components/ui/ink-stamp";
 import { Input } from "~/components/ui/input";
+import { Kbd, KbdGroup } from "~/components/ui/kbd";
 import { Label } from "~/components/ui/label";
 import {
   Popover,
@@ -85,7 +126,11 @@ import {
   PopoverTrigger,
 } from "~/components/ui/popover";
 import { QuantityInput } from "~/components/ui/quantity-input";
+import { ScrollArea } from "~/components/ui/scroll-area";
+import { Separator } from "~/components/ui/separator";
 import { Skeleton } from "~/components/ui/skeleton";
+import { Spinner } from "~/components/ui/spinner";
+import { StatGrid, StatTile } from "~/components/ui/stat-tile";
 import { Switch } from "~/components/ui/switch";
 import {
   Table,
@@ -96,8 +141,17 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Textarea } from "~/components/ui/textarea";
 import { TicketDivider } from "~/components/ui/ticket-divider";
+import { Toggle } from "~/components/ui/toggle";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "~/components/ui/tooltip";
+import { ViewSwitcher } from "~/components/ui/view-switcher";
 import { INGREDIENT_PART_COLOR } from "~/lib/ingredient-part-colors";
 
 /** Surface + semantic palette tokens, grouped for the swatch grid. */
@@ -170,6 +224,11 @@ const GRAPH_FIXTURE = [
   ),
 ];
 
+const SCROLL_ROWS = Array.from(
+  { length: 20 },
+  (_, i) => `Scrollable row ${i + 1}`,
+);
+
 function Swatch({ token }: { token: string }) {
   return (
     <div className="flex flex-col gap-1">
@@ -240,6 +299,54 @@ function QtyDemo({ initial }: { initial: number | null }) {
         = {value ?? "null"}
       </span>
     </div>
+  );
+}
+
+/** AmountFieldGroup + UnitMappingPairField on a throwaway form, for the gallery. */
+function FormGroupsDemo() {
+  const form = useForm({
+    defaultValues: {
+      amount: { value: 1.5 as number | null, unit: "cup" },
+      mapping: {
+        a: { value: 1 as number | null, unit: "cup" },
+        b: { value: 240 as number | null, unit: "g" },
+        source: null as string | null,
+      },
+    },
+  });
+  return (
+    <div className="space-y-4">
+      <Row label="Amount">
+        <div className="max-w-[16rem]">
+          <AmountFieldGroup
+            form={form}
+            valuePath="amount.value"
+            unitPath="amount.unit"
+          />
+        </div>
+      </Row>
+      <Row label="Mapping pair">
+        <div className="flex flex-wrap items-end gap-2">
+          <UnitMappingPairField form={form} path="mapping" showSource />
+        </div>
+      </Row>
+    </div>
+  );
+}
+
+/** ViewSwitcher (toggle-group) with local state, for the gallery. */
+function ViewSwitcherDemo() {
+  const [view, setView] = useState("table");
+  return (
+    <ViewSwitcher
+      value={view}
+      onValueChange={setView}
+      options={[
+        { value: "table", label: "Table" },
+        { value: "gallery", label: "Gallery" },
+        { value: "charts", label: "Charts" },
+      ]}
+    />
   );
 }
 
@@ -886,6 +993,199 @@ export function DesignGallery() {
               </div>
             ))}
           </div>
+        </div>
+      </GallerySection>
+
+      <GallerySection
+        title="Form field groups"
+        source="inventory/amount-field-group · units/unit-mapping-pair-field"
+      >
+        <div className="space-y-2">
+          <p className="font-mono text-3xs text-muted-foreground uppercase tracking-wider">
+            Fraction-aware amount + unit pair, and the composable “A = B”
+            mapping pair (reused by the product unit-conversion editor)
+          </p>
+          <FormGroupsDemo />
+        </div>
+      </GallerySection>
+
+      <GallerySection title="Tabs" source="components/ui/tabs">
+        <Tabs defaultValue="overview" className="max-w-md">
+          <TabsList>
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="nutrition">Nutrition</TabsTrigger>
+            <TabsTrigger value="history">History</TabsTrigger>
+          </TabsList>
+          <TabsContent value="overview" className="pt-2 text-sm">
+            Overview panel content.
+          </TabsContent>
+          <TabsContent value="nutrition" className="pt-2 text-sm">
+            Nutrition panel content.
+          </TabsContent>
+          <TabsContent value="history" className="pt-2 text-sm">
+            History panel content.
+          </TabsContent>
+        </Tabs>
+      </GallerySection>
+
+      <GallerySection
+        title="Toggles & view switcher"
+        source="components/ui/toggle · view-switcher"
+      >
+        <div className="space-y-3">
+          <Row label="Toggle">
+            <Toggle defaultPressed>Bold</Toggle>
+            <Toggle variant="outline">Italic</Toggle>
+            <Toggle size="sm">Small</Toggle>
+            <Toggle disabled>Disabled</Toggle>
+          </Row>
+          <Row label="View switch">
+            <ViewSwitcherDemo />
+          </Row>
+        </div>
+      </GallerySection>
+
+      <GallerySection
+        title="Tooltip & keys"
+        source="components/ui/tooltip · kbd"
+      >
+        <div className="space-y-3">
+          <Row label="Tooltip">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger
+                  render={<Button variant="outline">Hover me</Button>}
+                />
+                <TooltipContent>Tooltip content</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </Row>
+          <Row label="Kbd">
+            <KbdGroup>
+              <Kbd>⌘</Kbd>
+              <Kbd>K</Kbd>
+            </KbdGroup>
+            <Kbd>Esc</Kbd>
+          </Row>
+        </div>
+      </GallerySection>
+
+      <GallerySection title="Spinner" source="components/ui/spinner">
+        <Row label="Sizes">
+          <Spinner size="sm" />
+          <Spinner size="default" />
+          <Spinner size="md" />
+          <Spinner size="lg" />
+        </Row>
+      </GallerySection>
+
+      <GallerySection title="Avatar" source="components/ui/avatar">
+        <Row label="Group">
+          <AvatarGroup>
+            <Avatar>
+              <AvatarFallback>NS</AvatarFallback>
+            </Avatar>
+            <Avatar>
+              <AvatarFallback>AB</AvatarFallback>
+            </Avatar>
+            <Avatar>
+              <AvatarFallback>CD</AvatarFallback>
+            </Avatar>
+            <AvatarGroupCount>+3</AvatarGroupCount>
+          </AvatarGroup>
+        </Row>
+      </GallerySection>
+
+      <GallerySection title="Breadcrumb" source="components/ui/breadcrumb">
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink href="#">Pantry</BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbLink href="#">Top Shelf</BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbPage>Spices</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+      </GallerySection>
+
+      <GallerySection
+        title="Separator & collapsible"
+        source="components/ui/separator · collapsible"
+      >
+        <div className="max-w-md space-y-3">
+          <div className="text-sm">Above the rule</div>
+          <Separator />
+          <div className="text-sm">Below the rule</div>
+          <Collapsible defaultOpen className="space-y-2">
+            <CollapsibleTrigger
+              render={
+                <Button variant="outline" size="sm">
+                  Toggle details <ChevronsUpDown className="ml-1 size-3" />
+                </Button>
+              }
+            />
+            <CollapsibleContent className="text-muted-foreground text-sm">
+              Collapsible region content.
+            </CollapsibleContent>
+          </Collapsible>
+        </div>
+      </GallerySection>
+
+      <GallerySection title="Stat tiles" source="components/ui/stat-tile">
+        <StatGrid>
+          <StatTile label="Cost / serving">$0.42</StatTile>
+          <StatTile label="Calories">90</StatTile>
+          <StatTile label="Ingredients">13</StatTile>
+          <StatTile label="Coverage">9/13</StatTile>
+        </StatGrid>
+      </GallerySection>
+
+      <GallerySection title="Empty state" source="components/ui/empty">
+        <Empty className="max-w-md border border-[var(--border-chunky)]">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Inbox />
+            </EmptyMedia>
+            <EmptyTitle>No inventory yet</EmptyTitle>
+            <EmptyDescription>
+              Add your first item to start tracking what’s in the pantry.
+            </EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button size="sm">Add item</Button>
+          </EmptyContent>
+        </Empty>
+      </GallerySection>
+
+      <GallerySection title="Scroll area" source="components/ui/scroll-area">
+        <ScrollArea className="h-32 max-w-xs rounded-md border border-[var(--border-chunky)] p-3">
+          <div className="space-y-1 text-sm">
+            {SCROLL_ROWS.map((label) => (
+              <div key={label}>{label}</div>
+            ))}
+          </div>
+        </ScrollArea>
+      </GallerySection>
+
+      <GallerySection
+        title="Inline labels & time"
+        source="DotLabel · HoverableTimestamp"
+      >
+        <div className="space-y-3">
+          <Row label="Dot label">
+            <DotLabel color="var(--chart-1)">Produce</DotLabel>
+            <DotLabel color="var(--chart-3)">Dairy</DotLabel>
+            <DotLabel color="var(--chart-5)">Pantry</DotLabel>
+          </Row>
+          <Row label="Timestamp">
+            <HoverableTimestamp timestamp="2026-06-15T12:00:00Z" />
+          </Row>
         </div>
       </GallerySection>
     </div>

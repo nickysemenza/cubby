@@ -341,6 +341,13 @@ export const recipeSectionInput = z.object({
 
 // Descriptions live at the field level here (rather than on the shared building
 // blocks, which are also reused by the output/form layers) so they reliably
+// Filters accepted by the recipe list endpoint.
+export const recipeFiltersSchema = z.object({
+  nameFilter: z.string().optional(),
+  // Scope the list to one cookbook by FK id (cookbook detail page).
+  cookbookId: cookbookId.optional(),
+});
+
 // surface to MCP clients via `recipeCreateInput.shape` — see the create_recipe /
 // update_recipe tools. `recipeUpdateInput` inherits them through `.partial()`.
 export const recipeCreateInput = z

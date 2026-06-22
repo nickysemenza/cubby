@@ -13,6 +13,7 @@ import { Button, type buttonVariants } from "~/components/ui/button";
 import { FilterableCombobox } from "~/components/ui/combobox";
 import { Field, FieldError, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
+import { QuantityInput } from "~/components/ui/quantity-input";
 import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
 import { useFlag } from "~/lib/flags";
@@ -233,6 +234,7 @@ export function NullableNumericField<
   placeholder,
   step = "1",
   prefix,
+  fraction = false,
 }: {
   form: UseFormReturn<TFieldValues>;
   name: Path<TFieldValues>;
@@ -240,12 +242,37 @@ export function NullableNumericField<
   placeholder: string;
   step?: string;
   prefix?: string;
+  /**
+   * Render the fraction-aware {@link QuantityInput} instead of a raw number
+   * input, so "1 1/2" parses/displays correctly. Use for measure amounts; leave
+   * off for counts, IDs, and currency (where fraction formatting is wrong).
+   */
+  fraction?: boolean;
 }) {
   return (
     <Controller
       control={form.control}
       name={name}
       render={({ field, fieldState }) => {
+        if (fraction) {
+          return (
+            <Field data-invalid={fieldState.invalid}>
+              <FieldLabel htmlFor={name}>{label}</FieldLabel>
+              <QuantityInput
+                aria-label={label}
+                placeholder={placeholder}
+                value={(field.value as number | null) ?? null}
+                onChange={(value) =>
+                  field.onChange(
+                    value as PathValue<TFieldValues, Path<TFieldValues>>,
+                  )
+                }
+              />
+              {fieldState.error && <FieldError errors={[fieldState.error]} />}
+            </Field>
+          );
+        }
+
         const inputProps = {
           id: name,
           type: "number" as const,
@@ -480,7 +507,16 @@ export function UnifiedTextField<
 // Re-export ComboboxFieldWithSearch from its dedicated file
 export { ComboboxFieldWithSearch } from "./form-utils/combobox-field-with-search";
 
-// Helper for handling select fields (uses FilterableCombobox for type-to-filter)
+/**
+ * Select field over a **fixed, in-memory option list** (enums, small static
+ * sets). Backed by {@link FilterableCombobox} for type-to-filter.
+ *
+ * Pick the right combobox for the job:
+ * - `SelectField` — static options, page-level forms.
+ * - {@link ComboboxField} / `ComboboxFieldWithSearch` — async entity search
+ *   (ingredient/product/location/recipe) and anything rendered inside a Dialog,
+ *   where `DialogCompatibleCombobox` avoids the nested focus-trap conflict.
+ */
 export function SelectField<TFieldValues extends FieldValues = FieldValues>({
   form,
   name,

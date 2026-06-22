@@ -10,6 +10,7 @@ import { type ProductId, productId } from "@cubby/schemas/identifiers";
 import {
   productCategory,
   productCreateInput,
+  productFiltersSchema,
   productQuickCreatePayload,
   productTopLevelOut,
   productUpdateData,
@@ -37,14 +38,6 @@ import {
   createEntityCrudProcedures,
 } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
-
-// Define filters schema for products
-const productFiltersSchema = z.object({
-  nameFilter: z.string().optional(),
-  manufacturerFilter: z.string().optional(),
-  upcFilter: z.string().optional(),
-  categoryFilter: productCategory.optional(),
-});
 
 // Create standardized CRUD procedures using factory (except create, which we customize)
 const { getByID, list, update } = createEntityCrudProcedures({

@@ -3,6 +3,13 @@ import { amount } from "./codec";
 import { dbTimestampsOut } from "./common";
 import { inventoryId, locationId, productId } from "./identifiers";
 
+// Filters accepted by the inventory list endpoint.
+export const inventoryFiltersSchema = z.object({
+  productNameFilter: z.string().optional(),
+  locationNameFilter: z.string().optional(),
+  locationIdFilter: locationId.optional(),
+});
+
 export const inventoryEntryOut = z
   .object({
     id: inventoryId,

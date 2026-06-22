@@ -46,6 +46,7 @@ export function AmountFieldGroup<
         label={compact ? "Qty" : "Amount Value"}
         placeholder={compact ? "1" : "Enter amount"}
         step={step}
+        fraction
       />
       <UnifiedTextField
         form={form}
