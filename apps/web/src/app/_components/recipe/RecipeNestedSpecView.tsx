@@ -207,9 +207,7 @@ function SpecNode({
       {node.sections.map((section) => (
         <Fragment key={section.id}>
           {showSectionNames && section.name && (
-            <div className="pt-1.5 font-mono text-2xs text-eyebrow uppercase tracking-wider">
-              {section.name}
-            </div>
+            <div className="eyebrow pt-1.5">{section.name}</div>
           )}
           {section.rows.map((row) => (
             <SpecRow
@@ -269,12 +267,7 @@ export const RecipeNestedSpecView = memo(function RecipeNestedSpecView({
         </MarkdownText>
       )}
 
-      <div
-        className={cn(
-          rowGrid,
-          "border-primary border-b-2 pb-2 font-mono text-2xs text-eyebrow uppercase tracking-wider",
-        )}
-      >
+      <div className={cn(rowGrid, "eyebrow border-primary border-b-2 pb-2")}>
         <span>Ingredient</span>
         <span className="text-right">Qty</span>
         <span className="text-right">Scaling</span>

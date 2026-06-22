@@ -51,7 +51,7 @@ export function CookbookList() {
                 </span>
               </span>
             )}
-            <span className="mt-2 block truncate font-medium font-mono text-2xs text-eyebrow uppercase tracking-wider">
+            <span className="eyebrow mt-2 block truncate font-medium">
               {book || "Untitled"}
             </span>
             <span className="block truncate font-mono text-2xs text-muted-foreground uppercase tabular-nums">

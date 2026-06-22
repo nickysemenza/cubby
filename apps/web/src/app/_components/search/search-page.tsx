@@ -174,9 +174,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
           {/* Entities recently jumped to — entity-inked chips, same list as ⌘K */}
           {jumps.length > 0 && (
             <div className="space-y-1">
-              <span className="px-1 font-medium font-mono text-2xs text-eyebrow uppercase tracking-wider">
-                Jump back
-              </span>
+              <span className="eyebrow px-1 font-medium">Jump back</span>
               {jumps.map((jump) => {
                 const entity = entityTypeMap[jump.entityType];
                 return (
@@ -210,9 +208,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
           {recents.length > 0 && (
             <div className="space-y-1">
               <div className="flex items-center justify-between px-1">
-                <span className="font-medium font-mono text-2xs text-eyebrow uppercase tracking-wider">
-                  Recent
-                </span>
+                <span className="eyebrow font-medium">Recent</span>
                 <button
                   type="button"
                   onClick={() => setRecents([])}

@@ -38,7 +38,7 @@ function ShoppingList({ needs }: { needs: CombinedNeed[] }) {
       open
       className="rounded-lg border border-border-chunky bg-muted/30 px-3.5 py-2.5 print:border-0 print:bg-transparent print:px-0"
     >
-      <summary className="cursor-pointer font-mono text-2xs text-eyebrow uppercase tracking-wider marker:content-none">
+      <summary className="eyebrow cursor-pointer marker:content-none">
         <ShoppingCart className="mr-1.5 inline h-3 w-3 align-[-2px]" />
         Shopping list
         <span className="ml-1 text-muted-foreground/60">· full batch</span>
@@ -184,9 +184,7 @@ function Component({
         {node.sections.map((section, si) => (
           <div key={section.id}>
             {node.sections.length > 1 && section.name && (
-              <div className="pt-2 pb-0.5 font-mono text-2xs text-eyebrow uppercase tracking-wider">
-                {section.name}
-              </div>
+              <div className="eyebrow pt-2 pb-0.5">{section.name}</div>
             )}
             {section.rows.map((row) => (
               <PrepRow key={row.id} row={row} gramById={gramById} />
@@ -242,7 +240,7 @@ export const RecipePrepSheetView = memo(function RecipePrepSheetView({
             </span>
           ) : null}
         </div>
-        <span className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
+        <span className="eyebrow">
           Prep sheet
           <span className="text-muted-foreground/50">
             {" · "}

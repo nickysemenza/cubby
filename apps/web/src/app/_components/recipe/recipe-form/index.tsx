@@ -453,7 +453,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
         <div className="space-y-3">
           {/* Import toolbar — one-time tools, tucked out of the recipe's way */}
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
+            <span className="eyebrow">
               {mode === "edit" ? "Editing recipe" : "New recipe"}
             </span>
             <div className="flex gap-1.5">
@@ -742,7 +742,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
               images still auto-import via autoImportUrl. */}
           <Card>
             <CardContent className="space-y-2 px-4 py-3">
-              <h3 className="my-0 flex items-center gap-1.5 font-medium font-mono text-2xs text-eyebrow uppercase tracking-wider">
+              <h3 className="eyebrow my-0 flex items-center gap-1.5 font-medium">
                 <ImageIcon className="h-3.5 w-3.5" />
                 Photos
               </h3>
@@ -760,9 +760,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <h3 className="my-0 font-medium font-mono text-2xs text-eyebrow uppercase tracking-wider">
-                Recipe sections
-              </h3>
+              <h3 className="eyebrow my-0 font-medium">Recipe sections</h3>
             </div>
 
             {sectionFields.map((sectionField, sectionIndex) => (
@@ -817,9 +815,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                 <div className="flex flex-col space-y-2 md:flex-row md:space-x-2 md:space-y-0">
                   {/* Ingredients */}
                   <div className="md:w-1/2">
-                    <h5 className="mb-2 font-medium font-mono text-2xs text-eyebrow uppercase tracking-wider">
-                      Ingredients
-                    </h5>
+                    <h5 className="eyebrow mb-2 font-medium">Ingredients</h5>
                     <IngredientFieldArray
                       form={form}
                       sectionIndex={sectionIndex}
@@ -835,9 +831,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                       placeholder="E.g., 'Main Course', 'Sauce', etc."
                       nullable={true}
                     />
-                    <h5 className="mb-2 font-medium font-mono text-2xs text-eyebrow uppercase tracking-wider">
-                      Instructions
-                    </h5>
+                    <h5 className="eyebrow mb-2 font-medium">Instructions</h5>
                     <InstructionFieldArray
                       form={form}
                       sectionIndex={sectionIndex}
@@ -870,9 +864,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
         {/* Live page preview — the cookbook spread builds as you type */}
         <aside className="hidden xl:sticky xl:top-20 xl:block">
           <div className="max-h-[75vh] overflow-y-auto rounded-lg border border-[var(--border-chunky)] bg-card p-4 shadow-[var(--shadow-chunky)]">
-            <p className="mb-3 font-mono text-2xs text-eyebrow uppercase tracking-wider">
-              Live preview
-            </p>
+            <p className="eyebrow mb-3">Live preview</p>
             <RecipeLivePreview control={form.control} />
           </div>
         </aside>

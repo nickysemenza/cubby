@@ -113,9 +113,7 @@ export function RecipeScaleControl({
 
   return (
     <div className="flex items-center gap-2">
-      <span className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
-        Scale
-      </span>
+      <span className="eyebrow">Scale</span>
 
       {/* Quick ×-chips */}
       <ToggleGroup
@@ -151,9 +149,7 @@ export function RecipeScaleControl({
         />
         <PopoverContent className="w-72 space-y-3">
           <div className="space-y-1.5">
-            <Label className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
-              Scale by
-            </Label>
+            <Label className="eyebrow">Scale by</Label>
             <ToggleGroup
               aria-label="Scale anchor"
               variant="outline"

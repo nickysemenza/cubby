@@ -60,7 +60,7 @@ export const EntityHero: FC<EntityHeroProps> = ({ images }) => {
                 className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
               />
             </div>
-            <figcaption className="pt-1.5 font-mono text-2xs text-eyebrow uppercase tracking-wider">
+            <figcaption className="eyebrow pt-1.5">
               Fig. {String(activeIndex + 1).padStart(2, "0")} / {images.length}
             </figcaption>
           </figure>

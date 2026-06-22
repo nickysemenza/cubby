@@ -140,6 +140,13 @@
   }
 }
 
+/* The mono caption look — eyebrows, table column headers, stat-card labels.
+   One home for the class cluster that was inlined ~30× across components; the
+   `EYEBROW_CLASS` constant and `<Eyebrow>` component both resolve to this. */
+@utility eyebrow {
+  @apply font-mono text-2xs text-eyebrow uppercase tracking-wider;
+}
+
 /*
   ---break---
   Cubby Theme - Cool-neutral surfaces + warm accent palette

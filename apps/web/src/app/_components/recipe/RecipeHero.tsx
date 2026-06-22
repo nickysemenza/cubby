@@ -73,9 +73,7 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
         className="h-64 w-full object-cover sm:h-80 md:h-96"
       />
       <figcaption className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-1 pt-2">
-        <span className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
-          Fig. 01 — {recipe.name}
-        </span>
+        <span className="eyebrow">Fig. 01 — {recipe.name}</span>
         {metaInfo}
       </figcaption>
     </figure>

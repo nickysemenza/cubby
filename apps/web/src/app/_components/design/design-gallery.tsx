@@ -425,9 +425,7 @@ export function DesignGallery() {
             Mono is JetBrains Mono — used on chrome, codes, and numerals:
             041570052600 · $9.41 · 248
           </p>
-          <p className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
-            Eyebrow micro-label
-          </p>
+          <p className="eyebrow">Eyebrow micro-label</p>
           <div className="flex items-baseline gap-4 text-muted-foreground">
             <span className="text-3xs">text-3xs</span>
             <span className="text-2xs">text-2xs</span>

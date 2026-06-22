@@ -58,12 +58,7 @@ function FormSection({
   }
   return (
     <section className="space-y-2">
-      <h4
-        className={cn(
-          sectionRuleClass,
-          "my-0 font-medium font-mono text-2xs text-eyebrow uppercase tracking-wider",
-        )}
-      >
+      <h4 className={cn(sectionRuleClass, "eyebrow my-0 font-medium")}>
         {title}
       </h4>
       {children}

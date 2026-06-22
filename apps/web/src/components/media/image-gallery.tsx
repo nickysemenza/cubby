@@ -112,7 +112,7 @@ export function ImageGallery({ images, className }: ImageGalleryProps) {
       )}
 
       {/* Figure caption — the gallery reads as a numbered plate */}
-      <div className="border-border border-b bg-card px-4 py-1.5 font-mono text-2xs text-eyebrow uppercase tracking-wider">
+      <div className="eyebrow border-border border-b bg-card px-4 py-1.5">
         Fig. {String(activeIndex + 1).padStart(2, "0")} / {images.length}
       </div>
     </div>

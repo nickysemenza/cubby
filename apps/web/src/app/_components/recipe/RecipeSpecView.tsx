@@ -104,7 +104,7 @@ export function RecipeSpecView({
 
       <table className="w-full border-collapse text-left">
         <thead>
-          <tr className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
+          <tr className="eyebrow">
             <th className="pr-3 pb-2 font-medium">Ingredient</th>
             <th className="pr-3 pb-2 font-medium">Quantity</th>
             <th className="pr-3 pb-2 font-medium">Scaling</th>
@@ -136,10 +136,7 @@ export function RecipeSpecView({
                 )}
                 {showSectionNames && section.name && (
                   <tr>
-                    <td
-                      colSpan={4}
-                      className="pt-3 pb-1 font-mono text-2xs text-eyebrow uppercase tracking-wider"
-                    >
+                    <td colSpan={4} className="eyebrow pt-3 pb-1">
                       {section.name}
                     </td>
                   </tr>

@@ -141,9 +141,7 @@ export default function NutritionBars({
       </div>
 
       <div>
-        <div className="mb-2 font-mono text-2xs text-eyebrow uppercase tracking-wider">
-          Macros, whole recipe
-        </div>
+        <div className="eyebrow mb-2">Macros, whole recipe</div>
         <div className="space-y-2.5">
           {macroTotals.map((m) => (
             <div key={m.key}>

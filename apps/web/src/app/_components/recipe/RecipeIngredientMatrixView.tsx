@@ -46,9 +46,7 @@ export const RecipeIngredientMatrixView = memo(
             <h2 className="my-0 font-heading font-semibold text-2xl tracking-tight">
               {recipe.name}
             </h2>
-            <span className="font-mono text-2xs text-eyebrow uppercase tracking-wider">
-              Ingredient × component
-            </span>
+            <span className="eyebrow">Ingredient × component</span>
           </div>
           {recipe.yield?.value ? (
             <span className="font-heading text-primary text-sm">
@@ -60,7 +58,7 @@ export const RecipeIngredientMatrixView = memo(
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-left">
             <thead>
-              <tr className="border-primary border-b-2 font-mono text-2xs text-eyebrow uppercase tracking-wider">
+              <tr className="eyebrow border-primary border-b-2">
                 <th className="sticky left-0 z-10 bg-card px-2 py-2 font-medium">
                   Ingredient
                 </th>
@@ -136,7 +134,7 @@ export const RecipeIngredientMatrixView = memo(
               ))}
             </tbody>
             <tfoot>
-              <tr className="border-primary border-t-2 font-mono text-2xs text-eyebrow uppercase tracking-wider">
+              <tr className="eyebrow border-primary border-t-2">
                 <th
                   className="sticky left-0 z-10 bg-card px-2 py-2 text-left font-medium"
                   title="Total ingredient weight per component (raw inputs — differs from the yield when a batch loses water in cooking)"
