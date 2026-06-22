@@ -110,6 +110,21 @@ export const syncInventoryValuationsForProduct = async (
 };
 
 /**
+ * How many active inventory entries a product has — equals how many valuations
+ * `syncInventoryValuationsForProduct` resynced on a price change. Used by the
+ * product update proc to report `inventoryValuationsUpdated` in its side-effects.
+ */
+export const countActiveInventoryForProduct = async (
+  db: Database,
+  productId: ProductId,
+): Promise<number> =>
+  countWhere(
+    db,
+    inventoryEntry,
+    and(eq(inventoryEntry.productId, productId), notDeleted(inventoryEntry)),
+  );
+
+/**
  * Compare two valuations with tolerance for floating-point precision errors.
  * Returns true if values are different beyond tolerance (0.01 = 1 cent).
  */

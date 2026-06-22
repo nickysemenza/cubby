@@ -20,6 +20,7 @@ import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { upc } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { getErrorMessage } from "~/lib/error-utils";
+import { countActiveInventoryForProduct } from "~/server/repo/inventory/crud";
 import {
   backfillFoodCategories,
   deleteProducts,
@@ -128,9 +129,15 @@ const update = protectedProcedure
     const recipesRecomputed = ingredientId
       ? await ctx.services.recipeCosting.recomputeForIngredient(ingredientId)
       : 0;
+    // updateProduct already resynced inventory valuations in its tx when the
+    // price changed (amount × price); report how many entries that covered.
+    const inventoryValuationsUpdated =
+      input.data.price !== undefined
+        ? await countActiveInventoryForProduct(ctx.db, input.id)
+        : 0;
     return {
       ...result,
-      sideEffects: { recipesRecomputed, inventoryValuationsUpdated: 0 },
+      sideEffects: { recipesRecomputed, inventoryValuationsUpdated },
     };
   });
 
