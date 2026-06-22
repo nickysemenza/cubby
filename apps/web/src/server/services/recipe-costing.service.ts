@@ -37,7 +37,6 @@ import {
   countStaleRecipes,
   findParentRecipeIds,
   getRecipeTotalsState,
-  markRecipesStale,
   selectAllActiveRecipeIds,
   selectStaleRecipeIds,
   updateRecipeTotals,
@@ -304,36 +303,44 @@ export class RecipeCostingService {
   }
 
   /**
-   * Recompute + persist totals for the given recipe ids. When a recipe's totals
-   * actually change, nulls its direct parents so multi-level sub-recipe changes
-   * converge over drain passes (no recursive walk on the write path).
+   * Recompute + persist totals for the given recipe ids, then **eagerly recurse
+   * into any parent recipes whose sub-recipe cost changed** so the whole tree is
+   * fresh in one pass (a recipe is an ingredient when used as a sub-recipe). USDA
+   * is always available now, so a recompute either succeeds or throws — we always
+   * stamp fresh; a `usdaMiss` is a permanent costing gap, not a stale-for-retry
+   * state. `visited` guards against re-work and sub-recipe cycles.
    */
-  async recompute(recipeIds: RecipeId[]): Promise<void> {
-    if (recipeIds.length === 0) return;
-    const recipes = await getRecipesByIDs(this.db, recipeIds);
+  async recompute(
+    recipeIds: RecipeId[],
+    visited: Set<RecipeId> = new Set(),
+  ): Promise<void> {
+    const todo = recipeIds.filter((id) => !visited.has(id));
+    if (todo.length === 0) return;
+    for (const id of todo) visited.add(id);
+
+    const recipes = await getRecipesByIDs(this.db, todo);
     const totalsMap = await this.computeTotals(recipes);
     const changedParents = new Set<RecipeId>();
     for (const r of recipes) {
       const computed = totalsMap.get(r.id as RecipeId);
       if (!computed) continue;
-      const { totals: next, complete } = computed;
-      // Write the best-effort blob always; only stamp fresh when complete, so an
-      // incomplete (transient USDA miss) recompute stays stale and gets retried.
-      await updateRecipeTotals(this.db, r.id as RecipeId, next, {
-        stale: !complete,
-      });
+      const { totals: next } = computed;
+      // Always stamp fresh — USDA is reliable, so an unresolved fdc_id is a
+      // permanent gap (surfaced by the coverage UI), not a transient miss.
+      await updateRecipeTotals(this.db, r.id as RecipeId, next);
       const changed =
         !r.totals ||
         r.totals.costTotal !== next.costTotal ||
         r.totals.caloriesTotal !== next.caloriesTotal;
-      if (complete && changed) {
+      if (changed) {
         for (const p of await findParentRecipeIds(this.db, r.id as RecipeId))
           changedParents.add(p);
       }
     }
-    // Don't re-stale a recipe we just computed in this batch.
-    for (const id of recipeIds) changedParents.delete(id);
-    await markRecipesStale(this.db, [...changedParents]);
+    // Recurse into changed parents (visited prevents re-work / cycles).
+    if (changedParents.size > 0) {
+      await this.recompute([...changedParents], visited);
+    }
   }
 
   /** Recompute one batch of stale recipes; report how many remain. */
