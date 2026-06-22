@@ -11,6 +11,8 @@ interface QuantityInputProps {
   /** Fired after a successful commit when Enter is pressed (e.g. append a row). */
   onEnter?: () => void;
   className?: string;
+  /** Forwarded to the input so a `<label htmlFor>` can associate with it. */
+  id?: string;
   "aria-label"?: string;
   placeholder?: string;
 }
@@ -31,6 +33,7 @@ export const QuantityInput: FC<QuantityInputProps> = ({
   onChange,
   onEnter,
   className,
+  id,
   "aria-label": ariaLabel,
   placeholder,
 }) => {
@@ -78,6 +81,7 @@ export const QuantityInput: FC<QuantityInputProps> = ({
     <Input
       type="text"
       inputMode="text"
+      id={id}
       aria-label={ariaLabel}
       aria-invalid={invalid || undefined}
       placeholder={placeholder}

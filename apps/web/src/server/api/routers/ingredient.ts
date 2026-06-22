@@ -11,6 +11,7 @@ import {
   ingredientBase,
   ingredientFiltersSchema,
 } from "@cubby/schemas/ingredient";
+import { recomputeSummary } from "@cubby/schemas/recipe";
 import { z } from "zod";
 import {
   deleteIngredients,
@@ -27,8 +28,9 @@ import {
 } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
-// Create standardized CRUD procedures using factory
-const { getByID, list, create, update } = createEntityCrudProcedures({
+// Create standardized CRUD procedures using factory (update is customized below
+// so it can eagerly recompute dependent recipes and report the side-effects).
+const { getByID, list, create } = createEntityCrudProcedures({
   schemas: {
     createInput: ingredientBase,
     updateInput: ingredientBase.partial(),
@@ -65,6 +67,26 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
   entityName: "ingredient",
 });
 
+// Custom update: an ingredient edit changes its contribution to recipe cost, so
+// recompute every dependent recipe eagerly (covers UI + MCP, which both call
+// through this proc) and report the count.
+const update = protectedProcedure
+  .input(z.object({ id: ingredientId, data: ingredientBase.partial() }))
+  .output(ingredientWithFoodOut.extend({ sideEffects: recomputeSummary }))
+  .mutation(async ({ ctx, input }) => {
+    const result = await ctx.services.ingredient.updateIngredient(
+      input.id,
+      input.data,
+      ctx.actorContext,
+    );
+    const recipesRecomputed =
+      await ctx.services.recipeCosting.recomputeForIngredient(input.id);
+    return {
+      ...result,
+      sideEffects: { recipesRecomputed, inventoryValuationsUpdated: 0 },
+    };
+  });
+
 const merge = protectedProcedure
   .input(
     z.object({
@@ -72,12 +94,20 @@ const merge = protectedProcedure
       aliases: z.array(ingredientId).min(1),
     }),
   )
-  .output(ingredientWithFoodOut)
+  .output(ingredientWithFoodOut.extend({ sideEffects: recomputeSummary }))
   .mutation(async ({ ctx, input }) => {
-    return await ctx.services.ingredient.mergeIngredients(
+    const result = await ctx.services.ingredient.mergeIngredients(
       input.target,
       input.aliases,
     );
+    // Post-merge the alias rows reference the target, so recomputing the target's
+    // recipes covers every recipe that used a merged alias.
+    const recipesRecomputed =
+      await ctx.services.recipeCosting.recomputeForIngredient(input.target);
+    return {
+      ...result,
+      sideEffects: { recipesRecomputed, inventoryValuationsUpdated: 0 },
+    };
   });
 
 // The enrichment workbench worklist: recipe-used ingredients that aren't fully

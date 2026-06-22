@@ -333,8 +333,13 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
   );
   const mergeMutation = useActionMutation({
     mutationFn: api.ingredient.merge.mutationOptions,
-    success: "Merged.",
-    invalidateKeys: [["ingredient"]],
+    success: (data) => {
+      const n = data.sideEffects.recipesRecomputed;
+      return n > 0
+        ? `Merged · recomputed ${n} recipe${n === 1 ? "" : "s"}.`
+        : "Merged.";
+    },
+    invalidateKeys: [["ingredient"], ["recipe"]],
     error: (err) => `Merge failed: ${getErrorMessage(err)}`,
   });
 

@@ -29,7 +29,6 @@ import {
   updateIngredient as updateIngredientRepo,
 } from "../repo/ingredient";
 import { foodLookupParamFromProduct } from "../repo/product";
-import { markRecipesStaleForIngredient } from "../repo/recipe/totals";
 import { TraceNames, withTrace } from "../tracing";
 import { batchEnrichNestedItems, batchEnrichWithFood } from "./usda-helpers";
 
@@ -258,9 +257,8 @@ export class IngredientService {
     actor: ActorContext,
   ): Promise<IngredientWithFoodOut> {
     const ingredient = await updateIngredientRepo(this.db, id, data, actor);
-    // An ingredient edit can change its contribution to recipe totals; stale the
-    // recipes that use it so the drain recomputes (over-invalidates benignly).
-    await markRecipesStaleForIngredient(this.db, id);
+    // Dependent recipes are recomputed eagerly at the router layer (covers UI +
+    // MCP) — see the ingredient router's update proc.
     const enrichedProducts = await this.enrichProductsWithFood(
       ingredient.product,
     );
@@ -272,9 +270,9 @@ export class IngredientService {
   }
 
   /**
-   * Merge `aliases` into `target` (repoints recipe rows + soft-deletes aliases),
-   * then stale the target's recipes — post-merge the repointed rows reference the
-   * target, so invalidating it covers every recipe that used a merged alias.
+   * Merge `aliases` into `target` (repoints recipe rows + soft-deletes aliases).
+   * Post-merge the repointed rows reference the target, so the router's eager
+   * recompute of the *target*'s recipes covers every recipe that used an alias.
    * This is why merge lives in the service, not as a direct repo call.
    */
   async mergeIngredients(
@@ -282,7 +280,6 @@ export class IngredientService {
     aliases: IngredientId[],
   ): Promise<IngredientWithFoodOut> {
     await mergeIngredientsRepo(this.db, target, aliases);
-    await markRecipesStaleForIngredient(this.db, target);
     return this.getIngredientByID(target);
   }
 }

@@ -101,8 +101,19 @@ export class ProductService {
   ): Promise<ProductWithFoodOut> {
     const product = await createProductRepo(this.db, data, actor);
     const result = await this.getProductByID(product.id);
+    // Create stays deferred (mark stale → drain): the bulk workbench path loops
+    // createProduct, so per-call eager recompute would re-do shared recipes N
+    // times. The `update` path recomputes eagerly at the router instead.
     await this.invalidateRecipeTotals(result.ingredient?.id);
     return result;
+  }
+
+  /** Stale every recipe using an ingredient so the drain recomputes its totals. */
+  private async invalidateRecipeTotals(
+    ingredientId: IngredientId | undefined,
+  ): Promise<void> {
+    if (!ingredientId) return;
+    await markRecipesStaleForIngredient(this.db, ingredientId);
   }
 
   async updateProduct(
@@ -111,21 +122,9 @@ export class ProductService {
     actor: ActorContext,
   ): Promise<ProductWithFoodOut> {
     await updateProductRepo(this.db, id, data, actor);
-    const result = await this.getProductByID(id);
-    await this.invalidateRecipeTotals(result.ingredient?.id);
-    return result;
-  }
-
-  /**
-   * A product's price/USDA link feeds recipe cost & calories via its linked
-   * ingredient. Null the persisted totals of every recipe using that ingredient
-   * so the drain recomputes them. Over-invalidates on benign edits (no diffing),
-   * which is fine — recompute is cheap and deferred.
-   */
-  private async invalidateRecipeTotals(
-    ingredientId: IngredientId | undefined,
-  ): Promise<void> {
-    if (!ingredientId) return;
-    await markRecipesStaleForIngredient(this.db, ingredientId);
+    // Eager recompute of dependent recipes (and inventory valuations) happens at
+    // the router layer (covers UI + MCP callers) — see the product router's
+    // update proc.
+    return await this.getProductByID(id);
   }
 }

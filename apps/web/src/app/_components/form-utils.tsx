@@ -259,6 +259,7 @@ export function NullableNumericField<
             <Field data-invalid={fieldState.invalid}>
               <FieldLabel htmlFor={name}>{label}</FieldLabel>
               <QuantityInput
+                id={name}
                 aria-label={label}
                 placeholder={placeholder}
                 value={(field.value as number | null) ?? null}

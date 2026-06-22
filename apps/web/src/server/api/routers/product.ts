@@ -15,6 +15,7 @@ import {
   productTopLevelOut,
   productUpdateData,
 } from "@cubby/schemas/product";
+import { recomputeSummary } from "@cubby/schemas/recipe";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { upc } from "@cubby/usda-schemas";
 import { z } from "zod";
@@ -39,8 +40,9 @@ import {
 } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
-// Create standardized CRUD procedures using factory (except create, which we customize)
-const { getByID, list, update } = createEntityCrudProcedures({
+// Create standardized CRUD procedures using factory (create + update are
+// customized below — create imports UPC images, update eagerly recomputes).
+const { getByID, list } = createEntityCrudProcedures({
   schemas: {
     createInput: productCreateInput,
     // Defaults-stripped so a partial update never resets an omitted field (e.g.
@@ -108,6 +110,28 @@ const create = protectedProcedure
     }
 
     return product;
+  });
+
+// Custom update: a product's price/USDA link feeds recipe cost via its linked
+// ingredient, so recompute every dependent recipe eagerly (covers UI + MCP) and
+// report the count. Inventory-valuation recompute is added here too (stage D).
+const update = protectedProcedure
+  .input(z.object({ id: productId, data: productUpdateData }))
+  .output(productWithFoodOut.extend({ sideEffects: recomputeSummary }))
+  .mutation(async ({ ctx, input }) => {
+    const result = await ctx.services.product.updateProduct(
+      input.id,
+      input.data,
+      ctx.actorContext,
+    );
+    const ingredientId = result.ingredient?.id;
+    const recipesRecomputed = ingredientId
+      ? await ctx.services.recipeCosting.recomputeForIngredient(ingredientId)
+      : 0;
+    return {
+      ...result,
+      sideEffects: { recipesRecomputed, inventoryValuationsUpdated: 0 },
+    };
   });
 
 // Quick create a product with minimal data (just name required)

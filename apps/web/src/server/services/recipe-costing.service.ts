@@ -9,7 +9,7 @@
  * `drainStale` recomputes them, driven by the client while the app is open.
  */
 
-import type { RecipeId } from "@cubby/schemas/identifiers";
+import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
 import type {
   RecipeCostingExplain,
   RecipeMacroColumn,
@@ -36,6 +36,7 @@ import { getRecipesByIDs } from "~/server/repo/recipe/crud";
 import {
   countStaleRecipes,
   findParentRecipeIds,
+  findRecipeIdsUsingIngredient,
   getRecipeTotalsState,
   selectAllActiveRecipeIds,
   selectStaleRecipeIds,
@@ -341,6 +342,19 @@ export class RecipeCostingService {
     if (changedParents.size > 0) {
       await this.recompute([...changedParents], visited);
     }
+  }
+
+  /**
+   * Eagerly recompute every recipe whose cost depends on an ingredient — its
+   * product's price/USDA-link changed, the ingredient was edited, or a merge
+   * repointed rows onto it. Returns the total number of recipes recomputed
+   * (direct users + cascaded parents) for the mutation's side-effects summary.
+   */
+  async recomputeForIngredient(ingredientId: IngredientId): Promise<number> {
+    const ids = await findRecipeIdsUsingIngredient(this.db, ingredientId);
+    const visited = new Set<RecipeId>();
+    await this.recompute(ids, visited);
+    return visited.size;
   }
 
   /** Recompute one batch of stale recipes; report how many remain. */
