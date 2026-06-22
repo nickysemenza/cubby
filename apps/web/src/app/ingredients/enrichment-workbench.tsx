@@ -59,6 +59,35 @@ const parsePositive = (raw: string): number | null => {
   return Number.isFinite(n) && n > 0 ? n : null;
 };
 
+/**
+ * Turn a package-price entry (`$dollars` for `qty unit`) into what a product
+ * stores: a scalar per-each price when the unit is `each`, otherwise a money
+ * unit mapping (weight/volume ↔ dollar) that bridges the measure to money.
+ * Shared by the inline editor and the bulk review tray. Returns both null when
+ * no price was entered.
+ */
+const buildPackagePrice = (
+  dollarsStr: string,
+  qtyStr: string,
+  unitStr: string,
+): { eachPrice: number | null; mapping: UnitMappingInput | null } => {
+  const dollars = parsePositive(dollarsStr);
+  if (dollars == null) return { eachPrice: null, mapping: null };
+  const qty = parsePositive(qtyStr) ?? 1;
+  const unit = unitStr.trim() || "each";
+  if (unit.toLowerCase() === "each") {
+    return { eachPrice: dollars / qty, mapping: null };
+  }
+  return {
+    eachPrice: null,
+    mapping: {
+      a: { value: qty, unit },
+      b: { value: dollars, unit: "dollar" },
+      source: "manual: price (workbench)",
+    },
+  };
+};
+
 type FilterKey = "all" | "no-product" | "partial" | "no-usda";
 
 /** An AI USDA suggestion for one row, kept at the table level for bulk review. */
@@ -169,6 +198,15 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
   const [suggestions, setSuggestions] = useState<Record<string, Suggestion>>(
     {},
   );
+  // Optional package price typed per suggestion in the review tray, so bulk
+  // create can land a fully-costable product (fdc_id covers weight/volume/cal
+  // via synthesis; price is the only thing create can't infer).
+  const [suggestionPrices, setSuggestionPrices] = useState<
+    Record<string, { dollars: string; qty: string; unit: string }>
+  >({});
+  // The order of ids sent to the last createMany, so its index-keyed failures
+  // map back to rows (the hook's onSuccess doesn't see the variables).
+  const createOrderRef = useRef<string[]>([]);
   const [mergeSuggestions, setMergeSuggestions] = useState<
     Record<string, { targetId: string; targetName: string }>
   >({});
@@ -249,11 +287,35 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
   );
   const createMany = useActionMutation({
     mutationFn: api.product.createMany.mutationOptions,
-    success: "Products created.",
+    success: (data) =>
+      data.failed.length === 0
+        ? `Created ${data.created} product${data.created === 1 ? "" : "s"}.`
+        : `Created ${data.created}, ${data.failed.length} failed.`,
     invalidateKeys: [["ingredient"], ["product"]],
-    onSuccess: () => {
-      setSuggestions({});
-      clearSelection();
+    onSuccess: (data) => {
+      // Drop only the suggestions that actually created; keep failed rows (and
+      // their selection) so they can be retried without re-suggesting.
+      const failedIdx = new Set(data.failed.map((f) => f.index));
+      const succeeded = createOrderRef.current.filter(
+        (_, i) => !failedIdx.has(i),
+      );
+      const failed = new Set(
+        createOrderRef.current.filter((_, i) => failedIdx.has(i)),
+      );
+      setSuggestions((prev) => {
+        const next = { ...prev };
+        for (const id of succeeded) delete next[id];
+        return next;
+      });
+      setSuggestionPrices((prev) => {
+        const next = { ...prev };
+        for (const id of succeeded) delete next[id];
+        return next;
+      });
+      setSelected(failed);
+      for (const f of data.failed) {
+        toast.error(`${f.name}: ${f.error}`);
+      }
     },
     error: (err) => `Create failed: ${getErrorMessage(err)}`,
   });
@@ -344,19 +406,53 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
       toast.error("No selected rows have an AI suggestion yet. Suggest first.");
       return;
     }
+    createOrderRef.current = creatable.map((r) => r.id);
     createMany.mutate(
-      creatable.map((r) => ({
-        name: r.name,
-        manufacturer: UNSPECIFIED_MANUFACTURER,
-        upc: null,
-        expectedQuantity: null,
-        ingredientId: r.id,
-        fdc_id: suggestions[r.id]!.food.fdc_id,
-        price: null,
-        unitMappings: [],
-      })),
+      creatable.map((r) => {
+        const p = suggestionPrices[r.id];
+        const { eachPrice, mapping } = p
+          ? buildPackagePrice(p.dollars, p.qty, p.unit)
+          : { eachPrice: null, mapping: null };
+        return {
+          name: r.name,
+          manufacturer: UNSPECIFIED_MANUFACTURER,
+          upc: null,
+          expectedQuantity: null,
+          ingredientId: r.id,
+          fdc_id: suggestions[r.id]!.food.fdc_id,
+          // Ingredient products are food — keeps the category-clean invariant
+          // (the synthesized weight/volume/calorie edges come from the fdc link).
+          category: "food" as const,
+          price: eachPrice,
+          unitMappings: mapping ? [mapping] : [],
+        };
+      }),
     );
   };
+
+  const rejectSuggestion = (id: string) => {
+    setSuggestions((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    setSuggestionPrices((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  };
+
+  const setSuggestionPrice = (
+    id: string,
+    patch: Partial<{ dollars: string; qty: string; unit: string }>,
+  ) =>
+    setSuggestionPrices((prev) => ({
+      ...prev,
+      [id]: { dollars: "", qty: "1", unit: "lb", ...prev[id], ...patch },
+    }));
+
+  const suggestionCount = Object.keys(suggestions).length;
 
   const markable = selectedRows.flatMap((r) =>
     r.product.length > 0 && !hasUsdaLink(r) ? [r.product[0]!.id] : [],
@@ -395,6 +491,86 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
           </button>
         ))}
       </div>
+
+      {suggestionCount > 0 && (
+        <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-medium text-sm">
+              Review {suggestionCount} USDA suggestion
+              {suggestionCount === 1 ? "" : "s"}
+            </span>
+            <Button
+              size="sm"
+              onClick={handleCreate}
+              disabled={createMany.isPending || creatable.length === 0}
+            >
+              Create {creatable.length} product
+              {creatable.length === 1 ? "" : "s"}
+            </Button>
+          </div>
+          <div className="space-y-1.5">
+            {Object.entries(suggestions).map(([id, sug]) => {
+              const row = rows.find((r) => r.id === id);
+              if (!row) return null;
+              const p = suggestionPrices[id] ?? {
+                dollars: "",
+                qty: "1",
+                unit: "lb",
+              };
+              return (
+                <div
+                  key={id}
+                  className="flex flex-wrap items-center gap-2 text-sm"
+                >
+                  <button
+                    type="button"
+                    onClick={() => rejectSuggestion(id)}
+                    aria-label={`Reject suggestion for ${row.name}`}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                  <span className="font-medium">{row.name}</span>
+                  <span className="truncate text-muted-foreground">
+                    → {sug.food.foodInfo.description}
+                  </span>
+                  <span className="ml-auto flex items-center gap-1 text-xs">
+                    <span className="text-muted-foreground">$</span>
+                    <Input
+                      value={p.dollars}
+                      onChange={(e) =>
+                        setSuggestionPrice(id, { dollars: e.target.value })
+                      }
+                      placeholder="price"
+                      aria-label={`Price for ${row.name}`}
+                      className="h-7 w-16"
+                    />
+                    <span className="text-muted-foreground">/</span>
+                    <Input
+                      value={p.qty}
+                      onChange={(e) =>
+                        setSuggestionPrice(id, { qty: e.target.value })
+                      }
+                      aria-label={`Price quantity for ${row.name}`}
+                      className="h-7 w-12"
+                    />
+                    <UnitInput
+                      value={p.unit}
+                      onChange={(v) => setSuggestionPrice(id, { unit: v })}
+                      ariaLabel={`Price unit for ${row.name}`}
+                    />
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-2xs text-muted-foreground">
+            Price optional — leave blank to create the USDA link and price
+            later. Foods are usually priced by package (e.g. $5.99 / 2 lb); a
+            unit of “each” stores a per-item price.
+          </p>
+        </div>
+      )}
 
       {error && <div className="text-destructive text-sm">{error.message}</div>}
 
@@ -462,13 +638,6 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
           >
             <Sparkles className="h-4 w-4" />
             {suggestMerges.isPending ? "Checking…" : "Suggest merges"}
-          </Button>
-          <Button
-            size="sm"
-            onClick={handleCreate}
-            disabled={createMany.isPending || creatable.length === 0}
-          >
-            Create {creatable.length} product{creatable.length === 1 ? "" : "s"}
           </Button>
           <Button
             size="sm"
@@ -860,20 +1029,9 @@ function WorkbenchEditor({
     let eachPrice: number | null = null;
     const newMappings: UnitMappingInput[] = [];
 
-    const dollars = parsePositive(price);
-    if (dollars != null) {
-      const qty = parsePositive(priceQty) ?? 1;
-      const unit = priceUnit.trim() || "each";
-      if (unit.toLowerCase() === "each") {
-        eachPrice = dollars / qty;
-      } else {
-        newMappings.push({
-          a: { value: qty, unit },
-          b: { value: dollars, unit: "dollar" },
-          source: "manual: price (workbench)",
-        });
-      }
-    }
+    const built = buildPackagePrice(price, priceQty, priceUnit);
+    eachPrice = built.eachPrice;
+    if (built.mapping) newMappings.push(built.mapping);
 
     for (const c of convRows) {
       const fromQty = parsePositive(c.fromQty);
