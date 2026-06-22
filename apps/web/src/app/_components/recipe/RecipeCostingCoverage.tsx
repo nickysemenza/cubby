@@ -1,12 +1,18 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { ArrowRight, Sparkles, TriangleAlert } from "lucide-react";
 import { match } from "ts-pattern";
-import { Button, buttonVariants } from "~/components/ui/button";
+import { Badge } from "~/components/ui/badge";
+import { buttonVariants } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import {
+  Popover,
+  PopoverContent,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+} from "~/components/ui/popover";
 import type { CostingGap, LineKind } from "~/lib/recipe-costing-gaps";
 import { cn } from "~/lib/utils";
-import { EnrichIngredientDialog } from "../ingredients/enrich-ingredient-dialog";
 
 /** Example package mapping to show, matched to how the recipe line measures. */
 const purchaseExample = (lineKind: LineKind): string =>
@@ -14,8 +20,8 @@ const purchaseExample = (lineKind: LineKind): string =>
 
 /**
  * The prioritized suggestion copy for a gap. `lead` is the specific thing to
- * add; `cta` is the link/button label. USDA is preferred wherever it applies
- * (it adds portions + nutrition at once); the price variants are unit-aware.
+ * add; `cta` is the link label. USDA is preferred wherever it applies (it adds
+ * portions + nutrition at once); the price variants are unit-aware.
  */
 const suggestionFor = (gap: CostingGap): { lead: string; cta: string } =>
   match(gap)
@@ -44,21 +50,69 @@ const suggestionFor = (gap: CostingGap): { lead: string; cta: string } =>
     }))
     .exhaustive();
 
+/** The measures the engine couldn't resolve, as small chips. */
+const MISSING_CHIPS: { key: keyof CostingGap["missing"]; label: string }[] = [
+  { key: "price", label: "price" },
+  { key: "weight", label: "weight" },
+  { key: "nutrients", label: "nutrition" },
+];
+
 /**
- * "Improve costing coverage" panel: lists the recipe's uncosted ingredients,
- * each with its single highest-leverage suggested fix (derived once in
- * {@link deriveCostingGaps}). Ingredients with no product open the shared
- * {@link EnrichIngredientDialog} in place (link a product + USDA + price);
- * everything else deep-links to the product edit form (single product) or the
- * ingredient hub (multiple), where the USDA search, price, and mapping fields
- * already live. Render only when `gaps` is non-empty.
+ * The per-ingredient gap list, shared by the inline card and the popover. Each
+ * row shows the ingredient, what's missing (per-measure chips), the suggested
+ * fix, and a deep-link to that ingredient's row in the enrichment workbench —
+ * the one place all ingredient enrichment now happens.
+ */
+function CostingGapList({ gaps }: { gaps: CostingGap[] }) {
+  return (
+    <ul className="divide-y divide-border/60">
+      {gaps.map((gap) => {
+        const { lead, cta } = suggestionFor(gap);
+        const missing = MISSING_CHIPS.filter((c) => gap.missing[c.key]);
+        return (
+          <li
+            key={gap.ingredientId}
+            className="flex flex-wrap items-center justify-between gap-2 py-2"
+          >
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="font-medium text-sm">{gap.name}</span>
+                {missing.map((c) => (
+                  <Badge
+                    key={c.key}
+                    variant="outline"
+                    className="border-warning/40 px-1.5 py-0 font-normal text-2xs text-warning"
+                  >
+                    {c.label}
+                  </Badge>
+                ))}
+              </div>
+              <div className="text-2xs text-muted-foreground leading-snug">
+                {lead}
+              </div>
+            </div>
+            <Link
+              to="/ingredients/workbench"
+              search={{ focus: gap.ingredientId }}
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+            >
+              {cta}
+              <ArrowRight className="ml-1 h-3 w-3" />
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/**
+ * "Improve costing coverage" panel: the recipe's uncosted ingredients, each with
+ * its single highest-leverage fix (derived once in {@link deriveCostingGaps}),
+ * what's missing, and a deep-link into the workbench. Render only when `gaps` is
+ * non-empty; used inline in the table/charts views where cost matters.
  */
 export function RecipeCostingCoverage({ gaps }: { gaps: CostingGap[] }) {
-  const [enrichTarget, setEnrichTarget] = useState<{
-    id: string;
-    name: string;
-  } | null>(null);
-
   if (gaps.length === 0) return null;
 
   return (
@@ -75,57 +129,37 @@ export function RecipeCostingCoverage({ gaps }: { gaps: CostingGap[] }) {
         </p>
       </CardHeader>
       <CardContent>
-        <ul className="divide-y divide-border/60">
-          {gaps.map((gap) => {
-            const { lead, cta } = suggestionFor(gap);
-            return (
-              <li
-                key={gap.ingredientId}
-                className="flex flex-wrap items-center justify-between gap-2 py-2"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="font-medium text-sm">{gap.name}</div>
-                  <div className="text-2xs text-muted-foreground leading-snug">
-                    {lead}
-                  </div>
-                </div>
-                {gap.kind === "no-product" ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      setEnrichTarget({ id: gap.ingredientId, name: gap.name })
-                    }
-                  >
-                    {cta}
-                    <ArrowRight className="ml-1 h-3 w-3" />
-                  </Button>
-                ) : (
-                  <Link
-                    to={gap.productId ? "/products/$id" : "/ingredients/$id"}
-                    params={{ id: gap.productId ?? gap.ingredientId }}
-                    className={cn(
-                      buttonVariants({ variant: "outline", size: "sm" }),
-                    )}
-                  >
-                    {cta}
-                    <ArrowRight className="ml-1 h-3 w-3" />
-                  </Link>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+        <CostingGapList gaps={gaps} />
       </CardContent>
-
-      {/* Shared enrich flow for ingredients with no product (create + USDA + price). */}
-      <EnrichIngredientDialog
-        ingredient={enrichTarget}
-        onOpenChange={(open) => {
-          if (!open) setEnrichTarget(null);
-        }}
-      />
     </Card>
+  );
+}
+
+/**
+ * The same gap list as a compact, view-independent affordance — a "N block
+ * costing" button that opens the list in a popover. Shown in the reader-facing
+ * views (magazine/spec/prep/…) where the full inline card would intrude, so
+ * "why isn't this fully costed?" is always one click away.
+ */
+export function CostingCoverageButton({ gaps }: { gaps: CostingGap[] }) {
+  if (gaps.length === 0) return null;
+
+  return (
+    <Popover>
+      <PopoverTrigger
+        className={cn(
+          "inline-flex items-center gap-1.5 rounded-md border border-warning/40 px-2 py-1 text-warning text-xs hover:bg-warning/10",
+        )}
+      >
+        <TriangleAlert className="h-3.5 w-3.5" />
+        {gaps.length} block costing
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-96">
+        <PopoverHeader>
+          <PopoverTitle>Why isn&apos;t this fully costed?</PopoverTitle>
+        </PopoverHeader>
+        <CostingGapList gaps={gaps} />
+      </PopoverContent>
+    </Popover>
   );
 }

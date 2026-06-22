@@ -31,7 +31,10 @@ import { deriveCostingGaps } from "~/lib/recipe-costing-gaps";
 import { AuditLogList } from "../audit-log/audit-log-list";
 import EntityImageList from "../EntityImageList";
 import { useRecipeCostingData } from "../hooks/useRecipeCostingData";
-import { RecipeCostingCoverage } from "./RecipeCostingCoverage";
+import {
+  CostingCoverageButton,
+  RecipeCostingCoverage,
+} from "./RecipeCostingCoverage";
 import { RecipeIngredientMatrixView } from "./RecipeIngredientMatrixView";
 import { RecipeMagazineView } from "./RecipeMagazineView";
 import { RecipeNestedSpecView } from "./RecipeNestedSpecView";
@@ -188,6 +191,12 @@ const RecipeDetailInner: React.FC<{
           <RecipeTagList tags={recipe.tags} />
         )}
         <div className="ml-auto flex flex-wrap items-center gap-3">
+          {/* View-independent "why isn't this costed?" affordance — the full
+              inline card only shows in table/charts, so surface it as a compact
+              popover everywhere else. */}
+          {viewMode !== "table" && viewMode !== "charts" && (
+            <CostingCoverageButton gaps={costingGaps} />
+          )}
           <RecipeScaleControl
             recipe={recipe}
             totals={totals}
