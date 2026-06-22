@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { match } from "ts-pattern";
 import { UsdaFoodSearchField } from "~/app/_components/combobox/with-usda-food-search";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { MergeConfirmation } from "~/app/_components/ingredient/merge-confirmation";
 import { getHoverableMeasureUnitIcon } from "~/app/_components/inventory/format-amount";
 import { ConversionCapabilities } from "~/app/_components/units/ConversionCapabilities";
 import {
@@ -33,7 +34,6 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
-  AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
@@ -210,11 +210,13 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
   const [mergeSuggestions, setMergeSuggestions] = useState<
     Record<string, { targetId: string; targetName: string }>
   >({});
-  // The merge awaiting confirmation: `source` is folded into `target` (kept).
-  const [mergeConfirm, setMergeConfirm] = useState<{
-    source: { id: string; name: string };
-    target: { id: string; name: string };
-  } | null>(null);
+  // The ingredient pair awaiting a merge — fed to the shared MergeConfirmation,
+  // which lets the user pick the keeper (the candidate is listed first, so it's
+  // the default target). `mergeTargetRef` mirrors that choice for onExecute.
+  const [mergeConfirm, setMergeConfirm] = useState<
+    { id: string; name: string }[] | null
+  >(null);
+  const mergeTargetRef = useRef<string | null>(null);
 
   const { data, isLoading, error } = useQuery(
     api.ingredient.enrichmentWorkbench.queryOptions(),
@@ -359,16 +361,29 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
     }
   };
 
-  // Merge is destructive (the source ingredient is deleted, its recipe lines +
-  // products repoint to the target) AND merge candidates are suggestions — the AI
-  // ones and especially the trigram ones have false positives (e.g. "red wine
-  // vinegar" ~ "white wine vinegar"). So every merge routes through a confirm
-  // dialog where the direction is visible and swappable.
-  const performMerge = (sourceId: string, targetId: string) => {
-    mergeMutation.mutate({ target: targetId, aliases: [sourceId] });
+  // Open the shared merge confirmation for a pair. Merge candidates are
+  // suggestions — the AI ones and especially the trigram ones have false
+  // positives (e.g. "red wine vinegar" ~ "white wine vinegar") — so the user
+  // confirms and picks the keeper. The candidate goes first so it's the default
+  // target (it's the one likelier to already have a product/enrichment).
+  const requestMerge = (pair: {
+    source: { id: string; name: string };
+    target: { id: string; name: string };
+  }) => setMergeConfirm([pair.target, pair.source]);
+
+  // Execute the merge the user confirmed: keeper = the chosen target, the other
+  // becomes an alias (deleted, its recipe lines + products repoint to the keeper).
+  const confirmMerge = () => {
+    const pair = mergeConfirm;
+    if (!pair || pair.length < 2) return;
+    const target =
+      pair.find((i) => i.id === mergeTargetRef.current) ?? pair[0]!;
+    const alias = pair.find((i) => i.id !== target.id);
+    if (!alias) return;
+    mergeMutation.mutate({ target: target.id, aliases: [alias.id] });
     setMergeSuggestions((prev) => {
       const next = { ...prev };
-      delete next[sourceId];
+      delete next[alias.id];
       return next;
     });
     setMergeConfirm(null);
@@ -601,7 +616,7 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
                   onToggle={() => toggle(row.id)}
                   suggestion={suggestions[row.id] ?? null}
                   mergeSuggestion={mergeSuggestions[row.id] ?? null}
-                  onRequestMerge={setMergeConfirm}
+                  onRequestMerge={requestMerge}
                   defaultOpen={row.id === focus}
                   rowRef={row.id === focus ? focusRowRef : undefined}
                 />
@@ -662,42 +677,18 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Merge ingredients?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {mergeConfirm && (
-                <>
-                  <span className="font-medium text-foreground">
-                    {mergeConfirm.source.name}
-                  </span>{" "}
-                  will be deleted and merged into{" "}
-                  <span className="font-medium text-foreground">
-                    {mergeConfirm.target.name}
-                  </span>
-                  . Its recipe lines and products move to{" "}
-                  {mergeConfirm.target.name}. This can't be undone.
-                </>
-              )}
-            </AlertDialogDescription>
           </AlertDialogHeader>
+          {mergeConfirm && (
+            <MergeConfirmation
+              ingredients={mergeConfirm}
+              targetRef={mergeTargetRef}
+            />
+          )}
           <AlertDialogFooter>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="mr-auto"
-              onClick={() =>
-                setMergeConfirm((c) =>
-                  c ? { source: c.target, target: c.source } : null,
-                )
-              }
-            >
-              Swap direction
-            </Button>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               disabled={mergeMutation.isPending}
-              onClick={() =>
-                mergeConfirm &&
-                performMerge(mergeConfirm.source.id, mergeConfirm.target.id)
-              }
+              onClick={confirmMerge}
             >
               Merge
             </AlertDialogAction>
