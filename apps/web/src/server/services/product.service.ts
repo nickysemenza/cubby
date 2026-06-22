@@ -3,7 +3,7 @@ import {
   recipeUsageOut,
 } from "@cubby/schemas/combo";
 import type { ActorContext } from "@cubby/schemas/context";
-import type { IngredientId, ProductId } from "@cubby/schemas/identifiers";
+import type { ProductId } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type {
   ProductCategory,
@@ -21,7 +21,6 @@ import {
   productList as productListRepo,
   updateProduct as updateProductRepo,
 } from "../repo/product";
-import { markRecipesStaleForIngredient } from "../repo/recipe/totals";
 import { batchEnrichWithFood } from "./usda-helpers";
 
 // Extended schema that includes food data plus the recipes the product's linked
@@ -100,20 +99,10 @@ export class ProductService {
     actor: ActorContext,
   ): Promise<ProductWithFoodOut> {
     const product = await createProductRepo(this.db, data, actor);
-    const result = await this.getProductByID(product.id);
-    // Create stays deferred (mark stale → drain): the bulk workbench path loops
-    // createProduct, so per-call eager recompute would re-do shared recipes N
-    // times. The `update` path recomputes eagerly at the router instead.
-    await this.invalidateRecipeTotals(result.ingredient?.id);
-    return result;
-  }
-
-  /** Stale every recipe using an ingredient so the drain recomputes its totals. */
-  private async invalidateRecipeTotals(
-    ingredientId: IngredientId | undefined,
-  ): Promise<void> {
-    if (!ingredientId) return;
-    await markRecipesStaleForIngredient(this.db, ingredientId);
+    // Dependent recipes are recomputed eagerly at the router (the single `create`
+    // proc per product, `createMany` once over the deduped union) — covers UI +
+    // MCP. No mark-stale; there is no drain anymore.
+    return await this.getProductByID(product.id);
   }
 
   async updateProduct(

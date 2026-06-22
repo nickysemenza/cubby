@@ -18,7 +18,7 @@ import type {
 } from "@cubby/schemas/recipe";
 import { RECIPE_MACRO_KEYS, recipeTotals } from "@cubby/schemas/recipe";
 import { getNutrientValueByKey } from "@cubby/usda-schemas";
-import { keyBy } from "es-toolkit";
+import { keyBy, uniq } from "es-toolkit";
 import {
   type CalculateTotalsResult,
   type CostingRow,
@@ -351,9 +351,29 @@ export class RecipeCostingService {
    * (direct users + cascaded parents) for the mutation's side-effects summary.
    */
   async recomputeForIngredient(ingredientId: IngredientId): Promise<number> {
-    const ids = await findRecipeIdsUsingIngredient(this.db, ingredientId);
+    return this.recomputeForIngredients([ingredientId]);
+  }
+
+  /**
+   * Batched {@link recomputeForIngredient}: dedupe the affected recipes across
+   * many ingredients (e.g. a bulk product-create) and recompute the union once,
+   * so recipes shared by several created products aren't recomputed N times.
+   */
+  async recomputeForIngredients(
+    ingredientIds: IngredientId[],
+  ): Promise<number> {
+    if (ingredientIds.length === 0) return 0;
+    const recipeIds = uniq(
+      (
+        await Promise.all(
+          uniq(ingredientIds).map((id) =>
+            findRecipeIdsUsingIngredient(this.db, id),
+          ),
+        )
+      ).flat(),
+    );
     const visited = new Set<RecipeId>();
-    await this.recompute(ids, visited);
+    await this.recompute(recipeIds, visited);
     return visited.size;
   }
 

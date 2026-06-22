@@ -9,7 +9,7 @@
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
-import type { CookbookId } from "@cubby/schemas/identifiers";
+import type { CookbookId, RecipeId } from "@cubby/schemas/identifiers";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import type { CookbookSummary } from "@cubby/schemas/recipe";
 import { and, eq, sql } from "drizzle-orm";
@@ -200,7 +200,11 @@ export const reprocessCookbook = async (
   db: Database,
   id: CookbookId,
   actor: ActorContext,
-): Promise<{ reprocessed: number; importableExtras: string[] }> => {
+): Promise<{
+  reprocessed: number;
+  importableExtras: string[];
+  recipeIds: RecipeId[];
+}> => {
   const cb = await getCookbookById(db, id);
   if (!cb) {
     throw createAppError("COOKBOOK_NOT_FOUND", `Cookbook ${id} not found`);
@@ -213,13 +217,21 @@ export const reprocessCookbook = async (
 
   let reprocessed = 0;
   const importableExtras: string[] = [];
+  // The upserted recipe ids, so the caller can recompute their totals eagerly.
+  const recipeIds: RecipeId[] = [];
   for (const cr of cb.rawJson) {
     if (existing.has(cr.meta.title.trim().toLowerCase())) {
-      await upsertCookbookRecipeFromCookbook(cr, cookbookRef, db, actor);
+      const { id: recipeId } = await upsertCookbookRecipeFromCookbook(
+        cr,
+        cookbookRef,
+        db,
+        actor,
+      );
+      recipeIds.push(recipeId);
       reprocessed++;
     } else {
       importableExtras.push(cr.meta.title);
     }
   }
-  return { reprocessed, importableExtras };
+  return { reprocessed, importableExtras, recipeIds };
 };

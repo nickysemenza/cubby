@@ -7,7 +7,7 @@
 
 import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
 import type { RecipeTotals } from "@cubby/schemas/recipe";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import {
   ingredient,
@@ -34,18 +34,6 @@ export const updateRecipeTotals = async (
     .update(recipe)
     .set({ totals, totalsComputedAt: opts?.stale ? null : new Date() })
     .where(eq(recipe.id, id));
-};
-
-/** Mark recipes stale (keep the last-known totals; just clear the timestamp). */
-export const markRecipesStale = async (
-  db: Database,
-  ids: RecipeId[],
-): Promise<void> => {
-  if (ids.length === 0) return;
-  await getDb(db)
-    .update(recipe)
-    .set({ totalsComputedAt: null })
-    .where(inArray(recipe.id, ids));
 };
 
 /** Ids of stale (never-computed / invalidated) recipes, for the drain. */
@@ -109,23 +97,6 @@ export const countStaleRecipes = async (db: Database): Promise<number> =>
       and(notDeleted(recipe), isNull(recipe.totalsComputedAt)),
     );
   });
-
-/**
- * The single entry point for "an ingredient's contribution to recipe totals
- * changed" — mark every recipe using it stale so the drain recomputes its
- * cost/calories. Callers: a product's price/USDA-link edit (via its linked
- * ingredient), an ingredient edit, and a merge (post-merge the repointed rows
- * reference the target, so invalidating the target covers former-alias users).
- * Over-invalidates on benign edits, which is fine — recompute is cheap and
- * deferred.
- */
-export const markRecipesStaleForIngredient = async (
-  db: Database,
-  ingredientId: IngredientId,
-): Promise<void> => {
-  const ids = await findRecipeIdsUsingIngredient(db, ingredientId);
-  await markRecipesStale(db, ids);
-};
 
 /**
  * Recipes that reference an ingredient (via any section). Used to invalidate when

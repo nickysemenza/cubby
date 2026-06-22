@@ -73,7 +73,6 @@ import {
   findProductsWithNoImages,
 } from "~/server/repo/product";
 import { foodLookupParamFromProduct } from "~/server/repo/product/helpers";
-import { markRecipesStale } from "~/server/repo/recipe/totals";
 import { batchEnrichWithFood } from "~/server/services/usda-helpers";
 
 // Every problem item type is the canonical Zod-derived shape from
@@ -824,8 +823,7 @@ const findStaleIngredientParses = async (
 // fresh parse on all three axes (name, amounts, modifier). Reuses the exact scan the
 // UI shows, so it fixes precisely the listed rows. Name drift re-points the ingredient
 // FK via find-or-create; amounts/modifier are column writes. Idempotent — a second run
-// finds nothing stale. Totals invalidation is left to the caller (recompute) plus a
-// belt-and-braces markRecipesStale so the drain retries if recompute is interrupted.
+// finds nothing stale. Returns the affected recipe ids so the caller recomputes them.
 export const reparseStaleIngredientParses = async (
   db: Database,
 ): Promise<{ updated: number; recipesAffected: RecipeId[] }> => {
@@ -855,7 +853,6 @@ export const reparseStaleIngredientParses = async (
   });
 
   const recipesAffected = uniq(stale.map((s) => s.recipeId));
-  await markRecipesStale(db, recipesAffected);
   return { updated: stale.length, recipesAffected };
 };
 

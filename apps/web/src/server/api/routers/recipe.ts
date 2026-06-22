@@ -144,9 +144,11 @@ const insertImport = protectedProcedure
   .input(importRecipeSchema)
   .output(recipeIdOut)
   .mutation(async ({ ctx, input }) => {
-    // TODO: enqueue imported recipe ids for async Cloudflare Queue recompute
-    // instead of blocking per-recipe import requests.
-    return await upsertImportRecipe(input, ctx.db, ctx.actorContext);
+    const result = await upsertImportRecipe(input, ctx.db, ctx.actorContext);
+    // Recompute eagerly so totals are fresh on import (cheap — a fresh import's
+    // ingredients are bare, so there's no USDA/price work yet). No drain anymore.
+    await ctx.services.recipeCosting.recompute([result.id]);
+    return result;
   });
 // Create/refresh a cookbook from a full EPUB extraction. Called once at the start
 // of an import (before any recipe insert) so the FK target exists and the raw JSON
@@ -197,14 +199,15 @@ const insertCookbook = protectedProcedure
   )
   .output(recipeIdOut)
   .mutation(async ({ ctx, input }) => {
-    // TODO: enqueue cookbook import recipe ids for batched Cloudflare Queue
-    // recompute instead of blocking each EPUB recipe insert.
-    return await upsertCookbookRecipeFromCookbook(
+    const result = await upsertCookbookRecipeFromCookbook(
       input.recipe,
       { id: input.cookbookId, name: input.book },
       ctx.db,
       { ...ctx.actorContext, source: "epub_import" },
     );
+    // Eager recompute (cheap on a fresh, productless import). No drain anymore.
+    await ctx.services.recipeCosting.recompute([result.id]);
+    return result;
   });
 // Recipes already imported from a given book, each with its id (for an in-app
 // link) and a content signature (so the preview shows "no changes" vs "will
@@ -354,7 +357,13 @@ const reprocessCookbookEndpoint = protectedProcedure
     }),
   )
   .mutation(async ({ ctx, input }) => {
-    return await reprocessCookbook(ctx.db, input.cookbookId, ctx.actorContext);
+    const { recipeIds, ...result } = await reprocessCookbook(
+      ctx.db,
+      input.cookbookId,
+      ctx.actorContext,
+    );
+    await ctx.services.recipeCosting.recompute(recipeIds);
+    return result;
   });
 
 // LLM passthrough for the in-browser EPUB extractor: the client builds each

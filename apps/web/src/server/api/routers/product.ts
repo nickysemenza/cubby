@@ -6,7 +6,11 @@
  * See CLAUDE.md "Service Layer Architecture" for details.
  */
 
-import { type ProductId, productId } from "@cubby/schemas/identifiers";
+import {
+  type IngredientId,
+  type ProductId,
+  productId,
+} from "@cubby/schemas/identifiers";
 import {
   productCategory,
   productCreateInput,
@@ -277,6 +281,7 @@ const createMany = protectedProcedure
   .output(
     z.object({
       created: z.number(),
+      recipesRecomputed: z.number(),
       failed: z.array(
         z.object({
           index: z.number(),
@@ -288,16 +293,25 @@ const createMany = protectedProcedure
   )
   .mutation(async ({ ctx, input }) => {
     const failed: { index: number; name: string; error: string }[] = [];
+    const ingredientIds: IngredientId[] = [];
     let created = 0;
     for (const [index, item] of input.entries()) {
       try {
-        await ctx.services.product.createProduct(item, ctx.actorContext);
+        const product = await ctx.services.product.createProduct(
+          item,
+          ctx.actorContext,
+        );
         created++;
+        if (product.ingredient?.id) ingredientIds.push(product.ingredient.id);
       } catch (error) {
         failed.push({ index, name: item.name, error: getErrorMessage(error) });
       }
     }
-    return { created, failed };
+    // One deduped recompute over every affected recipe (not per-product), since
+    // the bulk workbench create links many products whose recipes overlap.
+    const recipesRecomputed =
+      await ctx.services.recipeCosting.recomputeForIngredients(ingredientIds);
+    return { created, recipesRecomputed, failed };
   });
 
 // Batch "no USDA food exists" flag for the workbench's "Mark no-USDA" action, so
