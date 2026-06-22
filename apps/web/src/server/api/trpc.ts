@@ -55,13 +55,16 @@ const mapProductToTopLevelOut = (
 /**
  * Helper function to build crud services for both production and test contexts
  */
-const buildCrudServices = (db: Database) => {
+const buildCrudServices = (
+  db: Database,
+  opts?: { usdaFetcher?: typeof fetch },
+) => {
   const notionClient = env.NOTION_API_KEY
     ? new NotionClient(env.NOTION_API_KEY)
     : null;
   const usdaClient = new USDAClient(
     env.USDA_API_URL,
-    getBindingFetcher("USDA_API"),
+    opts?.usdaFetcher ?? getBindingFetcher("USDA_API"),
   );
   const upcLookupClient = new UPCLookupClient(
     env.UPC_LOOKUP_API_URL,
@@ -348,7 +351,18 @@ export const createTestTRPCContext = (
     auth?: { userId: UserId };
   } = {},
 ) => {
-  const crudServices = buildCrudServices(db);
+  // USDA is always-available in prod (CF Worker) and now throws on a real
+  // service error rather than degrading to null. Tests have no USDA backend, so
+  // give them a deterministic stub that 404s every lookup → `food: null` (a
+  // genuine "food not found"), the same "no USDA data" the suite always assumed —
+  // hermetic, and no thrown network error.
+  const crudServices = buildCrudServices(db, {
+    usdaFetcher: (async () =>
+      new Response("null", {
+        status: 404,
+        headers: { "content-type": "application/json" },
+      })) as unknown as typeof fetch,
+  });
   const auth = opts.auth
     ? createTestAuth(opts.auth.userId)
     : { userId: null, sessionId: null };

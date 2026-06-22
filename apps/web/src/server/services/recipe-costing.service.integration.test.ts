@@ -17,13 +17,14 @@ import {
 } from "../repo/repo.fixtures";
 
 // Exercises RecipeCostingService end-to-end against a real DB (IntegresQL). The
-// costing WASM is pure, so nothing is mocked; the USDA backend is unreachable in
-// tests, so any `fdc_id` lookup degrades to `food: null` (best-effort) — which is
-// exactly the "incomplete / transient miss" path the service branches on
-// (`usdaMissesFor`: fdc_id set but food unresolved ⇒ incomplete).
+// costing WASM is pure; the test context stubs the USDA client to 404 every
+// lookup → `food: null`. USDA is always-available in prod now, so a null is a
+// genuine "food not found" — a *permanent* gap (an unresolvable fdc_id), not a
+// transient miss to retry. computeTotals still flags it `complete: false` via
+// `usdaMissesFor`, but recompute stamps such a recipe fresh (the gap is real).
 
-// An arbitrary FoodData Central id; the test USDA backend is unreachable, so the
-// lookup always degrades to `food: null` → a transient miss.
+// An arbitrary FoodData Central id the stub USDA backend 404s → `food: null` (a
+// permanent not-found, i.e. an ingredient with an unresolvable USDA link).
 const UNRESOLVABLE_FDC_ID = 999_999;
 
 describe("RecipeCostingService", () => {
@@ -222,7 +223,7 @@ describe("RecipeCostingService", () => {
       expect(state?.totalsComputedAt).not.toBeNull();
     });
 
-    it("leaves an incomplete recipe stale (best-effort blob, null timestamp)", async () => {
+    it("stamps a recipe with an unresolvable USDA link fresh (gap, not stale)", async () => {
       const ing = await findOrCreateIngredient(ctx.db, "stale flour");
       await createProduct(
         ctx.db,
@@ -236,7 +237,7 @@ describe("RecipeCostingService", () => {
       const recipe = await createRecipe(
         ctx.db,
         makeRecipeInput({
-          name: "Stale Recipe",
+          name: "Gap Recipe",
           sections: [
             {
               instructions: [{ instruction: "Mix" }],
@@ -251,13 +252,13 @@ describe("RecipeCostingService", () => {
 
       await service().recompute([recipe.id as RecipeId]);
       const state = await getRecipeTotalsState(ctx.db, recipe.id as RecipeId);
-      // Best-effort totals are written so the UI shows something...
       expect(state?.totals).not.toBeNull();
-      // ...but the row stays stale so the drain retries the USDA lookup.
-      expect(state?.totalsComputedAt).toBeNull();
+      // USDA is reliable now, so an unresolved fdc_id is a permanent costing gap
+      // (surfaced by the coverage UI), not a stale-for-retry row — stamp fresh.
+      expect(state?.totalsComputedAt).not.toBeNull();
     });
 
-    it("nulls a parent's totals when a child recompute changes (cascade staleness)", async () => {
+    it("eagerly recomputes a parent when a child sub-recipe changes", async () => {
       const child = await seedPricedRecipe("Cascade Child");
       const parent = await createRecipe(
         ctx.db,
@@ -280,21 +281,21 @@ describe("RecipeCostingService", () => {
         ctx.actor,
       );
 
-      // Stamp the parent fresh first.
+      // Stamp the parent fresh, but with empty totals (child not yet computed).
       await service().recompute([parent.id as RecipeId]);
-      expect(
-        (await getRecipeTotalsState(ctx.db, parent.id as RecipeId))
-          ?.totalsComputedAt,
-      ).not.toBeNull();
+      const before = await getRecipeTotalsState(ctx.db, parent.id as RecipeId);
+      expect(before?.totalsComputedAt).not.toBeNull();
 
-      // Recompute the child for the first time: its totals change (none → some),
-      // so recompute nulls its direct parent for the next drain pass.
+      // Recompute the child: its totals change (none → some), so recompute
+      // cascades eagerly into the parent — which stays fresh and now reflects
+      // the child's cost (no drain hop).
       await service().recompute([child.id as RecipeId]);
 
-      expect(
-        (await getRecipeTotalsState(ctx.db, parent.id as RecipeId))
-          ?.totalsComputedAt,
-      ).toBeNull();
+      const after = await getRecipeTotalsState(ctx.db, parent.id as RecipeId);
+      expect(after?.totalsComputedAt).not.toBeNull();
+      expect(after?.totals?.costTotal).toBeGreaterThan(
+        before?.totals?.costTotal ?? 0,
+      );
     });
   });
 });
