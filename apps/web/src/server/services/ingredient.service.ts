@@ -20,6 +20,7 @@ import type { Database } from "~/server/db";
 import type { USDAClient } from "../clients/usda";
 import {
   createIngredient as createIngredientRepo,
+  findFuzzyMergeCandidates,
   getIngredientByID as getIngredientByIDRepo,
   getIngredientByName as getIngredientByNameRepo,
   getIngredientsByIDs as getIngredientsByIDsRepo,
@@ -70,7 +71,14 @@ export const enrichmentRowOut = ingredientWithFoodOut.extend({
   }),
   recommendedFix: enrichmentFixKind,
   priceMode: z.enum(["per-each", "package"]),
-  mergeCandidates: z.array(z.object({ id: ingredientId, name: z.string() })),
+  mergeCandidates: z.array(
+    z.object({
+      id: ingredientId,
+      name: z.string(),
+      // pg_trgm similarity (0–1) to this row — suggestion-only, confirm before merging.
+      similarity: z.number(),
+    }),
+  ),
 });
 
 export type EnrichmentRow = z.infer<typeof enrichmentRowOut>;
@@ -215,11 +223,18 @@ export class IngredientService {
         coverage: { covered: [...coverage.covered], tier: coverage.tier },
         recommendedFix,
         priceMode: "package",
-        mergeCandidates: [],
+        mergeCandidates: [] as EnrichmentRow["mergeCandidates"],
       };
     });
 
-    return rows.filter((r) => r.recommendedFix !== "done");
+    // Trigram near-duplicate hints (one self-join query; we look up only the
+    // rows we show). Suggestion-only — the UI confirms before merging.
+    const worklist = rows.filter((r) => r.recommendedFix !== "done");
+    const fuzzy = await findFuzzyMergeCandidates(this.db);
+    return worklist.map((r) => ({
+      ...r,
+      mergeCandidates: fuzzy.get(r.id) ?? [],
+    }));
   }
 
   async createIngredient(

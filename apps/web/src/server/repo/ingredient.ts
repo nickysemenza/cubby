@@ -2,6 +2,7 @@ import type { IngredientWithRecipesAndProductOut } from "@cubby/schemas/combo";
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   type IngredientId,
+  unsafeIngredientId,
   unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
 import type { ingredientBase } from "@cubby/schemas/ingredient";
@@ -87,6 +88,66 @@ export const searchIngredientsForMerge = async (
     )
     .limit(limit);
   return rows.map((r) => ({ ...r, productCount: Number(r.productCount) }));
+};
+
+interface FuzzyMergeCandidate {
+  id: IngredientId;
+  name: string;
+  similarity: number;
+}
+
+/**
+ * Trigram (pg_trgm) near-duplicate candidates, keyed by source ingredient — the
+ * workbench's inline merge hint. A self-join of the standalone-ingredient table
+ * surfaces, for each ingredient, the most similar OTHERS above `threshold`,
+ * preferring ones that already have a product (merging inherits enrichment). The
+ * caller looks up only the rows it shows. The table is small (~hundreds), so the
+ * O(n²) similarity join is cheap and avoids fragile array-parameter binding.
+ *
+ * Suggestion-only: trigram has real false positives (e.g. "red wine vinegar" ~
+ * "white wine vinegar", "firm-ripe pears" ~ "firm ripe peaches"), so the UI must
+ * confirm before merging and never auto-apply.
+ */
+export const findFuzzyMergeCandidates = async (
+  db: Database,
+  { threshold = 0.5, perRow = 3 }: { threshold?: number; perRow?: number } = {},
+): Promise<Map<IngredientId, FuzzyMergeCandidate[]>> => {
+  type Row = {
+    source_id: string;
+    cand_id: string;
+    cand_name: string;
+    sim: number;
+    has_product: boolean;
+  };
+  const res = await getDb(db).execute<Row>(sql`
+    SELECT s.id AS source_id, c.id AS cand_id, c.name AS cand_name,
+           similarity(s.name, c.name) AS sim,
+           EXISTS (
+             SELECT 1 FROM "Product" p
+             WHERE p."ingredientId" = c.id AND p."deletedAt" IS NULL
+           ) AS has_product
+    FROM ${ingredient} s
+    JOIN ${ingredient} c
+      ON c."deletedAt" IS NULL AND c."recipeId" IS NULL AND c.id <> s.id
+     AND similarity(s.name, c.name) > ${threshold}
+    WHERE s."deletedAt" IS NULL AND s."recipeId" IS NULL
+    ORDER BY s.id, has_product DESC, sim DESC
+  `);
+
+  // Already ordered best-first per source; keep the top `perRow` for each.
+  const out = new Map<IngredientId, FuzzyMergeCandidate[]>();
+  for (const r of res.rows as unknown as Row[]) {
+    const key = unsafeIngredientId(r.source_id);
+    const arr = out.get(key) ?? [];
+    if (arr.length >= perRow) continue;
+    arr.push({
+      id: unsafeIngredientId(r.cand_id),
+      name: r.cand_name,
+      similarity: Number(r.sim),
+    });
+    out.set(key, arr);
+  }
+  return out;
 };
 
 export const mergeIngredients = async (

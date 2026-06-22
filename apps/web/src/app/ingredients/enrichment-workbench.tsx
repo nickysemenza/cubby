@@ -28,6 +28,16 @@ import {
 } from "~/app/_components/units/unit-mapping-graph";
 import { UnitMappingsTable } from "~/app/_components/units/unitmappingstable";
 import { CoverageChips } from "~/app/problems/components/unit-coverage-fix";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "~/components/ui/alert-dialog";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -162,6 +172,11 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
   const [mergeSuggestions, setMergeSuggestions] = useState<
     Record<string, { targetId: string; targetName: string }>
   >({});
+  // The merge awaiting confirmation: `source` is folded into `target` (kept).
+  const [mergeConfirm, setMergeConfirm] = useState<{
+    source: { id: string; name: string };
+    target: { id: string; name: string };
+  } | null>(null);
 
   const { data, isLoading, error } = useQuery(
     api.ingredient.enrichmentWorkbench.queryOptions(),
@@ -282,13 +297,19 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
     }
   };
 
-  const handleMerge = (sourceId: string, targetId: string) => {
+  // Merge is destructive (the source ingredient is deleted, its recipe lines +
+  // products repoint to the target) AND merge candidates are suggestions — the AI
+  // ones and especially the trigram ones have false positives (e.g. "red wine
+  // vinegar" ~ "white wine vinegar"). So every merge routes through a confirm
+  // dialog where the direction is visible and swappable.
+  const performMerge = (sourceId: string, targetId: string) => {
     mergeMutation.mutate({ target: targetId, aliases: [sourceId] });
     setMergeSuggestions((prev) => {
       const next = { ...prev };
       delete next[sourceId];
       return next;
     });
+    setMergeConfirm(null);
   };
 
   const handleSuggest = async () => {
@@ -404,7 +425,7 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
                   onToggle={() => toggle(row.id)}
                   suggestion={suggestions[row.id] ?? null}
                   mergeSuggestion={mergeSuggestions[row.id] ?? null}
-                  onMerge={handleMerge}
+                  onRequestMerge={setMergeConfirm}
                   defaultOpen={row.id === focus}
                   rowRef={row.id === focus ? focusRowRef : undefined}
                 />
@@ -462,6 +483,94 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
           </Button>
         </div>
       )}
+
+      <AlertDialog
+        open={mergeConfirm != null}
+        onOpenChange={(o) => {
+          if (!o) setMergeConfirm(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Merge ingredients?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {mergeConfirm && (
+                <>
+                  <span className="font-medium text-foreground">
+                    {mergeConfirm.source.name}
+                  </span>{" "}
+                  will be deleted and merged into{" "}
+                  <span className="font-medium text-foreground">
+                    {mergeConfirm.target.name}
+                  </span>
+                  . Its recipe lines and products move to{" "}
+                  {mergeConfirm.target.name}. This can't be undone.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mr-auto"
+              onClick={() =>
+                setMergeConfirm((c) =>
+                  c ? { source: c.target, target: c.source } : null,
+                )
+              }
+            >
+              Swap direction
+            </Button>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={mergeMutation.isPending}
+              onClick={() =>
+                mergeConfirm &&
+                performMerge(mergeConfirm.source.id, mergeConfirm.target.id)
+              }
+            >
+              Merge
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+/** Inline "≈ candidate · Merge" hint shown under an ingredient name. */
+function MergeHint({
+  tone,
+  targetName,
+  onMerge,
+}: {
+  tone: "ai" | "fuzzy";
+  targetName: string;
+  onMerge: () => void;
+}) {
+  return (
+    <div className="mt-1 flex items-center gap-1.5">
+      <span
+        className={cn(
+          "text-xs",
+          tone === "ai" ? "text-info" : "text-muted-foreground",
+        )}
+      >
+        {tone === "ai" ? "≈" : "possible dup:"} {targetName}
+      </span>
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-6 px-2 text-xs"
+        onClick={(e) => {
+          e.stopPropagation();
+          onMerge();
+        }}
+      >
+        <GitMerge className="h-3 w-3" />
+        Merge
+      </Button>
     </div>
   );
 }
@@ -472,7 +581,7 @@ function WorkbenchRow({
   onToggle,
   suggestion,
   mergeSuggestion,
-  onMerge,
+  onRequestMerge,
   defaultOpen = false,
   rowRef,
 }: {
@@ -481,7 +590,10 @@ function WorkbenchRow({
   onToggle: () => void;
   suggestion: Suggestion | null;
   mergeSuggestion: { targetId: string; targetName: string } | null;
-  onMerge: (sourceId: string, targetId: string) => void;
+  onRequestMerge: (pair: {
+    source: { id: string; name: string };
+    target: { id: string; name: string };
+  }) => void;
   /** Start expanded (deep-link focus from the Problems page). */
   defaultOpen?: boolean;
   /** Ref on the row's first <tr>, so the parent can scroll it into view. */
@@ -534,24 +646,37 @@ function WorkbenchRow({
               </span>
             )}
           </div>
-          {mergeSuggestion && (
-            <div className="mt-1 flex items-center gap-1.5">
-              <span className="text-info text-xs">
-                ≈ {mergeSuggestion.targetName}
-              </span>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-6 px-2 text-xs"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onMerge(row.id, mergeSuggestion.targetId);
+          {mergeSuggestion ? (
+            <MergeHint
+              tone="ai"
+              targetName={mergeSuggestion.targetName}
+              onMerge={() =>
+                onRequestMerge({
+                  source: { id: row.id, name: row.name },
+                  target: {
+                    id: mergeSuggestion.targetId,
+                    name: mergeSuggestion.targetName,
+                  },
+                })
+              }
+            />
+          ) : (
+            // Tier-1/2 trigram near-dup hint — no AI call needed. Suggestion only;
+            // the confirm dialog guards against false positives.
+            row.mergeCandidates[0] && (
+              <MergeHint
+                tone="fuzzy"
+                targetName={row.mergeCandidates[0].name}
+                onMerge={() => {
+                  const cand = row.mergeCandidates[0];
+                  if (cand)
+                    onRequestMerge({
+                      source: { id: row.id, name: row.name },
+                      target: { id: cand.id, name: cand.name },
+                    });
                 }}
-              >
-                <GitMerge className="h-3 w-3" />
-                Merge
-              </Button>
-            </div>
+              />
+            )
           )}
         </td>
         <td className="px-2 py-2.5">
