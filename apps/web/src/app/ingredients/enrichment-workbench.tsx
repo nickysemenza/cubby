@@ -45,6 +45,7 @@ import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
 import { getErrorMessage } from "~/lib/error-utils";
 import { isMoneyUnit } from "~/lib/price-mapping-utils";
+import { savedWithRecompute } from "~/lib/recompute-summary";
 import {
   getIngredientMappings,
   unitMappingsFromFood,
@@ -333,12 +334,7 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
   );
   const mergeMutation = useActionMutation({
     mutationFn: api.ingredient.merge.mutationOptions,
-    success: (data) => {
-      const n = data.sideEffects.recipesRecomputed;
-      return n > 0
-        ? `Merged · recomputed ${n} recipe${n === 1 ? "" : "s"}.`
-        : "Merged.";
-    },
+    success: (data) => savedWithRecompute(data.sideEffects, "Merged"),
     invalidateKeys: [["ingredient"], ["recipe"]],
     error: (err) => `Merge failed: ${getErrorMessage(err)}`,
   });

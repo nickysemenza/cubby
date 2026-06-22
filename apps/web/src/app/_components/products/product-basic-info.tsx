@@ -6,6 +6,7 @@ import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Button } from "~/components/ui/button";
 import { getErrorMessage } from "~/lib/error-utils";
 import { queryKeys } from "~/lib/query-keys";
+import { savedWithRecompute } from "~/lib/recompute-summary";
 import { formatCurrency } from "~/lib/utils";
 import type { ProductWithFoodOut } from "~/server/services/product.service";
 import { useTRPC } from "~/trpc/react";
@@ -32,8 +33,9 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
   // Mutation for inline editing (price, category, etc.)
   const updateProductMutation = useActionMutation({
     mutationFn: api.product.update.mutationOptions,
-    success: "Saved your changes.",
-    invalidateKeys: [queryKeys.product.list],
+    // Surface the eager recompute (dependent recipes / inventory valuations).
+    success: (data) => savedWithRecompute(data.sideEffects),
+    invalidateKeys: [queryKeys.product.list, queryKeys.recipe.list],
     error: (err) => getErrorMessage(err) || "Failed to update product",
   });
 
