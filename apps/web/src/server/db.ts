@@ -37,25 +37,29 @@ const createPoolClient = (connectionString: string) => {
 // but Hyperdrive caching makes them fast (~5ms for cached reads).
 // ---------------------------------------------------------------------------
 
-const requestDbStore = new AsyncLocalStorage<DBClient>();
+// Per-request holder. We store the connection string (not a connected client)
+// so the actual pg.Client + connect() is deferred until the first db access —
+// see getDbInstance(). Requests that never query (static pages, logged-out /
+// and /auth/sign-in, bot 404s) never open a Neon connection.
+type LazyDbHolder = {
+  connectionString: string;
+  db?: DBClient;
+};
+
+const requestDbStore = new AsyncLocalStorage<LazyDbHolder>();
 
 /**
  * Run a function with a per-request database connection (CF Workers only).
  * Uses pg.Client through Hyperdrive's pooled TCP connections.
+ *
+ * Lazy: this does NOT connect. The connection is opened on first db access
+ * inside getDbInstance(), so requests that never query never wake Neon.
  */
 export const withRequestDb = async <T>(
   connectionString: string,
   fn: () => Promise<T>,
 ): Promise<T> => {
-  const client = new pg.Client({ connectionString });
-  await client.connect();
-  const db = drizzleNodePostgres({ client, schema });
-  instrumentDrizzleClient(db, { dbSystem: "postgresql", dbName: "cubby" });
-  // No explicit client.end() — Hyperdrive manages connection lifecycle.
-  // Calling client.end() can terminate the connection while queries are
-  // still queued on the pg.Client (tRPC batches stream responses before
-  // all procedures complete).
-  return requestDbStore.run(db, fn);
+  return requestDbStore.run({ connectionString }, fn);
 };
 
 // ---------------------------------------------------------------------------
@@ -80,9 +84,30 @@ if (!isCFWorkers) {
 // ---------------------------------------------------------------------------
 
 const getDbInstance = (): DBClient => {
-  // CF Workers: read from per-request store
-  const requestDb = requestDbStore.getStore();
-  if (requestDb) return requestDb;
+  // CF Workers: read from per-request store, connecting lazily on first access.
+  const holder = requestDbStore.getStore();
+  if (holder) {
+    if (!holder.db) {
+      const client = new pg.Client({
+        connectionString: holder.connectionString,
+      });
+      // Kick off the connection but don't await — getDbInstance is sync (called
+      // from the db Proxy's get trap). pg.Client queues queries issued after
+      // connect() is called and drains them once the handshake completes. The
+      // no-op catch keeps a connection failure from surfacing as an
+      // unhandledRejection — the queued query rejects with the same error and
+      // surfaces it to the caller.
+      // No explicit client.end() — Hyperdrive manages connection lifecycle.
+      // Calling client.end() can terminate the connection while queries are
+      // still queued on the pg.Client (tRPC batches stream responses before
+      // all procedures complete).
+      void client.connect().catch(() => {});
+      const db = drizzleNodePostgres({ client, schema });
+      instrumentDrizzleClient(db, { dbSystem: "postgresql", dbName: "cubby" });
+      holder.db = db;
+    }
+    return holder.db;
+  }
   // Dev server: use module-level instance
   if (moduleDb) return moduleDb;
   throw new Error(
