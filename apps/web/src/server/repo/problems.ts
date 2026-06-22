@@ -12,7 +12,6 @@ import type {
   IngredientWithPartialCoverage,
   InvalidInventoryAmount,
   InvalidUPC,
-  InventoryWithStaleValuation,
   LocationWithoutAiDescription,
   MaintenanceCounts,
   OrphanedProduct,
@@ -22,7 +21,6 @@ import type {
   ProductWithoutMappings,
   ProductWithWrongCategory,
   StaleIngredientParse,
-  StaleRecipeTotals,
 } from "@cubby/schemas/problems";
 import { hasFdcLink } from "@cubby/schemas/product";
 import { isMiscProduct } from "@cubby/shared";
@@ -67,7 +65,6 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";
-import { findInventoryWithStaleValuations } from "~/server/repo/inventory/crud";
 import {
   findProductsNeedingFoodCategory,
   findProductsWithNoImages,
@@ -856,27 +853,6 @@ export const reparseStaleIngredientParses = async (
   return { updated: stale.length, recipesAffected };
 };
 
-// StaleRecipeTotals (staleRecipeTotalsSchema): a recipe whose persisted
-// cost/calorie rollups are out of date — `totalsComputedAt` is NULL because the
-// recipe is new, was edited, or a costing input (a linked product's price / USDA
-// enrichment) changed. The list shows the last-known totals (may be null if never
-// computed); the fix recomputes them. See recipe-costing.service / repo/recipe/totals.
-
-// Stale rows only (normally 0 or a handful) — indexed by Recipe_totals_stale_idx —
-// so this is cheap and never a full-table read.
-const findStaleRecipeTotals = async (
-  db: Database,
-): Promise<StaleRecipeTotals[]> => {
-  return await getDb(db)
-    .select({
-      recipeId: recipe.id,
-      recipeName: recipe.name,
-      totals: recipe.totals,
-    })
-    .from(recipe)
-    .where(and(notDeleted(recipe), isNull(recipe.totalsComputedAt)));
-};
-
 // Distinct non-deleted recipes each product feeds into, via its linked
 // ingredient (product → ingredient → recipeSectionIngredient → recipe). A
 // prioritization signal for the Problems page: a data gap on a product used in
@@ -947,10 +923,9 @@ export const findAllProblemsCount = async (
 export const findMaintenanceCounts = async (
   db: Database,
 ): Promise<MaintenanceCounts> => {
-  const [staleParses, staleValuations, noImages, wrongCategory, noDescription] =
+  const [staleParses, noImages, wrongCategory, noDescription] =
     await Promise.all([
       findStaleIngredientParses(db),
-      findInventoryWithStaleValuations(db),
       findProductsWithNoImages(db, { excludeIngredients: true }),
       findProductsNeedingFoodCategory(db),
       findLocationsWithoutAiDescription(db),
@@ -958,7 +933,6 @@ export const findMaintenanceCounts = async (
 
   return {
     staleIngredientParses: staleParses.length,
-    inventoryWithStaleValuations: staleValuations.length,
     // Deliberately a SUBSET of the Problems-page productsWithNoImages count:
     // backfillUPCImages can only act on products that have a UPC to look up, so
     // this counts just those. Same canonical key, intentionally narrower number.
@@ -986,11 +960,9 @@ export const findAllProblems = async (
     emptyLocations,
     productsWithNoImages,
     productsNeedingFoodCategory,
-    inventoryWithStaleValuationsRaw,
     productsWithIslandedMappings,
     locationsWithoutAiDescription,
     staleIngredientParses,
-    staleRecipeTotals,
     productsWithBetterUpcData,
   ] = await Promise.all([
     findDuplicateUniqueProducts(db),
@@ -1003,11 +975,9 @@ export const findAllProblems = async (
     findEmptyLocations(db),
     findProductsWithNoImages(db, { excludeIngredients: true }),
     findProductsNeedingFoodCategory(db),
-    findInventoryWithStaleValuations(db),
     findProductsWithIslandedMappings(db, usdaClient),
     findLocationsWithoutAiDescription(db),
     findStaleIngredientParses(db),
-    findStaleRecipeTotals(db),
     findProductsWithBetterUpcData(db, upcLookupClient),
   ]);
 
@@ -1021,9 +991,6 @@ export const findAllProblems = async (
       indicator: getFoodIndicator(p),
     }));
 
-  const inventoryWithStaleValuations: InventoryWithStaleValuation[] =
-    inventoryWithStaleValuationsRaw;
-
   const sections = {
     duplicateUniqueProducts,
     orphanedProducts,
@@ -1035,11 +1002,9 @@ export const findAllProblems = async (
     emptyLocations,
     productsWithNoImages,
     productsWithWrongCategory,
-    inventoryWithStaleValuations,
     productsWithIslandedMappings,
     locationsWithoutAiDescription,
     staleIngredientParses,
-    staleRecipeTotals,
     productsWithBetterUpcData,
   };
 

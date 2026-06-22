@@ -37,20 +37,6 @@ export const BACKFILL = {
           : "Nothing to re-parse.",
     }),
   }),
-  syncValuations: def({
-    selectMutation: (api) =>
-      api.inventory.backfillInventoryValuations.mutationOptions,
-    invalidateKeys: (api) => [api.inventory.list.queryKey()],
-    idleLabel: "Sync all",
-    pendingLabel: "Syncing…",
-    toastResult: (r) => ({
-      tone: r.updated > 0 ? "success" : "info",
-      message:
-        r.updated > 0
-          ? `Synced ${r.updated} entr${r.updated === 1 ? "y" : "ies"}.`
-          : "All valuations already current.",
-    }),
-  }),
   fetchUpcImages: def({
     selectMutation: (api) => api.product.backfillUPCImages.mutationOptions,
     invalidateKeys: (api) => [api.product.list.queryKey()],

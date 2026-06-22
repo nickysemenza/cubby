@@ -23,7 +23,6 @@ import { duplicateUniqueProductSchema } from "@cubby/schemas/problems";
 import { z } from "zod";
 import { createAppError } from "~/server/errors/app-error";
 import {
-  backfillInventoryValuations,
   bulkMoveInventoryEntries,
   bulkProcessInventoryEntries,
   checkUniqueProductDuplicate,
@@ -152,18 +151,6 @@ const findDuplicates = protectedProcedure
     }));
   });
 
-// Backfill inventory valuations from product prices
-const backfillInventoryValuationsEndpoint = protectedProcedure
-  .output(
-    z.object({
-      updated: z.number(),
-      skipped: z.number(),
-    }),
-  )
-  .mutation(async ({ ctx }) => {
-    return await backfillInventoryValuations(ctx.db);
-  });
-
 // Get inventory counts for multiple locations (batched query to avoid N+1)
 const getCountsByLocations = protectedProcedure
   .input(z.object({ locationIds: z.array(locationId) }))
@@ -189,7 +176,6 @@ export const inventoryRouter = createTRPCRouter({
   bulkProcess,
   bulkMove,
   findDuplicates,
-  backfillInventoryValuations: backfillInventoryValuationsEndpoint,
   getCountsByLocations,
   getByLocationIds,
 });

@@ -442,22 +442,6 @@ const deleteItem = createDeleteProcedure<RecipeId>(async (services, ids) => {
   await deleteRecipes(services.db, ids, services.actorContext);
 }, recipeId);
 
-// Recompute one batch of recipes whose persisted totals are stale
-// (totalsComputedAt IS NULL). Driven by the client while the app is open;
-// returns how many remain so the caller can keep draining. A high `limit` also
-// serves as a one-shot backfill (new rows start stale).
-const recomputeStale = protectedProcedure
-  .input(z.object({ limit: z.number().int().positive().max(500).default(25) }))
-  .output(
-    z.object({
-      processed: z.number().int(),
-      remaining: z.number().int(),
-    }),
-  )
-  .mutation(async ({ ctx, input }) => {
-    return await ctx.services.recipeCosting.drainStale(input.limit);
-  });
-
 // One-shot backfill: recompute every recipe's totals regardless of stale state.
 // Admin/recovery (e.g. after the USDA backend was down during a drain).
 const recomputeAll = protectedProcedure
@@ -512,7 +496,6 @@ export const recipeRouter = createTRPCRouter({
   create,
   update,
   delete: deleteItem,
-  recomputeStale,
   recomputeAll,
   dryRunRecomputeTotals,
   explainCosting,

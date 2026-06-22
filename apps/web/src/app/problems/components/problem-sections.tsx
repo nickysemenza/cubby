@@ -2,7 +2,6 @@ import type { Entity } from "@cubby/schemas/entity";
 import { Link } from "@tanstack/react-router";
 import { groupBy } from "es-toolkit";
 import {
-  DollarSign,
   Download,
   ImageOff,
   type LucideIcon,
@@ -19,8 +18,6 @@ import { DecompositionView } from "~/app/_components/recipe/decomposition-view";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { EntityIcon } from "~/entities/entities";
-import { formatCurrencyRange, formatNumberRange } from "~/lib/format-range";
-import { formatCurrency } from "~/lib/utils";
 import type { ProductWithBetterUpcData } from "~/server/repo/problems";
 import type { RouterOutputs } from "~/trpc/react";
 import { BACKFILL } from "./backfill-registry";
@@ -374,33 +371,6 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     }),
   }),
   section({
-    id: "stale-valuations",
-    label: "Stale Valuations",
-    select: (p) => p.inventoryWithStaleValuations,
-    icon: DollarSign,
-    title: "Stale Inventory Valuations",
-    description:
-      "Inventory entries where the stored valuation doesn't match amount × product price.",
-    emptyMessage: "All inventory valuations are in sync.",
-    headerAction: <BackfillButton {...BACKFILL.syncValuations} />,
-    renderItem: (entry) => ({
-      title: entry.productName,
-      details: [locationDetail(entry.locationName)],
-      badges: [
-        <span key="valuations" className="text-muted-foreground text-sm">
-          {entry.storedValuation !== null
-            ? formatCurrency(entry.storedValuation)
-            : "null"}{" "}
-          →{" "}
-          {entry.expectedValuation != null
-            ? formatCurrency(entry.expectedValuation)
-            : "null"}
-        </span>,
-      ],
-      route: { to: "/inventory/$id", params: { id: entry.id } },
-    }),
-  }),
-  section({
     id: "amounts",
     label: "Amounts",
     select: (p) => p.invalidInventoryAmounts,
@@ -563,48 +533,6 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
           <DecompositionView rawLine={item.rawLine} />
         </div>,
       ],
-      route: { to: "/recipes/$id", params: { id: item.recipeId } },
-    }),
-  }),
-  section({
-    id: "stale-totals",
-    label: "Stale Totals",
-    select: (p) => p.staleRecipeTotals ?? [],
-    entity: "recipe",
-    title: "Stale Totals",
-    description:
-      "Recipes whose persisted cost/calorie rollups are out of date — newly added, edited, or affected by a changed price or USDA enrichment. The list shows last-known figures; recomputing refreshes them.",
-    emptyMessage:
-      "No stale totals — every recipe's cost and calorie rollups are up to date.",
-    headerAction: (
-      // One batch covers the whole backlog at the max limit; the action is manual
-      // (no background loop) so it never busy-polls. USDA-incomplete recipes may
-      // stay stale and reappear — that's expected; recompute again once warm.
-      <BackfillButton
-        selectMutation={(api) => api.recipe.recomputeStale.mutationOptions}
-        invalidateKeys={(api) => [api.recipe.list.queryKey()]}
-        variables={{ limit: 500 }}
-        idleLabel="Recompute All"
-        pendingLabel="Recomputing..."
-        toastResult={(result) =>
-          result.processed > 0
-            ? {
-                tone: "success",
-                message:
-                  `Recomputed ${result.processed} recipe total${result.processed !== 1 ? "s" : ""}` +
-                  (result.remaining > 0
-                    ? ` — ${result.remaining} still awaiting data`
-                    : ""),
-              }
-            : { tone: "info", message: "No stale totals to recompute" }
-        }
-      />
-    ),
-    renderItem: (item) => ({
-      title: item.recipeName,
-      subtitle: item.totals
-        ? `${formatCurrencyRange(item.totals.costTotal, item.totals.costTotalUpper)} · ${formatNumberRange(item.totals.caloriesTotal, item.totals.caloriesTotalUpper, (n) => `${Math.round(n)}`)} cal`
-        : "Not yet computed",
       route: { to: "/recipes/$id", params: { id: item.recipeId } },
     }),
   }),

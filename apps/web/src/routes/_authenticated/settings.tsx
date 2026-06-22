@@ -308,13 +308,6 @@ const MAINTENANCE_TOOLS: {
     action: <BackfillButton {...BACKFILL.reparse} />,
   },
   {
-    label: "Sync inventory valuations",
-    description:
-      "Recompute the dollar value of every inventory entry from current product prices.",
-    count: (c) => c.inventoryWithStaleValuations,
-    action: <BackfillButton {...BACKFILL.syncValuations} />,
-  },
-  {
     label: "Fetch UPC images",
     description:
       "Pull product images from the UPC database for products missing one.",

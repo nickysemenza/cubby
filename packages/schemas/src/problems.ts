@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { amount } from "./codec";
 import { ingredientId, recipeId } from "./identifiers";
-import { recipeTotals } from "./recipe";
 
 // Status/indicator enums shared by the problem item schemas below.
 export const invalidUpcIssue = z.enum(["invalid_format", "duplicate"]);
@@ -96,14 +95,6 @@ export const productWithWrongCategorySchema = productProblemBase.extend({
   indicator: wrongCategoryIndicator,
 });
 
-export const inventoryWithStaleValuationSchema = z.object({
-  id: z.string(),
-  productName: z.string(),
-  locationName: z.string(),
-  storedValuation: z.number().nullable(),
-  expectedValuation: z.number().nullable(),
-});
-
 export const productWithIslandedMappingsSchema = productProblemBase.extend({
   islandCount: z.number(),
   islands: z.array(
@@ -148,12 +139,6 @@ export const productWithBetterUpcDataSchema = productProblemBase.extend({
   }),
 });
 
-export const staleRecipeTotalsSchema = z.object({
-  recipeId,
-  recipeName: z.string(),
-  totals: recipeTotals.nullable(),
-});
-
 // Combined output schema for all problems.
 export const allProblemsSchema = z.object({
   duplicateUniqueProducts: z.array(duplicateUniqueProductSchema),
@@ -162,7 +147,6 @@ export const allProblemsSchema = z.object({
   productsWithoutMappings: z.array(productWithoutMappingsSchema),
   ingredientsWithPartialCoverage: z.array(ingredientWithPartialCoverageSchema),
   ingredientsWithoutProduct: z.array(ingredientWithoutProductSchema),
-  inventoryWithStaleValuations: z.array(inventoryWithStaleValuationSchema),
   invalidInventoryAmounts: z.array(invalidInventoryAmountSchema),
   emptyLocations: z.array(emptyLocationSchema),
   productsWithNoImages: z.array(productWithNoImagesSchema),
@@ -170,7 +154,6 @@ export const allProblemsSchema = z.object({
   productsWithIslandedMappings: z.array(productWithIslandedMappingsSchema),
   locationsWithoutAiDescription: z.array(locationWithoutAiDescriptionSchema),
   staleIngredientParses: z.array(staleIngredientParseSchema),
-  staleRecipeTotals: z.array(staleRecipeTotalsSchema),
   productsWithBetterUpcData: z.array(productWithBetterUpcDataSchema),
   totalProblems: z.number(),
 });
@@ -215,9 +198,6 @@ export type EmptyLocation = z.infer<typeof emptyLocationSchema>;
 export type ProductWithWrongCategory = z.infer<
   typeof productWithWrongCategorySchema
 >;
-export type InventoryWithStaleValuation = z.infer<
-  typeof inventoryWithStaleValuationSchema
->;
 export type ProductWithIslandedMappings = z.infer<
   typeof productWithIslandedMappingsSchema
 >;
@@ -225,7 +205,6 @@ export type LocationWithoutAiDescription = z.infer<
   typeof locationWithoutAiDescriptionSchema
 >;
 export type StaleIngredientParse = z.infer<typeof staleIngredientParseSchema>;
-export type StaleRecipeTotals = z.infer<typeof staleRecipeTotalsSchema>;
 export type ProductWithBetterUpcData = z.infer<
   typeof productWithBetterUpcDataSchema
 >;
@@ -237,7 +216,6 @@ export type ProductWithBetterUpcData = z.infer<
 // and the Problems section read the same field — no third naming convention.
 export const maintenanceCountsSchema = z.object({
   staleIngredientParses: z.number().int(),
-  inventoryWithStaleValuations: z.number().int(),
   productsWithNoImages: z.number().int(),
   productsWithWrongCategory: z.number().int(),
   locationsWithoutAiDescription: z.number().int(),

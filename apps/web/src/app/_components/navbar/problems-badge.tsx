@@ -30,14 +30,12 @@ const PROBLEM_LABELS: Record<
   ingredientsWithPartialCoverage: (n) => `${n} partial coverage`,
   ingredientsWithoutProduct: (n) => `${n} without a product`,
   productsWithIslandedMappings: (n) => pl(n, "islanded mapping"),
-  inventoryWithStaleValuations: (n) => pl(n, "stale valuation"),
   invalidInventoryAmounts: (n) => pl(n, "invalid amount"),
   emptyLocations: (n) => pl(n, "empty location"),
   productsWithNoImages: (n) => pl(n, "missing image"),
   productsWithWrongCategory: (n) => pl(n, "wrong category", "wrong categories"),
   locationsWithoutAiDescription: (n) => pl(n, "missing AI description"),
   staleIngredientParses: (n) => pl(n, "stale parse"),
-  staleRecipeTotals: (n) => pl(n, "stale total"),
   productsWithBetterUpcData: (n) => pl(n, "UPC update"),
 };
 

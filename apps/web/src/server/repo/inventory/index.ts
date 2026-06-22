@@ -3,7 +3,6 @@
 // Bulk operations
 export { bulkMoveInventoryEntries, bulkProcessInventoryEntries } from "./bulk";
 export {
-  backfillInventoryValuations,
   checkUniqueProductDuplicate,
   createInventoryEntry,
   deleteInventoryEntries,

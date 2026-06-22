@@ -678,32 +678,5 @@ describe("inventory router", () => {
       // Valuation should be null
       expect(entry.valuation).toBeNull();
     });
-
-    it("should backfill return empty when no stale valuations", async () => {
-      const caller = createTestCaller(inventoryRouter, ctx.db);
-
-      // Create inventory WITHOUT a price - valuation is null from both
-      // the import and the backfill (product.price is null), so nothing is stale.
-      // Note: seedFromCSV with price creates a stale valuation because it stores
-      // row.price as valuation but doesn't sync product.price via unit mappings.
-      await seedFromCSV(
-        ctx.db,
-        [
-          {
-            product_name: "Unpriced Product",
-            manufacturer: "Brand",
-            location_name: "Pantry",
-            quantity: 4,
-            unit: "each",
-          },
-        ],
-        TEST_ACTOR,
-      );
-
-      // Backfill should find nothing since valuations are consistently null
-      const result = await caller.backfillInventoryValuations();
-      expect(result.updated).toBe(0);
-      expect(result.skipped).toBeGreaterThanOrEqual(0);
-    });
   });
 });

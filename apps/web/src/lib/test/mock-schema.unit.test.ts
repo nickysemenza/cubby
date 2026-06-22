@@ -16,7 +16,6 @@ import {
   productWithoutMappingsSchema,
   productWithWrongCategorySchema,
   staleIngredientParseSchema,
-  staleRecipeTotalsSchema,
 } from "@cubby/schemas/problems";
 import { productCreateInput } from "@cubby/schemas/product";
 import { recipeCreateInput, recipeOut } from "@cubby/schemas/recipe";
@@ -45,7 +44,6 @@ const ROUND_TRIP_CORPUS: Record<string, z.ZodType> = {
   productWithWrongCategorySchema,
   productWithIslandedMappingsSchema,
   staleIngredientParseSchema,
-  staleRecipeTotalsSchema,
   productWithBetterUpcDataSchema,
 };
 

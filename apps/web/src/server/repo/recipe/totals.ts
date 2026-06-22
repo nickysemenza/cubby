@@ -7,7 +7,7 @@
 
 import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
 import type { RecipeTotals } from "@cubby/schemas/recipe";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import {
   ingredient,
@@ -15,7 +15,7 @@ import {
   recipeSection,
   recipeSectionIngredient,
 } from "~/server/db/schema";
-import { countWhere, getDb, notDeleted } from "~/server/repo/database-helpers";
+import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { TraceNames, withTrace } from "~/server/tracing";
 
 /**
@@ -35,22 +35,6 @@ export const updateRecipeTotals = async (
     .set({ totals, totalsComputedAt: opts?.stale ? null : new Date() })
     .where(eq(recipe.id, id));
 };
-
-/** Ids of stale (never-computed / invalidated) recipes, for the drain. */
-export const selectStaleRecipeIds = async (
-  db: Database,
-  limit: number,
-): Promise<RecipeId[]> =>
-  withTrace(TraceNames.db("recipe.selectStaleRecipeIds"), async (span) => {
-    span.setAttribute("db.table", "recipe");
-    const rows = await getDb(db)
-      .select({ id: recipe.id })
-      .from(recipe)
-      .where(and(notDeleted(recipe), isNull(recipe.totalsComputedAt)))
-      .limit(limit);
-    span.setAttribute("db.result_count", rows.length);
-    return rows.map((r) => r.id as RecipeId);
-  });
 
 /** Persisted totals state for one recipe (explain endpoint). Null = not found. */
 export const getRecipeTotalsState = async (
@@ -85,17 +69,6 @@ export const selectAllActiveRecipeIds = async (
       .where(notDeleted(recipe));
     span.setAttribute("db.result_count", rows.length);
     return rows.map((r) => r.id as RecipeId);
-  });
-
-/** How many recipes still need (re)computing. */
-export const countStaleRecipes = async (db: Database): Promise<number> =>
-  withTrace(TraceNames.db("recipe.countStaleRecipes"), async (span) => {
-    span.setAttribute("db.table", "recipe");
-    return countWhere(
-      db,
-      recipe,
-      and(notDeleted(recipe), isNull(recipe.totalsComputedAt)),
-    );
   });
 
 /**

@@ -34,12 +34,10 @@ import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import { getRecipesByIDs } from "~/server/repo/recipe/crud";
 import {
-  countStaleRecipes,
   findParentRecipeIds,
   findRecipeIdsUsingIngredient,
   getRecipeTotalsState,
   selectAllActiveRecipeIds,
-  selectStaleRecipeIds,
   updateRecipeTotals,
 } from "~/server/repo/recipe/totals";
 import { TraceNames, withTrace } from "~/server/tracing";
@@ -375,22 +373,6 @@ export class RecipeCostingService {
     const visited = new Set<RecipeId>();
     await this.recompute(recipeIds, visited);
     return visited.size;
-  }
-
-  /** Recompute one batch of stale recipes; report how many remain. */
-  async drainStale(
-    limit: number,
-  ): Promise<{ processed: number; remaining: number }> {
-    const ids = await selectStaleRecipeIds(this.db, limit);
-    await this.recompute(ids);
-    const remaining = await countStaleRecipes(this.db);
-    if (ids.length > 0) {
-      // Visible in `wrangler tail` / the dev terminal — the drain's only trace.
-      console.log(
-        `[recipe-totals] drained ${ids.length} (${remaining} remaining)`,
-      );
-    }
-    return { processed: ids.length, remaining };
   }
 
   /**
