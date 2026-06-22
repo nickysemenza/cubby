@@ -64,7 +64,9 @@ export const entities: Record<Entity, EntityDefinition> = {
       list: "/products",
       new: "/products/new",
     },
-    detail: { commonSections: ["unit-mappings", "history"] },
+    // Note: product renders unit mappings as a custom section (coverage grid +
+    // rows table, like ingredient), so unit-mappings is not a common section.
+    detail: { commonSections: ["history"] },
     list: {
       hasUnitMappings: true,
       defaultSort: "createdAt",

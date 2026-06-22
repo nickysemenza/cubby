@@ -1,4 +1,7 @@
-import { productWithIngredientAndInventoryAndMappingsOut } from "@cubby/schemas/combo";
+import {
+  productWithIngredientAndInventoryAndMappingsOut,
+  recipeUsageOut,
+} from "@cubby/schemas/combo";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { IngredientId, ProductId } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
@@ -7,9 +10,10 @@ import type {
   ProductCreateInput,
 } from "@cubby/schemas/product";
 import { foodSummary } from "@cubby/usda-schemas";
-import type { z } from "zod";
+import { z } from "zod";
 import type { Database } from "~/server/db";
 import type { USDAClient } from "../clients/usda";
+import { getRecipeUsagesForIngredient } from "../repo/ingredient";
 import {
   createProduct as createProductRepo,
   foodLookupParamFromProduct,
@@ -20,10 +24,13 @@ import {
 import { markRecipesStaleForIngredient } from "../repo/recipe/totals";
 import { batchEnrichWithFood } from "./usda-helpers";
 
-// Extended schema that includes food data
+// Extended schema that includes food data plus the recipes the product's linked
+// ingredient appears in. `recipeUsages` defaults to [] so the list path (which
+// doesn't compute usages) stays valid against this shared output schema.
 export const productWithFoodOut =
   productWithIngredientAndInventoryAndMappingsOut.extend({
     food: foodSummary.nullable(),
+    recipeUsages: z.array(recipeUsageOut).default([]),
   });
 
 export type ProductWithFoodOut = z.infer<typeof productWithFoodOut>;
@@ -43,9 +50,15 @@ export class ProductService {
       ? await this.usdaClient.findFood(lookupParam)
       : null;
 
+    // Recipes the product appears in, resolved through its linked ingredient.
+    const { recipeUsages } = product.ingredient
+      ? await getRecipeUsagesForIngredient(this.db, product.ingredient.id)
+      : { recipeUsages: [] };
+
     return {
       ...product,
       food,
+      recipeUsages,
     };
   }
 
@@ -75,7 +88,11 @@ export class ProductService {
       this.usdaClient,
     );
 
-    return { data: productsWithFood, count };
+    // The list doesn't compute recipe usages (detail-only); satisfy the shared
+    // `productWithFoodOut` shape with an empty array per row.
+    const data = productsWithFood.map((p) => ({ ...p, recipeUsages: [] }));
+
+    return { data, count };
   }
 
   async createProduct(

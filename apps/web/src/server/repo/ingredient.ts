@@ -52,6 +52,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import {
+  computeRecipeUsages,
   dbRecipeToAPIShallow,
   liveRecipeCountForIngredientSql,
 } from "./recipe";
@@ -184,36 +185,11 @@ const dbIngredientToAPI = async (
   });
 
   // One row per usage (a recipe repeats when it uses this ingredient in multiple
-  // sections); the deduped `appearsInRecipes` is derived from these.
-  //
-  // `mapRelation` drops soft-deleted RecipeSectionIngredient rows, but it only
-  // inspects the top-level row — a live usage can still point at a soft-deleted
-  // section or recipe. Those must be excluded so the displayed recipe pills stay
-  // consistent with the list's recipe-count sort, whose subquery counts live
-  // recipes only (`r."deletedAt" IS NULL`, see `ingredientList`). Without this,
-  // an ingredient used solely in deleted recipes shows a pill yet sorts as zero
-  // — appearing stranded "in the middle" of the no-recipe ingredients.
-  const liveRecipeUsages = (RecipeSectionIngredient ?? []).filter(
-    (rsi) =>
-      rsi.recipeSection.deletedAt === null &&
-      rsi.recipeSection.recipe.deletedAt === null,
+  // sections); the deduped `appearsInRecipes` is derived from these. Shared with
+  // the product detail view via computeRecipeUsages.
+  const { recipeUsages, appearsInRecipes } = computeRecipeUsages(
+    RecipeSectionIngredient ?? [],
   );
-
-  const recipeUsages = mapRelation(liveRecipeUsages, (section) => ({
-    id: section.id,
-    recipe: dbRecipeToAPIShallow(section.recipeSection.recipe),
-    sectionName: section.recipeSection.name,
-    amounts: section.amounts,
-    rawLine: section.rawLine,
-    modifier: section.modifier,
-  }));
-
-  const seenRecipeIds = new Set<string>();
-  const appearsInRecipes = recipeUsages
-    .filter(
-      (u) => !seenRecipeIds.has(u.recipe.id) && seenRecipeIds.add(u.recipe.id),
-    )
-    .map((u) => u.recipe);
 
   return {
     ...restOfIngredient,
@@ -236,6 +212,31 @@ export const getIngredientByID = async (db: Database, id: IngredientId) => {
   }
 
   return await dbIngredientToAPI(db, ingredientData);
+};
+
+/**
+ * Lean fetch of an ingredient's recipe usages — just the RecipeSectionIngredient
+ * rows joined to their section + recipe, shaped by {@link computeRecipeUsages}.
+ * Used by the product detail view (via the linked ingredient) to render "Appears
+ * In Recipes" without loading the full ingredient graph (its other products and
+ * their unit mappings).
+ */
+export const getRecipeUsagesForIngredient = async (
+  db: Database,
+  ingredientId: IngredientId,
+) => {
+  const rows = await getDb(db).query.recipeSectionIngredient.findMany({
+    where: and(
+      eq(recipeSectionIngredient.ingredientId, ingredientId),
+      notDeleted(recipeSectionIngredient),
+    ),
+    with: {
+      recipeSection: {
+        with: { recipe: true },
+      },
+    },
+  });
+  return computeRecipeUsages(rows);
 };
 
 /**

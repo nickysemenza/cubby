@@ -17,13 +17,13 @@ import { DetailPage, type DetailSection } from "../data-table/detail-page";
 import { editableDetailSection } from "../data-table/editable-detail-section";
 import { EntityPillLinkList } from "../EntityPillLinkList";
 import { useEntityDetail } from "../hooks/useEntityDetail";
+import { RecipeUsagesTable } from "../recipe/recipe-usages-table";
 import { ConversionCapabilities } from "../units/ConversionCapabilities";
 import { UnitMappingsTable } from "../units/unitmappingstable";
 import { NutritionInfoTable } from "../usda/nutrition";
 import { EnrichIngredientDialog } from "./enrich-ingredient-dialog";
 import { IngredientBasicInfo } from "./ingredient-basic-info";
 import { IngredientForm } from "./ingredient-form";
-import { IngredientRecipeUsagesTable } from "./ingredient-recipe-usages-table";
 
 interface IngredientDetailProps {
   ingredient: IngredientWithFoodOut;
@@ -122,7 +122,7 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
       fullWidth: true,
       content:
         ingredient.recipeUsages.length > 0 ? (
-          <IngredientRecipeUsagesTable
+          <RecipeUsagesTable
             usages={ingredient.recipeUsages}
             ingredientName={ingredient.name}
             aliases={ingredient.aliases}

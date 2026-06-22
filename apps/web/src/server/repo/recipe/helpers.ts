@@ -9,7 +9,11 @@ import type {
   SectionIngredient,
 } from "@cubby/schemas/recipe";
 import type { z } from "zod";
-import type { recipe } from "~/server/db/schema";
+import type {
+  recipe,
+  recipeSection,
+  recipeSectionIngredient,
+} from "~/server/db/schema";
 import {
   extractImagesFromJoinTable,
   mapRelation,
@@ -42,6 +46,57 @@ export const liveRecipeCountForIngredientSql = (
   `JOIN "RecipeSection" rs ON rs."id" = rsi."recipeSectionId" AND rs."deletedAt" IS NULL ` +
   `JOIN "Recipe" r ON r."id" = rs."recipeId" AND r."deletedAt" IS NULL ` +
   `WHERE rsi."ingredientId" = ${ingredientRef} AND rsi."deletedAt" IS NULL)`;
+
+/**
+ * A RecipeSectionIngredient row joined up to its section and recipe — the input
+ * shape for {@link computeRecipeUsages}.
+ */
+type RecipeSectionIngredientWithRecipe =
+  typeof recipeSectionIngredient.$inferSelect & {
+    recipeSection: typeof recipeSection.$inferSelect & {
+      recipe: typeof recipe.$inferSelect;
+    };
+  };
+
+/**
+ * Shared recipe-usage shaping for both the ingredient and product detail views.
+ * Given an ingredient's RecipeSectionIngredient rows (each joined to its section
+ * and recipe), produces one `recipeUsage` per live usage plus the deduped
+ * `appearsInRecipes`.
+ *
+ * `mapRelation` drops soft-deleted RecipeSectionIngredient rows, but it only
+ * inspects the top-level row — a live usage can still point at a soft-deleted
+ * section or recipe. Those are excluded here so the displayed recipes stay
+ * consistent with the list's recipe-count sort, whose subquery counts live
+ * recipes only (see {@link liveRecipeCountForIngredientSql}).
+ */
+export const computeRecipeUsages = (
+  rows: RecipeSectionIngredientWithRecipe[],
+) => {
+  const liveRecipeUsages = rows.filter(
+    (rsi) =>
+      rsi.recipeSection.deletedAt === null &&
+      rsi.recipeSection.recipe.deletedAt === null,
+  );
+
+  const recipeUsages = mapRelation(liveRecipeUsages, (usage) => ({
+    id: usage.id,
+    recipe: dbRecipeToAPIShallow(usage.recipeSection.recipe),
+    sectionName: usage.recipeSection.name,
+    amounts: usage.amounts,
+    rawLine: usage.rawLine,
+    modifier: usage.modifier,
+  }));
+
+  const seenRecipeIds = new Set<string>();
+  const appearsInRecipes = recipeUsages
+    .filter(
+      (u) => !seenRecipeIds.has(u.recipe.id) && seenRecipeIds.add(u.recipe.id),
+    )
+    .map((u) => u.recipe);
+
+  return { recipeUsages, appearsInRecipes };
+};
 
 /**
  * Convert a recipe section ingredient DB record to API type.

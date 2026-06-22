@@ -54,7 +54,7 @@ export type IngredientWithRecipesAndProductOut = z.infer<
 // ingredient in multiple sections. Carries the per-usage provenance (raw imported
 // line, parser-derived modifier) and amounts so the ingredient detail page can show
 // usage + surface parser drift. `appearsInRecipes` is derived from this (deduped).
-const recipeUsageOut = z.object({
+export const recipeUsageOut = z.object({
   // RecipeSectionIngredient id — stable row identity (a recipe can appear twice).
   id: z.uuid(),
   recipe: recipeTopLevel,

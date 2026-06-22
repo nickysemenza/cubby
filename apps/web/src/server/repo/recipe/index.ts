@@ -33,6 +33,7 @@ export {
 } from "./crud";
 // Helpers
 export {
+  computeRecipeUsages,
   dbRecipeToAPIShallow,
   liveRecipeCountForIngredientSql,
 } from "./helpers";

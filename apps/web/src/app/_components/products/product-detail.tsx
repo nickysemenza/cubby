@@ -1,6 +1,6 @@
 import type { ProductCreateInput } from "@cubby/schemas/product";
 import { uniq } from "es-toolkit";
-import { Apple, Info } from "lucide-react";
+import { Apple, ChefHat, Info, Scale } from "lucide-react";
 import type { FC } from "react";
 import { MutedBox } from "~/components/layout/muted-box";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
@@ -14,6 +14,9 @@ import {
 } from "../data-table/detail-page";
 import { editableDetailSection } from "../data-table/editable-detail-section";
 import { useEntityDetail } from "../hooks/useEntityDetail";
+import { RecipeUsagesTable } from "../recipe/recipe-usages-table";
+import { ConversionCapabilities } from "../units/ConversionCapabilities";
+import { UnitMappingsTable } from "../units/unitmappingstable";
 import { NutritionInfoTable } from "../usda/nutrition";
 import { ProductBasicInfo } from "./product-basic-info";
 import { ProductForm } from "./product-form";
@@ -25,7 +28,7 @@ interface ProductDetailProps {
 export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   const api = useTRPC();
 
-  const { commonSections, editMode } = useEntityDetail<
+  const { commonSections, editMode, mappings } = useEntityDetail<
     ProductWithFoodOut,
     { id: string; data: Partial<ProductCreateInput> }
   >({
@@ -60,7 +63,43 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
           },
         ]
       : []),
-    // Common sections from entity config (Images, Unit Mappings, History)
+    // Custom section: Unit Mappings — conversion capabilities + Convert modal
+    // above the source-attributed rows table, mirroring the ingredient page.
+    {
+      title: "Unit Mappings",
+      icon: Scale,
+      content: (
+        <div className="space-y-2">
+          <ConversionCapabilities mappings={mappings} />
+          <UnitMappingsTable mappings={mappings} />
+        </div>
+      ),
+    },
+    // Custom section: Appears In Recipes — recipes the product's linked ingredient
+    // is used in, one row per usage with amount, source line, and parser-drift flag.
+    // Full-width so the 5-column table has room (esp. the source line).
+    ...(product.ingredient
+      ? [
+          {
+            title: "Appears In Recipes",
+            icon: ChefHat,
+            fullWidth: true,
+            content:
+              product.recipeUsages.length > 0 ? (
+                <RecipeUsagesTable
+                  usages={product.recipeUsages}
+                  ingredientName={product.ingredient.name}
+                  aliases={product.ingredient.aliases}
+                />
+              ) : (
+                <p className="text-muted-foreground text-sm">
+                  Not used in any recipes yet.
+                </p>
+              ),
+          },
+        ]
+      : []),
+    // Common sections from entity config (History)
     ...commonSections,
   ];
 

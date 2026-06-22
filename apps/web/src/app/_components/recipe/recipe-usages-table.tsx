@@ -19,13 +19,16 @@ type UsageRow = RecipeUsage & {
 };
 
 /**
- * Per-usage table for the ingredient detail page's "Appears In Recipes" section.
- * One row per {@link RecipeUsage} (a recipe repeats when it uses the ingredient in
- * multiple sections), showing the formatted amount, modifier, and the original
- * imported line. Re-parses each raw line with the current parser and surfaces (read-only)
- * any drift — name (Source line), amounts (Amount), or modifier — via {@link computeParseDrift}.
+ * Per-usage table for the "Appears In Recipes" section on the ingredient and
+ * product detail pages. One row per {@link RecipeUsage} (a recipe repeats when it
+ * uses the ingredient in multiple sections), showing the formatted amount,
+ * modifier, and the original imported line. Re-parses each raw line with the
+ * current parser and surfaces (read-only) any drift — name (Source line), amounts
+ * (Amount), or modifier — via {@link computeParseDrift}. `ingredientName`/`aliases`
+ * are the name(s) the drift check matches against; for products this is the
+ * product's linked ingredient.
  */
-export function IngredientRecipeUsagesTable({
+export function RecipeUsagesTable({
   usages,
   ingredientName,
   aliases,
