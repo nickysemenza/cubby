@@ -147,6 +147,13 @@ const problems: NavItem = {
   isActive: (p) => p.startsWith("/problems"),
 };
 
+const aiSmokeTest: NavItem = {
+  href: "/ai-smoke-test",
+  label: "AI smoke test",
+  icon: Sparkles,
+  isActive: (p) => p.startsWith("/ai-smoke-test"),
+};
+
 const images: NavItem = {
   href: "/images",
   label: "Images",
@@ -207,6 +214,7 @@ export const moreNavItems: NavItem[] = [
   activity,
   insights,
   problems,
+  aiSmokeTest,
   images,
   settings,
 ];
@@ -225,6 +233,7 @@ export const reportsItems: NavItem[] = [
   activity,
   insights,
   problems,
+  aiSmokeTest,
 ];
 
 export const desktopMoreItems: NavItem[] = [captureShelf, images, settings];

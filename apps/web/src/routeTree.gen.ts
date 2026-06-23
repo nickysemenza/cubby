@@ -23,6 +23,7 @@ import { Route as AuthenticatedInsightsRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedCaptureRouteImport } from './routes/_authenticated/capture'
 import { Route as AuthenticatedAskRouteImport } from './routes/_authenticated/ask'
+import { Route as AuthenticatedAiSmokeTestRouteImport } from './routes/_authenticated/ai-smoke-test'
 import { Route as AuthenticatedActivityRouteImport } from './routes/_authenticated/activity'
 import { Route as AuthenticatedShortcodeRouteImport } from './routes/_authenticated/$shortcode'
 import { Route as AuthenticatedUsdaIndexRouteImport } from './routes/_authenticated/usda.index'
@@ -140,6 +141,12 @@ const AuthenticatedAskRoute = AuthenticatedAskRouteImport.update({
   path: '/ask',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedAiSmokeTestRoute =
+  AuthenticatedAiSmokeTestRouteImport.update({
+    id: '/ai-smoke-test',
+    path: '/ai-smoke-test',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedActivityRoute = AuthenticatedActivityRouteImport.update({
   id: '/activity',
   path: '/activity',
@@ -414,6 +421,7 @@ export interface FileRoutesByFullPath {
   '/docs': typeof DocsRoute
   '/$shortcode': typeof AuthenticatedShortcodeRoute
   '/activity': typeof AuthenticatedActivityRoute
+  '/ai-smoke-test': typeof AuthenticatedAiSmokeTestRoute
   '/ask': typeof AuthenticatedAskRoute
   '/capture': typeof AuthenticatedCaptureRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
@@ -476,6 +484,7 @@ export interface FileRoutesByTo {
   '/docs': typeof DocsRoute
   '/$shortcode': typeof AuthenticatedShortcodeRoute
   '/activity': typeof AuthenticatedActivityRoute
+  '/ai-smoke-test': typeof AuthenticatedAiSmokeTestRoute
   '/ask': typeof AuthenticatedAskRoute
   '/capture': typeof AuthenticatedCaptureRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
@@ -540,6 +549,7 @@ export interface FileRoutesById {
   '/docs': typeof DocsRoute
   '/_authenticated/$shortcode': typeof AuthenticatedShortcodeRoute
   '/_authenticated/activity': typeof AuthenticatedActivityRoute
+  '/_authenticated/ai-smoke-test': typeof AuthenticatedAiSmokeTestRoute
   '/_authenticated/ask': typeof AuthenticatedAskRoute
   '/_authenticated/capture': typeof AuthenticatedCaptureRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
@@ -604,6 +614,7 @@ export interface FileRouteTypes {
     | '/docs'
     | '/$shortcode'
     | '/activity'
+    | '/ai-smoke-test'
     | '/ask'
     | '/capture'
     | '/dashboard'
@@ -666,6 +677,7 @@ export interface FileRouteTypes {
     | '/docs'
     | '/$shortcode'
     | '/activity'
+    | '/ai-smoke-test'
     | '/ask'
     | '/capture'
     | '/dashboard'
@@ -729,6 +741,7 @@ export interface FileRouteTypes {
     | '/docs'
     | '/_authenticated/$shortcode'
     | '/_authenticated/activity'
+    | '/_authenticated/ai-smoke-test'
     | '/_authenticated/ask'
     | '/_authenticated/capture'
     | '/_authenticated/dashboard'
@@ -896,6 +909,13 @@ declare module '@tanstack/react-router' {
       path: '/ask'
       fullPath: '/ask'
       preLoaderRoute: typeof AuthenticatedAskRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/ai-smoke-test': {
+      id: '/_authenticated/ai-smoke-test'
+      path: '/ai-smoke-test'
+      fullPath: '/ai-smoke-test'
+      preLoaderRoute: typeof AuthenticatedAiSmokeTestRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/activity': {
@@ -1233,6 +1253,7 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteChildren {
   AuthenticatedShortcodeRoute: typeof AuthenticatedShortcodeRoute
   AuthenticatedActivityRoute: typeof AuthenticatedActivityRoute
+  AuthenticatedAiSmokeTestRoute: typeof AuthenticatedAiSmokeTestRoute
   AuthenticatedAskRoute: typeof AuthenticatedAskRoute
   AuthenticatedCaptureRoute: typeof AuthenticatedCaptureRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
@@ -1288,6 +1309,7 @@ interface AuthenticatedRouteChildren {
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedShortcodeRoute: AuthenticatedShortcodeRoute,
   AuthenticatedActivityRoute: AuthenticatedActivityRoute,
+  AuthenticatedAiSmokeTestRoute: AuthenticatedAiSmokeTestRoute,
   AuthenticatedAskRoute: AuthenticatedAskRoute,
   AuthenticatedCaptureRoute: AuthenticatedCaptureRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
