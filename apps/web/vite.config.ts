@@ -42,32 +42,6 @@ function cfPgNativeStub(): Plugin {
 }
 
 /**
- * Force the browser variant of @aws-sdk/client-s3's runtimeConfig in the SSR/CF
- * Workers env. The SDK's legacy `browser` package.json field isn't honored by
- * Vite's SSR resolver, so the node runtimeConfig.js is picked. But @smithy/core
- * uses an `exports` field with a `browser` condition that resolves to stubs
- * (e.g. `loadConfig = Symbol("node-only")`), producing
- * `TypeError: loadConfig is not a function` at S3Client construction.
- */
-function cfAwsSdkBrowserRedirect(): Plugin {
-  return {
-    name: "cf-aws-sdk-browser-redirect",
-    enforce: "pre",
-    applyToEnvironment(env) {
-      return env.name === "ssr";
-    },
-    async resolveId(source, importer) {
-      if (!source.endsWith("/runtimeConfig")) return;
-      if (!importer?.includes("@aws-sdk/")) return;
-      const resolved = await this.resolve(`${source}.browser`, importer, {
-        skipSelf: true,
-      });
-      return resolved ?? undefined;
-    },
-  };
-}
-
-/**
  * Vite plugin that redirects @cubby/recipebridge to a CF Workers-compatible
  * wrapper in the SSR environment. The wrapper uses the ?init pattern supported
  * by @cloudflare/vite-plugin to properly instantiate the WASM module.
@@ -194,9 +168,7 @@ export default defineConfig(async () => {
       // Deploy plugin must come first (Cloudflare plugin needs early hook)
       ...deployPlugin,
       // CF Workers WASM instantiation plugin must run before vite-plugin-wasm
-      ...(isCloudflare
-        ? [cfPgNativeStub(), cfWasmPlugin(), cfAwsSdkBrowserRedirect()]
-        : []),
+      ...(isCloudflare ? [cfPgNativeStub(), cfWasmPlugin()] : []),
       wasm(),
       devtools({
         injectSource: { enabled: false },
