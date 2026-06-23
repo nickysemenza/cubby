@@ -31,6 +31,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { mapValues, omit, sum, uniq } from "es-toolkit";
+import { env } from "~/env";
 import {
   BASE_KINDS,
   conversionCoverage,
@@ -536,8 +537,9 @@ const findLocationsWithoutAiDescription = async (
 
 // ProductWithBetterUpcData (productWithBetterUpcDataSchema): a product whose
 // stored UPC-sourced fields have a gap (no manufacturer, price, or image) that a
-// *fresh* UPC lookup could fill. `gaps` flags which fields the live lookup can
-// actually fill (only set when the lookup has data for them).
+// *fresh* UPC lookup could fill. `proposed` carries the value the live lookup
+// would write per field (null ⇒ no change), so the panel can show the actual
+// before→after, not just which fields are missing.
 
 // Find products that a fresh UPC lookup could enrich. We first narrow to
 // *candidates* purely from the DB — products with a UPC that already have a
@@ -589,22 +591,38 @@ const findProductsWithBetterUpcData = async (
     const lookup = lookups.get(cand.upc);
     if (!lookup) continue;
 
-    const gaps = {
+    // Each field is set only when a fresh lookup would fill it (stored value
+    // empty AND lookup has one); null ⇒ no change. The non-null fields are
+    // exactly the old `gaps` booleans, now carrying the value that would land.
+    const proposed = {
       manufacturer:
         isUnspecifiedManufacturer(cand.manufacturer) &&
-        !isUnspecifiedManufacturer(lookup.manufacturer ?? lookup.brand),
-      price: cand.price == null && lookup.priceDollars != null,
-      image: !cand.hasImage && lookup.imageUrl != null,
+        !isUnspecifiedManufacturer(lookup.manufacturer ?? lookup.brand)
+          ? (lookup.manufacturer ?? lookup.brand)
+          : null,
+      price:
+        cand.price == null && lookup.priceDollars != null
+          ? lookup.priceDollars
+          : null,
+      imageUrl:
+        !cand.hasImage && lookup.imageUrl
+          ? new URL(lookup.imageUrl, env.UPC_LOOKUP_API_URL).toString()
+          : null,
     };
 
-    if (!gaps.manufacturer && !gaps.price && !gaps.image) continue;
+    if (
+      proposed.manufacturer == null &&
+      proposed.price == null &&
+      proposed.imageUrl == null
+    )
+      continue;
 
     problems.push({
       id: cand.id,
       name: cand.name,
       manufacturer: cand.manufacturer,
       upc: cand.upc,
-      gaps,
+      proposed,
     });
   }
 

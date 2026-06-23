@@ -10,14 +10,17 @@ import {
   Wrench,
 } from "lucide-react";
 import type { ReactNode } from "react";
+import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
 import { formatAmounts } from "~/app/_components/inventory/format-amount";
 import { DriftIndicator } from "~/app/_components/parse-drift-indicator";
 import { DecompositionView } from "~/app/_components/recipe/decomposition-view";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { EntityIcon } from "~/entities/entities";
+import { queryKeys } from "~/lib/query-keys";
+import { formatCurrency } from "~/lib/utils";
 import type { ProductWithBetterUpcData } from "~/server/repo/problems";
-import type { RouterOutputs } from "~/trpc/react";
+import { type RouterOutputs, useTRPC } from "~/trpc/react";
 import { BACKFILL } from "./backfill-registry";
 import { EmptyLocationsList } from "./empty-locations-list";
 import { BackfillButton } from "./problem-backfill-action";
@@ -109,11 +112,37 @@ function customSection<T>(def: {
   };
 }
 
-const GAP_LABELS: Record<keyof ProductWithBetterUpcData["gaps"], string> = {
-  manufacturer: "Manufacturer",
-  price: "Price",
-  image: "Image",
-};
+/**
+ * "Apply" action for the "Better UPC data available" cards — writes the
+ * looked-up fields onto the product in place (manufacturer/price via update +
+ * recipe recompute, image via R2 import) without leaving the page. Lives in a
+ * component (not `renderItem`) so it can own the mutation hook; the card drops
+ * out of the list once `problems.getAllProblems` invalidates.
+ */
+function UpcApplyAction({ product }: { product: ProductWithBetterUpcData }) {
+  const api = useTRPC();
+  const apply = useProblemCardMutation({
+    mutationFn: api.product.applyUpcData.mutationOptions,
+    success: `Updated ${product.name} from UPC`,
+    // getAllProblems is always invalidated by the hook; add the navbar badge
+    // count + the product/recipe lists (price feeds recipe cost).
+    invalidateKeys: [
+      api.problems.getProblemsCount.queryKey(),
+      queryKeys.product.list,
+      queryKeys.recipe.list,
+    ],
+  });
+  return (
+    <Button
+      size="sm"
+      onClick={() => apply.mutate({ id: product.id, upc: product.upc })}
+      disabled={apply.isPending}
+    >
+      <Download className="mr-1 h-3 w-3" />
+      {apply.isPending ? "Applying…" : "Apply"}
+    </Button>
+  );
+}
 
 /** Card for the merged "Unit coverage" section — core-4 chips + the inline fix. */
 /**
@@ -434,23 +463,61 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     icon: Download,
     title: "Better UPC data available",
     description:
-      "A fresh UPC lookup can fill in missing fields on these products. Re-import to pull the newer info.",
+      "A fresh UPC lookup can fill in these missing fields. Apply to write the new value onto the product.",
     emptyMessage: "No products have newer info available from UPC lookup.",
-    renderItem: (product) => ({
-      title: product.name,
-      subtitle: byManufacturer(product.manufacturer),
-      badges: [
-        ...(Object.keys(GAP_LABELS) as Array<keyof typeof GAP_LABELS>)
-          .filter((key) => product.gaps[key])
-          .map((key) => (
-            <Badge key={key} variant="secondary">
-              {GAP_LABELS[key]}
-            </Badge>
-          )),
-        <CodeChip key="upc">{product.upc}</CodeChip>,
-      ],
-      route: { to: "/products/$id", params: { id: product.id } },
-      editLabel: "Re-import",
-    }),
+    renderItem: (product) => {
+      const { proposed } = product;
+      // Show the actual value a fresh lookup would write per field — not just
+      // which fields are missing — so it's clear what "Apply" changes.
+      const details: ReactNode[] = [];
+      if (proposed.manufacturer != null) {
+        details.push(
+          <div key="manufacturer" className="text-sm">
+            <span className="text-muted-foreground">Manufacturer → </span>
+            <span className="font-medium">{proposed.manufacturer}</span>
+          </div>,
+        );
+      }
+      if (proposed.price != null) {
+        details.push(
+          <div key="price" className="text-sm">
+            <span className="text-muted-foreground">Price → </span>
+            <span className="font-medium">
+              {formatCurrency(proposed.price)}
+            </span>
+          </div>,
+        );
+      }
+      return {
+        title: product.name,
+        subtitle: byManufacturer(product.manufacturer),
+        imageSlot: proposed.imageUrl ? (
+          <img
+            src={proposed.imageUrl}
+            alt={`${product.name} (from UPC lookup)`}
+            className="h-full w-full object-cover"
+            // UPC-sourced image URLs can 404; degrade to an empty slot (the
+            // "New image" badge still conveys the gap) instead of sprawling alt.
+            onError={(e) => {
+              e.currentTarget.style.display = "none";
+            }}
+          />
+        ) : undefined,
+        details,
+        badges: [
+          ...(proposed.imageUrl
+            ? [
+                <Badge key="image" variant="secondary">
+                  New image
+                </Badge>,
+              ]
+            : []),
+          <CodeChip key="upc">{product.upc}</CodeChip>,
+        ],
+        route: { to: "/products/$id", params: { id: product.id } },
+        editLabel: "Open product",
+        customActions: <UpcApplyAction product={product} />,
+      };
+    },
   }),
 ];

@@ -115,10 +115,13 @@ export const staleIngredientParseSchema = z.object({
 
 export const productWithBetterUpcDataSchema = productProblemBase.extend({
   upc: z.string(),
-  gaps: z.object({
-    manufacturer: z.boolean(),
-    price: z.boolean(),
-    image: z.boolean(),
+  // Each field is set only when a fresh lookup would fill it (stored value empty
+  // AND lookup has one). null ⇒ no change for that field. A row always has ≥1
+  // non-null field. `imageUrl` is an absolute URL ready to render.
+  proposed: z.object({
+    manufacturer: z.string().nullable(),
+    price: z.number().nullable(), // dollars, matches product.price + lookup.priceDollars
+    imageUrl: z.string().nullable(),
   }),
 });
 

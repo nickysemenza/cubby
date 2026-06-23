@@ -414,20 +414,22 @@ describe("problems repo", () => {
 
       const byId = new Map(productsWithBetterUpcData.map((p) => [p.id, p]));
 
-      expect(byId.get(noManu.id)?.gaps).toEqual({
-        manufacturer: true,
-        price: false,
-        image: false,
+      // `proposed` carries the value each gap would be filled with (null = no
+      // change). An absolute lookup image URL is returned unchanged.
+      expect(byId.get(noManu.id)?.proposed).toEqual({
+        manufacturer: "Acme",
+        price: null,
+        imageUrl: null,
       });
-      expect(byId.get(noPrice.id)?.gaps).toEqual({
-        manufacturer: false,
-        price: true,
-        image: false,
+      expect(byId.get(noPrice.id)?.proposed).toEqual({
+        manufacturer: null,
+        price: 4.5,
+        imageUrl: null,
       });
-      expect(byId.get(noImage.id)?.gaps).toEqual({
-        manufacturer: false,
-        price: false,
-        image: true,
+      expect(byId.get(noImage.id)?.proposed).toEqual({
+        manufacturer: null,
+        price: null,
+        imageUrl: "https://example.com/p.jpg",
       });
 
       // Fully-populated and misc products are neither flagged nor looked up.

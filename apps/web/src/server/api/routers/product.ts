@@ -25,6 +25,7 @@ import { upc } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { streamItems, streamProgress } from "~/lib/bulk-progress";
 import { getErrorMessage } from "~/lib/error-utils";
+import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { countActiveInventoryForProduct } from "~/server/repo/inventory/crud";
 import {
   deleteProducts,
@@ -149,6 +150,72 @@ const update = protectedProcedure
       input.data.price !== undefined
         ? await countActiveInventoryForProduct(ctx.db, input.id)
         : 0;
+    return {
+      ...result,
+      sideEffects: { recipesRecomputed, inventoryValuationsUpdated },
+    };
+  });
+
+// One-click "Apply" for the Problems page "Better UPC data available" panel:
+// pull the (cached) UPC lookup and fill ONLY the fields still empty — never
+// clobber a value the user already set. Manufacturer/price go through
+// updateProduct (which resyncs inventory valuations and lets us recompute
+// dependent recipes, since price feeds cost); the image is imported separately.
+// Mirrors the field mapping in findOrCreateByUPC and the recompute in `update`.
+const applyUpcData = protectedProcedure
+  .input(z.object({ id: productId, upc: upc }))
+  .output(productWithFoodOut.extend({ sideEffects: recomputeSummary }))
+  .mutation(async ({ ctx, input }) => {
+    const current = await ctx.services.product.getProductByID(input.id);
+    const lookup = await ctx.upcLookupClient.lookup(input.upc);
+
+    // Build a partial update from the gaps the lookup can actually fill.
+    const data: { manufacturer?: string; price?: number } = {};
+    const lookupManufacturer = lookup?.manufacturer ?? lookup?.brand ?? null;
+    if (
+      lookupManufacturer != null &&
+      isUnspecifiedManufacturer(current.manufacturer) &&
+      !isUnspecifiedManufacturer(lookupManufacturer)
+    ) {
+      data.manufacturer = lookupManufacturer;
+    }
+    if (current.price == null && lookup?.priceDollars != null) {
+      data.price = lookup.priceDollars;
+    }
+
+    const priceChanged = data.price !== undefined;
+    if (Object.keys(data).length > 0) {
+      await ctx.services.product.updateProduct(
+        input.id,
+        data,
+        ctx.actorContext,
+      );
+    }
+
+    // Image is a separate write (R2 import + association); only when missing.
+    if (current.images.length === 0 && lookup?.imageUrl) {
+      try {
+        await importImageFromUPC(
+          ctx.db,
+          ctx.upcLookupClient,
+          input.upc,
+          input.id,
+        );
+      } catch (error) {
+        console.error(`[product.applyUpcData] Image import failed:`, error);
+      }
+    }
+
+    // Re-fetch so the returned payload reflects every write (incl. the image).
+    const result = await ctx.services.product.getProductByID(input.id);
+    const ingredientId = result.ingredient?.id;
+    const recipesRecomputed =
+      priceChanged && ingredientId
+        ? await ctx.services.recipeCosting.recomputeForIngredient(ingredientId)
+        : 0;
+    const inventoryValuationsUpdated = priceChanged
+      ? await countActiveInventoryForProduct(ctx.db, input.id)
+      : 0;
     return {
       ...result,
       sideEffects: { recipesRecomputed, inventoryValuationsUpdated },
@@ -326,6 +393,7 @@ export const productRouter = createTRPCRouter({
   createMany,
   markUsdaUnavailableMany,
   update,
+  applyUpcData,
   delete: deleteItem,
   quickCreate,
   findOrCreateByUPC,
