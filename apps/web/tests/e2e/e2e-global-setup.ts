@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -85,6 +86,21 @@ async function globalSetup(config: FullConfig): Promise<void> {
   // 2. Start wrangler dev against the CF Workers build
   const webRoot = path.join(__dirname, "../..");
 
+  // Strip the `ai` binding for E2E. A Workers AI binding forces `wrangler dev`
+  // to establish a remote Cloudflare session at boot (AI has no local runtime),
+  // which needs CF credentials the E2E job doesn't have — without them the
+  // server never becomes ready. E2E is hermetic and never invokes AI, so we run
+  // against a copy of the build config with the binding removed. This also keeps
+  // AI features reported unavailable, matching pre-binding E2E behavior.
+  const e2eConfig = JSON.parse(
+    readFileSync(path.join(webRoot, "dist/server/wrangler.json"), "utf8"),
+  ) as Record<string, unknown>;
+  delete e2eConfig.ai;
+  writeFileSync(
+    path.join(webRoot, "dist/server/wrangler.e2e.json"),
+    JSON.stringify(e2eConfig),
+  );
+
   console.log("[E2E Setup] Starting wrangler dev on port 3001");
   const serverProcess = spawn(
     "npx",
@@ -92,7 +108,7 @@ async function globalSetup(config: FullConfig): Promise<void> {
       "wrangler",
       "dev",
       "--config",
-      "dist/server/wrangler.json",
+      "dist/server/wrangler.e2e.json",
       "--port",
       "3001",
       "--var",
