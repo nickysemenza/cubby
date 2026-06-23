@@ -1,15 +1,16 @@
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, Import } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
-import { toast } from "sonner";
+import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
+import { Progress } from "~/components/ui/progress";
 import { Spinner } from "~/components/ui/spinner";
 import { getErrorMessage } from "~/lib/error-utils";
 import { queryKeys } from "~/lib/query-keys";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC, useTRPCClient } from "~/trpc/react";
 import type { ImportResult } from "../cookbook-import/types";
 import { RecipeImportCard } from "../recipe-import-card";
 
@@ -33,10 +34,15 @@ type PreviewItem = {
  */
 export function NotionImport() {
   const api = useTRPC();
+  const client = useTRPCClient();
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [results, setResults] = useState<Map<string, ImportResult>>(new Map());
   const [importing, setImporting] = useState(false);
+  const [progress, setProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
 
   // Auto-loads on mount: reading the Notion Recipes DB is the whole point of the
   // page, so there's no reason to gate it behind a click. staleTime: 0 means every
@@ -45,9 +51,12 @@ export function NotionImport() {
   const preview = useQuery(
     api.recipe.previewNotionSync.queryOptions(undefined, { staleTime: 0 }),
   );
-  const importMut = useMutation(
-    api.recipe.importNotionRecipe.mutationOptions(),
-  );
+  // Per-page outcome streamed back from importNotionSyncStream, keyed by page id.
+  const { start: startNotionImport } = useBulkStream<
+    | { pageId: string; ok: true; id: string; status: "created" | "updated" }
+    | { pageId: string; ok: false; error: string },
+    { succeeded: number; failed: number }
+  >();
 
   const items = (preview.data ?? []) as PreviewItem[];
   // Checkbox is enabled for anything that isn't malformed (incl. unchanged, in
@@ -78,34 +87,45 @@ export function NotionImport() {
   }, [actionable]);
 
   const runImport = useCallback(async () => {
+    const pageIds = [...selected];
+    if (pageIds.length === 0) return;
     setImporting(true);
-    let ok = 0;
-    // Sequential, so each card's status lands one at a time and the server stays
-    // authoritative (it re-maps each page on commit).
-    for (const pageId of selected) {
+    setProgress({ done: 0, total: pageIds.length });
+    for (const pageId of pageIds) {
       setResults((m) => new Map(m).set(pageId, { status: "importing" }));
-      try {
-        const res = await importMut.mutateAsync({ pageId });
-        setResults((m) =>
-          new Map(m).set(pageId, { status: "done", id: res.id }),
-        );
-        ok++;
-      } catch (e) {
-        setResults((m) =>
-          new Map(m).set(pageId, {
-            status: "error",
-            message: getErrorMessage(e),
-          }),
-        );
-      }
     }
+    // One streamed request: the server upserts each page (in its own tx) and does
+    // a single batched recompute; per-page results + overall progress stream back.
+    await startNotionImport(
+      () => client.recipe.importNotionSyncStream.mutate({ pageIds }),
+      {
+        onItem: (item) =>
+          setResults((m) =>
+            new Map(m).set(
+              item.pageId,
+              item.ok
+                ? { status: "done", id: item.id }
+                : { status: "error", message: item.error },
+            ),
+          ),
+        onProgress: (done, total) => setProgress({ done, total }),
+        onDone: (r) => {
+          // Refresh the recipe list + re-run the preview (flips new → will-update).
+          if (r.succeeded > 0) {
+            void queryClient.invalidateQueries({
+              queryKey: [queryKeys.recipe.all],
+            });
+          }
+        },
+        successToast: (r) =>
+          r.succeeded > 0
+            ? `Imported ${r.succeeded} recipe${r.succeeded === 1 ? "" : "s"} from Notion`
+            : null,
+      },
+    );
     setImporting(false);
-    if (ok > 0) {
-      toast.success(`Imported ${ok} recipe${ok === 1 ? "" : "s"} from Notion`);
-      // Refresh the recipe list and re-run the preview (flips new → will-update).
-      await queryClient.invalidateQueries({ queryKey: [queryKeys.recipe.all] });
-    }
-  }, [selected, importMut, queryClient]);
+    setProgress(null);
+  }, [selected, client, startNotionImport, queryClient]);
 
   const summary = useMemo(() => {
     const c = { new: 0, update: 0, unchanged: 0, needs: 0 };
@@ -145,6 +165,16 @@ export function NotionImport() {
           </Button>
         )}
       </div>
+
+      {progress && (
+        <div className="space-y-1">
+          <p className="flex items-center gap-1 text-muted-foreground text-xs">
+            <Spinner className="h-3 w-3" /> Importing {progress.done} of{" "}
+            {progress.total}
+          </p>
+          <Progress value={progress.done} max={progress.total} />
+        </div>
+      )}
 
       {preview.isError && (
         <p className="flex items-center gap-1 text-destructive text-sm">

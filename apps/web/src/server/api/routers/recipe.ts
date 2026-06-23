@@ -347,44 +347,89 @@ const previewNotionSync = protectedProcedure
     );
   });
 
-const importNotionRecipe = protectedProcedure
-  .input(z.object({ pageId: z.string() }))
-  .output(z.object({ id: z.uuid(), status: z.enum(["created", "updated"]) }))
-  .mutation(async ({ ctx, input }) => {
+// Per-page outcome streamed back during a Notion import, keyed by the page id so
+// each card maps to its result.
+type NotionItemResult =
+  | { pageId: string; ok: true; id: string; status: "created" | "updated" }
+  | { pageId: string; ok: false; error: string };
+type NotionSummary = { succeeded: number; failed: number };
+
+// Import the selected Notion pages in ONE streamed request (replaces the old
+// per-page importNotionRecipe client loop, which also re-queried the whole Notion
+// DB on every iteration). Queries the Recipes DB once, upserts each selected page
+// in its own tx (sequential, per-page error isolation), yields per-page progress,
+// then runs a single batched costing recompute. Upserts are keyed on page id.
+const importNotionSyncStream = protectedProcedure
+  .input(z.object({ pageIds: z.array(z.string()).min(1) }))
+  .mutation(async function* ({
+    ctx,
+    input,
+  }): AsyncGenerator<BulkProgressEvent<NotionItemResult, NotionSummary>> {
     const client = ctx.notionClient;
     if (!client) {
       throw createAppError("CONSTRAINT_VIOLATION", "Notion is not configured.");
     }
-    const row = (await client.queryRecipes()).find(
-      (r) => r.id === input.pageId,
+    // Query the Recipes DB once + load existing page ids once (was N× per page).
+    const rowById = new Map(
+      (await client.queryRecipes()).map((r) => [r.id, r]),
     );
-    if (!row) {
-      throw createAppError(
-        "RECIPE_NOT_FOUND",
-        "That page isn't in the Notion Recipes database.",
-      );
+    const existing = new Set(
+      (await getNotionRecipePageIds(ctx.db)).map(normalizeNotionId),
+    );
+    const insertedIds: RecipeId[] = [];
+    let succeeded = 0;
+    let failed = 0;
+    const total = input.pageIds.length;
+    yield { type: "progress", done: 0, total };
+    for (let i = 0; i < input.pageIds.length; i++) {
+      const pageId = input.pageIds[i]!;
+      try {
+        const row = rowById.get(pageId);
+        if (!row) {
+          throw new Error("That page isn't in the Notion Recipes database.");
+        }
+        const blocks = await client.getPageContent(pageId);
+        const recipe = notionPageToImportRecipe(row, blocks);
+        const { status: lintStatus, reasons } = lintImportRecipe(recipe);
+        if (lintStatus === "needs-formatting") {
+          throw new Error(`Recipe isn't import-ready: ${reasons.join(" ")}`);
+        }
+        const existed = existing.has(normalizeNotionId(pageId));
+        const { id } = await upsertNotionRecipeFromImport(
+          recipe,
+          pageId,
+          row.tags,
+          ctx.db,
+          ctx.actorContext,
+        );
+        insertedIds.push(id as RecipeId);
+        succeeded++;
+        yield {
+          type: "progress",
+          done: i + 1,
+          total,
+          item: {
+            pageId,
+            ok: true,
+            id,
+            status: existed ? "updated" : "created",
+          },
+        };
+      } catch (error) {
+        // Isolate: one malformed page can't sink the rest of the import.
+        failed++;
+        yield {
+          type: "progress",
+          done: i + 1,
+          total,
+          item: { pageId, ok: false, error: getErrorMessage(error) },
+        };
+      }
     }
-    const blocks = await client.getPageContent(input.pageId);
-    const recipe = notionPageToImportRecipe(row, blocks);
-    const { status, reasons } = lintImportRecipe(recipe);
-    if (status === "needs-formatting") {
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        `Recipe isn't import-ready: ${reasons.join(" ")}`,
-      );
+    if (insertedIds.length > 0) {
+      await ctx.services.recipeCosting.recompute(insertedIds);
     }
-    const existed = (await getNotionRecipePageIds(ctx.db)).some(
-      (id) => normalizeNotionId(id) === normalizeNotionId(input.pageId),
-    );
-    const { id } = await upsertNotionRecipeFromImport(
-      recipe,
-      input.pageId,
-      row.tags,
-      ctx.db,
-      ctx.actorContext,
-    );
-    await ctx.services.recipeCosting.recompute([id as RecipeId]);
-    return { id, status: existed ? "updated" : "created" };
+    yield { type: "done", result: { succeeded, failed } };
   });
 
 // Distinct cookbooks with recipe counts, for the browse-by-source index.
@@ -561,7 +606,7 @@ export const recipeRouter = createTRPCRouter({
   importCookbookStream,
   getCookbookDiff,
   previewNotionSync,
-  importNotionRecipe,
+  importNotionSyncStream,
   listCookbooks: listCookbooksEndpoint,
   deleteByCookbook,
   reprocessCookbook: reprocessCookbookStreamEndpoint,
