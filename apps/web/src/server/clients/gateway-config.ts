@@ -37,8 +37,3 @@ export function gatewayAdapterConfig(opts?: { metadata?: GatewayMetadata }) {
     ...opts,
   };
 }
-
-/** True when an AI gateway path is available (binding in prod, token in dev). */
-export function isGatewayConfigured(): boolean {
-  return !!getAiGateway() || !!env.AI_GATEWAY_API_KEY;
-}

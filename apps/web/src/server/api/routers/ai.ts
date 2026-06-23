@@ -25,7 +25,7 @@ import {
   suggestUsdaFood,
   suggestUsdaFoodBatch,
 } from "~/server/services/ai-enrichment.service";
-import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 /**
  * Suggest a category for a product based on its name and manufacturer
@@ -54,20 +54,9 @@ const suggestLocationType = protectedProcedure
     return client.suggestLocationType(input.locationName);
   });
 
-/**
- * Check if AI features are available (API key configured)
- */
-const isAvailable = publicProcedure
-  .output(z.object({ available: z.boolean() }))
-  .query(() => {
-    const client = getAnthropicClient();
-    return { available: client.isConfigured() };
-  });
-
 export const aiRouter = createTRPCRouter({
   suggestCategory,
   suggestLocationType,
-  isAvailable,
   describeLocation: protectedProcedure
     .input(z.object({ locationId }))
     .output(locationDescriptionSchema)

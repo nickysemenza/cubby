@@ -30,7 +30,6 @@ import type { AnthropicImageMetadata } from "@tanstack/ai-anthropic";
 import {
   type GatewayMetadata,
   gatewayAdapterConfig,
-  isGatewayConfigured,
 } from "~/server/clients/gateway-config";
 
 // Single source of truth for the model so both gateway-config branches stay in
@@ -145,10 +144,6 @@ class AnthropicClient {
   // Construction is cheap.
   private getAdapter(metadata?: GatewayMetadata) {
     return createAnthropicChat(MODEL, gatewayAdapterConfig({ metadata }));
-  }
-
-  isConfigured(): boolean {
-    return isGatewayConfigured();
   }
 
   /**
