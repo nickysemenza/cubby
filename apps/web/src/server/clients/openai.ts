@@ -18,6 +18,12 @@ import {
  * billing), so we never pass a provider `apiKey`. Prod authenticates implicitly
  * via the gateway binding; dev falls back to gateway-REST with the
  * `AI_GATEWAY_API_KEY` gateway token (`cfApiKey`).
+ *
+ * API surface: `createOpenAiChat` targets the OpenAI **Responses** API (vs the
+ * old `createOpenaiChatCompletions`, which used `/chat/completions`). Verified
+ * the multi-turn search->select tool loop in `ai-enrichment.service.ts`
+ * (`suggestUsdaFood` / `suggestIngredientMerge`) works through the gateway on
+ * this surface.
  */
 
 // CF AI Gateway custom metadata: up to 5 string/number/boolean entries, surfaced
