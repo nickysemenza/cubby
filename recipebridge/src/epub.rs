@@ -1,24 +1,26 @@
 //! EPUB cookbook extraction (client-side pipeline; LLM call proxied via Cubby).
 //!
-//! The browser drives the loop: `chunk_epub` splits an uploaded .epub into text
-//! chunks each carrying a ready-to-send LLM request; the orchestrator sends each
-//! request to Cubby's `extractCookbookChunk` proxy (which holds the gateway key);
-//! `assemble_recipes` folds the per-chunk model outputs back into recipes. All
-//! recipe logic stays in Rust — TS only moves bytes.
+//! Rust drives the loop: `chunk_epub` splits an uploaded .epub into text chunks
+//! each carrying a ready-to-send LLM request; `extract_cookbook` then runs the
+//! whole per-chunk loop (retry → model escalation → salvage → assemble, shared
+//! with the native path via `recipe_epub::try_extract_chunk`), calling back into
+//! JS only for the one authenticated network hop to Cubby's `extractCookbookChunk`
+//! proxy. All recipe logic stays in Rust — TS only moves bytes + renders.
 
+use futures::stream::{self, StreamExt};
 use recipe_epub::{
-    Chunk as EpubChunk, EpubMeta, ImageRef, Link as EpubLink,
-    assemble_recipes as assemble_recipes_internal, build_chunk_request,
+    CallResult, Chunk as EpubChunk, EpubError, EpubMeta, ExtractedRecipe, ImageRef,
+    Link as EpubLink, Usage, assemble_recipes as assemble_recipes_internal, build_chunk_request,
     chunk_epub as chunk_epub_internal, cover_image_ref as cover_image_ref_internal,
-    epub_metadata as epub_metadata_internal, parse_recipes_payload,
-    read_image as read_image_internal,
+    epub_metadata as epub_metadata_internal, read_image as read_image_internal, try_extract_chunk,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
+use wasm_bindgen_futures::JsFuture;
 
-use crate::to_js;
+use crate::{from_js, to_js};
 
 /// One LLM request for a cookbook chunk (mirrors `recipe_epub::ChunkRequest`).
 /// Sent verbatim to Cubby's `extractCookbookChunk` proxy.
@@ -44,8 +46,8 @@ pub struct WCookbookLink {
 }
 
 /// A unit of cookbook text to extract: a stable `id` (sha256 of the text, for
-/// the orchestrator's session cache), provenance, and the ready-to-send request.
-/// `assemble_recipes` consumes the same chunks back, paired with model output.
+/// byte-identical chunks), provenance, and the ready-to-send request.
+/// `extract_cookbook` drives each chunk's extraction from this.
 #[derive(Tsify, Serialize, Deserialize)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct WCookbookChunk {
@@ -63,23 +65,6 @@ pub struct WCookbookChunk {
 #[tsify(into_wasm_abi, from_wasm_abi)]
 #[serde(transparent)]
 pub struct WCookbookChunks(pub Vec<WCookbookChunk>);
-
-/// The model's output for one chunk: the `id` it answers, plus the raw forced-
-/// tool `input` object (`{ recipes: [...] }`) the proxy returned.
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
-pub struct WChunkResult {
-    pub id: String,
-    /// The forced tool's `input` object as returned by the LLM proxy.
-    #[tsify(type = "unknown")]
-    pub input: serde_json::Value,
-}
-
-/// `WChunkResult[]` (`transparent`).
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
-#[serde(transparent)]
-pub struct WChunkResults(pub Vec<WChunkResult>);
 
 /// Book-level EPUB metadata (mirrors `recipe_epub::EpubMeta`): the OPF title,
 /// authors, and subject tags. Surfaced so the cookbook import can stamp a
@@ -126,8 +111,8 @@ pub fn chunk_epub(bytes: &[u8]) -> Result<WCookbookChunks, String> {
         .map(|c| -> Result<WCookbookChunk, String> {
             let req = build_chunk_request(&c);
             Ok(WCookbookChunk {
-                // Stable id over the chunk text → the orchestrator's session-cache
-                // key (don't re-pay an already-extracted chunk on a retry).
+                // Stable id over the chunk text (dedups byte-identical chunks —
+                // shared front-matter, a duplicated page).
                 id: hex_sha256(c.text.as_bytes()),
                 doc_path: c.doc_path,
                 title_hint: c.title_hint,
@@ -155,38 +140,93 @@ pub fn chunk_epub(bytes: &[u8]) -> Result<WCookbookChunks, String> {
     Ok(WCookbookChunks(out))
 }
 
-/// Phase 2: fold the per-chunk model outputs into final recipes and resolve
-/// cross-recipe references. `chunks` is the same array `chunk_epub` returned;
-/// `results` pairs each chunk `id` with the model's raw tool output. Returns
-/// `CookbookRecipe[]` (validate with `cookbookRecipesSchema` on the TS side).
-/// Resolve each chunk to its model payload by id, via *lookup* (not removal): a
-/// content-hash id repeats for byte-identical chunks (a duplicated page, shared
-/// front-matter), so a consuming `remove` would leave every occurrence after the
-/// first empty — silently dropping recipes the LLM already produced and we
-/// already paid for. Order matches `chunks`.
-fn payloads_for_chunks(
-    chunks: &[WCookbookChunk],
-    by_id: &std::collections::HashMap<String, serde_json::Value>,
-) -> Vec<Option<serde_json::Value>> {
-    chunks.iter().map(|c| by_id.get(&c.id).cloned()).collect()
+/// Drive ONE chunk to completion in the browser: call the proxy for the default
+/// model (with the shared parse-retry policy), escalate to the stronger model on
+/// failure, then salvage (empty) if even that won't parse. The decision logic is
+/// the pure, native-shared [`try_extract_chunk`] — only the call primitive (a JS
+/// proxy callback returning a Promise) is wasm-specific.
+/// Returns the chunk's recipes plus whether it was *salvaged* (skipped after both
+/// the default model and escalation failed to parse) — so the driver can report a
+/// skipped count distinct from chunks that legitimately held no recipes.
+async fn drive_chunk_wasm(
+    doc_path: &str,
+    request: &JsValue,
+    call_chunk: &js_sys::Function,
+) -> (Vec<ExtractedRecipe>, bool) {
+    // One proxy round-trip for the given model tier. `escalate=false` is the
+    // default model; `true` tells the server-owned proxy to use the stronger one.
+    let call = |escalate: bool| {
+        let request = request.clone();
+        async move {
+            let returned = call_chunk
+                .call2(&JsValue::NULL, &request, &JsValue::from_bool(escalate))
+                .map_err(|e| EpubError::Proxy(format!("proxy callback threw: {e:?}")))?;
+            // `Promise::resolve` adopts the returned thenable (the callback is
+            // async), so this works whether or not it's already a Promise.
+            let input_js = JsFuture::from(js_sys::Promise::resolve(&returned))
+                .await
+                .map_err(|e| EpubError::Proxy(format!("proxy callback rejected: {e:?}")))?;
+            let input: serde_json::Value =
+                from_js(input_js, "chunk input").map_err(EpubError::Proxy)?;
+            Ok(CallResult {
+                input: Some(input),
+                usage: Usage::default(),
+                truncated: false,
+            })
+        }
+    };
+
+    match try_extract_chunk(doc_path, || call(false)).await {
+        Ok(driven) => (driven.recipes, false),
+        // Default model couldn't return parseable output after its retry —
+        // escalate this one chunk to the stronger model, then salvage if even
+        // that fails. The models' malformed-output failure sets are disjoint, so
+        // escalation recovers the default's misses.
+        Err(primary_err) => match try_extract_chunk(doc_path, || call(true)).await {
+            Ok(driven) => {
+                tracing::info!("chunk {doc_path} recovered by escalating to the fallback model");
+                (driven.recipes, false)
+            }
+            Err(esc_err) => {
+                tracing::warn!(
+                    "chunk {doc_path} unparseable on default ({primary_err}) and escalation ({esc_err}); skipping"
+                );
+                (Vec::new(), true)
+            }
+        },
+    }
 }
 
+/// Extract every recipe from a chunked EPUB, driving the whole per-chunk loop in
+/// Rust. For each chunk it calls `call_chunk` (the JS proxy that performs the one
+/// authenticated network hop), applies the shared retry → escalate → salvage
+/// policy via [`drive_chunk_wasm`], and assembles the results.
+///
+/// - `call_chunk(request, escalate)` → Promise of the model's `{ recipes }`
+///   payload. `request` is a [`WChunkRequest`]; `escalate` asks the server-owned
+///   proxy for the stronger model.
+/// - `on_progress(done, total, recipes)` is invoked after each chunk for the live
+///   preview + progress bar (`recipes` is the assembled-so-far `CookbookRecipe[]`).
+///
+/// Returns the final assembled `CookbookRecipe[]`. This replaces the former JS
+/// orchestration loop, so the retry/escalation/salvage policy lives in ONE place
+/// (shared with the native CLI/desktop path); the browser supplies only transport
+/// (the callback) and rendering (progress).
 #[wasm_bindgen]
-pub fn assemble_recipes(
+pub async fn extract_cookbook(
     chunks: WCookbookChunks,
-    results: WChunkResults,
     source: String,
+    concurrency: usize,
+    call_chunk: js_sys::Function,
+    on_progress: js_sys::Function,
 ) -> Result<JsValue, String> {
-    let by_id: std::collections::HashMap<String, serde_json::Value> =
-        results.0.into_iter().map(|r| (r.id, r.input)).collect();
-    let payloads = payloads_for_chunks(&chunks.0, &by_id);
-    let mut per_chunk = Vec::with_capacity(chunks.0.len());
+    let total = chunks.0.len();
+
+    // Pre-build each chunk's assemble-side `EpubChunk` + its proxy request, and
+    // collect the book-wide anchor links (the Layer-2 cross-recipe signal).
     let mut links: Vec<EpubLink> = Vec::new();
-    for (c, payload) in chunks.0.into_iter().zip(payloads) {
-        let recipes = match payload {
-            Some(input) => parse_recipes_payload(input).map_err(|e| e.to_string())?,
-            None => Vec::new(),
-        };
+    let mut prepared: Vec<(String, EpubChunk, JsValue)> = Vec::with_capacity(total);
+    for c in chunks.0 {
         let chunk_links: Vec<EpubLink> = c
             .links
             .into_iter()
@@ -196,29 +236,78 @@ pub fn assemble_recipes(
             })
             .collect();
         links.extend(chunk_links.iter().cloned());
-        // `assemble_recipes` takes the full `Chunk` so it can bind each recipe's
-        // hero photo (`hero_for` uses `text` + `images`). We deliberately pass empty
-        // `text`/`images`, leaving the resulting `CookbookRecipe.image` = None.
-        //
-        // TODO(hero-photos): wire EPUB hero photos to the UI. recipe-epub already
-        // computes a per-recipe `ImageRef` (an in-archive path + MIME, not bytes).
-        // To use it we'd need to: (1) carry `text` + the `(line, ImageRef)` images
-        // back across this boundary (re-add `text`/`images` to `WCookbookChunk` +
-        // `WImageRef`), (2) materialize the bytes from the still-in-memory EPUB and
-        // upload/persist them (R2) into a real image URL, and (3) surface `image` in
-        // the TS cookbook schema + import path. Cubby has no image-display wiring for
-        // cookbook imports today, so this is deferred.
-        let chunk = EpubChunk {
+        let request = to_js(&c.request, "chunk request")?;
+        let epub_chunk = EpubChunk {
             title_hint: c.title_hint,
             text: String::new(),
-            doc_path: c.doc_path,
+            doc_path: c.doc_path.clone(),
             links: chunk_links,
             images: Vec::new(),
         };
-        per_chunk.push((chunk, recipes));
+        prepared.push((c.doc_path, epub_chunk, request));
     }
+
+    // Run chunks concurrently (bounded), streaming each completion into a live
+    // preview. `buffer_unordered` yields results as they finish; order is
+    // irrelevant since the assembler rebinds recipes to their chunks.
+    let call_chunk = &call_chunk;
+    let mut stream = stream::iter(prepared.into_iter().map(
+        |(doc_path, epub_chunk, request)| async move {
+            let (recipes, skipped) = drive_chunk_wasm(&doc_path, &request, call_chunk).await;
+            (epub_chunk, recipes, skipped)
+        },
+    ))
+    .buffer_unordered(concurrency.max(1));
+
+    let mut per_chunk: Vec<(EpubChunk, Vec<ExtractedRecipe>)> = Vec::with_capacity(total);
+    let mut skipped = 0usize;
+    let mut done = 0usize;
+    while let Some((chunk, recipes, was_skipped)) = stream.next().await {
+        per_chunk.push((chunk, recipes));
+        if was_skipped {
+            skipped += 1;
+        }
+        done += 1;
+        // Stream a live preview for every chunk but the last; the final assemble
+        // below doubles as the last progress tick (no double assemble at the end).
+        if done < total {
+            let partial = assemble_recipes_internal(per_chunk.clone(), links.clone(), &source);
+            let recipes_js = to_js(&partial, "partial recipes")?;
+            let _ = on_progress.call3(
+                &JsValue::NULL,
+                &JsValue::from_f64(done as f64),
+                &JsValue::from_f64(total as f64),
+                &recipes_js,
+            );
+        }
+    }
+
     let recipes = assemble_recipes_internal(per_chunk, links, &source);
-    to_js(&recipes, "assembled recipes")
+    let recipes_js = to_js(&recipes, "assembled recipes")?;
+    let _ = on_progress.call3(
+        &JsValue::NULL,
+        &JsValue::from_f64(total as f64),
+        &JsValue::from_f64(total as f64),
+        &recipes_js,
+    );
+    // Return recipes + the salvaged-chunk count (distinct from empty chunks) so
+    // the UI can surface "imported N, M chunks skipped". A plain serde struct
+    // (serialized via serde-wasm-bindgen) — `CookbookRecipe` isn't Tsify, so the
+    // `.d.ts` types this `any` (CookbookRecipe isn't Tsify).
+    to_js(
+        &ExtractResult {
+            recipes: &recipes,
+            skipped,
+        },
+        "extract result",
+    )
+}
+
+/// The `{ recipes, skipped }` object [`extract_cookbook`] returns.
+#[derive(Serialize)]
+struct ExtractResult<'a> {
+    recipes: &'a [recipe_epub::CookbookRecipe],
+    skipped: usize,
 }
 
 /// Read book-level metadata (title / authors / subjects) from an EPUB's OPF.
@@ -273,54 +362,14 @@ pub fn read_image(bytes: &[u8], path: &str) -> Option<Vec<u8>> {
 mod tests {
     use super::*;
 
-    fn chunk(id: &str) -> WCookbookChunk {
-        WCookbookChunk {
-            id: id.to_string(),
-            doc_path: "OEBPS/ch1.xhtml".to_string(),
-            title_hint: None,
-            links: vec![],
-            request: WChunkRequest {
-                system: String::new(),
-                user: String::new(),
-                tool_name: String::new(),
-                tool_schema: "{}".to_string(),
-            },
-        }
-    }
-
-    /// The chunk id is the lowercase hex sha256 of the text — the orchestrator's
-    /// session-cache key. Pinned against a known vector so the cache key (and
-    /// re-extraction dedup) can't silently change.
+    /// The chunk id is the lowercase hex sha256 of the text. Pinned against a
+    /// known vector so the id (used for byte-identical-chunk dedup) can't
+    /// silently change.
     #[test]
     fn hex_sha256_matches_known_vector() {
         assert_eq!(
             hex_sha256(b"abc"),
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
         );
-    }
-
-    /// Regression: two byte-identical chunks share one content-hash id and one
-    /// cached result. A consuming `remove` left the second occurrence empty
-    /// (dropping already-extracted recipes); lookup resolves *both*.
-    #[test]
-    fn duplicate_chunk_ids_each_resolve() {
-        let mut by_id = std::collections::HashMap::new();
-        by_id.insert("dup".to_string(), serde_json::json!({ "recipes": [] }));
-        let chunks = vec![chunk("dup"), chunk("dup")];
-        let payloads = payloads_for_chunks(&chunks, &by_id);
-        assert_eq!(
-            payloads.iter().filter(|p| p.is_some()).count(),
-            2,
-            "both identical chunks must resolve to the cached payload"
-        );
-    }
-
-    /// A chunk with no matching result resolves to `None` (→ empty recipes), not
-    /// a panic — the normal "this chunk produced nothing" path.
-    #[test]
-    fn unmatched_chunk_resolves_to_none() {
-        let by_id = std::collections::HashMap::new();
-        let payloads = payloads_for_chunks(&[chunk("absent")], &by_id);
-        assert_eq!(payloads, vec![None]);
     }
 }

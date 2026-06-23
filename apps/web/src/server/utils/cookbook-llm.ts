@@ -4,14 +4,21 @@ import { getAnthropicClient } from "~/server/clients/anthropic";
 // Cookbook extraction runs the orchestration loop in the browser (WASM splits
 // the EPUB into chunks, each carrying a ready-to-send LLM request). This proxy
 // is the one server hop per chunk: it forwards the chunk as a structured-output
-// call and returns the `{ recipes: [...] }` object for the WASM
-// `assemble_recipes` to parse. It holds no recipe knowledge.
+// call and returns the `{ recipes: [...] }` object for the WASM driver
+// (`extract_cookbook`) to parse. It holds no recipe knowledge.
 //
 // Claude (claude-haiku-4-5) via the shared Anthropic client, which routes
 // through Cubby's Cloudflare AI Gateway (`cubby`) — binding in prod / REST in
 // dev. The model + token budget are server-owned (not client-supplied) so an
 // authenticated user can't run up bills.
 const MAX_TOKENS = 16_000;
+// Stronger model the browser escalates a chunk to when the default (Haiku, set
+// in `anthropic.ts`) can't return parseable output. Server-owned (the client
+// sends a bool, not a model id) so an authenticated user can't run up bills on
+// an arbitrary model. The two models fail on *different* chunks — the malformed-
+// JSON failure is deterministic per model + chunk content — so escalating a
+// default-model failure to this one recovers it.
+const ESCALATION_MODEL = "claude-sonnet-4-6";
 // Bound each gateway call so a hung request can't pin a concurrency slot forever
 // (the browser orchestrator's retry only fires on rejection, not a hang). Real
 // calls finish in seconds — this is purely a backstop. `chat()` has no abort
@@ -42,6 +49,9 @@ interface CookbookChunkRequest {
   toolName: string;
   /** JSON Schema for the `{ recipes: [...] }` output. */
   toolSchema: Record<string, unknown>;
+  /** Route this chunk to the stronger {@link ESCALATION_MODEL} (set by the
+   * browser only after the default model returned unparseable output). */
+  escalate?: boolean;
 }
 
 // `outputSchema` accepts a raw JSON Schema object; `chunk_epub` builds one but
@@ -50,8 +60,8 @@ type OutputSchema = Parameters<typeof chat>[0]["outputSchema"];
 
 /**
  * Structured-output call for one cookbook chunk. Returns the model's
- * `{ recipes: [...] }` object — the WASM `assemble_recipes` parses it. The
- * chunk's `toolSchema` (raw JSON Schema from `chunk_epub`) drives the output
+ * `{ recipes: [...] }` object — the WASM driver (`extract_cookbook`) parses it.
+ * The chunk's `toolSchema` (raw JSON Schema from `chunk_epub`) drives the output
  * shape, so `toolName` is unused here.
  */
 export async function extractCookbookChunk(
@@ -59,7 +69,9 @@ export async function extractCookbookChunk(
 ): Promise<unknown> {
   const t0 = performance.now();
   // Reuse the shared client's adapter (gateway binding in prod / REST in dev).
-  const adapter = getAnthropicClient().getTextAdapter();
+  // Escalated chunks use the stronger model; the default stays Haiku.
+  const model = req.escalate ? ESCALATION_MODEL : undefined;
+  const adapter = getAnthropicClient().getTextAdapter(undefined, model);
   const out = await withTimeout(
     chat({
       adapter,
@@ -75,6 +87,8 @@ export async function extractCookbookChunk(
       modelOptions: { max_tokens: MAX_TOKENS },
     }),
   );
-  console.log(`[cookbook-llm] claude ${Math.round(performance.now() - t0)}ms`);
+  console.log(
+    `[cookbook-llm] ${model ?? "claude (default)"} ${Math.round(performance.now() - t0)}ms`,
+  );
   return out ?? { recipes: [] };
 }

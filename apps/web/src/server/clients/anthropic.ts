@@ -142,18 +142,25 @@ class AnthropicClient {
   // Build the gateway adapter per call rather than caching it: in prod the
   // binding is per-request, so a cached adapter would close over a stale one.
   // Construction is cheap.
-  private getAdapter(metadata?: GatewayMetadata) {
-    return createAnthropicChat(MODEL, gatewayAdapterConfig({ metadata }));
+  private getAdapter(
+    metadata?: GatewayMetadata,
+    model: Parameters<typeof createAnthropicChat>[0] = MODEL,
+  ) {
+    return createAnthropicChat(model, gatewayAdapterConfig({ metadata }));
   }
 
   /**
    * Expose the shared text adapter so callers (the agent runtime, the cookbook
    * proxy, the USDA/merge tool loops) can drive their own `chat()` loop without
    * re-constructing the gateway client. Optional `metadata` is surfaced in the
-   * AI Gateway dashboard for per-feature filtering.
+   * AI Gateway dashboard for per-feature filtering. `model` overrides the default
+   * (Haiku) — used by the cookbook proxy to escalate a failing chunk to Sonnet.
    */
-  getTextAdapter(metadata?: GatewayMetadata) {
-    return this.getAdapter(metadata);
+  getTextAdapter(
+    metadata?: GatewayMetadata,
+    model?: Parameters<typeof createAnthropicChat>[0],
+  ) {
+    return this.getAdapter(metadata, model);
   }
 
   async suggestCategory(

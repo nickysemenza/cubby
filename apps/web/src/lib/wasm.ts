@@ -48,8 +48,8 @@ const SLOW_WASM_THRESHOLD_MS = 16;
  * per page as React re-renders during query streaming — profiling showed ~23×
  * redundancy on a recipe page. Only the genuinely expensive methods are listed;
  * trivially cheap ones (is_valid_unit ~0.1µs, amount_kind ~0.5µs) cost less than
- * the cache key itself. Byte-array methods (chunk_epub/assemble_recipes) are
- * excluded — huge keys, called once.
+ * the cache key itself. Byte-array / driver methods (chunk_epub/extract_cookbook)
+ * are excluded — huge keys, called once, and the driver isn't pure (callbacks).
  */
 const CACHEABLE_METHODS = [
   "parse_ingredient",

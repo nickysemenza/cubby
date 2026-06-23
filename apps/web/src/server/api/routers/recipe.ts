@@ -369,8 +369,8 @@ const reprocessCookbookEndpoint = protectedProcedure
 // LLM passthrough for the in-browser EPUB extractor: the client builds each
 // chunk's request in WASM (`recipebridge.chunk_epub`) and sends it here so the
 // gateway key stays server-side. Returns the raw forced-tool `input`
-// (`{ recipes: [...] }`) for the WASM `assemble_recipes` to parse — no recipe
-// logic lives here. One short, network-bound request per chunk.
+// (`{ recipes: [...] }`) for the WASM driver (`extract_cookbook`) to parse — no
+// recipe logic lives here. One short, network-bound request per chunk.
 const extractCookbookChunkProc = protectedProcedure
   .input(
     z.object({
@@ -379,6 +379,11 @@ const extractCookbookChunkProc = protectedProcedure
       toolName: z.string(),
       // The output JSON Schema, built in WASM and forwarded verbatim.
       toolSchema: z.record(z.string(), z.unknown()),
+      // Escalate this chunk to the stronger fallback model. The browser sets
+      // this only after the default model fails to return parseable output. The
+      // model itself stays server-owned (a bool, not a model id) so a client
+      // can't pick an arbitrary expensive model.
+      escalate: z.boolean().optional(),
     }),
   )
   .mutation(async ({ input }) => {
@@ -387,6 +392,7 @@ const extractCookbookChunkProc = protectedProcedure
       user: input.user,
       toolName: input.toolName,
       toolSchema: input.toolSchema,
+      escalate: input.escalate ?? false,
     });
   });
 

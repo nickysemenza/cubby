@@ -12,6 +12,10 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 wasm-bindgen = "0.2"
 js-sys = "0.3"
+# Await JS Promises (the cookbook chunk-extraction proxy callback) + drive the
+# per-chunk extraction loop concurrently in Rust.
+wasm-bindgen-futures = "0.4"
+futures = "0.3"
 # Generates the boundary .d.ts from the Rust structs below (replacing the old
 # hand-written typescript_custom_section). "js" routes the wasm ABI through
 # serde-wasm-bindgen, matching how this crate already crosses the boundary.

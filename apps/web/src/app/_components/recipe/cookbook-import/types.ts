@@ -44,6 +44,9 @@ export type ChunkRequestInput = {
   user: string;
   toolName: string;
   toolSchema: Record<string, unknown>;
+  /** Ask the server-owned proxy for the stronger escalation model. Set by the
+   * Rust driver only after the default model returned unparseable output. */
+  escalate?: boolean;
 };
 
 /** Callbacks the parent passes to each {@link Book} card. */

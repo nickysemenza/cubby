@@ -1,4 +1,4 @@
-import type { WCookbookChunk } from "@cubby/recipebridge";
+import type { WChunkRequest, WCookbookChunk } from "@cubby/recipebridge";
 import { cookbookBundleSchema } from "@cubby/schemas/cookbook";
 import {
   ALLOWED_IMAGE_TYPES,
@@ -9,7 +9,7 @@ import {
   importRecipesSchema,
 } from "@cubby/schemas/import-recipe";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { clamp, sum } from "es-toolkit";
+import { sum } from "es-toolkit";
 import { Upload } from "lucide-react";
 import { useCallback, useEffect, useId, useState } from "react";
 import { toast } from "sonner";
@@ -37,26 +37,6 @@ const deriveBookName = (source: string): string => {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** Run `fn` over `items` with at most `limit` in flight, preserving order. */
-async function mapLimit<T, R>(
-  items: T[],
-  limit: number,
-  fn: (item: T, index: number) => Promise<R>,
-): Promise<R[]> {
-  const results = new Array<R>(items.length);
-  let next = 0;
-  const worker = async () => {
-    while (next < items.length) {
-      const i = next++;
-      results[i] = await fn(items[i]!, i);
-    }
-  };
-  await Promise.all(
-    Array.from({ length: clamp(limit, 1, items.length) }, worker),
-  );
-  return results;
-}
-
 /** Retry with exponential backoff; resolves with the first success. */
 async function withRetry<R>(fn: () => Promise<R>, attempts = 3): Promise<R> {
   let lastErr: unknown;
@@ -71,33 +51,28 @@ async function withRetry<R>(fn: () => Promise<R>, attempts = 3): Promise<R> {
   throw lastErr;
 }
 
-// Session cache of chunk-id → raw LLM tool output. Keyed by the sha256 the WASM
-// computes over the chunk text, so a manual "retry this book" (or two books
-// sharing boilerplate) doesn't re-pay an already-extracted chunk this session.
-// Not persisted — this is a one-off import flow.
-const chunkCache = new Map<string, unknown>();
-
-// Chunks per book extracted concurrently. Matches the native `recipe-epub`
-// extractor's default (`Options.concurrency`). Books extract one at a time, so
-// this is the ceiling on simultaneous gateway calls — comfortably within
-// Gemini-flash rate limits. (In dev over HTTP/1.1 the browser caps ~6 in-flight
+// Chunks per book extracted concurrently, passed to the Rust driver
+// (`wasm.extract_cookbook`). Matches the native `recipe-epub` extractor's default
+// (`Options.concurrency`). Books extract one at a time, so this is the ceiling on
+// simultaneous gateway calls. (In dev over HTTP/1.1 the browser caps ~6 in-flight
 // to one origin anyway; prod is HTTP/2 and multiplexes.)
 const CHUNK_CONCURRENCY = 8;
 
-// Min gap between live-preview re-assembles during extraction. Each re-assemble
+// Min gap between live-preview re-renders during extraction. Each re-assemble
 // re-renders the whole growing card list (re-parsing every ingredient line), so
 // without this an 8-chunk burst would fire 8 heavy renders back-to-back.
 const PREVIEW_THROTTLE_MS = 600;
 
 /**
  * Import cookbooks by dragging `.epub` files straight into Cubby. Each book is
- * extracted entirely in the browser: WASM (`recipebridge.chunk_epub`) splits the
- * EPUB into text chunks carrying ready-to-send LLM requests; the orchestration
- * loop here sends each through `recipe.extractCookbookChunk` (which holds the
- * gateway key) with retry + a session cache; `recipebridge.assemble_recipes`
- * folds the per-chunk outputs back into recipes. The reviewed recipes import via
- * `recipe.insertCookbook`, upserting by (book, title). A flat/bundled JSON file
- * is still accepted as a power-user path.
+ * extracted in the browser: WASM (`recipebridge.chunk_epub`) splits the EPUB into
+ * text chunks, then `recipebridge.extract_cookbook` DRIVES the whole per-chunk
+ * loop in Rust (retry → model escalation → salvage → assemble, shared with the
+ * native CLI/desktop path). This component supplies only transport (`callChunk` →
+ * `recipe.extractCookbookChunk`, which holds the gateway key) and rendering (the
+ * `onProgress` live preview). Reviewed recipes import via `recipe.insertCookbook`,
+ * upserting by (book, title). A flat/bundled JSON file is still accepted as a
+ * power-user path.
  */
 export function CookbookImport({
   loadCookbookId,
@@ -196,8 +171,8 @@ export function CookbookImport({
     [updateBook],
   );
 
-  // Extract one EPUB end to end: chunk in WASM, run the LLM per chunk through the
-  // proxy (concurrent, retried, cached, failures degrade to empty), then
+  // Extract one EPUB end to end: chunk in WASM, then the Rust driver runs the LLM
+  // per chunk through the proxy (concurrent, retried, escalated, salvaged), then
   // assemble. A failed chunk yields no recipes rather than sinking the book.
   const extractBook = useCallback(
     async (source: string, bytes: Uint8Array) => {
@@ -261,16 +236,23 @@ export function CookbookImport({
         return;
       }
 
-      let done = 0;
-      let failed = 0;
-      setExtract(source, { status: "extracting", done, total: chunks.length });
+      setExtract(source, {
+        status: "extracting",
+        done: 0,
+        total: chunks.length,
+      });
 
-      // --- profiling: per-call latency, live concurrency, assemble cost ---
+      // The whole per-chunk loop — retry, model escalation, salvage, concurrency,
+      // and incremental assembly — runs in Rust (`wasm.extract_cookbook`, shared
+      // with the native CLI/desktop path). The browser supplies only TRANSPORT
+      // (`callChunk`, the one authenticated network hop) and RENDERING
+      // (`onProgress`, the live preview). See recipebridge `extract_cookbook`.
+
+      // --- profiling: per-call latency + live concurrency (assembly is in WASM) ---
       const tBook = performance.now();
       const latencies: number[] = [];
       let inFlight = 0;
       let maxInFlight = 0;
-      let assembleMs = 0;
       const chunkSizes = chunks.map((c) => c.request.user.length);
 
       // Freeze measurement: 'longtask' entries are main-thread blocks >50ms.
@@ -291,98 +273,92 @@ export function CookbookImport({
         // longtask API unsupported (e.g. Safari) — skip freeze metrics.
       }
 
-      // Results accumulate as chunks land (order-independent — `assemble_recipes`
-      // matches them to chunks by id). `assemble_recipes` is pure, so we re-run it
-      // on the partial set to stream recipes into the preview live. Cross-chunk
-      // merges + reference links only fully resolve on the final pass; the live
-      // preview self-corrects. Throttled so an 8-chunk burst collapses to one
-      // re-render (each re-render re-parses every line, so they're not free).
-      const results: { id: string; input: unknown }[] = [];
-      let lastPreviewAt = 0;
+      // TRANSPORT: one authenticated proxy hop per call. Rust decides when to call
+      // this (and whether to `escalate`); `withRetry` handles transport failures.
+      const callChunk = (
+        request: WChunkRequest,
+        escalate: boolean,
+      ): Promise<unknown> => {
+        const input: ChunkRequestInput = {
+          system: request.system,
+          user: request.user,
+          toolName: request.tool_name,
+          // WASM emits the schema as a JSON string (a serde_json::Value would
+          // cross as a JS Map); parse it back to a plain object.
+          toolSchema: JSON.parse(request.tool_schema) as Record<
+            string,
+            unknown
+          >,
+          escalate,
+        };
+        inFlight++;
+        if (inFlight > maxInFlight) maxInFlight = inFlight;
+        const tCall = performance.now();
+        return withRetry(() => extractChunk.mutateAsync(input)).finally(() => {
+          latencies.push(performance.now() - tCall);
+          inFlight--;
+        });
+      };
 
-      const reassemble = (final: boolean) => {
-        if (!final) {
-          const now = performance.now();
-          if (now - lastPreviewAt < PREVIEW_THROTTLE_MS) return;
-          lastPreviewAt = now;
-        }
-        let recipes: ImportRecipe[];
+      // RENDERING: the Rust driver calls this after each chunk with the
+      // assembled-so-far recipes. Throttled so an 8-chunk burst collapses to one
+      // re-render (each re-render re-parses every line). The final tick
+      // (done === total) always renders.
+      let lastPreviewAt = 0;
+      const onProgress = (
+        doneCount: number,
+        total: number,
+        rawRecipes: unknown,
+      ) => {
+        setExtract(source, { status: "extracting", done: doneCount, total });
+        const now = performance.now();
+        const final = doneCount >= total;
+        if (!final && now - lastPreviewAt < PREVIEW_THROTTLE_MS) return;
+        lastPreviewAt = now;
         try {
-          const tA = performance.now();
-          recipes = importRecipesSchema.parse(
-            wasm.assemble_recipes(chunks, results, source),
-          );
-          assembleMs += performance.now() - tA;
-        } catch (error) {
-          // A transient partial-parse hiccup is fine mid-flight; only surface it
-          // if the *final* assemble fails.
-          if (final) {
-            setExtract(source, {
-              status: "error",
-              message: getErrorMessage(error),
-            });
-          }
-          return;
-        }
-        updateBook(source, (b) => ({
-          ...b,
-          recipes,
-          // Auto-select everything; the import button is gated on `ready`, so
-          // re-selecting all each pass doesn't fight the user.
-          selected: new Set(recipes.map((_, i) => i)),
-          ...(final
-            ? { extract: { status: "ready", failedChunks: failed } as const }
-            : {}),
-        }));
-        if (final && recipes.length === 0) {
-          toast.warning(`No recipes found in ${deriveBookName(source)}`);
+          const recipes = importRecipesSchema.parse(rawRecipes);
+          updateBook(source, (b) => ({
+            ...b,
+            recipes,
+            // Auto-select everything; the import button is gated on `ready`.
+            selected: new Set(recipes.map((_, i) => i)),
+          }));
+        } catch {
+          // A transient partial-parse mid-flight is fine; the authoritative
+          // result is taken from the awaited return below.
         }
       };
 
-      await mapLimit(chunks, CHUNK_CONCURRENCY, async (chunk) => {
-        let input: unknown;
-        const cached = chunkCache.get(chunk.id);
-        if (cached !== undefined) {
-          input = cached;
-        } else {
-          const request: ChunkRequestInput = {
-            system: chunk.request.system,
-            user: chunk.request.user,
-            toolName: chunk.request.tool_name,
-            // WASM emits the schema as a JSON string (a serde_json::Value would
-            // cross as a JS Map); parse it back to a plain object.
-            toolSchema: JSON.parse(chunk.request.tool_schema) as Record<
-              string,
-              unknown
-            >,
-          };
-          inFlight++;
-          if (inFlight > maxInFlight) maxInFlight = inFlight;
-          const tCall = performance.now();
-          try {
-            input = await withRetry(() => extractChunk.mutateAsync(request));
-            chunkCache.set(chunk.id, input);
-          } catch {
-            // Exhausted retries — skip this chunk (its recipes are lost, the rest
-            // of the book proceeds), matching the native extractor.
-            failed++;
-            input = { recipes: [] };
-          } finally {
-            latencies.push(performance.now() - tCall);
-            inFlight--;
-          }
-        }
-        results.push({ id: chunk.id, input });
-        done++;
+      let recipes: ImportRecipe[];
+      let skipped: number;
+      try {
+        const result = (await wasm.extract_cookbook(
+          chunks,
+          source,
+          CHUNK_CONCURRENCY,
+          callChunk,
+          onProgress,
+        )) as { recipes: unknown; skipped: number };
+        recipes = importRecipesSchema.parse(result.recipes);
+        skipped = result.skipped;
+      } catch (error) {
+        observer?.disconnect();
         setExtract(source, {
-          status: "extracting",
-          done,
-          total: chunks.length,
+          status: "error",
+          message: getErrorMessage(error),
         });
-        reassemble(false); // stream this chunk's recipes into the preview
-      });
+        return;
+      }
 
-      reassemble(true); // authoritative final assemble + mark ready
+      updateBook(source, (b) => ({
+        ...b,
+        recipes,
+        selected: new Set(recipes.map((_, i) => i)),
+        extract: { status: "ready", failedChunks: skipped },
+      }));
+      if (recipes.length === 0) {
+        toast.warning(`No recipes found in ${deriveBookName(source)}`);
+      }
 
       // --- profiling summary ---
       // Flush any pending longtask entries, then stop observing.
@@ -403,11 +379,11 @@ export function CookbookImport({
       const sumSizes = sum(chunkSizes);
       console.info(`[cookbook-profile] ${deriveBookName(source)}`, {
         chunks: chunks.length,
+        // Includes retries + escalations now (Rust may call back >1× per chunk).
         networkCalls: latencies.length,
-        cacheHits: chunks.length - latencies.length,
+        chunksSkipped: skipped,
         wallS: +(wallMs / 1000).toFixed(1),
         chunkEpubMs: Math.round(chunkEpubMs),
-        assembleMsTotal: Math.round(assembleMs),
         avgChunkChars: Math.round(sumSizes / chunks.length),
         callLatencyMs: {
           p50: pct(0.5),
