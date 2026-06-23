@@ -1,20 +1,21 @@
-import {
-  DeleteObjectCommand,
-  PutObjectCommand,
-  S3Client,
-} from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { AwsClient } from "aws4fetch";
 import { env } from "~/env";
 
-// Create S3 client for Cloudflare R2
-const s3Client = new S3Client({
-  region: "auto", // R2 ignores this, but it's required by the SDK
-  endpoint: env.R2_ENDPOINT, // Cloudflare R2 endpoint
-  credentials: {
-    accessKeyId: env.R2_ACCESS_KEY_ID,
-    secretAccessKey: env.R2_SECRET_ACCESS_KEY,
-  },
+// SigV4 fetch signer for Cloudflare R2 (S3 API). aws4fetch is Workers-native and
+// runs identically in Node (vite dev) and Workers — no dev/prod split. R2 requires
+// region "auto" + service "s3" set explicitly (CF's docs rely on host autodetection,
+// but explicit avoids signature/region mismatches).
+const r2 = new AwsClient({
+  accessKeyId: env.R2_ACCESS_KEY_ID,
+  secretAccessKey: env.R2_SECRET_ACCESS_KEY,
+  service: "s3",
+  region: "auto",
 });
+
+// S3-API object URL (for signing/PUT/DELETE), distinct from the public delivery
+// URL produced by getS3ObjectUrl.
+const objectUrl = (key: string) =>
+  `${env.R2_ENDPOINT}/${env.R2_BUCKET_NAME}/${key}`;
 
 const IMAGE_FETCH_TIMEOUT_MS = 10000;
 
@@ -25,25 +26,28 @@ interface PresignedUrlParams {
 }
 
 /**
- * Generate a presigned URL for uploading a file to S3
+ * Generate a presigned URL for uploading a file to S3.
+ *
+ * Signs the URL only (`signQuery`, no signed headers): only `host` lands in
+ * `X-Amz-SignedHeaders`, so the client's `Content-Type: file.type` PUT sets the
+ * object content-type without a signature mismatch — the same effective result
+ * as the old SDK path (which also didn't require the browser to echo a signed
+ * content-type). NOTE: content-type is therefore NOT enforced by the signature;
+ * R2 accepts a PUT with any content-type. `contentType` is kept only for
+ * call-site compatibility (callers + the tRPC input schema still pass it) and no
+ * longer influences the signed URL.
  */
 export const generatePresignedUploadUrl = async ({
   key,
-  contentType,
+  contentType: _contentType,
   expiresIn = 300, // Default 5 minutes
 }: PresignedUrlParams): Promise<string> => {
-  const command = new PutObjectCommand({
-    Bucket: env.R2_BUCKET_NAME,
-    Key: key,
-    ContentType: contentType,
-    CacheControl: "public, max-age=31536000, immutable",
+  const u = new URL(objectUrl(key));
+  u.searchParams.set("X-Amz-Expires", String(expiresIn));
+  const signed = await r2.sign(new Request(u, { method: "PUT" }), {
+    aws: { signQuery: true },
   });
-
-  const signedUrl = await getSignedUrl(s3Client, command, {
-    expiresIn,
-  });
-
-  return signedUrl;
+  return signed.url;
 };
 
 /**
@@ -103,12 +107,11 @@ export const extractKeyFromUrl = (url: string): string | null => {
  * @param key The key of the object to delete
  */
 export const deleteS3Object = async (key: string): Promise<void> => {
-  const command = new DeleteObjectCommand({
-    Bucket: env.R2_BUCKET_NAME,
-    Key: key,
-  });
-
-  await s3Client.send(command);
+  const res = await r2.fetch(objectUrl(key), { method: "DELETE" });
+  // R2 returns 204 on delete; treat a missing object (404) as success too.
+  if (!res.ok && res.status !== 404) {
+    throw new Error(`Failed to delete ${key}: ${res.status} ${res.statusText}`);
+  }
 };
 
 /**
@@ -120,15 +123,23 @@ const uploadToS3 = async (params: {
   body: Buffer;
   contentType: string;
 }): Promise<void> => {
-  const command = new PutObjectCommand({
-    Bucket: env.R2_BUCKET_NAME,
-    Key: params.key,
-    Body: params.body,
-    ContentType: params.contentType,
-    CacheControl: "public, max-age=31536000, immutable",
+  // Server-side PUT signs the request itself, so Content-Type AND Cache-Control
+  // are applied to the stored object (unlike the presigned-upload path).
+  const res = await r2.fetch(objectUrl(params.key), {
+    method: "PUT",
+    // Buffer is typed Buffer<ArrayBufferLike> which isn't a valid BodyInit
+    // (the backing may be SharedArrayBuffer); a plain Uint8Array view fixes it.
+    body: new Uint8Array(params.body),
+    headers: {
+      "content-type": params.contentType,
+      "cache-control": "public, max-age=31536000, immutable",
+    },
   });
-
-  await s3Client.send(command);
+  if (!res.ok) {
+    throw new Error(
+      `Failed to upload ${params.key}: ${res.status} ${res.statusText}`,
+    );
+  }
 };
 
 // --- Image import utilities (merged from image-import.ts) ---
