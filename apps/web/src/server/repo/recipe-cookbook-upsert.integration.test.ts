@@ -1,4 +1,5 @@
 import { type ActorContext, buildActorContext } from "@cubby/schemas/context";
+import type { RecipeId } from "@cubby/schemas/identifiers";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import { and, eq } from "drizzle-orm";
 import { buildTestDB } from "tooling/test-setup";
@@ -9,6 +10,7 @@ import { upsertCookbook } from "./cookbook";
 import { getDb } from "./database-helpers";
 import { createIngredient } from "./ingredient";
 import {
+  type CookbookImportContext,
   type CookbookRef,
   getCookbookRecipeTitles,
   getRecipeByID,
@@ -331,6 +333,79 @@ describe("upsertCookbookRecipe", () => {
     // Both sections reference the one shared ingredient row.
     expect(almonds).toHaveLength(2);
     expect(almonds[0]?.ingredient?.id).toBe(almonds[1]?.ingredient?.id);
+  });
+
+  // A fresh per-import context, as the importCookbookStream / reprocess loops
+  // build it for an empty/new book.
+  const newImportCtx = (): CookbookImportContext => ({
+    titleToId: new Map(),
+    ingredientIdByName: new Map(),
+  });
+
+  it("shares an ingredient across recipes via the import context (one row)", async () => {
+    const ctx = newImportCtx();
+    // Both recipes use "flour" — the context's ingredient cache should resolve it
+    // once and reuse the same id for the second recipe.
+    const first = await upsertCookbookRecipeFromCookbook(
+      cookbookRecipe("Pancakes", ["2 cups flour"]),
+      bookA,
+      db,
+      actor,
+      ctx,
+    );
+    const second = await upsertCookbookRecipeFromCookbook(
+      cookbookRecipe("Waffles", ["3 cups flour"]),
+      bookA,
+      db,
+      actor,
+      ctx,
+    );
+
+    // Cache populated with the shared ingredient (keyed by the lowercased
+    // parsed name; resolves to the pre-existing "Flour" ingredient row).
+    expect(ctx.ingredientIdByName.has("flour")).toBe(true);
+
+    // Each recipe has a single flat ingredient — grab its id.
+    const flourId = (id: RecipeId) =>
+      getRecipeByID(db, id).then(
+        (full) =>
+          full!.sections
+            .flatMap((s) => s.ingredients)
+            .find((ing) => ing.type === "ingredient")?.ingredient?.id,
+      );
+    const [a, b] = await Promise.all([flourId(first.id), flourId(second.id)]);
+    expect(a).toBeDefined();
+    expect(a).toBe(b);
+    expect(a).toBe(ctx.ingredientIdByName.get("flour"));
+  });
+
+  it("links a forward reference in one pass via the import context (topo order)", async () => {
+    const ctx = newImportCtx();
+    // Topo order: the referenced sub-recipe commits first; the context's running
+    // titleToId then lets its referrer link on the same pass (no re-import).
+    const piecrust = await upsertCookbookRecipeFromCookbook(
+      cookbookRecipe("The Only Piecrust", ["2 cups flour"]),
+      bookA,
+      db,
+      actor,
+      ctx,
+    );
+    const galette = await upsertCookbookRecipeFromCookbook(
+      cookbookRecipe(
+        "Apple Galette",
+        ["1 recipe The Only Piecrust", "3 apples"],
+        { references: [piecrustRef] },
+      ),
+      bookA,
+      db,
+      actor,
+      ctx,
+    );
+
+    const full = await getRecipeByID(db, galette.id);
+    const ingredients = full!.sections.flatMap((s) => s.ingredients);
+    const linked = ingredients.find((ing) => ing.type === "recipe");
+    expect(linked?.recipe?.id).toBe(piecrust.id);
   });
 
   it("leaves a reference whose target isn't imported as a flat ingredient", async () => {

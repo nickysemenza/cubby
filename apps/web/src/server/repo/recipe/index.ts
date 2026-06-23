@@ -7,6 +7,7 @@
 
 // ImportRecipe → RecipeCreateInput conversion + upserts
 export {
+  type CookbookImportContext,
   upsertCookbookRecipeFromCookbook,
   upsertImportRecipe,
   upsertNotionRecipeFromImport,
@@ -25,6 +26,7 @@ export {
   getRecipeByID,
   getRecipeByShortcode,
   getRecipesByIDs,
+  normalizeTitle,
   recipeList,
   updateRecipe,
   upsertCookbookRecipe,

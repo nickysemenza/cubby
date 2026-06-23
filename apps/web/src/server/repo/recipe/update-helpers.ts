@@ -13,7 +13,7 @@ import type {
 } from "@cubby/schemas/recipe";
 import { and, eq, inArray } from "drizzle-orm";
 import type { z } from "zod";
-import type { DrizzleTransaction } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   image,
   ingredient,
@@ -22,7 +22,11 @@ import {
   recipeSection,
   recipeSectionIngredient,
 } from "~/server/db/schema";
-import { findOrCreate, insertAndReturn } from "~/server/repo/database-helpers";
+import {
+  findOrCreate,
+  insertAndReturn,
+  unwrapDb,
+} from "~/server/repo/database-helpers";
 
 import type { ExistingRecipeWithSections } from "./internal-types";
 import { webProvenance } from "./source";
@@ -40,17 +44,17 @@ import { webProvenance } from "./source";
  * import's reference linking.
  */
 export const findOrCreateRecipeLinkIngredient = async (
-  tx: DrizzleTransaction,
+  db: Database | DrizzleTransaction,
   recipeId: RecipeId,
 ): Promise<IngredientId> => {
   // Atomic find-or-create. Identity is recipeId — the `Ingredient_recipeId_key`
   // unique index (partial, WHERE deletedAt IS NULL) backs the race and the match
   // predicate. The name lookup is deferred to the create path via the values
   // thunk. See findOrCreate for the race it closes.
-  const { row } = await findOrCreate(tx, ingredient, {
+  const { row } = await findOrCreate(db, ingredient, {
     where: eq(ingredient.recipeId, recipeId),
     values: async () => {
-      const recipeRecord = await tx.query.recipe.findFirst({
+      const recipeRecord = await unwrapDb(db).query.recipe.findFirst({
         where: eq(recipe.id, recipeId),
         columns: { name: true },
       });

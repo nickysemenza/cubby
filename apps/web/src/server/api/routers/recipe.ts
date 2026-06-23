@@ -51,10 +51,12 @@ import {
   upsertCookbook,
 } from "~/server/repo/cookbook";
 import {
+  type CookbookImportContext,
   createRecipe,
   deleteRecipes,
   deleteRecipesByCookbook,
   getAllTags,
+  getCookbookRecipeIdsByTitle,
   getCookbookRecipesForDiff,
   getIngredientCooccurrence,
   getIngredientUsage,
@@ -221,6 +223,14 @@ const importCookbookStream = protectedProcedure
     // Recipes live in the cookbook's stored extraction; indices address it directly.
     const { name, recipes } = await getCookbookSource(ctx.db, input.cookbookId);
     const cookbookRef = { id: input.cookbookId, name };
+    // One shared context for the whole loop: a running (title → id) map (seeded
+    // from the book, appended per commit) so forward refs resolve in-memory, and
+    // an ingredient id cache so a repeated ingredient resolves once. Eliminates
+    // the per-recipe title re-read + cross-recipe ingredient re-resolution.
+    const importCtx: CookbookImportContext = {
+      titleToId: await getCookbookRecipeIdsByTitle(ctx.db, input.cookbookId),
+      ingredientIdByName: new Map(),
+    };
     const insertedIds: RecipeId[] = [];
     let succeeded = 0;
     let failed = 0;
@@ -244,6 +254,7 @@ const importCookbookStream = protectedProcedure
           cookbookRef,
           ctx.db,
           actor,
+          importCtx,
         );
         insertedIds.push(id);
         succeeded++;

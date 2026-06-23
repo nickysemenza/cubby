@@ -11,29 +11,63 @@ import {
   type CookbookRef,
   findOrCreateRecipeLinkIngredient,
   getCookbookRecipeIdsByTitle,
+  normalizeTitle,
   upsertCookbookRecipe,
   upsertNotionRecipe,
   upsertRecipe,
 } from "./recipe";
 
 /**
- * Memoize ingredient resolution within a single recipe conversion. The same
- * ingredient can appear in multiple sections (e.g. "almond extract" in both the
- * Cake and Glaze of a recipe); without memoization the parallel `Promise.all`
- * fires two concurrent find-or-create inserts for it, both SELECT-miss, and the
- * second INSERT violates the unique name index (poisoning the transaction).
- * Keying by normalized name (and recipe id for sub-recipe links) collapses
- * duplicates to one find-or-create.
+ * Per-import shared state, threaded through the converter when importing a whole
+ * cookbook (one context for the entire `importCookbookStream` /
+ * `reprocessCookbookStream` loop). Both maps are read AND mutated as the loop
+ * runs, so a forward sub-recipe reference and a repeated ingredient resolve
+ * against work already committed by earlier recipes — turning per-recipe DB
+ * reads into in-memory lookups. Absent for single-recipe callers (scrape /
+ * Notion), which keep the original per-recipe behavior.
  */
-const makeIngredientResolvers = (tx: DrizzleTransaction) => {
+export type CookbookImportContext = {
+  // normalizeTitle(name) → recipe id. Seeded from the cookbook once, appended
+  // after each upsert so forward cross-recipe references still link.
+  titleToId: Map<string, RecipeId>;
+  // name.trim().toLowerCase() → committed ingredient id. Fills lazily: the first
+  // recipe to use an ingredient pays the find-or-create round trip; the rest of
+  // the book reuses it for free.
+  ingredientIdByName: Map<string, IngredientId>;
+};
+
+/**
+ * Memoize ingredient resolution. The same ingredient can appear in multiple
+ * sections (e.g. "almond extract" in both the Cake and Glaze of a recipe);
+ * without memoization the parallel `Promise.all` fires two concurrent
+ * find-or-create inserts for it, both SELECT-miss, and the second INSERT
+ * violates the unique name index. Keying by normalized name (and recipe id for
+ * sub-recipe links) collapses duplicates to one find-or-create.
+ *
+ * The optional `sharedIds` map (from a {@link CookbookImportContext}) extends
+ * that memo across the *whole* import: a hit returns immediately with no DB
+ * call, and every newly-resolved id is cached for later recipes. The executor
+ * (`exec`) is the cookbook import's bare `db` (so each find-or-create commits
+ * autonomously, keeping a cached id valid even when a later recipe is
+ * error-isolated) or a single-recipe caller's transaction.
+ */
+const makeIngredientResolvers = (
+  exec: Database | DrizzleTransaction,
+  sharedIds?: Map<string, IngredientId>,
+) => {
   const plain = new Map<string, Promise<IngredientId>>();
   const link = new Map<RecipeId, Promise<IngredientId>>();
   return {
     resolvePlain: (name: string): Promise<IngredientId> => {
       const key = name.trim().toLowerCase();
+      const cached = sharedIds?.get(key);
+      if (cached) return Promise.resolve(cached);
       let p = plain.get(key);
       if (!p) {
-        p = findOrCreateIngredient(tx, name).then((i) => i.id);
+        p = findOrCreateIngredient(exec, name).then((i) => {
+          sharedIds?.set(key, i.id);
+          return i.id;
+        });
         plain.set(key, p);
       }
       return p;
@@ -41,7 +75,7 @@ const makeIngredientResolvers = (tx: DrizzleTransaction) => {
     resolveLink: (recipeId: RecipeId): Promise<IngredientId> => {
       let p = link.get(recipeId);
       if (!p) {
-        p = findOrCreateRecipeLinkIngredient(tx, recipeId);
+        p = findOrCreateRecipeLinkIngredient(exec, recipeId);
         link.set(recipeId, p);
       }
       return p;
@@ -61,6 +95,7 @@ const importRecipeToRecipeInput = async (
   cr: ImportRecipe,
   db: Database,
   cookbookRef?: CookbookRef,
+  importCtx?: CookbookImportContext,
 ): Promise<RecipeCreateInput> => {
   // Cross-recipe linking is cookbook-only; scraper/Notion resolve everything flat.
   const lineToTitle = cookbookRef
@@ -68,14 +103,23 @@ const importRecipeToRecipeInput = async (
         cr.references.map((r) => [r.line.trim(), r.title.trim().toLowerCase()]),
       )
     : new Map<string, string>();
-  const titleToId = cookbookRef
-    ? await getCookbookRecipeIdsByTitle(db, cookbookRef.id)
-    : new Map<string, RecipeId>();
+  // Prefer the import context's running title map (seeded + appended per commit);
+  // fall back to a one-shot read for the single-cookbook-recipe path.
+  const titleToId = importCtx
+    ? importCtx.titleToId
+    : cookbookRef
+      ? await getCookbookRecipeIdsByTitle(db, cookbookRef.id)
+      : new Map<string, RecipeId>();
 
   const normalized = normalizeImportRecipe(cr);
 
-  return await withTransaction(db, async (tx) => {
-    const { resolvePlain, resolveLink } = makeIngredientResolvers(tx);
+  const build = async (
+    exec: Database | DrizzleTransaction,
+  ): Promise<RecipeCreateInput> => {
+    const { resolvePlain, resolveLink } = makeIngredientResolvers(
+      exec,
+      importCtx?.ingredientIdByName,
+    );
     return {
       name: normalized.name,
       meta: normalized.meta,
@@ -119,7 +163,12 @@ const importRecipeToRecipeInput = async (
         })),
       ),
     };
-  });
+  };
+
+  // Cookbook import: resolve against bare `db` so each ingredient/link commits
+  // autonomously (no per-recipe BEGIN/COMMIT; cached ids stay valid across the
+  // loop). Single-recipe callers keep the wrapping transaction.
+  return importCtx ? await build(db) : await withTransaction(db, build);
 };
 
 /** Upsert a scraped/imported recipe, keyed on name (the URL-scrape path). */
@@ -167,9 +216,28 @@ export const upsertCookbookRecipeFromCookbook = async (
   cookbookRef: CookbookRef,
   db: Database,
   actor: ActorContext,
+  importCtx?: CookbookImportContext,
 ) => {
-  const recipeInput = await importRecipeToRecipeInput(cr, db, cookbookRef);
+  const recipeInput = await importRecipeToRecipeInput(
+    cr,
+    db,
+    cookbookRef,
+    importCtx,
+  );
 
   // (cookbookId, title)-scoped upsert + "Book" provenance + FK link.
-  return await upsertCookbookRecipe(recipeInput, cookbookRef, db, actor);
+  const result = await upsertCookbookRecipe(
+    recipeInput,
+    cookbookRef,
+    db,
+    actor,
+  );
+
+  // Record the committed (title → id) so a later recipe's forward reference to
+  // this one resolves against the running map instead of a fresh DB read. Keyed
+  // exactly like getCookbookRecipeIdsByTitle (normalizeTitle of the stored name,
+  // which normalizeImportRecipe sets to meta.title).
+  importCtx?.titleToId.set(normalizeTitle(recipeInput.name), result.id);
+
+  return result;
 };

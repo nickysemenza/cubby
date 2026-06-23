@@ -25,8 +25,14 @@ import {
   updateAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { upsertCookbookRecipeFromCookbook } from "~/server/repo/import-recipe-convert";
-import { getCookbookRecipeTitles } from "~/server/repo/recipe";
+import {
+  type CookbookImportContext,
+  upsertCookbookRecipeFromCookbook,
+} from "~/server/repo/import-recipe-convert";
+import {
+  getCookbookRecipeIdsByTitle,
+  getCookbookRecipeTitles,
+} from "~/server/repo/recipe";
 
 // Everything an import knows about a cookbook before its recipes are written: the
 // book name plus the full extraction and OPF metadata. `author`/`subjects` default
@@ -235,6 +241,13 @@ export async function* reprocessCookbookStream(
     .map((cr) => cr.meta.title);
 
   const total = toReprocess.length;
+  // Shared context for the loop: running title map (forward refs in-memory) +
+  // ingredient id cache (resolve a repeated ingredient once). See the import
+  // path in routers/recipe.ts.
+  const importCtx: CookbookImportContext = {
+    titleToId: await getCookbookRecipeIdsByTitle(db, id),
+    ingredientIdByName: new Map(),
+  };
   // The upserted recipe ids, so the caller can recompute their totals eagerly.
   const recipeIds: RecipeId[] = [];
   let done = 0;
@@ -244,6 +257,7 @@ export async function* reprocessCookbookStream(
       cookbookRef,
       db,
       actor,
+      importCtx,
     );
     recipeIds.push(recipeId);
     done++;

@@ -164,7 +164,8 @@ export const getCookbookRecipesForDiff = async (
 };
 
 // Normalize a title for cross-recipe reference matching (trim + lowercase).
-const normalizeTitle = (title: string): string => title.trim().toLowerCase();
+export const normalizeTitle = (title: string): string =>
+  title.trim().toLowerCase();
 
 /**
  * Map of normalized title → recipe id for a cookbook's non-deleted recipes. Used
@@ -309,14 +310,17 @@ export const recipeList = async (
 export type CookbookRef = { id: CookbookId; name: string };
 
 /**
- * Create a new recipe.
+ * Create a new recipe, returning only its id. The whole insert (recipe +
+ * sections + ingredients + images + audit) runs in one transaction; unlike
+ * {@link createRecipe} it skips the heavy {@link getRecipeByID} re-read — callers
+ * that only need the id (every upsert path) avoid a wasted full-graph join.
  */
-export const createRecipe = async (
+const createRecipeReturningId = async (
   db: Database,
   recipeInput: RecipeCreateInput,
   actor: ActorContext,
   provenance?: RecipeProvenance,
-): Promise<RecipeOut> => {
+): Promise<{ id: RecipeId }> => {
   const sourceColumns = recipeSourceToColumns(
     provenance ?? webProvenance(recipeInput.meta?.url ?? null),
   );
@@ -361,12 +365,32 @@ export const createRecipe = async (
       action: "create",
     });
 
-    const fullRecipe = await getRecipeByID(tx, createdRecipeId);
-    if (!fullRecipe) {
-      throw new Error("Failed to retrieve created recipe");
-    }
-    return fullRecipe;
+    return { id: createdRecipeId };
   });
+};
+
+/**
+ * Create a new recipe and return its full {@link RecipeOut}. Thin wrapper over
+ * {@link createRecipeReturningId} + a post-commit {@link getRecipeByID} — for
+ * callers (the CRUD create endpoint, tests) that need the materialized recipe.
+ */
+export const createRecipe = async (
+  db: Database,
+  recipeInput: RecipeCreateInput,
+  actor: ActorContext,
+  provenance?: RecipeProvenance,
+): Promise<RecipeOut> => {
+  const { id } = await createRecipeReturningId(
+    db,
+    recipeInput,
+    actor,
+    provenance,
+  );
+  const fullRecipe = await getRecipeByID(db, id);
+  if (!fullRecipe) {
+    throw new Error("Failed to retrieve created recipe");
+  }
+  return fullRecipe;
 };
 
 /**
@@ -433,8 +457,8 @@ const upsertRecipeMatching = async (
   // re-SELECTs the committed winner and takes the update path instead of 500ing.
   return runWithConflictRecovery(
     async () => {
-      const created = await createRecipe(db, input, actor, provenance);
-      return { id: created.id };
+      // Only the id is used here — skip the full-graph re-read createRecipe does.
+      return await createRecipeReturningId(db, input, actor, provenance);
     },
     async (error) => {
       const winner = await getDb(db).query.recipe.findFirst({
