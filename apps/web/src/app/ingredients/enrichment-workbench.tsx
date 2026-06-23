@@ -1,9 +1,6 @@
+import type { Confidence } from "@cubby/schemas/ai";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
-import {
-  manualUnitMapping,
-  type UnitMapping,
-  type UnitMappingInput,
-} from "@cubby/schemas/unitmapping";
+import type { UnitMapping, UnitMappingInput } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
@@ -18,11 +15,11 @@ import {
 import { type Ref, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
+import { confidenceColor } from "~/app/_components/ai/ai-suggest";
 import { UsdaFoodSearchField } from "~/app/_components/combobox/with-usda-food-search";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useBulkActionMutation } from "~/app/_components/hooks/useBulkActionMutation";
 import { MergeConfirmation } from "~/app/_components/ingredient/merge-confirmation";
-import { getHoverableMeasureUnitIcon } from "~/app/_components/inventory/format-amount";
 import { RecipeUsagesTable } from "~/app/_components/recipe/recipe-usages-table";
 import { ConversionCapabilities } from "~/app/_components/units/ConversionCapabilities";
 import {
@@ -50,53 +47,30 @@ import { BASE_KINDS, type BaseKind } from "~/lib/conversion-coverage";
 import { getErrorMessage } from "~/lib/error-utils";
 import { isMoneyUnit } from "~/lib/price-mapping-utils";
 import { savedWithRecompute } from "~/lib/recompute-summary";
-import {
-  getIngredientMappings,
-  unitMappingsFromFood,
-} from "~/lib/unit-mapping-utils";
+import { getIngredientMappings } from "~/lib/unit-mapping-utils";
 import { cn } from "~/lib/utils";
 import type { EnrichmentRow } from "~/server/services/ingredient.service";
 import { useTRPC } from "~/trpc/react";
-
-/** Parse a text input as a positive number, or null if blank/invalid. */
-const parsePositive = (raw: string): number | null => {
-  const n = Number.parseFloat(raw);
-  return Number.isFinite(n) && n > 0 ? n : null;
-};
-
-/**
- * Turn a package-price entry (`$dollars` for `qty unit`) into what a product
- * stores: a scalar per-each price when the unit is `each`, otherwise a money
- * unit mapping (weight/volume ↔ dollar) that bridges the measure to money.
- * Shared by the inline editor and the bulk review tray. Returns both null when
- * no price was entered.
- */
-const buildPackagePrice = (
-  dollarsStr: string,
-  qtyStr: string,
-  unitStr: string,
-): { eachPrice: number | null; mapping: UnitMappingInput | null } => {
-  const dollars = parsePositive(dollarsStr);
-  if (dollars == null) return { eachPrice: null, mapping: null };
-  const qty = parsePositive(qtyStr) ?? 1;
-  const unit = unitStr.trim() || "each";
-  if (unit.toLowerCase() === "each") {
-    return { eachPrice: dollars / qty, mapping: null };
-  }
-  return {
-    eachPrice: null,
-    mapping: {
-      a: { value: qty, unit },
-      b: { value: dollars, unit: "dollar" },
-      source: "manual: price (workbench)",
-    },
-  };
-};
+import { ReviewQueue } from "./review-queue";
+import {
+  buildPackagePrice,
+  buildPreviewMappings,
+  buildProductWrite,
+  defaultPriceUnit,
+  hasPriceEntry,
+  hasUsdaLink,
+  parsePositive,
+  UnitInput,
+} from "./workbench-editor-core";
 
 type FilterKey = "all" | "no-product" | "partial" | "no-usda";
 
 /** An AI USDA suggestion for one row, kept at the table level for bulk review. */
-type Suggestion = { food: FoodSummaryWithLinkedProducts; reasoning: string };
+type Suggestion = {
+  food: FoodSummaryWithLinkedProducts;
+  confidence: Confidence;
+  reasoning: string;
+};
 
 /** One editable conversion row in the editor (the user can add several). */
 type ConvRow = {
@@ -125,20 +99,6 @@ const FIX_LABEL: Record<EnrichmentRow["recommendedFix"], string> = {
   done: "Done",
 };
 
-const hasUsdaLink = (row: EnrichmentRow): boolean =>
-  row.product.some((p) => p.food != null || p.fdc_id != null || p.upc != null);
-
-// True when a price exists on the product (scalar or a money mapping) — used to
-// tell "no price yet" apart from "priced but unreachable" (islanded).
-const hasPriceEntry = (row: EnrichmentRow): boolean =>
-  row.product.some(
-    (p) =>
-      p.price != null ||
-      p.unitMappings.some(
-        (m) => isMoneyUnit(m.a.unit) || isMoneyUnit(m.b.unit),
-      ),
-  );
-
 // The "Next" badge label. A priced-but-money-uncovered row is islanded — the fix
 // is to connect the existing price, not set a new one, so say so.
 const fixBadgeLabel = (row: EnrichmentRow): string => {
@@ -155,41 +115,6 @@ const fixBadgeLabel = (row: EnrichmentRow): string => {
 };
 
 /**
- * A unit text input with the shared valid-unit check / measure-kind tooltip
- * adornment (the same `getHoverableMeasureUnitIcon` the amount fields use), so a
- * recognized unit shows a check and hovering reveals its kind. Plain (not RHF-
- * bound) since the workbench editor holds its fields in local state.
- */
-function UnitInput({
-  value,
-  onChange,
-  placeholder,
-  ariaLabel,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-  ariaLabel: string;
-}) {
-  return (
-    <div className="relative w-16">
-      <Input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        aria-label={ariaLabel}
-        className="w-full pr-6"
-      />
-      {value.trim() && (
-        <span className="absolute top-1/2 right-1 flex -translate-y-1/2 items-center">
-          {getHoverableMeasureUnitIcon(value.trim())}
-        </span>
-      )}
-    </div>
-  );
-}
-
-/**
  * Dense bulk-enrichment table for ingredients that can't be fully costed yet —
  * the bare ones EPUB imports leave behind (no product) plus those with a product
  * whose conversion graph is still incomplete. Each row shows its coverage and the
@@ -200,6 +125,7 @@ function UnitInput({
 export function EnrichmentWorkbench({ focus }: { focus?: string }) {
   const api = useTRPC();
   const [filter, setFilter] = useState<FilterKey>("all");
+  const [view, setView] = useState<"browse" | "review">("browse");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [suggestions, setSuggestions] = useState<Record<string, Suggestion>>(
     {},
@@ -414,7 +340,11 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
       for (const r of results) {
         const id = byName.get(r.name.toLowerCase());
         if (id && r.food) {
-          next[id] = { food: r.food, reasoning: r.reasoning };
+          next[id] = {
+            food: r.food,
+            confidence: r.confidence,
+            reasoning: r.reasoning,
+          };
           matched++;
         }
       }
@@ -517,209 +447,244 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
             {label} {counts[key]}
           </button>
         ))}
+        <div className="ml-auto flex items-center gap-1">
+          {(["browse", "review"] as const).map((v) => (
+            <Button
+              key={v}
+              type="button"
+              size="sm"
+              variant={view === v ? "secondary" : "ghost"}
+              className="h-7 px-2.5 text-xs capitalize"
+              onClick={() => setView(v)}
+            >
+              {v}
+            </Button>
+          ))}
+        </div>
       </div>
 
-      {suggestionCount > 0 && (
-        <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
-          <div className="flex items-center justify-between gap-2">
-            <span className="font-medium text-sm">
-              Review {suggestionCount} USDA suggestion
-              {suggestionCount === 1 ? "" : "s"}
-            </span>
-            <Button
-              size="sm"
-              onClick={handleCreate}
-              disabled={createMany.isPending || creatable.length === 0}
-            >
-              Create {creatable.length} product
-              {creatable.length === 1 ? "" : "s"}
-            </Button>
-          </div>
-          {createMany.progress && (
-            <Progress
-              value={createMany.progress.done}
-              max={createMany.progress.total}
-            />
-          )}
-          <div className="space-y-1.5">
-            {Object.entries(suggestions).map(([id, sug]) => {
-              const row = rows.find((r) => r.id === id);
-              if (!row) return null;
-              const p = suggestionPrices[id] ?? {
-                dollars: "",
-                qty: "1",
-                unit: "lb",
-              };
-              return (
-                <div
-                  key={id}
-                  className="flex flex-wrap items-center gap-2 text-sm"
+      {view === "review" && (
+        <ReviewQueue rows={visible} onExit={() => setView("browse")} />
+      )}
+
+      {view === "browse" && (
+        <>
+          {suggestionCount > 0 && (
+            <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium text-sm">
+                  Review {suggestionCount} USDA suggestion
+                  {suggestionCount === 1 ? "" : "s"}
+                </span>
+                <Button
+                  size="sm"
+                  onClick={handleCreate}
+                  disabled={createMany.isPending || creatable.length === 0}
                 >
-                  <button
-                    type="button"
-                    onClick={() => rejectSuggestion(id)}
-                    aria-label={`Reject suggestion for ${row.name}`}
-                    className="text-muted-foreground hover:text-destructive"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                  <span className="font-medium">{row.name}</span>
-                  <span className="truncate text-muted-foreground">
-                    → {sug.food.foodInfo.description}
-                  </span>
-                  <span className="ml-auto flex items-center gap-1 text-xs">
-                    <span className="text-muted-foreground">$</span>
-                    <Input
-                      value={p.dollars}
-                      onChange={(e) =>
-                        setSuggestionPrice(id, { dollars: e.target.value })
-                      }
-                      placeholder="price"
-                      aria-label={`Price for ${row.name}`}
-                      className="h-7 w-16"
-                    />
-                    <span className="text-muted-foreground">/</span>
-                    <Input
-                      value={p.qty}
-                      onChange={(e) =>
-                        setSuggestionPrice(id, { qty: e.target.value })
-                      }
-                      aria-label={`Price quantity for ${row.name}`}
-                      className="h-7 w-12"
-                    />
-                    <UnitInput
-                      value={p.unit}
-                      onChange={(v) => setSuggestionPrice(id, { unit: v })}
-                      ariaLabel={`Price unit for ${row.name}`}
-                    />
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-          <p className="text-2xs text-muted-foreground">
-            Price optional — leave blank to create the USDA link and price
-            later. Foods are usually priced by package (e.g. $5.99 / 2 lb); a
-            unit of “each” stores a per-item price.
-          </p>
-        </div>
-      )}
-
-      {error && <div className="text-destructive text-sm">{error.message}</div>}
-
-      {!isLoading && rows.length === 0 && (
-        <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground text-sm">
-          Every recipe ingredient is fully costable. Nothing to enrich.
-        </div>
-      )}
-
-      {visible.length > 0 && (
-        <div className="overflow-hidden rounded-lg border">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b bg-muted/40 text-left text-2xs text-muted-foreground uppercase tracking-wide">
-                <th className="w-8 px-2 py-2" />
-                <th className="w-8 px-2 py-2" />
-                <th className="px-2 py-2 font-medium">Ingredient</th>
-                <th className="px-2 py-2 font-medium">Coverage</th>
-                <th className="px-2 py-2 font-medium">Next</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visible.map((row) => (
-                <WorkbenchRow
-                  key={row.id}
-                  row={row}
-                  selected={selected.has(row.id)}
-                  onToggle={() => toggle(row.id)}
-                  suggestion={suggestions[row.id] ?? null}
-                  mergeSuggestion={mergeSuggestions[row.id] ?? null}
-                  onRequestMerge={requestMerge}
-                  defaultOpen={row.id === focus}
-                  rowRef={row.id === focus ? focusRowRef : undefined}
+                  Create {creatable.length} product
+                  {creatable.length === 1 ? "" : "s"}
+                </Button>
+              </div>
+              {createMany.progress && (
+                <Progress
+                  value={createMany.progress.done}
+                  max={createMany.progress.total}
                 />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {isLoading && (
-        <div className="flex justify-center py-8">
-          <Spinner />
-        </div>
-      )}
-
-      {selected.size > 0 && (
-        <div className="sticky bottom-4 flex flex-wrap items-center gap-2 rounded-lg border bg-background/95 px-4 py-2.5 shadow-sm backdrop-blur">
-          <span className="font-medium text-sm">{selected.size} selected</span>
-          <span className="text-border">|</span>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleSuggest}
-            disabled={suggestUsda.isPending}
-          >
-            <Sparkles className="h-4 w-4" />
-            {suggestUsda.isPending ? "Suggesting…" : "Suggest USDA"}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleSuggestMerges}
-            disabled={suggestMerges.isPending}
-          >
-            <Sparkles className="h-4 w-4" />
-            {suggestMerges.isPending ? "Checking…" : "Suggest merges"}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleMarkNoUsda}
-            disabled={markNoUsda.isPending || markable.length === 0}
-          >
-            Mark no-USDA ({markable.length})
-          </Button>
-          <Button size="sm" variant="ghost" onClick={clearSelection}>
-            Clear
-          </Button>
-          {markNoUsda.progress && (
-            <Progress
-              className="w-full"
-              value={markNoUsda.progress.done}
-              max={markNoUsda.progress.total}
-            />
+              )}
+              <div className="space-y-1.5">
+                {Object.entries(suggestions).map(([id, sug]) => {
+                  const row = rows.find((r) => r.id === id);
+                  if (!row) return null;
+                  const p = suggestionPrices[id] ?? {
+                    dollars: "",
+                    qty: "1",
+                    unit: "lb",
+                  };
+                  return (
+                    <div
+                      key={id}
+                      className="flex flex-wrap items-center gap-2 text-sm"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => rejectSuggestion(id)}
+                        aria-label={`Reject suggestion for ${row.name}`}
+                        className="text-muted-foreground hover:text-destructive"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                      <span className="font-medium">{row.name}</span>
+                      <span className="truncate text-muted-foreground">
+                        → {sug.food.foodInfo.description}
+                      </span>
+                      <span
+                        className={cn(
+                          "text-2xs",
+                          confidenceColor[sug.confidence],
+                        )}
+                        title={sug.reasoning}
+                      >
+                        {sug.confidence}
+                      </span>
+                      <span className="ml-auto flex items-center gap-1 text-xs">
+                        <span className="text-muted-foreground">$</span>
+                        <Input
+                          value={p.dollars}
+                          onChange={(e) =>
+                            setSuggestionPrice(id, { dollars: e.target.value })
+                          }
+                          placeholder="price"
+                          aria-label={`Price for ${row.name}`}
+                          className="h-7 w-16"
+                        />
+                        <span className="text-muted-foreground">/</span>
+                        <Input
+                          value={p.qty}
+                          onChange={(e) =>
+                            setSuggestionPrice(id, { qty: e.target.value })
+                          }
+                          aria-label={`Price quantity for ${row.name}`}
+                          className="h-7 w-12"
+                        />
+                        <UnitInput
+                          value={p.unit}
+                          onChange={(v) => setSuggestionPrice(id, { unit: v })}
+                          ariaLabel={`Price unit for ${row.name}`}
+                        />
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="text-2xs text-muted-foreground">
+                Price optional — leave blank to create the USDA link and price
+                later. Foods are usually priced by package (e.g. $5.99 / 2 lb);
+                a unit of “each” stores a per-item price.
+              </p>
+            </div>
           )}
-        </div>
-      )}
 
-      <AlertDialog
-        open={mergeConfirm != null}
-        onOpenChange={(o) => {
-          if (!o) setMergeConfirm(null);
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Merge ingredients?</AlertDialogTitle>
-          </AlertDialogHeader>
-          {mergeConfirm && (
-            <MergeConfirmation
-              ingredients={mergeConfirm}
-              targetRef={mergeTargetRef}
-            />
+          {error && (
+            <div className="text-destructive text-sm">{error.message}</div>
           )}
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={mergeMutation.isPending}
-              onClick={confirmMerge}
-            >
-              Merge
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+
+          {!isLoading && rows.length === 0 && (
+            <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground text-sm">
+              Every recipe ingredient is fully costable. Nothing to enrich.
+            </div>
+          )}
+
+          {visible.length > 0 && (
+            <div className="overflow-hidden rounded-lg border">
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/40 text-left text-2xs text-muted-foreground uppercase tracking-wide">
+                    <th className="w-8 px-2 py-2" />
+                    <th className="w-8 px-2 py-2" />
+                    <th className="px-2 py-2 font-medium">Ingredient</th>
+                    <th className="px-2 py-2 font-medium">Coverage</th>
+                    <th className="px-2 py-2 font-medium">Next</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visible.map((row) => (
+                    <WorkbenchRow
+                      key={row.id}
+                      row={row}
+                      selected={selected.has(row.id)}
+                      onToggle={() => toggle(row.id)}
+                      suggestion={suggestions[row.id] ?? null}
+                      mergeSuggestion={mergeSuggestions[row.id] ?? null}
+                      onRequestMerge={requestMerge}
+                      defaultOpen={row.id === focus}
+                      rowRef={row.id === focus ? focusRowRef : undefined}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {isLoading && (
+            <div className="flex justify-center py-8">
+              <Spinner />
+            </div>
+          )}
+
+          {selected.size > 0 && (
+            <div className="sticky bottom-4 flex flex-wrap items-center gap-2 rounded-lg border bg-background/95 px-4 py-2.5 shadow-sm backdrop-blur">
+              <span className="font-medium text-sm">
+                {selected.size} selected
+              </span>
+              <span className="text-border">|</span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleSuggest}
+                disabled={suggestUsda.isPending}
+              >
+                <Sparkles className="h-4 w-4" />
+                {suggestUsda.isPending ? "Suggesting…" : "Suggest USDA"}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleSuggestMerges}
+                disabled={suggestMerges.isPending}
+              >
+                <Sparkles className="h-4 w-4" />
+                {suggestMerges.isPending ? "Checking…" : "Suggest merges"}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleMarkNoUsda}
+                disabled={markNoUsda.isPending || markable.length === 0}
+              >
+                Mark no-USDA ({markable.length})
+              </Button>
+              <Button size="sm" variant="ghost" onClick={clearSelection}>
+                Clear
+              </Button>
+              {markNoUsda.progress && (
+                <Progress
+                  className="w-full"
+                  value={markNoUsda.progress.done}
+                  max={markNoUsda.progress.total}
+                />
+              )}
+            </div>
+          )}
+
+          <AlertDialog
+            open={mergeConfirm != null}
+            onOpenChange={(o) => {
+              if (!o) setMergeConfirm(null);
+            }}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Merge ingredients?</AlertDialogTitle>
+              </AlertDialogHeader>
+              {mergeConfirm && (
+                <MergeConfirmation
+                  ingredients={mergeConfirm}
+                  targetRef={mergeTargetRef}
+                />
+              )}
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={mergeMutation.isPending}
+                  onClick={confirmMerge}
+                >
+                  Merge
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </>
+      )}
     </div>
   );
 }
@@ -827,7 +792,10 @@ function WorkbenchRow({
             × {row.recipeCount} recipe{row.recipeCount === 1 ? "" : "s"}
             {suggestion && (
               <span className="ml-1.5 text-info">
-                · AI: {suggestion.food.foodInfo.description}
+                · AI: {suggestion.food.foodInfo.description}{" "}
+                <span className={confidenceColor[suggestion.confidence]}>
+                  ({suggestion.confidence})
+                </span>
               </span>
             )}
           </div>
@@ -964,9 +932,7 @@ function WorkbenchEditor({
     initialFood,
   );
   const [priceQty, setPriceQty] = useState("1");
-  const [priceUnit, setPriceUnit] = useState(
-    row.priceMode === "per-each" ? "each" : "lb",
-  );
+  const [priceUnit, setPriceUnit] = useState(defaultPriceUnit(row));
   const [price, setPrice] = useState("");
   // One or more conversion rows; the first is pre-seeded to bridge an islanded
   // price into grams when applicable.
@@ -981,55 +947,19 @@ function WorkbenchEditor({
   const removeConvRow = (id: string) =>
     setConvRows((rows) => rows.filter((r) => r.id !== id));
 
-  // The mapping graph as it *would* be after this edit: the product's current
-  // effective edges, plus the USDA food being picked and whatever price/
-  // conversion is half-typed. Feeds the live coverage panel so kinds light up as
-  // you type, before saving.
-  const previewMappings = useMemo<UnitMapping[]>(() => {
-    const base: UnitMapping[] = (() => {
-      try {
-        return getIngredientMappings(row);
-      } catch {
-        return [];
-      }
-    })();
-    if (food) {
-      try {
-        base.push(...unitMappingsFromFood(food));
-      } catch {
-        // ignore an un-synthesizable food preview
-      }
-    }
-    const dollars = parsePositive(price);
-    if (dollars != null) {
-      base.push(
-        manualUnitMapping(
-          {
-            value: parsePositive(priceQty) ?? 1,
-            unit: priceUnit.trim() || "each",
-          },
-          { value: dollars, unit: "dollar" },
-          "preview",
-        ),
-      );
-    }
-    for (const c of convRows) {
-      const fq = parsePositive(c.fromQty);
-      const tq = parsePositive(c.toQty);
-      const fu = c.fromUnit.trim();
-      const tu = c.toUnit.trim();
-      if (fq != null && tq != null && fu && tu) {
-        base.push(
-          manualUnitMapping(
-            { value: fq, unit: fu },
-            { value: tq, unit: tu },
-            "preview",
-          ),
-        );
-      }
-    }
-    return base;
-  }, [row, food, price, priceQty, priceUnit, convRows]);
+  // Live preview of the mapping graph as it would be after this edit (shared with
+  // the review card so both light up coverage identically).
+  const previewMappings = useMemo<UnitMapping[]>(
+    () =>
+      buildPreviewMappings(row, {
+        food,
+        dollars: price,
+        qty: priceQty,
+        unit: priceUnit,
+        convRows,
+      }),
+    [row, food, price, priceQty, priceUnit, convRows],
+  );
 
   const createProduct = useActionMutation({
     mutationFn: api.product.create.mutationOptions,
@@ -1105,41 +1035,9 @@ function WorkbenchEditor({
       return;
     }
 
-    if (product == null) {
-      createProduct.mutate({
-        name: row.name,
-        manufacturer: UNSPECIFIED_MANUFACTURER,
-        upc: null,
-        expectedQuantity: null,
-        ingredientId: row.id,
-        fdc_id: food?.fdc_id ?? null,
-        price: eachPrice,
-        unitMappings: newMappings,
-      });
-      return;
-    }
-
-    // product.update replaces the whole mapping set — carry the existing rows
-    // (with ids) so we append rather than wipe.
-    const data: {
-      fdc_id?: number;
-      price?: number;
-      unitMappings?: UnitMappingInput[];
-    } = {};
-    if (food) data.fdc_id = food.fdc_id;
-    if (eachPrice != null) data.price = eachPrice;
-    if (newMappings.length > 0) {
-      data.unitMappings = [
-        ...product.unitMappings.map((m) => ({
-          id: m.id,
-          a: m.a,
-          b: m.b,
-          source: m.source,
-        })),
-        ...newMappings,
-      ];
-    }
-    updateProduct.mutate({ id: product.id, data });
+    const write = buildProductWrite(row, { food, eachPrice, newMappings });
+    if (write.kind === "create") createProduct.mutate(write.input);
+    else updateProduct.mutate({ id: write.id, data: write.data });
   };
 
   const isPending = createProduct.isPending || updateProduct.isPending;

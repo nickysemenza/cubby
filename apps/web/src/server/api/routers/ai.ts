@@ -22,6 +22,7 @@ import {
   backfillLocationDescriptions,
   describeLocation,
   detectInventoryItems,
+  precomputeEnrichmentProposals,
   suggestIngredientMergeBatch,
   suggestUsdaFood,
   suggestUsdaFoodBatch,
@@ -142,6 +143,32 @@ export const aiRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       return suggestIngredientMergeBatch(ctx.db, input.ingredients);
+    }),
+  // Streamed, read-only pre-compute for the enrichment review queue: one event
+  // per ingredient carrying its USDA (and optional merge) proposal, so the
+  // client can fill a cache ahead of the user. Links/merges nothing. The client
+  // pages the worklist (~25/page); cap a page so one request stays bounded.
+  precomputeEnrichmentProposals: protectedProcedure
+    .input(
+      z.object({
+        items: z
+          .array(
+            z.object({
+              id: ingredientId,
+              name: z.string().min(1),
+              wantMerge: z.boolean(),
+            }),
+          )
+          .min(1)
+          .max(50),
+      }),
+    )
+    .mutation(async function* ({ ctx, input }) {
+      yield* precomputeEnrichmentProposals(
+        ctx.usdaService,
+        ctx.db,
+        input.items,
+      );
     }),
   parseSearch: protectedProcedure
     .input(z.object({ query: z.string().min(1) }))
