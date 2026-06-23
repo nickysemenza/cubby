@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { match } from "ts-pattern";
 import { UsdaFoodSearchField } from "~/app/_components/combobox/with-usda-food-search";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { useBulkActionMutation } from "~/app/_components/hooks/useBulkActionMutation";
 import { MergeConfirmation } from "~/app/_components/ingredient/merge-confirmation";
 import { getHoverableMeasureUnitIcon } from "~/app/_components/inventory/format-amount";
 import { RecipeUsagesTable } from "~/app/_components/recipe/recipe-usages-table";
@@ -43,6 +44,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
+import { Progress } from "~/components/ui/progress";
 import { Spinner } from "~/components/ui/spinner";
 import { BASE_KINDS, type BaseKind } from "~/lib/conversion-coverage";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -291,8 +293,11 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
   const suggestUsda = useMutation(
     api.ai.suggestUsdaFoodBatch.mutationOptions(),
   );
-  const createMany = useActionMutation({
-    mutationFn: api.product.createMany.mutationOptions,
+  const createMany = useBulkActionMutation({
+    run: (
+      client,
+      vars: Parameters<typeof client.product.createMany.mutate>[0],
+    ) => client.product.createMany.mutate(vars),
     success: (data) =>
       data.failed.length === 0
         ? `Created ${data.created} product${data.created === 1 ? "" : "s"}.`
@@ -325,8 +330,11 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
     },
     error: (err) => `Create failed: ${getErrorMessage(err)}`,
   });
-  const markNoUsda = useActionMutation({
-    mutationFn: api.product.markUsdaUnavailableMany.mutationOptions,
+  const markNoUsda = useBulkActionMutation({
+    run: (
+      client,
+      vars: Parameters<typeof client.product.markUsdaUnavailableMany.mutate>[0],
+    ) => client.product.markUsdaUnavailableMany.mutate(vars),
     success: "Marked: no USDA entry.",
     invalidateKeys: [["ingredient"], ["product"]],
     onSuccess: clearSelection,
@@ -527,6 +535,12 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
               {creatable.length === 1 ? "" : "s"}
             </Button>
           </div>
+          {createMany.progress && (
+            <Progress
+              value={createMany.progress.done}
+              max={createMany.progress.total}
+            />
+          )}
           <div className="space-y-1.5">
             {Object.entries(suggestions).map(([id, sug]) => {
               const row = rows.find((r) => r.id === id);
@@ -669,6 +683,13 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
           <Button size="sm" variant="ghost" onClick={clearSelection}>
             Clear
           </Button>
+          {markNoUsda.progress && (
+            <Progress
+              className="w-full"
+              value={markNoUsda.progress.done}
+              max={markNoUsda.progress.total}
+            />
+          )}
         </div>
       )}
 

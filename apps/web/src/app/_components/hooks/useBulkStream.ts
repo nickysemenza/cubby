@@ -21,6 +21,8 @@ interface BulkStreamHandlers<Item, Result> {
   onDone?: (result: Result) => void;
   /** Success-toast text built from the final summary; return null/"" to skip the toast. */
   successToast?: (result: Result) => string | null;
+  /** Error-toast text; defaults to `getErrorMessage(error)`. */
+  errorToast?: (error: unknown) => string;
 }
 
 /**
@@ -80,7 +82,8 @@ export function useBulkStream<Item = unknown, Result = unknown>() {
         }
       } catch (error) {
         if (runIdRef.current === runId) {
-          const message = getErrorMessage(error);
+          const message =
+            handlers.errorToast?.(error) ?? getErrorMessage(error);
           setState((s) => ({ ...s, running: false, error: message }));
           toast.error(message);
         }

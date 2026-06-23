@@ -23,7 +23,7 @@ import { recomputeSummary } from "@cubby/schemas/recipe";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { upc } from "@cubby/usda-schemas";
 import { z } from "zod";
-import { streamProgress } from "~/lib/bulk-progress";
+import { type BulkProgressEvent, streamProgress } from "~/lib/bulk-progress";
 import { getErrorMessage } from "~/lib/error-utils";
 import { countActiveInventoryForProduct } from "~/server/repo/inventory/crud";
 import {
@@ -249,29 +249,26 @@ const getByShortcode = protectedProcedure
     return await getProductByShortcode(ctx.db, input.shortcode);
   });
 
-// Delete procedure using standalone factory
-// Batch-create products for the enrichment workbench's "Create products" action.
-// Sequential single-row creates (each its own tx) so one bad row doesn't abort
-// the rest; failures are reported per index for the client to surface/retry.
+// Batch-create products for the enrichment workbench's "Create products" action,
+// streamed with per-row progress. Sequential single-row creates (each its own tx)
+// so one bad row doesn't abort the rest; failures are reported per index for the
+// client to surface/retry, then ONE deduped recompute over the affected recipes.
+type CreateManyResult = {
+  created: number;
+  recipesRecomputed: number;
+  failed: { index: number; name: string; error: string }[];
+};
 const createMany = protectedProcedure
   .input(z.array(productCreateInput).min(1).max(50))
-  .output(
-    z.object({
-      created: z.number(),
-      recipesRecomputed: z.number(),
-      failed: z.array(
-        z.object({
-          index: z.number(),
-          name: z.string(),
-          error: z.string(),
-        }),
-      ),
-    }),
-  )
-  .mutation(async ({ ctx, input }) => {
+  .mutation(async function* ({
+    ctx,
+    input,
+  }): AsyncGenerator<BulkProgressEvent<never, CreateManyResult>> {
     const failed: { index: number; name: string; error: string }[] = [];
     const ingredientIds: IngredientId[] = [];
     let created = 0;
+    const total = input.length;
+    yield { type: "progress", done: 0, total };
     for (const [index, item] of input.entries()) {
       try {
         const product = await ctx.services.product.createProduct(
@@ -283,21 +280,27 @@ const createMany = protectedProcedure
       } catch (error) {
         failed.push({ index, name: item.name, error: getErrorMessage(error) });
       }
+      yield { type: "progress", done: index + 1, total };
     }
     // One deduped recompute over every affected recipe (not per-product), since
     // the bulk workbench create links many products whose recipes overlap.
     const recipesRecomputed =
       await ctx.services.recipeCosting.recomputeForIngredients(ingredientIds);
-    return { created, recipesRecomputed, failed };
+    yield { type: "done", result: { created, recipesRecomputed, failed } };
   });
 
 // Batch "no USDA food exists" flag for the workbench's "Mark no-USDA" action, so
 // those products drop out of the link-USDA worklist and switch to manual entry.
+// Streamed with per-id progress; each update is its own tx.
 const markUsdaUnavailableMany = protectedProcedure
   .input(z.object({ ids: z.array(productId).min(1).max(100) }))
-  .output(z.object({ updated: z.number() }))
-  .mutation(async ({ ctx, input }) => {
+  .mutation(async function* ({
+    ctx,
+    input,
+  }): AsyncGenerator<BulkProgressEvent<never, { updated: number }>> {
     let updated = 0;
+    const total = input.ids.length;
+    yield { type: "progress", done: 0, total };
     for (const id of input.ids) {
       await ctx.services.product.updateProduct(
         id,
@@ -305,8 +308,9 @@ const markUsdaUnavailableMany = protectedProcedure
         ctx.actorContext,
       );
       updated++;
+      yield { type: "progress", done: updated, total };
     }
-    return { updated };
+    yield { type: "done", result: { updated } };
   });
 
 const deleteItem = createDeleteProcedure<ProductId>(async (services, ids) => {
