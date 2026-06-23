@@ -3,10 +3,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, Import } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
+import { BulkProgressBar } from "~/components/ui/bulk-progress-bar";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
-import { Progress } from "~/components/ui/progress";
 import { Spinner } from "~/components/ui/spinner";
 import { getErrorMessage } from "~/lib/error-utils";
 import { queryKeys } from "~/lib/query-keys";
@@ -166,15 +166,7 @@ export function NotionImport() {
         )}
       </div>
 
-      {progress && (
-        <div className="space-y-1">
-          <p className="flex items-center gap-1 text-muted-foreground text-xs">
-            <Spinner className="h-3 w-3" /> Importing {progress.done} of{" "}
-            {progress.total}
-          </p>
-          <Progress value={progress.done} max={progress.total} />
-        </div>
-      )}
+      {progress && <BulkProgressBar verb="Importing" progress={progress} />}
 
       {preview.isError && (
         <p className="flex items-center gap-1 text-destructive text-sm">

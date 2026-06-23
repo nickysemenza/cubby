@@ -36,7 +36,11 @@ import {
   recipeDependencyGraphSchema,
 } from "@cubby/schemas/recipe-dependency-graph";
 import { z } from "zod";
-import { type BulkProgressEvent, streamProgress } from "~/lib/bulk-progress";
+import {
+  type BulkProgressEvent,
+  streamItems,
+  streamProgress,
+} from "~/lib/bulk-progress";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
   importRecipeSignature,
@@ -232,18 +236,14 @@ const importCookbookStream = protectedProcedure
       ingredientIdByName: new Map(),
     };
     const insertedIds: RecipeId[] = [];
-    let succeeded = 0;
-    let failed = 0;
-    const total = input.indices.length;
-    yield { type: "progress", done: 0, total };
     // SEQUENTIAL + in received (topo) order: a forward cross-recipe reference
     // resolves only if its target was committed by an earlier iteration
     // (upsertCookbookRecipeFromCookbook re-reads the cookbook per upsert). Never
     // parallelize.
-    for (let i = 0; i < input.indices.length; i++) {
-      const index = input.indices[i]!;
-      const recipe = recipes[index];
-      try {
+    yield* streamItems<number, ImportItemResult, ImportSummary>(
+      input.indices,
+      async (index): Promise<ImportItemResult> => {
+        const recipe = recipes[index];
         if (!recipe) {
           throw new Error(
             `Recipe index ${index} is out of range for this cookbook`,
@@ -257,30 +257,25 @@ const importCookbookStream = protectedProcedure
           importCtx,
         );
         insertedIds.push(id);
-        succeeded++;
-        yield {
-          type: "progress",
-          done: i + 1,
-          total,
-          item: { index, ok: true, id },
-        };
-      } catch (error) {
+        return { index, ok: true, id };
+      },
+      {
         // Isolate: one malformed recipe can't sink the rest of the import.
-        failed++;
-        yield {
-          type: "progress",
-          done: i + 1,
-          total,
-          item: { index, ok: false, error: getErrorMessage(error) },
-        };
-      }
-    }
-    // ONE recompute for the whole import (was per-recipe). Costing never affects
-    // reference resolution, so deferring to the end is safe.
-    if (insertedIds.length > 0) {
-      await ctx.services.recipeCosting.recompute(insertedIds);
-    }
-    yield { type: "done", result: { succeeded, failed } };
+        onError: (index, _i, error) => ({
+          index,
+          ok: false,
+          error: getErrorMessage(error),
+        }),
+        // ONE recompute for the whole import (was per-recipe). Costing never
+        // affects reference resolution, so deferring to the end is safe.
+        finalize: async (summary) => {
+          if (insertedIds.length > 0) {
+            await ctx.services.recipeCosting.recompute(insertedIds);
+          }
+          return summary;
+        },
+      },
+    );
   });
 // Recipes already imported from a given book, each with its id (for an in-app
 // link) and a content signature (so the preview shows "no changes" vs "will
@@ -388,13 +383,9 @@ const importNotionSyncStream = protectedProcedure
       (await getNotionRecipePageIds(ctx.db)).map(normalizeNotionId),
     );
     const insertedIds: RecipeId[] = [];
-    let succeeded = 0;
-    let failed = 0;
-    const total = input.pageIds.length;
-    yield { type: "progress", done: 0, total };
-    for (let i = 0; i < input.pageIds.length; i++) {
-      const pageId = input.pageIds[i]!;
-      try {
+    yield* streamItems<string, NotionItemResult, NotionSummary>(
+      input.pageIds,
+      async (pageId): Promise<NotionItemResult> => {
         const row = rowById.get(pageId);
         if (!row) {
           throw new Error("That page isn't in the Notion Recipes database.");
@@ -414,33 +405,28 @@ const importNotionSyncStream = protectedProcedure
           ctx.actorContext,
         );
         insertedIds.push(id as RecipeId);
-        succeeded++;
-        yield {
-          type: "progress",
-          done: i + 1,
-          total,
-          item: {
-            pageId,
-            ok: true,
-            id,
-            status: existed ? "updated" : "created",
-          },
+        return {
+          pageId,
+          ok: true,
+          id,
+          status: existed ? "updated" : "created",
         };
-      } catch (error) {
+      },
+      {
         // Isolate: one malformed page can't sink the rest of the import.
-        failed++;
-        yield {
-          type: "progress",
-          done: i + 1,
-          total,
-          item: { pageId, ok: false, error: getErrorMessage(error) },
-        };
-      }
-    }
-    if (insertedIds.length > 0) {
-      await ctx.services.recipeCosting.recompute(insertedIds);
-    }
-    yield { type: "done", result: { succeeded, failed } };
+        onError: (pageId, _i, error) => ({
+          pageId,
+          ok: false,
+          error: getErrorMessage(error),
+        }),
+        finalize: async (summary) => {
+          if (insertedIds.length > 0) {
+            await ctx.services.recipeCosting.recompute(insertedIds);
+          }
+          return summary;
+        },
+      },
+    );
   });
 
 // Distinct cookbooks with recipe counts, for the browse-by-source index.
@@ -463,8 +449,6 @@ const deleteByCookbook = protectedProcedure
     );
   });
 
-type ReprocessSummary = { reprocessed: number; importableExtras: string[] };
-
 // Re-derive a cookbook's recipes from its stored raw JSON (re-runs the WASM
 // ingredient parser, no LLM) in ONE streamed request. Yields per-recipe progress
 // for a live bar, then runs a single batched recompute and yields the final
@@ -472,27 +456,14 @@ type ReprocessSummary = { reprocessed: number; importableExtras: string[] };
 const reprocessCookbookStreamEndpoint = protectedProcedure
   .input(z.object({ cookbookId }))
   // A mutation (it re-derives + writes recipes); streams progress like a query.
-  .mutation(async function* ({
-    ctx,
-    input,
-  }): AsyncGenerator<BulkProgressEvent<never, ReprocessSummary>> {
-    const gen = reprocessCookbookStream(
-      ctx.db,
-      input.cookbookId,
-      ctx.actorContext,
+  .mutation(async function* ({ ctx, input }) {
+    yield* streamProgress(
+      reprocessCookbookStream(ctx.db, input.cookbookId, ctx.actorContext),
+      async ({ recipeIds, reprocessed, importableExtras }) => {
+        await ctx.services.recipeCosting.recompute(recipeIds);
+        return { reprocessed, importableExtras };
+      },
     );
-    let next = await gen.next();
-    while (!next.done) {
-      yield {
-        type: "progress",
-        done: next.value.done,
-        total: next.value.total,
-      };
-      next = await gen.next();
-    }
-    const { recipeIds, reprocessed, importableExtras } = next.value;
-    await ctx.services.recipeCosting.recompute(recipeIds);
-    yield { type: "done", result: { reprocessed, importableExtras } };
   });
 
 // LLM passthrough for the in-browser EPUB extractor: the client builds each

@@ -8,11 +8,11 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useMemo, useRef } from "react";
+import { BulkProgressBar } from "~/components/ui/bulk-progress-bar";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
-import { Progress } from "~/components/ui/progress";
 import { Spinner } from "~/components/ui/spinner";
 import { importRecipeSignature } from "~/lib/recipe-signature";
 import { useTRPC } from "~/trpc/react";
@@ -152,16 +152,7 @@ export function BookGroupCard({
             </p>
           )}
           {book.importProgress ? (
-            <div className="space-y-1">
-              <p className="flex items-center gap-1 text-muted-foreground text-xs">
-                <Spinner className="h-3 w-3" /> Importing{" "}
-                {book.importProgress.done} of {book.importProgress.total}
-              </p>
-              <Progress
-                value={book.importProgress.done}
-                max={book.importProgress.total}
-              />
-            </div>
+            <BulkProgressBar verb="Importing" progress={book.importProgress} />
           ) : (
             doneCount > 0 && (
               <p className="text-muted-foreground text-xs">

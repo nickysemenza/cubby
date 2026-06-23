@@ -11,9 +11,9 @@ import { RecipeList } from "~/app/recipes/recipelist";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { PageWrapper } from "~/components/layout/page-wrapper";
 import { PageHero } from "~/components/layouts/page-hero";
+import { BulkProgressBar } from "~/components/ui/bulk-progress-bar";
 import { Button } from "~/components/ui/button";
 import { Image } from "~/components/ui/image";
-import { Progress } from "~/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 import { useTabParam } from "~/hooks/useTabParam";
@@ -181,18 +181,11 @@ function CookbookDetailPage() {
       </div>
 
       {reprocess.running && (
-        <div className="mt-3 space-y-1">
-          <p className="text-muted-foreground text-xs">
-            {reprocess.progress
-              ? `Reprocessing ${reprocess.progress.done} of ${reprocess.progress.total}…`
-              : "Reprocessing…"}
-          </p>
-          <Progress
-            value={reprocess.progress?.done ?? 0}
-            max={reprocess.progress?.total ?? 1}
-            indeterminate={!reprocess.progress}
-          />
-        </div>
+        <BulkProgressBar
+          verb="Reprocessing"
+          progress={reprocess.progress}
+          className="mt-3"
+        />
       )}
 
       <Tabs

@@ -23,7 +23,7 @@ import { recomputeSummary } from "@cubby/schemas/recipe";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { upc } from "@cubby/usda-schemas";
 import { z } from "zod";
-import { type BulkProgressEvent, streamProgress } from "~/lib/bulk-progress";
+import { streamItems, streamProgress } from "~/lib/bulk-progress";
 import { getErrorMessage } from "~/lib/error-utils";
 import { countActiveInventoryForProduct } from "~/server/repo/inventory/crud";
 import {
@@ -260,33 +260,38 @@ type CreateManyResult = {
 };
 const createMany = protectedProcedure
   .input(z.array(productCreateInput).min(1).max(50))
-  .mutation(async function* ({
-    ctx,
-    input,
-  }): AsyncGenerator<BulkProgressEvent<never, CreateManyResult>> {
+  .mutation(async function* ({ ctx, input }) {
     const failed: { index: number; name: string; error: string }[] = [];
     const ingredientIds: IngredientId[] = [];
-    let created = 0;
-    const total = input.length;
-    yield { type: "progress", done: 0, total };
-    for (const [index, item] of input.entries()) {
-      try {
+    yield* streamItems<(typeof input)[number], never, CreateManyResult>(
+      input,
+      async (item) => {
         const product = await ctx.services.product.createProduct(
           item,
           ctx.actorContext,
         );
-        created++;
         if (product.ingredient?.id) ingredientIds.push(product.ingredient.id);
-      } catch (error) {
-        failed.push({ index, name: item.name, error: getErrorMessage(error) });
-      }
-      yield { type: "progress", done: index + 1, total };
-    }
-    // One deduped recompute over every affected recipe (not per-product), since
-    // the bulk workbench create links many products whose recipes overlap.
-    const recipesRecomputed =
-      await ctx.services.recipeCosting.recomputeForIngredients(ingredientIds);
-    yield { type: "done", result: { created, recipesRecomputed, failed } };
+      },
+      {
+        onError: (item, index, error) => {
+          failed.push({
+            index,
+            name: item.name,
+            error: getErrorMessage(error),
+          });
+        },
+        // One deduped recompute over every affected recipe (not per-product),
+        // since the bulk create links many products whose recipes overlap.
+        finalize: async (summary) => ({
+          created: summary.succeeded,
+          recipesRecomputed:
+            await ctx.services.recipeCosting.recomputeForIngredients(
+              ingredientIds,
+            ),
+          failed,
+        }),
+      },
+    );
   });
 
 // Batch "no USDA food exists" flag for the workbench's "Mark no-USDA" action, so
@@ -294,23 +299,18 @@ const createMany = protectedProcedure
 // Streamed with per-id progress; each update is its own tx.
 const markUsdaUnavailableMany = protectedProcedure
   .input(z.object({ ids: z.array(productId).min(1).max(100) }))
-  .mutation(async function* ({
-    ctx,
-    input,
-  }): AsyncGenerator<BulkProgressEvent<never, { updated: number }>> {
-    let updated = 0;
-    const total = input.ids.length;
-    yield { type: "progress", done: 0, total };
-    for (const id of input.ids) {
-      await ctx.services.product.updateProduct(
-        id,
-        { usdaUnavailable: true },
-        ctx.actorContext,
-      );
-      updated++;
-      yield { type: "progress", done: updated, total };
-    }
-    yield { type: "done", result: { updated } };
+  .mutation(async function* ({ ctx, input }) {
+    yield* streamItems<(typeof input.ids)[number], never, { updated: number }>(
+      input.ids,
+      async (id) => {
+        await ctx.services.product.updateProduct(
+          id,
+          { usdaUnavailable: true },
+          ctx.actorContext,
+        );
+      },
+      { finalize: (summary) => ({ updated: summary.succeeded }) },
+    );
   });
 
 const deleteItem = createDeleteProcedure<ProductId>(async (services, ids) => {
