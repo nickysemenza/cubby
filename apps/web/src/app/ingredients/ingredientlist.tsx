@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
-import { Merge, Sparkles } from "lucide-react";
+import { Merge, Scale, Sparkles } from "lucide-react";
 import { useId, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { MergeConfirmation } from "~/app/_components/ingredient/merge-confirmation";
@@ -303,6 +303,14 @@ export function IngredientList() {
         refreshControls={refreshControls}
         actions={
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              render={<Link to="/ingredients/equivalences" />}
+              nativeButton={false}
+            >
+              <Scale className="h-4 w-4" />
+              Equivalences
+            </Button>
             {stubCount > 0 && (
               <Button
                 variant="outline"

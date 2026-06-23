@@ -7,6 +7,11 @@
  */
 
 import {
+  type CandidateEquivalence,
+  type EquivalenceReport,
+  equivalenceReportSchema,
+} from "@cubby/schemas/equivalences";
+import {
   cookbookId,
   type RecipeId,
   recipeId,
@@ -35,6 +40,7 @@ import {
   type RecipeDependencyGraph,
   recipeDependencyGraphSchema,
 } from "@cubby/schemas/recipe-dependency-graph";
+import { uniq } from "es-toolkit";
 import { z } from "zod";
 import {
   type BulkProgressEvent,
@@ -42,10 +48,13 @@ import {
   streamProgress,
 } from "~/lib/bulk-progress";
 import { getErrorMessage } from "~/lib/error-utils";
+import { harvestEquivalences } from "~/lib/harvest-equivalences";
 import {
   importRecipeSignature,
   recipeOutSignature,
 } from "~/lib/recipe-signature";
+import { getIngredientMappings } from "~/lib/unit-mapping-utils";
+import { wasm } from "~/lib/wasm";
 import { createAppError } from "~/server/errors/app-error";
 import {
   getCookbookByName,
@@ -54,6 +63,7 @@ import {
   reprocessCookbookStream,
   upsertCookbook,
 } from "~/server/repo/cookbook";
+import { getMultiMeasureRecipeIngredients } from "~/server/repo/equivalences";
 import {
   type CookbookImportContext,
   createRecipe,
@@ -592,8 +602,102 @@ const explainCosting = protectedProcedure
     return await ctx.services.recipeCosting.explainRecipe(input.id);
   });
 
+// Re-express a value in another unit of the SAME kind (oz→g, tbsp→cup):
+// canonicalize both to the kind's base via empty-mapping built-in conversions,
+// then divide — the base unit cancels. null if there's no within-kind path.
+const convertWithinKind = (
+  value: number,
+  fromUnit: string,
+  toUnit: string,
+): number | null => {
+  if (fromUnit === toUnit) return value;
+  try {
+    const kind = wasm.amount_kind({ value: 1, unit: toUnit });
+    const from = wasm.conv_amount_to_kind([], kind, { value, unit: fromUnit });
+    const per = wasm.conv_amount_to_kind([], kind, { value: 1, unit: toUnit });
+    if (!from || !per || !(per.value > 0) || !Number.isFinite(from.value))
+      return null;
+    return from.value / per.value;
+  } catch {
+    return null;
+  }
+};
+
+// On-demand scan: mine ingredient-scoped unit equivalences from recipe lines that
+// carry a parenthetical secondary measure (e.g. "1 bunch kale (about 5 cups)"),
+// then drop the ones the ingredient's existing conversion graph already covers —
+// those add nothing (the costing engine already converts them). Read-only report
+// material, NOT part of the eager Problems aggregation, so it runs only on demand.
+const harvestEquivalencesEndpoint = protectedProcedure
+  .output(equivalenceReportSchema)
+  .query(async ({ ctx }): Promise<EquivalenceReport> => {
+    const rows = await getMultiMeasureRecipeIngredients(ctx.db);
+    const candidates = harvestEquivalences(rows, {
+      kindOf: (a) => wasm.amount_kind(a),
+      convert: convertWithinKind,
+    });
+    if (candidates.length === 0) return { candidates: [], hiddenCovered: 0 };
+
+    // Assemble each candidate ingredient's existing conversion graph (its
+    // products' stored mappings + USDA portions/serving/nutrition + price).
+    const ingredients = await ctx.services.ingredient.getIngredientsByIDs(
+      uniq(candidates.map((c) => c.ingredientId)),
+    );
+    const mappingsById = new Map(
+      ingredients.map((ing) => [ing.id, getIngredientMappings(ing)]),
+    );
+
+    // What the ingredient's existing graph predicts for 1 unitA → unitB (same
+    // display units as `medianRatio`), or null when no path exists (novel).
+    // conv_amount_to_kind throws when there's no bridge — caught as null.
+    const existingRatioFor = (
+      c: (typeof candidates)[number],
+    ): number | null => {
+      const mappings = mappingsById.get(c.ingredientId);
+      if (!mappings || mappings.length === 0) return null;
+      try {
+        const kindB = wasm.amount_kind({ value: 1, unit: c.unitB });
+        const conv = wasm.conv_amount_to_kind(mappings, kindB, {
+          value: 1,
+          unit: c.unitA,
+        });
+        if (!conv || !(conv.value > 0) || !Number.isFinite(conv.value))
+          return null;
+        // conv is in kindB's canonical unit; restate it in unitB to compare.
+        return convertWithinKind(conv.value, conv.unit, c.unitB);
+      } catch {
+        return null;
+      }
+    };
+
+    // Three outcomes: novel (no existing path) → show plain; covered & agrees
+    // (within tolerance) → hide as redundant; covered & disagrees → KEEP and flag
+    // with `existingRatio` so the report can warn ("graph says 240, recipes 199").
+    const DISAGREE_FACTOR = 1.15; // ≥15% apart counts as a discrepancy
+    const visible: CandidateEquivalence[] = [];
+    let hiddenCovered = 0;
+    for (const c of candidates) {
+      const existing = existingRatioFor(c);
+      if (existing == null) {
+        visible.push(c); // novel
+        continue;
+      }
+      const factor = Math.max(
+        existing / c.medianRatio,
+        c.medianRatio / existing,
+      );
+      if (factor <= DISAGREE_FACTOR) {
+        hiddenCovered++; // already covered and agrees → redundant
+      } else {
+        visible.push({ ...c, existingRatio: existing }); // covered but disagrees
+      }
+    }
+    return { candidates: visible, hiddenCovered };
+  });
+
 export const recipeRouter = createTRPCRouter({
   insertImport,
+  harvestEquivalences: harvestEquivalencesEndpoint,
   upsertCookbook: upsertCookbookEndpoint,
   getCookbookSource: getCookbookSourceEndpoint,
   importCookbookStream,
