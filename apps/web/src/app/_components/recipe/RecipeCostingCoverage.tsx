@@ -48,6 +48,12 @@ const suggestionFor = (gap: CostingGap): { lead: string; cta: string } =>
       lead: "Add a weight mapping (e.g. 1 cup = 120 g) — or link a USDA food for portions.",
       cta: "Add mapping",
     }))
+    .with({ kind: "add-volume-mapping" }, () => ({
+      // The per-recipe path never emits this (volume isn't a costing blocker); the
+      // arm exists only to keep the match exhaustive over the shared CostingGapKind.
+      lead: "Add a volume mapping (e.g. 1 cup = 240 ml) — or link a USDA food for portions.",
+      cta: "Add mapping",
+    }))
     .exhaustive();
 
 /** The measures the engine couldn't resolve, as small chips. */

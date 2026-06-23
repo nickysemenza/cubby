@@ -1,12 +1,19 @@
 import { z } from "zod";
 import { dbTimestampsOut } from "./common";
 import { ingredientId } from "./identifiers";
+import { baseKind } from "./problems";
 
 export const ingredientBase = z.object({
   // `mock` is a faker dot-path consumed by the test mock generator
   // (apps/web .../test/mock-schema.ts); it is plain metadata, faker-free here.
   name: z.string().meta({ mock: "food.ingredient" }),
   aliases: z.array(z.string()),
+  // Base measurement kinds the user has marked "not applicable" for this
+  // ingredient (e.g. volume on a count-only item). Optional everywhere (the DB
+  // column defaults to '{}', so reads always have it); the coverage layer
+  // subtracts these from the graded universe. See the `naKinds` column in
+  // schema.ts and `gradedKinds` in conversion-coverage.
+  naKinds: z.array(baseKind).optional(),
 });
 
 /**

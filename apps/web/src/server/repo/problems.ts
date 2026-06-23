@@ -31,7 +31,11 @@ import {
   sql,
 } from "drizzle-orm";
 import { mapValues, omit, sum, uniq } from "es-toolkit";
-import { BASE_KINDS, conversionCoverage } from "~/lib/conversion-coverage";
+import {
+  BASE_KINDS,
+  conversionCoverage,
+  gradedKinds,
+} from "~/lib/conversion-coverage";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { computeParseDrift, hasDrift } from "~/lib/parse-drift";
 import { isMoneyUnit } from "~/lib/price-mapping-utils";
@@ -243,6 +247,9 @@ const findIngredientsWithPartialCoverage = async (
         where: notDeleted(productUnitMappings),
         columns: { a: true, b: true, source: true },
       },
+      // The linked ingredient's N/A opt-outs, so we grade only the kinds that
+      // apply (a count-only item isn't flagged for a volume it never uses).
+      Ingredient: { columns: { naKinds: true } },
     },
   });
 
@@ -271,7 +278,8 @@ const findIngredientsWithPartialCoverage = async (
     // narrows the type for the non-nullable schema field.
     if (p.ingredientId == null) continue;
 
-    const cov = conversionCoverage(effective, BASE_KINDS);
+    const applicable = gradedKinds(p.Ingredient?.naKinds);
+    const cov = conversionCoverage(effective, applicable);
 
     // Flag any food whose effective graph can't reach all four base kinds. This
     // includes the subtle case where a scalar/each price exists but isn't
@@ -289,7 +297,7 @@ const findIngredientsWithPartialCoverage = async (
       id: p.id,
       name: p.name,
       manufacturer: p.manufacturer,
-      coverage: { covered: [...cov.covered] },
+      coverage: { covered: [...cov.covered], applicable: [...applicable] },
       hasPrice,
       hasUsdaLink: p.food != null,
       usdaUnavailable: p.usdaUnavailable ?? false,
@@ -503,6 +511,9 @@ const findProductsWithIslandedMappings = async (
         })),
         coverage: {
           covered: [...conversionCoverage(effective, BASE_KINDS).covered],
+          // Islanding is about a disconnected money/measure component, not N/A
+          // dimensions — grade against all four base kinds.
+          applicable: [...BASE_KINDS],
         },
       });
     }

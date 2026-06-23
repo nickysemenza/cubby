@@ -12,7 +12,7 @@ import { unitMappingOut } from "@cubby/schemas/unitmapping";
 import { foodSummary } from "@cubby/usda-schemas";
 import { uniq } from "es-toolkit";
 import { z } from "zod";
-import { BASE_KINDS, conversionCoverage } from "~/lib/conversion-coverage";
+import { conversionCoverage, gradedKinds } from "~/lib/conversion-coverage";
 import { classifyIngredientFix } from "~/lib/recipe-costing-gaps";
 import { getIngredientMappings } from "~/lib/unit-mapping-utils";
 // Extended schemas that include food data
@@ -54,6 +54,7 @@ const enrichmentFixKind = z.enum([
   "set-per-item-price",
   "add-purchase-mapping",
   "add-weight-mapping",
+  "add-volume-mapping",
   "done",
 ]);
 
@@ -66,6 +67,9 @@ export const enrichmentRowOut = ingredientWithFoodOut.extend({
   recipeCount: z.number(),
   coverage: z.object({
     covered: z.array(baseKind),
+    // Kinds graded against (all four minus the ingredient's N/A opt-outs), so the
+    // UI can render an N/A kind as "—" rather than a missing gap.
+    applicable: z.array(baseKind),
     tier: z.enum(["complete", "good", "partial", "none"]),
   }),
   recommendedFix: enrichmentFixKind,
@@ -205,13 +209,18 @@ export class IngredientService {
     );
 
     const rows = enriched.map((ing): EnrichmentRow => {
+      // Grade against the kinds that apply to this ingredient — the user's N/A
+      // opt-outs (naKinds) drop out, so a count-only item isn't pegged below
+      // "complete" for a volume it's never measured by.
+      const applicable = gradedKinds(ing.naKinds);
       const coverage = conversionCoverage(
         getIngredientMappings(ing),
-        BASE_KINDS,
+        applicable,
       );
       const recommendedFix = classifyIngredientFix({
         products: ing.product,
         coverage,
+        applicable,
         // No recipe-line context here; default to a measured (package) price
         // suggestion — the inline editor still lets the user pick "each".
         sampleLineKind: "weight",
@@ -219,7 +228,11 @@ export class IngredientService {
       return {
         ...ing,
         recipeCount: uniq(ing.appearsInRecipes.map((r) => r.id)).length,
-        coverage: { covered: [...coverage.covered], tier: coverage.tier },
+        coverage: {
+          covered: [...coverage.covered],
+          applicable,
+          tier: coverage.tier,
+        },
         recommendedFix,
         priceMode: "package",
         mergeCandidates: [] as EnrichmentRow["mergeCandidates"],

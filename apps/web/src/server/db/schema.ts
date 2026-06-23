@@ -13,6 +13,7 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { imageStatusValues } from "@cubby/schemas/image";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
+import type { BaseKind } from "@cubby/schemas/problems";
 import { productCategoryValues } from "@cubby/schemas/product";
 import {
   type RecipeTotals,
@@ -224,6 +225,17 @@ export const ingredient = pgTable(
       .$type<IngredientId>(),
     name: text("name").notNull(),
     aliases: text("aliases").array().notNull().default(sql`'{}'::text[]`),
+    // Base measurement kinds the user has marked "not applicable" for this
+    // ingredient (e.g. volume on whole lemons you only ever buy by count). The
+    // coverage layer drops these from the graded universe so the ingredient can
+    // read "complete" instead of being nagged for a gap it can't/shouldn't fill.
+    // Read ONLY when building the `kinds` arg to conversionCoverage — never reaches
+    // the conversion engine, so it can't affect costing.
+    naKinds: text("naKinds")
+      .array()
+      .notNull()
+      .$type<BaseKind[]>()
+      .default(sql`'{}'::text[]`),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updatedAt", { mode: "date" })
       .notNull()

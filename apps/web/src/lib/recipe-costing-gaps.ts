@@ -1,4 +1,4 @@
-import type { ConversionCoverage } from "~/lib/conversion-coverage";
+import type { BaseKind, ConversionCoverage } from "~/lib/conversion-coverage";
 import type { RecipeCosting } from "~/lib/recipe-costing";
 import { wasm } from "~/lib/wasm";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
@@ -17,7 +17,8 @@ export type CostingGapKind =
   | "link-usda" // product(s) exist but none USDA-linked, and weight is missing
   | "set-per-item-price" // count line, no per-each price yet
   | "add-purchase-mapping" // weight/volume line, no money path → package mapping
-  | "add-weight-mapping"; // has price but can't reach grams
+  | "add-weight-mapping" // has price but can't reach grams
+  | "add-volume-mapping"; // costed & weighable, but an applicable volume is unreachable
 
 /** What kind of measurement the recipe line uses, for tailoring price copy. */
 export type LineKind = "count" | "weight" | "volume";
@@ -31,7 +32,12 @@ export interface CostingGap {
   lineUnit: string | null;
   lineKind: LineKind;
   /** Which measures the engine couldn't resolve for this ingredient. */
-  missing: { price: boolean; weight: boolean; nutrients: boolean };
+  missing: {
+    price: boolean;
+    weight: boolean;
+    nutrients: boolean;
+    volume: boolean;
+  };
   /** The prioritized fix to suggest. */
   kind: CostingGapKind;
 }
@@ -43,6 +49,9 @@ const KIND_RANK: Record<CostingGapKind, number> = {
   "set-per-item-price": 2,
   "add-purchase-mapping": 2,
   "add-weight-mapping": 3,
+  // Volume is never a costing blocker (the per-recipe path never emits it); it
+  // only surfaces in the global workbench, so its sort rank is nominal.
+  "add-volume-mapping": 4,
 };
 
 /**
@@ -68,7 +77,14 @@ interface GapAccumulator {
   lineUnit: string | null;
   lineKind: LineKind;
   products: IngredientWithFoodOut["product"];
-  missing: { price: boolean; weight: boolean; nutrients: boolean };
+  // `volume` is always false on the recipe path — volume isn't a costing blocker
+  // for a specific line; it's a global-workbench-only signal (classifyIngredientFix).
+  missing: {
+    price: boolean;
+    weight: boolean;
+    nutrients: boolean;
+    volume: boolean;
+  };
 }
 
 /**
@@ -79,11 +95,16 @@ interface GapAccumulator {
  */
 interface FixInputs {
   products: IngredientWithFoodOut["product"];
-  missing: { price: boolean; weight: boolean; nutrients: boolean };
+  missing: {
+    price: boolean;
+    weight: boolean;
+    nutrients: boolean;
+    volume: boolean;
+  };
   lineKind: LineKind;
 }
 
-const classifyKind = (acc: FixInputs): CostingGapKind => {
+const classifyKind = (acc: FixInputs): CostingGapKind | "done" => {
   if (acc.products.length === 0) return "no-product";
 
   // A product is USDA-associated if it carries (or intends to carry) food data:
@@ -107,9 +128,13 @@ const classifyKind = (acc: FixInputs): CostingGapKind => {
     return hasPrice ? "add-purchase-mapping" : "set-per-item-price";
   }
 
-  // Price resolved but weight didn't (and a USDA link already exists / price is
-  // set) → a direct weight mapping is the remaining fix.
-  return "add-weight-mapping";
+  // Price resolved. Name the *actually*-missing measure rather than assuming
+  // weight: a direct weight mapping when weight is unreachable, else a volume
+  // mapping when an applicable volume is missing. Nothing measurable left (only
+  // nutrients, or volume that's N/A) → "done": no user-actionable costing fix.
+  if (acc.missing.weight) return "add-weight-mapping";
+  if (acc.missing.volume) return "add-volume-mapping";
+  return "done";
 };
 
 /**
@@ -126,18 +151,24 @@ const classifyKind = (acc: FixInputs): CostingGapKind => {
 export const classifyIngredientFix = (input: {
   products: IngredientWithFoodOut["product"];
   coverage: ConversionCoverage;
+  /** Kinds graded against (gradedKinds) — an N/A volume is excluded here. */
+  applicable: readonly BaseKind[];
   sampleLineKind: LineKind;
 }): CostingGapKind | "done" => {
   if (input.products.length === 0) return "no-product";
   if (input.coverage.tier === "complete") return "done";
 
   const covered = input.coverage.covered;
+  // Only treat volume as a gap when it's applicable to this ingredient — a count
+  // item the user opted out of (naKinds) shouldn't be told to "Add volume".
+  const volumeApplicable = input.applicable.includes("volume");
   return classifyKind({
     products: input.products,
     missing: {
       price: !covered.has("money"),
       weight: !covered.has("weight"),
       nutrients: !covered.has("calories"),
+      volume: volumeApplicable && !covered.has("volume"),
     },
     lineKind: input.sampleLineKind,
   });
@@ -180,6 +211,7 @@ export const deriveCostingGaps = (
       existing.missing.price ||= priceMissing;
       existing.missing.weight ||= weightMissing;
       existing.missing.nutrients ||= nutrientMissing;
+      // volume stays false — not a recipe-costing concern (see GapAccumulator).
       continue;
     }
 
@@ -195,12 +227,17 @@ export const deriveCostingGaps = (
         price: priceMissing,
         weight: weightMissing,
         nutrients: nutrientMissing,
+        volume: false,
       },
     });
   }
 
   const gaps: CostingGap[] = [];
   for (const [ingredientId, acc] of byId) {
+    const kind = classifyKind(acc);
+    // Rows here are pre-filtered to a missing price or weight, so classifyKind
+    // never returns "done"/"add-volume-mapping"; the guard just satisfies the type.
+    if (kind === "done" || kind === "add-volume-mapping") continue;
     gaps.push({
       ingredientId,
       name: acc.name,
@@ -208,7 +245,7 @@ export const deriveCostingGaps = (
       lineUnit: acc.lineUnit,
       lineKind: acc.lineKind,
       missing: acc.missing,
-      kind: classifyKind(acc),
+      kind,
     });
   }
 

@@ -1,6 +1,12 @@
 import type { Amount } from "@cubby/schemas/codec";
 import { describe, expect, it } from "vitest";
 import {
+  type BaseKind,
+  type ConversionCoverage,
+  type CoverageTier,
+  gradedKinds,
+} from "~/lib/conversion-coverage";
+import {
   costRecipe,
   cups,
   each,
@@ -11,7 +17,11 @@ import {
   makeProduct,
   type Product,
 } from "~/lib/recipe-costing.fixtures";
-import { type CostingGap, deriveCostingGaps } from "~/lib/recipe-costing-gaps";
+import {
+  type CostingGap,
+  classifyIngredientFix,
+  deriveCostingGaps,
+} from "~/lib/recipe-costing-gaps";
 
 // One product, given fixed id "prod-p" so single-product cases can assert it.
 const prod = (opts?: Parameters<typeof makeProduct>[1]): Product =>
@@ -184,5 +194,57 @@ describe("deriveCostingGaps — multi-row", () => {
       "no-product",
       "add-weight-mapping",
     ]);
+  });
+});
+
+// ─── Global workbench path: classifyIngredientFix + N/A (naKinds) ─────────────
+// classifyKind only reads `coverage.covered` + `tier`, so build minimal coverage
+// literals rather than driving the WASM engine.
+const cov = (covered: BaseKind[], tier: CoverageTier): ConversionCoverage => ({
+  covered: new Set(covered),
+  kindsCovered: covered.length,
+  pairs: [],
+  tier,
+});
+
+describe("classifyIngredientFix — N/A-aware next fix", () => {
+  it("weight+price covered, volume applicable but missing → add-volume-mapping (never add-weight)", () => {
+    const fix = classifyIngredientFix({
+      products: [prod({ price: 1, fdc: 1234 })],
+      coverage: cov(["weight", "money", "calories"], "good"),
+      applicable: ["weight", "volume", "money", "calories"],
+      sampleLineKind: "weight",
+    });
+    expect(fix).toBe("add-volume-mapping");
+  });
+
+  it("volume marked N/A + the other applicable kinds covered → done (drops off worklist)", () => {
+    const fix = classifyIngredientFix({
+      products: [prod({ price: 1, fdc: 1234 })],
+      coverage: cov(["weight", "money", "calories"], "complete"),
+      applicable: gradedKinds(["volume"]),
+      sampleLineKind: "weight",
+    });
+    expect(fix).toBe("done");
+  });
+
+  it("weight covered, volume N/A, only calories missing → done (not actionable, never add-weight)", () => {
+    const fix = classifyIngredientFix({
+      products: [prod({ price: 1, fdc: 1234 })],
+      coverage: cov(["weight", "money"], "good"),
+      applicable: gradedKinds(["volume"]),
+      sampleLineKind: "weight",
+    });
+    expect(fix).toBe("done");
+  });
+
+  it("weight still missing (USDA-linked, priced) → add-weight-mapping (regression)", () => {
+    const fix = classifyIngredientFix({
+      products: [prod({ price: 1, fdc: 1234 })],
+      coverage: cov(["money", "calories"], "partial"),
+      applicable: ["weight", "volume", "money", "calories"],
+      sampleLineKind: "weight",
+    });
+    expect(fix).toBe("add-weight-mapping");
   });
 });

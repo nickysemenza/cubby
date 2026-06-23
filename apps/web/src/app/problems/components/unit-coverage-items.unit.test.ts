@@ -25,7 +25,10 @@ const partialProduct = (over: Partial<Partial_> = {}): Partial_ => ({
   id: "p2",
   name: "Aji amarillo",
   manufacturer: "generic",
-  coverage: { covered: [] },
+  coverage: {
+    covered: [],
+    applicable: ["weight", "volume", "money", "calories"],
+  },
   hasPrice: true,
   hasUsdaLink: false,
   usdaUnavailable: false,
@@ -42,7 +45,10 @@ const islandedProduct = (over: Partial<Islanded> = {}): Islanded => ({
     { units: ["cup", "g"], exampleUnit: "cup" },
     { units: ["dollar"], exampleUnit: "dollar" },
   ],
-  coverage: { covered: ["weight", "volume"] },
+  coverage: {
+    covered: ["weight", "volume"],
+    applicable: ["weight", "volume", "money", "calories"],
+  },
   ...over,
 });
 

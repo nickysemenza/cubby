@@ -163,6 +163,7 @@ function renderUnitCoverageItem(item: UnitCoverageItem): RenderedProblemItem {
         <CoverageChips
           key="cov"
           covered={item.coverage.covered}
+          applicable={item.coverage.applicable}
           usdaLinked={item.hasUsdaLink}
         />,
       ],

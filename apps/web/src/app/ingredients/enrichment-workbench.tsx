@@ -43,6 +43,7 @@ import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
+import { BASE_KINDS, type BaseKind } from "~/lib/conversion-coverage";
 import { getErrorMessage } from "~/lib/error-utils";
 import { isMoneyUnit } from "~/lib/price-mapping-utils";
 import { savedWithRecompute } from "~/lib/recompute-summary";
@@ -117,6 +118,7 @@ const FIX_LABEL: Record<EnrichmentRow["recommendedFix"], string> = {
   "set-per-item-price": "Set price",
   "add-purchase-mapping": "Set price",
   "add-weight-mapping": "Add weight",
+  "add-volume-mapping": "Add volume",
   done: "Done",
 };
 
@@ -841,7 +843,10 @@ function WorkbenchRow({
           )}
         </td>
         <td className="px-2 py-2.5">
-          <CoverageChips covered={row.coverage.covered} />
+          <CoverageChips
+            covered={row.coverage.covered}
+            applicable={row.coverage.applicable}
+          />
         </td>
         <td className="px-2 py-2.5">
           <Badge variant="outline" className="font-normal">
@@ -907,10 +912,12 @@ function WorkbenchEditor({
   // gap. The conversion is only "optional" once nothing measurable is missing —
   // setting a price won't cover volume, so don't pretend it's optional then.
   const covered = new Set(row.coverage.covered);
-  const moneyMissing = !covered.has("money");
+  // Kinds the user hasn't marked N/A — a gap only counts against an applicable kind.
+  const applicableKinds = new Set(row.coverage.applicable);
+  const moneyMissing = applicableKinds.has("money") && !covered.has("money");
   const usdaUnavailable = row.product.some((p) => p.usdaUnavailable);
   const conversionGaps = (["weight", "volume", "calories"] as const).filter(
-    (k) => !covered.has(k),
+    (k) => applicableKinds.has(k) && !covered.has(k),
   );
   // A conversion is the path for those gaps only once USDA can't fill them
   // (already linked, or there's no USDA entry). Before that, linking USDA is.
@@ -1017,6 +1024,24 @@ function WorkbenchEditor({
     error: (err) => `Failed to update: ${getErrorMessage(err)}`,
   });
 
+  // Toggle a base kind's "not applicable" flag on the ingredient. Marking volume
+  // N/A on a count-only item (e.g. whole lemons) drops it from the graded
+  // universe, so the row reads "complete" instead of nagging for a volume it's
+  // never measured by. Invalidates the worklist so coverage recomputes.
+  const updateIngredient = useActionMutation({
+    mutationFn: api.ingredient.update.mutationOptions,
+    success: `Updated ${row.name}.`,
+    invalidateKeys: [["ingredient"]],
+    error: (err) => `Failed to update: ${getErrorMessage(err)}`,
+  });
+  const naKinds = row.naKinds ?? [];
+  const toggleNaKind = (kind: BaseKind) => {
+    const next = new Set(naKinds);
+    if (next.has(kind)) next.delete(kind);
+    else next.add(kind);
+    updateIngredient.mutate({ id: row.id, data: { naKinds: [...next] } });
+  };
+
   const buildPriceAndMappings = () => {
     let eachPrice: number | null = null;
     const newMappings: UnitMappingInput[] = [];
@@ -1104,11 +1129,17 @@ function WorkbenchEditor({
           <p className="text-xs">
             <span className="font-medium text-warning">Still missing:</span>{" "}
             {[
-              !covered.has("weight") && "weight",
-              !covered.has("volume") && "volume",
+              applicableKinds.has("weight") &&
+                !covered.has("weight") &&
+                "weight",
+              applicableKinds.has("volume") &&
+                !covered.has("volume") &&
+                "volume",
               moneyMissing &&
                 (priceIslanded ? "price (not connected)" : "price"),
-              !covered.has("calories") && "calories",
+              applicableKinds.has("calories") &&
+                !covered.has("calories") &&
+                "calories",
             ]
               .filter(Boolean)
               .join(", ")}
@@ -1299,8 +1330,39 @@ function WorkbenchEditor({
         <div className="rounded-md border bg-background/60 p-2">
           <ConversionCapabilities
             mappings={previewMappings}
+            kinds={row.coverage.applicable}
             hideConvertButton
           />
+        </div>
+        {/* Per-kind "not applicable" opt-out — drops a kind from grading so a
+            count-only ingredient (e.g. whole lemons, never measured by volume)
+            reads complete instead of being nagged for a gap it can't fill. */}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 pt-1">
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wide">
+            N/A
+          </span>
+          {BASE_KINDS.map((kind) => {
+            const off = naKinds.includes(kind);
+            return (
+              <button
+                key={kind}
+                type="button"
+                disabled={updateIngredient.isPending}
+                onClick={() => toggleNaKind(kind)}
+                aria-pressed={off}
+                className={cn(
+                  "flex items-center gap-1 text-[11px]",
+                  off ? "text-foreground" : "text-muted-foreground",
+                )}
+              >
+                <Checkbox
+                  checked={off}
+                  className="pointer-events-none h-3 w-3"
+                />
+                {kind === "money" ? "price" : kind}
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>

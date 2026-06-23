@@ -31,6 +31,21 @@ export type BaseKind = (typeof BASE_KINDS)[number];
  */
 export const USDA_KINDS = ["weight", "volume", "calories"] as const;
 
+/**
+ * The kind universe an ingredient is graded against: all four base kinds minus
+ * the ones the user marked "not applicable" (`ingredient.naKinds`). The single
+ * place that opt-out is interpreted — pass the result as the `kinds` arg to
+ * {@link conversionCoverage} (so an N/A kind can't peg the tier below complete)
+ * AND surface it as `coverage.applicable` so the UI can render N/A as "—" rather
+ * than a missing gap. Never reaches the conversion engine, so it can't corrupt
+ * costing; a forgotten call site just falls back to grading all four kinds.
+ */
+export function gradedKinds(naKinds?: readonly BaseKind[] | null): BaseKind[] {
+  if (!naKinds || naKinds.length === 0) return [...BASE_KINDS];
+  const na = new Set(naKinds);
+  return BASE_KINDS.filter((k) => !na.has(k));
+}
+
 export type CoverageTier = "complete" | "good" | "partial" | "none";
 
 interface CoveragePair {

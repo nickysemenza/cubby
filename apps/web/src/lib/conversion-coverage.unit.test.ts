@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   BASE_KINDS,
   conversionCoverage,
+  gradedKinds,
   USDA_KINDS,
 } from "./conversion-coverage";
 
@@ -40,5 +41,29 @@ describe("conversionCoverage tiers", () => {
     const mappings = [calories()];
     expect(conversionCoverage(mappings, BASE_KINDS).tier).toBe("partial");
     expect(conversionCoverage(mappings, USDA_KINDS).tier).toBe("good");
+  });
+});
+
+describe("gradedKinds (N/A opt-out)", () => {
+  it("no opt-outs → all four base kinds", () => {
+    expect(gradedKinds()).toEqual([...BASE_KINDS]);
+    expect(gradedKinds(null)).toEqual([...BASE_KINDS]);
+    expect(gradedKinds([])).toEqual([...BASE_KINDS]);
+  });
+
+  it("subtracts the marked-N/A kinds (preserving BASE_KINDS order)", () => {
+    expect(gradedKinds(["volume"])).toEqual(["weight", "money", "calories"]);
+    expect(gradedKinds(["volume", "calories"])).toEqual(["weight", "money"]);
+  });
+
+  it("volume N/A lets a weight↔money↔calories item read 'complete'", () => {
+    // A whole-lemon-style item: price + grams + calories, but no volume. Graded
+    // over all four it's 'good' (volume unreachable); with volume N/A it's
+    // 'complete' — exactly the fix that drops it off the gap worklist.
+    const mappings = [price(), calories()];
+    expect(conversionCoverage(mappings, BASE_KINDS).tier).toBe("good");
+    expect(conversionCoverage(mappings, gradedKinds(["volume"])).tier).toBe(
+      "complete",
+    );
   });
 });

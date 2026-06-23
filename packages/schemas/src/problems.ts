@@ -16,7 +16,13 @@ const productProblemBase = z.object({
   name: z.string(),
   manufacturer: z.string(),
 });
-const coverageShape = z.object({ covered: z.array(baseKind) });
+// `covered` = kinds the graph can actually reach; `applicable` = the kinds graded
+// against (BASE_KINDS minus the ingredient's N/A opt-outs). A kind in `applicable`
+// but not `covered` is a real gap; a kind in neither is "not applicable" (—).
+const coverageShape = z.object({
+  covered: z.array(baseKind),
+  applicable: z.array(baseKind),
+});
 
 // Output schemas for each problem type.
 export const duplicateUniqueProductSchema = productProblemBase.extend({

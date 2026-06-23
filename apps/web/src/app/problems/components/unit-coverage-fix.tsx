@@ -42,15 +42,26 @@ const KIND_LABEL: Record<(typeof BASE_KINDS)[number], string> = {
  * When `usdaLinked` is provided, also shows a "USDA" chip — so it's clear
  * whether a gap (e.g. calories) is because nothing's linked, or because the
  * linked food simply has no data for that kind.
+ *
+ * `applicable` (the kinds graded against — see `gradedKinds`) splits the unlit
+ * chips into two: a kind that's applicable but unreached is a real gap (faded);
+ * a kind the user marked N/A is struck through ("—" / not applicable), so a
+ * count-only ingredient doesn't read as missing a volume it never uses. Omitting
+ * `applicable` grades all four (legacy callers / placeholders).
  */
 export function CoverageChips({
   covered,
+  applicable,
   usdaLinked,
 }: {
   covered: string[];
+  applicable?: string[];
   usdaLinked?: boolean;
 }) {
   const lit = new Set(covered);
+  const na = applicable
+    ? new Set(BASE_KINDS.filter((k) => !applicable.includes(k)))
+    : new Set<string>();
   const chip = (key: string, label: string, on: boolean) => (
     <Badge
       key={key}
@@ -63,7 +74,20 @@ export function CoverageChips({
   );
   return (
     <div className="flex flex-wrap gap-1">
-      {BASE_KINDS.map((kind) => chip(kind, KIND_LABEL[kind], lit.has(kind)))}
+      {BASE_KINDS.map((kind) =>
+        na.has(kind) ? (
+          <Badge
+            key={kind}
+            variant="outline"
+            className="text-muted-foreground/40 line-through"
+            title="not applicable"
+          >
+            {KIND_LABEL[kind]}
+          </Badge>
+        ) : (
+          chip(kind, KIND_LABEL[kind], lit.has(kind))
+        ),
+      )}
       {usdaLinked !== undefined && chip("usda", "USDA", usdaLinked)}
     </div>
   );
