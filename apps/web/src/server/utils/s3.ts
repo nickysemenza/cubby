@@ -26,12 +26,16 @@ interface PresignedUrlParams {
 }
 
 /**
- * Generate a presigned URL for uploading a file to S3
+ * Generate a presigned URL for uploading a file to S3.
  *
- * Signs the URL only (no signed headers) so the client's existing
- * `Content-Type: file.type` PUT sets the object content-type, same as before.
- * `contentType` stays in the signature for call-site compatibility even though
- * it's no longer baked into the signature — the browser PUT supplies it.
+ * Signs the URL only (`signQuery`, no signed headers): only `host` lands in
+ * `X-Amz-SignedHeaders`, so the client's `Content-Type: file.type` PUT sets the
+ * object content-type without a signature mismatch — the same effective result
+ * as the old SDK path (which also didn't require the browser to echo a signed
+ * content-type). NOTE: content-type is therefore NOT enforced by the signature;
+ * R2 accepts a PUT with any content-type. `contentType` is kept only for
+ * call-site compatibility (callers + the tRPC input schema still pass it) and no
+ * longer influences the signed URL.
  */
 export const generatePresignedUploadUrl = async ({
   key,
