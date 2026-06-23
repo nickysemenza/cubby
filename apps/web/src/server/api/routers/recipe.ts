@@ -377,7 +377,7 @@ const extractCookbookChunkProc = protectedProcedure
       system: z.string(),
       user: z.string(),
       toolName: z.string(),
-      // The forced tool's JSON Schema, built in WASM and forwarded verbatim.
+      // The output JSON Schema, built in WASM and forwarded verbatim.
       toolSchema: z.record(z.string(), z.unknown()),
     }),
   )

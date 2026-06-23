@@ -27,18 +27,10 @@ import {
 } from "@cubby/schemas/product";
 import { chat, type ImagePart } from "@tanstack/ai";
 import type { AnthropicImageMetadata } from "@tanstack/ai-anthropic";
-import { env } from "~/env";
 import {
-  CF_ACCOUNT_ID,
-  CF_AIG_GATEWAY_ID,
-  getAiGateway,
-} from "~/server/cf-env";
-
-// Cubby's Cloudflare AI Gateway base (no provider suffix). Append the provider
-// path: `/anthropic`, `/google-ai-studio/v1beta/openai`, etc. Still consumed by
-// the cookbook-extraction proxy (`~/server/utils/cookbook-llm`), which talks to
-// the gateway over raw fetch rather than the `@cloudflare/tanstack-ai` adapters.
-export const AI_GATEWAY_BASE_URL = `https://gateway.ai.cloudflare.com/v1/${CF_ACCOUNT_ID}/${CF_AIG_GATEWAY_ID}`;
+  gatewayAdapterConfig,
+  isGatewayConfigured,
+} from "~/server/clients/gateway-config";
 
 // Single source of truth for the model so both gateway-config branches stay in
 // sync on a bump (mirrors `MODEL` in `./openai`).
@@ -147,34 +139,15 @@ Rules:
 }
 
 class AnthropicClient {
-  constructor(private apiKey: string | undefined) {}
-
   // Build the gateway adapter per call rather than caching it: in prod the
-  // binding (`getAiGateway()`) is per-request, so a cached adapter would close
-  // over a stale binding. Construction is cheap. Prod routes through the gateway
-  // binding (implicit Worker-identity auth); dev falls back to gateway-REST with
-  // the AI_GATEWAY_API_KEY token.
+  // binding is per-request, so a cached adapter would close over a stale one.
+  // Construction is cheap.
   private getAdapter() {
-    const gateway = getAiGateway();
-    if (gateway) {
-      return createAnthropicChat(MODEL, { binding: gateway });
-    }
-    if (!this.apiKey) {
-      throw new Error(
-        "AI_GATEWAY_API_KEY is not configured. Add it to your .env file.",
-      );
-    }
-    return createAnthropicChat(MODEL, {
-      accountId: CF_ACCOUNT_ID,
-      gatewayId: CF_AIG_GATEWAY_ID,
-      cfApiKey: this.apiKey,
-    });
+    return createAnthropicChat(MODEL, gatewayAdapterConfig());
   }
 
   isConfigured(): boolean {
-    // Configured if either the gateway binding (prod) or the REST token (dev)
-    // is available.
-    return !!getAiGateway() || !!this.apiKey;
+    return isGatewayConfigured();
   }
 
   /**
@@ -426,7 +399,7 @@ let anthropicClient: AnthropicClient | null = null;
 
 export function getAnthropicClient(): AnthropicClient {
   if (!anthropicClient) {
-    anthropicClient = new AnthropicClient(env.AI_GATEWAY_API_KEY);
+    anthropicClient = new AnthropicClient();
   }
   return anthropicClient;
 }
