@@ -136,8 +136,11 @@ pub fn unit_graph_bridges(mappings: WUnitMappings) -> WUnitBridges {
             }
         }
     }
-    let index_of: HashMap<&str, usize> =
-        units.iter().enumerate().map(|(i, u)| (u.as_str(), i)).collect();
+    let index_of: HashMap<&str, usize> = units
+        .iter()
+        .enumerate()
+        .map(|(i, u)| (u.as_str(), i))
+        .collect();
 
     // Engine component membership per original unit. find_connected_components
     // names nodes by their normalized unit, so attach a unique sentinel leaf to
@@ -185,9 +188,10 @@ pub fn unit_graph_bridges(mappings: WUnitMappings) -> WUnitBridges {
         }
     };
     for m in &mappings.0 {
-        if let (Some(&a), Some(&b)) =
-            (index_of.get(m.a.unit.as_str()), index_of.get(m.b.unit.as_str()))
-        {
+        if let (Some(&a), Some(&b)) = (
+            index_of.get(m.a.unit.as_str()),
+            index_of.get(m.b.unit.as_str()),
+        ) {
             union(&mut parent, a, b);
         }
     }
