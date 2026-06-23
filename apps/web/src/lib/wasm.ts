@@ -75,6 +75,19 @@ const cacheableMethods = new Set<string>(CACHEABLE_METHODS);
 // returning undefined unambiguously means "miss".
 const resultCache = new LRUCache<string, NonNullable<unknown>>({ max: 2048 });
 
+/** Compact, non-dumping summary of a WASM call's args for the slow-call warning. */
+const summarizeArg = (arg: unknown): string => {
+  if (arg instanceof Uint8Array || arg instanceof ArrayBuffer) {
+    return `Uint8Array(${arg.byteLength})`;
+  }
+  if (typeof arg === "string") {
+    return arg.length > 64 ? `"${arg.slice(0, 61)}…"` : JSON.stringify(arg);
+  }
+  if (Array.isArray(arg)) return `Array(${arg.length})`;
+  if (arg && typeof arg === "object") return "{…}";
+  return String(arg);
+};
+
 /** Invoke the real WASM method inside a trace span (+ dev slow-call warning). */
 const tracedCall = (
   name: string,
@@ -107,7 +120,10 @@ const tracedCall = (
       // Flag-gated (default on in dev, off in CF prod) — flippable on /settings.
       if (getFlag("wasmSlowWarn") && durationMs > SLOW_WASM_THRESHOLD_MS) {
         // eslint-disable-next-line no-console
-        console.warn(`[wasm] ${name} took ${durationMs.toFixed(1)}ms`, ...args);
+        console.warn(
+          `[wasm] ${name} took ${durationMs.toFixed(1)}ms`,
+          args.map(summarizeArg).join(", "),
+        );
       }
       span.end();
     }
