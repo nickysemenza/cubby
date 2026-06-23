@@ -87,7 +87,9 @@ const optionalLocationId = z
 // Input schema for creating locations
 export const locationCreateInput = locationBase
   .extend({
-    parentId: optionalLocationId,
+    parentId: optionalLocationId.describe(
+      "Parent location id — nest this location under another (omit/null for a top-level location).",
+    ),
   })
   .merge(createInputImages);
 

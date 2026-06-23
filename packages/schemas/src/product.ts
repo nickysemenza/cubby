@@ -49,14 +49,22 @@ export const hasFoodIndicators = (product: {
 // Base schema for product data (without relationships)
 const productBase = z.object({
   // `mock` is a faker dot-path read by the test mock generator (faker-free here).
-  name: z.string().meta({ mock: "commerce.productName" }),
+  name: z
+    .string()
+    .describe("Product name")
+    .meta({ mock: "commerce.productName" }),
   upc: upc.nullable(),
   // Explicit USDA link by FoodData Central id (the universal PK across all food
   // types — see `fdcId`). Resolution prefers this over UPC auto-matching.
   // Defaults to null so product summaries from queries that don't select it
   // (inventory / ingredient embeds) validate instead of 500ing, and inputs may
   // omit it.
-  fdc_id: fdcId.nullable().default(null),
+  fdc_id: fdcId
+    .nullable()
+    .default(null)
+    .describe(
+      "USDA FoodData Central id — links the product to any USDA food (takes precedence over the product's UPC). null to unlink.",
+    ),
   manufacturer: z
     .string()
     .describe("Manufacturer or 'generic'")
@@ -80,14 +88,23 @@ export const productCreateInput = productBase
   .omit({ category: true })
   .extend({
     category: productCategory.nullable().optional(),
-    ingredientId: ingredientId.nullable(),
+    ingredientId: ingredientId
+      .nullable()
+      .describe(
+        "Link this product to an ingredient (its id) so recipes using that ingredient can cost from this product.",
+      ),
     price: z
       .number()
       .positive()
       .nullable()
       .optional()
       .describe("price per each ($), source of truth"),
-    unitMappings: z.array(unitMappingInput).default([]),
+    unitMappings: z
+      .array(unitMappingInput)
+      .default([])
+      .describe(
+        'Conversion/price edges, e.g. 8 oz = $10 → [{ a: { value: 8, unit: "oz" }, b: { value: 10, unit: "dollar" } }]. For a weight-measured ingredient an oz/g → dollar edge is the cost basis.',
+      ),
     externalIds: z.array(externalIdInput).default([]),
     usdaUnavailable: z
       .boolean()

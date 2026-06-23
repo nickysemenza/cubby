@@ -51,7 +51,10 @@ export const unitMappingInput = unitMappingBase.extend({
  */
 export const mcpUnitMappingInput = unitMappingInput
   .omit({ id: true })
-  .extend({ source: z.string().optional() });
+  .extend({ source: z.string().optional() })
+  .describe(
+    'One conversion/price edge in the unit graph, e.g. 8 oz = $10 → { a: { value: 8, unit: "oz" }, b: { value: 10, unit: "dollar" } }. Money unit is "dollar"; nutrient edges use the b unit (e.g. "kcal", "g protein").',
+  );
 export type McpUnitMappingInput = z.infer<typeof mcpUnitMappingInput>;
 
 export const unitMappingOut = z

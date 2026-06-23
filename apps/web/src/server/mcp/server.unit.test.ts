@@ -102,18 +102,25 @@ describe("slimMeal", () => {
 });
 
 describe("slimUsdaFood", () => {
-  it("surfaces id, description, link keys, and per-100g nutrients; drops portions", () => {
+  it("surfaces id, description, link keys, nutrients, the portion table, and branded serving", () => {
     const slim = slimUsdaFood({
       fdc_id: 2571981,
       foodInfo: { data_type: "branded_food", description: "Kosher salt" },
       brandedFoodInfo: {
         brand_owner: "Diamond Crystal",
+        brand_name: "Diamond Crystal",
         gtin_upc: "013600020019",
+        ingredients: "SALT",
+        serving: {
+          serving_size: 1,
+          serving_size_unit: "g",
+          household_serving_fulltext: "1/4 tsp",
+        },
       },
       legacyFoodInfo: null,
       nutritionInfo: {
         nutrientsPer100: { Sodium: 39000 },
-        nutrientSummary: [],
+        nutrientSummary: [{ amount: 39000, name: "Sodium", unit: "mg" }],
       },
       portionInfoRaw: [{ amount: 1, modifier: "tsp", gram_weight: 6 }],
       linkedProducts: [{ id: "p-1", name: "salt", notes: "drop me" }],
@@ -123,9 +130,18 @@ describe("slimUsdaFood", () => {
       description: "Kosher salt",
       data_type: "branded_food",
       brand_owner: "Diamond Crystal",
+      brand_name: "Diamond Crystal",
       gtin_upc: "013600020019",
       ndb_number: null,
+      ingredients: "SALT",
+      serving: {
+        serving_size: 1,
+        serving_size_unit: "g",
+        household_serving_fulltext: "1/4 tsp",
+      },
       nutrientsPer100: { Sodium: 39000 },
+      nutrientSummary: [{ amount: 39000, name: "Sodium", unit: "mg" }],
+      portionInfoRaw: [{ amount: 1, modifier: "tsp", gram_weight: 6 }],
       linkedProducts: [{ id: "p-1", name: "salt" }],
     });
   });
