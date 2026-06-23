@@ -21,14 +21,17 @@ const REQUEST_TIMEOUT_MS = 120_000;
 
 /** Reject if `promise` doesn't settle within `REQUEST_TIMEOUT_MS`. */
 function withTimeout<T>(promise: Promise<T>): Promise<T> {
+  // Clear the timer once the real promise settles, so it doesn't outlive the
+  // request and keep the Worker isolate alive toward its wall-clock limit.
+  let timer: ReturnType<typeof setTimeout>;
   return Promise.race([
-    promise,
-    new Promise<T>((_, reject) =>
-      setTimeout(
+    promise.finally(() => clearTimeout(timer)),
+    new Promise<T>((_, reject) => {
+      timer = setTimeout(
         () => reject(new Error("cookbook extraction timed out")),
         REQUEST_TIMEOUT_MS,
-      ),
-    ),
+      );
+    }),
   ]);
 }
 
