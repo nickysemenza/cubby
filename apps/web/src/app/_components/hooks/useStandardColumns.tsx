@@ -2,7 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { ColumnDef, ColumnHelper } from "@tanstack/react-table";
 import type { ReactNode } from "react";
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { entities, getSortableFields } from "~/entities/entities";
 import {
   createActionsColumn,
@@ -82,6 +82,11 @@ export function useStandardColumns<TData extends BaseListRow>({
   hasUnitMappings,
   nameClassName,
 }: UseStandardColumnsOptions<TData>): AnyColumnDef<TData>[] {
+  // Shift-click range selection: anchor (last clicked row id) + modifier flag.
+  // Refs are stable across renders, so they don't perturb the useMemo deps below.
+  const lastSelectedIdRef = useRef<string | null>(null);
+  const shiftKeyRef = useRef(false);
+
   // Stabilize filters array - only update when serialized content changes
   // This prevents re-renders when consumer passes new array literal each render
   const filtersKey = JSON.stringify(filters);
@@ -126,7 +131,7 @@ export function useStandardColumns<TData extends BaseListRow>({
 
     // Prepend select column if row selection is enabled
     if (enableRowSelection) {
-      cols.push(buildSelectColumn<TData>());
+      cols.push(buildSelectColumn<TData>(lastSelectedIdRef, shiftKeyRef));
     }
 
     // Prepend standard columns
