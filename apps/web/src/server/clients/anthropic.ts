@@ -40,6 +40,10 @@ import {
 // the gateway over raw fetch rather than the `@cloudflare/tanstack-ai` adapters.
 export const AI_GATEWAY_BASE_URL = `https://gateway.ai.cloudflare.com/v1/${CF_ACCOUNT_ID}/${CF_AIG_GATEWAY_ID}`;
 
+// Single source of truth for the model so both gateway-config branches stay in
+// sync on a bump (mirrors `MODEL` in `./openai`).
+const MODEL = "claude-haiku-4-5";
+
 // Category descriptions for the LLM to understand what each category means
 // Using `satisfies` to ensure all categories have descriptions (build fails if one is missing)
 export const CATEGORY_DESCRIPTIONS = {
@@ -153,14 +157,14 @@ class AnthropicClient {
   private getAdapter() {
     const gateway = getAiGateway();
     if (gateway) {
-      return createAnthropicChat("claude-haiku-4-5", { binding: gateway });
+      return createAnthropicChat(MODEL, { binding: gateway });
     }
     if (!this.apiKey) {
       throw new Error(
         "AI_GATEWAY_API_KEY is not configured. Add it to your .env file.",
       );
     }
-    return createAnthropicChat("claude-haiku-4-5", {
+    return createAnthropicChat(MODEL, {
       accountId: CF_ACCOUNT_ID,
       gatewayId: CF_AIG_GATEWAY_ID,
       cfApiKey: this.apiKey,
