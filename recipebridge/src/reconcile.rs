@@ -16,6 +16,16 @@ use ingredient::unit::{Measure, MeasureGraph, MeasureKind, convert_measure_with_
 
 use crate::food_mappings::{WProductInput, product_mapping_pairs};
 
+// TODO(upstream): `canonical_amount` and `convert_with_fallback` below are fully
+// pure — they operate only on `ingredient::unit` types (Measure/MeasureGraph/
+// MeasureKind/convert_measure_with_graph), with no cubby-domain coupling. They'd
+// fit naturally in `ingredient::unit::conversion` (beside `convert_measure_with_graph`)
+// where native tools could reuse them and they'd be tested next to `Measure`.
+// Deferred: there's no native consumer today, and moving them spans the cubby /
+// ingredient-parser repo boundary (CI builds recipebridge against ingredient-parser
+// `main`, so the upstream change must land first). `pairs_for_product` stays here
+// either way — it's cubby-coupled (products / food mappings).
+
 /// The amount a row's measures resolve from: a mass amount when present (the
 /// stated weight, resolved exactly via the unit engine's mass identity), else
 /// the first written amount. `None` only for an amount-less row.

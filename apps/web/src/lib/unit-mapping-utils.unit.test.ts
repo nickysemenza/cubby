@@ -2,104 +2,11 @@ import { unsafeProductId } from "@cubby/schemas/identifiers";
 import type { FoodSummary } from "@cubby/usda-schemas";
 import { describe, expect, it } from "vitest";
 import { convertAmountToPrice, safeConvertAmount } from "~/lib/recipe-costing";
-import {
-  getAllUnitMappingsFromProduct,
-  parseUnitMappingString,
-} from "./unit-mapping-utils";
+import { getAllUnitMappingsFromProduct } from "./unit-mapping-utils";
 
-describe("parseUnitMappingString", () => {
-  interface Case {
-    name: string;
-    input: string;
-    expected: {
-      a: { value: number; unit: string };
-      b: { value: number; unit: string };
-      // Only asserted when present (string or explicit null).
-      source?: string | null;
-    };
-  }
-
-  const CASES: Case[] = [
-    {
-      name: "conversion format with source",
-      input: "4 lb = $5 @ whole foods",
-      expected: {
-        a: { value: 4, unit: "lb" },
-        b: { value: 5, unit: "$" }, // canonical money form
-        source: "whole foods",
-      },
-    },
-    {
-      name: "conversion format without source",
-      input: "1 cup = 120g",
-      expected: {
-        a: { value: 1, unit: "cup" },
-        b: { value: 120, unit: "g" },
-        source: null,
-      },
-    },
-    {
-      // normalized order — amount first, then price
-      name: "price-per format",
-      input: "$5/4lb",
-      expected: { a: { value: 4, unit: "lb" }, b: { value: 5, unit: "$" } },
-    },
-    {
-      name: "price-per format with source",
-      input: "$5/4lb @ costco",
-      expected: {
-        a: { value: 4, unit: "lb" },
-        b: { value: 5, unit: "$" },
-        source: "costco",
-      },
-    },
-    {
-      name: "decimal values (singularized unit)",
-      input: "2.5 cups = $3.50",
-      expected: {
-        a: { value: 2.5, unit: "cup" },
-        b: { value: 3.5, unit: "$" },
-      },
-    },
-    {
-      name: "named unit on the left",
-      input: "1 stick = 113g",
-      expected: {
-        a: { value: 1, unit: "stick" },
-        b: { value: 113, unit: "g" },
-      },
-    },
-    {
-      name: "plural count singularized, with source",
-      input: "12 eggs = $7 @ store",
-      expected: {
-        a: { value: 12, unit: "egg" },
-        b: { value: 7, unit: "$" },
-        source: "store",
-      },
-    },
-    {
-      name: "plural weight singularized",
-      input: "2 lbs = $6",
-      expected: { a: { value: 2, unit: "lb" }, b: { value: 6, unit: "$" } },
-    },
-  ];
-
-  it.each(CASES)("parses $name", ({ input, expected }) => {
-    const result = parseUnitMappingString(input);
-    expect(result.a.value).toBe(expected.a.value);
-    expect(result.a.unit).toBe(expected.a.unit);
-    expect(result.b.value).toBe(expected.b.value);
-    expect(result.b.unit).toBe(expected.b.unit);
-    if (expected.source !== undefined) {
-      expect(result.source).toBe(expected.source);
-    }
-  });
-
-  it.each(["invalid", "4 lb", ""])("throws on invalid input %j", (input) => {
-    expect(() => parseUnitMappingString(input)).toThrow();
-  });
-});
+// Note: unit-mapping STRING parsing (the "4 lb = $5" formats) is covered by the
+// Rust golden test `parse_unit_mapping_formats` in recipebridge/src/conversion.rs;
+// the dead TS wrapper that duplicated it here was removed.
 
 // A branded food whose household serving text parses to a bare count + name
 // (the ProMix shape, fdc 576208: "2 SCOOPS" → 2 ⟨whole⟩, name "SCOOPS").

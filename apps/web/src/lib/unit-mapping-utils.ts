@@ -17,28 +17,6 @@ import { wasm } from "~/lib/wasm";
 // engine all derive conversion edges from one implementation. This module is
 // the thin boundary wrapper: project inputs, recast outputs.
 
-// Parsed unit mapping result (source normalized from undefined to null)
-interface ParsedUnitMappingResult
-  extends Omit<WUnitMapping, "source" | "sourceMetadata"> {
-  source: string | null;
-}
-
-/**
- * Parse a unit mapping string using WASM.
- * Supports formats: "4 lb = $5", "$5/4lb", "4 lb = $5 @ store"
- */
-export const parseUnitMappingString = (
-  input: string,
-): ParsedUnitMappingResult => {
-  const result = wasm.parse_unit_mapping(input);
-  // Normalize undefined to null for source field
-  return {
-    a: result.a,
-    b: result.b,
-    source: result.source ?? null,
-  };
-};
-
 /**
  * Project a `FoodSummary` down to the WASM synthesis input (the
  * mapping-relevant subset). Tier-1 filtering and conversion-target labeling
