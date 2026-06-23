@@ -302,14 +302,63 @@ export class RecipeCostingService {
   }
 
   /**
+   * Wrap a recompute bulk operation in the canonical span + log so every
+   * recompute entry point reports its duration the same way: a
+   * `service.recipeCosting.{operation}` span carrying `recipe.recomputed` +
+   * `duration_ms` (and any extra attrs), plus a `[recipe-totals]` console line
+   * for `wrangler tail`. Owns the format so it can't drift per call site.
+   */
+  private async tracedRecompute(
+    operation: string,
+    extraAttrs: Record<string, string | number | boolean | undefined>,
+    run: () => Promise<number>,
+  ): Promise<number> {
+    return withTrace(
+      TraceNames.service("recipeCosting", operation),
+      async (span) => {
+        const t0 = performance.now();
+        const recomputed = await run();
+        const ms = Math.round(performance.now() - t0);
+        span.setAttributes({
+          ...extraAttrs,
+          "recipe.recomputed": recomputed,
+          duration_ms: ms,
+        });
+        console.log(
+          `[recipe-totals] ${operation} recomputed ${recomputed} recipe(s) in ${ms}ms`,
+        );
+        return recomputed;
+      },
+    );
+  }
+
+  /**
+   * Public, timed entry for recomputing a known set of recipes (recipe
+   * create/update/import/reprocess). Wraps the recursive {@link recomputeTree}
+   * with one span + log. Returns the count of recipes recomputed (the set plus
+   * any cascaded parents).
+   */
+  async recompute(recipeIds: RecipeId[]): Promise<number> {
+    return this.tracedRecompute("recompute", {}, async () => {
+      const visited = new Set<RecipeId>();
+      await this.recomputeTree(recipeIds, visited);
+      return visited.size;
+    });
+  }
+
+  /**
    * Recompute + persist totals for the given recipe ids, then **eagerly recurse
    * into any parent recipes whose sub-recipe cost changed** so the whole tree is
    * fresh in one pass (a recipe is an ingredient when used as a sub-recipe). USDA
    * is always available now, so a recompute either succeeds or throws — we always
    * stamp fresh; a `usdaMiss` is a permanent costing gap, not a stale-for-retry
    * state. `visited` guards against re-work and sub-recipe cycles.
+   *
+   * Internal/recursive worker — **always call this from inside the service**
+   * (recursion, the ingredient/all funnels), never the timed public
+   * {@link recompute}, so a single bulk op emits exactly one span + log line.
    */
-  async recompute(
+  private async recomputeTree(
     recipeIds: RecipeId[],
     visited: Set<RecipeId> = new Set(),
   ): Promise<void> {
@@ -338,7 +387,7 @@ export class RecipeCostingService {
     }
     // Recurse into changed parents (visited prevents re-work / cycles).
     if (changedParents.size > 0) {
-      await this.recompute([...changedParents], visited);
+      await this.recomputeTree([...changedParents], visited);
     }
   }
 
@@ -361,18 +410,25 @@ export class RecipeCostingService {
     ingredientIds: IngredientId[],
   ): Promise<number> {
     if (ingredientIds.length === 0) return 0;
-    const recipeIds = uniq(
-      (
-        await Promise.all(
-          uniq(ingredientIds).map((id) =>
-            findRecipeIdsUsingIngredient(this.db, id),
-          ),
-        )
-      ).flat(),
+    const uniqueIngredientIds = uniq(ingredientIds);
+    return this.tracedRecompute(
+      "recomputeForIngredient",
+      { "ingredient.count": uniqueIngredientIds.length },
+      async () => {
+        const recipeIds = uniq(
+          (
+            await Promise.all(
+              uniqueIngredientIds.map((id) =>
+                findRecipeIdsUsingIngredient(this.db, id),
+              ),
+            )
+          ).flat(),
+        );
+        const visited = new Set<RecipeId>();
+        await this.recomputeTree(recipeIds, visited);
+        return visited.size;
+      },
     );
-    const visited = new Set<RecipeId>();
-    await this.recompute(recipeIds, visited);
-    return visited.size;
   }
 
   /**
@@ -427,12 +483,18 @@ export class RecipeCostingService {
    * Chunked so a large library doesn't hold one giant transaction.
    */
   async recomputeAll(): Promise<{ processed: number }> {
-    const ids = await selectAllActiveRecipeIds(this.db);
-    const CHUNK = 25;
-    for (let i = 0; i < ids.length; i += CHUNK) {
-      await this.recompute(ids.slice(i, i + CHUNK));
-    }
-    console.log(`[recipe-totals] recomputeAll processed ${ids.length}`);
-    return { processed: ids.length };
+    const processed = await this.tracedRecompute(
+      "recomputeAll",
+      {},
+      async () => {
+        const ids = await selectAllActiveRecipeIds(this.db);
+        const CHUNK = 25;
+        for (let i = 0; i < ids.length; i += CHUNK) {
+          await this.recomputeTree(ids.slice(i, i + CHUNK));
+        }
+        return ids.length;
+      },
+    );
+    return { processed };
   }
 }
