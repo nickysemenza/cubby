@@ -190,7 +190,7 @@ export const getCookbookSource = async (
 };
 
 /** Final summary of a reprocess pass (the generator's `return` value). */
-export type ReprocessSummary = {
+type ReprocessSummary = {
   reprocessed: number;
   importableExtras: string[];
   recipeIds: RecipeId[];

@@ -38,9 +38,9 @@ export function DeleteInventoryDialog({
 
   const handleDelete = async () => {
     try {
-      await Promise.all(
-        items.map((item) => deleteMutation.mutateAsync({ ids: [item.id] })),
-      );
+      // One batched delete (the procedure takes an id array) instead of a
+      // per-item mutateAsync fan-out.
+      await deleteMutation.mutateAsync({ ids: items.map((item) => item.id) });
 
       toast.success(`Successfully deleted ${countLabel(items.length, "item")}`);
       onSuccess();
