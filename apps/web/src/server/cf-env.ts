@@ -11,6 +11,20 @@ export const setCfEnv = (env: Env): void => {
   cfEnv = env;
 };
 
+// Cubby's Cloudflare account + AI Gateway identifiers. Single source of truth
+// for the gateway binding (below) and the gateway-REST base URL built in
+// `~/server/clients/anthropic`.
+export const CF_ACCOUNT_ID = "9f10f078d35d86c78dedece2300a6b88";
+export const CF_AIG_GATEWAY_ID = "cubby";
+
+/**
+ * The AI Gateway binding (`env.AI.gateway("cubby")`) on CF Workers, or undefined
+ * on the dev Node server (where setCfEnv is never called). Used by the Anthropic
+ * /OpenAI clients to authenticate via Worker identity in prod; dev falls back to
+ * gateway-REST with AI_GATEWAY_API_KEY.
+ */
+export const getAiGateway = () => cfEnv?.AI?.gateway(CF_AIG_GATEWAY_ID);
+
 type ServiceBindingName = "USDA_API" | "UPC_LOOKUP";
 
 /**

@@ -51,6 +51,12 @@
     { "binding": "USDA_API", "service": "usda-api" },
     { "binding": "UPC_LOOKUP", "service": "upc-lookup" }
   ],
+  // Workers AI binding — exposes `env.AI.gateway("cubby")` for routing the
+  // Anthropic/OpenAI adapters through Cubby's authenticated AI Gateway with
+  // implicit (Worker-identity) auth. Dev (vite Node) has no `env.AI`, so those
+  // clients fall back to gateway-REST with AI_GATEWAY_API_KEY. See
+  // src/server/clients/{anthropic,openai}.ts + src/server/cf-env.ts.
+  "ai": { "binding": "AI" },
   // Hyperdrive connection pooling — creates via:
   //   wrangler hyperdrive create cubby-db --connection-string="postgres://..."
   "hyperdrive": [
