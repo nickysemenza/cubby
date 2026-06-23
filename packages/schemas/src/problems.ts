@@ -2,11 +2,6 @@ import { z } from "zod";
 import { amount } from "./codec";
 import { ingredientId, recipeId } from "./identifiers";
 
-// Status/indicator enums shared by the problem item schemas below.
-export const invalidUpcIssue = z.enum(["invalid_format", "duplicate"]);
-export const invalidInventoryAmountIssue = z.enum(["zero", "negative"]);
-export const wrongCategoryIndicator = z.enum(["fdc", "ingredient"]);
-
 // The four base measurement kinds a product's conversion graph can reach. The
 // single source for the BaseKind union: the costing lib (conversion-coverage)
 // re-exports BASE_KINDS/BaseKind from this, and the coverage-bearing problem
@@ -38,11 +33,6 @@ export const orphanedProductSchema = productProblemBase.extend({
   createdAt: z.date(),
 });
 
-export const invalidUPCSchema = productProblemBase.extend({
-  upc: z.string(),
-  issue: invalidUpcIssue,
-});
-
 export const productWithoutMappingsSchema = productProblemBase.extend({
   createdAt: z.date(),
   isIngredient: z.boolean(),
@@ -67,14 +57,6 @@ export const ingredientWithoutProductSchema = z.object({
   recipeCount: z.number(),
 });
 
-export const invalidInventoryAmountSchema = z.object({
-  id: z.string(),
-  productName: z.string(),
-  locationName: z.string(),
-  amount,
-  issue: invalidInventoryAmountIssue,
-});
-
 export const emptyLocationSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -88,11 +70,6 @@ export const emptyLocationSchema = z.object({
 
 export const productWithNoImagesSchema = productProblemBase.extend({
   upc: z.string().nullable(),
-});
-
-export const productWithWrongCategorySchema = productProblemBase.extend({
-  category: z.string().nullable(),
-  indicator: wrongCategoryIndicator,
 });
 
 export const productWithIslandedMappingsSchema = productProblemBase.extend({
@@ -143,14 +120,11 @@ export const productWithBetterUpcDataSchema = productProblemBase.extend({
 export const allProblemsSchema = z.object({
   duplicateUniqueProducts: z.array(duplicateUniqueProductSchema),
   orphanedProducts: z.array(orphanedProductSchema),
-  invalidUPCs: z.array(invalidUPCSchema),
   productsWithoutMappings: z.array(productWithoutMappingsSchema),
   ingredientsWithPartialCoverage: z.array(ingredientWithPartialCoverageSchema),
   ingredientsWithoutProduct: z.array(ingredientWithoutProductSchema),
-  invalidInventoryAmounts: z.array(invalidInventoryAmountSchema),
   emptyLocations: z.array(emptyLocationSchema),
   productsWithNoImages: z.array(productWithNoImagesSchema),
-  productsWithWrongCategory: z.array(productWithWrongCategorySchema),
   productsWithIslandedMappings: z.array(productWithIslandedMappingsSchema),
   locationsWithoutAiDescription: z.array(locationWithoutAiDescriptionSchema),
   staleIngredientParses: z.array(staleIngredientParseSchema),
@@ -181,7 +155,6 @@ export type DuplicateUniqueProduct = z.infer<
   typeof duplicateUniqueProductSchema
 >;
 export type OrphanedProduct = z.infer<typeof orphanedProductSchema>;
-export type InvalidUPC = z.infer<typeof invalidUPCSchema>;
 export type ProductWithoutMappings = z.infer<
   typeof productWithoutMappingsSchema
 >;
@@ -191,13 +164,7 @@ export type IngredientWithPartialCoverage = z.infer<
 export type IngredientWithoutProduct = z.infer<
   typeof ingredientWithoutProductSchema
 >;
-export type InvalidInventoryAmount = z.infer<
-  typeof invalidInventoryAmountSchema
->;
 export type EmptyLocation = z.infer<typeof emptyLocationSchema>;
-export type ProductWithWrongCategory = z.infer<
-  typeof productWithWrongCategorySchema
->;
 export type ProductWithIslandedMappings = z.infer<
   typeof productWithIslandedMappingsSchema
 >;
@@ -217,7 +184,6 @@ export type ProductWithBetterUpcData = z.infer<
 export const maintenanceCountsSchema = z.object({
   staleIngredientParses: z.number().int(),
   productsWithNoImages: z.number().int(),
-  productsWithWrongCategory: z.number().int(),
   locationsWithoutAiDescription: z.number().int(),
 });
 export type MaintenanceCounts = z.infer<typeof maintenanceCountsSchema>;

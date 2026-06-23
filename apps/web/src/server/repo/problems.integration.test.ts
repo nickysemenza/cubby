@@ -179,40 +179,6 @@ describe("problems repo", () => {
     });
   });
 
-  describe("findInvalidUPCs", () => {
-    it("flags an invalid-format UPC and leaves a valid one clean", async () => {
-      // Seed an invalid UPC by writing it past the input schema (which would
-      // reject it) — the scan exists precisely for rows the schema can't catch.
-      const bad = await createProduct(
-        ctx.db,
-        makeProductInput({ name: "Bad UPC Product" }),
-        ctx.actor,
-      );
-      await getDb(ctx.db)
-        .update(product)
-        .set({ upc: "123" }) // too short for UPC-A (min 12)
-        .where(eq(product.id, bad.id));
-
-      const good = await createProduct(
-        ctx.db,
-        makeProductInput({ name: "Good UPC Product", upc: "012345678905" }),
-        ctx.actor,
-      );
-
-      const { invalidUPCs } = await findAllProblems(
-        ctx.db,
-        fakeUpcClient().client,
-        fakeUsdaClient(),
-      );
-      const flagged = invalidUPCs.find((u) => u.id === bad.id);
-      expect(flagged?.issue).toBe("invalid_format");
-      expect(invalidUPCs.some((u) => u.id === good.id)).toBe(false);
-      // NB: the duplicate-UPC sub-case can't be seeded — a partial unique index
-      // (Product_upc_key WHERE deletedAt IS NULL) bars two live products sharing
-      // a UPC, so the Map-based dedup in findInvalidUPCs is purely defensive.
-    });
-  });
-
   describe("findProductsWithIslandedMappings", () => {
     it("flags a product whose mappings form 2+ islands but not a connected one", async () => {
       // widget↔gadget are custom units unreachable from the standard unit graph,

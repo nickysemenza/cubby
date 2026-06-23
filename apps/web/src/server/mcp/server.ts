@@ -1140,7 +1140,7 @@ function registerTools(server: McpServer) {
         .string()
         .optional()
         .describe(
-          "Return only this problem category (e.g. 'orphanedProducts', 'invalidUPCs', 'staleIngredientParses'). Ignored when countsOnly is true.",
+          "Return only this problem category (e.g. 'orphanedProducts', 'productsWithNoImages', 'staleIngredientParses'). Ignored when countsOnly is true.",
         ),
     },
     withErrorHandling(async (params, extra) => {

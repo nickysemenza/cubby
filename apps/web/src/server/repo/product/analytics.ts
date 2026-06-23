@@ -3,13 +3,11 @@
  * Category distribution, duplicate detection, and backfill operations.
  */
 
-import type { ActorContext } from "@cubby/schemas/context";
 import type { ProductId } from "@cubby/schemas/identifiers";
 import type { ProductCategory } from "@cubby/schemas/product";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { product, productImage } from "~/server/db/schema";
-import { logAuditEntries } from "~/server/repo/audit-log";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
 // Find products with expectedQuantity=1 that appear in multiple locations
@@ -64,45 +62,6 @@ export const findProductsWithNoImages = async (
     .having(sql`count(${productImage.imageId}) = 0`);
 
   return results;
-};
-
-/**
- * Find all products that have food indicators (NDB or ingredient) but category is not "food".
- * Used for food category backfill functionality.
- */
-export const findProductsNeedingFoodCategory = async (
-  db: Database,
-): Promise<
-  Array<{
-    id: ProductId;
-    name: string;
-    manufacturer: string;
-    category: string | null;
-    upc: string | null;
-    fdc_id: number | null;
-    ingredientId: string | null;
-  }>
-> => {
-  const dbClient = getDb(db);
-
-  return await dbClient
-    .select({
-      id: product.id,
-      name: product.name,
-      manufacturer: product.manufacturer,
-      category: product.category,
-      upc: product.upc,
-      fdc_id: product.fdc_id,
-      ingredientId: product.ingredientId,
-    })
-    .from(product)
-    .where(
-      and(
-        notDeleted(product),
-        sql`${product.category} IS DISTINCT FROM 'food'`,
-        sql`((${product.fdc_id} IS NOT NULL AND ${product.fdc_id} > 0) OR ${product.ingredientId} IS NOT NULL)`,
-      ),
-    );
 };
 
 /**
@@ -222,50 +181,4 @@ export const getProductSummaryForAudit = async (
     })
     .from(product)
     .where(notDeleted(product));
-};
-
-/**
- * Backfill food category for all products with food indicators.
- * Returns the count of products updated.
- */
-export const backfillFoodCategories = async (
-  db: Database,
-  actor: ActorContext,
-): Promise<{
-  updated: number;
-  products: Array<{ id: string; name: string }>;
-}> => {
-  const productsToUpdate = await findProductsNeedingFoodCategory(db);
-
-  if (productsToUpdate.length === 0) {
-    return { updated: 0, products: [] };
-  }
-
-  const dbClient = getDb(db);
-  const productIds = productsToUpdate.map((p) => p.id);
-
-  // Batch update all products to category = "food"
-  await dbClient
-    .update(product)
-    .set({ category: "food" })
-    .where(inArray(product.id, productIds));
-
-  // Log audit entries in batch
-  await logAuditEntries(
-    db,
-    actor,
-    productsToUpdate.map((p) => ({
-      entityType: "product" as const,
-      entityId: p.id,
-      action: "update" as const,
-      changes: {
-        category: { from: p.category, to: "food" },
-      },
-    })),
-  );
-
-  return {
-    updated: productsToUpdate.length,
-    products: productsToUpdate.map((p) => ({ id: p.id, name: p.name })),
-  };
 };

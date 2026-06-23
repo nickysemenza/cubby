@@ -7,9 +7,7 @@
 
 // Analytics operations
 export {
-  backfillFoodCategories,
   findDuplicateUniqueProducts,
-  findProductsNeedingFoodCategory,
   findProductsWithNoImages,
   getCategoryDistribution,
   getProductSummaryForAudit,

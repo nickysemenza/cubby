@@ -26,7 +26,6 @@ import { z } from "zod";
 import { getErrorMessage } from "~/lib/error-utils";
 import { countActiveInventoryForProduct } from "~/server/repo/inventory/crud";
 import {
-  backfillFoodCategories,
   deleteProducts,
   getCategoryDistribution,
   getProductByShortcode,
@@ -218,23 +217,6 @@ const backfillUPCImages = protectedProcedure
     return backfillUPCImagesService(ctx.db, ctx.upcLookupClient);
   });
 
-// Backfill food category for products with UPC/NDB/ingredient
-const backfillFoodCategoriesEndpoint = protectedProcedure
-  .output(
-    z.object({
-      updated: z.number(),
-      products: z.array(
-        z.object({
-          id: z.string(),
-          name: z.string(),
-        }),
-      ),
-    }),
-  )
-  .mutation(async ({ ctx }) => {
-    return await backfillFoodCategories(ctx.db, ctx.actorContext);
-  });
-
 // Get category distribution for insights visualization
 const categoryDistribution = protectedProcedure
   .output(
@@ -349,6 +331,5 @@ export const productRouter = createTRPCRouter({
   quickCreate,
   findOrCreateByUPC,
   backfillUPCImages,
-  backfillFoodCategories: backfillFoodCategoriesEndpoint,
   categoryDistribution,
 });

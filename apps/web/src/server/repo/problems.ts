@@ -10,8 +10,6 @@ import type {
   EmptyLocation,
   IngredientWithoutProduct,
   IngredientWithPartialCoverage,
-  InvalidInventoryAmount,
-  InvalidUPC,
   LocationWithoutAiDescription,
   MaintenanceCounts,
   OrphanedProduct,
@@ -19,12 +17,9 @@ import type {
   ProductWithBetterUpcData,
   ProductWithIslandedMappings,
   ProductWithoutMappings,
-  ProductWithWrongCategory,
   StaleIngredientParse,
 } from "@cubby/schemas/problems";
-import { hasFdcLink } from "@cubby/schemas/product";
 import { isMiscProduct } from "@cubby/shared";
-import { upc as upcSchema } from "@cubby/usda-schemas";
 import {
   and,
   eq,
@@ -60,15 +55,11 @@ import {
 import {
   getDb,
   notDeleted,
-  parseInventoryAmount,
   updateAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";
-import {
-  findProductsNeedingFoodCategory,
-  findProductsWithNoImages,
-} from "~/server/repo/product";
+import { findProductsWithNoImages } from "~/server/repo/product";
 import { foodLookupParamFromProduct } from "~/server/repo/product/helpers";
 import { batchEnrichWithFood } from "~/server/services/usda-helpers";
 
@@ -157,59 +148,6 @@ const findOrphanedProducts = async (
 };
 
 // Find products with invalid or duplicate UPC codes
-const findInvalidUPCs = async (db: Database): Promise<InvalidUPC[]> => {
-  const problems: InvalidUPC[] = [];
-
-  // Find products with UPCs
-  const productsWithUPCs = await getDb(db).query.product.findMany({
-    where: and(notDeleted(product), isNotNull(product.upc)),
-    columns: {
-      id: true,
-      name: true,
-      manufacturer: true,
-      upc: true,
-    },
-  });
-
-  // Check for invalid barcode formats using shared schema (skip misc products)
-  for (const prod of productsWithUPCs) {
-    if (prod.upc && !isMiscProduct(prod.name)) {
-      const result = upcSchema.safeParse(prod.upc);
-      if (!result.success) {
-        problems.push({
-          id: prod.id,
-          name: prod.name,
-          manufacturer: prod.manufacturer,
-          upc: prod.upc,
-          issue: "invalid_format",
-        });
-      }
-    }
-  }
-
-  // Find duplicate UPCs (database should prevent this, but check anyway)
-  const upcCounts = new Map<string, typeof productsWithUPCs>();
-  for (const prod of productsWithUPCs) {
-    if (prod.upc && !isMiscProduct(prod.name)) {
-      const existing = upcCounts.get(prod.upc);
-      if (existing) {
-        // Found duplicate
-        problems.push({
-          id: prod.id,
-          name: prod.name,
-          manufacturer: prod.manufacturer,
-          upc: prod.upc,
-          issue: "duplicate",
-        });
-      } else {
-        upcCounts.set(prod.upc, [prod]);
-      }
-    }
-  }
-
-  return problems;
-};
-
 // Find products with no conversion/price coverage at all. A product is covered
 // if it has a manual unit mapping OR a price (synthesizes a `1 each = $price`
 // edge) OR a USDA link (fdc_id/upc synthesizes portion/serving/nutrient
@@ -416,50 +354,6 @@ const findIngredientsWithoutProduct = async (
   return rows.map((r) => ({ ...r, recipeCount: Number(r.recipeCount) }));
 };
 
-// Find inventory entries with zero or negative amounts
-const findInvalidInventoryAmounts = async (
-  db: Database,
-): Promise<InvalidInventoryAmount[]> => {
-  const inventoryEntries = await getDb(db).query.inventoryEntry.findMany({
-    where: notDeleted(inventoryEntry),
-    columns: {
-      id: true,
-      amount: true,
-    },
-    with: {
-      Product: {
-        columns: {
-          name: true,
-        },
-      },
-      location: {
-        columns: {
-          name: true,
-        },
-      },
-    },
-  });
-
-  const problems: InvalidInventoryAmount[] = [];
-
-  for (const entry of inventoryEntries) {
-    // Validate and parse the JSONB amount column
-    const parsedAmount = parseInventoryAmount(entry.amount, entry.id);
-
-    if (parsedAmount.value <= 0) {
-      problems.push({
-        id: entry.id,
-        productName: entry.Product.name,
-        locationName: entry.location.name,
-        amount: parsedAmount,
-        issue: parsedAmount.value === 0 ? "zero" : "negative",
-      });
-    }
-  }
-
-  return problems;
-};
-
 // Find leaf locations with no inventory entries (excludes parent locations)
 const findEmptyLocations = async (db: Database): Promise<EmptyLocation[]> => {
   const dbClient = getDb(db);
@@ -516,13 +410,6 @@ const findEmptyLocations = async (db: Database): Promise<EmptyLocation[]> => {
 
   return emptyLocations;
 };
-
-// Helper to determine the primary food indicator for a product. Reuses the
-// shared hasFdcLink predicate so the fdc-link threshold has one definition.
-const getFoodIndicator = (product: {
-  fdc_id: number | null;
-  ingredientId: string | null;
-}): "fdc" | "ingredient" => (hasFdcLink(product.fdc_id) ? "fdc" : "ingredient");
 
 // Find products with disconnected unit mapping graphs (islands).
 //
@@ -916,20 +803,18 @@ export const findAllProblemsCount = async (
   };
 };
 
-// Counts for the Settings → Maintenance "N affected" dry-run. Runs only the six
+// Counts for the Settings → Maintenance "N affected" dry-run. Runs only the
 // detectors behind that panel's buttons — all DB/WASM, no USDA/UPC network — so
 // it's far cheaper than findAllProblemsCount. Recompute is a forced full pass,
 // so its number is every active recipe, not just the stale ones.
 export const findMaintenanceCounts = async (
   db: Database,
 ): Promise<MaintenanceCounts> => {
-  const [staleParses, noImages, wrongCategory, noDescription] =
-    await Promise.all([
-      findStaleIngredientParses(db),
-      findProductsWithNoImages(db, { excludeIngredients: true }),
-      findProductsNeedingFoodCategory(db),
-      findLocationsWithoutAiDescription(db),
-    ]);
+  const [staleParses, noImages, noDescription] = await Promise.all([
+    findStaleIngredientParses(db),
+    findProductsWithNoImages(db, { excludeIngredients: true }),
+    findLocationsWithoutAiDescription(db),
+  ]);
 
   return {
     staleIngredientParses: staleParses.length,
@@ -937,7 +822,6 @@ export const findMaintenanceCounts = async (
     // backfillUPCImages can only act on products that have a UPC to look up, so
     // this counts just those. Same canonical key, intentionally narrower number.
     productsWithNoImages: noImages.filter((p) => p.upc != null).length,
-    productsWithWrongCategory: wrongCategory.length,
     locationsWithoutAiDescription: noDescription.length,
   };
 };
@@ -952,14 +836,11 @@ export const findAllProblems = async (
   const [
     duplicateUniqueProducts,
     orphanedProducts,
-    invalidUPCs,
     productsWithoutMappings,
     ingredientsWithPartialCoverage,
     ingredientsWithoutProduct,
-    invalidInventoryAmounts,
     emptyLocations,
     productsWithNoImages,
-    productsNeedingFoodCategory,
     productsWithIslandedMappings,
     locationsWithoutAiDescription,
     staleIngredientParses,
@@ -967,41 +848,25 @@ export const findAllProblems = async (
   ] = await Promise.all([
     findDuplicateUniqueProducts(db),
     findOrphanedProducts(db),
-    findInvalidUPCs(db),
     findProductsWithoutMappings(db),
     findIngredientsWithPartialCoverage(db, usdaClient),
     findIngredientsWithoutProduct(db),
-    findInvalidInventoryAmounts(db),
     findEmptyLocations(db),
     findProductsWithNoImages(db, { excludeIngredients: true }),
-    findProductsNeedingFoodCategory(db),
     findProductsWithIslandedMappings(db, usdaClient),
     findLocationsWithoutAiDescription(db),
     findStaleIngredientParses(db),
     findProductsWithBetterUpcData(db, upcLookupClient),
   ]);
 
-  // Transform to problem types
-  const productsWithWrongCategory: ProductWithWrongCategory[] =
-    productsNeedingFoodCategory.map((p) => ({
-      id: p.id,
-      name: p.name,
-      manufacturer: p.manufacturer,
-      category: p.category,
-      indicator: getFoodIndicator(p),
-    }));
-
   const sections = {
     duplicateUniqueProducts,
     orphanedProducts,
-    invalidUPCs,
     productsWithoutMappings,
     ingredientsWithPartialCoverage,
     ingredientsWithoutProduct,
-    invalidInventoryAmounts,
     emptyLocations,
     productsWithNoImages,
-    productsWithWrongCategory,
     productsWithIslandedMappings,
     locationsWithoutAiDescription,
     staleIngredientParses,

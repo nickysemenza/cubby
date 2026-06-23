@@ -3,6 +3,15 @@ import { amount } from "./codec";
 import { dbTimestampsOut } from "./common";
 import { inventoryId, locationId, productId } from "./identifiers";
 
+// A stored inventory quantity must be strictly positive: zero means "none left"
+// (delete the entry instead) and negative is nonsensical. Enforced on every
+// write path so the state the Problems page used to flag can't be created. Reads
+// (`inventoryEntryOut`) stay on the looser `amount` so any legacy row still loads.
+export const positiveAmount = amount.refine((a) => a.value > 0, {
+  error: "Amount must be greater than zero",
+  path: ["value"],
+});
+
 // Filters accepted by the inventory list endpoint.
 export const inventoryFiltersSchema = z.object({
   productNameFilter: z.string().optional(),
@@ -20,7 +29,7 @@ export const inventoryEntryOut = z
   .extend(dbTimestampsOut.shape);
 
 export const inventoryUpdatePayloadData = z.object({
-  amount: amount.optional(),
+  amount: positiveAmount.optional(),
   productId: productId.optional(),
   locationId: locationId.optional(),
 });
@@ -36,7 +45,7 @@ export type InventoryUpdateInput = z.infer<typeof inventoryUpdateInput>;
 export const inventoryCreatePayloadData = z.object({
   productId: productId,
   locationId: locationId,
-  amount: amount,
+  amount: positiveAmount,
 });
 
 // Schema for bulk inventory operations
@@ -44,7 +53,7 @@ const inventoryBulkOperationItem = z.object({
   id: inventoryId.optional(),
   productId: productId,
   locationId: locationId,
-  amount: amount,
+  amount: positiveAmount,
 });
 
 export type InventoryBulkOperationItem = z.infer<
@@ -60,7 +69,7 @@ export const inventoryBulkOperationPayload = z.object({
 // Schema for bulk move operations (moving items between locations)
 const bulkMoveItem = z.object({
   inventoryEntryId: inventoryId,
-  quantity: amount, // How much to move (can be less than total for partial moves)
+  quantity: positiveAmount, // How much to move (can be less than total for partial moves)
 });
 
 export type BulkMoveItem = z.infer<typeof bulkMoveItem>;

@@ -6,15 +6,12 @@ import {
   duplicateUniqueProductSchema,
   emptyLocationSchema,
   ingredientWithPartialCoverageSchema,
-  invalidInventoryAmountSchema,
-  invalidUPCSchema,
   orphanedProductSchema,
   problemsCountSchema,
   productWithBetterUpcDataSchema,
   productWithIslandedMappingsSchema,
   productWithNoImagesSchema,
   productWithoutMappingsSchema,
-  productWithWrongCategorySchema,
   staleIngredientParseSchema,
 } from "@cubby/schemas/problems";
 import { productCreateInput } from "@cubby/schemas/product";
@@ -35,13 +32,10 @@ const ROUND_TRIP_CORPUS: Record<string, z.ZodType> = {
   problemsCountSchema,
   duplicateUniqueProductSchema,
   orphanedProductSchema,
-  invalidUPCSchema,
   productWithoutMappingsSchema,
   ingredientWithPartialCoverageSchema,
-  invalidInventoryAmountSchema,
   emptyLocationSchema,
   productWithNoImagesSchema,
-  productWithWrongCategorySchema,
   productWithIslandedMappingsSchema,
   staleIngredientParseSchema,
   productWithBetterUpcDataSchema,
@@ -78,13 +72,13 @@ describe("mock() determinism", () => {
 
 describe("mock() overrides", () => {
   it("a deep override wins over generated values and still parses", () => {
-    const value = mock(invalidUPCSchema, {
+    const value = mock(orphanedProductSchema, {
       seed: 1,
-      overrides: { name: "Pinned Name", issue: "duplicate" },
+      overrides: { name: "Pinned Name", manufacturer: "Pinned Mfr" },
     });
     expect(value.name).toBe("Pinned Name");
-    expect(value.issue).toBe("duplicate");
-    expect(invalidUPCSchema.safeParse(value).success).toBe(true);
+    expect(value.manufacturer).toBe("Pinned Mfr");
+    expect(orphanedProductSchema.safeParse(value).success).toBe(true);
   });
 
   it("array overrides replace wholesale", () => {

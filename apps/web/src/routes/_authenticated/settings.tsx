@@ -317,12 +317,6 @@ const MAINTENANCE_TOOLS: {
     action: <BackfillButton {...BACKFILL.fetchUpcImages} />,
   },
   {
-    label: "Fix product categories",
-    description: "Re-derive product categories from their linked USDA food.",
-    count: (c) => c.productsWithWrongCategory,
-    action: <BackfillButton {...BACKFILL.fixCategories} />,
-  },
-  {
     label: "Analyze location descriptions",
     description:
       "Generate AI descriptions for locations that don't have one yet.",

@@ -47,19 +47,6 @@ export const BACKFILL = {
       message: `Imported ${countLabel(r.imported, "image")} · ${r.found} found, ${r.skipped} skipped.`,
     }),
   }),
-  fixCategories: def({
-    selectMutation: (api) => api.product.backfillFoodCategories.mutationOptions,
-    invalidateKeys: (api) => [api.product.list.queryKey()],
-    idleLabel: "Fix all",
-    pendingLabel: "Fixing…",
-    toastResult: (r) => ({
-      tone: r.updated > 0 ? "success" : "info",
-      message:
-        r.updated > 0
-          ? `Fixed ${r.updated} categor${r.updated === 1 ? "y" : "ies"}.`
-          : "All categories already set.",
-    }),
-  }),
   analyzeDescriptions: def({
     selectMutation: (api) =>
       api.ai.backfillLocationDescriptions.mutationOptions,

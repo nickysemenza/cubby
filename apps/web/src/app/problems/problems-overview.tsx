@@ -34,12 +34,10 @@ export function ProblemsOverview() {
             [
               ...problems.duplicateUniqueProducts,
               ...problems.orphanedProducts,
-              ...problems.invalidUPCs,
               ...problems.productsWithoutMappings,
               ...problems.ingredientsWithPartialCoverage,
               ...problems.productsWithIslandedMappings,
               ...problems.productsWithNoImages,
-              ...problems.productsWithWrongCategory,
               ...problems.productsWithBetterUpcData,
             ].map((p) => p.id),
           )

@@ -7,9 +7,7 @@ import {
   type LucideIcon,
   Network,
   Sparkles,
-  Utensils,
   Wrench,
-  Zap,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { formatAmounts } from "~/app/_components/inventory/format-amount";
@@ -28,17 +26,8 @@ import {
   ProblemSection,
   type RenderedProblemItem,
 } from "./problem-section";
-import {
-  byManufacturer,
-  CodeChip,
-  createdAgoDetail,
-  locationDetail,
-} from "./render-helpers";
-import {
-  InventoryAmountFix,
-  OrphanedDeleteFix,
-  ProductUpcFix,
-} from "./tier2-fixes";
+import { byManufacturer, CodeChip, createdAgoDetail } from "./render-helpers";
+import { OrphanedDeleteFix } from "./tier2-fixes";
 import {
   buildUnitCoverageItems,
   CoverageChips,
@@ -124,11 +113,6 @@ const GAP_LABELS: Record<keyof ProductWithBetterUpcData["gaps"], string> = {
   manufacturer: "Manufacturer",
   price: "Price",
   image: "Image",
-};
-
-const INDICATOR_LABELS: Record<"fdc" | "ingredient", string> = {
-  fdc: "USDA-linked",
-  ingredient: "Has Ingredient",
 };
 
 /** Card for the merged "Unit coverage" section — core-4 chips + the inline fix. */
@@ -300,38 +284,6 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     }),
   }),
   section({
-    id: "upcs",
-    label: "UPCs",
-    select: (p) => p.invalidUPCs,
-    icon: Zap,
-    title: "Invalid UPCs",
-    description: "Products with invalid UPC formats or duplicate UPC codes.",
-    emptyMessage:
-      "No invalid UPC codes found. All UPCs are properly formatted and unique.",
-    groupBy: (items) =>
-      groupBy(items, (item) =>
-        item.issue === "invalid_format" ? "Invalid Format" : "Duplicate UPCs",
-      ),
-    renderItem: (product) => ({
-      title: product.name,
-      subtitle: byManufacturer(product.manufacturer),
-      badges: [
-        <Badge key="issue" variant="destructive">
-          {product.issue === "invalid_format" ? "Invalid UPC" : "Duplicate UPC"}
-        </Badge>,
-        <CodeChip key="upc">{product.upc}</CodeChip>,
-      ],
-      route: { to: "/products/$id", params: { id: product.id } },
-      editLabel: "Fix",
-      inlineFix: {
-        label: "Fix UPC",
-        render: (close) => (
-          <ProductUpcFix id={product.id} upc={product.upc} close={close} />
-        ),
-      },
-    }),
-  }),
-  section({
     id: "unit-coverage",
     label: "Unit coverage",
     // Merge the "can't fully convert" problems — empty graph (no price/USDA/
@@ -370,44 +322,6 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       customActions: <WorkbenchFixLink ingredientId={ing.id} />,
     }),
   }),
-  section({
-    id: "amounts",
-    label: "Amounts",
-    select: (p) => p.invalidInventoryAmounts,
-    entity: "inventory",
-    title: "Invalid Inventory Amounts",
-    description:
-      "Inventory entries with zero or negative amounts that should be fixed or removed.",
-    emptyMessage: "All inventory entries have valid positive amounts.",
-    groupBy: (items) =>
-      groupBy(items, (item) =>
-        item.issue === "zero" ? "Zero Amounts" : "Negative Amounts",
-      ),
-    renderItem: (entry) => ({
-      title: entry.productName,
-      details: [locationDetail(entry.locationName)],
-      badges: [
-        <Badge key="issue" variant="destructive">
-          {entry.issue === "zero" ? "Zero Amount" : "Negative Amount"}
-        </Badge>,
-        <CodeChip key="amount">
-          {entry.amount.value} {entry.amount.unit}
-        </CodeChip>,
-      ],
-      route: { to: "/inventory/$id", params: { id: entry.id } },
-      editLabel: "Fix",
-      inlineFix: {
-        label: "Fix amount",
-        render: (close) => (
-          <InventoryAmountFix
-            id={entry.id}
-            unit={entry.amount.unit}
-            close={close}
-          />
-        ),
-      },
-    }),
-  }),
   customSection({
     id: "locations",
     label: "Locations",
@@ -427,30 +341,6 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       title: product.name,
       subtitle: byManufacturer(product.manufacturer),
       badges: product.upc ? [<CodeChip key="upc">{product.upc}</CodeChip>] : [],
-      route: { to: "/products/$id", params: { id: product.id } },
-    }),
-  }),
-  section({
-    id: "categories",
-    label: "Categories",
-    select: (p) => p.productsWithWrongCategory,
-    icon: Utensils,
-    title: "Wrong Category",
-    description:
-      "Products with food indicators (UPC, NDB, or ingredient link) but category is not set to 'food'.",
-    emptyMessage: "All products with food indicators have correct categories.",
-    headerAction: <BackfillButton {...BACKFILL.fixCategories} />,
-    renderItem: (product) => ({
-      title: product.name,
-      subtitle: byManufacturer(product.manufacturer),
-      badges: [
-        <Badge key="category" variant="outline">
-          {product.category ?? "No category"}
-        </Badge>,
-        <Badge key="indicator" variant="secondary">
-          {INDICATOR_LABELS[product.indicator]}
-        </Badge>,
-      ],
       route: { to: "/products/$id", params: { id: product.id } },
     }),
   }),
