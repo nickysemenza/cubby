@@ -34,12 +34,6 @@ import {
   getAiGateway,
 } from "~/server/cf-env";
 
-// Cubby's Cloudflare AI Gateway base (no provider suffix). Append the provider
-// path: `/anthropic`, `/google-ai-studio/v1beta/openai`, etc. Still consumed by
-// the cookbook-extraction proxy (`~/server/utils/cookbook-llm`), which talks to
-// the gateway over raw fetch rather than the `@cloudflare/tanstack-ai` adapters.
-export const AI_GATEWAY_BASE_URL = `https://gateway.ai.cloudflare.com/v1/${CF_ACCOUNT_ID}/${CF_AIG_GATEWAY_ID}`;
-
 // Single source of truth for the model so both gateway-config branches stay in
 // sync on a bump (mirrors `MODEL` in `./openai`).
 const MODEL = "claude-haiku-4-5";
