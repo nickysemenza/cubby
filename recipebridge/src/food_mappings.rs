@@ -167,10 +167,26 @@ fn serving_mapping(fdc_id: u32, serving: &WFoodServing) -> Option<WUnitMapping> 
     })
 }
 
+/// USDA portion modifiers append clarifying parentheticals — dimensions
+/// ("large (7-1/4\" long)"), counts ("cup (4.86 large eggs)") — that fragment the unit
+/// graph: "large (...)" can't reach a parser-emitted "large", and the egg "cup (...)"
+/// portion never reaches a real "cup". Drop the trailing parenthetical so portions key
+/// off the bare unit word. Whitespace-separated qualifiers ("cup chopped") have no
+/// parens and stay distinct — only the parenthetical is removed.
+fn strip_portion_parenthetical(modifier: &str) -> &str {
+    match modifier.split_once('(') {
+        Some((base, _)) if !base.trim().is_empty() => base.trim(),
+        _ => modifier, // no paren, or fully-parenthetical → leave raw
+    }
+}
+
 /// USDA portion row → weight mapping.
 fn portion_mapping(p: &WFoodPortion, fdc_id: u32) -> WUnitMapping {
     WUnitMapping {
-        a: amount(p.amount, p.modifier.as_deref().unwrap_or("portion")),
+        a: amount(
+            p.amount,
+            strip_portion_parenthetical(p.modifier.as_deref().unwrap_or("portion")),
+        ),
         b: amount(p.gram_weight, "g"),
         source: Some("USDA portion".to_string()),
         source_metadata: Some(WSourceMetadata::Food { fdc_id }),
@@ -467,6 +483,104 @@ mod tests {
                 product_id: "prod-1".to_string()
             })
         );
+    }
+
+    /// A portions-only food, for asserting the synthesized portion `a` unit.
+    fn food_with_portions(portions: Vec<WFoodPortion>) -> WFoodInput {
+        WFoodInput {
+            fdc_id: 170393,
+            portions,
+            serving: None,
+            nutrients_per_100: vec![],
+        }
+    }
+
+    fn portion(modifier: &str, gram_weight: f64) -> WFoodPortion {
+        WFoodPortion {
+            amount: 1.0,
+            modifier: Some(modifier.to_string()),
+            gram_weight,
+        }
+    }
+
+    /// Real carrot (fdc 170393) size portions carry parenthetical dimension specs; the
+    /// bare size word is the node a parser-emitted size unit can reach.
+    #[test]
+    fn produce_size_portion_strips_parenthetical() {
+        let mappings = mappings_from_food(&food_with_portions(vec![
+            portion("large (7-1/4\" to 8-1/2\" long)", 72.0),
+            portion("small (5-1/2\" long)", 50.0),
+        ]));
+        assert_eq!(mappings[0].a.unit, "large");
+        assert_eq!(mappings[0].b.value, 72.0);
+        assert_eq!(mappings[1].a.unit, "small");
+        assert_eq!(mappings[1].b.value, 50.0);
+    }
+
+    /// The egg (fdc 171287) `cup (4.86 large eggs)` portion collapses to a real `cup`
+    /// density edge, so cup volume now reaches grams without a hand-made bridge.
+    #[test]
+    fn egg_cup_portion_strips_to_bare_cup() {
+        let mappings = mappings_from_food(&food_with_portions(vec![portion(
+            "cup (4.86 large eggs)",
+            243.0,
+        )]));
+        assert_eq!(mappings[0].a.unit, "cup");
+        assert_eq!(mappings[0].b.value, 243.0);
+    }
+
+    /// Already-bare modifiers (egg grades) have no parens and pass through verbatim.
+    #[test]
+    fn bare_modifiers_unchanged() {
+        let mappings = mappings_from_food(&food_with_portions(vec![
+            portion("medium", 44.0),
+            portion("extra large", 56.0),
+            portion("jumbo", 63.0),
+        ]));
+        assert_eq!(mappings[0].a.unit, "medium");
+        assert_eq!(mappings[1].a.unit, "extra large");
+        assert_eq!(mappings[2].a.unit, "jumbo");
+    }
+
+    /// Word-disambiguated portions keep their distinct units; only the parenthetical is
+    /// removed, so `strip large (...)` becomes `strip large`, NOT `large`.
+    #[test]
+    fn word_qualified_portions_unchanged() {
+        let mappings = mappings_from_food(&food_with_portions(vec![
+            portion("cup chopped", 128.0),
+            portion("strip large (3\" long)", 7.0),
+        ]));
+        assert_eq!(mappings[0].a.unit, "cup chopped");
+        assert_eq!(mappings[1].a.unit, "strip large");
+    }
+
+    /// A fully-parenthetical modifier leaves the raw string (empty-base guard); a null
+    /// modifier keeps the existing "portion" fallback.
+    #[test]
+    fn fully_parenthetical_or_null_falls_back() {
+        let mappings = mappings_from_food(&food_with_portions(vec![
+            portion("(packed)", 100.0),
+            WFoodPortion {
+                amount: 1.0,
+                modifier: None,
+                gram_weight: 50.0,
+            },
+        ]));
+        assert_eq!(mappings[0].a.unit, "(packed)");
+        assert_eq!(mappings[1].a.unit, "portion");
+    }
+
+    #[rstest]
+    #[case("large (7-1/4\" to 8-1/2\" long)", "large")]
+    #[case("small (5-1/2\" long)", "small")]
+    #[case("cup (4.86 large eggs)", "cup")]
+    #[case("medium", "medium")]
+    #[case("extra large", "extra large")]
+    #[case("cup chopped", "cup chopped")]
+    #[case("strip large (3\" long)", "strip large")]
+    #[case("(packed)", "(packed)")] // fully-parenthetical → raw
+    fn strip_portion_parenthetical_cases(#[case] input: &str, #[case] expected: &str) {
+        assert_eq!(strip_portion_parenthetical(input), expected);
     }
 
     #[test]
