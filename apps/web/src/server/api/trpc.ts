@@ -353,15 +353,25 @@ export const createTestTRPCContext = (
 ) => {
   // USDA is always-available in prod (CF Worker) and now throws on a real
   // service error rather than degrading to null. Tests have no USDA backend, so
-  // give them a deterministic stub that 404s every lookup → `food: null` (a
-  // genuine "food not found"), the same "no USDA data" the suite always assumed —
-  // hermetic, and no thrown network error.
+  // stub the fetcher to mimic the worker's "food not found" contract — hermetic,
+  // no thrown network error, the same "no USDA data" the suite always assumed:
+  //   - the batch endpoint (/api/foods/search/batch) returns 200 with an empty
+  //     results array (per-item misses); findFoodsBatch maps every item to null.
+  //     It must NOT 404 — findFoodsBatch throws on a non-200 (a real service
+  //     error), and product/recipe enrichment runs through the batch path.
+  //   - every other lookup (getFood / search / list) 404s → `food: null`.
+  const jsonResponse = (status: number, body: unknown) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { "content-type": "application/json" },
+    });
   const crudServices = buildCrudServices(db, {
-    usdaFetcher: (async () =>
-      new Response("null", {
-        status: 404,
-        headers: { "content-type": "application/json" },
-      })) as unknown as typeof fetch,
+    usdaFetcher: (async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      return url.includes("/search/batch")
+        ? jsonResponse(200, { results: [] })
+        : jsonResponse(404, null);
+    }) as unknown as typeof fetch,
   });
   const auth = opts.auth
     ? createTestAuth(opts.auth.userId)

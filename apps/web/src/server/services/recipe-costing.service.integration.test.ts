@@ -1,7 +1,7 @@
 import type { RecipeId } from "@cubby/schemas/identifiers";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { createProduct } from "~/server/repo/product";
+import { createProduct, updateProduct } from "~/server/repo/product";
 import {
   createRecipe,
   getRecipesByIDs,
@@ -77,8 +77,8 @@ describe("RecipeCostingService", () => {
 
     it("marks a recipe with an unresolved USDA link incomplete", async () => {
       const ing = await findOrCreateIngredient(ctx.db, "usda flour");
-      // fdc_id set but the USDA backend is unreachable in tests, so `food`
-      // resolves null → a transient miss → complete: false.
+      // fdc_id set but the stub USDA backend 404s → `food: null` (a permanent
+      // not-found), which `usdaMissesFor` still flags → complete: false.
       await createProduct(
         ctx.db,
         makeProductInput({
@@ -258,8 +258,41 @@ describe("RecipeCostingService", () => {
       expect(state?.totalsComputedAt).not.toBeNull();
     });
 
-    it("eagerly recomputes a parent when a child sub-recipe changes", async () => {
-      const child = await seedPricedRecipe("Cascade Child");
+    it("eagerly recomputes a parent when a child's cost changes", async () => {
+      // A *costable* child: 1 lb of an ingredient priced "1 lb = $4" → $4 (a
+      // weight→money package mapping, the form the engine can actually convert).
+      const ing = await findOrCreateIngredient(ctx.db, "cascade flour");
+      const priceMapping = (dollars: number) => ({
+        a: { value: 1, unit: "lb" },
+        b: { value: dollars, unit: "dollar" },
+        source: "test",
+      });
+      const prod = await createProduct(
+        ctx.db,
+        makeProductInput({
+          name: "cascade product",
+          ingredientId: ing.id,
+          unitMappings: [priceMapping(4)],
+        }),
+        ctx.actor,
+      );
+      const child = await createRecipe(
+        ctx.db,
+        makeRecipeInput({
+          name: "Cascade Child",
+          sections: [
+            {
+              instructions: [{ instruction: "Mix" }],
+              ingredients: [
+                ingredientRef(ing.id, {
+                  amounts: [{ value: 1, unit: "lb" }],
+                }),
+              ],
+            },
+          ],
+        }),
+        ctx.actor,
+      );
       const parent = await createRecipe(
         ctx.db,
         makeRecipeInput({
@@ -281,20 +314,41 @@ describe("RecipeCostingService", () => {
         ctx.actor,
       );
 
-      // Stamp the parent fresh, but with empty totals (child not yet computed).
-      await service().recompute([parent.id as RecipeId]);
-      const before = await getRecipeTotalsState(ctx.db, parent.id as RecipeId);
-      expect(before?.totalsComputedAt).not.toBeNull();
+      // Compute both; the child costs $4 and the parent is stamped fresh.
+      await service().recompute([parent.id as RecipeId, child.id as RecipeId]);
+      const childBefore = await getRecipeTotalsState(
+        ctx.db,
+        child.id as RecipeId,
+      );
+      const parentBefore = await getRecipeTotalsState(
+        ctx.db,
+        parent.id as RecipeId,
+      );
+      expect(childBefore?.totals?.costTotal).toBe(4);
+      expect(parentBefore?.totalsComputedAt).not.toBeNull();
 
-      // Recompute the child: its totals change (none → some), so recompute
-      // cascades eagerly into the parent — which stays fresh and now reflects
-      // the child's cost (no drain hop).
+      // Change the child's cost, then recompute ONLY the child. Because the
+      // child's totals changed, the eager cascade recomputes its parent too — no
+      // drain — re-stamping the parent's totals with a fresh (later) timestamp.
+      await updateProduct(
+        ctx.db,
+        prod.id,
+        { unitMappings: [priceMapping(10)] },
+        ctx.actor,
+      );
       await service().recompute([child.id as RecipeId]);
 
-      const after = await getRecipeTotalsState(ctx.db, parent.id as RecipeId);
-      expect(after?.totalsComputedAt).not.toBeNull();
-      expect(after?.totals?.costTotal).toBeGreaterThan(
-        before?.totals?.costTotal ?? 0,
+      const childAfter = await getRecipeTotalsState(
+        ctx.db,
+        child.id as RecipeId,
+      );
+      const parentAfter = await getRecipeTotalsState(
+        ctx.db,
+        parent.id as RecipeId,
+      );
+      expect(childAfter?.totals?.costTotal).toBe(10);
+      expect(parentAfter?.totalsComputedAt?.getTime() ?? 0).toBeGreaterThan(
+        parentBefore?.totalsComputedAt?.getTime() ?? 0,
       );
     });
   });
