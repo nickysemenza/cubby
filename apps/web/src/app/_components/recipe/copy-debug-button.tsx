@@ -17,7 +17,8 @@ export function CopyDebugButton({
   title,
 }: {
   getText: () => string;
-  label: string;
+  /** Button text; omit for an icon-only button. */
+  label?: string;
   toastLabel: string;
   title: string;
 }) {

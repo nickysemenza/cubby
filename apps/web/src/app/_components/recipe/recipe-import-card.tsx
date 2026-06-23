@@ -16,6 +16,7 @@ import { wasm } from "~/lib/wasm";
 import { EntityPillLink } from "../EntityPill";
 import { normalize } from "./cookbook-import/import-order";
 import type { ImportResult } from "./cookbook-import/types";
+import { CopyImportRecipeParseButton } from "./copy-corpus-button";
 import { CopyJsonButton } from "./copy-debug-button";
 import { ParsedIngredientTable } from "./parsed-ingredient-table";
 import { formatRichText } from "./richtext";
@@ -186,6 +187,7 @@ function RecipeImportCardImpl({
               <ExternalLink className="h-3.5 w-3.5" />
             </a>
           )}
+          <CopyImportRecipeParseButton recipe={recipe} />
           <CopyJsonButton
             value={recipe}
             title="Copy the full extracted recipe as JSON (for an ingredient-parser session)"

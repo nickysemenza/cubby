@@ -4,6 +4,7 @@ import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 import { EntityPillLink } from "../EntityPill";
 import { formatAmounts } from "../inventory/format-amount";
+import { CopyCorpusButton } from "./copy-corpus-button";
 import { parseIngredientLines } from "./recipe-form/ingredient-line-utils";
 import type { IngredientMatchMap } from "./use-ingredient-matches";
 
@@ -91,10 +92,19 @@ export function ParsedIngredientTable({
                 className={cn("border-border/40 border-b last:border-0", tint)}
               >
                 <td
-                  colSpan={3}
+                  colSpan={2}
                   className="pb-0.5 text-2xs text-muted-foreground/70 leading-tight"
                 >
                   {raw}
+                </td>
+                <td className="pb-0.5 text-right align-top">
+                  <CopyCorpusButton
+                    rawLine={raw}
+                    name={parsed.name}
+                    amounts={parsed.amounts}
+                    modifier={parsed.modifier}
+                    label={undefined}
+                  />
                 </td>
               </tr>
             </Fragment>
