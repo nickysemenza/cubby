@@ -114,12 +114,6 @@ export function UsdaFoodSearchField({
     ),
   );
 
-  const { data: aiStatus } = useQuery(
-    api.ai.isAvailable.queryOptions(undefined, {
-      staleTime: Number.POSITIVE_INFINITY,
-    }),
-  );
-
   const deduped = useMemo(
     () =>
       parsedFdcId != null
@@ -176,7 +170,7 @@ export function UsdaFoodSearchField({
     }
   }, [initialQuery, trpcClient, applyFood]);
 
-  const canSuggest = !!aiStatus?.available && !!initialQuery?.trim();
+  const canSuggest = !!initialQuery?.trim();
 
   return (
     <Field>
@@ -226,29 +220,27 @@ export function UsdaFoodSearchField({
             }}
           />
         </div>
-        {aiStatus?.available && (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleSuggest}
-                  disabled={!canSuggest || isSuggesting}
-                />
-              }
-            >
-              {isSuggesting ? <Spinner /> : <Sparkles className="h-4 w-4" />}
-              <span className="ml-1 hidden sm:inline">Suggest with AI</span>
-            </TooltipTrigger>
-            <TooltipContent>
-              {!initialQuery?.trim()
-                ? "Enter a name first"
-                : "Let AI pick the best USDA food"}
-            </TooltipContent>
-          </Tooltip>
-        )}
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleSuggest}
+                disabled={!canSuggest || isSuggesting}
+              />
+            }
+          >
+            {isSuggesting ? <Spinner /> : <Sparkles className="h-4 w-4" />}
+            <span className="ml-1 hidden sm:inline">Suggest with AI</span>
+          </TooltipTrigger>
+          <TooltipContent>
+            {!initialQuery?.trim()
+              ? "Enter a name first"
+              : "Let AI pick the best USDA food"}
+          </TooltipContent>
+        </Tooltip>
       </div>
 
       {suggestion && (

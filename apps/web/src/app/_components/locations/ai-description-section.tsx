@@ -1,5 +1,5 @@
 import type { LocationId } from "@cubby/schemas/identifiers";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Eye, Sparkles } from "lucide-react";
 import type { FC } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
@@ -21,12 +21,6 @@ export const AiDescriptionSection: FC<AiDescriptionSectionProps> = ({
   const api = useTRPC();
   const queryClient = useQueryClient();
 
-  const { data: aiStatus } = useQuery(
-    api.ai.isAvailable.queryOptions(undefined, {
-      staleTime: Number.POSITIVE_INFINITY,
-    }),
-  );
-
   const describeMutation = useActionMutation({
     mutationFn: api.ai.describeLocation.mutationOptions,
     success: "Description saved.",
@@ -39,7 +33,7 @@ export const AiDescriptionSection: FC<AiDescriptionSectionProps> = ({
     },
   });
 
-  const canAnalyze = aiStatus?.available && hasImages;
+  const canAnalyze = hasImages;
 
   return (
     <div className="space-y-3">
@@ -57,11 +51,7 @@ export const AiDescriptionSection: FC<AiDescriptionSectionProps> = ({
         {currentDescription ? "Re-analyze" : "Analyze Contents"}
       </Button>
 
-      {!aiStatus?.available && (
-        <p className="text-muted-foreground text-sm">AI not configured</p>
-      )}
-
-      {aiStatus?.available && !hasImages && (
+      {!hasImages && (
         <p className="text-muted-foreground text-sm">
           Add photos to this location to enable AI analysis
         </p>

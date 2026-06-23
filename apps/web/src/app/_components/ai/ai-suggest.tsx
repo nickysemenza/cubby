@@ -1,5 +1,4 @@
 import type { Confidence } from "@cubby/schemas/ai";
-import { useQuery } from "@tanstack/react-query";
 import { Sparkles } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
@@ -11,7 +10,6 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { getErrorMessage } from "~/lib/error-utils";
-import { useTRPC } from "~/trpc/react";
 
 /** Confidence → text color. One map (semantic text-warning for medium, not a
  * raw text-yellow-600) shared by every AI-suggestion surface. */
@@ -71,16 +69,10 @@ export function FieldWithAISuggest<
   runSuggest: () => Promise<TResult>;
   onResult: (result: TResult) => void;
 }) {
-  const api = useTRPC();
-  const { data: aiStatus } = useQuery(
-    api.ai.isAvailable.queryOptions(undefined, {
-      staleTime: Number.POSITIVE_INFINITY,
-    }),
-  );
   const [suggestion, setSuggestion] = useState<TResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const canSuggest = !!aiStatus?.available && enabled;
+  const canSuggest = enabled;
 
   const handleSuggest = async () => {
     if (!enabled) return;
@@ -116,11 +108,7 @@ export function FieldWithAISuggest<
             <span className="ml-1 hidden sm:inline">Suggest</span>
           </TooltipTrigger>
           <TooltipContent>
-            {!aiStatus?.available
-              ? "AI not configured"
-              : !enabled
-                ? disabledReason
-                : suggestLabel}
+            {!enabled ? disabledReason : suggestLabel}
           </TooltipContent>
         </Tooltip>
       </div>

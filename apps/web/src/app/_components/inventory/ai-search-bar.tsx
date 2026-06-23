@@ -1,5 +1,4 @@
 import type { ParsedSearch } from "@cubby/schemas/ai";
-import { useQuery } from "@tanstack/react-query";
 import type { Table } from "@tanstack/react-table";
 import { Sparkles, X } from "lucide-react";
 import { useCallback, useState } from "react";
@@ -8,7 +7,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
 import { getErrorMessage } from "~/lib/error-utils";
-import { useTRPC, useTRPCClient } from "~/trpc/react";
+import { useTRPCClient } from "~/trpc/react";
 
 interface AiSearchBarProps<T> {
   table: Table<T>;
@@ -19,14 +18,7 @@ export function AiSearchBar<T>({ table }: AiSearchBarProps<T>) {
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<ParsedSearch | null>(null);
 
-  const api = useTRPC();
   const trpcClient = useTRPCClient();
-
-  const { data: aiStatus } = useQuery(
-    api.ai.isAvailable.queryOptions(undefined, {
-      staleTime: Number.POSITIVE_INFINITY,
-    }),
-  );
 
   const applyFilters = useCallback(
     (parsed: ParsedSearch) => {
@@ -73,10 +65,6 @@ export function AiSearchBar<T>({ table }: AiSearchBarProps<T>) {
     },
     [handleSearch],
   );
-
-  if (!aiStatus?.available) {
-    return null;
-  }
 
   return (
     <div className="space-y-1.5">

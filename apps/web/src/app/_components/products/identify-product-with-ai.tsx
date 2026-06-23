@@ -1,5 +1,4 @@
 import type { ProductIdentification } from "@cubby/schemas/ai";
-import { useQuery } from "@tanstack/react-query";
 import { Sparkles } from "lucide-react";
 import { useCallback, useState } from "react";
 import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
@@ -7,7 +6,7 @@ import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { getErrorMessage } from "~/lib/error-utils";
-import { useTRPC, useTRPCClient } from "~/trpc/react";
+import { useTRPCClient } from "~/trpc/react";
 import { ConfidenceReasoningCard } from "../ai/ai-suggest";
 import type { PendingImage } from "../PendingImageUpload";
 
@@ -24,17 +23,10 @@ export function IdentifyProductButton<
   const [result, setResult] = useState<ProductIdentification | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const api = useTRPC();
   const trpcClient = useTRPCClient();
 
-  const { data: aiStatus } = useQuery(
-    api.ai.isAvailable.queryOptions(undefined, {
-      staleTime: Number.POSITIVE_INFINITY,
-    }),
-  );
-
   const imageUrls = pendingImages.map((img) => img.url);
-  const canIdentify = aiStatus?.available && imageUrls.length > 0 && !isLoading;
+  const canIdentify = imageUrls.length > 0 && !isLoading;
 
   const handleIdentify = useCallback(async () => {
     if (imageUrls.length === 0) return;
@@ -76,7 +68,7 @@ export function IdentifyProductButton<
     }
   }, [imageUrls, trpcClient, form]);
 
-  if (!aiStatus?.available || imageUrls.length === 0) {
+  if (imageUrls.length === 0) {
     return null;
   }
 
