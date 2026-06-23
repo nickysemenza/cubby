@@ -8,7 +8,7 @@ import {
   getCookbookByName,
   getCookbookSource,
   listCookbooks,
-  reprocessCookbook,
+  reprocessCookbookStream,
   upsertCookbook,
 } from "./cookbook";
 import { getDb } from "./database-helpers";
@@ -118,7 +118,18 @@ describe("cookbook repository", () => {
       actor,
     );
 
-    const result = await reprocessCookbook(db, id, actor);
+    // Drain the streaming generator: collect progress events, read the summary.
+    const gen = reprocessCookbookStream(db, id, actor);
+    const events: { done: number; total: number }[] = [];
+    let next = await gen.next();
+    while (!next.done) {
+      events.push(next.value);
+      next = await gen.next();
+    }
+    const result = next.value;
+
+    // One progress tick for the single reprocessed recipe (extras aren't counted).
+    expect(events).toEqual([{ done: 1, total: 1, recipeId: imported.id }]);
 
     // Pancakes was re-derived; Waffles (never imported) is surfaced, not created.
     expect(result.reprocessed).toBe(1);

@@ -1,10 +1,11 @@
 import { unsafeCookbookId } from "@cubby/schemas/identifiers";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { BookOpen, Plus, RefreshCw, Trash } from "lucide-react";
 import { useState } from "react";
 import { z } from "zod";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
 import { IngredientUsagePanel } from "~/app/_components/ingredient/ingredient-usage-panel";
 import { RecipeList } from "~/app/recipes/recipelist";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
@@ -12,12 +13,13 @@ import { PageWrapper } from "~/components/layout/page-wrapper";
 import { PageHero } from "~/components/layouts/page-hero";
 import { Button } from "~/components/ui/button";
 import { Image } from "~/components/ui/image";
+import { Progress } from "~/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 import { useTabParam } from "~/hooks/useTabParam";
 import { getErrorMessage } from "~/lib/error-utils";
 import { queryKeys } from "~/lib/query-keys";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC, useTRPCClient } from "~/trpc/react";
 
 const searchSchema = z.object({
   // Active tab, deep-linkable. Default ("recipes") is omitted from the URL.
@@ -65,18 +67,32 @@ function CookbookDetailPage() {
 
   useDocumentTitle(`Cookbook: ${name}`);
 
-  const reprocessMutation = useActionMutation({
-    mutationFn: api.recipe.reprocessCookbook.mutationOptions,
-    success: ({ reprocessed, importableExtras }) => {
-      const extra =
-        importableExtras.length > 0
-          ? ` (${importableExtras.length} more in the source not yet imported)`
-          : "";
-      return `Reprocessed ${reprocessed} recipe${reprocessed === 1 ? "" : "s"} from ${name}${extra}`;
-    },
-    invalidateKeys: [queryKeys.recipe.list],
-    error: (err) => getErrorMessage(err) || "Failed to reprocess cookbook",
-  });
+  // Reprocess streams progress server-side (one request) via useBulkStream. The
+  // RefreshCw button drives it; a live bar shows beneath the hero while it runs.
+  const client = useTRPCClient();
+  const queryClient = useQueryClient();
+  const reprocess = useBulkStream<
+    never,
+    { reprocessed: number; importableExtras: string[] }
+  >();
+  const runReprocess = () =>
+    reprocess.start(
+      () => client.recipe.reprocessCookbook.mutate({ cookbookId }),
+      {
+        successToast: ({ reprocessed, importableExtras }) => {
+          const extra =
+            importableExtras.length > 0
+              ? ` (${importableExtras.length} more in the source not yet imported)`
+              : "";
+          return `Reprocessed ${reprocessed} recipe${reprocessed === 1 ? "" : "s"} from ${name}${extra}`;
+        },
+        onDone: () => {
+          void queryClient.invalidateQueries({
+            queryKey: queryKeys.recipe.list,
+          });
+        },
+      },
+    );
 
   const deleteMutation = useActionMutation({
     mutationFn: api.recipe.deleteByCookbook.mutationOptions,
@@ -141,12 +157,12 @@ function CookbookDetailPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => reprocessMutation.mutate({ cookbookId })}
-                  disabled={reprocessMutation.isPending}
+                  onClick={() => void runReprocess()}
+                  disabled={reprocess.running}
                   title="Re-derive recipes from the stored extraction (no AI)"
                 >
                   <RefreshCw
-                    className={`mr-2 h-4 w-4 ${reprocessMutation.isPending ? "animate-spin" : ""}`}
+                    className={`mr-2 h-4 w-4 ${reprocess.running ? "animate-spin" : ""}`}
                   />
                   Reprocess
                 </Button>
@@ -163,6 +179,21 @@ function CookbookDetailPage() {
           />
         </div>
       </div>
+
+      {reprocess.running && (
+        <div className="mt-3 space-y-1">
+          <p className="text-muted-foreground text-xs">
+            {reprocess.progress
+              ? `Reprocessing ${reprocess.progress.done} of ${reprocess.progress.total}…`
+              : "Reprocessing…"}
+          </p>
+          <Progress
+            value={reprocess.progress?.done ?? 0}
+            max={reprocess.progress?.total ?? 1}
+            indeterminate={!reprocess.progress}
+          />
+        </div>
+      )}
 
       <Tabs
         value={tabs.value}

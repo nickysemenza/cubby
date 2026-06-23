@@ -34,6 +34,8 @@ export type Book = {
   selected: Set<number>;
   /** Per-recipe import status, by index. */
   results: Map<number, ImportResult>;
+  /** Overall import progress while `importCookbookStream` runs; absent when idle. */
+  importProgress?: { done: number; total: number };
   extract: ExtractPhase;
   expanded: boolean;
 };

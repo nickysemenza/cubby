@@ -13,12 +13,13 @@ import { sum } from "es-toolkit";
 import { Upload } from "lucide-react";
 import { useCallback, useEffect, useId, useState } from "react";
 import { toast } from "sonner";
+import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { getErrorMessage } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC, useTRPCClient } from "~/trpc/react";
 import { BookGroupCard } from "./book-group-card";
 import { addWithReferences, topoOrderSelected } from "./import-order";
 import type {
@@ -70,9 +71,10 @@ const PREVIEW_THROTTLE_MS = 600;
  * loop in Rust (retry → model escalation → salvage → assemble, shared with the
  * native CLI/desktop path). This component supplies only transport (`callChunk` →
  * `recipe.extractCookbookChunk`, which holds the gateway key) and rendering (the
- * `onProgress` live preview). Reviewed recipes import via `recipe.insertCookbook`,
- * upserting by (book, title). A flat/bundled JSON file is still accepted as a
- * power-user path.
+ * `onProgress` live preview). Reviewed recipes import in ONE streamed request via
+ * `recipe.importCookbookStream` (server-side loop + a single batched recompute,
+ * progress streamed back), upserting by (book, title). A flat/bundled JSON file is
+ * still accepted as a power-user path.
  */
 export function CookbookImport({
   loadCookbookId,
@@ -81,15 +83,21 @@ export function CookbookImport({
   loadCookbookId?: string;
 }) {
   const api = useTRPC();
+  const client = useTRPCClient();
   const extractChunk = useMutation(
     api.recipe.extractCookbookChunk.mutationOptions(),
   );
   const upsertCookbook = useMutation(
     api.recipe.upsertCookbook.mutationOptions(),
   );
-  const insertCookbook = useMutation(
-    api.recipe.insertCookbook.mutationOptions(),
-  );
+  // Per-recipe outcome streamed back from `importCookbookStream`, keyed by the
+  // recipe's index in `book.recipes` so each card maps to its result. `start` is
+  // referentially stable, so destructure it for the importBook callback's deps.
+  const { start: startCookbookImport } = useBulkStream<
+    | { index: number; ok: true; id: string }
+    | { index: number; ok: false; error: string },
+    { succeeded: number; failed: number }
+  >();
   const uploadImageMut = useMutation(api.image.uploadImage.mutationOptions());
 
   const [books, setBooks] = useState<Book[]>([]);
@@ -494,9 +502,10 @@ export function CookbookImport({
 
   // Import one book's selected recipes. First create/refresh the Cookbook row
   // (stores the full raw extraction + OPF metadata, and is the FK target), then
-  // import each recipe once, in topological order (a referenced recipe before the
-  // recipe that references it) so cross-recipe references resolve within the book
-  // on a single insert (insertCookbook upserts by (cookbookId, title)).
+  // send the selected recipes — in topological order (a referenced recipe before
+  // the recipe that references it) — to `importCookbookStream` in one request, so
+  // cross-recipe references resolve within the book as the server upserts them
+  // (it processes in the received order; upserts by (cookbookId, title)).
   const importBook = useCallback(
     async (source: string) => {
       const book = books.find((b) => b.source === source);
@@ -559,24 +568,51 @@ export function CookbookImport({
           results: new Map(b.results).set(i, result),
         }));
 
-      const succeeded = new Set<number>();
-      for (const i of orderedIndices) {
-        setResult(i, { status: "importing" });
-        try {
-          const { id } = await insertCookbook.mutateAsync({
-            recipe: book.recipes[i]!,
+      // Optimistically mark every selected recipe importing + seed the bar, so the
+      // button disables and a card spinner shows the instant the request fires.
+      for (const i of orderedIndices) setResult(i, { status: "importing" });
+      updateBook(source, (b) => ({
+        ...b,
+        importProgress: { done: 0, total: orderedIndices.length },
+      }));
+
+      // One streamed request: send just the selected indices (topo-ordered); the
+      // recipes are already persisted in the cookbook's rawJson by the upsert above,
+      // so the server reads them by index, upserts in order, and does a single
+      // batched recompute. Per-recipe results + overall progress stream back.
+      await startCookbookImport(
+        () =>
+          client.recipe.importCookbookStream.mutate({
             cookbookId,
-            book: bookName,
-          });
-          setResult(i, { status: "done", id });
-          succeeded.add(i);
-        } catch (error) {
-          setResult(i, { status: "error", message: getErrorMessage(error) });
-        }
-      }
-      toast.success(`Imported ${succeeded.size} from ${bookName}`);
+            indices: orderedIndices,
+          }),
+        {
+          onItem: (item) =>
+            setResult(
+              item.index,
+              item.ok
+                ? { status: "done", id: item.id }
+                : { status: "error", message: item.error },
+            ),
+          onProgress: (done, total) =>
+            updateBook(source, (b) => ({
+              ...b,
+              importProgress: { done, total },
+            })),
+          onDone: () =>
+            updateBook(source, (b) => ({ ...b, importProgress: undefined })),
+          successToast: (r) => `Imported ${r.succeeded} from ${bookName}`,
+        },
+      );
     },
-    [books, insertCookbook, upsertCookbook, updateBook, uploadImageBytes],
+    [
+      books,
+      client,
+      startCookbookImport,
+      upsertCookbook,
+      updateBook,
+      uploadImageBytes,
+    ],
   );
 
   // Stable ref so memoized RecipeCards don't re-render every streaming pass just
@@ -687,7 +723,7 @@ export function CookbookImport({
           key={book.source}
           book={book}
           handlers={handlers}
-          importing={insertCookbook.isPending}
+          importing={book.importProgress !== undefined}
         />
       ))}
     </div>

@@ -176,7 +176,7 @@ export const listCookbooks = async (
 /**
  * The cookbook's stored extraction (`rawJson`) + identity, so the importer can
  * re-open it for selective re-import. No recipe writes here — importing reuses
- * the per-recipe `insertCookbook` path with these recipes.
+ * the `importCookbookStream` path with these recipes.
  */
 export const getCookbookSource = async (
   db: Database,
@@ -189,22 +189,33 @@ export const getCookbookSource = async (
   return { id, name: cb.name, recipes: cb.rawJson };
 };
 
+/** Final summary of a reprocess pass (the generator's `return` value). */
+export type ReprocessSummary = {
+  reprocessed: number;
+  importableExtras: string[];
+  recipeIds: RecipeId[];
+};
+
 /**
  * Re-derive a cookbook's already-imported recipes from its stored `rawJson` —
  * re-running the ingredient/yield parser (WASM, **no LLM**) so a parser upgrade
  * applies without re-uploading the EPUB. Recipes are matched by title; recipes in
  * `rawJson` that were never imported are returned as `importableExtras` rather
  * than auto-created, preserving the user's original selection.
+ *
+ * Streamed: `yield`s `{ done, total }` after each upsert so the caller can drive a
+ * progress bar, and `return`s the summary (incl. the upserted ids for one batched
+ * recompute). `total` counts only the recipes actually reprocessed — the skipped
+ * extras are near-free, so excluding them keeps the bar honest.
  */
-export const reprocessCookbook = async (
+export async function* reprocessCookbookStream(
   db: Database,
   id: CookbookId,
   actor: ActorContext,
-): Promise<{
-  reprocessed: number;
-  importableExtras: string[];
-  recipeIds: RecipeId[];
-}> => {
+): AsyncGenerator<
+  { done: number; total: number; recipeId?: RecipeId },
+  ReprocessSummary
+> {
   const cb = await getCookbookById(db, id);
   if (!cb) {
     throw createAppError("COOKBOOK_NOT_FOUND", `Cookbook ${id} not found`);
@@ -214,24 +225,29 @@ export const reprocessCookbook = async (
     (await getCookbookRecipeTitles(db, id)).map((t) => t.trim().toLowerCase()),
   );
   const cookbookRef = { id, name: cb.name };
+  const matched = (cr: ImportRecipe) =>
+    existing.has(cr.meta.title.trim().toLowerCase());
 
-  let reprocessed = 0;
-  const importableExtras: string[] = [];
+  // Already-imported recipes get re-derived; the rest are reported as extras.
+  const toReprocess = cb.rawJson.filter(matched);
+  const importableExtras = cb.rawJson
+    .filter((cr) => !matched(cr))
+    .map((cr) => cr.meta.title);
+
+  const total = toReprocess.length;
   // The upserted recipe ids, so the caller can recompute their totals eagerly.
   const recipeIds: RecipeId[] = [];
-  for (const cr of cb.rawJson) {
-    if (existing.has(cr.meta.title.trim().toLowerCase())) {
-      const { id: recipeId } = await upsertCookbookRecipeFromCookbook(
-        cr,
-        cookbookRef,
-        db,
-        actor,
-      );
-      recipeIds.push(recipeId);
-      reprocessed++;
-    } else {
-      importableExtras.push(cr.meta.title);
-    }
+  let done = 0;
+  for (const cr of toReprocess) {
+    const { id: recipeId } = await upsertCookbookRecipeFromCookbook(
+      cr,
+      cookbookRef,
+      db,
+      actor,
+    );
+    recipeIds.push(recipeId);
+    done++;
+    yield { done, total, recipeId };
   }
-  return { reprocessed, importableExtras, recipeIds };
-};
+  return { reprocessed: total, importableExtras, recipeIds };
+}

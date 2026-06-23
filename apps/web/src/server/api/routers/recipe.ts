@@ -36,6 +36,8 @@ import {
   recipeDependencyGraphSchema,
 } from "@cubby/schemas/recipe-dependency-graph";
 import { z } from "zod";
+import type { BulkProgressEvent } from "~/lib/bulk-progress";
+import { getErrorMessage } from "~/lib/error-utils";
 import {
   importRecipeSignature,
   recipeOutSignature,
@@ -45,7 +47,7 @@ import {
   getCookbookByName,
   getCookbookSource,
   listCookbooks,
-  reprocessCookbook,
+  reprocessCookbookStream,
   upsertCookbook,
 } from "~/server/repo/cookbook";
 import {
@@ -186,28 +188,88 @@ const getCookbookSourceEndpoint = protectedProcedure
   .query(async ({ ctx, input }) => {
     return await getCookbookSource(ctx.db, input.cookbookId);
   });
-// Import one recipe extracted from an EPUB cookbook, linked to a cookbook created
-// up-front via `upsertCookbook`. Re-imports upsert by (cookbookId, title) and
-// stamp "Book" provenance + the FK.
-const insertCookbook = protectedProcedure
+// Per-recipe outcome streamed back during a cookbook import, keyed by the client's
+// `index` into its recipe list so each card maps to its result regardless of the
+// topo order the recipes were sent in.
+type ImportItemResult =
+  | { index: number; ok: true; id: RecipeId }
+  | { index: number; ok: false; error: string };
+type ImportSummary = { succeeded: number; failed: number };
+
+// Import an EPUB cookbook's selected recipes in ONE streamed request (replaces the
+// old per-recipe `insertCookbook` client loop). The client sends only the selected
+// recipe INDICES (topo-ordered so a referenced sub-recipe precedes its referrer) —
+// the recipes themselves were already persisted in the cookbook's `rawJson` by the
+// up-front `upsertCookbook`, so re-sending them would just bloat the request (a
+// `.query`'s input rides in the URL → "input too big" past ~8KB). Yields per-recipe
+// progress, then runs a single batched costing recompute at the end. Re-imports
+// upsert by (cookbookId, title) and stamp "Book" provenance + the FK.
+const importCookbookStream = protectedProcedure
   .input(
     z.object({
-      recipe: importRecipeSchema,
       cookbookId,
-      book: z.string().min(1),
+      indices: z.array(z.number().int().nonnegative()).min(1),
     }),
   )
-  .output(recipeIdOut)
-  .mutation(async ({ ctx, input }) => {
-    const result = await upsertCookbookRecipeFromCookbook(
-      input.recipe,
-      { id: input.cookbookId, name: input.book },
-      ctx.db,
-      { ...ctx.actorContext, source: "epub_import" },
-    );
-    // Eager recompute (cheap on a fresh, productless import). No drain anymore.
-    await ctx.services.recipeCosting.recompute([result.id]);
-    return result;
+  // A mutation (it writes): input rides in the POST body, and httpBatchStreamLink
+  // streams the async-generator's yields incrementally (jsonl) just like a query.
+  .mutation(async function* ({
+    ctx,
+    input,
+  }): AsyncGenerator<BulkProgressEvent<ImportItemResult, ImportSummary>> {
+    const actor = { ...ctx.actorContext, source: "epub_import" as const };
+    // Recipes live in the cookbook's stored extraction; indices address it directly.
+    const { name, recipes } = await getCookbookSource(ctx.db, input.cookbookId);
+    const cookbookRef = { id: input.cookbookId, name };
+    const insertedIds: RecipeId[] = [];
+    let succeeded = 0;
+    let failed = 0;
+    const total = input.indices.length;
+    yield { type: "progress", done: 0, total };
+    // SEQUENTIAL + in received (topo) order: a forward cross-recipe reference
+    // resolves only if its target was committed by an earlier iteration
+    // (upsertCookbookRecipeFromCookbook re-reads the cookbook per upsert). Never
+    // parallelize.
+    for (let i = 0; i < input.indices.length; i++) {
+      const index = input.indices[i]!;
+      const recipe = recipes[index];
+      try {
+        if (!recipe) {
+          throw new Error(
+            `Recipe index ${index} is out of range for this cookbook`,
+          );
+        }
+        const { id } = await upsertCookbookRecipeFromCookbook(
+          recipe,
+          cookbookRef,
+          ctx.db,
+          actor,
+        );
+        insertedIds.push(id);
+        succeeded++;
+        yield {
+          type: "progress",
+          done: i + 1,
+          total,
+          item: { index, ok: true, id },
+        };
+      } catch (error) {
+        // Isolate: one malformed recipe can't sink the rest of the import.
+        failed++;
+        yield {
+          type: "progress",
+          done: i + 1,
+          total,
+          item: { index, ok: false, error: getErrorMessage(error) },
+        };
+      }
+    }
+    // ONE recompute for the whole import (was per-recipe). Costing never affects
+    // reference resolution, so deferring to the end is safe.
+    if (insertedIds.length > 0) {
+      await ctx.services.recipeCosting.recompute(insertedIds);
+    }
+    yield { type: "done", result: { succeeded, failed } };
   });
 // Recipes already imported from a given book, each with its id (for an in-app
 // link) and a content signature (so the preview shows "no changes" vs "will
@@ -345,25 +407,36 @@ const deleteByCookbook = protectedProcedure
     );
   });
 
+type ReprocessSummary = { reprocessed: number; importableExtras: string[] };
+
 // Re-derive a cookbook's recipes from its stored raw JSON (re-runs the WASM
-// ingredient parser, no LLM). Returns how many were reprocessed and any extracted
-// recipes that were never imported.
-const reprocessCookbookEndpoint = protectedProcedure
+// ingredient parser, no LLM) in ONE streamed request. Yields per-recipe progress
+// for a live bar, then runs a single batched recompute and yields the final
+// summary (how many were reprocessed + any extracted recipes never imported).
+const reprocessCookbookStreamEndpoint = protectedProcedure
   .input(z.object({ cookbookId }))
-  .output(
-    z.object({
-      reprocessed: z.number().int().nonnegative(),
-      importableExtras: z.array(z.string()),
-    }),
-  )
-  .mutation(async ({ ctx, input }) => {
-    const { recipeIds, ...result } = await reprocessCookbook(
+  // A mutation (it re-derives + writes recipes); streams progress like a query.
+  .mutation(async function* ({
+    ctx,
+    input,
+  }): AsyncGenerator<BulkProgressEvent<never, ReprocessSummary>> {
+    const gen = reprocessCookbookStream(
       ctx.db,
       input.cookbookId,
       ctx.actorContext,
     );
+    let next = await gen.next();
+    while (!next.done) {
+      yield {
+        type: "progress",
+        done: next.value.done,
+        total: next.value.total,
+      };
+      next = await gen.next();
+    }
+    const { recipeIds, reprocessed, importableExtras } = next.value;
     await ctx.services.recipeCosting.recompute(recipeIds);
-    return result;
+    yield { type: "done", result: { reprocessed, importableExtras } };
   });
 
 // LLM passthrough for the in-browser EPUB extractor: the client builds each
@@ -485,13 +558,13 @@ export const recipeRouter = createTRPCRouter({
   insertImport,
   upsertCookbook: upsertCookbookEndpoint,
   getCookbookSource: getCookbookSourceEndpoint,
-  insertCookbook,
+  importCookbookStream,
   getCookbookDiff,
   previewNotionSync,
   importNotionRecipe,
   listCookbooks: listCookbooksEndpoint,
   deleteByCookbook,
-  reprocessCookbook: reprocessCookbookEndpoint,
+  reprocessCookbook: reprocessCookbookStreamEndpoint,
   extractCookbookChunk: extractCookbookChunkProc,
   scrape,
   parseHtml,
