@@ -28,7 +28,6 @@
   "ignoreDependencies": [
     "@cubby/.+",
     "@testing-library/.+",
-    "@tanstack/ai-openai",
     "@vitest/.+",
     "@tailwindcss/postcss",
     "@tailwindcss/vite",

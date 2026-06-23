@@ -28,6 +28,7 @@ import {
 import { chat, type ImagePart } from "@tanstack/ai";
 import type { AnthropicImageMetadata } from "@tanstack/ai-anthropic";
 import {
+  type GatewayMetadata,
   gatewayAdapterConfig,
   isGatewayConfigured,
 } from "~/server/clients/gateway-config";
@@ -142,8 +143,8 @@ class AnthropicClient {
   // Build the gateway adapter per call rather than caching it: in prod the
   // binding is per-request, so a cached adapter would close over a stale one.
   // Construction is cheap.
-  private getAdapter() {
-    return createAnthropicChat(MODEL, gatewayAdapterConfig());
+  private getAdapter(metadata?: GatewayMetadata) {
+    return createAnthropicChat(MODEL, gatewayAdapterConfig({ metadata }));
   }
 
   isConfigured(): boolean {
@@ -151,11 +152,13 @@ class AnthropicClient {
   }
 
   /**
-   * Expose the shared text adapter so the agent runtime can drive its own
-   * tool-calling `chat()` loop without re-constructing the gateway client.
+   * Expose the shared text adapter so callers (the agent runtime, the cookbook
+   * proxy, the USDA/merge tool loops) can drive their own `chat()` loop without
+   * re-constructing the gateway client. Optional `metadata` is surfaced in the
+   * AI Gateway dashboard for per-feature filtering.
    */
-  getTextAdapter() {
-    return this.getAdapter();
+  getTextAdapter(metadata?: GatewayMetadata) {
+    return this.getAdapter(metadata);
   }
 
   async suggestCategory(

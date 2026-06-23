@@ -13,8 +13,8 @@ import {
 export type GatewayMetadata = Record<string, string | number | boolean>;
 
 /**
- * Build the binding-or-REST config shared by the `@cloudflare/tanstack-ai`
- * gateway adapters (`createAnthropicChat` / `createOpenAiChat`). Prod
+ * Build the binding-or-REST config for a `@cloudflare/tanstack-ai` gateway
+ * adapter (`createAnthropicChat` — the only provider in use). Prod
  * authenticates implicitly via the gateway binding; dev (vite Node, no `env.AI`)
  * falls back to gateway-REST with the `AI_GATEWAY_API_KEY` token (`cfApiKey`).
  * The provider `apiKey` is always omitted — the gateway holds it (BYOK/unified

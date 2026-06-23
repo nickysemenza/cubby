@@ -10,7 +10,6 @@ import type { IngredientId, LocationId } from "@cubby/schemas/identifiers";
 import { type DataType, dataTypeEnum } from "@cubby/usda-schemas";
 import { chat, maxIterations, toolDefinition } from "@tanstack/ai";
 import { getAnthropicClient } from "~/server/clients/anthropic";
-import { getGatewayOpenAIAdapter } from "~/server/clients/openai";
 import type { Database } from "~/server/db";
 import { searchIngredientsForMerge } from "~/server/repo/ingredient";
 import { getInventoryByLocationIds } from "~/server/repo/inventory";
@@ -21,8 +20,11 @@ import {
 } from "~/server/repo/location";
 import type { USDAService } from "~/server/services/usda.service";
 
-// Defined by Vite for the Cloudflare build only; guard before reading (mirrors db.ts).
+// Defined by Vite for the Cloudflare build only; guard before reading (mirrors
+// db.ts). Used only as a "prod"/"dev" label for AI Gateway metadata here.
 declare const __CF_WORKERS__: boolean | undefined;
+const IS_CF_WORKERS =
+  typeof __CF_WORKERS__ !== "undefined" && __CF_WORKERS__ === true;
 
 /**
  * Analyze location photos and generate a description of contents.
@@ -152,12 +154,10 @@ export async function suggestUsdaFood(
   usdaService: USDAService,
   ingredientName: string,
 ): Promise<UsdaFoodSuggestion> {
-  const isProd =
-    typeof __CF_WORKERS__ !== "undefined" && __CF_WORKERS__ === true;
-  const adapter = getGatewayOpenAIAdapter({
+  const adapter = getAnthropicClient().getTextAdapter({
     feature: "usda-food-suggest",
     ingredient: ingredientName,
-    env: isProd ? "prod" : "dev",
+    env: IS_CF_WORKERS ? "prod" : "dev",
   });
 
   // Every food the model sees across searches, so we can return the full record
@@ -361,12 +361,10 @@ async function suggestIngredientMerge(
   db: Database,
   source: { id: IngredientId; name: string },
 ): Promise<IngredientMergeSuggestion> {
-  const isProd =
-    typeof __CF_WORKERS__ !== "undefined" && __CF_WORKERS__ === true;
-  const adapter = getGatewayOpenAIAdapter({
+  const adapter = getAnthropicClient().getTextAdapter({
     feature: "ingredient-merge",
     ingredient: source.name,
-    env: isProd ? "prod" : "dev",
+    env: IS_CF_WORKERS ? "prod" : "dev",
   });
 
   const seen = new Map<string, { id: IngredientId; name: string }>();

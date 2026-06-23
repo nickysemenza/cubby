@@ -255,9 +255,6 @@ importers:
       '@tanstack/ai-anthropic':
         specifier: ^0.15.0
         version: 0.15.1(@tanstack/ai@0.28.0(@opentelemetry/api@1.9.0))(zod@4.4.3)
-      '@tanstack/ai-openai':
-        specifier: ^0.14.0
-        version: 0.14.1(@tanstack/ai-client@0.16.3(@opentelemetry/api@1.9.0))(@tanstack/ai@0.28.0(@opentelemetry/api@1.9.0))(ws@8.21.0)(zod@4.4.3)
       '@tanstack/query-async-storage-persister':
         specifier: ^5.101.0
         version: 5.101.0
@@ -13566,6 +13563,7 @@ snapshots:
       '@tanstack/ai-event-client': 0.5.4(@tanstack/ai@0.28.0(@opentelemetry/api@1.9.0))
     transitivePeerDependencies:
       - '@opentelemetry/api'
+    optional: true
 
   '@tanstack/ai-event-client@0.5.4(@tanstack/ai@0.28.0(@opentelemetry/api@1.9.0))':
     dependencies:
@@ -13605,6 +13603,7 @@ snapshots:
       zod: 4.4.3
     transitivePeerDependencies:
       - ws
+    optional: true
 
   '@tanstack/ai-openrouter@0.14.1(@tanstack/ai@0.28.0(@opentelemetry/api@1.9.0))':
     dependencies:
@@ -13689,6 +13688,7 @@ snapshots:
     transitivePeerDependencies:
       - ws
       - zod
+    optional: true
 
   '@tanstack/openai-base@0.8.8(@tanstack/ai@0.28.0(@opentelemetry/api@1.9.0))(ws@8.21.0)(zod@4.4.3)':
     dependencies:
