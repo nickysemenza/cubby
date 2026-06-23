@@ -1,11 +1,14 @@
 //! Unit-conversion exports: kind conversion, explained paths, graph debugging,
 //! and unit-mapping string parsing.
 
-use std::{collections::HashSet, str::FromStr};
+use std::{
+    collections::{HashMap, HashSet},
+    str::FromStr,
+};
 
 use ingredient::{
     unit::{
-        ConversionStep, Measure, MeasureKind, convert_measure_with_graph_explained,
+        ConversionStep, Measure, MeasureKind, Unit, convert_measure_with_graph_explained,
         find_connected_components, is_valid, make_graph, print_graph,
     },
     unit_mapping::{ParsedUnitMapping, parse_unit_mapping as parse_unit_mapping_internal},
@@ -93,6 +96,155 @@ pub struct WUnitIslands(pub Vec<Vec<String>>);
 #[wasm_bindgen]
 pub fn detect_unit_mapping_islands(mappings: WUnitMappings) -> WUnitIslands {
     WUnitIslands(find_connected_components(&make_graph(&mappings.to_pairs())))
+}
+
+/// The built-in "native" bridge edges the unit-graph viz should draw, as
+/// `[unitA, unitB]` pairs in the caller's ORIGINAL unit strings. `transparent` →
+/// `type WUnitBridges = [string, string][]`.
+#[derive(Tsify, Serialize, Deserialize)]
+#[tsify(into_wasm_abi)]
+#[serde(transparent)]
+pub struct WUnitBridges(pub Vec<(String, String)>);
+
+/// Compute the native bridge edges for the unit-mapping graph viz.
+///
+/// The viz draws stored mappings as solid edges; the engine additionally knows
+/// built-in same-dimension conversions (cup↔tbsp) and strips portion modifiers
+/// ("tbsp, drained" ↔ cup), so two units the stored edges leave in separate
+/// pieces can still be convertible. Without a bridge those pieces float apart in
+/// the layout even though `conversionCoverage` reports them connected.
+///
+/// Why this lives in Rust: `find_connected_components` names nodes by their
+/// *normalized* unit (cup→tsp, $→cent), which the TS client can't map back to its
+/// display units. We resolve component membership here — where the normalization
+/// lives — by attaching a unique sentinel leaf to each original unit and reading
+/// back which component the sentinel lands in.
+///
+/// Returns the *minimal* set of edges: for each engine component the stored edges
+/// split across more than one piece, one edge per extra piece (preferring a
+/// same-kind endpoint pair so the bridge reads as a real conversion). A
+/// genuinely-disconnected unit — its own island — gets no edge.
+#[wasm_bindgen]
+pub fn unit_graph_bridges(mappings: WUnitMappings) -> WUnitBridges {
+    // Distinct original units in first-seen order (stable bridge endpoints).
+    let mut units: Vec<String> = Vec::new();
+    let mut seen: HashSet<&str> = HashSet::new();
+    for m in &mappings.0 {
+        for u in [m.a.unit.as_str(), m.b.unit.as_str()] {
+            if seen.insert(u) {
+                units.push(u.to_string());
+            }
+        }
+    }
+    let index_of: HashMap<&str, usize> =
+        units.iter().enumerate().map(|(i, u)| (u.as_str(), i)).collect();
+
+    // Engine component membership per original unit. find_connected_components
+    // names nodes by their normalized unit, so attach a unique sentinel leaf to
+    // each original unit and read back which component the sentinel lands in.
+    let sentinel = |i: usize| format!("cubbygraphnode{i}");
+    let mut graph_pairs = mappings.to_pairs();
+    for (i, u) in units.iter().enumerate() {
+        graph_pairs.push((Measure::new(u, 1.0), Measure::new(&sentinel(i), 1.0)));
+    }
+    let components = find_connected_components(&make_graph(&graph_pairs));
+    let mut engine_comp = vec![usize::MAX; units.len()];
+    for (ci, group) in components.iter().enumerate() {
+        for name in group {
+            // Sentinels are lowercase/singular already, so they survive
+            // normalization unchanged and map straight back to their unit index.
+            if let Some(rest) = name.strip_prefix("cubbygraphnode")
+                && let Ok(i) = rest.parse::<usize>()
+                && i < units.len()
+            {
+                engine_comp[i] = ci;
+            }
+        }
+    }
+
+    // Union-find over original units, seeded with the stored (explicit) edges.
+    let mut parent: Vec<usize> = (0..units.len()).collect();
+    fn find(parent: &mut [usize], x: usize) -> usize {
+        let mut root = x;
+        while parent[root] != root {
+            root = parent[root];
+        }
+        let mut cur = x;
+        while parent[cur] != root {
+            let next = parent[cur];
+            parent[cur] = root;
+            cur = next;
+        }
+        root
+    }
+    let union = |parent: &mut Vec<usize>, a: usize, b: usize| {
+        let ra = find(parent, a);
+        let rb = find(parent, b);
+        if ra != rb {
+            parent[ra] = rb;
+        }
+    };
+    for m in &mappings.0 {
+        if let (Some(&a), Some(&b)) =
+            (index_of.get(m.a.unit.as_str()), index_of.get(m.b.unit.as_str()))
+        {
+            union(&mut parent, a, b);
+        }
+    }
+
+    let kind_of = |i: usize| -> String {
+        Unit::from_str(&units[i])
+            .unwrap_or_else(|()| Unit::Other(units[i].clone()))
+            .kind()
+            .to_str()
+            .into_owned()
+    };
+
+    // For each engine component, group its units by their current explicit piece;
+    // if a component spans 2+ pieces, bridge them (anchor piece → each other).
+    let mut by_engine: HashMap<usize, Vec<usize>> = HashMap::new();
+    for (i, &c) in engine_comp.iter().enumerate() {
+        if c != usize::MAX {
+            by_engine.entry(c).or_default().push(i);
+        }
+    }
+    let mut bridges: Vec<(String, String)> = Vec::new();
+    for members in by_engine.values() {
+        // Group members by explicit-piece root, preserving first-seen order.
+        let mut pieces: Vec<Vec<usize>> = Vec::new();
+        let mut piece_of_root: HashMap<usize, usize> = HashMap::new();
+        for &m in members {
+            let root = find(&mut parent, m);
+            let pi = *piece_of_root.entry(root).or_insert_with(|| {
+                pieces.push(Vec::new());
+                pieces.len() - 1
+            });
+            pieces[pi].push(m);
+        }
+        if pieces.len() < 2 {
+            continue;
+        }
+        let anchor = pieces[0].clone();
+        for piece in &pieces[1..] {
+            let (a, b) = pick_endpoints(&anchor, piece, &kind_of);
+            bridges.push((units[a].clone(), units[b].clone()));
+            union(&mut parent, a, b);
+        }
+    }
+    WUnitBridges(bridges)
+}
+
+/// Prefer a same-kind (u, v) endpoint pair across two pieces so the dashed bridge
+/// reads as a real built-in conversion; fall back to the first of each.
+fn pick_endpoints(a: &[usize], b: &[usize], kind_of: &impl Fn(usize) -> String) -> (usize, usize) {
+    for &u in a {
+        for &v in b {
+            if kind_of(u) == kind_of(v) {
+                return (u, v);
+            }
+        }
+    }
+    (a[0], b[0])
 }
 
 /// The native core of `conv_amount_to_kind`: everything after the JsValue
@@ -193,6 +345,7 @@ mod tests {
         Measure, MeasureKind, convert_measure_with_graph_explained, make_graph,
     };
     use rstest::rstest;
+    use std::collections::HashSet;
     use std::str::FromStr;
 
     fn amt(value: f64, unit: &str) -> WAmount {
@@ -252,6 +405,59 @@ mod tests {
                 g.contains(&"widget".to_string()) && g.contains(&"gadget".to_string())
             })
         );
+    }
+
+    /// A bridge edge set as unordered `{a|b}` keys, so assertions don't depend on
+    /// which endpoint the algorithm picked as `a` vs `b`.
+    fn bridge_keys(b: WUnitBridges) -> HashSet<String> {
+        b.0.into_iter()
+            .map(|(a, b)| {
+                let mut pair = [a, b];
+                pair.sort();
+                pair.join("|")
+            })
+            .collect()
+    }
+
+    /// The islanded-price bug: food edges (g↔kcal, g↔"tbsp, drained"), a cup price
+    /// (cup↔$), and a drained→tbsp conversion. The engine connects cup into the
+    /// food cluster via a built-in volume edge, but the stored edges leave cup/$ a
+    /// separate piece — so one bridge is emitted, preferring the volume pair
+    /// cup↔tbsp over an arbitrary cross-kind one.
+    #[test]
+    fn bridges_reconnect_islanded_price() {
+        let mappings = WUnitMappings(vec![
+            mapping(100.0, "g", 387.0, "kcal"),
+            mapping(1.0, "g", 0.0667, "tbsp, drained"),
+            mapping(1.0, "cup", 5.0, "dollar"),
+            mapping(1.0, "tbsp, drained", 1.0, "tbsp"),
+        ]);
+        let keys = bridge_keys(unit_graph_bridges(mappings));
+        assert_eq!(keys, HashSet::from(["cup|tbsp".to_string()]));
+    }
+
+    /// The gallery fixture analog: a cup→g density edge and an lb price. lb is
+    /// connected to the cluster only through the built-in weight family, so the
+    /// bridge is the weight pair g↔lb.
+    #[test]
+    fn bridges_reconnect_weight_priced_unit() {
+        let mappings = WUnitMappings(vec![
+            mapping(1.0, "cup", 120.0, "g"),
+            mapping(2.0, "lb", 5.0, "dollar"),
+        ]);
+        let keys = bridge_keys(unit_graph_bridges(mappings));
+        assert_eq!(keys, HashSet::from(["g|lb".to_string()]));
+    }
+
+    /// Genuinely-disconnected units (no built-in conversion bridges them) get no
+    /// edge — the fix must not over-connect a real island.
+    #[test]
+    fn bridges_leave_true_islands_separate() {
+        let mappings = WUnitMappings(vec![
+            mapping(1.0, "cup", 120.0, "g"),
+            mapping(1.0, "widget", 3.0, "gadget"),
+        ]);
+        assert!(bridge_keys(unit_graph_bridges(mappings)).is_empty());
     }
 
     /// `is_valid_unit`: a known unit is valid, a bogus one isn't, and one supplied

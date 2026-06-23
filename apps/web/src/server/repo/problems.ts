@@ -458,31 +458,17 @@ const findProductsWithIslandedMappings = async (
     },
   });
 
-  const detectIslands = (
-    mappings: Parameters<typeof wasm.detect_unit_mapping_islands>[0],
-    prod: { id: string; name: string },
-  ): string[][] => {
-    try {
-      return wasm.detect_unit_mapping_islands(mappings);
-    } catch (error) {
-      // Log but don't fail - skip products with graph errors
-      console.error(
-        `Failed to detect islands for product ${prod.id} (${prod.name}):`,
-        error,
-      );
-      return [];
-    }
-  };
-
   // First pass: candidates are products whose STORED mappings split into 2+
   // islands. Adding the derived edges below can only merge components, never
   // split them, so a product already connected on its stored mappings can never
   // be islanded — skip it. This keeps the USDA fetch to the small flagged subset.
+  // `detect_unit_mapping_islands` is infallible (returns WUnitIslands, not a
+  // Result) so it never throws — no defensive wrapper needed.
   const candidates = productsWithMappings.filter(
     (prod) =>
       prod.unitMappings.length >= 2 &&
       !isMiscProduct(prod.name) &&
-      detectIslands(prod.unitMappings, prod).length >= 2,
+      wasm.detect_unit_mapping_islands(prod.unitMappings).length >= 2,
   );
 
   // Second pass: re-check each candidate against its effective mappings, dropping
@@ -498,7 +484,7 @@ const findProductsWithIslandedMappings = async (
     const effective = synthesizeEffectiveMappings(prod);
     if (!effective) continue;
 
-    const islands = detectIslands(effective, prod);
+    const islands = wasm.detect_unit_mapping_islands(effective);
     if (islands.length >= 2) {
       problems.push({
         id: prod.id,

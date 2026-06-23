@@ -2,7 +2,6 @@ import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import * as d3Force from "d3-force";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
-import { safeConvertAmount } from "~/lib/recipe-costing";
 import { wasm } from "~/lib/wasm";
 
 /**
@@ -24,14 +23,6 @@ interface ULink extends d3Force.SimulationLinkDatum<UNode> {
   /** A built-in conversion (e.g. g↔lb) rather than a stored mapping. */
   native?: boolean;
 }
-
-// A unit the engine can convert with no custom mappings — a standard weight/
-// volume unit (g, lb, cup, ml), as opposed to a food-specific portion ("cup
-// packed") which only converts via its stored mapping. Used to draw the
-// implicit same-kind edges the engine knows about but no mapping records.
-const isNativeUnit = (unit: string, kind: string): boolean =>
-  (kind === "weight" || kind === "volume") &&
-  safeConvertAmount({ value: 1, unit }, [], kind).isOk();
 
 const KIND_COLOR: Record<string, string> = {
   weight: "var(--chart-1)",
@@ -126,25 +117,16 @@ export function UnitMappingGraph({
       linkArr.push({ source: m.a.unit, target: m.b.unit });
     }
 
-    // Add the engine's built-in conversions: standard same-kind units (g↔lb,
-    // cup↔ml) aren't stored as mappings, so without this they'd look islanded
-    // even though the engine converts between them. Chain each kind's native
-    // units so they form one connected cluster.
-    const nativeByKind = new Map<string, string[]>();
-    for (const n of nodeMap.values()) {
-      if (isNativeUnit(n.id, n.kind)) {
-        const arr = nativeByKind.get(n.kind) ?? [];
-        arr.push(n.id);
-        nativeByKind.set(n.kind, arr);
-      }
-    }
-    for (const units of nativeByKind.values()) {
-      for (let i = 1; i < units.length; i++) {
-        linkArr.push({
-          source: units[0] as string,
-          target: units[i] as string,
-          native: true,
-        });
+    // Add the engine's built-in conversions: standard same-dimension units
+    // (g↔lb, cup↔ml) and portion-modifier stripping ("tbsp, drained" ↔ cup)
+    // aren't stored as mappings, so without these bridges a unit looks islanded
+    // even though the engine — and the coverage panel — treat it as connected.
+    // `unit_graph_bridges` computes the minimal dashed bridges in Rust, against
+    // the real conversion graph, so the viz mirrors it by construction. It works
+    // over the full mapping set, so only draw bridges between present nodes.
+    for (const [a, b] of wasm.unit_graph_bridges(mappings)) {
+      if (nodeMap.has(a) && nodeMap.has(b)) {
+        linkArr.push({ source: a, target: b, native: true });
       }
     }
 
