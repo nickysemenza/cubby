@@ -9,6 +9,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
+import { useHydrated } from "~/hooks/useHydrated";
 import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 
@@ -38,14 +39,18 @@ const PROBLEM_LABELS: Record<
 
 export const ProblemsBadge = () => {
   const api = useTRPC();
+  const hydrated = useHydrated();
 
   const { data: problems, isLoading } = useQuery({
     ...api.problems.getProblemsCount.queryOptions(),
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
-  // Loading state
-  if (isLoading) {
+  // The query isn't prefetched during SSR, so the server always renders this
+  // loading button. Dehydrated data can resolve before hydration, so gate the
+  // loaded branch on `hydrated` too — otherwise the first client render would
+  // emit the <Link> while the server emitted this button (hydration mismatch).
+  if (!hydrated || isLoading) {
     return (
       <Button variant="ghost" size="sm" disabled className="h-8 px-2">
         <Spinner />
