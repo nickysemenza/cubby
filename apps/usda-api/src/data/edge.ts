@@ -23,7 +23,7 @@ import type {
 } from "./types.js";
 
 const MAX_SQL_VARIABLES = 100;
-const DEFAULT_CONCURRENCY = 16;
+const DEFAULT_CONCURRENCY = 50;
 
 interface FoodIndexRow {
   fdc_id: number;
@@ -266,10 +266,24 @@ export function createEdgeUsdaDataSource(
       .first<FoodIndexRow>();
   }
 
-  async function hydrate(
-    row: FoodIndexRow | null,
-  ): Promise<FoodSummary | null> {
-    if (!row) return null;
+  // USDA bundle bytes are immutable, so the per-food range read is pure static
+  // work that's repeated on every lookup. Cache the hydrated JSON in the
+  // colo-local Cache API keyed on the exact R2 pointer (bundle_key + byte
+  // range): a dataset re-import writes new keys/offsets, so the key naturally
+  // invalidates without a manual purge.
+  async function readBundleText(row: FoodIndexRow): Promise<string | null> {
+    // `caches.default` is a Cloudflare extension absent from the DOM
+    // CacheStorage type (mirrors the cast in the web USDA client); it's also
+    // absent under Node (unit tests), so guard before use and read R2 directly.
+    const cache =
+      typeof caches !== "undefined"
+        ? (caches as unknown as { default: Cache }).default
+        : null;
+    const cacheKey = new Request(
+      `https://usda-cache/food/${encodeURIComponent(row.bundle_key)}/${row.byte_offset}/${row.byte_length}`,
+    );
+    const cached = cache ? await cache.match(cacheKey) : undefined;
+    if (cached) return cached.text();
 
     const object = await env.USDA_BUNDLES.get(row.bundle_key, {
       range: {
@@ -280,6 +294,22 @@ export function createEdgeUsdaDataSource(
     if (!object) return null;
 
     const text = await object.text();
+    await cache?.put(
+      cacheKey,
+      new Response(text, {
+        headers: { "Cache-Control": "public, max-age=31536000, immutable" },
+      }),
+    );
+    return text;
+  }
+
+  async function hydrate(
+    row: FoodIndexRow | null,
+  ): Promise<FoodSummary | null> {
+    if (!row) return null;
+
+    const text = await readBundleText(row);
+    if (text === null) return null;
     // A single malformed record must not 500 the whole page: drop it (callers
     // filter nulls / treat null as not-found). This makes a page slightly
     // shorter than totalCount (the count is from the index, not hydrated rows) —

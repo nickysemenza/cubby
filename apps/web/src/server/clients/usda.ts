@@ -12,6 +12,11 @@ import { injectTraceContext, TraceNames, withTrace } from "~/server/tracing";
 export class USDAClient {
   private client;
   private fetcher: typeof fetch;
+  // Request-scoped memo of batch-resolved foods, keyed by canonical lookup. The
+  // client is built per-request in ctx (see buildCrudServices), so this can't
+  // serve cross-request stale data; it just stops the same product being
+  // re-POSTed when several queries in one request enrich overlapping products.
+  private readonly batchMemo = new Map<string, FoodSummary | null>();
 
   constructor(
     private baseUrl: string,
@@ -170,23 +175,48 @@ export class USDAClient {
     });
   }
 
+  private static lookupKey(lookup: FoodLookupParam): string {
+    if (lookup.kind === "upc") return `upc:${lookup.gtin_upc}`;
+    if (lookup.kind === "ndb") return `ndb:${lookup.ndb_number}`;
+    return `fdc:${lookup.fdc_id}`;
+  }
+
   async findFoodsBatch(
     lookups: FoodLookupParam[],
   ): Promise<(FoodSummary | null)[]> {
     if (lookups.length === 0) return [];
 
-    return await this.traced("findByLookupBatch", async () => {
-      const res = await this.client.findByLookupBatch({ body: { lookups } });
-      // A batch is a single POST; a non-200 is a service error (per-item
-      // not-founds come back as nulls in `results`), so throw rather than
-      // silently degrading every lookup to null.
-      if (res.status !== 200) {
-        throw new Error(
-          `[USDA] findByLookupBatch failed with status ${res.status}`,
-        );
-      }
-      return res.body.results;
+    const keys = lookups.map((l) => USDAClient.lookupKey(l));
+    // Fetch only lookups not already resolved earlier in this request, deduped.
+    // A memo'd null is a known miss — don't re-POST it either.
+    const missing = new Map<string, FoodLookupParam>();
+    keys.forEach((key, i) => {
+      if (!this.batchMemo.has(key)) missing.set(key, lookups[i]!);
     });
+
+    if (missing.size > 0) {
+      const missKeys = [...missing.keys()];
+      const missLookups = [...missing.values()];
+      const results = await this.traced("findByLookupBatch", async () => {
+        const res = await this.client.findByLookupBatch({
+          body: { lookups: missLookups },
+        });
+        // A batch is a single POST; a non-200 is a service error (per-item
+        // not-founds come back as nulls in `results`), so throw rather than
+        // silently degrading every lookup to null.
+        if (res.status !== 200) {
+          throw new Error(
+            `[USDA] findByLookupBatch failed with status ${res.status}`,
+          );
+        }
+        return res.body.results;
+      });
+      results.forEach((food, i) => {
+        this.batchMemo.set(missKeys[i]!, food ?? null);
+      });
+    }
+
+    return keys.map((key) => this.batchMemo.get(key) ?? null);
   }
 
   async getFoodSummaryByID(fdc_id: number): Promise<FoodSummary | null> {

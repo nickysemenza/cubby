@@ -714,6 +714,28 @@ export const reparseStaleIngredientParses = async (
   const stale = await findStaleIngredientParses(db);
   if (stale.length === 0) return { updated: 0, recipesAffected: [] };
 
+  // Resolve every drifted name up front, in parallel on the pool and deduped to
+  // one find-or-create per distinct name. This pulls the ingredient lookups out
+  // of the write transaction's serial critical path (Postgres runs one
+  // statement at a time per connection, so the old interleaved
+  // find-or-create + update was ~2N sequential round-trips). find-or-create is
+  // race-safe and idempotent, so an ingredient resolved here but rolled back by
+  // a failing tx below is harmless — a retry re-finds it.
+  const driftNames = uniq(
+    stale.filter((s) => s.nameDrift).map((s) => s.parsedName),
+  );
+  const idByName = new Map(
+    await Promise.all(
+      driftNames.map(
+        async (name) =>
+          [
+            name.toLowerCase(),
+            (await findOrCreateIngredient(db, name)).id,
+          ] as const,
+      ),
+    ),
+  );
+
   await withTransaction(db, async (tx) => {
     for (const row of stale) {
       const values: {
@@ -724,8 +746,8 @@ export const reparseStaleIngredientParses = async (
       if (row.amountDrift) values.amounts = row.parsedAmounts;
       if (row.modifierDrift) values.modifier = row.parsedModifier;
       if (row.nameDrift) {
-        const ing = await findOrCreateIngredient(tx, row.parsedName);
-        values.ingredientId = ing.id;
+        const id = idByName.get(row.parsedName.toLowerCase());
+        if (id) values.ingredientId = id;
       }
       await updateAndReturn(
         tx,

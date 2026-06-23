@@ -26,6 +26,25 @@ declare const __CF_WORKERS__: boolean | undefined;
 const IS_CF_WORKERS =
   typeof __CF_WORKERS__ !== "undefined" && __CF_WORKERS__ === true;
 
+// Drive a chat() loop to completion. Tool handlers capture results via closures,
+// so we only watch for run errors here: chat() delivers provider/transport
+// failures as a RUN_ERROR chunk rather than throwing, and an unsurfaced one looks
+// like "no match" to the caller. Shared by both search-then-select flows below.
+async function drainChat(
+  stream: AsyncIterable<unknown>,
+  label: string,
+): Promise<void> {
+  for await (const chunk of stream) {
+    const type = (chunk as { type?: string })?.type ?? "";
+    if (type.includes("ERROR")) {
+      console.error(
+        `[${label}] run error:`,
+        (chunk as { message?: string }).message ?? JSON.stringify(chunk),
+      );
+    }
+  }
+}
+
 /**
  * Analyze location photos and generate a description of contents.
  * Persists the description to the location record.
@@ -173,6 +192,36 @@ export async function suggestUsdaFood(
     } | null;
   } = { selection: null };
 
+  // Run one USDA search: list, record every result in `seenFoods` (so a later
+  // select can return the full record and reject ids never seen), and format it
+  // for the model. Shared by the search tool and the up-front pre-seed below.
+  const runSearch = async (
+    query: string,
+    dataType?: DataType,
+  ): Promise<string> => {
+    const { data } = await usdaService.listFoods(
+      query,
+      dataType,
+      { orderBy: "fdc_id", direction: "asc" },
+      { pageIndex: 0, pageSize: 15 },
+    );
+    for (const food of data) seenFoods.set(food.fdc_id, food);
+    if (data.length === 0) return "No results.";
+    return data
+      .map((f) => {
+        // A product can only link a food by NDB or UPC, so flag linkable foods.
+        const linkable =
+          f.legacyFoodInfo?.ndb_number != null || !!f.brandedFoodInfo?.gtin_upc;
+        const brand = f.brandedFoodInfo?.brand_owner
+          ? `, ${f.brandedFoodInfo.brand_owner}`
+          : "";
+        return `FDC ${f.fdc_id} [${f.foodInfo.data_type}${brand}, id=${
+          linkable ? "ok" : "none"
+        }]: ${f.foodInfo.description}`;
+      })
+      .join("\n");
+  };
+
   const searchTool = toolDefinition({
     name: "search_usda_foods",
     description:
@@ -192,27 +241,7 @@ export async function suggestUsdaFood(
   }).server(async (rawArgs) => {
     const args = (rawArgs ?? {}) as { query?: string; dataType?: DataType };
     if (!args.query) return "Provide a query.";
-    const { data } = await usdaService.listFoods(
-      args.query,
-      args.dataType,
-      { orderBy: "fdc_id", direction: "asc" },
-      { pageIndex: 0, pageSize: 15 },
-    );
-    for (const food of data) seenFoods.set(food.fdc_id, food);
-    if (data.length === 0) return "No results.";
-    return data
-      .map((f) => {
-        // A product can only link a food by NDB or UPC, so flag linkable foods.
-        const linkable =
-          f.legacyFoodInfo?.ndb_number != null || !!f.brandedFoodInfo?.gtin_upc;
-        const brand = f.brandedFoodInfo?.brand_owner
-          ? `, ${f.brandedFoodInfo.brand_owner}`
-          : "";
-        return `FDC ${f.fdc_id} [${f.foodInfo.data_type}${brand}, id=${
-          linkable ? "ok" : "none"
-        }]: ${f.foodInfo.description}`;
-      })
-      .join("\n");
+    return runSearch(args.query, args.dataType);
   });
 
   const selectTool = toolDefinition({
@@ -242,30 +271,30 @@ export async function suggestUsdaFood(
     return "Recorded.";
   });
 
+  // Pre-seed the first search server-side and hand the model the results in the
+  // opening message, so it can usually select on turn 1 instead of spending a
+  // round-trip issuing the obvious name search itself (search_usda_foods stays
+  // available for refinement). Cuts the common path from ~3 model turns to ~1.
+  const initialResults = await runSearch(ingredientName);
+
   const stream = chat({
     adapter,
     systemPrompts: [buildUsdaMatchPrompt()],
     messages: [
       {
         role: "user",
-        content: `Find the best USDA food for the recipe ingredient: "${ingredientName}". Search as needed, then call select_food.`,
+        content: `Find the best USDA food for the recipe ingredient: "${ingredientName}".
+
+Initial search results for "${ingredientName}":
+${initialResults}
+
+If one is a clearly correct generic match, call select_food now. Otherwise refine with search_usda_foods first, then call select_food.`,
       },
     ],
     tools: [searchTool, selectTool],
     agentLoopStrategy: maxIterations(6),
   });
-  // Drive the loop to completion; tool handlers capture state via closures.
-  // chat() delivers provider/transport failures as a RUN_ERROR chunk rather than
-  // throwing, so surface those (otherwise a failed call looks like "no match").
-  for await (const chunk of stream) {
-    const type = (chunk as { type?: string })?.type ?? "";
-    if (type.includes("ERROR")) {
-      console.error(
-        "[suggestUsdaFood] run error:",
-        (chunk as { message?: string }).message ?? JSON.stringify(chunk),
-      );
-    }
-  }
+  await drainChat(stream, "suggestUsdaFood");
 
   const { selection } = state;
   if (!selection || selection.fdcId == null) {
@@ -376,6 +405,18 @@ async function suggestIngredientMerge(
     } | null;
   } = { selection: null };
 
+  // Run one ingredient search: record every hit in `seen` (so a later select can
+  // only target an id the model actually saw) and format for the model. Shared
+  // by the search tool and the up-front pre-seed below.
+  const runSearch = async (query: string): Promise<string> => {
+    const rows = await searchIngredientsForMerge(db, query, source.id, 12);
+    for (const r of rows) seen.set(r.id, { id: r.id, name: r.name });
+    if (rows.length === 0) return "No results.";
+    return rows
+      .map((r) => `${r.id} [${r.productCount} products]: ${r.name}`)
+      .join("\n");
+  };
+
   const searchTool = toolDefinition({
     name: "search_ingredients",
     description:
@@ -388,12 +429,7 @@ async function suggestIngredientMerge(
   }).server(async (rawArgs) => {
     const args = (rawArgs ?? {}) as { query?: string };
     if (!args.query) return "Provide a query.";
-    const rows = await searchIngredientsForMerge(db, args.query, source.id, 12);
-    for (const r of rows) seen.set(r.id, { id: r.id, name: r.name });
-    if (rows.length === 0) return "No results.";
-    return rows
-      .map((r) => `${r.id} [${r.productCount} products]: ${r.name}`)
-      .join("\n");
+    return runSearch(args.query);
   });
 
   const selectTool = toolDefinition({
@@ -423,27 +459,28 @@ async function suggestIngredientMerge(
     return "Recorded.";
   });
 
+  // Pre-seed the obvious name search server-side so the model can decide on turn
+  // 1 in the common case (search_ingredients stays available to refine).
+  const initialResults = await runSearch(source.name);
+
   const stream = chat({
     adapter,
     systemPrompts: [buildMergePrompt()],
     messages: [
       {
         role: "user",
-        content: `Is the recipe ingredient "${source.name}" the same purchasable item as an existing ingredient? Search, then call select_merge_target.`,
+        content: `Is the recipe ingredient "${source.name}" the same purchasable item as an existing ingredient?
+
+Existing ingredients matching "${source.name}":
+${initialResults}
+
+If one is a genuine duplicate, call select_merge_target now. Otherwise search_ingredients to look wider, then call select_merge_target (null if there is no real duplicate).`,
       },
     ],
     tools: [searchTool, selectTool],
     agentLoopStrategy: maxIterations(6),
   });
-  for await (const chunk of stream) {
-    const type = (chunk as { type?: string })?.type ?? "";
-    if (type.includes("ERROR")) {
-      console.error(
-        "[suggestIngredientMerge] run error:",
-        (chunk as { message?: string }).message ?? JSON.stringify(chunk),
-      );
-    }
-  }
+  await drainChat(stream, "suggestIngredientMerge");
 
   const { selection } = state;
   if (!selection || selection.ingredientId == null) {

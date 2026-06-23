@@ -77,3 +77,59 @@ describe("USDAClient surfaces fetch failures", () => {
     expect(result).toBeNull();
   });
 });
+
+describe("USDAClient.findFoodsBatch request-scoped memo", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  // A FoodSummary-shaped body keyed so we can assert the right record comes back.
+  const batchBody = (results: unknown[]) =>
+    new Response(JSON.stringify({ results }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+
+  it("reuses earlier results and only POSTs the lookups it hasn't seen", async () => {
+    const fetchMock = vi.fn();
+    // First call: one upc → one result. Second call mixes the same upc (memoed)
+    // with a new fdc — only the fdc should be sent on the wire.
+    fetchMock
+      .mockResolvedValueOnce(batchBody([{ fdc_id: 1 }]))
+      .mockResolvedValueOnce(batchBody([{ fdc_id: 2 }]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new USDAClient("http://localhost:8787");
+    const first = await client.findFoodsBatch([
+      { kind: "upc", gtin_upc: "012345678905" },
+    ]);
+    expect(first).toEqual([{ fdc_id: 1 }]);
+
+    const second = await client.findFoodsBatch([
+      { kind: "upc", gtin_upc: "012345678905" }, // memoed — not re-sent
+      { kind: "fdc", fdc_id: 2 },
+    ]);
+    // Memoed record returned in order alongside the freshly-fetched one.
+    expect(second).toEqual([{ fdc_id: 1 }, { fdc_id: 2 }]);
+
+    // Two POSTs total; the second carried only the unseen fdc lookup.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const secondBody = JSON.parse(
+      (fetchMock.mock.calls[1]?.[1] as { body: string }).body,
+    );
+    expect(secondBody.lookups).toEqual([{ kind: "fdc", fdc_id: 2 }]);
+  });
+
+  it("does not re-POST a known miss within the request", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(batchBody([null]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new USDAClient("http://localhost:8787");
+    const lookup = { kind: "ndb", ndb_number: 999 } as const;
+    expect(await client.findFoodsBatch([lookup])).toEqual([null]);
+    expect(await client.findFoodsBatch([lookup])).toEqual([null]);
+    // The null is memoed as a known miss, so the second call sends nothing.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
