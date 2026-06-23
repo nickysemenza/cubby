@@ -18,10 +18,9 @@ const def = <TFn extends MutationOptionsFn>(config: BackfillButtonProps<TFn>) =>
  * so the two surfaces can't drift; each surface keeps only its own display copy
  * (Problems: the section title/description; Maintenance: the row label + count).
  *
- * Recompute is intentionally absent — Problems recomputes stale-only
- * (`recipe.recomputeStale`, with `{ limit: 500 }`) while Maintenance
- * force-recomputes all (`recipe.recomputeAll`, with a dry run). Different
- * mutations and intent, so each stays declared at its own call site.
+ * Recompute is intentionally absent — totals now recompute eagerly on every
+ * write, so the only recompute surface left is Maintenance's force-rebuild-all
+ * (`recipe.recomputeAll`, with a dry run), declared at its own call site.
  */
 export const BACKFILL = {
   reparse: def({
