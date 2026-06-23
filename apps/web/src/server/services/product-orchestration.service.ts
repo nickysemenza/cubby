@@ -141,12 +141,14 @@ interface BackfillSummary {
 
 /**
  * Batch import UPC images for products that have a UPC but no images.
- * Processes in parallel batches of 10.
+ * Processes in parallel batches of 10. Streamed: `yield`s `{done,total}` after
+ * each batch (each batch's per-product writes commit independently — safe to
+ * yield between them) and `return`s the summary.
  */
-export async function backfillUPCImages(
+export async function* backfillUPCImages(
   db: Database,
   upcLookupClient: UPCLookupClient,
-): Promise<BackfillSummary> {
+): AsyncGenerator<{ done: number; total: number }, BackfillSummary> {
   const allNoImages = await findProductsWithNoImages(db);
   const productsWithUPC = allNoImages.filter(
     (p): p is typeof p & { upc: string } => p.upc != null,
@@ -157,7 +159,10 @@ export async function backfillUPCImages(
   let failed = 0;
   let skipped = 0;
 
+  const total = productsWithUPC.length;
+  let done = 0;
   const BATCH_SIZE = 10;
+  yield { done, total };
   for (let i = 0; i < productsWithUPC.length; i += BATCH_SIZE) {
     const batch = productsWithUPC.slice(i, i + BATCH_SIZE);
 
@@ -205,6 +210,8 @@ export async function backfillUPCImages(
       else if (result.status === "skipped") skipped++;
       else failed++;
     }
+    done += batch.length;
+    yield { done, total };
   }
 
   return {

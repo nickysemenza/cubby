@@ -11,6 +11,7 @@ import {
 import { foodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
 import { ingredientId, locationId } from "@cubby/schemas/identifiers";
 import { z } from "zod";
+import { streamProgress } from "~/lib/bulk-progress";
 import {
   CATEGORY_DESCRIPTIONS,
   getAnthropicClient,
@@ -69,11 +70,11 @@ export const aiRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       return detectInventoryItems(ctx.db, input.locationId);
     }),
-  backfillLocationDescriptions: protectedProcedure
-    .output(z.object({ analyzed: z.number(), total: z.number() }))
-    .mutation(async ({ ctx }) => {
-      return backfillLocationDescriptions(ctx.db);
-    }),
+  backfillLocationDescriptions: protectedProcedure.mutation(async function* ({
+    ctx,
+  }) {
+    yield* streamProgress(backfillLocationDescriptions(ctx.db), (r) => r);
+  }),
   identifyProduct: protectedProcedure
     .input(
       z.object({

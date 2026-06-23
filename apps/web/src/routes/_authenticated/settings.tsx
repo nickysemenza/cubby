@@ -264,8 +264,8 @@ function RecomputeAction() {
       >
         {dryRun.isFetching ? "Checking…" : "Dry run"}
       </Button>
-      <BackfillButton
-        selectMutation={(api) => api.recipe.recomputeAll.mutationOptions}
+      <BackfillButton<{ processed: number }>
+        run={(client) => client.recipe.recomputeAllStream.mutate()}
         invalidateKeys={(api) => [api.recipe.list.queryKey()]}
         idleLabel="Recompute all"
         pendingLabel="Recomputing…"

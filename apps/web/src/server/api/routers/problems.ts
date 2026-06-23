@@ -4,6 +4,7 @@ import {
   problemsCountSchema,
 } from "@cubby/schemas/problems";
 import { z } from "zod";
+import { streamProgress } from "~/lib/bulk-progress";
 import {
   findAllProblems,
   findAllProblemsCount,
@@ -42,20 +43,13 @@ const getMaintenanceCounts = protectedProcedure
 // Re-parse every stale ingredient line with the current parser and persist the fresh
 // result (name, amounts, modifier), then recompute affected recipe totals so the
 // costing reflects the updated lines immediately. Clears the Stale Parses section.
-const reparseStale = protectedProcedure
-  .output(
-    z.object({
-      updated: z.number(),
-      recipesAffected: z.number(),
-    }),
-  )
-  .mutation(async ({ ctx }) => {
-    const { updated, recipesAffected } = await reparseStaleIngredientParses(
-      ctx.db,
-    );
-    await ctx.services.recipeCosting.recompute(recipesAffected);
-    return { updated, recipesAffected: recipesAffected.length };
+const reparseStale = protectedProcedure.mutation(async function* ({ ctx }) {
+  yield* streamProgress(reparseStaleIngredientParses(ctx.db), async (r) => {
+    // After the parses land, recompute the affected recipes' totals.
+    await ctx.services.recipeCosting.recompute(r.recipesAffected);
+    return { updated: r.updated, recipesAffected: r.recipesAffected.length };
   });
+});
 
 // Batch: distinct non-deleted recipe count per product (via its ingredient).
 // Powers the "used in N recipes" signal on product problem cards. Only

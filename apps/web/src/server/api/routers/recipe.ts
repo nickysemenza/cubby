@@ -36,7 +36,7 @@ import {
   recipeDependencyGraphSchema,
 } from "@cubby/schemas/recipe-dependency-graph";
 import { z } from "zod";
-import type { BulkProgressEvent } from "~/lib/bulk-progress";
+import { type BulkProgressEvent, streamProgress } from "~/lib/bulk-progress";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
   importRecipeSignature,
@@ -567,12 +567,23 @@ const deleteItem = createDeleteProcedure<RecipeId>(async (services, ids) => {
 }, recipeId);
 
 // One-shot backfill: recompute every recipe's totals regardless of stale state.
-// Admin/recovery (e.g. after the USDA backend was down during a drain).
+// Admin/recovery (e.g. after the USDA backend was down during a drain). Kept
+// non-streaming for the MCP tool, which wants the plain `{processed}` result.
 const recomputeAll = protectedProcedure
   .output(z.object({ processed: z.number().int() }))
   .mutation(async ({ ctx }) => {
     return await ctx.services.recipeCosting.recomputeAll();
   });
+
+// Streaming sibling for the maintenance UI button: same work, per-chunk progress.
+const recomputeAllStream = protectedProcedure.mutation(async function* ({
+  ctx,
+}) {
+  yield* streamProgress(
+    ctx.services.recipeCosting.recomputeAllStream(),
+    (r) => r,
+  );
+});
 
 // Dry run for the force-recompute: how many recipes' totals would actually
 // change vs persisted, without writing. Read-only but ~as costly as recomputeAll
@@ -621,6 +632,7 @@ export const recipeRouter = createTRPCRouter({
   update,
   delete: deleteItem,
   recomputeAll,
+  recomputeAllStream,
   dryRunRecomputeTotals,
   explainCosting,
   getIngredientCooccurrence: getIngredientCooccurrenceEndpoint,

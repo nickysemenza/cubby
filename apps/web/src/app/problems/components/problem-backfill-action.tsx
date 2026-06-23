@@ -1,65 +1,79 @@
 import type { QueryKey } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { useTRPC } from "~/trpc/react";
+import { toast } from "sonner";
+import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
+import { Progress } from "~/components/ui/progress";
+import type { BulkProgressEvent } from "~/lib/bulk-progress";
+import { useTRPC, useTRPCClient } from "~/trpc/react";
 import { ProblemActionButton } from "./problem-action-button";
-import {
-  type BackfillToast,
-  type DataOf,
-  type MutationOptionsFn,
-  useProblemBackfill,
-  type VariablesOf,
-} from "./use-problem-backfill";
 
 type TRPCApi = ReturnType<typeof useTRPC>;
+type TRPCClient = ReturnType<typeof useTRPCClient>;
 
-export type BackfillButtonProps<TFn extends MutationOptionsFn> = {
-  /** Picks the mutation off the tRPC proxy, e.g. `(api) => api.problems.reparseStale.mutationOptions`. */
-  selectMutation: (api: TRPCApi) => TFn;
+/** Result-driven toast: which sonner variant to fire and with what message. */
+export type BackfillToast = { tone: "success" | "info"; message: string };
+
+export type BackfillButtonProps<TResult> = {
+  /** Opens the streaming backfill mutation, e.g. `(client) => client.problems.reparseStale.mutate()`. */
+  run: (
+    client: TRPCClient,
+  ) => Promise<AsyncIterable<BulkProgressEvent<unknown, TResult>>>;
   /** Entity lists to invalidate alongside the problems list. */
   invalidateKeys?: (api: TRPCApi) => QueryKey[];
-  toastResult: (data: DataOf<TFn>) => BackfillToast;
+  toastResult: (data: TResult) => BackfillToast;
   idleLabel: string;
   pendingLabel: string;
-  /**
-   * Mutation input, when the procedure takes one (e.g. `{ limit: 500 }`).
-   * Intentionally always-optional: making it required when `VariablesOf<TFn>`
-   * is non-void (via a conditional type on the props) regresses inference in
-   * tsgo — `TFn` can't be pinned from `selectMutation` while the props type is
-   * itself conditional on `TFn`, collapsing `DataOf<TFn>`/`VariablesOf<TFn>` to
-   * `unknown` for every call site. A future required-input backfill that omits
-   * this fails as a runtime tRPC validation error instead of a compile error.
-   */
-  variables?: VariablesOf<TFn>;
 };
 
 /**
  * The shared "fix all" button for a Problems section, driven entirely by props.
- * It owns the `useProblemBackfill` hook at its own top level, so a section
- * declares its backfill as plain data and mounts this — no per-section
- * component. `TFn` is inferred from `selectMutation`, so `toastResult` and
- * `variables` are checked against the real mutation.
+ * The backfill runs server-side in ONE streamed mutation (see `useBulkStream`);
+ * this owns the stream and renders a live `<Progress>` bar beneath the button
+ * while it runs, then fires the result-derived toast + invalidations on done.
+ * `TResult` is the mutation's final summary (pinned per registry entry).
  */
-export function BackfillButton<TFn extends MutationOptionsFn>({
-  selectMutation,
+export function BackfillButton<TResult>({
+  run,
   invalidateKeys,
   toastResult,
   idleLabel,
   pendingLabel,
-  variables,
-}: BackfillButtonProps<TFn>): ReactNode {
+}: BackfillButtonProps<TResult>): ReactNode {
   const api = useTRPC();
-  const mutation = useProblemBackfill({
-    mutationFn: selectMutation(api),
-    invalidateKeys: invalidateKeys?.(api),
-    toastResult,
-  });
+  const client = useTRPCClient();
+  const queryClient = useQueryClient();
+  const { start, running, progress } = useBulkStream<unknown, TResult>();
+
+  const onClick = () =>
+    void start(() => run(client), {
+      onDone: (data) => {
+        const { tone, message } = toastResult(data);
+        toast[tone](message);
+        queryClient.invalidateQueries({
+          queryKey: [api.problems.getAllProblems.queryKey()],
+        });
+        for (const key of invalidateKeys?.(api) ?? []) {
+          queryClient.invalidateQueries({ queryKey: [key] });
+        }
+      },
+    });
 
   return (
-    <ProblemActionButton
-      onClick={() => mutation.mutate(variables as never)}
-      isPending={mutation.isPending}
-      idleLabel={idleLabel}
-      pendingLabel={pendingLabel}
-    />
+    <div className="flex flex-col gap-1">
+      <ProblemActionButton
+        onClick={onClick}
+        isPending={running}
+        idleLabel={idleLabel}
+        pendingLabel={pendingLabel}
+      />
+      {running && (
+        <Progress
+          value={progress?.done ?? 0}
+          max={progress?.total ?? 1}
+          indeterminate={!progress}
+        />
+      )}
+    </div>
   );
 }

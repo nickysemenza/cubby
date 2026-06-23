@@ -102,15 +102,23 @@ export async function detectInventoryItems(
 
 /**
  * Backfill AI descriptions for all locations that have images but no description.
- * Processes in batches of 10 for throughput while limiting concurrency.
+ * Processes in batches of 10 for throughput while limiting concurrency. Streamed:
+ * `yield`s `{done,total}` after each batch (per-location writes commit
+ * independently — safe to yield between them) and `return`s the summary.
  */
-export async function backfillLocationDescriptions(
+export async function* backfillLocationDescriptions(
   db: Database,
-): Promise<{ analyzed: number; total: number }> {
+): AsyncGenerator<
+  { done: number; total: number },
+  { analyzed: number; total: number }
+> {
   const client = getAnthropicClient();
   const locations = await findLocationsNeedingAiDescription(db);
 
+  const total = locations.length;
+  let done = 0;
   let analyzed = 0;
+  yield { done, total };
   for (let i = 0; i < locations.length; i += 10) {
     const batch = locations.slice(i, i + 10);
     const results = await Promise.allSettled(
@@ -129,9 +137,11 @@ export async function backfillLocationDescriptions(
         console.error("Failed to describe location:", result.reason);
       }
     }
+    done += batch.length;
+    yield { done, total };
   }
 
-  return { analyzed, total: locations.length };
+  return { analyzed, total };
 }
 
 // ---------------------------------------------------------------------------

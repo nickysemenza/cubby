@@ -23,6 +23,7 @@ import { recomputeSummary } from "@cubby/schemas/recipe";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { upc } from "@cubby/usda-schemas";
 import { z } from "zod";
+import { streamProgress } from "~/lib/bulk-progress";
 import { getErrorMessage } from "~/lib/error-utils";
 import { countActiveInventoryForProduct } from "~/server/repo/inventory/crud";
 import {
@@ -194,28 +195,22 @@ const findOrCreateByUPC = protectedProcedure
     );
   });
 
-// Backfill UPC images for products that have a UPC but no images
-const backfillUPCImages = protectedProcedure
-  .output(
-    z.object({
-      found: z.number(),
-      imported: z.number(),
-      failed: z.number(),
-      skipped: z.number(),
-      details: z.array(
-        z.object({
-          productId: productId,
-          productName: z.string(),
-          upc: z.string(),
-          status: z.enum(["imported", "failed", "skipped"]),
-          error: z.string().optional(),
-        }),
-      ),
+// Backfill UPC images for products that have a UPC but no images — streamed
+// (per batch of 10) with a final scalar summary. The per-product `details` array
+// the service collects isn't surfaced to the UI, so the streamed result omits it.
+const backfillUPCImages = protectedProcedure.mutation(async function* ({
+  ctx,
+}) {
+  yield* streamProgress(
+    backfillUPCImagesService(ctx.db, ctx.upcLookupClient),
+    ({ found, imported, failed, skipped }) => ({
+      found,
+      imported,
+      failed,
+      skipped,
     }),
-  )
-  .mutation(async ({ ctx }) => {
-    return backfillUPCImagesService(ctx.db, ctx.upcLookupClient);
-  });
+  );
+});
 
 // Get category distribution for insights visualization
 const categoryDistribution = protectedProcedure

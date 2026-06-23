@@ -23,6 +23,14 @@ import {
 // find* helpers are exercised through the public findAllProblems aggregator;
 // reparseStaleIngredientParses is called directly.
 
+// reparseStaleIngredientParses streams `{done,total}` progress and returns its
+// summary; drain to the return value for assertions.
+const drainGen = async <R>(gen: AsyncGenerator<unknown, R>): Promise<R> => {
+  let next = await gen.next();
+  while (!next.done) next = await gen.next();
+  return next.value;
+};
+
 // Build a full UPCLookupResponse from a partial — only the fields a scan reads
 // (manufacturer/brand/priceDollars/imageUrl) usually matter per test.
 const upcResponse = (
@@ -145,7 +153,7 @@ describe("problems repo", () => {
         rawLine: "2 cups flour",
       });
 
-      const result = await reparseStaleIngredientParses(ctx.db);
+      const result = await drainGen(reparseStaleIngredientParses(ctx.db));
       expect(result.updated).toBeGreaterThanOrEqual(1);
       expect(result.recipesAffected).toContain(recipe.id);
 
@@ -158,7 +166,9 @@ describe("problems repo", () => {
       expect(staleIngredientParses.some((s) => s.recipeId === recipe.id)).toBe(
         false,
       );
-      expect((await reparseStaleIngredientParses(ctx.db)).updated).toBe(0);
+      expect(
+        (await drainGen(reparseStaleIngredientParses(ctx.db))).updated,
+      ).toBe(0);
     });
 
     it("find-or-creates the ingredient when the parsed name drifted", async () => {
@@ -173,7 +183,7 @@ describe("problems repo", () => {
         rawLine: "2 cups sugar",
       });
 
-      await reparseStaleIngredientParses(ctx.db);
+      await drainGen(reparseStaleIngredientParses(ctx.db));
       // The re-parse find-or-created the drifted-to ingredient.
       expect(await getIngredientByName(ctx.db, "sugar")).not.toBeNull();
     });

@@ -705,11 +705,22 @@ const findStaleIngredientParses = async (
 // UI shows, so it fixes precisely the listed rows. Name drift re-points the ingredient
 // FK via find-or-create; amounts/modifier are column writes. Idempotent — a second run
 // finds nothing stale. Returns the affected recipe ids so the caller recomputes them.
-export const reparseStaleIngredientParses = async (
+export async function* reparseStaleIngredientParses(
   db: Database,
-): Promise<{ updated: number; recipesAffected: RecipeId[] }> => {
+): AsyncGenerator<
+  { done: number; total: number },
+  { updated: number; recipesAffected: RecipeId[] }
+> {
   const stale = await findStaleIngredientParses(db);
-  if (stale.length === 0) return { updated: 0, recipesAffected: [] };
+  if (stale.length === 0) {
+    yield { done: 0, total: 0 };
+    return { updated: 0, recipesAffected: [] };
+  }
+  // The row updates run in ONE transaction (kept atomic — partial reparse is
+  // harmless but the single tx is cheap), so progress is coarse: 0 → all. We
+  // yield only AROUND the tx, never inside it, so the tx isn't held open across
+  // the stream.
+  yield { done: 0, total: stale.length };
 
   // Resolve every drifted name up front, in parallel on the pool and deduped to
   // one find-or-create per distinct name. This pulls the ingredient lookups out
@@ -756,8 +767,9 @@ export const reparseStaleIngredientParses = async (
   });
 
   const recipesAffected = uniq(stale.map((s) => s.recipeId));
+  yield { done: stale.length, total: stale.length };
   return { updated: stale.length, recipesAffected };
-};
+}
 
 // Distinct non-deleted recipes each product feeds into, via its linked
 // ingredient (product → ingredient → recipeSectionIngredient → recipe). A

@@ -1,15 +1,12 @@
 import { countLabel } from "~/lib/pluralize";
 import type { BackfillButtonProps } from "./problem-backfill-action";
-import type { MutationOptionsFn } from "./use-problem-backfill";
 
 /**
- * Identity helper that pins `TFn` from `selectMutation`, so each entry's
- * `toastResult` is type-checked against that mutation's real result shape.
- * Keep every entry an object literal — the tsgo inference over `TFn` collapses
- * to `unknown` if an entry is widened or annotated.
+ * Identity helper that pins each entry's result type explicitly, so its
+ * `toastResult` is type-checked against the streamed mutation's real summary
+ * shape (and the `run` call must yield that shape).
  */
-const def = <TFn extends MutationOptionsFn>(config: BackfillButtonProps<TFn>) =>
-  config;
+const def = <TResult,>(config: BackfillButtonProps<TResult>) => config;
 
 /**
  * The batch backfills that appear on BOTH surfaces: a section's "fix all" header
@@ -23,8 +20,8 @@ const def = <TFn extends MutationOptionsFn>(config: BackfillButtonProps<TFn>) =>
  * (`recipe.recomputeAll`, with a dry run), declared at its own call site.
  */
 export const BACKFILL = {
-  reparse: def({
-    selectMutation: (api) => api.problems.reparseStale.mutationOptions,
+  reparse: def<{ updated: number; recipesAffected: number }>({
+    run: (client) => client.problems.reparseStale.mutate(),
     invalidateKeys: (api) => [api.recipe.list.queryKey()],
     idleLabel: "Re-parse all",
     pendingLabel: "Re-parsing…",
@@ -36,8 +33,13 @@ export const BACKFILL = {
           : "Nothing to re-parse.",
     }),
   }),
-  fetchUpcImages: def({
-    selectMutation: (api) => api.product.backfillUPCImages.mutationOptions,
+  fetchUpcImages: def<{
+    found: number;
+    imported: number;
+    failed: number;
+    skipped: number;
+  }>({
+    run: (client) => client.product.backfillUPCImages.mutate(),
     invalidateKeys: (api) => [api.product.list.queryKey()],
     idleLabel: "Fetch images",
     pendingLabel: "Fetching…",
@@ -46,9 +48,8 @@ export const BACKFILL = {
       message: `Imported ${countLabel(r.imported, "image")} · ${r.found} found, ${r.skipped} skipped.`,
     }),
   }),
-  analyzeDescriptions: def({
-    selectMutation: (api) =>
-      api.ai.backfillLocationDescriptions.mutationOptions,
+  analyzeDescriptions: def<{ analyzed: number; total: number }>({
+    run: (client) => client.ai.backfillLocationDescriptions.mutate(),
     invalidateKeys: (api) => [api.location.list.queryKey()],
     idleLabel: "Analyze all",
     pendingLabel: "Analyzing…",
