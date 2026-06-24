@@ -19,6 +19,10 @@ export function ProblemsOverview() {
   const api = useTRPC();
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
+  // No staleTime here (unlike the 5-min navbar badge, where staleness is fine):
+  // opening the page — or reloading while on it — should revalidate the badge's
+  // possibly-stale cache. Cached data renders instantly, then a background
+  // refetch lands fresh numbers (which also updates the shared badge).
   const {
     data: problems,
     isLoading,

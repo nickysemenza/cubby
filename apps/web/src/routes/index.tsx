@@ -39,9 +39,10 @@ export const Route = createFileRoute("/")({
     void queryClient.prefetchQuery(trpc.ingredient.list.queryOptions(o));
     void queryClient.prefetchQuery(trpc.image.list.queryOptions(o));
     void queryClient.prefetchQuery(trpc.usda.list.queryOptions(o));
-    void queryClient.prefetchQuery(
-      trpc.problems.getProblemsCount.queryOptions(),
-    );
+    void queryClient.prefetchQuery({
+      ...trpc.problems.getAllProblems.queryOptions(),
+      staleTime: 5 * 60 * 1000,
+    });
   },
   component: Home,
 });

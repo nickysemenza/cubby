@@ -135,13 +135,9 @@ function UpcApplyAction({ product }: { product: ProductWithBetterUpcData }) {
   const apply = useProblemCardMutation({
     mutationFn: api.product.applyUpcData.mutationOptions,
     success: `Updated ${product.name} from UPC`,
-    // getAllProblems is always invalidated by the hook; add the navbar badge
-    // count + the product/recipe lists (price feeds recipe cost).
-    invalidateKeys: [
-      api.problems.getProblemsCount.queryKey(),
-      queryKeys.product.list,
-      queryKeys.recipe.list,
-    ],
+    // getAllProblems is always invalidated by the hook (which also feeds the
+    // navbar badge count); add the product/recipe lists (price feeds cost).
+    invalidateKeys: [queryKeys.product.list, queryKeys.recipe.list],
   });
   return (
     <Button

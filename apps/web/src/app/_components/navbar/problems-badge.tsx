@@ -1,4 +1,4 @@
-import type { ProblemsCount } from "@cubby/schemas/problems";
+import { countProblems, type ProblemsCount } from "@cubby/schemas/problems";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { AlertTriangle, Check } from "lucide-react";
@@ -44,9 +44,12 @@ export const ProblemsBadge = () => {
   const api = useTRPC();
   const hydrated = useHydrated();
 
+  // Derive the count from the shared getAllProblems cache (select) rather than a
+  // separate count endpoint — one scan powers the badge and the page.
   const { data: problems, isLoading } = useQuery({
-    ...api.problems.getProblemsCount.queryOptions(),
+    ...api.problems.getAllProblems.queryOptions(),
     staleTime: 5 * 60 * 1000, // 5 minutes
+    select: countProblems,
   });
 
   // The query isn't prefetched during SSR, so the server always renders this

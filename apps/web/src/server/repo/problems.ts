@@ -15,7 +15,6 @@ import type {
   LocationWithoutAiDescription,
   MaintenanceCounts,
   OrphanedProduct,
-  ProblemsCount,
   ProductWithBetterUpcData,
   ProductWithIslandedMappings,
   ProductWithoutMappings,
@@ -33,7 +32,7 @@ import {
   notExists,
   sql,
 } from "drizzle-orm";
-import { mapValues, omit, sum, uniq } from "es-toolkit";
+import { sum, uniq } from "es-toolkit";
 import { env } from "~/env";
 import {
   BASE_KINDS,
@@ -78,6 +77,7 @@ import {
 } from "~/server/repo/product";
 import { foodLookupParamFromProduct } from "~/server/repo/product/helpers";
 import { batchEnrichWithFood } from "~/server/services/usda-helpers";
+import { traceAll } from "~/server/tracing";
 
 // Every problem item type is the canonical Zod-derived shape from
 // @cubby/schemas/problems (imported above) — this repo is checked against those
@@ -1082,41 +1082,28 @@ export const deleteUnusedIngredients = async (
   return { deleted, failed };
 };
 
-export const findAllProblemsCount = async (
-  db: Database,
-  upcLookupClient: UPCLookupClient,
-  usdaClient: USDAClient,
-): Promise<ProblemsCount> => {
-  const p = await findAllProblems(db, upcLookupClient, usdaClient);
-
-  // Counts derive mechanically from the find* arrays, so byType can never drift
-  // from the set of detectors (no hand-maintained per-type list to forget).
-  return {
-    byType: mapValues(omit(p, ["totalProblems"]), (items) => items.length),
-    total: p.totalProblems,
-  };
-};
-
 // Counts for the Settings → Maintenance "N affected" dry-run. Runs only the
 // detectors behind that panel's buttons — all DB/WASM, no USDA/UPC network — so
-// it's far cheaper than findAllProblemsCount. Recompute is a forced full pass,
-// so its number is every active recipe, not just the stale ones.
+// it's far cheaper than a full findAllProblems scan. Recompute is a forced full
+// pass, so its number is every active recipe, not just the stale ones.
 export const findMaintenanceCounts = async (
   db: Database,
 ): Promise<MaintenanceCounts> => {
-  const [staleParses, noImages, noDescription] = await Promise.all([
-    findStaleIngredientParses(db),
-    findProductsWithNoImages(db, { excludeIngredients: true }),
-    findLocationsWithoutAiDescription(db),
-  ]);
+  const r = await traceAll({
+    staleIngredientParses: () => findStaleIngredientParses(db),
+    productsWithNoImages: () =>
+      findProductsWithNoImages(db, { excludeIngredients: true }),
+    locationsWithoutAiDescription: () => findLocationsWithoutAiDescription(db),
+  });
 
   return {
-    staleIngredientParses: staleParses.length,
+    staleIngredientParses: r.staleIngredientParses.length,
     // Deliberately a SUBSET of the Problems-page productsWithNoImages count:
     // backfillUPCImages can only act on products that have a UPC to look up, so
     // this counts just those. Same canonical key, intentionally narrower number.
-    productsWithNoImages: noImages.filter((p) => p.upc != null).length,
-    locationsWithoutAiDescription: noDescription.length,
+    productsWithNoImages: r.productsWithNoImages.filter((p) => p.upc != null)
+      .length,
+    locationsWithoutAiDescription: r.locationsWithoutAiDescription.length,
   };
 };
 
@@ -1126,52 +1113,43 @@ export const findAllProblems = async (
   upcLookupClient: UPCLookupClient,
   usdaClient: USDAClient,
 ): Promise<AllProblems> => {
-  // Run all checks in parallel for better performance
-  const [
-    duplicateUniqueProducts,
-    orphanedProducts,
-    productsWithoutMappings,
-    ingredientsWithPartialCoverage,
-    ingredientsWithoutProduct,
-    ingredientsWithUnusedAliases,
-    unusedIngredients,
-    emptyLocations,
-    productsWithNoImages,
-    productsWithIslandedMappings,
-    locationsWithoutAiDescription,
-    staleIngredientParses,
-    productsWithBetterUpcData,
-  ] = await Promise.all([
-    findDuplicateUniqueProducts(db),
-    findOrphanedProducts(db),
-    findProductsWithoutMappings(db),
-    findIngredientsWithPartialCoverage(db, usdaClient),
-    findIngredientsWithoutProduct(db),
-    findIngredientsWithUnusedAliases(db),
-    findUnusedIngredients(db),
-    findEmptyLocations(db),
-    findProductsWithNoImages(db, { excludeIngredients: true }),
-    findProductsWithIslandedMappings(db, usdaClient),
-    findLocationsWithoutAiDescription(db),
-    findStaleIngredientParses(db),
-    findProductsWithBetterUpcData(db, upcLookupClient),
-  ]);
+  // Run all checks in parallel, each in its own trace span (the key names the
+  // span — see traceAll). Better performance + per-detector observability.
+  const r = await traceAll({
+    duplicateUniqueProducts: () => findDuplicateUniqueProducts(db),
+    orphanedProducts: () => findOrphanedProducts(db),
+    productsWithoutMappings: () => findProductsWithoutMappings(db),
+    ingredientsWithPartialCoverage: () =>
+      findIngredientsWithPartialCoverage(db, usdaClient),
+    ingredientsWithoutProduct: () => findIngredientsWithoutProduct(db),
+    ingredientsWithUnusedAliases: () => findIngredientsWithUnusedAliases(db),
+    unusedIngredients: () => findUnusedIngredients(db),
+    emptyLocations: () => findEmptyLocations(db),
+    productsWithNoImages: () =>
+      findProductsWithNoImages(db, { excludeIngredients: true }),
+    productsWithIslandedMappings: () =>
+      findProductsWithIslandedMappings(db, usdaClient),
+    locationsWithoutAiDescription: () => findLocationsWithoutAiDescription(db),
+    staleIngredientParses: () => findStaleIngredientParses(db),
+    productsWithBetterUpcData: () =>
+      findProductsWithBetterUpcData(db, upcLookupClient),
+  });
 
   const sections = {
-    duplicateUniqueProducts,
-    orphanedProducts,
-    productsWithoutMappings,
-    ingredientsWithPartialCoverage,
-    ingredientsWithoutProduct,
-    ingredientsWithUnusedAliases,
-    unusedIngredientsWithProduct: unusedIngredients.withProduct,
-    unusedIngredientsWithoutProduct: unusedIngredients.withoutProduct,
-    emptyLocations,
-    productsWithNoImages,
-    productsWithIslandedMappings,
-    locationsWithoutAiDescription,
-    staleIngredientParses,
-    productsWithBetterUpcData,
+    duplicateUniqueProducts: r.duplicateUniqueProducts,
+    orphanedProducts: r.orphanedProducts,
+    productsWithoutMappings: r.productsWithoutMappings,
+    ingredientsWithPartialCoverage: r.ingredientsWithPartialCoverage,
+    ingredientsWithoutProduct: r.ingredientsWithoutProduct,
+    ingredientsWithUnusedAliases: r.ingredientsWithUnusedAliases,
+    unusedIngredientsWithProduct: r.unusedIngredients.withProduct,
+    unusedIngredientsWithoutProduct: r.unusedIngredients.withoutProduct,
+    emptyLocations: r.emptyLocations,
+    productsWithNoImages: r.productsWithNoImages,
+    productsWithIslandedMappings: r.productsWithIslandedMappings,
+    locationsWithoutAiDescription: r.locationsWithoutAiDescription,
+    staleIngredientParses: r.staleIngredientParses,
+    productsWithBetterUpcData: r.productsWithBetterUpcData,
   };
 
   // totalProblems is the sum of every section length — derived, never

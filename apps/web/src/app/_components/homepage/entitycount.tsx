@@ -1,5 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { SortParams } from "@cubby/schemas/pagination";
+import { countProblems } from "@cubby/schemas/problems";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { AlertTriangle } from "lucide-react";
@@ -22,9 +23,10 @@ function ProblemsStatCard({ enabled }: { enabled: boolean }) {
   // always-on query is idle during SSR but fetching on the client's first
   // render, so the isLoading branch diverges and hydration mismatches.
   const { data, isLoading } = useQuery({
-    ...api.problems.getProblemsCount.queryOptions(),
+    ...api.problems.getAllProblems.queryOptions(),
     staleTime: 5 * 60 * 1000,
     enabled,
+    select: countProblems,
   });
   const count = data?.total ?? 0;
   const alert = count > 0;

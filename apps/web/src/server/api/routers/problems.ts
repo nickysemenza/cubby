@@ -2,14 +2,12 @@ import { ingredientId } from "@cubby/schemas/identifiers";
 import {
   allProblemsSchema,
   maintenanceCountsSchema,
-  problemsCountSchema,
 } from "@cubby/schemas/problems";
 import { z } from "zod";
 import { streamProgress } from "~/lib/bulk-progress";
 import {
   deleteUnusedIngredients,
   findAllProblems,
-  findAllProblemsCount,
   findMaintenanceCounts,
   pruneUnusedAliases,
   recipeUsageCountsByProduct,
@@ -24,19 +22,9 @@ const getAllProblems = protectedProcedure
     return await findAllProblems(ctx.db, ctx.upcLookupClient, ctx.usdaClient);
   });
 
-// Count-only procedure for badge display (optimized)
-const getProblemsCount = protectedProcedure
-  .output(problemsCountSchema)
-  .query(async ({ ctx }) => {
-    return await findAllProblemsCount(
-      ctx.db,
-      ctx.upcLookupClient,
-      ctx.usdaClient,
-    );
-  });
-
 // Counts behind the Settings → Maintenance "N affected" dry-run. Focused subset
-// of detectors (no USDA/UPC network), separate from getProblemsCount.
+// of detectors (no USDA/UPC network); badge/count consumers instead derive
+// counts client-side from getAllProblems via countProblems (one shared scan).
 const getMaintenanceCounts = protectedProcedure
   .output(maintenanceCountsSchema)
   .query(async ({ ctx }) => {
@@ -105,7 +93,6 @@ const deleteUnused = protectedProcedure
 
 export const problemsRouter = createTRPCRouter({
   getAllProblems,
-  getProblemsCount,
   getMaintenanceCounts,
   reparseStale,
   recipeUsageByProduct,
