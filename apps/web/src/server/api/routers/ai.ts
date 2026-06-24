@@ -156,6 +156,7 @@ export const aiRouter = createTRPCRouter({
             z.object({
               id: ingredientId,
               name: z.string().min(1),
+              wantUsda: z.boolean(),
               wantMerge: z.boolean(),
             }),
           )

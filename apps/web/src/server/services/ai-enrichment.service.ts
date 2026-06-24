@@ -576,19 +576,32 @@ export interface EnrichmentProposal {
 export async function* precomputeEnrichmentProposals(
   usdaService: USDAService,
   db: Database,
-  items: { id: IngredientId; name: string; wantMerge: boolean }[],
+  items: {
+    id: IngredientId;
+    name: string;
+    wantUsda: boolean;
+    wantMerge: boolean;
+  }[],
 ): AsyncGenerator<
   BulkProgressEvent<EnrichmentProposal, { processed: number }>
 > {
   const total = items.length;
   let done = 0;
+  // An already-linked row needs no USDA match — skip the agent loop entirely.
+  const skippedUsda: EnrichmentProposal["usda"] = {
+    food: null,
+    confidence: "low",
+    reasoning: "",
+  };
   yield { type: "progress", done, total };
   for (let i = 0; i < items.length; i += 5) {
     const batch = items.slice(i, i + 5);
     const settled = await Promise.allSettled(
       batch.map(async (item): Promise<EnrichmentProposal> => {
         const [usda, merge] = await Promise.all([
-          suggestUsdaFood(usdaService, item.name),
+          item.wantUsda
+            ? suggestUsdaFood(usdaService, item.name)
+            : Promise.resolve(skippedUsda),
           item.wantMerge
             ? suggestIngredientMerge(db, { id: item.id, name: item.name })
             : Promise.resolve(null),

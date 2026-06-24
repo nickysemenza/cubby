@@ -6,6 +6,8 @@ import { useTRPCClient } from "~/trpc/react";
 interface ProposalRequest {
   id: string;
   name: string;
+  /** Run the USDA matcher (skip for already-linked rows). */
+  wantUsda: boolean;
   wantMerge: boolean;
 }
 

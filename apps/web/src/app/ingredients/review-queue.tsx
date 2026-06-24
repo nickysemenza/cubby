@@ -1,4 +1,3 @@
-import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
@@ -17,14 +16,10 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithRecompute } from "~/lib/recompute-summary";
 import type { EnrichmentRow } from "~/server/services/ingredient.service";
 import { useTRPC } from "~/trpc/react";
+import type { EnrichmentEditorHandle } from "./enrichment-editor";
 import { type MergeOption, ReviewCard } from "./review-card";
 import { useProposalCache } from "./use-proposal-cache";
-import {
-  buildPackagePrice,
-  buildProductWrite,
-  defaultPriceUnit,
-  hasUsdaLink,
-} from "./workbench-editor-core";
+import { hasUsdaLink } from "./workbench-editor-core";
 
 // How many rows ahead of the cursor to pre-compute. Bounds AI spend to roughly
 // (rows reviewed + LOOKAHEAD) — we never precompute far past where the user is.
@@ -33,11 +28,11 @@ const LOOKAHEAD = 5;
 type MergePair = { id: string; name: string };
 
 /**
- * Keyboard-first review queue: walks a worklist one ingredient at a time, each
- * card pre-loaded with its AI USDA (and merge) proposal. The human approves
- * every write — Apply creates/updates a product, or merges/skips/flags. A
- * session-only `processed` set removes a handled row immediately (so skips don't
- * resurface and the next card shows without waiting on the refetch).
+ * Keyboard-first review queue: walks a worklist one ingredient at a time. Each
+ * card is the shared {@link EnrichmentEditor} (so it shows only the inputs a row
+ * needs) wrapped in queue chrome — AI proposal, alternatives, merge list. The
+ * human approves every write (Apply saves; or merge/skip/flag). A session-only
+ * `processed` set removes a handled row immediately.
  */
 export function ReviewQueue({
   rows,
@@ -58,99 +53,40 @@ export function ReviewQueue({
   const idx = Math.min(cursor, Math.max(0, queue.length - 1));
   const current = queue[idx] ?? null;
 
-  // Per-card draft. `unit` persists across cards (the price accelerator): a
-  // measure unit you pick sticks; count items snap back to "each".
-  const [draftFood, setDraftFood] =
-    useState<FoodSummaryWithLinkedProducts | null>(null);
-  const [dollars, setDollars] = useState("");
-  const [qty, setQty] = useState("1");
-  const [unit, setUnit] = useState("lb");
-  const [showReplace, setShowReplace] = useState(false);
-
+  const editorRef = useRef<EnrichmentEditorHandle>(null);
   const [mergeConfirm, setMergeConfirm] = useState<MergePair[] | null>(null);
   const mergeTargetRef = useRef<string | null>(null);
   const mergeSourceRef = useRef<string | null>(null);
-  const appliedIdRef = useRef<string | null>(null);
-  // Whether the user manually chose a food for the current card — so a
-  // late-arriving proposal doesn't overwrite their pick.
-  const pickedRef = useRef(false);
+  const flaggedIdRef = useRef<string | null>(null);
 
   const markProcessed = (id: string | null) => {
     if (!id) return;
     setProcessed((prev) => new Set(prev).add(id));
   };
 
-  const pickFood = (f: FoodSummaryWithLinkedProducts) => {
-    pickedRef.current = true;
-    setDraftFood(f);
-  };
-
-  // Reset the draft when the current ingredient changes; seed the food from its
-  // cached proposal and auto-open manual search when there's no link/proposal.
-  // Reads `current`/`cache` through a ref so the effect fires only on id change.
-  const currentId = current?.id ?? null;
-  const seedRef = useRef({ current, get: cache.get });
-  seedRef.current = { current, get: cache.get };
-  useEffect(() => {
-    if (!currentId) return;
-    const { current: cur, get } = seedRef.current;
-    if (!cur) return;
-    const prop = get(cur.id);
-    pickedRef.current = false;
-    setDraftFood(prop?.usda.food ?? null);
-    setDollars("");
-    setQty("1");
-    setUnit((prev) => {
-      const def = defaultPriceUnit(cur);
-      if (def === "each") return "each";
-      return prev && prev.toLowerCase() !== "each" ? prev : def;
-    });
-    setShowReplace(false);
-  }, [currentId]);
-
-  // The proposal can land after the card mounts (async precompute). Seed the food
-  // from it once it arrives, unless the user already picked one.
-  const proposalFood = currentId
-    ? (cache.get(currentId)?.usda.food ?? null)
-    : null;
-  useEffect(() => {
-    if (!proposalFood || pickedRef.current) return;
-    setDraftFood((prev) => prev ?? proposalFood);
-  }, [proposalFood]);
-
-  // Keep the lookahead window pre-computed as the cursor advances. `ensure` is
-  // stable, so this fires only when the cursor or worklist moves.
+  // Keep the lookahead window pre-computed as the cursor advances. Linked rows
+  // with no merge candidate have nothing to fetch, so they're skipped (no AI).
   const ensureProposals = cache.ensure;
   useEffect(() => {
     if (queue.length === 0) return;
     ensureProposals(
-      queue.slice(idx, idx + LOOKAHEAD + 1).map((r) => ({
-        id: r.id,
-        name: r.name,
-        wantMerge: r.mergeCandidates.length > 0,
-      })),
+      queue
+        .slice(idx, idx + LOOKAHEAD + 1)
+        .map((r) => ({
+          id: r.id,
+          name: r.name,
+          wantUsda: !hasUsdaLink(r),
+          wantMerge: r.mergeCandidates.length > 0,
+        }))
+        .filter((it) => it.wantUsda || it.wantMerge),
     );
   }, [idx, queue, ensureProposals]);
 
-  const createProduct = useActionMutation({
-    mutationFn: api.product.create.mutationOptions,
-    success: (d) => savedWithRecompute(d.sideEffects, `Enriched ${d.name}`),
-    invalidateKeys: [["ingredient"], ["product"]],
-    onSuccess: () => markProcessed(appliedIdRef.current),
-    error: (err) => `Failed: ${getErrorMessage(err)}`,
-  });
-  const updateProduct = useActionMutation({
-    mutationFn: api.product.update.mutationOptions,
-    success: (d) => savedWithRecompute(d.sideEffects, `Updated ${d.name}`),
-    invalidateKeys: [["ingredient"], ["product"]],
-    onSuccess: () => markProcessed(appliedIdRef.current),
-    error: (err) => `Failed: ${getErrorMessage(err)}`,
-  });
   const markNoUsdaMut = useActionMutation({
     mutationFn: api.product.update.mutationOptions,
     success: "Marked: no USDA entry.",
     invalidateKeys: [["ingredient"], ["product"]],
-    onSuccess: () => markProcessed(appliedIdRef.current),
+    onSuccess: () => markProcessed(flaggedIdRef.current),
     error: (err) => `Failed: ${getErrorMessage(err)}`,
   });
   const mergeMutation = useActionMutation({
@@ -161,43 +97,16 @@ export function ReviewQueue({
     error: (err) => `Merge failed: ${getErrorMessage(err)}`,
   });
 
-  const busy =
-    createProduct.isPending ||
-    updateProduct.isPending ||
-    markNoUsdaMut.isPending ||
-    mergeMutation.isPending;
+  const busy = markNoUsdaMut.isPending || mergeMutation.isPending;
 
-  const apply = (withPrice: boolean) => {
-    if (!current || busy) return;
-    const { eachPrice, mapping } = withPrice
-      ? buildPackagePrice(dollars, qty, unit)
-      : { eachPrice: null, mapping: null };
-    const newMappings = mapping ? [mapping] : [];
-    if (draftFood == null && eachPrice == null && newMappings.length === 0) {
-      toast.error("Pick a USDA food or enter a price first.");
-      return;
-    }
-    const write = buildProductWrite(current, {
-      food: draftFood,
-      eachPrice,
-      newMappings,
-    });
-    appliedIdRef.current = current.id;
-    if (write.kind === "create") createProduct.mutate(write.input);
-    else updateProduct.mutate({ id: write.id, data: write.data });
-  };
-
-  const skip = () => {
-    if (!current) return;
-    markProcessed(current.id);
-  };
+  const skip = () => current && markProcessed(current.id);
 
   const canMarkNoUsda =
     !!current && current.product.length > 0 && !hasUsdaLink(current);
   const markNoUsda = () => {
     const pid = current?.product[0]?.id;
     if (!current || !pid || busy || hasUsdaLink(current)) return;
-    appliedIdRef.current = current.id;
+    flaggedIdRef.current = current.id;
     markNoUsdaMut.mutate({ id: pid, data: { usdaUnavailable: true } });
   };
 
@@ -253,17 +162,14 @@ export function ReviewQueue({
   // Keyboard model. Bound once; reads the latest handlers/flags through a ref so
   // the listener isn't re-attached on every keystroke.
   const kbd = {
-    apply,
+    apply: () => editorRef.current?.save(),
     skip,
     openMerge,
     markNoUsda,
     next: () => setCursor((c) => Math.min(queue.length - 1, c + 1)),
     prev: () => setCursor((c) => Math.max(0, c - 1)),
-    toggleReplace: () => setShowReplace((v) => !v),
     mergeOpen: mergeConfirm != null,
-    replaceOpen: showReplace,
     exit: onExit,
-    closeReplace: () => setShowReplace(false),
   };
   const kbdRef = useRef(kbd);
   kbdRef.current = kbd;
@@ -281,19 +187,15 @@ export function ReviewQueue({
 
       if (e.key === "Escape") {
         if (k.mergeOpen) return; // dialog owns Escape
-        if (k.replaceOpen) {
-          k.closeReplace();
-          return;
-        }
         k.exit();
         return;
       }
       if (k.mergeOpen) return;
       // Enter applies — but not while typing in a text field (the USDA search
-      // combobox owns Enter; the unit field has its own handler).
+      // combobox owns Enter).
       if (e.key === "Enter" && !isText) {
         e.preventDefault();
-        k.apply(!e.shiftKey);
+        k.apply();
         return;
       }
       if (isText) return;
@@ -301,10 +203,6 @@ export function ReviewQueue({
         case "s":
           e.preventDefault();
           k.skip();
-          break;
-        case "u":
-          e.preventDefault();
-          k.toggleReplace();
           break;
         case "m":
           e.preventDefault();
@@ -383,24 +281,12 @@ export function ReviewQueue({
           row={current}
           proposal={cache.get(current.id)}
           proposalPending={cache.running && cache.get(current.id) === undefined}
-          food={draftFood}
-          onPickFood={pickFood}
-          dollars={dollars}
-          qty={qty}
-          unit={unit}
-          onPrice={(patch) => {
-            if (patch.dollars !== undefined) setDollars(patch.dollars);
-            if (patch.qty !== undefined) setQty(patch.qty);
-            if (patch.unit !== undefined) setUnit(patch.unit);
-          }}
-          showReplace={showReplace}
-          onToggleReplace={() => setShowReplace((v) => !v)}
-          onApply={apply}
+          editorRef={editorRef}
+          onSaved={() => markProcessed(current.id)}
           mergeOptions={mergeOptions}
           onMerge={openMerge}
           canMarkNoUsda={canMarkNoUsda}
           onMarkNoUsda={markNoUsda}
-          isPending={busy}
           position={{ index: idx, total: queue.length }}
         />
       )}

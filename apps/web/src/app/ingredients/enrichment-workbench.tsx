@@ -1,6 +1,5 @@
 import type { Confidence } from "@cubby/schemas/ai";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
-import type { UnitMapping, UnitMappingInput } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
@@ -8,7 +7,6 @@ import {
   ChevronDown,
   ChevronRight,
   GitMerge,
-  Plus,
   Sparkles,
   X,
 } from "lucide-react";
@@ -21,12 +19,6 @@ import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useBulkActionMutation } from "~/app/_components/hooks/useBulkActionMutation";
 import { MergeConfirmation } from "~/app/_components/ingredient/merge-confirmation";
 import { RecipeUsagesTable } from "~/app/_components/recipe/recipe-usages-table";
-import { ConversionCapabilities } from "~/app/_components/units/ConversionCapabilities";
-import {
-  isDisplayMapping,
-  UnitMappingGraph,
-} from "~/app/_components/units/unit-mapping-graph";
-import { UnitMappingsTable } from "~/app/_components/units/unitmappingstable";
 import { CoverageChips } from "~/app/problems/components/unit-coverage-fix";
 import {
   AlertDialog,
@@ -43,23 +35,17 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { Progress } from "~/components/ui/progress";
 import { Spinner } from "~/components/ui/spinner";
-import { BASE_KINDS, type BaseKind } from "~/lib/conversion-coverage";
 import { getErrorMessage } from "~/lib/error-utils";
-import { isMoneyUnit } from "~/lib/price-mapping-utils";
 import { savedWithRecompute } from "~/lib/recompute-summary";
-import { getIngredientMappings } from "~/lib/unit-mapping-utils";
 import { cn } from "~/lib/utils";
 import type { EnrichmentRow } from "~/server/services/ingredient.service";
 import { useTRPC } from "~/trpc/react";
+import { EnrichmentEditor } from "./enrichment-editor";
 import { ReviewQueue } from "./review-queue";
 import {
   buildPackagePrice,
-  buildPreviewMappings,
-  buildProductWrite,
-  defaultPriceUnit,
   hasPriceEntry,
   hasUsdaLink,
-  parsePositive,
   UnitInput,
 } from "./workbench-editor-core";
 
@@ -71,23 +57,6 @@ type Suggestion = {
   confidence: Confidence;
   reasoning: string;
 };
-
-/** One editable conversion row in the editor (the user can add several). */
-type ConvRow = {
-  id: string;
-  fromQty: string;
-  fromUnit: string;
-  toQty: string;
-  toUnit: string;
-};
-let convRowSeq = 0;
-const blankConvRow = (fromUnit = ""): ConvRow => ({
-  id: `c${convRowSeq++}`,
-  fromQty: "1",
-  fromUnit,
-  toQty: "",
-  toUnit: "g",
-});
 
 const FIX_LABEL: Record<EnrichmentRow["recommendedFix"], string> = {
   "no-product": "Link product",
@@ -862,13 +831,10 @@ function WorkbenchRow({
 }
 
 /**
- * Unified inline editor. For a bare ingredient it creates the first product; for
- * one with a product it updates the first one. Either way: link a USDA food
- * (fills weight/volume/calories), set a price ("<qty> <unit> = $<price>": `each`
- * → the scalar per-each price, a measure like 2 lb → a money unit mapping so
- * weight/volume recipe lines stay costable), and optionally add one conversion.
- * Works off the row's already-loaded products, so updates merge with existing
- * mappings without a refetch.
+ * Browse-table chrome around the shared {@link EnrichmentEditor}: a plain USDA
+ * search picker, Save/Cancel, and the recipe-usages footer. All the gap-aware
+ * editing (link/price/conversions/N-A + live graph) lives in EnrichmentEditor,
+ * shared with the review card so the two can't drift.
  */
 function WorkbenchEditor({
   row,
@@ -879,330 +845,30 @@ function WorkbenchEditor({
   initialFood: FoodSummaryWithLinkedProducts | null;
   onDone: () => void;
 }) {
-  const api = useTRPC();
   const product = row.product[0] ?? null;
-  const usdaLinked = hasUsdaLink(row);
-
-  // Current state shown before the inputs (same as the Problems inline fix):
-  // the linked USDA food(s) and the effective core-4 conversions, derived from
-  // the row's already-loaded products — no refetch.
-  const linkedFoods = row.product
-    .map((p) => p.food)
-    .filter((f): f is NonNullable<typeof f> => f != null);
-  const currentMappings = useMemo<UnitMapping[]>(() => {
-    try {
-      return getIngredientMappings(row).filter(isDisplayMapping);
-    } catch {
-      return [];
-    }
-  }, [row]);
-
-  // Which base kinds are still uncovered, so the steps reflect what each fix
-  // actually closes: price closes money; a conversion closes a measure/calorie
-  // gap. The conversion is only "optional" once nothing measurable is missing —
-  // setting a price won't cover volume, so don't pretend it's optional then.
-  const covered = new Set(row.coverage.covered);
-  // Kinds the user hasn't marked N/A — a gap only counts against an applicable kind.
-  const applicableKinds = new Set(row.coverage.applicable);
-  const moneyMissing = applicableKinds.has("money") && !covered.has("money");
-  const usdaUnavailable = row.product.some((p) => p.usdaUnavailable);
-  const conversionGaps = (["weight", "volume", "calories"] as const).filter(
-    (k) => applicableKinds.has(k) && !covered.has(k),
-  );
-  // A conversion is the path for those gaps only once USDA can't fill them
-  // (already linked, or there's no USDA entry). Before that, linking USDA is.
-  const conversionNeeded =
-    conversionGaps.length > 0 && (usdaLinked || usdaUnavailable);
-
-  // Islanded price: a price exists but money is unreachable from a measure (e.g.
-  // a per-each price on a food whose portions only map "large"/"cup" → g, never
-  // "each" → g). The fix is to *connect* the existing price, not add a new one —
-  // bridge its measure-side unit into the weight graph (`1 each = N g`).
-  const priceEdge = currentMappings.find(
-    (m) => isMoneyUnit(m.a.unit) || isMoneyUnit(m.b.unit),
-  );
-  const priceIslanded = moneyMissing && priceEdge != null;
-  const islandedUnit = priceEdge
-    ? isMoneyUnit(priceEdge.a.unit)
-      ? priceEdge.b.unit
-      : priceEdge.a.unit
-    : null;
-
-  const [food, setFood] = useState<FoodSummaryWithLinkedProducts | null>(
-    initialFood,
-  );
-  const [priceQty, setPriceQty] = useState("1");
-  const [priceUnit, setPriceUnit] = useState(defaultPriceUnit(row));
-  const [price, setPrice] = useState("");
-  // One or more conversion rows; the first is pre-seeded to bridge an islanded
-  // price into grams when applicable.
-  const [convRows, setConvRows] = useState<ConvRow[]>([
-    blankConvRow(islandedUnit ?? ""),
-  ]);
-  const patchConvRow = (id: string, patch: Partial<ConvRow>) =>
-    setConvRows((rows) =>
-      rows.map((r) => (r.id === id ? { ...r, ...patch } : r)),
-    );
-  const addConvRow = () => setConvRows((rows) => [...rows, blankConvRow()]);
-  const removeConvRow = (id: string) =>
-    setConvRows((rows) => rows.filter((r) => r.id !== id));
-
-  // Live preview of the mapping graph as it would be after this edit (shared with
-  // the review card so both light up coverage identically).
-  const previewMappings = useMemo<UnitMapping[]>(
-    () =>
-      buildPreviewMappings(row, {
-        food,
-        dollars: price,
-        qty: priceQty,
-        unit: priceUnit,
-        convRows,
-      }),
-    [row, food, price, priceQty, priceUnit, convRows],
-  );
-
-  const createProduct = useActionMutation({
-    mutationFn: api.product.create.mutationOptions,
-    success: `Enriched ${row.name}.`,
-    invalidateKeys: [["ingredient"]],
-    onSuccess: onDone,
-    error: (err) => `Failed to create product: ${getErrorMessage(err)}`,
-  });
-  const updateProduct = useActionMutation({
-    mutationFn: api.product.update.mutationOptions,
-    success: `Updated ${row.name}.`,
-    invalidateKeys: [["ingredient"], ["product"]],
-    onSuccess: onDone,
-    error: (err) => `Failed to update: ${getErrorMessage(err)}`,
-  });
-
-  // Toggle a base kind's "not applicable" flag on the ingredient. Marking volume
-  // N/A on a count-only item (e.g. whole lemons) drops it from the graded
-  // universe, so the row reads "complete" instead of nagging for a volume it's
-  // never measured by. Invalidates the worklist so coverage recomputes.
-  const updateIngredient = useActionMutation({
-    mutationFn: api.ingredient.update.mutationOptions,
-    success: `Updated ${row.name}.`,
-    invalidateKeys: [["ingredient"]],
-    error: (err) => `Failed to update: ${getErrorMessage(err)}`,
-  });
-  const naKinds = row.naKinds ?? [];
-  const toggleNaKind = (kind: BaseKind) => {
-    const next = new Set(naKinds);
-    if (next.has(kind)) next.delete(kind);
-    else next.add(kind);
-    updateIngredient.mutate({ id: row.id, data: { naKinds: [...next] } });
-  };
-
-  const buildPriceAndMappings = () => {
-    let eachPrice: number | null = null;
-    const newMappings: UnitMappingInput[] = [];
-
-    const built = buildPackagePrice(price, priceQty, priceUnit);
-    eachPrice = built.eachPrice;
-    if (built.mapping) newMappings.push(built.mapping);
-
-    for (const c of convRows) {
-      const fromQty = parsePositive(c.fromQty);
-      const toQty = parsePositive(c.toQty);
-      const fromUnit = c.fromUnit.trim();
-      const toUnit = c.toUnit.trim();
-      if (fromQty != null && toQty != null && fromUnit && toUnit) {
-        newMappings.push({
-          a: { value: fromQty, unit: fromUnit },
-          b: { value: toQty, unit: toUnit },
-          source: "manual: conversion (workbench)",
-        });
-      } else if (fromUnit || c.toQty.trim()) {
-        // A half-filled row is a mistake, not an empty extra — tell the user.
-        return { error: "Fill in both sides of each conversion" as const };
-      }
-    }
-
-    return { eachPrice, newMappings };
-  };
-
-  const save = () => {
-    const built = buildPriceAndMappings();
-    if ("error" in built) {
-      toast.error(built.error);
-      return;
-    }
-    const { eachPrice, newMappings } = built;
-
-    if (food == null && eachPrice == null && newMappings.length === 0) {
-      toast.error("Link a USDA food, set a price, or add a conversion first");
-      return;
-    }
-
-    const write = buildProductWrite(row, { food, eachPrice, newMappings });
-    if (write.kind === "create") createProduct.mutate(write.input);
-    else updateProduct.mutate({ id: write.id, data: write.data });
-  };
-
-  const isPending = createProduct.isPending || updateProduct.isPending;
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-        <div className="shrink-0 space-y-3 lg:w-80">
-          {product && row.coverage.tier !== "complete" && (
-            <p className="text-xs">
-              <span className="font-medium text-warning">Still missing:</span>{" "}
-              {[
-                applicableKinds.has("weight") &&
-                  !covered.has("weight") &&
-                  "weight",
-                applicableKinds.has("volume") &&
-                  !covered.has("volume") &&
-                  "volume",
-                moneyMissing &&
-                  (priceIslanded ? "price (not connected)" : "price"),
-                applicableKinds.has("calories") &&
-                  !covered.has("calories") &&
-                  "calories",
-              ]
-                .filter(Boolean)
-                .join(", ")}
-            </p>
-          )}
-
-          {!usdaLinked && (
-            <div className="space-y-1">
-              <p className="font-medium text-xs">
-                Link a USDA food{" "}
-                <span className="font-normal text-muted-foreground">
-                  — fills weight, volume &amp; calories
-                </span>
+    <EnrichmentEditor
+      row={row}
+      initialFood={initialFood}
+      onSaved={onDone}
+      slots={{
+        usdaPicker: ({ food, setFood }) => (
+          <>
+            <UsdaFoodSearchField
+              initialQuery={row.name}
+              label=""
+              onSelect={setFood}
+            />
+            {food && (
+              <p className="flex items-center gap-1 text-positive text-xs">
+                <Check className="h-3 w-3" />
+                {food.foodInfo.description}
               </p>
-              <UsdaFoodSearchField
-                initialQuery={row.name}
-                label=""
-                onSelect={setFood}
-              />
-              {food && (
-                <p className="flex items-center gap-1 text-positive text-xs">
-                  <Check className="h-3 w-3" />
-                  {food.foodInfo.description}
-                </p>
-              )}
-            </div>
-          )}
-
-          {priceIslanded && (
-            <p className="rounded-md border bg-warning/10 px-2 py-1.5 text-warning text-xs">
-              Already priced, but “{islandedUnit}” isn’t linked to a weight — so
-              the price can’t be reached from a recipe measure. Connect it below
-              (e.g. 1 {islandedUnit} = N&nbsp;g) instead of adding a new price.
-            </p>
-          )}
-
-          {moneyMissing && !priceIslanded && (
-            <div className="space-y-1">
-              <p className="font-medium text-xs">Set a price</p>
-              <div className="flex items-center gap-1.5 text-sm">
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  value={priceQty}
-                  onChange={(e) => setPriceQty(e.target.value)}
-                  className="w-12"
-                  aria-label="Price quantity"
-                />
-                <UnitInput
-                  value={priceUnit}
-                  onChange={setPriceUnit}
-                  ariaLabel="Price unit"
-                />
-                <span>= $</span>
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  step="0.01"
-                  placeholder="0.00"
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value)}
-                  className="w-20"
-                />
-              </div>
-              <p className="text-muted-foreground text-xs">
-                For foods, price by the package, e.g. 2&nbsp;lb = $5.99. Use
-                “each” for count items.
-              </p>
-            </div>
-          )}
-
-          <div className="space-y-1.5">
-            <p className="font-medium text-xs">
-              {priceIslanded ? "Connect the price" : "Add conversions"}{" "}
-              <span className="font-normal text-muted-foreground">
-                {priceIslanded
-                  ? `— links “${islandedUnit}” to grams so your price is reachable`
-                  : conversionNeeded
-                    ? `— covers ${conversionGaps.join(", ")} (e.g. 1 cup = 240 g)`
-                    : "— optional, e.g. 1 cup = 240 g"}
-              </span>
-            </p>
-            {convRows.map((c) => (
-              <div key={c.id} className="flex items-center gap-1.5 text-sm">
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  value={c.fromQty}
-                  onChange={(e) =>
-                    patchConvRow(c.id, { fromQty: e.target.value })
-                  }
-                  className="w-12"
-                  aria-label="From quantity"
-                />
-                <UnitInput
-                  value={c.fromUnit}
-                  onChange={(v) => patchConvRow(c.id, { fromUnit: v })}
-                  placeholder="cup"
-                  ariaLabel="From unit"
-                />
-                <span>=</span>
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  value={c.toQty}
-                  onChange={(e) =>
-                    patchConvRow(c.id, { toQty: e.target.value })
-                  }
-                  className="w-14"
-                  aria-label="To quantity"
-                />
-                <UnitInput
-                  value={c.toUnit}
-                  onChange={(v) => patchConvRow(c.id, { toUnit: v })}
-                  placeholder="g"
-                  ariaLabel="To unit"
-                />
-                {convRows.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeConvRow(c.id)}
-                    className="text-muted-foreground hover:text-destructive"
-                    aria-label="Remove conversion"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-            ))}
-            <button
-              type="button"
-              onClick={addConvRow}
-              className="flex items-center gap-1 text-muted-foreground text-xs hover:text-foreground"
-            >
-              <Plus className="h-3 w-3" /> Add another
-            </button>
-          </div>
-
+            )}
+          </>
+        ),
+        actions: ({ save, isPending }) => (
           <div className="flex items-center gap-2">
             <Button size="sm" onClick={save} disabled={isPending}>
               {isPending
@@ -1215,97 +881,24 @@ function WorkbenchEditor({
               Cancel
             </Button>
           </div>
-        </div>
-
-        {(linkedFoods.length > 0 || currentMappings.length > 0) && (
-          <div className="min-w-0 flex-1 space-y-1 rounded-md border bg-background/60 p-2">
-            {linkedFoods.length > 0 && (
-              <p className="flex items-center gap-1 text-xs">
-                <Check className="h-3 w-3 text-positive" />
-                <span className="text-muted-foreground">Linked USDA:</span>{" "}
-                {linkedFoods.map((f) => f.foodInfo.description).join(", ")}
+        ),
+        footer:
+          row.recipeUsages.length > 0 ? (
+            <div className="space-y-1.5">
+              <p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+                Appears in {row.recipeCount} recipe
+                {row.recipeCount === 1 ? "" : "s"}
               </p>
-            )}
-            {currentMappings.length > 0 && (
-              <div className="space-y-1">
-                <p className="font-medium text-xs">Current conversions</p>
-                <UnitMappingsTable mappings={currentMappings} />
+              <div className="overflow-x-auto rounded-md border bg-background/60 p-2">
+                <RecipeUsagesTable
+                  usages={row.recipeUsages}
+                  ingredientName={row.name}
+                  aliases={row.aliases}
+                />
               </div>
-            )}
-          </div>
-        )}
-
-        <div className="shrink-0 space-y-1 lg:w-72">
-          <p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
-            Unit graph (live)
-          </p>
-          <UnitMappingGraph mappings={previewMappings} />
-          <p className="text-[10px] text-muted-foreground leading-tight">
-            Units as nodes, conversions as edges (dashed = built-in, e.g. g↔lb).
-            A disconnected cluster (e.g. an islanded price) floats off on its
-            own.
-          </p>
-        </div>
-
-        <div className="shrink-0 space-y-1 lg:w-56">
-          <p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
-            Coverage (live)
-          </p>
-          <div className="rounded-md border bg-background/60 p-2">
-            <ConversionCapabilities
-              mappings={previewMappings}
-              kinds={row.coverage.applicable}
-              hideConvertButton
-            />
-          </div>
-          {/* Per-kind "not applicable" opt-out — drops a kind from grading so a
-            count-only ingredient (e.g. whole lemons, never measured by volume)
-            reads complete instead of being nagged for a gap it can't fill. */}
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 pt-1">
-            <span className="text-[10px] text-muted-foreground uppercase tracking-wide">
-              N/A
-            </span>
-            {BASE_KINDS.map((kind) => {
-              const off = naKinds.includes(kind);
-              return (
-                <button
-                  key={kind}
-                  type="button"
-                  disabled={updateIngredient.isPending}
-                  onClick={() => toggleNaKind(kind)}
-                  aria-pressed={off}
-                  className={cn(
-                    "flex items-center gap-1 text-[11px]",
-                    off ? "text-foreground" : "text-muted-foreground",
-                  )}
-                >
-                  <Checkbox
-                    checked={off}
-                    className="pointer-events-none h-3 w-3"
-                  />
-                  {kind === "money" ? "price" : kind}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {row.recipeUsages.length > 0 && (
-        <div className="space-y-1.5">
-          <p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
-            Appears in {row.recipeCount} recipe
-            {row.recipeCount === 1 ? "" : "s"}
-          </p>
-          <div className="overflow-x-auto rounded-md border bg-background/60 p-2">
-            <RecipeUsagesTable
-              usages={row.recipeUsages}
-              ingredientName={row.name}
-              aliases={row.aliases}
-            />
-          </div>
-        </div>
-      )}
-    </div>
+            </div>
+          ) : null,
+      }}
+    />
   );
 }
