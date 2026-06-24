@@ -20,6 +20,7 @@ import { useBulkActionMutation } from "~/app/_components/hooks/useBulkActionMuta
 import { MergeConfirmation } from "~/app/_components/ingredient/merge-confirmation";
 import { RecipeUsagesTable } from "~/app/_components/recipe/recipe-usages-table";
 import { CoverageChips } from "~/app/problems/components/unit-coverage-fix";
+import { Row, Stack } from "~/components/layout";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -392,8 +393,8 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
+    <Stack>
+      <Row align="center" wrap gap="sm">
         {(
           [
             ["all", "All"],
@@ -416,7 +417,7 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
             {label} {counts[key]}
           </button>
         ))}
-        <div className="ml-auto flex items-center gap-1">
+        <Row align="center" gap="xs" className="ml-auto">
           {(["browse", "review"] as const).map((v) => (
             <Button
               key={v}
@@ -429,8 +430,8 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
               {v}
             </Button>
           ))}
-        </div>
-      </div>
+        </Row>
+      </Row>
 
       {view === "review" && (
         <ReviewQueue rows={visible} onExit={() => setView("browse")} />
@@ -439,8 +440,11 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
       {view === "browse" && (
         <>
           {suggestionCount > 0 && (
-            <div className="space-y-2 rounded-lg border border-[var(--border-chunky)] bg-muted/20 p-4">
-              <div className="flex items-center justify-between gap-2">
+            <Stack
+              gap="sm"
+              className="rounded-lg border border-[var(--border-chunky)] bg-muted/20 p-4"
+            >
+              <Row align="center" justify="between" gap="sm">
                 <span className="font-medium text-sm">
                   Review {suggestionCount} USDA suggestion
                   {suggestionCount === 1 ? "" : "s"}
@@ -453,14 +457,14 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
                   Create {creatable.length} product
                   {creatable.length === 1 ? "" : "s"}
                 </Button>
-              </div>
+              </Row>
               {createMany.progress && (
                 <Progress
                   value={createMany.progress.done}
                   max={createMany.progress.total}
                 />
               )}
-              <div className="space-y-2">
+              <Stack gap="sm">
                 {Object.entries(suggestions).map(([id, sug]) => {
                   const row = rows.find((r) => r.id === id);
                   if (!row) return null;
@@ -470,9 +474,12 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
                     unit: "lb",
                   };
                   return (
-                    <div
+                    <Row
                       key={id}
-                      className="flex flex-wrap items-center gap-2 text-sm"
+                      align="center"
+                      wrap
+                      gap="sm"
+                      className="text-sm"
                     >
                       <button
                         type="button"
@@ -495,7 +502,12 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
                       >
                         {sug.confidence}
                       </span>
-                      <span className="ml-auto flex items-center gap-1 text-xs">
+                      <Row
+                        as="span"
+                        align="center"
+                        gap="xs"
+                        className="ml-auto text-xs"
+                      >
                         <span className="text-muted-foreground">$</span>
                         <Input
                           value={p.dollars}
@@ -520,17 +532,17 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
                           onChange={(v) => setSuggestionPrice(id, { unit: v })}
                           ariaLabel={`Price unit for ${row.name}`}
                         />
-                      </span>
-                    </div>
+                      </Row>
+                    </Row>
                   );
                 })}
-              </div>
+              </Stack>
               <p className="text-2xs text-muted-foreground">
                 Price optional — leave blank to create the USDA link and price
                 later. Foods are usually priced by package (e.g. $5.99 / 2 lb);
                 a unit of “each” stores a per-item price.
               </p>
-            </div>
+            </Stack>
           )}
 
           {error && (
@@ -575,13 +587,18 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
           )}
 
           {isLoading && (
-            <div className="flex justify-center py-6">
+            <Row justify="center" className="py-6">
               <Spinner />
-            </div>
+            </Row>
           )}
 
           {selected.size > 0 && (
-            <div className="sticky bottom-4 flex flex-wrap items-center gap-2 rounded-lg border border-[var(--border-chunky)] bg-background/95 px-4 py-2 shadow-sm backdrop-blur">
+            <Row
+              align="center"
+              wrap
+              gap="sm"
+              className="sticky bottom-4 rounded-lg border border-[var(--border-chunky)] bg-background/95 px-4 py-2 shadow-sm backdrop-blur"
+            >
               <span className="font-medium text-sm">
                 {selected.size} selected
               </span>
@@ -622,7 +639,7 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
                   max={markNoUsda.progress.total}
                 />
               )}
-            </div>
+            </Row>
           )}
 
           <AlertDialog
@@ -654,7 +671,7 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
           </AlertDialog>
         </>
       )}
-    </div>
+    </Stack>
   );
 }
 
@@ -669,7 +686,7 @@ function MergeHint({
   onMerge: () => void;
 }) {
   return (
-    <div className="mt-1 flex items-center gap-2">
+    <Row align="center" gap="sm" className="mt-1">
       <span
         className={cn(
           "text-xs",
@@ -690,7 +707,7 @@ function MergeHint({
         <GitMerge className="h-3 w-3" />
         Merge
       </Button>
-    </div>
+    </Row>
   );
 }
 
@@ -861,15 +878,20 @@ function WorkbenchEditor({
               onSelect={setFood}
             />
             {food && (
-              <p className="flex items-center gap-1 text-positive text-xs">
+              <Row
+                as="p"
+                align="center"
+                gap="xs"
+                className="text-positive text-xs"
+              >
                 <Check className="h-3 w-3" />
                 {food.foodInfo.description}
-              </p>
+              </Row>
             )}
           </>
         ),
         actions: ({ save, isPending }) => (
-          <div className="flex items-center gap-2">
+          <Row align="center" gap="sm">
             <Button size="sm" onClick={save} disabled={isPending}>
               {isPending
                 ? "Saving…"
@@ -880,11 +902,11 @@ function WorkbenchEditor({
             <Button size="sm" variant="ghost" onClick={onDone}>
               Cancel
             </Button>
-          </div>
+          </Row>
         ),
         footer:
           row.recipeUsages.length > 0 ? (
-            <div className="space-y-2">
+            <Stack gap="sm">
               <p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
                 Appears in {row.recipeCount} recipe
                 {row.recipeCount === 1 ? "" : "s"}
@@ -896,7 +918,7 @@ function WorkbenchEditor({
                   aliases={row.aliases}
                 />
               </div>
-            </div>
+            </Stack>
           ) : null,
       }}
     />

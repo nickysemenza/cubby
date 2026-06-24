@@ -3,6 +3,7 @@ import { Package } from "lucide-react";
 import type { FC } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
+import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { getErrorMessage } from "~/lib/error-utils";
 import { queryKeys } from "~/lib/query-keys";
@@ -181,7 +182,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
       label: "Inventory Locations",
       value:
         product.inventoryEntry && product.inventoryEntry.length > 0 ? (
-          <div className="mt-1 flex flex-wrap gap-1">
+          <Row gap="xs" wrap className="mt-1">
             <EntityPillLinkList
               entity="location"
               items={product.inventoryEntry.map((entry) => ({
@@ -190,7 +191,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
                 type: entry.location.type,
               }))}
             />
-          </div>
+          </Row>
         ) : undefined,
     },
   ];
@@ -200,7 +201,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
       <BasicInfo
         fields={fields}
         actions={
-          <div className="flex gap-2">
+          <Row gap="sm">
             <Button onClick={onEdit}>Edit</Button>
             <Button
               variant="outline"
@@ -217,7 +218,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
             </Button>
             <PrintLabelButton shortcode={product.shortcode} />
             <DeleteButton />
-          </div>
+          </Row>
         }
       />
       <DeleteDialog />

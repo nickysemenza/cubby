@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { MergeConfirmation } from "~/app/_components/ingredient/merge-confirmation";
+import { Row, Stack } from "~/components/layout";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -232,7 +233,10 @@ export function ReviewQueue({
 
   if (queue.length === 0) {
     return (
-      <div className="space-y-2 rounded-lg border border-dashed p-6 text-center">
+      <Stack
+        gap="sm"
+        className="rounded-lg border border-dashed p-6 text-center"
+      >
         <p className="text-muted-foreground text-sm">
           {reviewedThisSession > 0
             ? `Reviewed ${reviewedThisSession} this session — nothing left in this filter.`
@@ -241,17 +245,23 @@ export function ReviewQueue({
         <Button variant="outline" size="sm" onClick={onExit}>
           Back to browse
         </Button>
-      </div>
+      </Stack>
     );
   }
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-center justify-between gap-2 text-muted-foreground text-xs">
+    <Stack gap="sm">
+      <Row
+        align="center"
+        justify="between"
+        wrap
+        gap="sm"
+        className="text-muted-foreground text-xs"
+      >
         <span>
           {queue.length} left · {reviewedThisSession} reviewed
         </span>
-        <span className="flex items-center gap-2">
+        <Row as="span" align="center" gap="sm">
           <span>
             precomputed {cache.stats.ready}/{cache.stats.requested}
             {cache.running && " · working…"}
@@ -272,8 +282,8 @@ export function ReviewQueue({
           >
             Browse
           </Button>
-        </span>
-      </div>
+        </Row>
+      </Row>
 
       {current && (
         <ReviewCard
@@ -318,6 +328,6 @@ export function ReviewQueue({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </Stack>
   );
 }

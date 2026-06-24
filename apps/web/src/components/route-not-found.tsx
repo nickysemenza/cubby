@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { Row, Stack } from "~/components/layout";
 
 /**
  * Branded 404. Used as the root route's `notFoundComponent` and the router-wide
@@ -10,18 +11,18 @@ import { Link } from "@tanstack/react-router";
 export function RouteNotFound() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center space-y-6 p-4">
-      <div className="flex items-center space-x-2">
+      <Row align="center" gap="sm">
         {/* Canonical logo asset — same source the nav uses, so the mark can't
             drift (the old inline copy had stale, hardcoded fill colors). */}
         <img src="/favicon.svg" alt="" className="h-12 w-12" />
         <h1 className="font-bold text-4xl">404</h1>
-      </div>
-      <div className="space-y-2 text-center">
+      </Row>
+      <Stack gap="sm" className="text-center">
         <h2 className="font-semibold text-2xl">Page Not Found</h2>
         <p className="max-w-md text-muted-foreground">
           The page you're looking for doesn't exist or has been moved.
         </p>
-      </div>
+      </Stack>
       <Link
         to="/"
         className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground text-sm shadow transition-colors hover:bg-primary/90"

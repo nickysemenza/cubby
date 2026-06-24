@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { partition, sumBy, uniq } from "es-toolkit";
 import { Calendar, DollarSign, ExternalLink, Hammer } from "lucide-react";
 import { lazy, Suspense, useMemo, useState } from "react";
+import { Grid, Row, Section, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import {
   Card,
@@ -132,7 +133,7 @@ export function ProjectsDashboard() {
 
   if (!dataWithImages) {
     return (
-      <div className="space-y-4">
+      <Stack>
         <h1 className="font-bold font-heading text-3xl">Projects</h1>
         <Card>
           <CardContent>
@@ -145,7 +146,7 @@ export function ProjectsDashboard() {
             </p>
           </CardContent>
         </Card>
-      </div>
+      </Stack>
     );
   }
 
@@ -214,11 +215,11 @@ function DashboardContent({
   }, [data, filters]);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2">
+    <Stack>
+      <Row align="center" gap="sm">
         <Hammer className="h-8 w-8" />
         <h1 className="font-bold font-heading text-3xl">Projects</h1>
-      </div>
+      </Row>
 
       <SummaryCards projects={projects} tasks={tasks} purchases={purchases} />
 
@@ -232,7 +233,7 @@ function DashboardContent({
 
       <NeedsAttention projects={projects} tasks={tasks} purchases={purchases} />
 
-      <div className="space-y-4">
+      <Stack>
         <ViewSwitcher
           ariaLabel="Dashboard view"
           options={DASHBOARD_VIEW_OPTIONS}
@@ -242,124 +243,94 @@ function DashboardContent({
 
         {view === "overview" && (
           <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
-            <div className="space-y-4 pt-4">
+            <Stack className="pt-4">
               <div className="grid gap-4 lg:grid-cols-2">
-                <section className="space-y-4">
-                  <h2 className="font-heading font-semibold text-lg">
-                    Cost vs Estimate
-                  </h2>
-                  <p className="text-muted-foreground text-xs">
-                    Projects with both spending and an estimate
-                  </p>
+                <Section
+                  title="Cost vs Estimate"
+                  description="Projects with both spending and an estimate"
+                >
                   <CostVsEstimate projects={projects} purchases={purchases} />
-                </section>
-                <section className="space-y-4">
-                  <h2 className="font-heading font-semibold text-lg">
-                    Budget Health
-                  </h2>
-                  <p className="text-muted-foreground text-xs">
-                    Top 12 projects by % of estimate spent
-                  </p>
+                </Section>
+                <Section
+                  title="Budget Health"
+                  description="Top 12 projects by % of estimate spent"
+                >
                   <BudgetHealth projects={projects} purchases={purchases} />
-                </section>
+                </Section>
               </div>
 
-              <section className="space-y-4">
-                <h2 className="font-heading font-semibold text-lg">
-                  Top 10 Projects by Spending
-                </h2>
+              <Section title="Top 10 Projects by Spending">
                 <SpendingByProject purchases={purchases} projects={projects} />
-              </section>
+              </Section>
 
-              <section className="space-y-4">
-                <h2 className="font-heading font-semibold text-lg">
-                  Task Status Board
-                </h2>
-                <p className="text-muted-foreground text-xs">
-                  Top 15 projects, sorted by date
-                </p>
+              <Section
+                title="Task Status Board"
+                description="Top 15 projects, sorted by date"
+              >
                 <TaskStatusBoard tasks={tasks} projects={projects} />
-              </section>
-            </div>
+              </Section>
+            </Stack>
           </Suspense>
         )}
 
         {view === "charts" && (
           <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
-            <div className="space-y-4 pt-4">
-              <section className="space-y-4">
-                <h2 className="font-heading font-semibold text-lg">
-                  Project Timeline
-                </h2>
+            <Stack className="pt-4">
+              <Section title="Project Timeline">
                 <ProjectTimeline projects={projects} />
-              </section>
+              </Section>
 
-              <section className="space-y-4">
-                <h2 className="font-heading font-semibold text-lg">
-                  Project Dependencies
-                </h2>
-                <p className="text-muted-foreground text-xs">
-                  Arrows show blocking relationships between projects
-                </p>
+              <Section
+                title="Project Dependencies"
+                description="Arrows show blocking relationships between projects"
+              >
                 <DependencyGraph projects={projects} />
-              </section>
+              </Section>
 
-              <section className="space-y-4">
-                <h2 className="font-heading font-semibold text-lg">
-                  Monthly Spending Trend
-                </h2>
+              <Section title="Monthly Spending Trend">
                 <MonthlyTrend purchases={purchases} />
-              </section>
+              </Section>
 
               <div className="grid gap-4 lg:grid-cols-2">
-                <section className="space-y-4">
-                  <h2 className="font-heading font-semibold text-lg">
-                    Category Split
-                  </h2>
+                <Section title="Category Split">
                   <PurchaseDonut
                     purchases={purchases}
                     height={300}
                     centerLabel="All projects"
                   />
-                </section>
-                <section className="space-y-4">
-                  <h2 className="font-heading font-semibold text-lg">
-                    Spending Heatmap
-                  </h2>
+                </Section>
+                <Section title="Spending Heatmap">
                   <SpendingHeatmap purchases={purchases} />
-                </section>
+                </Section>
               </div>
 
-              <section className="space-y-4">
-                <h2 className="font-heading font-semibold text-lg">
-                  Task Heatmap
-                </h2>
-                <p className="text-muted-foreground text-xs">
-                  Task due dates across all projects
-                </p>
+              <Section
+                title="Task Heatmap"
+                description="Task due dates across all projects"
+              >
                 <TaskHeatmap tasks={tasks} />
-              </section>
-            </div>
+              </Section>
+            </Stack>
           </Suspense>
         )}
 
         {view === "data" && (
-          <div className="space-y-4 pt-4">
-            <section className="space-y-4">
+          <Stack className="pt-4">
+            <Stack as="section">
               <h2 className="font-heading font-semibold text-xl">Projects</h2>
               <ProjectTable projects={projects} purchases={purchases} />
-            </section>
+            </Stack>
 
-            <section className="space-y-4">
+            <Stack as="section">
               <h2 className="font-heading font-semibold text-xl">Tasks</h2>
               <TaskList tasks={tasks} />
-            </section>
+            </Stack>
 
-            <section className="space-y-4">
+            <Stack as="section">
               <h2 className="font-heading font-semibold text-xl">Purchases</h2>
               <PurchaseList purchases={purchases} />
-            </section>
-          </div>
+            </Stack>
+          </Stack>
         )}
 
         {view === "gallery" && (
@@ -367,8 +338,8 @@ function DashboardContent({
             <ProjectCards projects={projects} />
           </div>
         )}
-      </div>
-    </div>
+      </Stack>
+    </Stack>
   );
 }
 
@@ -395,7 +366,7 @@ function SummaryCards({
           <CardTitle className="text-2xl">{activeProjects}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap gap-2">
+          <Row wrap gap="sm">
             {statusCounts(projects.map((p) => p.status)).map(
               ([status, count]) => (
                 <Badge key={status} variant="outline">
@@ -403,7 +374,7 @@ function SummaryCards({
                 </Badge>
               ),
             )}
-          </div>
+          </Row>
         </CardContent>
       </Card>
 
@@ -413,13 +384,13 @@ function SummaryCards({
           <CardTitle className="text-2xl">{activeTasks}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap gap-2">
+          <Row wrap gap="sm">
             {statusCounts(tasks.map((t) => t.status)).map(([status, count]) => (
               <Badge key={status} variant="outline">
                 {status}: {count}
               </Badge>
             ))}
-          </div>
+          </Row>
         </CardContent>
       </Card>
 
@@ -469,27 +440,27 @@ function ProjectCards({ projects }: { projects: NotionProject[] }) {
   }
 
   return (
-    <div className="space-y-4">
+    <Stack>
       {active.length > 0 && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <Grid cols="cards3">
           {active.map((project) => (
             <ProjectCard key={project.id} project={project} />
           ))}
-        </div>
+        </Grid>
       )}
       {done.length > 0 && (
         <details className="group">
           <summary className="cursor-pointer text-muted-foreground text-sm hover:text-foreground">
             Completed ({done.length})
           </summary>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Grid cols="cards3" className="mt-4">
             {done.map((project) => (
               <ProjectCard key={project.id} project={project} />
             ))}
-          </div>
+          </Grid>
         </details>
       )}
-    </div>
+    </Stack>
   );
 }
 
@@ -529,7 +500,7 @@ function ProjectCard({ project }: { project: NotionProject }) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap gap-2">
+          <Row wrap gap="sm">
             {project.kind && <Badge variant="secondary">{project.kind}</Badge>}
             {project.location.map((loc) => (
               <Badge key={loc} variant="outline">
@@ -548,7 +519,7 @@ function ProjectCard({ project }: { project: NotionProject }) {
                 {formatDateRange(project.date, project.dateEnd)}
               </Badge>
             )}
-          </div>
+          </Row>
         </CardContent>
       </Card>
     </Link>
@@ -557,7 +528,7 @@ function ProjectCard({ project }: { project: NotionProject }) {
 
 function DashboardSkeleton() {
   return (
-    <div className="space-y-4">
+    <Stack>
       <Skeleton className="h-8 w-48" />
       <div className="grid gap-4 sm:grid-cols-3">
         {Array.from({ length: 3 }, (_, i) => (
@@ -566,6 +537,6 @@ function DashboardSkeleton() {
         ))}
       </div>
       <Skeleton className="h-64 rounded-lg" />
-    </div>
+    </Stack>
   );
 }

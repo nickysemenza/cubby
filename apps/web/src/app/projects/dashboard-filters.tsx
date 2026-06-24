@@ -1,3 +1,4 @@
+import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 
 export type Filters = {
@@ -47,7 +48,7 @@ function FilterGroup({
   if (options.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <Row align="center" wrap gap="sm">
       <span className="font-medium text-muted-foreground text-xs">
         {label}:
       </span>
@@ -59,7 +60,7 @@ function FilterGroup({
           onClick={() => onToggle(option)}
         />
       ))}
-    </div>
+    </Row>
   );
 }
 
@@ -92,8 +93,8 @@ export function DashboardFilters({
   }
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap gap-4">
+    <Stack gap="sm">
+      <Row wrap gap="lg">
         <FilterGroup
           label="Status"
           options={availableStatuses}
@@ -112,7 +113,7 @@ export function DashboardFilters({
           selected={filters.locations}
           onToggle={(v) => toggle("locations", v)}
         />
-      </div>
+      </Row>
       {hasFilters && (
         <button
           type="button"
@@ -122,6 +123,6 @@ export function DashboardFilters({
           Clear filters
         </button>
       )}
-    </div>
+    </Stack>
   );
 }

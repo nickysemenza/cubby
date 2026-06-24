@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { CheckSquare, Square } from "lucide-react";
+import { Row, Stack } from "~/components/layout";
 import type { NotionBlock } from "~/server/clients/notion";
 import { useTRPC } from "~/trpc/react";
 
@@ -12,10 +13,10 @@ export function NotionPageContent({ pageId }: { pageId: string }) {
 
   if (isLoading) {
     return (
-      <div className="space-y-2">
+      <Stack gap="sm">
         <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
         <div className="h-4 w-1/2 animate-pulse rounded bg-muted" />
-      </div>
+      </Stack>
     );
   }
 
@@ -77,10 +78,10 @@ function BlockList({ blocks }: { blocks: NotionBlock[] }) {
         i++;
       }
       elements.push(
-        <div key={`todo-${i}`} className="space-y-1">
+        <Stack key={`todo-${i}`} gap="xs">
           {items.map((item, j) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: static parsed Notion content, never reordered; blocks have no id
-            <div key={j} className="flex items-center gap-2">
+            <Row key={j} align="center" gap="sm">
               {item.checked ? (
                 <CheckSquare className="h-4 w-4 shrink-0 text-positive" />
               ) : (
@@ -93,9 +94,9 @@ function BlockList({ blocks }: { blocks: NotionBlock[] }) {
               >
                 {item.text}
               </span>
-            </div>
+            </Row>
           ))}
-        </div>,
+        </Stack>,
       );
       continue;
     }
@@ -132,17 +133,25 @@ function BlockRenderer({ block }: { block: NotionBlock }) {
       return <hr className="my-4" />;
     case "child_page":
       return (
-        <div className="flex items-center gap-2 rounded-md border px-4 py-2 text-sm">
+        <Row
+          align="center"
+          gap="sm"
+          className="rounded-md border px-4 py-2 text-sm"
+        >
           <span className="text-muted-foreground">📄</span>
           <span className="font-medium">{block.text}</span>
-        </div>
+        </Row>
       );
     case "child_database":
       return (
-        <div className="flex items-center gap-2 rounded-md border px-4 py-2 text-sm">
+        <Row
+          align="center"
+          gap="sm"
+          className="rounded-md border px-4 py-2 text-sm"
+        >
           <span className="text-muted-foreground">🗃️</span>
           <span className="font-medium">{block.text}</span>
-        </div>
+        </Row>
       );
     case "quote":
       return (

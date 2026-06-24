@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAgentStream } from "~/app/_components/hooks/useAgentStream";
+import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
@@ -146,7 +147,7 @@ function EndpointCard({
             rows={input.split("\n").length + 1}
           />
         )}
-        <div className="flex items-center gap-2">
+        <Row align="center" gap="sm">
           <Button
             size="sm"
             onClick={onRun}
@@ -155,7 +156,7 @@ function EndpointCard({
             Run
           </Button>
           <StatusBadge state={state} />
-        </div>
+        </Row>
         {state.error && (
           <pre className="overflow-auto whitespace-pre-wrap text-2xs text-destructive">
             {state.error}
@@ -190,7 +191,7 @@ function AgentStreamCard() {
           spellCheck={false}
           rows={2}
         />
-        <div className="flex items-center gap-2">
+        <Row align="center" gap="sm">
           <Button
             size="sm"
             onClick={() => stream.ask(query)}
@@ -209,7 +210,7 @@ function AgentStreamCard() {
               done · {stream.result.toolCalls.length} tool call(s)
             </Badge>
           )}
-        </div>
+        </Row>
         {stream.error && (
           <pre className="overflow-auto whitespace-pre-wrap text-2xs text-destructive">
             {stream.error}
@@ -294,7 +295,7 @@ export function AiSmokeTest() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-2">
+      <Row align="center" wrap gap="sm">
         <Badge variant="outline">model: {MODEL}</Badge>
         <Badge variant="secondary">{mode}</Badge>
         <span className="text-2xs text-muted-foreground">
@@ -309,7 +310,7 @@ export function AiSmokeTest() {
         >
           Run all (non-streaming)
         </Button>
-      </div>
+      </Row>
       <div className="grid gap-4 md:grid-cols-2">
         {SPECS.map((spec) => (
           <EndpointCard

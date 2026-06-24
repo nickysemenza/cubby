@@ -12,6 +12,7 @@ import { ExternalLink, Hammer, ListTodo, ShoppingCart } from "lucide-react";
 import { useMemo } from "react";
 import RTable from "~/app/_components/data-table/Table";
 import { NoneState } from "~/app/_components/NoneState";
+import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import {
   Empty,
@@ -319,10 +320,10 @@ const projectColumns = [
   projectHelper.accessor("status", {
     header: "Status",
     cell: ({ row }) => (
-      <div className="flex items-center gap-2">
+      <Row align="center" gap="sm">
         <StatusIcon status={row.original.status} />
         <span>{row.original.status ?? <NoneState />}</span>
-      </div>
+      </Row>
     ),
     enableSorting: true,
   }),
@@ -341,13 +342,13 @@ const projectColumns = [
       const locs = getValue();
       if (locs.length === 0) return null;
       return (
-        <div className="flex flex-wrap gap-1">
+        <Row wrap gap="xs">
           {locs.map((loc) => (
             <Badge key={loc} variant="outline">
               {loc}
             </Badge>
           ))}
-        </div>
+        </Row>
       );
     },
     enableSorting: false,

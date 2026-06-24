@@ -14,6 +14,7 @@ import {
 } from "~/app/_components/form-fields";
 import { ComboboxFieldWithSearch } from "~/app/_components/form-utils";
 import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
+import { Row, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -73,7 +74,7 @@ export function CaptureFlow() {
 
   return (
     <Page variant="list" eyebrow="Beta" title="Scan a shelf">
-      <div className="space-y-6">
+      <Stack gap="lg">
         {/* Meta strip — preserved from the old PageHero `meta` slot, which the
             unified <Page> header no longer exposes. */}
         <div className="-mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-2xs text-muted-foreground">
@@ -122,16 +123,21 @@ export function CaptureFlow() {
 
         {/* Analyzing */}
         {busy && (
-          <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground text-sm">
+          <Row
+            align="center"
+            justify="center"
+            gap="sm"
+            className="py-6 text-muted-foreground text-sm"
+          >
             <Spinner />
             {uploading ? "Uploading photo…" : "Analyzing photo…"}
-          </div>
+          </Row>
         )}
 
         {/* Review */}
         {!busy && analyze.data && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
+          <Stack gap="sm">
+            <Row align="center" justify="between">
               <h2 className="font-heading font-semibold text-xl">
                 {proposals.length} item{proposals.length === 1 ? "" : "s"} found
               </h2>
@@ -143,7 +149,7 @@ export function CaptureFlow() {
                 <Camera className="mr-1 h-4 w-4" />
                 New photo
               </Button>
-            </div>
+            </Row>
             {analyze.data.summary && (
               <p className="text-muted-foreground text-sm">
                 {analyze.data.summary}
@@ -155,7 +161,7 @@ export function CaptureFlow() {
                 No items detected in this photo.
               </p>
             ) : (
-              <div className="space-y-2">
+              <Stack gap="sm">
                 {proposals.map((item, i) => (
                   <CaptureItemCard
                     // biome-ignore lint/suspicious/noArrayIndexKey: proposals are a stable positional list for this render
@@ -163,11 +169,11 @@ export function CaptureFlow() {
                     proposal={item}
                   />
                 ))}
-              </div>
+              </Stack>
             )}
-          </div>
+          </Stack>
         )}
-      </div>
+      </Stack>
     </Page>
   );
 }
@@ -217,19 +223,25 @@ function CaptureItemCard({ proposal }: { proposal: ProposedItem }) {
 
   if (added) {
     return (
-      <div className="flex items-center gap-2 rounded-md border border-border/50 px-2 py-2 text-muted-foreground text-sm">
+      <Row
+        align="center"
+        gap="sm"
+        className="rounded-md border border-border/50 px-2 py-2 text-muted-foreground text-sm"
+      >
         <Check className="h-4 w-4 shrink-0 text-primary" />
         <span className="truncate">Added {proposal.name} to inventory</span>
-      </div>
+      </Row>
     );
   }
 
   return (
-    <form
+    <Stack
+      as="form"
+      gap="sm"
       onSubmit={form.handleSubmit(onSubmit)}
-      className="space-y-2 rounded-lg border border-border/50 p-2"
+      className="rounded-lg border border-border/50 p-2"
     >
-      <div className="flex items-center justify-between gap-2">
+      <Row align="center" justify="between" gap="sm">
         <div className="min-w-0">
           <span className="font-medium text-sm">{proposal.name}</span>
           {meta && (
@@ -239,9 +251,9 @@ function CaptureItemCard({ proposal }: { proposal: ProposedItem }) {
         <Badge variant={confidenceVariant[proposal.confidence]}>
           {proposal.confidence}
         </Badge>
-      </div>
+      </Row>
 
-      <div className="flex flex-wrap items-end gap-2">
+      <Row align="end" wrap gap="sm">
         <div className="min-w-[8rem] flex-[3]">
           <ComboboxFieldWithSearch
             form={form}
@@ -270,7 +282,7 @@ function CaptureItemCard({ proposal }: { proposal: ProposedItem }) {
           {create.isPending ? <Spinner className="mr-1" /> : null}
           Add
         </Button>
-      </div>
-    </form>
+      </Row>
+    </Stack>
   );
 }

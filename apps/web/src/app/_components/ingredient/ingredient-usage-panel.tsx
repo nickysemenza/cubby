@@ -2,6 +2,7 @@ import type { CookbookId } from "@cubby/schemas/identifiers";
 import type { IngredientUsageRow } from "@cubby/schemas/ingredient-usage";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { Stack } from "~/components/layout";
 import { useTRPC } from "~/trpc/react";
 import { VisualizationPlaceholder } from "../visualizations/visualization-placeholder";
 import { IngredientUsageChart } from "./ingredient-usage-chart";
@@ -42,7 +43,7 @@ export function IngredientUsagePanel({
   const { rows, totalRecipes } = data;
 
   return (
-    <div className="space-y-6">
+    <Stack gap="lg">
       <IngredientUsageChart rows={rows} />
       {rows.length > 25 && (
         <p className="text-muted-foreground text-xs">
@@ -51,7 +52,7 @@ export function IngredientUsagePanel({
       )}
 
       <UsageTable rows={rows} totalRecipes={totalRecipes} />
-    </div>
+    </Stack>
   );
 }
 

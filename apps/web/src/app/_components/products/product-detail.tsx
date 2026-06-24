@@ -2,6 +2,7 @@ import type { ProductCreateInput } from "@cubby/schemas/product";
 import { uniq } from "es-toolkit";
 import { Apple, ChefHat, Info, Scale } from "lucide-react";
 import type { FC } from "react";
+import { Stack } from "~/components/layout";
 import { MutedBox } from "~/components/layout/muted-box";
 import { Page } from "~/components/page/Page";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
@@ -70,10 +71,10 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       title: "Unit Mappings",
       icon: Scale,
       content: (
-        <div className="space-y-2">
+        <Stack gap="sm">
           <ConversionCapabilities mappings={mappings} />
           <UnitMappingsTable mappings={mappings} />
-        </div>
+        </Stack>
       ),
     },
     // Custom section: Appears In Recipes — recipes the product's linked ingredient

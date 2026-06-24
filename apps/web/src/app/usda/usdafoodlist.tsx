@@ -6,6 +6,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
 import { useEffect, useRef, useState } from "react";
+import { Stack } from "~/components/layout";
 import { USDA_KINDS } from "~/lib/conversion-coverage";
 import type { QueryTiming } from "~/lib/query-timing";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
@@ -168,12 +169,12 @@ export function USDAFoodList() {
         const total = nutrientCount(nutritionInfo.nutrientsPer100);
         if (total === 0) return <NoneState />;
         return (
-          <div className="w-48 space-y-2">
+          <Stack gap="sm" className="w-48">
             <CoreNutrientCoverage nutrients={nutritionInfo.nutrientsPer100} />
             <div className="text-2xs text-muted-foreground">
               {total} nutrients total
             </div>
-          </div>
+          </Stack>
         );
       },
     }),

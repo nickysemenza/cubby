@@ -2,6 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import { Link } from "@tanstack/react-router";
 import { ChevronRight, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
+import { Row, Stack } from "~/components/layout";
 import { Checkbox } from "~/components/ui/checkbox";
 import { entities } from "~/entities/entities";
 import { cn } from "~/lib/utils";
@@ -141,7 +142,7 @@ export function MobileCard({
         )}
 
         {/* Title (content column, row 1) */}
-        <div className="flex min-w-0 items-baseline gap-2">
+        <Row align="baseline" gap="sm" className="min-w-0">
           {TitleIcon && (
             <TitleIcon
               className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" /* tight */
@@ -153,7 +154,7 @@ export function MobileCard({
           >
             {title}
           </span>
-        </div>
+        </Row>
 
         {/* Actions */}
         <div className={cn("self-center", hasSecondLine && "row-span-2")}>
@@ -162,13 +163,18 @@ export function MobileCard({
 
         {/* Second line (content column, row 2) */}
         {hasSecondLine && (
-          <div className="flex min-w-0 items-center gap-2">
+          <Row align="center" gap="sm" className="min-w-0">
             {subtitle && (
               <span className="block min-w-0 flex-1 truncate text-muted-foreground text-xs">
                 {subtitle}
               </span>
             )}
-            <div className="ml-auto flex min-w-0 max-w-[55%] items-center justify-end gap-2">
+            <Row
+              align="center"
+              justify="end"
+              gap="sm"
+              className="ml-auto min-w-0 max-w-[55%]"
+            >
               {rightValues?.[0] !== undefined && (
                 <span className="flex min-w-0 max-w-28 items-center overflow-hidden whitespace-nowrap font-mono text-2xs text-muted-foreground tabular-nums [&_*]:truncate">
                   {rightValues[0]}
@@ -179,8 +185,8 @@ export function MobileCard({
                   {rightValues[1]}
                 </span>
               )}
-            </div>
-          </div>
+            </Row>
+          </Row>
         )}
 
         {/* Extra children (debug, etc.) */}
@@ -191,12 +197,13 @@ export function MobileCard({
 
   // Card layout: original bordered card style
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: role, tabIndex, and onKeyDown are conditionally set based on onClick
-    <div
+    <Row
+      align="start"
+      gap="sm"
       className={cn(
         // No mount fade-in: the mobile list is virtualized, so a per-card
         // fade-in replays every time a card scrolls back into view (flicker).
-        "flex items-start gap-2 rounded-lg border border-[var(--border-chunky)] border-l-4 bg-card p-2 shadow-[var(--shadow-chunky-sm)] transition-all duration-300 hover:shadow-[var(--shadow-chunky)]",
+        "rounded-lg border border-[var(--border-chunky)] border-l-4 bg-card p-2 shadow-[var(--shadow-chunky-sm)] transition-all duration-300 hover:shadow-[var(--shadow-chunky)]",
         borderColor,
         // Touch devices have no :hover — give a pressed state so taps register.
         onClick && "cursor-pointer active:bg-muted/40",
@@ -222,13 +229,18 @@ export function MobileCard({
           />
         </div>
       )}
-      <div className="min-w-0 flex-1 space-y-2">
+      <Stack gap="sm" className="min-w-0 flex-1">
         {(title || detailsHref || actions) && (
-          <div className="flex items-start gap-2">
+          <Row align="start" gap="sm">
             {imageSlot}
             {title && (
               <div className="min-w-0 flex-1">
-                <h5 className="flex min-w-0 items-start gap-2 font-medium">
+                <Row
+                  as="h5"
+                  align="start"
+                  gap="sm"
+                  className="min-w-0 font-medium"
+                >
                   {TitleIcon && (
                     <TitleIcon
                       className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" /* tight */
@@ -237,7 +249,7 @@ export function MobileCard({
                   <span className="line-clamp-2" title={title}>
                     {title}
                   </span>
-                </h5>
+                </Row>
                 {subtitle && (
                   <p className="truncate text-muted-foreground text-sm">
                     {subtitle}
@@ -246,7 +258,7 @@ export function MobileCard({
               </div>
             )}
             {(detailsHref || actions) && (
-              <div className="flex shrink-0 items-center gap-1">
+              <Row align="center" gap="xs" className="shrink-0">
                 {detailsHref && (
                   <Link
                     to={detailsHref}
@@ -257,12 +269,12 @@ export function MobileCard({
                   </Link>
                 )}
                 {actions}
-              </div>
+              </Row>
             )}
-          </div>
+          </Row>
         )}
         {children}
-      </div>
-    </div>
+      </Stack>
+    </Row>
   );
 }

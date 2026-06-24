@@ -8,6 +8,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { type FC, useState } from "react";
+import { Stack } from "~/components/layout";
 import { MutedBox } from "~/components/layout/muted-box";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
@@ -81,7 +82,7 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
       title: "Related Products",
       icon: ShoppingCart,
       content: (
-        <div className="space-y-2">
+        <Stack gap="sm">
           {ingredient.product.length > 0 ? (
             <EntityPillLinkList entity="product" items={ingredient.product} />
           ) : (
@@ -98,7 +99,7 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
             <Sparkles className="h-4 w-4" />
             Enrich
           </Button>
-        </div>
+        </Stack>
       ),
     },
     // Custom section: Unit Mappings — conversion capabilities + Convert modal
@@ -108,10 +109,10 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
       title: "Unit Mappings",
       icon: Scale,
       content: (
-        <div className="space-y-2">
+        <Stack gap="sm">
           <ConversionCapabilities mappings={mappings} />
           <UnitMappingsTable mappings={mappings} />
-        </div>
+        </Stack>
       ),
     },
     // Custom section: Appears In Recipes — one row per usage, with amount,

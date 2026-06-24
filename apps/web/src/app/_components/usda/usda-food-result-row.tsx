@@ -1,6 +1,7 @@
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
 import { dataTypeLabel } from "@cubby/usda-schemas";
 import { Copy, Link2 } from "lucide-react";
+import { Row } from "~/components/layout";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { UsdaDataTypeDot } from "~/lib/usda-data-type";
 import { nutrientCount } from "~/lib/usda-food-stats";
@@ -68,7 +69,7 @@ export function UsdaFoodResultRow({
         {foodInfo.description}
       </span>
 
-      <div className="flex flex-wrap gap-2 text-muted-foreground text-xs">
+      <Row wrap gap="sm" className="text-muted-foreground text-xs">
         <MetaChip>
           <UsdaDataTypeDot dataType={foodInfo.data_type} />
           {dataTypeLabel(foodInfo.data_type)}
@@ -94,20 +95,30 @@ export function UsdaFoodResultRow({
             {duplicateCount === 1 ? "" : "s"}
           </MetaChip>
         )}
-      </div>
+      </Row>
 
       {totalNutrients > 0 && (
-        <div className="flex flex-wrap items-center gap-2 text-muted-foreground text-xs">
+        <Row
+          align="center"
+          wrap
+          gap="sm"
+          className="text-muted-foreground text-xs"
+        >
           <CoreNutrientCoverage nutrients={nutritionInfo.nutrientsPer100} />
           <span>{totalNutrients} nutrients</span>
-        </div>
+        </Row>
       )}
 
       {hasNutrition && (
-        <div className="flex flex-wrap items-center gap-2 text-2xs text-muted-foreground">
+        <Row
+          align="center"
+          wrap
+          gap="sm"
+          className="text-2xs text-muted-foreground"
+        >
           <NutrientsSummary nutrients={nutritionInfo.nutrientsPer100} dense />
           <span>/100g</span>
-        </div>
+        </Row>
       )}
     </div>
   );

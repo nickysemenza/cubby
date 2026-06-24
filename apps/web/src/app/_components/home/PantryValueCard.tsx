@@ -2,6 +2,7 @@ import type { InfLocation } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
 import { Wallet } from "lucide-react";
 import { useMemo } from "react";
+import { Row } from "~/components/layout";
 import { DashboardCard } from "~/components/layout/dashboard-card";
 import { useHydrated } from "~/hooks/useHydrated";
 import { authClient } from "~/lib/auth-client";
@@ -58,7 +59,11 @@ export function PantryValueCard() {
       <div className="font-mono font-semibold text-xl tabular-nums">
         {formatCurrency(total)}
       </div>
-      <div className="mt-4 flex h-24 items-end gap-2 border-[var(--border-chunky)] border-b px-1">
+      <Row
+        align="end"
+        gap="sm"
+        className="mt-4 h-24 border-[var(--border-chunky)] border-b px-1"
+      >
         {bars.map((b, i) => (
           <div
             key={b.label}
@@ -70,8 +75,8 @@ export function PantryValueCard() {
             }}
           />
         ))}
-      </div>
-      <div className="mt-2 flex gap-2 px-1">
+      </Row>
+      <Row gap="sm" className="mt-2 px-1">
         {bars.map((b) => (
           <span
             key={b.label}
@@ -81,7 +86,7 @@ export function PantryValueCard() {
             {b.label}
           </span>
         ))}
-      </div>
+      </Row>
     </DashboardCard>
   );
 }

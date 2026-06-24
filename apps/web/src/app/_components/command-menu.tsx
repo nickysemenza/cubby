@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
+import { Row, Stack } from "~/components/layout";
 import { MarkdownText } from "~/components/markdown";
 import {
   CommandDialog,
@@ -322,9 +323,9 @@ export function GlobalCommandMenu({
 
             {/* Loading state */}
             {isLoading && (
-              <div className="flex items-center justify-center py-6">
+              <Row align="center" justify="center" className="py-6">
                 <Spinner className="text-muted-foreground" />
-              </div>
+              </Row>
             )}
 
             {/* Empty state */}
@@ -683,10 +684,15 @@ function AnswerView({
 
       {/* Status line while the agent is working and no text is showing yet */}
       {isStreaming && answer.length === 0 && (
-        <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground text-sm">
+        <Row
+          align="center"
+          justify="center"
+          gap="sm"
+          className="py-6 text-muted-foreground text-sm"
+        >
           <Spinner />
           {toolStatus ? `Looking up ${humanizeTool(toolStatus)}…` : "Thinking…"}
-        </div>
+        </Row>
       )}
 
       {/* Answer text — rendered live as deltas stream in */}
@@ -732,21 +738,23 @@ function AnswerView({
 
       {!isStreaming && showToolCalls && toolCalls.length > 0 && (
         <CommandGroup heading="Tool calls">
-          <div className="space-y-1 px-2 py-1">
+          <Stack gap="xs" className="px-2 py-1">
             {toolCalls.map((call, i) => (
-              <div
+              <Row
                 // biome-ignore lint/suspicious/noArrayIndexKey: ordered log, no stable id
                 key={i}
-                className="flex items-center gap-2 font-mono text-muted-foreground text-xs"
+                align="center"
+                gap="sm"
+                className="font-mono text-muted-foreground text-xs"
               >
                 <span className={call.ok ? "text-primary" : "text-destructive"}>
                   {call.ok ? "✓" : "✗"}
                 </span>
                 <span>{call.tool}</span>
                 <span className="ml-auto">{call.durationMs}ms</span>
-              </div>
+              </Row>
             ))}
-          </div>
+          </Stack>
         </CommandGroup>
       )}
     </>

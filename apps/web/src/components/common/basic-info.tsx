@@ -1,4 +1,5 @@
 import type { FC, ReactNode } from "react";
+import { Stack } from "~/components/layout";
 import { InfoRow } from "./info-row";
 
 export interface BasicInfoField {
@@ -23,7 +24,7 @@ export const BasicInfo: FC<BasicInfoProps> = ({
   const visibleFields = fields.filter((f) => !f.hide && f.value !== undefined);
 
   return (
-    <div className="space-y-2">
+    <Stack gap="sm">
       {header}
       {/* Fact sheet: each InfoRow carries its own dotted leader — no dividers */}
       <div>
@@ -35,6 +36,6 @@ export const BasicInfo: FC<BasicInfoProps> = ({
       </div>
       {footer}
       {actions && <div className="pt-2">{actions}</div>}
-    </div>
+    </Stack>
   );
 };

@@ -8,6 +8,7 @@ import {
   UtensilsCrossed,
 } from "lucide-react";
 import { useMemo } from "react";
+import { Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { USDA_KINDS } from "~/lib/conversion-coverage";
 import { unitMappingsFromFood } from "~/lib/unit-mapping-utils";
@@ -42,7 +43,7 @@ export const USDAFoodDetail: React.FC<{
       {legacyFoodInfo && <div>NDB: {legacyFoodInfo.ndb_number}</div>}
 
       {brandedFoodInfo && (
-        <div className="space-y-2">
+        <Stack gap="sm">
           {brandedFoodInfo.brand_name && (
             <div>Brand: {brandedFoodInfo.brand_name}</div>
           )}
@@ -55,7 +56,7 @@ export const USDAFoodDetail: React.FC<{
           {brandedFoodInfo.gtin_upc && (
             <div>UPC: {brandedFoodInfo.gtin_upc}</div>
           )}
-        </div>
+        </Stack>
       )}
     </div>
   );
@@ -73,7 +74,7 @@ export const USDAFoodDetail: React.FC<{
   const servingInfoSection = (
     <div>
       {brandedFoodInfo?.serving && (
-        <div className="space-y-2">
+        <Stack gap="sm">
           {brandedFoodInfo.serving.serving_size &&
             brandedFoodInfo.serving.serving_size_unit && (
               <div>
@@ -87,7 +88,7 @@ export const USDAFoodDetail: React.FC<{
               {brandedFoodInfo.serving.household_serving_fulltext}
             </div>
           )}
-        </div>
+        </Stack>
       )}
       {portionInfoRaw.length > 0 && (
         <div className="mt-4">

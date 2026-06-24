@@ -1,3 +1,4 @@
+import { Row } from "~/components/layout";
 import { CORE_NUTRIENTS } from "~/lib/usda-food-stats";
 import { cn } from "~/lib/utils";
 
@@ -14,7 +15,7 @@ export function CoreNutrientCoverage({
   nutrients: Record<string, number>;
 }) {
   return (
-    <div className="flex flex-wrap gap-1">
+    <Row wrap gap="xs">
       {CORE_NUTRIENTS.map((n) => {
         const present = nutrients[n.code] !== undefined;
         return (
@@ -32,6 +33,6 @@ export function CoreNutrientCoverage({
           </span>
         );
       })}
-    </div>
+    </Row>
   );
 }

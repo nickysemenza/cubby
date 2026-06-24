@@ -3,6 +3,7 @@ import { Code, RotateCcw } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import type { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
+import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 
@@ -63,12 +64,12 @@ export function EditableComponentDemo<T>({
   return (
     <div className={cn("my-6", className)}>
       {/* Header */}
-      <div className="mb-2 flex items-center gap-2">
+      <Row align="center" gap="sm" className="mb-2">
         <span className="inline-flex items-center rounded bg-secondary px-2 py-1 font-medium text-secondary-foreground text-xs">
           Interactive
         </span>
         {title && <span className="font-medium">{title}</span>}
-        <div className="ml-auto flex gap-2">
+        <Row gap="sm" className="ml-auto">
           {isEditing && (
             <Button
               variant="ghost"
@@ -89,8 +90,8 @@ export function EditableComponentDemo<T>({
             <Code className="h-3 w-3" />
             {isEditing ? "Hide JSON" : "Edit JSON"}
           </Button>
-        </div>
-      </div>
+        </Row>
+      </Row>
 
       {description && (
         <p className="mb-2 text-muted-foreground text-sm">{description}</p>

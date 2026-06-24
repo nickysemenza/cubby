@@ -4,6 +4,7 @@ import { match } from "ts-pattern";
 import { EntityPillLink } from "~/app/_components/EntityPill";
 import { HoverableTimestamp } from "~/app/_components/HoverableTimestamp";
 import { ImageStatusBadge } from "~/app/_components/table/StatusBadge";
+import { Row, Stack } from "~/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Image } from "~/components/ui/image";
 import { formatBytes } from "~/lib/format";
@@ -77,7 +78,7 @@ export function ImageDetail({ image }: ImageDetailProps) {
   };
 
   return (
-    <div className="space-y-4">
+    <Stack>
       {/* Preview */}
       <Card>
         <CardHeader className="pb-2">
@@ -126,10 +127,10 @@ export function ImageDetail({ image }: ImageDetailProps) {
             <span className="text-muted-foreground">Size:</span>{" "}
             {formatBytes(image.size)}
           </div>
-          <div className="flex items-center gap-2">
+          <Row align="center" gap="sm">
             <span className="text-muted-foreground">Status:</span>
             <ImageStatusBadge status={image.status} />
-          </div>
+          </Row>
           <div>
             <span className="text-muted-foreground">Entity:</span>{" "}
             {renderEntityLink()}
@@ -140,6 +141,6 @@ export function ImageDetail({ image }: ImageDetailProps) {
           </div>
         </CardContent>
       </Card>
-    </div>
+    </Stack>
   );
 }

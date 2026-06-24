@@ -10,6 +10,7 @@ import {
   EntitySummaryCard,
   entitySummaryDataSchema,
 } from "~/components/entity/entity-summary-card";
+import { Row } from "~/components/layout";
 import {
   Card,
   CardDescription,
@@ -59,10 +60,10 @@ export function DocsPage() {
       <div className="my-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2">
+            <Row align="center" gap="sm">
               <entities.ingredient.lucideIcon className="h-5 w-5 text-muted-foreground" />
               <CardTitle>Ingredients</CardTitle>
-            </div>
+            </Row>
             <CardDescription>
               The building blocks of recipes. Generic items like "flour" or
               "butter" that appear across multiple recipes.
@@ -72,10 +73,10 @@ export function DocsPage() {
 
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2">
+            <Row align="center" gap="sm">
               <entities.product.lucideIcon className="h-5 w-5 text-muted-foreground" />
               <CardTitle>Products</CardTitle>
-            </div>
+            </Row>
             <CardDescription>
               Specific purchasable items linked to ingredients. Products can
               have unit mappings, UPC barcodes, and optional USDA nutrition
@@ -86,10 +87,10 @@ export function DocsPage() {
 
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2">
+            <Row align="center" gap="sm">
               <entities.location.lucideIcon className="h-5 w-5 text-muted-foreground" />
               <CardTitle>Locations</CardTitle>
-            </div>
+            </Row>
             <CardDescription>
               Hierarchical storage areas (Kitchen → Pantry → Top Shelf).
               Supports types like room, shelf, drawer, and CSV import/export
@@ -100,10 +101,10 @@ export function DocsPage() {
 
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2">
+            <Row align="center" gap="sm">
               <entities.recipe.lucideIcon className="h-5 w-5 text-muted-foreground" />
               <CardTitle>Recipes</CardTitle>
-            </div>
+            </Row>
             <CardDescription>
               Collections of ingredients with amounts, organized into sections
               with step-by-step instructions.
@@ -113,10 +114,10 @@ export function DocsPage() {
 
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2">
+            <Row align="center" gap="sm">
               <entities.inventory.lucideIcon className="h-5 w-5 text-muted-foreground" />
               <CardTitle>Inventory</CardTitle>
-            </div>
+            </Row>
             <CardDescription>
               Tracks what products you have and where. Links products to
               locations with quantities.
@@ -149,10 +150,10 @@ export function DocsPage() {
       <div className="my-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2">
+            <Row align="center" gap="sm">
               <entities.recipe.lucideIcon className="h-5 w-5 text-muted-foreground" />
               <CardTitle>Recipes</CardTitle>
-            </div>
+            </Row>
             <CardDescription>
               Create recipes with multiple sections, import from URLs, and nest
               recipes within other recipes as sub-components.
@@ -162,10 +163,10 @@ export function DocsPage() {
 
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2">
+            <Row align="center" gap="sm">
               <entities.product.lucideIcon className="h-5 w-5 text-muted-foreground" />
               <CardTitle>Products</CardTitle>
-            </div>
+            </Row>
             <CardDescription>
               Link to ingredients, add unit mappings, connect to USDA for
               nutrition. Use <code className="text-xs">misc:</code> prefix for
@@ -176,10 +177,10 @@ export function DocsPage() {
 
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2">
+            <Row align="center" gap="sm">
               <entities.inventory.lucideIcon className="h-5 w-5 text-muted-foreground" />
               <CardTitle>Inventory Management</CardTitle>
-            </div>
+            </Row>
             <CardDescription>
               Track quantities at locations, bulk edit/move items, and
               automatically detect duplicate unique products.
@@ -189,10 +190,10 @@ export function DocsPage() {
 
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2">
+            <Row align="center" gap="sm">
               <Apple className="h-5 w-5 text-muted-foreground" />
               <CardTitle>USDA Integration</CardTitle>
-            </div>
+            </Row>
             <CardDescription>
               Search FoodData Central by name, UPC, or NDB number. View detailed
               nutrition and link products to USDA entries.
@@ -202,10 +203,10 @@ export function DocsPage() {
 
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2">
+            <Row align="center" gap="sm">
               <Scale className="h-5 w-5 text-muted-foreground" />
               <CardTitle>Unit Conversions</CardTitle>
-            </div>
+            </Row>
             <CardDescription>
               WASM-powered engine that chains conversions through multiple units
               (cups → grams → dollars) using product mappings.
@@ -215,10 +216,10 @@ export function DocsPage() {
 
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2">
+            <Row align="center" gap="sm">
               <AlertTriangle className="h-5 w-5 text-muted-foreground" />
               <CardTitle>Problems Dashboard</CardTitle>
-            </div>
+            </Row>
             <CardDescription>
               Find duplicate products, missing inventory, invalid UPCs, products
               without unit mappings, and empty locations.

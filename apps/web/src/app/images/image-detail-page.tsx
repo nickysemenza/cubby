@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { ImageDetail } from "~/app/_components/images/image-detail";
+import { Row, Stack } from "~/components/layout";
 import { PageWrapper } from "~/components/layout/page-wrapper";
 import { useTRPC } from "~/trpc/react";
 
@@ -19,10 +20,10 @@ export default function ImageDetailPage({ id }: ImageDetailPageProps) {
   if (isLoading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
-        <div className="flex items-center space-x-2">
+        <Row align="center" gap="sm">
           <div className="h-4 w-4 animate-spin rounded-full border-foreground border-t-2 border-b-2"></div>
           <span>Loading image details...</span>
-        </div>
+        </Row>
       </div>
     );
   }
@@ -42,12 +43,12 @@ export default function ImageDetailPage({ id }: ImageDetailPageProps) {
 
   return (
     <PageWrapper>
-      <div className="space-y-6">
+      <Stack gap="lg">
         <div className="flex items-center justify-between">
           <h1 className="font-bold text-3xl tracking-tight">Image Details</h1>
         </div>
         <ImageDetail image={imageDetails} />
-      </div>
+      </Stack>
     </PageWrapper>
   );
 }

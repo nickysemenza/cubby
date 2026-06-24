@@ -1,6 +1,7 @@
 import { Check } from "lucide-react";
 import { type RefObject, useEffect, useState } from "react";
 import { NoneState } from "~/app/_components/NoneState";
+import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 import { EntityPillLink } from "../EntityPill";
@@ -28,7 +29,7 @@ export function MergeConfirmation({
 
   const aliases = ingredients.filter((i) => i.id !== targetId);
   return (
-    <div className="space-y-4">
+    <Stack>
       <div>
         <div className="mb-1 font-medium text-muted-foreground text-sm">
           Keep (target):
@@ -61,7 +62,7 @@ export function MergeConfirmation({
         <div className="mb-1 font-medium text-muted-foreground text-sm">
           Merge into aliases:
         </div>
-        <div className="flex flex-wrap gap-1">
+        <Row gap="xs" wrap>
           {aliases.length > 0 ? (
             aliases.map((a) => (
               <EntityPillLink
@@ -73,13 +74,13 @@ export function MergeConfirmation({
           ) : (
             <NoneState />
           )}
-        </div>
+        </Row>
       </div>
       <p className="text-muted-foreground text-xs">
         The other selected ingredient{aliases.length === 1 ? "" : "s"} will be
         deleted — their names become aliases of the kept one, and their products
         and recipe uses move over.
       </p>
-    </div>
+    </Stack>
   );
 }

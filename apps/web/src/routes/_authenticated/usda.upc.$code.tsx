@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
+import { Stack } from "~/components/layout";
 import { PageWrapper } from "~/components/layout/page-wrapper";
 import { Skeleton } from "~/components/ui/skeleton";
 import { useTRPC } from "~/trpc/react";
@@ -35,10 +36,10 @@ function USDAUPCLookupPage() {
   if (isLoading) {
     return (
       <PageWrapper>
-        <div className="space-y-4">
+        <Stack>
           <Skeleton className="h-8 w-48" />
           <Skeleton className="h-32 w-full" />
-        </div>
+        </Stack>
       </PageWrapper>
     );
   }
