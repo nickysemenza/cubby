@@ -58,19 +58,21 @@ export function Page({
   return (
     <HydrateClient>
       <PageWrapper fullWidth={fullWidth}>
-        <PageHeader
-          variant={variant}
-          title={title}
-          eyebrow={eyebrow}
-          entity={entity}
-          actions={actions}
-          heroStamp={heroStamp}
-          heroStats={heroStats}
-          heroNo={heroNo}
-          heroImages={heroImages}
-          rawData={rawData}
-        />
-        <Suspense fallback={<ListLoadingSkeleton />}>{children}</Suspense>
+        <div className={variant === "detail" ? "space-y-2" : undefined}>
+          <PageHeader
+            variant={variant}
+            title={title}
+            eyebrow={eyebrow}
+            entity={entity}
+            actions={actions}
+            heroStamp={heroStamp}
+            heroStats={heroStats}
+            heroNo={heroNo}
+            heroImages={heroImages}
+            rawData={rawData}
+          />
+          <Suspense fallback={<ListLoadingSkeleton />}>{children}</Suspense>
+        </div>
       </PageWrapper>
     </HydrateClient>
   );
