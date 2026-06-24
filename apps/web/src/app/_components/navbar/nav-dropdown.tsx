@@ -1,5 +1,5 @@
-import { Link, useLocation } from "@tanstack/react-router";
-import { ChevronDown, type LucideIcon } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { ChevronDown } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -7,20 +7,12 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { cn } from "~/lib/utils";
-import type { NavItem } from "../navigation/nav-items";
+import { type NavGroup, useActiveTo } from "../navigation/nav-items";
 
-type NavDropdownProps = {
-  label: string;
-  items: NavItem[];
-  /** Optional icon to show next to the label */
-  icon?: LucideIcon;
-};
-
-export const NavDropdown = ({ label, items, icon: Icon }: NavDropdownProps) => {
-  const pathName = useLocation().pathname;
-
-  // Check if any item in this group is active
-  const isGroupActive = items.some((item) => item.isActive(pathName));
+export const NavDropdown = ({ group }: { group: NavGroup }) => {
+  const { label, icon: Icon, children } = group;
+  const activeTo = useActiveTo();
+  const isGroupActive = children.some((item) => item.to === activeTo);
 
   return (
     <DropdownMenu>
@@ -32,19 +24,18 @@ export const NavDropdown = ({ label, items, icon: Icon }: NavDropdownProps) => {
         data-status={isGroupActive ? "active" : undefined}
         title={label}
       >
-        {Icon && <Icon className="h-4 w-4" />}
+        <Icon className="h-4 w-4" />
         <span className="hidden lg:inline">{label}</span>
         <ChevronDown className="h-3 w-3" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-44">
-        {items.map((item) => {
-          const active = item.isActive(pathName);
+        {children.map((item) => {
           const ItemIcon = item.icon;
           return (
             <DropdownMenuItem
-              key={item.href}
-              render={<Link to={item.href} />}
-              className={cn("gap-2", active && "bg-accent")}
+              key={item.to}
+              render={<Link to={item.to} />}
+              className={cn("gap-2", item.to === activeTo && "bg-accent")}
             >
               <ItemIcon className="h-4 w-4" />
               {item.label}
