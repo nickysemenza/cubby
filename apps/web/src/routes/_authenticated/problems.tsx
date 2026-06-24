@@ -4,14 +4,14 @@ import { EntityLayout } from "~/components/layouts/entity-layout";
 import { RoutePending } from "~/components/route-pending";
 
 export const Route = createFileRoute("/_authenticated/problems")({
-  // Warm the (heavy) full-scan query before render — usually already cached from
-  // the navbar badge, so this rarely blocks; RoutePending covers a cold load.
+  // Ensure data exists before render, but only *block* on a truly cold load —
+  // staleTime Infinity makes ensureQueryData reuse any cached scan (e.g. the
+  // navbar badge's) without a blocking refetch. The page query revalidates in
+  // the background on entry, so freshness is handled there, not by a wait here.
   loader: async ({ context }) => {
     await context.queryClient.ensureQueryData({
       ...context.trpc.problems.getAllProblems.queryOptions(),
-      // Match the navbar/badge staleTime — ensureQueryData honors it, so a warm
-      // cache is reused instead of blocking on a full refetch (default 0 = stale).
-      staleTime: 5 * 60 * 1000,
+      staleTime: Number.POSITIVE_INFINITY,
     });
   },
   pendingComponent: RoutePending,

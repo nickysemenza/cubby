@@ -19,16 +19,15 @@ export function ProblemsOverview() {
   const api = useTRPC();
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
+  // No staleTime here (unlike the 5-min navbar badge, where staleness is fine):
+  // opening the page — or reloading while on it — should revalidate the badge's
+  // possibly-stale cache. Cached data renders instantly, then a background
+  // refetch lands fresh numbers (which also updates the shared badge).
   const {
     data: problems,
     isLoading,
     error,
-    // Match the navbar/loader staleTime so the page reuses their warm cache
-    // instead of background-refetching the full scan on every visit.
-  } = useQuery({
-    ...api.problems.getAllProblems.queryOptions(),
-    staleTime: 5 * 60 * 1000,
-  });
+  } = useQuery(api.problems.getAllProblems.queryOptions());
 
   // Every product id across the product-bearing sections, so we fetch recipe
   // usage once for the whole page rather than per card.
