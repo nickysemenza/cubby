@@ -65,12 +65,19 @@ lookup.post("/batch", async (c) => {
   // Dedupe + drop malformed UPCs.
   const upcs = uniq(parsed.data.upcs).filter((u) => UPC_REGEX.test(u));
 
-  const found = await getProducts(db, upcs);
+  // Read products and fresh misses concurrently over the full UPC set — they're
+  // two independent D1 round-trips, and product PKs vs. miss PKs are effectively
+  // disjoint, so querying misses for the few UPCs that turn out to be products
+  // costs nothing. (Was sequential: getProducts → getFreshMisses(remaining).)
+  const [found, freshMisses] = await Promise.all([
+    getProducts(db, upcs),
+    getFreshMisses(db, upcs),
+  ]);
   const foundSet = new Set(found.map((p) => p.upc));
 
-  const remaining = upcs.filter((u) => !foundSet.has(u));
-  const freshMisses = await getFreshMisses(db, remaining);
-  const neverChecked = remaining.filter((u) => !freshMisses.has(u));
+  const neverChecked = upcs.filter(
+    (u) => !foundSet.has(u) && !freshMisses.has(u),
+  );
 
   const products = found.map((p) => toResponse(p, baseUrl));
 

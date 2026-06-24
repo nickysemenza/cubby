@@ -16,7 +16,12 @@ export class USDAClient {
   // client is built per-request in ctx (see buildCrudServices), so this can't
   // serve cross-request stale data; it just stops the same product being
   // re-POSTed when several queries in one request enrich overlapping products.
-  private readonly batchMemo = new Map<string, FoodSummary | null>();
+  //
+  // Stores the in-flight *promise*, not the resolved value, so concurrent
+  // callers (e.g. the two coverage detectors on the Problems page, which run
+  // under one Promise.all) coalesce onto a single POST instead of each firing
+  // their own before the other has settled.
+  private readonly batchMemo = new Map<string, Promise<FoodSummary | null>>();
 
   constructor(
     private baseUrl: string,
@@ -187,8 +192,8 @@ export class USDAClient {
     if (lookups.length === 0) return [];
 
     const keys = lookups.map((l) => USDAClient.lookupKey(l));
-    // Fetch only lookups not already resolved earlier in this request, deduped.
-    // A memo'd null is a known miss — don't re-POST it either.
+    // Fetch only lookups not already in-flight or resolved earlier in this
+    // request, deduped. A memo'd null is a known miss — don't re-POST it either.
     const missing = new Map<string, FoodLookupParam>();
     keys.forEach((key, i) => {
       if (!this.batchMemo.has(key)) missing.set(key, lookups[i]!);
@@ -197,7 +202,7 @@ export class USDAClient {
     if (missing.size > 0) {
       const missKeys = [...missing.keys()];
       const missLookups = [...missing.values()];
-      const results = await this.traced("findByLookupBatch", async () => {
+      const batch = this.traced("findByLookupBatch", async () => {
         const res = await this.client.findByLookupBatch({
           body: { lookups: missLookups },
         });
@@ -211,12 +216,20 @@ export class USDAClient {
         }
         return res.body.results;
       });
-      results.forEach((food, i) => {
-        this.batchMemo.set(missKeys[i]!, food ?? null);
+      // Register each key's slice of the shared POST in the memo *before*
+      // awaiting, so a concurrent caller requesting an overlapping key awaits
+      // this same batch instead of issuing a second POST.
+      missKeys.forEach((key, i) => {
+        this.batchMemo.set(
+          key,
+          batch.then((results) => results[i] ?? null),
+        );
       });
     }
 
-    return keys.map((key) => this.batchMemo.get(key) ?? null);
+    return Promise.all(
+      keys.map((key) => this.batchMemo.get(key) ?? Promise.resolve(null)),
+    );
   }
 
   async getFoodSummaryByID(fdc_id: number): Promise<FoodSummary | null> {

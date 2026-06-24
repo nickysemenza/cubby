@@ -25,7 +25,11 @@ type DBClient = NodePgDatabase<typeof schema>;
 
 const createPoolClient = (connectionString: string) => {
   const { Pool } = pg;
-  const pool = new Pool({ connectionString });
+  // Dev-only pool (prod uses a per-request pg.Client behind Hyperdrive). The
+  // Problems page fans out ~25 concurrent queries; pg's default max of 10 forces
+  // the overflow to queue and pay fresh ~310ms TLS handshakes to Neon, so lift
+  // the ceiling enough to absorb the fan-out.
+  const pool = new Pool({ connectionString, max: 25 });
   const instrumentedPool = instrumentDrizzle(pool);
   return drizzleNodePostgres({ client: instrumentedPool, schema });
 };
