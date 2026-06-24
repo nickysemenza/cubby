@@ -9,6 +9,13 @@ import handler, { createServerEntry } from "@tanstack/react-start/server-entry";
 // So apply it only in dev (Node via `vite dev`), where the node SDK is actually
 // initialized by instrument.server.mjs. In prod, errors still reach Sentry via
 // withSentry + the explicit captures in cf-server.ts / trpc.ts.
+//
+// Safety here is the RUNTIME guard, not tree-shaking: at runtime in prod
+// `isCfBuild` is true, so wrapFetchWithSentry is never *called* — its
+// node-tracing path can't execute on workerd regardless of whether the import
+// is eliminated. The import itself is harmless: trpc.ts already pulls
+// @sentry/tanstackstart-react into the Workers bundle for captureException, and
+// it loads on workerd without side effects (the CF build/deploy is green).
 declare const __CF_WORKERS__: boolean | undefined;
 const isCfBuild =
   typeof __CF_WORKERS__ !== "undefined" && __CF_WORKERS__ === true;
