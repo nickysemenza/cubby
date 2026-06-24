@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { useTableDensity } from "~/app/_components/data-table/useTableDensity";
 import { BACKFILL } from "~/app/problems/components/backfill-registry";
 import { BackfillButton } from "~/app/problems/components/problem-backfill-action";
+import { Row, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import {
@@ -48,7 +49,7 @@ function SettingsPage() {
   const { flags, setFlag, resetFlags } = useFlags();
   return (
     <Page variant="list" title="Settings">
-      <div className="max-w-2xl space-y-4 pb-6">
+      <Stack className="max-w-2xl pb-6">
         {GROUPS.map(({ group, blurb }) => {
           const keys = FLAG_KEYS.filter(
             (k) =>
@@ -87,7 +88,7 @@ function SettingsPage() {
         <Button variant="outline" size="sm" onClick={resetFlags}>
           Reset developer flags
         </Button>
-      </div>
+      </Stack>
     </Page>
   );
 }
@@ -103,18 +104,18 @@ function FlagRow({
 }) {
   const def = FLAGS[flagKey];
   return (
-    <div className="flex items-start justify-between gap-4 py-4">
-      <div className="space-y-0.5" /* tight */>
-        <div className="flex items-center gap-2">
+    <Row align="start" justify="between" gap="md" className="py-4">
+      <Stack gap="tight">
+        <Row align="center" gap="sm">
           <span className="font-medium text-sm">{def.label}</span>
           <code className="font-mono text-2xs text-muted-foreground">
             {flagKey}
           </code>
-        </div>
+        </Row>
         <p className="text-muted-foreground text-xs">{def.description}</p>
-      </div>
+      </Stack>
       <Switch checked={value} onCheckedChange={onChange} />
-    </div>
+    </Row>
   );
 }
 
@@ -135,14 +136,14 @@ function DiagnosticsCard() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-2">
+        <Row align="start" justify="between" gap="md">
+          <Stack gap="sm">
             <CardTitle>Diagnostics</CardTitle>
             <CardDescription>
               Latency of core infrastructure — database, USDA API, and UPC
               lookup.
             </CardDescription>
-          </div>
+          </Stack>
           <Button
             variant="outline"
             size="xs"
@@ -151,7 +152,7 @@ function DiagnosticsCard() {
           >
             {isFetching ? "Measuring…" : "Re-run"}
           </Button>
-        </div>
+        </Row>
       </CardHeader>
       <CardContent className="divide-y divide-border/60">
         {error ? (
@@ -163,31 +164,39 @@ function DiagnosticsCard() {
         ) : (
           <>
             {data.results.map((result) => (
-              <div
+              <Row
                 key={result.label}
-                className="flex items-start justify-between gap-4 py-2"
+                align="start"
+                justify="between"
+                gap="md"
+                className="py-2"
               >
-                <div className="min-w-0 space-y-0.5" /* tight */>
+                <Stack gap="tight" className="min-w-0">
                   <code className="block truncate font-mono text-muted-foreground text-xs">
                     {result.label}
                   </code>
                   {result.error && (
                     <p className="text-destructive text-xs">{result.error}</p>
                   )}
-                </div>
+                </Stack>
                 <span className="shrink-0 font-medium font-mono text-sm tabular-nums">
                   {result.durationMs} ms
                 </span>
-              </div>
+              </Row>
             ))}
-            <div className="flex items-center justify-between gap-4 py-2 text-muted-foreground text-xs">
+            <Row
+              align="center"
+              justify="between"
+              gap="md"
+              className="py-2 text-muted-foreground text-xs"
+            >
               <span>
                 Last run {new Date(dataUpdatedAt).toLocaleTimeString()}
               </span>
               <span className="font-mono tabular-nums">
                 total {data.totalMs} ms
               </span>
-            </div>
+            </Row>
           </>
         )}
       </CardContent>
@@ -218,12 +227,12 @@ function MaintenanceRow({
   action: ReactNode;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 py-4">
-      <div className="space-y-0.5" /* tight */>
+    <Row align="start" justify="between" gap="md" className="py-4">
+      <Stack gap="tight">
         <span className="font-medium text-sm">{label}</span>
         <p className="text-muted-foreground text-xs">{description}</p>
-      </div>
-      <div className="flex shrink-0 items-center gap-2">
+      </Stack>
+      <Row align="center" gap="sm" className="shrink-0">
         {showCount && (
           <span className="font-mono text-2xs text-muted-foreground tabular-nums">
             {count == null
@@ -234,8 +243,8 @@ function MaintenanceRow({
           </span>
         )}
         {action}
-      </div>
-    </div>
+      </Row>
+    </Row>
   );
 }
 
@@ -250,7 +259,7 @@ function RecomputeAction() {
     enabled: false,
   });
   return (
-    <div className="flex items-center gap-2">
+    <Row align="center" gap="sm">
       {dryRun.data && (
         <span className="font-mono text-2xs text-muted-foreground tabular-nums">
           {dryRun.data.wouldChange} of {dryRun.data.total} would change
@@ -274,7 +283,7 @@ function RecomputeAction() {
           message: `Recomputed ${r.processed} recipe${r.processed === 1 ? "" : "s"}.`,
         })}
       />
-    </div>
+    </Row>
   );
 }
 
@@ -372,14 +381,14 @@ function AppearanceCard() {
         <CardTitle>Appearance</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="flex items-center justify-between gap-4 py-1">
-          <div className="space-y-0.5" /* tight */>
+        <Row align="center" justify="between" gap="md" className="py-1">
+          <Stack gap="tight">
             <span className="font-medium text-sm">Table density</span>
             <p className="text-muted-foreground text-xs">
               Row height in data tables.
             </p>
-          </div>
-          <div className="flex gap-1">
+          </Stack>
+          <Row gap="xs">
             {DENSITIES.map((d) => (
               <Button
                 key={d}
@@ -391,8 +400,8 @@ function AppearanceCard() {
                 {d}
               </Button>
             ))}
-          </div>
-        </div>
+          </Row>
+        </Row>
       </CardContent>
     </Card>
   );

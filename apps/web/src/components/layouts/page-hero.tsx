@@ -297,6 +297,10 @@ interface PageHeaderProps {
   entity?: Entity;
   actions?: ReactNode;
   className?: string;
+  /** List-only: smaller title for utility pages (maps to PageHero "compact"). */
+  compact?: boolean;
+  /** List-only: "none" drops the accent bar under the title. */
+  decoration?: "accent" | "none";
   // Detail-only spec-plate extras.
   rawData?: unknown;
   heroNo?: string;
@@ -318,6 +322,8 @@ export function PageHeader({
   entity,
   actions,
   className,
+  compact,
+  decoration,
   rawData,
   heroNo,
   heroStamp,
@@ -344,11 +350,12 @@ export function PageHeader({
 
   return (
     <PageHero
-      variant="list"
+      variant={compact ? "compact" : "list"}
       title={title}
       eyebrow={eyebrow}
       entity={entity}
       actions={actions}
+      decoration={decoration}
       className={className}
     />
   );

@@ -5,6 +5,7 @@ import { type ComponentProps, useState } from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
 import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
+import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -73,7 +74,7 @@ export function CoverageChips({
     </Badge>
   );
   return (
-    <div className="flex flex-wrap gap-1">
+    <Row gap="xs" wrap>
       {BASE_KINDS.map((kind) =>
         na.has(kind) ? (
           <Badge
@@ -89,7 +90,7 @@ export function CoverageChips({
         ),
       )}
       {usdaLinked !== undefined && chip("usda", "USDA", usdaLinked)}
-    </div>
+    </Row>
   );
 }
 
@@ -164,11 +165,11 @@ function PriceFix({ id, close }: { id: string; close: () => void }) {
   };
 
   return (
-    <div className="space-y-2">
+    <Stack gap="sm">
       <p className="text-muted-foreground text-xs">
         Not a food — just needs a price.
       </p>
-      <div className="flex items-center gap-2 text-sm">
+      <Row align="center" gap="sm" className="text-sm">
         <span>1 each = $</span>
         <NumberInput
           step="0.01"
@@ -180,8 +181,8 @@ function PriceFix({ id, close }: { id: string; close: () => void }) {
         <Button size="sm" onClick={save} disabled={update.isPending}>
           Save price
         </Button>
-      </div>
-    </div>
+      </Row>
+    </Stack>
   );
 }
 
@@ -249,14 +250,16 @@ function DisconnectedFix({
   };
 
   return (
-    <div className="space-y-2">
+    <Stack gap="sm">
       <p className="text-muted-foreground text-xs">
         Add the missing conversion(s) to connect the groups.
       </p>
       {bridges.map((b, i) => (
-        <div
+        <Row
           key={`${b.from}-${b.to}`}
-          className="flex items-center gap-2 text-sm"
+          align="center"
+          gap="sm"
+          className="text-sm"
         >
           <span>1 {b.from} =</span>
           <NumberInput
@@ -268,7 +271,7 @@ function DisconnectedFix({
             className="w-20"
           />
           <span>{b.to}</span>
-        </div>
+        </Row>
       ))}
       {isError && (
         <p className="text-destructive text-xs">
@@ -282,6 +285,6 @@ function DisconnectedFix({
       >
         {isLoading ? "Loading…" : "Save conversion"}
       </Button>
-    </div>
+    </Stack>
   );
 }

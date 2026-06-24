@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
+import { Stack } from "~/components/layout";
 import { Progress } from "~/components/ui/progress";
 import type { BulkProgressEvent } from "~/lib/bulk-progress";
 import { useTRPC, useTRPCClient } from "~/trpc/react";
@@ -60,7 +61,7 @@ export function BackfillButton<TResult>({
     });
 
   return (
-    <div className="flex flex-col gap-1">
+    <Stack gap="xs">
       <ProblemActionButton
         onClick={onClick}
         isPending={running}
@@ -74,6 +75,6 @@ export function BackfillButton<TResult>({
           indeterminate={!progress}
         />
       )}
-    </div>
+    </Stack>
   );
 }

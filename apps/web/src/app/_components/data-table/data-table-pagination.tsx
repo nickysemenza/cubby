@@ -8,6 +8,7 @@ import {
   ChevronsRight,
 } from "lucide-react";
 
+import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { type QueryTiming, QueryTimingIndicator } from "~/lib/query-timing";
 import { RowsPerPageSelect } from "./rows-per-page-select";
@@ -35,15 +36,24 @@ export function DataTablePagination<TData>({
       {/* Main pagination controls */}
       <div className="flex flex-col space-y-2 sm:flex-row sm:items-center sm:space-x-4 sm:space-y-0 lg:space-x-4">
         {/* Rows per page - simplified on mobile */}
-        <div className="flex items-center justify-between space-x-2 sm:justify-start">
+        <Row
+          align="center"
+          justify="between"
+          gap="sm"
+          className="sm:justify-start"
+        >
           <p className="font-medium font-mono text-2xs text-muted-foreground uppercase tracking-wider">
             Rows per page
           </p>
           <RowsPerPageSelect table={table} />
-        </div>
+        </Row>
 
         {/* Page info - responsive text */}
-        <div className="flex min-w-0 flex-1 items-center justify-center font-mono text-2xs text-muted-foreground uppercase tabular-nums sm:flex-none">
+        <Row
+          align="center"
+          justify="center"
+          className="min-w-0 flex-1 font-mono text-2xs text-muted-foreground uppercase tabular-nums sm:flex-none"
+        >
           <span className="hidden sm:inline">
             Page {table.getState().pagination.pageIndex + 1} of{" "}
             {table.getPageCount()} ({table.getRowCount()} records)
@@ -52,10 +62,10 @@ export function DataTablePagination<TData>({
             {table.getState().pagination.pageIndex + 1} of{" "}
             {table.getPageCount()}
           </span>
-        </div>
+        </Row>
 
         {/* Navigation buttons */}
-        <div className="flex items-center justify-center space-x-1">
+        <Row align="center" justify="center" gap="xs">
           <Button
             variant="outline"
             size="icon-lg"
@@ -94,7 +104,7 @@ export function DataTablePagination<TData>({
             <span className="sr-only">Go to last page</span>
             <ChevronsRight />
           </Button>
-        </div>
+        </Row>
       </div>
     </div>
   );

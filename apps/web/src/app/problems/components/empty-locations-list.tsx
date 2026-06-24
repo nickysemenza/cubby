@@ -4,6 +4,7 @@ import { formatDistanceToNow } from "date-fns";
 import { Calendar } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { CardThumbnail } from "~/components/entity/card-thumbnail";
+import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { queryKeys } from "~/lib/query-keys";
@@ -49,14 +50,16 @@ export function EmptyLocationsList({
 
           if (location.lastBulkInventory) {
             details.push(
-              <div
+              <Row
                 key="last-inventory"
-                className="flex items-center gap-1 text-muted-foreground text-sm"
+                align="center"
+                gap="xs"
+                className="text-muted-foreground text-sm"
               >
                 <Calendar className="h-3 w-3" />
                 Last inventory {formatDistanceToNow(location.lastBulkInventory)}{" "}
                 ago
-              </div>,
+              </Row>,
             );
           }
 

@@ -25,6 +25,10 @@ interface PageListProps extends PageBaseProps {
   variant?: "list";
   /** Entity drives the eyebrow path + accent bar. */
   entity?: Entity;
+  /** Smaller title for utility pages (e.g. Ask). */
+  compact?: boolean;
+  /** "none" drops the terracotta accent bar under the title. */
+  decoration?: "accent" | "none";
 }
 
 interface PageDetailProps extends PageBaseProps {
@@ -60,6 +64,8 @@ export function Page(props: PageProps) {
   const variant = props.variant ?? "list";
   // Detail-only spec-plate extras, narrowed off the union.
   const detail = props.variant === "detail" ? props : undefined;
+  // List-only header options, narrowed off the union.
+  const list = props.variant !== "detail" ? props : undefined;
   return (
     <HydrateClient>
       <PageWrapper fullWidth={fullWidth}>
@@ -70,6 +76,8 @@ export function Page(props: PageProps) {
             eyebrow={eyebrow}
             entity={entity}
             actions={actions}
+            compact={list?.compact}
+            decoration={list?.decoration}
             heroStamp={detail?.heroStamp}
             heroStats={detail?.heroStats}
             heroNo={detail?.heroNo}

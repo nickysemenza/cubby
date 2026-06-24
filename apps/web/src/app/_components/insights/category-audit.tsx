@@ -2,6 +2,7 @@ import type { CategoryAudit as CategoryAuditResult } from "@cubby/schemas/ai";
 import { useMutation } from "@tanstack/react-query";
 import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
@@ -30,14 +31,14 @@ export function CategoryAudit() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <div className="space-y-1">
+        <Row align="center" justify="between">
+          <Stack gap="xs">
             <CardTitle icon={Sparkles}>Category Audit</CardTitle>
             <CardDescription>
               Use AI to identify gaps in your category system based on your
               current product catalog.
             </CardDescription>
-          </div>
+          </Stack>
           <Button
             onClick={() => auditMutation.mutate()}
             disabled={auditMutation.isPending}
@@ -54,7 +55,7 @@ export function CategoryAudit() {
               </>
             )}
           </Button>
-        </div>
+        </Row>
       </CardHeader>
 
       {result && (
@@ -62,14 +63,14 @@ export function CategoryAudit() {
           <p className="text-muted-foreground text-sm">{result.summary}</p>
 
           {result.suggestions.length > 0 && (
-            <div className="space-y-4">
+            <Stack>
               {result.suggestions.map((suggestion) => (
                 <SuggestionCard
                   key={suggestion.categoryName}
                   suggestion={suggestion}
                 />
               ))}
-            </div>
+            </Stack>
           )}
         </CardContent>
       )}
@@ -83,21 +84,24 @@ function SuggestionCard({
   suggestion: CategoryAuditResult["suggestions"][number];
 }) {
   return (
-    <div className="space-y-2 rounded-lg border border-[var(--border-chunky)] p-4">
+    <Stack
+      gap="sm"
+      className="rounded-lg border border-[var(--border-chunky)] p-4"
+    >
       <div className="flex items-center gap-2">
         <Badge variant="secondary">{suggestion.categoryName}</Badge>
       </div>
       <p className="text-sm">{suggestion.description}</p>
       <p className="text-muted-foreground text-xs">{suggestion.reasoning}</p>
       {suggestion.productNames.length > 0 && (
-        <div className="flex flex-wrap gap-2 pt-1">
+        <Row wrap gap="sm" className="pt-1">
           {suggestion.productNames.map((name) => (
             <Badge key={name} variant="outline" className="text-xs">
               {name}
             </Badge>
           ))}
-        </div>
+        </Row>
       )}
-    </div>
+    </Stack>
   );
 }

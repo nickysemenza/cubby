@@ -1,6 +1,7 @@
 import { formatDistanceToNow } from "date-fns";
 import { Calendar } from "lucide-react";
 import type { ReactNode } from "react";
+import { Row } from "~/components/layout";
 
 /** `by {manufacturer}` — the standard product-card subtitle. */
 export function byManufacturer(manufacturer: string): string {
@@ -10,13 +11,15 @@ export function byManufacturer(manufacturer: string): string {
 /** Muted "Created N ago" detail row, keyed for use in a `details` array. */
 export function createdAgoDetail(createdAt: Date | string | number): ReactNode {
   return (
-    <div
+    <Row
       key="created"
-      className="flex items-center gap-1 text-muted-foreground text-sm"
+      align="center"
+      gap="xs"
+      className="text-muted-foreground text-sm"
     >
       <Calendar className="h-3 w-3" />
       Created {formatDistanceToNow(createdAt)} ago
-    </div>
+    </Row>
   );
 }
 
