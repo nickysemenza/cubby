@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
 import { Progress } from "~/components/ui/progress";
 import type { BulkProgressEvent } from "~/lib/bulk-progress";
+import { queryKeys } from "~/lib/query-keys";
 import { useTRPC, useTRPCClient } from "~/trpc/react";
 import { ProblemActionButton } from "./problem-action-button";
 
@@ -51,7 +52,7 @@ export function BackfillButton<TResult>({
         const { tone, message } = toastResult(data);
         toast[tone](message);
         queryClient.invalidateQueries({
-          queryKey: [api.problems.getAllProblems.queryKey()],
+          queryKey: [queryKeys.problems.all],
         });
         for (const key of invalidateKeys?.(api) ?? []) {
           queryClient.invalidateQueries({ queryKey: [key] });

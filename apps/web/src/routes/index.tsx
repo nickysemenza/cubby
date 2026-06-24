@@ -39,10 +39,10 @@ export const Route = createFileRoute("/")({
     void queryClient.prefetchQuery(trpc.ingredient.list.queryOptions(o));
     void queryClient.prefetchQuery(trpc.image.list.queryOptions(o));
     void queryClient.prefetchQuery(trpc.usda.list.queryOptions(o));
-    void queryClient.prefetchQuery({
-      ...trpc.problems.getAllProblems.queryOptions(),
-      staleTime: 5 * 60 * 1000,
-    });
+    // Problems count is fetched client-side by the badge/card via the five
+    // cost-grouped queries (no monolithic getAllProblems). Not prefetched here:
+    // SSR self-fetch is unauthenticated and we don't want the heavy detectors
+    // running in the SSR invocation.
     // Warm the location tree — the pantry-value card reads each location's
     // persisted valuation rollup from it (no inventory fetch).
     void queryClient.prefetchQuery(trpc.location.makeTree.queryOptions());

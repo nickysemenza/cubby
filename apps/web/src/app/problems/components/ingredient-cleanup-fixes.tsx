@@ -21,8 +21,9 @@ import { useTRPC } from "~/trpc/react";
  * Per-card and bulk cleanup actions for the three ingredient problem sections.
  * Per-card fixes own a mutation hook (mounted only while the card is expanded)
  * and clear their card on success; the bulk buttons confirm first, then act on
- * every rendered row at once. All invalidate the navbar badge count alongside
- * the always-invalidated `problems.getAllProblems`.
+ * every rendered row at once. All invalidate the whole `problems.*` path
+ * (queryKeys.problems.all) so the page's cost-grouped queries and the badge's
+ * combined scan both re-read.
  */
 
 // ── Per-card fixes ───────────────────────────────────────────────────────────
@@ -183,10 +184,7 @@ export function RemoveAllAliasesButton({
   const prune = useActionMutation({
     mutationFn: api.problems.pruneAliases.mutationOptions,
     success: (data) => `Removed ${countLabel(data.pruned, "alias", "aliases")}`,
-    invalidateKeys: [
-      api.problems.getAllProblems.queryKey(),
-      queryKeys.ingredient.list,
-    ],
+    invalidateKeys: [queryKeys.problems.all, queryKeys.ingredient.list],
   });
 
   return (
@@ -223,7 +221,7 @@ export function DeleteAllUnusedButton({
         ? `Deleted ${data.deleted}, ${data.failed.length} failed (e.g. ${data.failed[0]?.reason ?? "unknown"})`
         : `Deleted ${countLabel(data.deleted, "ingredient")}`,
     invalidateKeys: [
-      api.problems.getAllProblems.queryKey(),
+      queryKeys.problems.all,
       queryKeys.ingredient.list,
       ...(alsoDeleteProducts ? [queryKeys.product.list] : []),
     ],

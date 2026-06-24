@@ -3,14 +3,15 @@ import type {
   DataOf,
   MutationOptionsFn,
 } from "~/app/problems/components/use-problem-backfill";
-import { useTRPC } from "~/trpc/react";
+import { queryKeys } from "~/lib/query-keys";
 import { useActionMutation } from "./useActionMutation";
 
 /**
  * Per-card inline-fix mutation for the Problems page. Like {@link useActionMutation},
- * but always invalidates `problems.getAllProblems` (so the resolved card drops out
- * of the list) on top of any caller-supplied entity-list keys. This is the
- * per-card counterpart to `useProblemBackfill`, which powers the "fix all" buttons.
+ * but always invalidates the whole `problems.*` path (so the resolved card drops
+ * out of whichever cost-grouped detector query owns it, and the badge's combined
+ * scan) on top of any caller-supplied entity-list keys. This is the per-card
+ * counterpart to `useProblemBackfill`, which powers the "fix all" buttons.
  *
  * `TData`/`TVariables` are inferred from the passed `*.mutationOptions` reference,
  * so callers need no generics.
@@ -31,11 +32,10 @@ export function useProblemCardMutation<TFn extends MutationOptionsFn>({
   onSuccess?: (data: DataOf<TFn>) => void;
   error?: string | ((err: unknown) => string);
 }) {
-  const api = useTRPC();
   return useActionMutation({
     mutationFn,
     success,
-    invalidateKeys: [api.problems.getAllProblems.queryKey(), ...invalidateKeys],
+    invalidateKeys: [queryKeys.problems.all, ...invalidateKeys],
     onSuccess,
     error,
   });

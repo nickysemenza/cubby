@@ -1,30 +1,65 @@
 import { ingredientId } from "@cubby/schemas/identifiers";
 import {
-  allProblemsSchema,
   maintenanceCountsSchema,
+  problemsAliasesSchema,
+  problemsCoverageSchema,
+  problemsFastSchema,
+  problemsParsesSchema,
+  problemsUpcSchema,
 } from "@cubby/schemas/problems";
 import { z } from "zod";
 import { streamProgress } from "~/lib/bulk-progress";
 import {
-  deleteUnusedIngredients,
-  findAllProblems,
-  findMaintenanceCounts,
   pruneUnusedAliases,
   recipeUsageCountsByProduct,
-  reparseStaleIngredientParses,
 } from "~/server/repo/problems";
+import {
+  deleteUnusedIngredients,
+  findAliasesProblems,
+  findCoverageProblems,
+  findFastProblems,
+  findMaintenanceCounts,
+  findParsesProblems,
+  findUpcProblems,
+  reparseStaleIngredientParses,
+} from "~/server/services/problems.service";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
-// Main procedure to get all problems
-const getAllProblems = protectedProcedure
-  .output(allProblemsSchema)
-  .query(async ({ ctx }) => {
-    return await findAllProblems(ctx.db, ctx.upcLookupClient, ctx.usdaClient);
-  });
+// The Problems surfaces (page, navbar badge, homepage card) all load these five
+// cost-grouped procedures and assemble the combined result client-side — each
+// over an UNBATCHED link so it gets its own Worker invocation / CPU budget. The
+// old monolithic getAllProblems ran every detector (two re-parse every recipe
+// line through WASM) in ONE invocation and exceeded the 30s CPU limit; it was
+// removed. MCP composes these five the same way (assembleAllProblems).
+
+// Group: DB-only detectors (cheap).
+const getFast = protectedProcedure
+  .output(problemsFastSchema)
+  .query(async ({ ctx }) => findFastProblems(ctx.db));
+
+// Group: USDA-coverage (one shared product scan + enrichment).
+const getCoverage = protectedProcedure
+  .output(problemsCoverageSchema)
+  .query(async ({ ctx }) => findCoverageProblems(ctx.db, ctx.usdaClient));
+
+// Group: unused-aliases WASM parse-sweep (isolated CPU budget).
+const getAliases = protectedProcedure
+  .output(problemsAliasesSchema)
+  .query(async ({ ctx }) => findAliasesProblems(ctx.db));
+
+// Group: stale-parses WASM parse-sweep (isolated CPU budget).
+const getParses = protectedProcedure
+  .output(problemsParsesSchema)
+  .query(async ({ ctx }) => findParsesProblems(ctx.db));
+
+// Group: better-UPC network detector.
+const getUpc = protectedProcedure
+  .output(problemsUpcSchema)
+  .query(async ({ ctx }) => findUpcProblems(ctx.db, ctx.upcLookupClient));
 
 // Counts behind the Settings → Maintenance "N affected" dry-run. Focused subset
 // of detectors (no USDA/UPC network); badge/count consumers instead derive
-// counts client-side from getAllProblems via countProblems (one shared scan).
+// counts client-side from the five cost-grouped queries via countProblems.
 const getMaintenanceCounts = protectedProcedure
   .output(maintenanceCountsSchema)
   .query(async ({ ctx }) => {
@@ -92,7 +127,11 @@ const deleteUnused = protectedProcedure
   });
 
 export const problemsRouter = createTRPCRouter({
-  getAllProblems,
+  getFast,
+  getCoverage,
+  getAliases,
+  getParses,
+  getUpc,
   getMaintenanceCounts,
   reparseStale,
   recipeUsageByProduct,

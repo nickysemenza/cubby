@@ -20,6 +20,13 @@ export const queryKeys = {
     list: ["ingredient", "list"] as const,
     getByName: ["ingredient", "getByName"] as const,
   },
+  problems: {
+    // Broad prefix — invalidate every problems query so a fix re-reads whichever
+    // cost-grouped detector query (getFast / getCoverage / getAliases /
+    // getParses / getUpc) owns the resolved card, plus the badge's combined
+    // getAllProblems scan. The page loads the groups, not getAllProblems.
+    all: ["problems"] as const,
+  },
   debug: {
     timing: ["debug", "timing"] as const,
   },

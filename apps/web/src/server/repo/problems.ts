@@ -842,14 +842,9 @@ export const findLinkedProductIds = async (
   return linked.map((p) => p.id);
 };
 
-// Re-export the orchestration surface from the ProblemsService so existing
-// callers (the problems router) keep importing these from this module unchanged.
-// The orchestration itself (USDA enrichment, cross-entity deletes, the full
-// findAllProblems scan) lives in the service layer; the detectors above are the
-// repo-layer primitives it composes.
-export {
-  deleteUnusedIngredients,
-  findAllProblems,
-  findMaintenanceCounts,
-  reparseStaleIngredientParses,
-} from "~/server/services/problems.service";
+// The orchestration surface (full findAllProblems scan + cost-grouped bundles,
+// USDA enrichment, cross-entity deletes, the reparse mutation) lives in the
+// service layer and is imported from there directly by callers. It is NOT
+// re-exported here: a repo importing from a service is a layering violation and
+// created a repo → service → repo module cycle. The detectors above are the
+// repo-layer primitives the service composes.

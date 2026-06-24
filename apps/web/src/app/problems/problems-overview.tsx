@@ -14,20 +14,17 @@ import {
 import { useTRPC } from "~/trpc/react";
 import { PROBLEM_SECTIONS } from "./components/problem-sections";
 import { RecipeUsageContext } from "./components/recipe-usage-context";
+import { useProblemsData } from "./use-problems-data";
 
 export function ProblemsOverview() {
   const api = useTRPC();
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  // No staleTime here (unlike the 5-min navbar badge, where staleness is fine):
-  // opening the page — or reloading while on it — should revalidate the badge's
-  // possibly-stale cache. Cached data renders instantly, then a background
-  // refetch lands fresh numbers (which also updates the shared badge).
-  const {
-    data: problems,
-    isLoading,
-    error,
-  } = useQuery(api.problems.getAllProblems.queryOptions());
+  // The page loads detectors as five cost-grouped, unbatched queries (each its
+  // own Worker invocation/CPU budget — see useProblemsData) and merges them back
+  // into the AllProblems shape the sections expect. No staleTime: opening the
+  // page revalidates whatever the badge's 5-min cache may have left stale.
+  const { problems, isLoading, error } = useProblemsData();
 
   // Every product id across the product-bearing sections, so we fetch recipe
   // usage once for the whole page rather than per card.
@@ -61,15 +58,6 @@ export function ProblemsOverview() {
       <ErrorDisplay
         error={error}
         className="rounded-md bg-destructive/10 p-4"
-      />
-    );
-  }
-
-  if (!problems) {
-    return (
-      <ErrorDisplay
-        error="No problem data available"
-        className="rounded-md bg-accent/20 p-4"
       />
     );
   }

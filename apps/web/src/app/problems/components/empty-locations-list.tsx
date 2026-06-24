@@ -8,7 +8,6 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { queryKeys } from "~/lib/query-keys";
 import type { EmptyLocation } from "~/server/repo/problems";
-import { useTRPC } from "~/trpc/react";
 import { AddInventoryDialog } from "./add-inventory-dialog";
 import { ProblemSection } from "./problem-section";
 import { createdAgoDetail } from "./render-helpers";
@@ -21,7 +20,6 @@ export function EmptyLocationsList({
   const [addDialogLocation, setAddDialogLocation] =
     useState<EmptyLocation | null>(null);
   const queryClient = useQueryClient();
-  const api = useTRPC();
 
   return (
     <>
@@ -104,7 +102,7 @@ export function EmptyLocationsList({
           locationName={addDialogLocation.name}
           onSuccess={() => {
             queryClient.invalidateQueries({
-              queryKey: [api.problems.getAllProblems.queryKey()],
+              queryKey: [queryKeys.problems.all],
             });
             queryClient.invalidateQueries({
               queryKey: queryKeys.inventory.list,
