@@ -6,6 +6,7 @@
 //    single request's query fan-out runs in parallel instead of serializing.
 // 3. Intercepts console.error to capture real error details for `wrangler tail`.
 
+import * as Sentry from "@sentry/cloudflare";
 import { setCfEnv } from "./server/cf-env";
 import { withRequestDb } from "./server/db";
 
@@ -52,7 +53,7 @@ console.error = (...args: unknown[]) => {
   _origError(...args);
 };
 
-export default {
+const handler = {
   async fetch(request: Request, env: Env) {
     // Bridge CF secrets → process.env for libraries that read from it
     // (better-auth reads BETTER_AUTH_SECRET from process.env at init time)
@@ -71,17 +72,27 @@ export default {
         const response = await handler.fetch(request);
 
         // If Nitro returned a 500 and we intercepted a real error, log the details
-        // so they appear in `wrangler tail` (Nitro's response body is useless).
+        // so they appear in `wrangler tail` (Nitro's response body is useless)
+        // and report it to Sentry — the handler swallows it into a 500 body, so
+        // withSentry's auto-capture (thrown-error only) never sees it.
         if (response.status >= 500 && lastInterceptedError) {
           console.error(
             "[cf-server] Unhandled error:",
             JSON.stringify(lastInterceptedError, null, 2),
           );
+          const reconstructed = new Error(lastInterceptedError.message);
+          reconstructed.name = lastInterceptedError.name;
+          reconstructed.stack = lastInterceptedError.stack;
+          reconstructed.cause = lastInterceptedError.cause;
+          Sentry.captureException(reconstructed);
         }
 
         return response;
       });
     } catch (error) {
+      // Report to Sentry before swallowing: we return a generic 500 rather than
+      // rethrowing, so withSentry's auto-capture would otherwise miss this.
+      Sentry.captureException(error);
       // Log full detail server-side (visible in `wrangler tail`) but never
       // return the stack/message to the client — avoids stack-trace exposure.
       const detail =
@@ -93,3 +104,18 @@ export default {
     }
   },
 };
+
+export default Sentry.withSentry(
+  () => ({
+    dsn: "https://a50b2f76dd1586f95cdd29cd13a6c0dc@o83311.ingest.us.sentry.io/4508775559135232",
+    sendDefaultPii: true,
+    // Mirror the client's prod 10% trace sampling (router.tsx). Head-based
+    // sampling decisions propagate client→server via the `sentry-trace` header,
+    // so matching the rate keeps front-to-back traces connected without the
+    // per-request overhead of full tracing — the same cost/signal call the
+    // client already made for this single-user app. Errors are captured
+    // regardless of the trace sample rate.
+    tracesSampleRate: 0.1,
+  }),
+  handler,
+);
