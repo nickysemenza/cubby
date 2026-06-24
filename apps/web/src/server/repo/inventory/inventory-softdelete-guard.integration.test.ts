@@ -1,6 +1,8 @@
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import {
+  bulkMoveInventoryEntries,
+  bulkProcessInventoryEntries,
   createInventoryEntry,
   updateInventoryEntry,
 } from "~/server/repo/inventory";
@@ -77,6 +79,77 @@ describe("inventory soft-delete target guard", () => {
         ctx.db,
         entry.id,
         { productId: deadProduct.id },
+        TEST_ACTOR,
+      ),
+    ).rejects.toThrow(/does not exist or has been deleted/);
+  });
+
+  it("updateInventoryEntry rejects re-pointing at a soft-deleted location", async () => {
+    const location = await liveLocation();
+    const product = await liveProduct();
+    const entry = await createInventoryEntry(
+      ctx.db,
+      { productId: product.id, locationId: location.id, amount },
+      TEST_ACTOR,
+    );
+
+    // An empty second location can be soft-deleted, then can't be moved onto.
+    const deadLocation = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Closet" }),
+      TEST_ACTOR,
+    );
+    await deleteLocations(ctx.db, [deadLocation.id], TEST_ACTOR);
+
+    await expect(
+      updateInventoryEntry(
+        ctx.db,
+        entry.id,
+        { locationId: deadLocation.id },
+        TEST_ACTOR,
+      ),
+    ).rejects.toThrow(/does not exist or has been deleted/);
+  });
+
+  it("bulkProcessInventoryEntries rejects a soft-deleted location", async () => {
+    const product = await liveProduct();
+    const location = await liveLocation();
+    await deleteLocations(ctx.db, [location.id], TEST_ACTOR);
+
+    await expect(
+      bulkProcessInventoryEntries(
+        ctx.db,
+        location.id,
+        [{ productId: product.id, locationId: location.id, amount }],
+        TEST_ACTOR,
+      ),
+    ).rejects.toThrow(/does not exist or has been deleted/);
+  });
+
+  it("bulkMoveInventoryEntries rejects a soft-deleted target location", async () => {
+    const source = await liveLocation();
+    const product = await liveProduct();
+    const entry = await createInventoryEntry(
+      ctx.db,
+      { productId: product.id, locationId: source.id, amount },
+      TEST_ACTOR,
+    );
+
+    const deadTarget = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Closed Shelf" }),
+      TEST_ACTOR,
+    );
+    await deleteLocations(ctx.db, [deadTarget.id], TEST_ACTOR);
+
+    await expect(
+      bulkMoveInventoryEntries(
+        ctx.db,
+        {
+          sourceLocationId: source.id,
+          targetLocationId: deadTarget.id,
+          items: [{ inventoryEntryId: entry.id, quantity: amount }],
+        },
         TEST_ACTOR,
       ),
     ).rejects.toThrow(/does not exist or has been deleted/);

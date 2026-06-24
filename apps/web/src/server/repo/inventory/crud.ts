@@ -35,7 +35,7 @@ import {
   updateAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { dbInventoryEntryToAPI } from "./helpers";
+import { assertLiveTargets, dbInventoryEntryToAPI } from "./helpers";
 import type {
   CreateInventoryEntryData,
   UpdateInventoryEntryData,
@@ -325,44 +325,6 @@ export const inventoryentryList = async (
 
   const inventoryEntries = results.map((r) => dbInventoryEntryToAPI(r));
   return { data: inventoryEntries, count: totalCount };
-};
-
-/**
- * Reject inventory writes whose target product/location is soft-deleted. Without
- * this, an entry can be created or re-pointed (update / bulk-move) to a deleted
- * parent — the entry stays live but references a "gone" product/location, which
- * then leaks into global search (the symptom guarded in repo/search.ts). Only the
- * ids actually provided are checked, so partial updates stay cheap.
- */
-const assertLiveTargets = async (
-  db: Database,
-  targets: { productId?: ProductId; locationId?: LocationId },
-) => {
-  const client = getDb(db);
-  if (targets.productId !== undefined) {
-    const live = await client.query.product.findFirst({
-      where: and(eq(product.id, targets.productId), notDeleted(product)),
-      columns: { id: true },
-    });
-    if (!live) {
-      throw createAppError(
-        "PRODUCT_NOT_FOUND",
-        `Product ${targets.productId} does not exist or has been deleted`,
-      );
-    }
-  }
-  if (targets.locationId !== undefined) {
-    const live = await client.query.location.findFirst({
-      where: and(eq(location.id, targets.locationId), notDeleted(location)),
-      columns: { id: true },
-    });
-    if (!live) {
-      throw createAppError(
-        "LOCATION_NOT_FOUND",
-        `Location ${targets.locationId} does not exist or has been deleted`,
-      );
-    }
-  }
 };
 
 export const updateInventoryEntry = async (
