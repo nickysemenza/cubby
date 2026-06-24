@@ -132,4 +132,32 @@ describe("USDAClient.findFoodsBatch request-scoped memo", () => {
     // The null is memoed as a known miss, so the second call sends nothing.
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it("coalesces concurrent calls for the same lookup onto one POST", async () => {
+    // The Problems-page pattern: two detectors enrich an overlapping product set
+    // concurrently (under one Promise.all). The memo stores the in-flight
+    // *promise*, so the second caller awaits the first's POST instead of issuing
+    // its own — regression guard for the duplicate findByLookupBatch in the trace.
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(() => resolve(batchBody([{ fdc_id: 7 }])), 10),
+          ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new USDAClient("http://localhost:8787");
+    const lookup = { kind: "upc", gtin_upc: "012345678905" } as const;
+
+    const [a, b] = await Promise.all([
+      client.findFoodsBatch([lookup]),
+      client.findFoodsBatch([lookup]),
+    ]);
+
+    expect(a).toEqual([{ fdc_id: 7 }]);
+    expect(b).toEqual([{ fdc_id: 7 }]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });

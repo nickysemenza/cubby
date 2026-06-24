@@ -32,7 +32,7 @@ import {
   notExists,
   sql,
 } from "drizzle-orm";
-import { sum, uniq } from "es-toolkit";
+import { sum, uniq, uniqBy } from "es-toolkit";
 import { env } from "~/env";
 import {
   BASE_KINDS,
@@ -228,22 +228,33 @@ const synthesizeEffectiveMappings = (
   }
 };
 
-// Find ingredient products that are under-covered: they have *some* coverage (so
-// findProductsWithoutMappings skips them) but their effective conversion graph
-// can't reach all four base kinds. Graded with conversionCoverage on the
-// synthesized mappings (stored conversions + price edge + USDA edges), so money
-// in a unit mapping counts like a scalar price — not just the scalar field.
+// Detect both coverage problems in one pass: ingredient products that are
+// *under-covered* and products whose mappings *island*. Both detectors fetch
+// products with their stored mappings, enrich them with USDA food, and
+// synthesize effective edges — so they share one product scan, one USDA
+// enrichment (the overlap deduped by the client memo), and one synthesis per
+// product instead of doing all of it twice.
 //
-// Cost: like the islanded detector, this enriches candidates with USDA food and
-// synthesizes their mappings. The DB pre-filter drops truly-empty products
-// (owned by findProductsWithoutMappings); batchEnrichWithFood only hits the
-// network for candidates that actually have a upc/fdc_id to look up.
-const findIngredientsWithPartialCoverage = async (
+//   - partial coverage: an ingredient product with *some* coverage (so
+//     findProductsWithoutMappings skips it) whose effective conversion graph
+//     (stored conversions + price edge + USDA edges) still can't reach all four
+//     base kinds. Money in a unit mapping counts like a scalar price.
+//   - islanded mappings: a product whose *effective* mappings still split into
+//     2+ components. A product islanded on its stored mappings alone but bridged
+//     into one component by USDA portion/serving edges is fully convertible, so
+//     it isn't flagged — mirroring the "a USDA link counts as coverage" rule in
+//     findProductsWithoutMappings.
+const findProductCoverageProblems = async (
   db: Database,
   usdaClient: USDAClient,
-): Promise<IngredientWithPartialCoverage[]> => {
+): Promise<{
+  ingredientsWithPartialCoverage: IngredientWithPartialCoverage[];
+  productsWithIslandedMappings: ProductWithIslandedMappings[];
+}> => {
+  // One scan, a superset of both detectors' needs: all non-deleted products with
+  // their stored mappings + the linked ingredient's N/A opt-outs.
   const products = await getDb(db).query.product.findMany({
-    where: and(notDeleted(product), isNotNull(product.ingredientId)),
+    where: notDeleted(product),
     columns: {
       id: true,
       name: true,
@@ -259,53 +270,76 @@ const findIngredientsWithPartialCoverage = async (
         where: notDeleted(productUnitMappings),
         columns: { a: true, b: true, source: true },
       },
-      // The linked ingredient's N/A opt-outs, so we grade only the kinds that
-      // apply (a count-only item isn't flagged for a volume it never uses).
+      // The linked ingredient's N/A opt-outs, so partial coverage grades only the
+      // kinds that apply (a count-only item isn't flagged for a volume it never uses).
       Ingredient: { columns: { naKinds: true } },
     },
   });
 
-  const candidates = products.filter(
+  // Candidate sets are pure DB/WASM (no network). Partial coverage wants
+  // ingredient products with *some* signal — truly-empty ones belong to
+  // findProductsWithoutMappings. Islanded wants products whose STORED mappings
+  // already split into 2+ components: adding the derived edges can only merge
+  // components, never split them, so a product connected on its stored mappings
+  // can never be islanded. detect_unit_mapping_islands is infallible (never throws).
+  const partialCandidates = products.filter(
     (p) =>
+      p.ingredientId != null &&
       !isMiscProduct(p.name) &&
-      // Skip truly-empty products — findProductsWithoutMappings owns those.
       (p.price != null ||
         p.fdc_id != null ||
         p.upc != null ||
         p.unitMappings.length > 0),
   );
+  const islandedCandidates = products.filter(
+    (p) =>
+      p.unitMappings.length >= 2 &&
+      !isMiscProduct(p.name) &&
+      wasm.detect_unit_mapping_islands(p.unitMappings).length >= 2,
+  );
 
+  // One USDA enrichment over the union of both candidate sets (the client memo
+  // dedupes the overlap so each food is fetched once), then synthesize each
+  // product's effective mappings once, keyed by id, for both detectors.
+  const toEnrich = uniqBy(
+    [...partialCandidates, ...islandedCandidates],
+    (p) => p.id,
+  );
   const enriched = await batchEnrichWithFood(
-    candidates,
+    toEnrich,
     foodLookupParamFromProduct,
     usdaClient,
   );
+  const enrichedById = new Map(enriched.map((p) => [p.id, p]));
+  const effectiveById = new Map(
+    enriched.map((p) => [p.id, synthesizeEffectiveMappings(p)]),
+  );
 
-  const problems: IngredientWithPartialCoverage[] = [];
-  for (const p of enriched) {
-    const effective = synthesizeEffectiveMappings(p);
-    if (!effective) continue;
+  const ingredientsWithPartialCoverage: IngredientWithPartialCoverage[] = [];
+  for (const cand of partialCandidates) {
+    const p = enrichedById.get(cand.id);
+    const effective = p ? effectiveById.get(p.id) : null;
+    if (!p || !effective) continue;
 
-    // The query filters isNotNull(ingredientId), so this never skips; it just
-    // narrows the type for the non-nullable schema field.
+    // partialCandidates guarantees ingredientId != null; narrow for the
+    // non-nullable schema field.
     if (p.ingredientId == null) continue;
 
     const applicable = gradedKinds(p.Ingredient?.naKinds);
     const cov = conversionCoverage(effective, applicable);
+    if (cov.tier === "complete") continue;
 
     // Flag any food whose effective graph can't reach all four base kinds. This
     // includes the subtle case where a scalar/each price exists but isn't
     // reachable from a measure (e.g. russet potato: `1 each = $1` islanded from
-    // the gram graph because no portion maps `each`→g) — money stays uncovered,
-    // and the fix is to connect the price to grams (a manual `1 each = N g`).
+    // the gram graph because no portion maps `each`→g) — money stays uncovered.
     // `hasPrice` no longer exempts: a price you can't convert from a measure is
     // still a gap.
     const hasPrice =
       p.price != null ||
       effective.some((m) => isMoneyUnit(m.a.unit) || isMoneyUnit(m.b.unit));
-    if (cov.tier === "complete") continue;
 
-    problems.push({
+    ingredientsWithPartialCoverage.push({
       id: p.id,
       name: p.name,
       manufacturer: p.manufacturer,
@@ -317,7 +351,34 @@ const findIngredientsWithPartialCoverage = async (
     });
   }
 
-  return problems;
+  const productsWithIslandedMappings: ProductWithIslandedMappings[] = [];
+  for (const cand of islandedCandidates) {
+    const p = enrichedById.get(cand.id);
+    const effective = p ? effectiveById.get(p.id) : null;
+    if (!p || !effective) continue;
+
+    const islands = wasm.detect_unit_mapping_islands(effective);
+    if (islands.length >= 2) {
+      productsWithIslandedMappings.push({
+        id: p.id,
+        name: p.name,
+        manufacturer: p.manufacturer,
+        islandCount: islands.length,
+        islands: islands.map((units) => ({
+          units: units.slice(0, 3), // Limit to first 3 units for display
+          exampleUnit: units[0] ?? "unknown",
+        })),
+        coverage: {
+          covered: [...conversionCoverage(effective, BASE_KINDS).covered],
+          // Islanding is about a disconnected money/measure component, not N/A
+          // dimensions — grade against all four base kinds.
+          applicable: [...BASE_KINDS],
+        },
+      });
+    }
+  }
+
+  return { ingredientsWithPartialCoverage, productsWithIslandedMappings };
 };
 
 // Find ingredients used in a recipe but linked to no product, so they can't be
@@ -588,95 +649,6 @@ const findEmptyLocations = async (db: Database): Promise<EmptyLocation[]> => {
     );
 
   return emptyLocations;
-};
-
-// Find products with disconnected unit mapping graphs (islands).
-//
-// A product is only a real problem if its *effective* mappings — stored
-// conversions PLUS the edges its USDA link and price synthesize — still split
-// into 2+ components. A product islanded on its stored mappings alone but
-// bridged into one component by USDA portion/serving edges (the same edges the
-// conversion graph and costing engine use) is fully convertible, so it isn't
-// flagged. This mirrors the "a USDA link counts as conversion coverage" rule in
-// findProductsWithoutMappings.
-const findProductsWithIslandedMappings = async (
-  db: Database,
-  usdaClient: USDAClient,
-): Promise<ProductWithIslandedMappings[]> => {
-  const dbClient = getDb(db);
-
-  // Fetch products with their stored unit mappings, plus the fields needed to
-  // synthesize their derived edges (USDA link + price).
-  const productsWithMappings = await dbClient.query.product.findMany({
-    where: notDeleted(product),
-    columns: {
-      id: true,
-      name: true,
-      manufacturer: true,
-      upc: true,
-      fdc_id: true,
-      price: true,
-    },
-    with: {
-      unitMappings: {
-        where: notDeleted(productUnitMappings),
-        columns: {
-          a: true,
-          b: true,
-          source: true,
-        },
-      },
-    },
-  });
-
-  // First pass: candidates are products whose STORED mappings split into 2+
-  // islands. Adding the derived edges below can only merge components, never
-  // split them, so a product already connected on its stored mappings can never
-  // be islanded — skip it. This keeps the USDA fetch to the small flagged subset.
-  // `detect_unit_mapping_islands` is infallible (returns WUnitIslands, not a
-  // Result) so it never throws — no defensive wrapper needed.
-  const candidates = productsWithMappings.filter(
-    (prod) =>
-      prod.unitMappings.length >= 2 &&
-      !isMiscProduct(prod.name) &&
-      wasm.detect_unit_mapping_islands(prod.unitMappings).length >= 2,
-  );
-
-  // Second pass: re-check each candidate against its effective mappings, dropping
-  // any that the USDA/price edges bridge into a single component.
-  const enriched = await batchEnrichWithFood(
-    candidates,
-    foodLookupParamFromProduct,
-    usdaClient,
-  );
-
-  const problems: ProductWithIslandedMappings[] = [];
-  for (const prod of enriched) {
-    const effective = synthesizeEffectiveMappings(prod);
-    if (!effective) continue;
-
-    const islands = wasm.detect_unit_mapping_islands(effective);
-    if (islands.length >= 2) {
-      problems.push({
-        id: prod.id,
-        name: prod.name,
-        manufacturer: prod.manufacturer,
-        islandCount: islands.length,
-        islands: islands.map((units) => ({
-          units: units.slice(0, 3), // Limit to first 3 units for display
-          exampleUnit: units[0] ?? "unknown",
-        })),
-        coverage: {
-          covered: [...conversionCoverage(effective, BASE_KINDS).covered],
-          // Islanding is about a disconnected money/measure component, not N/A
-          // dimensions — grade against all four base kinds.
-          applicable: [...BASE_KINDS],
-        },
-      });
-    }
-  }
-
-  return problems;
 };
 
 // Find locations that have images but no AI description
@@ -1119,16 +1091,14 @@ export const findAllProblems = async (
     duplicateUniqueProducts: () => findDuplicateUniqueProducts(db),
     orphanedProducts: () => findOrphanedProducts(db),
     productsWithoutMappings: () => findProductsWithoutMappings(db),
-    ingredientsWithPartialCoverage: () =>
-      findIngredientsWithPartialCoverage(db, usdaClient),
+    // Both coverage detectors share one product scan + USDA enrichment.
+    productCoverage: () => findProductCoverageProblems(db, usdaClient),
     ingredientsWithoutProduct: () => findIngredientsWithoutProduct(db),
     ingredientsWithUnusedAliases: () => findIngredientsWithUnusedAliases(db),
     unusedIngredients: () => findUnusedIngredients(db),
     emptyLocations: () => findEmptyLocations(db),
     productsWithNoImages: () =>
       findProductsWithNoImages(db, { excludeIngredients: true }),
-    productsWithIslandedMappings: () =>
-      findProductsWithIslandedMappings(db, usdaClient),
     locationsWithoutAiDescription: () => findLocationsWithoutAiDescription(db),
     staleIngredientParses: () => findStaleIngredientParses(db),
     productsWithBetterUpcData: () =>
@@ -1139,14 +1109,16 @@ export const findAllProblems = async (
     duplicateUniqueProducts: r.duplicateUniqueProducts,
     orphanedProducts: r.orphanedProducts,
     productsWithoutMappings: r.productsWithoutMappings,
-    ingredientsWithPartialCoverage: r.ingredientsWithPartialCoverage,
+    ingredientsWithPartialCoverage:
+      r.productCoverage.ingredientsWithPartialCoverage,
     ingredientsWithoutProduct: r.ingredientsWithoutProduct,
     ingredientsWithUnusedAliases: r.ingredientsWithUnusedAliases,
     unusedIngredientsWithProduct: r.unusedIngredients.withProduct,
     unusedIngredientsWithoutProduct: r.unusedIngredients.withoutProduct,
     emptyLocations: r.emptyLocations,
     productsWithNoImages: r.productsWithNoImages,
-    productsWithIslandedMappings: r.productsWithIslandedMappings,
+    productsWithIslandedMappings:
+      r.productCoverage.productsWithIslandedMappings,
     locationsWithoutAiDescription: r.locationsWithoutAiDescription,
     staleIngredientParses: r.staleIngredientParses,
     productsWithBetterUpcData: r.productsWithBetterUpcData,
