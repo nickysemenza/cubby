@@ -269,15 +269,15 @@ The dev server is plain Node via `vite dev`. Production = CF Workers.
 | File | Purpose |
 |---|---|
 | [apps/web/src/cf-server.ts](apps/web/src/cf-server.ts) | Worker entry — wraps each request with `withRequestDb()` |
-| [apps/web/src/server/db.ts](apps/web/src/server/db.ts) | Per-request `pg.Client` via `AsyncLocalStorage` (CF) or module-level pool (dev) |
+| [apps/web/src/server/db.ts](apps/web/src/server/db.ts) | Per-request `pg.Pool` via `AsyncLocalStorage` (CF) or module-level pool (dev) |
 | [apps/web/src/lib/recipebridge-cf.ts](apps/web/src/lib/recipebridge-cf.ts) | WASM wrapper using `?init` pattern for CF |
 | [apps/web/wrangler.jsonc](apps/web/wrangler.jsonc) | Worker config (name, vars, Hyperdrive, compat flags) |
 | [apps/web/vite.config.ts](apps/web/vite.config.ts) | `cfWasmPlugin()` + `__CF_WORKERS__` define for dead-code elimination |
 
 Key constraints:
 
-- **Hyperdrive** pools TCP connections at CF's edge. The connection string comes from `env.HYPERDRIVE.connectionString` (not a secret). Uses standard `pg.Client`.
-- **Per-request `pg.Client`** via `withRequestDb()` + `AsyncLocalStorage`, even though Hyperdrive reuses underlying connections.
+- **Hyperdrive** pools TCP connections at CF's edge. The connection string comes from `env.HYPERDRIVE.connectionString` (not a secret).
+- **Per-request `pg.Pool`** (`max: 5`) via `withRequestDb()` + `AsyncLocalStorage`. A single `pg.Client` would serialize a request's query fan-out on one connection; a small pool lets independent queries run in parallel. `max: 5` is the Workers per-invocation connection ceiling (~6 simultaneous outbound TCP), distinct from Hyperdrive's 60-connection origin pool shared across all invocations.
 - **WASM uses `?init`** because `vite-plugin-wasm` doesn't apply to CF's SSR environment. `cfWasmPlugin()` redirects `@cubby/recipebridge` to `recipebridge-cf.ts`.
 - **`__CF_WORKERS__` define** eliminates module-level Pool creation from the CF build.
 - **OTel disabled in production** — only runs in dev via `instrument.server.mjs`.
