@@ -6,7 +6,7 @@ import {
   type FoodSummary,
 } from "@cubby/usda-schemas";
 import type { D1Database } from "@cloudflare/workers-types";
-import { withSpan } from "@cubby/worker-tracing";
+import { type SpanAttr, withSpan } from "@cubby/worker-tracing";
 import { toFtsQuery } from "../search/fts-query.js";
 import {
   assertVersion,
@@ -367,17 +367,45 @@ export function createEdgeUsdaDataSource(
     });
   }
 
-  async function findByColumn(
+  async function findRowByColumn(
     column: "gtin_upc" | "ndb_number",
     value: string | number,
-  ): Promise<FoodSummary | null> {
+  ): Promise<FoodIndexRow | null> {
     const tables = await getActiveVersion(env.DB);
-    const row = await env.DB.prepare(
+    return env.DB.prepare(
       `SELECT * FROM ${tables.foodIndex} WHERE ${column} = ? ORDER BY fdc_id ASC LIMIT 1`,
     )
       .bind(value)
       .first<FoodIndexRow>();
-    return hydrate(row);
+  }
+
+  // Trace one single-food lookup as a span: the D1 index hit + the R2 hydrate,
+  // with the same cacheHits/r2Reads/bytesRead attrs as the batch path. This is
+  // the `/api/foods/search` path that product enrichment (api.usda.findByLookup)
+  // takes — previously an opaque gap inside the usda-api root span. The D1 query
+  // itself is auto-instrumented by the platform and nests under this span.
+  function tracedSingle(
+    name: string,
+    attrs: Record<string, SpanAttr>,
+    fetchRow: () => Promise<FoodIndexRow | null>,
+  ): Promise<FoodSummary | null> {
+    return withSpan(
+      name,
+      async (span) => {
+        const stats: HydrateStats = { cacheHits: 0, r2Reads: 0, bytesRead: 0 };
+        const row = await fetchRow();
+        const food = await hydrate(row, stats);
+        span.setAttributes({
+          indexHit: row !== null,
+          found: food !== null,
+          cacheHits: stats.cacheHits,
+          r2Reads: stats.r2Reads,
+          bytesRead: stats.bytesRead,
+        });
+        return food;
+      },
+      attrs,
+    );
   }
 
   async function findRowsByColumn(
@@ -424,16 +452,22 @@ export function createEdgeUsdaDataSource(
       return countsSchema.parse(manifest.counts);
     },
 
-    async getFoodById(fdcId) {
-      return hydrate(await getPointerByFdcId(fdcId));
+    getFoodById(fdcId) {
+      return tracedSingle("usda.getFoodById", { fdcId }, () =>
+        getPointerByFdcId(fdcId),
+      );
     },
 
     findFoodByUpc(gtinUpc) {
-      return findByColumn("gtin_upc", gtinUpc);
+      return tracedSingle("usda.findFoodByUpc", { gtin_upc: gtinUpc }, () =>
+        findRowByColumn("gtin_upc", gtinUpc),
+      );
     },
 
     findFoodByNdb(ndbNumber) {
-      return findByColumn("ndb_number", ndbNumber);
+      return tracedSingle("usda.findFoodByNdb", { ndb_number: ndbNumber }, () =>
+        findRowByColumn("ndb_number", ndbNumber),
+      );
     },
 
     async findFoodsByLookupBatch(lookups: FoodLookupParam[]) {
