@@ -90,7 +90,7 @@ export function InventoryValuationSummary({
   return (
     <div className={className}>
       <div className="font-semibold text-lg">
-        {formatCurrency(result.totalValuation)}
+        {formatCurrency(totalValuation)}
       </div>
       {pricingSummary && (
         <div className="text-muted-foreground text-xs">{pricingSummary}</div>

@@ -16,7 +16,7 @@ import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
 import type { LocationId } from "@cubby/schemas/identifiers";
 import type { BulkMoveItem } from "@cubby/schemas/inventory";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -27,6 +27,7 @@ import {
 } from "~/app/_components/form-fields";
 import { ComboboxFieldWithSearch } from "~/app/_components/form-utils";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
+import { queryKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
@@ -56,6 +57,7 @@ export function MoveInventoryDialog({
   const sourceLocationId =
     sourceLocationIdProp ?? (items[0] ? items[0].location.id : undefined);
   const api = useTRPC();
+  const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
 
   const form = useForm<FormValues>({
@@ -71,6 +73,11 @@ export function MoveInventoryDialog({
         toast.success(
           `Successfully moved ${items.length} item${items.length !== 1 ? "s" : ""}`,
         );
+        // A move recomputes source + target location valuations server-side;
+        // refresh the location queries that render them.
+        void queryClient.invalidateQueries({
+          queryKey: [queryKeys.location.all],
+        });
         form.reset();
         onSuccess();
         onOpenChange(false);

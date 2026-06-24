@@ -17,7 +17,7 @@ import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
 import { unsafeInventoryId } from "@cubby/schemas/identifiers";
 import type { BulkMoveItem } from "@cubby/schemas/inventory";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -37,6 +37,7 @@ import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { EntityIcon } from "~/entities/entities";
+import { queryKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 
 type InventoryWithLocationAndProductOut = z.infer<
@@ -63,6 +64,7 @@ type BulkMoveFormValues = z.infer<typeof formSchema>;
 
 export default function BulkMoveForm() {
   const api = useTRPC();
+  const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [moveItems, setMoveItems] = useState<MoveItem[]>([]);
@@ -180,6 +182,10 @@ export default function BulkMoveForm() {
     api.inventory.bulkMove.mutationOptions({
       onSuccess: () => {
         refetchInventoryItems();
+        // Refresh persisted location valuations (recomputed server-side).
+        void queryClient.invalidateQueries({
+          queryKey: [queryKeys.location.all],
+        });
       },
     }),
   );

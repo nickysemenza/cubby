@@ -1,7 +1,7 @@
 import { unsafeInventoryId } from "@cubby/schemas/identifiers";
 import type { InventoryBulkOperationItem } from "@cubby/schemas/inventory";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Plus, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -27,6 +27,7 @@ import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group
 import { BarcodeScannerButton } from "~/app/_components/inventory/barcode-scanner-button";
 import { useUpcLookup } from "~/app/_components/inventory/hooks";
 import { Button } from "~/components/ui/button";
+import { queryKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 
 // Schema for a single inventory item using shared field schemas
@@ -42,6 +43,7 @@ type BulkInventoryFormValues = z.input<typeof formSchema>;
 
 export default function BulkInventoryForm() {
   const api = useTRPC();
+  const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -144,6 +146,10 @@ export default function BulkInventoryForm() {
     api.inventory.bulkProcess.mutationOptions({
       onSuccess: () => {
         refetchInventoryItems();
+        // Refresh persisted location valuations (recomputed server-side).
+        void queryClient.invalidateQueries({
+          queryKey: [queryKeys.location.all],
+        });
       },
     }),
   );
