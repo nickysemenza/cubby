@@ -1,5 +1,11 @@
 import { Link } from "@tanstack/react-router";
-import { Bug, BugOff, LayoutDashboard, Search, Settings } from "lucide-react";
+import {
+  Bug,
+  BugOff,
+  LayoutDashboard,
+  MoreHorizontal,
+  Search,
+} from "lucide-react";
 import { FlexContainer } from "~/components/layout/flex-container";
 import { Button } from "~/components/ui/button";
 import { entities } from "~/entities/entities";
@@ -27,7 +33,7 @@ import {
 // Icons for the desktop dropdowns; the links use each NavItem's own icon.
 const KitchenIcon = entities.recipe.lucideIcon;
 const ReportsIcon = LayoutDashboard;
-const SettingsIcon = Settings;
+const MoreIcon = MoreHorizontal;
 
 interface MainNavProps extends React.HTMLAttributes<HTMLElement> {
   onSearchClick?: () => void;
@@ -79,9 +85,9 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
               icon={ReportsIcon}
             />
             <NavDropdown
-              label="Settings"
+              label="More"
               items={desktopMoreItems}
-              icon={SettingsIcon}
+              icon={MoreIcon}
             />
           </>
         ) : (

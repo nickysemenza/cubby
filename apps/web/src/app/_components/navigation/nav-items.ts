@@ -1,16 +1,22 @@
 import {
   Activity,
   AlertTriangle,
+  ArrowLeftRight,
   BookOpen,
+  Bot,
+  Boxes,
   Camera,
   FileText,
   Hammer,
   Home,
   LayoutDashboard,
+  ListChecks,
   Palette,
+  QrCode,
   ScanBarcode,
   Search,
   Settings,
+  ShoppingCart,
   Sparkles,
   TrendingUp,
   Utensils,
@@ -72,9 +78,12 @@ const meals: NavItem = {
   href: "/meals",
   label: "Meals",
   icon: Utensils,
-  // The calendar + everything under /meals EXCEPT the suggestions surface,
-  // which has its own nav item below.
-  isActive: (p) => p.startsWith("/meals") && p !== "/meals/suggestions",
+  // The calendar + everything under /meals EXCEPT the suggestions and
+  // shopping-list surfaces, which have their own nav items below.
+  isActive: (p) =>
+    p.startsWith("/meals") &&
+    p !== "/meals/suggestions" &&
+    p !== "/meals/shopping-list",
 };
 
 const mealSuggestions: NavItem = {
@@ -84,11 +93,25 @@ const mealSuggestions: NavItem = {
   isActive: (p) => p === "/meals/suggestions",
 };
 
+const shoppingList: NavItem = {
+  href: "/meals/shopping-list",
+  label: "Shopping list",
+  icon: ShoppingCart,
+  isActive: (p) => p === "/meals/shopping-list",
+};
+
 const search: NavItem = {
   href: "/search",
   label: "Search",
   icon: Search,
   isActive: (p) => p.startsWith("/search"),
+};
+
+const ask: NavItem = {
+  href: "/ask",
+  label: "Ask AI",
+  icon: Bot,
+  isActive: (p) => p.startsWith("/ask"),
 };
 
 export const products: NavItem = {
@@ -109,7 +132,26 @@ const ingredients: NavItem = {
   href: "/ingredients",
   label: "Ingredients",
   icon: entities.ingredient.lucideIcon,
-  isActive: (p) => p.startsWith("/ingredients"),
+  // Everything under /ingredients EXCEPT the workbench + equivalences surfaces,
+  // which have their own nav items below.
+  isActive: (p) =>
+    p.startsWith("/ingredients") &&
+    p !== "/ingredients/workbench" &&
+    p !== "/ingredients/equivalences",
+};
+
+const ingredientWorkbench: NavItem = {
+  href: "/ingredients/workbench",
+  label: "Workbench",
+  icon: ListChecks,
+  isActive: (p) => p === "/ingredients/workbench",
+};
+
+const ingredientEquivalences: NavItem = {
+  href: "/ingredients/equivalences",
+  label: "Equivalences",
+  icon: ArrowLeftRight,
+  isActive: (p) => p === "/ingredients/equivalences",
 };
 
 const usda: NavItem = {
@@ -140,6 +182,13 @@ const insights: NavItem = {
   isActive: (p) => p.startsWith("/insights"),
 };
 
+const pantryView: NavItem = {
+  href: "/pantry-view",
+  label: "Pantry view",
+  icon: Boxes,
+  isActive: (p) => p.startsWith("/pantry-view"),
+};
+
 const problems: NavItem = {
   href: "/problems",
   label: "Problems",
@@ -159,6 +208,13 @@ const images: NavItem = {
   label: "Images",
   icon: entities.image.lucideIcon,
   isActive: (p) => p.startsWith("/images"),
+};
+
+const labels: NavItem = {
+  href: "/labels",
+  label: "Labels",
+  icon: QrCode,
+  isActive: (p) => p.startsWith("/labels"),
 };
 
 export const projects: NavItem = {
@@ -206,24 +262,33 @@ export const bottomNavItems: NavItem[] = [
 export const moreNavItems: NavItem[] = [
   home,
   captureShelf,
+  ask,
   products,
   ingredients,
+  ingredientWorkbench,
+  ingredientEquivalences,
+  shoppingList,
   usda,
   projects,
   dashboard,
   activity,
   insights,
+  pantryView,
   problems,
   aiSmokeTest,
   images,
+  labels,
   settings,
 ];
 
 export const kitchenItems: NavItem[] = [
   ingredients,
+  ingredientWorkbench,
+  ingredientEquivalences,
   recipes,
   cookbooks,
   meals,
+  shoppingList,
   mealSuggestions,
   usda,
 ];
@@ -232,8 +297,15 @@ export const reportsItems: NavItem[] = [
   dashboard,
   activity,
   insights,
+  pantryView,
   problems,
   aiSmokeTest,
 ];
 
-export const desktopMoreItems: NavItem[] = [captureShelf, images, settings];
+export const desktopMoreItems: NavItem[] = [
+  captureShelf,
+  labels,
+  ask,
+  images,
+  settings,
+];
