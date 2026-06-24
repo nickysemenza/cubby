@@ -59,11 +59,14 @@ export const updateInputImages = z
 
 export type UpdateInputImages = z.infer<typeof updateInputImages>;
 
+// Max image upload size (~50MB) — server refuses presigned URLs for absurd sizes.
+export const MAX_IMAGE_UPLOAD_BYTES = 50 * 1024 * 1024;
+
 // Schema for initiating an image upload without entity ID (for pending uploads)
 export const initiateUploadWithoutEntitySchema = z.object({
   filename: z.string(),
   contentType: imageContentType,
-  size: z.int().positive(),
+  size: z.int().positive().max(MAX_IMAGE_UPLOAD_BYTES),
   entityType: entityImage,
 });
 

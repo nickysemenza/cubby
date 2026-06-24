@@ -36,7 +36,7 @@ function ShoppingList({ needs }: { needs: CombinedNeed[] }) {
   return (
     <details
       open
-      className="rounded-lg border border-border-chunky bg-muted/30 px-3.5 py-2.5 print:border-0 print:bg-transparent print:px-0"
+      className="rounded-lg border border-[var(--border-chunky)] bg-muted/30 px-3.5 py-2.5 print:border-0 print:bg-transparent print:px-0"
     >
       <summary className="eyebrow cursor-pointer marker:content-none">
         <ShoppingCart className="mr-1.5 inline h-3 w-3 align-[-2px]" />
@@ -180,7 +180,7 @@ function Component({
         </div>
       </div>
 
-      <div className="border-border-chunky border-t">
+      <div className="border-[var(--border-chunky)] border-t">
         {node.sections.map((section, si) => (
           <div key={section.id}>
             {node.sections.length > 1 && section.name && (
@@ -193,7 +193,7 @@ function Component({
               <ol className="mt-2.5 space-y-1.5 pl-0">
                 {steps.map((step) => (
                   <li key={step.n} className="flex gap-2.5">
-                    <span className="mt-px inline-flex size-[17px] shrink-0 items-center justify-center rounded-full border border-border-chunky font-mono text-[9px] text-muted-foreground tabular-nums">
+                    <span className="mt-px inline-flex size-[17px] shrink-0 items-center justify-center rounded-full border border-[var(--border-chunky)] font-mono text-[9px] text-muted-foreground tabular-nums">
                       {step.n}
                     </span>
                     <span className="text-muted-foreground text-sm leading-snug">
@@ -228,7 +228,7 @@ export const RecipePrepSheetView = memo(function RecipePrepSheetView({
   const usedByRecipe = useMemo(() => asUsedGramsByRecipe(tree), [tree]);
 
   return (
-    <div className="space-y-6 rounded-xl border border-border-chunky bg-card px-6 py-6 sm:px-8">
+    <div className="space-y-6 rounded-xl border border-[var(--border-chunky)] bg-card px-6 py-6 sm:px-8">
       <header className="border-primary border-b-2 pb-2.5">
         <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
           <h2 className="my-0 font-heading font-semibold text-2xl tracking-tight">

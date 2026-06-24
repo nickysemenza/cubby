@@ -220,7 +220,7 @@ export function InventoryItemList() {
   return (
     <div>
       <AiSearchBar table={table} />
-      <div className="mb-3 flex items-center justify-between gap-2">
+      <div className="mb-4 flex items-center justify-between gap-2">
         <div className="min-w-0">
           {view === "shelf" && (
             <InventoryValuationSummary

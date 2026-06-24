@@ -65,7 +65,7 @@ export function MealDetailPage({ mealId }: { mealId: MealId }) {
       >
         ← Meals
       </Link>
-      <div className="flex flex-wrap items-end justify-between gap-3">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-2">
           <Input
             value={nameValue}
@@ -178,7 +178,7 @@ function RecipeRow({
   };
 
   return (
-    <div className="flex items-center gap-3 rounded-lg border p-2.5">
+    <div className="flex items-center gap-2 rounded-lg border border-[var(--border-chunky)] p-2.5">
       <Link
         to="/recipes/$id"
         params={{ id: mr.recipeId }}

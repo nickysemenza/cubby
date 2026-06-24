@@ -78,7 +78,7 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
       )}
 
       {/* Header */}
-      <div className="space-y-3">
+      <div className="space-y-4">
         <Link
           to="/projects"
           className="inline-flex items-center gap-1 text-muted-foreground text-sm hover:text-foreground"
@@ -134,7 +134,7 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
 
       {/* Spending over time */}
       {purchases.length > 0 && (
-        <section className="space-y-3">
+        <section className="space-y-4">
           <h2 className="font-heading font-semibold text-lg">
             Spending Over Time
           </h2>
@@ -148,13 +148,13 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
       {/* Category breakdown charts */}
       {purchases.length > 0 && (
         <div className="grid gap-4 lg:grid-cols-2">
-          <section className="space-y-3">
+          <section className="space-y-4">
             <h2 className="font-heading font-semibold text-lg">
               Spending by Category
             </h2>
             <PurchaseDonut purchases={purchases} />
           </section>
-          <section className="space-y-3">
+          <section className="space-y-4">
             <h2 className="font-heading font-semibold text-lg">
               Spending by Subcategory
             </h2>
@@ -166,13 +166,13 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
       {/* Category treemap + trend */}
       {purchases.length > 0 && (
         <div className="grid gap-4 lg:grid-cols-2">
-          <section className="space-y-3">
+          <section className="space-y-4">
             <h2 className="font-heading font-semibold text-lg">
               Category Treemap
             </h2>
             <CategoryTreemap purchases={purchases} />
           </section>
-          <section className="space-y-3">
+          <section className="space-y-4">
             <h2 className="font-heading font-semibold text-lg">
               Category Trend
             </h2>
@@ -183,7 +183,7 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
 
       {/* Task calendar */}
       {tasks.length > 0 && (
-        <section className="space-y-3">
+        <section className="space-y-4">
           <h2 className="font-heading font-semibold text-lg">Task Timeline</h2>
           <TaskHeatmap tasks={tasks} />
         </section>

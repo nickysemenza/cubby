@@ -358,7 +358,6 @@ function EditableInputEditor<T>({
       <Button
         size="icon"
         variant="ghost"
-        className="h-7 w-7"
         onClick={() => void handleSave()}
         disabled={isPending}
       >
@@ -367,7 +366,6 @@ function EditableInputEditor<T>({
       <Button
         size="icon"
         variant="ghost"
-        className="h-7 w-7"
         onClick={onCancel}
         disabled={isPending}
       >
@@ -483,7 +481,6 @@ function EditableSelectEditor({
       <Button
         size="icon"
         variant="ghost"
-        className="h-7 w-7"
         onClick={() => void handleSave()}
         disabled={isPending}
       >
@@ -492,7 +489,6 @@ function EditableSelectEditor({
       <Button
         size="icon"
         variant="ghost"
-        className="h-7 w-7"
         onClick={onCancel}
         disabled={isPending}
       >
@@ -612,7 +608,6 @@ export function EditableAmountCell({
         <Button
           size="icon"
           variant="ghost"
-          className="h-7 w-7"
           onClick={() => void save()}
           disabled={isPending}
         >
@@ -621,7 +616,6 @@ export function EditableAmountCell({
         <Button
           size="icon"
           variant="ghost"
-          className="h-7 w-7"
           onClick={cancel}
           disabled={isPending}
         >

@@ -437,7 +437,7 @@ export default function QuickCaptureForm({
       }
     >
       {/* Persistent Scanner Mode Toggle */}
-      <Card className="mb-3">
+      <Card className="mb-4">
         <CardContent className="pt-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -463,7 +463,7 @@ export default function QuickCaptureForm({
 
           {/* Persistent Scanner */}
           {scannerEnabled && focusedLocationId && (
-            <div className="mt-3 space-y-2">
+            <div className="mt-4 space-y-2">
               <PersistentScanner
                 onScan={handlePersistentScan}
                 enabled={!isScannerPending}
@@ -510,7 +510,7 @@ export default function QuickCaptureForm({
 
       {/* Location Context Section */}
       {focusedLocationId ? (
-        <Card className="mb-3">
+        <Card className="mb-4">
           <CardHeader className="pb-2">
             <CardTitle>Current Location Context</CardTitle>
           </CardHeader>
@@ -541,8 +541,7 @@ export default function QuickCaptureForm({
                             key={child.id}
                             type="button"
                             variant="outline"
-                            size="sm"
-                            className="h-7 text-xs"
+                            size="default"
                             onClick={() => handleChildLocationClick(child)}
                           >
                             <LocationIcon
@@ -561,7 +560,7 @@ export default function QuickCaptureForm({
           </CardContent>
         </Card>
       ) : (
-        <Card className="mb-3">
+        <Card className="mb-4">
           <CardContent className="pt-4">
             <RecentLocations
               onSelect={(location) => {
@@ -576,7 +575,7 @@ export default function QuickCaptureForm({
         </Card>
       )}
 
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between">
         <h3 className="font-medium text-lg">
           {scannerEnabled ? "Manual Entry" : "Add Items"}
         </h3>
@@ -667,7 +666,7 @@ export default function QuickCaptureForm({
 
       {/* Inventory at focused location */}
       {focusedLocationId && (
-        <Card className="mt-3">
+        <Card className="mt-4">
           <CardHeader className="pb-2">
             <button
               type="button"
@@ -710,7 +709,7 @@ export default function QuickCaptureForm({
         </Card>
       )}
 
-      <div className="mt-3 text-muted-foreground text-sm">
+      <div className="mt-4 text-muted-foreground text-sm">
         <p>Keyboard shortcuts:</p>
         <ul className="list-inside list-disc">
           <li>

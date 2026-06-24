@@ -61,7 +61,7 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
       <BasicInfo
         fields={fields}
         header={
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <LocationIconWithLabel
               type={location.type}
               label={location.name}

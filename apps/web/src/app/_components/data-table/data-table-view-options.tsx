@@ -40,8 +40,8 @@ export function DataTableViewOptions<TData>({
         render={
           <Button
             variant="ghost"
-            size="sm"
-            className="h-7 gap-1.5 px-2 text-muted-foreground text-xs hover:text-foreground"
+            size="default"
+            className="text-muted-foreground hover:text-foreground"
           />
         }
       >

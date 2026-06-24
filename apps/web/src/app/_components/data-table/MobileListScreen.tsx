@@ -58,8 +58,8 @@ export function MobileListScreen<TItem>({
     groupConfig && onGroupedChange ? (
       <Button
         variant="ghost"
-        size="sm"
-        className="h-8 w-8 shrink-0 p-0"
+        size="icon-lg"
+        className="shrink-0"
         onClick={() => onGroupedChange(!grouped)}
         aria-label={grouped ? "Show flat list" : "Show grouped list"}
       >

@@ -526,7 +526,7 @@ export function createActionsColumnBase<T>(
       return (
         <DropdownMenu>
           <DropdownMenuTrigger
-            render={<Button variant="ghost" size="icon" className="h-8 w-8" />}
+            render={<Button variant="ghost" size="icon-lg" />}
             onClick={(e) => e.stopPropagation()}
           >
             <MoreHorizontal className="h-4 w-4" />

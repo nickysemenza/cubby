@@ -175,6 +175,13 @@ export async function globalSearch(
         .where(
           and(
             notDeleted(inventoryEntry),
+            // Defense-in-depth: inventory writes now reject soft-deleted targets
+            // (assertLiveTargets in inventory/helpers.ts), but guard the joined
+            // tables here too so a stray pre-existing bad row never surfaces a
+            // deleted product/location name. Consistent with the inventory list
+            // query in inventory/crud.ts.
+            notDeleted(product),
+            notDeleted(location),
             or(
               formatSearchTerm(product.name, query),
               formatSearchTerm(location.name, query),

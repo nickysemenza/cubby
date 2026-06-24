@@ -25,7 +25,7 @@ import {
   updateAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { dbInventoryEntryToAPI } from "./helpers";
+import { assertLiveTargets, dbInventoryEntryToAPI } from "./helpers";
 import type { InventoryEntryDeepDB } from "./types";
 
 /** Batch fetch inventory entries with full relations, preserving order. */
@@ -62,6 +62,30 @@ export const bulkProcessInventoryEntries = async (
   const processedItems = await withTransaction(
     db,
     async (tx: DrizzleTransaction) => {
+      // Guard: never create/re-point entries at a soft-deleted target. Validate
+      // the shelf location once, then batch-validate every submitted product id
+      // (the UI filters deleted options, but the tRPC API is callable directly).
+      await assertLiveTargets(tx, { locationId });
+      const submittedProductIds = uniq(
+        items.filter((i) => i.productId).map((i) => i.productId as ProductId),
+      );
+      if (submittedProductIds.length > 0) {
+        const liveProducts = await tx
+          .select({ id: product.id })
+          .from(product)
+          .where(
+            and(inArray(product.id, submittedProductIds), notDeleted(product)),
+          );
+        const liveIds = new Set(liveProducts.map((p) => p.id));
+        const missing = submittedProductIds.find((id) => !liveIds.has(id));
+        if (missing) {
+          throw createAppError(
+            "PRODUCT_NOT_FOUND",
+            `Product ${missing} does not exist or has been deleted`,
+          );
+        }
+      }
+
       // First, get all existing inventory entries for this location
       const existingItems = await tx.query.inventoryEntry.findMany({
         where: and(
@@ -271,6 +295,9 @@ export const bulkMoveInventoryEntries = async (
   const processedItems = await withTransaction(
     db,
     async (tx: DrizzleTransaction) => {
+      // Guard: never move inventory onto a soft-deleted target location.
+      await assertLiveTargets(tx, { locationId: payload.targetLocationId });
+
       const sourceIds = payload.items.map((i) => i.inventoryEntryId);
 
       // Pre-fetch all source entries in a single query

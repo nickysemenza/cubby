@@ -128,7 +128,7 @@ export const DetectItemsDialog: FC<DetectItemsDialogProps> = ({
         </DialogHeader>
 
         {isLoading && (
-          <div className="flex flex-col items-center gap-3 py-8">
+          <div className="flex flex-col items-center gap-2 py-8">
             <Spinner className="h-6 w-6" />
             <p className="text-muted-foreground text-sm">Analyzing photos...</p>
           </div>
@@ -153,7 +153,7 @@ export const DetectItemsDialog: FC<DetectItemsDialogProps> = ({
                 {items.map((item, index) => (
                   <div
                     key={`${item.name}-${index}`}
-                    className="flex items-center gap-3 rounded-md border p-3"
+                    className="flex items-center gap-2 rounded-md border border-[var(--border-chunky)] p-3"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">

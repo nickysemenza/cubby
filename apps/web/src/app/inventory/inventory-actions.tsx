@@ -12,7 +12,7 @@ export function InventoryActions() {
   return (
     <>
       <Link to="/inventory/quick-capture">
-        <Button variant="default" size="sm" className="h-7 gap-1 text-xs">
+        <Button variant="default" size="default" className="gap-1 text-xs">
           <ScanBarcode className="h-3.5 w-3.5" />
           Add Inventory
         </Button>
@@ -22,8 +22,7 @@ export function InventoryActions() {
           render={
             <Button
               variant="outline"
-              size="sm"
-              className="h-7 px-2"
+              size="icon"
               aria-label="More inventory actions"
             >
               <EllipsisVertical className="h-3.5 w-3.5" />

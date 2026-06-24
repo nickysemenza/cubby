@@ -35,7 +35,7 @@ import {
   updateAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { dbInventoryEntryToAPI } from "./helpers";
+import { assertLiveTargets, dbInventoryEntryToAPI } from "./helpers";
 import type {
   CreateInventoryEntryData,
   UpdateInventoryEntryData,
@@ -333,6 +333,12 @@ export const updateInventoryEntry = async (
   data: UpdateInventoryEntryData,
   actor: ActorContext,
 ) => {
+  // Guard against re-pointing the entry at a soft-deleted product/location.
+  await assertLiveTargets(db, {
+    productId: data.productId,
+    locationId: data.locationId,
+  });
+
   // Fetch current state for audit logging and valuation computation
   const before = await getDb(db).query.inventoryEntry.findFirst({
     where: eq(inventoryEntry.id, id),
@@ -412,6 +418,12 @@ export const createInventoryEntry = async (
   data: CreateInventoryEntryData,
   actor: ActorContext,
 ) => {
+  // Guard against creating an entry pointed at a soft-deleted product/location.
+  await assertLiveTargets(db, {
+    productId: data.productId,
+    locationId: data.locationId,
+  });
+
   // Compute valuation based on amount and product price
   const amountValue =
     typeof data.amount === "object" && data.amount !== null

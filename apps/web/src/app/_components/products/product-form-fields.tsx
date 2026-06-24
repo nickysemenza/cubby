@@ -453,12 +453,12 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
 
   if (compact) {
     return (
-      <div className="space-y-3 rounded-lg border border-border/50 bg-muted/30 p-3">
+      <div className="space-y-4 rounded-lg border border-border/50 bg-muted/30 p-3">
         {content}
       </div>
     );
   }
 
   // Extra spacing between the labeled sections so the form reads as groups.
-  return <div className="space-y-3">{content}</div>;
+  return <div className="space-y-4">{content}</div>;
 }

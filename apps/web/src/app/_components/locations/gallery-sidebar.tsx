@@ -171,7 +171,7 @@ export function GallerySidebar({
           variant="ghost"
           size="icon"
           onClick={onToggleCollapse}
-          className="h-7 w-7 transition-colors hover:bg-primary/10"
+          className="transition-colors hover:bg-primary/10"
           title="Collapse sidebar"
         >
           <PanelLeftClose className="h-4 w-4" />

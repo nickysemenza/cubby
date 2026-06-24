@@ -48,12 +48,12 @@ export function DataTableToolbar<TData>({
         {isFiltered && (
           <Button
             variant="ghost"
-            size="sm"
+            size="default"
             onClick={() => {
               table.resetColumnFilters();
               table.setGlobalFilter({});
             }}
-            className="h-7 gap-1 px-2 text-muted-foreground text-xs hover:text-foreground"
+            className="text-muted-foreground hover:text-foreground"
           >
             <X className="h-3 w-3" />
             Reset

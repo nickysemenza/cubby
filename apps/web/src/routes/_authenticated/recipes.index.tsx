@@ -16,26 +16,26 @@ function RecipesPage() {
         actions={
           <>
             <Link to="/recipes/graph">
-              <Button size="sm" variant="outline" className="h-7 gap-1 text-xs">
-                <Share2 className="h-3.5 w-3.5" />
+              <Button variant="outline">
+                <Share2 />
                 Graph
               </Button>
             </Link>
             <Link to="/recipes/import-cookbook">
-              <Button size="sm" variant="outline" className="h-7 gap-1 text-xs">
-                <BookOpen className="h-3.5 w-3.5" />
+              <Button variant="outline">
+                <BookOpen />
                 Import cookbook
               </Button>
             </Link>
             <Link to="/recipes/import-notion">
-              <Button size="sm" variant="outline" className="h-7 gap-1 text-xs">
-                <NotebookPen className="h-3.5 w-3.5" />
+              <Button variant="outline">
+                <NotebookPen />
                 Import from Notion
               </Button>
             </Link>
             <Link to="/recipes/new">
-              <Button size="sm" className="h-7 gap-1 text-xs">
-                <Plus className="h-3.5 w-3.5" />
+              <Button>
+                <Plus />
                 New
               </Button>
             </Link>

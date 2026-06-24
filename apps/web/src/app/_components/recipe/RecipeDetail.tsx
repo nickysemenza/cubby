@@ -190,7 +190,7 @@ const RecipeDetailInner: React.FC<{
         {recipe.tags && recipe.tags.length > 0 && (
           <RecipeTagList tags={recipe.tags} />
         )}
-        <div className="ml-auto flex flex-wrap items-center gap-3">
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           {/* View-independent "why isn't this costed?" affordance — the full
               inline card only shows in table/charts, so surface it as a compact
               popover everywhere else. */}

@@ -40,7 +40,7 @@ export const RecipeIngredientMatrixView = memo(
     }, [tree]);
 
     return (
-      <div className="rounded-xl border border-border-chunky bg-card px-6 py-6 sm:px-8">
+      <div className="rounded-xl border border-[var(--border-chunky)] bg-card px-6 py-6 sm:px-8">
         <header className="mb-3 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
           <div>
             <h2 className="my-0 font-heading font-semibold text-2xl tracking-tight">

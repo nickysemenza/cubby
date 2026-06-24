@@ -83,7 +83,7 @@ export function ShoppingListPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-3">
+      <div className="flex flex-wrap items-end gap-4">
         <div className="space-y-1">
           <label htmlFor={fromId} className="text-muted-foreground text-xs">
             From
@@ -148,7 +148,7 @@ export function ShoppingListPage() {
               Nothing to buy for the selected meals.
             </p>
           ) : (
-            <div className="overflow-hidden rounded-lg border">
+            <div className="overflow-hidden rounded-lg border border-[var(--border-chunky)]">
               <table className="w-full text-sm">
                 <thead className="bg-muted/40 text-muted-foreground text-xs">
                   <tr>
