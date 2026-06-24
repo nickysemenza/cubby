@@ -1,6 +1,5 @@
 import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
 import type { InventoryUpdateInput } from "@cubby/schemas/inventory";
-import { useQuery } from "@tanstack/react-query";
 import { ArrowRightLeft, Package, Pencil } from "lucide-react";
 import type { FC } from "react";
 import { useState } from "react";
@@ -27,13 +26,6 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
 }) => {
   const api = useTRPC();
   const [showMoveDialog, setShowMoveDialog] = useState(false);
-
-  // Subscribe to the route-seeded query so background refetches surface a
-  // consistent not-found / error state if the entity disappears or a refetch fails.
-  const query = useQuery({
-    ...api.inventory.getByID.queryOptions({ id: inventoryitem.id }),
-    initialData: inventoryitem,
-  });
 
   const { commonSections, editMode } = useEntityDetail<
     InventoryItem,
@@ -101,8 +93,6 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
         entity="inventory"
         name={inventoryitem.product.name}
         rawData={inventoryitem}
-        error={query.error ?? undefined}
-        notFound={query.data == null}
         actions={actions}
       />
       <DeleteDialog />

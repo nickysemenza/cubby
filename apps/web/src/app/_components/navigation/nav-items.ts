@@ -187,10 +187,15 @@ export const bottomNavItems: NavItem[] = [
 
 const bottomTabTargets = new Set(bottomNavItems.map((item) => item.to));
 
-/** Mobile "More" sheet — every authed leaf that isn't already a primary tab. */
-export const moreNavItems: NavItem[] = desktopLeaves.filter(
-  (leaf) => !bottomTabTargets.has(leaf.to),
-);
+/**
+ * Mobile "More" sheet — Home first (the desktop logo links home, but the mobile
+ * bar has no logo, so Home would otherwise be unreachable), then every authed
+ * leaf that isn't already a primary tab.
+ */
+export const moreNavItems: NavItem[] = [
+  home,
+  ...desktopLeaves.filter((leaf) => !bottomTabTargets.has(leaf.to)),
+];
 
 /** Signed-out bar / bottom tabs — always flat leaves (no dropdowns). */
 export const publicNavItems: NavItem[] = [

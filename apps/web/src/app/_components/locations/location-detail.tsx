@@ -1,5 +1,5 @@
 import type { InfLocation, LocationUpdateInput } from "@cubby/schemas/location";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
   ClipboardCheck,
@@ -50,13 +50,6 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
   const navigate = useNavigate();
   const [createChildOpen, setCreateChildOpen] = useState(false);
   const [detectItemsOpen, setDetectItemsOpen] = useState(false);
-
-  // Subscribe to the route-seeded query so background refetches surface a
-  // consistent not-found / error state if the entity disappears or a refetch fails.
-  const query = useQuery({
-    ...api.location.getByID.queryOptions({ id: location.id }),
-    initialData: location,
-  });
 
   const { commonSections, editMode } = useEntityDetail<
     InfLocation,
@@ -229,8 +222,6 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
         entity="location"
         name={location.name}
         rawData={location}
-        error={query.error ?? undefined}
-        notFound={query.data == null}
         heroImages={location.images}
       />
       <CreateChildLocationDialog

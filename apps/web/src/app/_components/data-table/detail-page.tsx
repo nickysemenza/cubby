@@ -2,19 +2,11 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { FC, ReactNode } from "react";
 import { ImageGallery } from "~/components/media/image-gallery";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyMedia,
-  EmptyTitle,
-} from "~/components/ui/empty";
 import { Eyebrow } from "~/components/ui/eyebrow";
 import { InkStamp } from "~/components/ui/ink-stamp";
-import { Skeleton } from "~/components/ui/skeleton";
-import { EntityIcon, entities } from "~/entities/entities";
+import { entities } from "~/entities/entities";
 import { useDebug } from "~/hooks/useDebug";
 import { useIsMobile } from "~/hooks/useMobile";
-import { getErrorMessage } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
 import { EntityHero } from "../EntityHero";
 import JsonRenderer from "../json-renderer";
@@ -47,61 +39,6 @@ interface DetailPageProps {
   heroNo?: string;
   /** Page-level action cluster (edit / move / delete) rendered on the hero plate. */
   actions?: ReactNode;
-  /**
-   * Render a skeleton in place of the page body. The route's Suspense boundary
-   * usually owns the primary load, so this is for detail components that drive
-   * their own (non-suspended) fetch.
-   */
-  isLoading?: boolean;
-  /** Render a consistent error state instead of the body. */
-  error?: unknown;
-  /** Render a consistent not-found state instead of the body. */
-  notFound?: boolean;
-}
-
-/** Skeleton mirroring the spec-plate hero + two-column card grid. */
-function DetailPageSkeleton() {
-  return (
-    <div className="space-y-2 sm:space-y-3">
-      <Card>
-        <CardContent className="space-y-2 px-4 py-3 sm:px-5">
-          <Skeleton className="h-3 w-24" />
-          <Skeleton className="h-8 w-56" />
-        </CardContent>
-      </Card>
-      <div className="grid gap-2 sm:gap-3 md:grid-cols-2">
-        {[0, 1, 2, 3].map((i) => (
-          <Skeleton key={i} className="h-40 w-full rounded-lg" />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/** Consistent stamped error / not-found state for the detail body. */
-function DetailPageState({
-  entity,
-  tone,
-  title,
-  description,
-}: {
-  entity: Entity;
-  tone: "ink" | "red";
-  title: string;
-  description: string;
-}) {
-  return (
-    <Empty variant="warm" className="py-8">
-      <InkStamp tone={tone} className="mb-1">
-        {tone === "red" ? "Error" : "Not on file"}
-      </InkStamp>
-      <EmptyMedia variant="icon">
-        <EntityIcon entity={entity} colored className="size-5" />
-      </EmptyMedia>
-      <EmptyTitle>{title}</EmptyTitle>
-      <EmptyDescription>{description}</EmptyDescription>
-    </Empty>
-  );
 }
 
 /** Pull a created-at date out of the raw entity for the hero's ledger meta. */
@@ -232,39 +169,9 @@ export const DetailPage: FC<DetailPageProps> = ({
   heroStamp,
   heroNo,
   actions,
-  isLoading,
-  error,
-  notFound,
 }) => {
   const { isDebugEnabled } = useDebug();
   const isMobile = useIsMobile();
-  const entityLabel = entities[entity].label.toLowerCase();
-
-  if (isLoading) {
-    return <DetailPageSkeleton />;
-  }
-
-  if (notFound) {
-    return (
-      <DetailPageState
-        entity={entity}
-        tone="ink"
-        title={`No ${entityLabel} found`}
-        description={`This ${entityLabel} doesn't exist or has been deleted.`}
-      />
-    );
-  }
-
-  if (error) {
-    return (
-      <DetailPageState
-        entity={entity}
-        tone="red"
-        title={`Couldn't load this ${entityLabel}`}
-        description={getErrorMessage(error)}
-      />
-    );
-  }
 
   const onFileSince = getOnFileSince(rawData);
   const entityDef = entities[entity];

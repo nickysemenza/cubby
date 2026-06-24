@@ -1,5 +1,4 @@
 import type { IngredientUpdateInput } from "@cubby/schemas/ingredient";
-import { useQuery } from "@tanstack/react-query";
 import {
   Apple,
   ChefHat,
@@ -33,13 +32,6 @@ interface IngredientDetailProps {
 export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
   const api = useTRPC();
   const [isEnriching, setIsEnriching] = useState(false);
-
-  // Subscribe to the route-seeded query so background refetches surface a
-  // consistent not-found / error state if the entity disappears or a refetch fails.
-  const query = useQuery({
-    ...api.ingredient.getByID.queryOptions({ id: ingredient.id }),
-    initialData: ingredient,
-  });
 
   const { commonSections, editMode, mappings } = useEntityDetail<
     IngredientWithFoodOut,
@@ -152,8 +144,6 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
         entity="ingredient"
         name={ingredient.name}
         rawData={ingredient}
-        error={query.error ?? undefined}
-        notFound={query.data == null}
       />
       <EnrichIngredientDialog
         ingredient={
