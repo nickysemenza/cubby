@@ -24,6 +24,7 @@
     "test:run": "vitest run"
   },
   "dependencies": {
+    "@cubby/worker-tracing": "workspace:*",
     "@hono/zod-openapi": "^1.2.1",
     "@modelcontextprotocol/sdk": "^1.28.0",
     "@scalar/hono-api-reference": "^0.10.0",

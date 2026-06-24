@@ -50,6 +50,7 @@ import {
   updateAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { TraceNames, withTrace } from "~/server/tracing";
 
 // Every problem item type is the canonical Zod-derived shape from
 // @cubby/schemas/problems (imported above) — this repo is checked against those
@@ -297,18 +298,31 @@ export const findIngredientsWithUnusedAliases = async (
       ),
     );
 
-  const resolvedNameToIngredientIds = new Map<string, Set<string>>();
-  for (const row of lineRows) {
-    if (!row.rawLine) continue; // isNotNull already filtered; narrow the type
-    const fresh = wasm.parse_ingredient(row.rawLine);
-    const key = fresh.name.toLowerCase();
-    let ids = resolvedNameToIngredientIds.get(key);
-    if (!ids) {
-      ids = new Set();
-      resolvedNameToIngredientIds.set(key, ids);
-    }
-    ids.add(row.ingredientId);
-  }
+  // The DB fetch above is auto-traced (drizzle instrumentation); this WASM
+  // parse-sweep over every recipe line is CPU and otherwise invisible — it's the
+  // suspected 30–60s. Trace it with the line count so the cost is attributable.
+  const resolvedNameToIngredientIds = await withTrace(
+    TraceNames.wasm("parseAliasLines"),
+    async (span) => {
+      const map = new Map<string, Set<string>>();
+      for (const row of lineRows) {
+        if (!row.rawLine) continue; // isNotNull already filtered; narrow the type
+        const fresh = wasm.parse_ingredient(row.rawLine);
+        const key = fresh.name.toLowerCase();
+        let ids = map.get(key);
+        if (!ids) {
+          ids = new Set();
+          map.set(key, ids);
+        }
+        ids.add(row.ingredientId);
+      }
+      span.setAttributes({
+        lineCount: lineRows.length,
+        distinctNames: map.size,
+      });
+      return map;
+    },
+  );
 
   // Only ingredients that actually carry aliases can have unused ones.
   const withAliases = await dbClient
@@ -639,46 +653,52 @@ export const findStaleIngredientParses = async (
   // computeParseDrift the client surfaces use. Name matching is alias-aware (so "large
   // eggs" parsing to the alias-bearing "large brown eggs" ingredient is NOT drift); the
   // amount/modifier axes are strict — the parser is the single normalizer.
-  const stale: StaleIngredientParse[] = [];
-  for (const row of rows) {
-    if (!row.rawLine) continue; // isNotNull already filtered; narrow the type
-    const fresh = wasm.parse_ingredient(row.rawLine);
-    const drift = computeParseDrift(
-      {
-        knownNames: [row.storedName, ...row.storedAliases],
-        amounts: row.storedAmounts,
-        modifier: row.storedModifier,
-      },
-      fresh,
-    );
-    if (!hasDrift(drift)) continue;
-    stale.push({
-      recipeSectionIngredientId: row.recipeSectionIngredientId,
-      recipeId: row.recipeId,
-      recipeName: row.recipeName,
-      ingredientId: row.ingredientId,
-      storedName: row.storedName,
-      rawLine: row.rawLine,
-      parsedName: fresh.name,
-      nameDrift: drift.name !== null,
-      storedAmounts: row.storedAmounts,
-      // Carry the range upper bound (parser WAmount snake → persisted Amount
-      // camel) so Re-parse All actually resolves range drift instead of
-      // re-flagging the row forever.
-      parsedAmounts: drift.amounts
-        ? drift.amounts.map((a) => ({
-            value: a.value,
-            unit: a.unit,
-            ...(a.upper_value != null ? { upperValue: a.upper_value } : {}),
-          }))
-        : [],
-      amountDrift: drift.amounts !== null,
-      storedModifier: row.storedModifier,
-      parsedModifier: drift.modifier,
-      modifierDrift: drift.modifier !== null,
-    });
-  }
-  return stale;
+  // The DB fetch above is auto-traced; this WASM re-parse + drift diff over every
+  // recipe line is the CPU sweep (suspected 30–60s). Trace it with line/stale
+  // counts so the cost is attributable.
+  return withTrace(TraceNames.wasm("reparseStaleLines"), async (span) => {
+    const stale: StaleIngredientParse[] = [];
+    for (const row of rows) {
+      if (!row.rawLine) continue; // isNotNull already filtered; narrow the type
+      const fresh = wasm.parse_ingredient(row.rawLine);
+      const drift = computeParseDrift(
+        {
+          knownNames: [row.storedName, ...row.storedAliases],
+          amounts: row.storedAmounts,
+          modifier: row.storedModifier,
+        },
+        fresh,
+      );
+      if (!hasDrift(drift)) continue;
+      stale.push({
+        recipeSectionIngredientId: row.recipeSectionIngredientId,
+        recipeId: row.recipeId,
+        recipeName: row.recipeName,
+        ingredientId: row.ingredientId,
+        storedName: row.storedName,
+        rawLine: row.rawLine,
+        parsedName: fresh.name,
+        nameDrift: drift.name !== null,
+        storedAmounts: row.storedAmounts,
+        // Carry the range upper bound (parser WAmount snake → persisted Amount
+        // camel) so Re-parse All actually resolves range drift instead of
+        // re-flagging the row forever.
+        parsedAmounts: drift.amounts
+          ? drift.amounts.map((a) => ({
+              value: a.value,
+              unit: a.unit,
+              ...(a.upper_value != null ? { upperValue: a.upper_value } : {}),
+            }))
+          : [],
+        amountDrift: drift.amounts !== null,
+        storedModifier: row.storedModifier,
+        parsedModifier: drift.modifier,
+        modifierDrift: drift.modifier !== null,
+      });
+    }
+    span.setAttributes({ lineCount: rows.length, staleCount: stale.length });
+    return stale;
+  });
 };
 
 // Distinct non-deleted recipes each product feeds into, via its linked
