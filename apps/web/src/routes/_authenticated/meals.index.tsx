@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 // Meal planning calendar (week view).
 import { MealCalendarPage } from "~/app/meals/calendar-page";
-import { EntityLayout } from "~/components/layouts/entity-layout";
+import { Page } from "~/components/page/Page";
 
 export const Route = createFileRoute("/_authenticated/meals/")({
   component: MealsIndexRoute,
@@ -10,8 +10,8 @@ export const Route = createFileRoute("/_authenticated/meals/")({
 
 function MealsIndexRoute() {
   return (
-    <EntityLayout title="Meals" fullWidth>
+    <Page variant="list" title="Meals" entity="meal" fullWidth>
       <MealCalendarPage />
-    </EntityLayout>
+    </Page>
   );
 }

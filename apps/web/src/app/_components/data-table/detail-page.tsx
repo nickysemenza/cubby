@@ -1,9 +1,5 @@
-import type { Entity } from "@cubby/schemas/entity";
 import type { FC, ReactNode } from "react";
-import {
-  type DetailHeroStat,
-  PageHeader,
-} from "~/components/layouts/page-hero";
+import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { useDebug } from "~/hooks/useDebug";
 import { useIsMobile } from "~/hooks/useMobile";
@@ -167,62 +163,6 @@ export const DetailSections: FC<DetailSectionsProps> = ({
           </CardContent>
         </Card>
       )}
-    </div>
-  );
-};
-
-interface DetailPageProps {
-  sections: DetailSection[];
-  entity: Entity;
-  name: string;
-  rawData: unknown; // The full entity data for debug display
-  /** Images shown as a swipeable hero gallery on mobile */
-  heroImages?: Array<{ id: string; url: string; filename: string }>;
-  /** Inline ledger stats on the spec-plate hero (on hand, value, ...) */
-  heroStats?: DetailHeroStat[];
-  /** Status stamp on the plate (e.g. IN STOCK) */
-  heroStamp?: { label: string; tone?: "ink" | "red" | "green" };
-  /** Reference code shown in the eyebrow (e.g. the product shortcode) */
-  heroNo?: string;
-  /** Page-level action cluster (edit / move / delete) rendered on the hero plate. */
-  actions?: ReactNode;
-}
-
-/**
- * Back-compat detail page: the spec-plate hero (via {@link PageHeader}) plus the
- * {@link DetailSections} body. Kept for detail pages not yet migrated to the
- * unified `<Page variant="detail">` shell — new pages should compose Page +
- * DetailSections directly. Behaviour is identical to the pre-split component.
- */
-export const DetailPage: FC<DetailPageProps> = ({
-  sections,
-  entity,
-  name,
-  rawData,
-  heroImages,
-  heroStats,
-  heroStamp,
-  heroNo,
-  actions,
-}) => {
-  return (
-    <div className="space-y-2 sm:space-y-3">
-      <PageHeader
-        variant="detail"
-        title={name}
-        entity={entity}
-        rawData={rawData}
-        heroNo={heroNo}
-        heroStamp={heroStamp}
-        heroStats={heroStats}
-        heroImages={heroImages}
-        actions={actions}
-      />
-      <DetailSections
-        sections={sections}
-        rawData={rawData}
-        heroImages={heroImages}
-      />
     </div>
   );
 };

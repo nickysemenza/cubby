@@ -12,7 +12,7 @@ import { LocationGallery } from "~/app/_components/locations/location-gallery";
 import { LocationActions } from "~/app/locations/location-actions";
 import { LocationList } from "~/app/locations/locationlist";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
-import { EntityLayout } from "~/components/layouts/entity-layout";
+import { Page } from "~/components/page/Page";
 import {
   ViewSwitcher,
   type ViewSwitcherOption,
@@ -45,7 +45,13 @@ function LocationsPage() {
   const navigate = useNavigate({ from: Route.fullPath });
 
   return (
-    <EntityLayout title="Locations" actions={<LocationActions />} fullWidth>
+    <Page
+      variant="list"
+      title="Locations"
+      entity="location"
+      actions={<LocationActions />}
+      fullWidth
+    >
       <div className="space-y-4">
         <ViewSwitcher
           ariaLabel="Locations view"
@@ -104,6 +110,6 @@ function LocationsPage() {
           </div>
         )}
       </div>
-    </EntityLayout>
+    </Page>
   );
 }

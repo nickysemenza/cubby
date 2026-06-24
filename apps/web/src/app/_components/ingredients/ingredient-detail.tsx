@@ -9,11 +9,12 @@ import {
 } from "lucide-react";
 import { type FC, useState } from "react";
 import { MutedBox } from "~/components/layout/muted-box";
+import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { getIngredientMappings } from "~/lib/unit-mapping-utils";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { useTRPC } from "~/trpc/react";
-import { DetailPage, type DetailSection } from "../data-table/detail-page";
+import { type DetailSection, DetailSections } from "../data-table/detail-page";
 import { editableDetailSection } from "../data-table/editable-detail-section";
 import { EntityPillLinkList } from "../EntityPillLinkList";
 import { useEntityDetail } from "../hooks/useEntityDetail";
@@ -139,12 +140,14 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
 
   return (
     <>
-      <DetailPage
-        sections={sections}
+      <Page
+        variant="detail"
         entity="ingredient"
-        name={ingredient.name}
+        title={ingredient.name}
         rawData={ingredient}
-      />
+      >
+        <DetailSections sections={sections} rawData={ingredient} />
+      </Page>
       <EnrichIngredientDialog
         ingredient={
           isEnriching ? { id: ingredient.id, name: ingredient.name } : null

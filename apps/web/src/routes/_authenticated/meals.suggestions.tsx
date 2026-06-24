@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { MealSuggestionsPage } from "~/app/meals/suggestions-page";
-import { EntityLayout } from "~/components/layouts/entity-layout";
+import { Page } from "~/components/page/Page";
 
 export const Route = createFileRoute("/_authenticated/meals/suggestions")({
   component: MealsSuggestionsRoute,
@@ -9,8 +9,8 @@ export const Route = createFileRoute("/_authenticated/meals/suggestions")({
 
 function MealsSuggestionsRoute() {
   return (
-    <EntityLayout title="What can I make?" fullWidth>
+    <Page variant="list" title="What can I make?" fullWidth>
       <MealSuggestionsPage />
-    </EntityLayout>
+    </Page>
   );
 }

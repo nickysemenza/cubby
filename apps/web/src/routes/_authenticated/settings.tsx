@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { useTableDensity } from "~/app/_components/data-table/useTableDensity";
 import { BACKFILL } from "~/app/problems/components/backfill-registry";
 import { BackfillButton } from "~/app/problems/components/problem-backfill-action";
-import { EntityLayout } from "~/components/layouts/entity-layout";
+import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import {
   Card,
@@ -47,7 +47,7 @@ const GROUPS: { group: FlagGroup; blurb: string }[] = [
 function SettingsPage() {
   const { flags, setFlag, resetFlags } = useFlags();
   return (
-    <EntityLayout title="Settings">
+    <Page variant="list" title="Settings">
       <div className="max-w-2xl space-y-4 pb-16">
         {GROUPS.map(({ group, blurb }) => {
           const keys = FLAG_KEYS.filter(
@@ -88,7 +88,7 @@ function SettingsPage() {
           Reset developer flags
         </Button>
       </div>
-    </EntityLayout>
+    </Page>
   );
 }
 

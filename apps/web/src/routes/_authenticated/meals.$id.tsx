@@ -1,7 +1,7 @@
 import { unsafeMealId } from "@cubby/schemas/identifiers";
 import { createFileRoute } from "@tanstack/react-router";
 import { MealDetailPage } from "~/app/meals/meal-detail-page";
-import { EntityLayout } from "~/components/layouts/entity-layout";
+import { Page } from "~/components/page/Page";
 
 export const Route = createFileRoute("/_authenticated/meals/$id")({
   // Brand the path param at the boundary so it's a `MealId` throughout.
@@ -16,8 +16,8 @@ export const Route = createFileRoute("/_authenticated/meals/$id")({
 function MealDetailRoute() {
   const id = Route.useParams().id;
   return (
-    <EntityLayout title="Meal" entity="meal">
+    <Page variant="list" title="Meal" entity="meal">
       <MealDetailPage mealId={id} />
-    </EntityLayout>
+    </Page>
   );
 }

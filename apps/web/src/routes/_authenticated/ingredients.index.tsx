@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { IngredientList } from "~/app/ingredients/ingredientlist";
-import { EntityLayout } from "~/components/layouts/entity-layout";
+import { Page } from "~/components/page/Page";
 
 export const Route = createFileRoute("/_authenticated/ingredients/")({
   component: IngredientsPage,
@@ -8,8 +8,8 @@ export const Route = createFileRoute("/_authenticated/ingredients/")({
 
 function IngredientsPage() {
   return (
-    <EntityLayout title="Ingredients" entity="ingredient" fullWidth>
+    <Page variant="list" title="Ingredients" entity="ingredient" fullWidth>
       <IngredientList />
-    </EntityLayout>
+    </Page>
   );
 }

@@ -28,7 +28,7 @@ import {
   typeSupportsQrCode,
 } from "~/app/_components/locations/location-type-theme";
 import { getCategoryColor } from "~/app/_components/products/category-theme";
-import { EntityLayout } from "~/components/layouts/entity-layout";
+import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import {
@@ -411,7 +411,7 @@ function LabelsPage() {
 
   if (shortcodes.length === 0) {
     return (
-      <EntityLayout title="Print Labels">
+      <Page variant="list" title="Print Labels">
         <Card>
           <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
             <p className="text-muted-foreground">
@@ -421,13 +421,14 @@ function LabelsPage() {
             <AddLabelsPopover codes={codes} onCodesChange={handleCodesChange} />
           </CardContent>
         </Card>
-      </EntityLayout>
+      </Page>
     );
   }
 
   return (
     <>
-      <EntityLayout
+      <Page
+        variant="list"
         title="Print Labels"
         actions={
           <div className="flex items-center gap-2">
@@ -536,7 +537,7 @@ function LabelsPage() {
         ) : (
           <PtouchPreview items={items} />
         )}
-      </EntityLayout>
+      </Page>
       {/* Portal to body so print CSS can hide everything else */}
       {isSheetFormat(format) &&
         !isLoading &&

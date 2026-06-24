@@ -15,7 +15,7 @@ import RecipeDetail, {
 } from "~/app/_components/recipe/RecipeDetail";
 import { AddToMeal } from "~/app/meals/add-to-meal";
 import { PageWrapper } from "~/components/layout/page-wrapper";
-import { PageHero } from "~/components/layouts/page-hero";
+import { Page } from "~/components/page/Page";
 import { RouteErrorComponent } from "~/components/route-error";
 import { DetailPagePending } from "~/components/route-pending";
 import { Button } from "~/components/ui/button";
@@ -111,31 +111,30 @@ function RecipeDetailPage() {
   };
 
   return (
-    <PageWrapper>
-      <PageHero
-        variant="detail"
-        entity="recipe"
-        title={recipe.name}
-        actions={
-          !isEditing ? (
-            <>
-              <AddToMeal recipeId={recipe.id} />
-              <CopyRecipeParseButton recipe={recipe} />
-              <Button onClick={startEditing} variant="outline" size="sm">
-                <Edit className="mr-2 h-4 w-4" />
-                Edit Recipe
-              </Button>
-              <DeleteButton size="sm" />
-            </>
-          ) : (
-            <Button onClick={stopEditing} variant="outline" size="sm">
-              <X className="mr-2 h-4 w-4" />
-              Cancel
+    <Page
+      variant="detail"
+      entity="recipe"
+      title={recipe.name}
+      rawData={recipe}
+      actions={
+        !isEditing ? (
+          <>
+            <AddToMeal recipeId={recipe.id} />
+            <CopyRecipeParseButton recipe={recipe} />
+            <Button onClick={startEditing} variant="outline" size="sm">
+              <Edit className="mr-2 h-4 w-4" />
+              Edit Recipe
             </Button>
-          )
-        }
-      />
-
+            <DeleteButton size="sm" />
+          </>
+        ) : (
+          <Button onClick={stopEditing} variant="outline" size="sm">
+            <X className="mr-2 h-4 w-4" />
+            Cancel
+          </Button>
+        )
+      }
+    >
       {isEditing ? (
         <EditRecipeForm recipe={recipe} onCancel={stopEditing} />
       ) : (
@@ -149,6 +148,6 @@ function RecipeDetailPage() {
       )}
 
       <DeleteDialog />
-    </PageWrapper>
+    </Page>
   );
 }

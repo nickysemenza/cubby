@@ -20,7 +20,7 @@ import {
   getIngredientName,
   recipeHeadlineTotals,
 } from "~/app/_components/recipe/recipe-utils";
-import { EntityLayout } from "~/components/layouts/entity-layout";
+import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { computeRecipeCosting } from "~/lib/recipe-costing";
@@ -109,7 +109,7 @@ function RecipeComparePage() {
 
   if (recipeIds.length === 0) {
     return (
-      <EntityLayout title="Compare Recipes">
+      <Page variant="list" title="Compare Recipes">
         <Card>
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground">
@@ -124,12 +124,13 @@ function RecipeComparePage() {
             </Link>
           </CardContent>
         </Card>
-      </EntityLayout>
+      </Page>
     );
   }
 
   return (
-    <EntityLayout
+    <Page
+      variant="list"
       title="Compare Recipes"
       fullWidth
       actions={
@@ -161,6 +162,6 @@ function RecipeComparePage() {
           </div>
         </div>
       )}
-    </EntityLayout>
+    </Page>
   );
 }

@@ -4,10 +4,11 @@ import { ArrowRightLeft, Package, Pencil } from "lucide-react";
 import type { FC } from "react";
 import { useState } from "react";
 import type { z } from "zod";
+import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { queryKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
-import { DetailPage, type DetailSection } from "../data-table/detail-page";
+import { type DetailSection, DetailSections } from "../data-table/detail-page";
 import { editableDetailSection } from "../data-table/editable-detail-section";
 import { useEntityDelete } from "../hooks/useEntityDelete";
 import { useEntityDetail } from "../hooks/useEntityDetail";
@@ -88,13 +89,15 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
 
   return (
     <>
-      <DetailPage
-        sections={sections}
+      <Page
+        variant="detail"
         entity="inventory"
-        name={inventoryitem.product.name}
+        title={inventoryitem.product.name}
         rawData={inventoryitem}
         actions={actions}
-      />
+      >
+        <DetailSections sections={sections} rawData={inventoryitem} />
+      </Page>
       <DeleteDialog />
       {showMoveDialog && (
         <MoveInventoryDialog

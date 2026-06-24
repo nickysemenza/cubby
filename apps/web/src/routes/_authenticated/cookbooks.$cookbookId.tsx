@@ -1,7 +1,7 @@
 import { unsafeCookbookId } from "@cubby/schemas/identifiers";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { BookOpen, Plus, RefreshCw, Trash } from "lucide-react";
+import { Plus, RefreshCw, Trash } from "lucide-react";
 import { useState } from "react";
 import { z } from "zod";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
@@ -9,8 +9,8 @@ import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
 import { IngredientUsagePanel } from "~/app/_components/ingredient/ingredient-usage-panel";
 import { RecipeList } from "~/app/recipes/recipelist";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
-import { PageWrapper } from "~/components/layout/page-wrapper";
-import { PageHero } from "~/components/layouts/page-hero";
+import type { DetailHeroStat } from "~/components/layouts/page-hero";
+import { Page } from "~/components/page/Page";
 import { BulkProgressBar } from "~/components/ui/bulk-progress-bar";
 import { Button } from "~/components/ui/button";
 import { Image } from "~/components/ui/image";
@@ -105,80 +105,75 @@ function CookbookDetailPage() {
     error: (err) => getErrorMessage(err) || "Failed to delete cookbook recipes",
   });
 
+  // Author + recipe count read as the spec-plate ledger stats; the cover plate
+  // rides above the tabs (the spec-plate hero has no cover slot of its own).
+  const heroStats: DetailHeroStat[] = [
+    ...(cookbook && cookbook.author.length > 0
+      ? [{ label: "Author", value: cookbook.author.join(", ") }]
+      : []),
+    ...(recipeCount !== undefined
+      ? [
+          {
+            label: "Recipes",
+            value: `${recipeCount} ${recipeCount === 1 ? "recipe" : "recipes"}`,
+          },
+        ]
+      : []),
+  ];
+
   return (
-    <PageWrapper fullWidth>
-      <div className="flex items-start gap-4">
-        {coverUrl && (
-          <figure className="my-0 shrink-0 rounded-sm border border-border bg-card p-1.5">
-            <Image
-              src={coverUrl}
-              alt={name}
-              className="h-24 w-16 object-cover"
+    <Page
+      variant="detail"
+      title={name}
+      entity="cookbook"
+      heroStats={heroStats}
+      fullWidth
+      actions={
+        <div className="flex items-center gap-2">
+          {notImported > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                navigate({
+                  to: "/recipes/import-cookbook",
+                  search: { from: cookbookId },
+                })
+              }
+              title="Selectively import recipes from this cookbook's source (no AI)"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add from source ({notImported})
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void runReprocess()}
+            disabled={reprocess.running}
+            title="Re-derive recipes from the stored extraction (no AI)"
+          >
+            <RefreshCw
+              className={`mr-2 h-4 w-4 ${reprocess.running ? "animate-spin" : ""}`}
             />
-          </figure>
-        )}
-        <div className="min-w-0 flex-1">
-          <PageHero
-            variant="detail"
-            title={name}
-            entity="cookbook"
-            eyebrow="Cookbook"
-            meta={[
-              ...(cookbook && cookbook.author.length > 0
-                ? [{ label: cookbook.author.join(", ") }]
-                : []),
-              ...(recipeCount !== undefined
-                ? [
-                    {
-                      icon: BookOpen,
-                      label: `${recipeCount} ${recipeCount === 1 ? "recipe" : "recipes"}`,
-                    },
-                  ]
-                : []),
-            ]}
-            actions={
-              <div className="flex items-center gap-2">
-                {notImported > 0 && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      navigate({
-                        to: "/recipes/import-cookbook",
-                        search: { from: cookbookId },
-                      })
-                    }
-                    title="Selectively import recipes from this cookbook's source (no AI)"
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add from source ({notImported})
-                  </Button>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void runReprocess()}
-                  disabled={reprocess.running}
-                  title="Re-derive recipes from the stored extraction (no AI)"
-                >
-                  <RefreshCw
-                    className={`mr-2 h-4 w-4 ${reprocess.running ? "animate-spin" : ""}`}
-                  />
-                  Reprocess
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => setShowDelete(true)}
-                >
-                  <Trash className="mr-2 h-4 w-4" />
-                  Delete all recipes
-                </Button>
-              </div>
-            }
-          />
+            Reprocess
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => setShowDelete(true)}
+          >
+            <Trash className="mr-2 h-4 w-4" />
+            Delete all recipes
+          </Button>
         </div>
-      </div>
+      }
+    >
+      {coverUrl && (
+        <figure className="my-0 mb-3 w-fit shrink-0 rounded-sm border border-border bg-card p-1.5">
+          <Image src={coverUrl} alt={name} className="h-24 w-16 object-cover" />
+        </figure>
+      )}
 
       {reprocess.running && (
         <BulkProgressBar
@@ -223,6 +218,6 @@ function CookbookDetailPage() {
           `Every recipe from "${name}" will be permanently deleted.`
         }
       />
-    </PageWrapper>
+    </Page>
   );
 }

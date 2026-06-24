@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ShoppingListPage } from "~/app/meals/shopping-list-page";
-import { EntityLayout } from "~/components/layouts/entity-layout";
+import { Page } from "~/components/page/Page";
 
 export const Route = createFileRoute("/_authenticated/meals/shopping-list")({
   component: ShoppingListRoute,
@@ -9,8 +9,8 @@ export const Route = createFileRoute("/_authenticated/meals/shopping-list")({
 
 function ShoppingListRoute() {
   return (
-    <EntityLayout title="Shopping list" fullWidth>
+    <Page variant="list" title="Shopping list" fullWidth>
       <ShoppingListPage />
-    </EntityLayout>
+    </Page>
   );
 }

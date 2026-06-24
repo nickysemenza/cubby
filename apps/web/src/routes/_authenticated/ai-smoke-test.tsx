@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AiSmokeTest } from "~/app/_components/dev/ai-smoke-test";
-import { EntityLayout } from "~/components/layouts/entity-layout";
+import { Page } from "~/components/page/Page";
 
 export const Route = createFileRoute("/_authenticated/ai-smoke-test")({
   component: AiSmokeTestPage,
@@ -9,8 +9,8 @@ export const Route = createFileRoute("/_authenticated/ai-smoke-test")({
 
 function AiSmokeTestPage() {
   return (
-    <EntityLayout title="AI smoke test">
+    <Page variant="list" title="AI smoke test">
       <AiSmokeTest />
-    </EntityLayout>
+    </Page>
   );
 }

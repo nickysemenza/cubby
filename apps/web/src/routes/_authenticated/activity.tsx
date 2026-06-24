@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
-import { EntityLayout } from "~/components/layouts/entity-layout";
+import { Page } from "~/components/page/Page";
 
 export const Route = createFileRoute("/_authenticated/activity")({
   // Warm the first page of the audit feed during route load so the list renders
@@ -21,7 +21,7 @@ export const Route = createFileRoute("/_authenticated/activity")({
 
 function ActivityPage() {
   return (
-    <EntityLayout title="Activity">
+    <Page variant="list" title="Activity">
       <div className="max-w-3xl">
         <p className="mb-6 text-muted-foreground">
           Recent changes to products, locations, inventory, recipes, and
@@ -29,6 +29,6 @@ function ActivityPage() {
         </p>
         <AuditLogList showEntityLink={true} />
       </div>
-    </EntityLayout>
+    </Page>
   );
 }
