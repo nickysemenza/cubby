@@ -148,7 +148,7 @@ export function ProblemSection<T>({
           {Object.entries(groups).map(([groupName, groupItems]) => (
             <div key={groupName}>
               {isGrouped && (
-                <h4 className="mb-3 flex items-center gap-2 font-medium">
+                <h4 className="mb-2 flex items-center gap-2 font-medium">
                   {groupName}
                   <Badge variant="outline">{groupItems.length}</Badge>
                 </h4>
@@ -204,7 +204,7 @@ function ProblemCard({ rendered }: { rendered: RenderedProblemItem }) {
       title={title}
       subtitle={subtitle}
       imageSlot={imageSlot}
-      className="border-l border-l-border p-3"
+      className="border-l border-l-border p-2"
       actions={
         <div className="flex gap-1">
           {inlineFix && (
@@ -250,7 +250,7 @@ function ProblemCard({ rendered }: { rendered: RenderedProblemItem }) {
         </div>
       }
     >
-      {details.length > 0 && <div className="space-y-0.5">{details}</div>}
+      {details.length > 0 && <div className="space-y-1">{details}</div>}
       {badges.length > 0 && (
         <div className="flex flex-wrap gap-1">{badges}</div>
       )}
@@ -260,7 +260,7 @@ function ProblemCard({ rendered }: { rendered: RenderedProblemItem }) {
         </div>
       )}
       {inlineFix && open && (
-        <div className="mt-3 border-t pt-3">
+        <div className="mt-2 border-t pt-2">
           {inlineFix.render(() => setOpen(false))}
         </div>
       )}

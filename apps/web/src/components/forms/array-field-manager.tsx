@@ -73,7 +73,7 @@ export const ArrayFieldManager = <
   const canAdd = !maxItems || fields.length < maxItems;
 
   return (
-    <div className={cn("space-y-1.5", className)}>
+    <div className={cn("space-y-2", className)}>
       <div className="flex items-center justify-between">
         <h3 className={cn("eyebrow my-0 font-medium", titleClassName)}>
           {title}
@@ -86,7 +86,7 @@ export const ArrayFieldManager = <
           onClick={handleAdd}
           disabled={!canAdd}
         >
-          <Plus className="mr-1.5 h-3.5 w-3.5" />
+          <Plus className="mr-2 h-3.5 w-3.5" />
           {addButtonText}
         </Button>
       </div>
@@ -102,10 +102,7 @@ export const ArrayFieldManager = <
         {fields.map((field, index) => (
           <div
             key={field.id}
-            className={cn(
-              "flex flex-wrap items-end gap-2 py-1.5",
-              itemClassName,
-            )}
+            className={cn("flex flex-wrap items-end gap-2 py-2", itemClassName)}
           >
             {children(field as T, index, handleRemove)}
             {showRemoveButton && (
@@ -113,7 +110,7 @@ export const ArrayFieldManager = <
                 type="button"
                 variant="ghost"
                 size="icon-sm"
-                className="mb-0.5"
+                className="mb-1"
                 aria-label={`Remove ${title.slice(0, -1).toLowerCase()} ${index + 1}`}
                 onClick={() => handleRemove(index)}
               >

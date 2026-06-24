@@ -208,7 +208,7 @@ function Graph({
   return (
     <div
       ref={containerRef}
-      className="relative h-[540px] w-full overflow-hidden rounded-md border"
+      className="relative h-[540px] w-full overflow-hidden rounded-md border border-[var(--border-chunky)]"
     >
       <svg
         aria-hidden="true"
@@ -295,9 +295,9 @@ function Graph({
       </svg>
 
       {hovered && (
-        <div className="absolute top-3 left-3 z-50 max-w-xs rounded-md border bg-popover px-3 py-2 text-sm shadow-lg">
+        <div className="absolute top-3 left-3 z-50 max-w-xs rounded-md border bg-popover px-4 py-2 text-sm shadow-lg">
           <div className="font-medium">{hovered.name}</div>
-          <div className="mt-0.5 text-muted-foreground text-xs">
+          <div className="mt-1 text-muted-foreground text-xs">
             {hovered.cookbookName ?? "No cookbook"}
             {hovered.external ? " · external" : ""}
           </div>

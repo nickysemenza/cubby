@@ -458,8 +458,8 @@ export function createInventoryEntriesColumn<
         .map((entry) => getRelatedEntity(entry) as never)
         .filter(Boolean);
       return (
-        <SpacedContainer space={0} className="space-y-0.5">
-          <div className="space-y-0.5 text-xs">
+        <SpacedContainer space={0} className={"space-y-0.5" /* tight */}>
+          <div className={"space-y-0.5 text-xs" /* tight */}>
             {entries.map((entry) => (
               <div key={entry.id}>{tryFormatAmount(entry.amount)}</div>
             ))}

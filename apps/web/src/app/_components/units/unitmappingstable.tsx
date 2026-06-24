@@ -88,13 +88,13 @@ export const UnitMappingsTable: React.FC<{
         enableSorting: false,
         // The table uses table-layout:fixed, so give From/To explicit widths sized
         // to their short content; the unspecified Source column then claims the rest.
-        meta: { className: "w-16 whitespace-nowrap p-0.5" },
+        meta: { className: "w-16 whitespace-nowrap p-0.5" /* tight */ },
       }),
       columnHelper.accessor((row) => wasm.format_amount(row.b), {
         id: "to",
         header: "To",
         enableSorting: false,
-        meta: { className: "w-32 whitespace-nowrap p-0.5" },
+        meta: { className: "w-32 whitespace-nowrap p-0.5" /* tight */ },
       }),
       columnHelper.accessor("source", {
         id: "source",
@@ -102,7 +102,7 @@ export const UnitMappingsTable: React.FC<{
         enableSorting: false,
         // Unspecified width: in table-layout:fixed this column absorbs the
         // remaining space; truncate ellipsizes the long source label/pill.
-        meta: { className: "truncate p-0.5" },
+        meta: { className: "truncate p-0.5" /* tight */ },
         cell: (info) => <MappingSource mapping={info.row.original} />,
       }),
     ],

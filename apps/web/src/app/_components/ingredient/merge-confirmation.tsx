@@ -28,7 +28,7 @@ export function MergeConfirmation({
 
   const aliases = ingredients.filter((i) => i.id !== targetId);
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div>
         <div className="mb-1 font-medium text-muted-foreground text-sm">
           Keep (target):

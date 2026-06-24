@@ -6,7 +6,7 @@ import {
 import { Plus } from "lucide-react";
 import { z } from "zod";
 import { ProductList } from "~/app/products/productlist";
-import { EntityLayout } from "~/components/layouts/entity-layout";
+import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 
 const searchSchema = z.object({
@@ -26,7 +26,7 @@ function ProductsPage() {
   const { category } = Route.useSearch();
 
   return (
-    <EntityLayout title="Products" fullWidth>
+    <Page variant="list" title="Products" entity="product" fullWidth>
       <ProductList
         initialCategory={category}
         actions={
@@ -38,6 +38,6 @@ function ProductsPage() {
           </Link>
         }
       />
-    </EntityLayout>
+    </Page>
   );
 }

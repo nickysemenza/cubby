@@ -8,9 +8,10 @@ import {
   UtensilsCrossed,
 } from "lucide-react";
 import { useMemo } from "react";
+import { Page } from "~/components/page/Page";
 import { USDA_KINDS } from "~/lib/conversion-coverage";
 import { unitMappingsFromFood } from "~/lib/unit-mapping-utils";
-import { DetailPage, type DetailSection } from "../data-table/detail-page";
+import { type DetailSection, DetailSections } from "../data-table/detail-page";
 import { EntityPillLinkList } from "../EntityPillLinkList";
 import { NutrientsSummary } from "../units/NutrientsSummary";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
@@ -121,7 +122,7 @@ export const USDAFoodDetail: React.FC<{
 
   const nutritionSection = (
     <div>
-      <p className="mb-3 text-muted-foreground text-sm">Per 100g</p>
+      <p className="mb-4 text-muted-foreground text-sm">Per 100g</p>
       <div className="mb-4">
         <NutrientsSummary nutrients={nutritionInfo.nutrientsPer100} />
       </div>
@@ -168,11 +169,13 @@ export const USDAFoodDetail: React.FC<{
   ];
 
   return (
-    <DetailPage
-      sections={sections}
+    <Page
+      variant="detail"
       entity="usda-food"
-      name={foodInfo.description || "Unnamed Food"}
+      title={foodInfo.description || "Unnamed Food"}
       rawData={food}
-    />
+    >
+      <DetailSections sections={sections} rawData={food} />
+    </Page>
   );
 };

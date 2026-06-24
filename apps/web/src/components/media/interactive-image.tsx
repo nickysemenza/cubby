@@ -4,7 +4,10 @@ import { Image } from "~/components/ui/image";
 import { cn } from "~/lib/utils";
 
 const interactiveImageVariants = cva(
-  ["relative overflow-hidden rounded-md border", "transition-colors"],
+  [
+    "relative overflow-hidden rounded-md border border-[var(--border-chunky)]",
+    "transition-colors",
+  ],
   {
     variants: {
       aspectRatio: {

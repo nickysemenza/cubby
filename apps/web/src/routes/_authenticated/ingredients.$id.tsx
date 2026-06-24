@@ -34,9 +34,5 @@ function IngredientDetailPage() {
 
   useDocumentTitle(ingredient.name);
 
-  return (
-    <PageWrapper>
-      <IngredientDetail key={id} ingredient={ingredient} />
-    </PageWrapper>
-  );
+  return <IngredientDetail key={id} ingredient={ingredient} />;
 }

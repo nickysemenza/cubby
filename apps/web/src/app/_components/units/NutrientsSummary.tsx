@@ -71,7 +71,7 @@ export function NutrientsSummary({
     <div
       className={cn(
         "flex flex-wrap",
-        dense ? "gap-0.5 text-2xs" : "gap-1 text-xs",
+        dense ? "gap-0.5 text-2xs" /* tight */ : "gap-1 text-xs",
       )}
     >
       {displayNutrients.map((code) => {
@@ -86,7 +86,7 @@ export function NutrientsSummary({
             key={code}
             className={cn(
               "inline-flex items-baseline gap-1 whitespace-nowrap rounded-sm bg-muted",
-              dense ? "px-1 py-0" : "px-1.5 py-0.5",
+              dense ? "px-1 py-0" : "px-1.5 py-0.5" /* tight: nutrient chip */,
             )}
           >
             <span className="font-medium text-subtle">{displayName}</span>

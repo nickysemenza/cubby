@@ -317,7 +317,7 @@ export default function BulkMoveForm() {
               {moveItems.map((item, index) => (
                 <div
                   key={item.inventoryEntryId}
-                  className={`flex items-center gap-4 rounded border p-3 ${
+                  className={`flex items-center gap-4 rounded border p-4 ${
                     item.selected ? "border-primary bg-primary/5" : ""
                   }`}
                 >
@@ -359,7 +359,7 @@ export default function BulkMoveForm() {
               ))}
             </div>
           ) : (
-            <div className="py-8 text-center text-muted-foreground">
+            <div className="py-6 text-center text-muted-foreground">
               No inventory items at this location.
             </div>
           )}

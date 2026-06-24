@@ -105,7 +105,7 @@ export function EntityEmptyState({
   const actionHref = `/${entityDef.basePath}/new`;
 
   return (
-    <Empty variant="warm" className="relative isolate overflow-hidden py-8">
+    <Empty variant="warm" className="relative isolate overflow-hidden py-6">
       <IconPattern className="-z-10" />
       <InkStamp className="mb-1">Nothing on file</InkStamp>
       <EmptyMedia variant="icon">

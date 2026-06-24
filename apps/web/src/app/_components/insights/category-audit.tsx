@@ -62,7 +62,7 @@ export function CategoryAudit() {
           <p className="text-muted-foreground text-sm">{result.summary}</p>
 
           {result.suggestions.length > 0 && (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {result.suggestions.map((suggestion) => (
                 <SuggestionCard
                   key={suggestion.categoryName}
@@ -83,14 +83,14 @@ function SuggestionCard({
   suggestion: CategoryAuditResult["suggestions"][number];
 }) {
   return (
-    <div className="space-y-2 rounded-lg border p-4">
+    <div className="space-y-2 rounded-lg border border-[var(--border-chunky)] p-4">
       <div className="flex items-center gap-2">
         <Badge variant="secondary">{suggestion.categoryName}</Badge>
       </div>
       <p className="text-sm">{suggestion.description}</p>
       <p className="text-muted-foreground text-xs">{suggestion.reasoning}</p>
       {suggestion.productNames.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 pt-1">
+        <div className="flex flex-wrap gap-2 pt-1">
           {suggestion.productNames.map((name) => (
             <Badge key={name} variant="outline" className="text-xs">
               {name}

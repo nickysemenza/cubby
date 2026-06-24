@@ -34,9 +34,5 @@ function InventoryDetailPage() {
 
   useDocumentTitle(inventory.product?.name);
 
-  return (
-    <PageWrapper>
-      <InventoryDetail key={id} inventoryitem={inventory} />
-    </PageWrapper>
-  );
+  return <InventoryDetail key={id} inventoryitem={inventory} />;
 }

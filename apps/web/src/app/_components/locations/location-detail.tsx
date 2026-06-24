@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { type FC, useState } from "react";
 import { toast } from "sonner";
+import { Page } from "~/components/page/Page";
 import { Button, buttonVariants } from "~/components/ui/button";
 import {
   Empty,
@@ -25,7 +26,7 @@ import {
 import { queryKeys } from "~/lib/query-keys";
 import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
-import { DetailPage, type DetailSection } from "../data-table/detail-page";
+import { type DetailSection, DetailSections } from "../data-table/detail-page";
 import { editableDetailSection } from "../data-table/editable-detail-section";
 import { useEntityDetail } from "../hooks/useEntityDetail";
 import { QuickInventoryAdd } from "../inventory/quick-inventory-add";
@@ -216,14 +217,22 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
 
   return (
     <>
-      <LocationBreadcrumb location={location} linkable />
-      <DetailPage
-        sections={sections}
+      <Page
+        variant="detail"
         entity="location"
-        name={location.name}
+        title={location.name}
         rawData={location}
         heroImages={location.images}
-      />
+      >
+        {/* Breadcrumb lives inside Page so it sits within the max-width
+            container (was full-width when the route PageWrapper was dropped). */}
+        <LocationBreadcrumb location={location} linkable />
+        <DetailSections
+          sections={sections}
+          rawData={location}
+          heroImages={location.images}
+        />
+      </Page>
       <CreateChildLocationDialog
         open={createChildOpen}
         onOpenChange={setCreateChildOpen}

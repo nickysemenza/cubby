@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { useTableDensity } from "~/app/_components/data-table/useTableDensity";
 import { BACKFILL } from "~/app/problems/components/backfill-registry";
 import { BackfillButton } from "~/app/problems/components/problem-backfill-action";
-import { EntityLayout } from "~/components/layouts/entity-layout";
+import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import {
   Card,
@@ -47,8 +47,8 @@ const GROUPS: { group: FlagGroup; blurb: string }[] = [
 function SettingsPage() {
   const { flags, setFlag, resetFlags } = useFlags();
   return (
-    <EntityLayout title="Settings">
-      <div className="max-w-2xl space-y-4 pb-16">
+    <Page variant="list" title="Settings">
+      <div className="max-w-2xl space-y-4 pb-6">
         {GROUPS.map(({ group, blurb }) => {
           const keys = FLAG_KEYS.filter(
             (k) =>
@@ -88,7 +88,7 @@ function SettingsPage() {
           Reset developer flags
         </Button>
       </div>
-    </EntityLayout>
+    </Page>
   );
 }
 
@@ -103,8 +103,8 @@ function FlagRow({
 }) {
   const def = FLAGS[flagKey];
   return (
-    <div className="flex items-start justify-between gap-4 py-3">
-      <div className="space-y-0.5">
+    <div className="flex items-start justify-between gap-4 py-4">
+      <div className="space-y-0.5" /* tight */>
         <div className="flex items-center gap-2">
           <span className="font-medium text-sm">{def.label}</span>
           <code className="font-mono text-2xs text-muted-foreground">
@@ -136,7 +136,7 @@ function DiagnosticsCard() {
     <Card>
       <CardHeader>
         <div className="flex items-start justify-between gap-4">
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <CardTitle>Diagnostics</CardTitle>
             <CardDescription>
               Latency of core infrastructure — database, USDA API, and UPC
@@ -155,11 +155,11 @@ function DiagnosticsCard() {
       </CardHeader>
       <CardContent className="divide-y divide-border/60">
         {error ? (
-          <p className="py-3 text-destructive text-xs">
+          <p className="py-4 text-destructive text-xs">
             Timing check failed: {getErrorMessage(error)}
           </p>
         ) : !data ? (
-          <p className="py-3 text-muted-foreground text-xs">Measuring…</p>
+          <p className="py-4 text-muted-foreground text-xs">Measuring…</p>
         ) : (
           <>
             {data.results.map((result) => (
@@ -167,7 +167,7 @@ function DiagnosticsCard() {
                 key={result.label}
                 className="flex items-start justify-between gap-4 py-2"
               >
-                <div className="min-w-0 space-y-0.5">
+                <div className="min-w-0 space-y-0.5" /* tight */>
                   <code className="block truncate font-mono text-muted-foreground text-xs">
                     {result.label}
                   </code>
@@ -218,12 +218,12 @@ function MaintenanceRow({
   action: ReactNode;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 py-3">
-      <div className="space-y-0.5">
+    <div className="flex items-start justify-between gap-4 py-4">
+      <div className="space-y-0.5" /* tight */>
         <span className="font-medium text-sm">{label}</span>
         <p className="text-muted-foreground text-xs">{description}</p>
       </div>
-      <div className="flex shrink-0 items-center gap-3">
+      <div className="flex shrink-0 items-center gap-2">
         {showCount && (
           <span className="font-mono text-2xs text-muted-foreground tabular-nums">
             {count == null
@@ -250,7 +250,7 @@ function RecomputeAction() {
     enabled: false,
   });
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-2">
       {dryRun.data && (
         <span className="font-mono text-2xs text-muted-foreground tabular-nums">
           {dryRun.data.wouldChange} of {dryRun.data.total} would change
@@ -373,7 +373,7 @@ function AppearanceCard() {
       </CardHeader>
       <CardContent>
         <div className="flex items-center justify-between gap-4 py-1">
-          <div className="space-y-0.5">
+          <div className="space-y-0.5" /* tight */>
             <span className="font-medium text-sm">Table density</span>
             <p className="text-muted-foreground text-xs">
               Row height in data tables.

@@ -15,7 +15,7 @@ export const FieldArrayItemControls: FC<FieldArrayItemControlsProps> = ({
   remove,
   index,
   fieldsLength,
-  className = "mt-7 flex flex-col space-y-1",
+  className = "mt-6 flex flex-col space-y-1",
 }) => (
   <div className={className}>
     <Button

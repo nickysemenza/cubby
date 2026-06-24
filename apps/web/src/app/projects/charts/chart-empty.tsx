@@ -18,7 +18,7 @@ export function ChartEmpty({
   title: string;
 }) {
   return (
-    <Empty variant="minimal" className="py-8">
+    <Empty variant="minimal" className="py-6">
       <EmptyHeader>
         {icon && <EmptyIcon icon={icon} />}
         <EmptyTitle className="text-muted-foreground">{title}</EmptyTitle>

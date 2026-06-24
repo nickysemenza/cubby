@@ -158,7 +158,7 @@ export function InventoryItemList() {
           const { upc } = product;
           return (
             <div className="flex items-center gap-2">
-              <div className="min-w-0 flex-1 space-y-0.5">
+              <div className="min-w-0 flex-1 space-y-1">
                 <EntityPillLink entity="product" data={product} compact />
                 {upc && (
                   <div className="text-muted-foreground text-xs">

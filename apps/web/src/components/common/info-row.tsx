@@ -15,7 +15,7 @@ interface InfoRowProps {
  * own rule, so stacks of InfoRows need no dividers between them.
  */
 export const InfoRow = ({ label, children, className }: InfoRowProps) => (
-  <div className={cn("flex items-baseline gap-2 py-1.5", className)}>
+  <div className={cn("flex items-baseline gap-2 py-2", className)}>
     <Eyebrow as="span" className="shrink-0">
       {label}
     </Eyebrow>

@@ -124,7 +124,7 @@ export function IngredientReparse({
   };
 
   return (
-    <div className="mt-1 flex flex-col gap-y-0.5 pl-8">
+    <div className="mt-1 flex flex-col gap-y-1 pl-6">
       <span
         className="truncate text-muted-foreground/70 text-xs italic"
         title={rawLine}
@@ -132,7 +132,7 @@ export function IngredientReparse({
         from: {rawLine}
       </span>
       {drifted && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
           {drift.name !== null && (
             <DriftIndicator
               axis="name"

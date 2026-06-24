@@ -58,7 +58,7 @@ export function PantryValueCard() {
       <div className="font-mono font-semibold text-xl tabular-nums">
         {formatCurrency(total)}
       </div>
-      <div className="mt-3 flex h-24 items-end gap-3 border-[var(--border-chunky)] border-b px-1">
+      <div className="mt-4 flex h-24 items-end gap-2 border-[var(--border-chunky)] border-b px-1">
         {bars.map((b, i) => (
           <div
             key={b.label}
@@ -71,7 +71,7 @@ export function PantryValueCard() {
           />
         ))}
       </div>
-      <div className="mt-1.5 flex gap-3 px-1">
+      <div className="mt-2 flex gap-2 px-1">
         {bars.map((b) => (
           <span
             key={b.label}

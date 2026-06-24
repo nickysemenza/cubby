@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { BookOpen, NotebookPen, Plus, Share2 } from "lucide-react";
 import { RecipeList } from "~/app/recipes/recipelist";
-import { EntityLayout } from "~/components/layouts/entity-layout";
+import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 
 export const Route = createFileRoute("/_authenticated/recipes/")({
@@ -11,7 +11,7 @@ export const Route = createFileRoute("/_authenticated/recipes/")({
 
 function RecipesPage() {
   return (
-    <EntityLayout title="Recipes" entity="recipe" fullWidth>
+    <Page variant="list" title="Recipes" entity="recipe" fullWidth>
       <RecipeList
         actions={
           <>
@@ -42,6 +42,6 @@ function RecipesPage() {
           </>
         }
       />
-    </EntityLayout>
+    </Page>
   );
 }

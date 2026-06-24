@@ -43,9 +43,5 @@ function USDAFoodDetailPage() {
       : undefined,
   );
 
-  return (
-    <PageWrapper>
-      <USDAFoodDetail id={numericId} food={food} />
-    </PageWrapper>
-  );
+  return <USDAFoodDetail id={numericId} food={food} />;
 }

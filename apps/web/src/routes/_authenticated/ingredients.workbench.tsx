@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { EnrichmentWorkbench } from "~/app/ingredients/enrichment-workbench";
-import { EntityLayout } from "~/components/layouts/entity-layout";
+import { Page } from "~/components/page/Page";
 
 // `focus` is an ingredient id to scroll to + auto-expand on load — set by the
 // Problems page's "Fix in workbench" links so a click lands on the exact row.
@@ -15,8 +15,8 @@ export const Route = createFileRoute("/_authenticated/ingredients/workbench")({
 function IngredientWorkbenchPage() {
   const { focus } = Route.useSearch();
   return (
-    <EntityLayout title="Ingredient Workbench" fullWidth>
+    <Page variant="list" title="Ingredient Workbench" fullWidth>
       <EnrichmentWorkbench focus={focus} />
-    </EntityLayout>
+    </Page>
   );
 }

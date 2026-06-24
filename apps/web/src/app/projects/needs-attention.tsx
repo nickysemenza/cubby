@@ -139,7 +139,7 @@ function AttentionGroup({
         {icon}
         {title}
       </summary>
-      <div className="mt-1.5 ml-5 space-y-1">{children}</div>
+      <div className="mt-2 ml-4 space-y-1">{children}</div>
     </details>
   );
 }

@@ -28,7 +28,7 @@ import {
   typeSupportsQrCode,
 } from "~/app/_components/locations/location-type-theme";
 import { getCategoryColor } from "~/app/_components/products/category-theme";
-import { EntityLayout } from "~/components/layouts/entity-layout";
+import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import {
@@ -260,7 +260,7 @@ function AddLabelsPopover({
         }
       />
       <PopoverContent align="start" className="w-80 p-0">
-        <div className="flex items-center gap-2 border-b px-3 py-2">
+        <div className="flex items-center gap-2 border-b px-2 py-2">
           <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
           <input
             ref={inputRef}
@@ -273,18 +273,18 @@ function AddLabelsPopover({
         </div>
         <div className="max-h-64 overflow-y-auto p-1">
           {isLoading ? (
-            <p className="px-3 py-4 text-center text-muted-foreground text-sm">
+            <p className="px-2 py-4 text-center text-muted-foreground text-sm">
               Searching...
             </p>
           ) : locations.length === 0 ? (
-            <p className="px-3 py-4 text-center text-muted-foreground text-sm">
+            <p className="px-2 py-4 text-center text-muted-foreground text-sm">
               No locations found
             </p>
           ) : (
             locations.map((loc) => (
               <div
                 key={loc.id}
-                className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
+                className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm" /* tight */
               >
                 <LocationIcon
                   type={loc.type}
@@ -295,7 +295,7 @@ function AddLabelsPopover({
                   {typeSupportsQrCode(loc.type) && loc.shortcode && (
                     <button
                       type="button"
-                      className="rounded px-1.5 py-0.5 text-primary text-xs hover:bg-muted"
+                      className="rounded px-1.5 py-0.5 text-primary text-xs hover:bg-muted" /* tight */
                       onClick={() => handleAddSingle(loc)}
                     >
                       Add
@@ -303,7 +303,7 @@ function AddLabelsPopover({
                   )}
                   <button
                     type="button"
-                    className="flex items-center gap-1 rounded px-1.5 py-0.5 text-primary text-xs hover:bg-muted"
+                    className="flex items-center gap-1 rounded px-1.5 py-0.5 text-primary text-xs hover:bg-muted" /* tight */
                     onClick={() => void handleAddChildren(loc)}
                   >
                     <Users className="h-3 w-3" />
@@ -411,9 +411,9 @@ function LabelsPage() {
 
   if (shortcodes.length === 0) {
     return (
-      <EntityLayout title="Print Labels">
+      <Page variant="list" title="Print Labels">
         <Card>
-          <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
+          <CardContent className="flex flex-col items-center gap-4 py-6 text-center">
             <p className="text-muted-foreground">
               No items selected. Select items from the locations or products
               table, or add them here.
@@ -421,13 +421,14 @@ function LabelsPage() {
             <AddLabelsPopover codes={codes} onCodesChange={handleCodesChange} />
           </CardContent>
         </Card>
-      </EntityLayout>
+      </Page>
     );
   }
 
   return (
     <>
-      <EntityLayout
+      <Page
+        variant="list"
         title="Print Labels"
         actions={
           <div className="flex items-center gap-2">
@@ -443,7 +444,7 @@ function LabelsPage() {
               }
             />
             {isSheetFormat(format) && (
-              <label className="flex items-center gap-1.5 text-sm">
+              <label className="flex items-center gap-1.5 text-sm" /* tight */>
                 <span className="text-muted-foreground">Skip</span>
                 <input
                   type="number"
@@ -464,7 +465,7 @@ function LabelsPage() {
                 />
               </label>
             )}
-            <label className="flex items-center gap-1.5 text-sm">
+            <label className="flex items-center gap-1.5 text-sm" /* tight */>
               <span className="text-muted-foreground">Copies</span>
               <input
                 type="number"
@@ -500,7 +501,7 @@ function LabelsPage() {
       >
         {isLoading ? (
           <Card>
-            <CardContent className="py-12 text-center">
+            <CardContent className="py-6 text-center">
               <p className="text-muted-foreground">Loading...</p>
             </CardContent>
           </Card>
@@ -518,13 +519,13 @@ function LabelsPage() {
               onToggle={toggleHidden}
             />
             {hiddenItems.length > 0 && (
-              <div className="mt-3 flex flex-wrap items-center gap-1.5">
+              <div className="mt-4 flex flex-wrap items-center gap-2">
                 <span className="text-muted-foreground text-xs">Hidden:</span>
                 {hiddenItems.map((item) => (
                   <button
                     key={item.shortcode}
                     type="button"
-                    className="rounded bg-muted px-2 py-0.5 font-mono text-muted-foreground text-xs transition-colors hover:bg-muted/80"
+                    className="rounded bg-muted px-2 py-0.5 font-mono text-muted-foreground text-xs transition-colors hover:bg-muted/80" /* tight */
                     onClick={() => toggleHidden(item.shortcode)}
                   >
                     {item.shortcode}
@@ -536,7 +537,7 @@ function LabelsPage() {
         ) : (
           <PtouchPreview items={items} />
         )}
-      </EntityLayout>
+      </Page>
       {/* Portal to body so print CSS can hide everything else */}
       {isSheetFormat(format) &&
         !isLoading &&
@@ -569,12 +570,12 @@ function FormatToggle({
     { value: "ptouch" as const, label: "P-Touch" },
   ];
   return (
-    <div className="flex rounded-md border">
+    <div className="flex rounded-md border border-[var(--border-chunky)]">
       {options.map((opt) => (
         <button
           key={opt.value}
           type="button"
-          className={`px-3 py-1.5 text-sm transition-colors ${
+          className={`px-2 py-2 text-sm transition-colors ${
             format === opt.value
               ? "bg-primary text-primary-foreground"
               : "hover:bg-muted"

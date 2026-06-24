@@ -17,7 +17,7 @@ export function Prose({ children, className }: ProseProps) {
         "max-w-none",
         // Headings
         "[&_h1]:mb-4 [&_h1]:font-bold [&_h1]:text-3xl [&_h1]:tracking-tight",
-        "[&_h2]:mt-8 [&_h2]:mb-3 [&_h2]:font-semibold [&_h2]:text-2xl",
+        "[&_h2]:mt-6 [&_h2]:mb-2 [&_h2]:font-semibold [&_h2]:text-2xl",
         "[&_h3]:mt-6 [&_h3]:mb-2 [&_h3]:font-medium [&_h3]:text-xl",
         // Text
         "[&_p]:mb-4 [&_p]:text-muted-foreground [&_p]:leading-7",
@@ -29,7 +29,7 @@ export function Prose({ children, className }: ProseProps) {
         // Links
         "[&_a]:text-primary [&_a]:underline [&_a]:underline-offset-4 hover:[&_a]:text-primary/80",
         // Code
-        "[&_code]:rounded [&_code]:bg-muted [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-sm",
+        "[&_code]:rounded [&_code]:bg-muted [&_code]:px-2 [&_code]:py-1 [&_code]:font-mono [&_code]:text-sm",
         className,
       )}
     >

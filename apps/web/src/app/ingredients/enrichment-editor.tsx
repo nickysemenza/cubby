@@ -55,7 +55,7 @@ function PriceField({
   return (
     <div className="space-y-1">
       <p className="font-medium text-xs">Set a price</p>
-      <div className="flex items-center gap-1.5 text-sm">
+      <div className="flex items-center gap-2 text-sm">
         <Input
           type="number"
           inputMode="decimal"
@@ -101,13 +101,13 @@ function ConversionRowsField({
   onRemove: (id: string) => void;
 }) {
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       <p className="font-medium text-xs">
         {hint.title}{" "}
         <span className="font-normal text-muted-foreground">{hint.detail}</span>
       </p>
       {rows.map((c) => (
-        <div key={c.id} className="flex items-center gap-1.5 text-sm">
+        <div key={c.id} className="flex items-center gap-2 text-sm">
           <Input
             type="number"
             inputMode="decimal"
@@ -172,7 +172,7 @@ function NaKindsField({
   disabled: boolean;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 pt-1">
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-1">
       <span className="text-[10px] text-muted-foreground uppercase tracking-wide">
         N/A
       </span>
@@ -217,9 +217,9 @@ function LivePanels({
   naDisabled: boolean;
 }) {
   return (
-    <div className="shrink-0 space-y-3 lg:w-72">
+    <div className="shrink-0 space-y-4 lg:w-72">
       {(linkedFoods.length > 0 || currentMappings.length > 0) && (
-        <div className="space-y-1 rounded-md border bg-background/60 p-2 text-xs">
+        <div className="space-y-1 rounded-md border border-[var(--border-chunky)] bg-background/60 p-2 text-xs">
           {linkedFoods.length > 0 && (
             <p className="flex items-center gap-1">
               <Check className="h-3 w-3 text-positive" />
@@ -245,7 +245,7 @@ function LivePanels({
         <p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
           Coverage (live)
         </p>
-        <div className="rounded-md border bg-background/60 p-2">
+        <div className="rounded-md border border-[var(--border-chunky)] bg-background/60 p-2">
           <ConversionCapabilities
             mappings={previewMappings}
             kinds={row.coverage.applicable}
@@ -428,7 +428,7 @@ export function EnrichmentEditor({
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-        <div className="min-w-0 flex-1 space-y-3">
+        <div className="min-w-0 flex-1 space-y-4">
           {slots.header}
 
           {product != null &&
@@ -453,7 +453,7 @@ export function EnrichmentEditor({
           )}
 
           {gaps.priceIslanded && (
-            <p className="rounded-md border bg-warning/10 px-2 py-1.5 text-warning text-xs">
+            <p className="rounded-md border bg-warning/10 px-2 py-2 text-warning text-xs">
               Already priced, but “{gaps.islandedUnit}” isn’t linked to a weight
               — so the price can’t be reached from a recipe measure. Connect it
               below (e.g. 1 {gaps.islandedUnit} = N&nbsp;g) instead of adding a

@@ -43,7 +43,7 @@ const depthRule = (depth: number): string =>
   DEPTH_RULE[Math.min(depth, DEPTH_RULE.length - 1)] ?? "var(--chart-1)";
 
 const rowGrid =
-  "grid grid-cols-[minmax(0,1fr)_5rem_3.5rem] items-baseline gap-x-3";
+  "grid grid-cols-[minmax(0,1fr)_5rem_3.5rem] items-baseline gap-x-2";
 
 function ScalingCell({
   pct,
@@ -130,17 +130,17 @@ function SpecRow({
         )}
         <IngredientModifier modifier={row.row.modifier} />
         {isSubrecipe && !isExpanded && (
-          <span className="ml-1.5 align-middle font-mono text-[10px] text-muted-foreground/60 lowercase">
+          <span className="ml-2 align-middle font-mono text-[10px] text-muted-foreground/60 lowercase">
             ↑ see above
           </span>
         )}
         {isBase && (
-          <span className="ml-1.5 rounded-sm bg-primary/10 px-1 py-px align-middle font-mono text-[9px] text-primary uppercase tracking-wide">
+          <span className="ml-2 rounded-sm bg-primary/10 px-1 py-px align-middle font-mono text-[9px] text-primary uppercase tracking-wide">
             100% base
           </span>
         )}
         {noWeight && row.kind === "ingredient" && (
-          <span className="ml-1.5 rounded-sm bg-warning/15 px-1 py-px align-middle font-mono text-[9px] text-warning uppercase tracking-wide">
+          <span className="ml-2 rounded-sm bg-warning/15 px-1 py-px align-middle font-mono text-[9px] text-warning uppercase tracking-wide">
             no weight
           </span>
         )}
@@ -160,7 +160,7 @@ function SpecRow({
     <>
       {line}
       <div
-        className="mt-1 mb-2 ml-1 rounded-r-md border-l-[3px] bg-muted/40 py-2 pr-2 pl-3"
+        className="mt-1 mb-2 ml-1 rounded-r-md border-l-[3px] bg-muted/40 py-2 pr-2 pl-2"
         style={{ borderLeftColor: accentColor }}
       >
         <SpecNode node={row.child} expanded={expanded} />
@@ -183,7 +183,7 @@ function SpecNode({
   return (
     <div className="space-y-1">
       {!isRoot && (
-        <div className="mb-1 flex flex-wrap items-center gap-x-1.5 font-mono text-2xs uppercase tracking-wider">
+        <div className="mb-1 flex flex-wrap items-center gap-x-2 font-mono text-2xs uppercase tracking-wider">
           <EntityPreviewLink
             entity="recipe"
             id={node.recipe.id}
@@ -207,7 +207,7 @@ function SpecNode({
       {node.sections.map((section) => (
         <Fragment key={section.id}>
           {showSectionNames && section.name && (
-            <div className="eyebrow pt-1.5">{section.name}</div>
+            <div className="eyebrow pt-2">{section.name}</div>
           )}
           {section.rows.map((row) => (
             <SpecRow
@@ -219,7 +219,7 @@ function SpecNode({
             />
           ))}
           {section.steps.length > 0 && (
-            <ol className="mt-1.5 mb-1 space-y-1 pl-0">
+            <ol className="mt-2 mb-1 space-y-1 pl-0">
               {section.steps.map((step) => (
                 <li key={step.n} className="flex gap-2">
                   <span className="mt-px inline-flex size-[16px] shrink-0 items-center justify-center rounded-full border border-[var(--border-chunky)] font-mono text-[9px] text-muted-foreground tabular-nums">
@@ -249,8 +249,8 @@ export const RecipeNestedSpecView = memo(function RecipeNestedSpecView({
   const recipe = tree.recipe;
   const expanded = useMemo(() => firstExpansionRowIds(tree), [tree]);
   return (
-    <div className="rounded-xl border border-[var(--border-chunky)] bg-card px-6 py-6 sm:px-8">
-      <header className="mb-3 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+    <div className="rounded-xl border border-[var(--border-chunky)] bg-card px-6 py-6">
+      <header className="mb-4 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
         <h2 className="my-0 font-heading font-semibold text-2xl tracking-tight">
           {recipe.name}
         </h2>

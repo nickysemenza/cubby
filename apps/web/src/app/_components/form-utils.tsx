@@ -191,7 +191,7 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
         <div
           className={cn(
             stickyFooter
-              ? "sticky bottom-20 z-20 flex items-center gap-3 rounded-lg border border-[var(--border-chunky)] bg-card px-3 py-2 shadow-[var(--shadow-chunky)] md:bottom-4"
+              ? "sticky bottom-20 z-20 flex items-center gap-2 rounded-lg border border-[var(--border-chunky)] bg-card px-2 py-2 shadow-[var(--shadow-chunky)] md:bottom-4"
               : "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
           )}
         >
@@ -355,7 +355,10 @@ export function NullableNumericField<
                 <span className="absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground">
                   {prefix}
                 </span>
-                <Input {...inputProps} className="pl-7" />
+                <Input
+                  {...inputProps}
+                  className="pl-7" /* tight: clears absolute prefix */
+                />
               </div>
             ) : (
               <Input {...inputProps} />
@@ -550,7 +553,9 @@ export function UnifiedTextField<
                   const v = e.target.value;
                   field.onChange(nullable ? (v === "" ? null : v) : v);
                 }}
-                className={icon ? "pr-10" : undefined}
+                className={
+                  icon ? "pr-10" /* tight: clears absolute icon */ : undefined
+                }
                 aria-invalid={fieldState.invalid}
               />
               {icon && (

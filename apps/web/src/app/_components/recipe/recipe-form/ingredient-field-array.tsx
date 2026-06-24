@@ -168,8 +168,8 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
               row.amounts[0]?.upperValue != null || revealedUpper.has(field.id);
 
             return (
-              <div key={field.id} className="py-1.5">
-                <div className="grid grid-cols-[4.5rem_3.5rem_4rem_minmax(0,1.6fr)_minmax(0,1fr)_auto] items-center gap-1.5">
+              <div key={field.id} className="py-2">
+                <div className="grid grid-cols-[4.5rem_3.5rem_4rem_minmax(0,1.6fr)_minmax(0,1fr)_auto] items-center gap-2">
                   <AmountInputs
                     form={form}
                     sectionIndex={sectionIndex}
@@ -327,7 +327,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                             )
                           }
                         >
-                          <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                          <ExternalLink className="mr-2 h-3.5 w-3.5" />
                           Open{" "}
                           {row.type === "ingredient" ? "ingredient" : "recipe"}
                         </DropdownMenuItem>
@@ -337,7 +337,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                         variant="destructive"
                         onClick={() => remove(ingredientIndex)}
                       >
-                        <Trash className="mr-1.5 h-3.5 w-3.5" />
+                        <Trash className="mr-2 h-3.5 w-3.5" />
                         Delete row
                       </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -352,7 +352,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                   return (
                     <div
                       key={`${field.id}-amount-${extraIdx + 1}`}
-                      className="mt-1 grid grid-cols-[4.5rem_3.5rem_4rem_minmax(0,1fr)_auto] items-center gap-1.5"
+                      className="mt-1 grid grid-cols-[4.5rem_3.5rem_4rem_minmax(0,1fr)_auto] items-center gap-2"
                     >
                       <AmountInputs
                         form={form}
@@ -397,7 +397,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
 
       <div className="mt-2 flex gap-2">
         <Button type="button" variant="outline" size="sm" onClick={appendRow}>
-          <Plus className="mr-1.5 h-3.5 w-3.5" />
+          <Plus className="mr-2 h-3.5 w-3.5" />
           Ingredient
         </Button>
         <Button
@@ -406,7 +406,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
           size="sm"
           onClick={() => append(newRow("recipe"))}
         >
-          <Plus className="mr-1.5 h-3.5 w-3.5" />
+          <Plus className="mr-2 h-3.5 w-3.5" />
           Sub-recipe
         </Button>
       </div>

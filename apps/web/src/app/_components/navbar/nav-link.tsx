@@ -14,7 +14,7 @@ export const NavLink = ({ item }: { item: NavItem }) => {
     <Link
       to={item.to}
       className={cn(
-        "nav-link-animated inline-flex items-center gap-1.5 font-medium text-sm transition-colors hover:text-primary",
+        "nav-link-animated inline-flex items-center gap-2 font-medium text-sm transition-colors hover:text-primary",
         !active && "text-muted-foreground",
       )}
       aria-current={active ? "page" : undefined}

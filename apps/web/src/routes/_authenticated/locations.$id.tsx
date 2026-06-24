@@ -34,9 +34,5 @@ function LocationDetailPage() {
 
   useDocumentTitle(location.name);
 
-  return (
-    <PageWrapper>
-      <LocationDetail key={id} location={location} />
-    </PageWrapper>
-  );
+  return <LocationDetail key={id} location={location} />;
 }

@@ -36,7 +36,7 @@ export function MealCalendarPage() {
           <button
             type="button"
             onClick={() => setView("calendar")}
-            className={`flex items-center gap-1.5 px-2.5 py-1 text-sm ${view === "calendar" ? "bg-accent font-medium" : "text-muted-foreground"}`}
+            className={`flex items-center gap-1.5 px-2.5 py-1 text-sm ${view === "calendar" ? "bg-accent font-medium" : "text-muted-foreground"}`} /* tight: segmented toggle icon+label */
           >
             <CalendarDays className="size-4" />
             Calendar
@@ -44,7 +44,7 @@ export function MealCalendarPage() {
           <button
             type="button"
             onClick={() => setView("table")}
-            className={`flex items-center gap-1.5 border-l px-2.5 py-1 text-sm ${view === "table" ? "bg-accent font-medium" : "text-muted-foreground"}`}
+            className={`flex items-center gap-1.5 border-l px-2.5 py-1 text-sm ${view === "table" ? "bg-accent font-medium" : "text-muted-foreground"}`} /* tight: segmented toggle icon+label */
           >
             <TableIcon className="size-4" />
             Table
@@ -139,7 +139,7 @@ function CalendarView() {
             return (
               <div
                 key={dayStr}
-                className="flex min-h-32 flex-col gap-1.5 rounded-lg border p-2"
+                className="flex min-h-32 flex-col gap-1.5 rounded-lg border p-2" /* tight: calendar day cell */
               >
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground text-xs uppercase">
@@ -210,16 +210,16 @@ function TableView() {
         <table className="w-full text-sm">
           <thead className="bg-muted/40 text-muted-foreground text-xs">
             <tr>
-              <th className="px-3 py-2 text-left font-medium">Date</th>
-              <th className="px-3 py-2 text-left font-medium">Meal</th>
-              <th className="px-3 py-2 text-left font-medium">Recipes</th>
-              <th className="px-3 py-2 text-right font-medium">Cost</th>
+              <th className="px-2 py-2 text-left font-medium">Date</th>
+              <th className="px-2 py-2 text-left font-medium">Meal</th>
+              <th className="px-2 py-2 text-left font-medium">Recipes</th>
+              <th className="px-2 py-2 text-right font-medium">Cost</th>
             </tr>
           </thead>
           <tbody>
             {meals.map((m) => (
               <tr key={m.id} className="border-t hover:bg-accent/40">
-                <td className="whitespace-nowrap px-3 py-2 tabular-nums">
+                <td className="whitespace-nowrap px-2 py-2 tabular-nums">
                   <Link
                     to="/meals/$id"
                     params={{ id: m.id }}
@@ -228,8 +228,8 @@ function TableView() {
                     {format(parseISO(m.date), "EEE, MMM d, yyyy")}
                   </Link>
                 </td>
-                <td className="px-3 py-2">{m.name || "—"}</td>
-                <td className="px-3 py-2 text-muted-foreground">
+                <td className="px-2 py-2">{m.name || "—"}</td>
+                <td className="px-2 py-2 text-muted-foreground">
                   {m.recipes.length === 0
                     ? "—"
                     : m.recipes
@@ -239,7 +239,7 @@ function TableView() {
                         )
                         .join(", ")}
                 </td>
-                <td className="px-3 py-2 text-right tabular-nums">
+                <td className="px-2 py-2 text-right tabular-nums">
                   {formatMealCost(m.totals)}
                 </td>
               </tr>
@@ -256,7 +256,7 @@ function MealChip({ meal }: { meal: MealOut }) {
     <Link
       to="/meals/$id"
       params={{ id: meal.id }}
-      className="flex flex-col gap-0.5 rounded-md border bg-card p-1.5 text-xs transition-colors hover:bg-accent"
+      className="flex flex-col gap-0.5 rounded-md border bg-card p-1.5 text-xs transition-colors hover:bg-accent" /* tight: calendar meal chip */
     >
       <div className="flex items-center justify-between gap-1">
         <span className="truncate font-medium">{meal.name || "Meal"}</span>

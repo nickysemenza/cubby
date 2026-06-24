@@ -92,7 +92,7 @@ export function ProblemsOverview() {
         {/* Summary header */}
         {problems.totalProblems > 0 ? (
           <Card>
-            <CardHeader className="pb-3">
+            <CardHeader className="pb-2">
               <CardTitle>
                 <Badge variant="destructive" className="text-base">
                   {problems.totalProblems}
@@ -105,10 +105,10 @@ export function ProblemsOverview() {
                     key={cat.id}
                     type="button"
                     onClick={() => scrollToSection(cat.id)}
-                    className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2.5 py-1 text-sm transition-colors hover:bg-muted/80"
+                    className="inline-flex items-center gap-2 rounded-md bg-muted px-2 py-1 text-sm transition-colors hover:bg-muted/80"
                   >
                     {cat.label}
-                    <Badge variant="destructive" className="ml-0.5">
+                    <Badge variant="destructive" className="ml-1">
                       {cat.count}
                     </Badge>
                   </button>

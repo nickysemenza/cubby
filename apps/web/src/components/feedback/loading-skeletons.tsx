@@ -15,7 +15,7 @@ function SkeletonText({ className }: { className?: string }) {
 function SkeletonLedgerRow({ index }: { index: number }) {
   const nameWidths = ["w-3/5", "w-2/5", "w-1/2", "w-2/3", "w-1/3"];
   return (
-    <div className="grid grid-cols-[3.5rem_minmax(0,1fr)_4rem] items-center gap-3 border-border border-b border-dashed py-2.5">
+    <div className="grid grid-cols-[3.5rem_minmax(0,1fr)_4rem] items-center gap-2 border-border border-b border-dashed py-2">
       <Skeleton className="h-3 w-full" />
       <Skeleton className={cn("h-3", nameWidths[index % nameWidths.length])} />
       <Skeleton className="h-3 w-full" />

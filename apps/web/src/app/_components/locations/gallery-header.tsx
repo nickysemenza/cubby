@@ -52,10 +52,10 @@ export function GalleryHeader({
   return (
     <div className={cn("sticky top-0 z-10 border-b", className)}>
       {/* Stats + Breadcrumb row */}
-      <div className="flex min-h-[32px] items-center gap-3 border-b bg-muted/30 px-4 py-1">
+      <div className="flex min-h-[32px] items-center gap-2 border-b bg-muted/30 px-4 py-1">
         {/* Stats - hidden on mobile */}
         {stats && (
-          <div className="hidden items-center gap-3 border-r pr-3 text-muted-foreground text-xs md:flex">
+          <div className="hidden items-center gap-2 border-r pr-2 text-muted-foreground text-xs md:flex">
             <EntityStat
               entity="location"
               count={stats.locationCount}
@@ -94,13 +94,13 @@ export function GalleryHeader({
             placeholder="Search..."
             value={searchTerm}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="h-8 pr-7 pl-8 text-sm"
+            className="h-8 pr-7 pl-8 text-sm" /* tight: input padding aligns text under absolutely-positioned search/clear icons */
           />
           {searchTerm && (
             <button
               type="button"
               onClick={() => onSearchChange("")}
-              className="absolute top-1/2 right-2 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
+              className="absolute top-1/2 right-2 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground hover:text-foreground" /* tight: icon-button hit area */
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -108,7 +108,7 @@ export function GalleryHeader({
         </div>
 
         {/* Type Filter */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           <Label className="hidden text-muted-foreground sm:inline">
             Type:
           </Label>
@@ -129,7 +129,7 @@ export function GalleryHeader({
         </div>
 
         {/* Empty Filter */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           <Label className="hidden text-muted-foreground sm:inline">
             Status:
           </Label>
@@ -170,7 +170,7 @@ export function GalleryHeader({
 
         {/* Hide Non-Matching Checkbox - only show when filters are active */}
         {hasActiveFilters && (
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
             <Checkbox
               id={hideNonMatchingId}
               checked={hideNonMatching}

@@ -35,7 +35,7 @@ export const RecipeTag: FC<RecipeTagProps> = ({
       variant="outline"
       className={cn(
         "gap-1 font-normal",
-        size === "sm" && "px-1.5 py-0 text-xs",
+        size === "sm" && "px-2 py-0 text-xs",
         onRemove && "pr-1",
         className,
       )}
@@ -61,7 +61,7 @@ export const RecipeTag: FC<RecipeTagProps> = ({
             e.stopPropagation();
             onRemove();
           }}
-          className="ml-0.5 rounded hover:bg-muted"
+          className="ml-1 rounded hover:bg-muted"
         >
           <X size={size === "sm" ? 10 : 12} />
         </button>

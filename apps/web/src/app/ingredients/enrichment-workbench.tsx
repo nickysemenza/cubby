@@ -393,7 +393,7 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-2">
         {(
           [
             ["all", "All"],
@@ -407,7 +407,7 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
             key={key}
             onClick={() => setFilter(key)}
             className={cn(
-              "rounded-md px-2.5 py-1 text-sm transition-colors",
+              "rounded-md px-2 py-1 text-sm transition-colors",
               filter === key
                 ? "bg-secondary font-medium"
                 : "text-muted-foreground hover:bg-accent",
@@ -423,7 +423,7 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
               type="button"
               size="sm"
               variant={view === v ? "secondary" : "ghost"}
-              className="h-7 px-2.5 text-xs capitalize"
+              className="h-7 px-2 text-xs capitalize"
               onClick={() => setView(v)}
             >
               {v}
@@ -439,7 +439,7 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
       {view === "browse" && (
         <>
           {suggestionCount > 0 && (
-            <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
+            <div className="space-y-2 rounded-lg border border-[var(--border-chunky)] bg-muted/20 p-4">
               <div className="flex items-center justify-between gap-2">
                 <span className="font-medium text-sm">
                   Review {suggestionCount} USDA suggestion
@@ -460,7 +460,7 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
                   max={createMany.progress.total}
                 />
               )}
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 {Object.entries(suggestions).map(([id, sug]) => {
                   const row = rows.find((r) => r.id === id);
                   if (!row) return null;
@@ -538,13 +538,13 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
           )}
 
           {!isLoading && rows.length === 0 && (
-            <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground text-sm">
+            <div className="rounded-lg border border-dashed p-6 text-center text-muted-foreground text-sm">
               Every recipe ingredient is fully costable. Nothing to enrich.
             </div>
           )}
 
           {visible.length > 0 && (
-            <div className="overflow-hidden rounded-lg border">
+            <div className="overflow-hidden rounded-lg border border-[var(--border-chunky)]">
               <table className="w-full border-collapse text-sm">
                 <thead>
                   <tr className="border-b bg-muted/40 text-left text-2xs text-muted-foreground uppercase tracking-wide">
@@ -575,13 +575,13 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
           )}
 
           {isLoading && (
-            <div className="flex justify-center py-8">
+            <div className="flex justify-center py-6">
               <Spinner />
             </div>
           )}
 
           {selected.size > 0 && (
-            <div className="sticky bottom-4 flex flex-wrap items-center gap-2 rounded-lg border bg-background/95 px-4 py-2.5 shadow-sm backdrop-blur">
+            <div className="sticky bottom-4 flex flex-wrap items-center gap-2 rounded-lg border border-[var(--border-chunky)] bg-background/95 px-4 py-2 shadow-sm backdrop-blur">
               <span className="font-medium text-sm">
                 {selected.size} selected
               </span>
@@ -669,7 +669,7 @@ function MergeHint({
   onMerge: () => void;
 }) {
   return (
-    <div className="mt-1 flex items-center gap-1.5">
+    <div className="mt-1 flex items-center gap-2">
       <span
         className={cn(
           "text-xs",
@@ -741,26 +741,26 @@ function WorkbenchRow({
           setOpen((v) => !v);
         }}
       >
-        <td className="px-2 py-2.5">
+        <td className="px-2 py-2">
           <Checkbox
             checked={selected}
             onCheckedChange={onToggle}
             aria-label={`Select ${row.name}`}
           />
         </td>
-        <td className="px-2 py-2.5 text-muted-foreground">
+        <td className="px-2 py-2 text-muted-foreground">
           {open ? (
             <ChevronDown className="h-4 w-4" />
           ) : (
             <ChevronRight className="h-4 w-4" />
           )}
         </td>
-        <td className="px-2 py-2.5">
+        <td className="px-2 py-2">
           <div className="font-medium">{row.name}</div>
           <div className="text-muted-foreground text-xs">
             × {row.recipeCount} recipe{row.recipeCount === 1 ? "" : "s"}
             {suggestion && (
-              <span className="ml-1.5 text-info">
+              <span className="ml-2 text-info">
                 · AI: {suggestion.food.foodInfo.description}{" "}
                 <span className={confidenceColor[suggestion.confidence]}>
                   ({suggestion.confidence})
@@ -801,13 +801,13 @@ function WorkbenchRow({
             )
           )}
         </td>
-        <td className="px-2 py-2.5">
+        <td className="px-2 py-2">
           <CoverageChips
             covered={row.coverage.covered}
             applicable={row.coverage.applicable}
           />
         </td>
-        <td className="px-2 py-2.5">
+        <td className="px-2 py-2">
           <Badge variant="outline" className="font-normal">
             {fixBadgeLabel(row)}
           </Badge>
@@ -817,7 +817,7 @@ function WorkbenchRow({
         <tr className="border-b bg-muted/20">
           <td />
           <td />
-          <td colSpan={3} className="px-2 py-3 pr-4">
+          <td colSpan={3} className="px-2 py-2 pr-4">
             <WorkbenchEditor
               row={row}
               initialFood={suggestion?.food ?? null}
@@ -884,12 +884,12 @@ function WorkbenchEditor({
         ),
         footer:
           row.recipeUsages.length > 0 ? (
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
                 Appears in {row.recipeCount} recipe
                 {row.recipeCount === 1 ? "" : "s"}
               </p>
-              <div className="overflow-x-auto rounded-md border bg-background/60 p-2">
+              <div className="overflow-x-auto rounded-md border border-[var(--border-chunky)] bg-background/60 p-2">
                 <RecipeUsagesTable
                   usages={row.recipeUsages}
                   ingredientName={row.name}

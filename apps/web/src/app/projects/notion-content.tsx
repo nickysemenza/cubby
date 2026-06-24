@@ -43,7 +43,7 @@ function BlockList({ blocks }: { blocks: NotionBlock[] }) {
         i++;
       }
       elements.push(
-        <ul key={`ul-${i}`} className="list-disc space-y-0.5 pl-5">
+        <ul key={`ul-${i}`} className="list-disc space-y-1 pl-4">
           {items.map((item, j) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: static parsed Notion content, never reordered; blocks have no id
             <li key={j}>{item.text}</li>
@@ -60,7 +60,7 @@ function BlockList({ blocks }: { blocks: NotionBlock[] }) {
         i++;
       }
       elements.push(
-        <ol key={`ol-${i}`} className="list-decimal space-y-0.5 pl-5">
+        <ol key={`ol-${i}`} className="list-decimal space-y-1 pl-4">
           {items.map((item, j) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: static parsed Notion content, never reordered; blocks have no id
             <li key={j}>{item.text}</li>
@@ -115,7 +115,7 @@ function BlockRenderer({ block }: { block: NotionBlock }) {
     case "heading_1":
       return <h2 className="mt-4 font-bold text-lg">{block.text}</h2>;
     case "heading_2":
-      return <h3 className="mt-3 font-semibold text-base">{block.text}</h3>;
+      return <h3 className="mt-2 font-semibold text-base">{block.text}</h3>;
     case "heading_3":
       return <h4 className="mt-2 font-medium text-sm">{block.text}</h4>;
     case "image":
@@ -129,17 +129,17 @@ function BlockRenderer({ block }: { block: NotionBlock }) {
         />
       );
     case "divider":
-      return <hr className="my-3" />;
+      return <hr className="my-4" />;
     case "child_page":
       return (
-        <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+        <div className="flex items-center gap-2 rounded-md border px-4 py-2 text-sm">
           <span className="text-muted-foreground">📄</span>
           <span className="font-medium">{block.text}</span>
         </div>
       );
     case "child_database":
       return (
-        <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+        <div className="flex items-center gap-2 rounded-md border px-4 py-2 text-sm">
           <span className="text-muted-foreground">🗃️</span>
           <span className="font-medium">{block.text}</span>
         </div>
@@ -152,13 +152,13 @@ function BlockRenderer({ block }: { block: NotionBlock }) {
       );
     case "callout":
       return (
-        <div className="rounded-md bg-muted/50 px-4 py-3 text-sm">
+        <div className="rounded-md bg-muted/50 px-4 py-4 text-sm">
           {block.text}
         </div>
       );
     case "code":
       return (
-        <pre className="overflow-x-auto rounded-md bg-muted p-3 text-xs">
+        <pre className="overflow-x-auto rounded-md bg-muted p-4 text-xs">
           <code>{block.text}</code>
         </pre>
       );

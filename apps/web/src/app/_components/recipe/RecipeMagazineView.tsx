@@ -99,7 +99,7 @@ function IngredientLedger({
                     }
                     className={cn(
                       ingredientRowGrid,
-                      "w-full cursor-pointer py-1.5 text-left",
+                      "w-full cursor-pointer py-2 text-left",
                     )}
                   >
                     <IngredientQuantities
@@ -151,7 +151,7 @@ export function RecipeMagazineView({
 
       {/* Kicker: the recipe's vitals on one ledger line */}
       {kicker && (
-        <Eyebrow className="border-foreground border-b pb-1.5 tracking-[0.12em]">
+        <Eyebrow className="border-foreground border-b pb-2 tracking-[0.12em]">
           {kicker}
         </Eyebrow>
       )}
@@ -164,7 +164,7 @@ export function RecipeMagazineView({
       )}
 
       {/* Open-book spread: ingredients column + method column, no boxes */}
-      <div className="grid gap-8 lg:grid-cols-[300px_1fr] lg:gap-12">
+      <div className="grid gap-6 lg:grid-cols-[300px_1fr] lg:gap-12">
         <aside className="lg:sticky lg:top-20 lg:h-fit">
           <SpreadHeading>Ingredients</SpreadHeading>
           <div className="mt-2">

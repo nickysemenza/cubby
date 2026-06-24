@@ -11,7 +11,7 @@ interface SectionHeaderProps {
 export function SectionHeader({ title, count, color }: SectionHeaderProps) {
   return (
     <div
-      className="flex items-center gap-2 px-2 py-1.5"
+      className="flex items-center gap-2 px-2 py-2"
       style={{
         backgroundColor: `color-mix(in oklch, ${color} 8%, transparent)`,
       }}
@@ -23,7 +23,11 @@ export function SectionHeader({ title, count, color }: SectionHeaderProps) {
       <span className="font-mono font-semibold text-2xs text-foreground/80 uppercase tracking-wider">
         {title}
       </span>
-      <span className="rounded-full bg-foreground/10 px-1.5 py-0.5 font-medium font-mono text-2xs text-foreground/50 tabular-nums leading-none">
+      <span
+        className={
+          "rounded-full bg-foreground/10 px-1.5 py-0.5 font-medium font-mono text-2xs text-foreground/50 tabular-nums leading-none" /* tight */
+        }
+      >
         {count}
       </span>
     </div>

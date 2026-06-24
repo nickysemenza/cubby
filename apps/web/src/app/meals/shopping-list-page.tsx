@@ -133,8 +133,8 @@ export function ShoppingListPage() {
                   onClick={() => setExcluded((s) => toggle(s, m.id))}
                   className={
                     isOut
-                      ? "rounded-full border border-dashed px-2.5 py-1 text-muted-foreground text-xs line-through"
-                      : "rounded-full border bg-card px-2.5 py-1 text-xs"
+                      ? "rounded-full border border-dashed px-2 py-1 text-muted-foreground text-xs line-through"
+                      : "rounded-full border bg-card px-2 py-1 text-xs"
                   }
                 >
                   {m.name || "Meal"} · {format(parseISO(m.date), "EEE M/d")}
@@ -152,12 +152,12 @@ export function ShoppingListPage() {
               <table className="w-full text-sm">
                 <thead className="bg-muted/40 text-muted-foreground text-xs">
                   <tr>
-                    <th className="px-3 py-2 text-left font-medium">
+                    <th className="px-2 py-2 text-left font-medium">
                       Ingredient
                     </th>
-                    <th className="px-3 py-2 text-right font-medium">Need</th>
-                    <th className="px-3 py-2 text-right font-medium">Have</th>
-                    <th className="px-3 py-2 text-right font-medium">Short</th>
+                    <th className="px-2 py-2 text-right font-medium">Need</th>
+                    <th className="px-2 py-2 text-right font-medium">Have</th>
+                    <th className="px-2 py-2 text-right font-medium">Short</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -210,11 +210,11 @@ function RowGroup({
   return (
     <>
       <tr className="border-t">
-        <td className="px-3 py-2">
+        <td className="px-2 py-2">
           <button
             type="button"
             onClick={onToggle}
-            className="flex items-center gap-1.5 text-left hover:underline"
+            className="flex items-center gap-1.5 text-left hover:underline" /* tight: chevron+label */
           >
             {isOpen ? (
               <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
@@ -227,16 +227,16 @@ function RowGroup({
             </span>
           </button>
         </td>
-        <td className="px-3 py-2 text-right tabular-nums">
+        <td className="px-2 py-2 text-right tabular-nums">
           {formatAmount(need, item.basisUnit)}
         </td>
-        <td className="px-3 py-2 text-right text-muted-foreground tabular-nums">
+        <td className="px-2 py-2 text-right text-muted-foreground tabular-nums">
           {item.haveValue == null
             ? "—"
             : formatAmount(item.haveValue, item.basisUnit)}
         </td>
         <td
-          className={`px-3 py-2 text-right font-medium tabular-nums ${shortfall > 0 ? statusClass(status) : "text-muted-foreground"}`}
+          className={`px-2 py-2 text-right font-medium tabular-nums ${shortfall > 0 ? statusClass(status) : "text-muted-foreground"}`}
         >
           {shortfall > 0 ? formatAmount(shortfall, item.basisUnit) : "✓"}
         </td>
@@ -247,7 +247,7 @@ function RowGroup({
             key={`${c.mealId}-${c.recipeId}-${i}`}
             className="bg-muted/20 text-muted-foreground text-xs"
           >
-            <td className="py-1 pr-3 pl-9">
+            <td className="py-1 pr-2 pl-6">
               <Link
                 to="/meals/$id"
                 params={{ id: c.mealId }}
@@ -260,7 +260,7 @@ function RowGroup({
                 {c.recipeName}
               </span>
             </td>
-            <td className="py-1 pr-3 text-right tabular-nums">
+            <td className="py-1 pr-2 text-right tabular-nums">
               {formatAmount(c.needValue, item.basisUnit)}
             </td>
             <td />

@@ -43,7 +43,7 @@ export function HeaderFilter<TData>({
   // Dense filter row: flatten the global chunky input treatment (drop the 2px
   // border + offset shadow) so dozens of tiny filters don't read as heavy boxes.
   const inputClassName =
-    "h-5 text-2xs px-1.5 border shadow-none bg-background/80 border-border/60 placeholder:text-muted-foreground/50 focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:border-primary/40";
+    "h-5 text-2xs px-1.5 border shadow-none bg-background/80 border-border/60 placeholder:text-muted-foreground/50 focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:border-primary/40"; /* tight */
 
   // Enrich select options with faceted counts (opt-in — see FilterConfig).
   // biome-ignore lint/correctness/useExhaustiveDependencies: column.getFacetedUniqueValues is stable API
@@ -84,7 +84,7 @@ export function HeaderFilter<TData>({
         placeholder={filterConfig.placeholder}
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        className={`w-full ${inputClassName} ${value ? "pr-5" : ""}`}
+        className={`w-full ${inputClassName} ${value ? "pr-6" : ""}`}
         onClick={(e) => e.stopPropagation()}
       />
       {value && (
@@ -94,7 +94,7 @@ export function HeaderFilter<TData>({
             e.stopPropagation();
             setValue("");
           }}
-          className="absolute top-1/2 right-1 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground/60 hover:text-foreground"
+          className="absolute top-1/2 right-1 -translate-y-1/2 rounded-sm p-1 text-muted-foreground/60 hover:text-foreground"
         >
           <X className="h-2.5 w-2.5" />
         </button>

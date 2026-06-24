@@ -19,7 +19,7 @@ export function RecipeInstructions({ recipe }: RecipeInstructionsProps) {
   }, [recipe.sections]);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {recipe.sections.map((section, sectionIndex) => (
         <div
           key={section.id}

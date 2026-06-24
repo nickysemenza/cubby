@@ -140,7 +140,7 @@ export const RecipeIngredientList: React.FC<{
 
         // Format each amount using tryFormatAmount
         return (
-          <div className="space-y-0.5 text-sm">
+          <div className="space-y-1 text-sm">
             {amounts.map((amount, index) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: amounts are positional without stable IDs
               <div key={index}>{tryFormatAmount(amount)}</div>

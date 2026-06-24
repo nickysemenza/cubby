@@ -42,7 +42,7 @@ type EntityPillLinkProps = {
 // name as a dotted-underlined text link, with optional muted metadata. Replaces
 // the old bordered pill so dense lists/tables read as text, not chips.
 const linkClass =
-  "group inline-flex max-w-full items-baseline gap-1.5 align-baseline text-foreground transition-colors hover:text-primary";
+  "group inline-flex max-w-full items-baseline gap-2 align-baseline text-foreground transition-colors hover:text-primary";
 
 function EntityLinkBody({
   icon,

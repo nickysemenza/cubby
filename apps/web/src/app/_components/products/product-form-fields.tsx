@@ -453,7 +453,7 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
 
   if (compact) {
     return (
-      <div className="space-y-4 rounded-lg border border-border/50 bg-muted/30 p-3">
+      <div className="space-y-4 rounded-lg border border-border/50 bg-muted/30 p-4">
         {content}
       </div>
     );

@@ -153,7 +153,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
           {
             label: "External IDs",
             value: (
-              <div className="flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-xs">
+              <div className="flex flex-wrap gap-x-2 gap-y-1 font-mono text-xs">
                 {product.externalIds.map((eid) => {
                   const label = `${eid.source}: ${eid.externalId}`;
                   return eid.url ? (

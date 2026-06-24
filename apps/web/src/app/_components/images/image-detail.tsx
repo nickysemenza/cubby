@@ -113,7 +113,7 @@ export function ImageDetail({ image }: ImageDetailProps) {
         <CardHeader className="pb-2">
           <CardTitle>Information</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3 text-sm">
+        <CardContent className="space-y-4 text-sm">
           <div>
             <span className="text-muted-foreground">Filename:</span>{" "}
             {image.filename}

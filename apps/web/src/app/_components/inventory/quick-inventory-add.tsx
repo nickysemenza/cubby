@@ -255,7 +255,7 @@ export function QuickInventoryAdd({
                 variant="outline"
                 size="sm"
                 onClick={() => handleCreateNew("")}
-                className="mb-0.5"
+                className="mb-1"
               >
                 <Plus className="mr-1 h-3 w-3" />
                 New
@@ -271,7 +271,7 @@ export function QuickInventoryAdd({
                 type="submit"
                 size="icon"
                 disabled={addMutation.isPending}
-                className="mb-0.5"
+                className="mb-1"
               >
                 <Plus className="h-4 w-4" />
               </Button>
@@ -341,7 +341,7 @@ export function QuickInventoryAdd({
               "data-[panel-open]:fade-in-0 data-[panel-open]:animate-in",
             )}
           >
-            <div className="pt-3">
+            <div className="pt-4">
               <ProductFormFields
                 form={createForm}
                 imageHandlers={imageState}
@@ -374,7 +374,7 @@ export function QuickInventoryAdd({
             type="submit"
             size="sm"
             disabled={isCreating}
-            className="mb-0.5"
+            className="mb-1"
           >
             {isCreating ? (
               <Spinner size="sm" />

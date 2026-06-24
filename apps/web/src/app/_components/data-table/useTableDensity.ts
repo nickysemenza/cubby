@@ -54,7 +54,7 @@ export function useTableDensity() {
 export const densityConfig = {
   comfortable: {
     rowHeight: 44,
-    cellClass: "h-11 px-3 py-2 text-xs",
+    cellClass: "h-11 px-4 py-2 text-xs",
     rowClass: "h-11",
   },
   compact: {
@@ -64,7 +64,7 @@ export const densityConfig = {
   },
   dense: {
     rowHeight: 28,
-    cellClass: "h-7 px-1.5 py-0.5 text-2xs",
+    cellClass: "h-7 px-1.5 py-0.5 text-2xs" /* tight */,
     rowClass: "h-7",
   },
 } as const;

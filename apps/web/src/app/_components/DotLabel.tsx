@@ -18,7 +18,7 @@ export function DotLabel({
   className?: string;
 }) {
   return (
-    <span className={cn("inline-flex min-w-0 items-center gap-1.5", className)}>
+    <span className={cn("inline-flex min-w-0 items-center gap-2", className)}>
       <span
         aria-hidden
         className="size-2 shrink-0 rounded-full"

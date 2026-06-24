@@ -638,7 +638,7 @@ function MobileGalleryDrillDown({
                   inventoryItems={inventoryByLocation.get(location.id) ?? []}
                 />
                 {hasChildren && (
-                  <div className="mt-0.5 text-center text-2xs text-muted-foreground">
+                  <div className="mt-1 text-center text-2xs text-muted-foreground">
                     {location.children!.length} sub-location
                     {location.children!.length !== 1 ? "s" : ""}
                   </div>
@@ -648,7 +648,7 @@ function MobileGalleryDrillDown({
           })}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+        <div className="flex flex-col items-center justify-center py-6 text-muted-foreground">
           <LocationIcon type="room" className="mb-2 h-8 w-8 opacity-40" />
           <span>No locations here</span>
         </div>

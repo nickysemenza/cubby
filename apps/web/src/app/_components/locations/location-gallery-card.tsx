@@ -71,7 +71,7 @@ export const LocationGalleryCard = function LocationGalleryCard({
       ref={ref}
       data-location-id={location.id}
       className={cn(
-        "group rounded-xl border bg-card transition-all duration-300",
+        "group rounded-xl border border-[var(--border-chunky)] bg-card transition-all duration-300",
         // Highlight state for search matches
         isHighlighted && "ring-2 ring-primary/50 ring-offset-2",
         // Faded state for non-matches
@@ -83,8 +83,8 @@ export const LocationGalleryCard = function LocationGalleryCard({
     >
       {/* Header — name owns its own line so it isn't crushed by the value;
           the colored type icon already conveys location type (no badge). */}
-      <div className="border-b px-2 py-1.5">
-        <div className="flex items-center gap-1.5">
+      <div className="border-b px-2 py-2">
+        <div className="flex items-center gap-2">
           <LocationIcon
             type={location.type}
             colored
@@ -99,7 +99,7 @@ export const LocationGalleryCard = function LocationGalleryCard({
           </Link>
         </div>
         {inventoryItems.length > 0 && (
-          <div className="mt-0.5 flex justify-end">
+          <div className="mt-1 flex justify-end">
             <InventoryValuationSummary
               items={inventoryItems}
               variant="compact"
@@ -110,7 +110,7 @@ export const LocationGalleryCard = function LocationGalleryCard({
 
       {/* Location Images Strip */}
       {hasLocationImages && (
-        <div className="flex gap-1 overflow-x-auto border-b bg-muted/20 p-1.5">
+        <div className="flex gap-1 overflow-x-auto border-b bg-muted/20 p-2">
           {location.images.map((image) => (
             <ImageWithPreview
               key={image.id}
@@ -126,11 +126,11 @@ export const LocationGalleryCard = function LocationGalleryCard({
       )}
 
       {/* Products Section */}
-      <div className="p-1.5">
+      <div className="p-2">
         {productImages.length > 0 ? (
           <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
             {productImages.map((product) => (
-              <div key={product.id} className="flex items-center gap-1.5">
+              <div key={product.id} className="flex items-center gap-2">
                 {product.images[0] ? (
                   <ImageWithPreview
                     src={product.images[0].url}
@@ -163,7 +163,7 @@ export const LocationGalleryCard = function LocationGalleryCard({
             ))}
           </div>
         ) : (
-          <div className="flex items-center justify-center gap-1.5 py-2 text-2xs text-muted-foreground">
+          <div className="flex items-center justify-center gap-2 py-2 text-2xs text-muted-foreground">
             <EntityIcon entity="inventory" className="h-3 w-3 opacity-40" />
             <span>Empty</span>
           </div>

@@ -18,7 +18,7 @@ export const NavDropdown = ({ group }: { group: NavGroup }) => {
     <DropdownMenu>
       <DropdownMenuTrigger
         className={cn(
-          "nav-link-animated flex items-center gap-1.5 font-medium text-sm transition-colors hover:text-primary focus:outline-none",
+          "nav-link-animated flex items-center gap-2 font-medium text-sm transition-colors hover:text-primary focus:outline-none",
           isGroupActive ? "text-foreground" : "text-muted-foreground",
         )}
         data-status={isGroupActive ? "active" : undefined}

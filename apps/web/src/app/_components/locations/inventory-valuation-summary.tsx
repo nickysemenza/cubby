@@ -97,7 +97,7 @@ export function InventoryValuationSummary({
       )}
 
       {result.breakdown.length > 0 && (
-        <div className="mt-3">
+        <div className="mt-4">
           <div className="mb-1 font-medium text-muted-foreground text-xs">
             By manufacturer
           </div>

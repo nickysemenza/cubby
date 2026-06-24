@@ -1739,10 +1739,10 @@ function drawTitle(
 
 function CategoryLegend() {
   return (
-    <div className="absolute bottom-4 left-4 rounded-lg bg-black/70 px-3 py-2 backdrop-blur-sm">
+    <div className="absolute bottom-4 left-4 rounded-lg bg-black/70 px-2 py-2 backdrop-blur-sm">
       <div className="grid grid-cols-2 gap-x-4 gap-y-1">
         {productCategoryValues.map((cat) => (
-          <div key={cat} className="flex items-center gap-1.5">
+          <div key={cat} className="flex items-center gap-2">
             <div
               className="h-2.5 w-2.5 shrink-0 rounded-sm"
               style={{ backgroundColor: getCategoryColor(cat) }}
@@ -1752,7 +1752,7 @@ function CategoryLegend() {
             </span>
           </div>
         ))}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           <div
             className="h-2.5 w-2.5 shrink-0 rounded-sm"
             style={{ backgroundColor: getCategoryColor(null) }}
@@ -2116,7 +2116,7 @@ export function IsometricPantry() {
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center bg-[#1a1d24]">
-        <div className="flex items-center gap-3 text-white/60">
+        <div className="flex items-center gap-2 text-white/60">
           <Loader2 className="h-5 w-5 animate-spin" />
           <span>Loading pantry...</span>
         </div>

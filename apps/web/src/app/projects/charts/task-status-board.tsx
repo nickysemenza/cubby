@@ -77,7 +77,7 @@ export function TaskStatusBoard({
       <table className="w-full text-xs">
         <thead>
           <tr>
-            <th className="pr-3 pb-2 text-left font-medium text-muted-foreground">
+            <th className="pr-2 pb-2 text-left font-medium text-muted-foreground">
               Project
             </th>
             {statuses.map((s) => (
@@ -94,7 +94,7 @@ export function TaskStatusBoard({
           {projectRows.map((row) => (
             <tr key={row.name} className="border-border/50 border-t">
               <td
-                className={`max-w-[150px] truncate py-1.5 pr-3 font-medium ${row.isDone ? "text-muted-foreground line-through" : ""}`}
+                className={`max-w-[150px] truncate py-2 pr-2 font-medium ${row.isDone ? "text-muted-foreground line-through" : ""}`}
               >
                 {row.name}
               </td>
@@ -104,7 +104,7 @@ export function TaskStatusBoard({
                 const color = getStatusChartColor(status);
 
                 return (
-                  <td key={status} className="px-2 py-1.5 text-center">
+                  <td key={status} className="px-2 py-2 text-center">
                     {count > 0 ? (
                       <span
                         className="inline-flex h-6 w-8 items-center justify-center rounded font-medium text-white text-xs"

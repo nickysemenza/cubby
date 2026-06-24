@@ -267,7 +267,7 @@ function RecipeImportCardImpl({
           <div className="space-y-2">
             {recipe.sections.map((section, si) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: fixed ordered list
-              <div key={si} className="space-y-0.5">
+              <div key={si} className="space-y-1">
                 {section.name && (
                   <div className="font-medium text-muted-foreground text-xs">
                     {section.name}
@@ -285,13 +285,13 @@ function RecipeImportCardImpl({
             {recipe.sections.map((section, si) =>
               section.instructions.length > 0 ? (
                 // biome-ignore lint/suspicious/noArrayIndexKey: fixed ordered list
-                <div key={si} className="space-y-0.5">
+                <div key={si} className="space-y-1">
                   {section.name && (
                     <div className="font-medium text-muted-foreground text-xs">
                       {section.name}
                     </div>
                   )}
-                  <ol className="list-decimal space-y-0.5 pl-4 text-muted-foreground text-xs leading-snug">
+                  <ol className="list-decimal space-y-1 pl-4 text-muted-foreground text-xs leading-snug">
                     {richBySection[si]?.map((rich, ii) => (
                       // biome-ignore lint/suspicious/noArrayIndexKey: ordered by line
                       <li key={ii}>{rich}</li>

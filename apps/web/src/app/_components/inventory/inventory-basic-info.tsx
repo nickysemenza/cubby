@@ -13,7 +13,7 @@ interface InventoryBasicInfoProps {
   inventoryitem: InventoryItem;
 }
 
-// The edit / move / delete action cluster now lives on the DetailPage hero plate
+// The edit / move / delete action cluster now lives on the Page hero plate
 // (see inventory-detail.tsx) — this card is read-only.
 export const InventoryBasicInfo: FC<InventoryBasicInfoProps> = ({
   inventoryitem,

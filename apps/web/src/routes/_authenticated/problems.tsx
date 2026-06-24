@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ProblemsOverview } from "~/app/problems/problems-overview";
-import { EntityLayout } from "~/components/layouts/entity-layout";
+import { Page } from "~/components/page/Page";
 import { RoutePending } from "~/components/route-pending";
 
 export const Route = createFileRoute("/_authenticated/problems")({
@@ -20,8 +20,8 @@ export const Route = createFileRoute("/_authenticated/problems")({
 
 function ProblemsPage() {
   return (
-    <EntityLayout title="Data Problems">
+    <Page variant="list" title="Data Problems">
       <ProblemsOverview />
-    </EntityLayout>
+    </Page>
   );
 }

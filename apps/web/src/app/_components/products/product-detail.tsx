@@ -3,14 +3,15 @@ import { uniq } from "es-toolkit";
 import { Apple, ChefHat, Info, Scale } from "lucide-react";
 import type { FC } from "react";
 import { MutedBox } from "~/components/layout/muted-box";
+import { Page } from "~/components/page/Page";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { formatCurrency } from "~/lib/utils";
 import type { ProductWithFoodOut } from "~/server/services/product.service";
 import { useTRPC } from "~/trpc/react";
 import {
   type DetailHeroStat,
-  DetailPage,
   type DetailSection,
+  DetailSections,
 } from "../data-table/detail-page";
 import { editableDetailSection } from "../data-table/editable-detail-section";
 import { useEntityDetail } from "../hooks/useEntityDetail";
@@ -114,10 +115,10 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   ];
 
   return (
-    <DetailPage
-      sections={sections}
+    <Page
+      variant="detail"
       entity="product"
-      name={product.name}
+      title={product.name}
       rawData={product}
       heroImages={product.images}
       heroNo={product.shortcode ?? undefined}
@@ -127,6 +128,12 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
           : { label: "Not stocked", tone: "ink" }
       }
       heroStats={heroStats}
-    />
+    >
+      <DetailSections
+        sections={sections}
+        rawData={product}
+        heroImages={product.images}
+      />
+    </Page>
   );
 };

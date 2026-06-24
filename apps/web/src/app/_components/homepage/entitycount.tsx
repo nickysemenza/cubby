@@ -35,7 +35,7 @@ function ProblemsStatCard({ enabled }: { enabled: boolean }) {
     <Link to="/problems">
       <Card
         className={cn(
-          "p-2.5 transition-all duration-150 ease-cozy",
+          "p-2 transition-all duration-150 ease-cozy",
           "hover:-translate-x-px hover:-translate-y-px",
           "cursor-pointer border-l-4",
           alert
@@ -51,7 +51,7 @@ function ProblemsStatCard({ enabled }: { enabled: boolean }) {
             : undefined
         }
       >
-        <div className="flex flex-col items-start gap-1.5">
+        <div className="flex flex-col items-start gap-2">
           <div
             className={cn(
               "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg",
@@ -121,13 +121,13 @@ function StatCard({ entity, count, isLoading, isError }: StatCardProps) {
     <Link to={def.routes.list}>
       <Card
         className={cn(
-          "p-2.5 transition-all duration-150 ease-cozy",
+          "p-2 transition-all duration-150 ease-cozy",
           "hover:-translate-y-0.5 hover:shadow-[var(--shadow-chunky)]",
           "cursor-pointer border-l-4",
           def.color.text.replace("text-", "border-l-"),
         )}
       >
-        <div className="flex flex-col items-start gap-1.5">
+        <div className="flex flex-col items-start gap-2">
           <div
             className={cn(
               "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br",

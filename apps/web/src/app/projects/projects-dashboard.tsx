@@ -242,7 +242,7 @@ function DashboardContent({
 
         {view === "overview" && (
           <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
-            <div className="space-y-4 pt-3">
+            <div className="space-y-4 pt-4">
               <div className="grid gap-4 lg:grid-cols-2">
                 <section className="space-y-4">
                   <h2 className="font-heading font-semibold text-lg">
@@ -286,7 +286,7 @@ function DashboardContent({
 
         {view === "charts" && (
           <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
-            <div className="space-y-4 pt-3">
+            <div className="space-y-4 pt-4">
               <section className="space-y-4">
                 <h2 className="font-heading font-semibold text-lg">
                   Project Timeline
@@ -344,7 +344,7 @@ function DashboardContent({
         )}
 
         {view === "data" && (
-          <div className="space-y-4 pt-3">
+          <div className="space-y-4 pt-4">
             <section className="space-y-4">
               <h2 className="font-heading font-semibold text-xl">Projects</h2>
               <ProjectTable projects={projects} purchases={purchases} />
@@ -363,7 +363,7 @@ function DashboardContent({
         )}
 
         {view === "gallery" && (
-          <div className="pt-3">
+          <div className="pt-4">
             <ProjectCards projects={projects} />
           </div>
         )}

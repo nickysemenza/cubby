@@ -658,8 +658,7 @@ export function CookbookImport({
       <div>
         <h1 className="font-semibold text-xl">Import cookbook</h1>
         <p className="text-muted-foreground text-sm">
-          Drag{" "}
-          <code className="rounded bg-muted px-1 py-0.5 text-xs">.epub</code>{" "}
+          Drag <code className="rounded bg-muted px-1 py-1 text-xs">.epub</code>{" "}
           cookbooks here — Cubby extracts the recipes with AI, then you review
           and import.
         </p>
@@ -674,7 +673,7 @@ export function CookbookImport({
         onDragLeave={() => setIsDragging(false)}
         onDrop={onDrop}
         className={cn(
-          "flex flex-col items-center gap-2 rounded border border-border border-dashed p-8 text-muted-foreground transition-colors",
+          "flex flex-col items-center gap-2 rounded border border-border border-dashed p-6 text-muted-foreground transition-colors",
           isDragging && "border-warning bg-warning/10 text-accent-foreground",
         )}
       >
@@ -683,7 +682,7 @@ export function CookbookImport({
         <div className="flex flex-wrap items-center justify-center gap-2">
           <Label
             htmlFor={fileInputId}
-            className="cursor-pointer rounded border border-border px-3 py-1.5 font-medium text-foreground text-sm hover:bg-muted"
+            className="cursor-pointer rounded border border-border px-2 py-2 font-medium text-foreground text-sm hover:bg-muted"
           >
             Choose .epub files
           </Label>

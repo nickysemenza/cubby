@@ -96,7 +96,7 @@ export function LocationBreadcrumb({
                 render={
                   <Link
                     to="/"
-                    className="flex items-center gap-1.5 rounded-md px-2 py-1 hover:bg-muted"
+                    className="flex items-center gap-1.5 rounded-md px-2 py-1 hover:bg-muted" /* tight: breadcrumb icon+label */
                   />
                 }
               >

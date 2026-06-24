@@ -194,7 +194,7 @@ function ConversionDialogContent({
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <ConversionCapabilities
             mappings={filteredMappings}
             hideConvertButton={true}
@@ -210,7 +210,7 @@ function ConversionDialogContent({
             />
           </div>
         </div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <h4 className="font-medium text-sm">Available Unit Mappings</h4>
             <UnitMappingsTable mappings={filteredMappings} />

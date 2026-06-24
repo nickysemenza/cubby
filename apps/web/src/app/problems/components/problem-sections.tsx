@@ -534,7 +534,7 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       details: [
         <div
           key="drifts"
-          className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs"
+          className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs"
         >
           {item.nameDrift && (
             <DriftIndicator

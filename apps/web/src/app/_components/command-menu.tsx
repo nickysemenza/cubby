@@ -287,7 +287,7 @@ export function GlobalCommandMenu({
                       conversion.ingredientName,
                     )
                   }
-                  className="flex items-center gap-3"
+                  className="flex items-center gap-2"
                 >
                   <Equal className="h-4 w-4 shrink-0 text-primary" />
                   <span className="truncate font-mono font-semibold text-sm tabular-nums">
@@ -309,7 +309,7 @@ export function GlobalCommandMenu({
                 <CommandItem
                   value={`ask-cubby-${search}`}
                   onSelect={() => runAsk(search)}
-                  className="flex items-center gap-3"
+                  className="flex items-center gap-2"
                 >
                   <Sparkles className="h-4 w-4 text-primary" />
                   <span className="truncate">
@@ -371,7 +371,7 @@ export function GlobalCommandMenu({
                           onSelect={() =>
                             goToEntity(item.entityType, item.id, item.name)
                           }
-                          className="flex items-center gap-3"
+                          className="flex items-center gap-2"
                         >
                           {item.imageUrl ? (
                             <img
@@ -438,7 +438,7 @@ export function GlobalCommandMenu({
                           });
                           setOpen(false);
                         }}
-                        className="flex items-center gap-3"
+                        className="flex items-center gap-2"
                       >
                         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-muted/50">
                           {p.icon ? (
@@ -466,7 +466,7 @@ export function GlobalCommandMenu({
                           window.open(t.notionUrl, "_blank");
                           setOpen(false);
                         }}
-                        className="flex items-center gap-3"
+                        className="flex items-center gap-2"
                       >
                         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-muted/50">
                           <ClipboardList className="h-4 w-4" />
@@ -493,7 +493,7 @@ export function GlobalCommandMenu({
                           window.open(p.notionUrl, "_blank");
                           setOpen(false);
                         }}
-                        className="flex items-center gap-3"
+                        className="flex items-center gap-2"
                       >
                         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-muted/50">
                           <ShoppingCart className="h-4 w-4" />
@@ -547,7 +547,7 @@ export function GlobalCommandMenu({
                         onSelect={() =>
                           goToEntity(recent.entityType, recent.id, recent.name)
                         }
-                        className="flex items-center gap-3"
+                        className="flex items-center gap-2"
                       >
                         <div
                           className={cn(
@@ -683,7 +683,7 @@ function AnswerView({
 
       {/* Status line while the agent is working and no text is showing yet */}
       {isStreaming && answer.length === 0 && (
-        <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground text-sm">
+        <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground text-sm">
           <Spinner />
           {toolStatus ? `Looking up ${humanizeTool(toolStatus)}…` : "Thinking…"}
         </div>
@@ -708,7 +708,7 @@ function AnswerView({
               onSelect={() =>
                 onSelectSource(source.entityType, source.id, source.name)
               }
-              className="flex items-center gap-3"
+              className="flex items-center gap-2"
             >
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-muted/50">
                 <EntityIcon

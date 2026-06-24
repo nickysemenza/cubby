@@ -81,7 +81,7 @@ export function IconPattern({ className }: IconPatternProps) {
       aria-hidden="true"
     >
       <div
-        className="grid place-items-center gap-3 md:gap-4"
+        className="grid place-items-center gap-4"
         style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
       >
         {Array.from({ length: count }).map((_, i) => {

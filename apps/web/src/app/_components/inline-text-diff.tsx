@@ -30,7 +30,7 @@ export function InlineTextDiff({
           <span
             // biome-ignore lint/suspicious/noArrayIndexKey: positional diff segments
             key={idx}
-            className="rounded-xs bg-positive/15 px-0.5 text-positive"
+            className="rounded-xs bg-positive/15 px-0.5 text-positive" /* tight: inline word-diff highlight */
           >
             {s.text}
           </span>
@@ -38,7 +38,7 @@ export function InlineTextDiff({
           <span
             // biome-ignore lint/suspicious/noArrayIndexKey: positional diff segments
             key={idx}
-            className="rounded-xs bg-destructive/15 px-0.5 text-destructive line-through"
+            className="rounded-xs bg-destructive/15 px-0.5 text-destructive line-through" /* tight: inline word-diff highlight */
           >
             {s.text}
           </span>

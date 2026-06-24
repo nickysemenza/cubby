@@ -151,7 +151,7 @@ function Sunburst({ data }: SunburstProps) {
   return (
     <div
       ref={containerRef}
-      className="relative h-[500px] w-full overflow-hidden rounded-md border"
+      className="relative h-[500px] w-full overflow-hidden rounded-md border border-[var(--border-chunky)]"
     >
       <svg
         aria-hidden="true"
@@ -235,7 +235,7 @@ function HoverTooltip({
   node: d3Hierarchy.HierarchyRectangularNode<LocationHierarchyNode>;
 }) {
   return (
-    <div className="pointer-events-none absolute top-4 left-4 z-50 rounded-md bg-popover px-3 py-2 text-sm shadow-lg">
+    <div className="pointer-events-none absolute top-4 left-4 z-50 rounded-md bg-popover px-4 py-2 text-sm shadow-lg">
       <div className="flex items-center gap-2 font-medium">
         <LocationIcon type={node.data.type} size={14} />
         <Link
@@ -247,7 +247,7 @@ function HoverTooltip({
           {node.data.name}
         </Link>
       </div>
-      <div className="mt-1 space-y-0.5 text-muted-foreground">
+      <div className="mt-1 space-y-1 text-muted-foreground">
         <LocationTypeBadge type={node.data.type} />
         <div>
           Items: {node.data.directCount} direct / {node.data.totalCount} total

@@ -54,7 +54,7 @@ export function BottomNav() {
                   // the Scan shortcut sets it (see nav-items). Cast is local.
                   search={item.search as never}
                   className={cn(
-                    "flex min-h-[48px] min-w-[48px] flex-1 flex-col items-center justify-center gap-0.5 transition-colors active:bg-muted/60",
+                    "flex min-h-[48px] min-w-[48px] flex-1 flex-col items-center justify-center gap-1 transition-colors active:bg-muted/60",
                     active
                       ? "text-primary"
                       : "text-muted-foreground hover:text-foreground",
@@ -79,7 +79,7 @@ export function BottomNav() {
                   <button
                     type="button"
                     className={cn(
-                      "flex min-h-[48px] min-w-[48px] flex-1 flex-col items-center justify-center gap-0.5 transition-colors active:bg-muted/60",
+                      "flex min-h-[48px] min-w-[48px] flex-1 flex-col items-center justify-center gap-1 transition-colors active:bg-muted/60",
                       isMoreActive
                         ? "text-primary"
                         : "text-muted-foreground hover:text-foreground",
@@ -101,7 +101,7 @@ export function BottomNav() {
                 <SheetHeader className="px-4 pt-4 pb-2">
                   <SheetTitle>More</SheetTitle>
                 </SheetHeader>
-                <div className="safe-bottom flex flex-1 flex-col gap-1 overflow-y-auto px-4 pb-8">
+                <div className="safe-bottom flex flex-1 flex-col gap-1 overflow-y-auto px-4 pb-6">
                   {/* Debug Toggle */}
                   <Button
                     variant="ghost"
@@ -110,7 +110,7 @@ export function BottomNav() {
                       setIsOpen(false);
                     }}
                     className={cn(
-                      "min-h-[44px] justify-start px-3 py-2 text-sm",
+                      "min-h-[44px] justify-start px-2 py-2 text-sm",
                       isDebugEnabled && "bg-warning/30 text-accent-foreground",
                     )}
                   >
@@ -139,7 +139,7 @@ export function BottomNav() {
                           <Link
                             to={item.to}
                             className={cn(
-                              "flex min-h-[44px] items-center gap-3 rounded-md px-3 py-2 font-medium text-sm transition-colors hover:bg-muted hover:text-primary",
+                              "flex min-h-[44px] items-center gap-2 rounded-md px-2 py-2 font-medium text-sm transition-colors hover:bg-muted hover:text-primary",
                               !active && "text-muted-foreground",
                               active && "bg-muted text-foreground",
                             )}
@@ -169,7 +169,7 @@ export function BottomNav() {
                   key={item.to}
                   to={item.to}
                   className={cn(
-                    "flex min-h-[48px] min-w-[48px] flex-1 flex-col items-center justify-center gap-0.5 transition-colors active:bg-muted/60",
+                    "flex min-h-[48px] min-w-[48px] flex-1 flex-col items-center justify-center gap-1 transition-colors active:bg-muted/60",
                     active
                       ? "text-primary"
                       : "text-muted-foreground hover:text-foreground",
@@ -187,7 +187,7 @@ export function BottomNav() {
             <Link
               to="/auth/$authView"
               params={{ authView: "sign-in" }}
-              className="flex min-h-[48px] min-w-[48px] flex-1 flex-col items-center justify-center gap-0.5 text-muted-foreground transition-colors hover:text-foreground active:bg-muted/60"
+              className="flex min-h-[48px] min-w-[48px] flex-1 flex-col items-center justify-center gap-1 text-muted-foreground transition-colors hover:text-foreground active:bg-muted/60"
             >
               <LogIn className="h-5 w-5" aria-hidden="true" />
               <span className="font-medium text-2xs">Sign In</span>

@@ -195,7 +195,7 @@ export function UnitMappingGraph({
   return (
     <div
       ref={containerRef}
-      className="w-full overflow-hidden rounded-md border bg-background/40"
+      className="w-full overflow-hidden rounded-md border border-[var(--border-chunky)] bg-background/40"
       style={{ height }}
     >
       {nodes.length === 0 ? (

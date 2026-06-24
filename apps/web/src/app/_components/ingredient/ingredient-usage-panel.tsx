@@ -63,13 +63,13 @@ function UsageTable({
   totalRecipes: number;
 }) {
   return (
-    <div className="overflow-hidden rounded-lg border">
+    <div className="overflow-hidden rounded-lg border border-[var(--border-chunky)]">
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr className="bg-muted/50 text-left text-muted-foreground">
-            <th className="px-3 py-2 font-medium">Ingredient</th>
-            <th className="px-3 py-2 text-right font-medium">Recipes</th>
-            <th className="px-3 py-2 text-right font-medium">% of recipes</th>
+            <th className="px-2 py-2 font-medium">Ingredient</th>
+            <th className="px-2 py-2 text-right font-medium">Recipes</th>
+            <th className="px-2 py-2 text-right font-medium">% of recipes</th>
           </tr>
         </thead>
         <tbody>
@@ -80,7 +80,7 @@ function UsageTable({
                 : 0;
             return (
               <tr key={row.ingredientId} className="border-t hover:bg-muted/30">
-                <td className="px-3 py-2">
+                <td className="px-2 py-2">
                   <Link
                     to="/ingredients/$id"
                     params={{ id: row.ingredientId }}
@@ -89,10 +89,10 @@ function UsageTable({
                     {row.name}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-right tabular-nums">
+                <td className="px-2 py-2 text-right tabular-nums">
                   {row.recipeCount}
                 </td>
-                <td className="px-3 py-2 text-right text-muted-foreground tabular-nums">
+                <td className="px-2 py-2 text-right text-muted-foreground tabular-nums">
                   {pct}%
                 </td>
               </tr>

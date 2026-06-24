@@ -130,7 +130,7 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
           if (!totals.costTotal) return <NoneState />;
           const perItem = getServingBasis(recipe);
           return (
-            <div className="space-y-0.5">
+            <div className="space-y-1">
               <CoverageValue
                 covered={totals.costCovered}
                 total={totals.ingredientCount}
@@ -171,7 +171,7 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
           if (!totals.caloriesTotal) return <NoneState />;
           const perItem = getServingBasis(recipe);
           return (
-            <div className="space-y-0.5">
+            <div className="space-y-1">
               <CoverageValue
                 covered={totals.caloriesCovered}
                 total={totals.ingredientCount}

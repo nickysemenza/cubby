@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { BookOpen } from "lucide-react";
 import { CookbookList } from "~/app/cookbooks/cookbooklist";
-import { EntityLayout } from "~/components/layouts/entity-layout";
+import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 
 export const Route = createFileRoute("/_authenticated/cookbooks/")({
@@ -14,7 +14,8 @@ export const Route = createFileRoute("/_authenticated/cookbooks/")({
 
 function CookbooksPage() {
   return (
-    <EntityLayout
+    <Page
+      variant="list"
       title="Cookbooks"
       entity="cookbook"
       actions={
@@ -27,6 +28,6 @@ function CookbooksPage() {
       }
     >
       <CookbookList />
-    </EntityLayout>
+    </Page>
   );
 }

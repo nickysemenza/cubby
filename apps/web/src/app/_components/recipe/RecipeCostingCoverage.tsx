@@ -81,13 +81,13 @@ function CostingGapList({ gaps }: { gaps: CostingGap[] }) {
             className="flex flex-wrap items-center justify-between gap-2 py-2"
           >
             <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-1.5">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="font-medium text-sm">{gap.name}</span>
                 {missing.map((c) => (
                   <Badge
                     key={c.key}
                     variant="outline"
-                    className="border-warning/40 px-1.5 py-0 font-normal text-2xs text-warning"
+                    className="border-warning/40 px-2 py-0 font-normal text-2xs text-warning"
                   >
                     {c.label}
                   </Badge>
@@ -154,7 +154,7 @@ export function CostingCoverageButton({ gaps }: { gaps: CostingGap[] }) {
     <Popover>
       <PopoverTrigger
         className={cn(
-          "inline-flex items-center gap-1.5 rounded-md border border-warning/40 px-2 py-1 text-warning text-xs hover:bg-warning/10",
+          "inline-flex items-center gap-2 rounded-md border border-warning/40 px-2 py-1 text-warning text-xs hover:bg-warning/10",
         )}
       >
         <TriangleAlert className="h-3.5 w-3.5" />

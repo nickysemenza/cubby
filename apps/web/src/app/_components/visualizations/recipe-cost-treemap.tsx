@@ -167,7 +167,7 @@ function Treemap({ data }: TreemapProps) {
   return (
     <div
       ref={containerRef}
-      className="relative h-[300px] w-full overflow-hidden rounded-md border"
+      className="relative h-[300px] w-full overflow-hidden rounded-md border border-[var(--border-chunky)]"
     >
       <svg
         aria-hidden="true"
@@ -257,7 +257,9 @@ function Treemap({ data }: TreemapProps) {
                     </div>
                     {node.data.hasPrice && width > 60 && height > 45 && (
                       <div
-                        className="mt-0.5 font-mono text-2xs tabular-nums"
+                        className={
+                          "mt-0.5 font-mono text-2xs tabular-nums" /* tight: label stack inside a clipped treemap tile */
+                        }
                         style={{
                           color: isDeepFill(node)
                             ? "oklch(from var(--brand-cream) l c h / 0.85)"
@@ -269,7 +271,11 @@ function Treemap({ data }: TreemapProps) {
                       </div>
                     )}
                     {!node.data.hasPrice && width > 60 && height > 45 && (
-                      <div className="mt-0.5 font-mono text-2xs text-muted-foreground uppercase">
+                      <div
+                        className={
+                          "mt-0.5 font-mono text-2xs text-muted-foreground uppercase" /* tight: label stack inside a clipped treemap tile */
+                        }
+                      >
                         No price
                       </div>
                     )}
@@ -297,7 +303,7 @@ function HoverTooltip({
   if (!node) return null;
 
   return (
-    <div className="pointer-events-none absolute top-4 left-4 z-50 rounded-md bg-popover px-3 py-2 text-sm shadow-lg">
+    <div className="pointer-events-none absolute top-4 left-4 z-50 rounded-md bg-popover px-4 py-2 text-sm shadow-lg">
       <div className="font-medium">{node.data.name}</div>
       <div className="mt-1 text-muted-foreground">
         {node.data.hasPrice ? (

@@ -109,7 +109,7 @@ export const RecipeLivePreview: FC<{
                   <li
                     // biome-ignore lint/suspicious/noArrayIndexKey: positional draft rows
                     key={i}
-                    className="flex gap-2.5"
+                    className="flex gap-2"
                   >
                     <span className="w-5 shrink-0 text-right font-heading font-medium text-base text-primary italic leading-snug">
                       {stepNumber}
