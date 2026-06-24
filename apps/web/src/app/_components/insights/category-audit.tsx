@@ -59,19 +59,21 @@ export function CategoryAudit() {
       </CardHeader>
 
       {result && (
-        <CardContent className="space-y-4">
-          <p className="text-muted-foreground text-sm">{result.summary}</p>
+        <CardContent>
+          <Stack>
+            <p className="text-muted-foreground text-sm">{result.summary}</p>
 
-          {result.suggestions.length > 0 && (
-            <Stack>
-              {result.suggestions.map((suggestion) => (
-                <SuggestionCard
-                  key={suggestion.categoryName}
-                  suggestion={suggestion}
-                />
-              ))}
-            </Stack>
-          )}
+            {result.suggestions.length > 0 && (
+              <Stack>
+                {result.suggestions.map((suggestion) => (
+                  <SuggestionCard
+                    key={suggestion.categoryName}
+                    suggestion={suggestion}
+                  />
+                ))}
+              </Stack>
+            )}
+          </Stack>
         </CardContent>
       )}
     </Card>
@@ -88,9 +90,9 @@ function SuggestionCard({
       gap="sm"
       className="rounded-lg border border-[var(--border-chunky)] p-4"
     >
-      <div className="flex items-center gap-2">
+      <Row align="center" gap="sm">
         <Badge variant="secondary">{suggestion.categoryName}</Badge>
-      </div>
+      </Row>
       <p className="text-sm">{suggestion.description}</p>
       <p className="text-muted-foreground text-xs">{suggestion.reasoning}</p>
       {suggestion.productNames.length > 0 && (

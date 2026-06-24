@@ -88,12 +88,6 @@ export const stackVariants = cva("", {
       md: "space-y-4",
       lg: "space-y-6",
     },
-    align: {
-      start: "items-start",
-      center: "items-center",
-      end: "items-end",
-      stretch: "items-stretch",
-    },
   },
   defaultVariants: {
     gap: "md",

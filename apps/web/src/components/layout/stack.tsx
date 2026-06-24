@@ -16,13 +16,12 @@ export const Stack = ({
   as: Comp = "div",
   className,
   gap,
-  align,
   ref,
   ...props
 }: StackProps) => {
   return (
     <Comp
-      className={cn(stackVariants({ gap, align }), className)}
+      className={cn(stackVariants({ gap }), className)}
       ref={ref}
       {...props}
     />
