@@ -8,9 +8,12 @@ import { describe, expect, it } from "vitest";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { USDAClient } from "~/server/clients/usda";
 import { image, product, productImage } from "~/server/db/schema";
+import {
+  findAllProblems,
+  reparseStaleIngredientParses,
+} from "../services/problems.service";
 import { getDb } from "./database-helpers";
 import { createIngredient, getIngredientByName } from "./ingredient";
-import { findAllProblems, reparseStaleIngredientParses } from "./problems";
 import { createProduct } from "./product";
 import { createRecipe } from "./recipe";
 import {

@@ -2,12 +2,12 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { ingredient } from "~/server/db/schema";
+import { deleteUnusedIngredients } from "../services/problems.service";
 import { getDb } from "./database-helpers";
 import { findOrCreateIngredient } from "./ingredient";
 import { createInventoryEntry } from "./inventory";
 import { createLocation } from "./location";
 import {
-  deleteUnusedIngredients,
   findIngredientsWithUnusedAliases,
   findUnusedIngredients,
 } from "./problems";

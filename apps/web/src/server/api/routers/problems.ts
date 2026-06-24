@@ -11,6 +11,10 @@ import {
 import { z } from "zod";
 import { streamProgress } from "~/lib/bulk-progress";
 import {
+  pruneUnusedAliases,
+  recipeUsageCountsByProduct,
+} from "~/server/repo/problems";
+import {
   deleteUnusedIngredients,
   findAliasesProblems,
   findAllProblems,
@@ -19,10 +23,8 @@ import {
   findMaintenanceCounts,
   findParsesProblems,
   findUpcProblems,
-  pruneUnusedAliases,
-  recipeUsageCountsByProduct,
   reparseStaleIngredientParses,
-} from "~/server/repo/problems";
+} from "~/server/services/problems.service";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 // Combined scan — badge/homepage/SSR/MCP read this one (counts derived client-
