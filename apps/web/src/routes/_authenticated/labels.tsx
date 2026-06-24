@@ -31,6 +31,7 @@ import { getCategoryColor } from "~/app/_components/products/category-theme";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
+import { Description } from "~/components/ui/description";
 import {
   Popover,
   PopoverContent,
@@ -273,13 +274,13 @@ function AddLabelsPopover({
         </div>
         <div className="max-h-64 overflow-y-auto p-1">
           {isLoading ? (
-            <p className="px-2 py-4 text-center text-muted-foreground text-sm">
+            <Description className="px-2 py-4 text-center">
               Searching...
-            </p>
+            </Description>
           ) : locations.length === 0 ? (
-            <p className="px-2 py-4 text-center text-muted-foreground text-sm">
+            <Description className="px-2 py-4 text-center">
               No locations found
-            </p>
+            </Description>
           ) : (
             locations.map((loc) => (
               <div
@@ -520,7 +521,9 @@ function LabelsPage() {
             />
             {hiddenItems.length > 0 && (
               <div className="mt-4 flex flex-wrap items-center gap-2">
-                <span className="text-muted-foreground text-xs">Hidden:</span>
+                <Description as="span" size="xs">
+                  Hidden:
+                </Description>
                 {hiddenItems.map((item) => (
                   <button
                     key={item.shortcode}
@@ -612,10 +615,10 @@ function LabelSummary({
   const pages = totalSlots / labelsPerSheet;
   const pagesDisplay = pages % 1 === 0 ? pages.toString() : pages.toFixed(1);
   return (
-    <p className="text-muted-foreground text-sm">
+    <Description>
       {labelCount} label{labelCount !== 1 && "s"}, {pagesDisplay} page
       {pages !== 1 && "s"}
-    </p>
+    </Description>
   );
 }
 
@@ -829,9 +832,9 @@ function PtouchPreview({ items }: { items: LabelItem[] }) {
                 <td className="px-4 py-2">
                   {item.name}
                   {item.parentName && (
-                    <span className="ml-2 text-muted-foreground text-xs">
+                    <Description as="span" size="xs" className="ml-2">
                       {item.parentName}
-                    </span>
+                    </Description>
                   )}
                 </td>
                 <td className="px-4 py-2 text-muted-foreground">

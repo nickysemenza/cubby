@@ -4,6 +4,7 @@ import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
 import {
   Tooltip,
@@ -39,7 +40,7 @@ export function ConfidenceReasoningCard({
           {confidence} confidence
         </span>
       </Row>
-      <p className="mt-1 text-muted-foreground">{reasoning}</p>
+      <Description className="mt-1">{reasoning}</Description>
     </div>
   );
 }

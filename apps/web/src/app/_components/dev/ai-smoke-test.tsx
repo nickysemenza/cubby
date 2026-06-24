@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
+import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -222,9 +223,9 @@ function AgentStreamCard() {
           </div>
         )}
         {stream.result && stream.result.sources.length > 0 && (
-          <div className="text-2xs text-muted-foreground">
+          <Description size="2xs">
             sources: {stream.result.sources.map((s) => s.name).join(", ")}
-          </div>
+          </Description>
         )}
       </CardContent>
     </Card>
@@ -298,10 +299,10 @@ export function AiSmokeTest() {
       <Row align="center" wrap gap="sm">
         <Badge variant="outline">model: {MODEL}</Badge>
         <Badge variant="secondary">{mode}</Badge>
-        <span className="text-2xs text-muted-foreground">
+        <Description as="span" size="2xs">
           In prod this exercises the real <code>env.AI.gateway("cubby")</code>{" "}
           binding path — the only place it's testable end-to-end.
-        </span>
+        </Description>
         <Button
           size="sm"
           variant="outline"

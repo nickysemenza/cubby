@@ -8,6 +8,7 @@ import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { FilterableCombobox } from "~/components/ui/combobox";
+import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { formatCurrency } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
@@ -49,8 +50,7 @@ export function MealDetailPage({ mealId }: { mealId: MealId }) {
   const [name, setName] = useState<string | null>(null);
 
   if (isLoading) return <SimpleLoading text="Loading meal..." />;
-  if (!meal)
-    return <p className="text-muted-foreground text-sm">Meal not found.</p>;
+  if (!meal) return <Description>Meal not found.</Description>;
 
   const nameValue = name ?? meal.name ?? "";
   const recipeItems = (recipeList?.items ?? []).map((r) => ({
@@ -99,18 +99,16 @@ export function MealDetailPage({ mealId }: { mealId: MealId }) {
               ? "—"
               : `${formatCurrency(meal.totals.costTotal)}${meal.totals.pending ? "+" : ""}`}
           </div>
-          <div className="text-muted-foreground text-xs">
+          <Description as="div" size="xs">
             {Math.round(meal.totals.caloriesTotal)} cal
             {meal.totals.pending ? " (some recipes uncosted)" : ""}
-          </div>
+          </Description>
         </div>
       </Row>
 
       <Stack gap="sm">
         {meal.recipes.length === 0 ? (
-          <p className="text-muted-foreground text-sm">
-            No recipes yet — add one below.
-          </p>
+          <Description>No recipes yet — add one below.</Description>
         ) : (
           meal.recipes.map((mr) => (
             <RecipeRow key={mr.id} mr={mr} onChanged={invalidate} />
@@ -119,9 +117,9 @@ export function MealDetailPage({ mealId }: { mealId: MealId }) {
       </Stack>
 
       <div className="max-w-sm">
-        <span className="mb-1 block text-muted-foreground text-xs">
+        <Description as="span" size="xs" className="mb-1 block">
           Add a recipe
-        </span>
+        </Description>
         <FilterableCombobox
           items={recipeItems}
           value={null}

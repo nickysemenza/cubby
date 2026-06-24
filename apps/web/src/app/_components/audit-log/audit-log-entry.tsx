@@ -10,6 +10,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "~/components/ui/collapsible";
+import { Description } from "~/components/ui/description";
 import { EntityIcon, entities } from "~/entities/entities";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn } from "~/lib/utils";
@@ -167,13 +168,11 @@ export function AuditLogEntryComponent({
 
             {/* User Name */}
             {entry.user && (
-              <span className="text-muted-foreground text-sm">
+              <Description as="span">
                 by {entry.user.name ?? entry.user.email}
-              </span>
+              </Description>
             )}
-            {!entry.user && (
-              <span className="text-muted-foreground text-sm">by System</span>
-            )}
+            {!entry.user && <Description as="span">by System</Description>}
 
             {/* Timestamp — inline with the metadata row to save a line */}
             <span className="text-muted-foreground text-xs">

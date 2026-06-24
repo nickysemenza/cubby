@@ -18,6 +18,7 @@ import { Row, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { Description } from "~/components/ui/description";
 import { Image } from "~/components/ui/image";
 import { Spinner } from "~/components/ui/spinner";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -151,15 +152,11 @@ export function CaptureFlow() {
               </Button>
             </Row>
             {analyze.data.summary && (
-              <p className="text-muted-foreground text-sm">
-                {analyze.data.summary}
-              </p>
+              <Description>{analyze.data.summary}</Description>
             )}
 
             {proposals.length === 0 ? (
-              <p className="text-muted-foreground text-sm">
-                No items detected in this photo.
-              </p>
+              <Description>No items detected in this photo.</Description>
             ) : (
               <Stack gap="sm">
                 {proposals.map((item, i) => (
@@ -245,7 +242,9 @@ function CaptureItemCard({ proposal }: { proposal: ProposedItem }) {
         <div className="min-w-0">
           <span className="font-medium text-sm">{proposal.name}</span>
           {meta && (
-            <span className="ml-2 text-muted-foreground text-xs">{meta}</span>
+            <Description as="span" size="xs" className="ml-2">
+              {meta}
+            </Description>
           )}
         </div>
         <Badge variant={confidenceVariant[proposal.confidence]}>

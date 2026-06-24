@@ -12,6 +12,7 @@ import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
+import { Description } from "~/components/ui/description";
 import {
   Dialog,
   DialogContent,
@@ -257,9 +258,13 @@ function ConversionDialogContent({
                           </span>
                         </Row>
                         {result?.isOk() && path && (
-                          <div className="text-right font-mono text-2xs text-muted-foreground">
+                          <Description
+                            as="div"
+                            size="2xs"
+                            className="text-right font-mono"
+                          >
                             {formatConversionPath(path)}
-                          </div>
+                          </Description>
                         )}
                       </div>
                     );

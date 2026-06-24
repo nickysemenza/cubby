@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
 import { useEffect, useRef, useState } from "react";
 import { Stack } from "~/components/layout";
+import { Description } from "~/components/ui/description";
 import { USDA_KINDS } from "~/lib/conversion-coverage";
 import type { QueryTiming } from "~/lib/query-timing";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
@@ -141,9 +142,9 @@ export function USDAFoodList() {
               {brandedFood.brand_owner || <NoneState />}
             </div>
             {brandedFood.branded_food_category && (
-              <div className="truncate text-muted-foreground text-xs">
+              <Description as="div" size="xs" className="truncate">
                 {brandedFood.branded_food_category}
-              </div>
+              </Description>
             )}
             {brandedFood.gtin_upc && (
               <div className="font-mono text-xs">
@@ -171,9 +172,9 @@ export function USDAFoodList() {
         return (
           <Stack gap="sm" className="w-48">
             <CoreNutrientCoverage nutrients={nutritionInfo.nutrientsPer100} />
-            <div className="text-2xs text-muted-foreground">
+            <Description as="div" size="2xs">
               {total} nutrients total
-            </div>
+            </Description>
           </Stack>
         );
       },

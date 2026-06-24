@@ -1,6 +1,7 @@
 import type { SearchableEntity, SearchResultItem } from "@cubby/schemas/search";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Row } from "~/components/layout";
+import { Description } from "~/components/ui/description";
 import { EntityIcon, entities } from "~/entities/entities";
 import {
   createActionsColumnBase,
@@ -86,7 +87,7 @@ export const searchColumns = [
     cell: ({ getValue }) => {
       const value = getValue();
       return value ? (
-        <span className="text-muted-foreground text-sm">{value}</span>
+        <Description as="span">{value}</Description>
       ) : (
         <NoneState />
       );
@@ -101,7 +102,9 @@ export const searchColumns = [
     cell: ({ row }) => {
       const enrichment = getEnrichmentText(row.original);
       return enrichment ? (
-        <span className="text-muted-foreground text-xs">{enrichment}</span>
+        <Description as="span" size="xs">
+          {enrichment}
+        </Description>
       ) : (
         <NoneState />
       );

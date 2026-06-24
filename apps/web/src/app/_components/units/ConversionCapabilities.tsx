@@ -2,6 +2,7 @@ import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { ArrowLeftRight } from "lucide-react";
 import { memo, useMemo } from "react";
 import { Row, Stack } from "~/components/layout";
+import { StatusText } from "~/components/ui/status-text";
 import {
   Tooltip,
   TooltipContent,
@@ -51,12 +52,15 @@ const TIER_LABEL: Record<CoverageTier, string> = {
   none: "None",
 };
 
-const TIER_CLASS: Record<CoverageTier, string> = {
-  complete: "text-positive",
-  good: "text-warning",
-  partial: "text-muted-foreground",
-  none: "text-destructive",
-};
+const TIER_TONE = {
+  complete: "positive",
+  good: "warning",
+  partial: "muted",
+  none: "destructive",
+} as const satisfies Record<
+  CoverageTier,
+  "positive" | "warning" | "muted" | "destructive"
+>;
 
 export const ConversionCapabilities = memo(function ConversionCapabilities({
   mappings,
@@ -96,11 +100,12 @@ export const ConversionCapabilities = memo(function ConversionCapabilities({
               columns. Only when there are mappings to grade — an unmapped stub
               shouldn't read as a red "None". */}
           {coverage && compact && showTier && mappings.length > 0 && (
-            <span
-              className={`font-mono text-2xs uppercase tracking-wide ${TIER_CLASS[coverage.tier]}`}
+            <StatusText
+              tone={TIER_TONE[coverage.tier]}
+              className="font-mono text-2xs uppercase tracking-wide"
             >
               {TIER_LABEL[coverage.tier]}
-            </span>
+            </StatusText>
           )}
 
           {/* Compact: the kind icons are the whole story (no room for a grid).
@@ -136,11 +141,12 @@ export const ConversionCapabilities = memo(function ConversionCapabilities({
 
           {/* Detail: a one-word headline; the grid below is the detail. */}
           {coverage && !compact && (
-            <span
-              className={`font-mono text-2xs uppercase tracking-wide ${TIER_CLASS[coverage.tier]}`}
+            <StatusText
+              tone={TIER_TONE[coverage.tier]}
+              className="font-mono text-2xs uppercase tracking-wide"
             >
               {TIER_LABEL[coverage.tier]}
-            </span>
+            </StatusText>
           )}
         </Row>
       </Row>

@@ -5,6 +5,7 @@ import type { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+import { Description } from "~/components/ui/description";
 import { cn } from "~/lib/utils";
 
 interface EditableComponentDemoProps<T> {
@@ -93,9 +94,7 @@ export function EditableComponentDemo<T>({
         </Row>
       </Row>
 
-      {description && (
-        <p className="mb-2 text-muted-foreground text-sm">{description}</p>
-      )}
+      {description && <Description className="mb-2">{description}</Description>}
 
       {/* JSON Editor (collapsible) */}
       {isEditing && (

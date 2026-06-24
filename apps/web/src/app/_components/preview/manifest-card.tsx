@@ -3,6 +3,7 @@ import { ArrowUpRight } from "lucide-react";
 import type { ReactNode } from "react";
 import { match } from "ts-pattern";
 import { Row } from "~/components/layout";
+import { Description } from "~/components/ui/description";
 import { Eyebrow } from "~/components/ui/eyebrow";
 import { Spinner } from "~/components/ui/spinner";
 import { entities } from "~/entities/entities";
@@ -175,9 +176,9 @@ function BodyBlockView({ block }: { block: BodyBlock }) {
             <EntityPillLink key={p.id} entity="product" data={p} compact />
           ))}
           {b.products.length > 4 && (
-            <span className="text-2xs text-muted-foreground">
+            <Description as="span" size="2xs">
               +{b.products.length - 4} more
-            </span>
+            </Description>
           )}
         </div>
       </div>
