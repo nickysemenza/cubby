@@ -285,7 +285,15 @@ export const findIngredientsWithUnusedAliases = async (
     .from(recipeSectionIngredient)
     .innerJoin(
       ingredient,
-      eq(ingredient.id, recipeSectionIngredient.ingredientId),
+      and(
+        eq(ingredient.id, recipeSectionIngredient.ingredientId),
+        // Output-neutral (computeUnusedAliases only ever checks a *live*
+        // ingredient's id against the map — a deleted ingredient's id is never
+        // queried), so dropping lines that resolve to soft-deleted ingredients
+        // trims rows without changing the verdict, and matches the soft-delete
+        // convention the second query already follows.
+        notDeleted(ingredient),
+      ),
     )
     .innerJoin(
       recipeSection,
