@@ -66,7 +66,7 @@ describe("defaultPagination", () => {
   it("has correct default values", () => {
     expect(defaultPagination).toEqual({
       pageIndex: 0,
-      pageSize: 50,
+      pageSize: 1000,
     });
   });
 });
