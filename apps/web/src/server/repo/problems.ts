@@ -269,15 +269,31 @@ export const findIngredientsWithUnusedAliases = async (
   // Map<lower(parsedName), Set<ingredientId>>: for each live recipe line, the
   // ingredient its re-parsed name resolved to. An alias is "matched" iff this
   // map ties its lowercased value to its own ingredient.
+  //
+  // selectDistinct: the SQL execution is ~6ms but marshalling every row back
+  // through Hyperdrive/node-postgres on workerd costs ~0.75ms/row (6684 rows ≈
+  // 5s — the dominant cost). Identical (rawLine, ingredientId) pairs are pure
+  // waste here: the parse is deterministic and the target is a Set, so deduping
+  // server-side (6684 → ~4231 rows) cuts both the transfer AND the parse loop by
+  // ~37% with byte-identical output. The HashAggregate adds ~3ms server-side —
+  // a trivial price for thousands of fewer rows over the wire.
   const lineRows = await dbClient
-    .select({
+    .selectDistinct({
       rawLine: recipeSectionIngredient.rawLine,
       ingredientId: ingredient.id,
     })
     .from(recipeSectionIngredient)
     .innerJoin(
       ingredient,
-      eq(ingredient.id, recipeSectionIngredient.ingredientId),
+      and(
+        eq(ingredient.id, recipeSectionIngredient.ingredientId),
+        // Output-neutral (computeUnusedAliases only ever checks a *live*
+        // ingredient's id against the map — a deleted ingredient's id is never
+        // queried), so dropping lines that resolve to soft-deleted ingredients
+        // trims rows without changing the verdict, and matches the soft-delete
+        // convention the second query already follows.
+        notDeleted(ingredient),
+      ),
     )
     .innerJoin(
       recipeSection,

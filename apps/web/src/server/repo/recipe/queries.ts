@@ -49,9 +49,15 @@ export const getIngredientCooccurrence = async (
         where: notDeleted(recipeSection),
         with: {
           ingredients: {
+            // Only the nested ingredient's id/name/recipeId is read below — never
+            // a line-level column (rawLine, amounts). Drop all RSI columns so the
+            // ~thousands of joined lines don't marshal the heavy rawLine/amounts
+            // back through Hyperdrive; Drizzle still pulls the FK to hydrate the
+            // relation.
+            columns: {},
             where: notDeleted(recipeSectionIngredient),
             with: {
-              ingredient: true,
+              ingredient: { columns: { id: true, name: true, recipeId: true } },
             },
           },
         },
@@ -194,6 +200,9 @@ export const getRecipeDependencyGraph = async (
         where: notDeleted(recipeSection),
         with: {
           ingredients: {
+            // Only si.ingredient is read — drop the heavy RSI line columns
+            // (rawLine, amounts) from the marshalled payload.
+            columns: {},
             where: notDeleted(recipeSectionIngredient),
             with: {
               ingredient: { columns: { recipeId: true, deletedAt: true } },
@@ -280,6 +289,9 @@ export const getIngredientUsage = async (
         where: notDeleted(recipeSection),
         with: {
           ingredients: {
+            // Only si.ingredient is read — drop the heavy RSI line columns
+            // (rawLine, amounts) from the marshalled payload.
+            columns: {},
             where: notDeleted(recipeSectionIngredient),
             with: {
               ingredient: {
