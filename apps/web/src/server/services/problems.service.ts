@@ -355,7 +355,8 @@ export const findAllProblems = async (
     unusedIngredientsWithoutProduct: r.unusedIngredients.withoutProduct,
     emptyLocations: r.emptyLocations,
     productsWithNoImages: r.productsWithNoImages,
-    productsWithIslandedMappings: r.productCoverage.productsWithIslandedMappings,
+    productsWithIslandedMappings:
+      r.productCoverage.productsWithIslandedMappings,
     locationsWithoutAiDescription: r.locationsWithoutAiDescription,
     staleIngredientParses: r.staleIngredientParses,
     productsWithBetterUpcData: r.productsWithBetterUpcData,

@@ -37,25 +37,31 @@ interface PageHeroMetaItem {
   label: ReactNode;
 }
 
-// Entities that live under the "Kitchen" nav group — their eyebrows read as a
-// path ("Kitchen / Recipes") to match the ledger-style breadcrumb labels.
-const KITCHEN_ENTITIES: ReadonlySet<Entity> = new Set([
-  "recipe",
-  "cookbook",
-  "ingredient",
-]);
+// Each entity's top-level nav group (see navigation/nav-items.ts) — eyebrows
+// read as a path ("Cook / Recipes", "Pantry / Products") to match the
+// ledger-style breadcrumb labels and the dropdown the entity lives under.
+const ENTITY_NAV_GROUP: Partial<Record<Entity, string>> = {
+  recipe: "Cook",
+  cookbook: "Cook",
+  meal: "Plan",
+  product: "Pantry",
+  inventory: "Pantry",
+  location: "Pantry",
+  ingredient: "Dev",
+  "usda-food": "Dev",
+  image: "Dev",
+};
 
 /**
  * Derive an eyebrow path from the entity when none is given explicitly.
- * Detail pages get the full path ("Kitchen / Recipes"); list pages drop the
- * segment that would just repeat the title (so the Recipes list shows
- * "Kitchen", and the Products list shows nothing).
+ * Detail pages get the full path ("Cook / Recipes"); list pages drop the
+ * segment that would just repeat the title (so the Recipes list shows "Cook",
+ * and a non-grouped entity's list shows nothing).
  */
 function deriveEyebrow(entity: Entity, title: ReactNode): string | null {
   const def = entities[entity];
-  const segments = KITCHEN_ENTITIES.has(entity)
-    ? ["Kitchen", def.pluralLabel]
-    : [def.pluralLabel];
+  const group = ENTITY_NAV_GROUP[entity];
+  const segments = group ? [group, def.pluralLabel] : [def.pluralLabel];
   const filtered = segments.filter((s) => s !== title);
   return filtered.length > 0 ? filtered.join(" / ") : null;
 }
