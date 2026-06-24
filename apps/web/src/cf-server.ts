@@ -7,6 +7,7 @@
 // 3. Intercepts console.error to capture real error details for `wrangler tail`.
 
 import * as Sentry from "@sentry/cloudflare";
+import { SENTRY_DSN } from "./lib/sentry-dsn";
 import { setCfEnv } from "./server/cf-env";
 import { withRequestDb } from "./server/db";
 
@@ -107,7 +108,7 @@ const handler = {
 
 export default Sentry.withSentry(
   () => ({
-    dsn: "https://a50b2f76dd1586f95cdd29cd13a6c0dc@o83311.ingest.us.sentry.io/4508775559135232",
+    dsn: SENTRY_DSN,
     sendDefaultPii: true,
     // Mirror the client's prod 10% trace sampling (router.tsx). Head-based
     // sampling decisions propagate client→server via the `sentry-trace` header,
