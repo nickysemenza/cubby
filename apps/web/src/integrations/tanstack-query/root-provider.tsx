@@ -68,6 +68,14 @@ function getUrl() {
 // Problems-page detector procedures routed through the unbatched link (see the
 // splitLink below). Kept in sync with the cost-grouped procedures in the
 // problems router.
+//
+// TODO(sync-guard): this allowlist is maintained by hand — adding a new
+// expensive problems procedure but forgetting to list it here silently
+// re-batches it and brings back the CPU pileup this split was meant to fix.
+// When the persist-phase follow-up lands, add a guard so the two can't drift:
+// either a compile-time `satisfies` tied to the router's problems procedure
+// keys, or a cheap unit invariant asserting every entry here resolves to a real
+// `problems.*` procedure.
 const UNBATCHED_PATHS = new Set([
   "problems.getFast",
   "problems.getCoverage",
