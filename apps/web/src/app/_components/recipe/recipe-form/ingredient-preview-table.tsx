@@ -239,7 +239,7 @@ function IngredientRow({
       className={cn(
         isLoading && "text-muted-foreground",
         isMatched && "bg-positive/10",
-        !isMatched && !isLoading && "bg-amber-50/50",
+        !isMatched && !isLoading && "bg-warning/10",
       )}
     >
       <TableCell>
@@ -256,13 +256,13 @@ function IngredientRow({
             />
           ) : (
             <>
-              <AlertCircle className="h-4 w-4 text-amber-600" />
-              <span className="text-amber-700">{item.parsed.name}</span>
+              <AlertCircle className="h-4 w-4 text-warning" />
+              <span className="text-warning">{item.parsed.name}</span>
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="h-6 w-6 p-0 text-amber-600 hover:bg-amber-100 hover:text-amber-700"
+                className="h-6 w-6 p-0 text-warning hover:bg-warning/15 hover:text-warning"
                 onClick={onCreateClick}
               >
                 <Plus className="h-4 w-4" />

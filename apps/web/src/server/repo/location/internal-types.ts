@@ -22,9 +22,9 @@ export type LocationDeepDB = typeof location.$inferSelect & {
       images: Array<{ image: typeof image.$inferSelect }>;
     }
   >;
-  InventoryEntries: Array<
+  inventoryEntries: Array<
     typeof inventoryEntry.$inferSelect & {
-      Product: typeof product.$inferSelect;
+      product: typeof product.$inferSelect;
     }
   >;
   images: Array<{

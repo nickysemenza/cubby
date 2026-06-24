@@ -170,7 +170,7 @@ function DonutChart({ data }: DonutChartProps) {
                     textAnchor="middle"
                     dominantBaseline="middle"
                     className="pointer-events-none fill-white font-medium text-xs capitalize"
-                    style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}
+                    style={{ textShadow: "var(--text-shadow-chart)" }}
                   >
                     {formatCategoryLabel(slice.category)}
                   </text>

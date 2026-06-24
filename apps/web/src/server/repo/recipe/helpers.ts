@@ -105,11 +105,11 @@ export const computeRecipeUsages = (
 const sectionIngredientToAPI = (
   sectionIngredient: SectionIngredientDB,
 ): SectionIngredient => {
-  if (sectionIngredient.ingredient?.Recipe) {
+  if (sectionIngredient.ingredient?.recipe) {
     return {
       ...sectionIngredient,
       type: "recipe",
-      recipe: dbRecipeToAPIShallow(sectionIngredient.ingredient.Recipe),
+      recipe: dbRecipeToAPIShallow(sectionIngredient.ingredient.recipe),
       ingredient: null,
       amounts: sectionIngredient.amounts,
     };

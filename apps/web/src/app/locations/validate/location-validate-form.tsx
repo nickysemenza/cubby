@@ -408,10 +408,10 @@ export function LocationValidateForm({
 
       {/* Missing */}
       {missing.length > 0 && (
-        <Card className="border-amber-300">
+        <Card className="border-warning/40">
           <CardHeader className="pb-2">
             <CardTitle>
-              <CircleAlert className="h-4 w-4 text-amber-600" />
+              <CircleAlert className="h-4 w-4 text-warning" />
               Missing ({missing.length})
             </CardTitle>
           </CardHeader>

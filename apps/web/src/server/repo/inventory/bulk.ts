@@ -55,7 +55,10 @@ export const bulkProcessInventoryEntries = async (
   items: InventoryBulkOperationItem[],
   actor: ActorContext,
 ) => {
-  // Use a transaction to ensure all operations are processed atomically
+  // Transaction boundary: the entire diff (deletes of removed items, creates +
+  // updates of submitted items, audit logging, and the location timestamp bump)
+  // commits or rolls back as one unit so a partial failure leaves no half-applied
+  // bulk state.
   const processedItems = await withTransaction(
     db,
     async (tx: DrizzleTransaction) => {
@@ -129,7 +132,10 @@ export const bulkProcessInventoryEntries = async (
         if (!item.id) {
           // Create new inventory entry - productId and amount are required
           if (!item.productId || !item.amount) {
-            throw new Error("productId and amount are required for new items");
+            throw createAppError(
+              "REQUIRED_FIELD_MISSING",
+              "productId and amount are required for new items",
+            );
           }
 
           // Compute valuation using pre-fetched price
@@ -252,9 +258,16 @@ export const bulkMoveInventoryEntries = async (
 ) => {
   // Validate source and target are different
   if (payload.sourceLocationId === payload.targetLocationId) {
-    throw new Error("Source and target locations must be different");
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Source and target locations must be different",
+    );
   }
 
+  // Transaction boundary: every per-item move (source decrement/delete, target
+  // merge/create, audit logging, and both location timestamp bumps) commits or
+  // rolls back as one unit, so a failure partway through the items never leaves
+  // inventory split between source and target.
   const processedItems = await withTransaction(
     db,
     async (tx: DrizzleTransaction) => {
@@ -317,7 +330,8 @@ export const bulkMoveInventoryEntries = async (
         const moveQuantity = item.quantity.value;
 
         if (moveQuantity > sourceQuantity) {
-          throw new Error(
+          throw createAppError(
+            "CONSTRAINT_VIOLATION",
             `Cannot move ${moveQuantity} ${item.quantity.unit} - only ${sourceQuantity} available`,
           );
         }

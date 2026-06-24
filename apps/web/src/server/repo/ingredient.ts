@@ -207,7 +207,7 @@ export const mergeIngredients = async (
 };
 
 type IngredientDeepDB = typeof ingredient.$inferSelect & {
-  Product: Array<
+  product: Array<
     typeof product.$inferSelect & {
       unitMappings: Array<typeof productUnitMappings.$inferSelect>;
       externalIds: Array<typeof productExternalId.$inferSelect>;
@@ -216,8 +216,8 @@ type IngredientDeepDB = typeof ingredient.$inferSelect & {
       }>;
     }
   >;
-  Recipe: typeof recipe.$inferSelect | null;
-  RecipeSectionIngredient: Array<
+  recipe: typeof recipe.$inferSelect | null;
+  recipeSectionIngredient: Array<
     typeof recipeSectionIngredient.$inferSelect & {
       recipeSection: typeof recipeSection.$inferSelect & {
         recipe: typeof recipe.$inferSelect;
@@ -230,10 +230,14 @@ const dbIngredientToAPI = async (
   _db: Database | DrizzleTransaction,
   ingredientData: IngredientDeepDB,
 ): Promise<IngredientWithRecipesAndProductOut> => {
-  const { Product, Recipe, RecipeSectionIngredient, ...restOfIngredient } =
-    ingredientData;
+  const {
+    product: productRel,
+    recipe: recipeRel,
+    recipeSectionIngredient: recipeSectionIngredientRel,
+    ...restOfIngredient
+  } = ingredientData;
 
-  const productWithMappings = mapRelation(Product, (prod) => {
+  const productWithMappings = mapRelation(productRel, (prod) => {
     const { ingredientId: _ingredientId, ...prodRest } = prod;
     return {
       ...prodRest,
@@ -249,13 +253,13 @@ const dbIngredientToAPI = async (
   // sections); the deduped `appearsInRecipes` is derived from these. Shared with
   // the product detail view via computeRecipeUsages.
   const { recipeUsages, appearsInRecipes } = computeRecipeUsages(
-    RecipeSectionIngredient ?? [],
+    recipeSectionIngredientRel ?? [],
   );
 
   return {
     ...restOfIngredient,
     id: restOfIngredient.id,
-    recipe: Recipe ? dbRecipeToAPIShallow(Recipe) : null,
+    recipe: recipeRel ? dbRecipeToAPIShallow(recipeRel) : null,
     product: productWithMappings,
     recipeUsages,
     appearsInRecipes,
@@ -390,6 +394,9 @@ export const createIngredient = async (
   });
 
   if (!ingredientData) {
+    // INTERNAL_SERVER_ERROR (500): the row was just written, so its absence is a
+    // genuine internal fault, not a missing-entity 404. No createAppError reason
+    // maps to 500 here, and matches the sibling pattern in recipe/crud.ts.
     throw new Error("Failed to fetch created ingredient");
   }
 
@@ -433,6 +440,9 @@ export const updateIngredient = async (
   });
 
   if (!ingredientData) {
+    // INTERNAL_SERVER_ERROR (500): the row was just written, so its absence is a
+    // genuine internal fault, not a missing-entity 404. No createAppError reason
+    // maps to 500 here, and matches the sibling pattern in recipe/crud.ts.
     throw new Error("Failed to fetch updated ingredient");
   }
 

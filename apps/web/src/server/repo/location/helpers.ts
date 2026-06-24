@@ -53,15 +53,15 @@ export const dbLocationToAPI = (
 export const dbLocationToAPIWithChildren = (
   locationData: LocationDeepDB,
 ): LocationOutWithParentChildren => {
-  const { parent, children, InventoryEntries, ...restOfLocation } =
+  const { parent, children, inventoryEntries, ...restOfLocation } =
     locationData;
 
   return {
     ...dbLocationToAPI(restOfLocation),
     parent: parent ? dbLocationToAPI(parent) : null,
     children: mapRelation(children, dbLocationToAPI),
-    inventoryEntries: mapRelation(InventoryEntries, (x) => {
-      const { Product, ...rest } = x;
+    inventoryEntries: mapRelation(inventoryEntries, (x) => {
+      const { product, ...rest } = x;
       return {
         id: rest.id,
         amount: rest.amount as { value: number; unit: string },
@@ -69,22 +69,22 @@ export const dbLocationToAPIWithChildren = (
         createdAt: rest.createdAt,
         updatedAt: rest.updatedAt,
         product: {
-          id: Product.id,
-          shortcode: unsafeProductShortcode(Product.shortcode),
-          name: Product.name,
-          manufacturer: Product.manufacturer,
-          category: Product.category,
-          upc: Product.upc,
-          fdc_id: Product.fdc_id,
-          model: Product.model,
-          expectedQuantity: Product.expectedQuantity,
-          price: Product.price,
-          usdaUnavailable: Product.usdaUnavailable,
+          id: product.id,
+          shortcode: unsafeProductShortcode(product.shortcode),
+          name: product.name,
+          manufacturer: product.manufacturer,
+          category: product.category,
+          upc: product.upc,
+          fdc_id: product.fdc_id,
+          model: product.model,
+          expectedQuantity: product.expectedQuantity,
+          price: product.price,
+          usdaUnavailable: product.usdaUnavailable,
           // Product images/externalIds are not fetched in this query for performance reasons
           images: [],
           externalIds: [],
-          createdAt: Product.createdAt,
-          updatedAt: Product.updatedAt,
+          createdAt: product.createdAt,
+          updatedAt: product.updatedAt,
         },
       };
     }),

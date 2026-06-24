@@ -134,10 +134,7 @@ function StatCard({ entity, count, isLoading, isError }: StatCardProps) {
               def.color.bg,
               def.color.text,
             )}
-            style={{
-              boxShadow:
-                "inset 0 1px 2px rgba(255,255,255,0.3), inset 0 -1px 2px rgba(0,0,0,0.1)",
-            }}
+            style={{ boxShadow: "var(--shadow-inset-gloss)" }}
           >
             <Icon className="h-4 w-4" />
           </div>

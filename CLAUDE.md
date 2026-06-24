@@ -139,5 +139,10 @@ Don't brand shortcode columns or `Image` ids — those add insert-side friction 
 
 ## Colors / Design Tokens
 
-- Never hardcode colors (hex/oklch) in components. Use the tokens in `apps/web/src/styles.css` — the warm chart ramp (`--chart-1..8`) and semantic tokens (`--plum`, `--positive`, `--warning`, …).
-- A new semantic color gets a `--token` in `:root` **and** a `--color-*` mirror in `@theme inline` (the `--plum` / `--color-plum` pattern), so both `var(--token)` and Tailwind utilities (`text-foo`) work. e.g. `--ingredient-amount/name/modifier`.
+- Never hardcode colors (hex/oklch) in components. Use the tokens in `apps/web/src/styles.css` — the warm chart ramp (`--chart-1..8`) and semantic tokens (`--plum`, `--positive`, `--warning`, …). Map green→`positive`, red→`destructive`, amber/yellow→`warning` (one tone — don't reintroduce a `text-amber-600/700/800` shade ladder). This is **enforced** by `scripts/check-conventions.mjs` (run via `pnpm check`); the only exempt surfaces are `design-gallery.tsx`/`design.tsx` (swatches), `IsometricPantry.tsx` (`<canvas>` paint), and `theme-color`/chart-lib fallbacks.
+- A new semantic color gets a `--token` in `:root` **and** a `--color-*` mirror in `@theme inline` (the `--plum` / `--color-plum` pattern), so both `var(--token)` and Tailwind utilities (`text-foo`) work. e.g. `--ingredient-amount/name/modifier`. **Composite shadow/text-shadow tokens** (`--shadow-chunky*`, `--shadow-inset-gloss`, `--shadow-scan-flash`, `--text-shadow-chart`) need **no** `@theme` mirror — use via `shadow-[var(--token)]` or `style={{ boxShadow: "var(--token)" }}`. Don't inline `rgba()` shadows in components; add a token.
+
+## Spacing
+
+- Named scale on the layout cvas in `apps/web/src/styles/layouts.ts`: `xs=1, sm=2, md=4, lg=6` (Tailwind units). Prefer these named keys over bare numbers; pick from `{1,2,4,6}` — `gap-3`/`space-y-3`/`gap-1.5` are the drift to avoid.
+- `gap-*` for flex/grid containers (siblings laid out by the parent); `space-y-*` only for plain block stacks with no flex/grid context. Soft convention (Biome can't custom-lint it) — enforce by review + the `/design` gallery.

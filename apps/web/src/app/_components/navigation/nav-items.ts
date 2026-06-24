@@ -7,13 +7,16 @@ import {
   BookOpen,
   Bot,
   Boxes,
+  CalendarRange,
   Camera,
+  ChefHat,
   FileText,
   Hammer,
   Home,
   LayoutDashboard,
   ListChecks,
   MoreHorizontal,
+  Package,
   Palette,
   QrCode,
   ScanBarcode,
@@ -23,6 +26,7 @@ import {
   Sparkles,
   TrendingUp,
   Utensils,
+  Wrench,
 } from "lucide-react";
 import { useMemo } from "react";
 import { entities } from "~/entities/entities";
@@ -72,13 +76,71 @@ const inventory: NavItem = {
  * The signed-in desktop bar, top to bottom — the single source of truth for the
  * authed IA. Dropdowns nest their leaves and own their trigger icon. Active
  * state is derived (see {@link findActiveTo}), so nothing carries match logic.
+ *
+ * `Dev` is intentionally always present — cubby is a personal tool, so there's
+ * no feature flag or DEV gate on the developer group.
  */
 export const desktopNav: NavNode[] = [
-  home,
-  { to: "/products", label: "Products", icon: entities.product.lucideIcon },
   {
-    label: "Kitchen",
-    icon: entities.recipe.lucideIcon,
+    label: "Cook",
+    icon: ChefHat,
+    children: [
+      recipes,
+      { to: "/cookbooks", label: "Cookbooks", icon: BookOpen },
+      { to: "/meals/suggestions", label: "What can I make?", icon: Sparkles },
+    ],
+  },
+  {
+    label: "Pantry",
+    icon: Boxes,
+    children: [
+      inventory,
+      locations,
+      { to: "/products", label: "Products", icon: entities.product.lucideIcon },
+      { to: "/pantry-view", label: "Pantry view", icon: Package },
+    ],
+  },
+  {
+    label: "Plan",
+    icon: CalendarRange,
+    children: [
+      { to: "/meals", label: "Meals", icon: Utensils },
+      {
+        to: "/meals/shopping-list",
+        label: "Shopping list",
+        icon: ShoppingCart,
+      },
+    ],
+  },
+  {
+    label: "Reports",
+    icon: LayoutDashboard,
+    children: [
+      { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { to: "/insights", label: "Insights", icon: TrendingUp },
+      { to: "/activity", label: "Activity", icon: Activity },
+      { to: "/problems", label: "Problems", icon: AlertTriangle },
+    ],
+  },
+  {
+    label: "More",
+    icon: MoreHorizontal,
+    children: [
+      { to: "/capture", label: "Capture", icon: Camera },
+      {
+        to: "/inventory/quick-capture",
+        label: "Scan UPC",
+        icon: ScanBarcode,
+      },
+      { to: "/labels", label: "Labels", icon: QrCode },
+      { to: "/ask", label: "Ask AI", icon: Bot },
+      { to: "/search", label: "Search", icon: Search },
+      { to: "/settings", label: "Settings", icon: Settings },
+    ],
+  },
+  {
+    label: "Dev",
+    icon: Wrench,
     children: [
       {
         to: "/ingredients",
@@ -91,46 +153,15 @@ export const desktopNav: NavNode[] = [
         label: "Equivalences",
         icon: ArrowLeftRight,
       },
-      recipes,
-      { to: "/cookbooks", label: "Cookbooks", icon: BookOpen },
-      { to: "/meals", label: "Meals", icon: Utensils },
-      {
-        to: "/meals/shopping-list",
-        label: "Shopping list",
-        icon: ShoppingCart,
-      },
-      { to: "/meals/suggestions", label: "What can I make?", icon: Sparkles },
       {
         to: "/usda",
-        label: "USDA Foods",
+        label: "USDA",
         icon: entities["usda-food"].lucideIcon,
       },
-    ],
-  },
-  locations,
-  inventory,
-  { to: "/projects", label: "Projects", icon: Hammer },
-  {
-    label: "Reports",
-    icon: LayoutDashboard,
-    children: [
-      { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { to: "/activity", label: "Activity", icon: Activity },
-      { to: "/insights", label: "Insights", icon: TrendingUp },
-      { to: "/pantry-view", label: "Pantry view", icon: Boxes },
-      { to: "/problems", label: "Problems", icon: AlertTriangle },
-      { to: "/ai-smoke-test", label: "AI smoke test", icon: Sparkles },
-    ],
-  },
-  {
-    label: "More",
-    icon: MoreHorizontal,
-    children: [
-      { to: "/capture", label: "Capture shelf", icon: Camera },
-      { to: "/labels", label: "Labels", icon: QrCode },
-      { to: "/ask", label: "Ask AI", icon: Bot },
       { to: "/images", label: "Images", icon: entities.image.lucideIcon },
-      { to: "/settings", label: "Settings", icon: Settings },
+      { to: "/projects", label: "Projects", icon: Hammer },
+      { to: "/design", label: "Design", icon: Palette },
+      { to: "/ai-smoke-test", label: "AI smoke test", icon: Sparkles },
     ],
   },
 ];
@@ -156,10 +187,15 @@ export const bottomNavItems: NavItem[] = [
 
 const bottomTabTargets = new Set(bottomNavItems.map((item) => item.to));
 
-/** Mobile "More" sheet — every authed leaf that isn't already a primary tab. */
-export const moreNavItems: NavItem[] = desktopLeaves.filter(
-  (leaf) => !bottomTabTargets.has(leaf.to),
-);
+/**
+ * Mobile "More" sheet — Home first (the desktop logo links home, but the mobile
+ * bar has no logo, so Home would otherwise be unreachable), then every authed
+ * leaf that isn't already a primary tab.
+ */
+export const moreNavItems: NavItem[] = [
+  home,
+  ...desktopLeaves.filter((leaf) => !bottomTabTargets.has(leaf.to)),
+];
 
 /** Signed-out bar / bottom tabs — always flat leaves (no dropdowns). */
 export const publicNavItems: NavItem[] = [

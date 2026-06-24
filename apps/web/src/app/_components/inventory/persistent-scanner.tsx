@@ -161,18 +161,18 @@ export function PersistentScanner({
           {isQrMode ? (
             /* Square guide for QR codes */
             <div
-              className={`h-48 w-48 rounded-lg border-2 shadow-[0_0_0_9999px_rgba(0,0,0,0.4)] transition-colors duration-150 ${
+              className={`h-48 w-48 rounded-lg border-2 shadow-[var(--shadow-scan-scrim)] transition-colors duration-150 ${
                 scanFlash
-                  ? "border-green-400 shadow-[0_0_0_9999px_rgba(0,0,0,0.4),0_0_20px_rgba(74,222,128,0.5)]"
+                  ? "border-positive shadow-[var(--shadow-scan-flash)]"
                   : "border-white/60"
               }`}
             />
           ) : (
             /* Wide horizontal guide for barcodes */
             <div
-              className={`h-28 w-[85%] rounded-lg border-2 shadow-[0_0_0_9999px_rgba(0,0,0,0.4)] transition-colors duration-150 ${
+              className={`h-28 w-[85%] rounded-lg border-2 shadow-[var(--shadow-scan-scrim)] transition-colors duration-150 ${
                 scanFlash
-                  ? "border-green-400 shadow-[0_0_0_9999px_rgba(0,0,0,0.4),0_0_20px_rgba(74,222,128,0.5)]"
+                  ? "border-positive shadow-[var(--shadow-scan-flash)]"
                   : "border-white/60"
               }`}
             />
@@ -205,7 +205,7 @@ export function PersistentScanner({
           <span
             className={`rounded-full px-3 py-1 text-sm transition-colors duration-150 ${
               scanFlash
-                ? "bg-green-500/80 text-white"
+                ? "bg-positive text-primary-foreground"
                 : "bg-black/60 text-white"
             }`}
           >

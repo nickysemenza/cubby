@@ -1,3 +1,19 @@
+/**
+ * Image repository — the single data-access boundary for the `image` entity and
+ * its product / location / recipe association join tables.
+ *
+ * Public API (consumed by routers + services; keep these signatures stable):
+ * - {@link initiateImageUploadWithoutEntity} — create a PENDING image + presigned upload URL
+ * - {@link imageList}                         — paginated/sorted/filtered list with entity associations
+ * - {@link getImageById}                      — fetch one image with its entity association
+ * - {@link cullPendingImages}                 — GC PENDING images with no association older than a cutoff
+ * - {@link importImageFromUrl}                — fetch+store an external image (or reuse one already in our bucket)
+ * - {@link associateImagesWithProduct}        — attach PENDING images to a product
+ *
+ * Everything else in this file (helpers, relation config, the by-key lookup) is
+ * intentionally module-private.
+ */
+
 import type {
   ImageWithEntity,
   InitiateUploadWithoutEntityInput,

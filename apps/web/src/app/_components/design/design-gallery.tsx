@@ -410,6 +410,61 @@ export function DesignGallery() {
         </div>
       </GallerySection>
 
+      <GallerySection title="Elevation & shadows" source="styles.css :root">
+        <div className="flex flex-wrap items-end gap-4">
+          {(
+            [
+              ["--shadow-chunky-sm", "chunky-sm"],
+              ["--shadow-chunky", "chunky"],
+              ["--shadow-chunky-lg", "chunky-lg"],
+            ] as const
+          ).map(([token, label]) => (
+            <div key={token} className="flex flex-col items-center gap-1.5">
+              <div
+                className="h-16 w-24 rounded-lg border border-[var(--border-chunky)] bg-card"
+                style={{ boxShadow: `var(${token})` }}
+              />
+              <span className="font-mono text-3xs text-muted-foreground">
+                {label}
+              </span>
+            </div>
+          ))}
+          <div className="flex flex-col items-center gap-1.5">
+            <div
+              className="h-16 w-24 rounded-lg bg-gradient-to-br from-chart-1 to-chart-5"
+              style={{ boxShadow: "var(--shadow-inset-gloss)" }}
+            />
+            <span className="font-mono text-3xs text-muted-foreground">
+              inset-gloss
+            </span>
+          </div>
+          <div className="flex flex-col items-center gap-1.5">
+            <div className="grid h-16 w-24 place-items-center rounded-lg bg-foreground">
+              <div
+                className="h-10 w-16 rounded border-2 border-positive"
+                style={{ boxShadow: "var(--shadow-scan-flash)" }}
+              />
+            </div>
+            <span className="font-mono text-3xs text-muted-foreground">
+              scan-flash
+            </span>
+          </div>
+          <div className="flex flex-col items-center gap-1.5">
+            <div className="grid h-16 w-24 place-items-center rounded-lg bg-chart-3">
+              <span
+                className="font-semibold text-white text-xs"
+                style={{ textShadow: "var(--text-shadow-chart)" }}
+              >
+                Label
+              </span>
+            </div>
+            <span className="font-mono text-3xs text-muted-foreground">
+              text-shadow-chart
+            </span>
+          </div>
+        </div>
+      </GallerySection>
+
       <GallerySection title="Typography" source="styles.css @layer base">
         <div className="space-y-2">
           <h1>Heading 1 — Fraunces display</h1>

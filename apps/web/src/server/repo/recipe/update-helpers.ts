@@ -22,6 +22,7 @@ import {
   recipeSection,
   recipeSectionIngredient,
 } from "~/server/db/schema";
+import { createAppError } from "~/server/errors/app-error";
 import {
   findOrCreate,
   insertAndReturn,
@@ -59,7 +60,10 @@ export const findOrCreateRecipeLinkIngredient = async (
         columns: { name: true },
       });
       if (!recipeRecord) {
-        throw new Error(`Recipe with ID ${recipeId} not found`);
+        throw createAppError(
+          "RECIPE_NOT_FOUND",
+          `Recipe with ID ${recipeId} not found`,
+        );
       }
       return { name: `Recipe: ${recipeRecord.name}`, aliases: [], recipeId };
     },
@@ -469,7 +473,8 @@ export async function handleSectionUpdates(
       );
 
       if (!existingSection) {
-        throw new Error(
+        throw createAppError(
+          "RECIPE_NOT_FOUND",
           `Section with ID ${sectionUpdate.id} not found in recipe ${recipeId}`,
         );
       }

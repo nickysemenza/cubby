@@ -37,6 +37,8 @@ interface DetailPageProps {
   heroStamp?: { label: string; tone?: "ink" | "red" | "green" };
   /** Reference code shown in the eyebrow (e.g. the product shortcode) */
   heroNo?: string;
+  /** Page-level action cluster (edit / move / delete) rendered on the hero plate. */
+  actions?: ReactNode;
 }
 
 /** Pull a created-at date out of the raw entity for the hero's ledger meta. */
@@ -166,9 +168,11 @@ export const DetailPage: FC<DetailPageProps> = ({
   heroStats,
   heroStamp,
   heroNo,
+  actions,
 }) => {
   const { isDebugEnabled } = useDebug();
   const isMobile = useIsMobile();
+
   const onFileSince = getOnFileSince(rawData);
   const entityDef = entities[entity];
   // Entity-colored spine, same runtime class trick as the homepage stat cards.
@@ -205,11 +209,14 @@ export const DetailPage: FC<DetailPageProps> = ({
                 </p>
               )}
             </div>
-            {heroStamp && (
-              <InkStamp tone={heroStamp.tone} className="mt-1 shrink-0">
-                {heroStamp.label}
-              </InkStamp>
-            )}
+            <div className="flex shrink-0 items-center gap-2">
+              {heroStamp && (
+                <InkStamp tone={heroStamp.tone} className="mt-1">
+                  {heroStamp.label}
+                </InkStamp>
+              )}
+              {actions}
+            </div>
           </div>
           {heroStats && heroStats.length > 0 && (
             <div className="mt-3 flex border-foreground/25 border-t border-dashed pt-2.5">

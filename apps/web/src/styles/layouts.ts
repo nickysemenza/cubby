@@ -1,5 +1,19 @@
 import { cva, type VariantProps } from "class-variance-authority";
 
+/**
+ * Named spacing scale (values are Tailwind spacing units → 0.25rem each):
+ *
+ *   xs = 1 (0.25rem)   sm = 2 (0.5rem)   md = 4 (1rem)   lg = 6 (1.5rem)
+ *
+ * Use these named keys on the layout cvas below instead of bare numbers; the
+ * numeric keys are kept only for back-compat with existing call sites.
+ *
+ * gap vs. space-y: `gap` belongs on flex/grid containers (spaces children in
+ * any flow direction); `space-y` is for plain block stacks where there's no
+ * flex/grid context. Reach for `flexContainerVariants` / `gridContainerVariants`
+ * (gap) by default; use `spacedContainerVariants` (space-y) only for vertical
+ * block stacks.
+ */
 export const flexContainerVariants = cva("flex", {
   variants: {
     align: {
@@ -10,6 +24,12 @@ export const flexContainerVariants = cva("flex", {
       end: "justify-end",
     },
     gap: {
+      // Named spacing scale (preferred):
+      xs: "gap-1",
+      sm: "gap-2",
+      md: "gap-4",
+      lg: "gap-6",
+      // Numeric keys kept for back-compat:
       1: "gap-1",
       2: "gap-2",
     },
@@ -28,6 +48,12 @@ export const gridContainerVariants = cva("grid gap-4", {
       summary: "grid-cols-[repeat(auto-fit,minmax(7rem,1fr))]",
     },
     gap: {
+      // Named spacing scale (preferred):
+      xs: "gap-1",
+      sm: "gap-2",
+      md: "gap-4",
+      lg: "gap-6",
+      // Numeric keys kept for back-compat:
       2: "gap-2",
       4: "gap-4",
     },
@@ -40,6 +66,12 @@ export const gridContainerVariants = cva("grid gap-4", {
 export const spacedContainerVariants = cva("space-y-4", {
   variants: {
     space: {
+      // Named spacing scale (preferred):
+      xs: "space-y-1",
+      sm: "space-y-2",
+      md: "space-y-4",
+      lg: "space-y-6",
+      // Numeric keys kept for back-compat:
       0: "space-y-0",
       4: "space-y-4",
     },

@@ -315,7 +315,7 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
                     textAnchor="middle"
                     dominantBaseline="middle"
                     className="pointer-events-none fill-white font-semibold text-2xs"
-                    style={{ textShadow: "0 1px 3px rgba(0,0,0,0.7)" }}
+                    style={{ textShadow: "var(--text-shadow-chart)" }}
                   >
                     {truncatedName}
                   </text>

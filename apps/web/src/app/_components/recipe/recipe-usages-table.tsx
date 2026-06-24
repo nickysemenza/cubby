@@ -98,10 +98,10 @@ export function RecipeUsagesTable({
                 <Tooltip>
                   <TooltipTrigger
                     render={
-                      <span className="inline-flex items-center gap-1 text-amber-700" />
+                      <span className="inline-flex items-center gap-1 text-warning" />
                     }
                   >
-                    <AlertCircle className="h-3 w-3 shrink-0 text-amber-600" />—
+                    <AlertCircle className="h-3 w-3 shrink-0 text-warning" />—
                   </TooltipTrigger>
                   <TooltipContent>No parsed amount</TooltipContent>
                 </Tooltip>

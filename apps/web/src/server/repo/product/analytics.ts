@@ -15,7 +15,7 @@ export const findDuplicateUniqueProducts = async (db: Database) => {
   const duplicates = await getDb(db).query.product.findMany({
     where: and(eq(product.expectedQuantity, 1), notDeleted(product)),
     with: {
-      InventoryEntry: {
+      inventoryEntry: {
         with: {
           location: true,
         },
@@ -23,7 +23,7 @@ export const findDuplicateUniqueProducts = async (db: Database) => {
     },
   });
 
-  return duplicates.filter((prod) => prod.InventoryEntry.length > 1);
+  return duplicates.filter((prod) => prod.inventoryEntry.length > 1);
 };
 
 /**
@@ -87,7 +87,7 @@ export const getCategoryDistribution = async (
       category: true,
     },
     with: {
-      InventoryEntry: {
+      inventoryEntry: {
         columns: {},
         with: {
           location: {
@@ -124,7 +124,7 @@ export const getCategoryDistribution = async (
     catData.productCount++;
 
     // Count locations for this product
-    for (const entry of prod.InventoryEntry) {
+    for (const entry of prod.inventoryEntry) {
       const loc = entry.location;
       const existing = catData.locationCounts.get(loc.id);
       if (existing) {

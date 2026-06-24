@@ -1,5 +1,5 @@
 import type { VariantProps } from "class-variance-authority";
-import { lazy, type ReactNode, Suspense } from "react";
+import { lazy, type ReactNode, Suspense, useEffect, useRef } from "react";
 import {
   Controller,
   type FieldValues,
@@ -9,9 +9,9 @@ import {
   type UseFormReturn,
 } from "react-hook-form";
 import { toast } from "sonner";
+import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button, type buttonVariants } from "~/components/ui/button";
 import { FilterableCombobox } from "~/components/ui/combobox";
-import { Field, FieldError, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { QuantityInput } from "~/components/ui/quantity-input";
 import { Spinner } from "~/components/ui/spinner";
@@ -20,6 +20,7 @@ import { useFlag } from "~/lib/flags";
 import { cn } from "~/lib/utils";
 import { DialogCompatibleCombobox } from "./combobox/combobox-dialog";
 import type { ComboboxItem } from "./combobox/combobox-types";
+import { FormFieldGroup } from "./forms/form-field-group";
 
 // Build-time guard so the bundler eliminates the @hookform/devtools import (and
 // its lodash dependency) from production builds. build:cf pins NODE_ENV=production
@@ -78,6 +79,44 @@ function getPendingButtonText(text: string): string {
   return `${text}…`;
 }
 
+/**
+ * Submission-level feedback banner for a form — distinct from per-field
+ * `FieldError`. Surfaces a server/mutation error (the `error` string flows up
+ * from the entity mutation hooks) in the same `destructive` Alert chrome used
+ * across the app. Every `FormWrapper`-based form gets this automatically by
+ * passing an `error` string; not exported standalone until a non-wrapper
+ * consumer needs it (keeps the lint/knip unused-export gate clean).
+ */
+function FormStatusBanner({ error }: { error?: string }) {
+  if (!error) return null;
+  return (
+    <Alert variant="destructive" data-slot="form-status-banner">
+      <AlertTitle>Couldn’t save</AlertTitle>
+      <AlertDescription>{error}</AlertDescription>
+    </Alert>
+  );
+}
+
+/**
+ * Fire a success toast on the pending → settled transition (when no error
+ * landed). Kept generic so any `FormWrapper`-based form can opt in by passing
+ * `successMessage`; the edge-trigger on `isPending` avoids re-toasting on
+ * unrelated re-renders.
+ */
+function useSubmitSuccessToast(
+  isPending: boolean,
+  error: string | undefined,
+  successMessage: string | undefined,
+) {
+  const wasPending = useRef(false);
+  useEffect(() => {
+    if (wasPending.current && !isPending && !error && successMessage) {
+      toast.success(successMessage);
+    }
+    wasPending.current = isPending;
+  }, [isPending, error, successMessage]);
+}
+
 // Form wrapper component with common layout and buttons
 export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
   form,
@@ -90,6 +129,7 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
   children,
   stickyFooter = false,
   footerStart,
+  successMessage,
 }: {
   form: UseFormReturn<TFieldValues>;
   onSubmit: (values: TFieldValues) => void;
@@ -103,11 +143,17 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
   stickyFooter?: boolean;
   /** Left slot of the sticky bar (e.g. a live tally). Sticky mode only. */
   footerStart?: ReactNode;
+  /**
+   * Toast shown once a submit settles successfully (pending → done, no error).
+   * Omit to keep the form silent on success (e.g. when the caller toasts).
+   */
+  successMessage?: string;
 }) {
   // Runtime opt-in via the `formDevtools` developer flag. The hook runs in all
   // builds (Rules of Hooks), but the panel only mounts when the devtools are
   // bundled (dev) AND the user has flipped the flag on in Settings → Developer.
   const formDevtoolsEnabled = useFlag("formDevtools");
+  useSubmitSuccessToast(isPending, error, successMessage);
   return (
     <FormProvider {...form}>
       {FORM_DEVTOOLS_BUNDLED && formDevtoolsEnabled ? (
@@ -136,7 +182,7 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
       >
         {children}
 
-        {error && <div className="text-destructive text-sm">{error}</div>}
+        <FormStatusBanner error={error} />
 
         {/* flex-col-reverse: primary submit sits at the bottom (thumb reach)
             on mobile, full-width; reverts to submit-left/cancel-right on sm+.
@@ -207,8 +253,12 @@ export function RequiredTextareaField<
       control={form.control}
       name={name}
       render={({ field, fieldState }) => (
-        <Field data-invalid={fieldState.invalid}>
-          <FieldLabel htmlFor={name}>{label}</FieldLabel>
+        <FormFieldGroup
+          htmlFor={name}
+          label={label}
+          invalid={fieldState.invalid}
+          error={fieldState.error}
+        >
           <Textarea
             id={name}
             placeholder={placeholder}
@@ -217,8 +267,7 @@ export function RequiredTextareaField<
             rows={rows}
             aria-invalid={fieldState.invalid}
           />
-          {fieldState.error && <FieldError errors={[fieldState.error]} />}
-        </Field>
+        </FormFieldGroup>
       )}
     />
   );
@@ -256,8 +305,12 @@ export function NullableNumericField<
       render={({ field, fieldState }) => {
         if (fraction) {
           return (
-            <Field data-invalid={fieldState.invalid}>
-              <FieldLabel htmlFor={name}>{label}</FieldLabel>
+            <FormFieldGroup
+              htmlFor={name}
+              label={label}
+              invalid={fieldState.invalid}
+              error={fieldState.error}
+            >
               <QuantityInput
                 id={name}
                 aria-label={label}
@@ -269,8 +322,7 @@ export function NullableNumericField<
                   )
                 }
               />
-              {fieldState.error && <FieldError errors={[fieldState.error]} />}
-            </Field>
+            </FormFieldGroup>
           );
         }
 
@@ -292,8 +344,12 @@ export function NullableNumericField<
         };
 
         return (
-          <Field data-invalid={fieldState.invalid}>
-            <FieldLabel htmlFor={name}>{label}</FieldLabel>
+          <FormFieldGroup
+            htmlFor={name}
+            label={label}
+            invalid={fieldState.invalid}
+            error={fieldState.error}
+          >
             {prefix ? (
               <div className="relative">
                 <span className="absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground">
@@ -304,8 +360,7 @@ export function NullableNumericField<
             ) : (
               <Input {...inputProps} />
             )}
-            {fieldState.error && <FieldError errors={[fieldState.error]} />}
-          </Field>
+          </FormFieldGroup>
         );
       }}
     />
@@ -340,8 +395,12 @@ export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
       control={form.control}
       name={name}
       render={({ field, fieldState }) => (
-        <Field data-invalid={fieldState.invalid}>
-          {label && <FieldLabel htmlFor={name}>{label}</FieldLabel>}
+        <FormFieldGroup
+          htmlFor={name}
+          label={label}
+          invalid={fieldState.invalid}
+          error={fieldState.error}
+        >
           <DialogCompatibleCombobox
             label={label?.toLowerCase() ?? "item"}
             items={items}
@@ -356,8 +415,7 @@ export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
             }}
             onCreateNew={onCreateNew}
           />
-          {fieldState.error && <FieldError errors={[fieldState.error]} />}
-        </Field>
+        </FormFieldGroup>
       )}
     />
   );
@@ -476,8 +534,12 @@ export function UnifiedTextField<
           ? getIcon(nullable ? (field.value as string | null) : field.value)
           : null;
         return (
-          <Field data-invalid={fieldState.invalid}>
-            <FieldLabel htmlFor={name}>{label}</FieldLabel>
+          <FormFieldGroup
+            htmlFor={name}
+            label={label}
+            invalid={fieldState.invalid}
+            error={fieldState.error}
+          >
             <div className="relative">
               <Input
                 id={name}
@@ -497,8 +559,7 @@ export function UnifiedTextField<
                 </span>
               )}
             </div>
-            {fieldState.error && <FieldError errors={[fieldState.error]} />}
-          </Field>
+          </FormFieldGroup>
         );
       }}
     />
@@ -547,8 +608,13 @@ export function SelectField<TFieldValues extends FieldValues = FieldValues>({
       control={form.control}
       name={name}
       render={({ field, fieldState }) => (
-        <Field data-invalid={fieldState.invalid}>
-          <FieldLabel htmlFor={name}>{label}</FieldLabel>
+        <FormFieldGroup
+          htmlFor={name}
+          label={label}
+          description={description}
+          invalid={fieldState.invalid}
+          error={fieldState.error}
+        >
           <FilterableCombobox
             items={items}
             value={field.value ?? (nullable ? "__none__" : null)}
@@ -558,11 +624,7 @@ export function SelectField<TFieldValues extends FieldValues = FieldValues>({
             placeholder={placeholder || `Select ${label.toLowerCase()}`}
             disabled={disabled}
           />
-          {description && (
-            <p className="text-muted-foreground text-xs">{description}</p>
-          )}
-          {fieldState.error && <FieldError errors={[fieldState.error]} />}
-        </Field>
+        </FormFieldGroup>
       )}
     />
   );

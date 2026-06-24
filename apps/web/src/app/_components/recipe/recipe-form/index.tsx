@@ -605,7 +605,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                     {ingredientImport.matchedCount}/
                     {ingredientImport.totalCount} ingredients matched
                     {ingredientImport.missingCount > 0 && (
-                      <span className="text-amber-600">
+                      <span className="text-warning">
                         {" "}
                         ({ingredientImport.missingCount} will be created)
                       </span>
