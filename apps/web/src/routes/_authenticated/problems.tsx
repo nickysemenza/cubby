@@ -7,9 +7,12 @@ export const Route = createFileRoute("/_authenticated/problems")({
   // Warm the (heavy) full-scan query before render — usually already cached from
   // the navbar badge, so this rarely blocks; RoutePending covers a cold load.
   loader: async ({ context }) => {
-    await context.queryClient.ensureQueryData(
-      context.trpc.problems.getAllProblems.queryOptions(),
-    );
+    await context.queryClient.ensureQueryData({
+      ...context.trpc.problems.getAllProblems.queryOptions(),
+      // Match the navbar/badge staleTime — ensureQueryData honors it, so a warm
+      // cache is reused instead of blocking on a full refetch (default 0 = stale).
+      staleTime: 5 * 60 * 1000,
+    });
   },
   pendingComponent: RoutePending,
   component: ProblemsPage,
