@@ -237,7 +237,7 @@ function DetailPlate({
       )}
 
       <Card
-        className={cn("border-l-[6px]", spineClass)}
+        className={cn("border-l-[length:var(--border-spine)]", spineClass)}
         data-testid="detail-spec-plate"
       >
         <CardContent className="px-4 py-1 sm:px-4">

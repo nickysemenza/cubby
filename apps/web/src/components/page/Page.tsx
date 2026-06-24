@@ -8,22 +8,29 @@ import {
 } from "~/components/layouts/page-hero";
 import { HydrateClient } from "~/trpc/hydrate-client";
 
-interface PageProps {
+interface PageBaseProps {
   /** Page title — the big heading (list) or the spec-plate name (detail). */
   title: ReactNode;
-  /** Override the auto-derived eyebrow (list variant only). */
+  /** Override the auto-derived eyebrow. */
   eyebrow?: ReactNode;
-  /** Entity drives the eyebrow path / accent (list) and spine color (detail). */
-  entity?: Entity;
   /** Right-aligned action cluster on the header. */
   actions?: ReactNode;
-  /** "list" (default) renders the list header; "detail" the spec-plate hero. */
-  variant?: "list" | "detail";
   /** Let very wide content breathe instead of capping at the readable column. */
   fullWidth?: boolean;
   children: ReactNode;
+}
 
-  // Detail-only spec-plate extras.
+interface PageListProps extends PageBaseProps {
+  /** "list" (default) renders the list header. */
+  variant?: "list";
+  /** Entity drives the eyebrow path + accent bar. */
+  entity?: Entity;
+}
+
+interface PageDetailProps extends PageBaseProps {
+  variant: "detail";
+  /** Required on detail — drives the spec-plate's entity-colored spine. */
+  entity: Entity;
   /** Status stamp on the plate (e.g. IN STOCK). */
   heroStamp?: { label: string; tone?: "ink" | "red" | "green" };
   /** Inline ledger stats strip (on hand, value, ...). */
@@ -37,24 +44,22 @@ interface PageProps {
 }
 
 /**
+ * Discriminated union — `variant="detail"` requires `entity` at compile time
+ * (the spec-plate can't render without it), so callers get a TS error instead of
+ * the runtime guard in {@link PageHeader}.
+ */
+type PageProps = PageListProps | PageDetailProps;
+
+/**
  * The single page shell for both list and detail pages: client hydration, the
  * width container, the unified {@link PageHeader} (list header or detail
  * spec-plate), and a Suspense boundary around the page body.
  */
-export function Page({
-  title,
-  eyebrow,
-  entity,
-  actions,
-  variant = "list",
-  fullWidth,
-  children,
-  heroStamp,
-  heroStats,
-  heroNo,
-  heroImages,
-  rawData,
-}: PageProps) {
+export function Page(props: PageProps) {
+  const { title, eyebrow, entity, actions, fullWidth, children } = props;
+  const variant = props.variant ?? "list";
+  // Detail-only spec-plate extras, narrowed off the union.
+  const detail = props.variant === "detail" ? props : undefined;
   return (
     <HydrateClient>
       <PageWrapper fullWidth={fullWidth}>
@@ -65,11 +70,11 @@ export function Page({
             eyebrow={eyebrow}
             entity={entity}
             actions={actions}
-            heroStamp={heroStamp}
-            heroStats={heroStats}
-            heroNo={heroNo}
-            heroImages={heroImages}
-            rawData={rawData}
+            heroStamp={detail?.heroStamp}
+            heroStats={detail?.heroStats}
+            heroNo={detail?.heroNo}
+            heroImages={detail?.heroImages}
+            rawData={detail?.rawData}
           />
           <Suspense fallback={<ListLoadingSkeleton />}>{children}</Suspense>
         </div>

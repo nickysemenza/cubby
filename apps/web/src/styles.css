@@ -196,6 +196,9 @@
   /* Border for signature chrome - a hairline a step darker than --border so
      primary surfaces still read defined, just not outlined. */
   --border-chunky: oklch(0.87 0.005 255);
+  /* Entity-colored left "spine" on the detail spec-plate (centrally tunable
+     instead of an inline border-l-[6px]). */
+  --border-spine: 6px;
 
   /* Core colors - 3-step surface elevation: muted < paper(bg) < cream(card) */
   --background: var(--brand-paper);

@@ -217,7 +217,6 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
 
   return (
     <>
-      <LocationBreadcrumb location={location} linkable />
       <Page
         variant="detail"
         entity="location"
@@ -225,6 +224,9 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
         rawData={location}
         heroImages={location.images}
       >
+        {/* Breadcrumb lives inside Page so it sits within the max-width
+            container (was full-width when the route PageWrapper was dropped). */}
+        <LocationBreadcrumb location={location} linkable />
         <DetailSections
           sections={sections}
           rawData={location}
