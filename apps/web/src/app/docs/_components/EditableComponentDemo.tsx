@@ -61,9 +61,9 @@ export function EditableComponentDemo<T>({
   }, [defaultData]);
 
   return (
-    <div className={cn("my-8", className)}>
+    <div className={cn("my-6", className)}>
       {/* Header */}
-      <div className="mb-3 flex items-center gap-3">
+      <div className="mb-2 flex items-center gap-2">
         <span className="inline-flex items-center rounded bg-secondary px-2 py-1 font-medium text-secondary-foreground text-xs">
           Interactive
         </span>
@@ -93,13 +93,13 @@ export function EditableComponentDemo<T>({
       </div>
 
       {description && (
-        <p className="mb-3 text-muted-foreground text-sm">{description}</p>
+        <p className="mb-2 text-muted-foreground text-sm">{description}</p>
       )}
 
       {/* JSON Editor (collapsible) */}
       {isEditing && (
-        <div className="mb-4 overflow-hidden rounded-lg border">
-          <div className="border-b bg-muted/50 px-3 py-2 font-medium text-xs">
+        <div className="mb-4 overflow-hidden rounded-lg border border-[var(--border-chunky)]">
+          <div className="border-b bg-muted/50 px-4 py-2 font-medium text-xs">
             Sample Data (editable)
           </div>
           <div className="max-h-80 overflow-auto p-2">
@@ -116,7 +116,7 @@ export function EditableComponentDemo<T>({
             />
           </div>
           {error && (
-            <div className="border-t bg-destructive/10 px-3 py-2 text-destructive text-xs">
+            <div className="border-t bg-destructive/10 px-4 py-2 text-destructive text-xs">
               Validation error: {error}
             </div>
           )}
@@ -124,7 +124,7 @@ export function EditableComponentDemo<T>({
       )}
 
       {/* Demo content */}
-      <div className="overflow-hidden rounded-lg border bg-card">
+      <div className="overflow-hidden rounded-lg border border-[var(--border-chunky)] bg-card">
         <div className="p-6">{children(data)}</div>
       </div>
     </div>

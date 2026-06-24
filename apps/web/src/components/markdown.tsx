@@ -30,13 +30,13 @@ const components = {
   ),
   ul: (props: ElementProps<"ul">) => (
     <ul
-      className="mb-2 list-disc space-y-0.5 pl-5 last:mb-0"
+      className="mb-2 list-disc space-y-0.5 pl-4 last:mb-0" /* tight */
       {...clean(props)}
     />
   ),
   ol: (props: ElementProps<"ol">) => (
     <ol
-      className="mb-2 list-decimal space-y-0.5 pl-5 last:mb-0"
+      className="mb-2 list-decimal space-y-0.5 pl-4 last:mb-0" /* tight */
       {...clean(props)}
     />
   ),
@@ -59,7 +59,7 @@ const components = {
   ),
   code: (props: ElementProps<"code">) => (
     <code
-      className="rounded bg-muted px-1 py-0.5 font-mono text-xs"
+      className="rounded bg-muted px-1 py-0.5 font-mono text-xs" /* tight */
       {...clean(props)}
     />
   ),
@@ -100,7 +100,7 @@ const components = {
   ),
   blockquote: (props: ElementProps<"blockquote">) => (
     <blockquote
-      className="mb-2 border-border border-l-2 pl-3 text-muted-foreground last:mb-0"
+      className="mb-2 border-border border-l-2 pl-2 text-muted-foreground last:mb-0"
       {...clean(props)}
     />
   ),

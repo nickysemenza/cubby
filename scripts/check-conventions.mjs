@@ -10,6 +10,9 @@
  *     Phase 1 color sweep (use design tokens, never `text-red-500` etc.).
  *  2. Reintroduction of a TS `calculateTotals` costing engine — costing must
  *     stay in the Rust/WASM crate (recipebridge), never reimplemented in TS.
+ *  3. Off-scale Tailwind spacing — gap/space/padding/margin must use the strict
+ *     {1,2,4,6} scale. Exempts components/ui (design-system primitives), the
+ *     /design gallery, and any line marked `/* tight *\/` (intentional density).
  *
  * Exit 1 + a report on any violation; exit 0 + one-line OK when clean.
  */
@@ -85,6 +88,19 @@ const COLOR_RE =
 // the WASM engine under this name, so exempt test + fixture files.
 const CALC_TOTALS_RE = /\bfunction\s+calculateTotals\b|\bcalculateTotals\s*=/;
 
+// Off-scale Tailwind spacing: gap / gap-x|y / space-x|y / p*/m* (+ directional)
+// using any step outside the strict {0,1,2,4,6} scale. (Arbitrary `-[…]` values
+// and non-spacing utilities like h-/w-/top- are not matched.)
+const SPACING_RE =
+  /\b(gap(-[xy])?|space-[xy]|[pm][xytblr]?)-(0\.5|1\.5|2\.5|3|3\.5|5|7|8|9|10|11|12|14|16|20)\b/;
+
+// components/ui holds the shadcn-derived primitives whose internal padding (px-3,
+// p-6, ...) IS the design system's defined component spacing — exempt from the
+// app-level {1,2,4,6} scale.
+function isUiPrimitive(path) {
+  return path.includes("/components/ui/");
+}
+
 function isCommentLine(line) {
   const t = line.trim();
   return t.startsWith("//") || t.startsWith("*") || t.startsWith("/*");
@@ -154,6 +170,24 @@ function scan(files) {
           rule: "ts-calculateTotals",
         });
       }
+
+      // Rule 3: off-scale spacing (tsx only). Exempt UI primitives, the design
+      // gallery, comment lines, and lines marked `/* tight */` (intentional).
+      if (
+        isTsx &&
+        !isUiPrimitive(file) &&
+        !COLOR_EXCLUDE_BASENAMES.has(base) &&
+        !isCommentLine(line) &&
+        !line.includes("tight") &&
+        SPACING_RE.test(line)
+      ) {
+        violations.push({
+          file,
+          line: i + 1,
+          snippet: line.trim(),
+          rule: "off-scale-spacing",
+        });
+      }
     }
   }
 
@@ -179,6 +213,8 @@ const byRule = {
     "Hardcoded chromatic Tailwind colors — use design tokens in apps/web/src/styles.css (see CLAUDE.md Colors).",
   "ts-calculateTotals":
     "TS `calculateTotals` costing reimplementation — costing must stay in the WASM crate (recipebridge), not TS.",
+  "off-scale-spacing":
+    "Off-scale spacing — use the {1,2,4,6} scale (see CLAUDE.md Spacing). Mark genuinely-dense exceptions with an inline /* tight */ comment.",
 };
 
 console.error(

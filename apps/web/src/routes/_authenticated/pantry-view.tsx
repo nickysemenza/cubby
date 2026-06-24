@@ -7,8 +7,11 @@ export const Route = createFileRoute("/_authenticated/pantry-view")({
 });
 
 function PantryViewPage() {
+  // negative bottom margin cancels the root mobile-nav clearance for a full-bleed view
   return (
-    <div className="-mx-4 -mt-4 -mb-20 h-[calc(100dvh-4rem)] overflow-hidden md:-mx-6 md:-mb-4">
+    <div
+      className="-mx-4 -mt-4 -mb-20 h-[calc(100dvh-4rem)] overflow-hidden md:-mx-6 md:-mb-4" /* tight */
+    >
       <IsometricPantry />
     </div>
   );

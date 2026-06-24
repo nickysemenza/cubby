@@ -180,9 +180,7 @@ export function GallerySidebar({
 
       {/* Tree */}
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="space-y-0.5 p-2">
-          {" "}
-          {/* tight: dense location nav tree */}
+        <div className="space-y-1 p-2">
           {locations.map((location) => (
             <SidebarTreeNode
               key={location.id}
@@ -273,7 +271,7 @@ function SidebarTreeNode({
         tabIndex={0}
         onKeyDown={handleKeyDown}
         className={cn(
-          "group relative flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm", // tight: dense nav tree row
+          "group relative flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm",
           "transition-all duration-150 ease-out",
           !isActive && "hover:bg-accent/50",
           isActive && [
@@ -356,7 +354,7 @@ function SidebarTreeNode({
         {(location.totalItemCount ?? 0) > 0 && (
           <div
             className={cn(
-              "flex items-center gap-1 rounded-full px-1.5 py-0.5 font-medium text-2xs transition-colors", // tight: count badge pill
+              "flex items-center gap-1 rounded-full px-2 py-1 font-medium text-2xs transition-colors",
               isActive
                 ? "bg-primary/20 text-primary"
                 : "bg-muted text-muted-foreground group-hover:bg-muted/80",

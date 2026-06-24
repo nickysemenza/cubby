@@ -101,7 +101,7 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
   const stack = error instanceof Error ? error.stack : undefined;
 
   return (
-    <div className="flex min-h-[400px] flex-col items-center justify-center space-y-4 p-8">
+    <div className="flex min-h-[400px] flex-col items-center justify-center space-y-4 p-6">
       {getIcon(category)}
 
       <h2 className="font-semibold text-xl">
@@ -162,7 +162,7 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
           />
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <div className="mt-2 max-w-lg space-y-2 rounded-md border bg-muted/50 p-3 text-left font-mono text-xs">
+          <div className="mt-2 max-w-lg space-y-2 rounded-md border border-[var(--border-chunky)] bg-muted/50 p-2 text-left font-mono text-xs">
             {code && (
               <div>
                 <span className="text-muted-foreground">Code: </span>

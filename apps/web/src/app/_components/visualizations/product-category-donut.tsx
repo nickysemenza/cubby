@@ -126,7 +126,7 @@ function DonutChart({ data }: DonutChartProps) {
   return (
     <div
       ref={containerRef}
-      className="relative h-100 w-full overflow-hidden rounded-md border"
+      className="relative h-100 w-full overflow-hidden rounded-md border border-[var(--border-chunky)]"
     >
       <svg
         aria-hidden="true"

@@ -293,7 +293,7 @@ export function AiSmokeTest() {
     : "prod — gateway binding";
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="outline">model: {MODEL}</Badge>
         <Badge variant="secondary">{mode}</Badge>
@@ -310,7 +310,7 @@ export function AiSmokeTest() {
           Run all (non-streaming)
         </Button>
       </div>
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         {SPECS.map((spec) => (
           <EndpointCard
             key={spec.key}

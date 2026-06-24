@@ -144,5 +144,10 @@ Don't brand shortcode columns or `Image` ids — those add insert-side friction 
 
 ## Spacing
 
-- Named scale on the layout cvas in `apps/web/src/styles/layouts.ts`: `xs=1, sm=2, md=4, lg=6` (Tailwind units). Prefer these named keys over bare numbers; pick from `{1,2,4,6}` — `gap-3`/`space-y-3`/`gap-1.5` are the drift to avoid.
-- `gap-*` for flex/grid containers (siblings laid out by the parent); `space-y-*` only for plain block stacks with no flex/grid context. Soft convention (Biome can't custom-lint it) — enforce by review + the `/design` gallery.
+- **Strict `{1,2,4,6}` scale, guard-enforced.** All `gap`/`space-x|y`/`p*`/`m*` spacing must use `0,1,2,4,6` (Tailwind units; `--spacing` 0.25rem). Off-scale values (`gap-3`, `space-y-3`, `p-1.5`, `py-2.5`, `m-5`, …) FAIL `scripts/check-conventions.mjs` (runs in `pnpm check`). Named keys `xs/sm/md/lg` on the layout cvas in `apps/web/src/styles/layouts.ts` map to `1/2/4/6`.
+- **Exemptions:** `components/ui/**` (shadcn primitives — their `px-3`/`p-6` is the design system's own component padding), the `/design` gallery, and any line with an inline `/* tight */` comment (genuinely dense UI — calendars, icon nudges, nav-clearance negatives). Use `/* tight */` sparingly; default is to round to scale.
+- `gap-*` for flex/grid containers (siblings laid out by the parent); `space-y-*` only for plain block stacks with no flex/grid context.
+
+## Page shell
+
+- Every list and detail page renders through one shell: `Page` from `~/components/page/Page` (`HydrateClient` + `PageWrapper` + unified `PageHeader` + `Suspense`). Props are a discriminated union — `variant="detail"` requires `entity` at compile time. List = eyebrow/title/actions/accent header; detail = the spec-plate placard. Don't reintroduce `EntityLayout`/`DetailPage` (deleted) or call `PageHero`/`PageWrapper` directly in pages — use `Page`. Detail bodies use `DetailSections` (`~/app/_components/data-table/detail-page`) as `Page`'s children.

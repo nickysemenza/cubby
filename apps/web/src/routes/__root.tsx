@@ -234,7 +234,9 @@ function RootComponent() {
               <MainNav className="mx-0" onSearchClick={openCommandMenu} />
             </div>
           </div>
-          <main className="w-full flex-1 px-4 pt-4 pb-20 md:px-6 md:pb-4">
+          <main
+            className="w-full flex-1 px-4 pt-4 pb-20 md:px-6 md:pb-4" /* tight */
+          >
             {/* biome-ignore lint/correctness/useUniqueElementIds: React <Profiler> id, not a DOM id */}
             <PerfProfiler id="route">
               <Outlet />

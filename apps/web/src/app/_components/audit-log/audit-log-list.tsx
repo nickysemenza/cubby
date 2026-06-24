@@ -59,7 +59,7 @@ export function AuditLogList({
   // while the session is still resolving for a signed-in user.
   if (isLoading || (hydrated && session.isPending)) {
     return (
-      <div className="flex items-center justify-center py-8">
+      <div className="flex items-center justify-center py-6">
         <Spinner size="md" className="text-muted-foreground" />
       </div>
     );

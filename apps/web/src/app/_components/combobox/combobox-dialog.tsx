@@ -157,10 +157,10 @@ export function DialogCompatibleCombobox<TId extends string = string>({
               : "max-w-[400px]",
           )}
         >
-          <div className="flex h-9 items-center gap-2 border-b px-3">
+          <div className="flex h-9 items-center gap-2 border-b px-2">
             <input
               ref={inputRef}
-              className="flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex h-10 w-full rounded-md bg-transparent py-2 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-50"
               placeholder={`Search ${label}...`}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
@@ -182,7 +182,7 @@ export function DialogCompatibleCombobox<TId extends string = string>({
             {isLoading ? (
               <SimpleLoading />
             ) : items.length === 0 ? (
-              <div className="px-3 py-6 text-left text-sm">
+              <div className="px-2 py-6 text-left text-sm">
                 No {label} found.
                 {onCreateNew && inputValue.trim() !== "" && (
                   <Button
@@ -214,7 +214,7 @@ export function DialogCompatibleCombobox<TId extends string = string>({
                     variant="ghost"
                     type="button" // Explicitly mark as a button type to prevent form submission
                     className={cn(
-                      "relative flex w-full cursor-default justify-start rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground",
+                      "relative flex w-full cursor-default justify-start rounded-sm px-2 py-2 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground",
                       renderItem
                         ? "h-auto items-start whitespace-normal py-2"
                         : "items-center",
@@ -237,7 +237,8 @@ export function DialogCompatibleCombobox<TId extends string = string>({
                     <Check
                       className={cn(
                         "mr-2 h-4 w-4 flex-shrink-0",
-                        renderItem && "mt-0.5",
+                        renderItem &&
+                          "mt-0.5" /* tight: check icon optical-align */,
                         value?.id === result.id ? "opacity-100" : "opacity-0",
                       )}
                     />

@@ -232,7 +232,7 @@ export function ReviewQueue({
 
   if (queue.length === 0) {
     return (
-      <div className="space-y-3 rounded-lg border border-dashed p-8 text-center">
+      <div className="space-y-2 rounded-lg border border-dashed p-6 text-center">
         <p className="text-muted-foreground text-sm">
           {reviewedThisSession > 0
             ? `Reviewed ${reviewedThisSession} this session — nothing left in this filter.`
@@ -246,7 +246,7 @@ export function ReviewQueue({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2 text-muted-foreground text-xs">
         <span>
           {queue.length} left · {reviewedThisSession} reviewed

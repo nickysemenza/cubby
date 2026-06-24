@@ -58,7 +58,7 @@ export function EquivalencesReport() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         <Button
           variant="outline"
           onClick={() => refetch()}
@@ -161,11 +161,11 @@ export function EquivalencesReport() {
                     {spreadLabel(c)}
                   </td>
                   <td className="py-1">
-                    <ul className="space-y-0.5">
+                    <ul className="space-y-1">
                       {c.examples.map((ex, i) => (
                         <li
                           key={`${ex.recipeId} ${i}`}
-                          className="flex flex-wrap items-baseline gap-x-1.5 text-muted-foreground/70"
+                          className="flex flex-wrap items-baseline gap-x-2 text-muted-foreground/70"
                         >
                           <EntityPillLink
                             entity="recipe"

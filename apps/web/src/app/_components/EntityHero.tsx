@@ -38,7 +38,7 @@ export const EntityHero: FC<EntityHeroProps> = ({ images }) => {
       )}
       style={{ animationFillMode: "both" }}
     >
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-4">
         <div className="flex items-center gap-2">
           <ImageIcon className="h-3.5 w-3.5 text-eyebrow" />
           <CardTitle>Images</CardTitle>
@@ -51,7 +51,7 @@ export const EntityHero: FC<EntityHeroProps> = ({ images }) => {
           params={{ id: activeImage.id }}
           className="group block"
         >
-          <figure className="my-0 rounded-sm border border-border p-1.5">
+          <figure className="my-0 rounded-sm border border-border p-2">
             <div className="relative aspect-video overflow-hidden">
               <Image
                 src={activeImage.url}
@@ -60,7 +60,7 @@ export const EntityHero: FC<EntityHeroProps> = ({ images }) => {
                 className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
               />
             </div>
-            <figcaption className="eyebrow pt-1.5">
+            <figcaption className="eyebrow pt-2">
               Fig. {String(activeIndex + 1).padStart(2, "0")} / {images.length}
             </figcaption>
           </figure>

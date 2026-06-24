@@ -91,7 +91,7 @@ export function MobileCard({
       // biome-ignore lint/a11y/noStaticElementInteractions: role, tabIndex, and onKeyDown are conditionally set based on onClick
       <div
         className={cn(
-          "grid w-full max-w-full items-center gap-x-2.5 overflow-hidden border-border/30 border-b px-3 py-2",
+          "grid w-full max-w-full items-center gap-x-2 overflow-hidden border-border/30 border-b px-2 py-2",
           // Dynamic grid columns based on which slots are present
           selectable && imageSlot
             ? "grid-cols-[auto_auto_1fr_auto]"
@@ -143,7 +143,9 @@ export function MobileCard({
         {/* Title (content column, row 1) */}
         <div className="flex min-w-0 items-baseline gap-2">
           {TitleIcon && (
-            <TitleIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <TitleIcon
+              className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" /* tight */
+            />
           )}
           <span
             className="block min-w-0 flex-1 truncate font-medium text-sm"
@@ -194,7 +196,7 @@ export function MobileCard({
       className={cn(
         // No mount fade-in: the mobile list is virtualized, so a per-card
         // fade-in replays every time a card scrolls back into view (flicker).
-        "flex items-start gap-2.5 rounded-lg border border-l-4 bg-card p-2.5 shadow-[var(--shadow-chunky-sm)] transition-all duration-300 hover:shadow-[var(--shadow-chunky)]",
+        "flex items-start gap-2 rounded-lg border border-[var(--border-chunky)] border-l-4 bg-card p-2 shadow-[var(--shadow-chunky-sm)] transition-all duration-300 hover:shadow-[var(--shadow-chunky)]",
         borderColor,
         // Touch devices have no :hover — give a pressed state so taps register.
         onClick && "cursor-pointer active:bg-muted/40",
@@ -228,7 +230,9 @@ export function MobileCard({
               <div className="min-w-0 flex-1">
                 <h5 className="flex min-w-0 items-start gap-2 font-medium">
                   {TitleIcon && (
-                    <TitleIcon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                    <TitleIcon
+                      className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" /* tight */
+                    />
                   )}
                   <span className="line-clamp-2" title={title}>
                     {title}

@@ -192,14 +192,14 @@ const MissingDataFooter: React.FC<{
   }
 
   return (
-    <div className="mt-4 space-y-2 border-foreground/10 border-t pt-3">
+    <div className="mt-4 space-y-2 border-foreground/10 border-t pt-4">
       <Eyebrow as="div" className="font-medium">
         Missing data
       </Eyebrow>
       {categories.map((category) => (
         <div
           key={category.label}
-          className="flex flex-wrap items-baseline gap-1.5"
+          className="flex flex-wrap items-baseline gap-2"
         >
           <span className="font-medium text-foreground text-sm">
             {category.label}

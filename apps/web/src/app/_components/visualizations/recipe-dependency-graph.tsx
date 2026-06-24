@@ -208,7 +208,7 @@ function Graph({
   return (
     <div
       ref={containerRef}
-      className="relative h-[540px] w-full overflow-hidden rounded-md border"
+      className="relative h-[540px] w-full overflow-hidden rounded-md border border-[var(--border-chunky)]"
     >
       <svg
         aria-hidden="true"

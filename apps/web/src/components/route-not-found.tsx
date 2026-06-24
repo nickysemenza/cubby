@@ -10,7 +10,7 @@ import { Link } from "@tanstack/react-router";
 export function RouteNotFound() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center space-y-6 p-4">
-      <div className="flex items-center space-x-3">
+      <div className="flex items-center space-x-2">
         {/* Canonical logo asset — same source the nav uses, so the mark can't
             drift (the old inline copy had stale, hardcoded fill colors). */}
         <img src="/favicon.svg" alt="" className="h-12 w-12" />

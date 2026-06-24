@@ -89,7 +89,7 @@ function RecipeUsageCell({
   const recipes = ingredient.appearsInRecipes;
   if (recipes.length === 0) return <NoneState />;
   return (
-    <div className="flex min-w-0 items-center gap-1.5">
+    <div className="flex min-w-0 items-center gap-2">
       {recipes.length > 1 && (
         <Tooltip>
           <TooltipTrigger

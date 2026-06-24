@@ -76,7 +76,7 @@ export function AiSearchBar<T>({ table }: AiSearchBarProps<T>) {
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder='Ask: "where are the canned tomatoes?"'
-            className="pl-9"
+            className="pl-9" /* tight: clears absolute icon */
             disabled={isLoading}
           />
         </div>

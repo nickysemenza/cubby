@@ -90,7 +90,7 @@ export function SpendingHeatmap({
         />
       </div>
       {selectedDay && selectedItems.length > 0 && (
-        <div className="rounded-md border bg-muted/30 p-4">
+        <div className="rounded-md border border-[var(--border-chunky)] bg-muted/30 p-4">
           <div className="mb-2 flex items-center justify-between">
             <span className="font-medium text-sm">
               {formatDate(selectedDay)} —{" "}

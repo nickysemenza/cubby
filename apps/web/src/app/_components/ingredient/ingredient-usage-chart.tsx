@@ -39,7 +39,7 @@ export function IngredientUsageChart({ rows }: { rows: IngredientUsageRow[] }) {
         enableGridX
         enableGridY={false}
         tooltip={({ value, indexValue }) => (
-          <div className="rounded-md bg-popover px-3 py-2 text-sm shadow-md ring-1 ring-border">
+          <div className="rounded-md bg-popover px-2 py-2 text-sm shadow-md ring-1 ring-border">
             <strong>{indexValue}</strong> — {value} recipe
             {value === 1 ? "" : "s"}
           </div>

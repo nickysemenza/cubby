@@ -561,7 +561,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
               </Field>
               <div>
                 <FieldLabel>Parsed Ingredients</FieldLabel>
-                <div className="mt-2 min-h-[120px] rounded border border-border bg-muted/30 p-2">
+                <div className="mt-2 min-h-[120px] rounded border border-[var(--border-chunky)] bg-muted/30 p-2">
                   <IngredientPreviewTable ingredientLines={ingredientLines} />
                 </div>
               </div>
@@ -580,7 +580,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
               </Field>
               <div>
                 <FieldLabel>Instructions Preview</FieldLabel>
-                <div className="mt-2 min-h-[120px] rounded border border-border bg-muted/30 p-2">
+                <div className="mt-2 min-h-[120px] rounded border border-[var(--border-chunky)] bg-muted/30 p-2">
                   {richInstructions.length > 0 ? (
                     <ol className="list-decimal space-y-2 pl-4 text-sm">
                       {richInstructions.map((richItems, idx) => (

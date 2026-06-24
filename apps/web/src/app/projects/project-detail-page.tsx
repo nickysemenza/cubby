@@ -69,8 +69,8 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
       {/* Cover image */}
       {project.coverImage && (
         <div
-          /* tight: negative-margin cover bleed; -mx-* is coupled to the w-[calc(100%+Nrem)] compensation, not free spacing */
-          className="relative -mx-4 -mt-4 mb-0 h-48 w-[calc(100%+2rem)] overflow-hidden rounded-t-lg sm:-mx-6 sm:w-[calc(100%+3rem)] lg:-mx-8 lg:w-[calc(100%+4rem)]"
+          // negative-margin cover bleed; -mx-* is coupled to the w-[calc(100%+Nrem)] compensation, not free spacing
+          className="relative -mx-4 -mt-4 mb-0 h-48 w-[calc(100%+2rem)] overflow-hidden rounded-t-lg sm:-mx-6 sm:w-[calc(100%+3rem)] lg:-mx-8 lg:w-[calc(100%+4rem)]" /* tight */
         >
           <Image
             src={project.coverImage}

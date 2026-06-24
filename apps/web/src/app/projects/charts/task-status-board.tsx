@@ -94,8 +94,7 @@ export function TaskStatusBoard({
           {projectRows.map((row) => (
             <tr key={row.name} className="border-border/50 border-t">
               <td
-                /* tight: dense status-board data row */
-                className={`max-w-[150px] truncate py-1.5 pr-2 font-medium ${row.isDone ? "text-muted-foreground line-through" : ""}`}
+                className={`max-w-[150px] truncate py-2 pr-2 font-medium ${row.isDone ? "text-muted-foreground line-through" : ""}`}
               >
                 {row.name}
               </td>
@@ -105,10 +104,7 @@ export function TaskStatusBoard({
                 const color = getStatusChartColor(status);
 
                 return (
-                  <td
-                    key={status}
-                    className="px-2 py-1.5 text-center" /* tight */
-                  >
+                  <td key={status} className="px-2 py-2 text-center">
                     {count > 0 ? (
                       <span
                         className="inline-flex h-6 w-8 items-center justify-center rounded font-medium text-white text-xs"

@@ -14,7 +14,7 @@ export function RoutePending() {
           <Skeleton className="h-3 w-24" />
           <Skeleton className="h-9 w-56" />
         </div>
-        <div className="space-y-3">
+        <div className="space-y-4">
           {[0, 1, 2, 3, 4].map((i) => (
             <Skeleton key={i} className="h-16 w-full rounded-lg" />
           ))}
@@ -30,14 +30,14 @@ export function RoutePending() {
 export function DetailPagePending() {
   return (
     <PageWrapper>
-      <div className="space-y-3 sm:space-y-6">
+      <div className="space-y-4 sm:space-y-6">
         {/* Header: eyebrow + title */}
         <div className="space-y-2">
           <Skeleton className="h-3 w-20" />
           <Skeleton className="h-9 w-64" />
         </div>
         {/* 2-column card grid */}
-        <div className="grid gap-3 sm:gap-6 md:grid-cols-2">
+        <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
           {[0, 1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-40 w-full rounded-lg" />
           ))}

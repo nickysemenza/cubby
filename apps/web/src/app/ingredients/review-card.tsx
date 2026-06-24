@@ -109,7 +109,7 @@ function QueueUsdaPicker({
       )}
 
       {!noMatch && (alternatives.length > 0 || altLoading) && (
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
             Other USDA matches
           </p>
@@ -118,13 +118,13 @@ function QueueUsdaPicker({
               <Spinner className="h-3 w-3" /> Searching…
             </p>
           ) : (
-            <div className="divide-y rounded-md border">
+            <div className="divide-y rounded-md border border-[var(--border-chunky)]">
               {alternatives.map((alt) => (
                 <button
                   key={alt.food.fdc_id}
                   type="button"
                   onClick={() => pick(alt.food)}
-                  className="block w-full px-2 py-1.5 text-left hover:bg-accent/50"
+                  className="block w-full px-2 py-2 text-left hover:bg-accent/50"
                 >
                   <UsdaFoodResultRow
                     food={alt.food}
@@ -194,14 +194,14 @@ export function ReviewCard({
   const usdaLinked = hasUsdaLink(row);
 
   return (
-    <div className="rounded-lg border bg-background p-4 shadow-sm">
+    <div className="rounded-lg border border-[var(--border-chunky)] bg-background p-4 shadow-sm">
       <EnrichmentEditor
         ref={editorRef}
         row={row}
         onSaved={onSaved}
         slots={{
           header: (
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start justify-between gap-2">
               <div>
                 <div className="font-medium text-lg">{row.name}</div>
                 <div className="text-muted-foreground text-xs">
@@ -227,7 +227,7 @@ export function ReviewCard({
             <div className="flex flex-wrap items-center gap-2">
               <Button onClick={save} disabled={isPending}>
                 {isPending ? "Applying…" : "Apply"}
-                <Kbd className="ml-1.5">↵</Kbd>
+                <Kbd className="ml-2">↵</Kbd>
               </Button>
               {canMarkNoUsda && (
                 <Button
@@ -241,7 +241,7 @@ export function ReviewCard({
             </div>
           ),
           footer: (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {mergeOptions.length > 0 && (
                 <div className="space-y-1">
                   <p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
@@ -251,7 +251,7 @@ export function ReviewCard({
                     {mergeOptions.map((opt, i) => (
                       <div
                         key={opt.id}
-                        className="flex items-center gap-2 px-2 py-1.5 text-sm"
+                        className="flex items-center gap-2 px-2 py-2 text-sm"
                       >
                         <span className="font-medium">{opt.name}</span>
                         <span className="text-2xs text-muted-foreground">
@@ -275,7 +275,7 @@ export function ReviewCard({
                 </div>
               )}
 
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t pt-2 text-2xs text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t pt-2 text-2xs text-muted-foreground">
                 <span>
                   <Kbd>↵</Kbd> Apply
                 </span>

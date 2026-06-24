@@ -1742,9 +1742,7 @@ function CategoryLegend() {
     <div className="absolute bottom-4 left-4 rounded-lg bg-black/70 px-2 py-2 backdrop-blur-sm">
       <div className="grid grid-cols-2 gap-x-4 gap-y-1">
         {productCategoryValues.map((cat) => (
-          <div key={cat} className="flex items-center gap-1.5">
-            {" "}
-            {/* tight: legend swatch+label */}
+          <div key={cat} className="flex items-center gap-2">
             <div
               className="h-2.5 w-2.5 shrink-0 rounded-sm"
               style={{ backgroundColor: getCategoryColor(cat) }}
@@ -1754,9 +1752,7 @@ function CategoryLegend() {
             </span>
           </div>
         ))}
-        <div className="flex items-center gap-1.5">
-          {" "}
-          {/* tight: legend swatch+label */}
+        <div className="flex items-center gap-2">
           <div
             className="h-2.5 w-2.5 shrink-0 rounded-sm"
             style={{ backgroundColor: getCategoryColor(null) }}

@@ -111,7 +111,7 @@ export function USDAFoodList() {
       cell: (info) => {
         const type = info.getValue();
         return (
-          <span className="inline-flex items-center gap-1.5">
+          <span className="inline-flex items-center gap-2">
             <UsdaDataTypeDot dataType={type} />
             {dataTypeLabel(type)}
           </span>
@@ -135,7 +135,7 @@ export function USDAFoodList() {
         if (!brandedFood) return <NoneState />;
 
         return (
-          <div className="flex flex-col space-y-0.5">
+          <div className="flex flex-col space-y-1">
             <div className="text-sm">
               {brandedFood.brand_owner || <NoneState />}
             </div>
@@ -168,7 +168,7 @@ export function USDAFoodList() {
         const total = nutrientCount(nutritionInfo.nutrientsPer100);
         if (total === 0) return <NoneState />;
         return (
-          <div className="w-48 space-y-1.5">
+          <div className="w-48 space-y-2">
             <CoreNutrientCoverage nutrients={nutritionInfo.nutrientsPer100} />
             <div className="text-2xs text-muted-foreground">
               {total} nutrients total

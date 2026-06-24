@@ -68,15 +68,19 @@ export function ManifestCard({
   body,
 }: ManifestCardProps) {
   return (
-    <div className="flex flex-col gap-2.5">
+    <div className="flex flex-col gap-2">
       <div className="flex items-start gap-2">
-        <span className="mt-0.5 shrink-0 self-start">{icon}</span>
+        <span
+          className="mt-0.5 shrink-0 self-start" /* tight: icon optical-align nudge */
+        >
+          {icon}
+        </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-start gap-2">
             <span className="min-w-0 flex-1 font-heading font-medium text-sm leading-tight">
               {name}
             </span>
-            <div className="mt-px flex shrink-0 items-center gap-1.5">
+            <div className="mt-px flex shrink-0 items-center gap-2">
               <Link
                 to={entities[entity].routes.detail}
                 params={{ id: routeParam }}
@@ -85,20 +89,20 @@ export function ManifestCard({
               >
                 <ArrowUpRight className="size-3.5" />
               </Link>
-              <span className="rounded-sm bg-muted px-1.5 py-px font-mono text-[9px] text-muted-foreground uppercase tracking-wide">
+              <span className="rounded-sm bg-muted px-2 py-px font-mono text-[9px] text-muted-foreground uppercase tracking-wide">
                 {tag}
               </span>
             </div>
           </div>
           {identity && (
-            <div className="mt-0.5 flex items-center gap-1.5 text-muted-foreground text-xs">
+            <div className="mt-1 flex items-center gap-2 text-muted-foreground text-xs">
               {identity}
             </div>
           )}
         </div>
       </div>
       {crossLinks && crossLinks.length > 0 && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-border/60 border-y border-dashed py-1.5 text-xs">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-border/60 border-y border-dashed py-2 text-xs">
           {crossLinks.map((cl) => (
             <Link
               key={cl.label}
@@ -144,7 +148,7 @@ function BodyBlockView({ block }: { block: BodyBlock }) {
       </div>
     ))
     .with({ kind: "stats" }, (b) => (
-      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-2">
         {b.stats.map((s) => (
           <div key={s.label} className="flex flex-col">
             <SectionLabel>{s.label}</SectionLabel>
@@ -161,7 +165,7 @@ function BodyBlockView({ block }: { block: BodyBlock }) {
     .with({ kind: "products" }, (b) => (
       <div className="flex flex-col gap-1">
         <SectionLabel>Product{b.products.length === 1 ? "" : "s"}</SectionLabel>
-        <div className="flex flex-col gap-0.5">
+        <div className="flex flex-col gap-1">
           {b.products.slice(0, 4).map((p) => (
             <EntityPillLink key={p.id} entity="product" data={p} compact />
           ))}
@@ -197,7 +201,7 @@ export function PriceValue({
 
 export function PreviewLoading() {
   return (
-    <div className="flex items-center justify-center py-3">
+    <div className="flex items-center justify-center py-4">
       <Spinner className="text-muted-foreground" />
     </div>
   );

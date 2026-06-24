@@ -139,7 +139,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
               params: { id: conversion.ingredientId },
             });
           }}
-          className="flex w-full items-center gap-4 rounded-lg border border-border bg-card px-4 py-4 text-left transition-all ease-cozy hover:-translate-y-0.5 hover:shadow-[var(--shadow-chunky-sm)]"
+          className="flex w-full items-center gap-4 rounded-lg border border-[var(--border-chunky)] bg-card px-4 py-4 text-left transition-all ease-cozy hover:-translate-y-0.5 hover:shadow-[var(--shadow-chunky-sm)]"
         >
           <Equal className="h-4 w-4 shrink-0 text-primary" />
           <span className="truncate font-mono font-semibold text-sm tabular-nums">

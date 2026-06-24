@@ -18,8 +18,8 @@ export function CookbookList() {
 
   if (cookbooks.length === 0) {
     return (
-      <div className="rounded-xl border border-border border-dashed p-10 text-center text-muted-foreground">
-        <BookOpen className="mx-auto mb-3 h-6 w-6" />
+      <div className="rounded-xl border border-border border-dashed p-6 text-center text-muted-foreground">
+        <BookOpen className="mx-auto mb-2 h-6 w-6" />
         <p className="text-sm">
           No cookbooks yet. Import an EPUB from the Recipes page to get started.
         </p>
@@ -28,7 +28,7 @@ export function CookbookList() {
   }
 
   return (
-    <ul className="my-0 ml-0 grid list-none grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+    <ul className="my-0 ml-0 grid list-none grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
       {cookbooks.map(
         ({ id, book, author, recipeCount, sourceRecipeCount, coverUrl }) => {
           // `sourceRecipeCount` is how many recipes the EPUB extraction holds;
@@ -46,7 +46,7 @@ export function CookbookList() {
               <Link
                 to="/cookbooks/$cookbookId"
                 params={{ cookbookId: id }}
-                className="block rounded-sm border border-border bg-card p-2 transition-all ease-cozy hover:-translate-y-0.5 hover:shadow-[var(--shadow-chunky-sm)]"
+                className="block rounded-sm border border-[var(--border-chunky)] bg-card p-2 transition-all ease-cozy hover:-translate-y-0.5 hover:shadow-[var(--shadow-chunky-sm)]"
               >
                 {coverUrl ? (
                   <Image
@@ -55,7 +55,7 @@ export function CookbookList() {
                     className="aspect-[3/4] w-full object-cover"
                   />
                 ) : (
-                  <span className="flex aspect-[3/4] w-full items-center justify-center bg-plum/15 px-3 text-center">
+                  <span className="flex aspect-[3/4] w-full items-center justify-center bg-plum/15 px-4 text-center">
                     <span className="line-clamp-4 font-heading font-semibold text-plum">
                       {book || <NoneState />}
                     </span>

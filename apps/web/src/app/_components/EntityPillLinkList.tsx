@@ -48,7 +48,7 @@ export const EntityPillLinkList: React.FC<EntityPillLinkListProps> = (
       return <NoneState />;
     }
     return (
-      <Empty variant="minimal" className="py-3">
+      <Empty variant="minimal" className="py-2">
         <EmptyTitle className="text-sm">None</EmptyTitle>
         <EmptyDescription className="text-xs">
           No items linked yet
@@ -86,7 +86,7 @@ export const EntityPillLinkList: React.FC<EntityPillLinkListProps> = (
 
   // Default: show all items vertically (for detail pages)
   return (
-    <div className="space-y-0.5">
+    <div className="space-y-1">
       {items.map((item, index) => (
         <div key={getKey(item, index)}>{renderItem(item, index)}</div>
       ))}

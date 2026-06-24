@@ -170,7 +170,7 @@ function CookbookDetailPage() {
       }
     >
       {coverUrl && (
-        <figure className="my-0 mb-4 w-fit shrink-0 rounded-sm border border-border bg-card p-2">
+        <figure className="my-0 mb-4 w-fit shrink-0 rounded-sm border border-[var(--border-chunky)] bg-card p-2">
           <Image src={coverUrl} alt={name} className="h-24 w-16 object-cover" />
         </figure>
       )}
