@@ -33,6 +33,7 @@
   "dependencies": {
     "@cubby/usda-contract": "workspace:*",
     "@cubby/usda-schemas": "workspace:*",
+    "@cubby/worker-tracing": "workspace:*",
     "@openapi-contrib/json-schema-to-openapi-schema": "^4.3.1",
     "@scalar/hono-api-reference": "^0.10.0",
     "@ts-rest/core": "3.53.0-rc.1",

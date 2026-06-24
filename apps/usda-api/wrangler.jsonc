@@ -2,7 +2,9 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "usda-api",
   "account_id": "9f10f078d35d86c78dedece2300a6b88",
-  "compatibility_date": "2026-06-10",
+  // Bumped to 2026-06-16 for the cloudflare:workers `tracing.enterSpan` custom-spans
+  // API (used via @cubby/worker-tracing to trace the D1/R2 batch-lookup phases).
+  "compatibility_date": "2026-06-16",
   "compatibility_flags": ["nodejs_compat"],
   "main": "./src/worker.ts",
 

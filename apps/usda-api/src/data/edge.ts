@@ -6,6 +6,7 @@ import {
   type FoodSummary,
 } from "@cubby/usda-schemas";
 import type { D1Database } from "@cloudflare/workers-types";
+import { withSpan } from "@cubby/worker-tracing";
 import { toFtsQuery } from "../search/fts-query.js";
 import {
   assertVersion,
@@ -24,6 +25,13 @@ import type {
 
 const MAX_SQL_VARIABLES = 100;
 const DEFAULT_CONCURRENCY = 50;
+
+/** Aggregated R2/cache stats for one hydration pass, surfaced as span attrs. */
+interface HydrateStats {
+  cacheHits: number;
+  r2Reads: number;
+  bytesRead: number;
+}
 
 interface FoodIndexRow {
   fdc_id: number;
@@ -271,7 +279,10 @@ export function createEdgeUsdaDataSource(
   // colo-local Cache API keyed on the exact R2 pointer (bundle_key + byte
   // range): a dataset re-import writes new keys/offsets, so the key naturally
   // invalidates without a manual purge.
-  async function readBundleText(row: FoodIndexRow): Promise<string | null> {
+  async function readBundleText(
+    row: FoodIndexRow,
+    stats?: HydrateStats,
+  ): Promise<string | null> {
     // `caches.default` is a Cloudflare extension absent from the DOM
     // CacheStorage type (mirrors the cast in the web USDA client); it's also
     // absent under Node (unit tests), so guard before use and read R2 directly.
@@ -283,7 +294,10 @@ export function createEdgeUsdaDataSource(
       `https://usda-cache/food/${encodeURIComponent(row.bundle_key)}/${row.byte_offset}/${row.byte_length}`,
     );
     const cached = cache ? await cache.match(cacheKey) : undefined;
-    if (cached) return cached.text();
+    if (cached) {
+      if (stats) stats.cacheHits += 1;
+      return cached.text();
+    }
 
     const object = await env.USDA_BUNDLES.get(row.bundle_key, {
       range: {
@@ -294,6 +308,10 @@ export function createEdgeUsdaDataSource(
     if (!object) return null;
 
     const text = await object.text();
+    if (stats) {
+      stats.r2Reads += 1;
+      stats.bytesRead += text.length;
+    }
     await cache?.put(
       cacheKey,
       new Response(text, {
@@ -305,10 +323,11 @@ export function createEdgeUsdaDataSource(
 
   async function hydrate(
     row: FoodIndexRow | null,
+    stats?: HydrateStats,
   ): Promise<FoodSummary | null> {
     if (!row) return null;
 
-    const text = await readBundleText(row);
+    const text = await readBundleText(row, stats);
     if (text === null) return null;
     // A single malformed record must not 500 the whole page: drop it (callers
     // filter nulls / treat null as not-found). This makes a page slightly
@@ -331,7 +350,21 @@ export function createEdgeUsdaDataSource(
   }
 
   async function hydrateRows(rows: FoodIndexRow[]) {
-    return mapWithConcurrency(rows, r2Concurrency, (row) => hydrate(row));
+    // R2 range-read + JSON/zod parse per row. Traced so a slow lookup shows
+    // whether the time is R2 (cacheMisses/bytesRead) vs the index query above.
+    const stats: HydrateStats = { cacheHits: 0, r2Reads: 0, bytesRead: 0 };
+    return withSpan("usda.hydrateRows", async (span) => {
+      const result = await mapWithConcurrency(rows, r2Concurrency, (row) =>
+        hydrate(row, stats),
+      );
+      span.setAttributes({
+        rowCount: rows.length,
+        cacheHits: stats.cacheHits,
+        r2Reads: stats.r2Reads,
+        bytesRead: stats.bytesRead,
+      });
+      return result;
+    });
   }
 
   async function findByColumn(
@@ -405,54 +438,78 @@ export function createEdgeUsdaDataSource(
 
     async findFoodsByLookupBatch(lookups: FoodLookupParam[]) {
       if (lookups.length === 0) return [];
+      return withSpan(
+        "usda.findFoodsByLookupBatch",
+        async (span) => {
+          const upcs = Array.from(
+            new Set(
+              lookups
+                .filter((lookup) => lookup.kind === "upc")
+                .map((lookup) => lookup.gtin_upc),
+            ),
+          );
+          const ndbNumbers = Array.from(
+            new Set(
+              lookups
+                .filter((lookup) => lookup.kind === "ndb")
+                .map((lookup) => lookup.ndb_number),
+            ),
+          );
+          const fdcIds = Array.from(
+            new Set(
+              lookups
+                .filter((lookup) => lookup.kind === "fdc")
+                .map((lookup) => lookup.fdc_id),
+            ),
+          );
 
-      const upcs = Array.from(
-        new Set(
-          lookups
-            .filter((lookup) => lookup.kind === "upc")
-            .map((lookup) => lookup.gtin_upc),
-        ),
-      );
-      const ndbNumbers = Array.from(
-        new Set(
-          lookups
-            .filter((lookup) => lookup.kind === "ndb")
-            .map((lookup) => lookup.ndb_number),
-        ),
-      );
-      const fdcIds = Array.from(
-        new Set(
-          lookups
-            .filter((lookup) => lookup.kind === "fdc")
-            .map((lookup) => lookup.fdc_id),
-        ),
-      );
+          // D1 index lookup phase (3 parallel IN queries), traced separately
+          // from hydration so a slow batch shows whether it's the index or R2.
+          const [upcRows, ndbRows, fdcRows] = await withSpan(
+            "usda.indexLookup",
+            async (indexSpan) => {
+              const out = await Promise.all([
+                findRowsByColumn("gtin_upc", upcs),
+                findRowsByColumn("ndb_number", ndbNumbers),
+                findRowsByColumn("fdc_id", fdcIds),
+              ]);
+              indexSpan.setAttribute(
+                "indexRowCount",
+                out[0].size + out[1].size + out[2].size,
+              );
+              return out;
+            },
+            {
+              upcCount: upcs.length,
+              ndbCount: ndbNumbers.length,
+              fdcCount: fdcIds.length,
+            },
+          );
 
-      const [upcRows, ndbRows, fdcRows] = await Promise.all([
-        findRowsByColumn("gtin_upc", upcs),
-        findRowsByColumn("ndb_number", ndbNumbers),
-        findRowsByColumn("fdc_id", fdcIds),
-      ]);
+          const rows = lookups.map((lookup) => {
+            if (lookup.kind === "upc")
+              return upcRows.get(lookup.gtin_upc) ?? null;
+            if (lookup.kind === "ndb")
+              return ndbRows.get(lookup.ndb_number) ?? null;
+            return fdcRows.get(lookup.fdc_id) ?? null;
+          });
 
-      const rows = lookups.map((lookup) => {
-        if (lookup.kind === "upc") return upcRows.get(lookup.gtin_upc) ?? null;
-        if (lookup.kind === "ndb")
-          return ndbRows.get(lookup.ndb_number) ?? null;
-        return fdcRows.get(lookup.fdc_id) ?? null;
-      });
+          const uniqueRows = new Map<number, FoodIndexRow>();
+          for (const row of rows) {
+            if (row) uniqueRows.set(row.fdc_id, row);
+          }
+          const uniqueRowList = [...uniqueRows.values()];
+          span.setAttribute("uniqueRowCount", uniqueRowList.length);
+          const hydrated = await hydrateRows(uniqueRowList);
+          const hydratedById = new Map<number, FoodSummary | null>(
+            uniqueRowList.map((row, i) => [row.fdc_id, hydrated[i] ?? null]),
+          );
 
-      const uniqueRows = new Map<number, FoodIndexRow>();
-      for (const row of rows) {
-        if (row) uniqueRows.set(row.fdc_id, row);
-      }
-      const uniqueRowList = [...uniqueRows.values()];
-      const hydrated = await hydrateRows(uniqueRowList);
-      const hydratedById = new Map<number, FoodSummary | null>(
-        uniqueRowList.map((row, i) => [row.fdc_id, hydrated[i] ?? null]),
-      );
-
-      return rows.map((row) =>
-        row ? (hydratedById.get(row.fdc_id) ?? null) : null,
+          return rows.map((row) =>
+            row ? (hydratedById.get(row.fdc_id) ?? null) : null,
+          );
+        },
+        { lookupCount: lookups.length },
       );
     },
 
