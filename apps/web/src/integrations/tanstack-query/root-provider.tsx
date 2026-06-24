@@ -171,9 +171,17 @@ export function Provider({
                   // tRPC keys are nested: [["product","list"], { input, type }].
                   const head = query.queryKey?.[0];
                   const root = Array.isArray(head) ? head[0] : head;
+                  const procedure = Array.isArray(head) ? head[1] : undefined;
+                  // Persist lighter detail queries for offline warm starts, but
+                  // NOT the big `.list` payloads. superjson-serializing a list
+                  // (now up to 1000 rows) on every cache write was the dominant
+                  // main-thread cost — profiled at ~38% of scroll-time CPU, with
+                  // zero network in that window. Lists refetch fast from the
+                  // server; the persist serialize isn't worth the jank.
                   return (
                     typeof root === "string" &&
                     PERSISTED_ROOTS.has(root) &&
+                    procedure !== "list" &&
                     query.state.status === "success"
                   );
                 },

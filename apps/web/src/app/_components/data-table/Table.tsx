@@ -1,14 +1,13 @@
 // cf https://ui.shadcn.com/docs/components/data-table
 
 import type { Entity } from "@cubby/schemas/entity";
-import { useThrottledValue } from "@tanstack/react-pacer";
 import { useLocation } from "@tanstack/react-router";
 import {
   flexRender,
   type Table as ITable,
   type Row,
 } from "@tanstack/react-table";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import {
   ArrowDown,
   ArrowUp,
@@ -52,6 +51,7 @@ import { DataTableToolbar } from "./data-table-toolbar";
 import { EntityEmptyState, hasActiveFilters } from "./entity-empty-states";
 import { HeaderFilter } from "./HeaderFilter";
 import { MobileListScreen } from "./MobileListScreen";
+import { RowsPerPageSelect } from "./rows-per-page-select";
 import { SectionHeader } from "./SectionHeader";
 import { useDesktopGroupedRows } from "./useDesktopGroupedRows";
 import type { GroupConfig } from "./useGroupedList";
@@ -62,10 +62,8 @@ const scrollPositionCache = new Map<string, number>();
 
 // Number of rows to render outside the visible area
 const OVERSCAN = 5;
-// Minimum table height so it's always usable
-const MIN_TABLE_HEIGHT = 300;
-// Breathing room below the table
-const BOTTOM_PADDING = 32;
+// Sticky top nav height (h-16 = 4rem = 64px); the sticky toolbar pins below it.
+const NAV_HEIGHT = 64;
 
 interface TTableProps<TItem> {
   table: ITable<TItem>;
@@ -233,29 +231,37 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
   // Keyboard navigation: focused row index (desktop only)
   const [focusedRowIndex, setFocusedRowIndex] = useState<number | null>(null);
 
-  // Dynamic table height: fill remaining viewport on desktop. Track raw window
-  // height in state and throttle it so a resize drag recomputes maxHeight at
-  // most ~once per 100ms instead of on every resize event.
-  const [maxHeight, setMaxHeight] = useState(600);
-  const [winHeight, setWinHeight] = useState(() =>
-    typeof window !== "undefined" ? window.innerHeight : 0,
-  );
-  const [throttledWinHeight] = useThrottledValue(winHeight, { wait: 100 });
+  // The list scrolls with the whole page (window virtualization), so the
+  // virtualizer needs the table body's distance from the top of the document as
+  // its scrollMargin. Re-measured on resize and whenever the toolbar height
+  // changes (the toolbar sits above the body, so it shifts the body down).
+  const [scrollMargin, setScrollMargin] = useState(0);
+
+  // The sticky column header pins *below* the sticky toolbar, whose height is
+  // dynamic (filter row, bulk-action bar). Measure it so the header's sticky
+  // offset tracks it instead of using a hardcoded value.
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const [toolbarHeight, setToolbarHeight] = useState(0);
 
   useEffect(() => {
-    if (isMobile) return;
-    const onResize = () => setWinHeight(window.innerHeight);
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    const el = toolbarRef.current;
+    if (!el || isMobile) return;
+    setToolbarHeight(el.offsetHeight);
+    const ro = new ResizeObserver(() => setToolbarHeight(el.offsetHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
   }, [isMobile]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: toolbarHeight is an intentional re-measure trigger — the toolbar sits above the body, so a height change shifts the body's document offset.
   useEffect(() => {
     const el = tableContainerRef.current;
     if (!el || isMobile) return;
-    const rect = el.getBoundingClientRect();
-    const available = throttledWinHeight - rect.top - BOTTOM_PADDING;
-    setMaxHeight(Math.max(available, MIN_TABLE_HEIGHT));
-  }, [throttledWinHeight, isMobile]);
+    const measure = () =>
+      setScrollMargin(el.getBoundingClientRect().top + window.scrollY);
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [isMobile, toolbarHeight]);
 
   // On desktop with infinite scroll, eagerly fetch all pages so client-side
   // pagination works over the complete dataset. Mobile uses scroll-to-load.
@@ -280,9 +286,8 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
 
   // Always virtualize for consistent rendering
   const virtualizerCount = groupedItems ? groupedItems.length : rows.length;
-  const rowVirtualizer = useVirtualizer({
+  const rowVirtualizer = useWindowVirtualizer({
     count: virtualizerCount,
-    getScrollElement: () => tableContainerRef.current,
     estimateSize: (index) => {
       if (groupedItems && groupedItems[index]!.kind === "header") {
         return SECTION_HEADER_HEIGHT;
@@ -290,16 +295,17 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
       return dConfig.rowHeight;
     },
     overscan: OVERSCAN,
+    scrollMargin,
   });
 
   const virtualRows = rowVirtualizer.getVirtualItems();
   const totalSize = rowVirtualizer.getTotalSize();
 
-  // Save scroll position on unmount for navigate-back restoration
+  // Save scroll position on unmount for navigate-back restoration. The page is
+  // the scroller now, so we track window.scrollY rather than a container.
   const saveScrollPosition = useCallback(() => {
-    const el = tableContainerRef.current;
-    if (el && el.scrollTop > 0) {
-      scrollPositionCache.set(pathname, el.scrollTop);
+    if (typeof window !== "undefined" && window.scrollY > 0) {
+      scrollPositionCache.set(pathname, window.scrollY);
     } else {
       scrollPositionCache.delete(pathname);
     }
@@ -324,7 +330,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     if (savedPosition && rows.length > 0) {
       // Use rAF to ensure the virtualizer has measured
       requestAnimationFrame(() => {
-        tableContainerRef.current?.scrollTo(0, savedPosition);
+        window.scrollTo(0, savedPosition);
       });
       hasRestoredRef.current = true;
     }
@@ -402,9 +408,11 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     // Always use virtualized rendering for consistent behavior
     return (
       <>
-        {/* Top padding row for scroll position */}
-        {virtualRows.length > 0 && virtualRows[0]!.start > 0 && (
-          <tr style={{ height: `${virtualRows[0]!.start}px` }} />
+        {/* Top padding row for scroll position. Window-virtualizer offsets are
+            measured from the document top, so subtract the table's scrollMargin
+            to get the gap within the table body. */}
+        {virtualRows.length > 0 && virtualRows[0]!.start - scrollMargin > 0 && (
+          <tr style={{ height: `${virtualRows[0]!.start - scrollMargin}px` }} />
         )}
 
         {/* Render only visible rows (with optional group headers) */}
@@ -482,53 +490,58 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
           --row-accent so hover/selected bars match the section's color. */}
       {!isMobile && (
         <div
-          className="overflow-hidden rounded-lg border border-[var(--border-chunky)] shadow-[var(--shadow-chunky)]"
+          className="border-[var(--border-chunky)] border-y"
           style={
-            entity
-              ? ({
-                  "--row-accent": ENTITY_ACCENTS[entity],
-                } as React.CSSProperties)
-              : undefined
+            {
+              ...(entity ? { "--row-accent": ENTITY_ACCENTS[entity] } : {}),
+              // Header pins below the nav + the (dynamic) sticky toolbar.
+              "--table-header-top": `${NAV_HEIGHT + toolbarHeight}px`,
+            } as React.CSSProperties
           }
         >
-          {/* Attached Toolbar */}
-          <DataTableToolbar
-            table={table}
-            additionalContent={
-              groupConfig && onGroupedChange ? (
+          {/* Sticky toolbar — pins just below the top nav. Holds view options,
+              filters reset, the bulk-action bar, and a page-size control. */}
+          <div
+            ref={toolbarRef}
+            className="sticky top-16 z-30 border-border/50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80"
+          >
+            <DataTableToolbar
+              table={table}
+              additionalContent={
                 <div className="flex items-center gap-2">
                   {additionalToolbarContent}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 w-8 shrink-0 p-0"
-                    onClick={() => onGroupedChange(!grouped)}
-                    aria-label={
-                      grouped ? "Show flat list" : "Show grouped list"
-                    }
-                  >
-                    {grouped ? (
-                      <List className="h-4 w-4" />
-                    ) : (
-                      <LayoutList className="h-4 w-4" />
-                    )}
-                  </Button>
+                  {groupConfig && onGroupedChange && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 shrink-0 p-0"
+                      onClick={() => onGroupedChange(!grouped)}
+                      aria-label={
+                        grouped ? "Show flat list" : "Show grouped list"
+                      }
+                    >
+                      {grouped ? (
+                        <List className="h-4 w-4" />
+                      ) : (
+                        <LayoutList className="h-4 w-4" />
+                      )}
+                    </Button>
+                  )}
+                  <RowsPerPageSelect table={table} className="h-7 w-16" />
                 </div>
-              ) : (
-                additionalToolbarContent
-              )
-            }
-            actions={actions}
-            bulkActionBar={bulkActionBar}
-            className="border-border/50 border-b px-3 py-2"
-          />
+              }
+              actions={actions}
+              bulkActionBar={bulkActionBar}
+              className="px-3 py-2"
+            />
+          </div>
 
-          {/* Scrollable container for virtualization */}
-          {/* biome-ignore lint/a11y/noStaticElementInteractions: scroll container hosts keyboard row navigation (arrow keys/Enter), not a semantic control */}
+          {/* Table wrapper. No longer scrolls (the window does) — kept as the
+              scrollMargin anchor and the focus target for keyboard row nav. */}
+          {/* biome-ignore lint/a11y/noStaticElementInteractions: hosts keyboard row navigation (arrow keys/Enter), not a semantic control */}
           <div
             ref={tableContainerRef}
-            className="overflow-auto outline-none"
-            style={{ maxHeight: `${maxHeight}px` }}
+            className="outline-none"
             // biome-ignore lint/a11y/noNoninteractiveTabindex: keyboard row navigation requires focusable container
             tabIndex={0}
             onKeyDown={(e) => {
@@ -579,7 +592,10 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
               className={cn(styles.table)}
               containerClassName="overflow-visible"
             >
-              <TableHeader className="sticky top-0 z-20 bg-background shadow-[0_1px_3px_rgba(58,53,48,0.08)] [&_tr]:border-b-0">
+              <TableHeader
+                className="sticky z-20 bg-background shadow-[0_1px_3px_rgba(58,53,48,0.08)] [&_tr]:border-b-0"
+                style={{ top: "var(--table-header-top)" }}
+              >
                 {table.getHeaderGroups().map((headerGroup) => {
                   // Check if any column has a filter config
                   const hasAnyFilters = headerGroup.headers.some(
@@ -723,7 +739,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                   );
                   if (!hasFooter) return null;
                   return (
-                    <TableFooter className="sticky bottom-0 border-t bg-card font-medium text-xs">
+                    <TableFooter className="border-t bg-card font-medium text-xs">
                       {footerGroups.map((footerGroup) => (
                         <TableRow
                           key={footerGroup.id}
@@ -776,8 +792,16 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
         />
       )}
 
-      {/* Hide pagination on mobile when infinite scroll is active */}
-      {table.getPageCount() > 1 && !(isMobile && infiniteScroll) && (
+      {/* Desktop: persistent pagination/status bar pinned to the viewport
+          bottom (page-size + page nav stay reachable without scrolling). */}
+      {!isMobile && (
+        <div className="sticky bottom-0 z-30 border-[var(--border-chunky)] border-t bg-background/90 px-2 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/75">
+          <DataTablePagination table={table} timing={timing} />
+        </div>
+      )}
+
+      {/* Mobile keeps the inline pager, hidden when infinite scroll is active */}
+      {isMobile && table.getPageCount() > 1 && !infiniteScroll && (
         <DataTablePagination table={table} timing={timing} />
       )}
     </SpacedContainer>

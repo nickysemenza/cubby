@@ -9,8 +9,8 @@ import {
 } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
-import { FilterableCombobox } from "~/components/ui/combobox";
 import { type QueryTiming, QueryTimingIndicator } from "~/lib/query-timing";
+import { RowsPerPageSelect } from "./rows-per-page-select";
 
 interface DataTablePaginationProps<TData> {
   table: Table<TData>;
@@ -39,17 +39,7 @@ export function DataTablePagination<TData>({
           <p className="font-medium font-mono text-2xs text-muted-foreground uppercase tracking-wider">
             Rows per page
           </p>
-          <FilterableCombobox
-            items={[10, 50, 100, 1000].map((pageSize) => ({
-              value: `${pageSize}`,
-              label: `${pageSize}`,
-            }))}
-            value={`${table.getState().pagination.pageSize}`}
-            onValueChange={(value) => {
-              if (value) table.setPageSize(Number(value));
-            }}
-            className="h-8 w-20"
-          />
+          <RowsPerPageSelect table={table} />
         </div>
 
         {/* Page info - responsive text */}
