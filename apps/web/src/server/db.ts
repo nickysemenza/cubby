@@ -1,9 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import {
-  instrumentDrizzle,
-  instrumentDrizzleClient,
-} from "@kubiks/otel-drizzle";
-import {
   drizzle as drizzleNodePostgres,
   type NodePgDatabase,
 } from "drizzle-orm/node-postgres";
@@ -11,6 +7,7 @@ import pg from "pg";
 import { env } from "~/env";
 import type { Database } from "./db/database";
 import * as schema from "./db/schema";
+import { TraceNames, withTrace } from "./tracing";
 
 // Re-export Database type for use throughout the application
 export type { Database };
@@ -23,6 +20,125 @@ export type { Database };
 // Use NodePgDatabase<schema> to avoid $client type mismatch.
 type DBClient = NodePgDatabase<typeof schema>;
 
+// ---------------------------------------------------------------------------
+// DB query tracing
+// ---------------------------------------------------------------------------
+
+// Trace every drizzle query as a span via the unified `withTrace` (OTel → Jaeger
+// in dev, native `cloudflare:workers` tracing → Grafana in prod). This replaces
+// @kubiks/otel-drizzle, which emits ONLY OTel spans — a no-op on the prod Worker
+// (no OTel SDK), so DB time was invisible in CF traces: a slow query showed only
+// as unattributed gap inside the tRPC span. We now get real per-query timing
+// (incl. the first query's connection-establishment cost, since pg.Pool connects
+// lazily) plus the statement + row count, in BOTH runtimes.
+const TRACED = Symbol("worker-tracing:traced");
+const DB_SYSTEM = "postgresql";
+const DB_NAMESPACE = "cubby";
+const MAX_STATEMENT_LEN = 1000;
+
+// The SQL operation = the leading keyword (SELECT/INSERT/UPDATE/DELETE/BEGIN/…),
+// uppercased. This is exactly how @kubiks/otel-drizzle derives db.operation — it
+// reads the compiled SQL text, NOT the drizzle query builder (it extracts no
+// table name and pulls db.name/peer from caller config), so there's nothing the
+// pg layer can't see. That's why we don't patch drizzle internals.
+const extractOperation = (sql: string): string | undefined =>
+  /^\s*(\w+)/u.exec(sql)?.[1]?.toUpperCase();
+
+// Wrap one pg `query` function (a checked-out Client's `query`) in a `withTrace`
+// span. `getTransaction` is read at query time — a checked-out client is reused
+// across checkouts, so transaction-ness is per-acquire, not per-client.
+const traceQuery =
+  (run: (...args: unknown[]) => unknown, getTransaction: () => boolean) =>
+  (...args: unknown[]): unknown => {
+    // pg's `query` has callback overloads; only the promise form (what drizzle
+    // uses) is traced. No args, or a trailing callback → pass straight through.
+    if (args.length === 0 || typeof args[args.length - 1] === "function")
+      return run(...args);
+    const head = args[0];
+    const sql =
+      typeof head === "string"
+        ? head
+        : head && typeof head === "object" && "text" in head
+          ? String((head as { text: unknown }).text)
+          : "unknown";
+    const operation = extractOperation(sql);
+    // Span name per operation (db.SELECT, db.INSERT, …) + OTel DB semconv attrs —
+    // the same information @kubiks/otel-drizzle emits, in BOTH runtimes.
+    return withTrace(TraceNames.db(operation ?? "query"), async (span) => {
+      span.setAttributes({
+        "db.system.name": DB_SYSTEM,
+        "db.namespace": DB_NAMESPACE,
+        "db.operation.name": operation,
+        "db.query.text": sql.slice(0, MAX_STATEMENT_LEN),
+        "db.query.transaction": getTransaction(),
+      });
+      const res = (await run(...args)) as {
+        rowCount?: number | null;
+        rows?: unknown[];
+      };
+      span.setAttribute(
+        "db.response.returned_rows",
+        res?.rowCount ?? res?.rows?.length ?? 0,
+      );
+      return res;
+    });
+  };
+
+// Trace BOTH the connection acquire AND the query. Routing every query through an
+// explicit acquire (instead of letting pg.Pool.query connect internally) surfaces
+// the connection cost as its own `db.acquire` span rather than folding it into the
+// first query's span — the per-request pool connects lazily, so the first acquire
+// pays the full TCP/TLS/auth round-trip to Hyperdrive→Neon. That separation is the
+// signal we need to tell "connection: 5s" apart from "query: 7ms".
+const IN_TX = Symbol("worker-tracing:inTransaction");
+type TracedClient = pg.PoolClient & { [TRACED]?: boolean; [IN_TX]?: boolean };
+
+const tracePool = (pool: pg.Pool): pg.Pool => {
+  const rawQuery = pool.query.bind(pool) as (...args: unknown[]) => unknown;
+  const rawConnect = pool.connect.bind(pool) as (...args: unknown[]) => unknown;
+
+  // Acquire a client inside a `db.acquire` span and wrap its `query` once. The
+  // transaction flag is stamped per-acquire so a reused client reports correctly.
+  const acquire = (inTransaction: boolean): Promise<pg.PoolClient> =>
+    withTrace(TraceNames.db("acquire"), async (span) => {
+      span.setAttribute("db.acquire.transaction", inTransaction);
+      const client = (await rawConnect()) as TracedClient;
+      client[IN_TX] = inTransaction;
+      if (!client[TRACED]) {
+        client.query = traceQuery(
+          client.query.bind(client),
+          () => client[IN_TX] ?? false,
+        ) as typeof client.query;
+        client[TRACED] = true;
+      }
+      return client;
+    });
+
+  // Non-transactional queries: acquire (traced) → query (traced) → release. The
+  // callback / no-arg forms (incl. pg's own internal usage) pass straight through.
+  pool.query = ((...args: unknown[]) => {
+    if (args.length === 0 || typeof args[args.length - 1] === "function")
+      return rawQuery(...args);
+    return acquire(false).then(async (client) => {
+      try {
+        return await (client.query as (...a: unknown[]) => Promise<unknown>)(
+          ...args,
+        );
+      } finally {
+        client.release();
+      }
+    });
+  }) as typeof pool.query;
+
+  // Transactions (drizzle `.transaction()`) check out a client via connect.
+  pool.connect = ((...args: unknown[]) => {
+    if (typeof args[0] === "function") return rawConnect(...args); // callback form
+    return acquire(true);
+  }) as typeof pool.connect;
+
+  return pool;
+};
+
 const createPoolClient = (connectionString: string) => {
   const { Pool } = pg;
   // Dev-only pool (prod uses a per-request pg.Pool behind Hyperdrive — see
@@ -31,8 +147,7 @@ const createPoolClient = (connectionString: string) => {
   // the overflow to queue and pay fresh ~310ms TLS handshakes to Neon, so lift
   // the ceiling enough to absorb the fan-out.
   const pool = new Pool({ connectionString, max: 25 });
-  const instrumentedPool = instrumentDrizzle(pool);
-  return drizzleNodePostgres({ client: instrumentedPool, schema });
+  return drizzleNodePostgres({ client: tracePool(pool), schema });
 };
 
 // ---------------------------------------------------------------------------
@@ -121,8 +236,7 @@ const getDbInstance = (): DBClient => {
         max: 5,
         allowExitOnIdle: true,
       });
-      const db = drizzleNodePostgres({ client: pool, schema });
-      instrumentDrizzleClient(db, { dbSystem: "postgresql", dbName: "cubby" });
+      const db = drizzleNodePostgres({ client: tracePool(pool), schema });
       holder.db = db;
     }
     return holder.db;
