@@ -16,6 +16,7 @@ import { UnitMappingGraph } from "~/app/_components/units/unit-mapping-graph";
 import { UnitMappingsTable } from "~/app/_components/units/unitmappingstable";
 import { Row, Stack } from "~/components/layout";
 import { Checkbox } from "~/components/ui/checkbox";
+import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { BASE_KINDS, type BaseKind } from "~/lib/conversion-coverage";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -80,10 +81,10 @@ function PriceField({
           aria-label="Price"
         />
       </Row>
-      <p className="text-muted-foreground text-xs">
+      <Description size="xs">
         For foods, price by the package, e.g. 2&nbsp;lb = $5.99. Use “each” for
         count items.
-      </p>
+      </Description>
     </Stack>
   );
 }

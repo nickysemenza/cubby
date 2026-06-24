@@ -14,6 +14,7 @@ import RTable from "~/app/_components/data-table/Table";
 import { NoneState } from "~/app/_components/NoneState";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
+import { Description } from "~/components/ui/description";
 import {
   Empty,
   EmptyHeader,
@@ -149,7 +150,9 @@ const taskColumns = [
       const due = getValue();
       if (!due) return null;
       return (
-        <span className="text-muted-foreground text-xs">{formatDate(due)}</span>
+        <Description as="span" size="xs">
+          {formatDate(due)}
+        </Description>
       );
     },
     sortingFn: "alphanumeric",
@@ -258,9 +261,9 @@ const purchaseColumns = [
       const date = getValue();
       if (!date) return null;
       return (
-        <span className="text-muted-foreground text-xs">
+        <Description as="span" size="xs">
           {formatDate(date)}
-        </span>
+        </Description>
       );
     },
     sortingFn: "alphanumeric",
@@ -383,9 +386,9 @@ const projectColumns = [
       const { date, dateEnd } = row.original;
       if (!date) return null;
       return (
-        <span className="text-muted-foreground text-xs">
+        <Description as="span" size="xs">
           {formatDateRange(date, dateEnd)}
-        </span>
+        </Description>
       );
     },
     sortingFn: "alphanumeric",

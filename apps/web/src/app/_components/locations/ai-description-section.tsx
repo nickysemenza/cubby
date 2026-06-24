@@ -5,6 +5,7 @@ import type { FC } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
 import { useTRPC } from "~/trpc/react";
 
@@ -53,9 +54,9 @@ export const AiDescriptionSection: FC<AiDescriptionSectionProps> = ({
       </Button>
 
       {!hasImages && (
-        <p className="text-muted-foreground text-sm">
+        <Description>
           Add photos to this location to enable AI analysis
-        </p>
+        </Description>
       )}
 
       {currentDescription && (

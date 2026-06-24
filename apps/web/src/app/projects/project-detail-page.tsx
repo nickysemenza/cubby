@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { sumBy } from "es-toolkit";
 import { ArrowLeft, Calendar, DollarSign, ExternalLink } from "lucide-react";
 import { useMemo } from "react";
-import { Row, Section, Stack } from "~/components/layout";
+import { Grid, Row, Section, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import {
   Card,
@@ -12,8 +12,10 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
+import { Description } from "~/components/ui/description";
 import { Image } from "~/components/ui/image";
 import { Skeleton } from "~/components/ui/skeleton";
+import { StatusText } from "~/components/ui/status-text";
 import { formatCurrency } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import { CategoryTreemap } from "./charts/category-treemap";
@@ -58,7 +60,7 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
           <ArrowLeft className="h-4 w-4" />
           Back to projects
         </Link>
-        <p className="text-muted-foreground">Project not found.</p>
+        <Description>Project not found.</Description>
       </Stack>
     );
   }
@@ -148,26 +150,26 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
 
       {/* Category breakdown charts */}
       {purchases.length > 0 && (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <Grid cols="pair">
           <Section title="Spending by Category">
             <PurchaseDonut purchases={purchases} />
           </Section>
           <Section title="Spending by Subcategory">
             <SubcategoryBars purchases={purchases} />
           </Section>
-        </div>
+        </Grid>
       )}
 
       {/* Category treemap + trend */}
       {purchases.length > 0 && (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <Grid cols="pair">
           <Section title="Category Treemap">
             <CategoryTreemap purchases={purchases} />
           </Section>
           <Section title="Category Trend">
             <CategoryTrend purchases={purchases} />
           </Section>
-        </div>
+        </Grid>
       )}
 
       {/* Task calendar */}
@@ -228,9 +230,7 @@ function CostSummary({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground text-xs">
-            {purchaseCount} purchases
-          </p>
+          <Description size="xs">{purchaseCount} purchases</Description>
         </CardContent>
       </Card>
 
@@ -250,13 +250,15 @@ function CostSummary({
                 style={{ width: `${Math.min(percentage ?? 0, 100)}%` }}
               />
             </div>
-            <p
-              className={`text-xs ${overBudget ? "text-destructive" : "text-muted-foreground"}`}
+            <StatusText
+              as="p"
+              tone={overBudget ? "destructive" : "muted"}
+              className="text-xs"
             >
               {percentage?.toFixed(0)}% of estimate
               {overBudget &&
                 ` (+${formatCurrency(totalCost - costEstimate, 0)} over)`}
-            </p>
+            </StatusText>
           </CardContent>
         </Card>
       )}

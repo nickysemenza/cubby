@@ -8,6 +8,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
+import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { useTRPC } from "~/trpc/react";
 import { formatAmount, statusClass, statusLabel } from "./meal-format";
@@ -114,13 +115,13 @@ export function ShoppingListPage() {
       {isLoading ? (
         <SimpleLoading text="Adding up what you need..." />
       ) : !data || data.meals.length === 0 ? (
-        <p className="text-muted-foreground text-sm">
+        <Description>
           No meals planned in this range.{" "}
           <Link to="/meals" className="underline">
             Plan some meals
           </Link>
           .
-        </p>
+        </Description>
       ) : (
         <>
           {/* Meal include/exclude toggles */}
@@ -145,9 +146,7 @@ export function ShoppingListPage() {
           </Row>
 
           {rows.length === 0 ? (
-            <p className="text-muted-foreground text-sm">
-              Nothing to buy for the selected meals.
-            </p>
+            <Description>Nothing to buy for the selected meals.</Description>
           ) : (
             <div className="overflow-hidden rounded-lg border border-[var(--border-chunky)]">
               <table className="w-full text-sm">

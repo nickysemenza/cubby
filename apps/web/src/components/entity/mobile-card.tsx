@@ -4,6 +4,7 @@ import { ChevronRight, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { Row, Stack } from "~/components/layout";
 import { Checkbox } from "~/components/ui/checkbox";
+import { Description } from "~/components/ui/description";
 import { entities } from "~/entities/entities";
 import { cn } from "~/lib/utils";
 
@@ -165,9 +166,13 @@ export function MobileCard({
         {hasSecondLine && (
           <Row align="center" gap="sm" className="min-w-0">
             {subtitle && (
-              <span className="block min-w-0 flex-1 truncate text-muted-foreground text-xs">
+              <Description
+                as="span"
+                size="xs"
+                className="block min-w-0 flex-1 truncate"
+              >
                 {subtitle}
-              </span>
+              </Description>
             )}
             <Row
               align="center"
@@ -251,9 +256,7 @@ export function MobileCard({
                   </span>
                 </Row>
                 {subtitle && (
-                  <p className="truncate text-muted-foreground text-sm">
-                    {subtitle}
-                  </p>
+                  <Description className="truncate">{subtitle}</Description>
                 )}
               </div>
             )}

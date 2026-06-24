@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
 import { Row } from "~/components/layout/row";
 import { Stack } from "~/components/layout/stack";
+import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -659,11 +660,11 @@ export function CookbookImport({
     <Stack>
       <div>
         <h1 className="font-semibold text-xl">Import cookbook</h1>
-        <p className="text-muted-foreground text-sm">
+        <Description>
           Drag <code className="rounded bg-muted px-1 py-1 text-xs">.epub</code>{" "}
           cookbooks here — Cubby extracts the recipes with AI, then you review
           and import.
-        </p>
+        </Description>
       </div>
 
       {/* biome-ignore lint/a11y/noStaticElementInteractions: drop zone */}

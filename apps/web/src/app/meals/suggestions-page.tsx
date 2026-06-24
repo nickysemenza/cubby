@@ -6,6 +6,8 @@ import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Grid, Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { Description } from "~/components/ui/description";
+import { StatusText } from "~/components/ui/status-text";
 import { useTRPC } from "~/trpc/react";
 
 /** Filter presets for the minimum-coverage control. */
@@ -42,11 +44,13 @@ export function MealSuggestionsPage() {
       {isLoading ? (
         <SimpleLoading text="Checking what you can make..." />
       ) : error ? (
-        <p className="text-destructive text-sm">{error.message}</p>
+        <StatusText tone="destructive" className="text-sm">
+          {error.message}
+        </StatusText>
       ) : !data || data.length === 0 ? (
-        <p className="text-muted-foreground text-sm">
+        <Description>
           No recipes match — try lowering the coverage filter.
-        </p>
+        </Description>
       ) : (
         <Grid cols="cards3">
           {data.map((recipe) => (
@@ -74,14 +78,14 @@ function RecipeCoverageCard({ recipe }: { recipe: RecipeAvailability }) {
           {ready ? "Ready" : `Missing ${recipe.missing.length}`}
         </Badge>
       </Row>
-      <span className="text-muted-foreground text-xs">
+      <Description as="span" size="xs">
         {recipe.availableIngredients}/{recipe.totalIngredients} ingredients
         {recipe.totalIngredients > 0 ? ` · ${pct}%` : ""}
-      </span>
+      </Description>
       {recipe.missing.length > 0 && (
-        <span className="text-muted-foreground text-xs">
+        <Description as="span" size="xs">
           Need: {recipe.missing.join(", ")}
-        </span>
+        </Description>
       )}
     </Link>
   );

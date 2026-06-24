@@ -5,6 +5,7 @@ import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { buttonVariants } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Description } from "~/components/ui/description";
 import {
   Popover,
   PopoverContent,
@@ -99,9 +100,9 @@ function CostingGapList({ gaps }: { gaps: CostingGap[] }) {
                   </Badge>
                 ))}
               </Row>
-              <div className="text-2xs text-muted-foreground leading-snug">
+              <Description as="div" size="2xs" className="leading-snug">
                 {lead}
-              </div>
+              </Description>
             </div>
             <Link
               to="/ingredients/workbench"
@@ -134,11 +135,11 @@ export function RecipeCostingCoverage({ gaps }: { gaps: CostingGap[] }) {
           <Sparkles className="h-4 w-4 text-primary" />
           Improve costing coverage
         </CardTitle>
-        <p className="text-muted-foreground text-sm">
+        <Description>
           {gaps.length} ingredient{gaps.length === 1 ? "" : "s"} can&apos;t be
           fully costed yet. Linking a USDA food adds the most conversions at
           once.
-        </p>
+        </Description>
       </CardHeader>
       <CardContent>
         <CostingGapList gaps={gaps} />

@@ -15,6 +15,8 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
+import { Description } from "~/components/ui/description";
+import { StatusText } from "~/components/ui/status-text";
 import { Switch } from "~/components/ui/switch";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
@@ -112,7 +114,7 @@ function FlagRow({
             {flagKey}
           </code>
         </Row>
-        <p className="text-muted-foreground text-xs">{def.description}</p>
+        <Description size="xs">{def.description}</Description>
       </Stack>
       <Switch checked={value} onCheckedChange={onChange} />
     </Row>
@@ -156,11 +158,13 @@ function DiagnosticsCard() {
       </CardHeader>
       <CardContent className="divide-y divide-border/60">
         {error ? (
-          <p className="py-4 text-destructive text-xs">
+          <StatusText as="p" tone="destructive" className="py-4 text-xs">
             Timing check failed: {getErrorMessage(error)}
-          </p>
+          </StatusText>
         ) : !data ? (
-          <p className="py-4 text-muted-foreground text-xs">Measuring…</p>
+          <Description as="p" size="xs" className="py-4">
+            Measuring…
+          </Description>
         ) : (
           <>
             {data.results.map((result) => (
@@ -230,7 +234,7 @@ function MaintenanceRow({
     <Row align="start" justify="between" gap="md" className="py-4">
       <Stack gap="tight">
         <span className="font-medium text-sm">{label}</span>
-        <p className="text-muted-foreground text-xs">{description}</p>
+        <Description size="xs">{description}</Description>
       </Stack>
       <Row align="center" gap="sm" className="shrink-0">
         {showCount && (
@@ -384,9 +388,7 @@ function AppearanceCard() {
         <Row align="center" justify="between" gap="md" className="py-1">
           <Stack gap="tight">
             <span className="font-medium text-sm">Table density</span>
-            <p className="text-muted-foreground text-xs">
-              Row height in data tables.
-            </p>
+            <Description size="xs">Row height in data tables.</Description>
           </Stack>
           <Row gap="xs">
             {DENSITIES.map((d) => (

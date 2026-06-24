@@ -6,6 +6,7 @@ import { HoverableTimestamp } from "~/app/_components/HoverableTimestamp";
 import { ImageStatusBadge } from "~/app/_components/table/StatusBadge";
 import { Row, Stack } from "~/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Description } from "~/components/ui/description";
 import { Image } from "~/components/ui/image";
 import { formatBytes } from "~/lib/format";
 
@@ -34,9 +35,9 @@ export function ImageDetail({ image }: ImageDetailProps) {
     const { entityType, entityId, entityName } = image;
     if (!entityType || !entityId || !entityName) {
       return (
-        <span className="text-muted-foreground italic">
+        <Description as="span" className="italic">
           Not associated with any entity
-        </span>
+        </Description>
       );
     }
 
@@ -97,11 +98,11 @@ export function ImageDetail({ image }: ImageDetailProps) {
               <div className="flex h-full w-full items-center justify-center bg-muted/30">
                 <div className="text-center">
                   <ImageIcon className="mx-auto h-12 w-12 text-muted-foreground/50" />
-                  <p className="mt-2 text-muted-foreground text-sm">
+                  <Description className="mt-2">
                     {image.status === "PENDING"
                       ? "Upload pending..."
                       : "Upload failed"}
-                  </p>
+                  </Description>
                 </div>
               </div>
             )}

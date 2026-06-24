@@ -3,6 +3,7 @@ import { type RefObject, useEffect, useState } from "react";
 import { NoneState } from "~/app/_components/NoneState";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+import { Description } from "~/components/ui/description";
 import { cn } from "~/lib/utils";
 import { EntityPillLink } from "../EntityPill";
 
@@ -76,11 +77,11 @@ export function MergeConfirmation({
           )}
         </Row>
       </div>
-      <p className="text-muted-foreground text-xs">
+      <Description size="xs">
         The other selected ingredient{aliases.length === 1 ? "" : "s"} will be
         deleted — their names become aliases of the kept one, and their products
         and recipe uses move over.
-      </p>
+      </Description>
     </Stack>
   );
 }

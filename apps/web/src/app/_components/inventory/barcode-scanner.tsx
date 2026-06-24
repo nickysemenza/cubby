@@ -1,6 +1,7 @@
 import { CameraOff, RotateCcw } from "lucide-react";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
 import { BARCODE_FORMATS, useBarcodeScanner } from "./useBarcodeScanner";
 
@@ -72,12 +73,12 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
               <p className="font-medium text-foreground">
                 Camera access needed
               </p>
-              <p className="mt-2 text-muted-foreground text-sm">
+              <Description className="mt-2">
                 To scan barcodes, allow camera access in{" "}
                 <span className="font-medium text-foreground">
                   Settings &gt; Safari &gt; Camera
                 </span>
-              </p>
+              </Description>
             </div>
             <Button
               variant="outline"

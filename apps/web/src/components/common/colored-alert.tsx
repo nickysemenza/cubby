@@ -5,15 +5,15 @@ import { cn } from "~/lib/utils";
 type ColoredAlertVariant =
   | "default"
   | "destructive"
-  | "success"
+  | "positive"
   | "warning"
   | "info";
 
 const variantClasses: Record<ColoredAlertVariant, string> = {
   default: "",
   destructive: "",
-  success:
-    "border-secondary bg-secondary text-secondary-foreground [&>svg]:text-secondary-foreground",
+  positive:
+    "border-positive/40 bg-positive/10 text-positive [&>svg]:text-positive",
   warning:
     "border-warning bg-warning/30 text-accent-foreground [&>svg]:text-accent-foreground",
   info: "border-slate/30 bg-slate/10 text-slate [&>svg]:text-slate",

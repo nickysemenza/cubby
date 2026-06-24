@@ -10,7 +10,7 @@ import {
   EntitySummaryCard,
   entitySummaryDataSchema,
 } from "~/components/entity/entity-summary-card";
-import { Row } from "~/components/layout";
+import { Grid, Row } from "~/components/layout";
 import {
   Card,
   CardDescription,
@@ -57,7 +57,7 @@ export function DocsPage() {
         <p>cubby is built around five key entity types that work together:</p>
       </Prose>
 
-      <div className="my-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <Grid cols="cards3" className="my-6">
         <Card>
           <CardHeader>
             <Row align="center" gap="sm">
@@ -124,7 +124,7 @@ export function DocsPage() {
             </CardDescription>
           </CardHeader>
         </Card>
-      </div>
+      </Grid>
 
       <div className="my-6">
         <div className="mb-2 font-medium">Entity Relationships</div>
@@ -147,7 +147,7 @@ export function DocsPage() {
         <h2>Features</h2>
       </Prose>
 
-      <div className="my-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <Grid cols="cards3" className="my-6">
         <Card>
           <CardHeader>
             <Row align="center" gap="sm">
@@ -226,7 +226,7 @@ export function DocsPage() {
             </CardDescription>
           </CardHeader>
         </Card>
-      </div>
+      </Grid>
 
       <Prose>
         <h2>Component Demos</h2>

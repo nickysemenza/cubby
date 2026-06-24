@@ -5,6 +5,7 @@ import { addDays, format, parseISO } from "date-fns";
 import { CalendarPlus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
+import { Description } from "~/components/ui/description";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -73,9 +74,9 @@ export function AddToMeal({ recipeId }: { recipeId: RecipeId }) {
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <div className="px-2 py-2">
-          <span className="mb-1 block text-muted-foreground text-xs">
+          <Description as="span" size="xs" className="mb-1 block">
             Pick a date
-          </span>
+          </Description>
           <input
             type="date"
             className="w-full rounded-md border bg-input/20 px-2 py-1 text-sm"

@@ -8,6 +8,7 @@ import { match } from "ts-pattern";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { StatusText } from "~/components/ui/status-text";
 import { formatCurrency } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import { CopyJsonButton } from "./copy-debug-button";
@@ -51,7 +52,11 @@ const MeasureCell: React.FC<{
   path?: { from_unit: string; to_unit: string; factor: number }[] | null;
 }> = ({ diag, path }) => {
   if (!diag.ok) {
-    return <span className="text-destructive text-xs">{diag.error}</span>;
+    return (
+      <StatusText tone="destructive" className="text-xs">
+        {diag.error}
+      </StatusText>
+    );
   }
   const value =
     "value" in diag
@@ -136,14 +141,14 @@ export const RecipeCostingDebugCard: React.FC<{ recipeId: RecipeId }> = ({
         </Row>
 
         {computed.usdaMisses.length > 0 && (
-          <div className="text-destructive text-xs">
+          <StatusText as="div" tone="destructive" className="text-xs">
             USDA misses:{" "}
             {computed.usdaMisses
               .map(
                 (m) => `${m.ingredientName} (${m.productName} fdc ${m.fdcId})`,
               )
               .join(", ")}
-          </div>
+          </StatusText>
         )}
 
         {/* Per-row trace: usage, fired rule per measure, value-or-error + path. */}

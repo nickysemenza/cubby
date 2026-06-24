@@ -13,6 +13,7 @@ import {
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
+import { Description } from "~/components/ui/description";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithRecompute } from "~/lib/recompute-summary";
 import type { EnrichmentRow } from "~/server/services/ingredient.service";
@@ -237,11 +238,11 @@ export function ReviewQueue({
         gap="sm"
         className="rounded-lg border border-dashed p-6 text-center"
       >
-        <p className="text-muted-foreground text-sm">
+        <Description>
           {reviewedThisSession > 0
             ? `Reviewed ${reviewedThisSession} this session — nothing left in this filter.`
             : "Nothing to review in this filter."}
-        </p>
+        </Description>
         <Button variant="outline" size="sm" onClick={onExit}>
           Back to browse
         </Button>

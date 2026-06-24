@@ -9,6 +9,7 @@ import { BulkProgressBar } from "~/components/ui/bulk-progress-bar";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
+import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
 import { getErrorMessage } from "~/lib/error-utils";
 import { queryKeys } from "~/lib/query-keys";
@@ -149,10 +150,10 @@ export function NotionImport() {
     <Stack>
       <Row align="center" gap="sm">
         {preview.isSuccess && (
-          <span className="text-muted-foreground text-sm">
+          <Description as="span">
             {items.length} recipe{items.length === 1 ? "" : "s"}
             {summary && ` · ${summary}`}
-          </span>
+          </Description>
         )}
         <div className="flex-1" />
         {items.length > 0 && (
@@ -202,9 +203,9 @@ export function NotionImport() {
               disabled={actionable.length === 0}
               onCheckedChange={toggleAll}
             />
-            <span className="text-muted-foreground text-sm">
+            <Description as="span">
               Select all new &amp; changed ({actionable.length})
-            </span>
+            </Description>
           </CardHeader>
           <CardContent className="space-y-2">
             {items.map((item) => (

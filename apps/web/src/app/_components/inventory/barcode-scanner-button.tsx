@@ -3,6 +3,7 @@ import { useCallback, useState } from "react";
 import { ColoredAlert } from "~/components/common/colored-alert";
 import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+import { Description } from "~/components/ui/description";
 import {
   Dialog,
   DialogContent,
@@ -94,9 +95,9 @@ export function BarcodeScannerButton({
               )
             )}
 
-            <p className="text-center text-muted-foreground text-sm">
+            <Description className="text-center">
               Point your camera at a barcode to scan
-            </p>
+            </Description>
           </Stack>
         </DialogContent>
       </Dialog>

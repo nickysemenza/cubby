@@ -10,6 +10,7 @@ import {
 import { useMemo } from "react";
 import { Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
+import { Description } from "~/components/ui/description";
 import { USDA_KINDS } from "~/lib/conversion-coverage";
 import { unitMappingsFromFood } from "~/lib/unit-mapping-utils";
 import { type DetailSection, DetailSections } from "../data-table/detail-page";
@@ -123,7 +124,7 @@ export const USDAFoodDetail: React.FC<{
 
   const nutritionSection = (
     <div>
-      <p className="mb-4 text-muted-foreground text-sm">Per 100g</p>
+      <Description className="mb-4">Per 100g</Description>
       <div className="mb-4">
         <NutrientsSummary nutrients={nutritionInfo.nutrientsPer100} />
       </div>

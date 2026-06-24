@@ -5,6 +5,7 @@ import type { FC } from "react";
 import { Stack } from "~/components/layout";
 import { MutedBox } from "~/components/layout/muted-box";
 import { Page } from "~/components/page/Page";
+import { Description } from "~/components/ui/description";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { formatCurrency } from "~/lib/utils";
 import type { ProductWithFoodOut } from "~/server/services/product.service";
@@ -94,9 +95,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
                   aliases={product.ingredient.aliases}
                 />
               ) : (
-                <p className="text-muted-foreground text-sm">
-                  Not used in any recipes yet.
-                </p>
+                <Description>Not used in any recipes yet.</Description>
               ),
           },
         ]

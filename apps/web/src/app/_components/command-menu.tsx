@@ -32,6 +32,7 @@ import {
   CommandList,
   CommandSeparator,
 } from "~/components/ui/command";
+import { IconTile } from "~/components/ui/icon-tile";
 import { Spinner } from "~/components/ui/spinner";
 import { EntityIcon, entities } from "~/entities/entities";
 import { useDebug } from "~/hooks/useDebug";
@@ -381,9 +382,10 @@ export function GlobalCommandMenu({
                               className="h-8 w-8 shrink-0 rounded object-cover"
                             />
                           ) : (
-                            <div
+                            <IconTile
+                              size="md"
                               className={cn(
-                                "flex h-8 w-8 shrink-0 items-center justify-center rounded",
+                                "rounded",
                                 entityDef?.color.bg ?? "bg-muted/50",
                                 entityDef?.color.text,
                               )}
@@ -392,7 +394,7 @@ export function GlobalCommandMenu({
                                 item={item}
                                 className="h-4 w-4 shrink-0"
                               />
-                            </div>
+                            </IconTile>
                           )}
                           <div className="min-w-0 flex-1">
                             <div className="truncate text-sm">{item.name}</div>
@@ -441,13 +443,13 @@ export function GlobalCommandMenu({
                         }}
                         className="flex items-center gap-2"
                       >
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-muted/50">
+                        <IconTile size="md" className="rounded bg-muted/50">
                           {p.icon ? (
                             <span className="text-base">{p.icon}</span>
                           ) : (
                             <Hammer className="h-4 w-4" />
                           )}
-                        </div>
+                        </IconTile>
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-sm">{p.name}</div>
                           <div className="truncate text-muted-foreground text-xs">
@@ -469,9 +471,9 @@ export function GlobalCommandMenu({
                         }}
                         className="flex items-center gap-2"
                       >
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-muted/50">
+                        <IconTile size="md" className="rounded bg-muted/50">
                           <ClipboardList className="h-4 w-4" />
-                        </div>
+                        </IconTile>
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-sm">{t.name}</div>
                           <div className="truncate text-muted-foreground text-xs">
@@ -496,9 +498,9 @@ export function GlobalCommandMenu({
                         }}
                         className="flex items-center gap-2"
                       >
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-muted/50">
+                        <IconTile size="md" className="rounded bg-muted/50">
                           <ShoppingCart className="h-4 w-4" />
-                        </div>
+                        </IconTile>
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-sm">{p.name}</div>
                           <div className="truncate text-muted-foreground text-xs">
@@ -550,9 +552,10 @@ export function GlobalCommandMenu({
                         }
                         className="flex items-center gap-2"
                       >
-                        <div
+                        <IconTile
+                          size="sm"
                           className={cn(
-                            "flex h-6 w-6 shrink-0 items-center justify-center rounded",
+                            "size-6 rounded",
                             entities[entityTypeMap[recent.entityType]]?.color
                               .bg ?? "bg-muted/50",
                             entities[entityTypeMap[recent.entityType]]?.color
@@ -563,7 +566,7 @@ export function GlobalCommandMenu({
                             entity={entityTypeMap[recent.entityType]}
                             className="h-3.5 w-3.5"
                           />
-                        </div>
+                        </IconTile>
                         <span className="truncate">{recent.name}</span>
                       </CommandItem>
                     ))}
@@ -716,13 +719,13 @@ function AnswerView({
               }
               className="flex items-center gap-2"
             >
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-muted/50">
+              <IconTile size="md" className="rounded bg-muted/50">
                 <EntityIcon
                   entity={entityTypeMap[source.entityType]}
                   colored
                   className="h-4 w-4 shrink-0"
                 />
-              </div>
+              </IconTile>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm">{source.name}</div>
                 {source.detail && (

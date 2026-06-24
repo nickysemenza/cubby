@@ -1,6 +1,7 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
 import { useMemo } from "react";
 import { Row, Stack } from "~/components/layout";
+import { Description } from "~/components/ui/description";
 import { wasm } from "~/lib/wasm";
 import { formatRichText } from "./richtext";
 import { SectionHeading } from "./section-heading";
@@ -57,9 +58,9 @@ export function RecipeInstructions({ recipe }: RecipeInstructionsProps) {
 
           {/* No instructions message */}
           {section.instructions.length === 0 && (
-            <p className="text-muted-foreground italic">
+            <Description className="italic">
               No instructions for this section.
-            </p>
+            </Description>
           )}
         </div>
       ))}

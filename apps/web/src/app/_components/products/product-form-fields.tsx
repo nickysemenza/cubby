@@ -11,6 +11,7 @@ import { ArrayFieldManager } from "~/components/forms/array-field-manager";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
+import { Description } from "~/components/ui/description";
 import { Image } from "~/components/ui/image";
 import { sectionRuleClass } from "~/components/ui/section-rule";
 import { Spinner } from "~/components/ui/spinner";
@@ -353,10 +354,10 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
                 over UPC auto-resolution (foodLookupParamFromProduct), so surface
                 that precedence instead of leaving it implicit. */}
             {(upcValue || fdcValue) && (
-              <p className="text-muted-foreground text-xs">
+              <Description size="xs">
                 USDA link:{" "}
                 {fdcValue ? "via FDC id (explicit)" : "via UPC (auto)"}
-              </p>
+              </Description>
             )}
           </FormSection>
 

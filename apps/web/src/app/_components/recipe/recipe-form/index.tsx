@@ -37,6 +37,7 @@ import {
 } from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
+import { Description } from "~/components/ui/description";
 import { Field, FieldLabel } from "~/components/ui/field";
 import { InkStamp } from "~/components/ui/ink-stamp";
 import { Input } from "~/components/ui/input";
@@ -539,9 +540,9 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                 </Button>
               </Row>
               {isResolving && progress.total > 0 && (
-                <p className="text-muted-foreground text-xs">
+                <Description size="xs">
                   Resolving ingredients {progress.done}/{progress.total}…
-                </p>
+                </Description>
               )}
             </Field>
           </div>
@@ -599,9 +600,9 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                       ))}
                     </Stack>
                   ) : (
-                    <div className="text-muted-foreground text-sm">
+                    <Description as="div">
                       Enter instructions to see preview
-                    </div>
+                    </Description>
                   )}
                 </div>
               </div>
@@ -609,7 +610,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
 
             {/* Import button */}
             <Row align="center" justify="between">
-              <div className="text-muted-foreground text-sm">
+              <Description as="div">
                 {ingredientImport.totalCount > 0 && (
                   <>
                     {ingredientImport.matchedCount}/
@@ -622,7 +623,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                     )}
                   </>
                 )}
-              </div>
+              </Description>
               <Button
                 type="button"
                 variant="default"
@@ -681,10 +682,10 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
               />
             </Field>
             <Row align="center" justify="between" gap="sm">
-              <p className="text-muted-foreground text-xs">
+              <Description size="xs">
                 The source URL is saved with the recipe and used to resolve
                 relative image and link references.
-              </p>
+              </Description>
               <Button
                 type="button"
                 variant="default"

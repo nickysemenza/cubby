@@ -15,6 +15,7 @@ import {
   type RecipeSummaryData,
 } from "~/components/entity/entity-summary-card";
 import { Stack } from "~/components/layout";
+import { Description } from "~/components/ui/description";
 import type {
   CalculateTotalsResult,
   CostingRow,
@@ -132,10 +133,10 @@ export const RecipeIngredientList: React.FC<{
         const usage = estimatedRows.get(info.row.original.id);
         if (amounts.length === 0 && usage) {
           return (
-            <span className="text-muted-foreground text-sm">
+            <Description as="span">
               {ESTIMATE_AMOUNT_LABELS[usage] ?? "estimated"}
               <EstimateMarker />
-            </span>
+            </Description>
           );
         }
 

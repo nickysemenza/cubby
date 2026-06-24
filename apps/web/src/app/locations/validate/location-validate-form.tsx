@@ -21,6 +21,7 @@ import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { typeSupportsQrCode } from "~/app/_components/locations/location-type-theme";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Description } from "~/components/ui/description";
 import { getErrorMessage } from "~/lib/error-utils";
 import { queryKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
@@ -254,10 +255,10 @@ export function LocationValidateForm({
         {parentLocation && (
           <div className="space-y-2">
             <LocationBreadcrumb location={parentLocation} linkable />
-            <p className="text-muted-foreground text-sm">
+            <Description>
               {childCount} child location{childCount !== 1 ? "s" : ""} to
               validate
-            </p>
+            </Description>
             {children.length > 0 && (
               <div className="space-y-1">
                 {children.map((child) => (
@@ -296,9 +297,9 @@ export function LocationValidateForm({
           <LocationBreadcrumb location={parentLocation} linkable />
         )}
 
-        <p className="text-muted-foreground text-sm">
+        <Description>
           Scanned {scannedCount} of {childCount} expected
-        </p>
+        </Description>
 
         <PersistentScanner
           onScan={handleScan}
@@ -376,10 +377,10 @@ export function LocationValidateForm({
         <LocationBreadcrumb location={parentLocation} linkable />
       )}
 
-      <p className="text-muted-foreground text-sm">
+      <Description>
         {confirmed.length} confirmed, {missing.length} missing,{" "}
         {unexpected.length} unexpected
-      </p>
+      </Description>
 
       {/* Confirmed */}
       {confirmed.length > 0 && (

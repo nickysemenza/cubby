@@ -21,6 +21,7 @@ import { useState } from "react";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+import { Description } from "~/components/ui/description";
 import { useTRPC } from "~/trpc/react";
 import { formatMealCost } from "./meal-format";
 import { useInvalidateMeals } from "./use-meal-mutations";
@@ -123,10 +124,10 @@ function CalendarView() {
         >
           <ChevronRight className="size-4" />
         </Button>
-        <span className="ml-2 text-muted-foreground text-sm">
+        <Description as="span" className="ml-2">
           {format(weekStart, "MMM d")} –{" "}
           {format(addDays(weekStart, 6), "MMM d, yyyy")}
-        </span>
+        </Description>
       </Row>
 
       {isLoading ? (
@@ -194,18 +195,18 @@ function TableView() {
   const total = data?.meta.totalCount ?? meals.length;
   if (meals.length === 0) {
     return (
-      <p className="text-muted-foreground text-sm">
+      <Description>
         No meals planned yet — switch to the calendar to add one.
-      </p>
+      </Description>
     );
   }
 
   return (
     <Stack gap="sm">
       {total > meals.length && (
-        <p className="text-muted-foreground text-xs">
+        <Description size="xs">
           Showing the {meals.length} most recent of {total} meals.
-        </p>
+        </Description>
       )}
       <div className="overflow-hidden rounded-lg border border-[var(--border-chunky)]">
         <table className="w-full text-sm">

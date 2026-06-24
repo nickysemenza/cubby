@@ -12,6 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
+import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
 import { useTRPC } from "~/trpc/react";
 
@@ -61,7 +62,7 @@ export function CategoryAudit() {
       {result && (
         <CardContent>
           <Stack>
-            <p className="text-muted-foreground text-sm">{result.summary}</p>
+            <Description>{result.summary}</Description>
 
             {result.suggestions.length > 0 && (
               <Stack>
@@ -94,7 +95,7 @@ function SuggestionCard({
         <Badge variant="secondary">{suggestion.categoryName}</Badge>
       </Row>
       <p className="text-sm">{suggestion.description}</p>
-      <p className="text-muted-foreground text-xs">{suggestion.reasoning}</p>
+      <Description size="xs">{suggestion.reasoning}</Description>
       {suggestion.productNames.length > 0 && (
         <Row wrap gap="sm" className="pt-1">
           {suggestion.productNames.map((name) => (
