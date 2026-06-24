@@ -5,6 +5,7 @@ import { RouteErrorComponent } from "~/components/route-error";
 import { RouteNotFound } from "~/components/route-not-found";
 import { RoutePending } from "~/components/route-pending";
 import { installJsProfiler } from "~/lib/perf/js-self-profile";
+import { SENTRY_DSN } from "~/lib/sentry-dsn";
 import * as TanstackQuery from "./integrations/tanstack-query/root-provider";
 
 // Import the generated route tree
@@ -54,7 +55,7 @@ export const getRouter = () => {
   if (!router.isServer) {
     const isProd = import.meta.env.PROD;
     Sentry.init({
-      dsn: "https://a50b2f76dd1586f95cdd29cd13a6c0dc@o83311.ingest.us.sentry.io/4508775559135232",
+      dsn: SENTRY_DSN,
       sendDefaultPii: true,
       // Tracing OFF in dev. React 19's dev build emits a `performance.measure`
       // per component render; Sentry's browser tracing turns each into a span and
