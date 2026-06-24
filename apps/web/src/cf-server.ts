@@ -2,7 +2,8 @@
 //
 // 1. Dynamic import catches module-level errors (which would otherwise be silent 500s)
 // 2. Per-request database connections via withRequestDb — Hyperdrive provides pooled
-//    TCP connections, but each Worker invocation still needs its own pg.Client handle.
+//    TCP connections, and each Worker invocation opens a per-request pg.Pool so a
+//    single request's query fan-out runs in parallel instead of serializing.
 // 3. Intercepts console.error to capture real error details for `wrangler tail`.
 
 import { setCfEnv } from "./server/cf-env";

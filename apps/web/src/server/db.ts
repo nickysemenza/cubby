@@ -35,18 +35,22 @@ const createPoolClient = (connectionString: string) => {
 };
 
 // ---------------------------------------------------------------------------
-// CF Workers: per-request Client via AsyncLocalStorage
-// Hyperdrive pools TCP connections at CF's edge — use pg.Client (not pg.Pool)
-// since Hyperdrive itself is the pool. Queries serialize through one connection
-// but Hyperdrive caching makes them fast (~5ms for cached reads).
+// CF Workers: per-request Pool via AsyncLocalStorage
+// Hyperdrive pools TCP connections to the origin at CF's edge. A single
+// pg.Client per request would serialize every query on ONE connection — the
+// Problems page fans out ~12 detectors, turning a parallel scan into a ~12s
+// sum-of-all-queries. We use a small per-request pg.Pool instead (max 5, the
+// Workers per-invocation connection ceiling — see getDbInstance), giving the
+// fan-out bounded real concurrency (wall time ≈ slowest few queries, not the sum).
 // ---------------------------------------------------------------------------
 
-// Per-request holder. We store the connection string (not a connected client)
-// so the actual pg.Client + connect() is deferred until the first db access —
-// see getDbInstance(). Requests that never query (static pages, logged-out /
-// and /auth/sign-in, bot 404s) never open a Neon connection.
+// Per-request holder. We store the connection string (not a connected pool) so
+// the actual pg.Pool is deferred until the first db access — see
+// getDbInstance(). Requests that never query (static pages, logged-out / and
+// /auth/sign-in, bot 404s) never open a Neon connection.
 type LazyDbHolder = {
   connectionString: string;
+  pool?: pg.Pool;
   db?: DBClient;
 };
 
@@ -92,22 +96,34 @@ const getDbInstance = (): DBClient => {
   const holder = requestDbStore.getStore();
   if (holder) {
     if (!holder.db) {
-      const client = new pg.Client({
+      // Per-request Pool: connections are opened lazily on demand (up to `max`)
+      // and concurrent queries each grab their own, so a fan-out runs in
+      // parallel instead of serializing on one connection. Drizzle's
+      // .transaction() checks out a single dedicated client for its duration, so
+      // transactional atomicity is preserved; only independent queries spread.
+      //
+      // max:5 is Cloudflare's recommended ceiling for a per-request DB pool: a
+      // Worker invocation can hold at most ~6 simultaneous outbound TCP
+      // connections, and Hyperdrive client connections count against that limit.
+      // (This is NOT the Hyperdrive→origin pool size of 60 — that's shared
+      // across all invocations and protects the database, not this request.) So
+      // the Problems fan-out gets 5-way parallelism, the platform maximum.
+      //
+      // We deliberately never call pool.end() — Hyperdrive manages connection
+      // lifecycle, and httpBatchStreamLink streams the response before all
+      // batched procedures finish. A Pool makes that safe for free: an in-flight
+      // (still-streaming) query keeps its client checked out and never idle, so
+      // it's never closed under it, while a finished query returns its client to
+      // the pool to self-drain via the idle timeout. allowExitOnIdle lets idle
+      // clients close without keeping the isolate alive.
+      const pool = new pg.Pool({
         connectionString: holder.connectionString,
+        max: 5,
+        allowExitOnIdle: true,
       });
-      // Kick off the connection but don't await — getDbInstance is sync (called
-      // from the db Proxy's get trap). pg.Client queues queries issued after
-      // connect() is called and drains them once the handshake completes. The
-      // no-op catch keeps a connection failure from surfacing as an
-      // unhandledRejection — the queued query rejects with the same error and
-      // surfaces it to the caller.
-      // No explicit client.end() — Hyperdrive manages connection lifecycle.
-      // Calling client.end() can terminate the connection while queries are
-      // still queued on the pg.Client (tRPC batches stream responses before
-      // all procedures complete).
-      void client.connect().catch(() => {});
-      const db = drizzleNodePostgres({ client, schema });
+      const db = drizzleNodePostgres({ client: pool, schema });
       instrumentDrizzleClient(db, { dbSystem: "postgresql", dbName: "cubby" });
+      holder.pool = pool;
       holder.db = db;
     }
     return holder.db;
