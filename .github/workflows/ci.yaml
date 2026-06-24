@@ -376,7 +376,13 @@ jobs:
       E2E_TEST_USER_EMAIL: nicky@test.com
       E2E_TEST_USER_PASSWORD: password1234
       BETTER_AUTH_SECRET: ci-secret-TbGFDRAbhlR8e3RaXsfHR9CQ7r4nIc9
-      PLAYWRIGHT_BROWSERS_PATH: ~/.cache/ms-playwright
+      # Do NOT set PLAYWRIGHT_BROWSERS_PATH to `~/.cache/ms-playwright`: a literal
+      # `~` in a YAML env value is NOT shell-expanded, so Playwright installs into
+      # a folder literally named `~` under apps/web, while actions/cache expands
+      # `~` to /home/runner — the two never align, so the browser cache silently
+      # never hit and Chromium (~175MB) was re-downloaded every run. Leaving this
+      # unset lets Playwright default to os.homedir()/.cache/ms-playwright, which
+      # matches the cache step's `~/.cache/ms-playwright` (action-expanded).
     services:
       postgres:
         image: postgres
@@ -408,11 +414,10 @@ jobs:
           download-wasm: "true"
       - name: Setup web environment
         uses: ./.github/actions/setup-web-env
-      - name: Enable pg_trgm extension
-        run: psql -h localhost -U postgres -d cubby -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm;'
-      - name: Push schema to database
-        run: pnpm --filter @cubby/web db:push
-
+      # NOTE: no manual `pg_trgm` / `db:push` against the `cubby` service DB —
+      # nothing reads it. e2e-global-setup.ts provisions its own IntegreSQL
+      # template entirely in-process (CREATE EXTENSION pg_trgm + drizzle-kit
+      # pushSchema), exactly like test-integration-web above.
       - name: Get Playwright version
         id: playwright-version
         run: echo "version=$(cd apps/web && npx playwright --version)" >> $GITHUB_OUTPUT
@@ -448,7 +453,8 @@ jobs:
 
   check-tests:
     name: Check All Tests Passed
-    needs: [test-unit-web, test-integration-web, test-unit-aux, test-e2e, test-rust]
+    needs:
+      [test-unit-web, test-integration-web, test-unit-aux, test-e2e, test-rust]
     runs-on: ubuntu-latest
     if: always()
     outputs:

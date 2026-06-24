@@ -217,15 +217,10 @@ async function globalSetup(config: FullConfig): Promise<void> {
     );
   }
 
-  // Navigate to establish session in browser context
-  await page.goto(baseURL);
-  await page.waitForLoadState("networkidle");
-
-  // Navigate to a protected page to verify authentication
-  await page.goto(`${baseURL}/dashboard`);
-  await page.waitForLoadState("networkidle");
-
-  // Save the authentication state
+  // Save the authentication state. `page.request` shares the BrowserContext
+  // cookie jar, so the better-auth session cookie set by the sign-in POST above
+  // is already captured — no extra page navigations needed to "establish" it
+  // (two goto + networkidle round-trips here were pure overhead every run).
   await context.storageState({ path: authFile });
 
   await browser.close();
