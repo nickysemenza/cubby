@@ -46,6 +46,14 @@ export const auth = betterAuth({
   plugins: [
     apiKey({
       enableSessionForAPIKeys: true,
+      // Rate limiting is deliberately OFF. better-auth's default when enabled is
+      // a punishing 10 requests / 24h per key (@better-auth/api-key index.mjs:
+      // timeWindow 1e3*60*60*24, maxRequests 10) — a single Claude MCP
+      // conversation fires far more tool calls than that, so the default would
+      // lock the (single) owner out almost immediately. There's no abuse vector
+      // worth throttling on a single-user instance; if a custom limit is ever
+      // wanted, set { enabled: true, maxRequests, timeWindow } here AND verify
+      // headroom for a full MCP session before deploying (lockout risk).
       rateLimit: { enabled: false },
     }),
     passkey({

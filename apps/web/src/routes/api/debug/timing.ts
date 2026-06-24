@@ -39,6 +39,14 @@ export const Route = createFileRoute("/api/debug/timing")({
   server: {
     handlers: {
       GET: async () => {
+        // This endpoint leaks DB latencies and upstream service URLs (topology),
+        // so it is a dev-only diagnostic. Gate on the same PROD signal the app
+        // uses elsewhere (router.tsx); return 404 in production so it is
+        // indistinguishable from a nonexistent route.
+        if (import.meta.env.PROD) {
+          return new Response("Not Found", { status: 404 });
+        }
+
         const overallStart = performance.now();
         const drizzle = getDb(db);
 

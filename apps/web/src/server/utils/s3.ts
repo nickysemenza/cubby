@@ -1,5 +1,7 @@
+import { TRPCError } from "@trpc/server";
 import { AwsClient } from "aws4fetch";
 import { env } from "~/env";
+import { createAppError } from "~/server/errors/app-error";
 
 // SigV4 fetch signer for Cloudflare R2 (S3 API). aws4fetch is Workers-native and
 // runs identically in Node (vite dev) and Workers — no dev/prod split. R2 requires
@@ -18,6 +20,63 @@ const objectUrl = (key: string) =>
   `${env.R2_ENDPOINT}/${env.R2_BUCKET_NAME}/${key}`;
 
 const IMAGE_FETCH_TIMEOUT_MS = 10000;
+
+// Cap external-image downloads so a malicious/oversized remote response can't
+// exhaust the Worker's (~128MB) memory. 50MB is comfortably larger than any real
+// product/recipe image.
+const MAX_IMAGE_BYTES = 50 * 1024 * 1024;
+
+/**
+ * Read a fetch Response body into a Buffer while enforcing a hard byte cap.
+ *
+ * `Content-Length` is checked by the caller as a cheap early-out, but it can be
+ * absent or lie, so this streams the body and aborts as soon as the running
+ * total exceeds `maxBytes` — we never buffer more than the cap. Throws an
+ * `IMAGE_IMPORT_FAILED` AppError on overflow.
+ */
+const readBodyWithCap = async (
+  response: Response,
+  maxBytes: number,
+): Promise<Buffer> => {
+  const body = response.body;
+  // No stream available (shouldn't happen for a normal fetch, but guard it):
+  // fall back to buffering, then check the size after the fact.
+  if (!body) {
+    const arrayBuffer = await response.arrayBuffer();
+    if (arrayBuffer.byteLength > maxBytes) {
+      throw createAppError(
+        "IMAGE_IMPORT_FAILED",
+        `Remote image exceeds ${maxBytes} byte cap (${arrayBuffer.byteLength} bytes)`,
+      );
+    }
+    return Buffer.from(arrayBuffer);
+  }
+
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        // Stop pulling more bytes; we've already proven the response is too big.
+        await reader.cancel();
+        throw createAppError(
+          "IMAGE_IMPORT_FAILED",
+          `Remote image exceeds ${maxBytes} byte cap`,
+        );
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  return Buffer.concat(chunks);
+};
 
 interface PresignedUrlParams {
   key: string;
@@ -192,9 +251,20 @@ export const fetchAndStoreImage = async (
       return null;
     }
 
-    // Read the image data
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    // Cheap early-out: reject before reading the body if the advertised size
+    // already blows the cap. (Content-Length is advisory — readBodyWithCap below
+    // enforces the real limit while streaming, since the header can be absent or
+    // lie.)
+    const contentLength = Number(response.headers.get("content-length"));
+    if (Number.isFinite(contentLength) && contentLength > MAX_IMAGE_BYTES) {
+      throw createAppError(
+        "IMAGE_IMPORT_FAILED",
+        `Remote image Content-Length ${contentLength} exceeds ${MAX_IMAGE_BYTES} byte cap (${sourceUrl})`,
+      );
+    }
+
+    // Read the image data, enforcing the byte cap during the stream.
+    const buffer = await readBodyWithCap(response, MAX_IMAGE_BYTES);
     const size = buffer.length;
 
     if (size === 0) {
@@ -226,9 +296,15 @@ export const fetchAndStoreImage = async (
       console.error(
         `[fetchAndStoreImage] Timeout fetching image from ${sourceUrl}`,
       );
-    } else {
-      console.error(`[fetchAndStoreImage] Error importing image:`, error);
+      return null;
     }
+    // The size-cap rejection is a typed AppError (TRPCError). Re-throw it so the
+    // oversized-payload case surfaces as a real error rather than being masked as
+    // a generic null import failure — createAppError already logged + annotated.
+    if (error instanceof TRPCError) {
+      throw error;
+    }
+    console.error(`[fetchAndStoreImage] Error importing image:`, error);
     return null;
   }
 };
