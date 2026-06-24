@@ -44,11 +44,11 @@ const MAX_STATEMENT_LEN = 1000;
 const extractOperation = (sql: string): string | undefined =>
   /^\s*(\w+)/u.exec(sql)?.[1]?.toUpperCase();
 
-// Wrap one pg `query` function (Pool or checked-out Client) in a `withTrace` span.
-// `inTransaction` tags queries running on a checked-out client (drizzle's
-// `.transaction()`), mirroring kubiks's db.transaction marker.
+// Wrap one pg `query` function (a checked-out Client's `query`) in a `withTrace`
+// span. `getTransaction` is read at query time — a checked-out client is reused
+// across checkouts, so transaction-ness is per-acquire, not per-client.
 const traceQuery =
-  (run: (...args: unknown[]) => unknown, inTransaction: boolean) =>
+  (run: (...args: unknown[]) => unknown, getTransaction: () => boolean) =>
   (...args: unknown[]): unknown => {
     // pg's `query` has callback overloads; only the promise form (what drizzle
     // uses) is traced. No args, or a trailing callback → pass straight through.
@@ -70,7 +70,7 @@ const traceQuery =
         "db.namespace": DB_NAMESPACE,
         "db.operation.name": operation,
         "db.query.text": sql.slice(0, MAX_STATEMENT_LEN),
-        "db.query.transaction": inTransaction,
+        "db.query.transaction": getTransaction(),
       });
       const res = (await run(...args)) as {
         rowCount?: number | null;
@@ -84,29 +84,58 @@ const traceQuery =
     });
   };
 
-// Trace a pool's queries on both paths: `pool.query` (non-transactional) and the
-// client handed out by `pool.connect()` (drizzle's `.transaction()` runs on a
-// checked-out client, bypassing pool.query). pg's internal `Pool.query` uses the
-// *callback* form of connect — which we pass through untouched — so a plain query
-// is traced once, not twice. A pooled client is reused across checkouts, so guard
-// against re-wrapping it.
+// Trace BOTH the connection acquire AND the query. Routing every query through an
+// explicit acquire (instead of letting pg.Pool.query connect internally) surfaces
+// the connection cost as its own `db.acquire` span rather than folding it into the
+// first query's span — the per-request pool connects lazily, so the first acquire
+// pays the full TCP/TLS/auth round-trip to Hyperdrive→Neon. That separation is the
+// signal we need to tell "connection: 5s" apart from "query: 7ms".
+const IN_TX = Symbol("worker-tracing:inTransaction");
+type TracedClient = pg.PoolClient & { [TRACED]?: boolean; [IN_TX]?: boolean };
+
 const tracePool = (pool: pg.Pool): pg.Pool => {
-  pool.query = traceQuery(pool.query.bind(pool), false) as typeof pool.query;
-  const connect = pool.connect.bind(pool) as (...args: unknown[]) => unknown;
-  pool.connect = ((...args: unknown[]) => {
-    if (typeof args[0] === "function") return connect(...args); // callback form
-    return (connect(...args) as Promise<pg.PoolClient>).then((client) => {
-      const c = client as pg.PoolClient & { [TRACED]?: boolean };
-      if (!c[TRACED]) {
-        c.query = traceQuery(
+  const rawQuery = pool.query.bind(pool) as (...args: unknown[]) => unknown;
+  const rawConnect = pool.connect.bind(pool) as (...args: unknown[]) => unknown;
+
+  // Acquire a client inside a `db.acquire` span and wrap its `query` once. The
+  // transaction flag is stamped per-acquire so a reused client reports correctly.
+  const acquire = (inTransaction: boolean): Promise<pg.PoolClient> =>
+    withTrace(TraceNames.db("acquire"), async (span) => {
+      span.setAttribute("db.acquire.transaction", inTransaction);
+      const client = (await rawConnect()) as TracedClient;
+      client[IN_TX] = inTransaction;
+      if (!client[TRACED]) {
+        client.query = traceQuery(
           client.query.bind(client),
-          true,
+          () => client[IN_TX] ?? false,
         ) as typeof client.query;
-        c[TRACED] = true;
+        client[TRACED] = true;
       }
       return client;
     });
+
+  // Non-transactional queries: acquire (traced) → query (traced) → release. The
+  // callback / no-arg forms (incl. pg's own internal usage) pass straight through.
+  pool.query = ((...args: unknown[]) => {
+    if (args.length === 0 || typeof args[args.length - 1] === "function")
+      return rawQuery(...args);
+    return acquire(false).then(async (client) => {
+      try {
+        return await (client.query as (...a: unknown[]) => Promise<unknown>)(
+          ...args,
+        );
+      } finally {
+        client.release();
+      }
+    });
+  }) as typeof pool.query;
+
+  // Transactions (drizzle `.transaction()`) check out a client via connect.
+  pool.connect = ((...args: unknown[]) => {
+    if (typeof args[0] === "function") return rawConnect(...args); // callback form
+    return acquire(true);
   }) as typeof pool.connect;
+
   return pool;
 };
 
