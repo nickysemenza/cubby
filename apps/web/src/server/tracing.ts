@@ -174,6 +174,28 @@ export const withTrace = async <T>(
 };
 
 /**
+ * Run a record of async thunks concurrently, each inside its own span named by
+ * its key, and return a typed object of their results. The key is the single
+ * source of truth — it's both the span name (a string literal, so it survives
+ * minification, unlike `fn.name`) and the result accessor — so detector names
+ * are never written twice.
+ */
+export const traceAll = async <
+  T extends Record<string, () => Promise<unknown>>,
+>(
+  tasks: T,
+): Promise<{ [K in keyof T]: Awaited<ReturnType<T[K]>> }> => {
+  const entries = await Promise.all(
+    Object.entries(tasks).map(
+      async ([name, run]) => [name, await withTrace(name, run)] as const,
+    ),
+  );
+  return Object.fromEntries(entries) as {
+    [K in keyof T]: Awaited<ReturnType<T[K]>>;
+  };
+};
+
+/**
  * Trace id of the active span, for surfacing to clients (e.g. an `x-trace-id`
  * header). Undefined in the CF backend — its `Span` exposes no trace id.
  */

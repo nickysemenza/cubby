@@ -21,6 +21,7 @@ import {
   mealUpdateData,
 } from "@cubby/schemas/meal";
 import { mcpPaginationParams } from "@cubby/schemas/pagination";
+import { countProblems } from "@cubby/schemas/problems";
 import {
   productCategory,
   productCreateInput,
@@ -1267,10 +1268,10 @@ function registerTools(server: McpServer) {
     },
     withErrorHandling(async (params, extra) => {
       const caller = getCaller(extra);
-      if (params.countsOnly) {
-        return json(await caller.problems.getProblemsCount());
-      }
       const all = await caller.problems.getAllProblems();
+      if (params.countsOnly) {
+        return json(countProblems(all));
+      }
       if (typeof params.type === "string") {
         const slice = (all as Record<string, unknown>)[params.type];
         if (slice === undefined) {

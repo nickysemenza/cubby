@@ -181,6 +181,17 @@ export const problemsCountSchema = z.object({
 export type AllProblems = z.infer<typeof allProblemsSchema>;
 export type ProblemsCount = z.infer<typeof problemsCountSchema>;
 
+// Derive the count payload from the full problems result: every array key
+// becomes its length. The single source of truth for badge/count consumers, so
+// they can `select` off the one `getAllProblems` query rather than re-scanning.
+export const countProblems = (all: AllProblems): ProblemsCount => {
+  const { totalProblems, ...arrays } = all;
+  const byType = Object.fromEntries(
+    Object.entries(arrays).map(([key, items]) => [key, items.length]),
+  ) as ProblemsCount["byType"];
+  return { total: totalProblems, byType };
+};
+
 // Per-detector item types — the canonical shapes the problems repo's find*
 // functions return, inferred from the schemas above so the repo never restates
 // them. `coverage.covered` carries the BaseKind union natively (via baseKind).

@@ -43,10 +43,7 @@ export function AliasPruneFix({
   const prune = useProblemCardMutation({
     mutationFn: api.problems.pruneAliases.mutationOptions,
     success: `Removed ${countLabel(unusedAliases.length, "alias", "aliases")} from ${name}`,
-    invalidateKeys: [
-      queryKeys.ingredient.list,
-      api.problems.getProblemsCount.queryKey(),
-    ],
+    invalidateKeys: [queryKeys.ingredient.list],
     onSuccess: close,
   });
 
@@ -96,7 +93,6 @@ export function UnusedIngredientDeleteFix({
     invalidateKeys: [
       queryKeys.ingredient.list,
       ...(alsoDeleteProducts ? [queryKeys.product.list] : []),
-      api.problems.getProblemsCount.queryKey(),
     ],
     onSuccess: (data) => {
       if (data.deleted > 0) close();
@@ -189,7 +185,6 @@ export function RemoveAllAliasesButton({
     success: (data) => `Removed ${countLabel(data.pruned, "alias", "aliases")}`,
     invalidateKeys: [
       api.problems.getAllProblems.queryKey(),
-      api.problems.getProblemsCount.queryKey(),
       queryKeys.ingredient.list,
     ],
   });
@@ -229,7 +224,6 @@ export function DeleteAllUnusedButton({
         : `Deleted ${countLabel(data.deleted, "ingredient")}`,
     invalidateKeys: [
       api.problems.getAllProblems.queryKey(),
-      api.problems.getProblemsCount.queryKey(),
       queryKeys.ingredient.list,
       ...(alsoDeleteProducts ? [queryKeys.product.list] : []),
     ],

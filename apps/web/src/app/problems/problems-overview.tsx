@@ -23,7 +23,12 @@ export function ProblemsOverview() {
     data: problems,
     isLoading,
     error,
-  } = useQuery(api.problems.getAllProblems.queryOptions());
+    // Match the navbar/loader staleTime so the page reuses their warm cache
+    // instead of background-refetching the full scan on every visit.
+  } = useQuery({
+    ...api.problems.getAllProblems.queryOptions(),
+    staleTime: 5 * 60 * 1000,
+  });
 
   // Every product id across the product-bearing sections, so we fetch recipe
   // usage once for the whole page rather than per card.
