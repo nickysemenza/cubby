@@ -1,4 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
+import type { AllProblems } from "@cubby/schemas/problems";
 import { Link } from "@tanstack/react-router";
 import { groupBy } from "es-toolkit";
 import {
@@ -20,7 +21,7 @@ import { EntityIcon } from "~/entities/entities";
 import { queryKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import type { ProductWithBetterUpcData } from "~/server/repo/problems";
-import { type RouterOutputs, useTRPC } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
 import { BACKFILL } from "./backfill-registry";
 import { EmptyLocationsList } from "./empty-locations-list";
 import {
@@ -44,8 +45,6 @@ import {
   type UnitCoverageItem,
   unitCoverageGroup,
 } from "./unit-coverage-fix";
-
-type AllProblems = RouterOutputs["problems"]["getAllProblems"];
 
 /** One row of the Problems page: its scroll anchor, summary-chip label, count, and card. */
 type ProblemSectionEntry = {
@@ -128,15 +127,16 @@ function customSection<T>(def: {
  * looked-up fields onto the product in place (manufacturer/price via update +
  * recipe recompute, image via R2 import) without leaving the page. Lives in a
  * component (not `renderItem`) so it can own the mutation hook; the card drops
- * out of the list once `problems.getAllProblems` invalidates.
+ * out of the list once the problems queries invalidate.
  */
 function UpcApplyAction({ product }: { product: ProductWithBetterUpcData }) {
   const api = useTRPC();
   const apply = useProblemCardMutation({
     mutationFn: api.product.applyUpcData.mutationOptions,
     success: `Updated ${product.name} from UPC`,
-    // getAllProblems is always invalidated by the hook (which also feeds the
-    // navbar badge count); add the product/recipe lists (price feeds cost).
+    // The whole problems.* path is always invalidated by the hook (which also
+    // feeds the navbar badge count); add the product/recipe lists (price feeds
+    // cost).
     invalidateKeys: [queryKeys.product.list, queryKeys.recipe.list],
   });
   return (

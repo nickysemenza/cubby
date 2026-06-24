@@ -220,13 +220,39 @@ export type ProblemsCount = z.infer<typeof problemsCountSchema>;
 
 // Derive the count payload from the full problems result: every array key
 // becomes its length. The single source of truth for badge/count consumers, so
-// they can `select` off the one `getAllProblems` query rather than re-scanning.
+// they assemble the five cost-grouped queries and count locally (no re-scan).
 export const countProblems = (all: AllProblems): ProblemsCount => {
   const { totalProblems, ...arrays } = all;
   const byType = Object.fromEntries(
     Object.entries(arrays).map(([key, items]) => [key, items.length]),
   ) as ProblemsCount["byType"];
   return { total: totalProblems, byType };
+};
+
+// Assemble the five cost-grouped detector results into the combined AllProblems
+// shape (with derived total). Shared by the service-layer findAllProblems
+// aggregator and the MCP list_problems tool so the merge + total live in one
+// place. (The Problems page merges client-side in useProblemsData, which is
+// loading-aware and defaults not-yet-loaded groups to empty.)
+export const assembleAllProblems = (groups: {
+  fast: ProblemsFast;
+  coverage: ProblemsCoverage;
+  aliases: ProblemsAliases;
+  parses: ProblemsParses;
+  upc: ProblemsUpc;
+}): AllProblems => {
+  const sections = {
+    ...groups.fast,
+    ...groups.coverage,
+    ...groups.aliases,
+    ...groups.parses,
+    ...groups.upc,
+  };
+  const totalProblems = Object.values(sections).reduce(
+    (n, items) => n + items.length,
+    0,
+  );
+  return { ...sections, totalProblems };
 };
 
 // Per-detector item types — the canonical shapes the problems repo's find*

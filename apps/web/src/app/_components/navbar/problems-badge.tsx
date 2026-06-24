@@ -1,7 +1,7 @@
 import { countProblems, type ProblemsCount } from "@cubby/schemas/problems";
-import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { AlertTriangle, Check } from "lucide-react";
+import { useProblemsData } from "~/app/problems/use-problems-data";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import {
@@ -11,7 +11,6 @@ import {
 } from "~/components/ui/tooltip";
 import { useHydrated } from "~/hooks/useHydrated";
 import { cn } from "~/lib/utils";
-import { useTRPC } from "~/trpc/react";
 
 const pl = (n: number, sing: string, plur = `${sing}s`) =>
   `${n} ${n === 1 ? sing : plur}`;
@@ -41,16 +40,15 @@ const PROBLEM_LABELS: Record<
 };
 
 export const ProblemsBadge = () => {
-  const api = useTRPC();
   const hydrated = useHydrated();
 
-  // Derive the count from the shared getAllProblems cache (select) rather than a
-  // separate count endpoint — one scan powers the badge and the page.
-  const { data: problems, isLoading } = useQuery({
-    ...api.problems.getAllProblems.queryOptions(),
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    select: countProblems,
-  });
+  // Assemble the count from the SAME five cost-grouped detector queries the
+  // Problems page uses (shared cache → no second scan, and the page is already
+  // warm when opened). 5-min staleTime keeps this background indicator from
+  // refetching on every navigation. Replaces the old monolithic getAllProblems,
+  // which ran every detector in one Worker invocation (the CPU-limit risk).
+  const { problems, isLoading } = useProblemsData({ staleTime: 5 * 60 * 1000 });
+  const count = countProblems(problems);
 
   // The query isn't prefetched during SSR, so the server always renders this
   // loading button. Dehydrated data can resolve before hydration, so gate the
@@ -64,17 +62,17 @@ export const ProblemsBadge = () => {
     );
   }
 
-  const totalProblems = problems?.total ?? 0;
+  const totalProblems = count.total;
   const hasProblems = totalProblems > 0;
 
   // One phrase per category, in Problems-page section order, so the breakdown
   // sums to `total` (every byType key is listed — no silent omissions).
-  const tooltipParts = problems
-    ? Object.entries(PROBLEM_LABELS).flatMap(([key, phrase]) => {
-        const n = problems.byType[key as keyof ProblemsCount["byType"]];
-        return n > 0 ? [phrase(n)] : [];
-      })
-    : [];
+  const tooltipParts = Object.entries(PROBLEM_LABELS).flatMap(
+    ([key, phrase]) => {
+      const n = count.byType[key as keyof ProblemsCount["byType"]];
+      return n > 0 ? [phrase(n)] : [];
+    },
+  );
 
   const tooltipText = hasProblems
     ? `${tooltipParts.join(", ")} — Click to view`

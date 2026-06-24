@@ -16,19 +16,20 @@
 
 import type { ActorContext } from "@cubby/schemas/context";
 import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
-import type {
-  AllProblems,
-  IngredientWithPartialCoverage,
-  MaintenanceCounts,
-  ProblemsAliases,
-  ProblemsCoverage,
-  ProblemsFast,
-  ProblemsParses,
-  ProblemsUpc,
-  ProductWithIslandedMappings,
+import {
+  type AllProblems,
+  assembleAllProblems,
+  type IngredientWithPartialCoverage,
+  type MaintenanceCounts,
+  type ProblemsAliases,
+  type ProblemsCoverage,
+  type ProblemsFast,
+  type ProblemsParses,
+  type ProblemsUpc,
+  type ProductWithIslandedMappings,
 } from "@cubby/schemas/problems";
 import { isMiscProduct } from "@cubby/shared";
-import { sum, uniq, uniqBy } from "es-toolkit";
+import { uniq, uniqBy } from "es-toolkit";
 import {
   BASE_KINDS,
   conversionCoverage,
@@ -397,22 +398,12 @@ export const findAllProblems = async (
   upcLookupClient: UPCLookupClient,
   usdaClient: USDAClient,
 ): Promise<AllProblems> => {
-  const r = await traceAll({
+  const groups = await traceAll({
     fast: () => findFastProblems(db),
     coverage: () => findCoverageProblems(db, usdaClient),
     aliases: () => findAliasesProblems(db),
     parses: () => findParsesProblems(db),
     upc: () => findUpcProblems(db, upcLookupClient),
   });
-  const sections = {
-    ...r.fast,
-    ...r.coverage,
-    ...r.aliases,
-    ...r.parses,
-    ...r.upc,
-  };
-  return {
-    ...sections,
-    totalProblems: sum(Object.values(sections).map((items) => items.length)),
-  };
+  return assembleAllProblems(groups);
 };

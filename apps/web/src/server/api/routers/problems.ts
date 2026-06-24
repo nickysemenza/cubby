@@ -1,6 +1,5 @@
 import { ingredientId } from "@cubby/schemas/identifiers";
 import {
-  allProblemsSchema,
   maintenanceCountsSchema,
   problemsAliasesSchema,
   problemsCoverageSchema,
@@ -17,7 +16,6 @@ import {
 import {
   deleteUnusedIngredients,
   findAliasesProblems,
-  findAllProblems,
   findCoverageProblems,
   findFastProblems,
   findMaintenanceCounts,
@@ -27,16 +25,12 @@ import {
 } from "~/server/services/problems.service";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
-// Combined scan — badge/homepage/SSR/MCP read this one (counts derived client-
-// side via countProblems). The Problems PAGE instead loads the cost-grouped
-// procedures below, each over an unbatched link so it gets its own Worker
-// invocation / CPU budget (a single combined invocation re-parses every recipe
-// line through WASM in two detectors and exceeded the 30s CPU limit).
-const getAllProblems = protectedProcedure
-  .output(allProblemsSchema)
-  .query(async ({ ctx }) => {
-    return await findAllProblems(ctx.db, ctx.upcLookupClient, ctx.usdaClient);
-  });
+// The Problems surfaces (page, navbar badge, homepage card) all load these five
+// cost-grouped procedures and assemble the combined result client-side — each
+// over an UNBATCHED link so it gets its own Worker invocation / CPU budget. The
+// old monolithic getAllProblems ran every detector (two re-parse every recipe
+// line through WASM) in ONE invocation and exceeded the 30s CPU limit; it was
+// removed. MCP composes these five the same way (assembleAllProblems).
 
 // Group: DB-only detectors (cheap).
 const getFast = protectedProcedure
@@ -65,7 +59,7 @@ const getUpc = protectedProcedure
 
 // Counts behind the Settings → Maintenance "N affected" dry-run. Focused subset
 // of detectors (no USDA/UPC network); badge/count consumers instead derive
-// counts client-side from getAllProblems via countProblems (one shared scan).
+// counts client-side from the five cost-grouped queries via countProblems.
 const getMaintenanceCounts = protectedProcedure
   .output(maintenanceCountsSchema)
   .query(async ({ ctx }) => {
@@ -133,7 +127,6 @@ const deleteUnused = protectedProcedure
   });
 
 export const problemsRouter = createTRPCRouter({
-  getAllProblems,
   getFast,
   getCoverage,
   getAliases,

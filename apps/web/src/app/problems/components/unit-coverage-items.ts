@@ -1,11 +1,10 @@
-import type { RouterOutputs } from "~/trpc/react";
+import type { AllProblems } from "@cubby/schemas/problems";
 
 // Pure, JSX-free core of the merged "Unit coverage" section, split out from
 // unit-coverage-fix.tsx so it's unit-testable (a .unit.test.ts can't import a
 // .tsx that pulls in `~/`-aliased React modules — see the vitest-unit-tsx-alias
 // note). The card rendering + inline-fix forms stay in the .tsx.
 
-type AllProblems = RouterOutputs["problems"]["getAllProblems"];
 type NoMappings = AllProblems["productsWithoutMappings"][number];
 type Islanded = AllProblems["productsWithIslandedMappings"][number];
 type PartialCoverage = AllProblems["ingredientsWithPartialCoverage"][number];

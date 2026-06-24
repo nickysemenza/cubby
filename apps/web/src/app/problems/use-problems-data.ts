@@ -15,15 +15,25 @@ import { useTRPC } from "~/trpc/react";
  * `useQueries` + `combine` for a referentially-stable result (per the repo's
  * hook-stability rule — a raw `useQueries` array is a new ref every render).
  */
-export function useProblemsData() {
+export function useProblemsData(opts?: {
+  staleTime?: number;
+  enabled?: boolean;
+}) {
   const api = useTRPC();
+  // `staleTime` lets the navbar badge reuse this exact cache with a relaxed
+  // 5-min freshness (background indicator) while the page leaves it at the
+  // client default and revalidates on entry — same query keys, one shared scan.
+  // `enabled` lets the homepage card gate the fetch (SSR-idle, then enable on
+  // the client) to avoid a hydration mismatch, like the sibling stat cards.
+  const staleTime = opts?.staleTime;
+  const enabled = opts?.enabled;
   return useQueries({
     queries: [
-      api.problems.getFast.queryOptions(),
-      api.problems.getCoverage.queryOptions(),
-      api.problems.getAliases.queryOptions(),
-      api.problems.getParses.queryOptions(),
-      api.problems.getUpc.queryOptions(),
+      { ...api.problems.getFast.queryOptions(), staleTime, enabled },
+      { ...api.problems.getCoverage.queryOptions(), staleTime, enabled },
+      { ...api.problems.getAliases.queryOptions(), staleTime, enabled },
+      { ...api.problems.getParses.queryOptions(), staleTime, enabled },
+      { ...api.problems.getUpc.queryOptions(), staleTime, enabled },
     ],
     combine: ([fast, coverage, aliases, parses, upc]) => {
       const sections = {

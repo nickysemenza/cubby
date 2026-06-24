@@ -1,9 +1,10 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { SortParams } from "@cubby/schemas/pagination";
 import { countProblems } from "@cubby/schemas/problems";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQueries } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { AlertTriangle } from "lucide-react";
+import { useProblemsData } from "~/app/problems/use-problems-data";
 import { Card } from "~/components/ui/card";
 import { Eyebrow } from "~/components/ui/eyebrow";
 import { Skeleton } from "~/components/ui/skeleton";
@@ -18,17 +19,16 @@ import { useTRPC } from "~/trpc/react";
  * count. Red ink + red chunky frame when anything needs attention.
  */
 function ProblemsStatCard({ enabled }: { enabled: boolean }) {
-  const api = useTRPC();
-  // `enabled` must gate this query like the sibling StatCard queries: an
-  // always-on query is idle during SSR but fetching on the client's first
-  // render, so the isLoading branch diverges and hydration mismatches.
-  const { data, isLoading } = useQuery({
-    ...api.problems.getAllProblems.queryOptions(),
+  // Assemble the count from the same five cost-grouped detector queries the
+  // navbar badge and Problems page use (shared cache, no monolithic
+  // getAllProblems scan). `enabled` gates the fetch like the sibling StatCard
+  // queries: an always-on query is idle during SSR but fetching on the client's
+  // first render, so the isLoading branch diverges and hydration mismatches.
+  const { problems, isLoading } = useProblemsData({
     staleTime: 5 * 60 * 1000,
     enabled,
-    select: countProblems,
   });
-  const count = data?.total ?? 0;
+  const count = countProblems(problems).total;
   const alert = count > 0;
 
   return (
