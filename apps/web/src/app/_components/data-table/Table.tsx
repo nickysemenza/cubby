@@ -7,7 +7,6 @@ import {
   type Table as ITable,
   type Row,
 } from "@tanstack/react-table";
-import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import {
   ArrowDown,
   ArrowUp,
@@ -50,6 +49,7 @@ import { DataTablePagination } from "./data-table-pagination";
 import { DataTableToolbar } from "./data-table-toolbar";
 import { EntityEmptyState, hasActiveFilters } from "./entity-empty-states";
 import { HeaderFilter } from "./HeaderFilter";
+import { useTableVirtualizer } from "./hooks/useTableVirtualizer";
 import { MobileListScreen } from "./MobileListScreen";
 import { RowsPerPageSelect } from "./rows-per-page-select";
 import { SectionHeader } from "./SectionHeader";
@@ -242,43 +242,8 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
   const { density } = useTableDensity();
   const dConfig = densityConfig[density];
 
-  // Ref for virtualization scroll container
-  const tableContainerRef = useRef<HTMLDivElement>(null);
-
   // Keyboard navigation: focused row index (desktop only)
   const [focusedRowIndex, setFocusedRowIndex] = useState<number | null>(null);
-
-  // The list scrolls with the whole page (window virtualization), so the
-  // virtualizer needs the table body's distance from the top of the document as
-  // its scrollMargin. Re-measured on resize and whenever the toolbar height
-  // changes (the toolbar sits above the body, so it shifts the body down).
-  const [scrollMargin, setScrollMargin] = useState(0);
-
-  // The sticky column header pins *below* the sticky toolbar, whose height is
-  // dynamic (filter row, bulk-action bar). Measure it so the header's sticky
-  // offset tracks it instead of using a hardcoded value.
-  const toolbarRef = useRef<HTMLDivElement>(null);
-  const [toolbarHeight, setToolbarHeight] = useState(0);
-
-  useEffect(() => {
-    const el = toolbarRef.current;
-    if (!el || isMobile) return;
-    setToolbarHeight(el.offsetHeight);
-    const ro = new ResizeObserver(() => setToolbarHeight(el.offsetHeight));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [isMobile]);
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: toolbarHeight is an intentional re-measure trigger — the toolbar sits above the body, so a height change shifts the body's document offset.
-  useEffect(() => {
-    const el = tableContainerRef.current;
-    if (!el || isMobile) return;
-    const measure = () =>
-      setScrollMargin(el.getBoundingClientRect().top + window.scrollY);
-    measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, [isMobile, toolbarHeight]);
 
   // On desktop with infinite scroll, eagerly fetch all pages so client-side
   // pagination works over the complete dataset. Mobile uses scroll-to-load.
@@ -298,33 +263,24 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
   // Desktop group detection (server trusts ordering)
   const groupedItems = useDesktopGroupedRows(rows, groupConfig, grouped);
 
-  // Estimated height for section headers (smaller than data rows)
-  const SECTION_HEADER_HEIGHT = 28;
-
-  // Always virtualize for consistent rendering
-  const virtualizerCount = groupedItems ? groupedItems.length : rows.length;
-  // Buffer ~one viewport of rows above/below so a fast fling doesn't outrun the
-  // rendered range and flash blank. Rows are cheap to render (profiled), so the
-  // extra DOM is affordable; clamped to keep tiny/huge viewports sane.
-  const viewportH = typeof window !== "undefined" ? window.innerHeight : 800;
-  const overscan = Math.min(
-    40,
-    Math.max(12, Math.ceil(viewportH / dConfig.rowHeight)),
-  );
-  const rowVirtualizer = useWindowVirtualizer({
-    count: virtualizerCount,
-    estimateSize: (index) => {
-      if (groupedItems && groupedItems[index]!.kind === "header") {
-        return SECTION_HEADER_HEIGHT;
-      }
-      return dConfig.rowHeight;
-    },
-    overscan,
+  // Window virtualization: body/toolbar refs + measurement, the virtualizer
+  // instance, and the grouped-vs-flat index math.
+  const {
+    tableContainerRef,
+    toolbarRef,
+    toolbarHeight,
     scrollMargin,
+    virtualRows,
+    totalSize,
+    resolveIndex,
+    flatRowToVirtualIndex,
+    scrollToIndex,
+  } = useTableVirtualizer({
+    rowCount: rows.length,
+    groupedItems,
+    rowHeight: dConfig.rowHeight,
+    isMobile,
   });
-
-  const virtualRows = rowVirtualizer.getVirtualItems();
-  const totalSize = rowVirtualizer.getTotalSize();
 
   // Save scroll position on unmount for navigate-back restoration. The page is
   // the scroller now, so we track window.scrollY rather than a container.
@@ -451,46 +407,27 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
 
         {/* Render only visible rows (with optional group headers) */}
         {virtualRows.map((virtualRow) => {
-          if (groupedItems) {
-            // virtualRow.index is bounded by the virtualizer count (= groupedItems.length)
-            const item = groupedItems[virtualRow.index]!;
-            if (item.kind === "header") {
-              return (
-                <TableRow
-                  key={`group-${item.title}`}
-                  className="border-border/30 border-b"
-                  style={{ height: `${virtualRow.size}px` }}
-                >
-                  <TableCell colSpan={colSpan} className="p-0">
-                    <SectionHeader
-                      title={item.title}
-                      count={item.count}
-                      color={item.color}
-                    />
-                  </TableCell>
-                </TableRow>
-              );
-            }
-            // rowIndex was built from valid positions into the same rows array
-            const row = rows[item.rowIndex]!;
+          const item = resolveIndex(virtualRow.index);
+          if (item.kind === "header") {
             return (
-              <DataRow
-                key={row.id}
-                row={row}
-                isSelected={row.getIsSelected()}
-                isFocused={focusedRowIndex === row.index}
-                isDebugEnabled={isDebugEnabled}
-                onRowClick={onRowClick}
-                onRowHover={onRowHover}
-                rowClassName={cn(styles.row, getRowClassName?.(row))}
-                cellClassName={styles.cell}
-                columnsKey={columnsKey}
-                height={`${virtualRow.size}px`}
-              />
+              <TableRow
+                key={`group-${item.title}`}
+                className="border-border/30 border-b"
+                style={{ height: `${virtualRow.size}px` }}
+              >
+                <TableCell colSpan={colSpan} className="p-0">
+                  <SectionHeader
+                    title={item.title}
+                    count={item.count}
+                    color={item.color}
+                  />
+                </TableCell>
+              </TableRow>
             );
           }
-          // non-grouped path: virtualRow.index is bounded by rows.length
-          const row = rows[virtualRow.index]!;
+          // rowIndex is a valid position into the rows array (flat index when
+          // ungrouped, or the row's flat index when grouped).
+          const row = rows[item.rowIndex]!;
           return (
             <DataRow
               key={row.id}
@@ -613,14 +550,10 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                       : Math.max(focusedRowIndex - 1, 0);
                 setFocusedRowIndex(next);
                 // When grouped, the virtualizer's index space includes header
-                // items, so map the flat row index to its groupedItems index.
-                const targetIndex = groupedItems
-                  ? groupedItems.findIndex(
-                      (it) => it.kind === "row" && it.rowIndex === next,
-                    )
-                  : next;
+                // items, so map the flat row index to its virtualizer index.
+                const targetIndex = flatRowToVirtualIndex(next);
                 if (targetIndex >= 0) {
-                  rowVirtualizer.scrollToIndex(targetIndex, { align: "auto" });
+                  scrollToIndex(targetIndex, { align: "auto" });
                 }
               }
               if (e.key === "Escape") {

@@ -1,4 +1,5 @@
 import type { ProductCreateInput } from "@cubby/schemas/product";
+import { useQuery } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
 import { Apple, ChefHat, Info, Scale } from "lucide-react";
 import type { FC } from "react";
@@ -27,6 +28,14 @@ interface ProductDetailProps {
 
 export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   const api = useTRPC();
+
+  // Subscribe to the same query the route seeded so a background refetch keeps
+  // the page fresh — and surfaces a consistent not-found / error state if the
+  // entity disappears or a refetch fails after the initial Suspense load.
+  const query = useQuery({
+    ...api.product.getByID.queryOptions({ id: product.id }),
+    initialData: product,
+  });
 
   const { commonSections, editMode, mappings } = useEntityDetail<
     ProductWithFoodOut,
@@ -119,6 +128,8 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       entity="product"
       name={product.name}
       rawData={product}
+      error={query.error ?? undefined}
+      notFound={query.data == null}
       heroImages={product.images}
       heroNo={product.shortcode ?? undefined}
       heroStamp={
