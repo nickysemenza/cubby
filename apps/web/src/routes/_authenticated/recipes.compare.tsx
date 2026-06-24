@@ -111,7 +111,7 @@ function RecipeComparePage() {
     return (
       <Page variant="list" title="Compare Recipes">
         <Card>
-          <CardContent className="py-12 text-center">
+          <CardContent className="py-6 text-center">
             <p className="text-muted-foreground">
               No recipes selected for comparison. Select 2 or more recipes from
               the recipes list.
@@ -144,7 +144,7 @@ function RecipeComparePage() {
     >
       {isLoading ? (
         <Card>
-          <CardContent className="py-12 text-center">
+          <CardContent className="py-6 text-center">
             <p className="text-muted-foreground">Loading recipes...</p>
           </CardContent>
         </Card>

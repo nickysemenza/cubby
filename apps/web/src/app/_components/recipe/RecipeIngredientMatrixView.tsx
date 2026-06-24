@@ -14,7 +14,7 @@ import { formatMakes, formatYield, gramText } from "./recipe-utils";
 // shopping total. The ingredient column sticks while the component columns
 // scroll horizontally (wide trees).
 
-const cellMono = "px-2 py-1.5 text-right font-mono text-xs tabular-nums";
+const cellMono = "px-2 py-2 text-right font-mono text-xs tabular-nums";
 
 // memo: skip re-renders from RecipeDetail's streaming churn (`tree` is stable).
 export const RecipeIngredientMatrixView = memo(
@@ -40,8 +40,8 @@ export const RecipeIngredientMatrixView = memo(
     }, [tree]);
 
     return (
-      <div className="rounded-xl border border-[var(--border-chunky)] bg-card px-6 py-6 sm:px-8">
-        <header className="mb-3 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+      <div className="rounded-xl border border-[var(--border-chunky)] bg-card px-6 py-6">
+        <header className="mb-4 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
           <div>
             <h2 className="my-0 font-heading font-semibold text-2xl tracking-tight">
               {recipe.name}
@@ -102,7 +102,7 @@ export const RecipeIngredientMatrixView = memo(
                 >
                   <th
                     scope="row"
-                    className="sticky left-0 z-10 bg-card px-2 py-1.5 text-left font-medium text-sm"
+                    className="sticky left-0 z-10 bg-card px-2 py-2 text-left font-medium text-sm"
                   >
                     <EntityPreviewLink
                       entity="ingredient"

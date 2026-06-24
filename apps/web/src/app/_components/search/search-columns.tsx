@@ -69,7 +69,7 @@ export const searchColumns = [
       const entity = entityTypeMap[row.original.entityType];
       const entityDef = entities[entity];
       return (
-        <span className="inline-flex items-center gap-1.5">
+        <span className="inline-flex items-center gap-2">
           <EntityIcon entity={entity} size={10} colored />
           {entityDef.label}
         </span>

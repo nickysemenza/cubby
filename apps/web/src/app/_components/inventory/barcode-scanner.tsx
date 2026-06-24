@@ -32,7 +32,7 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
 
       {status === "error" && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/80 p-4">
-          <div className="flex flex-col items-center gap-3 rounded-lg bg-destructive/90 p-4 text-center text-white">
+          <div className="flex flex-col items-center gap-4 rounded-lg bg-destructive/90 p-4 text-center text-white">
             <CameraOff className="h-8 w-8 opacity-80" />
             <div>
               <p className="font-medium">Camera Error</p>
@@ -42,7 +42,7 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
               variant="secondary"
               size="sm"
               onClick={retry}
-              className="gap-1.5"
+              className="gap-2"
             >
               <RotateCcw className="h-3.5 w-3.5" />
               Try Again
@@ -53,13 +53,13 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
 
       {status === "permission_denied" && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/80 p-4">
-          <div className="flex max-w-xs flex-col items-center gap-3 rounded-lg bg-card p-5 text-center shadow-lg">
+          <div className="flex max-w-xs flex-col items-center gap-4 rounded-lg bg-card p-4 text-center shadow-lg">
             <CameraOff className="h-10 w-10 text-muted-foreground" />
             <div>
               <p className="font-medium text-foreground">
                 Camera access needed
               </p>
-              <p className="mt-1.5 text-muted-foreground text-sm">
+              <p className="mt-2 text-muted-foreground text-sm">
                 To scan barcodes, allow camera access in{" "}
                 <span className="font-medium text-foreground">
                   Settings &gt; Safari &gt; Camera
@@ -70,7 +70,7 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
               variant="outline"
               size="sm"
               onClick={retry}
-              className="gap-1.5"
+              className="gap-2"
             >
               <RotateCcw className="h-3.5 w-3.5" />
               Retry

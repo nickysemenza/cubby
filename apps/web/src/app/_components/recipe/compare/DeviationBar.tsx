@@ -48,7 +48,7 @@ export const StripPlotCell: React.FC<{
   const color = isMax ? "var(--primary)" : "var(--foreground)";
 
   return (
-    <div className="relative mt-1.5 h-2.5 w-full">
+    <div className="relative mt-2 h-2.5 w-full">
       <Axis />
       <div
         className="absolute top-1/2 h-px -translate-y-1/2 opacity-40"
@@ -93,7 +93,7 @@ export const DistributionGlyph: React.FC<{
   const boxR = pct(mean + std);
 
   return (
-    <div className="relative mt-1.5 h-2.5 w-full">
+    <div className="relative mt-2 h-2.5 w-full">
       <div
         className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2"
         style={{ background: "var(--muted-foreground)" }}

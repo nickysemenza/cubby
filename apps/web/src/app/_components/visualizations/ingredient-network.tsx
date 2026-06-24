@@ -330,7 +330,7 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
       {selectedLink && !hoveredNode && (
         // biome-ignore lint/a11y/noStaticElementInteractions: Tooltip click prevention
         <div
-          className="absolute top-4 left-4 z-50 max-w-xs rounded-md border bg-popover px-3 py-2 text-sm shadow-lg"
+          className="absolute top-4 left-4 z-50 max-w-xs rounded-md border bg-popover px-4 py-2 text-sm shadow-lg"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-start justify-between gap-2">
@@ -346,11 +346,11 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
               ×
             </button>
           </div>
-          <div className="mt-1.5 text-muted-foreground text-xs">
+          <div className="mt-2 text-muted-foreground text-xs">
             Together in {selectedLink.weight} recipe
             {selectedLink.weight !== 1 ? "s" : ""}:
           </div>
-          <div className="mt-1.5 space-y-1">
+          <div className="mt-2 space-y-1">
             {selectedLink.recipes.map((recipe) => (
               <Link
                 key={recipe.id}
@@ -367,7 +367,7 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
 
       {/* Tooltip for hovered node */}
       {hoveredNode && (
-        <div className="absolute top-4 left-4 z-50 max-w-xs rounded-md bg-popover px-3 py-2 text-sm shadow-lg">
+        <div className="absolute top-4 left-4 z-50 max-w-xs rounded-md bg-popover px-4 py-2 text-sm shadow-lg">
           <div className="font-medium">
             <Link
               to="/ingredients/$id"

@@ -132,9 +132,11 @@ export function LocationCardGrid({
             aria-label="Toggle grouping by type"
           >
             {isGrouped ? (
-              <LayoutGrid className="mr-1.5 h-3.5 w-3.5" />
+              <LayoutGrid
+                className="mr-1.5 h-3.5 w-3.5" /* tight: icon+label */
+              />
             ) : (
-              <List className="mr-1.5 h-3.5 w-3.5" />
+              <List className="mr-1.5 h-3.5 w-3.5" /* tight: icon+label */ />
             )}
             <span className="text-xs">{isGrouped ? "Grouped" : "All"}</span>
           </Button>
@@ -147,7 +149,7 @@ export function LocationCardGrid({
           <div key={group}>
             {types.map(({ type, locations: typeLocations }) => (
               <div key={type} className="mb-6 last:mb-0">
-                <div className="mb-3">
+                <div className="mb-4">
                   <LocationTypeBadge type={type} />
                 </div>
                 <GridContainer cols="cards3">
@@ -223,7 +225,7 @@ function LocationCard({
       )}
 
       {/* Stats row: counts */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-xs">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground text-xs">
         {showTypeBadge && <LocationTypeBadge type={location.type} />}
         <EntityStat
           entity="location"

@@ -308,7 +308,7 @@ const projectColumns = [
       <Link
         to="/projects/$id"
         params={{ id: row.original.id }}
-        className="flex items-center gap-1.5 font-medium hover:underline"
+        className="flex items-center gap-2 font-medium hover:underline"
       >
         {row.original.icon && <span>{row.original.icon}</span>}
         {row.original.name}
@@ -319,7 +319,7 @@ const projectColumns = [
   projectHelper.accessor("status", {
     header: "Status",
     cell: ({ row }) => (
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-2">
         <StatusIcon status={row.original.status} />
         <span>{row.original.status ?? <NoneState />}</span>
       </div>

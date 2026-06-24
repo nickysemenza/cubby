@@ -123,7 +123,7 @@ export const TagInput: FC<TagInputProps> = ({ value, onChange, className }) => {
                 <button
                   type="button"
                   onClick={() => removeTag(tag)}
-                  className="ml-0.5 rounded hover:bg-muted"
+                  className="ml-1 rounded hover:bg-muted"
                 >
                   <X size={12} />
                 </button>
@@ -179,7 +179,7 @@ export const TagInput: FC<TagInputProps> = ({ value, onChange, className }) => {
                       addTag(suggestion);
                     }
                   }}
-                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-accent"
+                  className="flex w-full items-center gap-2 rounded px-2 py-2 text-left text-sm hover:bg-accent"
                 >
                   <Icon size={14} style={{ color }} />
                   <span>{suggestion}</span>

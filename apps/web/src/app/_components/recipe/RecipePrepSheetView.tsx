@@ -36,18 +36,18 @@ function ShoppingList({ needs }: { needs: CombinedNeed[] }) {
   return (
     <details
       open
-      className="rounded-lg border border-[var(--border-chunky)] bg-muted/30 px-3.5 py-2.5 print:border-0 print:bg-transparent print:px-0"
+      className="rounded-lg border border-[var(--border-chunky)] bg-muted/30 px-4 py-2 print:border-0 print:bg-transparent print:px-0"
     >
       <summary className="eyebrow cursor-pointer marker:content-none">
-        <ShoppingCart className="mr-1.5 inline h-3 w-3 align-[-2px]" />
+        <ShoppingCart className="mr-2 inline h-3 w-3 align-[-2px]" />
         Shopping list
         <span className="ml-1 text-muted-foreground/60">· full batch</span>
       </summary>
-      <div className="mt-2.5 grid grid-cols-1 gap-x-8 gap-y-0.5 text-sm sm:grid-cols-2">
+      <div className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
         {needs.map((need) => (
           <div
             key={need.ingredientId}
-            className="flex items-baseline justify-between gap-3 border-border/50 border-b border-dashed py-1"
+            className="flex items-baseline justify-between gap-2 border-border/50 border-b border-dashed py-1"
           >
             <span className="truncate">{need.name}</span>
             <span className="shrink-0 font-mono text-muted-foreground text-xs tabular-nums">
@@ -70,7 +70,7 @@ function PrepRow({
 }) {
   if (row.kind === "stub") {
     return (
-      <div className="flex items-baseline gap-3 border-border/60 border-b border-dashed py-2">
+      <div className="flex items-baseline gap-2 border-border/60 border-b border-dashed py-2">
         <span className="size-3.5 shrink-0" />
         <span className="flex-1 text-muted-foreground text-sm italic">
           {row.name}{" "}
@@ -90,7 +90,7 @@ function PrepRow({
   // A div, not a label: the name is now a link, and an interactive <a> can't
   // live inside a <label> (the checkbox stays individually clickable).
   return (
-    <div className="flex items-baseline gap-3 border-border/60 border-b border-dashed py-2">
+    <div className="flex items-baseline gap-2 border-border/60 border-b border-dashed py-2">
       <input
         type="checkbox"
         aria-label={`Prep ${name}`}
@@ -149,7 +149,7 @@ function Component({
 
   return (
     <section>
-      <div className="mb-1.5 flex items-baseline gap-2.5">
+      <div className="mb-2 flex items-baseline gap-2">
         <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 font-mono text-[11px] text-primary">
           {index + 1}
         </span>
@@ -184,15 +184,15 @@ function Component({
         {node.sections.map((section, si) => (
           <div key={section.id}>
             {node.sections.length > 1 && section.name && (
-              <div className="eyebrow pt-2 pb-0.5">{section.name}</div>
+              <div className="eyebrow pt-2 pb-1">{section.name}</div>
             )}
             {section.rows.map((row) => (
               <PrepRow key={row.id} row={row} gramById={gramById} />
             ))}
             {si === node.sections.length - 1 && steps.length > 0 && (
-              <ol className="mt-2.5 space-y-1.5 pl-0">
+              <ol className="mt-2 space-y-2 pl-0">
                 {steps.map((step) => (
-                  <li key={step.n} className="flex gap-2.5">
+                  <li key={step.n} className="flex gap-2">
                     <span className="mt-px inline-flex size-[17px] shrink-0 items-center justify-center rounded-full border border-[var(--border-chunky)] font-mono text-[9px] text-muted-foreground tabular-nums">
                       {step.n}
                     </span>
@@ -228,8 +228,8 @@ export const RecipePrepSheetView = memo(function RecipePrepSheetView({
   const usedByRecipe = useMemo(() => asUsedGramsByRecipe(tree), [tree]);
 
   return (
-    <div className="space-y-6 rounded-xl border border-[var(--border-chunky)] bg-card px-6 py-6 sm:px-8">
-      <header className="border-primary border-b-2 pb-2.5">
+    <div className="space-y-6 rounded-xl border border-[var(--border-chunky)] bg-card px-6 py-6">
+      <header className="border-primary border-b-2 pb-2">
         <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
           <h2 className="my-0 font-heading font-semibold text-2xl tracking-tight">
             {recipe.name}

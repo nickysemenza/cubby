@@ -80,7 +80,7 @@ export function CostVsEstimate({
         enableGridX
         enableGridY={false}
         tooltip={({ id, value, indexValue }) => (
-          <div className="rounded-md bg-popover px-3 py-2 text-sm shadow-md ring-1 ring-border">
+          <div className="rounded-md bg-popover px-4 py-2 text-sm shadow-md ring-1 ring-border">
             <strong>{indexValue}</strong> — {id}: {formatCurrency(value, 0)}
           </div>
         )}

@@ -67,7 +67,7 @@ function renderSectionLayout({
 }): ReactNode {
   if (isMobile) {
     return (
-      <div className="space-y-2 sm:space-y-3">
+      <div className="space-y-2 sm:space-y-4">
         {sections.map((section, i) => (
           <SectionCard key={section.title} section={section} index={i} />
         ))}
@@ -86,10 +86,10 @@ function renderSectionLayout({
     blocks.push(
       <div
         key={`run-${blocks.length}`}
-        className="grid grid-cols-2 items-start gap-2 sm:gap-3"
+        className="grid grid-cols-2 items-start gap-2 sm:gap-4"
       >
-        <div className="space-y-2 sm:space-y-3">{col1}</div>
-        <div className="space-y-2 sm:space-y-3">{col2}</div>
+        <div className="space-y-2 sm:space-y-4">{col1}</div>
+        <div className="space-y-2 sm:space-y-4">{col2}</div>
       </div>,
     );
   };
@@ -118,7 +118,7 @@ function renderSectionLayout({
   });
   flushRun();
 
-  return <div className="space-y-2 sm:space-y-3">{blocks}</div>;
+  return <div className="space-y-2 sm:space-y-4">{blocks}</div>;
 }
 
 interface DetailSectionsProps {
@@ -143,7 +143,7 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   const isMobile = useIsMobile();
 
   return (
-    <div className="space-y-2 sm:space-y-3">
+    <div className="space-y-2 sm:space-y-4">
       {/* Section cards. On desktop the two columns pack INDEPENDENTLY — each is a
           content-height stack, so a short card (e.g. Basic Info) never stretches to
           match a tall neighbour. Half-width sections are dealt out round-robin into

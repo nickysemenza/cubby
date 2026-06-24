@@ -44,7 +44,7 @@ export function ParsedIngredientTable({
             // biome-ignore lint/suspicious/noArrayIndexKey: fixed ordered list
             <Fragment key={i}>
               <tr className={tint}>
-                <td className="py-0.5 pr-2 align-top">
+                <td className="py-1 pr-2 align-top">
                   {match ? (
                     <EntityPillLink entity="ingredient" data={match} />
                   ) : (
@@ -79,12 +79,12 @@ export function ParsedIngredientTable({
                     </span>
                   )}
                 </td>
-                <td className="whitespace-nowrap py-0.5 pr-2 align-top text-muted-foreground">
+                <td className="whitespace-nowrap py-1 pr-2 align-top text-muted-foreground">
                   {parsed.amounts.length > 0
                     ? formatAmounts(parsed.amounts)
                     : ""}
                 </td>
-                <td className="py-0.5 align-top text-muted-foreground">
+                <td className="py-1 align-top text-muted-foreground">
                   {parsed.modifier ?? ""}
                 </td>
               </tr>
@@ -93,11 +93,11 @@ export function ParsedIngredientTable({
               >
                 <td
                   colSpan={2}
-                  className="pb-0.5 text-2xs text-muted-foreground/70 leading-tight"
+                  className="pb-1 text-2xs text-muted-foreground/70 leading-tight"
                 >
                   {raw}
                 </td>
-                <td className="pb-0.5 text-right align-top">
+                <td className="pb-1 text-right align-top">
                   <CopyCorpusButton
                     rawLine={raw}
                     name={parsed.name}

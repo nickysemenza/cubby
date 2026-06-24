@@ -203,14 +203,14 @@ function HoverTooltip({
 
   return (
     <div
-      className="pointer-events-none absolute z-50 rounded-md bg-popover px-3 py-2 text-sm shadow-lg"
+      className="pointer-events-none absolute z-50 rounded-md bg-popover px-2 py-2 text-sm shadow-lg"
       style={{ left: x, top: y }}
     >
       <div className="flex items-center gap-2 font-medium">
         <LocationIcon type={node.data.type} size={14} />
         {node.data.name}
       </div>
-      <div className="mt-1 space-y-0.5 text-muted-foreground">
+      <div className="mt-1 space-y-1 text-muted-foreground">
         <div>Type: {node.data.type}</div>
         <div>
           Items: {node.data.directCount} direct / {node.data.totalCount} total

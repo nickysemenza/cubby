@@ -117,7 +117,9 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
           onKeyDown={(e) => {
             if (e.key === "Enter") commitRecent(e.currentTarget.value);
           }}
-          className="pl-10"
+          className={
+            "pl-10" /* tight: clears the absolute search icon at left-3 */
+          }
           autoFocus
         />
       </div>
@@ -137,7 +139,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
               params: { id: conversion.ingredientId },
             });
           }}
-          className="flex w-full items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 text-left transition-all ease-cozy hover:-translate-y-0.5 hover:shadow-[var(--shadow-chunky-sm)]"
+          className="flex w-full items-center gap-4 rounded-lg border border-border bg-card px-4 py-4 text-left transition-all ease-cozy hover:-translate-y-0.5 hover:shadow-[var(--shadow-chunky-sm)]"
         >
           <Equal className="h-4 w-4 shrink-0 text-primary" />
           <span className="truncate font-mono font-semibold text-sm tabular-nums">
@@ -294,9 +296,9 @@ function MobileSearchResults({
   }, [filtered]);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {/* Filter chips */}
-      <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
+      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
         {filterOptions.map((opt) => {
           const isActive = filter === opt.value;
           return (
@@ -305,7 +307,7 @@ function MobileSearchResults({
               type="button"
               onClick={() => onFilterChange(opt.value)}
               className={cn(
-                "shrink-0 rounded-full border px-3 py-1 font-medium text-xs transition-colors",
+                "shrink-0 rounded-full border px-2 py-1 font-medium text-xs transition-colors",
                 isActive
                   ? "border-primary bg-primary text-primary-foreground"
                   : "border-border bg-background text-muted-foreground",
@@ -329,7 +331,7 @@ function MobileSearchResults({
           <div key={group.entityType}>
             {/* Section header (only when showing "All") */}
             {filter === "all" && (
-              <div className="flex items-center gap-2 px-3 py-1.5">
+              <div className="flex items-center gap-2 px-4 py-2">
                 <span className="font-medium text-muted-foreground text-xs uppercase tracking-wider">
                   {group.label}
                 </span>

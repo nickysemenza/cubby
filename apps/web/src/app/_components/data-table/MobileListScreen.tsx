@@ -94,7 +94,7 @@ export function MobileListScreen<TItem>({
       {isLoading ? (
         <MobileCardSkeletonList />
       ) : error ? (
-        <div className="py-8">
+        <div className="py-6">
           <ErrorDisplay error={error} />
         </div>
       ) : (

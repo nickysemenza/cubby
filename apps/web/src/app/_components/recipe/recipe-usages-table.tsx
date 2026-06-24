@@ -121,7 +121,7 @@ export function RecipeUsagesTable({
             </td>
             <td className="py-1 align-top">
               {row.rawLine ? (
-                <span className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                   <span className="text-muted-foreground/70">
                     {row.rawLine}
                   </span>

@@ -136,7 +136,7 @@ const EditorTally: FC<{ control: Control<RecipeFormValues> }> = ({
   const steps = sumBy(sections ?? [], (s) => s?.instructions?.length ?? 0);
 
   return (
-    <div className="flex min-w-0 items-center gap-2.5 font-mono text-2xs text-muted-foreground uppercase">
+    <div className="flex min-w-0 items-center gap-2 font-mono text-2xs text-muted-foreground uppercase">
       <span className="truncate tabular-nums">
         {ingredients} ingredients · {steps} steps
       </span>
@@ -456,7 +456,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
             <span className="eyebrow">
               {mode === "edit" ? "Editing recipe" : "New recipe"}
             </span>
-            <div className="flex gap-1.5">
+            <div className="flex gap-2">
               <Button
                 type="button"
                 variant="outline"
@@ -465,7 +465,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                 className={cn(openTool === "scrape" && "bg-muted")}
                 onClick={() => toggleTool("scrape")}
               >
-                <Link2 className="mr-1.5 h-3.5 w-3.5" />
+                <Link2 className="mr-2 h-3.5 w-3.5" />
                 Scrape URL
               </Button>
               <Button
@@ -476,7 +476,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                 className={cn(openTool === "text" && "bg-muted")}
                 onClick={() => toggleTool("text")}
               >
-                <ClipboardList className="mr-1.5 h-3.5 w-3.5" />
+                <ClipboardList className="mr-2 h-3.5 w-3.5" />
                 Paste text
               </Button>
               <Button
@@ -487,7 +487,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                 className={cn(openTool === "html" && "bg-muted")}
                 onClick={() => toggleTool("html")}
               >
-                <Code className="mr-1.5 h-3.5 w-3.5" />
+                <Code className="mr-2 h-3.5 w-3.5" />
                 Paste HTML
               </Button>
             </div>
@@ -496,7 +496,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
           {/* Scrape panel (kept mounted so in-flight scrapes aren't lost) */}
           <div
             className={cn(
-              "rounded-lg border border-[var(--border-chunky)] bg-card p-3",
+              "rounded-lg border border-[var(--border-chunky)] bg-card p-4",
               openTool !== "scrape" && "hidden",
             )}
           >
@@ -544,7 +544,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
           {/* Paste-text panel */}
           <div
             className={cn(
-              "space-y-2 rounded-lg border border-[var(--border-chunky)] bg-card p-3",
+              "space-y-2 rounded-lg border border-[var(--border-chunky)] bg-card p-4",
               openTool !== "text" && "hidden",
             )}
           >
@@ -580,9 +580,9 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
               </Field>
               <div>
                 <FieldLabel>Instructions Preview</FieldLabel>
-                <div className="mt-1.5 min-h-[120px] rounded border border-border bg-muted/30 p-2">
+                <div className="mt-2 min-h-[120px] rounded border border-border bg-muted/30 p-2">
                   {richInstructions.length > 0 ? (
-                    <ol className="list-decimal space-y-1.5 pl-4 text-sm">
+                    <ol className="list-decimal space-y-2 pl-4 text-sm">
                       {richInstructions.map((richItems, idx) => (
                         // biome-ignore lint/suspicious/noArrayIndexKey: instructions are ordered by line
                         <li key={idx}>{formatRichText(richItems)}</li>
@@ -641,7 +641,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
               page in your browser, View Source, copy all, and paste it here. */}
           <div
             className={cn(
-              "space-y-2 rounded-lg border border-[var(--border-chunky)] bg-card p-3",
+              "space-y-2 rounded-lg border border-[var(--border-chunky)] bg-card p-4",
               openTool !== "html" && "hidden",
             )}
           >
@@ -741,8 +741,8 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
           {/* Photos: a first-class field. Kept always-mounted so scraped
               images still auto-import via autoImportUrl. */}
           <Card>
-            <CardContent className="space-y-2 px-4 py-3">
-              <h3 className="eyebrow my-0 flex items-center gap-1.5 font-medium">
+            <CardContent className="space-y-2 px-4 py-4">
+              <h3 className="eyebrow my-0 flex items-center gap-2 font-medium">
                 <ImageIcon className="h-3.5 w-3.5" />
                 Photos
               </h3>
@@ -766,7 +766,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
             {sectionFields.map((sectionField, sectionIndex) => (
               <div
                 key={sectionField.id}
-                className="space-y-2 rounded-lg border border-[var(--border-chunky)] bg-card p-3 shadow-[var(--shadow-chunky-sm)]"
+                className="space-y-2 rounded-lg border border-[var(--border-chunky)] bg-card p-4 shadow-[var(--shadow-chunky-sm)]"
               >
                 <div className="flex items-center justify-between">
                   <h4 className="my-0 font-heading font-semibold text-sm">
@@ -841,7 +841,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
               </div>
             ))}
 
-            <div className="mt-3 flex justify-center">
+            <div className="mt-4 flex justify-center">
               <Button
                 type="button"
                 variant="outline"
@@ -864,7 +864,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
         {/* Live page preview — the cookbook spread builds as you type */}
         <aside className="hidden xl:sticky xl:top-20 xl:block">
           <div className="max-h-[75vh] overflow-y-auto rounded-lg border border-[var(--border-chunky)] bg-card p-4 shadow-[var(--shadow-chunky)]">
-            <p className="eyebrow mb-3">Live preview</p>
+            <p className="eyebrow mb-2">Live preview</p>
             <RecipeLivePreview control={form.control} />
           </div>
         </aside>

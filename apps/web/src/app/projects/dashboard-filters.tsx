@@ -47,7 +47,7 @@ function FilterGroup({
   if (options.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div className="flex flex-wrap items-center gap-2">
       <span className="font-medium text-muted-foreground text-xs">
         {label}:
       </span>

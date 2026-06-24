@@ -28,12 +28,12 @@ export function ProjectPill({ project }: { project: NotionProject }) {
 function ProjectTooltip({ project }: { project: NotionProject }) {
   return (
     <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 opacity-0 transition-opacity group-hover/pill:opacity-100">
-      <div className="whitespace-nowrap rounded-md bg-popover px-3 py-2 text-xs shadow-md ring-1 ring-border">
+      <div className="whitespace-nowrap rounded-md bg-popover px-4 py-2 text-xs shadow-md ring-1 ring-border">
         <div className="font-medium">
           {project.icon && `${project.icon} `}
           {project.name}
         </div>
-        <div className="mt-1 space-y-0.5 text-muted-foreground">
+        <div className="mt-1 space-y-1 text-muted-foreground">
           {project.status && <div>Status: {project.status}</div>}
           {(project.date || project.dateEnd) && (
             <div>{formatDateRange(project.date, project.dateEnd)}</div>

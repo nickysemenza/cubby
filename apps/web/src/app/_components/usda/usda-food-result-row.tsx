@@ -9,7 +9,11 @@ import { CoreNutrientCoverage } from "./core-nutrient-coverage";
 
 function MetaChip({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-sm bg-muted px-1.5 py-0.5">
+    <span
+      className={
+        "inline-flex items-center gap-1 whitespace-nowrap rounded-sm bg-muted px-1.5 py-0.5" /* tight: meta chip */
+      }
+    >
       {children}
     </span>
   );
@@ -64,7 +68,7 @@ export function UsdaFoodResultRow({
         {foodInfo.description}
       </span>
 
-      <div className="flex flex-wrap gap-1.5 text-muted-foreground text-xs">
+      <div className="flex flex-wrap gap-2 text-muted-foreground text-xs">
         <MetaChip>
           <UsdaDataTypeDot dataType={foodInfo.data_type} />
           {dataTypeLabel(foodInfo.data_type)}
@@ -93,14 +97,14 @@ export function UsdaFoodResultRow({
       </div>
 
       {totalNutrients > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5 text-muted-foreground text-xs">
+        <div className="flex flex-wrap items-center gap-2 text-muted-foreground text-xs">
           <CoreNutrientCoverage nutrients={nutritionInfo.nutrientsPer100} />
           <span>{totalNutrients} nutrients</span>
         </div>
       )}
 
       {hasNutrition && (
-        <div className="flex flex-wrap items-center gap-1.5 text-2xs text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-2 text-2xs text-muted-foreground">
           <NutrientsSummary nutrients={nutritionInfo.nutrientsPer100} dense />
           <span>/100g</span>
         </div>

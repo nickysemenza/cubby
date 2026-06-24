@@ -76,7 +76,7 @@ export function SpendingHeatmap({
             }
           }}
           tooltip={({ day, value }) => (
-            <div className="rounded-md bg-popover px-3 py-2 text-sm shadow-md ring-1 ring-border">
+            <div className="rounded-md bg-popover px-4 py-2 text-sm shadow-md ring-1 ring-border">
               <strong>{day}</strong>: {formatCurrency(Number(value), 0)} spent
               <div className="text-muted-foreground text-xs">
                 Click to see items
@@ -90,7 +90,7 @@ export function SpendingHeatmap({
         />
       </div>
       {selectedDay && selectedItems.length > 0 && (
-        <div className="rounded-md border bg-muted/30 p-3">
+        <div className="rounded-md border bg-muted/30 p-4">
           <div className="mb-2 flex items-center justify-between">
             <span className="font-medium text-sm">
               {formatDate(selectedDay)} —{" "}

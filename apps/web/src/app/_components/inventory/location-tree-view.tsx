@@ -149,14 +149,14 @@ function Node({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
       <LocationIcon type={data.type} size={14} />
       <span>{data.name}</span>
       {directItemCount > 0 && (
-        <Badge variant="secondary" className="h-5 px-1.5 text-xs">
+        <Badge variant="secondary" className="h-5 px-2 text-xs">
           {directItemCount}
         </Badge>
       )}
       {hasLocationChildren && totalItemCount > directItemCount && (
         <Badge
           variant="outline"
-          className="h-5 px-1.5 text-muted-foreground text-xs"
+          className="h-5 px-2 text-muted-foreground text-xs"
         >
           {totalItemCount} total
         </Badge>

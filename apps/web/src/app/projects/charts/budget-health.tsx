@@ -45,7 +45,7 @@ export function BudgetHealth({
   const maxPct = Math.max(...data.map((d) => d.pct), 100);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {data.map((d) => {
         const overBudget = d.pct > 100;
         const barWidth = Math.min((d.pct / maxPct) * 100, 100);

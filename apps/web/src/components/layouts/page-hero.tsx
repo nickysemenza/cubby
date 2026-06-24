@@ -11,12 +11,12 @@ import { ENTITY_ACCENTS } from "~/entities/entity-accents";
 import { cn } from "~/lib/utils";
 
 const heroVariants = cva(
-  "flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between",
+  "flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between",
   {
     variants: {
       variant: {
         list: "mb-4",
-        detail: "mb-3 sm:mb-4",
+        detail: "mb-4",
         compact: "mb-2",
       },
     },
@@ -146,7 +146,7 @@ export function PageHero({
         )}
         <div
           className={cn(
-            "flex items-center gap-3",
+            "flex items-center gap-2",
             showAccent && "page-header-accent pb-2",
           )}
         >
@@ -164,12 +164,12 @@ export function PageHero({
           <h1 className={titleVariants({ variant })}>{title}</h1>
         </div>
         {meta && meta.length > 0 && (
-          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-2xs text-muted-foreground">
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-2xs text-muted-foreground">
             {meta.map((item, i) => (
               <span
                 // biome-ignore lint/suspicious/noArrayIndexKey: meta items are positional and have no stable id
                 key={i}
-                className="inline-flex items-center gap-1.5"
+                className="inline-flex items-center gap-1.5" /* tight */
               >
                 {item.icon && <item.icon className="h-3 w-3 shrink-0" />}
                 <span>{item.label}</span>
@@ -240,8 +240,8 @@ function DetailPlate({
         className={cn("border-l-[6px]", spineClass)}
         data-testid="detail-spec-plate"
       >
-        <CardContent className="px-4 py-1 sm:px-5">
-          <div className="flex items-start justify-between gap-3">
+        <CardContent className="px-4 py-1 sm:px-4">
+          <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <Eyebrow className="tracking-[0.14em]">
                 {entityDef.pluralLabel}
@@ -266,7 +266,7 @@ function DetailPlate({
             </div>
           </div>
           {heroStats && heroStats.length > 0 && (
-            <div className="mt-3 flex border-foreground/25 border-t border-dashed pt-2.5">
+            <div className="mt-4 flex border-foreground/25 border-t border-dashed pt-2">
               {heroStats.map((stat, i) => (
                 <div
                   key={stat.label}

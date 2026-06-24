@@ -58,7 +58,7 @@ export const AiDescriptionSection: FC<AiDescriptionSectionProps> = ({
       )}
 
       {currentDescription && (
-        <div className="rounded-md bg-muted/50 p-3 text-sm">
+        <div className="rounded-md bg-muted/50 p-4 text-sm">
           <div className="mb-1 flex items-center gap-2 text-muted-foreground">
             <Eye className="h-3 w-3" />
             <span className="font-medium">AI Description</span>

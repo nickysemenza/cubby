@@ -29,7 +29,7 @@ export function DashboardCard({
 }: DashboardCardProps) {
   return (
     <Card className="fade-in slide-in-from-bottom-2 flex animate-in flex-col duration-300">
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Icon className="h-3.5 w-3.5 text-eyebrow" />

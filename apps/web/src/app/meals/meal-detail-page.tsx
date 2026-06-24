@@ -58,7 +58,7 @@ export function MealDetailPage({ mealId }: { mealId: MealId }) {
   }));
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <Link
         to="/meals"
         className="inline-flex items-center gap-1 text-muted-foreground text-sm hover:underline"
@@ -178,7 +178,7 @@ function RecipeRow({
   };
 
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-[var(--border-chunky)] p-2.5">
+    <div className="flex items-center gap-2 rounded-lg border border-[var(--border-chunky)] p-2">
       <Link
         to="/recipes/$id"
         params={{ id: mr.recipeId }}

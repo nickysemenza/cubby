@@ -26,11 +26,11 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
   // Meta row (ingredient/step counts, source) — shared between layouts.
   const metaInfo = (
     <div className="flex flex-wrap items-center gap-4 font-mono text-2xs text-muted-foreground">
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-2">
         <Users size={12} />
         <span>{totalIngredients} ingredients</span>
       </div>
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-2">
         <Clock size={12} />
         <span>{totalSteps} steps</span>
       </div>
@@ -39,7 +39,7 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
           href={recipe.meta.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-1.5 hover:underline"
+          className="flex items-center gap-2 hover:underline"
         >
           <ExternalLink size={12} />
           <span>Source</span>
@@ -55,7 +55,7 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
   // it — render a slim meta band instead of an empty hero block.
   if (!hasImage) {
     return (
-      <div className="page-header-accent rounded-xl bg-muted/60 px-6 py-5 ring-1 ring-foreground/10">
+      <div className="page-header-accent rounded-xl bg-muted/60 px-6 py-4 ring-1 ring-foreground/10">
         {metaInfo}
       </div>
     );

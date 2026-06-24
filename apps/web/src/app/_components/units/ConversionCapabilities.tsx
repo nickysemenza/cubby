@@ -106,7 +106,11 @@ export const ConversionCapabilities = memo(function ConversionCapabilities({
               Lit when the kind converts to something; per-icon tooltips + sr-only
               labels carry the meaning. */}
           {coverage && compact && showCoverage && (
-            <div className="flex items-center gap-0.5">
+            <div
+              className={
+                "flex items-center gap-0.5" /* tight: compact kind-icon strip */
+              }
+            >
               {coverageKinds.map((kind) => {
                 const { Icon, label } = kindIconMap[kind]!;
                 const lit = coverage.covered.has(kind);
@@ -114,7 +118,9 @@ export const ConversionCapabilities = memo(function ConversionCapabilities({
                 return (
                   <Tooltip key={kind}>
                     <TooltipTrigger
-                      render={<span className="inline-flex p-0.5" />}
+                      render={
+                        <span className={"inline-flex p-0.5" /* tight */} />
+                      }
                     >
                       <span className="sr-only">{`${label}: ${state}`}</span>
                       <Icon
@@ -154,7 +160,8 @@ export const ConversionCapabilities = memo(function ConversionCapabilities({
             return (
               <div
                 key={`${pair.from}-${pair.to}`}
-                className={`flex items-center justify-center gap-1.5 rounded-md px-1.5 py-0.5 ${
+                // dense conversion-pair pill (text-2xs, h-3.5 icons)
+                className={`flex items-center justify-center gap-2 rounded-md px-1.5 py-0.5 ${/* tight */ ""}${
                   pair.success
                     ? "border border-secondary bg-secondary/60 text-secondary-foreground"
                     : "border border-destructive/30 bg-destructive/10 text-muted-foreground/60"
@@ -163,7 +170,11 @@ export const ConversionCapabilities = memo(function ConversionCapabilities({
                 <Tooltip>
                   <TooltipTrigger
                     render={
-                      <div className="flex items-center justify-center gap-1.5 p-0.5" />
+                      <div
+                        className={
+                          "flex items-center justify-center gap-2 p-0.5" /* tight */
+                        }
+                      />
                     }
                   >
                     <span className="sr-only">{label}</span>

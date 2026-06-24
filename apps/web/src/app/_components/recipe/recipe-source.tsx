@@ -59,7 +59,7 @@ export function RecipeSourceLink({
   className?: string;
   onClick?: (e: MouseEvent) => void;
 }) {
-  const rowCn = cn("flex min-w-0 items-center gap-1.5", className);
+  const rowCn = cn("flex min-w-0 items-center gap-2", className);
   return match(source)
     .with({ type: "book" }, (s) => {
       const body = (

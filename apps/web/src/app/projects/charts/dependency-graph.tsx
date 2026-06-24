@@ -382,7 +382,7 @@ function ForceGraph({
           );
         })}
       </svg>
-      <div className="flex items-center justify-center gap-4 px-3 py-2 text-muted-foreground text-xs">
+      <div className="flex items-center justify-center gap-4 px-4 py-2 text-muted-foreground text-xs">
         <span>Arrow = "blocks"</span>
         <span>·</span>
         <span>Scroll to zoom · Drag to pan · Click to open</span>

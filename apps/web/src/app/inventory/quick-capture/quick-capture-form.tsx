@@ -487,7 +487,7 @@ export default function QuickCaptureForm({
                     {recentScans.slice(0, 5).map((item) => (
                       <div
                         key={item.id}
-                        className="flex items-center gap-1.5 rounded-full bg-positive/10 px-2.5 py-1 text-positive text-xs"
+                        className="flex items-center gap-2 rounded-full bg-positive/10 px-2 py-1 text-positive text-xs"
                       >
                         <Check className="h-3 w-3" />
                         <span className="max-w-[120px] truncate">

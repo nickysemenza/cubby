@@ -95,7 +95,7 @@ export function ShelfCard({
           {title}
         </div>
         {subtitle != null && subtitle !== "" && (
-          <div className="mt-0.5 truncate font-mono text-muted-foreground text-xs">
+          <div className="mt-1 truncate font-mono text-muted-foreground text-xs">
             {subtitle}
           </div>
         )}
@@ -113,7 +113,7 @@ export function ShelfEmpty({
   label: string;
 }) {
   return (
-    <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground text-sm">
+    <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground text-sm">
       <EntityIcon entity={entity} className="h-4 w-4 opacity-40" />
       {label}
     </div>
@@ -130,7 +130,7 @@ function ShelfSkeleton() {
           className="overflow-hidden rounded-lg border border-[var(--border-chunky)]"
         >
           <Skeleton className="aspect-square w-full rounded-none" />
-          <div className="space-y-1.5 px-2 py-2">
+          <div className="space-y-2 px-2 py-2">
             <Skeleton className="h-3.5 w-3/4" />
             <Skeleton className="h-3 w-1/2" />
           </div>
@@ -188,7 +188,7 @@ export function ShelfGrid<T>({
 
   if (error) {
     return (
-      <div className="py-8">
+      <div className="py-6">
         <ErrorDisplay error={error} />
       </div>
     );

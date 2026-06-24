@@ -72,7 +72,7 @@ export function AddToMeal({ recipeId }: { recipeId: RecipeId }) {
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <div className="px-2 py-1.5">
+        <div className="px-2 py-2">
           <span className="mb-1 block text-muted-foreground text-xs">
             Pick a date
           </span>

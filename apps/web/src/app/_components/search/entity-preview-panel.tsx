@@ -60,7 +60,11 @@ export function EntityPreviewPanel({
 
   return (
     <div className="flex h-full flex-col">
-      <SheetHeader className="border-b pr-12 pb-4">
+      <SheetHeader
+        className={
+          "border-b pr-12 pb-4" /* tight: clears the absolute Sheet close button at right-4 */
+        }
+      >
         <div className="flex items-center justify-between">
           <SheetTitle>Preview</SheetTitle>
           <Button

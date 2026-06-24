@@ -122,7 +122,7 @@ export const USDAFoodDetail: React.FC<{
 
   const nutritionSection = (
     <div>
-      <p className="mb-3 text-muted-foreground text-sm">Per 100g</p>
+      <p className="mb-4 text-muted-foreground text-sm">Per 100g</p>
       <div className="mb-4">
         <NutrientsSummary nutrients={nutritionInfo.nutrientsPer100} />
       </div>

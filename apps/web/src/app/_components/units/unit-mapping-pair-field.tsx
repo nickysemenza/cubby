@@ -41,7 +41,13 @@ export function UnitMappingPairField<
           unitPath={`${path}.a.unit` as Path<TFieldValues>}
         />
       </div>
-      <span className="pb-1.5 text-muted-foreground">=</span>
+      <span
+        className={
+          "pb-1.5 text-muted-foreground" /* tight: baseline-aligns = with compact inputs */
+        }
+      >
+        =
+      </span>
       <div className="min-w-[11rem] flex-1">
         <AmountFieldGroup
           compact

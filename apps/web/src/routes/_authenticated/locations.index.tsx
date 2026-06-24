@@ -79,7 +79,7 @@ function LocationsPage() {
               <h3 className="mb-2 font-semibold text-lg">
                 Inventory Distribution
               </h3>
-              <p className="mb-3 text-muted-foreground text-sm">
+              <p className="mb-4 text-muted-foreground text-sm">
                 Size represents total inventory items at each location and its
                 children
               </p>

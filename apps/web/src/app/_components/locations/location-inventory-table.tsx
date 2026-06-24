@@ -156,7 +156,7 @@ export function LocationInventoryTable({
       <ShelfTableToggle
         value={view}
         onChange={setView}
-        className="mb-3 justify-end"
+        className="mb-4 justify-end"
       />
 
       {view === "shelf" ? (

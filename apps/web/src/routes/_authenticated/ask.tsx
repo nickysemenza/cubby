@@ -71,11 +71,13 @@ function AskPage() {
 
         {!result && !ask.isPending && (
           <div className="space-y-2">
-            <div className="flex items-center gap-1.5 px-1 font-medium text-muted-foreground text-xs uppercase tracking-wider">
+            <div
+              className="flex items-center gap-1.5 px-1 font-medium text-muted-foreground text-xs uppercase tracking-wider" /* tight */
+            >
               <Sparkles className="h-3.5 w-3.5" />
               Try asking
             </div>
-            <div className="grid gap-1.5">
+            <div className="grid gap-2">
               {EXAMPLE_PROMPTS.map((prompt) => (
                 <button
                   key={prompt}
@@ -84,7 +86,7 @@ function AskPage() {
                     setQuery(prompt);
                     ask.mutate({ query: prompt });
                   }}
-                  className="flex items-center gap-2 rounded-md border border-border/50 px-3 py-2.5 text-left text-sm transition-colors hover:bg-muted/50 active:bg-muted/70"
+                  className="flex items-center gap-2 rounded-md border border-border/50 px-2 py-2 text-left text-sm transition-colors hover:bg-muted/50 active:bg-muted/70"
                 >
                   <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
                   <span className="min-w-0 flex-1">{prompt}</span>
@@ -121,7 +123,7 @@ function AskPage() {
                           to: `/${entities[entityTypeMap[source.entityType]].basePath}/${source.id}`,
                         })
                       }
-                      className="flex items-center gap-3 rounded-md border border-border/50 px-3 py-2 text-left transition-colors hover:bg-muted/50"
+                      className="flex items-center gap-2 rounded-md border border-border/50 px-2 py-2 text-left transition-colors hover:bg-muted/50"
                     >
                       <EntityIcon
                         entity={entityTypeMap[source.entityType]}
@@ -144,7 +146,7 @@ function AskPage() {
 
             {/* Tool calls (debug) */}
             {result.toolCalls.length > 0 && (
-              <details className="rounded-md border border-border/50 px-3 py-2">
+              <details className="rounded-md border border-border/50 px-2 py-2">
                 <summary className="cursor-pointer font-medium text-muted-foreground text-xs uppercase tracking-wider">
                   {result.toolCalls.length} tool call
                   {result.toolCalls.length === 1 ? "" : "s"}

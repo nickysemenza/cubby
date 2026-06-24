@@ -122,7 +122,7 @@ function RecipeExportPage() {
   return (
     <PageWrapper>
       <div className="mx-auto max-w-3xl">
-        <div className="mb-4 flex flex-wrap items-center gap-3 print:hidden">
+        <div className="mb-4 flex flex-wrap items-center gap-2 print:hidden">
           <ViewSwitcher
             ariaLabel="Export format"
             options={FORMAT_OPTIONS}

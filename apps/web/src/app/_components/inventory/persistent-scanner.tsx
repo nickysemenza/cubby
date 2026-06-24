@@ -106,7 +106,7 @@ export function PersistentScanner({
       {/* Error state */}
       {status === "error" && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/80 p-4">
-          <div className="flex flex-col items-center gap-3 rounded-lg bg-destructive/90 p-4 text-center text-white">
+          <div className="flex flex-col items-center gap-4 rounded-lg bg-destructive/90 p-4 text-center text-white">
             <CameraOff className="h-8 w-8 opacity-80" />
             <div>
               <p className="font-medium">Camera Error</p>
@@ -116,7 +116,7 @@ export function PersistentScanner({
               variant="secondary"
               size="sm"
               onClick={retry}
-              className="gap-1.5"
+              className="gap-2"
             >
               <RotateCcw className="h-3.5 w-3.5" />
               Try Again
@@ -128,13 +128,13 @@ export function PersistentScanner({
       {/* Permission denied state */}
       {status === "permission_denied" && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/80 p-4">
-          <div className="flex max-w-xs flex-col items-center gap-3 rounded-lg bg-card p-5 text-center shadow-lg">
+          <div className="flex max-w-xs flex-col items-center gap-4 rounded-lg bg-card p-4 text-center shadow-lg">
             <CameraOff className="h-10 w-10 text-muted-foreground" />
             <div>
               <p className="font-medium text-foreground">
                 Camera access needed
               </p>
-              <p className="mt-1.5 text-muted-foreground text-sm">
+              <p className="mt-2 text-muted-foreground text-sm">
                 To scan barcodes, allow camera access in{" "}
                 <span className="font-medium text-foreground">
                   Settings &gt; Safari &gt; Camera
@@ -145,7 +145,7 @@ export function PersistentScanner({
               variant="outline"
               size="sm"
               onClick={retry}
-              className="gap-1.5"
+              className="gap-2"
             >
               <RotateCcw className="h-3.5 w-3.5" />
               Retry
@@ -203,7 +203,7 @@ export function PersistentScanner({
       {status === "scanning" && (
         <div className="absolute inset-x-0 bottom-3 text-center">
           <span
-            className={`rounded-full px-3 py-1 text-sm transition-colors duration-150 ${
+            className={`rounded-full px-2 py-1 text-sm transition-colors duration-150 ${
               scanFlash
                 ? "bg-positive text-primary-foreground"
                 : "bg-black/60 text-white"

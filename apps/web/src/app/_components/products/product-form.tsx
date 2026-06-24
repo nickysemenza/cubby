@@ -91,7 +91,7 @@ const ProductTally: FC<{ control: Control<ProductFormValues> }> = ({
   const isDirty = Object.keys(dirtyFields).length > 0;
 
   return (
-    <div className="flex min-w-0 items-center gap-2.5 font-mono text-2xs text-muted-foreground uppercase">
+    <div className="flex min-w-0 items-center gap-2 font-mono text-2xs text-muted-foreground uppercase">
       <span className="truncate tabular-nums">
         {mappings?.length ?? 0} conversions · {externalIds?.length ?? 0}{" "}
         external IDs
@@ -336,7 +336,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
           {/* Live fact-sheet — the detail page builds as you type */}
           <aside className="@3xl/product:sticky @3xl/product:top-20 @3xl/product:block hidden">
             <div className="max-h-[75vh] overflow-y-auto rounded-lg border border-[var(--border-chunky)] bg-card p-4 shadow-[var(--shadow-chunky)]">
-              <p className="eyebrow mb-3">Live preview</p>
+              <p className="eyebrow mb-2">Live preview</p>
               <ProductLivePreview control={form.control} />
             </div>
           </aside>

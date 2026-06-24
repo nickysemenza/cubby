@@ -38,7 +38,7 @@ function QuickCapturePage() {
 
   if (isImmersiveScan) {
     return (
-      <div className="safe-top safe-bottom min-h-[100dvh] px-3 py-3">
+      <div className="safe-top safe-bottom min-h-[100dvh] px-4 py-4">
         <QuickCaptureForm
           initialLocationId={locationId}
           initialProductId={productId}

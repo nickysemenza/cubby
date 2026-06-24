@@ -77,7 +77,7 @@ export function CaptureFlow() {
         {/* Meta strip — preserved from the old PageHero `meta` slot, which the
             unified <Page> header no longer exposes. */}
         <div className="-mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-2xs text-muted-foreground">
-          <span className="inline-flex items-center gap-1.5">
+          <span className="inline-flex items-center gap-2">
             <Sparkles className="h-3 w-3 shrink-0" />
             <span>Photograph items and add them in bulk</span>
           </span>
@@ -111,7 +111,7 @@ export function CaptureFlow() {
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={busy}
-            className="flex w-full flex-col items-center justify-center gap-2 rounded-xl border border-border border-dashed py-16 text-muted-foreground transition-colors hover:bg-muted/40"
+            className="flex w-full flex-col items-center justify-center gap-2 rounded-xl border border-border border-dashed py-6 text-muted-foreground transition-colors hover:bg-muted/40"
           >
             <Camera className="h-8 w-8" />
             <span className="font-medium text-sm">
@@ -217,7 +217,7 @@ function CaptureItemCard({ proposal }: { proposal: ProposedItem }) {
 
   if (added) {
     return (
-      <div className="flex items-center gap-2 rounded-md border border-border/50 px-3 py-2 text-muted-foreground text-sm">
+      <div className="flex items-center gap-2 rounded-md border border-border/50 px-2 py-2 text-muted-foreground text-sm">
         <Check className="h-4 w-4 shrink-0 text-primary" />
         <span className="truncate">Added {proposal.name} to inventory</span>
       </div>
@@ -233,7 +233,7 @@ function CaptureItemCard({ proposal }: { proposal: ProposedItem }) {
         <div className="min-w-0">
           <span className="font-medium text-sm">{proposal.name}</span>
           {meta && (
-            <span className="ml-1.5 text-muted-foreground text-xs">{meta}</span>
+            <span className="ml-2 text-muted-foreground text-xs">{meta}</span>
           )}
         </div>
         <Badge variant={confidenceVariant[proposal.confidence]}>

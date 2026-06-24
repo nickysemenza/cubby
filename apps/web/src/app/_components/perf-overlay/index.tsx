@@ -135,7 +135,7 @@ export function PerfOverlay() {
         type="button"
         onClick={() => setMinimized(false)}
         className={cn(
-          "fixed z-[60] flex items-center gap-1.5 rounded-md border border-[var(--border-chunky)] bg-card px-2 py-1 font-mono text-xs shadow-[var(--shadow-chunky)]",
+          "fixed z-[60] flex items-center gap-1.5 rounded-md border border-[var(--border-chunky)] bg-card px-2 py-1 font-mono text-xs shadow-[var(--shadow-chunky)]" /* tight */,
           CORNER_CLASS[corner],
         )}
       >
@@ -166,7 +166,7 @@ export function PerfOverlay() {
         >
           {snap.runtime.fps}fps
         </span>
-        <div className="ml-auto flex items-center gap-0.5">
+        <div className="ml-auto flex items-center gap-0.5" /* tight */>
           <IconBtn title="Copy report as JSON" onClick={copyReport}>
             <ClipboardCopy className="size-3" />
           </IconBtn>
@@ -212,7 +212,7 @@ export function PerfOverlay() {
       </div>
 
       {/* Body */}
-      <div className="flex-1 overflow-y-auto p-1.5">
+      <div className="flex-1 overflow-y-auto p-1.5" /* tight */>
         {tab === "Slow" && <SlowTab snap={snap} />}
         {tab === "WASM" && <WasmTab snap={snap} />}
         {tab === "Queries" && <QueriesTab snap={snap} live={live} />}
@@ -286,7 +286,7 @@ function SlowTab({ snap }: { snap: PerfSnapshot }) {
         {events.map((e, i) => (
           // Composite key: `at` alone collides for events in the same tick.
           <tr key={`${e.at}-${i}`} className="border-border/30 border-t">
-            <td className="py-0.5 pr-1 align-middle">
+            <td className="py-0.5 pr-1 align-middle" /* tight */>
               <span
                 className="font-semibold text-3xs uppercase"
                 style={{ color: `var(--chart-${SLOW_TONE[e.kind]})` }}
@@ -294,7 +294,7 @@ function SlowTab({ snap }: { snap: PerfSnapshot }) {
                 {SLOW_TAG[e.kind]}
               </span>
             </td>
-            <td className="truncate py-0.5" title={e.label}>
+            <td className="truncate py-0.5" /* tight */ title={e.label}>
               {e.label}
             </td>
             <td className="whitespace-nowrap pl-1 text-right text-2xs text-muted-foreground">
@@ -343,7 +343,7 @@ function WasmTab({ snap }: { snap: PerfSnapshot }) {
             const avg = s.executions > 0 ? s.totalMs / s.executions : 0;
             return (
               <tr key={name} className="border-border/30 border-t">
-                <td className="truncate py-0.5">
+                <td className="truncate py-0.5" /* tight */>
                   {name}
                   {s.throws > 0 && (
                     <span
@@ -416,7 +416,7 @@ function QueriesTab({
           <tbody>
             {rows.map(([proc, s]) => (
               <tr key={proc} className="border-border/30 border-t">
-                <td className="truncate py-0.5">
+                <td className="truncate py-0.5" /* tight */>
                   {proc}
                   {s.fanout && (
                     <span className="ml-1 rounded-sm bg-destructive/15 px-1 text-3xs text-destructive">
@@ -474,7 +474,7 @@ function RendersTab({ snap }: { snap: PerfSnapshot }) {
         <tbody>
           {rows.map(([id, s]) => (
             <tr key={id} className="border-border/30 border-t align-top">
-              <td className="py-0.5">
+              <td className="py-0.5" /* tight */>
                 <div className="flex items-center gap-1">
                   <span className="truncate">{id}</span>
                   {s.lastPhase && (

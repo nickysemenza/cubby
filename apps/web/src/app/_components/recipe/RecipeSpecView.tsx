@@ -69,7 +69,7 @@ export function RecipeSpecView({
   const renderSteps = (steps: { n: number; text: string }[]) => (
     <div className="space-y-2">
       {steps.map((step) => (
-        <div key={step.n} className="flex gap-2.5">
+        <div key={step.n} className="flex gap-2">
           <span className="mt-px inline-flex size-[18px] shrink-0 items-center justify-center rounded-full border border-[var(--border-chunky)] font-mono text-[10px] text-muted-foreground tabular-nums">
             {step.n}
           </span>
@@ -82,7 +82,7 @@ export function RecipeSpecView({
   );
 
   return (
-    <div className="rounded-xl border border-[var(--border-chunky)] bg-card px-6 py-6 sm:px-8">
+    <div className="rounded-xl border border-[var(--border-chunky)] bg-card px-6 py-6">
       {/* Title + yield */}
       <header className="mb-4 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
         <h2 className="my-0 font-heading font-semibold text-2xl tracking-tight">
@@ -97,7 +97,7 @@ export function RecipeSpecView({
 
       {/* Headnote + tips */}
       {recipe.notes && (
-        <MarkdownText className="mb-5 max-w-prose text-muted-foreground">
+        <MarkdownText className="mb-4 max-w-prose text-muted-foreground">
           {recipe.notes}
         </MarkdownText>
       )}
@@ -105,9 +105,9 @@ export function RecipeSpecView({
       <table className="w-full border-collapse text-left">
         <thead>
           <tr className="eyebrow">
-            <th className="pr-3 pb-2 font-medium">Ingredient</th>
-            <th className="pr-3 pb-2 font-medium">Quantity</th>
-            <th className="pr-3 pb-2 font-medium">Scaling</th>
+            <th className="pr-2 pb-2 font-medium">Ingredient</th>
+            <th className="pr-2 pb-2 font-medium">Quantity</th>
+            <th className="pr-2 pb-2 font-medium">Scaling</th>
             <th className="pb-2 font-medium">Procedure</th>
           </tr>
         </thead>
@@ -121,7 +121,7 @@ export function RecipeSpecView({
             const procedureCell = (
               <td
                 rowSpan={Math.max(1, ingredients.length)}
-                className="py-2 pl-3 align-top"
+                className="py-2 pl-2 align-top"
               >
                 {renderSteps(steps)}
               </td>
@@ -136,7 +136,7 @@ export function RecipeSpecView({
                 )}
                 {showSectionNames && section.name && (
                   <tr>
-                    <td colSpan={4} className="eyebrow pt-3 pb-1">
+                    <td colSpan={4} className="eyebrow pt-2 pb-1">
                       {section.name}
                     </td>
                   </tr>
@@ -154,31 +154,31 @@ export function RecipeSpecView({
 
                   return (
                     <tr key={ing.id} className="align-top">
-                      <td className="py-1.5 pr-3 font-medium text-sm leading-snug">
+                      <td className="py-2 pr-2 font-medium text-sm leading-snug">
                         {name}
                         <IngredientModifier modifier={ing.modifier} />
                         {isBase && (
-                          <span className="ml-1.5 rounded-sm bg-primary/10 px-1 py-px align-middle font-mono text-[9px] text-primary uppercase tracking-wide">
+                          <span className="ml-2 rounded-sm bg-primary/10 px-1 py-px align-middle font-mono text-[9px] text-primary uppercase tracking-wide">
                             100% base
                           </span>
                         )}
                         {noWeight && (
                           <span
                             title="No weight — omitted from scaling"
-                            className="ml-1.5 rounded-sm bg-warning/15 px-1 py-px align-middle font-mono text-[9px] text-warning uppercase tracking-wide"
+                            className="ml-2 rounded-sm bg-warning/15 px-1 py-px align-middle font-mono text-[9px] text-warning uppercase tracking-wide"
                           >
                             no weight
                           </span>
                         )}
                       </td>
-                      <td className="py-1.5 pr-3">
+                      <td className="py-2 pr-2">
                         <IngredientQuantities
                           quantities={quantities}
                           className="text-xs"
                           emptyText="—"
                         />
                       </td>
-                      <td className="py-1.5 pr-3 font-mono text-xs tabular-nums">
+                      <td className="py-2 pr-2 font-mono text-xs tabular-nums">
                         {pct == null ? (
                           <span
                             title={
@@ -234,7 +234,7 @@ export function RecipeSpecView({
 
       {/* Attribution footer */}
       {footnote && (
-        <p className="mt-3 font-heading text-primary text-xs italic">
+        <p className="mt-4 font-heading text-primary text-xs italic">
           {footnote}
         </p>
       )}

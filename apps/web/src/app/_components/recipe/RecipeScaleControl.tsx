@@ -148,7 +148,7 @@ export function RecipeScaleControl({
           }
         />
         <PopoverContent className="w-72 space-y-4">
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <Label className="eyebrow">Scale by</Label>
             <ToggleGroup
               aria-label="Scale anchor"
@@ -249,7 +249,7 @@ export function RecipeScaleControl({
                     ? "These ingredients aren't in the weight total. Add a unit mapping for:"
                     : "No weight conversion yet. Add a unit mapping for:"}
                 </p>
-                <ul className="space-y-0.5">
+                <ul className="space-y-1">
                   {missingWeightLinks.map((link) => (
                     <li key={link.ingredientId}>
                       <Link

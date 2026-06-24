@@ -104,7 +104,7 @@ export default function NutritionBars({
   }
 
   return (
-    <div className="space-y-5 p-1">
+    <div className="space-y-4 p-1">
       <div>
         <StatTile label="Calories by ingredient">
           {Math.round(totalKcal)} kcal
@@ -126,7 +126,7 @@ export default function NutritionBars({
           {kcalRows.map((row, i) => (
             <span
               key={row.key}
-              className="inline-flex items-center gap-1.5 font-mono text-2xs text-muted-foreground"
+              className="inline-flex items-center gap-2 font-mono text-2xs text-muted-foreground"
             >
               <span
                 className="h-2 w-2 rounded-full border border-[var(--border-chunky)]"
@@ -142,10 +142,10 @@ export default function NutritionBars({
 
       <div>
         <div className="eyebrow mb-2">Macros, whole recipe</div>
-        <div className="space-y-2.5">
+        <div className="space-y-2">
           {macroTotals.map((m) => (
             <div key={m.key}>
-              <div className="mb-0.5 flex justify-between font-mono text-2xs text-muted-foreground uppercase">
+              <div className="mb-1 flex justify-between font-mono text-2xs text-muted-foreground uppercase">
                 <span>{m.label}</span>
                 <span className="tabular-nums">
                   {m.grams > 0
