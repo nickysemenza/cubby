@@ -118,7 +118,7 @@ export function LocationBreadcrumb({
                 isLast && "font-medium",
                 highlightNonDefault &&
                   !isDefault &&
-                  "rounded border border-amber-500/50 bg-amber-50 px-1 py-px",
+                  "rounded border border-warning/50 bg-warning/10 px-1 py-px",
                 isLast && activeHighlight && "rounded bg-primary/10 px-1 py-px",
               )}
             >

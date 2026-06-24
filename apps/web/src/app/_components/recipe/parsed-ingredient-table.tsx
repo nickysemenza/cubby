@@ -39,7 +39,7 @@ export function ParsedIngredientTable({
             ? matchMap.get(parsed.name.toLowerCase())
             : null;
           const isNew = matchReady && !match;
-          const tint = cn(match && "bg-positive/10", isNew && "bg-amber-50/30");
+          const tint = cn(match && "bg-positive/10", isNew && "bg-warning/10");
           return (
             // biome-ignore lint/suspicious/noArrayIndexKey: fixed ordered list
             <Fragment key={i}>
@@ -50,9 +50,9 @@ export function ParsedIngredientTable({
                   ) : (
                     <span className="flex items-center gap-1">
                       {isNew && (
-                        <AlertCircle className="h-3 w-3 shrink-0 text-amber-600" />
+                        <AlertCircle className="h-3 w-3 shrink-0 text-warning" />
                       )}
-                      <span className={isNew ? "text-amber-700" : ""}>
+                      <span className={isNew ? "text-warning" : ""}>
                         {name}
                       </span>
                       {isNew && onCreate ? (
@@ -60,7 +60,7 @@ export function ParsedIngredientTable({
                           type="button"
                           variant="ghost"
                           size="sm"
-                          className="h-5 w-5 p-0 text-amber-600 hover:bg-amber-100 hover:text-amber-700"
+                          className="h-5 w-5 p-0 text-warning hover:bg-warning/15 hover:text-warning"
                           onClick={() => onCreate(parsed.name)}
                           title="Add to your library"
                         >
@@ -69,7 +69,7 @@ export function ParsedIngredientTable({
                       ) : (
                         isNew && (
                           <span
-                            className="text-amber-600"
+                            className="text-warning"
                             title="Will be created on import"
                           >
                             · new

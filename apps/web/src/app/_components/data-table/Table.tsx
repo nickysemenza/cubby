@@ -634,7 +634,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
               containerClassName="overflow-visible"
             >
               <TableHeader
-                className="sticky z-20 bg-background shadow-[0_1px_3px_rgba(58,53,48,0.08)] [&_tr]:border-b-0"
+                className="sticky z-20 bg-background shadow-[var(--shadow-chunky-sm)] [&_tr]:border-b-0"
                 style={{ top: "var(--table-header-top)" }}
               >
                 {table.getHeaderGroups().map((headerGroup) => {

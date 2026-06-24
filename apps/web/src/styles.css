@@ -179,6 +179,20 @@
   --shadow-chunky-lg:
     0 2px 4px -1px oklch(from var(--brand-foreground) l c h / 0.06),
     0 8px 24px -6px oklch(from var(--brand-foreground) l c h / 0.16);
+  /* Inset "gloss" highlight for small gradient tiles (was inline rgba on the
+     homepage entity-count chips). */
+  --shadow-inset-gloss:
+    inset 0 1px 2px oklch(1 0 0 / 0.3),
+    inset 0 -1px 2px oklch(from var(--brand-foreground) l c h / 0.1);
+  /* Barcode-scanner viewfinder: the dark edge scrim, plus the success-flash
+     variant that adds a --positive glow when a code is captured. */
+  --shadow-scan-scrim: 0 0 0 9999px oklch(0 0 0 / 0.4);
+  --shadow-scan-flash:
+    0 0 0 9999px oklch(0 0 0 / 0.4),
+    0 0 20px oklch(from var(--positive) l c h / 0.55);
+  /* Text shadow for labels painted directly over chart fills (donut, network)
+     so they stay legible regardless of the underlying segment color. */
+  --text-shadow-chart: 0 1px 3px oklch(from var(--brand-foreground) l c h / 0.7);
   /* Border for signature chrome - a hairline a step darker than --border so
      primary surfaces still read defined, just not outlined. */
   --border-chunky: oklch(0.87 0.005 255);

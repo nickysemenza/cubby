@@ -60,8 +60,8 @@ export function NeedsAttention({
   if (totalIssues === 0) return null;
 
   return (
-    <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50/50 p-4">
-      <div className="flex items-center gap-2 font-medium text-amber-800 text-sm">
+    <div className="space-y-3 rounded-lg border border-warning/40 bg-warning/10 p-4">
+      <div className="flex items-center gap-2 font-medium text-sm text-warning">
         <AlertTriangle className="h-4 w-4" />
         Needs Attention ({totalIssues})
       </div>
@@ -97,7 +97,7 @@ export function NeedsAttention({
 
       {stalledProjects.length > 0 && (
         <AttentionGroup
-          icon={<AlertTriangle className="h-3.5 w-3.5 text-amber-500" />}
+          icon={<AlertTriangle className="h-3.5 w-3.5 text-warning" />}
           title={`${stalledProjects.length} stalled project${stalledProjects.length !== 1 ? "s" : ""} (no purchases in 30 days)`}
         >
           <div className="flex flex-wrap gap-1.5">
@@ -110,7 +110,7 @@ export function NeedsAttention({
 
       {missingEstimates.length > 0 && (
         <AttentionGroup
-          icon={<DollarSign className="h-3.5 w-3.5 text-amber-500" />}
+          icon={<DollarSign className="h-3.5 w-3.5 text-warning" />}
           title={`${missingEstimates.length} active project${missingEstimates.length !== 1 ? "s" : ""} missing cost estimates`}
         >
           <div className="flex flex-wrap gap-1.5">
@@ -135,7 +135,7 @@ function AttentionGroup({
 }) {
   return (
     <details className="group">
-      <summary className="flex cursor-pointer items-center gap-2 font-medium text-amber-900 text-xs hover:text-amber-700">
+      <summary className="flex cursor-pointer items-center gap-2 font-medium text-warning text-xs hover:text-warning/80">
         {icon}
         {title}
       </summary>

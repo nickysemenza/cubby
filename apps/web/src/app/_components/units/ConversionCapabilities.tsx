@@ -52,7 +52,7 @@ const TIER_LABEL: Record<CoverageTier, string> = {
 
 const TIER_CLASS: Record<CoverageTier, string> = {
   complete: "text-positive",
-  good: "text-amber-600",
+  good: "text-warning",
   partial: "text-muted-foreground",
   none: "text-destructive",
 };
