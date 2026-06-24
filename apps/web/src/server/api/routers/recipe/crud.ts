@@ -1,0 +1,117 @@
+/**
+ * Recipe CRUD procedures.
+ *
+ * Standard create / read / update / delete plus the by-shortcode, batched
+ * by-id, and tag-listing reads. Split out of the recipe router god file; paths
+ * are re-composed flat in `../recipe.ts`, so client procedure paths
+ * (`recipe.list`, `recipe.getByID`, …) are unchanged.
+ */
+
+import { type RecipeId, recipeId } from "@cubby/schemas/identifiers";
+import {
+  recipeCreateInput,
+  recipeFiltersSchema,
+  recipeOut,
+  recipeUpdateInput,
+} from "@cubby/schemas/recipe";
+import { z } from "zod";
+import { createAppError } from "~/server/errors/app-error";
+import {
+  createRecipe,
+  deleteRecipes,
+  getAllTags,
+  getRecipeByID,
+  getRecipeByShortcode,
+  getRecipesByIDs,
+  recipeList,
+  updateRecipe,
+} from "~/server/repo/recipe";
+import {
+  createDeleteProcedure,
+  createEntityCrudProcedures,
+} from "../../crud-factory";
+import { protectedProcedure } from "../../trpc";
+
+// Create standardized CRUD procedures using factory
+const { getByID, list, create, update } = createEntityCrudProcedures({
+  schemas: {
+    createInput: recipeCreateInput,
+    updateInput: recipeUpdateInput.shape.data,
+    output: recipeOut,
+    filters: recipeFiltersSchema,
+    idSchema: recipeId,
+  },
+  repository: {
+    getByID: async (services, id: RecipeId) => {
+      const res = await getRecipeByID(services.db, id);
+      if (res === null) {
+        throw createAppError("RECIPE_NOT_FOUND", "Recipe not found");
+      }
+      return res;
+    },
+    list: async (services, filters, sort, pagination) => {
+      return await recipeList(services.db, filters, sort, pagination);
+    },
+    create: async (services, data) => {
+      const created = await createRecipe(
+        services.db,
+        data,
+        services.actorContext,
+      );
+      // Recompute its totals now (instant freshness) + null any parents.
+      await services.services.recipeCosting.recompute([created.id as RecipeId]);
+      return created;
+    },
+    update: async (services, id: RecipeId, data) => {
+      const updated = await updateRecipe(
+        services.db,
+        id,
+        data,
+        services.actorContext,
+      );
+      await services.services.recipeCosting.recompute([id]);
+      return updated;
+    },
+  },
+  entityName: "recipe",
+});
+
+// Get recipe by shortcode (e.g., R-X7K9)
+const getByShortcode = protectedProcedure
+  .input(z.object({ shortcode: z.string() }))
+  .output(recipeOut.nullable())
+  .query(async ({ ctx, input }) => {
+    return await getRecipeByShortcode(ctx.db, input.shortcode);
+  });
+
+// Batched fetch by id — mirrors ingredient.getManyByIDs. Used by client-side
+// cost rollup to resolve sub-recipes (recipe-as-ingredient) without an N+1
+// fan-out of getByID calls. Missing/deleted ids are omitted from the result.
+const getManyByIDs = protectedProcedure
+  .input(z.object({ ids: z.array(recipeId) }))
+  .output(z.array(recipeOut))
+  .query(async ({ ctx, input }) => {
+    return await getRecipesByIDs(ctx.db, input.ids);
+  });
+
+// Delete procedure using standalone factory
+const deleteItem = createDeleteProcedure<RecipeId>(async (services, ids) => {
+  await deleteRecipes(services.db, ids, services.actorContext);
+}, recipeId);
+
+const getAllTagsEndpoint = protectedProcedure
+  .output(z.array(z.string()))
+  .query(async ({ ctx }) => {
+    return await getAllTags(ctx.db);
+  });
+
+export const recipeCrudProcedures = {
+  getByID,
+  getByShortcode,
+  getManyByIDs,
+  list,
+  create,
+  update,
+  delete: deleteItem,
+  getAllTags: getAllTagsEndpoint,
+};

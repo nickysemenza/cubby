@@ -388,7 +388,10 @@ export const createRecipe = async (
   );
   const fullRecipe = await getRecipeByID(db, id);
   if (!fullRecipe) {
-    throw new Error("Failed to retrieve created recipe");
+    throw createAppError(
+      "RECIPE_NOT_FOUND",
+      "Failed to retrieve created recipe",
+    );
   }
   return fullRecipe;
 };
@@ -599,7 +602,10 @@ export const updateRecipe = async (
 
     const fullRecipe = await getRecipeByID(tx, id);
     if (!fullRecipe) {
-      throw new Error("Failed to retrieve updated recipe");
+      throw createAppError(
+        "RECIPE_NOT_FOUND",
+        "Failed to retrieve updated recipe",
+      );
     }
 
     // Log audit entry with changes

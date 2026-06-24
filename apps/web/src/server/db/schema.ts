@@ -130,6 +130,9 @@ export const recipe = pgTable(
     index("Recipe_name_active_idx")
       .on(table.name)
       .where(sql`${table.deletedAt} IS NULL`),
+    index("Recipe_active_idx")
+      .on(table.deletedAt)
+      .where(sql`${table.deletedAt} IS NULL`),
     // Drain target: recipes whose totals need (re)computing.
     index("Recipe_totals_stale_idx")
       .on(table.totalsComputedAt)
@@ -269,6 +272,9 @@ export const ingredient = pgTable(
     // Partial index for soft delete queries
     index("Ingredient_name_active_idx")
       .on(table.name)
+      .where(sql`${table.deletedAt} IS NULL`),
+    index("Ingredient_active_idx")
+      .on(table.deletedAt)
       .where(sql`${table.deletedAt} IS NULL`),
   ],
 );
@@ -444,6 +450,9 @@ export const product = pgTable(
     index("Product_manufacturer_active_idx")
       .on(table.manufacturer)
       .where(sql`${table.deletedAt} IS NULL`),
+    index("Product_active_idx")
+      .on(table.deletedAt)
+      .where(sql`${table.deletedAt} IS NULL`),
   ],
 );
 
@@ -543,6 +552,9 @@ export const location = pgTable(
       .where(sql`${table.deletedAt} IS NULL`),
     index("Location_type_active_idx")
       .on(table.type)
+      .where(sql`${table.deletedAt} IS NULL`),
+    index("Location_active_idx")
+      .on(table.deletedAt)
       .where(sql`${table.deletedAt} IS NULL`),
   ],
 );
@@ -878,6 +890,7 @@ export const auditLog = pgTable(
   },
   (table) => [
     index("AuditLog_createdAt_idx").on(table.createdAt.desc()),
+    index("AuditLog_entityType_idx").on(table.entityType),
     index("AuditLog_entityType_entityId_createdAt_idx").on(
       table.entityType,
       table.entityId,

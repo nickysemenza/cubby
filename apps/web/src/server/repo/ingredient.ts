@@ -390,6 +390,9 @@ export const createIngredient = async (
   });
 
   if (!ingredientData) {
+    // INTERNAL_SERVER_ERROR (500): the row was just written, so its absence is a
+    // genuine internal fault, not a missing-entity 404. No createAppError reason
+    // maps to 500 here, and matches the sibling pattern in recipe/crud.ts.
     throw new Error("Failed to fetch created ingredient");
   }
 
@@ -433,6 +436,9 @@ export const updateIngredient = async (
   });
 
   if (!ingredientData) {
+    // INTERNAL_SERVER_ERROR (500): the row was just written, so its absence is a
+    // genuine internal fault, not a missing-entity 404. No createAppError reason
+    // maps to 500 here, and matches the sibling pattern in recipe/crud.ts.
     throw new Error("Failed to fetch updated ingredient");
   }
 
