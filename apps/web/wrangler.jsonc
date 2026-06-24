@@ -5,6 +5,16 @@
   // API (shipped 2026-06-16) — see src/server/tracing.ts prod backend.
   "compatibility_date": "2026-06-16",
   "compatibility_flags": ["nodejs_compat"],
+  // STOPGAP: raise the per-invocation CPU ceiling above the 30s default. The
+  // Problems page (problems.getAllProblems) is CPU-bound — it re-parses every
+  // recipe line through WASM in two detectors on every load — and intermittently
+  // exceeded the 30s default, killing the request. This is a guardrail, not the
+  // fix; the real fix is the per-detector lazy split (each detector → its own
+  // Worker invocation/CPU budget) + persisting/incrementalizing the parse sweeps.
+  // Single-user app, so the extra CPU headroom is negligible cost.
+  "limits": {
+    "cpu_ms": 120000
+  },
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1,
