@@ -7,6 +7,7 @@ import { AlertTriangle } from "lucide-react";
 import { useProblemsData } from "~/app/problems/use-problems-data";
 import { Card } from "~/components/ui/card";
 import { Eyebrow } from "~/components/ui/eyebrow";
+import { IconTile } from "~/components/ui/icon-tile";
 import { Skeleton } from "~/components/ui/skeleton";
 import { entities } from "~/entities/entities";
 import { useHydrated } from "~/hooks/useHydrated";
@@ -52,16 +53,16 @@ function ProblemsStatCard({ enabled }: { enabled: boolean }) {
         }
       >
         <div className="flex flex-col items-start gap-2">
-          <div
+          <IconTile
+            size="sm"
             className={cn(
-              "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg",
               alert
                 ? "bg-destructive/10 text-destructive"
                 : "bg-positive/10 text-positive",
             )}
           >
-            <AlertTriangle className="h-4 w-4" />
-          </div>
+            <AlertTriangle />
+          </IconTile>
           <div className="min-w-0 flex-1">
             {!enabled || isLoading ? (
               <Skeleton className="h-6 w-10" />
@@ -128,16 +129,13 @@ function StatCard({ entity, count, isLoading, isError }: StatCardProps) {
         )}
       >
         <div className="flex flex-col items-start gap-2">
-          <div
-            className={cn(
-              "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br",
-              def.color.bg,
-              def.color.text,
-            )}
+          <IconTile
+            size="sm"
+            className={cn("bg-gradient-to-br", def.color.bg, def.color.text)}
             style={{ boxShadow: "var(--shadow-inset-gloss)" }}
           >
-            <Icon className="h-4 w-4" />
-          </div>
+            <Icon />
+          </IconTile>
           <div className="min-w-0 flex-1">
             {isLoading ? (
               <Skeleton className="h-6 w-10" />

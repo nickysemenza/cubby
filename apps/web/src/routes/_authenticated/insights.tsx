@@ -8,7 +8,7 @@ import LocationTreemap from "~/app/_components/inventory/location-treemap";
 import IngredientNetwork from "~/app/_components/visualizations/ingredient-network";
 import LocationSunburst from "~/app/_components/visualizations/location-sunburst";
 import ProductCategoryDonut from "~/app/_components/visualizations/product-category-donut";
-import { Row, Section, Stack } from "~/components/layout";
+import { Grid, Row, Section, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { useTRPC } from "~/trpc/react";
 
@@ -28,7 +28,7 @@ function InsightsPage() {
         </Section>
 
         <Section title="Inventory by Location">
-          <div className="grid gap-4 lg:grid-cols-2">
+          <Grid cols="pair">
             <Stack gap="sm">
               <h3 className="font-medium text-muted-foreground text-sm">
                 Treemap View
@@ -41,7 +41,7 @@ function InsightsPage() {
               </h3>
               <LocationSunburst />
             </Stack>
-          </div>
+          </Grid>
         </Section>
 
         <Section

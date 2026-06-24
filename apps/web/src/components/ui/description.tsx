@@ -9,7 +9,7 @@ import { cn } from "~/lib/utils";
  */
 const descriptionVariants = cva("text-muted-foreground", {
   variants: {
-    size: { sm: "text-sm", xs: "text-xs" },
+    size: { sm: "text-sm", xs: "text-xs", "2xs": "text-2xs" },
   },
   defaultVariants: { size: "sm" },
 });
