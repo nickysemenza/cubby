@@ -60,10 +60,20 @@ import { densityConfig, useTableDensity } from "./useTableDensity";
 // Scroll position cache for navigate-back restoration
 const scrollPositionCache = new Map<string, number>();
 
-// Number of rows to render outside the visible area
-const OVERSCAN = 5;
 // Sticky top nav height (h-16 = 4rem = 64px); the sticky toolbar pins below it.
 const NAV_HEIGHT = 64;
+
+// Faint row guides every `rowHeight` px so the virtualized spacer (the gap the
+// renderer hasn't filled yet on a fast scroll) reads as empty table rows
+// instead of stark white. Uses the table's border token at low alpha; no
+// animation. Spacer heights are multiples of rowHeight, so lines align with
+// where real rows sit.
+function ghostRowsStyle(rowHeight: number): React.CSSProperties {
+  const line = "color-mix(in oklch, var(--border) 45%, transparent)";
+  return {
+    backgroundImage: `repeating-linear-gradient(to bottom, transparent 0, transparent ${rowHeight - 1}px, ${line} ${rowHeight - 1}px, ${line} ${rowHeight}px)`,
+  };
+}
 
 interface TTableProps<TItem> {
   table: ITable<TItem>;
@@ -286,6 +296,14 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
 
   // Always virtualize for consistent rendering
   const virtualizerCount = groupedItems ? groupedItems.length : rows.length;
+  // Buffer ~one viewport of rows above/below so a fast fling doesn't outrun the
+  // rendered range and flash blank. Rows are cheap to render (profiled), so the
+  // extra DOM is affordable; clamped to keep tiny/huge viewports sane.
+  const viewportH = typeof window !== "undefined" ? window.innerHeight : 800;
+  const overscan = Math.min(
+    40,
+    Math.max(12, Math.ceil(viewportH / dConfig.rowHeight)),
+  );
   const rowVirtualizer = useWindowVirtualizer({
     count: virtualizerCount,
     estimateSize: (index) => {
@@ -294,7 +312,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
       }
       return dConfig.rowHeight;
     },
-    overscan: OVERSCAN,
+    overscan,
     scrollMargin,
   });
 
@@ -412,7 +430,16 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
             measured from the document top, so subtract the table's scrollMargin
             to get the gap within the table body. */}
         {virtualRows.length > 0 && virtualRows[0]!.start - scrollMargin > 0 && (
-          <tr style={{ height: `${virtualRows[0]!.start - scrollMargin}px` }} />
+          <tr>
+            <td
+              colSpan={colSpan}
+              className="border-0 p-0"
+              style={{
+                height: `${virtualRows[0]!.start - scrollMargin}px`,
+                ...ghostRowsStyle(dConfig.rowHeight),
+              }}
+            />
+          </tr>
         )}
 
         {/* Render only visible rows (with optional group headers) */}
@@ -474,11 +501,16 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
 
         {/* Bottom padding row for remaining scroll space */}
         {virtualRows.length > 0 && (
-          <tr
-            style={{
-              height: `${totalSize - (virtualRows[virtualRows.length - 1]?.end ?? 0)}px`,
-            }}
-          />
+          <tr>
+            <td
+              colSpan={colSpan}
+              className="border-0 p-0"
+              style={{
+                height: `${totalSize - (virtualRows[virtualRows.length - 1]?.end ?? 0)}px`,
+                ...ghostRowsStyle(dConfig.rowHeight),
+              }}
+            />
+          </tr>
         )}
       </>
     );
