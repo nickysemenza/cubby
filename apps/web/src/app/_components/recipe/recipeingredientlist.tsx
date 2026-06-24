@@ -14,6 +14,7 @@ import {
   EntitySummaryCard,
   type RecipeSummaryData,
 } from "~/components/entity/entity-summary-card";
+import { Stack } from "~/components/layout";
 import type {
   CalculateTotalsResult,
   CostingRow,
@@ -140,12 +141,12 @@ export const RecipeIngredientList: React.FC<{
 
         // Format each amount using tryFormatAmount
         return (
-          <div className="space-y-1 text-sm">
+          <Stack gap="xs" className="text-sm">
             {amounts.map((amount, index) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: amounts are positional without stable IDs
               <div key={index}>{tryFormatAmount(amount)}</div>
             ))}
-          </div>
+          </Stack>
         );
       },
     }),

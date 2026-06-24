@@ -5,6 +5,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { Trash2 } from "lucide-react";
 import { useState } from "react";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
+import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { FilterableCombobox } from "~/components/ui/combobox";
 import { Input } from "~/components/ui/input";
@@ -58,14 +59,14 @@ export function MealDetailPage({ mealId }: { mealId: MealId }) {
   }));
 
   return (
-    <div className="space-y-4">
+    <Stack>
       <Link
         to="/meals"
         className="inline-flex items-center gap-1 text-muted-foreground text-sm hover:underline"
       >
         ← Meals
       </Link>
-      <div className="flex flex-wrap items-end justify-between gap-4">
+      <Row align="end" justify="between" wrap gap="md">
         <div className="flex flex-col gap-2">
           <Input
             value={nameValue}
@@ -103,9 +104,9 @@ export function MealDetailPage({ mealId }: { mealId: MealId }) {
             {meal.totals.pending ? " (some recipes uncosted)" : ""}
           </div>
         </div>
-      </div>
+      </Row>
 
-      <div className="space-y-2">
+      <Stack gap="sm">
         {meal.recipes.length === 0 ? (
           <p className="text-muted-foreground text-sm">
             No recipes yet — add one below.
@@ -115,7 +116,7 @@ export function MealDetailPage({ mealId }: { mealId: MealId }) {
             <RecipeRow key={mr.id} mr={mr} onChanged={invalidate} />
           ))
         )}
-      </div>
+      </Stack>
 
       <div className="max-w-sm">
         <span className="mb-1 block text-muted-foreground text-xs">
@@ -147,7 +148,7 @@ export function MealDetailPage({ mealId }: { mealId: MealId }) {
           Delete meal
         </Button>
       </div>
-    </div>
+    </Stack>
   );
 }
 
@@ -178,7 +179,11 @@ function RecipeRow({
   };
 
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-[var(--border-chunky)] p-2">
+    <Row
+      align="center"
+      gap="sm"
+      className="rounded-lg border border-[var(--border-chunky)] p-2"
+    >
       <Link
         to="/recipes/$id"
         params={{ id: mr.recipeId }}
@@ -186,7 +191,7 @@ function RecipeRow({
       >
         {mr.recipe.name}
       </Link>
-      <div className="flex items-center gap-1">
+      <Row align="center" gap="xs">
         <Input
           type="number"
           step={0.5}
@@ -198,7 +203,7 @@ function RecipeRow({
           aria-label="Scale"
         />
         <span className="text-muted-foreground text-xs">×</span>
-      </div>
+      </Row>
       <span className="w-16 text-right text-sm tabular-nums">
         {mr.scaledTotals ? formatCurrency(mr.scaledTotals.costTotal) : "—"}
       </span>
@@ -212,6 +217,6 @@ function RecipeRow({
       >
         <Trash2 className="size-4" />
       </Button>
-    </div>
+    </Row>
   );
 }

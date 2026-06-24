@@ -2,6 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { format } from "date-fns";
 import { useId, useState } from "react";
+import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { useTRPC } from "~/trpc/react";
@@ -27,8 +28,9 @@ export function MealNewPage() {
   );
 
   return (
-    <form
-      className="max-w-sm space-y-4"
+    <Stack
+      as="form"
+      className="max-w-sm"
       onSubmit={(e) => {
         e.preventDefault();
         if (!date) return;
@@ -38,7 +40,7 @@ export function MealNewPage() {
         });
       }}
     >
-      <div className="space-y-1">
+      <Stack gap="xs">
         <label htmlFor={dateId} className="text-muted-foreground text-sm">
           Date
         </label>
@@ -49,8 +51,8 @@ export function MealNewPage() {
           onChange={(e) => setDate(e.target.value)}
           required
         />
-      </div>
-      <div className="space-y-1">
+      </Stack>
+      <Stack gap="xs">
         <label htmlFor={nameId} className="text-muted-foreground text-sm">
           Name (optional)
         </label>
@@ -60,10 +62,10 @@ export function MealNewPage() {
           placeholder="e.g. Dinner"
           onChange={(e) => setName(e.target.value)}
         />
-      </div>
+      </Stack>
       <Button type="submit" disabled={createMeal.isPending}>
         Create meal
       </Button>
-    </form>
+    </Stack>
   );
 }

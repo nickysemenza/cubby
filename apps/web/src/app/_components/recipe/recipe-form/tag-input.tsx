@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { Plus, X } from "lucide-react";
 import { type FC, useEffect, useRef, useState } from "react";
+import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import { getTagColor, getTagIcon, parseTag, TAG_PREFIXES } from "../tag-theme";
 
@@ -23,7 +23,7 @@ export const TagInput: FC<TagInputProps> = ({ value, onChange, className }) => {
   const [inputValue, setInputValue] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLElement>(null);
 
   // Fetch existing tags for autocomplete
   const api = useTRPC();
@@ -100,10 +100,10 @@ export const TagInput: FC<TagInputProps> = ({ value, onChange, className }) => {
   const suggestions = getSuggestions();
 
   return (
-    <div ref={containerRef} className={cn("space-y-2", className)}>
+    <Stack ref={containerRef} gap="sm" className={className}>
       {/* Existing tags */}
       {tags.length > 0 && (
-        <div className="flex flex-wrap gap-1">
+        <Row wrap gap="xs">
           {tags.map((tag) => {
             const { prefix } = parseTag(tag);
             const Icon = getTagIcon(prefix);
@@ -130,12 +130,12 @@ export const TagInput: FC<TagInputProps> = ({ value, onChange, className }) => {
               </Badge>
             );
           })}
-        </div>
+        </Row>
       )}
 
       {/* Input with suggestions */}
       <div className="relative">
-        <div className="flex gap-2">
+        <Row gap="sm">
           <Input
             ref={inputRef}
             value={inputValue}
@@ -157,7 +157,7 @@ export const TagInput: FC<TagInputProps> = ({ value, onChange, className }) => {
           >
             <Plus className="h-4 w-4" />
           </Button>
-        </div>
+        </Row>
 
         {/* Suggestions dropdown */}
         {showSuggestions && suggestions.length > 0 && (
@@ -168,9 +168,12 @@ export const TagInput: FC<TagInputProps> = ({ value, onChange, className }) => {
               const color = getTagColor(prefix);
               const isPrefix = suggestion.endsWith(":");
               return (
-                <button
+                <Row
+                  as="button"
                   key={suggestion}
                   type="button"
+                  align="center"
+                  gap="sm"
                   onClick={() => {
                     if (isPrefix) {
                       setInputValue(suggestion);
@@ -179,7 +182,7 @@ export const TagInput: FC<TagInputProps> = ({ value, onChange, className }) => {
                       addTag(suggestion);
                     }
                   }}
-                  className="flex w-full items-center gap-2 rounded px-2 py-2 text-left text-sm hover:bg-accent"
+                  className="w-full rounded px-2 py-2 text-left text-sm hover:bg-accent"
                 >
                   <Icon size={14} style={{ color }} />
                   <span>{suggestion}</span>
@@ -188,12 +191,12 @@ export const TagInput: FC<TagInputProps> = ({ value, onChange, className }) => {
                       type value...
                     </span>
                   )}
-                </button>
+                </Row>
               );
             })}
           </div>
         )}
       </div>
-    </div>
+    </Stack>
   );
 };

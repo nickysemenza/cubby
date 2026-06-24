@@ -1,5 +1,6 @@
 import type { FC } from "react";
 import { type Control, useWatch } from "react-hook-form";
+import { Row, Stack } from "~/components/layout";
 import { MarkdownText } from "~/components/markdown";
 import { Eyebrow } from "~/components/ui/eyebrow";
 import { cn } from "~/lib/utils";
@@ -46,7 +47,7 @@ export const RecipeLivePreview: FC<{
   let stepNumber = 0;
 
   return (
-    <div className="space-y-4">
+    <Stack>
       <div>
         <h3 className="my-0 break-words font-bold font-heading text-lg tracking-tight">
           {values.name?.trim() || "Untitled recipe"}
@@ -66,10 +67,10 @@ export const RecipeLivePreview: FC<{
       )}
 
       {sections.map((section, sectionIndex) => (
-        <div
+        <Stack
           // biome-ignore lint/suspicious/noArrayIndexKey: preview of positional draft sections
           key={sectionIndex}
-          className="space-y-2"
+          gap="sm"
         >
           <SectionHeading
             sectionName={section?.name}
@@ -102,14 +103,15 @@ export const RecipeLivePreview: FC<{
           )}
 
           {(section?.instructions?.length ?? 0) > 0 && (
-            <ol className="my-0 ml-0 list-none space-y-2">
+            <Stack as="ol" gap="sm" className="my-0 ml-0 list-none">
               {section?.instructions?.map((inst, i) => {
                 stepNumber += 1;
                 return (
-                  <li
+                  <Row
+                    as="li"
                     // biome-ignore lint/suspicious/noArrayIndexKey: positional draft rows
                     key={i}
-                    className="flex gap-2"
+                    gap="sm"
                   >
                     <span className="w-5 shrink-0 text-right font-heading font-medium text-base text-primary italic leading-snug">
                       {stepNumber}
@@ -117,12 +119,12 @@ export const RecipeLivePreview: FC<{
                     <span className="min-w-0 text-xs/relaxed">
                       {inst?.instruction || "…"}
                     </span>
-                  </li>
+                  </Row>
                 );
               })}
-            </ol>
+            </Stack>
           )}
-        </div>
+        </Stack>
       ))}
 
       {sections.every(
@@ -134,6 +136,6 @@ export const RecipeLivePreview: FC<{
           The page builds itself as you type.
         </p>
       )}
-    </div>
+    </Stack>
   );
 };

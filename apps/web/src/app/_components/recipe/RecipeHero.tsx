@@ -1,5 +1,6 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
 import { Clock, ExternalLink, Users } from "lucide-react";
+import { Row } from "~/components/layout";
 import { Image } from "~/components/ui/image";
 import { RecipeSourceLink } from "./recipe-source";
 
@@ -25,15 +26,20 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
 
   // Meta row (ingredient/step counts, source) — shared between layouts.
   const metaInfo = (
-    <div className="flex flex-wrap items-center gap-4 font-mono text-2xs text-muted-foreground">
-      <div className="flex items-center gap-2">
+    <Row
+      align="center"
+      wrap
+      gap="md"
+      className="font-mono text-2xs text-muted-foreground"
+    >
+      <Row align="center" gap="sm">
         <Users size={12} />
         <span>{totalIngredients} ingredients</span>
-      </div>
-      <div className="flex items-center gap-2">
+      </Row>
+      <Row align="center" gap="sm">
         <Clock size={12} />
         <span>{totalSteps} steps</span>
-      </div>
+      </Row>
       {recipe.meta?.url && (
         <a
           href={recipe.meta.url}
@@ -48,7 +54,7 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
       {recipe.source?.type === "book" && (
         <RecipeSourceLink source={recipe.source} iconSize={12} />
       )}
-    </div>
+    </Row>
   );
 
   // No image: the recipe title already shows in the page header, so don't repeat

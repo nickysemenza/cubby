@@ -6,6 +6,7 @@ import { Link } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
 import { AlertCircle, Check, ExternalLink } from "lucide-react";
 import { memo, useMemo } from "react";
+import { Row, Stack } from "~/components/layout";
 import { MarkdownText } from "~/components/markdown";
 import { Badge, badgeVariants } from "~/components/ui/badge";
 import { Card, CardContent } from "~/components/ui/card";
@@ -148,13 +149,13 @@ function RecipeImportCardImpl({
   return (
     <Card size="sm">
       <CardContent>
-        <div className="flex items-center gap-2">
+        <Row align="center" gap="sm">
           <Checkbox
             checked={selected}
             disabled={disabled}
             onCheckedChange={onToggle}
           />
-          <div className="flex flex-1 flex-wrap items-center gap-2">
+          <Row wrap align="center" gap="sm" className="flex-1">
             <span
               className={cn("font-medium", disabled && "text-muted-foreground")}
             >
@@ -175,7 +176,7 @@ function RecipeImportCardImpl({
                 compact
               />
             )}
-          </div>
+          </Row>
           {externalUrl && (
             <a
               href={externalUrl}
@@ -194,7 +195,7 @@ function RecipeImportCardImpl({
             toastLabel="Copied recipe JSON"
           />
           <ImportStatus result={result} />
-        </div>
+        </Row>
 
         {reasons && reasons.length > 0 && (
           <p className="mt-1 pl-6 text-destructive text-xs">
@@ -209,7 +210,7 @@ function RecipeImportCardImpl({
         )}
 
         {references && recipe.references.length > 0 && (
-          <div className="mt-2 flex flex-wrap items-center gap-1 text-xs">
+          <Row wrap align="center" gap="xs" className="mt-2 text-xs">
             <span className="text-muted-foreground">Uses:</span>
             {recipe.references.map((ref) => {
               const linkable = references.linkableTitles.has(
@@ -260,14 +261,14 @@ function RecipeImportCardImpl({
                 </span>
               );
             })}
-          </div>
+          </Row>
         )}
 
         <div className="mt-2 grid gap-x-4 gap-y-2 md:grid-cols-2">
-          <div className="space-y-2">
+          <Stack gap="sm">
             {recipe.sections.map((section, si) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: fixed ordered list
-              <div key={si} className="space-y-1">
+              <Stack key={si} gap="xs">
                 {section.name && (
                   <div className="font-medium text-muted-foreground text-xs">
                     {section.name}
@@ -278,14 +279,14 @@ function RecipeImportCardImpl({
                   matchMap={matchMap}
                   matchReady={matchReady}
                 />
-              </div>
+              </Stack>
             ))}
-          </div>
-          <div className="space-y-2">
+          </Stack>
+          <Stack gap="sm">
             {recipe.sections.map((section, si) =>
               section.instructions.length > 0 ? (
                 // biome-ignore lint/suspicious/noArrayIndexKey: fixed ordered list
-                <div key={si} className="space-y-1">
+                <Stack key={si} gap="xs">
                   {section.name && (
                     <div className="font-medium text-muted-foreground text-xs">
                       {section.name}
@@ -297,10 +298,10 @@ function RecipeImportCardImpl({
                       <li key={ii}>{rich}</li>
                     ))}
                   </ol>
-                </div>
+                </Stack>
               ) : null,
             )}
-          </div>
+          </Stack>
         </div>
       </CardContent>
     </Card>
@@ -322,8 +323,8 @@ function ImportStatus({ result }: { result: ImportResult | undefined }) {
     );
   }
   return (
-    <span className="flex items-center gap-1 text-destructive text-sm">
+    <Row as="span" align="center" gap="xs" className="text-destructive text-sm">
       <AlertCircle className="h-4 w-4" /> {result.message}
-    </span>
+    </Row>
   );
 }

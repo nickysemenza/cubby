@@ -2,6 +2,7 @@ import { ExternalLink, MoreVertical, Plus, Trash } from "lucide-react";
 import type { FC, KeyboardEvent } from "react";
 import { useState } from "react";
 import { Controller, type UseFormReturn, useFieldArray } from "react-hook-form";
+import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import {
   DropdownMenu,
@@ -395,7 +396,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
         </div>
       )}
 
-      <div className="mt-2 flex gap-2">
+      <Row gap="sm" className="mt-2">
         <Button type="button" variant="outline" size="sm" onClick={appendRow}>
           <Plus className="mr-2 h-3.5 w-3.5" />
           Ingredient
@@ -409,7 +410,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
           <Plus className="mr-2 h-3.5 w-3.5" />
           Sub-recipe
         </Button>
-      </div>
+      </Row>
     </div>
   );
 };

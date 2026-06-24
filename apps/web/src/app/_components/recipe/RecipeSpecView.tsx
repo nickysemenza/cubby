@@ -1,6 +1,7 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
 import { uniq } from "es-toolkit";
 import { Fragment, useMemo, useState } from "react";
+import { Row, Stack } from "~/components/layout";
 import { MarkdownText } from "~/components/markdown";
 import type {
   CalculateTotalsResult,
@@ -67,18 +68,18 @@ export function RecipeSpecView({
   const footnote = sourceFootnote(recipe.source);
 
   const renderSteps = (steps: { n: number; text: string }[]) => (
-    <div className="space-y-2">
+    <Stack gap="sm">
       {steps.map((step) => (
-        <div key={step.n} className="flex gap-2">
+        <Row gap="sm" key={step.n}>
           <span className="mt-px inline-flex size-[18px] shrink-0 items-center justify-center rounded-full border border-[var(--border-chunky)] font-mono text-[10px] text-muted-foreground tabular-nums">
             {step.n}
           </span>
           <span className="text-foreground/85 text-sm leading-snug">
             <MarkdownText className="[&_p]:my-0">{step.text}</MarkdownText>
           </span>
-        </div>
+        </Row>
       ))}
-    </div>
+    </Stack>
   );
 
   return (

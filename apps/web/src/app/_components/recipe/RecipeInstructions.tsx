@@ -1,5 +1,6 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
 import { useMemo } from "react";
+import { Row, Stack } from "~/components/layout";
 import { wasm } from "~/lib/wasm";
 import { formatRichText } from "./richtext";
 import { SectionHeading } from "./section-heading";
@@ -19,7 +20,7 @@ export function RecipeInstructions({ recipe }: RecipeInstructionsProps) {
   }, [recipe.sections]);
 
   return (
-    <div className="space-y-6">
+    <Stack gap="lg">
       {recipe.sections.map((section, sectionIndex) => (
         <div
           key={section.id}
@@ -34,9 +35,9 @@ export function RecipeInstructions({ recipe }: RecipeInstructionsProps) {
           />
 
           {/* Instructions list */}
-          <ol className="my-0 ml-0 list-none space-y-4">
+          <Stack as="ol" gap="md" className="my-0 ml-0 list-none">
             {section.instructions.map((instruction, stepIndex) => (
-              <li key={`${section.id}-${stepIndex}`} className="flex gap-4">
+              <Row as="li" gap="md" key={`${section.id}-${stepIndex}`}>
                 {/* Step number - big italic serif numeral, cookbook style */}
                 <div className="w-8 shrink-0 text-right font-heading font-medium text-2xl text-primary italic leading-none">
                   {stepIndex + 1}
@@ -50,9 +51,9 @@ export function RecipeInstructions({ recipe }: RecipeInstructionsProps) {
                     ),
                   )}
                 </p>
-              </li>
+              </Row>
             ))}
-          </ol>
+          </Stack>
 
           {/* No instructions message */}
           {section.instructions.length === 0 && (
@@ -62,6 +63,6 @@ export function RecipeInstructions({ recipe }: RecipeInstructionsProps) {
           )}
         </div>
       ))}
-    </div>
+    </Stack>
   );
 }

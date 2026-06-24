@@ -5,6 +5,7 @@ import type {
 } from "@cubby/schemas/recipe";
 import { useQuery } from "@tanstack/react-query";
 import { match } from "ts-pattern";
+import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { formatCurrency } from "~/lib/utils";
@@ -108,7 +109,7 @@ export const RecipeCostingDebugCard: React.FC<{ recipeId: RecipeId }> = ({
       </CardHeader>
       <CardContent className="space-y-2">
         {/* Persistence panel: stored vs live, staleness, completeness. */}
-        <div className="flex flex-wrap items-center gap-2 text-xs">
+        <Row wrap align="center" gap="sm" className="text-xs">
           <Badge variant={persisted.stale ? "destructive" : "secondary"}>
             {persisted.stale ? "stale" : "fresh"}
           </Badge>
@@ -132,7 +133,7 @@ export const RecipeCostingDebugCard: React.FC<{ recipeId: RecipeId }> = ({
               </Badge>
             )}
           </span>
-        </div>
+        </Row>
 
         {computed.usdaMisses.length > 0 && (
           <div className="text-destructive text-xs">

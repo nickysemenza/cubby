@@ -4,6 +4,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Scale } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
+import { Stack } from "~/components/layout";
 import { Skeleton } from "~/components/ui/skeleton";
 import { formatCurrencyRange, formatNumberRange } from "~/lib/format-range";
 import { queryKeys } from "~/lib/query-keys";
@@ -130,7 +131,7 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
           if (!totals.costTotal) return <NoneState />;
           const perItem = getServingBasis(recipe);
           return (
-            <div className="space-y-1">
+            <Stack gap="xs">
               <CoverageValue
                 covered={totals.costCovered}
                 total={totals.ingredientCount}
@@ -151,7 +152,7 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
                     </div>
                   );
                 })()}
-            </div>
+            </Stack>
           );
         },
       }),
@@ -171,7 +172,7 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
           if (!totals.caloriesTotal) return <NoneState />;
           const perItem = getServingBasis(recipe);
           return (
-            <div className="space-y-1">
+            <Stack gap="xs">
               <CoverageValue
                 covered={totals.caloriesCovered}
                 total={totals.ingredientCount}
@@ -201,7 +202,7 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
                     </div>
                   );
                 })()}
-            </div>
+            </Stack>
           );
         },
       }),

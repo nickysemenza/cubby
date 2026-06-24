@@ -24,6 +24,7 @@ import {
   useWatch,
 } from "react-hook-form";
 import { toast } from "sonner";
+import { Row, Stack } from "~/components/layout";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -85,7 +86,7 @@ const YieldServingsFields: FC<{
   const showServings = yieldUnit && yieldUnit !== "servings";
 
   return (
-    <div className="space-y-2">
+    <Stack gap="sm">
       <SideBySideFields>
         <NullableNumericField
           form={form}
@@ -118,7 +119,7 @@ const YieldServingsFields: FC<{
           placeholder="How many portions?"
         />
       )}
-    </div>
+    </Stack>
   );
 };
 
@@ -136,12 +137,16 @@ const EditorTally: FC<{ control: Control<RecipeFormValues> }> = ({
   const steps = sumBy(sections ?? [], (s) => s?.instructions?.length ?? 0);
 
   return (
-    <div className="flex min-w-0 items-center gap-2 font-mono text-2xs text-muted-foreground uppercase">
+    <Row
+      align="center"
+      gap="sm"
+      className="min-w-0 font-mono text-2xs text-muted-foreground uppercase"
+    >
       <span className="truncate tabular-nums">
         {ingredients} ingredients · {steps} steps
       </span>
       {isDirty && <InkStamp tone="red">Unsaved</InkStamp>}
-    </div>
+    </Row>
   );
 };
 
@@ -450,13 +455,13 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
       footerStart={<EditorTally control={form.control} />}
     >
       <div className="gap-6 xl:grid xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
-        <div className="space-y-4">
+        <Stack>
           {/* Import toolbar — one-time tools, tucked out of the recipe's way */}
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          <Row wrap align="center" justify="between" gap="sm">
             <span className="eyebrow">
               {mode === "edit" ? "Editing recipe" : "New recipe"}
             </span>
-            <div className="flex gap-2">
+            <Row gap="sm">
               <Button
                 type="button"
                 variant="outline"
@@ -490,8 +495,8 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                 <Code className="mr-2 h-3.5 w-3.5" />
                 Paste HTML
               </Button>
-            </div>
-          </div>
+            </Row>
+          </Row>
 
           {/* Scrape panel (kept mounted so in-flight scrapes aren't lost) */}
           <div
@@ -502,7 +507,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
           >
             <Field>
               <FieldLabel>URL (Optional)</FieldLabel>
-              <div className="flex gap-2">
+              <Row gap="sm">
                 <Controller
                   control={form.control}
                   name="meta.url"
@@ -532,7 +537,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                   )}
                   Scrape
                 </Button>
-              </div>
+              </Row>
               {isResolving && progress.total > 0 && (
                 <p className="text-muted-foreground text-xs">
                   Resolving ingredients {progress.done}/{progress.total}…
@@ -542,9 +547,10 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
           </div>
 
           {/* Paste-text panel */}
-          <div
+          <Stack
+            gap="sm"
             className={cn(
-              "space-y-2 rounded-lg border border-[var(--border-chunky)] bg-card p-4",
+              "rounded-lg border border-[var(--border-chunky)] bg-card p-4",
               openTool !== "text" && "hidden",
             )}
           >
@@ -582,12 +588,16 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                 <FieldLabel>Instructions Preview</FieldLabel>
                 <div className="mt-2 min-h-[120px] rounded border border-[var(--border-chunky)] bg-muted/30 p-2">
                   {richInstructions.length > 0 ? (
-                    <ol className="list-decimal space-y-2 pl-4 text-sm">
+                    <Stack
+                      as="ol"
+                      gap="sm"
+                      className="list-decimal pl-4 text-sm"
+                    >
                       {richInstructions.map((richItems, idx) => (
                         // biome-ignore lint/suspicious/noArrayIndexKey: instructions are ordered by line
                         <li key={idx}>{formatRichText(richItems)}</li>
                       ))}
-                    </ol>
+                    </Stack>
                   ) : (
                     <div className="text-muted-foreground text-sm">
                       Enter instructions to see preview
@@ -598,7 +608,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
             </div>
 
             {/* Import button */}
-            <div className="flex items-center justify-between">
+            <Row align="center" justify="between">
               <div className="text-muted-foreground text-sm">
                 {ingredientImport.totalCount > 0 && (
                   <>
@@ -634,14 +644,15 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                   ? `Import All (create ${ingredientImport.missingCount})`
                   : "Import All"}
               </Button>
-            </div>
-          </div>
+            </Row>
+          </Stack>
 
           {/* Paste-HTML panel — fallback when a URL scrape is blocked. Open the
               page in your browser, View Source, copy all, and paste it here. */}
-          <div
+          <Stack
+            gap="sm"
             className={cn(
-              "space-y-2 rounded-lg border border-[var(--border-chunky)] bg-card p-4",
+              "rounded-lg border border-[var(--border-chunky)] bg-card p-4",
               openTool !== "html" && "hidden",
             )}
           >
@@ -669,7 +680,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                 className="font-mono text-xs"
               />
             </Field>
-            <div className="flex items-center justify-between gap-2">
+            <Row align="center" justify="between" gap="sm">
               <p className="text-muted-foreground text-xs">
                 The source URL is saved with the recipe and used to resolve
                 relative image and link references.
@@ -694,8 +705,8 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                 )}
                 Parse HTML
               </Button>
-            </div>
-          </div>
+            </Row>
+          </Stack>
 
           {/* Spec plate: the recipe's vitals in one chunky placard */}
           <Card>
@@ -758,22 +769,23 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
             </CardContent>
           </Card>
 
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
+          <Stack gap="sm">
+            <Row align="center" justify="between">
               <h3 className="eyebrow my-0 font-medium">Recipe sections</h3>
-            </div>
+            </Row>
 
             {sectionFields.map((sectionField, sectionIndex) => (
-              <div
+              <Stack
                 key={sectionField.id}
-                className="space-y-2 rounded-lg border border-[var(--border-chunky)] bg-card p-4 shadow-[var(--shadow-chunky-sm)]"
+                gap="sm"
+                className="rounded-lg border border-[var(--border-chunky)] bg-card p-4 shadow-[var(--shadow-chunky-sm)]"
               >
-                <div className="flex items-center justify-between">
+                <Row align="center" justify="between">
                   <h4 className="my-0 font-heading font-semibold text-sm">
                     Section {sectionIndex + 1}
                     {sectionField.name ? `: ${sectionField.name}` : ""}
                   </h4>
-                  <div className="flex space-x-2">
+                  <Row gap="sm">
                     <Button
                       type="button"
                       variant="ghost"
@@ -808,8 +820,8 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                     >
                       <Trash className="h-4 w-4" />
                     </Button>
-                  </div>
-                </div>
+                  </Row>
+                </Row>
 
                 {/* Ingredients and Instructions side by side */}
                 <div className="flex flex-col space-y-2 md:flex-row md:space-x-2 md:space-y-0">
@@ -838,10 +850,10 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                     />
                   </div>
                 </div>
-              </div>
+              </Stack>
             ))}
 
-            <div className="mt-4 flex justify-center">
+            <Row justify="center" className="mt-4">
               <Button
                 type="button"
                 variant="outline"
@@ -857,9 +869,9 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                 <Plus className="mr-2 h-4 w-4" />
                 Add Section
               </Button>
-            </div>
-          </div>
-        </div>
+            </Row>
+          </Stack>
+        </Stack>
 
         {/* Live page preview — the cookbook spread builds as you type */}
         <aside className="hidden xl:sticky xl:top-20 xl:block">

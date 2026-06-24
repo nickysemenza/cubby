@@ -3,6 +3,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, Import } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
+import { Row } from "~/components/layout/row";
+import { Stack } from "~/components/layout/stack";
 import { BulkProgressBar } from "~/components/ui/bulk-progress-bar";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader } from "~/components/ui/card";
@@ -144,8 +146,8 @@ export function NotionImport() {
   }, [items]);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2">
+    <Stack>
+      <Row align="center" gap="sm">
         {preview.isSuccess && (
           <span className="text-muted-foreground text-sm">
             {items.length} recipe{items.length === 1 ? "" : "s"}
@@ -164,21 +166,31 @@ export function NotionImport() {
             Import {selected.size}
           </Button>
         )}
-      </div>
+      </Row>
 
       {progress && <BulkProgressBar verb="Importing" progress={progress} />}
 
       {preview.isError && (
-        <p className="flex items-center gap-1 text-destructive text-sm">
+        <Row
+          as="p"
+          align="center"
+          gap="xs"
+          className="text-destructive text-sm"
+        >
           <AlertCircle className="h-4 w-4" />
           {getErrorMessage(preview.error)}
-        </p>
+        </Row>
       )}
 
       {preview.isFetching && items.length === 0 && (
-        <p className="flex items-center gap-2 text-muted-foreground text-sm">
+        <Row
+          as="p"
+          align="center"
+          gap="sm"
+          className="text-muted-foreground text-sm"
+        >
           <Spinner className="h-4 w-4" /> Reading the Notion Recipes database…
-        </p>
+        </Row>
       )}
 
       {items.length > 0 && (
@@ -212,6 +224,6 @@ export function NotionImport() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </Stack>
   );
 }

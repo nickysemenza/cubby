@@ -1,5 +1,6 @@
 import { AlertCircle, Plus } from "lucide-react";
 import { Fragment, useMemo } from "react";
+import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 import { EntityPillLink } from "../EntityPill";
@@ -48,7 +49,7 @@ export function ParsedIngredientTable({
                   {match ? (
                     <EntityPillLink entity="ingredient" data={match} />
                   ) : (
-                    <span className="flex items-center gap-1">
+                    <Row as="span" align="center" gap="xs">
                       {isNew && (
                         <AlertCircle className="h-3 w-3 shrink-0 text-warning" />
                       )}
@@ -76,7 +77,7 @@ export function ParsedIngredientTable({
                           </span>
                         )
                       )}
-                    </span>
+                    </Row>
                   )}
                 </td>
                 <td className="whitespace-nowrap py-1 pr-2 align-top text-muted-foreground">

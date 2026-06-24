@@ -1,5 +1,6 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
 import { type ReactNode, useMemo, useState } from "react";
+import { Stack } from "~/components/layout";
 import { MarkdownText } from "~/components/markdown";
 import { Eyebrow } from "~/components/ui/eyebrow";
 import { sectionRuleClass } from "~/components/ui/section-rule";
@@ -72,7 +73,7 @@ function IngredientLedger({
   };
 
   return (
-    <div className="space-y-4">
+    <Stack gap="md">
       {recipe.sections.map((section, sectionIndex) => (
         <div key={section.id}>
           <SectionHeading
@@ -122,7 +123,7 @@ function IngredientLedger({
           </ul>
         </div>
       ))}
-    </div>
+    </Stack>
   );
 }
 
@@ -145,7 +146,7 @@ export function RecipeMagazineView({
   ).join("  ·  ");
 
   return (
-    <div className="space-y-6">
+    <Stack gap="lg">
       {/* Hero Section */}
       <RecipeHero recipe={recipe} />
 
@@ -179,6 +180,6 @@ export function RecipeMagazineView({
           </div>
         </main>
       </div>
-    </div>
+    </Stack>
   );
 }
