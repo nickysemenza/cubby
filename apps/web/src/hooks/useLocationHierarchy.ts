@@ -4,14 +4,28 @@ import { useQuery } from "@tanstack/react-query";
 import { sumBy } from "es-toolkit";
 import { useMemo } from "react";
 import {
-  calculateInventoryValuation,
   emptyPricingStatus,
-  type InventoryItem,
   mergePricingStatus,
   type PricingStatus,
 } from "~/app/_components/locations/calculate-inventory-valuation";
 import { ROOT_LOCATION_ID } from "~/hooks/useLocationTree";
 import { useTRPC } from "~/trpc/react";
+
+// Persisted location.valuation stores pricing as bare counts; the viz nodes use
+// the richer PricingStatus shape (with item-name lists for tooltips). The names
+// aren't persisted, so rehydrate with empty lists — the viz only reads counts.
+function toPricingStatus(
+  counts:
+    | { priced: number; missingPricing: number; miscNoPrice: number }
+    | undefined,
+): PricingStatus {
+  if (!counts) return emptyPricingStatus();
+  return {
+    priced: { count: counts.priced, itemNames: [] },
+    missingPricing: { count: counts.missingPricing, itemNames: [] },
+    miscNoPrice: { count: counts.miscNoPrice, itemNames: [] },
+  };
+}
 
 /**
  * Node structure for location hierarchy visualizations.
@@ -60,69 +74,31 @@ export function useLocationHierarchy(
   const api = useTRPC();
   const locations = useQuery(api.location.makeTree.queryOptions());
 
-  const inventoryQuery = useQuery(
-    api.inventory.list.queryOptions({
-      sort: { orderBy: "createdAt", direction: "desc" },
-      pagination: { pageIndex: 0, pageSize: 5000 },
-      filters: {},
-    }),
-  );
-
-  const items = useMemo(
-    () => (inventoryQuery.data?.items ?? []) as InventoryItem[],
-    [inventoryQuery.data],
-  );
-
-  // Group items by location and calculate valuations synchronously
-  const valuationByLocation = useMemo(() => {
-    const itemsByLocation = new Map<string, InventoryItem[]>();
-    for (const item of items) {
-      const locationId = item.location.id;
-      const existing = itemsByLocation.get(locationId) ?? [];
-      existing.push(item);
-      itemsByLocation.set(locationId, existing);
-    }
-
-    const resultByLocation = new Map<
-      string,
-      { valuation: number; pricingStatus: PricingStatus }
-    >();
-
-    for (const [locationId, locationItems] of itemsByLocation) {
-      // Synchronous calculation using precomputed valuation column
-      const result = calculateInventoryValuation(locationItems);
-      resultByLocation.set(locationId, {
-        valuation: result.totalValuation,
-        pricingStatus: result.pricingStatus,
-      });
-    }
-
-    return resultByLocation;
-  }, [items]);
-
   const hierarchyData = useMemo(() => {
     const data = locations.data;
     if (!data || data.length === 0) return null;
 
     function transformNode(location: InfLocation): LocationHierarchyNode {
       const children = location.children?.map(transformNode);
-      const directCount = location.directItemCount ?? 0;
-      const locationData = valuationByLocation.get(location.id);
-      const directValuation = locationData?.valuation ?? 0;
-      const directPricingStatus =
-        locationData?.pricingStatus ?? emptyPricingStatus();
+      // Read the persisted rollup (location.valuation) — direct = this location,
+      // total = direct + all descendants (already rolled up server-side).
+      const v = location.valuation;
+      const directCount = v?.directItemCount ?? location.directItemCount ?? 0;
+      const directValuation = v?.directValuation ?? 0;
+      const directPricingStatus = toPricingStatus(v?.direct);
 
-      const childrenCount = sumBy(children ?? [], (c) => c.totalCount);
-      const childrenValuation = sumBy(children ?? [], (c) => c.totalValuation);
-      const childrenPricingStatuses =
-        children?.map((c) => c.totalPricingStatus) ?? [];
-
-      const totalCount = directCount + childrenCount;
-      const totalValuation = directValuation + childrenValuation;
-      const totalPricingStatus = mergePricingStatus([
-        directPricingStatus,
-        ...childrenPricingStatuses,
-      ]);
+      const totalCount =
+        v?.totalItemCount ??
+        directCount + sumBy(children ?? [], (c) => c.totalCount);
+      const totalValuation =
+        v?.totalValuation ??
+        directValuation + sumBy(children ?? [], (c) => c.totalValuation);
+      const totalPricingStatus = v
+        ? toPricingStatus(v.total)
+        : mergePricingStatus([
+            directPricingStatus,
+            ...(children?.map((c) => c.totalPricingStatus) ?? []),
+          ]);
 
       // Calculate value based on mode
       const value =
@@ -166,10 +142,10 @@ export function useLocationHierarchy(
       totalPricingStatus,
       children: allNodes,
     };
-  }, [locations.data, valuationByLocation, valuationMode]);
+  }, [locations.data, valuationMode]);
 
   return {
     data: hierarchyData,
-    isLoading: locations.isLoading || inventoryQuery.isLoading,
+    isLoading: locations.isLoading,
   };
 }

@@ -43,6 +43,7 @@ export const dbLocationToAPI = (
       identifier: { id: locationData.id, name: locationData.name },
     }),
     images: extractImagesFromJoinTable(locationData.images),
+    valuation: locationData.valuation ?? null,
     ...extractDbTimestampsFromDBRec(locationData),
   };
 };
@@ -126,6 +127,7 @@ export const buildLocationWithChildren = (
       identifier: { id: x.id, name: x.name },
     }),
     images: extractImagesFromJoinTable(x.images),
+    valuation: x.valuation ?? null,
     children,
     parent:
       includeParent && x.parent

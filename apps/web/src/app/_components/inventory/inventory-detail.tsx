@@ -42,7 +42,7 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
     entityLabel: "Inventory Entry",
     mutationOptions: (callbacks) =>
       api.inventory.delete.mutationOptions(callbacks),
-    invalidateKeys: [[queryKeys.inventory.list]],
+    invalidateKeys: [[queryKeys.inventory.list], [queryKeys.location.all]],
     redirectTo: "/inventory",
   });
 

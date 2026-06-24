@@ -62,7 +62,7 @@ export function InventoryItemList() {
   const deletableConfig = useDeletableConfig({
     mutationFn: api.inventory.delete.mutationOptions,
     entityLabel: "Inventory Entry",
-    invalidateKeys: [[queryKeys.inventory.list]],
+    invalidateKeys: [[queryKeys.inventory.list], [queryKeys.location.all]],
   });
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: navigate is stable

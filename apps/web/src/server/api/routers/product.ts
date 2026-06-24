@@ -145,11 +145,15 @@ const update = protectedProcedure
       ? await ctx.services.recipeCosting.recomputeForIngredient(ingredientId)
       : 0;
     // updateProduct already resynced inventory valuations in its tx when the
-    // price changed (amount × price); report how many entries that covered.
+    // price changed (amount × price); report how many entries that covered, and
+    // refresh the persisted per-location valuation rollups those entries feed.
     const inventoryValuationsUpdated =
       input.data.price !== undefined
         ? await countActiveInventoryForProduct(ctx.db, input.id)
         : 0;
+    if (input.data.price !== undefined) {
+      await ctx.services.locationValuation.recompute();
+    }
     return {
       ...result,
       sideEffects: { recipesRecomputed, inventoryValuationsUpdated },
@@ -216,6 +220,9 @@ const applyUpcData = protectedProcedure
     const inventoryValuationsUpdated = priceChanged
       ? await countActiveInventoryForProduct(ctx.db, input.id)
       : 0;
+    if (priceChanged) {
+      await ctx.services.locationValuation.recompute();
+    }
     return {
       ...result,
       sideEffects: { recipesRecomputed, inventoryValuationsUpdated },

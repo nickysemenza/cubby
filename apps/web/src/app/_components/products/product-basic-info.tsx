@@ -35,7 +35,12 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
     mutationFn: api.product.update.mutationOptions,
     // Surface the eager recompute (dependent recipes / inventory valuations).
     success: (data) => savedWithRecompute(data.sideEffects),
-    invalidateKeys: [queryKeys.product.list, queryKeys.recipe.list],
+    // location.all: a price change recomputes persisted per-location valuations.
+    invalidateKeys: [
+      queryKeys.product.list,
+      queryKeys.recipe.list,
+      queryKeys.location.all,
+    ],
     error: (err) => getErrorMessage(err) || "Failed to update product",
   });
 

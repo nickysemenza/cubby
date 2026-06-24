@@ -1,3 +1,4 @@
+import type { InfLocation } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
 import { Wallet } from "lucide-react";
 import { useMemo } from "react";
@@ -6,7 +7,6 @@ import { useHydrated } from "~/hooks/useHydrated";
 import { authClient } from "~/lib/auth-client";
 import { formatCurrency } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
-import type { InventoryItem } from "../locations/calculate-inventory-valuation";
 
 const BAR_COLORS = [
   "var(--chart-1)",
@@ -17,20 +17,10 @@ const BAR_COLORS = [
 ];
 
 /**
- * Exact inventory.list input the card reads. Exported so the home route loader
- * can prefetch the same query key (warming the card before it mounts). Must
- * match the card's `useQuery` input or the cache won't be reused.
- */
-export const PANTRY_VALUE_OPTS = {
-  sort: { orderBy: "createdAt", direction: "desc" },
-  pagination: { pageIndex: 0, pageSize: 1000 },
-  filters: {},
-} as const;
-
-/**
  * Home-page ledger chart: total pantry value with a bordered bar per top
- * location (the mockup's "spend by category" treatment, fed by real data).
- * Uses precomputed item valuations — no WASM, one inventory.list query.
+ * location. Reads each location's persisted `valuation.directValuation`
+ * (location.makeTree) instead of fetching every inventory row and summing on
+ * the client — see location-valuation.service.
  */
 export function PantryValueCard() {
   const api = useTRPC();
@@ -40,24 +30,23 @@ export function PantryValueCard() {
   // public home page.
   const isAuthenticated = useHydrated() && !!session.data?.user;
   const { data } = useQuery({
-    ...api.inventory.list.queryOptions(PANTRY_VALUE_OPTS),
+    ...api.location.makeTree.queryOptions(),
     enabled: isAuthenticated,
   });
 
   const { total, bars } = useMemo(() => {
-    const items = (data?.items ?? []) as InventoryItem[];
-    const byLocation = new Map<string, number>();
-    let total = 0;
-    for (const item of items) {
-      const v = item.valuation;
-      if (v == null || v <= 0) continue;
-      total += v;
-      const key = item.location?.name ?? "Unplaced";
-      byLocation.set(key, (byLocation.get(key) ?? 0) + v);
-    }
-    const bars = Array.from(byLocation, ([label, value]) => ({ label, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 5);
+    // Each location's direct valuation is one bar; walk the tree to collect them.
+    const byLocation: { label: string; value: number }[] = [];
+    const walk = (nodes: InfLocation[] | undefined) => {
+      for (const node of nodes ?? []) {
+        const value = node.valuation?.directValuation ?? 0;
+        if (value > 0) byLocation.push({ label: node.name, value });
+        walk(node.children);
+      }
+    };
+    walk(data);
+    const total = byLocation.reduce((sum, b) => sum + b.value, 0);
+    const bars = byLocation.sort((a, b) => b.value - a.value).slice(0, 5);
     return { total, bars };
   }, [data]);
 

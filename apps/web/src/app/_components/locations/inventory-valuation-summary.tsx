@@ -1,10 +1,12 @@
 import type { LocationId } from "@cubby/schemas/identifiers";
+import type { LocationValuation } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import {
   calculateInventoryValuation,
+  formatPricingCountsSummary,
   formatPricingStatusSummary,
   type InventoryItem,
 } from "./calculate-inventory-valuation";
@@ -14,6 +16,13 @@ type Variant = "compact" | "full";
 interface InventoryValuationSummaryProps {
   locationId?: LocationId;
   items?: InventoryItem[];
+  /**
+   * Persisted per-location rollup (location.valuation). When provided, the
+   * summary renders from it directly — no inventory fetch. Use this on the
+   * locations list/gallery (the row already carries it) to avoid a per-row
+   * `inventory.list(1000)`. `null` is treated as "not computed yet" → $0.
+   */
+  valuation?: LocationValuation | null;
   variant?: Variant;
   /** Hide the pricing status note (e.g., "no pricing for 2") - useful for compact cards */
   hidePricingStatus?: boolean;
@@ -23,13 +32,16 @@ interface InventoryValuationSummaryProps {
 export function InventoryValuationSummary({
   locationId,
   items,
+  valuation,
   variant = "compact",
   hidePricingStatus = false,
   className,
 }: InventoryValuationSummaryProps) {
   const api = useTRPC();
 
-  const enabled = !items && !!locationId;
+  // Persisted-value mode: caller passed the precomputed rollup → never fetch.
+  const hasPersisted = valuation !== undefined;
+  const enabled = !hasPersisted && !items && !!locationId;
   const baseOptions = api.inventory.list.queryOptions({
     sort: { orderBy: "createdAt", direction: "desc" },
     // Fetch generously to cover typical cases; server supports pagination
@@ -51,13 +63,21 @@ export function InventoryValuationSummary({
     [sourceItems],
   );
 
-  const pricingSummary = formatPricingStatusSummary(result.pricingStatus);
+  // Persisted rollup uses direct (items at this location) to match the
+  // location-filtered fetch this replaced. No manufacturer breakdown is stored,
+  // so the "full" variant's breakdown only shows in the fetch path.
+  const totalValuation = hasPersisted
+    ? (valuation?.directValuation ?? 0)
+    : result.totalValuation;
+  const pricingSummary = hasPersisted
+    ? formatPricingCountsSummary(valuation?.direct)
+    : formatPricingStatusSummary(result.pricingStatus);
 
   if (variant === "compact") {
     return (
       <div className={className}>
         <div className="text-muted-foreground text-xs">
-          {formatCurrency(result.totalValuation)}
+          {formatCurrency(totalValuation)}
           {!hidePricingStatus && pricingSummary && (
             <span className="ml-1">({pricingSummary})</span>
           )}

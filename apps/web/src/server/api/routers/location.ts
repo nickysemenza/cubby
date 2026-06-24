@@ -74,7 +74,15 @@ const { getByID, create, update } = createEntityCrudWithoutListProcedures({
       return await createLocation(services.db, data, services.actorContext);
     },
     update: async (services, id: LocationId, data) => {
-      return await updateLocation(services.db, id, data, services.actorContext);
+      const updated = await updateLocation(
+        services.db,
+        id,
+        data,
+        services.actorContext,
+      );
+      // Re-parenting moves a subtree, changing ancestors' rolled-up totals.
+      await services.services.locationValuation.recompute();
+      return updated;
     },
   },
 });
@@ -125,7 +133,18 @@ const getRecentlyActive = protectedProcedure
 // Delete procedure using standalone factory
 const deleteItem = createDeleteProcedure<LocationId>(async (services, ids) => {
   await deleteLocations(services.db, ids, services.actorContext);
+  await services.services.locationValuation.recompute();
 }, locationId);
+
+// Manual whole-tree recompute of persisted location valuations. Used to populate
+// after the column is first added, and as a safety net for writes that bypass the
+// router (raw SQL / postgres MCP). Idempotent — same inventory → same numbers.
+const recomputeValuations = protectedProcedure
+  .output(z.object({ updated: z.number() }))
+  .mutation(async ({ ctx }) => {
+    const updated = await ctx.services.locationValuation.recompute();
+    return { updated };
+  });
 
 // Get child location counts for multiple parent locations (batched to avoid N+1)
 const getChildCountsByLocations = protectedProcedure
@@ -146,6 +165,7 @@ export const locationRouter = createTRPCRouter({
   makeTree,
   create,
   update,
+  recomputeValuations,
   delete: deleteItem,
   touchLastBulkInventory,
 });

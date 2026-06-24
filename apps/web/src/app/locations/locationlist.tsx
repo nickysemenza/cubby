@@ -105,7 +105,7 @@ export function LocationList() {
         header: "Valuation",
         cell: (info) => (
           <InventoryValuationSummary
-            locationId={info.row.original.id}
+            valuation={info.row.original.valuation}
             variant="compact"
           />
         ),

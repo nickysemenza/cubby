@@ -25,6 +25,7 @@ const makeLocation = (
   lastBulkInventory: null,
   aiDescription: null,
   images: [],
+  valuation: null,
   ...ts,
   ...(children ? { children } : {}),
 });

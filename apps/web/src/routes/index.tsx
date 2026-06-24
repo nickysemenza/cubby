@@ -1,9 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import {
-  PANTRY_VALUE_OPTS,
-  PantryValueCard,
-} from "~/app/_components/home/PantryValueCard";
+import { PantryValueCard } from "~/app/_components/home/PantryValueCard";
 import { QuickActionsCard } from "~/app/_components/home/QuickActionsCard";
 import { RecentActivityFeed } from "~/app/_components/home/RecentActivityFeed";
 import EntityCount, {
@@ -46,11 +43,9 @@ export const Route = createFileRoute("/")({
       ...trpc.problems.getAllProblems.queryOptions(),
       staleTime: 5 * 60 * 1000,
     });
-    // Warm the pantry-value card's heavier inventory.list(1000) query so the
-    // card paints without a spinner. Same input as the card (PANTRY_VALUE_OPTS).
-    void queryClient.prefetchQuery(
-      trpc.inventory.list.queryOptions(PANTRY_VALUE_OPTS),
-    );
+    // Warm the location tree — the pantry-value card reads each location's
+    // persisted valuation rollup from it (no inventory fetch).
+    void queryClient.prefetchQuery(trpc.location.makeTree.queryOptions());
   },
   component: Home,
 });
