@@ -14,9 +14,11 @@ const iconTileVariants = cva(
   {
     variants: {
       size: {
+        // Calibrated to the real tile sizes pages use (h-7 / h-8 / h-10) so a
+        // tile sits flush with sibling h-8 image thumbnails. md = 32px (was 36).
         sm: "size-7 [&>svg]:size-3.5",
-        md: "size-9 [&>svg]:size-4",
-        lg: "size-11 [&>svg]:size-5",
+        md: "size-8 [&>svg]:size-4",
+        lg: "size-10 [&>svg]:size-5",
       },
       tone: {
         muted: "bg-muted text-muted-foreground",
