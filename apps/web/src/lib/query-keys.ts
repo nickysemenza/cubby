@@ -11,6 +11,10 @@ export const queryKeys = {
   },
   location: {
     list: ["location", "list"] as const,
+    makeTree: ["location", "makeTree"] as const,
+    // Broad prefix — invalidate every location query (list / makeTree / getByID)
+    // so persisted valuation rollups are re-read after an inventory/price change.
+    all: ["location"] as const,
   },
   ingredient: {
     list: ["ingredient", "list"] as const,

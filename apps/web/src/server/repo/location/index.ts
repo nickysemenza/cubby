@@ -42,3 +42,8 @@ export {
   buildLocationTypeCount,
   touchLastBulkInventory,
 } from "./tree";
+// Valuation rollup persistence
+export {
+  getLocationValuationInputs,
+  writeLocationValuations,
+} from "./valuation";

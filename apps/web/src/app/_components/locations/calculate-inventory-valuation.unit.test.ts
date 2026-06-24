@@ -41,6 +41,7 @@ function makeInventoryItem(params: {
       updatedAt: now,
       lastBulkInventory: null,
       aiDescription: null,
+      valuation: null,
     },
     product: {
       id: unsafeProductId(params.product.id),

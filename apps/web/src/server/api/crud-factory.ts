@@ -14,6 +14,7 @@ import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import type { IngredientService } from "~/server/services/ingredient.service";
+import type { LocationValuationService } from "~/server/services/location-valuation.service";
 import type { ProductService } from "~/server/services/product.service";
 import type { RecipeCostingService } from "~/server/services/recipe-costing.service";
 import { protectedProcedure } from "./trpc";
@@ -36,6 +37,7 @@ export interface CrudServices {
     product: ProductService;
     ingredient: IngredientService;
     recipeCosting: RecipeCostingService;
+    locationValuation: LocationValuationService;
   };
   usdaClient: USDAClient;
   upcLookupClient: UPCLookupClient;

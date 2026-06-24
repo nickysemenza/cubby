@@ -29,6 +29,30 @@ const locationBase = z.object({
   name: z.string().describe("name of location"),
   type: locationType,
 });
+
+// Per-category counts for a location's inventory (matches the client's
+// PricingStatus buckets in calculate-inventory-valuation).
+const pricingCounts = z.object({
+  priced: z.number().int(),
+  missingPricing: z.number().int(),
+  miscNoPrice: z.number().int(),
+});
+
+/**
+ * Precomputed inventory-valuation rollup stored on each location
+ * (location.valuation), recomputed eagerly like recipe.totals.
+ * `direct*` = items placed at this location; `total*` = direct + all descendants.
+ */
+export const locationValuation = z.object({
+  directValuation: z.number(),
+  totalValuation: z.number(),
+  directItemCount: z.number().int(),
+  totalItemCount: z.number().int(),
+  direct: pricingCounts,
+  total: pricingCounts,
+});
+export type LocationValuation = z.infer<typeof locationValuation>;
+
 export const locationOut = z
   .object({
     id: locationId,
@@ -36,6 +60,8 @@ export const locationOut = z
     lastBulkInventory: z.date().nullable(),
     aiDescription: z.string().nullable(),
     images: z.array(imageOut),
+    // Persisted valuation rollup; null until first recompute.
+    valuation: locationValuation.nullable(),
   })
   .extend(locationBase.shape)
   .extend(dbTimestampsOut.shape);

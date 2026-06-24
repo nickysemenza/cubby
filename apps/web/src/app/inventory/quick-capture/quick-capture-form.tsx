@@ -219,6 +219,8 @@ export default function QuickCaptureForm({
         queryClient.invalidateQueries({
           queryKey: [queryKeys.inventory.list],
         });
+        // Persisted per-location valuations were recomputed server-side.
+        queryClient.invalidateQueries({ queryKey: [queryKeys.location.all] });
       },
     }),
   );
@@ -261,6 +263,7 @@ export default function QuickCaptureForm({
         queryClient.invalidateQueries({
           queryKey: [queryKeys.inventory.list],
         });
+        queryClient.invalidateQueries({ queryKey: [queryKeys.location.all] });
       },
     }),
   );

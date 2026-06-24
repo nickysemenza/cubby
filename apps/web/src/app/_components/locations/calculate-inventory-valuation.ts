@@ -62,6 +62,24 @@ export function formatPricingStatusSummary(
   return parts.length > 0 ? parts.join(", ") : null;
 }
 
+/**
+ * Same summary string as formatPricingStatusSummary, but from the bare counts
+ * persisted on location.valuation (which omit item-name lists).
+ */
+export function formatPricingCountsSummary(
+  counts: { missingPricing: number; miscNoPrice: number } | undefined | null,
+): string | null {
+  if (!counts) return null;
+  const parts: string[] = [];
+  if (counts.missingPricing > 0) {
+    parts.push(`no pricing for ${counts.missingPricing}`);
+  }
+  if (counts.miscNoPrice > 0) {
+    parts.push(`${counts.miscNoPrice} misc`);
+  }
+  return parts.length > 0 ? parts.join(", ") : null;
+}
+
 type InventoryValuationResult = {
   totalValuation: number;
   breakdown: InventoryValuationBreakdown[];

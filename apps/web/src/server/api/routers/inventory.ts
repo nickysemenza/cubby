@@ -79,19 +79,24 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
         );
       }
 
-      return await createInventoryEntry(
+      const created = await createInventoryEntry(
         services.db,
         data,
         services.actorContext,
       );
+      // Eagerly refresh persisted location valuations (whole-tree).
+      await services.services.locationValuation.recompute();
+      return created;
     },
     update: async (services, id: InventoryId, data) => {
-      return await updateInventoryEntry(
+      const updated = await updateInventoryEntry(
         services.db,
         id,
         data,
         services.actorContext,
       );
+      await services.services.locationValuation.recompute();
+      return updated;
     },
   },
   entityName: "inventory",
@@ -100,6 +105,7 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
 // Delete procedure using standalone factory
 const deleteItem = createDeleteProcedure<InventoryId>(async (services, ids) => {
   await deleteInventoryEntries(services.db, ids, services.actorContext);
+  await services.services.locationValuation.recompute();
 }, inventoryId);
 
 // Bulk process inventory entries (creates and updates in one call)
@@ -107,7 +113,7 @@ const bulkProcess = protectedProcedure
   .input(inventoryBulkOperationPayload)
   .output(z.array(inventoryWithLocationAndProductOut))
   .mutation(async ({ ctx, input }) => {
-    return await bulkProcessInventoryEntries(
+    const result = await bulkProcessInventoryEntries(
       ctx.db,
       input.locationId,
       input.items.map((item) => ({
@@ -118,6 +124,8 @@ const bulkProcess = protectedProcedure
       })),
       ctx.actorContext,
     );
+    await ctx.services.locationValuation.recompute();
+    return result;
   });
 
 // Bulk move inventory entries between locations
@@ -125,7 +133,13 @@ const bulkMove = protectedProcedure
   .input(bulkMovePayload)
   .output(z.array(inventoryWithLocationAndProductOut))
   .mutation(async ({ ctx, input }) => {
-    return await bulkMoveInventoryEntries(ctx.db, input, ctx.actorContext);
+    const result = await bulkMoveInventoryEntries(
+      ctx.db,
+      input,
+      ctx.actorContext,
+    );
+    await ctx.services.locationValuation.recompute();
+    return result;
   });
 
 // Find products with expectedQuantity=1 in multiple locations

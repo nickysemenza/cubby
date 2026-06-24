@@ -13,6 +13,7 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { imageStatusValues } from "@cubby/schemas/image";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
+import type { LocationValuation } from "@cubby/schemas/location";
 import type { BaseKind } from "@cubby/schemas/problems";
 import { productCategoryValues } from "@cubby/schemas/product";
 import {
@@ -516,6 +517,10 @@ export const location = pgTable(
     parentId: uuid("parentId").$type<LocationId>(),
     type: text("type").notNull(),
     aiDescription: text("aiDescription"),
+    // Precomputed inventory-valuation rollup (direct + descendants), recomputed
+    // eagerly at inventory/price mutations — like recipe.totals. Null until the
+    // first recompute. See location-valuation.service.
+    valuation: jsonb("valuation").$type<LocationValuation | null>(),
   },
   (table) => [
     uniqueIndex("Location_shortcode_unique")
