@@ -13,6 +13,7 @@ import { BulkProgressBar } from "~/components/ui/bulk-progress-bar";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
+import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
 import { importRecipeSignature } from "~/lib/recipe-signature";
@@ -148,17 +149,17 @@ export function BookGroupCard({
             </p>
           )}
           {!ready && book.recipes.length > 0 && (
-            <p className="text-muted-foreground text-xs">
+            <Description size="xs">
               Streaming recipes as the book extracts…
-            </p>
+            </Description>
           )}
           {book.importProgress ? (
             <BulkProgressBar verb="Importing" progress={book.importProgress} />
           ) : (
             doneCount > 0 && (
-              <p className="text-muted-foreground text-xs">
+              <Description size="xs">
                 {doneCount} of {book.recipes.length} imported
-              </p>
+              </Description>
             )
           )}
           <RecipeList
@@ -277,7 +278,11 @@ function RecipeList({
 function ExtractStatus({ book }: { book: Book }) {
   const e = book.extract;
   if (e.status === "pending") {
-    return <span className="text-muted-foreground text-xs">Queued…</span>;
+    return (
+      <Description as="span" size="xs">
+        Queued…
+      </Description>
+    );
   }
   if (e.status === "extracting") {
     return (
@@ -305,9 +310,9 @@ function ExtractStatus({ book }: { book: Book }) {
   }
   // ready
   return (
-    <span className="text-muted-foreground text-xs">
+    <Description as="span" size="xs">
       {book.recipes.length} recipe{book.recipes.length === 1 ? "" : "s"}
       {e.failedChunks > 0 && ` · ${e.failedChunks} chunk(s) failed`}
-    </span>
+    </Description>
   );
 }

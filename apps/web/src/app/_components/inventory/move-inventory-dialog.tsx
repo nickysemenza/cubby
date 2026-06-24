@@ -28,6 +28,7 @@ import {
 import { ComboboxFieldWithSearch } from "~/app/_components/form-utils";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { Stack } from "~/components/layout";
+import { StatusText } from "~/components/ui/status-text";
 import { queryKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 
@@ -152,7 +153,11 @@ export function MoveInventoryDialog({
             searchType="location"
           />
 
-          {error && <div className="text-destructive text-sm">{error}</div>}
+          {error && (
+            <StatusText as="div" tone="destructive" className="text-sm">
+              {error}
+            </StatusText>
+          )}
         </Stack>
       </BulkActionDialog>
     </FormProvider>

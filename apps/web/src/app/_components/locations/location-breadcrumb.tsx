@@ -10,6 +10,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "~/components/ui/breadcrumb";
+import { Description } from "~/components/ui/description";
 import { getDefaultLocationType } from "~/lib/location-path";
 import { cn } from "~/lib/utils";
 import { LocationIcon } from "./location-icons";
@@ -127,9 +128,9 @@ export function LocationBreadcrumb({
                 {segment.name}
               </span>
               {showTypeAnnotations && !isDefault && segment.type && (
-                <span className="text-2xs text-muted-foreground">
+                <Description as="span" size="2xs">
                   · {segment.type}
-                </span>
+                </Description>
               )}
             </span>
           );

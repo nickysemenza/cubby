@@ -12,8 +12,9 @@ import { LocationGallery } from "~/app/_components/locations/location-gallery";
 import { LocationActions } from "~/app/locations/location-actions";
 import { LocationList } from "~/app/locations/locationlist";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
-import { Stack } from "~/components/layout";
+import { Grid, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
+import { Description } from "~/components/ui/description";
 import {
   ViewSwitcher,
   type ViewSwitcherOption,
@@ -80,17 +81,17 @@ function LocationsPage() {
               <h3 className="mb-2 font-semibold text-lg">
                 Inventory Distribution
               </h3>
-              <p className="mb-4 text-muted-foreground text-sm">
+              <Description className="mb-4">
                 Size represents total inventory items at each location and its
                 children
-              </p>
+              </Description>
               <Suspense fallback={<SimpleLoading text="Loading treemap..." />}>
                 <LocationTreemap />
               </Suspense>
             </div>
 
             {/* Tree views side by side */}
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <Grid cols="pair">
               <div>
                 <h3 className="mb-2 font-semibold text-lg">Tree View</h3>
                 <Suspense
@@ -107,7 +108,7 @@ function LocationsPage() {
                   <LocationTreeGraph />
                 </Suspense>
               </div>
-            </div>
+            </Grid>
           </Stack>
         )}
       </Stack>

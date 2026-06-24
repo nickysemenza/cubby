@@ -4,6 +4,7 @@ import { type FC, useEffect, useRef, useState } from "react";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { useTRPC } from "~/trpc/react";
 import { getTagColor, getTagIcon, parseTag, TAG_PREFIXES } from "../tag-theme";
@@ -187,9 +188,9 @@ export const TagInput: FC<TagInputProps> = ({ value, onChange, className }) => {
                   <Icon size={14} style={{ color }} />
                   <span>{suggestion}</span>
                   {isPrefix && (
-                    <span className="text-muted-foreground text-xs">
+                    <Description as="span" size="xs">
                       type value...
-                    </span>
+                    </Description>
                   )}
                 </Row>
               );

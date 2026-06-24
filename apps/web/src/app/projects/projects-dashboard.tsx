@@ -12,6 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
+import { Description } from "~/components/ui/description";
 import {
   Empty,
   EmptyDescription,
@@ -244,7 +245,7 @@ function DashboardContent({
         {view === "overview" && (
           <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
             <Stack className="pt-4">
-              <div className="grid gap-4 lg:grid-cols-2">
+              <Grid cols="pair">
                 <Section
                   title="Cost vs Estimate"
                   description="Projects with both spending and an estimate"
@@ -257,7 +258,7 @@ function DashboardContent({
                 >
                   <BudgetHealth projects={projects} purchases={purchases} />
                 </Section>
-              </div>
+              </Grid>
 
               <Section title="Top 10 Projects by Spending">
                 <SpendingByProject purchases={purchases} projects={projects} />
@@ -291,7 +292,7 @@ function DashboardContent({
                 <MonthlyTrend purchases={purchases} />
               </Section>
 
-              <div className="grid gap-4 lg:grid-cols-2">
+              <Grid cols="pair">
                 <Section title="Category Split">
                   <PurchaseDonut
                     purchases={purchases}
@@ -302,7 +303,7 @@ function DashboardContent({
                 <Section title="Spending Heatmap">
                   <SpendingHeatmap purchases={purchases} />
                 </Section>
-              </div>
+              </Grid>
 
               <Section
                 title="Task Heatmap"
@@ -402,9 +403,7 @@ function SummaryCards({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground text-xs">
-            {purchases.length} purchases
-          </p>
+          <Description size="xs">{purchases.length} purchases</Description>
         </CardContent>
       </Card>
     </div>

@@ -4,6 +4,8 @@ import { AlertTriangle, RefreshCw } from "lucide-react";
 import { useMemo } from "react";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+import { Description } from "~/components/ui/description";
+import { StatusText } from "~/components/ui/status-text";
 import {
   Tooltip,
   TooltipContent,
@@ -75,29 +77,29 @@ export function EquivalencesReport() {
             ).length;
             const novel = data.candidates.length - flagged;
             return (
-              <span className="text-muted-foreground text-sm">
+              <Description as="span">
                 {novel} novel
                 {flagged > 0 && ` · ${flagged} flagged (differ from existing)`}
                 {data.hiddenCovered > 0 &&
                   ` · ${data.hiddenCovered} hidden (already convertible)`}
-              </span>
+              </Description>
             );
           })()}
       </Row>
 
       {error && (
-        <p className="text-destructive text-sm">Scan failed: {error.message}</p>
+        <StatusText as="p" tone="destructive" className="text-sm">
+          Scan failed: {error.message}
+        </StatusText>
       )}
 
-      {isFetching && !data && (
-        <p className="text-muted-foreground text-sm">Scanning recipes…</p>
-      )}
+      {isFetching && !data && <Description>Scanning recipes…</Description>}
 
       {data && data.candidates.length === 0 && !isFetching && (
-        <p className="text-muted-foreground text-sm">
+        <Description>
           No novel equivalences found — every harvested pair is either a
           same-dimension conversion or already covered by an existing mapping.
-        </p>
+        </Description>
       )}
 
       {data && data.candidates.length > 0 && (

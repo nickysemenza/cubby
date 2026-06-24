@@ -1,6 +1,7 @@
 import { AlertTriangle, CalendarClock, DollarSign } from "lucide-react";
 import { useMemo } from "react";
 import { Row, Stack } from "~/components/layout";
+import { StatusText } from "~/components/ui/status-text";
 import type {
   NotionProject,
   NotionPurchase,
@@ -86,9 +87,9 @@ export function NeedsAttention({
                 </a>
                 {proj && <ProjectPill project={proj} />}
                 {t.due && (
-                  <span className="shrink-0 text-destructive">
+                  <StatusText tone="destructive" className="shrink-0">
                     due {formatDate(t.due)}
-                  </span>
+                  </StatusText>
                 )}
               </Row>
             );

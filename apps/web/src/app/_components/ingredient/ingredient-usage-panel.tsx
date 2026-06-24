@@ -3,6 +3,7 @@ import type { IngredientUsageRow } from "@cubby/schemas/ingredient-usage";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Stack } from "~/components/layout";
+import { Description } from "~/components/ui/description";
 import { useTRPC } from "~/trpc/react";
 import { VisualizationPlaceholder } from "../visualizations/visualization-placeholder";
 import { IngredientUsageChart } from "./ingredient-usage-chart";
@@ -46,9 +47,9 @@ export function IngredientUsagePanel({
     <Stack gap="lg">
       <IngredientUsageChart rows={rows} />
       {rows.length > 25 && (
-        <p className="text-muted-foreground text-xs">
+        <Description size="xs">
           Chart shows the top 25 of {rows.length} ingredients; full list below.
-        </p>
+        </Description>
       )}
 
       <UsageTable rows={rows} totalRecipes={totalRecipes} />

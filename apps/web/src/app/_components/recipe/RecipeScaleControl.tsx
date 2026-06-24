@@ -4,6 +4,7 @@ import { Scaling, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import {
@@ -270,10 +271,10 @@ export function RecipeScaleControl({
                 </Stack>
               </Stack>
             ) : !totals?.weight ? (
-              <p className="text-2xs text-muted-foreground">
+              <Description size="2xs">
                 No weight conversion yet — add a unit mapping to scale by
                 weight.
-              </p>
+              </Description>
             ) : null)}
         </PopoverContent>
       </Popover>

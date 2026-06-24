@@ -11,7 +11,9 @@ import { MarkdownText } from "~/components/markdown";
 import { Badge, badgeVariants } from "~/components/ui/badge";
 import { Card, CardContent } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
+import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
+import { StatusText } from "~/components/ui/status-text";
 import { cn } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
 import { EntityPillLink } from "../EntityPill";
@@ -162,11 +164,11 @@ function RecipeImportCardImpl({
               {recipe.meta.title || "(untitled)"}
             </span>
             {recipe.meta.recipe_yield && (
-              <span className="text-muted-foreground text-xs">
+              <Description as="span" size="xs">
                 {typeof recipe.meta.recipe_yield === "string"
                   ? recipe.meta.recipe_yield
                   : `${recipe.meta.recipe_yield.value} ${recipe.meta.recipe_yield.unit}`}
-              </span>
+              </Description>
             )}
             <Badge variant={badge.variant}>{badge.label}</Badge>
             {existingId && (
@@ -198,9 +200,9 @@ function RecipeImportCardImpl({
         </Row>
 
         {reasons && reasons.length > 0 && (
-          <p className="mt-1 pl-6 text-destructive text-xs">
+          <StatusText as="p" tone="destructive" className="mt-1 pl-6 text-xs">
             {reasons.join(" ")}
-          </p>
+          </StatusText>
         )}
 
         {notesMarkdown && (

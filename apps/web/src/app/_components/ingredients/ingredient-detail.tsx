@@ -12,6 +12,7 @@ import { Stack } from "~/components/layout";
 import { MutedBox } from "~/components/layout/muted-box";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
+import { Description } from "~/components/ui/description";
 import { getIngredientMappings } from "~/lib/unit-mapping-utils";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { useTRPC } from "~/trpc/react";
@@ -86,10 +87,10 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
           {ingredient.product.length > 0 ? (
             <EntityPillLinkList entity="product" items={ingredient.product} />
           ) : (
-            <p className="text-muted-foreground text-sm">
+            <Description>
               No products linked yet — enrich this ingredient to add pricing and
               nutrition.
-            </p>
+            </Description>
           )}
           <Button
             variant="outline"
@@ -130,9 +131,7 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
             aliases={ingredient.aliases}
           />
         ) : (
-          <p className="text-muted-foreground text-sm">
-            Not used in any recipes yet.
-          </p>
+          <Description>Not used in any recipes yet.</Description>
         ),
     },
     // Common sections from entity config (History)

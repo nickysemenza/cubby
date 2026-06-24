@@ -14,6 +14,7 @@ import type { z } from "zod";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+import { Description } from "~/components/ui/description";
 import {
   type EmptyFilter,
   useGalleryViewState,
@@ -639,10 +640,10 @@ function MobileGalleryDrillDown({
                   inventoryItems={inventoryByLocation.get(location.id) ?? []}
                 />
                 {hasChildren && (
-                  <div className="mt-1 text-center text-2xs text-muted-foreground">
+                  <Description as="div" size="2xs" className="mt-1 text-center">
                     {location.children!.length} sub-location
                     {location.children!.length !== 1 ? "s" : ""}
-                  </div>
+                  </Description>
                 )}
               </button>
             );

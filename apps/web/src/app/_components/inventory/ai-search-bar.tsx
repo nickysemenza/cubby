@@ -5,6 +5,7 @@ import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -90,9 +91,9 @@ export function AiSearchBar<T>({ table }: AiSearchBarProps<T>) {
       </Row>
 
       {result && (
-        <p className="px-1 text-muted-foreground text-xs">
+        <Description size="xs" className="px-1">
           {result.interpretation}
-        </p>
+        </Description>
       )}
     </Stack>
   );

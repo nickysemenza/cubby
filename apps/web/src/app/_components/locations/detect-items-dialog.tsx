@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { Description } from "~/components/ui/description";
 import {
   Dialog,
   DialogContent,
@@ -131,24 +132,20 @@ export const DetectItemsDialog: FC<DetectItemsDialogProps> = ({
         {isLoading && (
           <div className="flex flex-col items-center gap-2 py-6">
             <Spinner className="h-6 w-6" />
-            <p className="text-muted-foreground text-sm">Analyzing photos...</p>
+            <Description>Analyzing photos...</Description>
           </div>
         )}
 
         {!isLoading && !hasResults && detectMutation.isSuccess && (
           <div className="py-6 text-center">
             <Package className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
-            <p className="text-muted-foreground text-sm">
-              No items detected in the photos
-            </p>
+            <Description>No items detected in the photos</Description>
           </div>
         )}
 
         {!isLoading && hasResults && (
           <>
-            {summary && (
-              <p className="text-muted-foreground text-sm">{summary}</p>
-            )}
+            {summary && <Description>{summary}</Description>}
             <ScrollArea className="max-h-[400px]">
               <Stack gap="sm">
                 {items.map((item, index) => (
@@ -167,12 +164,12 @@ export const DetectItemsDialog: FC<DetectItemsDialogProps> = ({
                           {item.confidence}
                         </Badge>
                       </Row>
-                      <p className="text-muted-foreground text-sm">
+                      <Description>
                         {!isUnspecifiedManufacturer(item.manufacturer) && (
                           <span>{item.manufacturer} &middot; </span>
                         )}
                         {item.estimatedQuantity} {item.unit}
-                      </p>
+                      </Description>
                     </div>
                     <Button
                       variant="ghost"

@@ -65,6 +65,7 @@ import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Description } from "~/components/ui/description";
 import { Empty, EmptyTitle } from "~/components/ui/empty";
 import { Kbd } from "~/components/ui/kbd";
 import { Label } from "~/components/ui/label";
@@ -456,9 +457,7 @@ export default function QuickCaptureForm({
               </Label>
             </Row>
             {scannerEnabled && !focusedLocationId && (
-              <span className="text-muted-foreground text-sm">
-                Select a location below first
-              </span>
+              <Description as="span">Select a location below first</Description>
             )}
           </Row>
 
@@ -540,9 +539,9 @@ export default function QuickCaptureForm({
                 {focusedLocation.children &&
                   focusedLocation.children.length > 0 && (
                     <Stack gap="xs">
-                      <p className="text-muted-foreground text-xs">
+                      <Description size="xs">
                         Drill into child location:
-                      </p>
+                      </Description>
                       <Row gap="xs" wrap>
                         {focusedLocation.children.map((child) => (
                           <Button

@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
 import {
   Table,
@@ -144,11 +145,7 @@ export function IngredientPreviewTable({
   };
 
   if (ingredientLines.length === 0) {
-    return (
-      <div className="text-muted-foreground text-sm">
-        Enter ingredients to see preview
-      </div>
-    );
+    return <Description as="div">Enter ingredients to see preview</Description>;
   }
 
   return (

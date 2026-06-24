@@ -34,8 +34,10 @@ import {
   FormWrapper,
 } from "~/app/_components/form-utils";
 import { Row, Stack } from "~/components/layout";
+import { MutedBox } from "~/components/layout/muted-box";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
+import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { EntityIcon } from "~/entities/entities";
 import { queryKeys } from "~/lib/query-keys";
@@ -358,9 +360,7 @@ export default function BulkMoveForm() {
                       className="w-20"
                       disabled={!item.selected}
                     />
-                    <span className="text-muted-foreground text-sm">
-                      {item.unit}
-                    </span>
+                    <Description as="span">{item.unit}</Description>
                   </Row>
                 </Row>
               ))}
@@ -373,9 +373,9 @@ export default function BulkMoveForm() {
 
           {/* Selection summary */}
           {selectedItems.length > 0 && (
-            <div className="mt-4 rounded-lg bg-muted p-4">
+            <MutedBox className="mt-4 rounded-lg">
               <h4 className="mb-2 font-medium">Move Summary</h4>
-              <p className="text-muted-foreground text-sm">
+              <Description>
                 {selectedItems.length} item
                 {selectedItems.length !== 1 ? "s" : ""} selected
                 {targetLocation && (
@@ -385,8 +385,8 @@ export default function BulkMoveForm() {
                     <span className="font-medium">{targetLocation.name}</span>
                   </>
                 )}
-              </p>
-            </div>
+              </Description>
+            </MutedBox>
           )}
         </div>
       )}

@@ -3,6 +3,7 @@ import type { LocationValuation } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { Row, Stack } from "~/components/layout";
+import { Description } from "~/components/ui/description";
 import { formatCurrency } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import {
@@ -77,12 +78,12 @@ export function InventoryValuationSummary({
   if (variant === "compact") {
     return (
       <div className={className}>
-        <div className="text-muted-foreground text-xs">
+        <Description as="div" size="xs">
           {formatCurrency(totalValuation)}
           {!hidePricingStatus && pricingSummary && (
             <span className="ml-1">({pricingSummary})</span>
           )}
-        </div>
+        </Description>
       </div>
     );
   }
@@ -94,14 +95,16 @@ export function InventoryValuationSummary({
         {formatCurrency(totalValuation)}
       </div>
       {pricingSummary && (
-        <div className="text-muted-foreground text-xs">{pricingSummary}</div>
+        <Description as="div" size="xs">
+          {pricingSummary}
+        </Description>
       )}
 
       {result.breakdown.length > 0 && (
         <div className="mt-4">
-          <div className="mb-1 font-medium text-muted-foreground text-xs">
+          <Description as="div" size="xs" className="mb-1 font-medium">
             By manufacturer
-          </div>
+          </Description>
           <Stack as="ul" gap="xs">
             {result.breakdown.slice(0, 6).map((b) => (
               <Row

@@ -33,9 +33,11 @@ import {
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
+import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { Progress } from "~/components/ui/progress";
 import { Spinner } from "~/components/ui/spinner";
+import { StatusText } from "~/components/ui/status-text";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithRecompute } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
@@ -537,16 +539,18 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
                   );
                 })}
               </Stack>
-              <p className="text-2xs text-muted-foreground">
+              <Description size="2xs">
                 Price optional — leave blank to create the USDA link and price
                 later. Foods are usually priced by package (e.g. $5.99 / 2 lb);
                 a unit of “each” stores a per-item price.
-              </p>
+              </Description>
             </Stack>
           )}
 
           {error && (
-            <div className="text-destructive text-sm">{error.message}</div>
+            <StatusText as="div" tone="destructive" className="text-sm">
+              {error.message}
+            </StatusText>
           )}
 
           {!isLoading && rows.length === 0 && (
