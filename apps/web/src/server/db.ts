@@ -25,8 +25,9 @@ type DBClient = NodePgDatabase<typeof schema>;
 
 const createPoolClient = (connectionString: string) => {
   const { Pool } = pg;
-  // Dev-only pool (prod uses a per-request pg.Client behind Hyperdrive). The
-  // Problems page fans out ~25 concurrent queries; pg's default max of 10 forces
+  // Dev-only pool (prod uses a per-request pg.Pool behind Hyperdrive — see
+  // getDbInstance; Node has no Workers connection limit, so dev can run wide).
+  // The Problems page fans out ~25 concurrent queries; pg's default max of 10 forces
   // the overflow to queue and pay fresh ~310ms TLS handshakes to Neon, so lift
   // the ceiling enough to absorb the fan-out.
   const pool = new Pool({ connectionString, max: 25 });
@@ -58,7 +59,7 @@ const requestDbStore = new AsyncLocalStorage<LazyDbHolder>();
 
 /**
  * Run a function with a per-request database connection (CF Workers only).
- * Uses pg.Client through Hyperdrive's pooled TCP connections.
+ * Uses a per-request pg.Pool through Hyperdrive's pooled TCP connections.
  *
  * Lazy: this does NOT connect. The connection is opened on first db access
  * inside getDbInstance(), so requests that never query never wake Neon.

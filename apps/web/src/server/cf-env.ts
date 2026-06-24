@@ -1,6 +1,6 @@
 // Access to the CF Workers env (service bindings) outside the fetch handler.
 //
-// Module-level storage is safe here — unlike the per-request pg.Client in
+// Module-level storage is safe here — unlike the per-request pg.Pool in
 // db.ts, `env` is the same object for every request in an isolate. On the
 // dev server (plain Node via vite) setCfEnv is never called, so accessors
 // return undefined and callers fall back to public URLs + global fetch.
