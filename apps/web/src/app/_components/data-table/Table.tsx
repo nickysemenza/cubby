@@ -27,7 +27,7 @@ import {
 import type { SwipeAction } from "~/components/entity/swipe-row";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
-import { SpacedContainer } from "~/components/layout/spaced-container";
+import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import {
   Table,
@@ -463,7 +463,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
   };
 
   return (
-    <SpacedContainer space={4}>
+    <Stack>
       {/* Desktop Table View - Unified wrapper. Sets the entity-inked
           --row-accent so hover/selected bars match the section's color. */}
       {!isMobile && (
@@ -778,6 +778,6 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
       {isMobile && table.getPageCount() > 1 && !infiniteScroll && (
         <DataTablePagination table={table} timing={timing} />
       )}
-    </SpacedContainer>
+    </Stack>
   );
 }

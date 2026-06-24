@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { Bug, BugOff, Search } from "lucide-react";
-import { FlexContainer } from "~/components/layout/flex-container";
+import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { useDebug } from "~/hooks/useDebug";
 import { useNavAuthed } from "~/hooks/useNavAuthed";
@@ -27,12 +27,12 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
   return (
     <div className="flex w-full items-center justify-between">
       <Link to="/">
-        <FlexContainer align="center" gap={2}>
+        <Row align="center" gap="sm">
           <img src="/favicon.svg" alt="" className="h-6 w-6 sm:h-7 sm:w-7" />
           <span className="self-center whitespace-nowrap font-bold text-foreground text-lg tracking-tight sm:text-xl">
             cubby
           </span>
-        </FlexContainer>
+        </Row>
       </Link>
 
       {/* Desktop Navigation */}
@@ -52,7 +52,7 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
         )}
       </nav>
 
-      <FlexContainer align="center" gap={2}>
+      <Row align="center" gap="sm">
         {/* Search Button */}
         {onSearchClick && (
           <Button
@@ -105,7 +105,7 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
             Sign In
           </Link>
         )}
-      </FlexContainer>
+      </Row>
     </div>
   );
 }

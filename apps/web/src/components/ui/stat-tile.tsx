@@ -1,7 +1,7 @@
 import type * as React from "react";
 import type { SummaryItem } from "~/app/_components/SummaryCard";
 import { Eyebrow } from "~/components/ui/eyebrow";
-import { GridContainer } from "~/components/layout/grid-container";
+import { Grid } from "~/components/layout";
 
 /**
  * One ledger metric: a mono eyebrow label over a big tabular number, with an
@@ -64,8 +64,8 @@ export function StatGrid({
   children: React.ReactNode;
 }) {
   return (
-    <GridContainer cols="summary" className={className}>
+    <Grid cols="summary" className={className}>
       {children}
-    </GridContainer>
+    </Grid>
   );
 }

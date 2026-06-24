@@ -2,7 +2,7 @@ import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
 import { useId, useMemo, useState } from "react";
 import { type NodeRendererProps, Tree } from "react-arborist";
-import { FlexContainer } from "~/components/layout/flex-container";
+import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Label } from "~/components/ui/label";
@@ -85,7 +85,7 @@ export const LocationTree = ({ data }: LocationTreeProps) => {
 
   return (
     <div className="space-y-2">
-      <FlexContainer align="center" gap={2}>
+      <Row align="center" gap="sm">
         <Checkbox
           id={showInventoryId}
           checked={showInventory}
@@ -94,7 +94,7 @@ export const LocationTree = ({ data }: LocationTreeProps) => {
         <Label htmlFor={showInventoryId} className="cursor-pointer text-sm">
           Show inventory items
         </Label>
-      </FlexContainer>
+      </Row>
       <Tree
         key={showInventory ? "with-inventory" : "without-inventory"}
         initialData={treeData}
@@ -123,7 +123,7 @@ function Node({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
   if (data.nodeType === "inventory") {
     // Render inventory item
     return (
-      <FlexContainer style={style} ref={dragHandle} align="center">
+      <Row style={style} ref={dragHandle} align="center">
         <Link
           to="/inventory/$id"
           params={{ id: data.id.replace("inv-", "") }}
@@ -135,7 +135,7 @@ function Node({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
           </span>
           <span className="truncate">{data.productName}</span>
         </Link>
-      </FlexContainer>
+      </Row>
     );
   }
 
@@ -145,7 +145,7 @@ function Node({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
     (data.children?.filter((c) => c.nodeType === "location").length ?? 0) > 0;
 
   return (
-    <FlexContainer style={style} ref={dragHandle} align="center" gap={2}>
+    <Row style={style} ref={dragHandle} align="center" gap="sm">
       <LocationIcon type={data.type} size={14} />
       <span>{data.name}</span>
       {directItemCount > 0 && (
@@ -161,7 +161,7 @@ function Node({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
           {totalItemCount} total
         </Badge>
       )}
-    </FlexContainer>
+    </Row>
   );
 }
 

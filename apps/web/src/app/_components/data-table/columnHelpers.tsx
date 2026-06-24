@@ -6,7 +6,7 @@ import type { CellContext, ColumnHelper } from "@tanstack/react-table";
 import { uniqBy } from "es-toolkit";
 import { Eye, ImageIcon, MoreHorizontal } from "lucide-react";
 import type { ReactNode } from "react";
-import { SpacedContainer } from "~/components/layout/spaced-container";
+import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import {
   DropdownMenu,
@@ -458,18 +458,18 @@ export function createInventoryEntriesColumn<
         .map((entry) => getRelatedEntity(entry) as never)
         .filter(Boolean);
       return (
-        <SpacedContainer space={0} className={"space-y-0.5" /* tight */}>
-          <div className={"space-y-0.5 text-xs" /* tight */}>
+        <Stack gap="tight">
+          <Stack gap="tight" className="text-xs">
             {entries.map((entry) => (
               <div key={entry.id}>{tryFormatAmount(entry.amount)}</div>
             ))}
-          </div>
+          </Stack>
           <EntityPillLinkList
             entity={entity}
             items={relatedEntities as never}
             compact
           />
-        </SpacedContainer>
+        </Stack>
       );
     },
   });
