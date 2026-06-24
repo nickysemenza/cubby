@@ -32,29 +32,10 @@ concurrency:
 permissions:
   contents: read
   actions: read
+  # dorny/test-reporter posts check runs — https://github.com/dorny/test-reporter/issues/149
   checks: write
-  # dorny/paths-filter calls listFiles on the PR via the GitHub API
   pull-requests: read
-  # https://github.com/dorny/test-reporter/issues/149
 jobs:
-  detect-changes:
-    name: Detect Changes
-    runs-on: ubuntu-latest
-    outputs:
-      aux-packages: ${{ steps.filter.outputs.aux-packages }}
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            aux-packages:
-              - 'apps/usda-api/**'
-              - 'apps/upc-lookup/**'
-              - 'packages/schemas/**'
-              - 'packages/usda-contract/**'
-              - 'packages/usda-schemas/**'
-
   build-wasm:
     name: Build WASM
     runs-on: ubuntu-latest
@@ -104,6 +85,35 @@ jobs:
   test-rust:
     name: Rust Tests - recipebridge
     runs-on: ubuntu-latest
+    # Gating job on the deploy critical path: fmt + clippy + a plain `cargo test`.
+    # Coverage instrumentation (cargo llvm-cov) is a *separate* job (coverage-rust)
+    # because it forces a second, instrumented rebuild (~2m) that used to sit on
+    # this critical path for no gating benefit — codecov is a soft gate.
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          cache: true
+      - name: Format check
+        run: cargo fmt --manifest-path recipebridge/Cargo.toml --check
+      - name: Lint (clippy)
+        run: cargo clippy --manifest-path recipebridge/Cargo.toml --all-targets -- -D warnings
+      # Native-target tests: the costing + food-mapping modules are pure
+      # serde/ingredient code, so the parity suite runs without a wasm runtime.
+      # A test failure fails this step (and thus the deploy gate). NOTE: lib.rs
+      # reads as mostly uncovered by design: it's the #[wasm_bindgen] shim layer,
+      # executable only inside a wasm runtime; the logic lives in the
+      # costing/food_mappings modules (see coverage-rust).
+      - name: Run recipebridge tests
+        run: cargo test --manifest-path recipebridge/Cargo.toml
+
+  coverage-rust:
+    name: Rust Coverage - recipebridge
+    runs-on: ubuntu-latest
+    # Soft gate: NOT in check-tests `needs`, so a coverage hiccup never blocks the
+    # deploy. Runs in parallel with the gating test-rust job. cargo llvm-cov does
+    # its own instrumented build (separate RUSTFLAGS → can't reuse test-rust's
+    # artifacts), which is exactly why it lives off the critical path.
     steps:
       - uses: actions/checkout@v6
       - uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -112,17 +122,6 @@ jobs:
           components: llvm-tools-preview
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
-      - name: Format check
-        run: cargo fmt --manifest-path recipebridge/Cargo.toml --check
-      - name: Lint (clippy)
-        run: cargo clippy --manifest-path recipebridge/Cargo.toml --all-targets -- -D warnings
-      # Native-target tests: the costing + food-mapping modules are pure
-      # serde/ingredient code, so the parity suite runs without a wasm runtime.
-      # llvm-cov runs the same `cargo test` under instrumentation — a test
-      # failure fails this step. NOTE: lib.rs reads as mostly uncovered by
-      # design: it's the #[wasm_bindgen] shim layer, executable only inside a
-      # wasm runtime; the logic lives in the covered costing/food_mappings
-      # modules.
       - name: Run recipebridge tests (with coverage)
         run: cargo llvm-cov --manifest-path recipebridge/Cargo.toml --lcov --output-path recipebridge/lcov.info
       - name: Upload coverage
@@ -156,12 +155,64 @@ jobs:
     name: Unit Tests - web
     needs: [build-wasm]
     runs-on: ubuntu-latest
-    # NOTE: no job-level `continue-on-error` — it would force needs.<job>.result
-    # to 'success' even on failure, defeating the check-tests gate. The test step
-    # below keeps step-level continue-on-error so coverage still uploads on
-    # failure; the final "Fail if tests failed" step then fails the job honestly.
-    outputs:
-      test-passed: ${{ steps.test.outcome == 'success' }}
+    # Pure `unit` + `ui` vitest projects only — NO service containers, so this
+    # fast gate never pays the integresql/postgres image pull (normally ~25s but
+    # occasionally an ~8m GHCR stall). DB-backed suites run in test-integration-web
+    # below. NOTE: no job-level `continue-on-error` — it would force
+    # needs.<job>.result to 'success' even on failure, defeating the check-tests
+    # gate. The test step keeps step-level continue-on-error so coverage still
+    # uploads on failure; the final "Fail if tests failed" step then fails honestly.
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-node-with-deps
+        with:
+          download-wasm: "true"
+
+      - name: Setup web environment
+        uses: ./.github/actions/setup-web-env
+
+      - name: Create test results directory
+        run: mkdir -p apps/web/test-results
+
+      - name: Run unit + ui tests for web
+        id: test
+        continue-on-error: true
+        run: |
+          cd apps/web
+          pnpm test --project unit --project ui --coverage --reporter=default --reporter=github-actions --reporter=junit --outputFile=test-results/vitest-junit.xml
+
+      - name: Publish Test Results
+        if: always()
+        uses: dorny/test-reporter@v2
+        with:
+          name: Unit Tests - web
+          path: apps/web/test-results/vitest-junit.xml
+          reporter: java-junit
+          fail-on-error: false
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v6
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: nickysemenza/cubby
+          working-directory: apps/web
+          flags: web
+          name: web-unit-coverage
+
+      - name: Fail if tests failed
+        if: steps.test.outcome != 'success'
+        run: |
+          echo "::error::Unit tests failed — see the 'Run unit + ui tests for web' step above"
+          exit 1
+
+  test-integration-web:
+    name: Integration Tests - web
+    needs: [build-wasm]
+    runs-on: ubuntu-latest
+    # The DB-backed `integration` vitest project — isolated here so the flaky
+    # service-container pull never sits on the fast unit gate above. Still gates
+    # the deploy via check-tests. Same honest-failure pattern (no job-level
+    # continue-on-error; step-level so coverage uploads on failure).
     services:
       postgres:
         image: postgres
@@ -177,7 +228,9 @@ jobs:
         ports:
           - 5432:5432
       integresql:
-        image: ghcr.io/allaboutapps/integresql:latest
+        # Pinned to an immutable digest (was `:latest`) for reproducibility —
+        # the multi-arch index digest of integresql:latest as of 2026-06-24.
+        image: ghcr.io/allaboutapps/integresql@sha256:66b7433399f1907bad9e4b7cc7bd528ed4ebfccddecb8fd65da4af4d06a68c5a
         ports:
           - 5000:5000
         env:
@@ -197,22 +250,22 @@ jobs:
       # NOTE: no manual `pg_trgm` / `db:push` against the `cubby` service DB —
       # nothing reads it. The integration tests provision their own IntegreSQL
       # template entirely in-process (tooling/test-setup.ts: CREATE EXTENSION
-      # pg_trgm + drizzle-kit pushSchema), and unit/ui tests don't touch a DB.
+      # pg_trgm + drizzle-kit pushSchema).
       - name: Create test results directory
         run: mkdir -p apps/web/test-results
 
-      - name: Run tests for web
+      - name: Run integration tests for web
         id: test
         continue-on-error: true
         run: |
           cd apps/web
-          pnpm test --run --coverage --reporter=default --reporter=github-actions --reporter=junit --outputFile=test-results/vitest-junit.xml
+          pnpm test --project integration --coverage --reporter=default --reporter=github-actions --reporter=junit --outputFile=test-results/vitest-junit.xml
 
       - name: Publish Test Results
         if: always()
         uses: dorny/test-reporter@v2
         with:
-          name: Unit Tests - web
+          name: Integration Tests - web
           path: apps/web/test-results/vitest-junit.xml
           reporter: java-junit
           fail-on-error: false
@@ -224,19 +277,22 @@ jobs:
           slug: nickysemenza/cubby
           working-directory: apps/web
           flags: web
-          name: web-coverage
+          name: web-integration-coverage
 
       - name: Fail if tests failed
         if: steps.test.outcome != 'success'
         run: |
-          echo "::error::Unit tests failed — see the 'Run tests for web' step above"
+          echo "::error::Integration tests failed — see the 'Run integration tests for web' step above"
           exit 1
 
   test-unit-aux:
     name: Unit Tests - ${{ matrix.package.name }}
-    if: needs.detect-changes.outputs.aux-packages == 'true'
-    needs: [build-wasm, detect-changes]
+    needs: [build-wasm]
     runs-on: ubuntu-latest
+    # Always runs (no change-detection gate). The legs are ~30s, run in parallel,
+    # and finish well before the long-pole jobs, so they cost no critical-path
+    # time — and always uploading their codecov flags keeps `codecov/project`
+    # from dropping ~586 lines whenever a PR doesn't touch these packages.
     # NOTE: no job-level `continue-on-error` (see test-unit-web). result must stay
     # honest so the check-tests gate can catch a failing matrix leg.
     strategy:
@@ -252,8 +308,6 @@ jobs:
             path: packages/usda-schemas
           - name: upc-lookup
             path: apps/upc-lookup
-    outputs:
-      test-passed: ${{ steps.test.outcome == 'success' }}
 
     steps:
       - uses: actions/checkout@v6
@@ -308,8 +362,6 @@ jobs:
     if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.bypass_e2e) }}
     needs: [build-wasm]
     runs-on: ubuntu-latest
-    outputs:
-      test-passed: ${{ steps.e2e-test.outcome == 'success' }}
     env:
       NODE_OPTIONS: "--max-old-space-size=4096"
       E2E_TEST_USER_EMAIL: nicky@test.com
@@ -331,7 +383,8 @@ jobs:
         ports:
           - 5432:5432
       integresql:
-        image: ghcr.io/allaboutapps/integresql:latest
+        # Pinned to an immutable digest (was `:latest`) — see test-integration-web.
+        image: ghcr.io/allaboutapps/integresql@sha256:66b7433399f1907bad9e4b7cc7bd528ed4ebfccddecb8fd65da4af4d06a68c5a
         ports:
           - 5000:5000
         env:
@@ -386,7 +439,7 @@ jobs:
 
   check-tests:
     name: Check All Tests Passed
-    needs: [test-unit-web, test-unit-aux, test-e2e, test-rust]
+    needs: [test-unit-web, test-integration-web, test-unit-aux, test-e2e, test-rust]
     runs-on: ubuntu-latest
     if: always()
     outputs:
@@ -396,19 +449,23 @@ jobs:
         id: check
         run: |
           unit_web_result="${{ needs.test-unit-web.result }}"
+          integration_web_result="${{ needs.test-integration-web.result }}"
           unit_aux_result="${{ needs.test-unit-aux.result }}"
           e2e_result="${{ needs.test-e2e.result }}"
           rust_result="${{ needs.test-rust.result }}"
 
           echo "Unit tests (web) result: $unit_web_result"
+          echo "Integration tests (web) result: $integration_web_result"
           echo "Unit tests (aux) result: $unit_aux_result"
           echo "E2E tests result: $e2e_result"
           echo "Rust tests result: $rust_result"
 
-          # Skipped jobs are OK (aux skipped when those packages unchanged, e2e skipped on Renovate PRs)
+          # e2e may be skipped (bypass_e2e escape hatch / Renovate); everything else
+          # must pass. aux now always runs, so it must succeed (no skipped allowance).
           if [[ "$unit_web_result" == "success" && \
+                "$integration_web_result" == "success" && \
+                "$unit_aux_result" == "success" && \
                 "$rust_result" == "success" && \
-                ("$unit_aux_result" == "success" || "$unit_aux_result" == "skipped") && \
                 ("$e2e_result" == "success" || "$e2e_result" == "skipped") ]]; then
             echo "all-passed=true" >> $GITHUB_OUTPUT
           else
