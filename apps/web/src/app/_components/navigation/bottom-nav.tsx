@@ -1,4 +1,4 @@
-import { Link, useLocation } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { Bug, BugOff, LogIn, MoreHorizontal } from "lucide-react";
 import { useState } from "react";
 import { Button } from "~/components/ui/button";
@@ -13,12 +13,17 @@ import {
 import { useDebug } from "~/hooks/useDebug";
 import { useNavAuthed } from "~/hooks/useNavAuthed";
 import { cn, formatBuildDate } from "~/lib/utils";
-import { bottomNavItems, moreNavItems, publicNavItems } from "./nav-items";
+import {
+  bottomNavItems,
+  moreNavItems,
+  publicNavItems,
+  useActiveTo,
+} from "./nav-items";
 
 const buildDate = formatBuildDate(__BUILD_DATE__);
 
 export function BottomNav() {
-  const pathname = useLocation().pathname;
+  const activeTo = useActiveTo();
   const [isOpen, setIsOpen] = useState(false);
   const { isDebugEnabled, toggleDebug } = useDebug();
   // SSR-accurate auth (see useNavAuthed): the tab bar renders the right state
@@ -26,7 +31,7 @@ export function BottomNav() {
   const authed = useNavAuthed();
 
   // Check if any "more" item is active
-  const isMoreActive = moreNavItems.some((item) => item.isActive(pathname));
+  const isMoreActive = moreNavItems.some((item) => item.to === activeTo);
 
   return (
     <nav
@@ -38,13 +43,16 @@ export function BottomNav() {
         {authed ? (
           <>
             {bottomNavItems.map((item) => {
-              const active = item.isActive(pathname);
+              const active = item.to === activeTo;
               const Icon = item.icon;
 
               return (
                 <Link
-                  key={item.href}
-                  to={item.href}
+                  key={item.to}
+                  to={item.to}
+                  // `search` can't be correlated to the union `to` here; only
+                  // the Scan shortcut sets it (see nav-items). Cast is local.
+                  search={item.search as never}
                   className={cn(
                     "flex min-h-[48px] min-w-[48px] flex-1 flex-col items-center justify-center gap-0.5 transition-colors active:bg-muted/60",
                     active
@@ -116,20 +124,20 @@ export function BottomNav() {
 
                   {/* Nav items */}
                   {moreNavItems.map((item) => {
-                    const active = item.isActive(pathname);
+                    const active = item.to === activeTo;
                     const Icon = item.icon;
 
                     // Only show Dashboard if signed in
-                    if (item.href === "/dashboard" && !authed) {
+                    if (item.to === "/dashboard" && !authed) {
                       return null;
                     }
 
                     return (
                       <SheetClose
-                        key={item.href}
+                        key={item.to}
                         render={
                           <Link
-                            to={item.href}
+                            to={item.to}
                             className={cn(
                               "flex min-h-[44px] items-center gap-3 rounded-md px-3 py-2 font-medium text-sm transition-colors hover:bg-muted hover:text-primary",
                               !active && "text-muted-foreground",
@@ -154,12 +162,12 @@ export function BottomNav() {
         ) : (
           <>
             {publicNavItems.map((item) => {
-              const active = item.isActive(pathname);
+              const active = item.to === activeTo;
               const Icon = item.icon;
               return (
                 <Link
-                  key={item.href}
-                  to={item.href}
+                  key={item.to}
+                  to={item.to}
                   className={cn(
                     "flex min-h-[48px] min-w-[48px] flex-1 flex-col items-center justify-center gap-0.5 transition-colors active:bg-muted/60",
                     active

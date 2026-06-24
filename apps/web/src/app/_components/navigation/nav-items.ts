@@ -1,3 +1,5 @@
+import { type LinkProps, useLocation } from "@tanstack/react-router";
+import { uniq } from "es-toolkit";
 import {
   Activity,
   AlertTriangle,
@@ -11,6 +13,7 @@ import {
   Home,
   LayoutDashboard,
   ListChecks,
+  MoreHorizontal,
   Palette,
   QrCode,
   ScanBarcode,
@@ -21,294 +24,180 @@ import {
   TrendingUp,
   Utensils,
 } from "lucide-react";
+import { useMemo } from "react";
 import { entities } from "~/entities/entities";
 
+/** A navigable destination. `to` is typed against the generated route tree. */
 export type NavItem = {
-  href: string;
+  to: LinkProps["to"];
+  /** Static search params — only the scanner shortcut needs these today. */
+  search?: Record<string, unknown>;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
-  isActive: (pathname: string) => boolean;
 };
 
-// Define each item once
-const scan: NavItem = {
-  href: "/inventory/quick-capture?scanner=true",
-  label: "Scan UPC",
-  icon: ScanBarcode,
-  isActive: (p) => p === "/inventory/quick-capture",
+/** A dropdown that nests leaves. Discriminated from {@link NavItem} by `children`. */
+export type NavGroup = {
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  children: NavItem[];
 };
 
-const captureShelf: NavItem = {
-  href: "/capture",
-  label: "Capture shelf",
-  icon: Camera,
-  isActive: (p) => p.startsWith("/capture"),
-};
+type NavNode = NavItem | NavGroup;
 
-export const inventory: NavItem = {
-  href: "/inventory",
-  label: "Inventory",
-  icon: entities.inventory.lucideIcon,
-  isActive: (p) =>
-    p.startsWith("/inventory") && p !== "/inventory/quick-capture",
-};
+export const isNavGroup = (node: NavNode): node is NavGroup =>
+  "children" in node;
 
-export const locations: NavItem = {
-  href: "/locations",
-  label: "Locations",
-  icon: entities.location.lucideIcon,
-  isActive: (p) => p.startsWith("/locations"),
-};
-
+// The handful of leaves shared across surfaces that aren't derived from the
+// desktop tree (top-level desktop + bottom tabs / public bar). Everything else
+// is inlined where it's used.
+const home: NavItem = { to: "/", label: "Home", icon: Home };
 const recipes: NavItem = {
-  href: "/recipes",
+  to: "/recipes",
   label: "Recipes",
   icon: entities.recipe.lucideIcon,
-  isActive: (p) => p.startsWith("/recipes"),
+};
+const locations: NavItem = {
+  to: "/locations",
+  label: "Locations",
+  icon: entities.location.lucideIcon,
+};
+const inventory: NavItem = {
+  to: "/inventory",
+  label: "Inventory",
+  icon: entities.inventory.lucideIcon,
 };
 
-const cookbooks: NavItem = {
-  href: "/cookbooks",
-  label: "Cookbooks",
-  icon: BookOpen,
-  isActive: (p) => p.startsWith("/cookbooks"),
-};
+/**
+ * The signed-in desktop bar, top to bottom — the single source of truth for the
+ * authed IA. Dropdowns nest their leaves and own their trigger icon. Active
+ * state is derived (see {@link findActiveTo}), so nothing carries match logic.
+ */
+export const desktopNav: NavNode[] = [
+  home,
+  { to: "/products", label: "Products", icon: entities.product.lucideIcon },
+  {
+    label: "Kitchen",
+    icon: entities.recipe.lucideIcon,
+    children: [
+      {
+        to: "/ingredients",
+        label: "Ingredients",
+        icon: entities.ingredient.lucideIcon,
+      },
+      { to: "/ingredients/workbench", label: "Workbench", icon: ListChecks },
+      {
+        to: "/ingredients/equivalences",
+        label: "Equivalences",
+        icon: ArrowLeftRight,
+      },
+      recipes,
+      { to: "/cookbooks", label: "Cookbooks", icon: BookOpen },
+      { to: "/meals", label: "Meals", icon: Utensils },
+      {
+        to: "/meals/shopping-list",
+        label: "Shopping list",
+        icon: ShoppingCart,
+      },
+      { to: "/meals/suggestions", label: "What can I make?", icon: Sparkles },
+      {
+        to: "/usda",
+        label: "USDA Foods",
+        icon: entities["usda-food"].lucideIcon,
+      },
+    ],
+  },
+  locations,
+  inventory,
+  { to: "/projects", label: "Projects", icon: Hammer },
+  {
+    label: "Reports",
+    icon: LayoutDashboard,
+    children: [
+      { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { to: "/activity", label: "Activity", icon: Activity },
+      { to: "/insights", label: "Insights", icon: TrendingUp },
+      { to: "/pantry-view", label: "Pantry view", icon: Boxes },
+      { to: "/problems", label: "Problems", icon: AlertTriangle },
+      { to: "/ai-smoke-test", label: "AI smoke test", icon: Sparkles },
+    ],
+  },
+  {
+    label: "More",
+    icon: MoreHorizontal,
+    children: [
+      { to: "/capture", label: "Capture shelf", icon: Camera },
+      { to: "/labels", label: "Labels", icon: QrCode },
+      { to: "/ask", label: "Ask AI", icon: Bot },
+      { to: "/images", label: "Images", icon: entities.image.lucideIcon },
+      { to: "/settings", label: "Settings", icon: Settings },
+    ],
+  },
+];
 
-const meals: NavItem = {
-  href: "/meals",
-  label: "Meals",
-  icon: Utensils,
-  // The calendar + everything under /meals EXCEPT the suggestions and
-  // shopping-list surfaces, which have their own nav items below.
-  isActive: (p) =>
-    p.startsWith("/meals") &&
-    p !== "/meals/suggestions" &&
-    p !== "/meals/shopping-list",
-};
+/** Every authed leaf, flattened out of the tree (groups expanded). */
+const desktopLeaves: NavItem[] = desktopNav.flatMap((node) =>
+  isNavGroup(node) ? node.children : [node],
+);
 
-const mealSuggestions: NavItem = {
-  href: "/meals/suggestions",
-  label: "What can I make?",
-  icon: Sparkles,
-  isActive: (p) => p === "/meals/suggestions",
-};
-
-const shoppingList: NavItem = {
-  href: "/meals/shopping-list",
-  label: "Shopping list",
-  icon: ShoppingCart,
-  isActive: (p) => p === "/meals/shopping-list",
-};
-
-const search: NavItem = {
-  href: "/search",
-  label: "Search",
-  icon: Search,
-  isActive: (p) => p.startsWith("/search"),
-};
-
-const ask: NavItem = {
-  href: "/ask",
-  label: "Ask AI",
-  icon: Bot,
-  isActive: (p) => p.startsWith("/ask"),
-};
-
-export const products: NavItem = {
-  href: "/products",
-  label: "Products",
-  icon: entities.product.lucideIcon,
-  isActive: (p) => p.startsWith("/products"),
-};
-
-export const home: NavItem = {
-  href: "/",
-  label: "Home",
-  icon: Home,
-  isActive: (p) => p === "/",
-};
-
-const ingredients: NavItem = {
-  href: "/ingredients",
-  label: "Ingredients",
-  icon: entities.ingredient.lucideIcon,
-  // Everything under /ingredients EXCEPT the workbench + equivalences surfaces,
-  // which have their own nav items below.
-  isActive: (p) =>
-    p.startsWith("/ingredients") &&
-    p !== "/ingredients/workbench" &&
-    p !== "/ingredients/equivalences",
-};
-
-const ingredientWorkbench: NavItem = {
-  href: "/ingredients/workbench",
-  label: "Workbench",
-  icon: ListChecks,
-  isActive: (p) => p === "/ingredients/workbench",
-};
-
-const ingredientEquivalences: NavItem = {
-  href: "/ingredients/equivalences",
-  label: "Equivalences",
-  icon: ArrowLeftRight,
-  isActive: (p) => p === "/ingredients/equivalences",
-};
-
-const usda: NavItem = {
-  href: "/usda",
-  label: "USDA Foods",
-  icon: entities["usda-food"].lucideIcon,
-  isActive: (p) => p.startsWith("/usda"),
-};
-
-const dashboard: NavItem = {
-  href: "/dashboard",
-  label: "Dashboard",
-  icon: LayoutDashboard,
-  isActive: (p) => p === "/dashboard",
-};
-
-const activity: NavItem = {
-  href: "/activity",
-  label: "Activity",
-  icon: Activity,
-  isActive: (p) => p.startsWith("/activity"),
-};
-
-const insights: NavItem = {
-  href: "/insights",
-  label: "Insights",
-  icon: TrendingUp,
-  isActive: (p) => p.startsWith("/insights"),
-};
-
-const pantryView: NavItem = {
-  href: "/pantry-view",
-  label: "Pantry view",
-  icon: Boxes,
-  isActive: (p) => p.startsWith("/pantry-view"),
-};
-
-const problems: NavItem = {
-  href: "/problems",
-  label: "Problems",
-  icon: AlertTriangle,
-  isActive: (p) => p.startsWith("/problems"),
-};
-
-const aiSmokeTest: NavItem = {
-  href: "/ai-smoke-test",
-  label: "AI smoke test",
-  icon: Sparkles,
-  isActive: (p) => p.startsWith("/ai-smoke-test"),
-};
-
-const images: NavItem = {
-  href: "/images",
-  label: "Images",
-  icon: entities.image.lucideIcon,
-  isActive: (p) => p.startsWith("/images"),
-};
-
-const labels: NavItem = {
-  href: "/labels",
-  label: "Labels",
-  icon: QrCode,
-  isActive: (p) => p.startsWith("/labels"),
-};
-
-export const projects: NavItem = {
-  href: "/projects",
-  label: "Projects",
-  icon: Hammer,
-  isActive: (p) => p.startsWith("/projects"),
-};
-
-const settings: NavItem = {
-  href: "/settings",
-  label: "Settings",
-  icon: Settings,
-  isActive: (pathname) => pathname.startsWith("/settings"),
-};
-
-// Public routes reachable without signing in (see _authenticated layout guard).
-export const docs: NavItem = {
-  href: "/docs",
-  label: "Docs",
-  icon: FileText,
-  isActive: (p) => p.startsWith("/docs"),
-};
-
-export const design: NavItem = {
-  href: "/design",
-  label: "Design",
-  icon: Palette,
-  isActive: (p) => p.startsWith("/design"),
-};
-
-// Export groupings for consumers
-
-// Shown in the navbar when signed out — only routes that don't require auth.
-export const publicNavItems: NavItem[] = [home, docs, design];
-
+/** Mobile bottom tabs (primary). `scan`/`search` are mobile-only shortcuts. */
 export const bottomNavItems: NavItem[] = [
-  scan,
+  {
+    to: "/inventory/quick-capture",
+    search: { scanner: true },
+    label: "Scan UPC",
+    icon: ScanBarcode,
+  },
   inventory,
   locations,
   recipes,
-  search,
+  { to: "/search", label: "Search", icon: Search },
 ];
 
-export const moreNavItems: NavItem[] = [
+const bottomTabTargets = new Set(bottomNavItems.map((item) => item.to));
+
+/** Mobile "More" sheet — every authed leaf that isn't already a primary tab. */
+export const moreNavItems: NavItem[] = desktopLeaves.filter(
+  (leaf) => !bottomTabTargets.has(leaf.to),
+);
+
+/** Signed-out bar / bottom tabs — always flat leaves (no dropdowns). */
+export const publicNavItems: NavItem[] = [
   home,
-  captureShelf,
-  ask,
-  products,
-  ingredients,
-  ingredientWorkbench,
-  ingredientEquivalences,
-  cookbooks,
-  meals,
-  shoppingList,
-  mealSuggestions,
-  usda,
-  projects,
-  dashboard,
-  activity,
-  insights,
-  pantryView,
-  problems,
-  aiSmokeTest,
-  images,
-  labels,
-  settings,
+  { to: "/docs", label: "Docs", icon: FileText },
+  { to: "/design", label: "Design", icon: Palette },
 ];
 
-export const kitchenItems: NavItem[] = [
-  ingredients,
-  ingredientWorkbench,
-  ingredientEquivalences,
-  recipes,
-  cookbooks,
-  meals,
-  shoppingList,
-  mealSuggestions,
-  usda,
-];
+// --- Derived active state ---------------------------------------------------
 
-export const reportsItems: NavItem[] = [
-  dashboard,
-  activity,
-  insights,
-  pantryView,
-  problems,
-  aiSmokeTest,
-];
+/** Every reachable nav target, deduped — the universe active matching resolves over. */
+const allTargets: string[] = uniq(
+  [...desktopLeaves, ...bottomNavItems, ...publicNavItems].map(
+    (leaf) => leaf.to as string,
+  ),
+);
 
-export const desktopMoreItems: NavItem[] = [
-  captureShelf,
-  labels,
-  ask,
-  images,
-  settings,
-];
+/**
+ * The active target is the longest *segment* prefix of the pathname. The
+ * `to === path || path.startsWith(`${to}/`)` test makes `/` exact for free
+ * (`"/" + "/"` never prefixes a subpath), so no per-leaf match logic is needed.
+ * Returns the matching `to`; consumers compare their own `to` against it.
+ */
+function findActiveTo(pathname: string): string | undefined {
+  let best: string | undefined;
+  for (const to of allTargets) {
+    if (
+      (pathname === to || pathname.startsWith(`${to}/`)) &&
+      (best === undefined || to.length > best.length)
+    ) {
+      best = to;
+    }
+  }
+  return best;
+}
+
+/** Reactive {@link findActiveTo} keyed on the current pathname. */
+export function useActiveTo(): string | undefined {
+  const pathname = useLocation().pathname;
+  return useMemo(() => findActiveTo(pathname), [pathname]);
+}

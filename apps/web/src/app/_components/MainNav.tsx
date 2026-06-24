@@ -1,14 +1,7 @@
 import { Link } from "@tanstack/react-router";
-import {
-  Bug,
-  BugOff,
-  LayoutDashboard,
-  MoreHorizontal,
-  Search,
-} from "lucide-react";
+import { Bug, BugOff, Search } from "lucide-react";
 import { FlexContainer } from "~/components/layout/flex-container";
 import { Button } from "~/components/ui/button";
-import { entities } from "~/entities/entities";
 import { useDebug } from "~/hooks/useDebug";
 import { useNavAuthed } from "~/hooks/useNavAuthed";
 import { cn } from "~/lib/utils";
@@ -17,23 +10,7 @@ import { NavLink } from "./navbar/nav-link";
 import { ProblemsBadge } from "./navbar/problems-badge";
 import { QuickActionsMenu } from "./navbar/quick-actions-menu";
 import { UserAvatarDropdown } from "./navbar/user-avatar-dropdown";
-import {
-  design,
-  desktopMoreItems,
-  docs,
-  home,
-  inventory,
-  kitchenItems,
-  locations,
-  products,
-  projects,
-  reportsItems,
-} from "./navigation/nav-items";
-
-// Icons for the desktop dropdowns; the links use each NavItem's own icon.
-const KitchenIcon = entities.recipe.lucideIcon;
-const ReportsIcon = LayoutDashboard;
-const MoreIcon = MoreHorizontal;
+import { desktopNav, isNavGroup, publicNavItems } from "./navigation/nav-items";
 
 interface MainNavProps extends React.HTMLAttributes<HTMLElement> {
   onSearchClick?: () => void;
@@ -66,35 +43,12 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
         )}
         {...props}
       >
-        <NavLink item={home} />
-
-        {authed ? (
-          <>
-            <NavLink item={products} />
-            <NavDropdown
-              label="Kitchen"
-              items={kitchenItems}
-              icon={KitchenIcon}
-            />
-            <NavLink item={locations} />
-            <NavLink item={inventory} />
-            <NavLink item={projects} />
-            <NavDropdown
-              label="Reports"
-              items={reportsItems}
-              icon={ReportsIcon}
-            />
-            <NavDropdown
-              label="More"
-              items={desktopMoreItems}
-              icon={MoreIcon}
-            />
-          </>
-        ) : (
-          <>
-            <NavLink item={docs} />
-            <NavLink item={design} />
-          </>
+        {(authed ? desktopNav : publicNavItems).map((node) =>
+          isNavGroup(node) ? (
+            <NavDropdown key={node.label} group={node} />
+          ) : (
+            <NavLink key={node.to} item={node} />
+          ),
         )}
       </nav>
 
