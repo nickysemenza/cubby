@@ -327,12 +327,56 @@ export const inventoryentryList = async (
   return { data: inventoryEntries, count: totalCount };
 };
 
+/**
+ * Reject inventory writes whose target product/location is soft-deleted. Without
+ * this, an entry can be created or re-pointed (update / bulk-move) to a deleted
+ * parent — the entry stays live but references a "gone" product/location, which
+ * then leaks into global search (the symptom guarded in repo/search.ts). Only the
+ * ids actually provided are checked, so partial updates stay cheap.
+ */
+const assertLiveTargets = async (
+  db: Database,
+  targets: { productId?: ProductId; locationId?: LocationId },
+) => {
+  const client = getDb(db);
+  if (targets.productId !== undefined) {
+    const live = await client.query.product.findFirst({
+      where: and(eq(product.id, targets.productId), notDeleted(product)),
+      columns: { id: true },
+    });
+    if (!live) {
+      throw createAppError(
+        "PRODUCT_NOT_FOUND",
+        `Product ${targets.productId} does not exist or has been deleted`,
+      );
+    }
+  }
+  if (targets.locationId !== undefined) {
+    const live = await client.query.location.findFirst({
+      where: and(eq(location.id, targets.locationId), notDeleted(location)),
+      columns: { id: true },
+    });
+    if (!live) {
+      throw createAppError(
+        "LOCATION_NOT_FOUND",
+        `Location ${targets.locationId} does not exist or has been deleted`,
+      );
+    }
+  }
+};
+
 export const updateInventoryEntry = async (
   db: Database,
   id: InventoryId,
   data: UpdateInventoryEntryData,
   actor: ActorContext,
 ) => {
+  // Guard against re-pointing the entry at a soft-deleted product/location.
+  await assertLiveTargets(db, {
+    productId: data.productId,
+    locationId: data.locationId,
+  });
+
   // Fetch current state for audit logging and valuation computation
   const before = await getDb(db).query.inventoryEntry.findFirst({
     where: eq(inventoryEntry.id, id),
@@ -412,6 +456,12 @@ export const createInventoryEntry = async (
   data: CreateInventoryEntryData,
   actor: ActorContext,
 ) => {
+  // Guard against creating an entry pointed at a soft-deleted product/location.
+  await assertLiveTargets(db, {
+    productId: data.productId,
+    locationId: data.locationId,
+  });
+
   // Compute valuation based on amount and product price
   const amountValue =
     typeof data.amount === "object" && data.amount !== null
