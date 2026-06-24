@@ -83,7 +83,7 @@ export const getRecipeByID = async (
 
 /**
  * Get many recipes by ID in one query. Returns the full ingredient graph (incl.
- * the `ingredient.Recipe` discriminator) but omits images — used by client-side
+ * the `ingredient.recipe` discriminator) but omits images — used by client-side
  * cost rollup to resolve sub-recipes (recipe-as-ingredient). Missing/deleted ids
  * are simply absent from the result.
  */

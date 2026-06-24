@@ -144,7 +144,7 @@ const findDuplicates = protectedProcedure
       name: product.name,
       manufacturer: product.manufacturer,
       expectedQuantity: product.expectedQuantity,
-      locations: product.InventoryEntry.map((entry) => ({
+      locations: product.inventoryEntry.map((entry) => ({
         id: entry.location.id,
         name: entry.location.name,
       })),

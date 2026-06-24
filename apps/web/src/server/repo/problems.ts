@@ -71,7 +71,7 @@ export const findDuplicateUniqueProducts = async (
       expectedQuantity: true,
     },
     with: {
-      InventoryEntry: {
+      inventoryEntry: {
         where: notDeleted(inventoryEntry),
         columns: {
           id: true,
@@ -91,14 +91,14 @@ export const findDuplicateUniqueProducts = async (
 
   return duplicates
     .filter(
-      (prod) => prod.expectedQuantity === 1 && prod.InventoryEntry.length > 1,
+      (prod) => prod.expectedQuantity === 1 && prod.inventoryEntry.length > 1,
     )
     .map((prod) => ({
       id: prod.id,
       name: prod.name,
       manufacturer: prod.manufacturer,
       expectedQuantity: prod.expectedQuantity,
-      locations: prod.InventoryEntry.map((entry) => ({
+      locations: prod.inventoryEntry.map((entry) => ({
         id: entry.location.id,
         name: entry.location.name,
       })),
@@ -792,7 +792,7 @@ export const loadProductsForCoverage = async (db: Database) =>
       },
       // The linked ingredient's N/A opt-outs, so partial coverage grades only the
       // kinds that apply (a count-only item isn't flagged for a volume it never uses).
-      Ingredient: { columns: { naKinds: true } },
+      ingredient: { columns: { naKinds: true } },
     },
   });
 

@@ -16,7 +16,7 @@ import type { InventoryEntryDeepDB } from "./types";
 export const dbInventoryEntryToAPI: (
   inventoryentry: InventoryEntryDeepDB,
 ) => z.infer<typeof inventoryWithLocationAndProductOut> = (inventoryentry) => {
-  const { Product, location, ...restOfInventoryEntry } = inventoryentry;
+  const { product, location, ...restOfInventoryEntry } = inventoryentry;
   const { type, images: locationImages, ...restOfLocation } = location;
 
   // Validate amount from JSON column
@@ -41,14 +41,14 @@ export const dbInventoryEntryToAPI: (
     },
     product: {
       ...(() => {
-        const { ingredientId: _ingredientId, ...rest } = Product;
+        const { ingredientId: _ingredientId, ...rest } = product;
         return rest;
       })(),
-      id: Product.id,
-      shortcode: unsafeProductShortcode(Product.shortcode),
-      unitMappings: addProductSourceMetadata(Product.id, Product.unitMappings),
-      externalIds: Product.externalIds.filter((eid) => eid.deletedAt === null),
-      images: extractImagesFromJoinTable(Product.images),
+      id: product.id,
+      shortcode: unsafeProductShortcode(product.shortcode),
+      unitMappings: addProductSourceMetadata(product.id, product.unitMappings),
+      externalIds: product.externalIds.filter((eid) => eid.deletedAt === null),
+      images: extractImagesFromJoinTable(product.images),
     },
   };
 };

@@ -17,10 +17,10 @@ import type {
  * Used when fetching products with full relations.
  */
 export type ProductDeepDB = typeof product.$inferSelect & {
-  Ingredient: typeof ingredient.$inferSelect | null;
+  ingredient: typeof ingredient.$inferSelect | null;
   unitMappings: Array<typeof productUnitMappings.$inferSelect>;
   externalIds: Array<typeof productExternalId.$inferSelect>;
-  InventoryEntry: Array<
+  inventoryEntry: Array<
     typeof inventoryEntry.$inferSelect & {
       location: typeof location.$inferSelect & {
         images: Array<{

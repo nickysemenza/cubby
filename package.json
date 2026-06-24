@@ -7,7 +7,7 @@
     "dev": "pnpm -r dev",
     "dev:log": "pnpm -r --reporter append-only dev",
     "build": "pnpm -r build",
-    "check": "biome check && pnpm typecheck",
+    "check": "biome check && pnpm typecheck && node scripts/check-conventions.mjs",
     "typecheck": "pnpm -r --parallel typecheck",
     "typecheck:stable": "pnpm -r --parallel run typecheck:stable",
     "lint": "pnpm -r lint",

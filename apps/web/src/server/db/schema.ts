@@ -740,12 +740,12 @@ export const recipeSectionRelations = relations(
 );
 
 export const ingredientRelations = relations(ingredient, ({ one, many }) => ({
-  Recipe: one(recipe, {
+  recipe: one(recipe, {
     fields: [ingredient.recipeId],
     references: [recipe.id],
   }),
-  RecipeSectionIngredient: many(recipeSectionIngredient),
-  Product: many(product),
+  recipeSectionIngredient: many(recipeSectionIngredient),
+  product: many(product),
 }));
 
 export const recipeSectionIngredientRelations = relations(
@@ -778,13 +778,13 @@ export const mealRecipeRelations = relations(mealRecipe, ({ one }) => ({
 }));
 
 export const productRelations = relations(product, ({ one, many }) => ({
-  Ingredient: one(ingredient, {
+  ingredient: one(ingredient, {
     fields: [product.ingredientId],
     references: [ingredient.id],
   }),
   unitMappings: many(productUnitMappings),
   externalIds: many(productExternalId),
-  InventoryEntry: many(inventoryEntry),
+  inventoryEntry: many(inventoryEntry),
   images: many(productImage),
 }));
 
@@ -817,12 +817,12 @@ export const locationRelations = relations(location, ({ one, many }) => ({
   children: many(location, {
     relationName: "LocationToLocation",
   }),
-  InventoryEntries: many(inventoryEntry),
+  inventoryEntries: many(inventoryEntry),
   images: many(locationImage),
 }));
 
 export const inventoryEntryRelations = relations(inventoryEntry, ({ one }) => ({
-  Product: one(product, {
+  product: one(product, {
     fields: [inventoryEntry.productId],
     references: [product.id],
   }),

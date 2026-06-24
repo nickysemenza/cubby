@@ -17,7 +17,7 @@ import type {
  * ingredient is itself a sub-recipe). Shared building block for the types below.
  */
 type IngredientWithRecipeDB = typeof ingredient.$inferSelect & {
-  Recipe: typeof recipe.$inferSelect | null;
+  recipe: typeof recipe.$inferSelect | null;
 };
 
 /**

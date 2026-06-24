@@ -59,10 +59,10 @@ export const dbProductToAPI = (
   productData: ProductDeepDB,
 ): z.infer<typeof productWithIngredientAndInventoryAndMappingsOut> => {
   const {
-    Ingredient,
+    ingredient,
     unitMappings,
     externalIds,
-    InventoryEntry,
+    inventoryEntry,
     images,
     shortcode,
     ...restOfProduct
@@ -71,11 +71,11 @@ export const dbProductToAPI = (
   const result = {
     ...restOfProduct,
     shortcode: shortcode ? unsafeProductShortcode(shortcode) : null,
-    ingredient: Ingredient,
+    ingredient,
     unitMappings: addProductSourceMetadata(productData.id, unitMappings),
     externalIds: externalIds.filter((eid) => eid.deletedAt === null),
     images: extractImagesFromJoinTable(images),
-    inventoryEntry: mapRelation(InventoryEntry, (entry) => {
+    inventoryEntry: mapRelation(inventoryEntry, (entry) => {
       const {
         type,
         images: locationImages,

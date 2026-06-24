@@ -141,7 +141,7 @@ const findProductCoverageProblems = async (
     // non-nullable schema field.
     if (p.ingredientId == null) continue;
 
-    const applicable = gradedKinds(p.Ingredient?.naKinds);
+    const applicable = gradedKinds(p.ingredient?.naKinds);
     const cov = conversionCoverage(effective, applicable);
     if (cov.tier === "complete") continue;
 

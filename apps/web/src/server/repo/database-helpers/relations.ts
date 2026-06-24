@@ -38,7 +38,7 @@ export const relations = {
   ingredient: {
     full: {
       with: {
-        Product: {
+        product: {
           with: {
             unitMappings: true,
             externalIds: true,
@@ -49,8 +49,8 @@ export const relations = {
             },
           },
         },
-        Recipe: true,
-        RecipeSectionIngredient: {
+        recipe: true,
+        recipeSectionIngredient: {
           where: notDeleted(recipeSectionIngredient),
           with: {
             recipeSection: {
@@ -66,10 +66,10 @@ export const relations = {
   product: {
     full: {
       with: {
-        Ingredient: true,
+        ingredient: true,
         unitMappings: true,
         externalIds: true,
-        InventoryEntry: {
+        inventoryEntry: {
           with: {
             location: {
               with: {
@@ -114,7 +114,7 @@ export const relations = {
               with: {
                 ingredient: {
                   with: {
-                    Recipe: true,
+                    recipe: true,
                   },
                 },
               },
@@ -129,7 +129,7 @@ export const relations = {
       },
     },
     // Lean variant for the recipe LIST: same nested ingredient graph as `full`
-    // (the `ingredient.Recipe` join is load-bearing — it drives the
+    // (the `ingredient.recipe` join is load-bearing — it drives the
     // "ingredient" vs "recipe" discriminator in sectionIngredientToAPI), but
     // omits `images`, which the list table never renders. Keeps the wire
     // payload and one per-recipe lateral join off the hot list query.
@@ -145,7 +145,7 @@ export const relations = {
               with: {
                 ingredient: {
                   with: {
-                    Recipe: true,
+                    recipe: true,
                   },
                 },
               },
@@ -168,9 +168,9 @@ export const relations = {
             },
           },
         },
-        InventoryEntries: {
+        inventoryEntries: {
           with: {
-            Product: true,
+            product: true,
           },
         },
         images: {
@@ -193,7 +193,7 @@ export const relations = {
   inventory: {
     full: {
       with: {
-        Product: {
+        product: {
           with: {
             unitMappings: true,
             externalIds: true,
