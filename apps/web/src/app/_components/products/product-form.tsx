@@ -309,6 +309,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
       isPending={isPending}
       onCancel={onCancel}
       submitButtonText={buttonText}
+      successMessage={mode === "create" ? "Product created" : "Product saved"}
       stickyFooter={!embedded}
       footerStart={
         embedded ? undefined : <ProductTally control={form.control} />
