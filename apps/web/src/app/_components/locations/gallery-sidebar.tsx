@@ -265,6 +265,9 @@ function SidebarTreeNode({
 
   return (
     <div>
+      {/* Non-semantic role="button" wrapper on purpose: the row is clickable
+          but contains a nested <button> for expand/collapse, so it can't be a
+          real <button> (no nested interactive controls). */}
       <Row
         ref={isActive ? activeItemRef : undefined}
         align="center"
