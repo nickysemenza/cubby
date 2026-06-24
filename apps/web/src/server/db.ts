@@ -11,6 +11,7 @@ import pg from "pg";
 import { env } from "~/env";
 import type { Database } from "./db/database";
 import * as schema from "./db/schema";
+import { TraceNames, withTrace } from "./tracing";
 
 // Re-export Database type for use throughout the application
 export type { Database };
@@ -87,6 +88,38 @@ if (!isCFWorkers) {
   if (env.NODE_ENV !== "production") globalForDb.db = moduleDb;
 }
 
+// Wrap a per-request pg.Pool's promise-form `query` in a NATIVE CF trace span.
+// The OTel drizzle instrumentation (instrumentDrizzleClient) no-ops on the prod
+// Worker — no OTel SDK is registered there — so DB time is otherwise invisible
+// in CF traces: a slow query shows only as unattributed gap inside the tRPC
+// span. This surfaces real per-query timing (incl. the FIRST query's
+// connection-establishment cost, since pg.Pool connects lazily on first query),
+// plus the statement text and row count.
+const tracePoolQueries = (pool: pg.Pool): void => {
+  const run = pool.query.bind(pool) as (...args: unknown[]) => unknown;
+  pool.query = ((...args: unknown[]) => {
+    // pg's `query` has callback overloads; only the promise form (what drizzle
+    // uses) is traced — pass anything with a trailing callback straight through.
+    if (typeof args[args.length - 1] === "function") return run(...args);
+    const head = args[0];
+    const sql =
+      typeof head === "string"
+        ? head
+        : head && typeof head === "object" && "text" in head
+          ? String((head as { text: unknown }).text)
+          : "unknown";
+    return withTrace(TraceNames.db("query"), async (span) => {
+      span.setAttribute("db.statement", sql.slice(0, 300));
+      const res = (await run(...args)) as {
+        rowCount?: number | null;
+        rows?: unknown[];
+      };
+      span.setAttribute("db.rowCount", res?.rowCount ?? res?.rows?.length ?? 0);
+      return res;
+    });
+  }) as typeof pool.query;
+};
+
 // ---------------------------------------------------------------------------
 // Exported db / drizzle — uses AsyncLocalStorage on CF, module instance in dev
 // ---------------------------------------------------------------------------
@@ -121,6 +154,7 @@ const getDbInstance = (): DBClient => {
         max: 5,
         allowExitOnIdle: true,
       });
+      tracePoolQueries(pool);
       const db = drizzleNodePostgres({ client: pool, schema });
       instrumentDrizzleClient(db, { dbSystem: "postgresql", dbName: "cubby" });
       holder.db = db;
