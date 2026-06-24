@@ -9,6 +9,10 @@ import type {
 import { initClient } from "@ts-rest/core";
 import { injectTraceContext, TraceNames, withTrace } from "~/server/tracing";
 
+// Per-request abort ceiling for usda-api fetches. See the call site for why this
+// is generous (caller-side transport overhead, not handler work).
+const USDA_FETCH_TIMEOUT_MS = 15_000;
+
 export class USDAClient {
   private client;
   private fetcher: typeof fetch;
@@ -68,7 +72,13 @@ export class USDAClient {
         try {
           const response = await this.fetcher(args.path, {
             ...args,
-            signal: AbortSignal.timeout(5_000),
+            // usda-api's internal work is ~500ms–1s, but caller-side fetch time
+            // through the service binding has been observed up to ~5s (platform
+            // transport/queue overhead we're now tracing via usda.request). A 5s
+            // ceiling aborted those genuinely-in-flight responses, surfacing as
+            // hard errors on the homepage. Until enrichment moves off the
+            // critical path, give slow-but-real responses room to land.
+            signal: AbortSignal.timeout(USDA_FETCH_TIMEOUT_MS),
           });
 
           // Cache successful getFood responses for 24 hours
@@ -97,7 +107,9 @@ export class USDAClient {
           // degrade past. Re-throw so callers surface it instead of silently
           // producing null/empty results (which would masquerade as "no data").
           if (error instanceof Error && error.name === "TimeoutError") {
-            console.warn(`[USDA] Timeout after 5000ms for ${args.path}`);
+            console.warn(
+              `[USDA] Timeout after ${USDA_FETCH_TIMEOUT_MS}ms for ${args.path}`,
+            );
           } else {
             console.warn(`[USDA] Request failed for ${args.path}:`, error);
           }
