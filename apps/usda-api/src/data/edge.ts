@@ -353,22 +353,18 @@ export function createEdgeUsdaDataSource(
     // R2 range-read + JSON/zod parse per row. Traced so a slow lookup shows
     // whether the time is R2 (cacheMisses/bytesRead) vs the index query above.
     const stats: HydrateStats = { cacheHits: 0, r2Reads: 0, bytesRead: 0 };
-    return withSpan(
-      "usda.hydrateRows",
-      async (span) => {
-        const result = await mapWithConcurrency(rows, r2Concurrency, (row) =>
-          hydrate(row, stats),
-        );
-        span.setAttributes({
-          rowCount: rows.length,
-          cacheHits: stats.cacheHits,
-          r2Reads: stats.r2Reads,
-          bytesRead: stats.bytesRead,
-        });
-        return result;
-      },
-      { rowCount: rows.length },
-    );
+    return withSpan("usda.hydrateRows", async (span) => {
+      const result = await mapWithConcurrency(rows, r2Concurrency, (row) =>
+        hydrate(row, stats),
+      );
+      span.setAttributes({
+        rowCount: rows.length,
+        cacheHits: stats.cacheHits,
+        r2Reads: stats.r2Reads,
+        bytesRead: stats.bytesRead,
+      });
+      return result;
+    });
   }
 
   async function findByColumn(
