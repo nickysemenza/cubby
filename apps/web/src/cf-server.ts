@@ -10,6 +10,7 @@ import * as Sentry from "@sentry/cloudflare";
 import { SENTRY_DSN } from "./lib/sentry-dsn";
 import { setCfEnv } from "./server/cf-env";
 import { withRequestDb } from "./server/db";
+import { withTrace } from "./server/tracing";
 
 // Cache the handler module promise so the dynamic import only runs once (on
 // first request). We keep it lazy (not a top-level static import) so that
@@ -67,29 +68,52 @@ const handler = {
 
     lastInterceptedError = null;
 
+    // Entry span at the very top of our handler body. The CF platform's auto
+    // root span covers the whole invocation incl. queue/dispatch BEFORE our code
+    // runs; this child measures only time inside fetch(). So when a trace shows
+    // a multi-second root with a sub-second tRPC child, the gap localizes here:
+    //  - cf.fetch ≈ root  → the time is in our code; the children below say where
+    //  - cf.fetch ≪ root  → it's platform queue/dispatch (cold isolate, request
+    //                       waiting for a worker) or response-body flush — not us
+    // cf.importHandler isolates the first-request dynamic import of the (large)
+    // server bundle; cf.handler is the TanStack handler up to the Response being
+    // ready (the streamed body finishes after, outside the span).
+    const url = new URL(request.url);
     try {
-      return await withRequestDb(env.HYPERDRIVE.connectionString, async () => {
-        const { default: handler } = await getHandler();
-        const response = await handler.fetch(request);
+      return await withTrace(
+        "cf.fetch",
+        (span) =>
+          withRequestDb(env.HYPERDRIVE.connectionString, async () => {
+            const { default: handler } = await withTrace(
+              "cf.importHandler",
+              () => getHandler(),
+            );
+            const response = await withTrace("cf.handler", async () =>
+              handler.fetch(request),
+            );
+            span.setAttribute("http.response.status_code", response.status);
 
-        // If Nitro returned a 500 and we intercepted a real error, log the details
-        // so they appear in `wrangler tail` (Nitro's response body is useless)
-        // and report it to Sentry — the handler swallows it into a 500 body, so
-        // withSentry's auto-capture (thrown-error only) never sees it.
-        if (response.status >= 500 && lastInterceptedError) {
-          console.error(
-            "[cf-server] Unhandled error:",
-            JSON.stringify(lastInterceptedError, null, 2),
-          );
-          const reconstructed = new Error(lastInterceptedError.message);
-          reconstructed.name = lastInterceptedError.name;
-          reconstructed.stack = lastInterceptedError.stack;
-          reconstructed.cause = lastInterceptedError.cause;
-          Sentry.captureException(reconstructed);
-        }
+            // If Nitro returned a 500 and we intercepted a real error, log the
+            // details so they appear in `wrangler tail` (Nitro's response body
+            // is useless) and report it to Sentry — the handler swallows it into
+            // a 500 body, so withSentry's auto-capture (thrown-error only) never
+            // sees it.
+            if (response.status >= 500 && lastInterceptedError) {
+              console.error(
+                "[cf-server] Unhandled error:",
+                JSON.stringify(lastInterceptedError, null, 2),
+              );
+              const reconstructed = new Error(lastInterceptedError.message);
+              reconstructed.name = lastInterceptedError.name;
+              reconstructed.stack = lastInterceptedError.stack;
+              reconstructed.cause = lastInterceptedError.cause;
+              Sentry.captureException(reconstructed);
+            }
 
-        return response;
-      });
+            return response;
+          }),
+        { "http.request.method": request.method, "url.path": url.pathname },
+      );
     } catch (error) {
       // Report to Sentry before swallowing: we return a generic 500 rather than
       // rethrowing, so withSentry's auto-capture would otherwise miss this.
