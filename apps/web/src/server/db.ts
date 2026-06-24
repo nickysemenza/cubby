@@ -99,8 +99,9 @@ const tracePoolQueries = (pool: pg.Pool): void => {
   const run = pool.query.bind(pool) as (...args: unknown[]) => unknown;
   pool.query = ((...args: unknown[]) => {
     // pg's `query` has callback overloads; only the promise form (what drizzle
-    // uses) is traced — pass anything with a trailing callback straight through.
-    if (typeof args[args.length - 1] === "function") return run(...args);
+    // uses) is traced. No args, or a trailing callback → pass straight through.
+    if (args.length === 0 || typeof args[args.length - 1] === "function")
+      return run(...args);
     const head = args[0];
     const sql =
       typeof head === "string"
@@ -108,13 +109,19 @@ const tracePoolQueries = (pool: pg.Pool): void => {
         : head && typeof head === "object" && "text" in head
           ? String((head as { text: unknown }).text)
           : "unknown";
+    // OTel semconv attribute names (db.query.text / db.response.returned_rows)
+    // so the spans line up with any standard dashboard, even on the custom
+    // CF/Grafana destination.
     return withTrace(TraceNames.db("query"), async (span) => {
-      span.setAttribute("db.statement", sql.slice(0, 300));
+      span.setAttribute("db.query.text", sql.slice(0, 300));
       const res = (await run(...args)) as {
         rowCount?: number | null;
         rows?: unknown[];
       };
-      span.setAttribute("db.rowCount", res?.rowCount ?? res?.rows?.length ?? 0);
+      span.setAttribute(
+        "db.response.returned_rows",
+        res?.rowCount ?? res?.rows?.length ?? 0,
+      );
       return res;
     });
   }) as typeof pool.query;
