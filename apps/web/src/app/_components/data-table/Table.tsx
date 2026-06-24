@@ -97,6 +97,8 @@ interface TTableProps<TItem> {
   swipeActions?: (row: Row<TItem>) => SwipeAction[];
   /** Callback when a row is clicked */
   onRowClick?: (row: Row<TItem>) => void;
+  /** Callback when a row is hovered (desktop) — used to prefetch row data */
+  onRowHover?: (row: Row<TItem>) => void;
   /** Bulk action bar (rendered in toolbar when rows are selected) */
   bulkActionBar?: ReactNode;
   /** Infinite scroll controls — when provided, mobile hides pagination and auto-loads more */
@@ -126,6 +128,7 @@ interface DataRowProps<TItem> {
   isFocused: boolean;
   isDebugEnabled: boolean;
   onRowClick?: (row: Row<TItem>) => void;
+  onRowHover?: (row: Row<TItem>) => void;
   rowClassName: string;
   cellClassName: string;
   /** Signature of visible column ids — re-render rows when columns toggle/reorder */
@@ -139,6 +142,7 @@ function DataRowInner<TItem>({
   isFocused,
   isDebugEnabled,
   onRowClick,
+  onRowHover,
   rowClassName,
   cellClassName,
   height,
@@ -152,6 +156,7 @@ function DataRowInner<TItem>({
         isFocused && "ring-2 ring-primary/30 ring-inset",
       )}
       onClick={onRowClick ? () => onRowClick(row) : undefined}
+      onMouseEnter={onRowHover ? () => onRowHover(row) : undefined}
       style={height ? { height } : undefined}
     >
       {row.getVisibleCells().map((cell) => (
@@ -198,6 +203,7 @@ function rowPropsAreEqual<TItem>(
     prev.isFocused === next.isFocused &&
     prev.isDebugEnabled === next.isDebugEnabled &&
     prev.onRowClick === next.onRowClick &&
+    prev.onRowHover === next.onRowHover &&
     prev.rowClassName === next.rowClassName &&
     prev.cellClassName === next.cellClassName &&
     prev.columnsKey === next.columnsKey &&
@@ -221,6 +227,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     renderMobileCard,
     swipeActions,
     onRowClick,
+    onRowHover,
     infiniteScroll,
     refreshControls,
     groupConfig,
@@ -474,6 +481,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                 isFocused={focusedRowIndex === row.index}
                 isDebugEnabled={isDebugEnabled}
                 onRowClick={onRowClick}
+                onRowHover={onRowHover}
                 rowClassName={cn(styles.row, getRowClassName?.(row))}
                 cellClassName={styles.cell}
                 columnsKey={columnsKey}
@@ -491,6 +499,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
               isFocused={focusedRowIndex === row.index}
               isDebugEnabled={isDebugEnabled}
               onRowClick={onRowClick}
+              onRowHover={onRowHover}
               rowClassName={cn(styles.row, getRowClassName?.(row))}
               cellClassName={styles.cell}
               columnsKey={columnsKey}

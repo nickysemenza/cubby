@@ -63,7 +63,10 @@ export const getRouter = () => {
       // main-thread freeze on load — confirmed via JS self-profiling (60% of
       // samples in `addSpanChildren`). Prod's React build emits no such measures,
       // so full tracing there is safe.
-      tracesSampleRate: isProd ? 1.0 : 0,
+      // Sample 10% of prod pageloads for tracing — full 100% added meaningful
+      // per-navigation instrumentation overhead with little extra signal for a
+      // single-user app. Errors + replay sampling are unaffected.
+      tracesSampleRate: isProd ? 0.1 : 0,
       replaysSessionSampleRate: isProd ? 0.1 : 0,
       replaysOnErrorSampleRate: isProd ? 1.0 : 0,
       // No browser-tracing integration in dev: its pageload transaction collects

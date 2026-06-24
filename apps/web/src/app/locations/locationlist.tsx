@@ -40,7 +40,7 @@ export function LocationList() {
     () => createColumnHelper<LocationOutWithParentChildren>(),
     [],
   );
-  const { onRowClick, PreviewSheet } = useEntityPreview("location");
+  const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("location");
 
   // Memoize invalidate keys to prevent recreating on every render
   const invalidateKeys = useMemo(() => [queryKeys.location.list] as const, []);
@@ -271,6 +271,7 @@ export function LocationList() {
         timing={timing}
         entity="location"
         onRowClick={onRowClick}
+        onRowHover={onRowHover}
         bulkActionBar={bulkActionBar}
         infiniteScroll={infiniteScroll}
         refreshControls={refreshControls}

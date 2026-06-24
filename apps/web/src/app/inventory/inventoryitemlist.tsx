@@ -38,7 +38,8 @@ export function InventoryItemList() {
   const api = useTRPC();
   const navigate = useNavigate();
   const columnHelper = createColumnHelper<InventoryListItem>();
-  const { onRowClick, PreviewSheet } = useEntityPreview("inventory");
+  const { onRowClick, onRowHover, PreviewSheet } =
+    useEntityPreview("inventory");
   const [moveTarget, setMoveTarget] = useState<InventoryListItem | null>(null);
   const [bulkMoveItems, setBulkMoveItems] = useState<InventoryListItem[]>([]);
 
@@ -252,6 +253,7 @@ export function InventoryItemList() {
           timing={timing}
           entity="inventory"
           onRowClick={onRowClick}
+          onRowHover={onRowHover}
           swipeActions={swipeActions}
           bulkActionBar={bulkActionBar}
           infiniteScroll={infiniteScroll}

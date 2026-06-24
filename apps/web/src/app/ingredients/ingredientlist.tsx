@@ -120,7 +120,8 @@ export function IngredientList() {
     () => createColumnHelper<IngredientWithFoodOut>(),
     [],
   );
-  const { onRowClick, PreviewSheet } = useEntityPreview("ingredient");
+  const { onRowClick, onRowHover, PreviewSheet } =
+    useEntityPreview("ingredient");
 
   // Memoize invalidate keys to prevent recreating on every render
   const invalidateKeys = useMemo(
@@ -298,6 +299,7 @@ export function IngredientList() {
         timing={timing}
         entity="ingredient"
         onRowClick={onRowClick}
+        onRowHover={onRowHover}
         bulkActionBar={bulkActionBar}
         infiniteScroll={infiniteScroll}
         refreshControls={refreshControls}

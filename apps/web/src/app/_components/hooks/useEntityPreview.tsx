@@ -1,6 +1,9 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 import { Sheet, SheetContent } from "~/components/ui/sheet";
+import { entityQueryOptions } from "~/entities/entity-query";
+import { useTRPC } from "~/trpc/react";
 import { EntityPreviewPanel } from "../search/entity-preview-panel";
 
 interface PreviewState {
@@ -13,8 +16,13 @@ interface UseEntityPreviewOptions {
   idField?: string;
 }
 
+// Entities the preview panel can't fetch by id (entityQueryOptions returns a
+// skipped query for these) — don't try to prefetch them.
+const NON_FETCHABLE: ReadonlySet<Entity> = new Set(["cookbook", "meal"]);
+
 /**
- * Hook for adding row-click preview panels to entity lists.
+ * Hook for adding row-click preview panels to entity lists. Hovering a row
+ * prefetches the preview's `getByID` query so the click opens warm.
  */
 export function useEntityPreview(
   fixedEntity?: Entity,
@@ -22,30 +30,56 @@ export function useEntityPreview(
 ) {
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const idField = options?.idField ?? "id";
+  const api = useTRPC();
+  const queryClient = useQueryClient();
 
-  // Accept any row with an 'original' property that has at least an id field
-  // This is compatible with TanStack's Row<T> for any T
-  // Note: entityType is handled separately to avoid conflicts with data that has its own entityType field
-  const onRowClick = useCallback(
-    <T extends Record<string, unknown>>(row: { original: T }) => {
-      // Cast to access entityType which may be present on some rows (like search results)
+  // Resolve { entityType, id } from a row the same way for click + hover.
+  // Note: entityType is handled separately to avoid conflicts with data that
+  // has its own entityType field (search results carry a per-row entityType).
+  const resolveRow = useCallback(
+    <T extends Record<string, unknown>>(row: {
+      original: T;
+    }): PreviewState | null => {
       const rowData = row.original as T & {
         entityType?: Entity | string | null;
       };
       const entityType =
         fixedEntity ?? (rowData.entityType as Entity | undefined);
-      if (!entityType) {
-        console.warn("useEntityPreview: No entity type provided");
-        return;
-      }
+      if (!entityType) return null;
       const id = rowData[idField];
-      if (id === undefined || id === null) {
-        console.warn(`useEntityPreview: No ${idField} field in row`);
-        return;
-      }
-      setPreview({ entityType, id: String(id) });
+      if (id === undefined || id === null) return null;
+      return { entityType, id: String(id) };
     },
     [fixedEntity, idField],
+  );
+
+  // Accept any row with an 'original' property that has at least an id field.
+  // Compatible with TanStack's Row<T> for any T.
+  const onRowClick = useCallback(
+    <T extends Record<string, unknown>>(row: { original: T }) => {
+      const resolved = resolveRow(row);
+      if (!resolved) {
+        console.warn("useEntityPreview: could not resolve entity/id from row");
+        return;
+      }
+      setPreview(resolved);
+    },
+    [resolveRow],
+  );
+
+  // Prefetch the preview query on hover so the sheet opens without a spinner.
+  // Same options the panel's useQuery uses → guaranteed cache hit. prefetchQuery
+  // no-ops when the data is fresh or already in flight.
+  const onRowHover = useCallback(
+    <T extends Record<string, unknown>>(row: { original: T }) => {
+      const resolved = resolveRow(row);
+      if (!resolved || NON_FETCHABLE.has(resolved.entityType)) return;
+      void queryClient.prefetchQuery(
+        // biome-ignore lint/suspicious/noExplicitAny: union of getByID queryOptions can't be narrowed for prefetchQuery (same cast the panel uses for useQuery)
+        entityQueryOptions(api, resolved.entityType, resolved.id) as any,
+      );
+    },
+    [resolveRow, api, queryClient],
   );
 
   const closePreview = useCallback(() => setPreview(null), []);
@@ -60,5 +94,12 @@ export function useEntityPreview(
     </Sheet>
   );
 
-  return { onRowClick, PreviewSheet, preview, setPreview, closePreview };
+  return {
+    onRowClick,
+    onRowHover,
+    PreviewSheet,
+    preview,
+    setPreview,
+    closePreview,
+  };
 }

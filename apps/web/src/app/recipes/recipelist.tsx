@@ -69,7 +69,7 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
   const api = useTRPC();
   const navigate = useNavigate();
   const columnHelper = createColumnHelper<RecipeOut>();
-  const { onRowClick, PreviewSheet } = useEntityPreview("recipe");
+  const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("recipe");
 
   const columns = useMemo(
     () => [
@@ -289,6 +289,7 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
         timing={timing}
         entity="recipe"
         onRowClick={onRowClick}
+        onRowHover={onRowHover}
         actions={actions}
         bulkActionBar={bulkActionBar}
         infiniteScroll={infiniteScroll}

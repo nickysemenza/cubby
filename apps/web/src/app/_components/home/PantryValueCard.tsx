@@ -17,6 +17,17 @@ const BAR_COLORS = [
 ];
 
 /**
+ * Exact inventory.list input the card reads. Exported so the home route loader
+ * can prefetch the same query key (warming the card before it mounts). Must
+ * match the card's `useQuery` input or the cache won't be reused.
+ */
+export const PANTRY_VALUE_OPTS = {
+  sort: { orderBy: "createdAt", direction: "desc" },
+  pagination: { pageIndex: 0, pageSize: 1000 },
+  filters: {},
+} as const;
+
+/**
  * Home-page ledger chart: total pantry value with a bordered bar per top
  * location (the mockup's "spend by category" treatment, fed by real data).
  * Uses precomputed item valuations — no WASM, one inventory.list query.
@@ -29,11 +40,7 @@ export function PantryValueCard() {
   // public home page.
   const isAuthenticated = useHydrated() && !!session.data?.user;
   const { data } = useQuery({
-    ...api.inventory.list.queryOptions({
-      sort: { orderBy: "createdAt", direction: "desc" },
-      pagination: { pageIndex: 0, pageSize: 1000 },
-      filters: {},
-    }),
+    ...api.inventory.list.queryOptions(PANTRY_VALUE_OPTS),
     enabled: isAuthenticated,
   });
 

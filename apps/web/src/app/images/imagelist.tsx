@@ -14,7 +14,7 @@ import { useTRPC } from "~/trpc/react";
 export default function ImageList() {
   const api = useTRPC();
   const columnHelper = createColumnHelper<ImageWithEntity>();
-  const { onRowClick, PreviewSheet } = useEntityPreview("image");
+  const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("image");
 
   const { table, isLoading, error, timing, infiniteScroll, refreshControls } =
     useEntityList({
@@ -140,6 +140,7 @@ export default function ImageList() {
         timing={timing}
         entity="image"
         onRowClick={onRowClick}
+        onRowHover={onRowHover}
         infiniteScroll={infiniteScroll}
         refreshControls={refreshControls}
       />

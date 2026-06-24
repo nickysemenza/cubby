@@ -49,7 +49,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
     () => createColumnHelper<ProductWithFoodOut>(),
     [],
   );
-  const { onRowClick, PreviewSheet } = useEntityPreview("product");
+  const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("product");
 
   // Memoize invalidate keys to prevent recreating on every render
   const invalidateKeys = useMemo(() => [queryKeys.product.list] as const, []);
@@ -357,6 +357,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
           timing={timing}
           entity="product"
           onRowClick={onRowClick}
+          onRowHover={onRowHover}
           actions={actions}
           bulkActionBar={bulkActionBar}
           infiniteScroll={infiniteScroll}

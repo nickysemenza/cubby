@@ -24,9 +24,12 @@ import { CoreNutrientCoverage } from "../_components/usda/core-nutrient-coverage
 
 export function USDAFoodList() {
   const api = useTRPC();
-  const { onRowClick, PreviewSheet } = useEntityPreview("usda-food", {
-    idField: "fdc_id",
-  });
+  const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview(
+    "usda-food",
+    {
+      idField: "fdc_id",
+    },
+  );
   // Set up table state
   const tableState = useTableState({ initialSort: "fdc_id" });
 
@@ -218,6 +221,7 @@ export function USDAFoodList() {
         ariaLabel="USDA Foods Table"
         timing={timing}
         onRowClick={onRowClick}
+        onRowHover={onRowHover}
       />
       <PreviewSheet />
     </div>

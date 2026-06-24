@@ -52,7 +52,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
   const api = useTRPC();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const { onRowClick, PreviewSheet } = useEntityPreview();
+  const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview();
 
   // Search query - 50 per entity type for full search page
   const { data, isLoading, error } = useQuery({
@@ -167,6 +167,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
             error={error}
             ariaLabel="Search results"
             onRowClick={onRowClick}
+            onRowHover={onRowHover}
           />
         )
       ) : jumps.length > 0 || recents.length > 0 ? (
