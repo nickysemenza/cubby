@@ -162,8 +162,6 @@ jobs:
     # needs.<job>.result to 'success' even on failure, defeating the check-tests
     # gate. The test step keeps step-level continue-on-error so coverage still
     # uploads on failure; the final "Fail if tests failed" step then fails honestly.
-    outputs:
-      test-passed: ${{ steps.test.outcome == 'success' }}
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-node-with-deps
@@ -215,8 +213,6 @@ jobs:
     # service-container pull never sits on the fast unit gate above. Still gates
     # the deploy via check-tests. Same honest-failure pattern (no job-level
     # continue-on-error; step-level so coverage uploads on failure).
-    outputs:
-      test-passed: ${{ steps.test.outcome == 'success' }}
     services:
       postgres:
         image: postgres
@@ -312,8 +308,6 @@ jobs:
             path: packages/usda-schemas
           - name: upc-lookup
             path: apps/upc-lookup
-    outputs:
-      test-passed: ${{ steps.test.outcome == 'success' }}
 
     steps:
       - uses: actions/checkout@v6
@@ -368,8 +362,6 @@ jobs:
     if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.bypass_e2e) }}
     needs: [build-wasm]
     runs-on: ubuntu-latest
-    outputs:
-      test-passed: ${{ steps.e2e-test.outcome == 'success' }}
     env:
       NODE_OPTIONS: "--max-old-space-size=4096"
       E2E_TEST_USER_EMAIL: nicky@test.com
