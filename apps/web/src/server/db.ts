@@ -51,7 +51,6 @@ const createPoolClient = (connectionString: string) => {
 // /auth/sign-in, bot 404s) never open a Neon connection.
 type LazyDbHolder = {
   connectionString: string;
-  pool?: pg.Pool;
   db?: DBClient;
 };
 
@@ -124,7 +123,6 @@ const getDbInstance = (): DBClient => {
       });
       const db = drizzleNodePostgres({ client: pool, schema });
       instrumentDrizzleClient(db, { dbSystem: "postgresql", dbName: "cubby" });
-      holder.pool = pool;
       holder.db = db;
     }
     return holder.db;
