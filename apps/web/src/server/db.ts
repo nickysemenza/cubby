@@ -32,10 +32,23 @@ type DBClient = NodePgDatabase<typeof schema>;
 // (incl. the first query's connection-establishment cost, since pg.Pool connects
 // lazily) plus the statement + row count, in BOTH runtimes.
 const TRACED = Symbol("worker-tracing:traced");
+const DB_SYSTEM = "postgresql";
+const DB_NAMESPACE = "cubby";
+const MAX_STATEMENT_LEN = 1000;
+
+// The SQL operation = the leading keyword (SELECT/INSERT/UPDATE/DELETE/BEGIN/…),
+// uppercased. This is exactly how @kubiks/otel-drizzle derives db.operation — it
+// reads the compiled SQL text, NOT the drizzle query builder (it extracts no
+// table name and pulls db.name/peer from caller config), so there's nothing the
+// pg layer can't see. That's why we don't patch drizzle internals.
+const extractOperation = (sql: string): string | undefined =>
+  /^\s*(\w+)/u.exec(sql)?.[1]?.toUpperCase();
 
 // Wrap one pg `query` function (Pool or checked-out Client) in a `withTrace` span.
+// `inTransaction` tags queries running on a checked-out client (drizzle's
+// `.transaction()`), mirroring kubiks's db.transaction marker.
 const traceQuery =
-  (run: (...args: unknown[]) => unknown) =>
+  (run: (...args: unknown[]) => unknown, inTransaction: boolean) =>
   (...args: unknown[]): unknown => {
     // pg's `query` has callback overloads; only the promise form (what drizzle
     // uses) is traced. No args, or a trailing callback → pass straight through.
@@ -48,9 +61,17 @@ const traceQuery =
         : head && typeof head === "object" && "text" in head
           ? String((head as { text: unknown }).text)
           : "unknown";
-    // OTel semconv attribute names so spans line up with standard dashboards.
-    return withTrace(TraceNames.db("query"), async (span) => {
-      span.setAttribute("db.query.text", sql.slice(0, 300));
+    const operation = extractOperation(sql);
+    // Span name per operation (db.SELECT, db.INSERT, …) + OTel DB semconv attrs —
+    // the same information @kubiks/otel-drizzle emits, in BOTH runtimes.
+    return withTrace(TraceNames.db(operation ?? "query"), async (span) => {
+      span.setAttributes({
+        "db.system.name": DB_SYSTEM,
+        "db.namespace": DB_NAMESPACE,
+        "db.operation.name": operation,
+        "db.query.text": sql.slice(0, MAX_STATEMENT_LEN),
+        "db.query.transaction": inTransaction,
+      });
       const res = (await run(...args)) as {
         rowCount?: number | null;
         rows?: unknown[];
@@ -70,14 +91,17 @@ const traceQuery =
 // is traced once, not twice. A pooled client is reused across checkouts, so guard
 // against re-wrapping it.
 const tracePool = (pool: pg.Pool): pg.Pool => {
-  pool.query = traceQuery(pool.query.bind(pool)) as typeof pool.query;
+  pool.query = traceQuery(pool.query.bind(pool), false) as typeof pool.query;
   const connect = pool.connect.bind(pool) as (...args: unknown[]) => unknown;
   pool.connect = ((...args: unknown[]) => {
     if (typeof args[0] === "function") return connect(...args); // callback form
     return (connect(...args) as Promise<pg.PoolClient>).then((client) => {
       const c = client as pg.PoolClient & { [TRACED]?: boolean };
       if (!c[TRACED]) {
-        c.query = traceQuery(client.query.bind(client)) as typeof client.query;
+        c.query = traceQuery(
+          client.query.bind(client),
+          true,
+        ) as typeof client.query;
         c[TRACED] = true;
       }
       return client;
