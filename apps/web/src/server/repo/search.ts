@@ -175,6 +175,12 @@ export async function globalSearch(
         .where(
           and(
             notDeleted(inventoryEntry),
+            // Guard the joined tables too: an entry can be re-pointed to a
+            // soft-deleted product/location (update paths don't validate this),
+            // and a search hit must not surface a deleted product/location name.
+            // Consistent with the inventory list query in inventory/crud.ts.
+            notDeleted(product),
+            notDeleted(location),
             or(
               formatSearchTerm(product.name, query),
               formatSearchTerm(location.name, query),
