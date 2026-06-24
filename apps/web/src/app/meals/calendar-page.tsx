@@ -206,7 +206,7 @@ function TableView() {
           Showing the {meals.length} most recent of {total} meals.
         </p>
       )}
-      <div className="overflow-hidden rounded-lg border">
+      <div className="overflow-hidden rounded-lg border border-[var(--border-chunky)]">
         <table className="w-full text-sm">
           <thead className="bg-muted/40 text-muted-foreground text-xs">
             <tr>

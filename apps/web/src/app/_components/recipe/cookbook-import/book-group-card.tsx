@@ -140,7 +140,7 @@ export function BookGroupCard({
       </CardHeader>
 
       {book.expanded && (book.recipes.length > 0 || ready) && (
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-2">
           {ready && name.length === 0 && (
             <p className="text-warning text-xs">
               Set a book name before importing.

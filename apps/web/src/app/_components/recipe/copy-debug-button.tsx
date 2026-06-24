@@ -28,8 +28,8 @@ export function CopyDebugButton({
     <Button
       type="button"
       variant="ghost"
-      size="sm"
-      className="h-5 gap-1 px-1 text-muted-foreground/60 text-xs hover:text-foreground"
+      size="xs"
+      className="px-1 text-muted-foreground/60 text-xs hover:text-foreground"
       title={title}
       onClick={async (e) => {
         e.stopPropagation();

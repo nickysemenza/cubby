@@ -60,7 +60,7 @@ export function NeedsAttention({
   if (totalIssues === 0) return null;
 
   return (
-    <div className="space-y-3 rounded-lg border border-warning/40 bg-warning/10 p-4">
+    <div className="space-y-4 rounded-lg border border-warning/40 bg-warning/10 p-4">
       <div className="flex items-center gap-2 font-medium text-sm text-warning">
         <AlertTriangle className="h-4 w-4" />
         Needs Attention ({totalIssues})
@@ -100,7 +100,7 @@ export function NeedsAttention({
           icon={<AlertTriangle className="h-3.5 w-3.5 text-warning" />}
           title={`${stalledProjects.length} stalled project${stalledProjects.length !== 1 ? "s" : ""} (no purchases in 30 days)`}
         >
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-2">
             {stalledProjects.map((p) => (
               <ProjectPill key={p.id} project={p} />
             ))}
@@ -113,7 +113,7 @@ export function NeedsAttention({
           icon={<DollarSign className="h-3.5 w-3.5 text-warning" />}
           title={`${missingEstimates.length} active project${missingEstimates.length !== 1 ? "s" : ""} missing cost estimates`}
         >
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-2">
             {missingEstimates.map((p) => (
               <ProjectPill key={p.id} project={p} />
             ))}

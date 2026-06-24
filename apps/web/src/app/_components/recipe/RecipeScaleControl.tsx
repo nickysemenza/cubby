@@ -147,7 +147,7 @@ export function RecipeScaleControl({
             </Button>
           }
         />
-        <PopoverContent className="w-72 space-y-3">
+        <PopoverContent className="w-72 space-y-4">
           <div className="space-y-1.5">
             <Label className="eyebrow">Scale by</Label>
             <ToggleGroup

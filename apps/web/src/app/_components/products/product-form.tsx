@@ -322,7 +322,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
           never queries its own size. */}
       <div className="@container/product">
         <div className="@3xl/product:grid @3xl/product:grid-cols-[minmax(0,1fr)_minmax(360px,400px)] @3xl/product:items-start gap-6">
-          <div className="space-y-3">
+          <div className="space-y-4">
             <ProductFormFields
               form={form}
               imageHandlers={imageState}

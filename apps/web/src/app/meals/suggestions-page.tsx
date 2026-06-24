@@ -47,7 +47,7 @@ export function MealSuggestionsPage() {
           No recipes match — try lowering the coverage filter.
         </p>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {data.map((recipe) => (
             <RecipeCoverageCard key={recipe.recipeId} recipe={recipe} />
           ))}
@@ -65,7 +65,7 @@ function RecipeCoverageCard({ recipe }: { recipe: RecipeAvailability }) {
     <Link
       to="/recipes/$id"
       params={{ id: recipe.recipeId }}
-      className="flex flex-col gap-2 rounded-lg border p-4 transition-colors hover:bg-accent"
+      className="flex flex-col gap-2 rounded-lg border border-[var(--border-chunky)] p-4 transition-colors hover:bg-accent"
     >
       <div className="flex items-start justify-between gap-2">
         <span className="font-medium">{recipe.recipeName}</span>

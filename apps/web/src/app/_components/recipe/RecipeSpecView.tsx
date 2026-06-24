@@ -70,7 +70,7 @@ export function RecipeSpecView({
     <div className="space-y-2">
       {steps.map((step) => (
         <div key={step.n} className="flex gap-2.5">
-          <span className="mt-px inline-flex size-[18px] shrink-0 items-center justify-center rounded-full border border-border-chunky font-mono text-[10px] text-muted-foreground tabular-nums">
+          <span className="mt-px inline-flex size-[18px] shrink-0 items-center justify-center rounded-full border border-[var(--border-chunky)] font-mono text-[10px] text-muted-foreground tabular-nums">
             {step.n}
           </span>
           <span className="text-foreground/85 text-sm leading-snug">
@@ -82,7 +82,7 @@ export function RecipeSpecView({
   );
 
   return (
-    <div className="rounded-xl border border-border-chunky bg-card px-6 py-6 sm:px-8">
+    <div className="rounded-xl border border-[var(--border-chunky)] bg-card px-6 py-6 sm:px-8">
       {/* Title + yield */}
       <header className="mb-4 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
         <h2 className="my-0 font-heading font-semibold text-2xl tracking-tight">

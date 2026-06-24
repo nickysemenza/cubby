@@ -262,7 +262,7 @@ export default function BulkMoveForm() {
       }
     >
       {/* Location selectors */}
-      <div className="mb-4 flex items-end gap-3">
+      <div className="mb-4 flex items-end gap-4">
         <div className="flex-1">
           <ComboboxFieldWithSearch
             form={form}

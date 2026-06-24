@@ -19,8 +19,8 @@ function CookbooksPage() {
       entity="cookbook"
       actions={
         <Link to="/recipes/import-cookbook">
-          <Button size="sm" variant="outline" className="h-7 gap-1 text-xs">
-            <BookOpen className="h-3.5 w-3.5" />
+          <Button variant="outline">
+            <BookOpen />
             Import cookbook
           </Button>
         </Link>

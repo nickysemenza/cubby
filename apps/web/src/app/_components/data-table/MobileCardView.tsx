@@ -181,7 +181,7 @@ export function MobileCardView<TItem>({
           data={row.original}
           title={`Debug Data - Row ${row.id}`}
           trigger={
-            <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+            <Button variant="ghost" size="icon-sm">
               <Bug className="h-3 w-3" />
               <span className="sr-only">Debug row data</span>
             </Button>

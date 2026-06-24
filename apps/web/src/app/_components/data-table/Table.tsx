@@ -174,7 +174,7 @@ function DataRowInner<TItem>({
             data={row.original}
             title={`Debug Data - Row ${row.id}`}
             trigger={
-              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+              <Button variant="ghost" size="icon-lg">
                 <Bug className="h-4 w-4" />
                 <span className="sr-only">Debug row data</span>
               </Button>
@@ -491,8 +491,8 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                   {groupConfig && onGroupedChange && (
                     <Button
                       variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 shrink-0 p-0"
+                      size="icon-lg"
+                      className="shrink-0"
                       onClick={() => onGroupedChange(!grouped)}
                       aria-label={
                         grouped ? "Show flat list" : "Show grouped list"

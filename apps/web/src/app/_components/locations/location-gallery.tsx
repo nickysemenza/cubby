@@ -506,7 +506,7 @@ export function LocationGallery() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-12rem)] overflow-hidden rounded-lg border bg-background">
+    <div className="flex h-[calc(100vh-12rem)] overflow-hidden rounded-lg border border-[var(--border-chunky)] bg-background">
       {/* Sidebar */}
       <GallerySidebar
         locations={displayLocations}
@@ -589,16 +589,11 @@ function MobileGalleryDrillDown({
   }, []);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {/* Breadcrumb navigation */}
       {path.length > 0 && (
         <div className="flex items-center gap-1 text-sm">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 gap-1 px-2"
-            onClick={handleBack}
-          >
+          <Button variant="ghost" onClick={handleBack}>
             <ChevronLeft className="h-4 w-4" />
             Back
           </Button>

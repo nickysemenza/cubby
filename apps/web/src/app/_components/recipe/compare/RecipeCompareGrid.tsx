@@ -258,7 +258,7 @@ export const RecipeCompareGrid: React.FC<{
 
   return (
     <div className="overflow-x-auto rounded-lg border bg-card">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b px-3 py-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2.5">
         <div className="inline-flex rounded-md border p-0.5 text-sm">
           {(["gram", "baker"] as const).map((b) => (
             <button

@@ -13,7 +13,7 @@ import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 export type ShelfView = "shelf" | "table";
 
 const SHELF_GRID_CLASS =
-  "grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6";
+  "grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6";
 
 /** Shelf/Table view switch. Pair with ShelfGrid to make any list photo-first. */
 export function ShelfTableToggle({
@@ -36,11 +36,8 @@ export function ShelfTableToggle({
         <Button
           key={view}
           variant={value === view ? "secondary" : "ghost"}
-          size="sm"
-          className={cn(
-            "h-7 gap-1 text-xs",
-            value !== view && "text-muted-foreground",
-          )}
+          size="default"
+          className={cn(value !== view && "text-muted-foreground")}
           onClick={() => onChange(view)}
           aria-pressed={value === view}
         >
@@ -74,7 +71,7 @@ export function ShelfCard({
     <Link
       to={to}
       params={params}
-      className="flex flex-col overflow-hidden rounded-lg border bg-card transition-shadow duration-150 hover:shadow-[var(--shadow-chunky)]"
+      className="flex flex-col overflow-hidden rounded-lg border border-[var(--border-chunky)] bg-card transition-shadow duration-150 hover:shadow-[var(--shadow-chunky)]"
     >
       <div className="relative aspect-square w-full overflow-hidden bg-muted/20">
         <Image
@@ -127,8 +124,11 @@ function ShelfSkeleton() {
   return (
     <div className={SHELF_GRID_CLASS}>
       {Array.from({ length: 12 }, (_, i) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length placeholders
-        <div key={i} className="overflow-hidden rounded-lg border">
+        <div
+          // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length placeholders
+          key={i}
+          className="overflow-hidden rounded-lg border border-[var(--border-chunky)]"
+        >
           <Skeleton className="aspect-square w-full rounded-none" />
           <div className="space-y-1.5 px-2 py-2">
             <Skeleton className="h-3.5 w-3/4" />

@@ -450,7 +450,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
       footerStart={<EditorTally control={form.control} />}
     >
       <div className="gap-6 xl:grid xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
-        <div className="space-y-3">
+        <div className="space-y-4">
           {/* Import toolbar — one-time tools, tucked out of the recipe's way */}
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="eyebrow">
@@ -496,7 +496,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
           {/* Scrape panel (kept mounted so in-flight scrapes aren't lost) */}
           <div
             className={cn(
-              "rounded-lg border border-border bg-card p-3",
+              "rounded-lg border border-[var(--border-chunky)] bg-card p-3",
               openTool !== "scrape" && "hidden",
             )}
           >
@@ -544,7 +544,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
           {/* Paste-text panel */}
           <div
             className={cn(
-              "space-y-2 rounded-lg border border-border bg-card p-3",
+              "space-y-2 rounded-lg border border-[var(--border-chunky)] bg-card p-3",
               openTool !== "text" && "hidden",
             )}
           >
@@ -641,7 +641,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
               page in your browser, View Source, copy all, and paste it here. */}
           <div
             className={cn(
-              "space-y-2 rounded-lg border border-border bg-card p-3",
+              "space-y-2 rounded-lg border border-[var(--border-chunky)] bg-card p-3",
               openTool !== "html" && "hidden",
             )}
           >

@@ -242,7 +242,7 @@ export default function BulkInventoryForm() {
 
       {selectedLocation && (
         <>
-          <div className="mb-3 flex items-center justify-between">
+          <div className="mb-4 flex items-center justify-between">
             <h3 className="font-medium text-lg">
               Inventory for {selectedLocation.name}
             </h3>

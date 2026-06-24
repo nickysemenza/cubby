@@ -106,7 +106,7 @@ export const RecipeCostingDebugCard: React.FC<{ recipeId: RecipeId }> = ({
           label="copy explain"
         />
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-2">
         {/* Persistence panel: stored vs live, staleness, completeness. */}
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <Badge variant={persisted.stale ? "destructive" : "secondary"}>

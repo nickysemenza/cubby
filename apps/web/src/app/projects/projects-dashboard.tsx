@@ -215,7 +215,7 @@ function DashboardContent({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         <Hammer className="h-8 w-8" />
         <h1 className="font-bold font-heading text-3xl">Projects</h1>
       </div>
@@ -244,7 +244,7 @@ function DashboardContent({
           <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
             <div className="space-y-4 pt-3">
               <div className="grid gap-4 lg:grid-cols-2">
-                <section className="space-y-3">
+                <section className="space-y-4">
                   <h2 className="font-heading font-semibold text-lg">
                     Cost vs Estimate
                   </h2>
@@ -253,7 +253,7 @@ function DashboardContent({
                   </p>
                   <CostVsEstimate projects={projects} purchases={purchases} />
                 </section>
-                <section className="space-y-3">
+                <section className="space-y-4">
                   <h2 className="font-heading font-semibold text-lg">
                     Budget Health
                   </h2>
@@ -264,14 +264,14 @@ function DashboardContent({
                 </section>
               </div>
 
-              <section className="space-y-3">
+              <section className="space-y-4">
                 <h2 className="font-heading font-semibold text-lg">
                   Top 10 Projects by Spending
                 </h2>
                 <SpendingByProject purchases={purchases} projects={projects} />
               </section>
 
-              <section className="space-y-3">
+              <section className="space-y-4">
                 <h2 className="font-heading font-semibold text-lg">
                   Task Status Board
                 </h2>
@@ -287,14 +287,14 @@ function DashboardContent({
         {view === "charts" && (
           <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
             <div className="space-y-4 pt-3">
-              <section className="space-y-3">
+              <section className="space-y-4">
                 <h2 className="font-heading font-semibold text-lg">
                   Project Timeline
                 </h2>
                 <ProjectTimeline projects={projects} />
               </section>
 
-              <section className="space-y-3">
+              <section className="space-y-4">
                 <h2 className="font-heading font-semibold text-lg">
                   Project Dependencies
                 </h2>
@@ -304,7 +304,7 @@ function DashboardContent({
                 <DependencyGraph projects={projects} />
               </section>
 
-              <section className="space-y-3">
+              <section className="space-y-4">
                 <h2 className="font-heading font-semibold text-lg">
                   Monthly Spending Trend
                 </h2>
@@ -312,7 +312,7 @@ function DashboardContent({
               </section>
 
               <div className="grid gap-4 lg:grid-cols-2">
-                <section className="space-y-3">
+                <section className="space-y-4">
                   <h2 className="font-heading font-semibold text-lg">
                     Category Split
                   </h2>
@@ -322,7 +322,7 @@ function DashboardContent({
                     centerLabel="All projects"
                   />
                 </section>
-                <section className="space-y-3">
+                <section className="space-y-4">
                   <h2 className="font-heading font-semibold text-lg">
                     Spending Heatmap
                   </h2>
@@ -330,7 +330,7 @@ function DashboardContent({
                 </section>
               </div>
 
-              <section className="space-y-3">
+              <section className="space-y-4">
                 <h2 className="font-heading font-semibold text-lg">
                   Task Heatmap
                 </h2>
@@ -395,7 +395,7 @@ function SummaryCards({
           <CardTitle className="text-2xl">{activeProjects}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-2">
             {statusCounts(projects.map((p) => p.status)).map(
               ([status, count]) => (
                 <Badge key={status} variant="outline">
@@ -413,7 +413,7 @@ function SummaryCards({
           <CardTitle className="text-2xl">{activeTasks}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-2">
             {statusCounts(tasks.map((t) => t.status)).map(([status, count]) => (
               <Badge key={status} variant="outline">
                 {status}: {count}
@@ -471,7 +471,7 @@ function ProjectCards({ projects }: { projects: NotionProject[] }) {
   return (
     <div className="space-y-4">
       {active.length > 0 && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {active.map((project) => (
             <ProjectCard key={project.id} project={project} />
           ))}
@@ -482,7 +482,7 @@ function ProjectCards({ projects }: { projects: NotionProject[] }) {
           <summary className="cursor-pointer text-muted-foreground text-sm hover:text-foreground">
             Completed ({done.length})
           </summary>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {done.map((project) => (
               <ProjectCard key={project.id} project={project} />
             ))}
@@ -529,7 +529,7 @@ function ProjectCard({ project }: { project: NotionProject }) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-2">
             {project.kind && <Badge variant="secondary">{project.kind}</Badge>}
             {project.location.map((loc) => (
               <Badge key={loc} variant="outline">

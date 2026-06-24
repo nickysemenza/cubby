@@ -291,7 +291,7 @@ export function QuickInventoryAdd({
           e.preventDefault();
           createForm.handleSubmit(onCreateSubmit)(e);
         }}
-        className="space-y-3"
+        className="space-y-4"
       >
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -299,9 +299,8 @@ export function QuickInventoryAdd({
           <Button
             type="button"
             variant="ghost"
-            size="sm"
+            size="default"
             onClick={switchToSelectMode}
-            className="h-7 px-2"
           >
             <X className="mr-1 h-3 w-3" />
             Cancel

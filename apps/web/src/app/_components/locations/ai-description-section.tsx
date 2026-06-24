@@ -36,7 +36,7 @@ export const AiDescriptionSection: FC<AiDescriptionSectionProps> = ({
   const canAnalyze = hasImages;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <Button
         variant="outline"
         size="sm"
