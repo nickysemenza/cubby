@@ -1,9 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import {
-  instrumentDrizzle,
-  instrumentDrizzleClient,
-} from "@kubiks/otel-drizzle";
-import {
   drizzle as drizzleNodePostgres,
   type NodePgDatabase,
 } from "drizzle-orm/node-postgres";
@@ -24,6 +20,72 @@ export type { Database };
 // Use NodePgDatabase<schema> to avoid $client type mismatch.
 type DBClient = NodePgDatabase<typeof schema>;
 
+// ---------------------------------------------------------------------------
+// DB query tracing
+// ---------------------------------------------------------------------------
+
+// Trace every drizzle query as a span via the unified `withTrace` (OTel → Jaeger
+// in dev, native `cloudflare:workers` tracing → Grafana in prod). This replaces
+// @kubiks/otel-drizzle, which emits ONLY OTel spans — a no-op on the prod Worker
+// (no OTel SDK), so DB time was invisible in CF traces: a slow query showed only
+// as unattributed gap inside the tRPC span. We now get real per-query timing
+// (incl. the first query's connection-establishment cost, since pg.Pool connects
+// lazily) plus the statement + row count, in BOTH runtimes.
+const TRACED = Symbol("worker-tracing:traced");
+
+// Wrap one pg `query` function (Pool or checked-out Client) in a `withTrace` span.
+const traceQuery =
+  (run: (...args: unknown[]) => unknown) =>
+  (...args: unknown[]): unknown => {
+    // pg's `query` has callback overloads; only the promise form (what drizzle
+    // uses) is traced. No args, or a trailing callback → pass straight through.
+    if (args.length === 0 || typeof args[args.length - 1] === "function")
+      return run(...args);
+    const head = args[0];
+    const sql =
+      typeof head === "string"
+        ? head
+        : head && typeof head === "object" && "text" in head
+          ? String((head as { text: unknown }).text)
+          : "unknown";
+    // OTel semconv attribute names so spans line up with standard dashboards.
+    return withTrace(TraceNames.db("query"), async (span) => {
+      span.setAttribute("db.query.text", sql.slice(0, 300));
+      const res = (await run(...args)) as {
+        rowCount?: number | null;
+        rows?: unknown[];
+      };
+      span.setAttribute(
+        "db.response.returned_rows",
+        res?.rowCount ?? res?.rows?.length ?? 0,
+      );
+      return res;
+    });
+  };
+
+// Trace a pool's queries on both paths: `pool.query` (non-transactional) and the
+// client handed out by `pool.connect()` (drizzle's `.transaction()` runs on a
+// checked-out client, bypassing pool.query). pg's internal `Pool.query` uses the
+// *callback* form of connect — which we pass through untouched — so a plain query
+// is traced once, not twice. A pooled client is reused across checkouts, so guard
+// against re-wrapping it.
+const tracePool = (pool: pg.Pool): pg.Pool => {
+  pool.query = traceQuery(pool.query.bind(pool)) as typeof pool.query;
+  const connect = pool.connect.bind(pool) as (...args: unknown[]) => unknown;
+  pool.connect = ((...args: unknown[]) => {
+    if (typeof args[0] === "function") return connect(...args); // callback form
+    return (connect(...args) as Promise<pg.PoolClient>).then((client) => {
+      const c = client as pg.PoolClient & { [TRACED]?: boolean };
+      if (!c[TRACED]) {
+        c.query = traceQuery(client.query.bind(client)) as typeof client.query;
+        c[TRACED] = true;
+      }
+      return client;
+    });
+  }) as typeof pool.connect;
+  return pool;
+};
+
 const createPoolClient = (connectionString: string) => {
   const { Pool } = pg;
   // Dev-only pool (prod uses a per-request pg.Pool behind Hyperdrive — see
@@ -32,8 +94,7 @@ const createPoolClient = (connectionString: string) => {
   // the overflow to queue and pay fresh ~310ms TLS handshakes to Neon, so lift
   // the ceiling enough to absorb the fan-out.
   const pool = new Pool({ connectionString, max: 25 });
-  const instrumentedPool = instrumentDrizzle(pool);
-  return drizzleNodePostgres({ client: instrumentedPool, schema });
+  return drizzleNodePostgres({ client: tracePool(pool), schema });
 };
 
 // ---------------------------------------------------------------------------
@@ -88,45 +149,6 @@ if (!isCFWorkers) {
   if (env.NODE_ENV !== "production") globalForDb.db = moduleDb;
 }
 
-// Wrap a per-request pg.Pool's promise-form `query` in a NATIVE CF trace span.
-// The OTel drizzle instrumentation (instrumentDrizzleClient) no-ops on the prod
-// Worker — no OTel SDK is registered there — so DB time is otherwise invisible
-// in CF traces: a slow query shows only as unattributed gap inside the tRPC
-// span. This surfaces real per-query timing (incl. the FIRST query's
-// connection-establishment cost, since pg.Pool connects lazily on first query),
-// plus the statement text and row count.
-const tracePoolQueries = (pool: pg.Pool): void => {
-  const run = pool.query.bind(pool) as (...args: unknown[]) => unknown;
-  pool.query = ((...args: unknown[]) => {
-    // pg's `query` has callback overloads; only the promise form (what drizzle
-    // uses) is traced. No args, or a trailing callback → pass straight through.
-    if (args.length === 0 || typeof args[args.length - 1] === "function")
-      return run(...args);
-    const head = args[0];
-    const sql =
-      typeof head === "string"
-        ? head
-        : head && typeof head === "object" && "text" in head
-          ? String((head as { text: unknown }).text)
-          : "unknown";
-    // OTel semconv attribute names (db.query.text / db.response.returned_rows)
-    // so the spans line up with any standard dashboard, even on the custom
-    // CF/Grafana destination.
-    return withTrace(TraceNames.db("query"), async (span) => {
-      span.setAttribute("db.query.text", sql.slice(0, 300));
-      const res = (await run(...args)) as {
-        rowCount?: number | null;
-        rows?: unknown[];
-      };
-      span.setAttribute(
-        "db.response.returned_rows",
-        res?.rowCount ?? res?.rows?.length ?? 0,
-      );
-      return res;
-    });
-  }) as typeof pool.query;
-};
-
 // ---------------------------------------------------------------------------
 // Exported db / drizzle — uses AsyncLocalStorage on CF, module instance in dev
 // ---------------------------------------------------------------------------
@@ -161,9 +183,7 @@ const getDbInstance = (): DBClient => {
         max: 5,
         allowExitOnIdle: true,
       });
-      tracePoolQueries(pool);
-      const db = drizzleNodePostgres({ client: pool, schema });
-      instrumentDrizzleClient(db, { dbSystem: "postgresql", dbName: "cubby" });
+      const db = drizzleNodePostgres({ client: tracePool(pool), schema });
       holder.db = db;
     }
     return holder.db;
