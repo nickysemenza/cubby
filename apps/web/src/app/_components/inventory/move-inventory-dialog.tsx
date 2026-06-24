@@ -27,6 +27,7 @@ import {
 } from "~/app/_components/form-fields";
 import { ComboboxFieldWithSearch } from "~/app/_components/form-utils";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
+import { Stack } from "~/components/layout";
 import { queryKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 
@@ -143,7 +144,7 @@ export function MoveInventoryDialog({
         onSubmit={handleSubmit}
         isPending={bulkMoveMutation.isPending}
       >
-        <div className="space-y-4">
+        <Stack gap="md">
           <ComboboxFieldWithSearch
             form={form}
             name="targetLocation"
@@ -152,7 +153,7 @@ export function MoveInventoryDialog({
           />
 
           {error && <div className="text-destructive text-sm">{error}</div>}
-        </div>
+        </Stack>
       </BulkActionDialog>
     </FormProvider>
   );

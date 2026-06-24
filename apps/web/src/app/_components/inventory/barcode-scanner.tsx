@@ -1,4 +1,5 @@
 import { CameraOff, RotateCcw } from "lucide-react";
+import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { BARCODE_FORMATS, useBarcodeScanner } from "./useBarcodeScanner";
@@ -25,13 +26,21 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
       />
 
       {status === "loading" && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80">
+        <Row
+          align="center"
+          justify="center"
+          className="absolute inset-0 z-10 bg-background/80"
+        >
           <Spinner size="lg" />
-        </div>
+        </Row>
       )}
 
       {status === "error" && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/80 p-4">
+        <Row
+          align="center"
+          justify="center"
+          className="absolute inset-0 z-10 bg-black/80 p-4"
+        >
           <div className="flex flex-col items-center gap-4 rounded-lg bg-destructive/90 p-4 text-center text-white">
             <CameraOff className="h-8 w-8 opacity-80" />
             <div>
@@ -48,11 +57,15 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
               Try Again
             </Button>
           </div>
-        </div>
+        </Row>
       )}
 
       {status === "permission_denied" && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/80 p-4">
+        <Row
+          align="center"
+          justify="center"
+          className="absolute inset-0 z-10 bg-black/80 p-4"
+        >
           <div className="flex max-w-xs flex-col items-center gap-4 rounded-lg bg-card p-4 text-center shadow-lg">
             <CameraOff className="h-10 w-10 text-muted-foreground" />
             <div>
@@ -76,7 +89,7 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
               Retry
             </Button>
           </div>
-        </div>
+        </Row>
       )}
     </div>
   );

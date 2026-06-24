@@ -33,6 +33,7 @@ import {
   ComboboxFieldWithSearch,
   FormWrapper,
 } from "~/app/_components/form-utils";
+import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
@@ -262,7 +263,7 @@ export default function BulkMoveForm() {
       }
     >
       {/* Location selectors */}
-      <div className="mb-4 flex items-end gap-4">
+      <Row align="end" gap="md" className="mb-4">
         <div className="flex-1">
           <ComboboxFieldWithSearch
             form={form}
@@ -280,12 +281,12 @@ export default function BulkMoveForm() {
             searchType="location"
           />
         </div>
-      </div>
+      </Row>
 
       {/* Items list */}
       {sourceLocation && (
         <div>
-          <div className="mb-4 flex items-center justify-between">
+          <Row align="center" justify="between" className="mb-4">
             <h3 className="font-medium text-lg">
               Items at {sourceLocation.name}
             </h3>
@@ -301,23 +302,29 @@ export default function BulkMoveForm() {
                   : "Select All"}
               </Button>
             )}
-          </div>
+          </Row>
 
           {moveItems.length > 0 ? (
-            <div className="space-y-2">
+            <Stack gap="sm">
               {/* Header */}
-              <div className="flex items-center gap-4 border-b pb-2 font-medium text-muted-foreground text-sm">
+              <Row
+                align="center"
+                gap="md"
+                className="border-b pb-2 font-medium text-muted-foreground text-sm"
+              >
                 <div className="w-8"></div>
                 <div className="flex-1">Product</div>
                 <div className="w-32 text-right">Available</div>
                 <div className="w-40">Move Quantity</div>
-              </div>
+              </Row>
 
               {/* Items */}
               {moveItems.map((item, index) => (
-                <div
+                <Row
                   key={item.inventoryEntryId}
-                  className={`flex items-center gap-4 rounded border p-4 ${
+                  align="center"
+                  gap="md"
+                  className={`rounded border p-4 ${
                     item.selected ? "border-primary bg-primary/5" : ""
                   }`}
                 >
@@ -325,17 +332,17 @@ export default function BulkMoveForm() {
                     checked={item.selected}
                     onCheckedChange={() => toggleItemSelection(index)}
                   />
-                  <div className="flex flex-1 items-center gap-2">
+                  <Row align="center" gap="sm" className="flex-1">
                     <EntityIcon
                       entity="inventory"
                       className="h-4 w-4 text-muted-foreground"
                     />
                     <span className="font-medium">{item.productName}</span>
-                  </div>
+                  </Row>
                   <div className="w-32 text-right text-muted-foreground">
                     {item.currentQuantity} {item.unit}
                   </div>
-                  <div className="flex w-40 items-center gap-2">
+                  <Row align="center" gap="sm" className="w-40">
                     <Input
                       type="number"
                       min={0.01}
@@ -354,10 +361,10 @@ export default function BulkMoveForm() {
                     <span className="text-muted-foreground text-sm">
                       {item.unit}
                     </span>
-                  </div>
-                </div>
+                  </Row>
+                </Row>
               ))}
-            </div>
+            </Stack>
           ) : (
             <div className="py-6 text-center text-muted-foreground">
               No inventory items at this location.

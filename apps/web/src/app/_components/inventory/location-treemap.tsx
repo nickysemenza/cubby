@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import * as d3Hierarchy from "d3-hierarchy";
 import { useCallback, useMemo, useRef, useState } from "react";
+import { Row, Stack } from "~/components/layout";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import {
   type LocationHierarchyNode,
@@ -206,11 +207,11 @@ function HoverTooltip({
       className="pointer-events-none absolute z-50 rounded-md bg-popover px-2 py-2 text-sm shadow-lg"
       style={{ left: x, top: y }}
     >
-      <div className="flex items-center gap-2 font-medium">
+      <Row align="center" gap="sm" className="font-medium">
         <LocationIcon type={node.data.type} size={14} />
         {node.data.name}
-      </div>
-      <div className="mt-1 space-y-1 text-muted-foreground">
+      </Row>
+      <Stack gap="xs" className="mt-1 text-muted-foreground">
         <div>Type: {node.data.type}</div>
         <div>
           Items: {node.data.directCount} direct / {node.data.totalCount} total
@@ -227,7 +228,7 @@ function HoverTooltip({
           );
           return summary ? <div>{summary}</div> : null;
         })()}
-      </div>
+      </Stack>
     </div>
   );
 }

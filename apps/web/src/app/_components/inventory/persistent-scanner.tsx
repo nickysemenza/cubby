@@ -14,6 +14,7 @@
 
 import { CameraOff, Flashlight, FlashlightOff, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import {
@@ -95,17 +96,25 @@ export function PersistentScanner({
 
       {/* Loading overlay */}
       {status === "loading" && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/80">
+        <Row
+          align="center"
+          justify="center"
+          className="absolute inset-0 z-10 bg-black/80"
+        >
           <div className="flex flex-col items-center gap-2 text-white">
             <Spinner size="lg" />
             <span className="text-sm">Starting camera...</span>
           </div>
-        </div>
+        </Row>
       )}
 
       {/* Error state */}
       {status === "error" && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/80 p-4">
+        <Row
+          align="center"
+          justify="center"
+          className="absolute inset-0 z-10 bg-black/80 p-4"
+        >
           <div className="flex flex-col items-center gap-4 rounded-lg bg-destructive/90 p-4 text-center text-white">
             <CameraOff className="h-8 w-8 opacity-80" />
             <div>
@@ -122,12 +131,16 @@ export function PersistentScanner({
               Try Again
             </Button>
           </div>
-        </div>
+        </Row>
       )}
 
       {/* Permission denied state */}
       {status === "permission_denied" && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/80 p-4">
+        <Row
+          align="center"
+          justify="center"
+          className="absolute inset-0 z-10 bg-black/80 p-4"
+        >
           <div className="flex max-w-xs flex-col items-center gap-4 rounded-lg bg-card p-4 text-center shadow-lg">
             <CameraOff className="h-10 w-10 text-muted-foreground" />
             <div>
@@ -151,12 +164,16 @@ export function PersistentScanner({
               Retry
             </Button>
           </div>
-        </div>
+        </Row>
       )}
 
       {/* Viewfinder overlay — only when scanning */}
       {status === "scanning" && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <Row
+          align="center"
+          justify="center"
+          className="pointer-events-none absolute inset-0"
+        >
           {/* Darkened edges around the guide */}
           {isQrMode ? (
             /* Square guide for QR codes */
@@ -177,7 +194,7 @@ export function PersistentScanner({
               }`}
             />
           )}
-        </div>
+        </Row>
       )}
 
       {/* Torch button */}

@@ -12,6 +12,7 @@ import {
 } from "react";
 import type { z } from "zod";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
+import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import {
   type EmptyFilter,
@@ -589,15 +590,15 @@ function MobileGalleryDrillDown({
   }, []);
 
   return (
-    <div className="space-y-4">
+    <Stack gap="md">
       {/* Breadcrumb navigation */}
       {path.length > 0 && (
-        <div className="flex items-center gap-1 text-sm">
+        <Row align="center" gap="xs" className="text-sm">
           <Button variant="ghost" onClick={handleBack}>
             <ChevronLeft className="h-4 w-4" />
             Back
           </Button>
-          <div className="flex items-center gap-1 text-muted-foreground">
+          <Row align="center" gap="xs" className="text-muted-foreground">
             <button
               type="button"
               className="hover:text-foreground"
@@ -606,7 +607,7 @@ function MobileGalleryDrillDown({
               All
             </button>
             {path.map((loc, i) => (
-              <span key={loc.id} className="flex items-center gap-1">
+              <Row as="span" key={loc.id} align="center" gap="xs">
                 <span>/</span>
                 <button
                   type="button"
@@ -615,10 +616,10 @@ function MobileGalleryDrillDown({
                 >
                   {loc.name}
                 </button>
-              </span>
+              </Row>
             ))}
-          </div>
-        </div>
+          </Row>
+        </Row>
       )}
 
       {/* 2-column card grid */}
@@ -653,6 +654,6 @@ function MobileGalleryDrillDown({
           <span>No locations here</span>
         </div>
       )}
-    </div>
+    </Stack>
   );
 }

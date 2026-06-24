@@ -3,6 +3,7 @@ import type { Table } from "@tanstack/react-table";
 import { Sparkles, X } from "lucide-react";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
+import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
@@ -67,8 +68,8 @@ export function AiSearchBar<T>({ table }: AiSearchBarProps<T>) {
   );
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2">
+    <Stack gap="sm">
+      <Row align="center" gap="sm">
         <div className="relative flex-1">
           <Sparkles className="absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -86,13 +87,13 @@ export function AiSearchBar<T>({ table }: AiSearchBarProps<T>) {
           </Button>
         )}
         {isLoading && <Spinner />}
-      </div>
+      </Row>
 
       {result && (
         <p className="px-1 text-muted-foreground text-xs">
           {result.interpretation}
         </p>
       )}
-    </div>
+    </Stack>
   );
 }

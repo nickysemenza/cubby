@@ -1,6 +1,7 @@
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import * as d3Force from "d3-force";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Row } from "~/components/layout";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import { wasm } from "~/lib/wasm";
 
@@ -199,9 +200,13 @@ export function UnitMappingGraph({
       style={{ height }}
     >
       {nodes.length === 0 ? (
-        <div className="flex h-full items-center justify-center text-2xs text-muted-foreground">
+        <Row
+          align="center"
+          justify="center"
+          className="h-full text-2xs text-muted-foreground"
+        >
           No mappings yet.
-        </div>
+        </Row>
       ) : (
         <svg aria-hidden="true" width={width} height={height}>
           <g>

@@ -6,6 +6,7 @@ import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { z } from "zod";
 import type { SwipeAction } from "~/components/entity/swipe-row";
+import { Row as FlexRow, Stack } from "~/components/layout";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { queryKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
@@ -158,7 +159,7 @@ export function InventoryItemList() {
           const { upc } = product;
           return (
             <div className="flex items-center gap-2">
-              <div className="min-w-0 flex-1 space-y-1">
+              <Stack gap="xs" className="min-w-0 flex-1">
                 <EntityPillLink entity="product" data={product} compact />
                 {upc && (
                   <div className="text-muted-foreground text-xs">
@@ -171,7 +172,7 @@ export function InventoryItemList() {
                     </TableLink>
                   </div>
                 )}
-              </div>
+              </Stack>
             </div>
           );
         },
@@ -220,7 +221,7 @@ export function InventoryItemList() {
   return (
     <div>
       <AiSearchBar table={table} />
-      <div className="mb-4 flex items-center justify-between gap-2">
+      <FlexRow align="center" justify="between" gap="sm" className="mb-4">
         <div className="min-w-0">
           {view === "shelf" && (
             <InventoryValuationSummary
@@ -230,7 +231,7 @@ export function InventoryItemList() {
           )}
         </div>
         <ShelfTableToggle value={view} onChange={setView} />
-      </div>
+      </FlexRow>
       {view === "shelf" ? (
         <InventoryShelf
           items={items}

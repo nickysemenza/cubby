@@ -1,4 +1,5 @@
 import { type LocationType, locationType } from "@cubby/schemas/location";
+import { Row } from "~/components/layout";
 import { getLocationIcon, getLocationTypeColor } from "./location-type-theme";
 
 interface LocationIconProps {
@@ -39,7 +40,7 @@ export function LocationIconWithLabel({
   colored,
 }: LocationIconWithLabelProps) {
   return (
-    <div className="flex items-center gap-2">
+    <Row align="center" gap="sm">
       <LocationIcon
         type={type}
         className={className}
@@ -47,7 +48,7 @@ export function LocationIconWithLabel({
         colored={colored}
       />
       {showLabel && <span>{label}</span>}
-    </div>
+    </Row>
   );
 }
 

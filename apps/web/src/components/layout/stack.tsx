@@ -3,8 +3,12 @@ import { cn } from "~/lib/utils";
 import { type StackVariants, stackVariants } from "~/styles/layouts";
 
 interface StackProps extends React.HTMLAttributes<HTMLElement>, StackVariants {
-  /** Render as a different element (e.g. "ul", "section"). */
+  /** Render as a different element (e.g. "ul", "section", "button"). */
   as?: React.ElementType;
+  /** Forwarded when `as="button"`. */
+  type?: "button" | "submit" | "reset";
+  /** Forwarded when `as="button"`/`as="fieldset"`. */
+  disabled?: boolean;
   ref?: React.Ref<HTMLElement>;
 }
 

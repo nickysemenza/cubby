@@ -1,6 +1,7 @@
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { ArrowLeftRight } from "lucide-react";
 import { memo, useMemo } from "react";
+import { Row, Stack } from "~/components/layout";
 import {
   Tooltip,
   TooltipContent,
@@ -80,9 +81,9 @@ export const ConversionCapabilities = memo(function ConversionCapabilities({
   );
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+    <Stack gap="sm">
+      <Row align="center" justify="between">
+        <Row align="center" gap="sm">
           {!hideConvertButton && (
             <ConversionDialog
               mappings={mappings}
@@ -106,11 +107,7 @@ export const ConversionCapabilities = memo(function ConversionCapabilities({
               Lit when the kind converts to something; per-icon tooltips + sr-only
               labels carry the meaning. */}
           {coverage && compact && showCoverage && (
-            <div
-              className={
-                "flex items-center gap-0.5" /* tight: compact kind-icon strip */
-              }
-            >
+            <Row align="center" gap="tight">
               {coverageKinds.map((kind) => {
                 const { Icon, label } = kindIconMap[kind]!;
                 const lit = coverage.covered.has(kind);
@@ -134,7 +131,7 @@ export const ConversionCapabilities = memo(function ConversionCapabilities({
                   </Tooltip>
                 );
               })}
-            </div>
+            </Row>
           )}
 
           {/* Detail: a one-word headline; the grid below is the detail. */}
@@ -145,8 +142,8 @@ export const ConversionCapabilities = memo(function ConversionCapabilities({
               {TIER_LABEL[coverage.tier]}
             </span>
           )}
-        </div>
-      </div>
+        </Row>
+      </Row>
 
       {coverage && !compact && (
         <div className="grid grid-cols-3 gap-1 text-xs">
@@ -158,22 +155,27 @@ export const ConversionCapabilities = memo(function ConversionCapabilities({
             const FromIcon = fromMeta.Icon;
             const ToIcon = toMeta.Icon;
             return (
-              <div
+              <Row
                 key={`${pair.from}-${pair.to}`}
-                // dense conversion-pair pill (text-2xs, h-3.5 icons)
-                className={`flex items-center justify-center gap-2 rounded-md px-1.5 py-0.5 ${/* tight */ ""}${
-                  pair.success
-                    ? "border border-secondary bg-secondary/60 text-secondary-foreground"
-                    : "border border-destructive/30 bg-destructive/10 text-muted-foreground/60"
-                }`}
+                align="center"
+                justify="center"
+                gap="sm"
+                className={
+                  /* tight: dense conversion-pair pill (text-2xs) */ `rounded-md px-1.5 py-0.5 ${
+                    pair.success
+                      ? "border border-secondary bg-secondary/60 text-secondary-foreground"
+                      : "border border-destructive/30 bg-destructive/10 text-muted-foreground/60"
+                  }`
+                }
               >
                 <Tooltip>
                   <TooltipTrigger
                     render={
-                      <div
-                        className={
-                          "flex items-center justify-center gap-2 p-0.5" /* tight */
-                        }
+                      <Row
+                        align="center"
+                        justify="center"
+                        gap="sm"
+                        className="p-0.5" /* tight */
                       />
                     }
                   >
@@ -187,11 +189,11 @@ export const ConversionCapabilities = memo(function ConversionCapabilities({
                   </TooltipTrigger>
                   <TooltipContent sideOffset={6}>{label}</TooltipContent>
                 </Tooltip>
-              </div>
+              </Row>
             );
           })}
         </div>
       )}
-    </div>
+    </Stack>
   );
 });

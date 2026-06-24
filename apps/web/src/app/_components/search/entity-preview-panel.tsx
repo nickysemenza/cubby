@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ExternalLink } from "lucide-react";
 import { useMemo } from "react";
+import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { SheetHeader, SheetTitle } from "~/components/ui/sheet";
 import { Spinner } from "~/components/ui/spinner";
@@ -65,7 +66,7 @@ export function EntityPreviewPanel({
           "border-b pr-12 pb-4" /* tight: clears the absolute Sheet close button at right-4 */
         }
       >
-        <div className="flex items-center justify-between">
+        <Row align="center" justify="between">
           <SheetTitle>Preview</SheetTitle>
           <Button
             variant="outline"
@@ -75,7 +76,7 @@ export function EntityPreviewPanel({
             <ExternalLink className="mr-1 h-3 w-3" />
             View Full Details
           </Button>
-        </div>
+        </Row>
       </SheetHeader>
 
       <div className="flex-1 overflow-y-auto p-6">

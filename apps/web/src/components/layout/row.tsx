@@ -3,8 +3,12 @@ import { cn } from "~/lib/utils";
 import { type RowVariants, rowVariants } from "~/styles/layouts";
 
 interface RowProps extends React.HTMLAttributes<HTMLElement>, RowVariants {
-  /** Render as a different element (e.g. "ul", "nav", "label"). */
+  /** Render as a different element (e.g. "ul", "nav", "label", "button"). */
   as?: React.ElementType;
+  /** Forwarded when `as="button"`. */
+  type?: "button" | "submit" | "reset";
+  /** Forwarded when `as="button"`/`as="fieldset"`. */
+  disabled?: boolean;
   ref?: React.Ref<HTMLElement>;
 }
 

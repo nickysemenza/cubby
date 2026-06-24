@@ -5,6 +5,7 @@ import {
   type NutrientsPer100,
   TIER1_NUTRIENTS,
 } from "@cubby/usda-schemas";
+import { Row } from "~/components/layout";
 import { cn } from "~/lib/utils";
 
 // The key nutrients shown in summaries and the recipe table, in display order.
@@ -68,11 +69,9 @@ export function NutrientsSummary({
   }
 
   return (
-    <div
-      className={cn(
-        "flex flex-wrap",
-        dense ? "gap-0.5 text-2xs" /* tight */ : "gap-1 text-xs",
-      )}
+    <Row
+      wrap
+      className={cn(dense ? "gap-0.5 text-2xs" /* tight */ : "gap-1 text-xs")}
     >
       {displayNutrients.map((code) => {
         const value = nutrients[code] ?? 0;
@@ -97,6 +96,6 @@ export function NutrientsSummary({
           </span>
         );
       })}
-    </div>
+    </Row>
   );
 }
