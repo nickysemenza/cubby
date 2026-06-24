@@ -146,24 +146,56 @@ export const productWithBetterUpcDataSchema = productProblemBase.extend({
   }),
 });
 
-// Combined output schema for all problems.
-export const allProblemsSchema = z.object({
+// Grouped output schemas — the Problems page loads detectors in cost-grouped
+// chunks (one tRPC query each, routed through an UNBATCHED link so each runs in
+// its own Worker invocation/CPU budget; see root-provider.tsx). The groups split
+// by cost: `fast` is all DB-only detectors; the rest isolate the expensive ones
+// (two WASM parse-sweeps, USDA-coverage, UPC) so no single invocation sums all
+// the CPU. `allProblemsSchema` is composed from these so the section roster
+// stays single-source-of-truth (badge/homepage/MCP still read the combined one).
+
+// DB-only detectors — cheap, no WASM/network.
+export const problemsFastSchema = z.object({
   duplicateUniqueProducts: z.array(duplicateUniqueProductSchema),
   orphanedProducts: z.array(orphanedProductSchema),
   productsWithoutMappings: z.array(productWithoutMappingsSchema),
-  ingredientsWithPartialCoverage: z.array(ingredientWithPartialCoverageSchema),
   ingredientsWithoutProduct: z.array(ingredientWithoutProductSchema),
-  ingredientsWithUnusedAliases: z.array(ingredientWithUnusedAliasesSchema),
   unusedIngredientsWithProduct: z.array(unusedIngredientSchema),
   unusedIngredientsWithoutProduct: z.array(unusedIngredientSchema),
   emptyLocations: z.array(emptyLocationSchema),
   productsWithNoImages: z.array(productWithNoImagesSchema),
-  productsWithIslandedMappings: z.array(productWithIslandedMappingsSchema),
   locationsWithoutAiDescription: z.array(locationWithoutAiDescriptionSchema),
-  staleIngredientParses: z.array(staleIngredientParseSchema),
-  productsWithBetterUpcData: z.array(productWithBetterUpcDataSchema),
-  totalProblems: z.number(),
 });
+
+// USDA-coverage detectors — share one product scan + USDA enrichment.
+export const problemsCoverageSchema = z.object({
+  ingredientsWithPartialCoverage: z.array(ingredientWithPartialCoverageSchema),
+  productsWithIslandedMappings: z.array(productWithIslandedMappingsSchema),
+});
+
+// WASM parse-sweep: re-parses every recipe line to find unused aliases.
+export const problemsAliasesSchema = z.object({
+  ingredientsWithUnusedAliases: z.array(ingredientWithUnusedAliasesSchema),
+});
+
+// WASM parse-sweep: re-parses every recipe line to find drifted parses.
+export const problemsParsesSchema = z.object({
+  staleIngredientParses: z.array(staleIngredientParseSchema),
+});
+
+// UPC-lookup network detector.
+export const problemsUpcSchema = z.object({
+  productsWithBetterUpcData: z.array(productWithBetterUpcDataSchema),
+});
+
+// Combined output schema for all problems — composed from the groups (+ derived
+// total) so adding a detector to a group automatically flows into the badge.
+export const allProblemsSchema = problemsFastSchema
+  .merge(problemsCoverageSchema)
+  .merge(problemsAliasesSchema)
+  .merge(problemsParsesSchema)
+  .merge(problemsUpcSchema)
+  .extend({ totalProblems: z.number() });
 
 // Count-only output schema for badge display. byType derives mechanically from
 // allProblemsSchema — every array key becomes a count — so the count roster
@@ -179,6 +211,11 @@ export const problemsCountSchema = z.object({
 });
 
 export type AllProblems = z.infer<typeof allProblemsSchema>;
+export type ProblemsFast = z.infer<typeof problemsFastSchema>;
+export type ProblemsCoverage = z.infer<typeof problemsCoverageSchema>;
+export type ProblemsAliases = z.infer<typeof problemsAliasesSchema>;
+export type ProblemsParses = z.infer<typeof problemsParsesSchema>;
+export type ProblemsUpc = z.infer<typeof problemsUpcSchema>;
 export type ProblemsCount = z.infer<typeof problemsCountSchema>;
 
 // Derive the count payload from the full problems result: every array key

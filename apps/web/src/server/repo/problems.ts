@@ -849,7 +849,12 @@ export const findLinkedProductIds = async (
 // repo-layer primitives it composes.
 export {
   deleteUnusedIngredients,
+  findAliasesProblems,
   findAllProblems,
+  findCoverageProblems,
+  findFastProblems,
   findMaintenanceCounts,
+  findParsesProblems,
+  findUpcProblems,
   reparseStaleIngredientParses,
 } from "~/server/services/problems.service";

@@ -4,15 +4,17 @@ import { EntityLayout } from "~/components/layouts/entity-layout";
 import { RoutePending } from "~/components/route-pending";
 
 export const Route = createFileRoute("/_authenticated/problems")({
-  // Ensure data exists before render, but only *block* on a truly cold load —
-  // staleTime Infinity makes ensureQueryData reuse any cached scan (e.g. the
-  // navbar badge's) without a blocking refetch. The page query revalidates in
-  // the background on entry, so freshness is handled there, not by a wait here.
-  loader: async ({ context }) => {
-    await context.queryClient.ensureQueryData({
-      ...context.trpc.problems.getAllProblems.queryOptions(),
-      staleTime: Number.POSITIVE_INFINITY,
-    });
+  // Best-effort warm of the cheap DB-only group only — NON-blocking (void), like
+  // every other loader here: the SSR trpc client targets localhost (unreachable
+  // on CF Workers, unauthenticated in dev), so awaiting would throw into the
+  // error boundary. useProblemsData fetches all five groups client-side (each its
+  // own Worker invocation/CPU budget) and the page's skeleton covers cold loads.
+  // The heavy WASM/network groups are deliberately NOT prefetched here — keeping
+  // their CPU out of the SSR invocation is the whole point.
+  loader: ({ context }) => {
+    void context.queryClient.prefetchQuery(
+      context.trpc.problems.getFast.queryOptions(),
+    );
   },
   pendingComponent: RoutePending,
   component: ProblemsPage,

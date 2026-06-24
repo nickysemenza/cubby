@@ -6,7 +6,9 @@ import { Link as TanStackLink, useNavigate } from "@tanstack/react-router";
 import {
   createTRPCClient,
   httpBatchStreamLink,
+  httpLink,
   loggerLink,
+  splitLink,
 } from "@trpc/client";
 import { createTRPCOptionsProxy } from "@trpc/tanstack-react-query";
 import type { ReactNode } from "react";
@@ -63,6 +65,23 @@ function getUrl() {
   return `${base}/api/trpc`;
 }
 
+// Problems-page detector procedures routed through the unbatched link (see the
+// splitLink below). Kept in sync with the cost-grouped procedures in the
+// problems router.
+const UNBATCHED_PATHS = new Set([
+  "problems.getFast",
+  "problems.getCoverage",
+  "problems.getAliases",
+  "problems.getParses",
+  "problems.getUpc",
+]);
+
+const trpcHeaders = () => {
+  const headers = new Headers();
+  headers.set("x-trpc-source", "tanstack-start");
+  return headers;
+};
+
 const trpcClient = createTRPCClient<TRPCRouter>({
   links: [
     loggerLink({
@@ -73,20 +92,31 @@ const trpcClient = createTRPCClient<TRPCRouter>({
         (getFlag("queryLogger") ||
           (op.direction === "down" && op.result instanceof Error)),
     }),
-    httpBatchStreamLink({
-      transformer: superjson,
-      url: getUrl(),
-      // Cap the batched-GET URL length so large fan-outs (e.g. the cookbook
-      // import previewing hundreds of unique ingredients via getByName) split
-      // into several requests instead of one giant URL that exceeds the server's
-      // header-size limit (431 Request Header Fields Too Large). Kept well under
-      // the typical 16KB request-line limit to leave room for cookies/headers.
-      maxURLLength: 8000,
-      headers: () => {
-        const headers = new Headers();
-        headers.set("x-trpc-source", "tanstack-start");
-        return headers;
-      },
+    splitLink({
+      // The Problems page's cost-grouped detector queries MUST NOT batch: if
+      // they shared one HTTP request they'd run in a single Worker invocation
+      // and re-sum all the detector CPU (re-parsing every recipe line through
+      // WASM twice), which exceeded the 30s CPU limit. Route them through an
+      // unbatched httpLink so each is its own invocation/CPU budget. Everything
+      // else keeps the batched-stream link.
+      condition: (op) => UNBATCHED_PATHS.has(op.path),
+      true: httpLink({
+        transformer: superjson,
+        url: getUrl(),
+        headers: trpcHeaders,
+      }),
+      false: httpBatchStreamLink({
+        transformer: superjson,
+        url: getUrl(),
+        // Cap the batched-GET URL length so large fan-outs (e.g. the cookbook
+        // import previewing hundreds of unique ingredients via getByName) split
+        // into several requests instead of one giant URL that exceeds the
+        // server's header-size limit (431 Request Header Fields Too Large). Kept
+        // well under the typical 16KB request-line limit to leave room for
+        // cookies/headers.
+        maxURLLength: 8000,
+        headers: trpcHeaders,
+      }),
     }),
   ],
 });

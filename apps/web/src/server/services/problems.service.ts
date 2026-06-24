@@ -20,6 +20,11 @@ import type {
   AllProblems,
   IngredientWithPartialCoverage,
   MaintenanceCounts,
+  ProblemsAliases,
+  ProblemsCoverage,
+  ProblemsFast,
+  ProblemsParses,
+  ProblemsUpc,
   ProductWithIslandedMappings,
 } from "@cubby/schemas/problems";
 import { isMiscProduct } from "@cubby/shared";
@@ -317,53 +322,95 @@ export const findMaintenanceCounts = async (
   };
 };
 
-// Main function to get all problems
-export const findAllProblems = async (
-  db: Database,
-  upcLookupClient: UPCLookupClient,
-  usdaClient: USDAClient,
-): Promise<AllProblems> => {
-  // Run all checks in parallel, each in its own trace span (the key names the
-  // span — see traceAll). Better performance + per-detector observability.
+// ---------------------------------------------------------------------------
+// Cost-grouped detector bundles. The Problems page loads these as separate tRPC
+// queries routed through an UNBATCHED link, so each runs in its own Worker
+// invocation / CPU budget — no single invocation sums all the detector CPU (the
+// failure mode that exceeded the 30s limit). `findAllProblems` recomposes them
+// for the badge/homepage/MCP consumers that still want one combined payload.
+// ---------------------------------------------------------------------------
+
+// DB-only detectors — cheap (no WASM, no network). traceAll keeps a named span
+// per detector for observability.
+export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
   const r = await traceAll({
     duplicateUniqueProducts: () => findDuplicateUniqueProducts(db),
     orphanedProducts: () => findOrphanedProducts(db),
     productsWithoutMappings: () => findProductsWithoutMappings(db),
-    // Both coverage detectors share one product scan + USDA enrichment.
-    productCoverage: () => findProductCoverageProblems(db, usdaClient),
     ingredientsWithoutProduct: () => findIngredientsWithoutProduct(db),
-    ingredientsWithUnusedAliases: () => findIngredientsWithUnusedAliases(db),
     unusedIngredients: () => findUnusedIngredients(db),
     emptyLocations: () => findEmptyLocations(db),
     productsWithNoImages: () =>
       findProductsWithNoImages(db, { excludeIngredients: true }),
     locationsWithoutAiDescription: () => findLocationsWithoutAiDescription(db),
-    staleIngredientParses: () => findStaleIngredientParses(db),
-    productsWithBetterUpcData: () =>
-      findProductsWithBetterUpcData(db, upcLookupClient),
   });
-
-  const sections = {
+  return {
     duplicateUniqueProducts: r.duplicateUniqueProducts,
     orphanedProducts: r.orphanedProducts,
     productsWithoutMappings: r.productsWithoutMappings,
-    ingredientsWithPartialCoverage:
-      r.productCoverage.ingredientsWithPartialCoverage,
     ingredientsWithoutProduct: r.ingredientsWithoutProduct,
-    ingredientsWithUnusedAliases: r.ingredientsWithUnusedAliases,
     unusedIngredientsWithProduct: r.unusedIngredients.withProduct,
     unusedIngredientsWithoutProduct: r.unusedIngredients.withoutProduct,
     emptyLocations: r.emptyLocations,
     productsWithNoImages: r.productsWithNoImages,
-    productsWithIslandedMappings:
-      r.productCoverage.productsWithIslandedMappings,
     locationsWithoutAiDescription: r.locationsWithoutAiDescription,
-    staleIngredientParses: r.staleIngredientParses,
-    productsWithBetterUpcData: r.productsWithBetterUpcData,
   };
+};
 
-  // totalProblems is the sum of every section length — derived, never
-  // hand-summed, so adding a detector can't silently undercount the badge.
+// USDA-coverage group — both sections share one product scan + USDA enrichment.
+export const findCoverageProblems = (
+  db: Database,
+  usdaClient: USDAClient,
+): Promise<ProblemsCoverage> => findProductCoverageProblems(db, usdaClient);
+
+// WASM parse-sweep: unused aliases. Isolated so its CPU doesn't stack with the
+// other heavy detectors in one invocation.
+export const findAliasesProblems = async (
+  db: Database,
+): Promise<ProblemsAliases> => ({
+  ingredientsWithUnusedAliases: await findIngredientsWithUnusedAliases(db),
+});
+
+// WASM parse-sweep: stale parses. Isolated for the same reason.
+export const findParsesProblems = async (
+  db: Database,
+): Promise<ProblemsParses> => ({
+  staleIngredientParses: await findStaleIngredientParses(db),
+});
+
+// UPC-lookup network detector.
+export const findUpcProblems = async (
+  db: Database,
+  upcLookupClient: UPCLookupClient,
+): Promise<ProblemsUpc> => ({
+  productsWithBetterUpcData: await findProductsWithBetterUpcData(
+    db,
+    upcLookupClient,
+  ),
+});
+
+// Combined scan for the badge/homepage/MCP — recomposed from the same groups so
+// there's one definition of each detector's membership. totalProblems is the
+// sum of every section length — derived, never hand-summed.
+export const findAllProblems = async (
+  db: Database,
+  upcLookupClient: UPCLookupClient,
+  usdaClient: USDAClient,
+): Promise<AllProblems> => {
+  const r = await traceAll({
+    fast: () => findFastProblems(db),
+    coverage: () => findCoverageProblems(db, usdaClient),
+    aliases: () => findAliasesProblems(db),
+    parses: () => findParsesProblems(db),
+    upc: () => findUpcProblems(db, upcLookupClient),
+  });
+  const sections = {
+    ...r.fast,
+    ...r.coverage,
+    ...r.aliases,
+    ...r.parses,
+    ...r.upc,
+  };
   return {
     ...sections,
     totalProblems: sum(Object.values(sections).map((items) => items.length)),
