@@ -1,3 +1,4 @@
+import { ingredientId } from "@cubby/schemas/identifiers";
 import {
   allProblemsSchema,
   maintenanceCountsSchema,
@@ -6,9 +7,11 @@ import {
 import { z } from "zod";
 import { streamProgress } from "~/lib/bulk-progress";
 import {
+  deleteUnusedIngredients,
   findAllProblems,
   findAllProblemsCount,
   findMaintenanceCounts,
+  pruneUnusedAliases,
   recipeUsageCountsByProduct,
   reparseStaleIngredientParses,
 } from "~/server/repo/problems";
@@ -61,10 +64,51 @@ const recipeUsageByProduct = protectedProcedure
     return await recipeUsageCountsByProduct(ctx.db, input.productIds);
   });
 
+// Strip "unused" aliases from one or more ingredients (per-card removes one, the
+// section's bulk button removes all). The ingredient itself is never deleted.
+const pruneAliases = protectedProcedure
+  .input(
+    z.object({
+      items: z.array(z.object({ ingredientId, remove: z.array(z.string()) })),
+    }),
+  )
+  .output(z.object({ pruned: z.number() }))
+  .mutation(async ({ ctx, input }) => {
+    return await pruneUnusedAliases(ctx.db, input.items);
+  });
+
+// Delete entirely-unused ingredients (per-card or bulk). `alsoDeleteProducts`
+// distinguishes the two unused-ingredient sections: the product-linked one
+// removes the linked products too. Failures (e.g. a product still has inventory)
+// are returned per ingredient rather than aborting the batch.
+const deleteUnused = protectedProcedure
+  .input(
+    z.object({
+      ingredientIds: z.array(ingredientId),
+      alsoDeleteProducts: z.boolean(),
+    }),
+  )
+  .output(
+    z.object({
+      deleted: z.number(),
+      failed: z.array(z.object({ id: ingredientId, reason: z.string() })),
+    }),
+  )
+  .mutation(async ({ ctx, input }) => {
+    return await deleteUnusedIngredients(
+      ctx.db,
+      input.ingredientIds,
+      input.alsoDeleteProducts,
+      ctx.actorContext,
+    );
+  });
+
 export const problemsRouter = createTRPCRouter({
   getAllProblems,
   getProblemsCount,
   getMaintenanceCounts,
   reparseStale,
   recipeUsageByProduct,
+  pruneAliases,
+  deleteUnused,
 });

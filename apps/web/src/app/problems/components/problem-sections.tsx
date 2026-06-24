@@ -23,6 +23,12 @@ import type { ProductWithBetterUpcData } from "~/server/repo/problems";
 import { type RouterOutputs, useTRPC } from "~/trpc/react";
 import { BACKFILL } from "./backfill-registry";
 import { EmptyLocationsList } from "./empty-locations-list";
+import {
+  AliasPruneFix,
+  DeleteAllUnusedButton,
+  RemoveAllAliasesButton,
+  UnusedIngredientDeleteFix,
+} from "./ingredient-cleanup-fixes";
 import { BackfillButton } from "./problem-backfill-action";
 import {
   type IconProp,
@@ -70,7 +76,8 @@ function section<T>(config: {
   entity?: Entity;
   renderItem: (item: T) => RenderedProblemItem;
   groupBy?: (items: T[]) => Record<string, T[]>;
-  headerAction?: ReactNode;
+  /** A static "fix all" node, or one built from the current items (for bulk delete). */
+  headerAction?: ReactNode | ((items: T[]) => ReactNode);
 }): ProblemSectionEntry {
   const iconProp: IconProp = config.entity
     ? { entity: config.entity }
@@ -90,7 +97,11 @@ function section<T>(config: {
           items={items}
           renderItem={config.renderItem}
           groupBy={config.groupBy}
-          headerAction={config.headerAction}
+          headerAction={
+            typeof config.headerAction === "function"
+              ? config.headerAction(items)
+              : config.headerAction
+          }
         />
       );
     },
@@ -350,6 +361,113 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
       route: { to: "/ingredients/$id", params: { id: ing.id } },
       // The workbench can actually create the product; the detail page can't.
       customActions: <WorkbenchFixLink ingredientId={ing.id} />,
+    }),
+  }),
+  section({
+    id: "unused-aliases",
+    label: "Unused aliases",
+    select: (p) => p.ingredientsWithUnusedAliases,
+    entity: "ingredient",
+    title: "Ingredients with unused aliases",
+    description:
+      "Aliases that duplicate the ingredient's name (or each other), or that no recipe line ever matches. Removing an alias leaves the ingredient untouched.",
+    emptyMessage: "No unused aliases — every alias is doing something.",
+    headerAction: (items) => (
+      <RemoveAllAliasesButton
+        rows={items.map((i) => ({ id: i.id, unusedAliases: i.unusedAliases }))}
+      />
+    ),
+    renderItem: (ing) => ({
+      title: ing.name,
+      badges: ing.unusedAliases.map((alias) => (
+        <Badge key={alias} variant="outline">
+          {alias}
+        </Badge>
+      )),
+      route: { to: "/ingredients/$id", params: { id: ing.id } },
+      inlineFix: {
+        label: "Remove aliases",
+        render: (close) => (
+          <AliasPruneFix
+            id={ing.id}
+            name={ing.name}
+            unusedAliases={ing.unusedAliases}
+            close={close}
+          />
+        ),
+      },
+    }),
+  }),
+  section({
+    id: "unused-with-product",
+    label: "Unused (has product)",
+    select: (p) => p.unusedIngredientsWithProduct,
+    entity: "ingredient",
+    title: "Unused ingredients linked to a product",
+    description:
+      "Ingredients used in no recipe but still linked to a product. Deleting removes the ingredient and its product(s) — skipped if a product still has inventory.",
+    emptyMessage: "No unused product-linked ingredients.",
+    headerAction: (items) => (
+      <DeleteAllUnusedButton ids={items.map((i) => i.id)} alsoDeleteProducts />
+    ),
+    renderItem: (ing) => ({
+      title: ing.name,
+      details: [createdAgoDetail(ing.createdAt)],
+      badges: ing.products.map((prod) => (
+        <Link key={prod.id} to="/products/$id" params={{ id: prod.id }}>
+          <Badge
+            variant="outline"
+            className="flex items-center gap-1 hover:bg-accent"
+          >
+            <EntityIcon entity="product" colored className="h-3 w-3" />
+            {prod.name}
+          </Badge>
+        </Link>
+      )),
+      route: { to: "/ingredients/$id", params: { id: ing.id } },
+      inlineFix: {
+        label: "Delete + product(s)",
+        render: (close) => (
+          <UnusedIngredientDeleteFix
+            id={ing.id}
+            name={ing.name}
+            alsoDeleteProducts
+            close={close}
+          />
+        ),
+      },
+    }),
+  }),
+  section({
+    id: "unused-no-product",
+    label: "Unused",
+    select: (p) => p.unusedIngredientsWithoutProduct,
+    entity: "ingredient",
+    title: "Unused ingredients",
+    description:
+      "Ingredients used in no recipe and linked to no product — safe to delete.",
+    emptyMessage: "No unused ingredients.",
+    headerAction: (items) => (
+      <DeleteAllUnusedButton
+        ids={items.map((i) => i.id)}
+        alsoDeleteProducts={false}
+      />
+    ),
+    renderItem: (ing) => ({
+      title: ing.name,
+      details: [createdAgoDetail(ing.createdAt)],
+      route: { to: "/ingredients/$id", params: { id: ing.id } },
+      inlineFix: {
+        label: "Delete",
+        render: (close) => (
+          <UnusedIngredientDeleteFix
+            id={ing.id}
+            name={ing.name}
+            alsoDeleteProducts={false}
+            close={close}
+          />
+        ),
+      },
     }),
   }),
   customSection({

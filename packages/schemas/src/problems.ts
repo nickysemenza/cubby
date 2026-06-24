@@ -63,6 +63,27 @@ export const ingredientWithoutProductSchema = z.object({
   recipeCount: z.number(),
 });
 
+// An ingredient carrying ≥1 "unused" alias — one that's redundant (case-only dup
+// of the name/another alias) or never matched by a recipe line. `aliases` is the
+// full current list so the card can compute the keep-set; `unusedAliases` is the
+// subset to strip (the delete removes only these, never the ingredient).
+export const ingredientWithUnusedAliasesSchema = z.object({
+  id: ingredientId,
+  name: z.string(),
+  aliases: z.array(z.string()),
+  unusedAliases: z.array(z.string()),
+});
+
+// An ingredient used in no live recipe (and not a sub-recipe pointer). `products`
+// lists its non-deleted linked products ([] for the "no product" section); the
+// delete removes those products too.
+export const unusedIngredientSchema = z.object({
+  id: ingredientId,
+  name: z.string(),
+  createdAt: z.date(),
+  products: z.array(z.object({ id: z.string(), name: z.string() })),
+});
+
 export const emptyLocationSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -132,6 +153,9 @@ export const allProblemsSchema = z.object({
   productsWithoutMappings: z.array(productWithoutMappingsSchema),
   ingredientsWithPartialCoverage: z.array(ingredientWithPartialCoverageSchema),
   ingredientsWithoutProduct: z.array(ingredientWithoutProductSchema),
+  ingredientsWithUnusedAliases: z.array(ingredientWithUnusedAliasesSchema),
+  unusedIngredientsWithProduct: z.array(unusedIngredientSchema),
+  unusedIngredientsWithoutProduct: z.array(unusedIngredientSchema),
   emptyLocations: z.array(emptyLocationSchema),
   productsWithNoImages: z.array(productWithNoImagesSchema),
   productsWithIslandedMappings: z.array(productWithIslandedMappingsSchema),
@@ -173,6 +197,10 @@ export type IngredientWithPartialCoverage = z.infer<
 export type IngredientWithoutProduct = z.infer<
   typeof ingredientWithoutProductSchema
 >;
+export type IngredientWithUnusedAliases = z.infer<
+  typeof ingredientWithUnusedAliasesSchema
+>;
+export type UnusedIngredient = z.infer<typeof unusedIngredientSchema>;
 export type EmptyLocation = z.infer<typeof emptyLocationSchema>;
 export type ProductWithIslandedMappings = z.infer<
   typeof productWithIslandedMappingsSchema
