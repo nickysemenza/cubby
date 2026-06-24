@@ -14,6 +14,7 @@ import type React from "react";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { EntitySummaryCard } from "~/components/entity/entity-summary-card";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
+import { Row, Stack } from "~/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { TicketDivider } from "~/components/ui/ticket-divider";
 import {
@@ -184,13 +185,19 @@ const RecipeDetailInner: React.FC<{
   );
 
   return (
-    <div className="space-y-6">
+    <Stack gap="lg">
       {/* Tags, Scale control, and View Toggle */}
-      <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
+      <Row
+        align="center"
+        justify="between"
+        wrap
+        gap="sm"
+        className="print:hidden"
+      >
         {recipe.tags && recipe.tags.length > 0 && (
           <RecipeTagList tags={recipe.tags} />
         )}
-        <div className="ml-auto flex flex-wrap items-center gap-2">
+        <Row align="center" wrap gap="sm" className="ml-auto">
           {/* View-independent "why isn't this costed?" affordance — the full
               inline card only shows in table/charts, so surface it as a compact
               popover everywhere else. */}
@@ -226,8 +233,8 @@ const RecipeDetailInner: React.FC<{
             <Printer className="h-3 w-3" />
             Print / export
           </Link>
-        </div>
-      </div>
+        </Row>
+      </Row>
 
       {/* Actionable costing-coverage suggestions (table/charts views, where cost
           matters). Hidden in the reader-facing magazine view and when fully costed. */}
@@ -291,7 +298,7 @@ const RecipeDetailInner: React.FC<{
         </>
       )}
       {viewMode === "charts" && (
-        <div className="space-y-6">
+        <Stack gap="lg">
           {/* Yield/Servings Summary — the same shared card the table view uses,
               so the two views never disagree on totals. */}
           {totals && (
@@ -355,7 +362,7 @@ const RecipeDetailInner: React.FC<{
               </Card>
             </div>
           </Suspense>
-        </div>
+        </Stack>
       )}
 
       {/* Additional Images (for magazine view, if more than hero) */}
@@ -389,7 +396,7 @@ const RecipeDetailInner: React.FC<{
           />
         </CardContent>
       </Card>
-    </div>
+    </Stack>
   );
 };
 

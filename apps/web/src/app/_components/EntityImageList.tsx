@@ -1,8 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { ImageIcon } from "lucide-react";
 import type { FC } from "react";
-import { FlexContainer } from "~/components/layout/flex-container";
-import { GridContainer } from "~/components/layout/grid-container";
+import { Grid, Row } from "~/components/layout";
 import { InteractiveImage } from "~/components/media/interactive-image";
 import { Button } from "~/components/ui/button";
 import {
@@ -40,7 +39,7 @@ const EntityImageList: FC<EntityImageListProps> = ({
         </Empty>
       ) : (
         <div>
-          <GridContainer cols="thumbs" className="mb-4">
+          <Grid cols="thumbs" className="mb-4">
             {images.map((image) => (
               <Link
                 to="/images/$id"
@@ -57,16 +56,16 @@ const EntityImageList: FC<EntityImageListProps> = ({
                 <p className="mt-1 truncate text-sm">{image.filename}</p>
               </Link>
             ))}
-          </GridContainer>
+          </Grid>
 
           {showViewAllButton && (
-            <FlexContainer justify="end">
+            <Row justify="end">
               <Link to="/images">
                 <Button variant="outline" size="sm">
                   View All Images
                 </Button>
               </Link>
-            </FlexContainer>
+            </Row>
           )}
         </div>
       )}

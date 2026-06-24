@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { NoneState } from "~/app/_components/NoneState";
+import { Row } from "~/components/layout";
 import { Eyebrow } from "~/components/ui/eyebrow";
 import { cn } from "~/lib/utils";
 
@@ -15,7 +16,7 @@ interface InfoRowProps {
  * own rule, so stacks of InfoRows need no dividers between them.
  */
 export const InfoRow = ({ label, children, className }: InfoRowProps) => (
-  <div className={cn("flex items-baseline gap-2 py-2", className)}>
+  <Row align="baseline" gap="sm" className={cn("py-2", className)}>
     <Eyebrow as="span" className="shrink-0">
       {label}
     </Eyebrow>
@@ -28,5 +29,5 @@ export const InfoRow = ({ label, children, className }: InfoRowProps) => (
     <span className="min-w-0 max-w-[65%] text-right text-sm">
       {children ?? <NoneState />}
     </span>
-  </div>
+  </Row>
 );

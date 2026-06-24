@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Eye, Sparkles } from "lucide-react";
 import type { FC } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { useTRPC } from "~/trpc/react";
@@ -36,7 +37,7 @@ export const AiDescriptionSection: FC<AiDescriptionSectionProps> = ({
   const canAnalyze = hasImages;
 
   return (
-    <div className="space-y-4">
+    <Stack gap="md">
       <Button
         variant="outline"
         size="sm"
@@ -59,13 +60,13 @@ export const AiDescriptionSection: FC<AiDescriptionSectionProps> = ({
 
       {currentDescription && (
         <div className="rounded-md bg-muted/50 p-4 text-sm">
-          <div className="mb-1 flex items-center gap-2 text-muted-foreground">
+          <Row align="center" gap="sm" className="mb-1 text-muted-foreground">
             <Eye className="h-3 w-3" />
             <span className="font-medium">AI Description</span>
-          </div>
+          </Row>
           <p>{currentDescription}</p>
         </div>
       )}
-    </div>
+    </Stack>
   );
 };

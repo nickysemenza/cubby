@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { ArrowUpRight } from "lucide-react";
 import type { ReactNode } from "react";
 import { match } from "ts-pattern";
+import { Row } from "~/components/layout";
 import { Eyebrow } from "~/components/ui/eyebrow";
 import { Spinner } from "~/components/ui/spinner";
 import { entities } from "~/entities/entities";
@@ -69,18 +70,18 @@ export function ManifestCard({
 }: ManifestCardProps) {
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-start gap-2">
+      <Row align="start" gap="sm">
         <span
           className="mt-0.5 shrink-0 self-start" /* tight: icon optical-align nudge */
         >
           {icon}
         </span>
         <div className="min-w-0 flex-1">
-          <div className="flex items-start gap-2">
+          <Row align="start" gap="sm">
             <span className="min-w-0 flex-1 font-heading font-medium text-sm leading-tight">
               {name}
             </span>
-            <div className="mt-px flex shrink-0 items-center gap-2">
+            <Row align="center" gap="sm" className="mt-px shrink-0">
               <Link
                 to={entities[entity].routes.detail}
                 params={{ id: routeParam }}
@@ -92,15 +93,19 @@ export function ManifestCard({
               <span className="rounded-sm bg-muted px-2 py-px font-mono text-[9px] text-muted-foreground uppercase tracking-wide">
                 {tag}
               </span>
-            </div>
-          </div>
+            </Row>
+          </Row>
           {identity && (
-            <div className="mt-1 flex items-center gap-2 text-muted-foreground text-xs">
+            <Row
+              align="center"
+              gap="sm"
+              className="mt-1 text-muted-foreground text-xs"
+            >
               {identity}
-            </div>
+            </Row>
           )}
         </div>
-      </div>
+      </Row>
       {crossLinks && crossLinks.length > 0 && (
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-border/60 border-y border-dashed py-2 text-xs">
           {crossLinks.map((cl) => (
@@ -201,9 +206,9 @@ export function PriceValue({
 
 export function PreviewLoading() {
   return (
-    <div className="flex items-center justify-center py-4">
+    <Row align="center" justify="center" className="py-4">
       <Spinner className="text-muted-foreground" />
-    </div>
+    </Row>
   );
 }
 

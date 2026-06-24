@@ -6,6 +6,7 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { useMemo } from "react";
+import { Row } from "~/components/layout";
 import { wasm } from "~/lib/wasm";
 import { useTRPC } from "~/trpc/react";
 import RTable from "../data-table/Table";
@@ -63,7 +64,7 @@ const MappingSource: React.FC<{ mapping: UnitMapping }> = ({ mapping }) => {
   const { source, sourceMetadata } = mapping;
   if (!sourceMetadata) return <>{source || ""}</>;
   return (
-    <span className="flex items-center gap-1">
+    <Row as="span" align="center" gap="xs">
       <span>{source || ""}</span>
       {sourceMetadata.type === "food" && (
         <LazyFoodPillLink fdcId={sourceMetadata.fdcId} />
@@ -71,7 +72,7 @@ const MappingSource: React.FC<{ mapping: UnitMapping }> = ({ mapping }) => {
       {sourceMetadata.type === "product" && (
         <LazyProductPillLink productId={sourceMetadata.productId} />
       )}
-    </span>
+    </Row>
   );
 };
 
@@ -126,14 +127,24 @@ export const UnitMappingsTable: React.FC<{
       renderMobileCard={(row) => {
         const m = row.original;
         return (
-          <div className="flex items-center justify-between gap-2 border-b px-1 py-2 text-sm">
+          <Row
+            align="center"
+            justify="between"
+            gap="sm"
+            className="border-b px-1 py-2 text-sm"
+          >
             <span className="whitespace-nowrap font-medium">
               {wasm.format_amount(m.a)} = {wasm.format_amount(m.b)}
             </span>
-            <span className="flex min-w-0 items-center gap-1 truncate text-muted-foreground text-xs">
+            <Row
+              as="span"
+              align="center"
+              gap="xs"
+              className="min-w-0 truncate text-muted-foreground text-xs"
+            >
               <MappingSource mapping={m} />
-            </span>
-          </div>
+            </Row>
+          </Row>
         );
       }}
     />

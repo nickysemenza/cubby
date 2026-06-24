@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { Bug, BugOff, LogIn, MoreHorizontal } from "lucide-react";
 import { useState } from "react";
+import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import {
   Sheet,
@@ -39,7 +40,7 @@ export function BottomNav() {
       style={{ viewTransitionName: "bottom-nav" }}
       aria-label="Main navigation"
     >
-      <div className="flex h-16 items-center justify-around">
+      <Row align="center" justify="around" className="h-16">
         {authed ? (
           <>
             {bottomNavItems.map((item) => {
@@ -194,7 +195,7 @@ export function BottomNav() {
             </Link>
           </>
         )}
-      </div>
+      </Row>
     </nav>
   );
 }

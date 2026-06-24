@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { sumBy } from "es-toolkit";
 import { ArrowLeft, Calendar, DollarSign, ExternalLink } from "lucide-react";
 import { useMemo } from "react";
+import { Row, Section, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import {
   Card,
@@ -49,7 +50,7 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
 
   if (!project) {
     return (
-      <div className="space-y-4">
+      <Stack>
         <Link
           to="/projects"
           className="inline-flex items-center gap-1 text-muted-foreground text-sm hover:text-foreground"
@@ -58,14 +59,14 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
           Back to projects
         </Link>
         <p className="text-muted-foreground">Project not found.</p>
-      </div>
+      </Stack>
     );
   }
 
   const totalCost = sumBy(purchases, (p) => p.cost ?? 0);
 
   return (
-    <div className="space-y-4">
+    <Stack>
       {/* Cover image */}
       {project.coverImage && (
         <div
@@ -81,7 +82,7 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
       )}
 
       {/* Header */}
-      <div className="space-y-4">
+      <Stack>
         <Link
           to="/projects"
           className="inline-flex items-center gap-1 text-muted-foreground text-sm hover:text-foreground"
@@ -90,13 +91,13 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
           Back to projects
         </Link>
 
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-2">
+        <Row align="start" justify="between" gap="md">
+          <Stack gap="sm">
             <h1 className="font-bold font-heading text-3xl">
               {project.icon && `${project.icon} `}
               {project.name}
             </h1>
-            <div className="flex flex-wrap items-center gap-2">
+            <Row align="center" wrap gap="sm">
               <Badge variant="outline" className="gap-1">
                 <StatusIcon status={project.status} />
                 {project.status ?? "No status"}
@@ -115,8 +116,8 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
                   {formatDateRange(project.date, project.dateEnd)}
                 </Badge>
               )}
-            </div>
-          </div>
+            </Row>
+          </Stack>
           <a
             href={project.notionUrl}
             target="_blank"
@@ -125,8 +126,8 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
           >
             <ExternalLink className="h-4 w-4" />
           </a>
-        </div>
-      </div>
+        </Row>
+      </Stack>
 
       {/* Cost summary */}
       <CostSummary
@@ -137,83 +138,67 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
 
       {/* Spending over time */}
       {purchases.length > 0 && (
-        <section className="space-y-4">
-          <h2 className="font-heading font-semibold text-lg">
-            Spending Over Time
-          </h2>
+        <Section title="Spending Over Time">
           <SpendingOverTime
             purchases={purchases}
             costEstimate={project.costEstimate}
           />
-        </section>
+        </Section>
       )}
 
       {/* Category breakdown charts */}
       {purchases.length > 0 && (
         <div className="grid gap-4 lg:grid-cols-2">
-          <section className="space-y-4">
-            <h2 className="font-heading font-semibold text-lg">
-              Spending by Category
-            </h2>
+          <Section title="Spending by Category">
             <PurchaseDonut purchases={purchases} />
-          </section>
-          <section className="space-y-4">
-            <h2 className="font-heading font-semibold text-lg">
-              Spending by Subcategory
-            </h2>
+          </Section>
+          <Section title="Spending by Subcategory">
             <SubcategoryBars purchases={purchases} />
-          </section>
+          </Section>
         </div>
       )}
 
       {/* Category treemap + trend */}
       {purchases.length > 0 && (
         <div className="grid gap-4 lg:grid-cols-2">
-          <section className="space-y-4">
-            <h2 className="font-heading font-semibold text-lg">
-              Category Treemap
-            </h2>
+          <Section title="Category Treemap">
             <CategoryTreemap purchases={purchases} />
-          </section>
-          <section className="space-y-4">
-            <h2 className="font-heading font-semibold text-lg">
-              Category Trend
-            </h2>
+          </Section>
+          <Section title="Category Trend">
             <CategoryTrend purchases={purchases} />
-          </section>
+          </Section>
         </div>
       )}
 
       {/* Task calendar */}
       {tasks.length > 0 && (
-        <section className="space-y-4">
-          <h2 className="font-heading font-semibold text-lg">Task Timeline</h2>
+        <Section title="Task Timeline">
           <TaskHeatmap tasks={tasks} />
-        </section>
+        </Section>
       )}
 
       {/* Tasks */}
-      <section className="space-y-4">
+      <Stack as="section">
         <h2 className="font-heading font-semibold text-xl">
           Tasks ({tasks.length})
         </h2>
         <TaskList tasks={tasks} />
-      </section>
+      </Stack>
 
       {/* Purchases */}
-      <section className="space-y-4">
+      <Stack as="section">
         <h2 className="font-heading font-semibold text-xl">
           Purchases ({purchases.length})
         </h2>
         <PurchaseList purchases={purchases} />
-      </section>
+      </Stack>
 
       {/* Notion page content */}
-      <section className="space-y-4">
+      <Stack as="section">
         <h2 className="font-heading font-semibold text-xl">Notes</h2>
         <NotionPageContent pageId={project.id} />
-      </section>
-    </div>
+      </Stack>
+    </Stack>
   );
 }
 
@@ -236,10 +221,10 @@ function CostSummary({
         <CardHeader>
           <CardDescription>Actual Cost</CardDescription>
           <CardTitle className="text-2xl">
-            <span className="flex items-center gap-1">
+            <Row as="span" align="center" gap="xs">
               <DollarSign className="h-5 w-5" />
               {formatCurrency(totalCost, 0)}
-            </span>
+            </Row>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -281,7 +266,7 @@ function CostSummary({
 
 function DetailSkeleton() {
   return (
-    <div className="space-y-6">
+    <Stack gap="lg">
       <Skeleton className="h-4 w-32" />
       <Skeleton className="h-10 w-64" />
       <div className="grid gap-4 sm:grid-cols-2">
@@ -289,6 +274,6 @@ function DetailSkeleton() {
         <Skeleton className="h-24 rounded-lg" />
       </div>
       <Skeleton className="h-[350px] rounded-lg" />
-    </div>
+    </Stack>
   );
 }

@@ -2,6 +2,7 @@ import type { Confidence } from "@cubby/schemas/ai";
 import { Sparkles } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
+import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import {
@@ -31,13 +32,13 @@ export function ConfidenceReasoningCard({
 }) {
   return (
     <div className="rounded-md bg-muted/50 p-2 text-sm">
-      <div className="flex items-center gap-2">
+      <Row align="center" gap="sm">
         <Sparkles className="h-3 w-3 text-muted-foreground" />
         <span className="font-medium">{label}:</span>
         <span className={confidenceColor[confidence]}>
           {confidence} confidence
         </span>
-      </div>
+      </Row>
       <p className="mt-1 text-muted-foreground">{reasoning}</p>
     </div>
   );
@@ -89,8 +90,8 @@ export function FieldWithAISuggest<
   };
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-end gap-2">
+    <Stack gap="sm">
+      <Row align="end" gap="sm">
         <div className="flex-1">{field}</div>
 
         <Tooltip>
@@ -111,7 +112,7 @@ export function FieldWithAISuggest<
             {!enabled ? disabledReason : suggestLabel}
           </TooltipContent>
         </Tooltip>
-      </div>
+      </Row>
 
       {suggestion && (
         <ConfidenceReasoningCard
@@ -119,6 +120,6 @@ export function FieldWithAISuggest<
           reasoning={suggestion.reasoning}
         />
       )}
-    </div>
+    </Stack>
   );
 }

@@ -2,6 +2,7 @@ import { useDebouncedValue } from "@tanstack/react-pacer";
 import { Check, ChevronsUpDown } from "lucide-react";
 import * as React from "react";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
+import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 import type { ComboboxItem } from "./combobox-types";
@@ -157,7 +158,7 @@ export function DialogCompatibleCombobox<TId extends string = string>({
               : "max-w-[400px]",
           )}
         >
-          <div className="flex h-9 items-center gap-2 border-b px-2">
+          <Row align="center" gap="sm" className="h-9 border-b px-2">
             <input
               ref={inputRef}
               className="flex h-10 w-full rounded-md bg-transparent py-2 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-50"
@@ -169,7 +170,7 @@ export function DialogCompatibleCombobox<TId extends string = string>({
                 e.stopPropagation();
               }}
             />
-          </div>
+          </Row>
 
           <div
             id={listboxId}

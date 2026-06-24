@@ -4,6 +4,7 @@ import { ArrowRightLeft, Package, Pencil } from "lucide-react";
 import type { FC } from "react";
 import { useState } from "react";
 import type { z } from "zod";
+import { Row } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { queryKeys } from "~/lib/query-keys";
@@ -64,7 +65,7 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
   // while a delete is in flight so the row reads as "deleting" before the
   // redirect lands.
   const actions = (
-    <div className="flex items-center gap-2">
+    <Row align="center" gap="sm">
       <Button
         variant="outline"
         size="sm"
@@ -84,7 +85,7 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
         Move
       </Button>
       <DeleteButton />
-    </div>
+    </Row>
   );
 
   return (

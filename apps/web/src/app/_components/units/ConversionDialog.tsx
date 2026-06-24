@@ -9,6 +9,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { FormWrapper } from "~/app/_components/form-utils";
 import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
+import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import {
@@ -180,9 +181,9 @@ function ConversionDialogContent({
         </DialogDescription>
       </DialogHeader>
 
-      <div className="space-y-2 py-2">
+      <Stack gap="sm" className="py-2">
         {nutrientCount > 0 && (
-          <div className="flex items-center gap-2">
+          <Row align="center" gap="sm">
             <Checkbox
               id={showNutrientsId}
               checked={showNutrients}
@@ -191,7 +192,7 @@ function ConversionDialogContent({
             <Label htmlFor={showNutrientsId} className="text-sm">
               Show nutrient mappings ({nutrientCount})
             </Label>
-          </div>
+          </Row>
         )}
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -201,20 +202,20 @@ function ConversionDialogContent({
             kinds={kinds}
           />
 
-          <div className="space-y-2">
+          <Stack gap="sm">
             <h4 className="font-medium text-sm">Conversion Graph</h4>
             <UnitMappingGraph
               mappings={mappings}
               includeNutrients={showNutrients}
               height={220}
             />
-          </div>
+          </Stack>
         </div>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div className="space-y-2">
+          <Stack gap="sm">
             <h4 className="font-medium text-sm">Available Unit Mappings</h4>
             <UnitMappingsTable mappings={filteredMappings} />
-          </div>
+          </Stack>
           <div>
             <FormWrapper
               form={form}
@@ -234,9 +235,9 @@ function ConversionDialogContent({
             </FormWrapper>
 
             {Object.keys(conversions).length > 0 && (
-              <div className="mt-4 space-y-2">
+              <Stack gap="sm" className="mt-4">
                 <h4 className="font-medium text-sm">Conversion Results</h4>
-                <div className="space-y-2">
+                <Stack gap="sm">
                   {effectiveKinds.map((kind) => {
                     const result = conversions[kind];
                     const path = paths[kind];
@@ -244,17 +245,17 @@ function ConversionDialogContent({
                     if (!Meta) return null;
                     return (
                       <div key={kind} className="border-b py-1">
-                        <div className="flex items-center justify-between">
-                          <span className="flex items-center gap-2">
+                        <Row align="center" justify="between">
+                          <Row as="span" align="center" gap="sm">
                             <Meta.Icon className="h-4 w-4" aria-hidden />
                             <span className="font-medium">{Meta.label}</span>
-                          </span>
+                          </Row>
                           <span>
                             {result?.isOk()
                               ? wasm.format_amount(result.value)
                               : "Not convertible"}
                           </span>
-                        </div>
+                        </Row>
                         {result?.isOk() && path && (
                           <div className="text-right font-mono text-2xs text-muted-foreground">
                             {formatConversionPath(path)}
@@ -263,12 +264,12 @@ function ConversionDialogContent({
                       </div>
                     );
                   })}
-                </div>
-              </div>
+                </Stack>
+              </Stack>
             )}
           </div>
         </div>
-      </div>
+      </Stack>
     </DialogContent>
   );
 }

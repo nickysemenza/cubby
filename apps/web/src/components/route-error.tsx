@@ -12,6 +12,7 @@ import {
   WifiOff,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import {
   Collapsible,
@@ -128,7 +129,7 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
 
       {/* Action buttons for non-auth errors */}
       {category !== "auth" && (
-        <div className="flex gap-2">
+        <Row gap="sm">
           <Button
             variant="outline"
             onClick={() => {
@@ -142,7 +143,7 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
           <Button variant="ghost" render={<Link to="/" />} nativeButton={false}>
             Go Home
           </Button>
-        </div>
+        </Row>
       )}
 
       {/* Collapsible technical details */}
@@ -162,7 +163,10 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
           />
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <div className="mt-2 max-w-lg space-y-2 rounded-md border border-[var(--border-chunky)] bg-muted/50 p-2 text-left font-mono text-xs">
+          <Stack
+            gap="sm"
+            className="mt-2 max-w-lg rounded-md border border-[var(--border-chunky)] bg-muted/50 p-2 text-left font-mono text-xs"
+          >
             {code && (
               <div>
                 <span className="text-muted-foreground">Code: </span>
@@ -189,7 +193,7 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
                 </pre>
               </details>
             )}
-          </div>
+          </Stack>
         </CollapsibleContent>
       </Collapsible>
     </div>

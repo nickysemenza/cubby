@@ -1,4 +1,5 @@
 import { Fragment, memo, useMemo } from "react";
+import { Row, Stack } from "~/components/layout";
 import { MarkdownText } from "~/components/markdown";
 import { cn } from "~/lib/utils";
 import { dottedEntityLink, EntityPreviewLink } from "../EntityPreviewLink";
@@ -181,7 +182,7 @@ function SpecNode({
   const isRoot = node.depth === 0;
 
   return (
-    <div className="space-y-1">
+    <Stack gap="xs">
       {!isRoot && (
         <div className="mb-1 flex flex-wrap items-center gap-x-2 font-mono text-2xs uppercase tracking-wider">
           <EntityPreviewLink
@@ -219,9 +220,9 @@ function SpecNode({
             />
           ))}
           {section.steps.length > 0 && (
-            <ol className="mt-2 mb-1 space-y-1 pl-0">
+            <Stack as="ol" gap="xs" className="mt-2 mb-1 pl-0">
               {section.steps.map((step) => (
-                <li key={step.n} className="flex gap-2">
+                <Row as="li" gap="sm" key={step.n}>
                   <span className="mt-px inline-flex size-[16px] shrink-0 items-center justify-center rounded-full border border-[var(--border-chunky)] font-mono text-[9px] text-muted-foreground tabular-nums">
                     {step.n}
                   </span>
@@ -230,13 +231,13 @@ function SpecNode({
                       {step.text}
                     </MarkdownText>
                   </span>
-                </li>
+                </Row>
               ))}
-            </ol>
+            </Stack>
           )}
         </Fragment>
       ))}
-    </div>
+    </Stack>
   );
 }
 

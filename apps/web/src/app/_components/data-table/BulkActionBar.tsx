@@ -1,6 +1,7 @@
 import type { Row } from "@tanstack/react-table";
 import { X } from "lucide-react";
 import { useState } from "react";
+import { Row as LayoutRow } from "~/components/layout";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -73,10 +74,14 @@ export function BulkActionBar<TData>({
 
   return (
     <>
-      <div className="flex items-center gap-2 rounded-md bg-primary/10 px-4 py-2">
+      <LayoutRow
+        align="center"
+        gap="sm"
+        className="rounded-md bg-primary/10 px-4 py-2"
+      >
         <span className="font-medium text-sm">{selectedCount} selected</span>
 
-        <div className="flex items-center gap-1">
+        <LayoutRow align="center" gap="xs">
           {actions.map((action) => (
             <Button
               key={action.id}
@@ -93,7 +98,7 @@ export function BulkActionBar<TData>({
               {action.label}
             </Button>
           ))}
-        </div>
+        </LayoutRow>
 
         <Button
           variant="ghost"
@@ -105,7 +110,7 @@ export function BulkActionBar<TData>({
           <X className="h-3 w-3" />
           <span className="sr-only">Clear selection</span>
         </Button>
-      </div>
+      </LayoutRow>
 
       {/* Confirmation Dialog */}
       <AlertDialog

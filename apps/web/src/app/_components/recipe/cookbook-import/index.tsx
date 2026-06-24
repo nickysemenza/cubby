@@ -14,6 +14,8 @@ import { Upload } from "lucide-react";
 import { useCallback, useEffect, useId, useState } from "react";
 import { toast } from "sonner";
 import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
+import { Row } from "~/components/layout/row";
+import { Stack } from "~/components/layout/stack";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -654,7 +656,7 @@ export function CookbookImport({
   };
 
   return (
-    <div className="space-y-4">
+    <Stack>
       <div>
         <h1 className="font-semibold text-xl">Import cookbook</h1>
         <p className="text-muted-foreground text-sm">
@@ -679,7 +681,7 @@ export function CookbookImport({
       >
         <Upload className="h-6 w-6" />
         <p className="text-sm">Drag .epub cookbooks here, or choose files.</p>
-        <div className="flex flex-wrap items-center justify-center gap-2">
+        <Row align="center" justify="center" wrap gap="sm">
           <Label
             htmlFor={fileInputId}
             className="cursor-pointer rounded border border-border px-2 py-2 font-medium text-foreground text-sm hover:bg-muted"
@@ -714,7 +716,7 @@ export function CookbookImport({
               e.target.value = "";
             }}
           />
-        </div>
+        </Row>
       </div>
 
       {books.map((book) => (
@@ -725,6 +727,6 @@ export function CookbookImport({
           importing={book.importProgress !== undefined}
         />
       ))}
-    </div>
+    </Stack>
   );
 }

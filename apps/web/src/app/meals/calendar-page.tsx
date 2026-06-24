@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
+import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { useTRPC } from "~/trpc/react";
 import { formatMealCost } from "./meal-format";
@@ -30,8 +31,8 @@ export function MealCalendarPage() {
   const [view, setView] = useState<View>("calendar");
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-1">
+    <Stack>
+      <Row align="center" gap="xs">
         <div className="inline-flex overflow-hidden rounded-md border">
           <button
             type="button"
@@ -56,10 +57,10 @@ export function MealCalendarPage() {
             Shopping list
           </Button>
         </Link>
-      </div>
+      </Row>
 
       {view === "calendar" ? <CalendarView /> : <TableView />}
-    </div>
+    </Stack>
   );
 }
 
@@ -92,8 +93,8 @@ function CalendarView() {
   const today = new Date();
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-1">
+    <Stack>
+      <Row align="center" gap="xs">
         <Button
           type="button"
           variant="outline"
@@ -126,7 +127,7 @@ function CalendarView() {
           {format(weekStart, "MMM d")} –{" "}
           {format(addDays(weekStart, 6), "MMM d, yyyy")}
         </span>
-      </div>
+      </Row>
 
       {isLoading ? (
         <SimpleLoading text="Loading your week..." />
@@ -141,7 +142,7 @@ function CalendarView() {
                 key={dayStr}
                 className="flex min-h-32 flex-col gap-1.5 rounded-lg border p-2" /* tight: calendar day cell */
               >
-                <div className="flex items-center justify-between">
+                <Row align="center" justify="between">
                   <span className="text-muted-foreground text-xs uppercase">
                     {format(day, "EEE")}
                   </span>
@@ -154,7 +155,7 @@ function CalendarView() {
                   >
                     {format(day, "d")}
                   </span>
-                </div>
+                </Row>
 
                 {dayMeals.map((m) => (
                   <MealChip key={m.id} meal={m} />
@@ -174,7 +175,7 @@ function CalendarView() {
           })}
         </div>
       )}
-    </div>
+    </Stack>
   );
 }
 
@@ -200,7 +201,7 @@ function TableView() {
   }
 
   return (
-    <div className="space-y-2">
+    <Stack gap="sm">
       {total > meals.length && (
         <p className="text-muted-foreground text-xs">
           Showing the {meals.length} most recent of {total} meals.
@@ -247,7 +248,7 @@ function TableView() {
           </tbody>
         </table>
       </div>
-    </div>
+    </Stack>
   );
 }
 
@@ -258,12 +259,12 @@ function MealChip({ meal }: { meal: MealOut }) {
       params={{ id: meal.id }}
       className="flex flex-col gap-0.5 rounded-md border bg-card p-1.5 text-xs transition-colors hover:bg-accent" /* tight: calendar meal chip */
     >
-      <div className="flex items-center justify-between gap-1">
+      <Row align="center" justify="between" gap="xs">
         <span className="truncate font-medium">{meal.name || "Meal"}</span>
         <span className="shrink-0 text-muted-foreground tabular-nums">
           {formatMealCost(meal.totals)}
         </span>
-      </div>
+      </Row>
       {meal.recipes.length === 0 ? (
         <span className="text-muted-foreground italic">empty</span>
       ) : (

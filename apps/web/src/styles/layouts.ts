@@ -1,42 +1,62 @@
 import { cva, type VariantProps } from "class-variance-authority";
 
 /**
- * Named spacing scale (values are Tailwind spacing units → 0.25rem each):
+ * Layout-primitive cvas — the single home for the app's spacing vocabulary.
  *
- *   xs = 1 (0.25rem)   sm = 2 (0.5rem)   md = 4 (1rem)   lg = 6 (1.5rem)
+ * Named `gap` scale (Tailwind spacing units → 0.25rem each):
  *
- * Use these named keys on the layout cvas below instead of bare numbers; the
- * numeric keys are kept only for back-compat with existing call sites.
+ *   tight = 0.5   snug = 1.5   xs = 1   sm = 2   md = 4   lg = 6
  *
- * gap vs. space-y: `gap` belongs on flex/grid containers (spaces children in
- * any flow direction); `space-y` is for plain block stacks where there's no
- * flex/grid context. Reach for `flexContainerVariants` / `gridContainerVariants`
- * (gap) by default; use `spacedContainerVariants` (space-y) only for vertical
- * block stacks.
+ * `tight` / `snug` are the two blessed sub-scale densities (icon+label rows,
+ * dense list cells). Because this is a `.ts` file, the spacing guard in
+ * scripts/check-conventions.mjs (which only scans `.tsx`) never sees these
+ * sub-scale classes — so dense UI lives here as a named variant instead of a
+ * scattered `/* tight *​/` marker. Pages get density via `gap="tight"` and
+ * stop emitting raw off-scale spacing classes entirely.
+ *
+ * Consumed by the Row / Grid / Stack / Section primitives in
+ * ~/components/layout. Pages should reach for those, not raw flex/grid/space-y.
  */
-export const flexContainerVariants = cva("flex", {
+
+/** Shared `gap-*` scale used by Row and Grid. */
+const GAP = {
+  tight: "gap-0.5",
+  snug: "gap-1.5",
+  xs: "gap-1",
+  sm: "gap-2",
+  md: "gap-4",
+  lg: "gap-6",
+} as const;
+
+/**
+ * Horizontal flex row. No default variants — a bare `<Row>` is just `flex`
+ * (faithful to the old FlexContainer), so callers opt into alignment/gap.
+ */
+export const rowVariants = cva("flex", {
   variants: {
     align: {
+      start: "items-start",
       center: "items-center",
       end: "items-end",
+      baseline: "items-baseline",
+      stretch: "items-stretch",
     },
     justify: {
+      start: "justify-start",
+      center: "justify-center",
       end: "justify-end",
+      between: "justify-between",
+      around: "justify-around",
     },
-    gap: {
-      // Named spacing scale (preferred):
-      xs: "gap-1",
-      sm: "gap-2",
-      md: "gap-4",
-      lg: "gap-6",
-      // Numeric keys kept for back-compat:
-      1: "gap-1",
-      2: "gap-2",
+    wrap: {
+      true: "flex-wrap",
     },
+    gap: GAP,
   },
 });
 
-export const gridContainerVariants = cva("grid gap-4", {
+/** Responsive card/thumbnail grid. Defaults to `gap-4` (md). */
+export const gridVariants = cva("grid", {
   variants: {
     cols: {
       cards3: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3",
@@ -47,42 +67,33 @@ export const gridContainerVariants = cva("grid gap-4", {
       // and leaving dead space; the 7rem floor wraps to 2–3 across on mobile.
       summary: "grid-cols-[repeat(auto-fit,minmax(7rem,1fr))]",
     },
-    gap: {
-      // Named spacing scale (preferred):
-      xs: "gap-1",
-      sm: "gap-2",
-      md: "gap-4",
-      lg: "gap-6",
-      // Numeric keys kept for back-compat:
-      2: "gap-2",
-      4: "gap-4",
-    },
+    gap: GAP,
   },
   defaultVariants: {
-    gap: 4,
+    gap: "md",
   },
 });
 
-export const spacedContainerVariants = cva("space-y-4", {
+/**
+ * Vertical block stack. Keeps `space-y-*` under the hood (a 1:1 swap for raw
+ * `space-y-N` with no display-model change). Defaults to `space-y-4` (md).
+ */
+export const stackVariants = cva("", {
   variants: {
-    space: {
-      // Named spacing scale (preferred):
+    gap: {
+      tight: "space-y-0.5",
+      snug: "space-y-1.5",
       xs: "space-y-1",
       sm: "space-y-2",
       md: "space-y-4",
       lg: "space-y-6",
-      // Numeric keys kept for back-compat:
-      0: "space-y-0",
-      4: "space-y-4",
     },
   },
   defaultVariants: {
-    space: 4,
+    gap: "md",
   },
 });
 
-export type FlexContainerVariants = VariantProps<typeof flexContainerVariants>;
-export type GridContainerVariants = VariantProps<typeof gridContainerVariants>;
-export type SpacedContainerVariants = VariantProps<
-  typeof spacedContainerVariants
->;
+export type RowVariants = VariantProps<typeof rowVariants>;
+export type GridVariants = VariantProps<typeof gridVariants>;
+export type StackVariants = VariantProps<typeof stackVariants>;

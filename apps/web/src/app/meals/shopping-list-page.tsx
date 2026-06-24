@@ -7,6 +7,7 @@ import { sumBy } from "es-toolkit";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
+import { Row, Stack } from "~/components/layout";
 import { Input } from "~/components/ui/input";
 import { useTRPC } from "~/trpc/react";
 import { formatAmount, statusClass, statusLabel } from "./meal-format";
@@ -82,9 +83,9 @@ export function ShoppingListPage() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-4">
-        <div className="space-y-1">
+    <Stack>
+      <Row align="end" wrap gap="md">
+        <Stack gap="xs">
           <label htmlFor={fromId} className="text-muted-foreground text-xs">
             From
           </label>
@@ -95,8 +96,8 @@ export function ShoppingListPage() {
             className="h-8 w-40"
             onChange={(e) => setFromStr(e.target.value)}
           />
-        </div>
-        <div className="space-y-1">
+        </Stack>
+        <Stack gap="xs">
           <label htmlFor={toId} className="text-muted-foreground text-xs">
             To
           </label>
@@ -107,8 +108,8 @@ export function ShoppingListPage() {
             className="h-8 w-40"
             onChange={(e) => setToStr(e.target.value)}
           />
-        </div>
-      </div>
+        </Stack>
+      </Row>
 
       {isLoading ? (
         <SimpleLoading text="Adding up what you need..." />
@@ -123,7 +124,7 @@ export function ShoppingListPage() {
       ) : (
         <>
           {/* Meal include/exclude toggles */}
-          <div className="flex flex-wrap gap-2">
+          <Row wrap gap="sm">
             {data.meals.map((m) => {
               const isOut = excluded.has(m.id);
               return (
@@ -141,7 +142,7 @@ export function ShoppingListPage() {
                 </button>
               );
             })}
-          </div>
+          </Row>
 
           {rows.length === 0 ? (
             <p className="text-muted-foreground text-sm">
@@ -186,7 +187,7 @@ export function ShoppingListPage() {
           )}
         </>
       )}
-    </div>
+    </Stack>
   );
 }
 
@@ -211,10 +212,13 @@ function RowGroup({
     <>
       <tr className="border-t">
         <td className="px-2 py-2">
-          <button
+          <Row
+            as="button"
             type="button"
+            align="center"
+            gap="snug"
             onClick={onToggle}
-            className="flex items-center gap-1.5 text-left hover:underline" /* tight: chevron+label */
+            className="text-left hover:underline"
           >
             {isOpen ? (
               <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
@@ -225,7 +229,7 @@ function RowGroup({
             <span className={`text-xs ${statusClass(status)}`}>
               · {statusLabel(status)}
             </span>
-          </button>
+          </Row>
         </td>
         <td className="px-2 py-2 text-right tabular-nums">
           {formatAmount(need, item.basisUnit)}

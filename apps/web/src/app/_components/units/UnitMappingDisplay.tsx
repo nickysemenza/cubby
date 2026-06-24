@@ -1,4 +1,5 @@
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
+import { Stack } from "~/components/layout";
 import type { BaseKind } from "~/lib/conversion-coverage";
 import { ConversionCapabilities } from "./ConversionCapabilities";
 
@@ -26,7 +27,7 @@ export const UnitMappingDisplay: React.FC<UnitMappingDisplayProps> = ({
   return (
     <div>
       {title && <h3 className="mb-4 font-heading font-medium">{title}</h3>}
-      <div className="space-y-4">
+      <Stack gap="md">
         <ConversionCapabilities
           mappings={mappings}
           compact={compact}
@@ -34,7 +35,7 @@ export const UnitMappingDisplay: React.FC<UnitMappingDisplayProps> = ({
           showTier={showTier}
           kinds={kinds}
         />
-      </div>
+      </Stack>
     </div>
   );
 };

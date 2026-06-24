@@ -1,5 +1,6 @@
 import { ShoppingCart } from "lucide-react";
 import { memo, useMemo } from "react";
+import { Row, Stack } from "~/components/layout";
 import { MarkdownText } from "~/components/markdown";
 import { dottedEntityLink, EntityPreviewLink } from "../EntityPreviewLink";
 import {
@@ -45,16 +46,19 @@ function ShoppingList({ needs }: { needs: CombinedNeed[] }) {
       </summary>
       <div className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
         {needs.map((need) => (
-          <div
+          <Row
+            align="baseline"
+            justify="between"
+            gap="sm"
             key={need.ingredientId}
-            className="flex items-baseline justify-between gap-2 border-border/50 border-b border-dashed py-1"
+            className="border-border/50 border-b border-dashed py-1"
           >
             <span className="truncate">{need.name}</span>
             <span className="shrink-0 font-mono text-muted-foreground text-xs tabular-nums">
               {need.grams != null ? gramText(need.grams) : "—"}
               {need.estimated && <span className="text-warning"> ~</span>}
             </span>
-          </div>
+          </Row>
         ))}
       </div>
     </details>
@@ -70,7 +74,11 @@ function PrepRow({
 }) {
   if (row.kind === "stub") {
     return (
-      <div className="flex items-baseline gap-2 border-border/60 border-b border-dashed py-2">
+      <Row
+        align="baseline"
+        gap="sm"
+        className="border-border/60 border-b border-dashed py-2"
+      >
         <span className="size-3.5 shrink-0" />
         <span className="flex-1 text-muted-foreground text-sm italic">
           {row.name}{" "}
@@ -78,7 +86,7 @@ function PrepRow({
             {row.reason === "cycle" ? "↻ cycle" : "missing"}
           </span>
         </span>
-      </div>
+      </Row>
     );
   }
 
@@ -90,7 +98,11 @@ function PrepRow({
   // A div, not a label: the name is now a link, and an interactive <a> can't
   // live inside a <label> (the checkbox stays individually clickable).
   return (
-    <div className="flex items-baseline gap-2 border-border/60 border-b border-dashed py-2">
+    <Row
+      align="baseline"
+      gap="sm"
+      className="border-border/60 border-b border-dashed py-2"
+    >
       <input
         type="checkbox"
         aria-label={`Prep ${name}`}
@@ -120,7 +132,7 @@ function PrepRow({
         className="shrink-0 whitespace-nowrap text-xs"
         emptyText="—"
       />
-    </div>
+    </Row>
   );
 }
 
@@ -149,7 +161,7 @@ function Component({
 
   return (
     <section>
-      <div className="mb-2 flex items-baseline gap-2">
+      <Row align="baseline" gap="sm" className="mb-2">
         <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 font-mono text-[11px] text-primary">
           {index + 1}
         </span>
@@ -178,7 +190,7 @@ function Component({
             <div className="text-warning">batch est.</div>
           )}
         </div>
-      </div>
+      </Row>
 
       <div className="border-[var(--border-chunky)] border-t">
         {node.sections.map((section, si) => (
@@ -190,9 +202,9 @@ function Component({
               <PrepRow key={row.id} row={row} gramById={gramById} />
             ))}
             {si === node.sections.length - 1 && steps.length > 0 && (
-              <ol className="mt-2 space-y-2 pl-0">
+              <Stack as="ol" gap="sm" className="mt-2 pl-0">
                 {steps.map((step) => (
-                  <li key={step.n} className="flex gap-2">
+                  <Row as="li" gap="sm" key={step.n}>
                     <span className="mt-px inline-flex size-[17px] shrink-0 items-center justify-center rounded-full border border-[var(--border-chunky)] font-mono text-[9px] text-muted-foreground tabular-nums">
                       {step.n}
                     </span>
@@ -201,9 +213,9 @@ function Component({
                         {step.text}
                       </MarkdownText>
                     </span>
-                  </li>
+                  </Row>
                 ))}
-              </ol>
+              </Stack>
             )}
           </div>
         ))}
@@ -228,7 +240,10 @@ export const RecipePrepSheetView = memo(function RecipePrepSheetView({
   const usedByRecipe = useMemo(() => asUsedGramsByRecipe(tree), [tree]);
 
   return (
-    <div className="space-y-6 rounded-xl border border-[var(--border-chunky)] bg-card px-6 py-6">
+    <Stack
+      gap="lg"
+      className="rounded-xl border border-[var(--border-chunky)] bg-card px-6 py-6"
+    >
       <header className="border-primary border-b-2 pb-2">
         <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
           <h2 className="my-0 font-heading font-semibold text-2xl tracking-tight">
@@ -251,7 +266,7 @@ export const RecipePrepSheetView = memo(function RecipePrepSheetView({
 
       <ShoppingList needs={combined} />
 
-      <div className="space-y-6">
+      <Stack gap="lg">
         {components.map((node, i) => (
           <Component
             key={node.recipe.id}
@@ -260,7 +275,7 @@ export const RecipePrepSheetView = memo(function RecipePrepSheetView({
             usedGrams={usedByRecipe.get(node.recipe.id)}
           />
         ))}
-      </div>
-    </div>
+      </Stack>
+    </Stack>
   );
 });

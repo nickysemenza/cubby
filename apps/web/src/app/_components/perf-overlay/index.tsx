@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { Row, Stack } from "~/components/layout";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { setFlag } from "~/lib/flags";
 import {
@@ -131,17 +132,20 @@ export function PerfOverlay() {
 
   if (minimized) {
     return (
-      <button
+      <Row
+        as="button"
         type="button"
+        align="center"
+        gap="snug"
         onClick={() => setMinimized(false)}
         className={cn(
-          "fixed z-[60] flex items-center gap-1.5 rounded-md border border-[var(--border-chunky)] bg-card px-2 py-1 font-mono text-xs shadow-[var(--shadow-chunky)]" /* tight */,
+          "fixed z-[60] rounded-md border border-[var(--border-chunky)] bg-card px-2 py-1 font-mono text-xs shadow-[var(--shadow-chunky)]",
           CORNER_CLASS[corner],
         )}
       >
         <Activity className="size-3 text-primary" />
         {snap.runtime.fps} fps
-      </button>
+      </Row>
     );
   }
 
@@ -153,7 +157,11 @@ export function PerfOverlay() {
       )}
     >
       {/* Header */}
-      <div className="flex items-center gap-1 border-border/60 border-b bg-muted/40 px-2 py-1">
+      <Row
+        align="center"
+        gap="xs"
+        className="border-border/60 border-b bg-muted/40 px-2 py-1"
+      >
         <Activity className="size-3 text-primary" />
         <span className="font-semibold">perf</span>
         <span className="text-muted-foreground">·</span>
@@ -166,7 +174,7 @@ export function PerfOverlay() {
         >
           {snap.runtime.fps}fps
         </span>
-        <div className="ml-auto flex items-center gap-0.5" /* tight */>
+        <Row align="center" gap="tight" className="ml-auto">
           <IconBtn title="Copy report as JSON" onClick={copyReport}>
             <ClipboardCopy className="size-3" />
           </IconBtn>
@@ -189,8 +197,8 @@ export function PerfOverlay() {
           <IconBtn title="Close" onClick={() => setFlag("perfOverlay", false)}>
             <X className="size-3" />
           </IconBtn>
-        </div>
-      </div>
+        </Row>
+      </Row>
 
       {/* Tabs */}
       <div className="flex border-border/60 border-b">
@@ -322,7 +330,7 @@ function WasmTab({ snap }: { snap: PerfSnapshot }) {
   if (rows.length === 0)
     return <Empty label="No WASM calls yet — load a recipe." />;
   return (
-    <div className="space-y-1">
+    <Stack gap="xs">
       <div className="px-1 text-2xs text-muted-foreground">
         cache: {snap.cacheSize} entries
       </div>
@@ -372,7 +380,7 @@ function WasmTab({ snap }: { snap: PerfSnapshot }) {
           })}
         </tbody>
       </table>
-    </div>
+    </Stack>
   );
 }
 
@@ -387,8 +395,8 @@ function QueriesTab({
     (a, b) => b[1].fetches - a[1].fetches,
   );
   return (
-    <div className="space-y-1">
-      <div className="flex gap-2 px-1 text-2xs">
+    <Stack gap="xs">
+      <Row gap="sm" className="px-1 text-2xs">
         <span
           className={cn(
             live.inFlight > 0 ? "text-primary" : "text-muted-foreground",
@@ -400,7 +408,7 @@ function QueriesTab({
         {live.mutationsPending > 0 && (
           <span className="text-warning">{live.mutationsPending} mut</span>
         )}
-      </div>
+      </Row>
       {rows.length === 0 ? (
         <Empty label="No fetches recorded yet." />
       ) : (
@@ -436,7 +444,7 @@ function QueriesTab({
           </tbody>
         </table>
       )}
-    </div>
+    </Stack>
   );
 }
 
@@ -475,7 +483,7 @@ function RendersTab({ snap }: { snap: PerfSnapshot }) {
           {rows.map(([id, s]) => (
             <tr key={id} className="border-border/30 border-t align-top">
               <td className="py-0.5" /* tight */>
-                <div className="flex items-center gap-1">
+                <Row align="center" gap="xs">
                   <span className="truncate">{id}</span>
                   {s.lastPhase && (
                     <span
@@ -489,7 +497,7 @@ function RendersTab({ snap }: { snap: PerfSnapshot }) {
                       {s.lastPhase}
                     </span>
                   )}
-                </div>
+                </Row>
                 <Bar
                   pct={(s.count / maxCount) * 100}
                   tone={s.count > 10 ? 4 : 3}
@@ -514,7 +522,7 @@ function RendersTab({ snap }: { snap: PerfSnapshot }) {
 function RuntimeTab({ snap }: { snap: PerfSnapshot }) {
   const { fps, longTasks, heapUsedMB } = snap.runtime;
   return (
-    <div className="space-y-1 p-1">
+    <Stack gap="xs" className="p-1">
       <Metric label="FPS" value={String(fps)} bad={fps < 30} />
       <Metric
         label="Long tasks"
@@ -525,14 +533,14 @@ function RuntimeTab({ snap }: { snap: PerfSnapshot }) {
         label="JS heap"
         value={heapUsedMB === null ? "n/a" : `${heapUsedMB} MB`}
       />
-    </div>
+    </Stack>
   );
 }
 
 function VitalsTab({ snap }: { snap: PerfSnapshot }) {
   const { lcp, inp, cls } = snap.vitals;
   return (
-    <div className="space-y-1 p-1">
+    <Stack gap="xs" className="p-1">
       <Metric
         label="LCP"
         value={lcp === null ? "…" : `${lcp}ms`}
@@ -548,7 +556,7 @@ function VitalsTab({ snap }: { snap: PerfSnapshot }) {
         value={cls === null ? "…" : cls.toFixed(3)}
         bad={cls !== null && cls > 0.1}
       />
-    </div>
+    </Stack>
   );
 }
 
@@ -562,11 +570,15 @@ function Metric({
   bad?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between rounded bg-muted/40 px-2 py-1">
+    <Row
+      align="center"
+      justify="between"
+      className="rounded bg-muted/40 px-2 py-1"
+    >
       <span className="text-muted-foreground">{label}</span>
       <span className={cn("font-semibold", bad && "text-destructive")}>
         {value}
       </span>
-    </div>
+    </Row>
   );
 }

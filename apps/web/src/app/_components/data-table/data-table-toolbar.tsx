@@ -1,6 +1,7 @@
 import type { Table } from "@tanstack/react-table";
 import { X } from "lucide-react";
 import type { ReactNode } from "react";
+import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 import { DataTableViewOptions } from "./data-table-view-options";
@@ -31,15 +32,17 @@ export function DataTableToolbar<TData>({
     table.getState().columnFilters.length > 0 || table.getState().globalFilter;
 
   return (
-    <div className={cn("flex items-center justify-between gap-2", className)}>
-      <div className="flex items-center gap-2">
+    <Row align="center" justify="between" gap="sm" className={className}>
+      <Row align="center" gap="sm">
         {showViewOptions && <DataTableViewOptions table={table} />}
         {bulkActionBar}
-      </div>
+      </Row>
 
-      <div
+      <Row
+        align="center"
+        gap="sm"
         className={cn(
-          "flex flex-1 items-center gap-2",
+          "flex-1",
           showViewOptions || bulkActionBar ? "justify-end" : "justify-start",
         )}
       >
@@ -61,7 +64,7 @@ export function DataTableToolbar<TData>({
         )}
 
         {actions}
-      </div>
-    </div>
+      </Row>
+    </Row>
   );
 }

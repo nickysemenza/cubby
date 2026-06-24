@@ -1,3 +1,5 @@
+import { Row } from "~/components/layout";
+
 interface SectionHeaderProps {
   title: string;
   count: number;
@@ -10,8 +12,10 @@ interface SectionHeaderProps {
  */
 export function SectionHeader({ title, count, color }: SectionHeaderProps) {
   return (
-    <div
-      className="flex items-center gap-2 px-2 py-2"
+    <Row
+      align="center"
+      gap="sm"
+      className="px-2 py-2"
       style={{
         backgroundColor: `color-mix(in oklch, ${color} 8%, transparent)`,
       }}
@@ -30,6 +34,6 @@ export function SectionHeader({ title, count, color }: SectionHeaderProps) {
       >
         {count}
       </span>
-    </div>
+    </Row>
   );
 }

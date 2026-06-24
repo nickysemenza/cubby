@@ -4,6 +4,7 @@ import { Search, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { entityTypeMap } from "~/app/_components/search/search-utils";
+import { Row, Stack } from "~/components/layout";
 import { MarkdownText } from "~/components/markdown";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
@@ -45,9 +46,9 @@ function AskPage() {
   };
 
   return (
-    <Page variant="list" title="Ask Cubby">
-      <div className="space-y-4">
-        <form onSubmit={submit} className="flex gap-2">
+    <Page variant="list" compact decoration="none" title="Ask Cubby">
+      <Stack>
+        <Row as="form" onSubmit={submit} gap="sm">
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -67,16 +68,18 @@ function AskPage() {
               </>
             )}
           </Button>
-        </form>
+        </Row>
 
         {!result && !ask.isPending && (
-          <div className="space-y-2">
-            <div
-              className="flex items-center gap-1.5 px-1 font-medium text-muted-foreground text-xs uppercase tracking-wider" /* tight */
+          <Stack gap="sm">
+            <Row
+              align="center"
+              gap="snug"
+              className="px-1 font-medium text-muted-foreground text-xs uppercase tracking-wider"
             >
               <Sparkles className="h-3.5 w-3.5" />
               Try asking
-            </div>
+            </Row>
             <div className="grid gap-2">
               {EXAMPLE_PROMPTS.map((prompt) => (
                 <button
@@ -93,11 +96,11 @@ function AskPage() {
                 </button>
               ))}
             </div>
-          </div>
+          </Stack>
         )}
 
         {result && (
-          <div className="space-y-4">
+          <Stack>
             {/* Answer */}
             <Card>
               <CardContent className="pt-4">
@@ -109,7 +112,7 @@ function AskPage() {
 
             {/* Sources */}
             {result.sources.length > 0 && (
-              <div className="space-y-1">
+              <Stack gap="xs">
                 <h2 className="font-medium text-muted-foreground text-xs uppercase tracking-wider">
                   Sources
                 </h2>
@@ -141,7 +144,7 @@ function AskPage() {
                     </button>
                   ))}
                 </div>
-              </div>
+              </Stack>
             )}
 
             {/* Tool calls (debug) */}
@@ -151,12 +154,14 @@ function AskPage() {
                   {result.toolCalls.length} tool call
                   {result.toolCalls.length === 1 ? "" : "s"}
                 </summary>
-                <div className="mt-2 space-y-1">
+                <Stack gap="xs" className="mt-2">
                   {result.toolCalls.map((call, i) => (
-                    <div
+                    <Row
                       // biome-ignore lint/suspicious/noArrayIndexKey: tool calls are an ordered log with no stable id
                       key={i}
-                      className="flex items-center gap-2 font-mono text-xs"
+                      align="center"
+                      gap="sm"
+                      className="font-mono text-xs"
                     >
                       <span
                         className={
@@ -172,14 +177,14 @@ function AskPage() {
                       <span className="ml-auto shrink-0 text-muted-foreground">
                         {call.durationMs}ms
                       </span>
-                    </div>
+                    </Row>
                   ))}
-                </div>
+                </Stack>
               </details>
             )}
-          </div>
+          </Stack>
         )}
-      </div>
+      </Stack>
     </Page>
   );
 }

@@ -12,6 +12,7 @@ import { LocationGallery } from "~/app/_components/locations/location-gallery";
 import { LocationActions } from "~/app/locations/location-actions";
 import { LocationList } from "~/app/locations/locationlist";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
+import { Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import {
   ViewSwitcher,
@@ -52,7 +53,7 @@ function LocationsPage() {
       actions={<LocationActions />}
       fullWidth
     >
-      <div className="space-y-4">
+      <Stack gap="md">
         <ViewSwitcher
           ariaLabel="Locations view"
           options={VIEW_SWITCHER_OPTIONS}
@@ -73,7 +74,7 @@ function LocationsPage() {
         )}
 
         {view === "visualizations" && (
-          <div className="space-y-4">
+          <Stack gap="md">
             {/* Treemap - full width */}
             <div>
               <h3 className="mb-2 font-semibold text-lg">
@@ -107,9 +108,9 @@ function LocationsPage() {
                 </Suspense>
               </div>
             </div>
-          </div>
+          </Stack>
         )}
-      </div>
+      </Stack>
     </Page>
   );
 }

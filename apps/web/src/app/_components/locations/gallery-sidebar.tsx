@@ -6,6 +6,7 @@ import {
   PanelLeftClose,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { ImageWithPreview } from "~/components/ui/image-with-preview";
 import { EntityIcon } from "~/entities/entities";
@@ -160,13 +161,13 @@ export function GallerySidebar({
       )}
     >
       {/* Header */}
-      <div className="flex items-center justify-between border-b px-2 py-2">
-        <div className="flex items-center gap-2">
+      <Row align="center" justify="between" className="border-b px-2 py-2">
+        <Row align="center" gap="sm">
           <ImageIcon className="h-3.5 w-3.5 text-eyebrow" />
           <span className="font-semibold text-foreground text-sm tracking-tight">
             Locations
           </span>
-        </div>
+        </Row>
         <Button
           variant="ghost"
           size="icon"
@@ -176,11 +177,11 @@ export function GallerySidebar({
         >
           <PanelLeftClose className="h-4 w-4" />
         </Button>
-      </div>
+      </Row>
 
       {/* Tree */}
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="space-y-1 p-2">
+        <Stack gap="xs" className="p-2">
           {locations.map((location) => (
             <SidebarTreeNode
               key={location.id}
@@ -196,7 +197,7 @@ export function GallerySidebar({
               activeItemRef={activeItemRef}
             />
           ))}
-        </div>
+        </Stack>
       </div>
     </div>
   );
@@ -264,14 +265,18 @@ function SidebarTreeNode({
 
   return (
     <div>
-      {/* biome-ignore lint/a11y/useSemanticElements: Using div with role="button" to allow nested button for expand/collapse */}
-      <div
+      {/* Non-semantic role="button" wrapper on purpose: the row is clickable
+          but contains a nested <button> for expand/collapse, so it can't be a
+          real <button> (no nested interactive controls). */}
+      <Row
         ref={isActive ? activeItemRef : undefined}
+        align="center"
+        gap="sm"
         role="button"
         tabIndex={0}
         onKeyDown={handleKeyDown}
         className={cn(
-          "group relative flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm",
+          "group relative cursor-pointer rounded-lg px-2 py-2 text-sm",
           "transition-all duration-150 ease-out",
           !isActive && "hover:bg-accent/50",
           isActive && [
@@ -352,9 +357,11 @@ function SidebarTreeNode({
 
         {/* Item Count Badge */}
         {(location.totalItemCount ?? 0) > 0 && (
-          <div
+          <Row
+            align="center"
+            gap="xs"
             className={cn(
-              "flex items-center gap-1 rounded-full px-2 py-1 font-medium text-2xs transition-colors",
+              "rounded-full px-2 py-1 font-medium text-2xs transition-colors",
               isActive
                 ? "bg-primary/20 text-primary"
                 : "bg-muted text-muted-foreground group-hover:bg-muted/80",
@@ -369,9 +376,9 @@ function SidebarTreeNode({
             ) : (
               <span>{itemCount}</span>
             )}
-          </div>
+          </Row>
         )}
-      </div>
+      </Row>
 
       {/* Children with animation */}
       {hasChildren && (

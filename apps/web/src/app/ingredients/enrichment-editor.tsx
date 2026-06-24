@@ -14,6 +14,7 @@ import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { ConversionCapabilities } from "~/app/_components/units/ConversionCapabilities";
 import { UnitMappingGraph } from "~/app/_components/units/unit-mapping-graph";
 import { UnitMappingsTable } from "~/app/_components/units/unitmappingstable";
+import { Row, Stack } from "~/components/layout";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { BASE_KINDS, type BaseKind } from "~/lib/conversion-coverage";
@@ -53,9 +54,9 @@ function PriceField({
   onDollars: (v: string) => void;
 }) {
   return (
-    <div className="space-y-1">
+    <Stack gap="xs">
       <p className="font-medium text-xs">Set a price</p>
-      <div className="flex items-center gap-2 text-sm">
+      <Row align="center" gap="sm" className="text-sm">
         <Input
           type="number"
           inputMode="decimal"
@@ -78,12 +79,12 @@ function PriceField({
           className="w-20"
           aria-label="Price"
         />
-      </div>
+      </Row>
       <p className="text-muted-foreground text-xs">
         For foods, price by the package, e.g. 2&nbsp;lb = $5.99. Use “each” for
         count items.
       </p>
-    </div>
+    </Stack>
   );
 }
 
@@ -101,13 +102,13 @@ function ConversionRowsField({
   onRemove: (id: string) => void;
 }) {
   return (
-    <div className="space-y-2">
+    <Stack gap="sm">
       <p className="font-medium text-xs">
         {hint.title}{" "}
         <span className="font-normal text-muted-foreground">{hint.detail}</span>
       </p>
       {rows.map((c) => (
-        <div key={c.id} className="flex items-center gap-2 text-sm">
+        <Row key={c.id} align="center" gap="sm" className="text-sm">
           <Input
             type="number"
             inputMode="decimal"
@@ -149,16 +150,19 @@ function ConversionRowsField({
               <X className="h-3.5 w-3.5" />
             </button>
           )}
-        </div>
+        </Row>
       ))}
-      <button
+      <Row
+        as="button"
         type="button"
+        align="center"
+        gap="xs"
         onClick={onAdd}
-        className="flex items-center gap-1 text-muted-foreground text-xs hover:text-foreground"
+        className="text-muted-foreground text-xs hover:text-foreground"
       >
         <Plus className="h-3 w-3" /> Add another
-      </button>
-    </div>
+      </Row>
+    </Stack>
   );
 }
 
@@ -217,31 +221,34 @@ function LivePanels({
   naDisabled: boolean;
 }) {
   return (
-    <div className="shrink-0 space-y-4 lg:w-72">
+    <Stack className="shrink-0 lg:w-72">
       {(linkedFoods.length > 0 || currentMappings.length > 0) && (
-        <div className="space-y-1 rounded-md border border-[var(--border-chunky)] bg-background/60 p-2 text-xs">
+        <Stack
+          gap="xs"
+          className="rounded-md border border-[var(--border-chunky)] bg-background/60 p-2 text-xs"
+        >
           {linkedFoods.length > 0 && (
-            <p className="flex items-center gap-1">
+            <Row as="p" align="center" gap="xs">
               <Check className="h-3 w-3 text-positive" />
               <span className="text-muted-foreground">Linked USDA:</span>{" "}
               {linkedFoods.map((f) => f.foodInfo.description).join(", ")}
-            </p>
+            </Row>
           )}
           {currentMappings.length > 0 && (
-            <div className="space-y-1">
+            <Stack gap="xs">
               <p className="font-medium">Current conversions</p>
               <UnitMappingsTable mappings={currentMappings} />
-            </div>
+            </Stack>
           )}
-        </div>
+        </Stack>
       )}
-      <div className="space-y-1">
+      <Stack gap="xs">
         <p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
           Unit graph (live)
         </p>
         <UnitMappingGraph mappings={previewMappings} />
-      </div>
-      <div className="space-y-1">
+      </Stack>
+      <Stack gap="xs">
         <p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
           Coverage (live)
         </p>
@@ -257,8 +264,8 @@ function LivePanels({
           onToggle={onToggleNa}
           disabled={naDisabled}
         />
-      </div>
-    </div>
+      </Stack>
+    </Stack>
   );
 }
 
@@ -426,9 +433,9 @@ export function EnrichmentEditor({
       : { title: "Add conversions", detail: "— optional, e.g. 1 cup = 240 g" };
 
   return (
-    <div className="space-y-4">
+    <Stack>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-        <div className="min-w-0 flex-1 space-y-4">
+        <Stack className="min-w-0 flex-1">
           {slots.header}
 
           {product != null &&
@@ -441,7 +448,7 @@ export function EnrichmentEditor({
             )}
 
           {!gaps.usdaLinked && (
-            <div className="space-y-1">
+            <Stack gap="xs">
               <p className="font-medium text-xs">
                 Link a USDA food{" "}
                 <span className="font-normal text-muted-foreground">
@@ -449,7 +456,7 @@ export function EnrichmentEditor({
                 </span>
               </p>
               {slots.usdaPicker({ food, setFood })}
-            </div>
+            </Stack>
           )}
 
           {gaps.priceIslanded && (
@@ -481,7 +488,7 @@ export function EnrichmentEditor({
           />
 
           {slots.actions({ save, isPending })}
-        </div>
+        </Stack>
 
         <LivePanels
           row={row}
@@ -495,6 +502,6 @@ export function EnrichmentEditor({
       </div>
 
       {slots.footer}
-    </div>
+    </Stack>
   );
 }

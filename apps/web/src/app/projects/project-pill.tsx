@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { formatCurrency } from "~/lib/utils";
 import type { NotionProject } from "~/server/clients/notion";
@@ -33,7 +34,7 @@ function ProjectTooltip({ project }: { project: NotionProject }) {
           {project.icon && `${project.icon} `}
           {project.name}
         </div>
-        <div className="mt-1 space-y-1 text-muted-foreground">
+        <Stack gap="xs" className="mt-1 text-muted-foreground">
           {project.status && <div>Status: {project.status}</div>}
           {(project.date || project.dateEnd) && (
             <div>{formatDateRange(project.date, project.dateEnd)}</div>
@@ -45,7 +46,7 @@ function ProjectTooltip({ project }: { project: NotionProject }) {
           {project.costEstimate != null && (
             <div>Estimate: {formatCurrency(project.costEstimate, 0)}</div>
           )}
-        </div>
+        </Stack>
       </div>
     </div>
   );

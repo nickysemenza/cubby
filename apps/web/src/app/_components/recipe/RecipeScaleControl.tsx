@@ -2,6 +2,7 @@ import type { RecipeOut } from "@cubby/schemas/recipe";
 import { Link } from "@tanstack/react-router";
 import { Scaling, X } from "lucide-react";
 import { useMemo, useState } from "react";
+import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -112,7 +113,7 @@ export function RecipeScaleControl({
   const activeChip = QUICK_FACTORS.find((f) => f === factor);
 
   return (
-    <div className="flex items-center gap-2">
+    <Row align="center" gap="sm">
       <span className="eyebrow">Scale</span>
 
       {/* Quick ×-chips */}
@@ -148,7 +149,7 @@ export function RecipeScaleControl({
           }
         />
         <PopoverContent className="w-72 space-y-4">
-          <div className="space-y-2">
+          <Stack gap="sm">
             <Label className="eyebrow">Scale by</Label>
             <ToggleGroup
               aria-label="Scale anchor"
@@ -175,7 +176,7 @@ export function RecipeScaleControl({
                 Ingredient
               </ToggleGroupItem>
             </ToggleGroup>
-          </div>
+          </Stack>
 
           {mode === "ingredient" && (
             <select
@@ -197,14 +198,16 @@ export function RecipeScaleControl({
             </select>
           )}
 
-          <form
-            className="flex items-end gap-2"
+          <Row
+            as="form"
+            align="end"
+            gap="sm"
             onSubmit={(e) => {
               e.preventDefault();
               applyAnchor();
             }}
           >
-            <div className="flex-1 space-y-1">
+            <Stack gap="xs" className="flex-1">
               <Label className="text-2xs text-muted-foreground">
                 {mode === "multiplier" && "Multiplier"}
                 {mode === "totalWeight" && "Target total weight (g)"}
@@ -229,11 +232,11 @@ export function RecipeScaleControl({
                 onChange={(e) => setDraft(e.target.value)}
                 disabled={mode === "ingredient" && !selectedRow}
               />
-            </div>
+            </Stack>
             <Button type="submit" size="sm">
               Apply
             </Button>
-          </form>
+          </Row>
 
           {/* In weight mode, name the ingredients that can't reach grams so the
               user can fix them. Fires whenever there are offenders — a fully
@@ -243,13 +246,13 @@ export function RecipeScaleControl({
               nothing to point at (e.g. still loading). */}
           {mode === "totalWeight" &&
             (missingWeightLinks.length > 0 ? (
-              <div className="space-y-1 text-2xs text-muted-foreground">
+              <Stack gap="xs" className="text-2xs text-muted-foreground">
                 <p>
                   {totals?.weight
                     ? "These ingredients aren't in the weight total. Add a unit mapping for:"
                     : "No weight conversion yet. Add a unit mapping for:"}
                 </p>
-                <ul className="space-y-1">
+                <Stack as="ul" gap="xs">
                   {missingWeightLinks.map((link) => (
                     <li key={link.ingredientId}>
                       <Link
@@ -264,8 +267,8 @@ export function RecipeScaleControl({
                       </Link>
                     </li>
                   ))}
-                </ul>
-              </div>
+                </Stack>
+              </Stack>
             ) : !totals?.weight ? (
               <p className="text-2xs text-muted-foreground">
                 No weight conversion yet — add a unit mapping to scale by
@@ -285,6 +288,6 @@ export function RecipeScaleControl({
           <X className="h-3 w-3" />
         </Button>
       )}
-    </div>
+    </Row>
   );
 }

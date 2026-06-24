@@ -5,6 +5,7 @@ import { createColumnHelper } from "@tanstack/react-table";
 import { Package, Printer } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
+import { Row } from "~/components/layout";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import {
   Tooltip,
@@ -335,12 +336,12 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between gap-2">
+      <Row align="center" justify="between" gap="sm" className="mb-4">
         {/* Keep primary actions reachable in shelf view (they live in the
             table toolbar otherwise). */}
         <div className="min-w-0">{view === "shelf" ? actions : null}</div>
         <ShelfTableToggle value={view} onChange={setView} />
-      </div>
+      </Row>
       {view === "shelf" ? (
         <ProductShelf
           items={items}

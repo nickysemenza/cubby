@@ -1,5 +1,6 @@
 import type { FC } from "react";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
+import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { queryKeys } from "~/lib/query-keys";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
@@ -42,12 +43,12 @@ export const IngredientBasicInfo: FC<IngredientBasicInfoProps> = ({
       <BasicInfo
         fields={fields}
         actions={
-          <div className="flex gap-2">
+          <Row gap="sm">
             <Button onClick={onEdit} variant="outline" size="sm">
               Edit Ingredient
             </Button>
             <DeleteButton size="sm" />
-          </div>
+          </Row>
         }
       />
       <DeleteDialog />

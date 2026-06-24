@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { type FC, useState } from "react";
 import { toast } from "sonner";
+import { Row, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { Button, buttonVariants } from "~/components/ui/button";
 import {
@@ -99,8 +100,8 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
       title: "Child Locations",
       icon: FolderTree,
       content: (
-        <div className="space-y-2">
-          <div className="flex gap-2">
+        <Stack gap="sm">
+          <Row gap="sm">
             <Button
               variant="outline"
               size="sm"
@@ -153,7 +154,7 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
                 </Button>
               </>
             )}
-          </div>
+          </Row>
           {location.children && location.children.length > 0 ? (
             <LocationCardGrid
               locations={location.children}
@@ -170,7 +171,7 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
               </EmptyDescription>
             </Empty>
           )}
-        </div>
+        </Stack>
       ),
     },
     // Custom section: Inventory Items (with interactive refetch)
@@ -178,8 +179,8 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
       title: "Inventory Items",
       icon: Package,
       content: (
-        <div className="space-y-2">
-          <div className="space-y-2">
+        <Stack gap="sm">
+          <Stack gap="sm">
             <QuickInventoryAdd
               locationId={location.id}
               onSuccess={() => {
@@ -188,7 +189,7 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
                 });
               }}
             />
-            <div className="flex gap-2">
+            <Row gap="sm">
               <Button
                 variant="outline"
                 onClick={() => setDetectItemsOpen(true)}
@@ -205,10 +206,10 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
                 <ScanBarcode className="mr-2 h-4 w-4" />
                 Scan Items
               </Link>
-            </div>
-          </div>
+            </Row>
+          </Stack>
           <LocationInventoryTable locationId={location.id} />
-        </div>
+        </Stack>
       ),
     },
     // Common sections from entity config (History)

@@ -3,6 +3,7 @@ import { Sparkles } from "lucide-react";
 import { useCallback, useState } from "react";
 import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
 import { toast } from "sonner";
+import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -73,7 +74,7 @@ export function IdentifyProductButton<
   }
 
   return (
-    <div className="space-y-2">
+    <Stack gap="sm">
       <Button
         type="button"
         variant="outline"
@@ -92,6 +93,6 @@ export function IdentifyProductButton<
           reasoning={result.reasoning}
         />
       )}
-    </div>
+    </Stack>
   );
 }

@@ -3,6 +3,7 @@ import { uniq } from "es-toolkit";
 import { AlertCircle, AlertTriangle, Eye, EyeOff, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import {
@@ -165,7 +166,7 @@ export function IngredientPreviewTable({
       {/* "Raw" shows the grammar's carve of each source line. Off by default so
           the common view stays a tidy 3-column table; toggle it on to inspect
           how a line parsed (the carve column wraps, the others don't). */}
-      <div className="mb-1 flex justify-end">
+      <Row justify="end" className="mb-1">
         <Button
           type="button"
           variant="ghost"
@@ -180,7 +181,7 @@ export function IngredientPreviewTable({
           )}
           {showRaw ? "Hide raw" : "Show raw"}
         </Button>
-      </div>
+      </Row>
 
       <Table>
         <TableHeader>
@@ -209,10 +210,10 @@ export function IngredientPreviewTable({
                 colSpan={showRaw ? 4 : 3}
                 className="text-muted-foreground"
               >
-                <div className="flex items-center gap-2">
+                <Row align="center" gap="sm">
                   <Spinner />
                   Matching ingredients...
-                </div>
+                </Row>
               </TableCell>
             </TableRow>
           )}
@@ -243,7 +244,7 @@ function IngredientRow({
       )}
     >
       <TableCell>
-        <div className="flex items-center gap-2">
+        <Row align="center" gap="sm">
           {isLoading ? (
             <>
               <Spinner className="text-muted-foreground" />
@@ -269,7 +270,7 @@ function IngredientRow({
               </Button>
             </>
           )}
-        </div>
+        </Row>
       </TableCell>
       {/* `unparsed_digit` means the line carried a number the parser couldn't
           turn into an amount (a likely-missed quantity) — surfaced here, where

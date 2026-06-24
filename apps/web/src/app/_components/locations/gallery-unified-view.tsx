@@ -2,6 +2,7 @@ import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
 import type { InfLocation } from "@cubby/schemas/location";
 import type { RefCallback } from "react";
 import type { z } from "zod";
+import { Stack } from "~/components/layout";
 import { cn } from "~/lib/utils";
 import { LocationGalleryCard } from "./location-gallery-card";
 
@@ -82,7 +83,7 @@ function LocationRow({
     depthBackgrounds[Math.min(level, depthBackgrounds.length - 1)];
 
   return (
-    <div className="space-y-2">
+    <Stack gap="sm">
       {locations.map((location) => {
         const inventoryItems = inventoryByLocation.get(location.id) ?? [];
         const isHighlighted = Boolean(
@@ -111,7 +112,7 @@ function LocationRow({
                 <div className="absolute top-0 bottom-2 left-0 w-0.5 bg-muted-foreground/25" />
 
                 {/* Render each child with horizontal connector */}
-                <div className="space-y-2">
+                <Stack gap="sm">
                   {location.children!.map((child) => (
                     <div key={child.id} className="relative">
                       {/* Horizontal connector from vertical line to card */}
@@ -127,12 +128,12 @@ function LocationRow({
                       />
                     </div>
                   ))}
-                </div>
+                </Stack>
               </div>
             )}
           </div>
         );
       })}
-    </div>
+    </Stack>
   );
 }

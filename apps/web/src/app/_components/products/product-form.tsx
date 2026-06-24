@@ -21,6 +21,7 @@ import {
   optionalIngredientField,
 } from "~/app/_components/form-fields";
 import { InfoRow } from "~/components/common/info-row";
+import { Row, Stack } from "~/components/layout";
 import { InkStamp } from "~/components/ui/ink-stamp";
 import { useImageState } from "~/hooks/useImageState";
 import {
@@ -91,13 +92,17 @@ const ProductTally: FC<{ control: Control<ProductFormValues> }> = ({
   const isDirty = Object.keys(dirtyFields).length > 0;
 
   return (
-    <div className="flex min-w-0 items-center gap-2 font-mono text-2xs text-muted-foreground uppercase">
+    <Row
+      align="center"
+      gap="sm"
+      className="min-w-0 font-mono text-2xs text-muted-foreground uppercase"
+    >
       <span className="truncate tabular-nums">
         {mappings?.length ?? 0} conversions · {externalIds?.length ?? 0}{" "}
         external IDs
       </span>
       {isDirty && <InkStamp tone="red">Unsaved</InkStamp>}
-    </div>
+    </Row>
   );
 };
 
@@ -322,7 +327,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
           never queries its own size. */}
       <div className="@container/product">
         <div className="@3xl/product:grid @3xl/product:grid-cols-[minmax(0,1fr)_minmax(360px,400px)] @3xl/product:items-start gap-6">
-          <div className="space-y-4">
+          <Stack>
             <ProductFormFields
               form={form}
               imageHandlers={imageState}
@@ -331,7 +336,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
               }
               pendingImages={imageState.pendingImages}
             />
-          </div>
+          </Stack>
 
           {/* Live fact-sheet — the detail page builds as you type */}
           <aside className="@3xl/product:sticky @3xl/product:top-20 @3xl/product:block hidden">

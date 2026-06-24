@@ -3,6 +3,7 @@ import type { InfLocation } from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
 import { type Ref, useMemo } from "react";
 import type { z } from "zod";
+import { Row } from "~/components/layout";
 import { ImageWithPreview } from "~/components/ui/image-with-preview";
 import { EntityIcon } from "~/entities/entities";
 import { cn } from "~/lib/utils";
@@ -84,7 +85,7 @@ export const LocationGalleryCard = function LocationGalleryCard({
       {/* Header — name owns its own line so it isn't crushed by the value;
           the colored type icon already conveys location type (no badge). */}
       <div className="border-b px-2 py-2">
-        <div className="flex items-center gap-2">
+        <Row align="center" gap="sm">
           <LocationIcon
             type={location.type}
             colored
@@ -97,7 +98,7 @@ export const LocationGalleryCard = function LocationGalleryCard({
           >
             {location.name}
           </Link>
-        </div>
+        </Row>
         {inventoryItems.length > 0 && (
           <div className="mt-1 flex justify-end">
             <InventoryValuationSummary
@@ -110,7 +111,7 @@ export const LocationGalleryCard = function LocationGalleryCard({
 
       {/* Location Images Strip */}
       {hasLocationImages && (
-        <div className="flex gap-1 overflow-x-auto border-b bg-muted/20 p-2">
+        <Row gap="xs" className="overflow-x-auto border-b bg-muted/20 p-2">
           {location.images.map((image) => (
             <ImageWithPreview
               key={image.id}
@@ -122,7 +123,7 @@ export const LocationGalleryCard = function LocationGalleryCard({
               previewSize={240}
             />
           ))}
-        </div>
+        </Row>
       )}
 
       {/* Products Section */}
@@ -130,7 +131,7 @@ export const LocationGalleryCard = function LocationGalleryCard({
         {productImages.length > 0 ? (
           <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
             {productImages.map((product) => (
-              <div key={product.id} className="flex items-center gap-2">
+              <Row key={product.id} align="center" gap="sm">
                 {product.images[0] ? (
                   <ImageWithPreview
                     src={product.images[0].url}
@@ -159,14 +160,19 @@ export const LocationGalleryCard = function LocationGalleryCard({
                 >
                   {product.name}
                 </Link>
-              </div>
+              </Row>
             ))}
           </div>
         ) : (
-          <div className="flex items-center justify-center gap-2 py-2 text-2xs text-muted-foreground">
+          <Row
+            align="center"
+            justify="center"
+            gap="sm"
+            className="py-2 text-2xs text-muted-foreground"
+          >
             <EntityIcon entity="inventory" className="h-3 w-3 opacity-40" />
             <span>Empty</span>
-          </div>
+          </Row>
         )}
       </div>
     </div>

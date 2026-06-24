@@ -34,6 +34,7 @@ import {
   UnifiedTextField,
 } from "~/app/_components/form-utils";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Collapsible, CollapsibleContent } from "~/components/ui/collapsible";
 import { Spinner } from "~/components/ui/spinner";
@@ -238,7 +239,7 @@ export function QuickInventoryAdd({
       <FormProvider {...selectForm}>
         <form onSubmit={selectForm.handleSubmit(onSelectSubmit)}>
           <div className="flex flex-col gap-2">
-            <div className="flex items-end gap-2">
+            <Row align="end" gap="sm">
               <div className="flex-1">
                 <ComboboxField
                   form={selectForm}
@@ -260,8 +261,8 @@ export function QuickInventoryAdd({
                 <Plus className="mr-1 h-3 w-3" />
                 New
               </Button>
-            </div>
-            <div className="flex items-end gap-2">
+            </Row>
+            <Row align="end" gap="sm">
               <AmountFieldGroup
                 form={selectForm}
                 valuePath="amount.value"
@@ -275,7 +276,7 @@ export function QuickInventoryAdd({
               >
                 <Plus className="h-4 w-4" />
               </Button>
-            </div>
+            </Row>
           </div>
         </form>
       </FormProvider>
@@ -294,7 +295,7 @@ export function QuickInventoryAdd({
         className="space-y-4"
       >
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <Row align="center" justify="between">
           <h4 className="font-medium text-sm">New Product</h4>
           <Button
             type="button"
@@ -305,7 +306,7 @@ export function QuickInventoryAdd({
             <X className="mr-1 h-3 w-3" />
             Cancel
           </Button>
-        </div>
+        </Row>
 
         {/* Product name — always visible */}
         <UnifiedTextField
@@ -354,7 +355,7 @@ export function QuickInventoryAdd({
         </Collapsible>
 
         {/* Price + Amount + submit */}
-        <div className="flex items-end gap-2">
+        <Row align="end" gap="sm">
           <div className="w-28">
             <NullableNumericField
               form={createForm}
@@ -383,7 +384,7 @@ export function QuickInventoryAdd({
             )}
             Create & Add
           </Button>
-        </div>
+        </Row>
       </form>
     </FormProvider>
   );

@@ -1,5 +1,6 @@
 import { X } from "lucide-react";
 import type { FC } from "react";
+import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { cn } from "~/lib/utils";
 import {
@@ -89,7 +90,7 @@ export const RecipeTagList: FC<RecipeTagListProps> = ({
   if (!tags || tags.length === 0) return null;
 
   return (
-    <div className={cn("flex flex-wrap gap-1", className)}>
+    <Row wrap gap="xs" className={className}>
       {tags.map((tag) => (
         <RecipeTag
           key={tag}
@@ -98,6 +99,6 @@ export const RecipeTagList: FC<RecipeTagListProps> = ({
           onRemove={onRemove ? () => onRemove(tag) : undefined}
         />
       ))}
-    </div>
+    </Row>
   );
 };

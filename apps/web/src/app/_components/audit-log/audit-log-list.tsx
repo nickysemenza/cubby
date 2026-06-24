@@ -1,6 +1,7 @@
 import type { AuditEntityType } from "@cubby/schemas/audit";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Activity } from "lucide-react";
+import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import {
   Empty,
@@ -59,9 +60,9 @@ export function AuditLogList({
   // while the session is still resolving for a signed-in user.
   if (isLoading || (hydrated && session.isPending)) {
     return (
-      <div className="flex items-center justify-center py-6">
+      <Row align="center" justify="center" className="py-6">
         <Spinner size="md" className="text-muted-foreground" />
-      </div>
+      </Row>
     );
   }
 
@@ -91,7 +92,7 @@ export function AuditLogList({
       </div>
 
       {hasNextPage && (
-        <div className="flex justify-center pt-4">
+        <Row justify="center" className="pt-4">
           <Button
             variant="outline"
             size="sm"
@@ -107,7 +108,7 @@ export function AuditLogList({
               "Load more"
             )}
           </Button>
-        </div>
+        </Row>
       )}
     </div>
   );

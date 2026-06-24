@@ -254,9 +254,10 @@ vi.mock("./editable-cell", () => ({
   ),
 }));
 
-vi.mock("~/components/layout/spaced-container", () => ({
-  SpacedContainer: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="spaced-container">{children}</div>
+vi.mock("~/components/layout", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~/components/layout")>()),
+  Stack: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="stack">{children}</div>
   ),
 }));
 

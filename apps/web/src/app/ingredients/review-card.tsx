@@ -5,6 +5,7 @@ import { type Ref, useEffect, useMemo, useRef, useState } from "react";
 import { ConfidenceReasoningCard } from "~/app/_components/ai/ai-suggest";
 import { UsdaFoodSearchField } from "~/app/_components/combobox/with-usda-food-search";
 import { UsdaFoodResultRow } from "~/app/_components/usda/usda-food-result-row";
+import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Kbd, KbdGroup } from "~/components/ui/kbd";
 import { Spinner } from "~/components/ui/spinner";
@@ -85,7 +86,7 @@ function QueueUsdaPicker({
   }, [altData, food]);
 
   return (
-    <div className="space-y-2">
+    <Stack gap="sm">
       {usda && (
         <ConfidenceReasoningCard
           confidence={usda.confidence}
@@ -94,9 +95,14 @@ function QueueUsdaPicker({
         />
       )}
       {proposalPending && usda == null && (
-        <p className="flex items-center gap-2 text-muted-foreground text-sm">
+        <Row
+          as="p"
+          align="center"
+          gap="sm"
+          className="text-muted-foreground text-sm"
+        >
           <Spinner className="h-3 w-3" /> Finding a USDA match…
-        </p>
+        </Row>
       )}
 
       {food && (
@@ -109,14 +115,19 @@ function QueueUsdaPicker({
       )}
 
       {!noMatch && (alternatives.length > 0 || altLoading) && (
-        <div className="space-y-2">
+        <Stack gap="sm">
           <p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
             Other USDA matches
           </p>
           {altLoading && alternatives.length === 0 ? (
-            <p className="flex items-center gap-2 text-muted-foreground text-xs">
+            <Row
+              as="p"
+              align="center"
+              gap="sm"
+              className="text-muted-foreground text-xs"
+            >
               <Spinner className="h-3 w-3" /> Searching…
-            </p>
+            </Row>
           ) : (
             <div className="divide-y rounded-md border border-[var(--border-chunky)]">
               {alternatives.map((alt) => (
@@ -134,7 +145,7 @@ function QueueUsdaPicker({
               ))}
             </div>
           )}
-        </div>
+        </Stack>
       )}
 
       {noMatch || showSearch ? (
@@ -155,7 +166,7 @@ function QueueUsdaPicker({
           Search manually <Kbd className="ml-1">u</Kbd>
         </Button>
       )}
-    </div>
+    </Stack>
   );
 }
 
@@ -201,7 +212,7 @@ export function ReviewCard({
         onSaved={onSaved}
         slots={{
           header: (
-            <div className="flex items-start justify-between gap-2">
+            <Row align="start" justify="between" gap="sm">
               <div>
                 <div className="font-medium text-lg">{row.name}</div>
                 <div className="text-muted-foreground text-xs">
@@ -212,7 +223,7 @@ export function ReviewCard({
               <div className="text-right text-muted-foreground text-xs">
                 {position.index + 1} of {position.total}
               </div>
-            </div>
+            </Row>
           ),
           usdaPicker: ({ food, setFood }) => (
             <QueueUsdaPicker
@@ -224,7 +235,7 @@ export function ReviewCard({
             />
           ),
           actions: ({ save, isPending }) => (
-            <div className="flex flex-wrap items-center gap-2">
+            <Row align="center" wrap gap="sm">
               <Button onClick={save} disabled={isPending}>
                 {isPending ? "Applying…" : "Apply"}
                 <Kbd className="ml-2">↵</Kbd>
@@ -238,20 +249,22 @@ export function ReviewCard({
                   No USDA entry <Kbd className="ml-1">n</Kbd>
                 </Button>
               )}
-            </div>
+            </Row>
           ),
           footer: (
-            <div className="space-y-2">
+            <Stack gap="sm">
               {mergeOptions.length > 0 && (
-                <div className="space-y-1">
+                <Stack gap="xs">
                   <p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
                     Possible duplicate{mergeOptions.length === 1 ? "" : "s"}
                   </p>
                   <div className="divide-y rounded-md border border-dashed">
                     {mergeOptions.map((opt, i) => (
-                      <div
+                      <Row
                         key={opt.id}
-                        className="flex items-center gap-2 px-2 py-2 text-sm"
+                        align="center"
+                        gap="sm"
+                        className="px-2 py-2 text-sm"
                       >
                         <span className="font-medium">{opt.name}</span>
                         <span className="text-2xs text-muted-foreground">
@@ -269,10 +282,10 @@ export function ReviewCard({
                           <GitMerge className="h-3 w-3" /> Merge
                           {i === 0 && <Kbd className="ml-1">m</Kbd>}
                         </Button>
-                      </div>
+                      </Row>
                     ))}
                   </div>
-                </div>
+                </Stack>
               )}
 
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t pt-2 text-2xs text-muted-foreground">
@@ -304,7 +317,7 @@ export function ReviewCard({
                   <Kbd>esc</Kbd> Back
                 </span>
               </div>
-            </div>
+            </Stack>
           ),
         }}
       />

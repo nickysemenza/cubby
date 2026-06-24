@@ -8,6 +8,7 @@ import LocationTreemap from "~/app/_components/inventory/location-treemap";
 import IngredientNetwork from "~/app/_components/visualizations/ingredient-network";
 import LocationSunburst from "~/app/_components/visualizations/location-sunburst";
 import ProductCategoryDonut from "~/app/_components/visualizations/product-category-donut";
+import { Row, Section, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { useTRPC } from "~/trpc/react";
 
@@ -18,74 +19,52 @@ export const Route = createFileRoute("/_authenticated/insights")({
 function InsightsPage() {
   return (
     <Page variant="list" title="Insights">
-      <div className="space-y-4">
-        {/* Products by Category Section */}
-        <section className="space-y-4">
-          <h2 className="font-heading font-semibold text-xl">
-            Products by Category
-          </h2>
-          <p className="text-muted-foreground text-sm">
-            Distribution of products across categories. Click a slice to view
-            products in that category.
-          </p>
+      <Stack>
+        <Section
+          title="Products by Category"
+          description="Distribution of products across categories. Click a slice to view products in that category."
+        >
           <ProductCategoryDonut />
-        </section>
+        </Section>
 
-        {/* Inventory by Location Section */}
-        <section className="space-y-4">
-          <h2 className="font-heading font-semibold text-xl">
-            Inventory by Location
-          </h2>
+        <Section title="Inventory by Location">
           <div className="grid gap-4 lg:grid-cols-2">
-            <div className="space-y-2">
+            <Stack gap="sm">
               <h3 className="font-medium text-muted-foreground text-sm">
                 Treemap View
               </h3>
               <LocationTreemap />
-            </div>
-            <div className="space-y-2">
+            </Stack>
+            <Stack gap="sm">
               <h3 className="font-medium text-muted-foreground text-sm">
                 Sunburst View
               </h3>
               <LocationSunburst />
-            </div>
+            </Stack>
           </div>
-        </section>
+        </Section>
 
-        {/* Ingredient Relationships Section */}
-        <section className="space-y-4">
-          <h2 className="font-heading font-semibold text-xl">
-            Ingredient Relationships
-          </h2>
-          <p className="text-muted-foreground text-sm">
-            Ingredients that appear together in multiple recipes are connected.
-            Larger nodes indicate ingredients used in more recipes.
-          </p>
+        <Section
+          title="Ingredient Relationships"
+          description="Ingredients that appear together in multiple recipes are connected. Larger nodes indicate ingredients used in more recipes."
+        >
           <IngredientNetwork />
-        </section>
+        </Section>
 
-        {/* Ingredient Usage Section */}
-        <section className="space-y-4">
-          <h2 className="font-heading font-semibold text-xl">
-            Ingredient Usage
-          </h2>
-          <p className="text-muted-foreground text-sm">
-            How many recipes use each ingredient. Scope to a cookbook, and merge
-            near-duplicate names inline.
-          </p>
+        <Section
+          title="Ingredient Usage"
+          description="How many recipes use each ingredient. Scope to a cookbook, and merge near-duplicate names inline."
+        >
           <IngredientUsageSection />
-        </section>
+        </Section>
 
-        {/* Category Audit Section */}
-        <section className="space-y-4">
-          <h2 className="font-heading font-semibold text-xl">Category Audit</h2>
-          <p className="text-muted-foreground text-sm">
-            Use AI to analyze your product catalog and suggest new categories
-            that could better organize your inventory.
-          </p>
+        <Section
+          title="Category Audit"
+          description="Use AI to analyze your product catalog and suggest new categories that could better organize your inventory."
+        >
           <CategoryAudit />
-        </section>
-      </div>
+        </Section>
+      </Stack>
     </Page>
   );
 }
@@ -96,8 +75,8 @@ function IngredientUsageSection() {
   const [cookbookId, setCookbookId] = useState<string>("");
 
   return (
-    <div className="space-y-4">
-      <label className="flex w-fit items-center gap-2 text-sm">
+    <Stack>
+      <Row as="label" align="center" gap="sm" className="w-fit text-sm">
         <span className="text-muted-foreground">Cookbook</span>
         <select
           className="h-8 rounded-md border bg-background px-2 text-sm"
@@ -111,10 +90,10 @@ function IngredientUsageSection() {
             </option>
           ))}
         </select>
-      </label>
+      </Row>
       <IngredientUsagePanel
         cookbookId={cookbookId ? unsafeCookbookId(cookbookId) : undefined}
       />
-    </div>
+    </Stack>
   );
 }

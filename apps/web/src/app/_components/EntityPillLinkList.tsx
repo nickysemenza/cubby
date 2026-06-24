@@ -1,5 +1,6 @@
 import type { LocationType } from "@cubby/schemas/location";
 import type React from "react";
+import { Stack } from "~/components/layout";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { EntityPillLink } from "./EntityPill";
 import { NoneState } from "./NoneState";
@@ -86,10 +87,10 @@ export const EntityPillLinkList: React.FC<EntityPillLinkListProps> = (
 
   // Default: show all items vertically (for detail pages)
   return (
-    <div className="space-y-1">
+    <Stack gap="xs">
       {items.map((item, index) => (
         <div key={getKey(item, index)}>{renderItem(item, index)}</div>
       ))}
-    </div>
+    </Stack>
   );
 };

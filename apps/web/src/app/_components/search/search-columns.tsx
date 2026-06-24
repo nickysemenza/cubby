@@ -1,5 +1,6 @@
 import type { SearchableEntity, SearchResultItem } from "@cubby/schemas/search";
 import { createColumnHelper } from "@tanstack/react-table";
+import { Row } from "~/components/layout";
 import { EntityIcon, entities } from "~/entities/entities";
 import {
   createActionsColumnBase,
@@ -43,10 +44,10 @@ export const searchColumns = [
     enableSorting: true,
     meta: { className: "min-w-0 w-40 max-w-56" },
     cell: ({ row }) => (
-      <div className="flex items-center gap-2">
+      <Row align="center" gap="sm">
         <SearchResultItemIcon item={row.original} />
         <span className="truncate font-medium">{row.original.name}</span>
-      </div>
+      </Row>
     ),
   }),
 

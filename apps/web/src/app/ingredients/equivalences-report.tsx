@@ -2,6 +2,7 @@ import type { CandidateEquivalence } from "@cubby/schemas/equivalences";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { useMemo } from "react";
+import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import {
   Tooltip,
@@ -57,8 +58,8 @@ export function EquivalencesReport() {
   }, [data]);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2">
+    <Stack>
+      <Row align="center" gap="sm">
         <Button
           variant="outline"
           onClick={() => refetch()}
@@ -82,7 +83,7 @@ export function EquivalencesReport() {
               </span>
             );
           })()}
-      </div>
+      </Row>
 
       {error && (
         <p className="text-destructive text-sm">Scan failed: {error.message}</p>
@@ -161,7 +162,7 @@ export function EquivalencesReport() {
                     {spreadLabel(c)}
                   </td>
                   <td className="py-1">
-                    <ul className="space-y-1">
+                    <Stack as="ul" gap="xs">
                       {c.examples.map((ex, i) => (
                         <li
                           key={`${ex.recipeId} ${i}`}
@@ -175,7 +176,7 @@ export function EquivalencesReport() {
                           {ex.rawLine && <span>· {ex.rawLine}</span>}
                         </li>
                       ))}
-                    </ul>
+                    </Stack>
                   </td>
                 </tr>
               )),
@@ -183,6 +184,6 @@ export function EquivalencesReport() {
           </tbody>
         </table>
       )}
-    </div>
+    </Stack>
   );
 }

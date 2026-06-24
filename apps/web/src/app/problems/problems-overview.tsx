@@ -4,6 +4,7 @@ import { CheckCircle } from "lucide-react";
 import { useMemo, useRef } from "react";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
+import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import {
   Card,
@@ -76,7 +77,7 @@ export function ProblemsOverview() {
 
   return (
     <RecipeUsageContext.Provider value={recipeUsage ?? {}}>
-      <div className="space-y-6">
+      <Stack gap="lg">
         {/* Summary header */}
         {problems.totalProblems > 0 ? (
           <Card>
@@ -87,7 +88,7 @@ export function ProblemsOverview() {
                 </Badge>
                 {problems.totalProblems === 1 ? "Issue" : "Issues"} Found
               </CardTitle>
-              <div className="flex flex-wrap gap-2 pt-2">
+              <Row gap="sm" wrap className="pt-2">
                 {categoryLinks.map((cat) => (
                   <button
                     key={cat.id}
@@ -101,7 +102,7 @@ export function ProblemsOverview() {
                     </Badge>
                   </button>
                 ))}
-              </div>
+              </Row>
             </CardHeader>
           </Card>
         ) : (
@@ -129,7 +130,7 @@ export function ProblemsOverview() {
             {section.node(problems)}
           </div>
         ))}
-      </div>
+      </Stack>
     </RecipeUsageContext.Provider>
   );
 }

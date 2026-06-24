@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, Sparkles, TriangleAlert } from "lucide-react";
 import { match } from "ts-pattern";
+import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { buttonVariants } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -76,12 +77,17 @@ function CostingGapList({ gaps }: { gaps: CostingGap[] }) {
         const { lead, cta } = suggestionFor(gap);
         const missing = MISSING_CHIPS.filter((c) => gap.missing[c.key]);
         return (
-          <li
+          <Row
+            as="li"
+            align="center"
+            justify="between"
+            wrap
+            gap="sm"
             key={gap.ingredientId}
-            className="flex flex-wrap items-center justify-between gap-2 py-2"
+            className="py-2"
           >
             <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
+              <Row align="center" wrap gap="sm">
                 <span className="font-medium text-sm">{gap.name}</span>
                 {missing.map((c) => (
                   <Badge
@@ -92,7 +98,7 @@ function CostingGapList({ gaps }: { gaps: CostingGap[] }) {
                     {c.label}
                   </Badge>
                 ))}
-              </div>
+              </Row>
               <div className="text-2xs text-muted-foreground leading-snug">
                 {lead}
               </div>
@@ -105,7 +111,7 @@ function CostingGapList({ gaps }: { gaps: CostingGap[] }) {
               {cta}
               <ArrowRight className="ml-1 h-3 w-3" />
             </Link>
-          </li>
+          </Row>
         );
       })}
     </ul>

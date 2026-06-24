@@ -9,6 +9,7 @@ import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
 import { IngredientUsagePanel } from "~/app/_components/ingredient/ingredient-usage-panel";
 import { RecipeList } from "~/app/recipes/recipelist";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
+import { Row } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import { BulkProgressBar } from "~/components/ui/bulk-progress-bar";
@@ -129,7 +130,7 @@ function CookbookDetailPage() {
       heroStats={heroStats}
       fullWidth
       actions={
-        <div className="flex items-center gap-2">
+        <Row align="center" gap="sm">
           {notImported > 0 && (
             <Button
               variant="outline"
@@ -166,7 +167,7 @@ function CookbookDetailPage() {
             <Trash className="mr-2 h-4 w-4" />
             Delete all recipes
           </Button>
-        </div>
+        </Row>
       }
     >
       {coverUrl && (

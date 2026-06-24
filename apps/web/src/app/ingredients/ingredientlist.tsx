@@ -6,6 +6,7 @@ import { useId, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { MergeConfirmation } from "~/app/_components/ingredient/merge-confirmation";
 import { NoneState } from "~/app/_components/NoneState";
+import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import {
@@ -89,7 +90,7 @@ function RecipeUsageCell({
   const recipes = ingredient.appearsInRecipes;
   if (recipes.length === 0) return <NoneState />;
   return (
-    <div className="flex min-w-0 items-center gap-2">
+    <Row align="center" gap="sm" className="min-w-0">
       {recipes.length > 1 && (
         <Tooltip>
           <TooltipTrigger
@@ -108,7 +109,7 @@ function RecipeUsageCell({
         maxItems={1}
         compact
       />
-    </div>
+    </Row>
   );
 }
 
@@ -304,7 +305,7 @@ export function IngredientList() {
         infiniteScroll={infiniteScroll}
         refreshControls={refreshControls}
         actions={
-          <div className="flex items-center gap-2">
+          <Row align="center" gap="sm">
             <Button
               variant="outline"
               render={<Link to="/ingredients/equivalences" />}
@@ -330,10 +331,10 @@ export function IngredientList() {
             >
               Create New Ingredient
             </Button>
-          </div>
+          </Row>
         }
         additionalToolbarContent={
-          <div className="flex items-center space-x-2">
+          <Row align="center" gap="sm">
             <Checkbox
               id={missingProductsId}
               checked={table.getState().globalFilter.missingProductsOnly}
@@ -347,7 +348,7 @@ export function IngredientList() {
             >
               Missing Products Only
             </label>
-          </div>
+          </Row>
         }
       />
       <PreviewSheet />

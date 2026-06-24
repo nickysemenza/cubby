@@ -62,6 +62,7 @@ import {
   locationToSegments,
 } from "~/app/_components/locations/location-breadcrumb";
 import { LocationIcon } from "~/app/_components/locations/location-icons";
+import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Empty, EmptyTitle } from "~/components/ui/empty";
@@ -439,8 +440,8 @@ export default function QuickCaptureForm({
       {/* Persistent Scanner Mode Toggle */}
       <Card className="mb-4">
         <CardContent className="pt-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+          <Row align="center" justify="between">
+            <Row align="center" gap="sm">
               <Switch
                 id={scannerToggleId}
                 checked={scannerEnabled}
@@ -453,17 +454,17 @@ export default function QuickCaptureForm({
                 <ScanBarcode className="h-4 w-4" />
                 Persistent Scanner
               </Label>
-            </div>
+            </Row>
             {scannerEnabled && !focusedLocationId && (
               <span className="text-muted-foreground text-sm">
                 Select a location below first
               </span>
             )}
-          </div>
+          </Row>
 
           {/* Persistent Scanner */}
           {scannerEnabled && focusedLocationId && (
-            <div className="mt-4 space-y-2">
+            <Stack gap="sm" className="mt-4">
               <PersistentScanner
                 onScan={handlePersistentScan}
                 enabled={!isScannerPending}
@@ -473,37 +474,44 @@ export default function QuickCaptureForm({
 
               {/* Loading indicator */}
               {isScannerPending && (
-                <div className="flex items-center justify-center gap-2 text-muted-foreground text-sm">
+                <Row
+                  align="center"
+                  justify="center"
+                  gap="sm"
+                  className="text-muted-foreground text-sm"
+                >
                   <Spinner />
                   Looking up product...
-                </div>
+                </Row>
               )}
 
               {/* Recent scans */}
               {recentScans.length > 0 && (
-                <div className="space-y-2">
+                <Stack gap="sm">
                   <h4 className="font-medium text-sm">Recently Scanned</h4>
-                  <div className="flex flex-wrap gap-2">
+                  <Row gap="sm" wrap>
                     {recentScans.slice(0, 5).map((item) => (
-                      <div
+                      <Row
                         key={item.id}
-                        className="flex items-center gap-2 rounded-full bg-positive/10 px-2 py-1 text-positive text-xs"
+                        align="center"
+                        gap="sm"
+                        className="rounded-full bg-positive/10 px-2 py-1 text-positive text-xs"
                       >
                         <Check className="h-3 w-3" />
                         <span className="max-w-[120px] truncate">
                           {item.productName}
                         </span>
-                      </div>
+                      </Row>
                     ))}
                     {recentScans.length > 5 && (
                       <span className="px-2 py-1 text-muted-foreground text-xs">
                         +{recentScans.length - 5} more
                       </span>
                     )}
-                  </div>
-                </div>
+                  </Row>
+                </Stack>
               )}
-            </div>
+            </Stack>
           )}
         </CardContent>
       </Card>
@@ -516,9 +524,9 @@ export default function QuickCaptureForm({
           </CardHeader>
           <CardContent className="space-y-2">
             {isLoadingFocusedLocation ? (
-              <div className="flex items-center justify-center py-4">
+              <Row align="center" justify="center" className="py-4">
                 <Spinner />
-              </div>
+              </Row>
             ) : focusedLocation ? (
               <>
                 {/* Breadcrumb navigation */}
@@ -531,11 +539,11 @@ export default function QuickCaptureForm({
                 {/* Children quick navigation */}
                 {focusedLocation.children &&
                   focusedLocation.children.length > 0 && (
-                    <div className="space-y-1">
+                    <Stack gap="xs">
                       <p className="text-muted-foreground text-xs">
                         Drill into child location:
                       </p>
-                      <div className="flex flex-wrap gap-1">
+                      <Row gap="xs" wrap>
                         {focusedLocation.children.map((child) => (
                           <Button
                             key={child.id}
@@ -552,8 +560,8 @@ export default function QuickCaptureForm({
                             {child.name}
                           </Button>
                         ))}
-                      </div>
-                    </div>
+                      </Row>
+                    </Stack>
                   )}
               </>
             ) : null}
@@ -575,7 +583,7 @@ export default function QuickCaptureForm({
         </Card>
       )}
 
-      <div className="mb-4 flex items-center justify-between">
+      <Row align="center" justify="between" className="mb-4">
         <h3 className="font-medium text-lg">
           {scannerEnabled ? "Manual Entry" : "Add Items"}
         </h3>
@@ -583,9 +591,9 @@ export default function QuickCaptureForm({
           <Plus className="mr-1 h-4 w-4" />
           Add Row <Kbd className="ml-1">Ctrl+N</Kbd>
         </Button>
-      </div>
+      </Row>
 
-      <div className="space-y-2">
+      <Stack gap="sm">
         {fields.map((field, index) => {
           const isFocused = index === focusedRowIndex;
 
@@ -636,7 +644,7 @@ export default function QuickCaptureForm({
               </div>
 
               {/* Action buttons */}
-              <div className="flex items-center gap-2">
+              <Row align="center" gap="sm">
                 <BarcodeScannerButton
                   onScan={(barcode) => handleBarcodeScan(barcode, index)}
                   disabled={findOrCreateByUPCMutation.isPending}
@@ -658,11 +666,11 @@ export default function QuickCaptureForm({
                 >
                   <X className="h-4 w-4" />
                 </Button>
-              </div>
+              </Row>
             </div>
           );
         })}
-      </div>
+      </Stack>
 
       {/* Inventory at focused location */}
       {focusedLocationId && (
@@ -689,16 +697,16 @@ export default function QuickCaptureForm({
             <CardContent>
               {inventoryAtLocation?.items &&
               inventoryAtLocation.items.length > 0 ? (
-                <div className="flex flex-wrap gap-1">
+                <Row gap="xs" wrap>
                   {inventoryAtLocation.items.map((item) => (
-                    <div key={item.id} className="flex items-center gap-1">
+                    <Row key={item.id} align="center" gap="xs">
                       <EntityPillLink entity="product" data={item.product} />
                       <span className="text-muted-foreground text-xs">
                         ({item.amount.value} {item.amount.unit})
                       </span>
-                    </div>
+                    </Row>
                   ))}
-                </div>
+                </Row>
               ) : (
                 <Empty className="border-none py-2">
                   <EmptyTitle>No items at this location yet</EmptyTitle>

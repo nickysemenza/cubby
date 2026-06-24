@@ -2,6 +2,7 @@ import type { LocationId } from "@cubby/schemas/identifiers";
 import type { LocationValuation } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
+import { Row, Stack } from "~/components/layout";
 import { formatCurrency } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import {
@@ -101,19 +102,22 @@ export function InventoryValuationSummary({
           <div className="mb-1 font-medium text-muted-foreground text-xs">
             By manufacturer
           </div>
-          <ul className="space-y-1">
+          <Stack as="ul" gap="xs">
             {result.breakdown.slice(0, 6).map((b) => (
-              <li
+              <Row
+                as="li"
                 key={b.key}
-                className="flex items-center justify-between text-sm"
+                align="center"
+                justify="between"
+                className="text-sm"
               >
                 <span className="truncate pr-2">{b.label}</span>
                 <span className="tabular-nums">
                   {formatCurrency(b.valuation)}
                 </span>
-              </li>
+              </Row>
             ))}
-          </ul>
+          </Stack>
         </div>
       )}
     </div>

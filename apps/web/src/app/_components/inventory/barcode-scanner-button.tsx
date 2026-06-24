@@ -1,6 +1,7 @@
 import { Camera, X } from "lucide-react";
 import { useCallback, useState } from "react";
 import { ColoredAlert } from "~/components/common/colored-alert";
+import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -73,7 +74,7 @@ export function BarcodeScannerButton({
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <Stack gap="md">
             {error ? (
               <ColoredAlert variant="destructive">
                 <p className="font-medium">Camera Error</p>
@@ -96,7 +97,7 @@ export function BarcodeScannerButton({
             <p className="text-center text-muted-foreground text-sm">
               Point your camera at a barcode to scan
             </p>
-          </div>
+          </Stack>
         </DialogContent>
       </Dialog>
     </>

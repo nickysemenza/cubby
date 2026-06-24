@@ -2,6 +2,7 @@ import { Trash2 } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
+import { Stack } from "~/components/layout";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -49,7 +50,7 @@ export function AliasPruneFix({
   });
 
   return (
-    <div className="space-y-2">
+    <Stack gap="sm">
       <p className="text-muted-foreground text-xs">
         Remove <span className="font-medium">{unusedAliases.join(", ")}</span>{" "}
         from <span className="font-medium">{name}</span>? The ingredient itself
@@ -65,7 +66,7 @@ export function AliasPruneFix({
       >
         Remove {countLabel(unusedAliases.length, "alias", "aliases")}
       </Button>
-    </div>
+    </Stack>
   );
 }
 
@@ -101,7 +102,7 @@ export function UnusedIngredientDeleteFix({
   });
 
   return (
-    <div className="space-y-2">
+    <Stack gap="sm">
       <p className="text-muted-foreground text-xs">
         Delete <span className="font-medium">{name}</span>?{" "}
         {alsoDeleteProducts
@@ -118,7 +119,7 @@ export function UnusedIngredientDeleteFix({
       >
         {alsoDeleteProducts ? "Delete ingredient + product(s)" : "Delete"}
       </Button>
-    </div>
+    </Stack>
   );
 }
 

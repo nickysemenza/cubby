@@ -17,6 +17,7 @@ import { Equal, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { MobileCard } from "~/components/entity/mobile-card";
 import { MobileCardSkeletonList } from "~/components/feedback/mobile-card-skeleton";
+import { Row, Stack } from "~/components/layout";
 import { Image } from "~/components/ui/image";
 import { Input } from "~/components/ui/input";
 import { EntityIcon, entities } from "~/entities/entities";
@@ -105,7 +106,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
   };
 
   return (
-    <div className="container mx-auto space-y-4 p-1">
+    <Stack gap="md" className="container mx-auto p-1">
       {/* Search input */}
       <div className="relative">
         <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -126,7 +127,10 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
 
       {/* Inline unit answer — rendered above results, jumps to the ingredient */}
       {query.length > 0 && conversion && (
-        <button
+        <Row
+          as="button"
+          align="center"
+          gap="md"
           type="button"
           onClick={() => {
             pushRecent({
@@ -139,7 +143,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
               params: { id: conversion.ingredientId },
             });
           }}
-          className="flex w-full items-center gap-4 rounded-lg border border-[var(--border-chunky)] bg-card px-4 py-4 text-left transition-all ease-cozy hover:-translate-y-0.5 hover:shadow-[var(--shadow-chunky-sm)]"
+          className="w-full rounded-lg border border-[var(--border-chunky)] bg-card px-4 py-4 text-left transition-all ease-cozy hover:-translate-y-0.5 hover:shadow-[var(--shadow-chunky-sm)]"
         >
           <Equal className="h-4 w-4 shrink-0 text-primary" />
           <span className="truncate font-mono font-semibold text-sm tabular-nums">
@@ -150,7 +154,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
               ≈ {conversion.cost}
             </span>
           )}
-        </button>
+        </Row>
       )}
 
       {/* Results */}
@@ -173,15 +177,18 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
           />
         )
       ) : jumps.length > 0 || recents.length > 0 ? (
-        <div className="space-y-4">
+        <Stack gap="md">
           {/* Entities recently jumped to — entity-inked chips, same list as ⌘K */}
           {jumps.length > 0 && (
-            <div className="space-y-1">
+            <Stack gap="xs">
               <span className="eyebrow px-1 font-medium">Jump back</span>
               {jumps.map((jump) => {
                 const entity = entityTypeMap[jump.entityType];
                 return (
-                  <button
+                  <Row
+                    as="button"
+                    align="center"
+                    gap="sm"
                     key={`jump-${jump.entityType}-${jump.id}`}
                     type="button"
                     onClick={() => {
@@ -191,7 +198,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
                         params: { id: jump.id },
                       });
                     }}
-                    className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-muted active:bg-muted/70"
+                    className="w-full rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-muted active:bg-muted/70"
                   >
                     <span
                       className={cn(
@@ -203,14 +210,14 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
                       <EntityIcon entity={entity} className="h-3.5 w-3.5" />
                     </span>
                     <span className="truncate">{jump.name}</span>
-                  </button>
+                  </Row>
                 );
               })}
-            </div>
+            </Stack>
           )}
           {recents.length > 0 && (
-            <div className="space-y-1">
-              <div className="flex items-center justify-between px-1">
+            <Stack gap="xs">
+              <Row align="center" justify="between" className="px-1">
                 <span className="eyebrow font-medium">Recent</span>
                 <button
                   type="button"
@@ -219,21 +226,24 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
                 >
                   Clear
                 </button>
-              </div>
+              </Row>
               {recents.map((term) => (
-                <button
+                <Row
+                  as="button"
+                  align="center"
+                  gap="sm"
                   key={term}
                   type="button"
                   onClick={() => handleSearchChange(term)}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-muted active:bg-muted/70"
+                  className="w-full rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-muted active:bg-muted/70"
                 >
                   <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
                   <span className="truncate">{term}</span>
-                </button>
+                </Row>
               ))}
-            </div>
+            </Stack>
           )}
-        </div>
+        </Stack>
       ) : (
         <div className="flex h-48 flex-col items-center justify-center gap-2 text-muted-foreground">
           <Search className="h-8 w-8 opacity-40" />
@@ -241,7 +251,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
         </div>
       )}
       <PreviewSheet />
-    </div>
+    </Stack>
   );
 }
 
@@ -296,9 +306,9 @@ function MobileSearchResults({
   }, [filtered]);
 
   return (
-    <div className="space-y-4">
+    <Stack gap="md">
       {/* Filter chips */}
-      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+      <Row gap="sm" className="-mx-1 overflow-x-auto px-1 pb-1">
         {filterOptions.map((opt) => {
           const isActive = filter === opt.value;
           return (
@@ -317,7 +327,7 @@ function MobileSearchResults({
             </button>
           );
         })}
-      </div>
+      </Row>
 
       {/* Results */}
       {isLoading ? (
@@ -331,14 +341,14 @@ function MobileSearchResults({
           <div key={group.entityType}>
             {/* Section header (only when showing "All") */}
             {filter === "all" && (
-              <div className="flex items-center gap-2 px-4 py-2">
+              <Row align="center" gap="sm" className="px-4 py-2">
                 <span className="font-medium text-muted-foreground text-xs uppercase tracking-wider">
                   {group.label}
                 </span>
                 <span className="text-muted-foreground/60 text-xs">
                   ({group.items.length})
                 </span>
-              </div>
+              </Row>
             )}
             {group.items.map((item) => {
               const entity = entityTypeMap[item.entityType];
@@ -393,6 +403,6 @@ function MobileSearchResults({
           </div>
         ))
       )}
-    </div>
+    </Stack>
   );
 }

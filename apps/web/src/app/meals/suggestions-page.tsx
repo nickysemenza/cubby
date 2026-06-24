@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
+import { Grid, Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { useTRPC } from "~/trpc/react";
@@ -23,8 +24,8 @@ export function MealSuggestionsPage() {
   );
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
+    <Stack>
+      <Row align="center" wrap gap="sm">
         {FILTERS.map((f) => (
           <Button
             key={f.label}
@@ -36,7 +37,7 @@ export function MealSuggestionsPage() {
             {f.label}
           </Button>
         ))}
-      </div>
+      </Row>
 
       {isLoading ? (
         <SimpleLoading text="Checking what you can make..." />
@@ -47,13 +48,13 @@ export function MealSuggestionsPage() {
           No recipes match — try lowering the coverage filter.
         </p>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <Grid cols="cards3">
           {data.map((recipe) => (
             <RecipeCoverageCard key={recipe.recipeId} recipe={recipe} />
           ))}
-        </div>
+        </Grid>
       )}
-    </div>
+    </Stack>
   );
 }
 
@@ -67,12 +68,12 @@ function RecipeCoverageCard({ recipe }: { recipe: RecipeAvailability }) {
       params={{ id: recipe.recipeId }}
       className="flex flex-col gap-2 rounded-lg border border-[var(--border-chunky)] p-4 transition-colors hover:bg-accent"
     >
-      <div className="flex items-start justify-between gap-2">
+      <Row align="start" justify="between" gap="sm">
         <span className="font-medium">{recipe.recipeName}</span>
         <Badge variant={ready ? "default" : "secondary"}>
           {ready ? "Ready" : `Missing ${recipe.missing.length}`}
         </Badge>
-      </div>
+      </Row>
       <span className="text-muted-foreground text-xs">
         {recipe.availableIngredients}/{recipe.totalIngredients} ingredients
         {recipe.totalIngredients > 0 ? ` · ${pct}%` : ""}

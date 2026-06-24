@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Package, Sparkles, Trash2 } from "lucide-react";
 import { type FC, useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
@@ -149,21 +150,23 @@ export const DetectItemsDialog: FC<DetectItemsDialogProps> = ({
               <p className="text-muted-foreground text-sm">{summary}</p>
             )}
             <ScrollArea className="max-h-[400px]">
-              <div className="space-y-2">
+              <Stack gap="sm">
                 {items.map((item, index) => (
-                  <div
+                  <Row
                     key={`${item.name}-${index}`}
-                    className="flex items-center gap-2 rounded-md border border-[var(--border-chunky)] p-4"
+                    align="center"
+                    gap="sm"
+                    className="rounded-md border border-[var(--border-chunky)] p-4"
                   >
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
+                      <Row align="center" gap="sm">
                         <span className="truncate font-medium text-sm">
                           {item.name}
                         </span>
                         <Badge variant={confidenceVariant[item.confidence]}>
                           {item.confidence}
                         </Badge>
-                      </div>
+                      </Row>
                       <p className="text-muted-foreground text-sm">
                         {!isUnspecifiedManufacturer(item.manufacturer) && (
                           <span>{item.manufacturer} &middot; </span>
@@ -179,9 +182,9 @@ export const DetectItemsDialog: FC<DetectItemsDialogProps> = ({
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
-                  </div>
+                  </Row>
                 ))}
-              </div>
+              </Stack>
             </ScrollArea>
           </>
         )}

@@ -1,6 +1,7 @@
 import type { AuditEntityType } from "@cubby/schemas/audit";
 import { Bot, ChevronDown, ChevronRight } from "lucide-react";
 import { useState } from "react";
+import { Row, Stack } from "~/components/layout";
 import { MutedBox } from "~/components/layout/muted-box";
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
 import { Badge } from "~/components/ui/badge";
@@ -29,16 +30,16 @@ function ChangesList({
   changes: Record<string, { from: unknown; to: unknown }>;
 }) {
   return (
-    <div className="space-y-1">
+    <Stack gap="xs">
       {Object.entries(changes).map(([field, { from, to }]) => (
-        <div key={field} className="flex items-center gap-1 text-xs">
+        <Row key={field} align="center" gap="xs" className="text-xs">
           <span className="font-medium text-muted-foreground">{field}:</span>
           <span className="text-foreground">{formatChangeValue(from)}</span>
           <span className="text-muted-foreground">&rarr;</span>
           <span className="text-foreground">{formatChangeValue(to)}</span>
-        </div>
+        </Row>
       ))}
-    </div>
+    </Stack>
   );
 }
 
@@ -67,8 +68,8 @@ export function AuditLogEntryComponent({
 
   if (variant === "ledger") {
     return (
-      <div className="flex items-center justify-between gap-2 py-2">
-        <div className="flex min-w-0 items-center gap-2">
+      <Row align="center" justify="between" gap="sm" className="py-2">
+        <Row align="center" gap="sm" className="min-w-0">
           {showEntityLink ? (
             <EntityPillById
               entityType={entry.entityType}
@@ -93,11 +94,11 @@ export function AuditLogEntryComponent({
           >
             {action.label}
           </Badge>
-        </div>
+        </Row>
         <span className="shrink-0 text-muted-foreground">
           <HoverableTimestamp timestamp={entry.createdAt} />
         </span>
-      </div>
+      </Row>
     );
   }
 
@@ -112,7 +113,11 @@ export function AuditLogEntryComponent({
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <div className="group/entry relative flex items-start gap-2 py-2 pl-6 last:border-b-0">
+      <Row
+        align="start"
+        gap="sm"
+        className="group/entry relative py-2 pl-6 last:border-b-0"
+      >
         <div className="absolute top-4 left-0 h-3 w-3 rounded-full bg-primary ring-4 ring-background" />
         <div className="absolute top-7 bottom-0 left-[5px] w-0.5 bg-gradient-to-b from-border to-transparent group-last/entry:hidden" />
         <Avatar className="h-6 w-6 flex-shrink-0">
@@ -131,7 +136,7 @@ export function AuditLogEntryComponent({
 
         {/* Content */}
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
+          <Row align="center" gap="sm" wrap>
             {/* Entity Pill or Icon */}
             {showEntityLink ? (
               <EntityPillById
@@ -174,7 +179,7 @@ export function AuditLogEntryComponent({
             <span className="text-muted-foreground text-xs">
               <HoverableTimestamp timestamp={entry.createdAt} />
             </span>
-          </div>
+          </Row>
 
           {/* Changes (if any) */}
           {hasChanges && (
@@ -204,7 +209,7 @@ export function AuditLogEntryComponent({
             )}
           </CollapsibleContent>
         </div>
-      </div>
+      </Row>
     </Collapsible>
   );
 }

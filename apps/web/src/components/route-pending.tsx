@@ -1,3 +1,4 @@
+import { Stack } from "~/components/layout";
 import { PageWrapper } from "~/components/layout/page-wrapper";
 import { Skeleton } from "~/components/ui/skeleton";
 
@@ -9,17 +10,17 @@ import { Skeleton } from "~/components/ui/skeleton";
 export function RoutePending() {
   return (
     <PageWrapper>
-      <div className="space-y-6">
-        <div className="space-y-2">
+      <Stack gap="lg">
+        <Stack gap="sm">
           <Skeleton className="h-3 w-24" />
           <Skeleton className="h-9 w-56" />
-        </div>
-        <div className="space-y-4">
+        </Stack>
+        <Stack gap="md">
           {[0, 1, 2, 3, 4].map((i) => (
             <Skeleton key={i} className="h-16 w-full rounded-lg" />
           ))}
-        </div>
-      </div>
+        </Stack>
+      </Stack>
     </PageWrapper>
   );
 }
@@ -32,10 +33,10 @@ export function DetailPagePending() {
     <PageWrapper>
       <div className="space-y-4 sm:space-y-6">
         {/* Header: eyebrow + title */}
-        <div className="space-y-2">
+        <Stack gap="sm">
           <Skeleton className="h-3 w-20" />
           <Skeleton className="h-9 w-64" />
-        </div>
+        </Stack>
         {/* 2-column card grid */}
         <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
           {[0, 1, 2, 3].map((i) => (

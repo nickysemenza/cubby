@@ -2,6 +2,7 @@ import type { InfLocation } from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
 import type { FC } from "react";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
+import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { queryKeys } from "~/lib/query-keys";
@@ -70,7 +71,7 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
           </div>
         }
         actions={
-          <div className="flex flex-wrap gap-2">
+          <Row gap="sm" wrap>
             <Button onClick={onEdit}>Edit</Button>
             {typeSupportsQrCode(location.type) && (
               <PrintLabelButton shortcode={location.shortcode} />
@@ -100,7 +101,7 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
               Bulk Edit Inventory
             </Button>
             <DeleteButton />
-          </div>
+          </Row>
         }
       />
       <DeleteDialog />

@@ -1,6 +1,7 @@
 import { Plus } from "lucide-react";
 import type { FC } from "react";
 import { type UseFormReturn, useFieldArray } from "react-hook-form";
+import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { RequiredTextareaField } from "../../form-utils";
 import { FieldArrayItemControls } from "./field-array-item-controls";
@@ -21,15 +22,15 @@ export const InstructionFieldArray: FC<InstructionFieldArrayProps> = ({
   });
 
   return (
-    <div className="w-full space-y-2">
+    <Stack gap="sm" className="w-full">
       {fields.length === 0 ? (
         <div className="text-muted-foreground text-sm italic">
           No instructions added yet
         </div>
       ) : (
-        <div className="space-y-2">
+        <Stack gap="sm">
           {fields.map((field, instructionIndex) => (
-            <div key={field.id} className="flex items-start space-x-1">
+            <Row key={field.id} align="start" gap="xs">
               <div className="flex-grow">
                 <RequiredTextareaField
                   form={form}
@@ -45,12 +46,12 @@ export const InstructionFieldArray: FC<InstructionFieldArrayProps> = ({
                 index={instructionIndex}
                 fieldsLength={fields.length}
               />
-            </div>
+            </Row>
           ))}
-        </div>
+        </Stack>
       )}
 
-      <div className="mt-2 flex justify-end">
+      <Row justify="end" className="mt-2">
         <Button
           type="button"
           variant="outline"
@@ -60,7 +61,7 @@ export const InstructionFieldArray: FC<InstructionFieldArrayProps> = ({
           <Plus className="mr-2 h-4 w-4" />
           Add Instruction
         </Button>
-      </div>
-    </div>
+      </Row>
+    </Stack>
   );
 };

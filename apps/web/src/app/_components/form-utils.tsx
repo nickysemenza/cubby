@@ -9,6 +9,7 @@ import {
   type UseFormReturn,
 } from "react-hook-form";
 import { toast } from "sonner";
+import { Stack } from "~/components/layout";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button, type buttonVariants } from "~/components/ui/button";
 import { FilterableCombobox } from "~/components/ui/combobox";
@@ -161,8 +162,10 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
           <DevTool control={form.control as never} />
         </Suspense>
       ) : null}
-      <form
-        onSubmit={(e) => {
+      <Stack
+        as="form"
+        gap="sm"
+        onSubmit={(e: React.FormEvent<HTMLElement>) => {
           // https://github.com/orgs/react-hook-form/discussions/7038#discussioncomment-11376398
           e.stopPropagation();
           e.preventDefault();
@@ -178,7 +181,6 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
             });
           })(e);
         }}
-        className="space-y-2"
       >
         {children}
 
@@ -227,7 +229,7 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
             </Button>
           </div>
         </div>
-      </form>
+      </Stack>
     </FormProvider>
   );
 }

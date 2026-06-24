@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { ExternalLink, type LucideIcon, Wrench, X } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { MobileCard } from "~/components/entity/mobile-card";
-import { GridContainer } from "~/components/layout/grid-container";
+import { Grid } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
@@ -153,7 +153,7 @@ export function ProblemSection<T>({
                   <Badge variant="outline">{groupItems.length}</Badge>
                 </h4>
               )}
-              <GridContainer cols="cards3">
+              <Grid cols="cards3">
                 {groupItems.map((item) => {
                   const rendered = renderItem(item);
                   return (
@@ -166,7 +166,7 @@ export function ProblemSection<T>({
                     />
                   );
                 })}
-              </GridContainer>
+              </Grid>
             </div>
           ))}
         </div>

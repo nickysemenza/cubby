@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Sparkles } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Field, FieldLabel } from "~/components/ui/field";
 import { Spinner } from "~/components/ui/spinner";
@@ -175,7 +176,7 @@ export function UsdaFoodSearchField({
   return (
     <Field>
       <FieldLabel>{label}</FieldLabel>
-      <div className="flex gap-1">
+      <Row gap="xs">
         {SCOPES.map((s) => (
           <Button
             key={s}
@@ -188,8 +189,8 @@ export function UsdaFoodSearchField({
             {s}
           </Button>
         ))}
-      </div>
-      <div className="flex items-center gap-2">
+      </Row>
+      <Row align="center" gap="sm">
         <div className="flex-1">
           <DialogCompatibleCombobox
             label="USDA food"
@@ -241,17 +242,17 @@ export function UsdaFoodSearchField({
               : "Let AI pick the best USDA food"}
           </TooltipContent>
         </Tooltip>
-      </div>
+      </Row>
 
       {suggestion && (
         <div className="rounded-md bg-muted/50 p-2 text-sm">
-          <div className="flex items-center gap-2">
+          <Row align="center" gap="sm">
             <Sparkles className="h-3 w-3 text-muted-foreground" />
             <span className="font-medium">AI match:</span>
             <span className={confidenceColor[suggestion.confidence]}>
               {suggestion.confidence} confidence
             </span>
-          </div>
+          </Row>
           <p className="mt-1 text-muted-foreground">{suggestion.reasoning}</p>
         </div>
       )}

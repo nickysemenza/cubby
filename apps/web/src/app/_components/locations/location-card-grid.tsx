@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import { CardThumbnail } from "~/components/entity/card-thumbnail";
 import { EntityStat } from "~/components/entity/entity-stat";
 import { MobileCard } from "~/components/entity/mobile-card";
-import { GridContainer } from "~/components/layout/grid-container";
+import { Grid } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { useTRPC } from "~/trpc/react";
 import type { InventoryItem } from "./calculate-inventory-valuation";
@@ -152,18 +152,18 @@ export function LocationCardGrid({
                 <div className="mb-4">
                   <LocationTypeBadge type={type} />
                 </div>
-                <GridContainer cols="cards3">
+                <Grid cols="cards3">
                   {typeLocations.map((loc) => renderCard(loc, false))}
-                </GridContainer>
+                </Grid>
               </div>
             ))}
           </div>
         ))
       ) : (
         /* Flat view */
-        <GridContainer cols="cards3">
+        <Grid cols="cards3">
           {sortedLocations.map((loc) => renderCard(loc, canGroup))}
-        </GridContainer>
+        </Grid>
       )}
     </div>
   );

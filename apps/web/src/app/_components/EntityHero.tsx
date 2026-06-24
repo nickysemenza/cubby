@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { ImageIcon } from "lucide-react";
 import { type FC, useState } from "react";
+import { Row } from "~/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Image } from "~/components/ui/image";
 import { cn } from "~/lib/utils";
@@ -39,10 +40,10 @@ export const EntityHero: FC<EntityHeroProps> = ({ images }) => {
       style={{ animationFillMode: "both" }}
     >
       <CardHeader className="pb-4">
-        <div className="flex items-center gap-2">
+        <Row align="center" gap="sm">
           <ImageIcon className="h-3.5 w-3.5 text-eyebrow" />
           <CardTitle>Images</CardTitle>
-        </div>
+        </Row>
       </CardHeader>
       <CardContent className="space-y-2">
         {/* Primary image, set as a textbook figure: hairline mat + caption */}
@@ -68,7 +69,7 @@ export const EntityHero: FC<EntityHeroProps> = ({ images }) => {
 
         {/* Thumbnail strip for multiple images */}
         {images.length > 1 && (
-          <div className="flex items-center gap-2">
+          <Row align="center" gap="sm">
             <div className="flex gap-2 overflow-x-auto">
               {images.map((image, index) => (
                 <button
@@ -97,7 +98,7 @@ export const EntityHero: FC<EntityHeroProps> = ({ images }) => {
             >
               View All
             </Link>
-          </div>
+          </Row>
         )}
       </CardContent>
     </Card>

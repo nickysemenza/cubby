@@ -6,6 +6,7 @@ import { RecentActivityFeed } from "~/app/_components/home/RecentActivityFeed";
 import EntityCount, {
   DASHBOARD_COUNT_OPTS,
 } from "~/app/_components/homepage/entitycount";
+import { Row } from "~/components/layout";
 import { PageWrapper } from "~/components/layout/page-wrapper";
 import { Eyebrow } from "~/components/ui/eyebrow";
 import { authClient } from "~/lib/auth-client";
@@ -73,7 +74,7 @@ function Home() {
   return (
     <PageWrapper className="gradient-mesh space-y-4">
       {/* Warm greeting with a ledger-style date stamp */}
-      <div className="page-header-accent flex items-end justify-between pb-2">
+      <Row align="end" justify="between" className="page-header-accent pb-2">
         <div>
           <Eyebrow className="mb-1 font-medium tracking-[0.18em]">
             Keep everything in its place
@@ -92,7 +93,7 @@ function Home() {
             })}
           </p>
         )}
-      </div>
+      </Row>
 
       {/* Entity Stats + problems alert */}
       <EntityCount />

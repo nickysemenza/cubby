@@ -1,4 +1,5 @@
 import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
+import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { queryKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
@@ -28,7 +29,7 @@ export function OrphanedDeleteFix({
   });
 
   return (
-    <div className="space-y-2">
+    <Stack gap="sm">
       <p className="text-muted-foreground text-xs">
         Delete <span className="font-medium">{name}</span>? It has no inventory
         and isn't linked to a recipe.
@@ -41,6 +42,6 @@ export function OrphanedDeleteFix({
       >
         Delete product
       </Button>
-    </div>
+    </Stack>
   );
 }

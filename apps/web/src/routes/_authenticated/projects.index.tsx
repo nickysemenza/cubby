@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Suspense } from "react";
 import { ProjectsDashboard } from "~/app/projects/projects-dashboard";
+import { Stack } from "~/components/layout";
 import { PageWrapper } from "~/components/layout/page-wrapper";
 
 export const Route = createFileRoute("/_authenticated/projects/")({
@@ -22,7 +23,7 @@ function ProjectsPage() {
 
 function ProjectsSkeleton() {
   return (
-    <div className="space-y-4">
+    <Stack>
       <div className="h-8 w-48 animate-pulse rounded bg-muted" />
       <div className="grid gap-4 sm:grid-cols-3">
         {["s1", "s2", "s3"].map((k) => (
@@ -30,6 +31,6 @@ function ProjectsSkeleton() {
         ))}
       </div>
       <div className="h-64 animate-pulse rounded-lg bg-muted" />
-    </div>
+    </Stack>
   );
 }

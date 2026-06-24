@@ -8,6 +8,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useMemo, useRef } from "react";
+import { Row } from "~/components/layout/row";
 import { BulkProgressBar } from "~/components/ui/bulk-progress-bar";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader } from "~/components/ui/card";
@@ -113,7 +114,7 @@ export function BookGroupCard({
           className="h-8 max-w-xs font-medium"
           aria-label="Book name"
         />
-        <div className="flex flex-1 items-center justify-end gap-2 text-sm">
+        <Row align="center" justify="end" gap="sm" className="flex-1 text-sm">
           <ExtractStatus book={book} />
           {ready && book.recipes.length > 0 && (
             <Button
@@ -136,7 +137,7 @@ export function BookGroupCard({
           >
             <X className="h-4 w-4" />
           </button>
-        </div>
+        </Row>
       </CardHeader>
 
       {book.expanded && (book.recipes.length > 0 || ready) && (
@@ -280,16 +281,26 @@ function ExtractStatus({ book }: { book: Book }) {
   }
   if (e.status === "extracting") {
     return (
-      <span className="flex items-center gap-1 text-muted-foreground text-xs">
+      <Row
+        as="span"
+        align="center"
+        gap="xs"
+        className="text-muted-foreground text-xs"
+      >
         <Spinner className="h-3 w-3" /> Extracting {e.done}/{e.total}
-      </span>
+      </Row>
     );
   }
   if (e.status === "error") {
     return (
-      <span className="flex items-center gap-1 text-destructive text-xs">
+      <Row
+        as="span"
+        align="center"
+        gap="xs"
+        className="text-destructive text-xs"
+      >
         <AlertCircle className="h-3 w-3" /> {e.message}
-      </span>
+      </Row>
     );
   }
   // ready

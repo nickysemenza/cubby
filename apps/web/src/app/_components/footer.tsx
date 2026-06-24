@@ -1,6 +1,7 @@
 import type { SortParams } from "@cubby/schemas/pagination";
 import { useQueries } from "@tanstack/react-query";
 import { Github } from "lucide-react";
+import { Row } from "~/components/layout";
 import { authClient } from "~/lib/auth-client";
 import { formatBuildDate } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
@@ -50,8 +51,13 @@ function EntityCounts() {
 export function AppFooter() {
   return (
     <footer className="safe-bottom border-t print:hidden">
-      <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-2 px-4 py-2 font-mono text-2xs text-muted-foreground uppercase tracking-[0.12em] md:px-6">
-        <div className="flex items-center gap-2">
+      <Row
+        align="center"
+        justify="between"
+        gap="sm"
+        className="mx-auto w-full max-w-7xl px-4 py-2 font-mono text-2xs text-muted-foreground uppercase tracking-[0.12em] md:px-6"
+      >
+        <Row align="center" gap="sm">
           <span>
             {buildDate} · <span>{__GIT_BRANCH__}</span>@
             <span title={__GIT_COMMIT_MSG__}>{__GIT_COMMIT__}</span>
@@ -59,8 +65,8 @@ export function AppFooter() {
           <span className="hidden sm:inline">
             <EntityCounts />
           </span>
-        </div>
-        <div className="flex items-center gap-2">
+        </Row>
+        <Row align="center" gap="sm">
           <span className="hidden text-muted-foreground/60 sm:inline">
             ⌘K to search
           </span>
@@ -79,8 +85,8 @@ export function AppFooter() {
           >
             <Github className="h-3.5 w-3.5" />
           </a>
-        </div>
-      </div>
+        </Row>
+      </Row>
     </footer>
   );
 }

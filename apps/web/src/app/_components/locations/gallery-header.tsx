@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { Plus, Search, X } from "lucide-react";
 import { useId } from "react";
 import { EntityStat } from "~/components/entity/entity-stat";
+import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { FilterableCombobox } from "~/components/ui/combobox";
@@ -52,7 +53,11 @@ export function GalleryHeader({
   return (
     <div className={cn("sticky top-0 z-10 border-b", className)}>
       {/* Stats + Breadcrumb row */}
-      <div className="flex min-h-[32px] items-center gap-2 border-b bg-muted/30 px-4 py-1">
+      <Row
+        align="center"
+        gap="sm"
+        className="min-h-[32px] border-b bg-muted/30 px-4 py-1"
+      >
         {/* Stats - hidden on mobile */}
         {stats && (
           <div className="hidden items-center gap-2 border-r pr-2 text-muted-foreground text-xs md:flex">
@@ -70,7 +75,7 @@ export function GalleryHeader({
         )}
 
         {/* Breadcrumb */}
-        <div className="flex flex-1 items-center gap-1 overflow-hidden">
+        <Row align="center" gap="xs" className="flex-1 overflow-hidden">
           <LocationBreadcrumb
             showHome
             segments={breadcrumbPath.map((loc) => ({
@@ -82,11 +87,16 @@ export function GalleryHeader({
             onSegmentClick={onBreadcrumbClick}
             activeHighlight
           />
-        </div>
-      </div>
+        </Row>
+      </Row>
 
       {/* Controls row */}
-      <div className="flex flex-wrap items-center gap-2 bg-background/95 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <Row
+        align="center"
+        gap="sm"
+        wrap
+        className="bg-background/95 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/60"
+      >
         {/* Search Input */}
         <div className="relative min-w-[180px] flex-1 md:max-w-xs">
           <Search className="absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -108,7 +118,7 @@ export function GalleryHeader({
         </div>
 
         {/* Type Filter */}
-        <div className="flex items-center gap-2">
+        <Row align="center" gap="sm">
           <Label className="hidden text-muted-foreground sm:inline">
             Type:
           </Label>
@@ -126,10 +136,10 @@ export function GalleryHeader({
             className="h-8 w-[120px]"
             placeholder="All"
           />
-        </div>
+        </Row>
 
         {/* Empty Filter */}
-        <div className="flex items-center gap-2">
+        <Row align="center" gap="sm">
           <Label className="hidden text-muted-foreground sm:inline">
             Status:
           </Label>
@@ -166,11 +176,11 @@ export function GalleryHeader({
             className="h-8 w-[120px]"
             placeholder="All"
           />
-        </div>
+        </Row>
 
         {/* Hide Non-Matching Checkbox - only show when filters are active */}
         {hasActiveFilters && (
-          <div className="flex items-center gap-2">
+          <Row align="center" gap="sm">
             <Checkbox
               id={hideNonMatchingId}
               checked={hideNonMatching}
@@ -185,7 +195,7 @@ export function GalleryHeader({
             >
               Hide non-matching
             </Label>
-          </div>
+          </Row>
         )}
 
         {/* Clear Filters Button */}
@@ -217,7 +227,7 @@ export function GalleryHeader({
           <Plus className="h-3.5 w-3.5" />
           New Location
         </Button>
-      </div>
+      </Row>
     </div>
   );
 }

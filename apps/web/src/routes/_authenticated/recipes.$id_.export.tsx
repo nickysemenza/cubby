@@ -22,6 +22,7 @@ import { recipeTreeToMarkdown } from "~/app/_components/recipe/recipe-export-mar
 import { scaleRecipe } from "~/app/_components/recipe/recipe-scaling";
 import { useRecipeTree } from "~/app/_components/recipe/useRecipeTree";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
+import { Row } from "~/components/layout";
 import { PageWrapper } from "~/components/layout/page-wrapper";
 import { RouteErrorComponent } from "~/components/route-error";
 import { DetailPagePending } from "~/components/route-pending";
@@ -122,7 +123,7 @@ function RecipeExportPage() {
   return (
     <PageWrapper>
       <div className="mx-auto max-w-3xl">
-        <div className="mb-4 flex flex-wrap items-center gap-2 print:hidden">
+        <Row align="center" gap="sm" wrap className="mb-4 print:hidden">
           <ViewSwitcher
             ariaLabel="Export format"
             options={FORMAT_OPTIONS}
@@ -136,7 +137,7 @@ function RecipeExportPage() {
             factor={factor}
             onFactorChange={setScale}
           />
-          <div className="ml-auto flex items-center gap-2">
+          <Row align="center" gap="sm" className="ml-auto">
             <CopyDebugButton
               getText={getMarkdown}
               label="Copy Markdown"
@@ -152,8 +153,8 @@ function RecipeExportPage() {
               <Printer className="mr-2 h-4 w-4" />
               Print
             </Button>
-          </div>
-        </div>
+          </Row>
+        </Row>
 
         {tree ? (
           format === "prep" ? (

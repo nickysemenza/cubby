@@ -8,6 +8,7 @@ import { Search } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
 import { ArrayFieldManager } from "~/components/forms/array-field-manager";
+import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Image } from "~/components/ui/image";
@@ -57,12 +58,12 @@ function FormSection({
     );
   }
   return (
-    <section className="space-y-2">
+    <Stack as="section" gap="sm">
       <h4 className={cn(sectionRuleClass, "eyebrow my-0 font-medium")}>
         {title}
       </h4>
       {children}
-    </section>
+    </Stack>
   );
 }
 
@@ -185,8 +186,8 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
   };
 
   const upcBlock = (
-    <div className="space-y-2">
-      <div className="flex items-end gap-2">
+    <Stack gap="sm">
+      <Row align="end" gap="sm">
         <div className="flex-1">
           <UnifiedTextField
             form={form}
@@ -205,9 +206,9 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
           {isLookingUp ? <Spinner /> : <Search className="h-4 w-4" />}
           <span className="ml-1">Lookup</span>
         </Button>
-      </div>
+      </Row>
       {lookupImageUrl && (
-        <div className="flex items-center gap-2 text-muted-foreground text-sm">
+        <Row align="center" gap="sm" className="text-muted-foreground text-sm">
           <Image
             src={lookupImageUrl}
             alt="Product from UPC lookup"
@@ -216,9 +217,9 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
             className="rounded border object-contain"
           />
           <span>Image will be imported on save</span>
-        </div>
+        </Row>
       )}
-    </div>
+    </Stack>
   );
 
   const content = (
@@ -372,7 +373,7 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
 
       {/* PendingImageUpload carries its own "Upload images" label, so no
           FormSection header — avoids an IMAGES/UPLOAD IMAGES double. */}
-      <div className="space-y-2">
+      <Stack gap="sm">
         <PendingImageUpload
           entityType="PRODUCT"
           onImagesChange={imageHandlers.handlePendingImagesChange}
@@ -383,7 +384,7 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
         {pendingImages.length > 0 && (
           <IdentifyProductButton form={form} pendingImages={pendingImages} />
         )}
-      </div>
+      </Stack>
 
       {!isMisc && (
         <ArrayFieldManager<UnitMappingInput, TFieldValues>
@@ -453,12 +454,12 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
 
   if (compact) {
     return (
-      <div className="space-y-4 rounded-lg border border-border/50 bg-muted/30 p-4">
+      <Stack className="rounded-lg border border-border/50 bg-muted/30 p-4">
         {content}
-      </div>
+      </Stack>
     );
   }
 
   // Extra spacing between the labeled sections so the form reads as groups.
-  return <div className="space-y-4">{content}</div>;
+  return <Stack>{content}</Stack>;
 }

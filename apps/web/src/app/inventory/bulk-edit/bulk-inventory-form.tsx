@@ -26,6 +26,7 @@ import {
 import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
 import { BarcodeScannerButton } from "~/app/_components/inventory/barcode-scanner-button";
 import { useUpcLookup } from "~/app/_components/inventory/hooks";
+import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { queryKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
@@ -242,7 +243,7 @@ export default function BulkInventoryForm() {
 
       {selectedLocation && (
         <>
-          <div className="mb-4 flex items-center justify-between">
+          <Row align="center" justify="between" className="mb-4">
             <h3 className="font-medium text-lg">
               Inventory for {selectedLocation.name}
             </h3>
@@ -250,14 +251,16 @@ export default function BulkInventoryForm() {
               <Plus className="mr-1 h-4 w-4" />
               Add Item
             </Button>
-          </div>
+          </Row>
 
-          <div className="space-y-2">
+          <Stack gap="sm">
             {fields.length > 0 ? (
               fields.map((field, index) => (
-                <div
+                <Row
                   key={field.id}
-                  className="flex items-center gap-2 rounded border p-1"
+                  align="center"
+                  gap="sm"
+                  className="rounded border p-1"
                 >
                   <div className="flex-1">
                     <ComboboxFieldWithSearch
@@ -290,14 +293,14 @@ export default function BulkInventoryForm() {
                   >
                     <X className="h-4 w-4" />
                   </Button>
-                </div>
+                </Row>
               ))
             ) : (
               <div className="py-4 text-center text-muted-foreground">
                 No inventory items yet.
               </div>
             )}
-          </div>
+          </Stack>
         </>
       )}
     </FormWrapper>
