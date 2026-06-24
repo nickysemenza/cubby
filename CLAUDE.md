@@ -144,8 +144,8 @@ Don't brand shortcode columns or `Image` ids — those add insert-side friction 
 
 ## Spacing
 
-- **Strict `{1,2,4,6}` scale, guard-enforced.** All `gap`/`space-x|y`/`p*`/`m*` spacing must use `0,1,2,4,6` (Tailwind units; `--spacing` 0.25rem). Off-scale values (`gap-3`, `space-y-3`, `p-1.5`, `py-2.5`, `m-5`, …) FAIL `scripts/check-conventions.mjs` (runs in `pnpm check`). Named keys `xs/sm/md/lg` on the layout cvas in `apps/web/src/styles/layouts.ts` map to `1/2/4/6`.
-- **Exemptions:** `components/ui/**` (shadcn primitives — their `px-3`/`p-6` is the design system's own component padding), the `/design` gallery, and any line with an inline `/* tight */` comment (genuinely dense UI — calendars, icon nudges, nav-clearance negatives). Use `/* tight */` sparingly; default is to round to scale.
+- **Guard-enforced scale.** `gap`/`space-x|y`/`p*`/`m*` use the doublings `{0,1,2,4,6}` plus the legit large steps `{8,12,16,20}` (wide gutters, big touch targets, hero/clearance padding). The odd/half **rhythm drift** (`1.5, 2.5, 3, 5, 7, 9, 10, 11, 13, 14`) FAILS `scripts/check-conventions.mjs` (runs in `pnpm check`) — that's the long tail we killed. Named keys `xs/sm/md/lg` on the layout cvas in `apps/web/src/styles/layouts.ts` map to `1/2/4/6`.
+- **Exemptions:** `components/ui/**` (shadcn primitives — their `px-3` etc. is the design system's own component padding), the `/design` gallery, and the rare genuinely-dense sub-scale spot (`gap-0.5` optical nudges, dense calendar cells) marked with an inline `/* tight */`. Use `/* tight */` sparingly — and prefer encapsulating density in a component over scattering the marker.
 - `gap-*` for flex/grid containers (siblings laid out by the parent); `space-y-*` only for plain block stacks with no flex/grid context.
 
 ## Page shell

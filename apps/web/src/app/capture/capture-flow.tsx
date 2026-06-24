@@ -111,7 +111,7 @@ export function CaptureFlow() {
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={busy}
-            className="flex w-full flex-col items-center justify-center gap-2 rounded-xl border border-border border-dashed py-6 text-muted-foreground transition-colors hover:bg-muted/40"
+            className="flex w-full flex-col items-center justify-center gap-2 rounded-xl border border-border border-dashed py-16 text-muted-foreground transition-colors hover:bg-muted/40"
           >
             <Camera className="h-8 w-8" />
             <span className="font-medium text-sm">

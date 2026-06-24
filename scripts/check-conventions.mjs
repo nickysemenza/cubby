@@ -88,11 +88,14 @@ const COLOR_RE =
 // the WASM engine under this name, so exempt test + fixture files.
 const CALC_TOTALS_RE = /\bfunction\s+calculateTotals\b|\bcalculateTotals\s*=/;
 
-// Off-scale Tailwind spacing: gap / gap-x|y / space-x|y / p*/m* (+ directional)
-// using any step outside the strict {0,1,2,4,6} scale. (Arbitrary `-[…]` values
-// and non-spacing utilities like h-/w-/top- are not matched.)
+// Off-scale Tailwind spacing: gap / gap-x|y / space-x|y / p*/m* (+ directional).
+// We flag the odd/half "rhythm drift" steps (1.5, 2.5, 3, 5, 7, 9, …) — the long
+// tail that made spacing feel inconsistent. The scale itself is the doublings
+// {0,1,2,4,6} plus the legit large steps {8,12,16,20} (wide gutters, big touch
+// targets, hero padding), which are allowed. Arbitrary `-[…]` values and
+// non-spacing utilities (h-/w-/top-) aren't matched.
 const SPACING_RE =
-  /\b(gap(-[xy])?|space-[xy]|[pm][xytblr]?)-(0\.5|1\.5|2\.5|3|3\.5|5|7|8|9|10|11|12|14|16|20)\b/;
+  /\b(gap(-[xy])?|space-[xy]|[pm][xytblr]?)-(0\.5|1\.5|2\.5|3|3\.5|5|7|9|10|11|13|14)\b/;
 
 // components/ui holds the shadcn-derived primitives whose internal padding (px-3,
 // p-6, ...) IS the design system's defined component spacing — exempt from the
@@ -178,7 +181,9 @@ function scan(files) {
         !isUiPrimitive(file) &&
         !COLOR_EXCLUDE_BASENAMES.has(base) &&
         !isCommentLine(line) &&
-        !line.includes("tight") &&
+        // The `/* tight */` (or `/* tight: reason */`) marker only — the `/*`
+        // prefix means Tailwind's leading-tight/tracking-tight don't match.
+        !line.includes("/* tight") &&
         SPACING_RE.test(line)
       ) {
         violations.push({

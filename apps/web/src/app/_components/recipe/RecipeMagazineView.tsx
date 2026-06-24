@@ -164,7 +164,7 @@ export function RecipeMagazineView({
       )}
 
       {/* Open-book spread: ingredients column + method column, no boxes */}
-      <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
+      <div className="grid gap-6 lg:grid-cols-[300px_1fr] lg:gap-12">
         <aside className="lg:sticky lg:top-20 lg:h-fit">
           <SpreadHeading>Ingredients</SpreadHeading>
           <div className="mt-2">
