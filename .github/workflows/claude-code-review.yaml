@@ -8,11 +8,13 @@ on:
 
 jobs:
   claude-review:
-    # Skip draft PRs and dependency-bot PRs
+    # Skip draft PRs and any bot-initiated run. claude-code-action hard-fails on
+    # bot actors ("Workflow initiated by non-human actor"), so when this review's
+    # own fix-push (or renovate/dependabot) re-triggers `synchronize`, skip rather
+    # than fail. A job-level skip reports neutral, not red.
     if: |
       github.event.pull_request.draft == false &&
-      github.actor != 'renovate[bot]' &&
-      github.actor != 'dependabot[bot]'
+      !endsWith(github.actor, '[bot]')
     runs-on: ubuntu-latest
     permissions:
       contents: read
