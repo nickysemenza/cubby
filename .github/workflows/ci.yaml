@@ -94,6 +94,11 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           cache: true
+          # recipebridge builds via `--manifest-path recipebridge/Cargo.toml`, so
+          # artifacts land in recipebridge/target — NOT the workspace-root ./target
+          # that rust-cache caches by default. Without this the cache saved ~0 bytes
+          # and clippy recompiled every dep cold (~1:47) on every run.
+          cache-workspaces: "recipebridge -> target"
       - name: Format check
         run: cargo fmt --manifest-path recipebridge/Cargo.toml --check
       - name: Lint (clippy)
@@ -120,6 +125,10 @@ jobs:
         with:
           cache: true
           components: llvm-tools-preview
+          # See test-rust: cache recipebridge/target, not the empty ./target. The
+          # instrumented llvm-cov RUSTFLAGS give this its own cache bucket (distinct
+          # from test-rust), warmed across runs.
+          cache-workspaces: "recipebridge -> target"
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
       - name: Run recipebridge tests (with coverage)
