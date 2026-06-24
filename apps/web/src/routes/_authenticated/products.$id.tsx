@@ -34,9 +34,6 @@ function ProductDetailPage() {
 
   useDocumentTitle(product.name);
 
-  return (
-    <PageWrapper>
-      <ProductDetail key={id} product={product} />
-    </PageWrapper>
-  );
+  // ProductDetail renders its own <Page> shell (which owns the PageWrapper).
+  return <ProductDetail key={id} product={product} />;
 }

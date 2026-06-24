@@ -1,15 +1,19 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { FC, ReactNode } from "react";
-import { ImageGallery } from "~/components/media/image-gallery";
+import {
+  type DetailHeroStat,
+  PageHeader,
+} from "~/components/layouts/page-hero";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { Eyebrow } from "~/components/ui/eyebrow";
-import { InkStamp } from "~/components/ui/ink-stamp";
-import { entities } from "~/entities/entities";
 import { useDebug } from "~/hooks/useDebug";
 import { useIsMobile } from "~/hooks/useMobile";
 import { cn } from "~/lib/utils";
 import { EntityHero } from "../EntityHero";
 import JsonRenderer from "../json-renderer";
+
+// Re-exported for back-compat — the spec-plate ledger stat type now lives with
+// the unified PageHeader. Unmigrated detail pages import it from here.
+export type { DetailHeroStat };
 
 export interface DetailSection {
   title: string;
@@ -17,44 +21,6 @@ export interface DetailSection {
   icon: React.ElementType;
   /** Span both grid columns on desktop — for wide content like multi-column tables. */
   fullWidth?: boolean;
-}
-
-export interface DetailHeroStat {
-  label: string;
-  value: ReactNode;
-}
-
-interface DetailPageProps {
-  sections: DetailSection[];
-  entity: Entity;
-  name: string;
-  rawData: unknown; // The full entity data for debug display
-  /** Images shown as a swipeable hero gallery on mobile */
-  heroImages?: Array<{ id: string; url: string; filename: string }>;
-  /** Inline ledger stats on the spec-plate hero (on hand, value, ...) */
-  heroStats?: DetailHeroStat[];
-  /** Status stamp on the plate (e.g. IN STOCK) */
-  heroStamp?: { label: string; tone?: "ink" | "red" | "green" };
-  /** Reference code shown in the eyebrow (e.g. the product shortcode) */
-  heroNo?: string;
-  /** Page-level action cluster (edit / move / delete) rendered on the hero plate. */
-  actions?: ReactNode;
-}
-
-/** Pull a created-at date out of the raw entity for the hero's ledger meta. */
-function getOnFileSince(rawData: unknown): string | null {
-  if (typeof rawData !== "object" || rawData === null) return null;
-  const createdAt = (rawData as { createdAt?: unknown }).createdAt;
-  if (typeof createdAt !== "string" && !(createdAt instanceof Date)) {
-    return null;
-  }
-  const date = new Date(createdAt);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleDateString("en-US", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
 }
 
 /** A single section card. `index` only drives the staggered entrance animation. */
@@ -159,86 +125,29 @@ function renderSectionLayout({
   return <div className="space-y-2 sm:space-y-3">{blocks}</div>;
 }
 
-export const DetailPage: FC<DetailPageProps> = ({
+interface DetailSectionsProps {
+  sections: DetailSection[];
+  /** The full entity data for the debug "Raw Details" section. */
+  rawData: unknown;
+  /** Images — on desktop the first rides at the top of section column 2. */
+  heroImages?: Array<{ id: string; url: string; filename: string }>;
+}
+
+/**
+ * The headerless detail-page BODY: the section-card grid (with the desktop
+ * EntityHero in column 2) plus the debug "Raw Details" card. The spec-plate hero
+ * is owned by {@link PageHeader} / Page now — wrap this in `<Page variant="detail">`.
+ */
+export const DetailSections: FC<DetailSectionsProps> = ({
   sections,
-  entity,
-  name,
   rawData,
   heroImages,
-  heroStats,
-  heroStamp,
-  heroNo,
-  actions,
 }) => {
   const { isDebugEnabled } = useDebug();
   const isMobile = useIsMobile();
 
-  const onFileSince = getOnFileSince(rawData);
-  const entityDef = entities[entity];
-  // Entity-colored spine, same runtime class trick as the homepage stat cards.
-  const spineClass = entityDef.color.text.replace("text-", "border-l-");
-
   return (
     <div className="space-y-2 sm:space-y-3">
-      {/* Hero image gallery — mobile only */}
-      {isMobile && heroImages && heroImages.length > 0 && (
-        <div className="-mx-4 -mt-4">
-          <ImageGallery images={heroImages} />
-        </div>
-      )}
-
-      {/* Spec-plate hero: a chunky placard with entity spine, reference no.,
-          status stamp, and an inline ledger stat strip. */}
-      <Card
-        className={cn("border-l-[6px]", spineClass)}
-        data-testid="detail-spec-plate"
-      >
-        <CardContent className="px-4 py-1 sm:px-5">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <Eyebrow className="tracking-[0.14em]">
-                {entityDef.pluralLabel}
-                {heroNo ? ` / No. ${heroNo}` : ""}
-              </Eyebrow>
-              <h1 className="break-words font-bold font-heading text-2xl tracking-tight sm:text-3xl">
-                {name}
-              </h1>
-              {onFileSince && (
-                <p className="mt-1 font-mono text-2xs text-muted-foreground uppercase">
-                  On file since {onFileSince}
-                </p>
-              )}
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              {heroStamp && (
-                <InkStamp tone={heroStamp.tone} className="mt-1">
-                  {heroStamp.label}
-                </InkStamp>
-              )}
-              {actions}
-            </div>
-          </div>
-          {heroStats && heroStats.length > 0 && (
-            <div className="mt-3 flex border-foreground/25 border-t border-dashed pt-2.5">
-              {heroStats.map((stat, i) => (
-                <div
-                  key={stat.label}
-                  className={cn(
-                    "min-w-0 flex-1",
-                    i > 0 && "border-foreground/25 border-l border-dashed pl-4",
-                  )}
-                >
-                  <Eyebrow as="div">{stat.label}</Eyebrow>
-                  <div className="truncate font-mono font-semibold text-base tabular-nums">
-                    {stat.value}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
       {/* Section cards. On desktop the two columns pack INDEPENDENTLY — each is a
           content-height stack, so a short card (e.g. Basic Info) never stretches to
           match a tall neighbour. Half-width sections are dealt out round-robin into
@@ -258,6 +167,62 @@ export const DetailPage: FC<DetailPageProps> = ({
           </CardContent>
         </Card>
       )}
+    </div>
+  );
+};
+
+interface DetailPageProps {
+  sections: DetailSection[];
+  entity: Entity;
+  name: string;
+  rawData: unknown; // The full entity data for debug display
+  /** Images shown as a swipeable hero gallery on mobile */
+  heroImages?: Array<{ id: string; url: string; filename: string }>;
+  /** Inline ledger stats on the spec-plate hero (on hand, value, ...) */
+  heroStats?: DetailHeroStat[];
+  /** Status stamp on the plate (e.g. IN STOCK) */
+  heroStamp?: { label: string; tone?: "ink" | "red" | "green" };
+  /** Reference code shown in the eyebrow (e.g. the product shortcode) */
+  heroNo?: string;
+  /** Page-level action cluster (edit / move / delete) rendered on the hero plate. */
+  actions?: ReactNode;
+}
+
+/**
+ * Back-compat detail page: the spec-plate hero (via {@link PageHeader}) plus the
+ * {@link DetailSections} body. Kept for detail pages not yet migrated to the
+ * unified `<Page variant="detail">` shell — new pages should compose Page +
+ * DetailSections directly. Behaviour is identical to the pre-split component.
+ */
+export const DetailPage: FC<DetailPageProps> = ({
+  sections,
+  entity,
+  name,
+  rawData,
+  heroImages,
+  heroStats,
+  heroStamp,
+  heroNo,
+  actions,
+}) => {
+  return (
+    <div className="space-y-2 sm:space-y-3">
+      <PageHeader
+        variant="detail"
+        title={name}
+        entity={entity}
+        rawData={rawData}
+        heroNo={heroNo}
+        heroStamp={heroStamp}
+        heroStats={heroStats}
+        heroImages={heroImages}
+        actions={actions}
+      />
+      <DetailSections
+        sections={sections}
+        rawData={rawData}
+        heroImages={heroImages}
+      />
     </div>
   );
 };
