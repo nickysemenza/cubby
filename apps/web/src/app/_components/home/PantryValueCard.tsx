@@ -68,7 +68,7 @@ export function PantryValueCard() {
           <div
             key={b.label}
             title={`${b.label}: ${formatCurrency(b.value)}`}
-            className="min-w-0 flex-1 rounded-t border border-[var(--border-chunky)] border-b-0"
+            className="min-w-0 flex-1 border border-[var(--border-chunky)] border-b-0"
             style={{
               height: `${Math.max(8, (b.value / max) * 100)}%`,
               backgroundColor: BAR_COLORS[i % BAR_COLORS.length],

@@ -29,7 +29,7 @@ import type {
   NotionTask,
 } from "~/server/clients/notion";
 
-// -- Category colors (matching Notion chart palette) --
+// -- Category colors (monochrome ink ladder + ultramarine accent) --
 
 export const CATEGORY_COLORS: Record<string, string> = {
   materials: "var(--chart-1)",

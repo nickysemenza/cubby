@@ -8,15 +8,18 @@
 */
 
 @theme {
-  /* Fraunces - warm serif with personality for headings */
-  --font-heading: "Fraunces Variable", Georgia, "Times New Roman", serif;
-  /* Inter - crisp neutral UI sans (2026-06-12 refresh; was Nunito) */
+  /* Warm-Paper Ledger type system.
+     Space Grotesk - tight geometric sans for headings / panel titles. */
+  --font-heading:
+    "Space Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
+  /* Inter - crisp neutral UI sans for body / prose. */
   --font-sans:
     "Inter Variable", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
     "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  /* JetBrains Mono - the substrate for all data / cells / metrics / numerals. */
   --font-mono:
-    "JetBrains Mono", "Fira Code", "SF Mono", Monaco, "Cascadia Code",
-    "Roboto Mono", Consolas, "Courier New", monospace;
+    "JetBrains Mono Variable", "JetBrains Mono", "SF Mono", Monaco,
+    "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
 
   /* Sub-xs caption sizes - a home for what used to be arbitrary text-[10px]/[8px] */
   --text-2xs: 0.625rem; /* 10px */
@@ -24,9 +27,9 @@
   --text-3xs: 0.5rem; /* 8px */
   --text-3xs--line-height: 0.75rem;
 
-  /* Signature easing - a gentle settle with the faintest overshoot, so motion
-     feels alive and cozy rather than mechanical. Use via `ease-cozy`. */
-  --ease-cozy: cubic-bezier(0.34, 1.3, 0.64, 1);
+  /* Ledger easing - a flat, mechanical settle. The matte instrument panel has
+     no overshoot/bounce; motion is restrained and square. Use via `ease-cozy`. */
+  --ease-cozy: cubic-bezier(0.2, 0, 0, 1);
 }
 
 /*
@@ -56,13 +59,19 @@
   h4 {
     font-family: var(--font-heading);
   }
-  /* Crisp refresh: one step down from the old text-4xl/5xl extrabold display
-     scale - headings keep Fraunces' warmth but stop shouting. */
+  /* Warm-Paper Ledger: Space Grotesk headings, tight tracking, no shout. The
+     -0.02em letter-spacing is the geometric-sans signature of the look. */
   h1 {
-    @apply scroll-m-20 text-3xl font-bold tracking-tight lg:text-4xl;
+    @apply scroll-m-20 text-3xl font-semibold tracking-tight lg:text-4xl;
+    letter-spacing: -0.02em;
   }
   h2 {
     @apply scroll-m-20 border-b pb-2 text-2xl font-semibold tracking-tight first:mt-0;
+    letter-spacing: -0.02em;
+  }
+  h3,
+  h4 {
+    letter-spacing: -0.02em;
   }
   ul {
     @apply my-6 ml-6 list-inside list-disc [&>li]:mt-2;
@@ -85,10 +94,10 @@
   input:focus,
   textarea:focus,
   [data-slot="combobox-trigger"]:focus {
-    /* Crisp two-ring focus - no outer glow */
+    /* Ledger focus - a flat two-ring in ultramarine, no glow */
     box-shadow:
       0 0 0 2px var(--background),
-      0 0 0 4px oklch(from var(--brand-terracotta) l c h / 0.25);
+      0 0 0 4px oklch(from var(--ring) l c h / 0.4);
   }
 
   /* Respect users who prefer reduced motion - neutralize our animations.
@@ -152,62 +161,57 @@
   Cubby Theme - Cool-neutral surfaces + warm accent palette
 */
 :root {
-  /* Brand palette */
-  --brand-foreground: oklch(0.27 0.008 260);
-  /* Brick-deepened terracotta: reads as a printer's spot ink, not "orange UI"
-     (2026-06-10 palette tune; was #c2603d / #d98a68) */
-  --brand-terracotta: #ae4a28;
-  --brand-terra-light: #cf7d57;
-  /* Cool-neutral refresh (2026-06-14): de-warmed surfaces + ink to a slightly
-     cool neutral (hue ~255, very low chroma) so the app reads crisp/modern while
-     terracotta + the warm chart ramp stay the signature accents. Was warm
-     "Gallery": card #fffefb / paper oklch(0.97 0.004 95) / shelf #5c5550. */
-  --brand-cream: oklch(0.995 0.0015 255);
-  --brand-paper: oklch(0.975 0.003 255);
-  --brand-shelf: oklch(0.52 0.008 255);
+  /* Warm-Paper Ledger palette (2026-06-25 total visual overhaul). A matte
+     print-instrument look: dense mono data on warm paper, panels separated by
+     ink rules and hairlines instead of elevation, a lone ultramarine accent
+     reserved for the live/active value. Light mode only. Supersedes the
+     2026-06-14 cool-neutral / terracotta "Crisp Refresh". */
+  --brand-foreground: #16170f; /* --ink: near-black, not pure */
+  /* Ultramarine - the one loud thing on screen: active/hover/focus + the single
+     most important live value. Everywhere else is ink + paper. */
+  --brand-ultramarine: #2244cc;
+  --brand-ultramarine-dark: #16308f;
+  /* Paper ramp - the warm matte substrate. cream=raised panels/headers,
+     paper=base background, paper-alt=zebra stripe / inset (a whisper darker). */
+  --brand-cream: #fcfaf4; /* --paper-surface */
+  --brand-paper: #f7f4ec; /* --paper */
+  --brand-paper-alt: #efeae0; /* --paper-alt */
+  --brand-hairline: #d8d2c4; /* --hairline: dividers, panel borders, thin rules */
+  --brand-shelf: #6b6658; /* muted ink for secondary text/labels */
+  /* Retained terracotta refs (legacy consumers fade out as primitives reskin;
+     point them at ink so nothing strands on the old spot color). */
+  --brand-terracotta: var(--brand-ultramarine);
+  --brand-terra-light: var(--brand-ultramarine);
   --brand-sage: oklch(0.94 0.025 145);
 
-  /* Crisp elevation ("chunky" tokens repurposed, 2026-06-12 Linear/Figma-style
-     refresh) - layered low-alpha blurs in the warm foreground tint instead of
-     the old zero-blur offset slabs. Same two knobs still tune all signature
-     chrome app-wide: these shadows and --border-chunky. */
-  --shadow-chunky-sm: 0 1px 2px 0
-    oklch(from var(--brand-foreground) l c h / 0.06);
-  --shadow-chunky:
-    0 1px 2px 0 oklch(from var(--brand-foreground) l c h / 0.05),
-    0 2px 8px -2px oklch(from var(--brand-foreground) l c h / 0.1);
-  --shadow-chunky-lg:
-    0 2px 4px -1px oklch(from var(--brand-foreground) l c h / 0.06),
-    0 8px 24px -6px oklch(from var(--brand-foreground) l c h / 0.16);
-  /* Destructive zero-blur offset slab for the alert state of the homepage
-     Problems stat card (was inline oklch on entitycount.tsx). The base is the
-     resting 3px offset; -hover is the 4px lift on hover. */
-  --shadow-chunky-destructive: 3px 3px 0 0
-    oklch(from var(--destructive) l c h / 0.55);
-  --shadow-chunky-destructive-hover: 4px 4px 0 0
-    oklch(from var(--destructive) l c h / 0.55);
-  /* Inset "gloss" highlight for small gradient tiles (was inline rgba on the
-     homepage entity-count chips). */
-  --shadow-inset-gloss:
-    inset 0 1px 2px oklch(1 0 0 / 0.3),
-    inset 0 -1px 2px oklch(from var(--brand-foreground) l c h / 0.1);
-  /* Barcode-scanner viewfinder: the dark edge scrim, plus the success-flash
-     variant that adds a --positive glow when a code is captured. */
-  --shadow-scan-scrim: 0 0 0 9999px oklch(0 0 0 / 0.4);
-  --shadow-scan-flash:
-    0 0 0 9999px oklch(0 0 0 / 0.4),
-    0 0 20px oklch(from var(--positive) l c h / 0.55);
-  /* Text shadow for labels painted directly over chart fills (donut, network)
-     so they stay legible regardless of the underlying segment color. */
-  --text-shadow-chart: 0 1px 3px oklch(from var(--brand-foreground) l c h / 0.7);
-  /* Border for signature chrome - a hairline a step darker than --border so
-     primary surfaces still read defined, just not outlined. */
-  --border-chunky: oklch(0.87 0.005 255);
+  /* Ledger elevation: NONE. Separation comes from rules and tone, never from
+     shadow — the moment a surface casts a shadow it reads as glass. The
+     "chunky" shadow tokens are kept (so primitives don't break) but flattened
+     to `none`; panels are defined by --border-chunky hairlines or the 3px
+     --rule-ink top-rule instead. */
+  --shadow-chunky-sm: none;
+  --shadow-chunky: none;
+  --shadow-chunky-lg: none;
+  --shadow-chunky-destructive: none;
+  --shadow-chunky-destructive-hover: none;
+  --shadow-inset-gloss: none;
+  /* Barcode-scanner viewfinder: just the flat dark edge scrim, no success glow
+     (matte instrument panel — no glow anywhere). Both vars resolve to the scrim. */
+  --shadow-scan-scrim: 0 0 0 9999px oklch(0 0 0 / 0.55);
+  --shadow-scan-flash: 0 0 0 9999px oklch(0 0 0 / 0.55);
+  /* Chart labels sit on flat matte fills now, so no text shadow is needed. */
+  --text-shadow-chart: none;
+  /* Panel/card border - the hairline that defines a ruled region. */
+  --border-chunky: var(--brand-hairline);
+  /* The signature 3px ink top-rule for panels and sticky table headers — the
+     "printed control sheet" header underline. Use via border-top / border-bottom. */
+  --rule-ink: 3px solid var(--brand-foreground);
   /* Entity-colored left "spine" on the detail spec-plate (centrally tunable
      instead of an inline border-l-[6px]). */
   --border-spine: 6px;
 
-  /* Core colors - 3-step surface elevation: muted < paper(bg) < cream(card) */
+  /* Core colors - paper ramp surfaces: paper-alt(muted) < paper(bg) < surface(card).
+     Separation is by tone, not elevation. */
   --background: var(--brand-paper);
   --foreground: var(--brand-foreground);
   --card: var(--brand-cream);
@@ -215,101 +219,123 @@
   --popover: var(--brand-cream);
   --popover-foreground: var(--brand-foreground);
 
-  /* Primary - Terracotta for actions */
-  --primary: var(--brand-terracotta);
-  --primary-foreground: var(--brand-cream);
+  /* Primary - Ultramarine: the lone accent. Actions, the active/live value. */
+  --primary: var(--brand-ultramarine);
+  --primary-foreground: #ffffff;
 
-  /* Secondary - cool-neutral chip (was warm sage green; neutralized in the
-     2026-06-14 cool refresh so secondary buttons/badges read as quiet neutral,
-     not the one green element against the cool surfaces) */
-  --secondary: oklch(0.93 0.005 255);
-  --secondary-foreground: oklch(0.37 0.01 255);
+  /* Secondary - quiet paper-alt chip (ink text on a tinted-paper surface) */
+  --secondary: var(--brand-paper-alt);
+  --secondary-foreground: var(--brand-foreground);
 
-  /* Muted - light cool-neutral surface */
-  --muted: oklch(0.955 0.004 255);
+  /* Muted - inset paper surface */
+  --muted: var(--brand-paper-alt);
   --muted-foreground: var(--brand-shelf);
 
-  /* Accent - neutral hover/focus wash (color is reserved for selection/active,
-     not hover; semantic orange lives in --warning). --accent-foreground = ink. */
-  --accent: oklch(0.95 0.004 255);
+  /* Accent - neutral hover/focus wash (paper-alt). The ultramarine "accent" of
+     the design language lives in --primary/--ring; this shadcn token stays a
+     quiet wash so hover states don't shout. --accent-foreground = ink. */
+  --accent: var(--brand-paper-alt);
   --accent-foreground: var(--brand-foreground);
 
-  /* Warning - the reserved semantic orange (was carried by --accent) */
-  --warning: var(--brand-terra-light);
+  /* Warning - matte amber, kept off the blue accent axis */
+  --warning: oklch(0.62 0.13 65);
 
-  /* Destructive - Deep burgundy */
-  --destructive: oklch(0.45 0.18 15);
-  --destructive-foreground: var(--brand-cream);
+  /* Destructive - matte deep red, kept off the blue accent axis */
+  --destructive: oklch(0.45 0.18 25);
+  --destructive-foreground: #ffffff;
 
-  /* Borders and inputs - cool-neutral hairlines */
-  --border: oklch(0.91 0.004 255);
-  --input: oklch(0.955 0.004 255);
-  /* Checkbox border - a clearly visible mid-gray so unchecked boxes read as
-     empty controls against the surfaces (--input hairline was invisible) */
-  --checkbox-border: oklch(0.79 0.006 255);
-  --ring: var(--brand-terracotta);
+  /* Borders and inputs - paper hairlines */
+  --border: var(--brand-hairline);
+  --input: var(--brand-paper-alt);
+  /* Checkbox border - a visible ink-leaning hairline so unchecked boxes read as
+     empty controls against the paper surfaces */
+  --checkbox-border: oklch(0.6 0.01 80);
+  --ring: var(--brand-ultramarine);
 
-  /* Selected table-row tint - kept a faint terracotta on purpose: the surfaces
-     went cool-neutral but selection is the one place warmth = signal, so it
-     still reads as "this row is active" (paired with the terracotta row spine). */
-  --row-selected: oklch(0.955 0.012 50);
+  /* Selected/active table-row tint - a faint ultramarine wash. Selection is the
+     one place the accent earns its keep in a list (paired with the accent row
+     spine). color-mix keeps it a whisper of the accent over paper. */
+  --row-selected: color-mix(
+    in oklab,
+    var(--brand-ultramarine) 10%,
+    var(--brand-paper)
+  );
 
   /* Extended palette */
-  /* Eyebrow - cool-neutral gray for mono uppercase micro-labels (page-hero
-     eyebrows, table column headers, stat-card labels). A step lighter than the
-     ink so labels recede and stay quiet. */
-  --eyebrow: oklch(0.55 0.012 255);
-  --highlight: var(--brand-terracotta);
-  --subtle: oklch(0.65 0.08 90); /* Warm olive */
-  --glow: var(--brand-terra-light);
-  --plum: oklch(0.55 0.14 320); /* Warm plum - recipes */
-  --slate: oklch(0.55 0.06 55); /* Warm brown-slate */
+  /* Eyebrow - muted ink for mono uppercase micro-labels (page-hero eyebrows,
+     table column headers, stat-card labels). A step lighter than the ink so
+     labels recede and stay quiet. */
+  --eyebrow: var(--brand-shelf);
+  --highlight: var(--brand-ultramarine);
+  --subtle: oklch(0.55 0.01 80); /* muted ink-leaning neutral */
+  --glow: var(--brand-ultramarine);
+  --plum: var(--brand-ultramarine); /* recipes accent → ultramarine */
+  --slate: oklch(0.5 0.008 80); /* neutral ink-slate */
 
-  /* Ingredient parts - one color per section of the "amount name modifier" display
-     format, drawn from the warm chart ramp so they stay on-brand. Used by parse-drift
-     underlines and the rich-text ingredient line. */
-  --ingredient-amount: var(--chart-1); /* terracotta */
-  --ingredient-name: var(--chart-3); /* olive-sage */
-  --ingredient-modifier: var(--chart-5); /* warm plum */
+  /* Ingredient parts - one tone per section of the "amount name modifier"
+     display format. Kept deliberately off the pure red/green axis and now on
+     the ink + ultramarine scale: amount = accent, name = ink, modifier = muted
+     ink. Used by parse-drift underlines and the rich-text ingredient line. */
+  --ingredient-amount: var(--brand-ultramarine);
+  --ingredient-name: var(--brand-foreground);
+  --ingredient-modifier: var(--brand-shelf);
 
-  /* Positive / money - warm-leaning green (replaces ad-hoc inline oklch) */
-  --positive: oklch(0.52 0.1 150);
+  /* Positive / money - matte green, kept off the blue accent axis */
+  --positive: oklch(0.5 0.1 150);
 
-  /* Warm categorical chart ramp - harmonious but distinguishable.
-     orange / gold / green / red / plum / teal / brown / taupe */
-  --chart-1: oklch(0.63 0.15 42); /* terracotta */
-  --chart-2: oklch(0.76 0.13 80); /* honey */
-  --chart-3: oklch(0.58 0.09 140); /* olive-sage */
-  --chart-4: oklch(0.6 0.13 8); /* dusty rose */
-  --chart-5: oklch(0.5 0.13 345); /* warm plum */
-  --chart-6: oklch(0.7 0.05 200); /* muted teal */
-  --chart-7: oklch(0.45 0.06 55); /* deep clay */
-  --chart-8: oklch(0.66 0.04 70); /* warm taupe */
+  /* Ledger categorical chart ramp - a monochrome ink ladder (dark→light tints
+     of ink over paper) with ultramarine as the single highlight. Matte, no
+     warmth; encodes order/category by value, never by hue. chart-1 is the
+     accent so the "primary" series reads as the live one. */
+  --chart-1: var(--brand-ultramarine); /* accent / primary series */
+  --chart-2: oklch(0.28 0.006 80); /* ink */
+  --chart-3: oklch(0.42 0.006 80); /* ink 70% */
+  --chart-4: oklch(0.55 0.006 80); /* ink 55% */
+  --chart-5: oklch(0.66 0.006 80); /* ink 40% */
+  --chart-6: oklch(0.76 0.006 80); /* ink 28% */
+  --chart-7: oklch(0.84 0.005 80); /* ink 18% */
+  --chart-8: oklch(0.9 0.004 80); /* ink 10% */
 
-  /* Sequential ramp for heatmaps: cream -> terracotta */
-  --chart-seq-1: oklch(0.95 0.02 70);
-  --chart-seq-2: oklch(0.88 0.06 58);
-  --chart-seq-3: oklch(0.8 0.1 50);
-  --chart-seq-4: oklch(0.71 0.13 45);
-  --chart-seq-5: oklch(0.63 0.15 42);
+  /* Sequential ramp for heatmaps: paper -> ultramarine */
+  --chart-seq-1: color-mix(
+    in oklab,
+    var(--brand-ultramarine) 8%,
+    var(--brand-paper)
+  );
+  --chart-seq-2: color-mix(
+    in oklab,
+    var(--brand-ultramarine) 28%,
+    var(--brand-paper)
+  );
+  --chart-seq-3: color-mix(
+    in oklab,
+    var(--brand-ultramarine) 50%,
+    var(--brand-paper)
+  );
+  --chart-seq-4: color-mix(
+    in oklab,
+    var(--brand-ultramarine) 74%,
+    var(--brand-paper)
+  );
+  --chart-seq-5: var(--brand-ultramarine);
 
-  /* Semantic chart tones */
-  --chart-positive: var(--chart-3);
+  /* Semantic chart tones (ratings stay off the blue axis) */
+  --chart-positive: var(--positive);
   --chart-negative: var(--destructive);
-  --chart-neutral: var(--chart-8);
+  --chart-neutral: oklch(0.66 0.006 80);
 
-  /* Refined border radius (6px base) */
-  --radius: 0.375rem;
+  /* Square corners — the ledger reads as a printed control sheet, not a card UI */
+  --radius: 0rem;
 
   /* Sidebar */
   --sidebar: var(--brand-cream);
   --sidebar-foreground: var(--brand-foreground);
-  --sidebar-primary: var(--brand-terracotta);
-  --sidebar-primary-foreground: var(--brand-cream);
-  --sidebar-accent: oklch(0.955 0.004 255);
+  --sidebar-primary: var(--brand-ultramarine);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--brand-paper-alt);
   --sidebar-accent-foreground: var(--brand-foreground);
-  --sidebar-border: oklch(0.91 0.004 255);
-  --sidebar-ring: var(--brand-terracotta);
+  --sidebar-border: var(--brand-hairline);
+  --sidebar-ring: var(--brand-ultramarine);
 }
 /*
   ---break---
@@ -343,6 +369,16 @@
   --color-plum: var(--plum);
   --color-slate: var(--slate);
   --color-positive: var(--positive);
+  /* Warm-Paper Ledger brand mirrors - so paper/ink/ultramarine/hairline are
+     reachable as Tailwind utilities (bg-paper-alt, text-ink, text-ultramarine,
+     border-hairline, bg-paper-surface). */
+  --color-paper: var(--brand-paper);
+  --color-paper-alt: var(--brand-paper-alt);
+  --color-paper-surface: var(--brand-cream);
+  --color-ink: var(--brand-foreground);
+  --color-ultramarine: var(--brand-ultramarine);
+  --color-ultramarine-dark: var(--brand-ultramarine-dark);
+  --color-hairline: var(--brand-hairline);
   --color-ingredient-amount: var(--ingredient-amount);
   --color-ingredient-name: var(--ingredient-name);
   --color-ingredient-modifier: var(--ingredient-modifier);
@@ -362,10 +398,13 @@
   --color-chart-positive: var(--chart-positive);
   --color-chart-negative: var(--chart-negative);
   --color-chart-neutral: var(--chart-neutral);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
+  /* Square corners everywhere (ledger). All steps resolve to --radius (0);
+     rounded-full stays circular for avatars/spinners (it's a fixed 9999px,
+     not derived from --radius). */
+  --radius-sm: var(--radius);
+  --radius-md: var(--radius);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-xl: var(--radius);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -374,9 +413,9 @@
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
-  --radius-2xl: calc(var(--radius) + 8px);
-  --radius-3xl: calc(var(--radius) + 12px);
-  --radius-4xl: calc(var(--radius) + 16px);
+  --radius-2xl: var(--radius);
+  --radius-3xl: var(--radius);
+  --radius-4xl: var(--radius);
 }
 /*
   ---break---
@@ -416,9 +455,9 @@
   .skeleton-shimmer {
     background: linear-gradient(
       90deg,
-      var(--muted) 0%,
-      var(--accent) 50%,
-      var(--muted) 100%
+      var(--brand-paper-alt) 0%,
+      var(--brand-hairline) 50%,
+      var(--brand-paper-alt) 100%
     );
     background-size: 200% 100%;
     animation: shimmer 1.5s infinite;
@@ -435,53 +474,35 @@
 
   /*
     ---break---
-    Visual depth utilities - gradients and textures for atmosphere
+    Ledger surfaces - flat matte paper, no atmosphere
   */
 
-  /* Gradient mesh background - subtle colorful atmosphere.
-     Fixed + full-bleed so the radial blooms fade out softly against the
-     viewport instead of clipping to a hard edge at the content container. */
+  /* gradient-mesh is retained as a no-op wrapper (still applied app-wide) — the
+     matte instrument panel has no radial blooms, gradients, or texture. Paper
+     is paper. */
   .gradient-mesh {
     position: relative;
   }
-  .gradient-mesh::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    background-image:
-      radial-gradient(at 30% 0%, var(--highlight) 0px, transparent 45%),
-      radial-gradient(at 85% 5%, var(--subtle) 0px, transparent 45%),
-      radial-gradient(at 0% 30%, var(--glow) 0px, transparent 40%),
-      radial-gradient(at 95% 60%, var(--plum) 0px, transparent 35%);
-    /* Quieted again for the crisp refresh (was 0.05) - barely-there atmosphere */
-    opacity: 0.03;
-    pointer-events: none;
-    z-index: -1;
-  }
-  .gradient-mesh > * {
-    position: relative;
-    z-index: 1;
-  }
 
-  /* Table row hover - flat wash + spot-ink accent bar */
+  /* Table row hover - flat paper-alt wash + ultramarine spot rule on the left */
   .table-row-hover {
-    @apply transition-all duration-150;
+    @apply transition-colors duration-100;
   }
   .table-row-hover:hover {
-    background: oklch(0.965 0.003 255);
-    box-shadow: inset 3px 0 0 var(--row-accent, var(--brand-terracotta));
+    background: var(--brand-paper-alt);
+    box-shadow: inset 3px 0 0 var(--row-accent, var(--brand-ultramarine));
   }
 
-  /* Nav link animated underline */
+  /* Nav link underline - a flat square ultramarine rule (no pill, no glow) */
   .nav-link-animated {
     @apply relative;
   }
   .nav-link-animated::after {
     content: "";
-    @apply absolute -bottom-0.5 left-1 right-1 h-0.5 rounded-full;
-    background: var(--brand-terracotta);
+    @apply absolute -bottom-0.5 left-1 right-1 h-0.5;
+    background: var(--brand-ultramarine);
     transform: scaleX(0);
-    transition: transform 200ms ease-out;
+    transition: transform 150ms ease-out;
   }
   .nav-link-animated:hover::after,
   .nav-link-animated[data-status="active"]::after {
@@ -505,8 +526,8 @@
     content: "";
     @apply absolute -bottom-2 left-0 h-1 w-16;
     /* Spot-ink rule: a flat, square-ended bar — no gradient, no pill. Pages
-       set --page-accent per entity; falls back to the brand terracotta. */
-    background: var(--page-accent, var(--brand-terracotta));
+       set --page-accent per entity; falls back to the ultramarine accent. */
+    background: var(--page-accent, var(--brand-ultramarine));
   }
 
   /* View Transitions — progressive enhancement for page navigation */
@@ -585,14 +606,8 @@
     }
   }
 
-  /* Auth page background with warm gradient */
+  /* Auth page background - flat paper, no gradient (matte ledger) */
   .auth-background {
     @apply bg-background;
-    background-image: linear-gradient(
-      135deg,
-      oklch(from var(--brand-terracotta) l c h / 0.03) 0%,
-      oklch(from var(--brand-sage) l c h / 0.02) 50%,
-      oklch(from var(--brand-terra-light) l c h / 0.03) 100%
-    );
   }
 }

@@ -138,7 +138,6 @@ export function ProjectTimeline({ projects }: { projects: NotionProject[] }) {
                 y={y}
                 width={barW}
                 height={barHeight}
-                rx={4}
                 fill={color}
                 opacity={0.85}
               >

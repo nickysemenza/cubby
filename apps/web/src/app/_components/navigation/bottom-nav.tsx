@@ -56,19 +56,18 @@ function BottomNavItem({
   return (
     <Comp
       className={cn(
-        "flex min-h-[48px] min-w-[48px] flex-1 flex-col items-center justify-center gap-1 transition-colors active:bg-muted/60",
-        active ? "text-primary" : "text-muted-foreground hover:text-foreground",
+        // Flat ledger tab — the active tab is marked by a square ultramarine
+        // top-rule + ink label (no icon bounce, no rounded pill).
+        "relative flex min-h-[48px] min-w-[48px] flex-1 flex-col items-center justify-center gap-1 transition-colors active:bg-muted/60",
+        active
+          ? "text-primary before:absolute before:inset-x-2 before:top-0 before:h-0.5 before:bg-primary"
+          : "text-muted-foreground hover:text-foreground",
         className,
       )}
       aria-current={active ? "page" : undefined}
       {...rest}
     >
-      {Icon && (
-        <Icon
-          className={cn("h-5 w-5", active && "scale-110")}
-          aria-hidden="true"
-        />
-      )}
+      {Icon && <Icon className="h-5 w-5" aria-hidden="true" />}
       <span className="font-medium text-2xs">{label}</span>
     </Comp>
   );
@@ -87,11 +86,14 @@ export function BottomNav() {
 
   return (
     <nav
-      className="safe-bottom fixed inset-x-0 bottom-0 z-50 border-t-2 border-t-[var(--border-chunky)] bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:hidden print:hidden"
+      // Warm-Paper Ledger: a flat opaque paper-surface bar edged by the 3px ink
+      // top-rule — separation by rule and tone, no raised/blurred/translucent
+      // chrome.
+      className="safe-bottom fixed inset-x-0 bottom-0 z-50 border-t-[3px] border-t-foreground bg-card md:hidden print:hidden"
       style={{ viewTransitionName: "bottom-nav" }}
       aria-label="Main navigation"
     >
-      <Row align="center" justify="around" className="h-16">
+      <Row align="center" justify="around" className="h-14">
         {authed ? (
           <>
             {bottomNavItems.map((item) => (
@@ -123,7 +125,7 @@ export function BottomNav() {
               />
               <SheetContent
                 side="bottom"
-                className="flex max-h-[70vh] flex-col rounded-t-xl"
+                className="flex max-h-[70vh] flex-col rounded-none"
               >
                 <SheetHeader className="px-4 pt-4 pb-2">
                   <SheetTitle>More</SheetTitle>
@@ -154,11 +156,6 @@ export function BottomNav() {
                     const active = item.to === activeTo;
                     const Icon = item.icon;
 
-                    // Only show Dashboard if signed in
-                    if (item.to === "/dashboard" && !authed) {
-                      return null;
-                    }
-
                     return (
                       <SheetClose
                         key={item.to}
@@ -166,9 +163,10 @@ export function BottomNav() {
                           <Link
                             to={item.to}
                             className={cn(
-                              "flex min-h-[44px] items-center gap-2 rounded-md px-2 py-2 font-medium text-sm transition-colors hover:bg-muted hover:text-primary",
+                              "flex min-h-[44px] items-center gap-2 rounded-none px-2 py-2 font-medium text-sm transition-colors hover:bg-muted hover:text-primary",
                               !active && "text-muted-foreground",
-                              active && "bg-muted text-foreground",
+                              active &&
+                                "border-primary border-l-2 bg-muted text-foreground",
                             )}
                             aria-current={active ? "page" : undefined}
                           />

@@ -13,6 +13,7 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import { useTRPC } from "~/trpc/react";
+import { MaintenanceCard } from "./components/maintenance-card";
 import { PROBLEM_SECTIONS } from "./components/problem-sections";
 import { RecipeUsageContext } from "./components/recipe-usage-context";
 import { useProblemsData } from "./use-problems-data";
@@ -130,6 +131,11 @@ export function ProblemsOverview() {
             {section.node(problems)}
           </div>
         ))}
+
+        {/* Force-run batch fixes — surfaced here (not just buried in Settings)
+            so the "fix it" tools live right next to the issues. Same shared card
+            as Settings → Developer / Maintenance, same mutations. */}
+        <MaintenanceCard />
       </Stack>
     </RecipeUsageContext.Provider>
   );

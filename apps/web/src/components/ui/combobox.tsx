@@ -62,7 +62,7 @@ export function FilterableCombobox({
         ref={triggerRef}
         className={cn(
           // Structure
-          "flex w-full items-center justify-between gap-1.5 rounded-md border px-2 h-7",
+          "flex w-full items-center justify-between gap-1.5 rounded-none border px-2 h-7",
           // Colors & background
           "border-border bg-input/20",
           "hover:bg-input/30",
@@ -110,8 +110,8 @@ export function FilterableCombobox({
               "bg-popover text-popover-foreground",
               // Size constraints - match trigger width
               "w-(--anchor-width)",
-              // Shape & depth
-              "rounded-md border border-[var(--border-chunky)] shadow-[var(--shadow-chunky-sm)]",
+              // Shape — flat ruled panel, no elevation
+              "rounded-none border border-[var(--border-chunky)]",
               // Animation
               "data-open:animate-in data-closed:animate-out",
               "data-closed:fade-out-0 data-open:fade-in-0",
@@ -127,7 +127,7 @@ export function FilterableCombobox({
                   value={item.value}
                   className={cn(
                     // Compact layout
-                    "relative flex items-center gap-2 rounded-md px-2 py-1",
+                    "relative flex items-center gap-2 rounded-none px-2 py-1",
                     // Typography
                     "cursor-default text-xs outline-none select-none",
                     // Interactive states
@@ -144,7 +144,7 @@ export function FilterableCombobox({
                   {item.color && (
                     <span
                       aria-hidden
-                      className="inline-block size-2 shrink-0 rounded-full"
+                      className="inline-block size-2 shrink-0 rounded-none"
                       style={{ backgroundColor: item.color }}
                     />
                   )}

@@ -4,13 +4,13 @@ import { cn } from "~/lib/utils";
 
 /**
  * Icon-in-a-shape tile — the canonical replacement for the repeated
- * `flex h-N w-N items-center justify-center rounded-* bg-*` wrapper around a
+ * `flex h-N w-N items-center justify-center bg-*` wrapper around a
  * single icon. Pass an entity/custom color via `className` (e.g. an entity's
  * `color.bg`/`color.text`); the `tone` variants cover the common muted/primary
  * cases. Keep it lean — two axes only (size, tone).
  */
 const iconTileVariants = cva(
-  "inline-flex shrink-0 items-center justify-center rounded-lg [&>svg]:shrink-0",
+  "inline-flex shrink-0 items-center justify-center rounded-none [&>svg]:shrink-0",
   {
     variants: {
       size: {

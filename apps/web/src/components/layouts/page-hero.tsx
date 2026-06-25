@@ -1,10 +1,11 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { Link } from "@tanstack/react-router";
 import { cva, type VariantProps } from "class-variance-authority";
 import type { LucideIcon } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 import { ImageGallery } from "~/components/media/image-gallery";
 import { Card, CardContent } from "~/components/ui/card";
-import { Eyebrow } from "~/components/ui/eyebrow";
+import { EYEBROW_CLASS, Eyebrow } from "~/components/ui/eyebrow";
 import { InkStamp } from "~/components/ui/ink-stamp";
 import { entities } from "~/entities/entities";
 import { ENTITY_ACCENTS } from "~/entities/entity-accents";
@@ -91,6 +92,64 @@ function getOnFileSince(rawData: unknown): string | null {
   });
 }
 
+/**
+ * Ledger breadcrumb trail for a detail header, e.g. `Pantry / Products / No. SKU1`.
+ * Mono/eyebrow styled with hairline separators. The entity's plural label is
+ * always a real `<Link>` back to its list; an optional `No. X` reference code is
+ * appended as the (unlinked) current leaf. When there's no `heroNo`, the linked
+ * plural label is itself the last segment (the big title below is the record).
+ */
+function DetailBreadcrumb({
+  entity,
+  heroNo,
+}: {
+  entity: Entity;
+  heroNo?: string;
+}) {
+  const def = entities[entity];
+  const group = ENTITY_NAV_GROUP[entity];
+
+  const separator = (
+    <span aria-hidden className="text-border">
+      /
+    </span>
+  );
+
+  return (
+    <nav
+      aria-label="Breadcrumb"
+      className={cn(
+        EYEBROW_CLASS,
+        "flex flex-wrap items-center gap-x-2 gap-y-1 tracking-[0.14em]",
+      )}
+    >
+      {group && (
+        <>
+          <span className="text-muted-foreground">{group}</span>
+          {separator}
+        </>
+      )}
+      <Link
+        to={def.routes.list}
+        className={cn(
+          "transition-colors hover:text-foreground",
+          // The plural label is the leaf when there's no reference no., so it
+          // takes the foreground "current" tone; otherwise it's a muted parent.
+          heroNo ? "text-muted-foreground" : "text-foreground",
+        )}
+      >
+        {def.pluralLabel}
+      </Link>
+      {heroNo && (
+        <>
+          {separator}
+          <span className="text-foreground">No. {heroNo}</span>
+        </>
+      )}
+    </nav>
+  );
+}
+
 interface PageHeroProps extends VariantProps<typeof heroVariants> {
   title: ReactNode;
   /** Small uppercase label above the title (e.g. "Pantry" above "Locations"). */
@@ -101,7 +160,7 @@ interface PageHeroProps extends VariantProps<typeof heroVariants> {
   actions?: ReactNode;
   /** Optional entity — when set, shows the entity's icon tinted with its color on detail variant. */
   entity?: Entity;
-  /** Decoration under title. "accent" applies the terracotta page-header-accent bar. */
+  /** Decoration under title. "accent" applies the ultramarine page-header-accent rule. */
   decoration?: "accent" | "none";
   className?: string;
 }
@@ -127,7 +186,7 @@ export function PageHero({
   const showAccent = decoration === "accent" && variant !== "compact";
   const effectiveEyebrow =
     eyebrow ?? (entity ? deriveEyebrow(entity, title) : null);
-  // Entity-inked accent bar (falls back to terracotta via the CSS defaults).
+  // Entity-inked accent rule (falls back to ultramarine via the CSS defaults).
   const accent = entity ? ENTITY_ACCENTS[entity] : null;
   const accentStyle = accent
     ? ({ "--page-accent": accent } as CSSProperties)
@@ -153,7 +212,7 @@ export function PageHero({
           {showEntityIcon && def && EntityIconComponent && (
             <span
               className={cn(
-                "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg sm:h-11 sm:w-11",
+                "flex h-10 w-10 shrink-0 items-center justify-center rounded-none border border-[var(--border-chunky)] sm:h-11 sm:w-11",
                 def.color.bg,
                 def.color.text,
               )}
@@ -207,10 +266,14 @@ interface DetailPlateProps {
 }
 
 /**
- * Detail spec-plate hero: a chunky placard with an entity-colored left spine,
- * a "pluralLabel / No. X" eyebrow, the big name, an "On file since" line, a
- * status stamp, an inline ledger stat strip, and the page action cluster. The
- * mobile image gallery rides above the plate when heroImages are present.
+ * Detail spec-plate hero: a flat ledger placard with an ink left spine, a
+ * "pluralLabel / No. X" eyebrow, the big name, an "On file since" line, a
+ * status stamp, an inline ledger stat strip, and the page action cluster.
+ *
+ * Warm-Paper Ledger: the spine is a square ink rule (not an entity hue) —
+ * separation is by rule and tone, and the lone ultramarine is reserved for the
+ * live status stamp / value. The mobile image gallery rides above the plate
+ * when heroImages are present.
  */
 function DetailPlate({
   entity,
@@ -222,10 +285,7 @@ function DetailPlate({
   actions,
   heroImages,
 }: DetailPlateProps) {
-  const entityDef = entities[entity];
   const onFileSince = getOnFileSince(rawData);
-  // Entity-colored spine, same runtime class trick as the homepage stat cards.
-  const spineClass = entityDef.color.text.replace("text-", "border-l-");
 
   return (
     <>
@@ -237,16 +297,13 @@ function DetailPlate({
       )}
 
       <Card
-        className={cn("border-l-[length:var(--border-spine)]", spineClass)}
+        className="border-l-[length:var(--border-spine)] border-l-foreground"
         data-testid="detail-spec-plate"
       >
         <CardContent className="px-4 py-1 sm:px-4">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <Eyebrow className="tracking-[0.14em]">
-                {entityDef.pluralLabel}
-                {heroNo ? ` / No. ${heroNo}` : ""}
-              </Eyebrow>
+              <DetailBreadcrumb entity={entity} heroNo={heroNo} />
               <h1 className="break-words font-bold font-heading text-2xl tracking-tight sm:text-3xl">
                 {name}
               </h1>
@@ -266,13 +323,15 @@ function DetailPlate({
             </div>
           </div>
           {heroStats && heroStats.length > 0 && (
-            <div className="mt-4 flex border-foreground/25 border-t border-dashed pt-2">
+            // Flat ledger stat strip — crisp hairline rules (no dashed warmth),
+            // square cells, mono tabular numerals.
+            <div className="mt-4 flex border-border border-t pt-2">
               {heroStats.map((stat, i) => (
                 <div
                   key={stat.label}
                   className={cn(
                     "min-w-0 flex-1",
-                    i > 0 && "border-foreground/25 border-l border-dashed pl-4",
+                    i > 0 && "border-border border-l pl-4",
                   )}
                 >
                   <Eyebrow as="div">{stat.label}</Eyebrow>

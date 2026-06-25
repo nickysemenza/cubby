@@ -76,9 +76,9 @@ export function CategoryTrend({ purchases }: { purchases: NotionPurchase[] }) {
         }}
         enableArea
         areaOpacity={0.4}
-        colors={(d) => CATEGORY_COLORS[d.id] ?? "hsl(0, 0%, 65%)"}
+        colors={(d) => CATEGORY_COLORS[d.id] ?? "var(--chart-neutral)"}
         pointSize={5}
-        pointColor="white"
+        pointColor="var(--card)"
         pointBorderWidth={2}
         pointBorderColor={{ from: "serieColor" }}
         useMesh

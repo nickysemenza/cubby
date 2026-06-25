@@ -76,7 +76,7 @@ export function SubcategoryBars({
         padding={0.25}
         colors={(bar) => {
           const key = bar.id as string;
-          return CATEGORY_COLORS[key] ?? "hsl(0, 0%, 65%)";
+          return CATEGORY_COLORS[key] ?? "var(--chart-neutral)";
         }}
         {...nivoBarChrome}
         axisBottom={{
@@ -90,7 +90,7 @@ export function SubcategoryBars({
           d.value && d.value > 0 ? formatCurrency(d.value, 0) : ""
         }
         labelSkipWidth={40}
-        labelTextColor="white"
+        labelTextColor="var(--background)"
         enableGridX
         enableGridY={false}
         tooltip={({ id, value, indexValue, color }) => (

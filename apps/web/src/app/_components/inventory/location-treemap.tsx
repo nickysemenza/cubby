@@ -70,15 +70,29 @@ function Treemap({ data }: TreemapProps) {
 
   const nodes = useMemo(() => treemapLayout.descendants(), [treemapLayout]);
 
+  // Sequential ink ladder (paper -> ultramarine) by depth: the root ring burns
+  // deepest and each nested level steps lighter toward paper. Empty cells drop
+  // out to the lightest step so they read as "unfilled".
   const getNodeColor = useCallback(
     (node: d3Hierarchy.HierarchyRectangularNode<LocationHierarchyNode>) => {
-      const isEmpty = node.data.totalCount === 0;
-      const lightness = Math.min(75, 35 + node.depth * 15);
-      const saturation = isEmpty ? 12 : 50;
-      const adjustedLightness = isEmpty ? lightness + 20 : lightness;
-      // Warm amber/terracotta gradient by depth (was cold blue hsl(220))
-      return `hsl(42, ${saturation}%, ${adjustedLightness}%)`;
+      if (node.data.totalCount === 0) return "var(--chart-seq-1)";
+      const ramp = [
+        "var(--chart-seq-5)",
+        "var(--chart-seq-4)",
+        "var(--chart-seq-3)",
+        "var(--chart-seq-2)",
+        "var(--chart-seq-1)",
+      ];
+      // depth 1 = top visible ring (root is skipped) -> deepest step.
+      return ramp[Math.min(node.depth - 1, ramp.length - 1)] ?? ramp[0];
     },
+    [],
+  );
+
+  // Deep ramp steps need paper-colored ink; lighter steps read with foreground.
+  const isDeepCell = useCallback(
+    (node: d3Hierarchy.HierarchyRectangularNode<LocationHierarchyNode>) =>
+      node.data.totalCount > 0 && node.depth <= 2,
     [],
   );
 
@@ -110,9 +124,9 @@ function Treemap({ data }: TreemapProps) {
                 width={width}
                 height={height}
                 fill={getNodeColor(node)}
-                stroke={isHovered ? "var(--primary)" : "white"}
+                stroke={isHovered ? "var(--primary)" : "var(--background)"}
                 strokeWidth={isHovered ? 2 : 1}
-                rx={4}
+                rx={0}
                 className="cursor-pointer transition-opacity hover:opacity-90"
                 onMouseEnter={() => setHoveredNode(node.data.id)}
                 onMouseLeave={() => setHoveredNode(null)}
@@ -130,7 +144,9 @@ function Treemap({ data }: TreemapProps) {
                       className={`flex items-center gap-1 text-xs ${
                         node.data.totalCount === 0
                           ? "text-muted-foreground"
-                          : "text-white drop-shadow-sm"
+                          : isDeepCell(node)
+                            ? "text-background"
+                            : "text-foreground"
                       }`}
                     >
                       <Link
@@ -147,18 +163,18 @@ function Treemap({ data }: TreemapProps) {
                         <span className="truncate">{node.data.name}</span>
                       </Link>
                       {width > 160 && node.data.totalCount > 0 && (
-                        <span className="shrink-0 text-2xs text-white/80">
+                        <span className="shrink-0 text-2xs opacity-80">
                           · {node.data.totalCount}
                         </span>
                       )}
                       {width > 220 && node.data.totalValuation > 0 && (
-                        <span className="shrink-0 text-2xs text-white/80">
+                        <span className="shrink-0 text-2xs opacity-80">
                           · {formatCurrency(node.data.totalValuation, 0)}
                           {(node.data.totalPricingStatus.missingPricing.count >
                             0 ||
                             node.data.totalPricingStatus.miscNoPrice.count >
                               0) && (
-                            <span className="text-white/60">
+                            <span className="opacity-60">
                               {" "}
                               (
                               {node.data.totalPricingStatus.missingPricing

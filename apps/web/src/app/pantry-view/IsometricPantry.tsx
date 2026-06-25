@@ -77,29 +77,36 @@ const TILE_H = 28;
 const Z_STEP = 26;
 const ROOM_H = 5;
 
-const FLOOR_COLOR_1 = "hsl(30, 35%, 58%)";
-const FLOOR_COLOR_2 = "hsl(30, 30%, 52%)";
-const WALL_BACK_COLOR = "hsl(40, 25%, 88%)";
-const WALL_LEFT_COLOR = "hsl(40, 22%, 82%)";
-const BASEBOARD_COLOR = "hsl(25, 35%, 40%)";
-const BG_COLOR = "#1a1d24";
+// Warm-Paper Ledger palette. The canvas can't read CSS vars, so these mirror
+// styles.css (paper #f4f0e6, ink ~hsl(40,4%,18%), ultramarine #2244cc) as the
+// HSL/rgba literals the shading math (parseHSL/adjustLight) needs. Floor/walls
+// are paper neutrals, baseboard is ink, the scene sits on paper. Zones use the
+// single ultramarine accent at low opacity instead of a rainbow.
+const FLOOR_COLOR_1 = "hsl(42, 18%, 84%)";
+const FLOOR_COLOR_2 = "hsl(42, 16%, 79%)";
+const WALL_BACK_COLOR = "hsl(42, 20%, 92%)";
+const WALL_LEFT_COLOR = "hsl(42, 18%, 88%)";
+const BASEBOARD_COLOR = "hsl(40, 6%, 30%)";
+const BG_COLOR = "#f4f0e6";
 
+// Single ultramarine accent stepped down the ink ladder for adjacent zones —
+// a flat ledger band, not a rainbow. (Ultramarine #2244cc ≈ rgb(34,68,204).)
 const ZONE_OVERLAY_COLORS = [
-  "rgba(100, 180, 255, 0.07)",
-  "rgba(255, 180, 100, 0.07)",
-  "rgba(100, 255, 180, 0.07)",
-  "rgba(200, 130, 255, 0.07)",
-  "rgba(255, 130, 130, 0.07)",
-  "rgba(130, 255, 255, 0.07)",
+  "rgba(34, 68, 204, 0.06)",
+  "rgba(60, 60, 60, 0.05)",
+  "rgba(34, 68, 204, 0.04)",
+  "rgba(110, 110, 110, 0.05)",
+  "rgba(34, 68, 204, 0.05)",
+  "rgba(150, 150, 150, 0.05)",
 ];
 
 const ZONE_LABEL_COLORS = [
-  "rgba(130, 200, 255, 0.75)",
-  "rgba(255, 200, 130, 0.75)",
-  "rgba(130, 255, 200, 0.75)",
-  "rgba(220, 160, 255, 0.75)",
-  "rgba(255, 160, 160, 0.75)",
-  "rgba(160, 255, 255, 0.75)",
+  "rgba(34, 68, 204, 0.75)",
+  "rgba(60, 60, 60, 0.75)",
+  "rgba(34, 68, 204, 0.75)",
+  "rgba(90, 90, 90, 0.75)",
+  "rgba(34, 68, 204, 0.75)",
+  "rgba(120, 120, 120, 0.75)",
 ];
 
 const MIN_ZOOM = 0.08;
@@ -1429,7 +1436,7 @@ function drawZoneDivider(
   const top = toScreen(gx, 0, 0.02, cx, cy);
   const bottom = toScreen(gx, roomD, 0.02, cx, cy);
 
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+  ctx.strokeStyle = "rgba(34, 68, 204, 0.28)";
   ctx.lineWidth = 1.5;
   ctx.setLineDash([6, 4]);
   ctx.beginPath();
@@ -1479,7 +1486,7 @@ function drawGroupLabels(
     const labelPos = toScreen(centerGx, -0.3, ROOM_H + 0.3, cx, cy);
 
     ctx.font = "9px system-ui, sans-serif";
-    ctx.fillStyle = "rgba(255, 255, 255, 0.35)";
+    ctx.fillStyle = "rgba(42, 40, 36, 0.45)";
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
     ctx.fillText(group.name, labelPos.x, labelPos.y);
@@ -1618,13 +1625,13 @@ function renderScene(
     const sy = titleWorld.y * camera.zoom + camera.y;
 
     ctx.font = "bold 13px system-ui, sans-serif";
-    ctx.fillStyle = "rgba(255,255,255,0.85)";
+    ctx.fillStyle = "rgba(42, 40, 36, 0.85)";
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
     ctx.fillText(room.name, sx, sy);
 
     ctx.font = "11px system-ui, sans-serif";
-    ctx.fillStyle = "rgba(255,255,255,0.4)";
+    ctx.fillStyle = "rgba(42, 40, 36, 0.45)";
     ctx.fillText(
       `${room.totalItemCount} item${room.totalItemCount !== 1 ? "s" : ""}`,
       sx,
@@ -1686,29 +1693,25 @@ function drawTooltip(
   if (tx + boxW > canvasW - 10) tx = target.screenX - boxW - 14;
   if (ty < 10) ty = target.screenY + 14;
 
-  ctx.shadowColor = "rgba(0,0,0,0.3)";
-  ctx.shadowBlur = 8;
-  ctx.shadowOffsetY = 2;
-  ctx.fillStyle = "rgba(15, 18, 25, 0.92)";
+  // Flat ledger tooltip: paper card, hairline ink rule, square-ish corner, no
+  // drop shadow (matte figure, not a floating chip).
+  ctx.fillStyle = "rgba(244, 240, 230, 0.97)";
   ctx.beginPath();
-  ctx.roundRect(tx, ty, boxW, boxH, 6);
+  ctx.roundRect(tx, ty, boxW, boxH, 2);
   ctx.fill();
-  ctx.shadowColor = "transparent";
-  ctx.shadowBlur = 0;
-  ctx.shadowOffsetY = 0;
 
-  ctx.strokeStyle = "rgba(255,255,255,0.1)";
+  ctx.strokeStyle = "rgba(40, 38, 34, 0.45)";
   ctx.lineWidth = 1;
   ctx.stroke();
 
-  ctx.fillStyle = "#fff";
+  ctx.fillStyle = "#2a2824";
   ctx.font = "bold 12px system-ui, sans-serif";
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
   ctx.fillText(target.label, tx + padding, ty + padding);
 
   if (target.detail) {
-    ctx.fillStyle = "rgba(255,255,255,0.6)";
+    ctx.fillStyle = "rgba(42, 40, 36, 0.6)";
     ctx.font = "11px system-ui, sans-serif";
     ctx.fillText(target.detail, tx + padding, ty + padding + lineHeight);
   }
@@ -1720,13 +1723,13 @@ function drawTitle(
   totalItems: number,
   totalRooms: number,
 ) {
-  ctx.fillStyle = "rgba(255,255,255,0.85)";
+  ctx.fillStyle = "rgba(42, 40, 36, 0.85)";
   ctx.font = "bold 20px system-ui, sans-serif";
   ctx.textAlign = "right";
   ctx.textBaseline = "top";
   ctx.fillText("Isometric Pantry", canvasW - 24, 20);
 
-  ctx.fillStyle = "rgba(255,255,255,0.45)";
+  ctx.fillStyle = "rgba(42, 40, 36, 0.5)";
   ctx.font = "12px system-ui, sans-serif";
   ctx.fillText(
     `${totalItems} item${totalItems !== 1 ? "s" : ""} in ${totalRooms} room${totalRooms !== 1 ? "s" : ""}`,
@@ -1739,7 +1742,7 @@ function drawTitle(
 
 function CategoryLegend() {
   return (
-    <div className="absolute bottom-4 left-4 rounded-lg bg-black/70 px-2 py-2 backdrop-blur-sm">
+    <div className="absolute bottom-4 left-4 rounded-lg border border-[var(--border)] bg-card/90 px-2 py-2 backdrop-blur-sm">
       <div className="grid grid-cols-2 gap-x-4 gap-y-1">
         {productCategoryValues.map((cat) => (
           <div key={cat} className="flex items-center gap-2">
@@ -1747,7 +1750,7 @@ function CategoryLegend() {
               className="h-2.5 w-2.5 shrink-0 rounded-sm"
               style={{ backgroundColor: getCategoryColor(cat) }}
             />
-            <span className="text-2xs text-white/60 leading-none">
+            <span className="text-2xs text-muted-foreground leading-none">
               {formatCategoryLabel(cat)}
             </span>
           </div>
@@ -1757,7 +1760,7 @@ function CategoryLegend() {
             className="h-2.5 w-2.5 shrink-0 rounded-sm"
             style={{ backgroundColor: getCategoryColor(null) }}
           />
-          <span className="text-2xs text-white/60 leading-none">
+          <span className="text-2xs text-muted-foreground leading-none">
             uncategorized
           </span>
         </div>
@@ -2115,8 +2118,8 @@ export function IsometricPantry() {
 
   if (isLoading) {
     return (
-      <div className="flex h-full items-center justify-center bg-[#1a1d24]">
-        <div className="flex items-center gap-2 text-white/60">
+      <div className="flex h-full items-center justify-center bg-background">
+        <div className="flex items-center gap-2 text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin" />
           <span>Loading pantry...</span>
         </div>
@@ -2126,7 +2129,7 @@ export function IsometricPantry() {
 
   if (inventory.length === 0) {
     return (
-      <div className="flex h-full flex-col items-center justify-center bg-[#1a1d24] text-white/60">
+      <div className="flex h-full flex-col items-center justify-center bg-background text-muted-foreground">
         <p className="text-lg">Your pantry is empty</p>
         <p className="mt-2 text-sm">
           Add some inventory items to see them here
@@ -2152,7 +2155,7 @@ export function IsometricPantry() {
         <Button
           variant="ghost"
           size="sm"
-          className="text-white/60 hover:text-white"
+          className="text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="mr-1 h-4 w-4" />
           Back
@@ -2161,7 +2164,7 @@ export function IsometricPantry() {
       <Button
         variant="ghost"
         size="sm"
-        className="absolute top-4 right-48 text-white/60 hover:text-white"
+        className="absolute top-4 right-48 text-muted-foreground hover:text-foreground"
         onClick={resetView}
       >
         <Maximize2 className="mr-1 h-4 w-4" />

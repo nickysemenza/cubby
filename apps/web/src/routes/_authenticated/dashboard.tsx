@@ -1,17 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { Page } from "~/components/page/Page";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
+// `/dashboard` was an orphaned placeholder — the real dashboard is the home
+// route (`/`). Permanently redirect so any stale link / bookmark lands on home.
 export const Route = createFileRoute("/_authenticated/dashboard")({
-  component: DashboardPage,
+  beforeLoad: () => {
+    throw redirect({ to: "/" });
+  },
 });
-
-function DashboardPage() {
-  return (
-    <Page variant="list" title="Dashboard">
-      <p className="text-lg">
-        Welcome to your protected dashboard! This page is only visible to
-        authenticated users.
-      </p>
-    </Page>
-  );
-}

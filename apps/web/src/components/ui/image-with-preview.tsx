@@ -51,7 +51,7 @@ export function ImageWithPreview({
   displayWidth,
 }: ImageWithPreviewProps) {
   const thumbnailClasses = cn(
-    "bg-background relative flex-shrink-0 overflow-hidden rounded border transition-transform hover:scale-105",
+    "bg-background relative flex-shrink-0 overflow-hidden rounded-none border transition-transform hover:scale-105",
     className,
   );
 
@@ -81,7 +81,7 @@ export function ImageWithPreview({
       </TooltipTrigger>
       <TooltipContent
         side={previewSide}
-        className="bg-background border-border overflow-hidden rounded-lg border p-0 shadow-lg"
+        className="bg-popover border-[var(--border-chunky)] overflow-hidden rounded-none border p-0"
       >
         <div
           className="relative"

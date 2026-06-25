@@ -2,16 +2,16 @@ import { type DataType, dataTypeLabel } from "@cubby/usda-schemas";
 import { cn } from "~/lib/utils";
 
 // Color per USDA data_type, encoding BOTH identity and the generic/branded
-// grouping. The generic reference foods take the warm "food data" hues
-// (SR Legacy = terracotta, the house primary, since it's the richest source),
-// branded takes plum (a distinct category — manufacturer label data only), and
-// the sampling/research types are muted taupe (provenance noise). Richness
-// ordering (SR Legacy > Survey > Foundation > Branded) is reinforced by result
-// sort order + the nutrient count shown alongside, not by color alone.
+// grouping along the monochrome ink ladder. The richest reference foods take
+// the accent (SR Legacy = chart-1 ultramarine, the house primary, since it's
+// the richest source), the next tiers step down the ink ladder, and the
+// sampling/research types collapse to the lightest grey (provenance noise).
+// Richness ordering (SR Legacy > Survey > Foundation > Branded) is reinforced
+// by result sort order + the nutrient count shown alongside, not by color alone.
 //
-// Tokens only (CLAUDE.md): never hardcode hex/oklch — these are the warm chart
-// ramp + semantic tokens from styles.css, referenced as CSS vars so a single
-// record drives dots and tinted icons everywhere.
+// Tokens only (CLAUDE.md): never hardcode hex/oklch — these are the chart
+// ink-ladder + semantic tokens from styles.css, referenced as CSS vars so a
+// single record drives dots and tinted icons everywhere.
 const DATA_TYPE_COLOR: Record<DataType, string> = {
   sr_legacy_food: "var(--chart-1)",
   survey_fndds_food: "var(--chart-2)",

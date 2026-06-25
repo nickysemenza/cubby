@@ -29,7 +29,12 @@ function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
   return (
     <thead
       data-slot="table-header"
-      className={cn("[&_tr]:border-b", className)}
+      // Ledger header: paper-surface band underlined by the 3px ink rule — the
+      // "printed control sheet" column header.
+      className={cn(
+        "bg-card [&_tr]:border-b-[3px] [&_tr]:border-b-foreground",
+        className,
+      )}
       {...props}
     />
   );
@@ -63,7 +68,7 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
     <tr
       data-slot="table-row"
       className={cn(
-        "hover:bg-muted/50 data-[state=selected]:bg-[var(--row-selected)] data-[state=selected]:shadow-[inset_3px_0_0_var(--row-accent,var(--brand-terracotta))] border-b transition-colors",
+        "hover:bg-muted/50 data-[state=selected]:bg-[var(--row-selected)] data-[state=selected]:shadow-[inset_3px_0_0_var(--row-accent,var(--brand-ultramarine))] border-b transition-colors",
         className,
       )}
       {...props}

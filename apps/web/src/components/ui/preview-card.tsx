@@ -6,7 +6,7 @@ import { cn } from "~/lib/utils";
 
 // Hovercard primitive (base-ui PreviewCard): a rich preview that opens on
 // hover/focus of a link trigger. Mirrors the popover.tsx/tooltip.tsx wrapper
-// convention (chunky border + shadow, fade/zoom animations). The popup content
+// convention (chunky hairline border, fade/zoom animations). The popup content
 // mounts only while open, so a query inside it fetches lazily on first hover.
 
 function PreviewCard({ ...props }: PreviewCardPrimitive.Root.Props) {
@@ -43,7 +43,7 @@ function PreviewCardContent({
         <PreviewCardPrimitive.Popup
           data-slot="preview-card-content"
           className={cn(
-            "data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 w-80 origin-(--transform-origin) rounded-lg border border-[var(--border-chunky)] bg-popover p-3 text-popover-foreground text-xs shadow-[var(--shadow-chunky-sm)] outline-hidden duration-100",
+            "data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 w-80 origin-(--transform-origin) rounded-none border border-[var(--border-chunky)] bg-popover p-3 text-popover-foreground text-xs outline-hidden duration-100",
             className,
           )}
           {...props}

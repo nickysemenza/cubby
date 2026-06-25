@@ -1,6 +1,6 @@
-// Shared nivo chart styling — the ledger voice: mono ticks/labels in warm
-// neutrals, hairline grid. Kept dependency-free so lazy-loaded chart chunks
-// (sunburst/treemap) don't pull in unrelated modules.
+// Shared nivo chart styling — the warm-paper-ledger voice: mono ticks/labels
+// in the monochrome ink ladder, hairline grid. Kept dependency-free so
+// lazy-loaded chart chunks (sunburst/treemap) don't pull in unrelated modules.
 //
 // NOTE: brand tokens are oklch/hex — never wrap them in hsl(var(...)); the
 // result is an invalid color and nivo silently falls back to its defaults.
@@ -37,10 +37,11 @@ export const nivoChartTheme = {
   },
 };
 
-// Bar chrome shared by the nivo bar charts — hairline outline so bars read
-// crisp, not stickered. Spread into <ResponsiveBar {...nivoBarChrome}>.
+// Bar chrome shared by the nivo bar charts — hairline outline and square
+// corners so bars read as flat printed figures, not stickers. Spread into
+// <ResponsiveBar {...nivoBarChrome}>.
 export const nivoBarChrome = {
   borderWidth: 1,
   borderColor: "var(--border-chunky)",
-  borderRadius: 3,
+  borderRadius: 0,
 } as const;

@@ -81,7 +81,7 @@ export function MonthlyTrend({ purchases }: { purchases: NotionPurchase[] }) {
           );
         }}
         pointSize={5}
-        pointColor="white"
+        pointColor="var(--card)"
         pointBorderWidth={2}
         pointBorderColor={{ from: "serieColor" }}
         useMesh

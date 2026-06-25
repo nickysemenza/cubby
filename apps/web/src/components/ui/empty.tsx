@@ -4,12 +4,12 @@ import type { LucideIcon } from "lucide-react";
 import { cn } from "~/lib/utils";
 
 const emptyVariants = cva(
-  "flex w-full min-w-0 flex-1 flex-col items-center justify-center gap-4 rounded-xl p-6 text-center text-balance animate-in fade-in duration-300",
+  "flex w-full min-w-0 flex-1 flex-col items-center justify-center gap-4 rounded-none p-6 text-center text-balance animate-in fade-in duration-300",
   {
     variants: {
       variant: {
         default: "border border-dashed",
-        warm: "bg-gradient-to-b from-muted/30 to-transparent border border-dashed border-muted-foreground/20",
+        warm: "bg-muted/30 border border-dashed border-muted-foreground/20",
         minimal: "",
       },
     },
@@ -50,7 +50,7 @@ const emptyMediaVariants = cva(
     variants: {
       variant: {
         default: "bg-transparent",
-        icon: "bg-muted text-foreground flex size-8 shrink-0 items-center justify-center rounded-md [&_svg:not([class*='size-'])]:size-4",
+        icon: "bg-muted text-foreground flex size-8 shrink-0 items-center justify-center rounded-none [&_svg:not([class*='size-'])]:size-4",
       },
     },
     defaultVariants: {

@@ -144,7 +144,7 @@ function Treemap({ data }: TreemapProps) {
     [treemapLayout],
   );
 
-  // Brand sequential ramp (cream -> terracotta): bigger cost share -> deeper
+  // Sequential ink ramp (paper -> ultramarine): bigger cost share -> deeper
   // step. Unpriced cells get a hatched pattern instead of a dominant gray.
   const getNodeFill = useCallback(
     (node: d3Hierarchy.HierarchyRectangularNode<CostNode>) => {
@@ -158,7 +158,7 @@ function Treemap({ data }: TreemapProps) {
     },
     [noPricePatternId],
   );
-  // Deep ramp steps need light ink; shallow steps read with brand foreground.
+  // Deep ramp steps need paper-colored ink; shallow steps read with foreground.
   const isDeepFill = useCallback(
     (node: d3Hierarchy.HierarchyRectangularNode<CostNode>) =>
       node.data.hasPrice && node.data.percentage >= 25,
@@ -213,7 +213,7 @@ function Treemap({ data }: TreemapProps) {
                 stroke={isHovered ? "var(--primary)" : "var(--border-chunky)"}
                 strokeWidth={isHovered ? 2.5 : 1.5}
                 strokeDasharray={node.data.hasPrice ? undefined : "4 3"}
-                rx={3}
+                rx={0}
                 className="cursor-pointer transition-opacity hover:opacity-90"
                 onMouseEnter={() => setHoveredNode(node.data.name)}
                 onMouseLeave={() => setHoveredNode(null)}
@@ -231,9 +231,9 @@ function Treemap({ data }: TreemapProps) {
                       className="font-medium text-xs"
                       style={{
                         color: isDeepFill(node)
-                          ? "var(--brand-cream)"
+                          ? "var(--background)"
                           : node.data.hasPrice
-                            ? "var(--brand-foreground)"
+                            ? "var(--foreground)"
                             : "var(--muted-foreground)",
                       }}
                     >
@@ -263,7 +263,7 @@ function Treemap({ data }: TreemapProps) {
                         }
                         style={{
                           color: isDeepFill(node)
-                            ? "oklch(from var(--brand-cream) l c h / 0.85)"
+                            ? "oklch(from var(--background) l c h / 0.85)"
                             : "var(--muted-foreground)",
                         }}
                       >

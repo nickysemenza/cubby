@@ -65,7 +65,7 @@ export function SpendingOverTime({
         areaOpacity={0.1}
         colors={["var(--chart-1)"]}
         pointSize={6}
-        pointColor="white"
+        pointColor="var(--card)"
         pointBorderWidth={2}
         pointBorderColor={{ from: "serieColor" }}
         useMesh

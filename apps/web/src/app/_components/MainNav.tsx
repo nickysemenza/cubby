@@ -29,7 +29,7 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
       <Link to="/">
         <Row align="center" gap="sm">
           <img src="/favicon.svg" alt="" className="h-6 w-6 sm:h-7 sm:w-7" />
-          <span className="self-center whitespace-nowrap font-bold text-foreground text-lg tracking-tight sm:text-xl">
+          <span className="self-center whitespace-nowrap font-bold font-heading text-foreground text-lg tracking-tight sm:text-xl">
             cubby
           </span>
         </Row>
