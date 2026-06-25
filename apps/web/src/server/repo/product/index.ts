@@ -31,7 +31,6 @@ export {
   deleteProducts,
   getProductByID,
   getProductByShortcode,
-  getProductFoodLinks,
   getProductsByShortcodes,
   productList,
   productSearch,

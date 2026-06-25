@@ -186,23 +186,6 @@ export const productList = async (
 };
 
 /**
- * Minimal product rows ({id, upc, fdc_id}) for USDA food resolution — the input
- * to `foodLookupParamFromProduct`. Used by the lazy "USDA Food" column on the
- * products table so it can batch-enrich the visible page without re-fetching the
- * full product graph.
- */
-export const getProductFoodLinks = async (
-  db: Database,
-  ids: ProductId[],
-): Promise<{ id: ProductId; upc: string | null; fdc_id: number | null }[]> => {
-  if (ids.length === 0) return [];
-  return getDb(db).query.product.findMany({
-    where: and(inArray(product.id, ids), notDeleted(product)),
-    columns: { id: true, upc: true, fdc_id: true },
-  });
-};
-
-/**
  * Lightweight product search for typeahead/picker comboboxes.
  *
  * Returns scalar product fields only (`productTopLevelOut`) — it deliberately

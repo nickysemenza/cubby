@@ -286,26 +286,8 @@ describe("product router", () => {
     });
   });
 
-  describe("lazy USDA food", () => {
-    it("list returns food: null — enrichment is deferred to foodForIds", async () => {
-      const caller = createTestCaller(productRouter, ctx.db);
-      await caller.create(
-        makeProductInput({ name: "Olive Oil", pendingImageIds: [] }),
-      );
-
-      const result = await caller.list(
-        listParams({ filters: { nameFilter: "Olive" } }),
-      );
-
-      expect(result.items.length).toBeGreaterThan(0);
-      // product.list no longer pays the per-row USDA batch (its long pole); food
-      // hydrates lazily via product.foodForIds, so every list row comes back null.
-      for (const row of result.items) {
-        expect(row.food).toBeNull();
-      }
-    });
-
-    it("search returns lightweight picker rows with no food field", async () => {
+  describe("search (lightweight picker typeahead)", () => {
+    it("returns matching products without food or relation fields", async () => {
       const caller = createTestCaller(productRouter, ctx.db);
       const created = await caller.create(
         makeProductInput({
@@ -323,24 +305,26 @@ describe("product router", () => {
       expect(match).toBeDefined();
       expect(match?.name).toBe("Sea Salt");
       expect(match?.manufacturer).toBe("Acme");
-      // The lightweight search shape (productTopLevelOut) carries no USDA food.
+      // The picker path returns the lean productTopLevelOut shape — no USDA food
+      // (which is `list`'s long pole) and no inventory/mapping relation joins.
       expect(match && "food" in match).toBe(false);
+      expect(match && "inventoryEntry" in match).toBe(false);
     });
 
-    it("foodForIds returns a null food for a product with no USDA link", async () => {
+    it("filters by name", async () => {
       const caller = createTestCaller(productRouter, ctx.db);
-      const created = await caller.create(
-        makeProductInput({
-          name: "Plain Flour",
-          upc: null,
-          fdc_id: null,
-          pendingImageIds: [],
-        }),
+      await caller.create(
+        makeProductInput({ name: "Olive Oil", pendingImageIds: [] }),
+      );
+      await caller.create(
+        makeProductInput({ name: "Canola Oil", pendingImageIds: [] }),
       );
 
-      // No upc/fdc_id → no lookup param → no USDA round-trip, just a null food.
-      const result = await caller.foodForIds({ ids: [created.id] });
-      expect(result).toEqual([{ id: created.id, food: null }]);
+      const result = await caller.search(
+        listParams({ filters: { nameFilter: "Olive" } }),
+      );
+      expect(result.items.length).toBe(1);
+      expect(result.items[0]!.name).toBe("Olive Oil");
     });
   });
 });

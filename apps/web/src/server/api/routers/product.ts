@@ -21,7 +21,7 @@ import {
 } from "@cubby/schemas/product";
 import { recomputeSummary } from "@cubby/schemas/recipe";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import { foodSummary, upc } from "@cubby/usda-schemas";
+import { upc } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { streamItems, streamProgress } from "~/lib/bulk-progress";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -255,17 +255,6 @@ const applyUpcData = protectedProcedure
     };
   });
 
-// Lazy USDA food resolution for a page of products. The products table renders
-// immediately from `list` (food = null) and then fills the "USDA Food" column
-// from this batch — keeping the cross-Worker USDA round-trip off the navigation
-// critical path. Capped at one page's worth of ids.
-const foodForIds = protectedProcedure
-  .input(z.object({ ids: z.array(productId).max(200) }))
-  .output(z.array(z.object({ id: productId, food: foodSummary.nullable() })))
-  .query(async ({ ctx, input }) => {
-    return await ctx.services.product.foodForProductIds(input.ids);
-  });
-
 // Quick create a product with minimal data (just name required)
 const quickCreate = protectedProcedure
   .input(productQuickCreatePayload)
@@ -434,7 +423,6 @@ export const productRouter = createTRPCRouter({
   getByShortcodes,
   list,
   search,
-  foodForIds,
   create,
   createMany,
   markUsdaUnavailableMany,
