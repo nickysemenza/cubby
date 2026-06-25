@@ -37,6 +37,14 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "~/components/ui/popover";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table";
 import { generateLabelCsv, generateQrDataUrl } from "~/lib/label-generator";
 import { useTRPC } from "~/trpc/react";
 
@@ -817,33 +825,33 @@ function PtouchPreview({ items }: { items: LabelItem[] }) {
   return (
     <Card>
       <CardContent className="p-0">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b">
-              <th className="px-4 py-2 text-left font-medium">Shortcode</th>
-              <th className="px-4 py-2 text-left font-medium">Name</th>
-              <th className="px-4 py-2 text-left font-medium">URL</th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table className="table-auto">
+          <TableHeader>
+            <TableRow>
+              <TableHead>Shortcode</TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead>URL</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {items.map((item) => (
-              <tr key={item.shortcode} className="border-b last:border-b-0">
-                <td className="px-4 py-2 font-mono">{item.shortcode}</td>
-                <td className="px-4 py-2">
+              <TableRow key={item.shortcode}>
+                <TableCell className="font-mono">{item.shortcode}</TableCell>
+                <TableCell className="whitespace-normal">
                   {item.name}
                   {item.parentName && (
                     <Description as="span" size="xs" className="ml-2">
                       {item.parentName}
                     </Description>
                   )}
-                </td>
-                <td className="px-4 py-2 text-muted-foreground">
+                </TableCell>
+                <TableCell className="text-muted-foreground">
                   {getShortcodeUrl(item.shortcode)}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </CardContent>
     </Card>
   );

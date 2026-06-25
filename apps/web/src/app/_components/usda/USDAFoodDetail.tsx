@@ -11,6 +11,14 @@ import { useMemo } from "react";
 import { Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { Description } from "~/components/ui/description";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table";
 import { USDA_KINDS } from "~/lib/conversion-coverage";
 import { unitMappingsFromFood } from "~/lib/unit-mapping-utils";
 import { type DetailSection, DetailSections } from "../data-table/detail-page";
@@ -94,29 +102,26 @@ export const USDAFoodDetail: React.FC<{
       {portionInfoRaw.length > 0 && (
         <div className="mt-4">
           <h4 className="mb-2 font-heading font-medium">Portion Information</h4>
-          <table className="min-w-full border-collapse">
-            <thead>
-              <tr className="bg-muted">
-                <th className="border p-2 text-left">Amount</th>
-                <th className="border p-2 text-left">Portion</th>
-                <th className="border p-2 text-left">Grams</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table className="table-auto">
+            <TableHeader>
+              <TableRow>
+                <TableHead>Amount</TableHead>
+                <TableHead>Portion</TableHead>
+                <TableHead>Grams</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {portionInfoRaw.map((portion) => (
-                <tr
+                <TableRow
                   key={`${portion.amount}-${portion.modifier ?? "default"}-${portion.gram_weight}`}
-                  className="border-b"
                 >
-                  <td className="border p-2">{portion.amount}</td>
-                  <td className="border p-2">
-                    {portion.modifier || "portion"}
-                  </td>
-                  <td className="border p-2">{portion.gram_weight}g</td>
-                </tr>
+                  <TableCell>{portion.amount}</TableCell>
+                  <TableCell>{portion.modifier || "portion"}</TableCell>
+                  <TableCell>{portion.gram_weight}g</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       )}
     </div>

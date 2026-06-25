@@ -2,6 +2,7 @@ import { AlertCircle, Plus } from "lucide-react";
 import { Fragment, useMemo } from "react";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+import { Table, TableBody, TableCell, TableRow } from "~/components/ui/table";
 import { cn } from "~/lib/utils";
 import { EntityPillLink } from "../EntityPill";
 import { formatAmounts } from "../inventory/format-amount";
@@ -32,8 +33,8 @@ export function ParsedIngredientTable({
   const rows = useMemo(() => parseIngredientLines(lines), [lines]);
   if (rows.length === 0) return null;
   return (
-    <table className="w-full border-collapse text-xs">
-      <tbody>
+    <Table className="table-auto">
+      <TableBody>
         {rows.map(({ raw, parsed }, i) => {
           const name = parsed.name || raw;
           const match = parsed.name
@@ -44,8 +45,10 @@ export function ParsedIngredientTable({
           return (
             // biome-ignore lint/suspicious/noArrayIndexKey: fixed ordered list
             <Fragment key={i}>
-              <tr className={tint}>
-                <td className="py-1 pr-2 align-top">
+              {/* Name/amount/modifier row pairs with its raw-line row below; suppress
+                  the border here so the divider only falls between items. */}
+              <TableRow className={cn("border-b-0", tint)}>
+                <TableCell className="whitespace-normal align-top">
                   {match ? (
                     <EntityPillLink entity="ingredient" data={match} />
                   ) : (
@@ -79,26 +82,24 @@ export function ParsedIngredientTable({
                       )}
                     </Row>
                   )}
-                </td>
-                <td className="whitespace-nowrap py-1 pr-2 align-top text-muted-foreground">
+                </TableCell>
+                <TableCell className="align-top text-muted-foreground">
                   {parsed.amounts.length > 0
                     ? formatAmounts(parsed.amounts)
                     : ""}
-                </td>
-                <td className="py-1 align-top text-muted-foreground">
+                </TableCell>
+                <TableCell className="whitespace-normal align-top text-muted-foreground">
                   {parsed.modifier ?? ""}
-                </td>
-              </tr>
-              <tr
-                className={cn("border-border/40 border-b last:border-0", tint)}
-              >
-                <td
+                </TableCell>
+              </TableRow>
+              <TableRow className={tint}>
+                <TableCell
                   colSpan={2}
-                  className="pb-1 text-2xs text-muted-foreground/70 leading-tight"
+                  className="whitespace-normal pt-0 pb-1 text-2xs text-muted-foreground/70 leading-tight"
                 >
                   {raw}
-                </td>
-                <td className="pb-1 text-right align-top">
+                </TableCell>
+                <TableCell className="pt-0 pb-1 text-right align-top">
                   <CopyCorpusButton
                     rawLine={raw}
                     name={parsed.name}
@@ -106,12 +107,12 @@ export function ParsedIngredientTable({
                     modifier={parsed.modifier}
                     label={undefined}
                   />
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             </Fragment>
           );
         })}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }

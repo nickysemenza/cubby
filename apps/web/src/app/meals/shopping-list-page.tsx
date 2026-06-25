@@ -10,6 +10,15 @@ import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table";
+import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import { formatAmount, statusClass, statusLabel } from "./meal-format";
 
@@ -148,41 +157,40 @@ export function ShoppingListPage() {
           {rows.length === 0 ? (
             <Description>Nothing to buy for the selected meals.</Description>
           ) : (
-            <div className="overflow-hidden rounded-lg border border-[var(--border-chunky)]">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/40 text-muted-foreground text-xs">
-                  <tr>
-                    <th className="px-2 py-2 text-left font-medium">
-                      Ingredient
-                    </th>
-                    <th className="px-2 py-2 text-right font-medium">Need</th>
-                    <th className="px-2 py-2 text-right font-medium">Have</th>
-                    <th className="px-2 py-2 text-right font-medium">Short</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map(({ item, need, shortfall, status }) => {
-                    const key = item.ingredientId ?? item.name;
-                    const isOpen = expanded.has(key);
-                    const perMeal = item.perMeal.filter(
-                      (c) => !excluded.has(c.mealId),
-                    );
-                    return (
-                      <RowGroup
-                        key={key}
-                        item={item}
-                        need={need}
-                        shortfall={shortfall}
-                        status={status}
-                        isOpen={isOpen}
-                        perMeal={perMeal}
-                        onToggle={() => setExpanded((s) => toggle(s, key))}
-                      />
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <Table
+              containerClassName="overflow-hidden rounded-lg border border-[var(--border-chunky)]"
+              className="table-auto"
+            >
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Ingredient</TableHead>
+                  <TableHead className="text-right">Need</TableHead>
+                  <TableHead className="text-right">Have</TableHead>
+                  <TableHead className="text-right">Short</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map(({ item, need, shortfall, status }) => {
+                  const key = item.ingredientId ?? item.name;
+                  const isOpen = expanded.has(key);
+                  const perMeal = item.perMeal.filter(
+                    (c) => !excluded.has(c.mealId),
+                  );
+                  return (
+                    <RowGroup
+                      key={key}
+                      item={item}
+                      need={need}
+                      shortfall={shortfall}
+                      status={status}
+                      isOpen={isOpen}
+                      perMeal={perMeal}
+                      onToggle={() => setExpanded((s) => toggle(s, key))}
+                    />
+                  );
+                })}
+              </TableBody>
+            </Table>
           )}
         </>
       )}
@@ -209,8 +217,10 @@ function RowGroup({
 }) {
   return (
     <>
-      <tr className="border-t">
-        <td className="px-2 py-2">
+      {/* Open: drop the parent's bottom border so its meal rows read as one
+          cluster; the divider falls below the group's last row instead. */}
+      <TableRow className={cn(isOpen && "border-b-0")}>
+        <TableCell className="whitespace-normal">
           <Row
             as="button"
             type="button"
@@ -229,28 +239,34 @@ function RowGroup({
               · {statusLabel(status)}
             </span>
           </Row>
-        </td>
-        <td className="px-2 py-2 text-right tabular-nums">
+        </TableCell>
+        <TableCell className="text-right tabular-nums">
           {formatAmount(need, item.basisUnit)}
-        </td>
-        <td className="px-2 py-2 text-right text-muted-foreground tabular-nums">
+        </TableCell>
+        <TableCell className="text-right text-muted-foreground tabular-nums">
           {item.haveValue == null
             ? "—"
             : formatAmount(item.haveValue, item.basisUnit)}
-        </td>
-        <td
-          className={`px-2 py-2 text-right font-medium tabular-nums ${shortfall > 0 ? statusClass(status) : "text-muted-foreground"}`}
+        </TableCell>
+        <TableCell
+          className={cn(
+            "text-right font-medium tabular-nums",
+            shortfall > 0 ? statusClass(status) : "text-muted-foreground",
+          )}
         >
           {shortfall > 0 ? formatAmount(shortfall, item.basisUnit) : "✓"}
-        </td>
-      </tr>
+        </TableCell>
+      </TableRow>
       {isOpen &&
         perMeal.map((c, i) => (
-          <tr
+          <TableRow
             key={`${c.mealId}-${c.recipeId}-${i}`}
-            className="bg-muted/20 text-muted-foreground text-xs"
+            className={cn(
+              "bg-muted/20 text-muted-foreground text-xs",
+              i !== perMeal.length - 1 && "border-b-0",
+            )}
           >
-            <td className="py-1 pr-2 pl-6">
+            <TableCell className="whitespace-normal py-1 pl-6">
               <Link
                 to="/meals/$id"
                 params={{ id: c.mealId }}
@@ -262,13 +278,13 @@ function RowGroup({
                 — {c.scale !== 1 ? `${c.scale}× ` : ""}
                 {c.recipeName}
               </span>
-            </td>
-            <td className="py-1 pr-2 text-right tabular-nums">
+            </TableCell>
+            <TableCell className="py-1 text-right tabular-nums">
               {formatAmount(c.needValue, item.basisUnit)}
-            </td>
-            <td />
-            <td />
-          </tr>
+            </TableCell>
+            <TableCell className="py-1" />
+            <TableCell className="py-1" />
+          </TableRow>
         ))}
     </>
   );
