@@ -238,6 +238,12 @@ export const recipeTopLevel = baseEntitySchema.extend({
   notes: recipeNotes.nullish(),
 });
 
+// Minimal recipe reference — just enough to link + label a recipe pill. Lets
+// list surfaces carry "appears in recipes" without the full recipe body per row
+// (the over-fetch the ingredient list paid via `appearsInRecipes: recipeTopLevel[]`).
+export const recipeRefOut = z.object({ id: recipeId, name: z.string() });
+export type RecipeRef = z.infer<typeof recipeRefOut>;
+
 // Create a base schema with common fields
 const sectioningredientOut = z
   .object({

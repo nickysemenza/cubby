@@ -8,6 +8,7 @@ import { type ingredientBase, ingredientOut } from "@cubby/schemas/ingredient";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { baseKind } from "@cubby/schemas/problems";
 import { productTopLevelOut } from "@cubby/schemas/product";
+import { recipeRefOut } from "@cubby/schemas/recipe";
 import { unitMappingOut } from "@cubby/schemas/unitmapping";
 import { foodSummary } from "@cubby/usda-schemas";
 import { z } from "zod";
@@ -69,6 +70,14 @@ export const ingredientWithFoodLeanOut = ingredientOut.extend({
 export type IngredientWithFoodLeanOut = z.infer<
   typeof ingredientWithFoodLeanOut
 >;
+
+// The ingredient LIST row: lean ingredient + food, plus the {id,name} refs of the
+// recipes it appears in (the list renders a count + the first as a pill). No
+// per-usage recipe bodies / recipeUsages — those are detail-page only.
+export const ingredientListItemOut = ingredientWithFoodLeanOut.extend({
+  appearsInRecipes: z.array(recipeRefOut),
+});
+export type IngredientListItem = z.infer<typeof ingredientListItemOut>;
 
 /**
  * A workbench row: the lean ingredient (products + food, so the inline editor

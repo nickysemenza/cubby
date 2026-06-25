@@ -47,6 +47,7 @@ export {
 } from "./crud";
 // Row → API shaping helpers
 export {
+  appearsInRecipesRefsForIngredientSql,
   computeRecipeUsages,
   cookbookOnlyForIngredientSql,
   dbRecipeToAPIShallow,
