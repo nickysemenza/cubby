@@ -166,7 +166,7 @@ export const desktopNav: NavNode[] = [
 ];
 
 /** Every authed leaf, flattened out of the tree (groups expanded). */
-const desktopLeaves: NavItem[] = desktopNav.flatMap((node) =>
+export const desktopLeaves: NavItem[] = desktopNav.flatMap((node) =>
   isNavGroup(node) ? node.children : [node],
 );
 

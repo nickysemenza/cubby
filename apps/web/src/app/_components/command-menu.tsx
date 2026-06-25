@@ -39,15 +39,28 @@ import { useDebug } from "~/hooks/useDebug";
 import { setFlag, useFlag } from "~/lib/flags";
 import { cn, formatCurrency } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
+import { quickActions } from "./command-menu/quick-actions";
 import { getRecents, pushRecent } from "./command-menu/recents";
 import { useConversionAnswer } from "./command-menu/use-conversion-answer";
 import { useGlobalSearch } from "./command-menu/use-global-search";
 import { useAgentStream } from "./hooks/useAgentStream";
+import { desktopLeaves } from "./navigation/nav-items";
 import {
   entityTypeMap,
   getEnrichmentText,
   SearchResultItemIcon,
 } from "./search/search-utils";
+
+/**
+ * "Go to" destinations — every authed navbar leaf, so the palette covers the
+ * whole navbar and stays in sync with it. Drops leaves already surfaced by
+ * Quick Actions (Scan UPC, Labels, Problems) or the dedicated Settings group,
+ * so nothing appears twice in the browse state.
+ */
+const quickActionPaths = new Set(quickActions.map((action) => action.path));
+const goToLeaves = desktopLeaves.filter(
+  (leaf) => leaf.to !== "/settings" && !quickActionPaths.has(leaf.to as string),
+);
 
 interface GlobalCommandMenuProps {
   open?: boolean;
@@ -585,13 +598,13 @@ export function GlobalCommandMenu({
                 </CommandGroup>
                 <CommandSeparator />
                 <CommandGroup heading="Go to">
-                  {Object.values(entities).map((entity) => (
+                  {goToLeaves.map((leaf) => (
                     <CommandItem
-                      key={entity.basePath}
-                      onSelect={() => goToPage(`/${entity.basePath}`)}
+                      key={leaf.to as string}
+                      onSelect={() => goToPage(leaf.to as string)}
                     >
-                      <entity.lucideIcon className="h-4 w-4" />
-                      <span>{entity.pluralLabel}</span>
+                      <leaf.icon className="h-4 w-4" />
+                      <span>{leaf.label}</span>
                     </CommandItem>
                   ))}
                 </CommandGroup>
