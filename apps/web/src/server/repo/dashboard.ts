@@ -10,7 +10,7 @@ import {
 } from "~/server/db/schema";
 import { countWhere, notDeleted } from "~/server/repo/database-helpers";
 
-export interface DashboardEntityCounts {
+interface DashboardEntityCounts {
   products: number;
   recipes: number;
   ingredients: number;
