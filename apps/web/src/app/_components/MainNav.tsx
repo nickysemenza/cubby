@@ -16,6 +16,10 @@ interface MainNavProps extends React.HTMLAttributes<HTMLElement> {
   onSearchClick?: () => void;
 }
 
+// Localhost shows a hot-magenta variant so the dev tab/navbar is obvious among
+// prod tabs (matches the conditional favicon in __root.tsx).
+const LOGO_SRC = import.meta.env.DEV ? "/favicon-dev.svg" : "/favicon.svg";
+
 // cf https://github.com/shadcn-ui/ui/blob/main/apps/www/app/(app)/examples/dashboard/components/main-nav.tsx
 export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
   const { isDebugEnabled, toggleDebug } = useDebug();
@@ -28,7 +32,7 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
     <div className="flex w-full items-center justify-between">
       <Link to="/">
         <Row align="center" gap="sm">
-          <img src="/favicon.svg" alt="" className="h-6 w-6 sm:h-7 sm:w-7" />
+          <img src={LOGO_SRC} alt="" className="h-6 w-6 sm:h-7 sm:w-7" />
           <span className="self-center whitespace-nowrap font-bold font-heading text-foreground text-lg tracking-tight sm:text-xl">
             cubby
           </span>

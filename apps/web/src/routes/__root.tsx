@@ -122,7 +122,9 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
       {
         rel: "icon",
         type: "image/svg+xml",
-        href: "/favicon.svg",
+        // Localhost gets a hot-magenta variant so the dev tab is obvious
+        // among prod tabs; build-time DEV flag → no hydration mismatch.
+        href: import.meta.env.DEV ? "/favicon-dev.svg" : "/favicon.svg",
       },
       {
         rel: "apple-touch-icon",
