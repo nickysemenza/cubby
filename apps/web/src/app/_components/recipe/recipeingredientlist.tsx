@@ -137,7 +137,9 @@ export const RecipeIngredientList: React.FC<{
       // Fixed width (like the sibling numeric columns, which use w-*) so the
       // primary column doesn't collapse to "jala…"; the inner divs truncate
       // long names. `min-w-*` alone isn't honored by this table's layout.
-      meta: { className: "w-44" },
+      // Kept at w-48 (the overflow trim came from the numeric/pill columns,
+      // which had slack — not from the name column, which is truncation-prone).
+      meta: { className: "w-48" },
       footer: () => <span className="font-semibold">Totals</span>,
       cell: (info) => {
         const row = info.row.original;
