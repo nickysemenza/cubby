@@ -39,7 +39,9 @@ export function ScannerStatusOverlay(props: ScannerStatusOverlayProps) {
         className="absolute inset-0 z-10 bg-background/80"
       >
         {props.message ? (
-          <div className="flex flex-col items-center gap-2 text-white">
+          // text-foreground (not text-white): the loading scrim is bg-background/80,
+          // which is near-white in light mode — white text would be invisible.
+          <div className="flex flex-col items-center gap-2 text-foreground">
             <Spinner size="lg" />
             <span className="text-sm">{props.message}</span>
           </div>
