@@ -38,7 +38,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
     success: (data) => savedWithRecompute(data.sideEffects),
     // location.all: a price change recomputes persisted per-location valuations.
     invalidateKeys: [
-      queryKeys.product.list,
+      queryKeys.product.all,
       queryKeys.recipe.list,
       queryKeys.location.all,
     ],
@@ -51,7 +51,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
     entityLabel: "Product",
     mutationOptions: (callbacks) =>
       api.product.delete.mutationOptions(callbacks),
-    invalidateKeys: [[queryKeys.product.list]],
+    invalidateKeys: [[queryKeys.product.all]],
     redirectTo: "/products",
   });
 

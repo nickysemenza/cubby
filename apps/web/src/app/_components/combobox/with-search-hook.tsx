@@ -414,7 +414,7 @@ export function WithProductSearch({ children }: WithEntitySearchProps) {
     mutationFn: api.product.create.mutationOptions,
     success: (newProduct: ProductTopLevelOut) =>
       `Added ${newProduct.name} to your shelves.`,
-    invalidateKeys: [queryKeys.product.list, queryKeys.product.search],
+    invalidateKeys: [queryKeys.product.all],
     onSuccess: (newProduct) =>
       resolveWithEntity(buildProductComboboxItem(newProduct)),
     error: (err) => `Failed to create product: ${getErrorMessage(err)}`,

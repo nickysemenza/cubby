@@ -49,7 +49,7 @@ export function useUpcLookup(options: UseUpcLookupOptions = {}) {
   const findOrCreateByUPCMutation = useMutation(
     api.product.findOrCreateByUPC.mutationOptions({
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: [queryKeys.product.list] });
+        queryClient.invalidateQueries({ queryKey: [queryKeys.product.all] });
       },
     }),
   );

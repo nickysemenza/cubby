@@ -94,7 +94,7 @@ export function UnusedIngredientDeleteFix({
         : `Could not delete: ${data.failed[0]?.reason ?? "unknown error"}`,
     invalidateKeys: [
       queryKeys.ingredient.list,
-      ...(alsoDeleteProducts ? [queryKeys.product.list] : []),
+      ...(alsoDeleteProducts ? [queryKeys.product.all] : []),
     ],
     onSuccess: (data) => {
       if (data.deleted > 0) close();
@@ -224,7 +224,7 @@ export function DeleteAllUnusedButton({
     invalidateKeys: [
       queryKeys.problems.all,
       queryKeys.ingredient.list,
-      ...(alsoDeleteProducts ? [queryKeys.product.list] : []),
+      ...(alsoDeleteProducts ? [queryKeys.product.all] : []),
     ],
   });
 

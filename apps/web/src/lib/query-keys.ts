@@ -7,8 +7,12 @@ export const queryKeys = {
     list: ["inventory", "list"] as const,
   },
   product: {
-    list: ["product", "list"] as const,
-    search: ["product", "search"] as const,
+    // Broad prefix — invalidate every product query (list / search / getByID …)
+    // so the deferred product picker (product.search) AND the products table
+    // (product.list) both refresh after any product create/update/delete. The
+    // picker reads a different key than the table, so a list-only invalidation
+    // would leave its options stale.
+    all: ["product"] as const,
   },
   location: {
     list: ["location", "list"] as const,

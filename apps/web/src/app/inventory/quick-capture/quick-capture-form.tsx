@@ -232,7 +232,7 @@ export default function QuickCaptureForm({
     api.product.findOrCreateByUPC.mutationOptions({
       onSuccess: () => {
         // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
-        queryClient.invalidateQueries({ queryKey: [queryKeys.product.list] });
+        queryClient.invalidateQueries({ queryKey: [queryKeys.product.all] });
       },
     }),
   );

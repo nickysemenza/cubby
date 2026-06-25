@@ -24,7 +24,7 @@ export function OrphanedDeleteFix({
   const remove = useProblemCardMutation({
     mutationFn: api.product.delete.mutationOptions,
     success: "Product deleted",
-    invalidateKeys: [queryKeys.product.list],
+    invalidateKeys: [queryKeys.product.all],
     onSuccess: close,
   });
 

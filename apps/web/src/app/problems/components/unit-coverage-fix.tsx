@@ -151,7 +151,7 @@ function PriceFix({ id, close }: { id: string; close: () => void }) {
   const update = useProblemCardMutation({
     mutationFn: api.product.update.mutationOptions,
     success: "Price saved",
-    invalidateKeys: [queryKeys.product.list],
+    invalidateKeys: [queryKeys.product.all],
     onSuccess: close,
   });
 
@@ -219,7 +219,7 @@ function DisconnectedFix({
     mutationFn: api.product.update.mutationOptions,
     success: "Conversion saved",
     invalidateKeys: [
-      queryKeys.product.list,
+      queryKeys.product.all,
       api.product.getByID.queryKey({ id }),
     ],
     onSuccess: close,

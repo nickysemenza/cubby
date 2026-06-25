@@ -180,7 +180,7 @@ export function QuickInventoryAdd({
 
         toast.success(`Created "${newProduct.name}" and added to inventory`);
         void queryClient.invalidateQueries({
-          queryKey: [queryKeys.product.list],
+          queryKey: [queryKeys.product.all],
         });
         switchToSelectMode();
         onSuccess();
@@ -190,7 +190,7 @@ export function QuickInventoryAdd({
           `Product "${newProduct.name}" was created, but adding to inventory failed: ${getErrorMessage(inventoryErr)}. Search for it to add manually.`,
         );
         void queryClient.invalidateQueries({
-          queryKey: [queryKeys.product.list],
+          queryKey: [queryKeys.product.all],
         });
         switchToSelectMode();
       }

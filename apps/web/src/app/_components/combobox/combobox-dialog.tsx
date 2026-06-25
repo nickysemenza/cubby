@@ -91,12 +91,17 @@ export function DialogCompatibleCombobox<TId extends string = string>({
     onSearchChange(debouncedInput);
   }, [debouncedInput, onSearchChange]);
 
-  // Notify parent on open/close so an async-search wrapper can lazily enable its
-  // options query (handler is idempotent, so the mount call with `false` is a
-  // no-op).
-  React.useEffect(() => {
-    onOpenChange?.(open);
-  }, [open, onOpenChange]);
+  // Toggle open AND notify the parent in the same event so an async-search
+  // wrapper's `setActivated(true)` batches with this render — the first painted
+  // frame of the open dropdown already has the query enabled (loading spinner),
+  // instead of flashing "No items found" for one frame before a post-paint
+  // effect fires. `open` only ever flips true via the trigger button, so this is
+  // the single activation path.
+  const toggleOpen = () => {
+    const next = !open;
+    setOpen(next);
+    onOpenChange?.(next);
+  };
 
   // Focus the input when the dropdown is opened
   React.useEffect(() => {
@@ -152,7 +157,7 @@ export function DialogCompatibleCombobox<TId extends string = string>({
           // Prevent the click from bubbling up to the form and triggering a submit
           e.preventDefault();
           e.stopPropagation();
-          setOpen(!open);
+          toggleOpen();
         }}
         // Prevent form submission when clicking the button
         type="button"
