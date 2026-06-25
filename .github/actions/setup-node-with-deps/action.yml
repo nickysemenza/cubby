@@ -20,24 +20,13 @@ runs:
         node-version: "24"
         cache: "pnpm"
 
-    # Cache the linked node_modules trees (root + every workspace), not just the
-    # pnpm store. The store cache (cache: "pnpm" above) makes `pnpm install`
-    # *offline*, but the link/symlink step still ran ~20s on every job. Keyed on
-    # the lockfile, so any dependency change busts it and falls back to a real
-    # install. On a hit we skip install entirely — pnpm's node_modules is
-    # self-contained (relative symlinks into node_modules/.pnpm).
-    - name: Cache node_modules
-      id: node-modules-cache
-      uses: actions/cache@v5
-      with:
-        path: |
-          node_modules
-          apps/*/node_modules
-          packages/*/node_modules
-        key: node-modules-${{ runner.os }}-node24-${{ hashFiles('pnpm-lock.yaml') }}
-
+    # NB: caching node_modules directly was tried and REVERTED — on a warm cache
+    # hit, actions/cache restoring the linked node_modules tree (tens of
+    # thousands of small files) was *slower* than this `pnpm install` against the
+    # already-warm pnpm store (setup-node ~21s install vs ~35s restore). The
+    # store cache (cache: "pnpm" above) makes install offline; the hardlink/
+    # symlink step is fast. Don't reintroduce a node_modules cache.
     - name: Install dependencies
-      if: steps.node-modules-cache.outputs.cache-hit != 'true'
       run: pnpm install --frozen-lockfile --prefer-offline
       shell: bash
 
