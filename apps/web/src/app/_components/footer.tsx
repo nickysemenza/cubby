@@ -1,5 +1,4 @@
-import type { SortParams } from "@cubby/schemas/pagination";
-import { useQueries } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Github } from "lucide-react";
 import { Row } from "~/components/layout";
 import { authClient } from "~/lib/auth-client";
@@ -13,37 +12,23 @@ function EntityCounts() {
   const session = authClient.useSession();
   const isAuthenticated = !!session.data?.user;
 
-  const sort: SortParams = { orderBy: "name", direction: "asc" };
-  const opts = {
-    filters: {},
-    sort,
-    pagination: { pageIndex: 0, pageSize: 1 },
-  };
-
-  const { counts, isLoading } = useQueries({
-    queries: [
-      { ...api.product.list.queryOptions(opts), enabled: isAuthenticated },
-      { ...api.location.list.queryOptions(opts), enabled: isAuthenticated },
-      { ...api.recipe.list.queryOptions(opts), enabled: isAuthenticated },
-      { ...api.ingredient.list.queryOptions(opts), enabled: isAuthenticated },
-    ],
-    combine: (results) => ({
-      counts: results.map((r) => r.data?.meta.totalCount),
-      isLoading: results.some((r) => r.isLoading),
-    }),
+  // The footer renders on every page; reuse the homepage's single
+  // dashboard.counts query (shared key → one cheap fetch, deduped) rather than
+  // four `list({pageSize:1})` calls whose product.list fired discarded USDA
+  // enrichment app-wide.
+  const { data: counts, isLoading } = useQuery({
+    ...api.dashboard.counts.queryOptions(),
+    enabled: isAuthenticated,
   });
 
-  if (!isAuthenticated || isLoading) return null;
+  if (!isAuthenticated || isLoading || !counts) return null;
 
-  const [products, locations, recipes, ingredients] = counts;
   const parts = [
-    products != null && `${products} products`,
-    locations != null && `${locations} locations`,
-    recipes != null && `${recipes} recipes`,
-    ingredients != null && `${ingredients} ingredients`,
-  ].filter(Boolean);
-
-  if (parts.length === 0) return null;
+    `${counts.products} products`,
+    `${counts.locations} locations`,
+    `${counts.recipes} recipes`,
+    `${counts.ingredients} ingredients`,
+  ];
 
   return <span>{parts.join(" · ")}</span>;
 }

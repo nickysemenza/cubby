@@ -183,6 +183,21 @@ export class USDAClient {
     return data?.brandedFoodInfo ?? null;
   }
 
+  /**
+   * Dataset row counts from the usda-api `/counts` manifest endpoint — a single
+   * cheap manifest read (no list query, no per-food enrichment). Used by the
+   * dashboard's USDA count card instead of a `listFoods` count(*) over ~2M D1
+   * rows. Returns null on a non-200 (manifest unavailable).
+   */
+  async getCounts() {
+    return this.traced("counts", async () => {
+      const res = await this.client.counts();
+      USDAClient.assertNot5xx(res.status, "counts");
+      if (res.status !== 200) return null;
+      return res.body;
+    });
+  }
+
   async findFood(lookup: FoodLookupParam): Promise<FoodSummary | null> {
     return await this.traced("findByLookup", async () => {
       const res = await this.client.findByLookup({ body: lookup });
