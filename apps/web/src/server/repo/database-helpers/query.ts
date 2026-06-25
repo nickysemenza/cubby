@@ -59,6 +59,17 @@ export const notDeleted = <T extends { deletedAt: AnyColumn }>(table: T) =>
   isNull(table.deletedAt);
 
 /**
+ * Row-level twin of {@link notDeleted}: a predicate over an already-fetched
+ * record (not a SQL condition). Use this to filter soft-deleted rows in JS —
+ * e.g. relations loaded in a `with` block, or join-table associations — where
+ * the SQL `notDeleted()` can't apply. Keep the two in lockstep: `notDeleted`
+ * filters at query time, `isNotDeleted` filters in memory.
+ */
+export const isNotDeleted = <T extends { deletedAt: Date | null }>(
+  row: T,
+): boolean => row.deletedAt === null;
+
+/**
  * Count rows in a table matching an optional WHERE clause.
  * Wraps Drizzle's `db.$count`, which resolves directly to a number — replaces
  * the hand-rolled `select({ count: count() }).from(t).where(w)` + destructure.

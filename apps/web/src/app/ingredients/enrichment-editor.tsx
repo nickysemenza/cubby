@@ -20,6 +20,7 @@ import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { BASE_KINDS, type BaseKind } from "~/lib/conversion-coverage";
 import { getErrorMessage } from "~/lib/error-utils";
+import { queryKeys } from "~/lib/query-keys";
 import { savedWithRecompute } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
 import type { EnrichmentRow } from "~/server/services/ingredient.service";
@@ -361,21 +362,21 @@ export function EnrichmentEditor({
   const createProduct = useActionMutation({
     mutationFn: api.product.create.mutationOptions,
     success: (d) => savedWithRecompute(d.sideEffects, `Enriched ${d.name}`),
-    invalidateKeys: [["ingredient"], ["product"]],
+    invalidateKeys: [queryKeys.ingredient.all, queryKeys.product.all],
     onSuccess: () => onSaved?.(),
     error: (err) => `Failed to create product: ${getErrorMessage(err)}`,
   });
   const updateProduct = useActionMutation({
     mutationFn: api.product.update.mutationOptions,
     success: (d) => savedWithRecompute(d.sideEffects, `Updated ${d.name}`),
-    invalidateKeys: [["ingredient"], ["product"]],
+    invalidateKeys: [queryKeys.ingredient.all, queryKeys.product.all],
     onSuccess: () => onSaved?.(),
     error: (err) => `Failed to update: ${getErrorMessage(err)}`,
   });
   const updateIngredient = useActionMutation({
     mutationFn: api.ingredient.update.mutationOptions,
     success: `Updated ${row.name}.`,
-    invalidateKeys: [["ingredient"]],
+    invalidateKeys: [queryKeys.ingredient.all],
     error: (err) => `Failed to update: ${getErrorMessage(err)}`,
   });
 

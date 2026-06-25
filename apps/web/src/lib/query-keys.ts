@@ -24,6 +24,9 @@ export const queryKeys = {
   ingredient: {
     list: ["ingredient", "list"] as const,
     getByName: ["ingredient", "getByName"] as const,
+    // Broad prefix — invalidate every ingredient query (list / getByName /
+    // getByID …) after an enrich/merge/update so all consumers re-read.
+    all: ["ingredient"] as const,
   },
   problems: {
     // Broad prefix — invalidate every problems query so a fix re-reads whichever

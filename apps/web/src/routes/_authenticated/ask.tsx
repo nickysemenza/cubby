@@ -12,6 +12,7 @@ import { Card, CardContent } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
 import { EntityIcon, entities } from "~/entities/entities";
+import { getErrorMessage } from "~/lib/error-utils";
 import { useTRPC } from "~/trpc/react";
 
 export const Route = createFileRoute("/_authenticated/ask")({
@@ -33,7 +34,7 @@ function AskPage() {
 
   const ask = useMutation(
     api.agent.ask.mutationOptions({
-      onError: (error) => toast.error(error.message),
+      onError: (error) => toast.error(getErrorMessage(error)),
     }),
   );
 

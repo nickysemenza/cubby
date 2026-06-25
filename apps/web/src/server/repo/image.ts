@@ -35,6 +35,7 @@ import {
   formatSearchTerm,
   getDb,
   insertAndReturn,
+  isNotDeleted,
   notDeleted,
 } from "~/server/repo/database-helpers";
 import {
@@ -110,8 +111,8 @@ const imageWithRelationsToAPI = (
   imageData: ImageWithRelations,
 ): ImageWithEntity => {
   // Check product associations (join table filtered, but still check entity)
-  const productAssoc = imageData.productImages.find(
-    (assoc) => !assoc.product.deletedAt,
+  const productAssoc = imageData.productImages.find((assoc) =>
+    isNotDeleted(assoc.product),
   );
   if (productAssoc) {
     return {
@@ -131,8 +132,8 @@ const imageWithRelationsToAPI = (
   }
 
   // Check location associations (join table filtered, but still check entity)
-  const locationAssoc = imageData.locationImages.find(
-    (assoc) => !assoc.location.deletedAt,
+  const locationAssoc = imageData.locationImages.find((assoc) =>
+    isNotDeleted(assoc.location),
   );
   if (locationAssoc) {
     return {
@@ -152,8 +153,8 @@ const imageWithRelationsToAPI = (
   }
 
   // Check recipe associations (join table filtered, but still check entity)
-  const recipeAssoc = imageData.recipeImages.find(
-    (assoc) => !assoc.recipe.deletedAt,
+  const recipeAssoc = imageData.recipeImages.find((assoc) =>
+    isNotDeleted(assoc.recipe),
   );
   if (recipeAssoc) {
     return {

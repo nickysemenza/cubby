@@ -72,7 +72,7 @@ export function PendingImageUpload({
   const uploadImageMutation = useMutation(
     api.image.uploadImage.mutationOptions({
       onError: (error) => {
-        toast.error(`Upload initialization failed: ${error.message}`);
+        toast.error(`Upload initialization failed: ${getErrorMessage(error)}`);
       },
     }),
   );
