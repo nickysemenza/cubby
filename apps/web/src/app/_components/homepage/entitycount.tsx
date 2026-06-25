@@ -42,16 +42,11 @@ function ProblemsStatCard({ enabled }: { enabled: boolean }) {
           "hover:-translate-x-px hover:-translate-y-px",
           "cursor-pointer border-l-4",
           alert
-            ? "border-destructive/60 border-l-destructive hover:shadow-[4px_4px_0_0_oklch(from_var(--destructive)_l_c_h_/_0.55)]"
+            ? "border-destructive/60 border-l-destructive hover:shadow-[var(--shadow-chunky-destructive-hover)]"
             : "border-l-positive hover:shadow-[var(--shadow-chunky-lg)]",
         )}
         style={
-          alert
-            ? {
-                boxShadow:
-                  "3px 3px 0 0 oklch(from var(--destructive) l c h / 0.55)",
-              }
-            : undefined
+          alert ? { boxShadow: "var(--shadow-chunky-destructive)" } : undefined
         }
       >
         <div className="flex flex-col items-start gap-2">

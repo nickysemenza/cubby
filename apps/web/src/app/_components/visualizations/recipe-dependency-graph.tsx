@@ -17,6 +17,7 @@ import {
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import { useTRPC } from "~/trpc/react";
 import { VisualizationPlaceholder } from "./visualization-placeholder";
+import { VizOverlay, VizTooltip } from "./viz-overlay";
 
 // Warm chart ramp tokens, cycled across cookbooks for node fill.
 const COOKBOOK_COLORS = [
@@ -295,7 +296,7 @@ function Graph({
       </svg>
 
       {hovered && (
-        <div className="absolute top-3 left-3 z-50 max-w-xs rounded-md border bg-popover px-4 py-2 text-sm shadow-lg">
+        <VizTooltip className="top-3 left-3 max-w-xs border">
           <div className="font-medium">{hovered.name}</div>
           <div className="mt-1 text-muted-foreground text-xs">
             {hovered.cookbookName ?? "No cookbook"}
@@ -305,12 +306,12 @@ function Graph({
             Used by {inDegree.get(hovered.id) ?? 0} recipe
             {(inDegree.get(hovered.id) ?? 0) === 1 ? "" : "s"} · click to open
           </div>
-        </div>
+        </VizTooltip>
       )}
 
-      <div className="absolute right-2 bottom-2 rounded bg-background/80 px-2 py-1 text-muted-foreground text-xs backdrop-blur">
+      <VizOverlay className="text-muted-foreground">
         Arrow points to the sub-recipe it uses · size = how many depend on it
-      </div>
+      </VizOverlay>
     </div>
   );
 }

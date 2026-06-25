@@ -34,10 +34,19 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Description } from "~/components/ui/description";
+import { Empty, EmptyDescription } from "~/components/ui/empty";
 import { Input } from "~/components/ui/input";
 import { Progress } from "~/components/ui/progress";
 import { Spinner } from "~/components/ui/spinner";
 import { StatusText } from "~/components/ui/status-text";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithRecompute } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
@@ -585,40 +594,43 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
           )}
 
           {!isLoading && rows.length === 0 && (
-            <div className="rounded-lg border border-dashed p-6 text-center text-muted-foreground text-sm">
-              Every recipe ingredient is fully costable. Nothing to enrich.
-            </div>
+            <Empty>
+              <EmptyDescription>
+                Every recipe ingredient is fully costable. Nothing to enrich.
+              </EmptyDescription>
+            </Empty>
           )}
 
           {visible.length > 0 && (
-            <div className="overflow-hidden rounded-lg border border-[var(--border-chunky)]">
-              <table className="w-full border-collapse text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/40 text-left text-2xs text-muted-foreground uppercase tracking-wide">
-                    <th className="w-8 px-2 py-2" />
-                    <th className="w-8 px-2 py-2" />
-                    <th className="px-2 py-2 font-medium">Ingredient</th>
-                    <th className="px-2 py-2 font-medium">Coverage</th>
-                    <th className="px-2 py-2 font-medium">Next</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visible.map((row) => (
-                    <WorkbenchRow
-                      key={row.id}
-                      row={row}
-                      selected={selected.has(row.id)}
-                      onToggle={() => toggle(row.id)}
-                      suggestion={suggestions[row.id] ?? null}
-                      mergeSuggestion={mergeSuggestions[row.id] ?? null}
-                      onRequestMerge={requestMerge}
-                      defaultOpen={row.id === focus}
-                      rowRef={row.id === focus ? focusRowRef : undefined}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Table
+              className="table-auto"
+              containerClassName="overflow-hidden rounded-lg border border-[var(--border-chunky)]"
+            >
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-8" />
+                  <TableHead className="w-8" />
+                  <TableHead>Ingredient</TableHead>
+                  <TableHead>Coverage</TableHead>
+                  <TableHead>Next</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {visible.map((row) => (
+                  <WorkbenchRow
+                    key={row.id}
+                    row={row}
+                    selected={selected.has(row.id)}
+                    onToggle={() => toggle(row.id)}
+                    suggestion={suggestions[row.id] ?? null}
+                    mergeSuggestion={mergeSuggestions[row.id] ?? null}
+                    onRequestMerge={requestMerge}
+                    defaultOpen={row.id === focus}
+                    rowRef={row.id === focus ? focusRowRef : undefined}
+                  />
+                ))}
+              </TableBody>
+            </Table>
           )}
 
           {isLoading && (
@@ -774,10 +786,10 @@ function WorkbenchRow({
 
   return (
     <>
-      <tr
+      <TableRow
         ref={rowRef}
         className={cn(
-          "cursor-pointer border-b transition-colors hover:bg-accent/40",
+          "cursor-pointer hover:bg-accent/40",
           (open || selected) && "bg-accent/30",
         )}
         onClick={(e) => {
@@ -793,21 +805,21 @@ function WorkbenchRow({
           setOpen((v) => !v);
         }}
       >
-        <td className="px-2 py-2">
+        <TableCell>
           <Checkbox
             checked={selected}
             onCheckedChange={onToggle}
             aria-label={`Select ${row.name}`}
           />
-        </td>
-        <td className="px-2 py-2 text-muted-foreground">
+        </TableCell>
+        <TableCell className="text-muted-foreground">
           {open ? (
             <ChevronDown className="h-4 w-4" />
           ) : (
             <ChevronRight className="h-4 w-4" />
           )}
-        </td>
-        <td className="px-2 py-2">
+        </TableCell>
+        <TableCell className="whitespace-normal">
           <div className="font-medium">{row.name}</div>
           <div className="text-muted-foreground text-xs">
             × {row.recipeCount} recipe{row.recipeCount === 1 ? "" : "s"}
@@ -852,31 +864,31 @@ function WorkbenchRow({
               />
             )
           )}
-        </td>
-        <td className="px-2 py-2">
+        </TableCell>
+        <TableCell>
           <CoverageChips
             covered={row.coverage.covered}
             applicable={row.coverage.applicable}
           />
-        </td>
-        <td className="px-2 py-2">
+        </TableCell>
+        <TableCell>
           <Badge variant="outline" className="font-normal">
             {fixBadgeLabel(row)}
           </Badge>
-        </td>
-      </tr>
+        </TableCell>
+      </TableRow>
       {open && (
-        <tr className="border-b bg-muted/20">
-          <td />
-          <td />
-          <td colSpan={3} className="px-2 py-2 pr-4">
+        <TableRow className="bg-muted/20">
+          <TableCell />
+          <TableCell />
+          <TableCell colSpan={3} className="whitespace-normal pr-4">
             <WorkbenchEditor
               row={row}
               initialFood={suggestion?.food ?? null}
               onDone={() => setOpen(false)}
             />
-          </td>
-        </tr>
+          </TableCell>
+        </TableRow>
       )}
     </>
   );

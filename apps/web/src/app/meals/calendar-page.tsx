@@ -22,6 +22,14 @@ import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table";
 import { useTRPC } from "~/trpc/react";
 import { formatMealCost } from "./meal-format";
 import { useInvalidateMeals } from "./use-meal-mutations";
@@ -208,47 +216,48 @@ function TableView() {
           Showing the {meals.length} most recent of {total} meals.
         </Description>
       )}
-      <div className="overflow-hidden rounded-lg border border-[var(--border-chunky)]">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/40 text-muted-foreground text-xs">
-            <tr>
-              <th className="px-2 py-2 text-left font-medium">Date</th>
-              <th className="px-2 py-2 text-left font-medium">Meal</th>
-              <th className="px-2 py-2 text-left font-medium">Recipes</th>
-              <th className="px-2 py-2 text-right font-medium">Cost</th>
-            </tr>
-          </thead>
-          <tbody>
-            {meals.map((m) => (
-              <tr key={m.id} className="border-t hover:bg-accent/40">
-                <td className="whitespace-nowrap px-2 py-2 tabular-nums">
-                  <Link
-                    to="/meals/$id"
-                    params={{ id: m.id }}
-                    className="hover:underline"
-                  >
-                    {format(parseISO(m.date), "EEE, MMM d, yyyy")}
-                  </Link>
-                </td>
-                <td className="px-2 py-2">{m.name || "—"}</td>
-                <td className="px-2 py-2 text-muted-foreground">
-                  {m.recipes.length === 0
-                    ? "—"
-                    : m.recipes
-                        .map(
-                          (r) =>
-                            `${r.scale !== 1 ? `${r.scale}× ` : ""}${r.recipe.name}`,
-                        )
-                        .join(", ")}
-                </td>
-                <td className="px-2 py-2 text-right tabular-nums">
-                  {formatMealCost(m.totals)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <Table
+        className="table-auto"
+        containerClassName="overflow-hidden rounded-lg border border-[var(--border-chunky)]"
+      >
+        <TableHeader>
+          <TableRow>
+            <TableHead>Date</TableHead>
+            <TableHead>Meal</TableHead>
+            <TableHead>Recipes</TableHead>
+            <TableHead className="text-right">Cost</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {meals.map((m) => (
+            <TableRow key={m.id}>
+              <TableCell className="tabular-nums">
+                <Link
+                  to="/meals/$id"
+                  params={{ id: m.id }}
+                  className="hover:underline"
+                >
+                  {format(parseISO(m.date), "EEE, MMM d, yyyy")}
+                </Link>
+              </TableCell>
+              <TableCell>{m.name || "—"}</TableCell>
+              <TableCell className="whitespace-normal text-muted-foreground">
+                {m.recipes.length === 0
+                  ? "—"
+                  : m.recipes
+                      .map(
+                        (r) =>
+                          `${r.scale !== 1 ? `${r.scale}× ` : ""}${r.recipe.name}`,
+                      )
+                      .join(", ")}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {formatMealCost(m.totals)}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </Stack>
   );
 }

@@ -3,11 +3,6 @@ import { memo, useMemo } from "react";
 import { Row, Stack } from "~/components/layout";
 import { StatusText } from "~/components/ui/status-text";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "~/components/ui/tooltip";
-import {
   BASE_KINDS,
   type BaseKind,
   type CoverageTier,
@@ -15,7 +10,7 @@ import {
 } from "~/lib/conversion-coverage";
 import { ConversionDialog } from "./ConversionDialog";
 import { CoverageChips, MacroChips } from "./CoverageChips";
-import { kindIconMap } from "./kind-icons";
+import { KindIcon } from "./kind-icon";
 
 interface ConversionCapabilitiesProps {
   mappings: UnitMapping[];
@@ -42,8 +37,6 @@ interface ConversionCapabilitiesProps {
    */
   kinds?: readonly BaseKind[];
 }
-
-// kindIconMap shared in kind-icons.ts
 
 const TIER_LABEL: Record<CoverageTier, string> = {
   complete: "Complete",
@@ -113,29 +106,14 @@ export const ConversionCapabilities = memo(function ConversionCapabilities({
               labels carry the meaning. */}
           {coverage && compact && showCoverage && (
             <Row align="center" gap="tight">
-              {coverageKinds.map((kind) => {
-                const { Icon, label } = kindIconMap[kind]!;
-                const lit = coverage.covered.has(kind);
-                const state = lit ? "convertible" : "no conversion";
-                return (
-                  <Tooltip key={kind}>
-                    <TooltipTrigger
-                      render={
-                        <span className={"inline-flex p-0.5" /* tight */} />
-                      }
-                    >
-                      <span className="sr-only">{`${label}: ${state}`}</span>
-                      <Icon
-                        className={`h-3.5 w-3.5 ${lit ? "text-foreground" : "text-muted-foreground/40"}`}
-                        aria-hidden
-                      />
-                    </TooltipTrigger>
-                    <TooltipContent
-                      sideOffset={6}
-                    >{`${label}: ${state}`}</TooltipContent>
-                  </Tooltip>
-                );
-              })}
+              {coverageKinds.map((kind) => (
+                <KindIcon
+                  key={kind}
+                  kind={kind}
+                  lit={coverage.covered.has(kind)}
+                  className={"p-0.5" /* tight */}
+                />
+              ))}
             </Row>
           )}
 

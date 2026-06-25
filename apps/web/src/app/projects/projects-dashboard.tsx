@@ -134,20 +134,17 @@ export function ProjectsDashboard() {
 
   if (!dataWithImages) {
     return (
-      <Stack>
-        <h1 className="font-bold font-heading text-3xl">Projects</h1>
-        <Card>
-          <CardContent>
-            <p className="text-muted-foreground">
-              Notion integration is not configured. Add{" "}
-              <code className="rounded bg-muted px-1 text-sm">
-                NOTION_API_KEY
-              </code>{" "}
-              to your environment variables.
-            </p>
-          </CardContent>
-        </Card>
-      </Stack>
+      <Card>
+        <CardContent>
+          <p className="text-muted-foreground">
+            Notion integration is not configured. Add{" "}
+            <code className="rounded bg-muted px-1 text-sm">
+              NOTION_API_KEY
+            </code>{" "}
+            to your environment variables.
+          </p>
+        </CardContent>
+      </Card>
     );
   }
 
@@ -217,11 +214,6 @@ function DashboardContent({
 
   return (
     <Stack>
-      <Row align="center" gap="sm">
-        <Hammer className="h-8 w-8" />
-        <h1 className="font-bold font-heading text-3xl">Projects</h1>
-      </Row>
-
       <SummaryCards projects={projects} tasks={tasks} purchases={purchases} />
 
       <DashboardFilters

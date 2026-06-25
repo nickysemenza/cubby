@@ -2,6 +2,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { BookOpen } from "lucide-react";
 import { NoneState } from "~/app/_components/NoneState";
+import { Empty, EmptyDescription, EmptyIcon } from "~/components/ui/empty";
 import { Image } from "~/components/ui/image";
 import { useTRPC } from "~/trpc/react";
 
@@ -18,12 +19,12 @@ export function CookbookList() {
 
   if (cookbooks.length === 0) {
     return (
-      <div className="rounded-xl border border-border border-dashed p-6 text-center text-muted-foreground">
-        <BookOpen className="mx-auto mb-2 h-6 w-6" />
-        <p className="text-sm">
+      <Empty>
+        <EmptyIcon icon={BookOpen} />
+        <EmptyDescription>
           No cookbooks yet. Import an EPUB from the Recipes page to get started.
-        </p>
-      </div>
+        </EmptyDescription>
+      </Empty>
     );
   }
 

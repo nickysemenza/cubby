@@ -30,6 +30,7 @@ import {
   gramText,
   recipeMacroSegments,
 } from "./recipe-utils";
+import { StepNumberBadge, StubWarning } from "./spec-markers";
 
 // Prep sheet: the recipe broken into one block per component (every sub-recipe
 // + the root assembly, dependencies first), each an actionable checklist with
@@ -95,9 +96,9 @@ function PrepRow({
         <span className="size-3.5 shrink-0" />
         <span className="flex-1 text-muted-foreground text-sm italic">
           {row.name}{" "}
-          <span className="font-mono text-2xs text-warning uppercase tracking-wide">
+          <StubWarning>
             {row.reason === "cycle" ? "↻ cycle" : "missing"}
-          </span>
+          </StubWarning>
         </span>
       </Row>
     );
@@ -240,9 +241,7 @@ function Component({
               <Stack as="ol" gap="sm" className="mt-2 pl-0">
                 {steps.map((step) => (
                   <Row as="li" gap="sm" key={step.n}>
-                    <span className="mt-px inline-flex size-[17px] shrink-0 items-center justify-center rounded-full border border-[var(--border-chunky)] font-mono text-[9px] text-muted-foreground tabular-nums">
-                      {step.n}
-                    </span>
+                    <StepNumberBadge>{step.n}</StepNumberBadge>
                     <span className="text-muted-foreground text-sm leading-snug">
                       <MarkdownText className="[&_p]:my-0">
                         {step.text}

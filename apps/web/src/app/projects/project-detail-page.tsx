@@ -4,6 +4,7 @@ import { sumBy } from "es-toolkit";
 import { ArrowLeft, Calendar, DollarSign, ExternalLink } from "lucide-react";
 import { useMemo } from "react";
 import { Grid, Row, Section, Stack } from "~/components/layout";
+import { Page } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
 import {
   Card,
@@ -47,33 +48,66 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
   }, [data, projectId]);
 
   if (isLoading) {
-    return <DetailSkeleton />;
+    return (
+      <Page variant="list" title="Project" decoration="none">
+        <DetailSkeleton />
+      </Page>
+    );
   }
 
   if (!project) {
     return (
-      <Stack>
-        <Link
-          to="/projects"
-          className="inline-flex items-center gap-1 text-muted-foreground text-sm hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to projects
-        </Link>
-        <Description>Project not found.</Description>
-      </Stack>
+      <Page variant="list" title="Project" decoration="none">
+        <Stack>
+          <Link
+            to="/projects"
+            className="inline-flex items-center gap-1 text-muted-foreground text-sm hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to projects
+          </Link>
+          <Description>Project not found.</Description>
+        </Stack>
+      </Page>
     );
   }
 
   const totalCost = sumBy(purchases, (p) => p.cost ?? 0);
 
   return (
-    <Stack>
+    <Page
+      variant="list"
+      title={
+        <>
+          {project.icon && `${project.icon} `}
+          {project.name}
+        </>
+      }
+      eyebrow={
+        <Link
+          to="/projects"
+          className="inline-flex items-center gap-1 hover:text-foreground"
+        >
+          <ArrowLeft className="h-3 w-3" />
+          Projects
+        </Link>
+      }
+      actions={
+        <a
+          href={project.notionUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="shrink-0 text-muted-foreground hover:text-foreground"
+        >
+          <ExternalLink className="h-4 w-4" />
+        </a>
+      }
+    >
       {/* Cover image */}
       {project.coverImage && (
         <div
           // negative-margin cover bleed; -mx-* is coupled to the w-[calc(100%+Nrem)] compensation, not free spacing
-          className="relative -mx-4 -mt-4 mb-0 h-48 w-[calc(100%+2rem)] overflow-hidden rounded-t-lg sm:-mx-6 sm:w-[calc(100%+3rem)] lg:-mx-8 lg:w-[calc(100%+4rem)]"
+          className="relative -mx-4 mb-0 h-48 w-[calc(100%+2rem)] overflow-hidden rounded-lg sm:-mx-6 sm:w-[calc(100%+3rem)] lg:-mx-8 lg:w-[calc(100%+4rem)]"
         >
           <Image
             src={project.coverImage}
@@ -83,53 +117,25 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
         </div>
       )}
 
-      {/* Header */}
-      <Stack>
-        <Link
-          to="/projects"
-          className="inline-flex items-center gap-1 text-muted-foreground text-sm hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to projects
-        </Link>
-
-        <Row align="start" justify="between" gap="md">
-          <Stack gap="sm">
-            <h1 className="font-bold font-heading text-3xl">
-              {project.icon && `${project.icon} `}
-              {project.name}
-            </h1>
-            <Row align="center" wrap gap="sm">
-              <Badge variant="outline" className="gap-1">
-                <StatusIcon status={project.status} />
-                {project.status ?? "No status"}
-              </Badge>
-              {project.kind && (
-                <Badge variant="secondary">{project.kind}</Badge>
-              )}
-              {project.location.map((loc) => (
-                <Badge key={loc} variant="outline">
-                  {loc}
-                </Badge>
-              ))}
-              {(project.date || project.dateEnd) && (
-                <Badge variant="outline" className="gap-1">
-                  <Calendar className="h-3 w-3" />
-                  {formatDateRange(project.date, project.dateEnd)}
-                </Badge>
-              )}
-            </Row>
-          </Stack>
-          <a
-            href={project.notionUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="shrink-0 text-muted-foreground hover:text-foreground"
-          >
-            <ExternalLink className="h-4 w-4" />
-          </a>
-        </Row>
-      </Stack>
+      {/* Status / kind / location / date badges */}
+      <Row align="center" wrap gap="sm">
+        <Badge variant="outline" className="gap-1">
+          <StatusIcon status={project.status} />
+          {project.status ?? "No status"}
+        </Badge>
+        {project.kind && <Badge variant="secondary">{project.kind}</Badge>}
+        {project.location.map((loc) => (
+          <Badge key={loc} variant="outline">
+            {loc}
+          </Badge>
+        ))}
+        {(project.date || project.dateEnd) && (
+          <Badge variant="outline" className="gap-1">
+            <Calendar className="h-3 w-3" />
+            {formatDateRange(project.date, project.dateEnd)}
+          </Badge>
+        )}
+      </Row>
 
       {/* Cost summary */}
       <CostSummary
@@ -200,7 +206,7 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
         <h2 className="font-heading font-semibold text-xl">Notes</h2>
         <NotionPageContent pageId={project.id} />
       </Stack>
-    </Stack>
+    </Page>
   );
 }
 
