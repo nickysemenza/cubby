@@ -65,7 +65,7 @@ export const notDeleted = <T extends { deletedAt: AnyColumn }>(table: T) =>
  * the SQL `notDeleted()` can't apply. Keep the two in lockstep: `notDeleted`
  * filters at query time, `isNotDeleted` filters in memory.
  */
-export const isNotDeleted = <T extends { deletedAt: Date | null }>(
+export const isNotDeleted = <T extends { deletedAt?: Date | null }>(
   row: T,
 ): boolean => row.deletedAt === null;
 

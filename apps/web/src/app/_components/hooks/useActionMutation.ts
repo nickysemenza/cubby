@@ -1,6 +1,5 @@
 import type { QueryKey, UseMutationOptions } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useMemo } from "react";
 import { toast } from "sonner";
 import { getErrorMessage } from "~/lib/error-utils";
 
@@ -58,33 +57,25 @@ export function useActionMutation<TFn extends MutationOptionsFn>({
 }) {
   const queryClient = useQueryClient();
 
-  // Memoized so the options object (and thus the mutation) keeps a stable
-  // reference across renders — mirrors useUpdateMutation, avoids churn.
-  const mutationOptions = useMemo(
-    () =>
-      mutationFn({
-        onSuccess: (data: DataOf<TFn>) => {
-          toast.success(
-            typeof success === "function" ? success(data) : success,
-          );
-          for (const key of invalidateKeys) {
-            // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
-            void queryClient.invalidateQueries({ queryKey: [key] });
-          }
-          onSuccess?.(data);
-        },
-        onError: (err: unknown) => {
-          toast.error(
-            error === undefined
-              ? getErrorMessage(err)
-              : typeof error === "function"
-                ? error(err)
-                : error,
-          );
-        },
-      } as never),
-    [mutationFn, success, invalidateKeys, onSuccess, error, queryClient],
-  );
+  const mutationOptions = mutationFn({
+    onSuccess: (data: DataOf<TFn>) => {
+      toast.success(typeof success === "function" ? success(data) : success);
+      for (const key of invalidateKeys) {
+        // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
+        void queryClient.invalidateQueries({ queryKey: [key] });
+      }
+      onSuccess?.(data);
+    },
+    onError: (err: unknown) => {
+      toast.error(
+        error === undefined
+          ? getErrorMessage(err)
+          : typeof error === "function"
+            ? error(err)
+            : error,
+      );
+    },
+  } as never);
 
   return useMutation<DataOf<TFn>, Error, VariablesOf<TFn>>(
     mutationOptions as Parameters<

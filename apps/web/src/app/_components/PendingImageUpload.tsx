@@ -81,7 +81,7 @@ export function PendingImageUpload({
   const importFromUrlMutation = useMutation(
     api.image.importFromUrl.mutationOptions({
       onError: (error) => {
-        toast.error(`Import failed: ${error.message}`);
+        toast.error(`Import failed: ${getErrorMessage(error)}`);
       },
     }),
   );

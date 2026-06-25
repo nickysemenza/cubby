@@ -21,9 +21,7 @@ export const extractImagesFromJoinTable = <
   joinTableRecords: T[] | undefined | null,
 ): T["image"][] => {
   return (
-    joinTableRecords
-      ?.filter((record) => !record.deletedAt)
-      .map((record) => record.image) ?? []
+    joinTableRecords?.filter(isNotDeleted).map((record) => record.image) ?? []
   );
 };
 
