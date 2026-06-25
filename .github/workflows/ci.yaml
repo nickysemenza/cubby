@@ -512,7 +512,14 @@ jobs:
 
   build-cf:
     name: Build for Cloudflare Workers
-    needs: [build-wasm, lint-format]
+    # Only needs the WASM artifact + source — lint passing is orthogonal to
+    # whether the bundle builds. Decoupled from lint-format so it runs in
+    # parallel (starts after build-wasm, not after lint), which lands the PR
+    # preview-cf ~43s sooner and keeps build-cf off the deploy critical path
+    # (check-tests is the pole). The real deploy still gates on lint-format
+    # (deploy-cf `needs`), so a lint failure never ships — build-cf just may
+    # run on a lint-broken PR (cheap; minutes are free on the public repo).
+    needs: [build-wasm]
     runs-on: ubuntu-latest
     env:
       NODE_OPTIONS: "--max-old-space-size=4096"
