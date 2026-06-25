@@ -201,6 +201,49 @@ export function buildRecipeKicker(
   return parts.filter((p): p is string => Boolean(p));
 }
 
+/**
+ * The compact cost + macro segments shown by the Read kicker and (per-serving)
+ * the Prep component headers — `["$0.42", "740 kcal", "9g P", "5g F", "6g C"]`.
+ * Values are divided by `basis` when one is given (per-serving) and shown as
+ * totals otherwise; `basisLabel` ("per serving" / "total") is the single label a
+ * caller prepends, so the per-unit noun isn't repeated on every segment. Pulls
+ * fat & carbs (which the four-figure {@link recipeHeadlineTotals} omits) so the
+ * reader view shows a full macro split. Cost/calories carry their range upper;
+ * the gram macros render a single rounded value. */
+export function recipeMacroSegments(
+  totals: {
+    price: number;
+    priceUpper?: number;
+    weight: number;
+    weightUpper?: number;
+    nutrients: NutrientsPer100;
+    nutrientsUpper?: NutrientsPer100;
+  },
+  basis: ServingBasis | null,
+  opts?: { includeCost?: boolean },
+): { basisLabel: string; parts: string[] } {
+  const head = recipeHeadlineTotals(totals);
+  const fat = getNutrientValueByKey(totals.nutrients, "fat") || undefined;
+  const carbs = getNutrientValueByKey(totals.nutrients, "carbs") || undefined;
+  const div = basis ? basis.divisor : 1;
+  const per = (n: number) => n / div;
+  const perUpper = (u: number | undefined) => (u != null ? per(u) : undefined);
+  const round = (n: number) => `${Math.round(n)}`;
+
+  const parts: string[] = [];
+  if (head.cost && opts?.includeCost !== false)
+    parts.push(formatCurrencyRange(per(head.cost), perUpper(head.costUpper)));
+  if (head.calories)
+    parts.push(
+      `${formatNumberRange(per(head.calories), perUpper(head.caloriesUpper), round)} kcal`,
+    );
+  if (head.protein) parts.push(`${round(per(head.protein))}g P`);
+  if (fat) parts.push(`${round(per(fat))}g F`);
+  if (carbs) parts.push(`${round(per(carbs))}g C`);
+
+  return { basisLabel: basis ? `per ${basis.noun}` : "total", parts };
+}
+
 export const getIngredientName = getRecipeIngredientName;
 
 /**

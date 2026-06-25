@@ -2,18 +2,22 @@ import { ShoppingCart } from "lucide-react";
 import { memo, useMemo } from "react";
 import { Row, Stack } from "~/components/layout";
 import { MarkdownText } from "~/components/markdown";
+import { formatCurrency } from "~/lib/utils";
 import { dottedEntityLink, EntityPreviewLink } from "../EntityPreviewLink";
+import { IngredientComponentGrid } from "./IngredientComponentGrid";
 import {
   buildDisplayQuantities,
   gramMapFromCosting,
   IngredientModifier,
   IngredientQuantities,
 } from "./IngredientQuantities";
+import type { RecipePrepMode } from "./RecipeDetail";
 import {
   asUsedGramsByRecipe,
   batchYieldGrams,
   type CombinedNeed,
   flattenComponents,
+  fullBatchCostByComponent,
   fullBatchNeeds,
   type RecipeTreeNode,
   type RecipeTreeRow,
@@ -23,7 +27,9 @@ import {
   formatMakes,
   formatYield,
   getIngredientName,
+  getServingBasis,
   gramText,
+  recipeMacroSegments,
 } from "./recipe-utils";
 
 // Prep sheet: the recipe broken into one block per component (every sub-recipe
@@ -32,7 +38,13 @@ import {
 // you batch a sub-recipe, you don't make "0.16 of a chicken"); a per-component
 // "X used" note + the top shopping list carry the as-used / UI-scaled totals.
 
-function ShoppingList({ needs }: { needs: CombinedNeed[] }) {
+function ShoppingList({
+  needs,
+  totalCost,
+}: {
+  needs: CombinedNeed[];
+  totalCost: number | null;
+}) {
   if (needs.length === 0) return null;
   return (
     <details
@@ -43,6 +55,11 @@ function ShoppingList({ needs }: { needs: CombinedNeed[] }) {
         <ShoppingCart className="mr-2 inline h-3 w-3 align-[-2px]" />
         Shopping list
         <span className="ml-1 text-muted-foreground/60">· full batch</span>
+        {totalCost != null && (
+          <span className="ml-1 text-foreground">
+            · {formatCurrency(totalCost)}
+          </span>
+        )}
       </summary>
       <div className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
         {needs.map((need) => (
@@ -159,6 +176,15 @@ function Component({
       : 1;
   const steps = node.sections.flatMap((s) => s.steps);
 
+  // Cost + macro atoms: this component's full-batch cost and its per-serving
+  // macro split (basis = this component's own servings/yield).
+  const batchCost = node.costing?.totals.price ?? null;
+  const macro = node.costing
+    ? recipeMacroSegments(node.costing.totals, getServingBasis(node.recipe), {
+        includeCost: false,
+      })
+    : null;
+
   return (
     <section>
       <Row align="baseline" gap="sm" className="mb-2">
@@ -178,6 +204,12 @@ function Component({
           {makes && (
             <div>
               makes {makes}
+              {batchCost != null && (
+                <span className="text-foreground">
+                  {" "}
+                  · {formatCurrency(batchCost)}
+                </span>
+              )}
               {batches > 1 && (
                 <span className="text-warning"> · make {batches}×</span>
               )}
@@ -191,6 +223,13 @@ function Component({
           )}
         </div>
       </Row>
+
+      {/* Per-serving macro split (kcal · P · F · C), the macro atom. */}
+      {macro && macro.parts.length > 0 && (
+        <div className="mb-2 font-mono text-2xs text-muted-foreground lowercase tracking-wide">
+          {macro.basisLabel} · {macro.parts.join(" · ")}
+        </div>
+      )}
 
       <div className="border-[var(--border-chunky)] border-t">
         {node.sections.map((section, si) => (
@@ -229,8 +268,11 @@ function Component({
 // per-row WASM formatting + markdown ran on every parent re-render (load freeze).
 export const RecipePrepSheetView = memo(function RecipePrepSheetView({
   tree,
+  mode,
 }: {
   tree: RecipeTreeNode;
+  /** Sub-mode: actionable checklist (default) or the ingredient × component grid. */
+  mode: RecipePrepMode;
 }) {
   const recipe = tree.recipe;
   // Derived tree walks — memoized so RecipeDetail's streaming re-renders don't
@@ -238,6 +280,10 @@ export const RecipePrepSheetView = memo(function RecipePrepSheetView({
   const components = useMemo(() => flattenComponents(tree), [tree]);
   const combined = useMemo(() => fullBatchNeeds(tree), [tree]);
   const usedByRecipe = useMemo(() => asUsedGramsByRecipe(tree), [tree]);
+  const shoppingCost = useMemo(
+    () => fullBatchCostByComponent(tree).total,
+    [tree],
+  );
 
   return (
     <Stack
@@ -264,18 +310,22 @@ export const RecipePrepSheetView = memo(function RecipePrepSheetView({
         </span>
       </header>
 
-      <ShoppingList needs={combined} />
+      <ShoppingList needs={combined} totalCost={shoppingCost} />
 
-      <Stack gap="lg">
-        {components.map((node, i) => (
-          <Component
-            key={node.recipe.id}
-            node={node}
-            index={i}
-            usedGrams={usedByRecipe.get(node.recipe.id)}
-          />
-        ))}
-      </Stack>
+      {mode === "grid" ? (
+        <IngredientComponentGrid tree={tree} showCost />
+      ) : (
+        <Stack gap="lg">
+          {components.map((node, i) => (
+            <Component
+              key={node.recipe.id}
+              node={node}
+              index={i}
+              usedGrams={usedByRecipe.get(node.recipe.id)}
+            />
+          ))}
+        </Stack>
+      )}
     </Stack>
   );
 });

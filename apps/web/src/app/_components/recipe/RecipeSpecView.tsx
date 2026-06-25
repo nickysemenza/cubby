@@ -1,13 +1,11 @@
-import type { RecipeOut } from "@cubby/schemas/recipe";
 import { uniq } from "es-toolkit";
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, memo, useMemo, useState } from "react";
+import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
 import { Row, Stack } from "~/components/layout";
 import { MarkdownText } from "~/components/markdown";
-import type {
-  CalculateTotalsResult,
-  RecipeCosting,
-} from "~/lib/recipe-costing";
 import { cn } from "~/lib/utils";
+import { renderValueOrMissing } from "~/misc/result";
+import { dottedEntityLink, EntityPreviewLink } from "../EntityPreviewLink";
 import {
   buildDisplayQuantities,
   gramMapFromCosting,
@@ -17,74 +15,331 @@ import {
 import {
   computeScalingPercentages,
   formatScalingPct,
-  pickDefaultBaseRowId,
 } from "./recipe-scaling-pct";
 import { sourceFootnote } from "./recipe-source";
-import { formatYield, getIngredientName } from "./recipe-utils";
+import {
+  firstExpansionRowIds,
+  type RecipeTreeNode,
+  type RecipeTreeRow,
+} from "./recipe-tree";
+import {
+  entityRefForRow,
+  formatYield,
+  getIngredientName,
+} from "./recipe-utils";
 
-interface RecipeSpecViewProps {
-  /** Already-scaled recipe (RecipeDetail multiplies amounts upstream). */
-  recipe: RecipeOut;
-  totals: CalculateTotalsResult | null;
-  /** Per-row engine result — null while loading; grams/scaling degrade to "—". */
-  costing: RecipeCosting | null;
+// Spec sheet: the engineering view. A flat recipe renders as a single bordered
+// table (Ingredient · Qty · Cost · Scaling, method beneath each section); a
+// recipe with sub-recipes auto-expands every sub-recipe inline, Modernist-
+// Cuisine-style, each a self-contained batch with its OWN scaling base. This is
+// the merged Spec ∪ Nested view.
+//
+// Scaling % is re-anchorable: click any row's % to make it this node's 100%
+// base (per-node, keyed by recipe id), recomputed client-side from the grams the
+// costing engine already resolved — no WASM round-trip. The Cost column shows
+// the line's resolved price at its as-used amount (borrowed from the Data view).
+//
+// Sub-recipe rows show the *as-used* amount in the parent (spec convention:
+// "130 g of [chicken]"); the child's full table nests under a colored left-rule.
+
+// Depth-keyed left-rule color (warm chart ramp tokens, never hardcoded hex).
+// Capped so very deep trees reuse the last color rather than running off-ramp.
+const DEPTH_RULE = [
+  "var(--chart-1)",
+  "var(--chart-3)",
+  "var(--chart-5)",
+  "var(--chart-7)",
+];
+const depthRule = (depth: number): string =>
+  DEPTH_RULE[Math.min(depth, DEPTH_RULE.length - 1)] ?? "var(--chart-1)";
+
+const rowGrid =
+  "grid grid-cols-[minmax(0,1fr)_4.5rem_4rem_3.5rem] items-baseline gap-x-2";
+
+/** Per-node base override: recipe id → the row chosen as that node's 100% base. */
+type BaseOverrides = Map<string, string>;
+
+function CostCell({ node, rowId }: { node: RecipeTreeNode; rowId: string }) {
+  const price = node.costing?.rows.find((r) => r.id === rowId)?.priceInfo
+    ?.price;
+  return (
+    <span className="text-right font-mono text-muted-foreground text-xs tabular-nums">
+      {price ? (
+        renderValueOrMissing(price, (m) => tryFormatAmount(m))
+      ) : (
+        <span className="text-muted-foreground/40">·</span>
+      )}
+    </span>
+  );
 }
 
-export function RecipeSpecView({
-  recipe,
-  totals,
-  costing,
-}: RecipeSpecViewProps) {
-  // Ingredient id → derived grams, from the same engine the other views use.
-  const gramById = useMemo(() => gramMapFromCosting(costing), [costing]);
-
-  // Scaling base (the 100% reference). Defaults to flour, else the heaviest row;
-  // clicking any row's % re-anchors it — purely client-side, no engine re-call.
-  const defaultBaseId = useMemo(
-    () => (costing ? pickDefaultBaseRowId(costing) : null),
-    [costing],
+function ScalingCell({
+  pct,
+  noWeight,
+  isBase,
+  onPick,
+}: {
+  pct: number | null;
+  noWeight: boolean;
+  isBase: boolean;
+  onPick: () => void;
+}) {
+  if (pct == null) {
+    return (
+      <span
+        className={cn(
+          "text-right font-mono text-xs tabular-nums",
+          noWeight ? "text-warning/80" : "text-muted-foreground/60",
+        )}
+      >
+        —
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onPick}
+      aria-pressed={isBase}
+      title="Set as 100% base"
+      className={cn(
+        "cursor-pointer text-right font-mono text-xs tabular-nums hover:text-primary",
+        isBase ? "font-medium text-primary" : "text-foreground/80",
+      )}
+    >
+      {formatScalingPct(pct)}
+    </button>
   );
-  const [pickedBaseId, setPickedBaseId] = useState<string | null>(null);
-  const baseId = pickedBaseId ?? defaultBaseId;
+}
 
+function SpecRow({
+  row,
+  node,
+  baseId,
+  pct,
+  gramById,
+  expanded,
+  overrides,
+  setBase,
+}: {
+  row: RecipeTreeRow;
+  node: RecipeTreeNode;
+  baseId: string | null;
+  pct: number | null;
+  gramById: ReturnType<typeof gramMapFromCosting>;
+  /** Sub-recipe row ids that render their full panel (vs. a "see above" pointer). */
+  expanded: Set<string>;
+  overrides: BaseOverrides;
+  setBase: (recipeId: string, rowId: string) => void;
+}) {
+  if (row.kind === "stub") {
+    return (
+      <div className={rowGrid}>
+        <span className="py-1 text-muted-foreground text-sm italic">
+          {row.name}{" "}
+          <span className="font-mono text-2xs text-warning uppercase tracking-wide">
+            {row.reason === "cycle" ? "↻ cycle" : "missing"}
+          </span>
+        </span>
+        <span />
+        <span />
+        <span />
+      </div>
+    );
+  }
+
+  const isBase = row.id === baseId;
+  const noWeight = row.grams == null;
+  const quantities = buildDisplayQuantities(row.row, gramById);
+  const name = getIngredientName(row.row);
+  const ref = entityRefForRow(row);
+  // Tie a sub-recipe row's marker to the colored panel it opens below.
+  const isSubrecipe = row.kind === "subrecipe";
+  const isExpanded = isSubrecipe && expanded.has(row.id);
+  const accentColor = isSubrecipe ? depthRule(row.child.depth) : undefined;
+
+  const line = (
+    <div className={cn(rowGrid, "align-top")}>
+      <span className="py-1 font-medium text-sm leading-snug">
+        {isSubrecipe && (
+          <span aria-hidden className="mr-1" style={{ color: accentColor }}>
+            {isExpanded ? "▾" : "▸"}
+          </span>
+        )}
+        {ref ? (
+          <EntityPreviewLink
+            entity={ref.entity}
+            id={ref.id}
+            className={dottedEntityLink}
+          >
+            {name}
+          </EntityPreviewLink>
+        ) : (
+          name
+        )}
+        <IngredientModifier modifier={row.row.modifier} />
+        {isSubrecipe && !isExpanded && (
+          <span className="ml-2 align-middle font-mono text-[10px] text-muted-foreground/60 lowercase">
+            ↑ see above
+          </span>
+        )}
+        {isBase && (
+          <span className="ml-2 rounded-sm bg-primary/10 px-1 py-px align-middle font-mono text-[9px] text-primary uppercase tracking-wide">
+            100% base
+          </span>
+        )}
+        {noWeight && row.kind === "ingredient" && (
+          <span className="ml-2 rounded-sm bg-warning/15 px-1 py-px align-middle font-mono text-[9px] text-warning uppercase tracking-wide">
+            no weight
+          </span>
+        )}
+      </span>
+      <IngredientQuantities
+        quantities={quantities}
+        className="text-xs"
+        emptyText="—"
+      />
+      <CostCell node={node} rowId={row.id} />
+      <ScalingCell
+        pct={pct}
+        noWeight={noWeight}
+        isBase={isBase}
+        onPick={() => setBase(node.recipe.id, row.id)}
+      />
+    </div>
+  );
+
+  if (!isExpanded) return line;
+
+  return (
+    <>
+      {line}
+      <div
+        className="mt-1 mb-2 ml-1 rounded-r-md border-l-[3px] bg-muted/40 py-2 pr-2 pl-2"
+        style={{ borderLeftColor: accentColor }}
+      >
+        <SpecNode
+          node={row.child}
+          expanded={expanded}
+          overrides={overrides}
+          setBase={setBase}
+        />
+      </div>
+    </>
+  );
+}
+
+function SpecNode({
+  node,
+  expanded,
+  overrides,
+  setBase,
+}: {
+  node: RecipeTreeNode;
+  expanded: Set<string>;
+  overrides: BaseOverrides;
+  setBase: (recipeId: string, rowId: string) => void;
+}) {
+  const gramById = gramMapFromCosting(node.costing);
+  const showSectionNames = node.sections.length > 1;
+  const isRoot = node.depth === 0;
+
+  // Re-anchorable base: the user's pick for this node, else its default
+  // (flour/heaviest). Percentages are recomputed client-side from resolved grams.
+  const baseId = overrides.get(node.recipe.id) ?? node.baseRowId;
   const pctById = useMemo(
-    () => (costing ? computeScalingPercentages(costing, baseId) : new Map()),
-    [costing, baseId],
-  );
-
-  // Sections become red-ruled row groups; steps number continuously across them.
-  const sectionBlocks = useMemo(() => {
-    let n = 0;
-    return recipe.sections.map((section) => ({
-      section,
-      steps: section.instructions.map((ins) => ({
-        n: ++n,
-        text: ins.instruction,
-      })),
-    }));
-  }, [recipe.sections]);
-
-  const showSectionNames = recipe.sections.length > 1;
-  const footnote = sourceFootnote(recipe.source);
-
-  const renderSteps = (steps: { n: number; text: string }[]) => (
-    <Stack gap="sm">
-      {steps.map((step) => (
-        <Row gap="sm" key={step.n}>
-          <span className="mt-px inline-flex size-[18px] shrink-0 items-center justify-center rounded-full border border-[var(--border-chunky)] font-mono text-[10px] text-muted-foreground tabular-nums">
-            {step.n}
-          </span>
-          <span className="text-foreground/85 text-sm leading-snug">
-            <MarkdownText className="[&_p]:my-0">{step.text}</MarkdownText>
-          </span>
-        </Row>
-      ))}
-    </Stack>
+    () =>
+      node.costing
+        ? computeScalingPercentages(node.costing, baseId)
+        : new Map<string, number | null>(),
+    [node.costing, baseId],
   );
 
   return (
+    <Stack gap="xs">
+      {!isRoot && (
+        <div className="mb-1 flex flex-wrap items-center gap-x-2 font-mono text-2xs uppercase tracking-wider">
+          <EntityPreviewLink
+            entity="recipe"
+            id={node.recipe.id}
+            className={cn(dottedEntityLink, "font-semibold")}
+          >
+            <span style={{ color: depthRule(node.depth) }}>
+              {node.recipe.name}
+            </span>
+          </EntityPreviewLink>
+          {node.recipe.yield?.value ? (
+            <span className="text-eyebrow">
+              · yields {formatYield(node.recipe.yield)}
+            </span>
+          ) : null}
+          {node.batchEstimated && (
+            <span className="text-warning">· batch est.</span>
+          )}
+        </div>
+      )}
+
+      {node.sections.map((section) => (
+        <Fragment key={section.id}>
+          {showSectionNames && section.name && (
+            <div className="eyebrow pt-2">{section.name}</div>
+          )}
+          {section.rows.map((row) => (
+            <SpecRow
+              key={row.id}
+              row={row}
+              node={node}
+              baseId={baseId}
+              pct={pctById.get(row.id) ?? null}
+              gramById={gramById}
+              expanded={expanded}
+              overrides={overrides}
+              setBase={setBase}
+            />
+          ))}
+          {section.steps.length > 0 && (
+            <Stack as="ol" gap="xs" className="mt-2 mb-1 pl-0">
+              {section.steps.map((step) => (
+                <Row as="li" gap="sm" key={step.n}>
+                  <span className="mt-px inline-flex size-[16px] shrink-0 items-center justify-center rounded-full border border-[var(--border-chunky)] font-mono text-[9px] text-muted-foreground tabular-nums">
+                    {step.n}
+                  </span>
+                  <span className="text-foreground/80 text-xs leading-snug">
+                    <MarkdownText className="[&_p]:my-0">
+                      {step.text}
+                    </MarkdownText>
+                  </span>
+                </Row>
+              ))}
+            </Stack>
+          )}
+        </Fragment>
+      ))}
+    </Stack>
+  );
+}
+
+// memo: skip re-renders from RecipeDetail's streaming churn (`tree` is stable).
+export const RecipeSpecView = memo(function RecipeSpecView({
+  tree,
+}: {
+  tree: RecipeTreeNode;
+}) {
+  const recipe = tree.recipe;
+  const expanded = useMemo(() => firstExpansionRowIds(tree), [tree]);
+  const [overrides, setOverrides] = useState<BaseOverrides>(new Map());
+  const setBase = (recipeId: string, rowId: string) =>
+    setOverrides((prev) => {
+      const next = new Map(prev);
+      next.set(recipeId, rowId);
+      return next;
+    });
+
+  const footnote = sourceFootnote(recipe.source);
+  const missingWeight = tree.costing?.totals.missingByType.weight ?? [];
+
+  return (
     <div className="rounded-xl border border-[var(--border-chunky)] bg-card px-6 py-6">
-      {/* Title + yield */}
       <header className="mb-4 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
         <h2 className="my-0 font-heading font-semibold text-2xl tracking-tight">
           {recipe.name}
@@ -96,161 +351,41 @@ export function RecipeSpecView({
         ) : null}
       </header>
 
-      {/* Headnote + tips */}
       {recipe.notes && (
         <MarkdownText className="mb-4 max-w-prose text-muted-foreground">
           {recipe.notes}
         </MarkdownText>
       )}
 
-      <table className="w-full border-collapse text-left">
-        <thead>
-          <tr className="eyebrow">
-            <th className="pr-2 pb-2 font-medium">Ingredient</th>
-            <th className="pr-2 pb-2 font-medium">Quantity</th>
-            <th className="pr-2 pb-2 font-medium">Scaling</th>
-            <th className="pb-2 font-medium">Procedure</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td colSpan={4} className="border-primary border-t-2" />
-          </tr>
+      <div className={cn(rowGrid, "eyebrow border-primary border-b-2 pb-2")}>
+        <span>Ingredient</span>
+        <span className="text-right">Qty</span>
+        <span className="text-right">Cost</span>
+        <span className="text-right">Scaling</span>
+      </div>
 
-          {sectionBlocks.map(({ section, steps }, si) => {
-            const ingredients = section.ingredients;
-            const procedureCell = (
-              <td
-                rowSpan={Math.max(1, ingredients.length)}
-                className="py-2 pl-2 align-top"
-              >
-                {renderSteps(steps)}
-              </td>
-            );
+      <div className="pt-2">
+        <SpecNode
+          node={tree}
+          expanded={expanded}
+          overrides={overrides}
+          setBase={setBase}
+        />
+      </div>
 
-            return (
-              <Fragment key={section.id}>
-                {si > 0 && (
-                  <tr>
-                    <td colSpan={4} className="border-primary border-t" />
-                  </tr>
-                )}
-                {showSectionNames && section.name && (
-                  <tr>
-                    <td colSpan={4} className="eyebrow pt-2 pb-1">
-                      {section.name}
-                    </td>
-                  </tr>
-                )}
-
-                {ingredients.map((ing, ri) => {
-                  const name = getIngredientName(ing);
-                  const quantities = buildDisplayQuantities(ing, gramById);
-
-                  const pct = pctById.get(ing.id) ?? null;
-                  const isBase = ing.id === baseId;
-                  // No resolvable weight → this row can't scale (same signal that
-                  // feeds totals.missingByType.weight). Flag it loudly.
-                  const noWeight = !gramById.has(ing.id);
-
-                  return (
-                    <tr key={ing.id} className="align-top">
-                      <td className="py-2 pr-2 font-medium text-sm leading-snug">
-                        {name}
-                        <IngredientModifier modifier={ing.modifier} />
-                        {isBase && (
-                          <span className="ml-2 rounded-sm bg-primary/10 px-1 py-px align-middle font-mono text-[9px] text-primary uppercase tracking-wide">
-                            100% base
-                          </span>
-                        )}
-                        {noWeight && (
-                          <span
-                            title="No weight — omitted from scaling"
-                            className="ml-2 rounded-sm bg-warning/15 px-1 py-px align-middle font-mono text-[9px] text-warning uppercase tracking-wide"
-                          >
-                            no weight
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-2 pr-2">
-                        <IngredientQuantities
-                          quantities={quantities}
-                          className="text-xs"
-                          emptyText="—"
-                        />
-                      </td>
-                      <td className="py-2 pr-2 font-mono text-xs tabular-nums">
-                        {pct == null ? (
-                          <span
-                            title={
-                              noWeight
-                                ? "No weight — omitted from scaling"
-                                : undefined
-                            }
-                            className={cn(
-                              noWeight
-                                ? "text-warning/80"
-                                : "text-muted-foreground/60",
-                            )}
-                          >
-                            —
-                          </span>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setPickedBaseId(ing.id)}
-                            aria-pressed={isBase}
-                            title="Set as 100% base"
-                            className={cn(
-                              "cursor-pointer rounded-sm hover:text-primary",
-                              isBase
-                                ? "font-medium text-primary"
-                                : "text-foreground/80",
-                            )}
-                          >
-                            {formatScalingPct(pct)}
-                          </button>
-                        )}
-                      </td>
-                      {ri === 0 && procedureCell}
-                    </tr>
-                  );
-                })}
-
-                {ingredients.length === 0 && (
-                  <tr className="align-top">
-                    <td colSpan={3} />
-                    {procedureCell}
-                  </tr>
-                )}
-              </Fragment>
-            );
-          })}
-
-          <tr>
-            <td colSpan={4} className="border-primary border-t-2" />
-          </tr>
-        </tbody>
-      </table>
-
-      {/* Attribution footer */}
       {footnote && (
         <p className="mt-4 font-heading text-primary text-xs italic">
           {footnote}
         </p>
       )}
 
-      {/* Keep the totals reference wired even when the kicker is omitted, so the
-          spec sheet stays consistent with the costing the other views show. */}
-      {totals && totals.missingByType.weight.length > 0 && (
+      {missingWeight.length > 0 && (
         <p className="mt-2 font-mono text-2xs text-muted-foreground/70">
           Scaling omits{" "}
-          <span className="text-warning">
-            {uniq(totals.missingByType.weight).join(", ")}
-          </span>{" "}
+          <span className="text-warning">{uniq(missingWeight).join(", ")}</span>{" "}
           — no weight.
         </p>
       )}
     </div>
   );
-}
+});

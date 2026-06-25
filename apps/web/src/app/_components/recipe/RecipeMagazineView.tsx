@@ -9,6 +9,7 @@ import type {
   RecipeCosting,
 } from "~/lib/recipe-costing";
 import { cn } from "~/lib/utils";
+import { dottedEntityLink, EntityPreviewLink } from "../EntityPreviewLink";
 import {
   buildDisplayQuantities,
   gramMapFromCosting,
@@ -23,6 +24,7 @@ import {
   getEffectiveServings,
   getIngredientName,
   getServingBasis,
+  recipeMacroSegments,
 } from "./recipe-utils";
 import { SectionHeading } from "./section-heading";
 
@@ -87,8 +89,17 @@ function IngredientLedger({
               const name = getIngredientName(ing);
               const isStruck = struck.has(ing.id);
               const quantities = buildDisplayQuantities(ing, gramById);
+              // Strike-off lives on the quantity gutter (a button), so the name
+              // can be a dotted popover-link — hover for the entity preview,
+              // click to open it — without the two interactions colliding.
+              const ref =
+                ing.type === "ingredient"
+                  ? { entity: "ingredient" as const, id: ing.ingredient.id }
+                  : ing.type === "recipe"
+                    ? { entity: "recipe" as const, id: ing.recipe.id }
+                    : null;
               return (
-                <li key={ing.id}>
+                <li key={ing.id} className={cn(ingredientRowGrid, "py-2")}>
                   <button
                     type="button"
                     aria-pressed={isStruck}
@@ -96,27 +107,34 @@ function IngredientLedger({
                     title={
                       ing.rawLine && ing.rawLine !== name
                         ? ing.rawLine
-                        : undefined
+                        : "Cross off"
                     }
-                    className={cn(
-                      ingredientRowGrid,
-                      "w-full cursor-pointer py-2 text-left",
-                    )}
+                    className="cursor-pointer text-left"
                   >
                     <IngredientQuantities
                       quantities={quantities}
                       className={cn("text-xs", isStruck && "opacity-40")}
                     />
-                    <span
-                      className={cn(
-                        "text-sm leading-snug",
-                        isStruck && "text-muted-foreground line-through",
-                      )}
-                    >
-                      {name}
-                      <IngredientModifier modifier={ing.modifier} />
-                    </span>
                   </button>
+                  <span
+                    className={cn(
+                      "text-sm leading-snug",
+                      isStruck && "text-muted-foreground line-through",
+                    )}
+                  >
+                    {ref ? (
+                      <EntityPreviewLink
+                        entity={ref.entity}
+                        id={ref.id}
+                        className={dottedEntityLink}
+                      >
+                        {name}
+                      </EntityPreviewLink>
+                    ) : (
+                      name
+                    )}
+                    <IngredientModifier modifier={ing.modifier} />
+                  </span>
                 </li>
               );
             })}
@@ -140,21 +158,32 @@ export function RecipeMagazineView({
   // Ingredient id → derived gram weight, from the same engine the table uses.
   const gramById = useMemo(() => gramMapFromCosting(costing), [costing]);
 
-  const kicker = buildRecipeKicker(
-    { yield: recipe.yield, servings },
-    totals ? { totals, basis } : undefined,
-  ).join("  ·  ");
+  // Vitals (Makes/Serves) on the eyebrow; the cost + macro split rides on its own
+  // mono line just below (the macro atom — per-serving when there's a basis, else
+  // total — so the reader sees $·kcal·P·F·C without a hand-typed headnote).
+  const kicker = buildRecipeKicker({ yield: recipe.yield, servings }).join(
+    "  ·  ",
+  );
+  const macro = totals ? recipeMacroSegments(totals, basis) : null;
 
   return (
     <Stack gap="lg">
       {/* Hero Section */}
       <RecipeHero recipe={recipe} />
 
-      {/* Kicker: the recipe's vitals on one ledger line */}
-      {kicker && (
-        <Eyebrow className="border-foreground border-b pb-2 tracking-[0.12em]">
-          {kicker}
-        </Eyebrow>
+      {/* Kicker: the recipe's vitals + a cost/macro line */}
+      {(kicker || (macro && macro.parts.length > 0)) && (
+        <div className="border-foreground border-b pb-2">
+          {kicker && <Eyebrow className="tracking-[0.12em]">{kicker}</Eyebrow>}
+          {macro && macro.parts.length > 0 && (
+            <div className="mt-1 font-mono text-muted-foreground text-xs">
+              <span className="uppercase tracking-wide">
+                {macro.basisLabel}
+              </span>{" "}
+              · {macro.parts.join("  ·  ")}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Headnote + tips: freeform markdown imported from the source or edited */}

@@ -1,10 +1,9 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, Sparkles, TriangleAlert } from "lucide-react";
+import { ArrowRight, TriangleAlert } from "lucide-react";
 import { match } from "ts-pattern";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { buttonVariants } from "~/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import {
   Popover,
@@ -120,39 +119,10 @@ function CostingGapList({ gaps }: { gaps: CostingGap[] }) {
 }
 
 /**
- * "Improve costing coverage" panel: the recipe's uncosted ingredients, each with
- * its single highest-leverage fix (derived once in {@link deriveCostingGaps}),
- * what's missing, and a deep-link into the workbench. Render only when `gaps` is
- * non-empty; used inline in the table/charts views where cost matters.
- */
-export function RecipeCostingCoverage({ gaps }: { gaps: CostingGap[] }) {
-  if (gaps.length === 0) return null;
-
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-primary" />
-          Improve costing coverage
-        </CardTitle>
-        <Description>
-          {gaps.length} ingredient{gaps.length === 1 ? "" : "s"} can&apos;t be
-          fully costed yet. Linking a USDA food adds the most conversions at
-          once.
-        </Description>
-      </CardHeader>
-      <CardContent>
-        <CostingGapList gaps={gaps} />
-      </CardContent>
-    </Card>
-  );
-}
-
-/**
- * The same gap list as a compact, view-independent affordance — a "N block
- * costing" button that opens the list in a popover. Shown in the reader-facing
- * views (magazine/spec/prep/…) where the full inline card would intrude, so
- * "why isn't this fully costed?" is always one click away.
+ * The gap list as a compact, view-independent affordance — a "N block costing"
+ * button that opens the list in a popover. Shown on every recipe view (the bulky
+ * inline card was retired), so "why isn't this fully costed?" is always one
+ * click away without taking over the layout.
  */
 export function CostingCoverageButton({ gaps }: { gaps: CostingGap[] }) {
   if (gaps.length === 0) return null;
