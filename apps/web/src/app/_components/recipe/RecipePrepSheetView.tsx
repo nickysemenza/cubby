@@ -47,10 +47,7 @@ function ShoppingList({
 }) {
   if (needs.length === 0) return null;
   return (
-    <details
-      open
-      className="rounded-lg border border-[var(--border-chunky)] bg-muted/30 px-4 py-2 print:border-0 print:bg-transparent print:px-0"
-    >
+    <details className="rounded-lg border border-[var(--border-chunky)] bg-muted/30 px-4 py-2 print:border-0 print:bg-transparent print:px-0">
       <summary className="eyebrow cursor-pointer marker:content-none">
         <ShoppingCart className="mr-2 inline h-3 w-3 align-[-2px]" />
         Shopping list
@@ -310,7 +307,11 @@ export const RecipePrepSheetView = memo(function RecipePrepSheetView({
         </span>
       </header>
 
-      <ShoppingList needs={combined} totalCost={shoppingCost} />
+      {/* Grid mode's Total column + cost row already aggregate the full batch,
+          so the shopping list (collapsed) only rides along on the checklist. */}
+      {mode === "checklist" && (
+        <ShoppingList needs={combined} totalCost={shoppingCost} />
+      )}
 
       {mode === "grid" ? (
         <IngredientComponentGrid tree={tree} showCost />

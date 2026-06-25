@@ -1,6 +1,7 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
+import { Eye, EyeOff } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
-import { Stack } from "~/components/layout";
+import { Row, Stack } from "~/components/layout";
 import { MarkdownText } from "~/components/markdown";
 import { Eyebrow } from "~/components/ui/eyebrow";
 import { sectionRuleClass } from "~/components/ui/section-rule";
@@ -158,39 +159,74 @@ export function RecipeMagazineView({
   // Ingredient id → derived gram weight, from the same engine the table uses.
   const gramById = useMemo(() => gramMapFromCosting(costing), [costing]);
 
-  // Vitals (Makes/Serves) on the eyebrow; the cost + macro split rides on its own
-  // mono line just below (the macro atom — per-serving when there's a basis, else
-  // total — so the reader sees $·kcal·P·F·C without a hand-typed headnote).
+  // Makes/Serves on the eyebrow; the cost + macro split (the macro atom — per
+  // serving when there's a basis, else total) lives in a toggleable vitals panel
+  // to the right of the headnote, so the reader can hide the numbers.
   const kicker = buildRecipeKicker({ yield: recipe.yield, servings }).join(
     "  ·  ",
   );
   const macro = totals ? recipeMacroSegments(totals, basis) : null;
+  const hasMacro = !!macro && macro.parts.length > 0;
+  const [showVitals, setShowVitals] = useState(true);
 
   return (
     <Stack gap="lg">
       {/* Hero Section */}
       <RecipeHero recipe={recipe} />
 
-      {/* Kicker: the recipe's vitals + a cost/macro line */}
-      {(kicker || (macro && macro.parts.length > 0)) && (
-        <div className="border-foreground border-b pb-2">
-          {kicker && <Eyebrow className="tracking-[0.12em]">{kicker}</Eyebrow>}
-          {macro && macro.parts.length > 0 && (
-            <div className="mt-1 font-mono text-muted-foreground text-xs">
-              <span className="uppercase tracking-wide">
-                {macro.basisLabel}
-              </span>{" "}
-              · {macro.parts.join("  ·  ")}
-            </div>
-          )}
-        </div>
+      {/* Kicker: Makes / Serves */}
+      {kicker && (
+        <Eyebrow className="border-foreground border-b pb-2 tracking-[0.12em]">
+          {kicker}
+        </Eyebrow>
       )}
 
-      {/* Headnote + tips: freeform markdown imported from the source or edited */}
-      {recipe.notes && (
-        <MarkdownText className="max-w-prose text-muted-foreground">
-          {recipe.notes}
-        </MarkdownText>
+      {/* Headnote (left) + a toggleable cost/macro panel (right) — the panel
+          fills the rail beside the prose instead of leaving dead space. */}
+      {(recipe.notes || hasMacro) && (
+        <div className="grid gap-6 lg:grid-cols-[1fr_220px] lg:gap-10">
+          <div>
+            {recipe.notes && (
+              <MarkdownText className="max-w-prose text-muted-foreground">
+                {recipe.notes}
+              </MarkdownText>
+            )}
+          </div>
+          {hasMacro && (
+            <aside className="lg:self-start lg:justify-self-end">
+              <Row align="center" justify="between" className="mb-1.5">
+                <span className="eyebrow">{macro.basisLabel}</span>
+                <button
+                  type="button"
+                  onClick={() => setShowVitals((v) => !v)}
+                  aria-pressed={showVitals}
+                  title={
+                    showVitals
+                      ? "Hide nutrition & cost"
+                      : "Show nutrition & cost"
+                  }
+                  className="text-muted-foreground/60 hover:text-foreground"
+                >
+                  {showVitals ? (
+                    <EyeOff className="h-3.5 w-3.5" />
+                  ) : (
+                    <Eye className="h-3.5 w-3.5" />
+                  )}
+                </button>
+              </Row>
+              {showVitals && (
+                <Stack
+                  gap="tight"
+                  className="rounded-lg border border-[var(--border-chunky)] bg-card px-4 py-3 font-mono text-foreground/90 text-sm tabular-nums"
+                >
+                  {macro.parts.map((p) => (
+                    <div key={p}>{p}</div>
+                  ))}
+                </Stack>
+              )}
+            </aside>
+          )}
+        </div>
       )}
 
       {/* Open-book spread: ingredients column + method column, no boxes */}

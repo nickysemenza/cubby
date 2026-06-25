@@ -127,6 +127,13 @@ function CostingGapList({ gaps }: { gaps: CostingGap[] }) {
 export function CostingCoverageButton({ gaps }: { gaps: CostingGap[] }) {
   if (gaps.length === 0) return null;
 
+  // Roll the per-measure gaps up into category counts for the popover header —
+  // the breakdown the summary card's "Missing data" footer used to show.
+  const counts = MISSING_CHIPS.map((c) => ({
+    label: c.label,
+    n: gaps.filter((g) => g.missing[c.key]).length,
+  })).filter((c) => c.n > 0);
+
   return (
     <Popover>
       <PopoverTrigger
@@ -140,6 +147,17 @@ export function CostingCoverageButton({ gaps }: { gaps: CostingGap[] }) {
       <PopoverContent align="end" className="w-96">
         <PopoverHeader>
           <PopoverTitle>Why isn&apos;t this fully costed?</PopoverTitle>
+          <Row align="center" wrap gap="sm" className="pt-1">
+            {counts.map((c) => (
+              <span
+                key={c.label}
+                className="font-mono text-2xs text-muted-foreground uppercase tracking-wide"
+              >
+                {c.label}
+                <span className="ml-1 text-warning">{c.n}</span>
+              </span>
+            ))}
+          </Row>
         </PopoverHeader>
         <CostingGapList gaps={gaps} />
       </PopoverContent>
