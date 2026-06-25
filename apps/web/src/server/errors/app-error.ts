@@ -57,3 +57,14 @@ export function createAppError(
     cause: { reason, originalError },
   });
 }
+
+/**
+ * True for expected 4xx business errors (NOT_FOUND, UNAUTHORIZED, validation,
+ * etc.) — normal responses, not failures. Mirrors the console-logging skip in
+ * createAppError. Used to keep these out of Sentry: they have zero user impact
+ * and otherwise flood the issue stream (e.g. a stale cached getByID for a
+ * deleted entity, or an unauthenticated request to a protected procedure).
+ */
+export function isExpectedTRPCError(error: TRPCError): boolean {
+  return EXPECTED_ERROR_CODES.has(error.code);
+}

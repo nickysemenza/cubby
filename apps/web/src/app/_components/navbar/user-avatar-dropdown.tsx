@@ -11,16 +11,19 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
+import { useHydrated } from "~/hooks/useHydrated";
 import { authClient } from "~/lib/auth-client";
 
 export const UserAvatarDropdown = () => {
+  const hydrated = useHydrated();
   const session = authClient.useSession();
   const user = session.data?.user;
 
-  if (!user) {
-    // Mounted only when the server-side session says we're authed (see
-    // MainNav), so a missing user here means the client session is still
-    // resolving — show a neutral placeholder rather than collapsing to nothing.
+  // The better-auth session store can resolve *before* React hydrates, so the
+  // real avatar trigger would render on the first client pass while SSR emitted
+  // the placeholder → hydration mismatch (CUBBY-2). Gate on useHydrated() so the
+  // first client render is byte-identical to SSR (always the placeholder).
+  if (!hydrated || !user) {
     return (
       <div
         className="h-7 w-7 animate-pulse rounded-full bg-muted/60"
