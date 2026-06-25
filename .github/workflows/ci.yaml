@@ -36,38 +36,6 @@ permissions:
   checks: write
   pull-requests: read
 jobs:
-  changes:
-    name: Detect changed workers
-    runs-on: ubuntu-latest
-    # Path-filter so an aux worker only redeploys when ITS code (or a shared
-    # package it bundles) changed — a web-only merge must not redeploy usda-api.
-    # The cubby/web deploy stays unfiltered (it always redeploys on a main push).
-    # NOTE: deliberately NOT keyed on pnpm-lock.yaml — a transitive dep bump would
-    # otherwise redeploy every worker on any lockfile churn. A dep-only change that
-    # genuinely needs a worker redeploy is the rare manual-deploy case.
-    outputs:
-      usda: ${{ steps.filter.outputs.usda }}
-      upc: ${{ steps.filter.outputs.upc }}
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          # Each worker's dir + the exact workspace-package closure it bundles
-          # (verified against package.json deps, not guessed): usda-api pulls
-          # usda-schemas/usda-contract (→usda-schemas)/worker-tracing — NOT
-          # @cubby/schemas. upc-lookup pulls only worker-tracing. worker-tracing
-          # has no further @cubby deps, so the lists below are the full closure.
-          filters: |
-            usda:
-              - 'apps/usda-api/**'
-              - 'packages/usda-schemas/**'
-              - 'packages/usda-contract/**'
-              - 'packages/worker-tracing/**'
-            upc:
-              - 'apps/upc-lookup/**'
-              - 'packages/worker-tracing/**'
-
   build-wasm:
     name: Build WASM
     runs-on: ubuntu-latest
@@ -625,40 +593,32 @@ jobs:
           echo "url=$url" >> "$GITHUB_OUTPUT"
           [ -n "$url" ] || echo "::warning::No preview URL — enable Preview URLs (workers.dev) for the cubby worker."
 
-  # The two aux (leaf) workers deploy identically — same gate, same shape, only
-  # the package + its changes-flag differ — so they share one matrix job. Each
-  # runs its own `deploy` script (usda-api: wrangler deploy; upc-lookup: vite
-  # build + wrangler deploy). The web/cubby worker is deliberately NOT here: it
-  # deploys a prebuilt artifact, gates on the full E2E suite, and its dep closure
-  # is ~the whole repo — see deploy-cf.
+  # The two aux (leaf) workers deploy identically — same gate, same shape — so
+  # they share one matrix job, and both redeploy on every main push (like the
+  # web/cubby worker). No path-filtering: a `wrangler deploy` is cheap and CF
+  # versioning is atomic, so an occasional no-op redeploy is cheaper than the
+  # complexity (and footguns) of computing each worker's change set. Each runs its
+  # own `deploy` script (usda-api: wrangler deploy; upc-lookup: vite build +
+  # wrangler deploy). The web/cubby worker stays separate (deploy-cf): it deploys
+  # a prebuilt artifact and gates on the full E2E suite.
   #
-  # CODE ONLY — no D1 migrations run in CI for either worker. Prod schema changes
-  # are a deliberate, explicit act: usda-api's edge D1 + R2 bundles ride the manual
-  # seed pipeline (edge:d1:migrate:remote + edge:seed:remote); upc-lookup owns its
-  # D1 directly — run `pnpm --filter @cubby/upc-lookup db:migrate:remote` by hand
-  # before merging code that depends on a new schema.
+  # Gated on lint-format + the aux unit legs (test-unit-aux), NOT check-tests, so
+  # a flaky web E2E never blocks an aux deploy. Default needs-success gating means
+  # a failing lint/unit job auto-skips this — no explicit result checks needed.
+  #
+  # CODE ONLY — no D1 migrations run in CI. Prod schema changes are a deliberate,
+  # explicit act: usda-api's edge D1 + R2 bundles ride the manual seed pipeline
+  # (edge:d1:migrate:remote + edge:seed:remote); upc-lookup owns its D1 directly —
+  # run `pnpm --filter @cubby/upc-lookup db:migrate:remote` by hand before merging
+  # code that depends on a new schema.
   deploy-worker:
-    name: Deploy ${{ matrix.worker.pkg }} Worker
-    needs: [changes, lint-format, test-unit-aux]
+    name: Deploy ${{ matrix.pkg }} Worker
+    needs: [lint-format, test-unit-aux]
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
     strategy:
       matrix:
-        worker:
-          # `changed` indexes the per-worker boolean from the `changes` job below.
-          - pkg: usda-api
-            changed: usda
-          - pkg: upc-lookup
-            changed: upc
-    # Decoupled from the web E2E/integration gate: aux workers ride only on
-    # lint-format + their own unit legs (the test-unit-aux matrix). A flaky web
-    # E2E won't block them. `always()` is required so a skipped `changes` path
-    # doesn't cascade-skip the explicit result checks below.
-    if: |
-      always() &&
-      github.ref == 'refs/heads/main' &&
-      needs.changes.outputs[matrix.worker.changed] == 'true' &&
-      needs.lint-format.result == 'success' &&
-      needs.test-unit-aux.result == 'success'
+        pkg: [usda-api, upc-lookup]
     environment:
       name: cloudflare
     steps:
@@ -668,8 +628,8 @@ jobs:
           # workspace deps must be installed so wrangler's esbuild can resolve the
           # workspace imports each worker bundles (no prebuilt artifact).
           download-wasm: "false"
-      - name: Deploy ${{ matrix.worker.pkg }}
-        run: pnpm --filter @cubby/${{ matrix.worker.pkg }} run deploy
+      - name: Deploy ${{ matrix.pkg }}
+        run: pnpm --filter @cubby/${{ matrix.pkg }} run deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 9f10f078d35d86c78dedece2300a6b88
