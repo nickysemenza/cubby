@@ -1,5 +1,6 @@
 import { and, desc, eq, gt, inArray, like, sql } from "drizzle-orm";
 import { chunk, clamp } from "es-toolkit";
+import pMap from "p-map";
 import type { Database } from "./index";
 import { schema } from "./index";
 import type { UpcMiss } from "./schema";
@@ -46,19 +47,24 @@ export async function getFreshMisses(
   const fresh = new Set<string>();
   if (upcs.length === 0) return fresh;
 
-  for (const batch of chunk(upcs, IN_CHUNK)) {
-    const rows = await db
-      .select({ upc: schema.upcMisses.upc })
-      .from(schema.upcMisses)
-      .where(
-        and(
-          inArray(schema.upcMisses.upc, batch),
-          gt(
-            schema.upcMisses.lastCheckedAt,
-            sql`datetime('now', ${`-${ttlDays} days`})`,
+  const batches = await pMap(
+    chunk(upcs, IN_CHUNK),
+    (batch) =>
+      db
+        .select({ upc: schema.upcMisses.upc })
+        .from(schema.upcMisses)
+        .where(
+          and(
+            inArray(schema.upcMisses.upc, batch),
+            gt(
+              schema.upcMisses.lastCheckedAt,
+              sql`datetime('now', ${`-${ttlDays} days`})`,
+            ),
           ),
         ),
-      );
+    { concurrency: 5 },
+  );
+  for (const rows of batches) {
     for (const r of rows) fresh.add(r.upc);
   }
   return fresh;
@@ -90,17 +96,19 @@ export async function listMisses(
       ? like(schema.upcMisses.upc, `%${q.trim()}%`)
       : undefined;
 
-  const rows = await db.query.upcMisses.findMany({
-    where,
-    orderBy: [desc(schema.upcMisses.lastCheckedAt)],
-    limit: safePageSize,
-    offset: (safePage - 1) * safePageSize,
-  });
-
-  const countResult = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(schema.upcMisses)
-    .where(where);
+  // Page rows and total count are independent — one round trip.
+  const [rows, countResult] = await Promise.all([
+    db.query.upcMisses.findMany({
+      where,
+      orderBy: [desc(schema.upcMisses.lastCheckedAt)],
+      limit: safePageSize,
+      offset: (safePage - 1) * safePageSize,
+    }),
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(schema.upcMisses)
+      .where(where),
+  ]);
   const total = countResult[0]?.count ?? 0;
 
   return { rows, total, page: safePage, pageSize: safePageSize };

@@ -163,6 +163,12 @@ function makeEnv(bindCounts: number[]): EdgeBindings {
       };
       return statement;
     },
+    // The index-lookup phase now issues one D1 batch() for all chunk
+    // statements; route each through its own `all()` so the per-chunk bound
+    // parameter assertion still runs.
+    async batch<T>(statements: Array<{ all(): Promise<T> }>) {
+      return Promise.all(statements.map((s) => s.all()));
+    },
   };
 
   return {

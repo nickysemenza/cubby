@@ -44,7 +44,12 @@ export function createUsdaApp(
 
   app.get("/counts", async (c) => {
     try {
-      return c.json(countsSchema.parse(await dataSource.getCounts()), 200);
+      const counts = countsSchema.parse(await dataSource.getCounts());
+      // Counts only change on a dataset re-import — let direct/eyeball callers
+      // edge-cache the response. (Service-binding callers like apps/web bypass
+      // the edge cache; the in-worker getCounts Cache-API memo covers them.)
+      c.header("Cache-Control", "public, max-age=3600");
+      return c.json(counts, 200);
     } catch (e) {
       console.error("Error getting counts:", e);
       return c.json(

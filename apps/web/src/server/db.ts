@@ -272,6 +272,37 @@ export const db = toBrandedDatabase(dbProxy);
 // (e.g., Better‑Auth drizzle adapter). Do not use this for app queries.
 export const drizzle = dbProxy;
 
+/**
+ * Run `fn` with a Database bound to ONE checked-out connection, so a fan-out of
+ * independent read queries shares a single `db.acquire` instead of each
+ * contending for a pool slot. The per-request pool is max:5, but the Problems
+ * "fast" group fires 8 detectors at once — 5 cold connects + 3 queued, all
+ * acquire-bound while the SELECTs are ~0ms. Pinning them to one client trades 8
+ * connects for 1; the queries serialize on the wire (one in-flight query per
+ * connection), which is free when each is instant.
+ *
+ * Unlike withTransaction this issues NO BEGIN/COMMIT — the detectors are
+ * read-only and need no snapshot. The single `db.acquire` span comes from the
+ * traced pool.connect() (labelled transaction:true by the tracer — cosmetic;
+ * there is no real transaction).
+ */
+export const withConnection = async <T>(
+  db: Database,
+  fn: (scoped: Database) => Promise<T>,
+): Promise<T> => {
+  // DBClient is typed as NodePgDatabase<schema> (which hides `$client` to avoid
+  // a type mismatch — see top of file), but the runtime instance always carries
+  // the traced pg.Pool as `$client`. Cast through the known runtime shape.
+  const pool = (db as unknown as { $client: pg.Pool }).$client;
+  const client = await pool.connect();
+  try {
+    const scoped = toBrandedDatabase(drizzleNodePostgres({ client, schema }));
+    return await fn(scoped);
+  } finally {
+    client.release();
+  }
+};
+
 // Type for Drizzle transaction client
 export type DrizzleClient = DBClient;
 export type DrizzleTransaction = Parameters<

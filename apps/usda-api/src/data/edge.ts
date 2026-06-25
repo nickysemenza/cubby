@@ -5,8 +5,12 @@ import {
   type FoodLookupParam,
   type FoodSummary,
 } from "@cubby/usda-schemas";
-import type { D1Database } from "@cloudflare/workers-types";
+import type {
+  D1Database,
+  D1PreparedStatement,
+} from "@cloudflare/workers-types";
 import { type SpanAttr, withSpan } from "@cubby/worker-tracing";
+import pMap from "p-map";
 import { toFtsQuery } from "../search/fts-query.js";
 import {
   assertVersion,
@@ -25,6 +29,8 @@ import type {
 
 const MAX_SQL_VARIABLES = 100;
 const DEFAULT_CONCURRENCY = 50;
+
+type LookupColumn = "gtin_upc" | "ndb_number" | "fdc_id";
 
 /** Aggregated R2/cache stats for one hydration pass, surfaced as span attrs. */
 interface HydrateStats {
@@ -238,27 +244,6 @@ function rowsFromResult<T>(result: { results?: T[]; success: boolean }): T[] {
   return result.results ?? [];
 }
 
-async function mapWithConcurrency<T, R>(
-  items: T[],
-  concurrency: number,
-  fn: (item: T, index: number) => Promise<R>,
-): Promise<R[]> {
-  const results = new Array<R>(items.length);
-  let nextIndex = 0;
-
-  async function worker() {
-    while (nextIndex < items.length) {
-      const index = nextIndex++;
-      results[index] = await fn(items[index]!, index);
-    }
-  }
-
-  await Promise.all(
-    Array.from({ length: Math.min(concurrency, items.length) }, () => worker()),
-  );
-  return results;
-}
-
 export function createEdgeUsdaDataSource(
   env: EdgeBindings,
   options: { r2Concurrency?: number } = {},
@@ -354,9 +339,9 @@ export function createEdgeUsdaDataSource(
     // whether the time is R2 (cacheMisses/bytesRead) vs the index query above.
     const stats: HydrateStats = { cacheHits: 0, r2Reads: 0, bytesRead: 0 };
     return withSpan("usda.hydrateRows", async (span) => {
-      const result = await mapWithConcurrency(rows, r2Concurrency, (row) =>
-        hydrate(row, stats),
-      );
+      const result = await pMap(rows, (row) => hydrate(row, stats), {
+        concurrency: r2Concurrency,
+      });
       span.setAttributes({
         rowCount: rows.length,
         cacheHits: stats.cacheHits,
@@ -408,48 +393,85 @@ export function createEdgeUsdaDataSource(
     );
   }
 
-  async function findRowsByColumn(
-    column: "gtin_upc" | "ndb_number" | "fdc_id",
-    values: Array<string | number>,
-  ): Promise<Map<string | number, FoodIndexRow>> {
+  // Index-lookup phase for a batch: build one prepared statement per
+  // (column, ≤100-value chunk) and issue them ALL in a single `env.DB.batch()`
+  // round trip, rather than awaiting each chunk serially. D1 returns results in
+  // statement order, so each is folded back into its column's keyed map.
+  async function lookupIndexRows(
+    columns: { column: LookupColumn; values: Array<string | number> }[],
+  ): Promise<Map<LookupColumn, Map<string | number, FoodIndexRow>>> {
     const tables = await getActiveVersion(env.DB);
-    const rows = new Map<string | number, FoodIndexRow>();
+    const maps = new Map<LookupColumn, Map<string | number, FoodIndexRow>>(
+      columns.map(({ column }) => [column, new Map()]),
+    );
 
-    for (let i = 0; i < values.length; i += MAX_SQL_VARIABLES) {
-      const chunk = values.slice(i, i + MAX_SQL_VARIABLES);
-      if (chunk.length === 0) continue;
-
-      const placeholders = chunk.map(() => "?").join(", ");
-      const result = await env.DB.prepare(
-        `SELECT * FROM ${tables.foodIndex} WHERE ${column} IN (${placeholders}) ORDER BY ${column} ASC, fdc_id ASC`,
-      )
-        .bind(...chunk)
-        .all<FoodIndexRow>();
-
-      for (const row of rowsFromResult(result)) {
-        const key =
-          column === "gtin_upc"
-            ? row.gtin_upc
-            : column === "ndb_number"
-              ? row.ndb_number
-              : row.fdc_id;
-        if (key !== null && !rows.has(key)) rows.set(key, row);
+    const specs: { column: LookupColumn; stmt: D1PreparedStatement }[] = [];
+    for (const { column, values } of columns) {
+      for (let i = 0; i < values.length; i += MAX_SQL_VARIABLES) {
+        const chunk = values.slice(i, i + MAX_SQL_VARIABLES);
+        if (chunk.length === 0) continue;
+        const placeholders = chunk.map(() => "?").join(", ");
+        specs.push({
+          column,
+          stmt: env.DB.prepare(
+            `SELECT * FROM ${tables.foodIndex} WHERE ${column} IN (${placeholders}) ORDER BY ${column} ASC, fdc_id ASC`,
+          ).bind(...chunk),
+        });
       }
     }
+    if (specs.length === 0) return maps;
 
-    return rows;
+    const results = await env.DB.batch<FoodIndexRow>(specs.map((s) => s.stmt));
+    results.forEach((result, idx) => {
+      const spec = specs[idx];
+      const map = spec && maps.get(spec.column);
+      if (!spec || !map) return;
+      for (const row of rowsFromResult(result)) {
+        const key =
+          spec.column === "gtin_upc"
+            ? row.gtin_upc
+            : spec.column === "ndb_number"
+              ? row.ndb_number
+              : row.fdc_id;
+        if (key !== null && !map.has(key)) map.set(key, row);
+      }
+    });
+    return maps;
   }
 
   return {
     async getCounts() {
       const tables = await getActiveVersion(env.DB);
       const key = manifestKey(tables.version);
+      // The manifest is immutable per dataset version (a re-import writes a new
+      // key), so cache the parsed counts in the colo-local Cache API keyed by
+      // version — turning the per-request R2 read + JSON parse into a cache hit.
+      // Same `caches.default` guard as readBundleText (absent under Node tests).
+      const cache =
+        typeof caches !== "undefined"
+          ? (caches as unknown as { default: Cache }).default
+          : null;
+      const cacheKey = new Request(
+        `https://usda-cache/counts/${encodeURIComponent(key)}`,
+      );
+      const cached = cache ? await cache.match(cacheKey) : undefined;
+      if (cached) {
+        return countsSchema.parse(await cached.json());
+      }
+
       const object = await env.USDA_BUNDLES.get(key);
       if (!object) {
         throw new Error(`Missing USDA edge manifest: ${key}`);
       }
       const manifest = JSON.parse(await object.text()) as Manifest;
-      return countsSchema.parse(manifest.counts);
+      const counts = countsSchema.parse(manifest.counts);
+      await cache?.put(
+        cacheKey,
+        new Response(JSON.stringify(counts), {
+          headers: { "Cache-Control": "public, max-age=31536000, immutable" },
+        }),
+      );
+      return counts;
     },
 
     getFoodById(fdcId) {
@@ -502,16 +524,19 @@ export function createEdgeUsdaDataSource(
           const [upcRows, ndbRows, fdcRows] = await withSpan(
             "usda.indexLookup",
             async (indexSpan) => {
-              const out = await Promise.all([
-                findRowsByColumn("gtin_upc", upcs),
-                findRowsByColumn("ndb_number", ndbNumbers),
-                findRowsByColumn("fdc_id", fdcIds),
+              const maps = await lookupIndexRows([
+                { column: "gtin_upc", values: upcs },
+                { column: "ndb_number", values: ndbNumbers },
+                { column: "fdc_id", values: fdcIds },
               ]);
+              const upc = maps.get("gtin_upc") ?? new Map();
+              const ndb = maps.get("ndb_number") ?? new Map();
+              const fdc = maps.get("fdc_id") ?? new Map();
               indexSpan.setAttribute(
                 "indexRowCount",
-                out[0].size + out[1].size + out[2].size,
+                upc.size + ndb.size + fdc.size,
               );
-              return out;
+              return [upc, ndb, fdc] as const;
             },
             {
               upcCount: upcs.length,
@@ -616,22 +641,22 @@ export function createEdgeUsdaDataSource(
         orderClause = `i.${sqlOrderBy(orderBy)} ${sqlDirection(direction)}`;
       }
 
-      const result = await env.DB.prepare(
-        `SELECT i.*
+      // Data and count queries are independent — run them in one round trip.
+      const [result, countRow] = await Promise.all([
+        env.DB.prepare(
+          `SELECT i.*
            FROM ${dataFrom}
            ${where}
            ORDER BY ${orderClause}
            LIMIT ? OFFSET ?`,
-      )
-        .bind(...values, ...orderValues, pageSize, offset)
-        .all<FoodIndexRow>();
+        )
+          .bind(...values, ...orderValues, pageSize, offset)
+          .all<FoodIndexRow>(),
+        env.DB.prepare(`SELECT count(*) as count FROM ${countFrom} ${where}`)
+          .bind(...values)
+          .first<{ count: number }>(),
+      ]);
       const rows = rowsFromResult(result);
-
-      const countRow = await env.DB.prepare(
-        `SELECT count(*) as count FROM ${countFrom} ${where}`,
-      )
-        .bind(...values)
-        .first<{ count: number }>();
       const totalCount = countRow?.count ?? 0;
 
       const data = (await hydrateRows(rows)).filter(

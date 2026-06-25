@@ -24,29 +24,20 @@ search.get("/", async (c) => {
 
   const db = createDb(c.env.DB);
   const searchPattern = `%${query}%`;
+  const where = or(
+    like(schema.products.name, searchPattern),
+    like(schema.products.manufacturer, searchPattern),
+    like(schema.products.brand, searchPattern),
+  );
 
-  // Search by name or manufacturer
-  const products = await db.query.products.findMany({
-    where: or(
-      like(schema.products.name, searchPattern),
-      like(schema.products.manufacturer, searchPattern),
-      like(schema.products.brand, searchPattern),
-    ),
-    limit,
-    offset,
-  });
-
-  // Get total count
-  const countResult = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(schema.products)
-    .where(
-      or(
-        like(schema.products.name, searchPattern),
-        like(schema.products.manufacturer, searchPattern),
-        like(schema.products.brand, searchPattern),
-      ),
-    );
+  // Page of matches and total count are independent — one round trip.
+  const [products, countResult] = await Promise.all([
+    db.query.products.findMany({ where, limit, offset }),
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(schema.products)
+      .where(where),
+  ]);
 
   const total = countResult[0]?.count ?? 0;
 

@@ -38,7 +38,7 @@ import { isMoneyUnit } from "~/lib/price-mapping-utils";
 import { wasm } from "~/lib/wasm";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { USDAClient } from "~/server/clients/usda";
-import type { Database } from "~/server/db";
+import { type Database, withConnection } from "~/server/db";
 import {
   deleteIngredients,
   findOrCreateIngredient,
@@ -68,7 +68,7 @@ import {
 } from "~/server/repo/product";
 import { foodLookupParamFromProduct } from "~/server/repo/product/helpers";
 import { batchEnrichWithFood } from "~/server/services/usda-helpers";
-import { traceAll } from "~/server/tracing";
+import { traceAll, traceAllSeq } from "~/server/tracing";
 
 // Detect both coverage problems in one pass: ingredient products that are
 // *under-covered* and products whose mappings *island*. Both detectors fetch
@@ -383,17 +383,26 @@ export async function* pruneAllUnusedAliases(
 // DB-only detectors — cheap (no WASM, no network). traceAll keeps a named span
 // per detector for observability.
 export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
-  const r = await traceAll({
-    duplicateUniqueProducts: () => findDuplicateUniqueProducts(db),
-    orphanedProducts: () => findOrphanedProducts(db),
-    productsWithoutMappings: () => findProductsWithoutMappings(db),
-    ingredientsWithoutProduct: () => findIngredientsWithoutProduct(db),
-    unusedIngredients: () => findUnusedIngredients(db),
-    emptyLocations: () => findEmptyLocations(db),
-    productsWithNoImages: () =>
-      findProductsWithNoImages(db, { excludeIngredients: true }),
-    locationsWithoutAiDescription: () => findLocationsWithoutAiDescription(db),
-  });
+  // All 8 detectors are read-only single SELECTs (~0ms each); the cost is
+  // connection acquisition. Pin them to ONE shared connection so the fan-out
+  // pays a single `db.acquire` instead of 8 contending for the max:5 pool.
+  // traceAllSeq runs them sequentially (each still its own span) — a pg client
+  // takes one query at a time, and the per-query cost is ~0, so serializing on
+  // one connection beats 8 cold connects. See withConnection in db.ts.
+  const r = await withConnection(db, (scoped) =>
+    traceAllSeq({
+      duplicateUniqueProducts: () => findDuplicateUniqueProducts(scoped),
+      orphanedProducts: () => findOrphanedProducts(scoped),
+      productsWithoutMappings: () => findProductsWithoutMappings(scoped),
+      ingredientsWithoutProduct: () => findIngredientsWithoutProduct(scoped),
+      unusedIngredients: () => findUnusedIngredients(scoped),
+      emptyLocations: () => findEmptyLocations(scoped),
+      productsWithNoImages: () =>
+        findProductsWithNoImages(scoped, { excludeIngredients: true }),
+      locationsWithoutAiDescription: () =>
+        findLocationsWithoutAiDescription(scoped),
+    }),
+  );
   return {
     duplicateUniqueProducts: r.duplicateUniqueProducts,
     orphanedProducts: r.orphanedProducts,
