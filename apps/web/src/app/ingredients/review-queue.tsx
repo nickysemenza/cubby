@@ -251,7 +251,8 @@ export function ReviewQueue({
   }
 
   return (
-    <Stack gap="sm">
+    // Centered, bounded column — a focused single-card review shouldn't span full width.
+    <Stack gap="sm" className="mx-auto w-full max-w-4xl">
       <Row
         align="center"
         justify="between"
