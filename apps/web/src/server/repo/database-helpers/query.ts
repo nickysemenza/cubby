@@ -63,11 +63,13 @@ export const notDeleted = <T extends { deletedAt: AnyColumn }>(table: T) =>
  * record (not a SQL condition). Use this to filter soft-deleted rows in JS —
  * e.g. relations loaded in a `with` block, or join-table associations — where
  * the SQL `notDeleted()` can't apply. Keep the two in lockstep: `notDeleted`
- * filters at query time, `isNotDeleted` filters in memory.
+ * filters at query time, `isNotDeleted` filters in memory. Absent (`undefined`)
+ * counts as not-deleted too — `== null` matches both `null` and a missing field,
+ * so partially-selected rows aren't silently dropped.
  */
 export const isNotDeleted = <T extends { deletedAt?: Date | null }>(
   row: T,
-): boolean => row.deletedAt === null;
+): boolean => row.deletedAt == null;
 
 /**
  * Count rows in a table matching an optional WHERE clause.
