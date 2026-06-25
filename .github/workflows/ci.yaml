@@ -294,7 +294,10 @@ jobs:
           slug: nickysemenza/cubby
           working-directory: apps/web
           flags: web
-          name: web-integration-coverage
+          # Shard-specific upload name so the two shards' partial coverage reports
+          # don't collide on codecov (it merges by `flags`, but a shared name can
+          # dedup an upload). Matches the per-leg pattern in test-unit-aux.
+          name: web-integration-coverage-shard-${{ matrix.shard }}
 
       - name: Fail if tests failed
         if: steps.test.outcome != 'success'
