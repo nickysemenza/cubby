@@ -35,9 +35,7 @@ import {
 import { protectedProcedure } from "../../trpc";
 
 // Create standardized CRUD procedures using factory
-// List returns a lean summary (scalar fields + totals, no section graph); detail
-// (getByID/create/update) keeps the full recipeOut. Split into the two sub-
-// factories so the two surfaces carry different output schemas.
+// List returns the lean summary (no section graph); detail keeps full recipeOut — split the factory so each carries its own output schema.
 const { list } = createEntityListProcedure({
   schemas: { output: recipeListItemOut, filters: recipeFiltersSchema },
   repository: {

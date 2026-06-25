@@ -289,11 +289,7 @@ export const recipeList = async (
 
   const { take, skip } = buildTakeSkip(pagination);
 
-  // Summary fetch: flat recipe rows only (NO section/ingredient graph) + the
-  // persisted totals jsonb. The list renders scalar fields (tags/yield/totals/
-  // source) and pickers read {id,name}; nobody reads `.sections` off the list, so
-  // pulling + reshaping + Zod-validating the nested graph per recipe was the
-  // ~4.7s over-fetch. `dbRecipeToAPIShallow` carries `totals` through.
+  // Summary fetch: flat recipe rows (no section graph) + persisted totals via dbRecipeToAPIShallow — the nested graph nobody renders was the ~4.7s over-fetch.
   const { data: results, count: totalCount } = await executeListQueryWithCount(
     dbClient.query.recipe.findMany({
       where: whereClause,
