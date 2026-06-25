@@ -215,13 +215,20 @@ jobs:
           exit 1
 
   test-integration-web:
-    name: Integration Tests - web
+    name: Integration Tests - web (shard ${{ matrix.shard }})
     needs: [build-wasm]
     runs-on: ubuntu-latest
     # The DB-backed `integration` vitest project — isolated here so the flaky
     # service-container pull never sits on the fast unit gate above. Still gates
     # the deploy via check-tests. Same honest-failure pattern (no job-level
     # continue-on-error; step-level so coverage uploads on failure).
+    # Sharded across parallel jobs (own services + IntegreSQL template each) to
+    # cut wall-clock; vitest --shard splits the file set. needs.<job>.result is
+    # 'success' only if all shards pass, so the check-tests gate is unchanged.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     services:
       postgres:
         image: postgres
@@ -231,9 +238,10 @@ jobs:
           POSTGRES_HOST_AUTH_METHOD: trust
         options: >-
           --health-cmd pg_isready
-          --health-interval 10s
+          --health-interval 2s
           --health-timeout 5s
-          --health-retries 5
+          --health-retries 10
+          --health-start-period 3s
         ports:
           - 5432:5432
       integresql:
@@ -268,13 +276,13 @@ jobs:
         continue-on-error: true
         run: |
           cd apps/web
-          pnpm test --project integration --coverage --reporter=default --reporter=github-actions --reporter=junit --outputFile=test-results/vitest-junit.xml
+          pnpm test --project integration --shard=${{ matrix.shard }}/2 --coverage --reporter=default --reporter=github-actions --reporter=junit --outputFile=test-results/vitest-junit.xml
 
       - name: Publish Test Results
         if: always()
         uses: dorny/test-reporter@v2
         with:
-          name: Integration Tests - web
+          name: Integration Tests - web (shard ${{ matrix.shard }})
           path: apps/web/test-results/vitest-junit.xml
           reporter: java-junit
           fail-on-error: false
@@ -359,7 +367,7 @@ jobs:
           exit 1
 
   test-e2e:
-    name: E2E Tests
+    name: E2E Tests (shard ${{ matrix.shard }})
     # Run on every PR (incl. Renovate — a dep bump is exactly what E2E should
     # catch; the repo is public so Actions minutes are free). Only skip when
     # manually bypassing E2E to force a deploy; check-tests treats a skipped E2E
@@ -371,6 +379,17 @@ jobs:
     if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.bypass_e2e) }}
     needs: [build-wasm]
     runs-on: ubuntu-latest
+    # Shard the spec suite across parallel jobs to cut wall-clock. Each shard is
+    # a *separate* job with its own postgres/integresql services + IntegreSQL DB
+    # and its own wrangler dev server, so within-process worker contention (the
+    # reason workers stays at 2) never crosses shards — this is the safe way to
+    # raise E2E parallelism past 2. needs.test-e2e.result is 'success' only if
+    # every shard passes, so the check-tests gate is unchanged. fail-fast off so
+    # one shard's failure doesn't cancel the other (full signal on red).
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     env:
       NODE_OPTIONS: "--max-old-space-size=4096"
       E2E_TEST_USER_EMAIL: nicky@test.com
@@ -392,9 +411,10 @@ jobs:
           POSTGRES_HOST_AUTH_METHOD: trust
         options: >-
           --health-cmd pg_isready
-          --health-interval 10s
+          --health-interval 2s
           --health-timeout 5s
-          --health-retries 5
+          --health-retries 10
+          --health-start-period 3s
         ports:
           - 5432:5432
       integresql:
@@ -435,19 +455,19 @@ jobs:
         run: pnpm --filter @cubby/web run build:cf
       - name: Run Playwright tests
         id: e2e-test
-        run: cd apps/web && npx playwright test
+        run: cd apps/web && npx playwright test --shard=${{ matrix.shard }}/2
       - name: Publish Playwright Results
         if: always()
         uses: dorny/test-reporter@v2
         with:
-          name: E2E Tests
+          name: E2E Tests (shard ${{ matrix.shard }})
           path: apps/web/test-results/junit.xml
           reporter: java-junit
           fail-on-error: false
       - uses: actions/upload-artifact@v6
         if: failure()
         with:
-          name: playwright-report
+          name: playwright-report-shard-${{ matrix.shard }}
           path: apps/web/playwright-report/
           retention-days: 7
 
