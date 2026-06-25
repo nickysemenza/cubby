@@ -53,15 +53,20 @@ jobs:
       - uses: dorny/paths-filter@v3
         id: filter
         with:
+          # Each worker's dir + the exact workspace-package closure it bundles
+          # (verified against package.json deps, not guessed): usda-api pulls
+          # usda-schemas/usda-contract (→usda-schemas)/worker-tracing — NOT
+          # @cubby/schemas. upc-lookup pulls only worker-tracing. worker-tracing
+          # has no further @cubby deps, so the lists below are the full closure.
           filters: |
             usda:
               - 'apps/usda-api/**'
               - 'packages/usda-schemas/**'
               - 'packages/usda-contract/**'
-              - 'packages/schemas/**'
+              - 'packages/worker-tracing/**'
             upc:
               - 'apps/upc-lookup/**'
-              - 'packages/schemas/**'
+              - 'packages/worker-tracing/**'
 
   build-wasm:
     name: Build WASM
