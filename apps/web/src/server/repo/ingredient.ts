@@ -382,11 +382,12 @@ export const enrichmentWorkbenchIngredients = async (db: Database) => {
     } = row;
     return {
       ...restOfIngredient,
-      id: restOfIngredient.id,
       product: mapIngredientProducts(productRel),
-      // count() returns bigint (string over the wire); the boolean comes back native.
+      // count() returns bigint (string over the wire), so coerce; the boolean comes
+      // back native — `=== true` avoids the Boolean("false") === true trap if a
+      // future driver ever stringifies it.
       recipeCount: Number(recipeCount),
-      cookbookOnly: Boolean(cookbookOnly),
+      cookbookOnly: cookbookOnly === true,
     };
   });
 };
