@@ -8,6 +8,7 @@ import { unsafeProductId } from "@cubby/schemas/identifiers";
 import type { z } from "zod";
 import { parseWithContext } from "~/lib/zod-utils";
 import type { productUnitMappings } from "~/server/db/schema";
+import { isNotDeleted } from "./query";
 
 /**
  * Extract image records from join table results.
@@ -20,9 +21,7 @@ export const extractImagesFromJoinTable = <
   joinTableRecords: T[] | undefined | null,
 ): T["image"][] => {
   return (
-    joinTableRecords
-      ?.filter((record) => !record.deletedAt || record.deletedAt === null)
-      .map((record) => record.image) ?? []
+    joinTableRecords?.filter(isNotDeleted).map((record) => record.image) ?? []
   );
 };
 
@@ -60,15 +59,13 @@ export const addProductSourceMetadata = (
   productId: string,
   unitMappings: Array<typeof productUnitMappings.$inferSelect>,
 ) => {
-  return unitMappings
-    .filter((mapping) => mapping.deletedAt === null)
-    .map((mapping) => ({
-      ...mapping,
-      sourceMetadata: {
-        type: "product" as const,
-        productId: unsafeProductId(productId),
-      },
-    }));
+  return unitMappings.filter(isNotDeleted).map((mapping) => ({
+    ...mapping,
+    sourceMetadata: {
+      type: "product" as const,
+      productId: unsafeProductId(productId),
+    },
+  }));
 };
 
 /**

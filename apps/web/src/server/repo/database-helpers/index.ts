@@ -23,6 +23,7 @@ export {
   countWhere,
   executeListQueryWithCount,
   formatSearchTerm,
+  isNotDeleted,
   lockAndValidateForDelete,
   notDeleted,
 } from "./query";

@@ -14,6 +14,7 @@ import {
 } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
+import { getErrorMessage } from "~/lib/error-utils";
 import { useTRPC } from "~/trpc/react";
 
 export function CategoryAudit() {
@@ -22,7 +23,7 @@ export function CategoryAudit() {
   const auditMutation = useMutation(
     api.ai.auditCategories.mutationOptions({
       onError: (error) => {
-        toast.error(error.message);
+        toast.error(getErrorMessage(error));
       },
     }),
   );

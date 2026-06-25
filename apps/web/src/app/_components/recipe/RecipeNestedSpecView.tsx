@@ -179,7 +179,7 @@ function SpecNode({
   return (
     <Stack gap="xs">
       {!isRoot && (
-        <div className="mb-1 flex flex-wrap items-center gap-x-2 font-mono text-2xs uppercase tracking-wider">
+        <div className="eyebrow mb-1 flex flex-wrap items-center gap-x-2">
           <EntityPreviewLink
             entity="recipe"
             id={node.recipe.id}
