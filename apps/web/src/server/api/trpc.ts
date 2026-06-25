@@ -23,7 +23,7 @@ import { UPCLookupClient } from "~/server/clients/upc-lookup";
 import { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import { db } from "~/server/db";
-import { createAppError } from "~/server/errors/app-error";
+import { createAppError, isExpectedTRPCError } from "~/server/errors/app-error";
 import { translateDatabaseError } from "~/server/errors/db-errors";
 import { findProductsByFoodIdentifier } from "~/server/repo/product";
 import { AvailabilityService } from "~/server/services/availability.service";
@@ -269,10 +269,16 @@ const tracingMiddleWare = t.middleware(async (opts) =>
       // tRPC returns errors as results with ok: false, not thrown.
       if (!result.ok) {
         span.setError(getErrorMessage(result.error));
-        // Capture tRPC errors to Sentry
-        Sentry.captureException(result.error, {
-          extra: { trpcPath: opts.path, trpcType: opts.type },
-        });
+        // Only capture *unexpected* errors to Sentry. Expected 4xx business
+        // errors (NOT_FOUND, UNAUTHORIZED, validation, …) are normal responses
+        // — they already skip console logging in createAppError, have zero user
+        // impact, and would otherwise flood Sentry with thousands of events
+        // (e.g. a stale cached getByID for a deleted entity).
+        if (!isExpectedTRPCError(result.error)) {
+          Sentry.captureException(result.error, {
+            extra: { trpcPath: opts.path, trpcType: opts.type },
+          });
+        }
       }
 
       return result;

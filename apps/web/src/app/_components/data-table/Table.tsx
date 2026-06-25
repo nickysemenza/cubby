@@ -40,6 +40,7 @@ import {
 } from "~/components/ui/table";
 import { ENTITY_ACCENTS } from "~/entities/entity-accents";
 import { useDebug } from "~/hooks/useDebug";
+import { useHydrated } from "~/hooks/useHydrated";
 import { useIsMobile } from "~/hooks/useMobile";
 import type { QueryTiming } from "~/lib/query-timing";
 import { cn } from "~/lib/utils";
@@ -241,6 +242,12 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
 
   const { isDebugEnabled } = useDebug();
   const isMobile = useIsMobile();
+  // List queries are non-suspense and pending at SSR (loaders only
+  // `void prefetchQuery`), so SSR always renders the loading row. If the query
+  // resolves before hydration, the first client render would flip to the
+  // empty/data state and mismatch SSR (CUBBY-3J / CUBBY-3). Keep showing the
+  // loading row until hydrated so the first client render matches SSR.
+  const hydrated = useHydrated();
   const pathname = useLocation({ select: (l) => l.pathname });
   const { density } = useTableDensity();
   const dConfig = densityConfig[density];
@@ -351,7 +358,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
 
   // Render table body content based on state
   const renderTableBody = () => {
-    if (isLoading) {
+    if (isLoading || !hydrated) {
       return renderStatusRow(<SimpleLoading />);
     }
 
