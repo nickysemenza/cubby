@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { dbTimestampsOut } from "./common";
+import { dbTimestampsOut, requiredName } from "./common";
 import { ingredientId } from "./identifiers";
 import { baseKind } from "./problems";
 
@@ -41,12 +41,21 @@ export const ingredientOut = z
   .extend(dbTimestampsOut.shape);
 
 /**
+ * Input schema for creating ingredients. Overrides the base `name` (lax for
+ * reads) with a non-empty constraint; keep the mock hint for test fixtures.
+ */
+export const ingredientCreateInput = ingredientBase.extend({
+  name: requiredName("Ingredient name").meta({ mock: "food.ingredient" }),
+});
+export type IngredientCreateInput = z.infer<typeof ingredientCreateInput>;
+
+/**
  * Input schema for updating ingredients
  *
  */
 export const ingredientUpdateInput = z.object({
   id: ingredientId,
-  data: ingredientBase.partial(),
+  data: ingredientCreateInput.partial(),
 });
 
 export type IngredientUpdateInput = z.infer<typeof ingredientUpdateInput>;

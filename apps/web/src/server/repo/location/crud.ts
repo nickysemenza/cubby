@@ -61,6 +61,26 @@ import type {
 } from "./internal-types";
 import { wouldCreateParentCycle } from "./tree";
 
+// Verify a proposed parent location actually exists and isn't soft-deleted.
+// Without this, a dangling parentId silently inserts: wouldCreateParentCycle
+// walks off the end of a non-existent chain and reports "no cycle", orphaning
+// the row in the tree.
+const assertParentLocationExists = async (
+  db: Database,
+  parentId: LocationId,
+): Promise<void> => {
+  const parent = await getDb(db).query.location.findFirst({
+    where: and(eq(location.id, parentId), notDeleted(location)),
+    columns: { id: true },
+  });
+  if (!parent) {
+    throw createAppError(
+      "REFERENCED_RECORD_MISSING",
+      "Cannot set parent: the specified parent location does not exist",
+    );
+  }
+};
+
 // Create a new location
 export const createLocation = async (
   db: Database,
@@ -73,6 +93,11 @@ export const createLocation = async (
   // This ensures Drizzle sends SQL NULL rather than an empty string
   const parentIdValue =
     data.parentId && data.parentId.trim() !== "" ? data.parentId : undefined;
+
+  // Reject a parentId that doesn't reference a real, non-deleted location.
+  if (parentIdValue !== undefined) {
+    await assertParentLocationExists(db, parentIdValue);
+  }
 
   // Generate unique shortcode with collision retry
   const shortcode = await generateUniqueLocationShortcode(db);
@@ -114,6 +139,9 @@ export const updateLocation = async (
 ) => {
   // Check if the new parent would create a circular reference (includes self-parent check)
   if (data.parentId) {
+    // Reject a dangling parentId before the cycle walk (which would otherwise
+    // treat a missing parent as a valid top-of-chain and accept it).
+    await assertParentLocationExists(db, data.parentId);
     const wouldCycle = await wouldCreateParentCycle(db, id, data.parentId);
     if (wouldCycle) {
       throw createAppError(

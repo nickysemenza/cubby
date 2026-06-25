@@ -2,7 +2,7 @@ import { locationTypeValues } from "@cubby/shared";
 import { z } from "zod";
 import { amount } from "./codec";
 import type { locationOutWithParentChildrenAndInventoryOut } from "./combo";
-import { dbTimestampsOut } from "./common";
+import { dbTimestampsOut, requiredName } from "./common";
 import {
   inventoryId,
   locationId,
@@ -113,6 +113,9 @@ const optionalLocationId = z
 // Input schema for creating locations
 export const locationCreateInput = locationBase
   .extend({
+    // Override the base `name` (which stays lax for reads) with a non-empty
+    // constraint on the create/update boundary.
+    name: requiredName("Location name").describe("name of location"),
     parentId: optionalLocationId.describe(
       "Parent location id — nest this location under another (omit/null for a top-level location).",
     ),
