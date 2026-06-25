@@ -43,7 +43,7 @@ import {
 import { TraceNames, withTrace } from "~/server/tracing";
 import type {
   IngredientService,
-  IngredientWithFoodOut,
+  IngredientWithFoodLeanOut,
 } from "./ingredient.service";
 
 const toRecipeTotals = (t: CalculateTotalsResult): RecipeTotals => {
@@ -113,7 +113,7 @@ const totalsDiffer = (
  */
 const usdaMissesFor = (
   rows: CostingRow[],
-  ingMap: Record<string, IngredientWithFoodOut>,
+  ingMap: Record<string, IngredientWithFoodLeanOut>,
 ): { ingredientName: string; productName: string; fdcId: number }[] => {
   const misses: {
     ingredientName: string;
@@ -150,7 +150,7 @@ export class RecipeCostingService {
    * USDA-enriched ingredient map.
    */
   private async loadContext(recipes: RecipeOut[]): Promise<{
-    ingMap: Record<string, IngredientWithFoodOut>;
+    ingMap: Record<string, IngredientWithFoodLeanOut>;
     recipeMap: Record<string, RecipeOut>;
   }> {
     return withTrace(

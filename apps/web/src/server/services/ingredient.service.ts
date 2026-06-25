@@ -23,7 +23,7 @@ import {
   findFuzzyMergeCandidates,
   getIngredientByID as getIngredientByIDRepo,
   getIngredientByName as getIngredientByNameRepo,
-  getIngredientsByIDs as getIngredientsByIDsRepo,
+  getIngredientsByIDsLean as getIngredientsByIDsLeanRepo,
   ingredientList as ingredientListRepo,
   mergeIngredients as mergeIngredientsRepo,
   updateIngredient as updateIngredientRepo,
@@ -58,14 +58,17 @@ const enrichmentFixKind = z.enum([
   "done",
 ]);
 
-// Lean ingredient+food shape for the workbench worklist: products (so the inline
-// editor can create/update) WITHOUT the per-usage recipe bodies that
-// `ingredientWithFoodOut` carries. Those (full Recipe + Section jsonb per usage)
-// are a ~24 MB payload over ~1.4k ingredients; the row only needs a usage count
-// and the cookbook-only flag, and the expanded footer loads usages on demand.
-const ingredientWithFoodLeanOut = ingredientOut.extend({
+// Lean ingredient+food shape: products (with food) WITHOUT the per-usage recipe
+// bodies `ingredientWithFoodOut` carries (full Recipe + Section jsonb per usage —
+// a huge over-fetch). Used by every surface that only needs products/mappings/food
+// — the workbench worklist and the costing path (getManyByIDs / recompute).
+export const ingredientWithFoodLeanOut = ingredientOut.extend({
   product: z.array(productWithMappingsAndFoodOut),
 });
+
+export type IngredientWithFoodLeanOut = z.infer<
+  typeof ingredientWithFoodLeanOut
+>;
 
 /**
  * A workbench row: the lean ingredient (products + food, so the inline editor
@@ -131,16 +134,19 @@ export class IngredientService {
   /**
    * Batched `getIngredientByID`: one DB query for all ids + one cross-ingredient
    * USDA enrichment pass (via batchEnrichNestedItems), instead of N×(query+enrich).
-   * Used by the recipe list to compute the cost/calorie columns in one round-trip.
+   * Used by the recipe-costing path (recompute / getManyByIDs) + the unit-mapping
+   * analysis — all of which only read products/food, so this is the LEAN fetch: no
+   * recipe-usage relation (the per-usage Recipe + Section jsonb bodies that the
+   * full ingredient graph carries — a needless over-fetch for costing).
    */
   async getIngredientsByIDs(
     ids: IngredientId[],
-  ): Promise<IngredientWithFoodOut[]> {
+  ): Promise<IngredientWithFoodLeanOut[]> {
     return withTrace(
       TraceNames.service("ingredient", "getIngredientsByIDs"),
       async (span) => {
         span.setAttribute("ingredient.requested_count", ids.length);
-        const ingredients = await getIngredientsByIDsRepo(this.db, ids);
+        const ingredients = await getIngredientsByIDsLeanRepo(this.db, ids);
         return batchEnrichNestedItems(
           ingredients,
           (ing) => ing.product,

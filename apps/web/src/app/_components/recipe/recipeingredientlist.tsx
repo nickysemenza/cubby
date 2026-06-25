@@ -26,7 +26,7 @@ import type {
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { cn } from "~/lib/utils";
 import { renderValueOrMissing } from "~/misc/result";
-import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
+import type { IngredientWithFoodLeanOut } from "~/server/services/ingredient.service";
 import { createActionsColumnBase } from "../data-table/columnHelpers";
 import RTable from "../data-table/Table";
 import { EntityPillLink } from "../EntityPill";
@@ -67,7 +67,7 @@ type ScalingRow = IngredientDataItem & {
 
 export const RecipeIngredientList: React.FC<{
   ingredients: CostingRow[];
-  ingMap: Record<string, IngredientWithFoodOut> | undefined;
+  ingMap: Record<string, IngredientWithFoodLeanOut> | undefined;
   /**
    * The unified engine result (computed by the parent — RecipeDetail — with
    * sub-recipe rollups, usage estimates, and baker percentages applied). Rows

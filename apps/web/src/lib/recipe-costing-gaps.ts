@@ -1,7 +1,7 @@
 import type { BaseKind, ConversionCoverage } from "~/lib/conversion-coverage";
 import type { RecipeCosting } from "~/lib/recipe-costing";
 import { wasm } from "~/lib/wasm";
-import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
+import type { IngredientWithFoodLeanOut } from "~/server/services/ingredient.service";
 
 /**
  * The single highest-leverage fix we suggest for an uncosted ingredient.
@@ -76,7 +76,7 @@ interface GapAccumulator {
   productId: string | null;
   lineUnit: string | null;
   lineKind: LineKind;
-  products: IngredientWithFoodOut["product"];
+  products: IngredientWithFoodLeanOut["product"];
   // `volume` is always false on the recipe path — volume isn't a costing blocker
   // for a specific line; it's a global-workbench-only signal (classifyIngredientFix).
   missing: {
@@ -94,7 +94,7 @@ interface GapAccumulator {
  * supertype, so it passes straight through.
  */
 interface FixInputs {
-  products: IngredientWithFoodOut["product"];
+  products: IngredientWithFoodLeanOut["product"];
   missing: {
     price: boolean;
     weight: boolean;
@@ -149,7 +149,7 @@ const classifyKind = (acc: FixInputs): CostingGapKind | "done" => {
  * still a gap (add-weight-mapping), exactly as the per-recipe path treats it.
  */
 export const classifyIngredientFix = (input: {
-  products: IngredientWithFoodOut["product"];
+  products: IngredientWithFoodLeanOut["product"];
   coverage: ConversionCoverage;
   /** Kinds graded against (gradedKinds) — an N/A volume is excluded here. */
   applicable: readonly BaseKind[];
@@ -188,7 +188,7 @@ export const classifyIngredientFix = (input: {
  */
 export const deriveCostingGaps = (
   costing: RecipeCosting,
-  ingMap: Record<string, IngredientWithFoodOut>,
+  ingMap: Record<string, IngredientWithFoodLeanOut>,
 ): CostingGap[] => {
   const byId = new Map<string, GapAccumulator>();
 

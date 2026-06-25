@@ -315,20 +315,34 @@ export const getRecipeUsagesForIngredient = async (
 };
 
 /**
- * Batched sibling of `getIngredientByID`: fetches many ingredients (with full
- * relations) in ONE query via `inArray`, instead of one findFirst per id.
- * Missing/deleted ids are silently omitted. Order is not guaranteed.
+ * Lean batched fetch by id for the costing path: ingredients + their products
+ * (mappings / images / external ids), in ONE query via `inArray`. Deliberately
+ * drops the recipe-usage relation that the full ingredient graph carries (the
+ * per-usage Recipe + RecipeSection jsonb bodies) — costing, getManyByIDs, and the
+ * unit-mapping analysis only read products/food, so that's a needless over-fetch
+ * (~1s on a recipe's ingredient set). Missing/deleted ids are silently omitted.
  */
-export const getIngredientsByIDs = async (
+export const getIngredientsByIDsLean = async (
   db: Database,
   ids: IngredientId[],
 ) => {
   if (ids.length === 0) return [];
   const rows = await getDb(db).query.ingredient.findMany({
     where: and(inArray(ingredient.id, ids), notDeleted(ingredient)),
-    ...relations.ingredient.full,
+    with: {
+      product: {
+        with: {
+          unitMappings: true,
+          externalIds: true,
+          images: { with: { image: true } },
+        },
+      },
+    },
   });
-  return await Promise.all(rows.map((row) => dbIngredientToAPI(db, row)));
+  return rows.map((row) => {
+    const { product: productRel, ...restOfIngredient } = row;
+    return { ...restOfIngredient, product: mapIngredientProducts(productRel) };
+  });
 };
 
 /**
