@@ -10,6 +10,7 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { useHydrated } from "~/hooks/useHydrated";
+import { useIdle } from "~/hooks/useIdle";
 import { cn } from "~/lib/utils";
 
 const pl = (n: number, sing: string, plur = `${sing}s`) =>
@@ -41,20 +42,30 @@ const PROBLEM_LABELS: Record<
 
 export const ProblemsBadge = () => {
   const hydrated = useHydrated();
+  // Defer the 5 detector invocations until the browser is idle — the badge
+  // renders on every page, so firing them on each navigation put them on the
+  // critical path app-wide. `useIdle` holds the fetch until after first paint.
+  const idle = useIdle();
 
   // Assemble the count from the SAME five cost-grouped detector queries the
   // Problems page uses (shared cache → no second scan, and the page is already
   // warm when opened). 5-min staleTime keeps this background indicator from
   // refetching on every navigation. Replaces the old monolithic getAllProblems,
   // which ran every detector in one Worker invocation (the CPU-limit risk).
-  const { problems, isLoading } = useProblemsData({ staleTime: 5 * 60 * 1000 });
+  const { problems, isLoading } = useProblemsData({
+    staleTime: 5 * 60 * 1000,
+    enabled: hydrated && idle,
+  });
   const count = countProblems(problems);
 
   // The query isn't prefetched during SSR, so the server always renders this
   // loading button. Dehydrated data can resolve before hydration, so gate the
   // loaded branch on `hydrated` too — otherwise the first client render would
   // emit the <Link> while the server emitted this button (hydration mismatch).
-  if (!hydrated || isLoading) {
+  // `!idle` keeps the spinner up until the deferred fetch starts (a disabled
+  // query reports isLoading=false with empty data, which would flash "no
+  // problems" prematurely).
+  if (!hydrated || !idle || isLoading) {
     return (
       <Button variant="ghost" size="sm" disabled className="h-8 px-2">
         <Spinner />

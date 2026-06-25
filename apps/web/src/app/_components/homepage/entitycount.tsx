@@ -1,7 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
-import type { SortParams } from "@cubby/schemas/pagination";
 import { countProblems } from "@cubby/schemas/problems";
-import { useQueries } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { AlertTriangle } from "lucide-react";
 import { useProblemsData } from "~/app/problems/use-problems-data";
@@ -11,6 +10,7 @@ import { IconTile } from "~/components/ui/icon-tile";
 import { Skeleton } from "~/components/ui/skeleton";
 import { entities } from "~/entities/entities";
 import { useHydrated } from "~/hooks/useHydrated";
+import { useIdle } from "~/hooks/useIdle";
 import { authClient } from "~/lib/auth-client";
 import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
@@ -20,14 +20,16 @@ import { useTRPC } from "~/trpc/react";
  * count. Red ink + red chunky frame when anything needs attention.
  */
 function ProblemsStatCard({ enabled }: { enabled: boolean }) {
-  // Assemble the count from the same five cost-grouped detector queries the
-  // navbar badge and Problems page use (shared cache, no monolithic
-  // getAllProblems scan). `enabled` gates the fetch like the sibling StatCard
-  // queries: an always-on query is idle during SSR but fetching on the client's
-  // first render, so the isLoading branch diverges and hydration mismatches.
+  // Defer the 5 cost-grouped detector invocations off the first-paint critical
+  // path: they're not needed for the page to be interactive (just this badge
+  // count), and firing them on hydration competes with the homepage's other
+  // work on the single isolate thread. `useIdle` keeps them gated until the
+  // browser is idle; combined with `enabled` (auth+hydration) it stays SSR-safe.
+  const idle = useIdle();
+  const ready = enabled && idle;
   const { problems, isLoading } = useProblemsData({
     staleTime: 5 * 60 * 1000,
-    enabled,
+    enabled: ready,
   });
   const count = countProblems(problems).total;
   const alert = count > 0;
@@ -64,7 +66,7 @@ function ProblemsStatCard({ enabled }: { enabled: boolean }) {
             <AlertTriangle />
           </IconTile>
           <div className="min-w-0 flex-1">
-            {!enabled || isLoading ? (
+            {!ready || isLoading ? (
               <Skeleton className="h-6 w-10" />
             ) : (
               <p
@@ -90,18 +92,6 @@ function ProblemsStatCard({ enabled }: { enabled: boolean }) {
     </Link>
   );
 }
-
-/**
- * Query input for the dashboard count cards: pageSize 1 (we only read
- * `meta.totalCount`). Exported so the home route loader can prefetch the exact
- * same query keys for SSR — keep this the single source of truth so the loader
- * prefetch and the component's `useQueries` can't drift apart.
- */
-export const DASHBOARD_COUNT_OPTS = {
-  filters: {},
-  sort: { orderBy: "name", direction: "asc" } satisfies SortParams,
-  pagination: { pageIndex: 0, pageSize: 1 },
-};
 
 /** Format large numbers with compact notation (e.g., 2.1M, 15K) */
 const compactFormatter = new Intl.NumberFormat("en", { notation: "compact" });
@@ -163,50 +153,41 @@ export default function EntityCount() {
   // branching on it alone makes the first client render diverge from SSR.
   const isAuthenticated = useHydrated() && !!session.data?.user;
 
-  const opts = DASHBOARD_COUNT_OPTS;
-
-  const results = useQueries({
-    queries: [
-      { ...api.location.list.queryOptions(opts), enabled: isAuthenticated },
-      { ...api.product.list.queryOptions(opts), enabled: isAuthenticated },
-      { ...api.inventory.list.queryOptions(opts), enabled: isAuthenticated },
-      { ...api.recipe.list.queryOptions(opts), enabled: isAuthenticated },
-      { ...api.ingredient.list.queryOptions(opts), enabled: isAuthenticated },
-      { ...api.image.list.queryOptions(opts), enabled: isAuthenticated },
-      { ...api.usda.list.queryOptions(opts), enabled: isAuthenticated },
-    ],
-    combine: (queryResults) =>
-      queryResults.map((q) => ({
-        count: q.data?.meta.totalCount,
-        isLoading: q.isLoading,
-        isError: q.isError,
-      })),
+  // One call for all seven totals: six cheap COUNT(*)s + the USDA manifest
+  // count, none of which fetch or enrich a list row (see dashboard router). The
+  // old per-entity `list({pageSize:1})` cards fired discarded USDA enrichment on
+  // the product/ingredient/usda cards — the homepage's USDA-on-critical-path.
+  const countsQuery = useQuery({
+    ...api.dashboard.counts.queryOptions(),
+    enabled: isAuthenticated,
   });
+  const counts = countsQuery.data;
 
-  // Entity order matches query order above
-  const displayOrder: Entity[] = [
-    "location",
-    "product",
-    "inventory",
-    "recipe",
-    "ingredient",
-    "image",
-    "usda-food",
+  // Cards in display order, each paired with its total from the single result.
+  const cards: { entity: Entity; count: number | undefined }[] = [
+    { entity: "location", count: counts?.locations },
+    { entity: "product", count: counts?.products },
+    { entity: "inventory", count: counts?.inventory },
+    { entity: "recipe", count: counts?.recipes },
+    { entity: "ingredient", count: counts?.ingredients },
+    { entity: "image", count: counts?.images },
+    { entity: "usda-food", count: counts?.usdaFoods },
   ];
+
+  // While auth is still resolving the query is disabled (isLoading false), so
+  // treat the pre-auth window as loading to keep the skeleton up rather than
+  // flashing "0".
+  const isLoading = !isAuthenticated || countsQuery.isLoading;
 
   return (
     <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-8">
-      {displayOrder.map((entity, i) => (
+      {cards.map(({ entity, count }) => (
         <StatCard
           key={entity}
           entity={entity}
-          count={results[i]?.count}
-          // While auth is still resolving the queries are disabled, so their
-          // `isLoading` is false and `count` is undefined — without this the
-          // card would flash "0" before the real fetch starts. Treat the
-          // pre-auth window as loading so it shows the skeleton throughout.
-          isLoading={!isAuthenticated || (results[i]?.isLoading ?? true)}
-          isError={results[i]?.isError ?? false}
+          count={count}
+          isLoading={isLoading}
+          isError={countsQuery.isError}
         />
       ))}
       <ProblemsStatCard enabled={isAuthenticated} />
