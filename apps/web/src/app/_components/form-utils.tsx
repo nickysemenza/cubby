@@ -488,9 +488,16 @@ export function detectComboboxIdChange<TId extends string>(
 export function SideBySideFields({
   children,
   className,
+  narrowFirst = false,
 }: {
   children: ReactNode;
   className?: string;
+  /**
+   * Pin the first field to a tight fixed width (for short numeric inputs like a
+   * quantity) and let the second field take the remaining space, instead of the
+   * default 50/50 split. Used by the compact qty/unit rows.
+   */
+  narrowFirst?: boolean;
 }): ReactNode {
   return (
     <div
@@ -499,7 +506,7 @@ export function SideBySideFields({
         className,
       )}
     >
-      <div className="flex-1">
+      <div className={narrowFirst ? "w-16 shrink-0" : "flex-1"}>
         {Array.isArray(children) ? children[0] : children}
       </div>
       <div className="flex-1">

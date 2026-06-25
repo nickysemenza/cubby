@@ -36,6 +36,7 @@ export function AmountFieldGroup<
 
   return (
     <SideBySideFields
+      narrowFirst={compact}
       className={cn(
         compact ? "w-full min-w-0 space-x-2" : "min-w-[13rem] space-x-2",
       )}
