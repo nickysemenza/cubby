@@ -26,8 +26,9 @@ interface DashboardEntityCounts {
  * filter set so the totals match the list pages exactly:
  *   - ingredient also excludes recipe-pointer rows (`recipeId IS NULL`), like
  *     `ingredientList`.
- *   - image has no soft-delete column, so it counts every row (matching
- *     `imageList` with no filter).
+ *   - image is hard-deleted in practice (repo/image.ts does a row DELETE, not a
+ *     soft-delete), so `deletedAt` is never set and `notDeleted(image)` returns
+ *     the same rows `imageList` counts — kept for the soft-delete convention.
  * Filtered counts are intentionally not supported here — the `*.list` procedures
  * still serve filtered/paginated views.
  */
@@ -45,7 +46,7 @@ export const getDashboardEntityCounts = async (
       ),
       countWhere(db, location, notDeleted(location)),
       countWhere(db, inventoryEntry, notDeleted(inventoryEntry)),
-      countWhere(db, image),
+      countWhere(db, image, notDeleted(image)),
     ]);
 
   return { products, recipes, ingredients, locations, inventory, images };

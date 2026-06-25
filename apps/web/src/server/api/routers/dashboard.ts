@@ -23,6 +23,10 @@ const dashboardCountsSchema = z.object({
 const counts = protectedProcedure
   .output(dashboardCountsSchema)
   .query(async ({ ctx }) => {
+    // usda-api is always-up Cloudflare infra (D1 + R2 + worker). A getCounts
+    // failure is a real error we want surfaced, NOT masked — so it propagates
+    // and fails the procedure rather than silently degrading the USDA card.
+    // Reviewers: the Promise.all coupling here is intentional, not an oversight.
     const [entityCounts, usdaCounts] = await Promise.all([
       getDashboardEntityCounts(ctx.db),
       ctx.usdaClient.getCounts(),
