@@ -136,14 +136,17 @@ const MappingSource: React.FC<{ mapping: UnitMapping }> = ({ mapping }) => {
 
 export const UnitMappingsTable: React.FC<{
   mappings: UnitMapping[];
-}> = ({ mappings }) => {
+  /** Must match the `kinds` passed to the sibling ConversionCapabilities so
+   * row icons and coverage chips grade against the same kind universe. */
+  kinds?: readonly BaseKind[];
+}> = ({ mappings, kinds }) => {
   const columnHelper = createColumnHelper<UnitMapping>();
 
   // Same engine the coverage chips read, so a row's lit icon and the chip above
   // can't disagree. Cheap (6 cached probes), memoized per mapping set.
   const covered = useMemo(
-    () => conversionCoverage(mappings).covered,
-    [mappings],
+    () => conversionCoverage(mappings, kinds).covered,
+    [mappings, kinds],
   );
 
   const columns = useMemo(

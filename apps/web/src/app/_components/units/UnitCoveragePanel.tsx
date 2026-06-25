@@ -36,8 +36,7 @@ const isNutrientUnit = (unit: string): boolean => {
 /**
  * The one rich unit-mapping surface: coverage chips (big-4 + macros) over a
  * collapsible, lazy-loaded node-link graph and the source-attributed mappings
- * table. Shared by the product/ingredient detail sections, the Convert dialog,
- * and the workbench editor so they read the same model and can't drift.
+ * table. Adopted by product and ingredient detail sections.
  */
 export function UnitCoveragePanel({
   mappings,
@@ -125,7 +124,7 @@ export function UnitCoveragePanel({
         </CollapsibleContent>
       </Collapsible>
 
-      <UnitMappingsTable mappings={mappings} />
+      <UnitMappingsTable mappings={mappings} kinds={kinds} />
     </Stack>
   );
 }
