@@ -151,6 +151,15 @@ export const blankConvRow = (fromUnit = ""): ConvRow => ({
 export const hasUsdaLink = (row: EnrichmentRow): boolean =>
   row.product.some((p) => p.food != null || p.fdc_id != null || p.upc != null);
 
+/**
+ * An ingredient used only in imported cookbook ("book") recipes — i.e. it has
+ * recipe usages and every one is book-sourced. Used to hide the cookbook tail
+ * from the enrichment worklist. A null-source usage means NOT cookbook-only.
+ */
+export const isCookbookOnly = (row: EnrichmentRow): boolean =>
+  row.appearsInRecipes.length > 0 &&
+  row.appearsInRecipes.every((r) => r.source?.type === "book");
+
 /** The gap-aware analysis that drives which editor inputs a row needs. */
 interface GapAnalysis {
   usdaLinked: boolean;
