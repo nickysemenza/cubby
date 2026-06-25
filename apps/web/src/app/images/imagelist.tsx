@@ -66,6 +66,7 @@ export default function ImageList() {
         columnHelper.accessor("size", {
           header: "Size",
           meta: {
+            numeric: true,
             className: "w-24",
             mobile: { slot: "trailing", priority: 5 },
           },

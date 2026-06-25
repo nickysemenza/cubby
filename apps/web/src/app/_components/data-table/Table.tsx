@@ -61,6 +61,11 @@ import { densityConfig, useTableDensity } from "./useTableDensity";
 // Scroll position cache for navigate-back restoration
 const scrollPositionCache = new Map<string, number>();
 
+// Numeric/quantity columns (meta.numeric) right-align with tabular figures so
+// digits line up like a ledger. Defined once here and applied to both the cell
+// and its header, instead of repeating the string across column defs.
+const NUMERIC_CELL = "text-right font-mono tabular-nums";
+
 // Sticky top nav height: the h-12 (48px) nav bar + its 3px ink bottom-rule =
 // 51px (see __root.tsx). The sticky toolbar pins flush below it; if these drift
 // apart a sliver of scrolled rows peeks through the seam. Keep `top-[51px]` on
@@ -124,6 +129,13 @@ interface TTableProps<TItem> {
    * for the default styling.
    */
   getRowClassName?: (row: Row<TItem>) => string | undefined;
+  /**
+   * Vertical alignment of cell content (desktop). Defaults to `"middle"`. Use
+   * `"top"` for grids with multi-line cells (e.g. an ingredient name stacked
+   * over its raw line) so single-value cells align to the row's headline value
+   * instead of floating at its centre.
+   */
+  verticalAlign?: "top" | "middle";
 }
 
 interface DataRowProps<TItem> {
@@ -166,7 +178,11 @@ function DataRowInner<TItem>({
       {row.getVisibleCells().map((cell) => (
         <TableCell
           key={cell.id}
-          className={cn(cellClassName, cell.column.columnDef.meta?.className)}
+          className={cn(
+            cellClassName,
+            cell.column.columnDef.meta?.numeric && NUMERIC_CELL,
+            cell.column.columnDef.meta?.className,
+          )}
         >
           {flexRender(cell.column.columnDef.cell, cell.getContext())}
         </TableCell>
@@ -238,6 +254,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     grouped = false,
     onGroupedChange,
     getRowClassName,
+    verticalAlign = "middle",
   } = props;
 
   const { isDebugEnabled } = useDebug();
@@ -332,7 +349,11 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     header:
       "h-8 px-2 py-1 text-2xs font-mono font-semibold uppercase tracking-wider text-slate border-b-[3px] border-b-foreground",
     filterRow: "h-7 px-2 py-0.5 border-b border-border" /* tight */,
-    cell: cn(dConfig.cellClass, "overflow-hidden align-middle"),
+    cell: cn(
+      dConfig.cellClass,
+      "overflow-hidden",
+      verticalAlign === "top" ? "align-top" : "align-middle",
+    ),
     row: cn(dConfig.rowClass, "table-row-hover border-border border-b"),
     sortIcon: "h-3 w-3",
   };
@@ -478,7 +499,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
           --row-accent so hover/selected bars match the section's color. */}
       {!isMobile && (
         <div
-          className="border-[var(--border)] border-y"
+          className="border border-[var(--border)]"
           style={
             {
               ...(entity ? { "--row-accent": ENTITY_ACCENTS[entity] } : {}),
@@ -577,7 +598,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
               containerClassName="overflow-visible"
             >
               <TableHeader
-                className="sticky z-20 bg-background [&_tr]:border-b-0"
+                className="sticky z-20 bg-card [&_tr]:border-b-0"
                 style={{ top: "var(--table-header-top)" }}
               >
                 {table.getHeaderGroups().map((headerGroup) => {
@@ -598,6 +619,8 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                         {headerGroup.headers.map((header) => {
                           const sortDirection = header.column.getIsSorted();
                           const canSort = header.column.getCanSort();
+                          const numeric =
+                            header.column.columnDef.meta?.numeric ?? false;
                           const sortingArrows =
                             sortDirection === "desc" ? (
                               <ArrowDown
@@ -643,8 +666,9 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                                     : "none"
                               }
                               className={cn(
-                                header.column.columnDef.meta?.className,
                                 styles.header,
+                                numeric && "text-right",
+                                header.column.columnDef.meta?.className,
                                 sortDirection && "bg-muted/50",
                               )}
                             >
@@ -652,7 +676,15 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="group -ml-2 h-6 justify-start gap-1 px-2 font-semibold text-2xs uppercase tracking-wider hover:bg-muted/60"
+                                  className={cn(
+                                    "group h-6 gap-1 px-2 font-semibold text-2xs uppercase tracking-wider hover:bg-muted/60",
+                                    // Mirror the cell's right-align: pull the label
+                                    // to the column's right edge for numeric cols,
+                                    // else keep the left-edge compensation.
+                                    numeric
+                                      ? "-mr-2 justify-end"
+                                      : "-ml-2 justify-start",
+                                  )}
                                   onClick={() =>
                                     header.column.toggleSorting(
                                       header.column.getIsSorted() === "asc",

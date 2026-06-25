@@ -128,6 +128,7 @@ export function InventoryItemList() {
       columnHelper.accessor("amount", {
         header: "Qty",
         meta: {
+          numeric: true,
           className: "w-36",
           mobile: { slot: "trailing", priority: 10 },
         },
