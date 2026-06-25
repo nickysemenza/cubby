@@ -227,7 +227,16 @@ export const relations = {
         recipes: {
           orderBy: sectionOrder,
           with: {
-            recipe: true,
+            // Only the fields dbMealToAPI reads — the full recipe body per planned recipe was pure over-fetch (the list shows name + scaled totals).
+            recipe: {
+              columns: {
+                id: true,
+                name: true,
+                servings: true,
+                yield: true,
+                totals: true,
+              },
+            },
           },
         },
       },
