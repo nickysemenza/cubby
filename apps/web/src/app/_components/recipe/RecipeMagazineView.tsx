@@ -61,7 +61,7 @@ function VitalsPanel({
     <aside className="w-full lg:w-[230px] lg:self-start lg:justify-self-end">
       {show ? (
         <div className="rounded-xl border border-[var(--border-chunky)] bg-card p-4">
-          <Row align="center" justify="between" className="mb-3">
+          <Row align="center" justify="between" className="mb-2">
             <span className="eyebrow">{stats.basisLabel}</span>
             <button
               type="button"
@@ -74,7 +74,7 @@ function VitalsPanel({
           </Row>
 
           {(stats.cost != null || stats.kcal != null) && (
-            <Row align="baseline" justify="between" className="mb-3">
+            <Row align="baseline" justify="between" className="mb-2">
               {stats.cost != null && (
                 <span className="font-heading font-semibold text-2xl tracking-tight">
                   {formatCurrency(stats.cost)}
@@ -127,7 +127,7 @@ function VitalsPanel({
         <button
           type="button"
           onClick={onToggle}
-          className="inline-flex items-center gap-1.5 text-muted-foreground text-xs hover:text-foreground"
+          className="inline-flex items-center gap-1 text-muted-foreground text-xs hover:text-foreground"
         >
           <Eye className="h-3.5 w-3.5" />
           Show nutrition &amp; cost
@@ -298,7 +298,7 @@ export function RecipeMagazineView({
       {/* Headnote (left) + a toggleable cost/macro card (right) — the card
           fills the rail beside the prose instead of leaving dead space. */}
       {(recipe.notes || hasStats) && (
-        <div className="grid gap-6 lg:grid-cols-[1fr_230px] lg:gap-10">
+        <div className="grid gap-6 lg:grid-cols-[1fr_230px] lg:gap-12">
           <div>
             {recipe.notes && (
               <MarkdownText className="max-w-prose text-muted-foreground">
