@@ -49,6 +49,7 @@ import {
   buildPackagePrice,
   hasPriceEntry,
   hasUsdaLink,
+  isCookbookOnly,
   UnitInput,
 } from "./workbench-editor-core";
 
@@ -98,6 +99,9 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
   const api = useTRPC();
   const [filter, setFilter] = useState<FilterKey>("all");
   const [view, setView] = useState<"browse" | "review">("browse");
+  // Layered on top of the chips: drop ingredients used only in imported cookbook
+  // recipes (the long noise tail) from counts + the visible/review set.
+  const [hideCookbookOnly, setHideCookbookOnly] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [suggestions, setSuggestions] = useState<Record<string, Suggestion>>(
     {},
@@ -148,30 +152,42 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
     });
   }, [focus, rows, isLoading]);
 
+  const cookbookOnlyCount = useMemo(
+    () => rows.filter((r) => isCookbookOnly(r)).length,
+    [rows],
+  );
+
+  // The set the chips count + filter against — the cookbook toggle reduces it so
+  // the chip counts stay honest about what's actually shown.
+  const base = useMemo(
+    () => (hideCookbookOnly ? rows.filter((r) => !isCookbookOnly(r)) : rows),
+    [rows, hideCookbookOnly],
+  );
+
   const counts = useMemo(
     () => ({
-      all: rows.length,
-      "no-product": rows.filter((r) => r.recommendedFix === "no-product")
+      all: base.length,
+      "no-product": base.filter((r) => r.recommendedFix === "no-product")
         .length,
-      partial: rows.filter((r) => r.recommendedFix !== "no-product").length,
-      "no-usda": rows.filter((r) => !hasUsdaLink(r)).length,
+      partial: base.filter((r) => r.recommendedFix !== "no-product").length,
+      "no-usda": base.filter((r) => !hasUsdaLink(r)).length,
     }),
-    [rows],
+    [base],
   );
 
   const visible = useMemo(
     () =>
       match(filter)
-        .with("all", () => rows)
+        .with("all", () => base)
         .with("no-product", () =>
-          rows.filter((r) => r.recommendedFix === "no-product"),
+          base.filter((r) => r.recommendedFix === "no-product"),
         )
         .with("partial", () =>
-          rows.filter((r) => r.recommendedFix !== "no-product"),
+          base.filter((r) => r.recommendedFix !== "no-product"),
         )
-        .with("no-usda", () => rows.filter((r) => !hasUsdaLink(r)))
+        .with("no-usda", () => base.filter((r) => !hasUsdaLink(r)))
         .exhaustive(),
-    [rows, filter],
+    [base, filter],
   );
 
   const selectedRows = useMemo(
@@ -419,6 +435,21 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
             {label} {counts[key]}
           </button>
         ))}
+        {cookbookOnlyCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setHideCookbookOnly((v) => !v)}
+            aria-pressed={hideCookbookOnly}
+            className={cn(
+              "rounded-md px-2 py-1 text-sm transition-colors",
+              hideCookbookOnly
+                ? "bg-secondary font-medium"
+                : "text-muted-foreground hover:bg-accent",
+            )}
+          >
+            Hide cookbook-only ({cookbookOnlyCount})
+          </button>
+        )}
         <Row align="center" gap="xs" className="ml-auto">
           {(["browse", "review"] as const).map((v) => (
             <Button
