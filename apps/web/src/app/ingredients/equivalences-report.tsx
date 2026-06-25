@@ -7,6 +7,14 @@ import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { StatusText } from "~/components/ui/status-text";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table";
+import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -103,40 +111,37 @@ export function EquivalencesReport() {
       )}
 
       {data && data.candidates.length > 0 && (
-        <table className="w-full border-collapse text-xs">
-          <thead>
-            <tr className="border-border/40 border-b text-left text-muted-foreground">
-              <th className="py-1 pr-2 font-medium">Ingredient</th>
-              <th className="py-1 pr-2 font-medium">Equivalence</th>
-              <th className="py-1 pr-2 text-right font-medium">Seen</th>
-              <th className="py-1 pr-2 font-medium">Spread</th>
-              <th className="py-1 font-medium">Examples</th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table className="table-auto">
+          <TableHeader>
+            <TableRow>
+              <TableHead>Ingredient</TableHead>
+              <TableHead>Equivalence</TableHead>
+              <TableHead className="text-right">Seen</TableHead>
+              <TableHead>Spread</TableHead>
+              <TableHead>Examples</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {groups.map((group) =>
               group.map((c, idx) => (
-                <tr
+                <TableRow
                   key={`${c.ingredientId} ${c.unitA} ${c.unitB}`}
-                  className={cn(
-                    "align-top",
-                    // Border only at group boundaries, so an ingredient's rows
-                    // read as one cluster.
-                    idx === group.length - 1 && "border-border/40 border-b",
-                  )}
+                  // Border only at group boundaries, so an ingredient's rows
+                  // read as one cluster.
+                  className={cn(idx !== group.length - 1 && "border-b-0")}
                 >
                   {idx === 0 && (
-                    <td
+                    <TableCell
                       rowSpan={group.length}
-                      className="border-border/40 border-b py-1 pr-2 align-top"
+                      className="border-b align-top"
                     >
                       <EntityPillLink
                         entity="ingredient"
                         data={{ id: c.ingredientId, name: c.ingredientName }}
                       />
-                    </td>
+                    </TableCell>
                   )}
-                  <td className="whitespace-nowrap py-1 pr-2 font-medium">
+                  <TableCell className="align-top font-medium">
                     <span className="inline-flex items-center gap-1">
                       {equivalenceLabel(c)}
                       {c.existingRatio != null && (
@@ -156,14 +161,14 @@ export function EquivalencesReport() {
                         </Tooltip>
                       )}
                     </span>
-                  </td>
-                  <td className="py-1 pr-2 text-right text-muted-foreground tabular-nums">
+                  </TableCell>
+                  <TableCell className="text-right align-top text-muted-foreground tabular-nums">
                     {c.occurrences}
-                  </td>
-                  <td className="whitespace-nowrap py-1 pr-2 text-muted-foreground">
+                  </TableCell>
+                  <TableCell className="align-top text-muted-foreground">
                     {spreadLabel(c)}
-                  </td>
-                  <td className="py-1">
+                  </TableCell>
+                  <TableCell className="whitespace-normal align-top">
                     <Stack as="ul" gap="xs">
                       {c.examples.map((ex, i) => (
                         <li
@@ -179,12 +184,12 @@ export function EquivalencesReport() {
                         </li>
                       ))}
                     </Stack>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               )),
             )}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       )}
     </Stack>
   );

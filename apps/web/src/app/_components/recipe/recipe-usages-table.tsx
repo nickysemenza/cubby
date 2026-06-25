@@ -2,6 +2,14 @@ import type { RecipeUsage } from "@cubby/schemas/combo";
 import { AlertCircle } from "lucide-react";
 import { useMemo } from "react";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table";
+import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -65,26 +73,26 @@ export function RecipeUsagesTable({
   if (rows.length === 0) return null;
 
   return (
-    <table className="w-full border-collapse text-xs">
-      <thead>
-        <tr className="border-border/40 border-b text-left text-muted-foreground">
-          <th className="py-1 pr-2 font-medium">Recipe</th>
-          <th className="py-1 pr-2 font-medium">Section</th>
-          <th className="py-1 pr-2 font-medium">Amount</th>
-          <th className="py-1 pr-2 font-medium">Modifier</th>
-          <th className="py-1 font-medium">Source line</th>
-        </tr>
-      </thead>
-      <tbody>
+    <Table className="table-auto">
+      <TableHeader>
+        <TableRow>
+          <TableHead>Recipe</TableHead>
+          <TableHead>Section</TableHead>
+          <TableHead>Amount</TableHead>
+          <TableHead>Modifier</TableHead>
+          <TableHead>Source line</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {rows.map((row) => (
-          <tr key={row.id} className="border-border/40 border-b last:border-0">
-            <td className="py-1 pr-2 align-top">
+          <TableRow key={row.id}>
+            <TableCell className="align-top">
               <EntityPillLink entity="recipe" data={row.recipe} />
-            </td>
-            <td className="py-1 pr-2 align-top text-muted-foreground">
+            </TableCell>
+            <TableCell className="align-top text-muted-foreground">
               {row.sectionName ?? ""}
-            </td>
-            <td className="whitespace-nowrap py-1 pr-2 align-top text-muted-foreground">
+            </TableCell>
+            <TableCell className="align-top text-muted-foreground">
               {row.drift.amounts !== null ? (
                 <DriftIndicator
                   axis="amount"
@@ -106,8 +114,8 @@ export function RecipeUsagesTable({
                   <TooltipContent>No parsed amount</TooltipContent>
                 </Tooltip>
               )}
-            </td>
-            <td className="py-1 pr-2 align-top text-muted-foreground">
+            </TableCell>
+            <TableCell className="whitespace-normal align-top text-muted-foreground">
               {row.drift.modifier !== null ? (
                 <DriftIndicator
                   axis="modifier"
@@ -118,8 +126,8 @@ export function RecipeUsagesTable({
               ) : (
                 (row.modifier ?? "")
               )}
-            </td>
-            <td className="py-1 align-top">
+            </TableCell>
+            <TableCell className="whitespace-normal align-top">
               {row.rawLine ? (
                 <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                   <span className="text-muted-foreground/70">
@@ -141,10 +149,10 @@ export function RecipeUsagesTable({
                   (no source line)
                 </span>
               )}
-            </td>
-          </tr>
+            </TableCell>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
