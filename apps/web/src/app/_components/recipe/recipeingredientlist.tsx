@@ -16,6 +16,7 @@ import {
 } from "~/components/entity/entity-summary-card";
 import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
+import { formatCurrencyRange, formatNumberRange } from "~/lib/format-range";
 import type {
   CalculateTotalsResult,
   CostingRow,
@@ -136,7 +137,8 @@ export const RecipeIngredientList: React.FC<{
       // Fixed width (like the sibling numeric columns, which use w-*) so the
       // primary column doesn't collapse to "jala…"; the inner divs truncate
       // long names. `min-w-*` alone isn't honored by this table's layout.
-      meta: { className: "w-48" },
+      meta: { className: "w-44" },
+      footer: () => <span className="font-semibold">Totals</span>,
       cell: (info) => {
         const row = info.row.original;
         const rawLine = row.rawLine;
@@ -170,7 +172,7 @@ export const RecipeIngredientList: React.FC<{
     columnHelper.accessor("amounts", {
       header: "Amounts",
       enableSorting: false,
-      meta: { numeric: true, className: "w-32" },
+      meta: { numeric: true, className: "w-28" },
       cell: (info) => {
         const amounts = info.getValue();
 
@@ -208,8 +210,14 @@ export const RecipeIngredientList: React.FC<{
       {
         id: "dollars",
         header: "Cost",
-        meta: { numeric: true, className: "w-24" },
+        meta: { numeric: true, className: "w-20" },
         sortUndefined: "last",
+        footer: () =>
+          totals ? (
+            <div className="text-right font-mono tabular-nums">
+              {formatCurrencyRange(totals.price, totals.priceUpper)}
+            </div>
+          ) : null,
         cell: (info) => {
           const measure = info.row.original.priceInfo?.price;
           if (!measure) return null;
@@ -230,8 +238,18 @@ export const RecipeIngredientList: React.FC<{
       {
         id: "grams",
         header: "Weight",
-        meta: { numeric: true, className: "w-24" },
+        meta: { numeric: true, className: "w-20" },
         sortUndefined: "last",
+        footer: () =>
+          totals ? (
+            <div className="text-right font-mono tabular-nums">
+              {formatNumberRange(
+                totals.weight,
+                totals.weightUpper,
+                (g) => `${Math.round(g)} g`,
+              )}
+            </div>
+          ) : null,
         cell: (info) => {
           const measure = info.row.original.priceInfo?.gram;
           if (!measure) return null;
@@ -295,6 +313,22 @@ export const RecipeIngredientList: React.FC<{
           ),
           meta: { numeric: true, className: "w-14" },
           sortUndefined: "last",
+          footer: () => {
+            if (!totals) return null;
+            const value = totals.nutrients[n.code];
+            if (value == null || value <= 0) {
+              return (
+                <div className="text-right text-muted-foreground/40">·</div>
+              );
+            }
+            const fmt = (v: number) =>
+              n.unit === "g" ? v.toFixed(1) : Math.round(v).toString();
+            return (
+              <div className="text-right font-mono tabular-nums">
+                {formatNumberRange(value, totals.nutrientsUpper?.[n.code], fmt)}
+              </div>
+            );
+          },
           cell: (info) => {
             const nutrientResult = info.row.original.priceInfo?.nutrient;
             if (!nutrientResult) return null;
@@ -315,7 +349,7 @@ export const RecipeIngredientList: React.FC<{
     columnHelper.display({
       id: "ingredientDetails",
       header: "Ingredient Details",
-      meta: { className: "w-40" },
+      meta: { className: "w-36" },
       cell: (props) =>
         match(props.row.original)
           .with({ type: "ingredient" }, (row) => (
@@ -336,7 +370,7 @@ export const RecipeIngredientList: React.FC<{
     columnHelper.display({
       id: "mappings",
       header: "Unit Mappings",
-      meta: { className: "w-40" },
+      meta: { className: "w-36" },
       cell: (props) => {
         if (ingMap === undefined) {
           return "loading";
