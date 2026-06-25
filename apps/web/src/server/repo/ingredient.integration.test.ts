@@ -2,14 +2,22 @@ import { count, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { ingredient } from "~/server/db/schema";
-import { upsertImportRecipe } from "~/server/repo/recipe";
+import { createRecipe, upsertImportRecipe } from "~/server/repo/recipe";
 import { getDb, withTransaction } from "./database-helpers";
 import {
+  createIngredient,
+  enrichmentWorkbenchIngredients,
   findOrCreateIngredient,
   mergeIngredients,
   resolveOrCreateIngredients,
 } from "./ingredient";
-import { makeImportRecipe } from "./repo.fixtures";
+import { createProduct } from "./product";
+import {
+  ingredientRef,
+  makeImportRecipe,
+  makeProductInput,
+  makeRecipeInput,
+} from "./repo.fixtures";
 
 describe("ingredient", () => {
   const ctx = withTestDb();
@@ -242,5 +250,54 @@ describe("ingredient", () => {
     expect(updatedIngredient!.aliases).toContain(b.name);
     expect(updatedIngredient!.aliases).toContain(c.name);
     expect(updatedIngredient!.aliases).toContain("large eggs");
+  });
+
+  // Regression: the lean workbench fetch uses a relational query with raw-SQL
+  // `extras` (recipeCount/cookbookOnly correlated subqueries) — exercise it end to
+  // end so a Drizzle codegen break can't slip past typecheck. Replaced the 24 MB
+  // full-relation fetch that made the workbench ~40s.
+  it("enrichmentWorkbenchIngredients: recipe-used only, with recipeCount + cookbookOnly + products", async () => {
+    const used = await createIngredient(
+      ctx.db,
+      { name: "flour", aliases: [] },
+      ctx.actor,
+    );
+    await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Test flour",
+        manufacturer: "test",
+        ingredientId: used.id,
+      }),
+      ctx.actor,
+    );
+    await createRecipe(
+      ctx.db,
+      makeRecipeInput({
+        name: "Web Recipe",
+        sections: [
+          {
+            instructions: [{ instruction: "Mix" }],
+            ingredients: [ingredientRef(used.id)],
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    // Never used in a recipe → must be excluded by the recipe-used filter.
+    await createIngredient(ctx.db, { name: "orphan", aliases: [] }, ctx.actor);
+
+    const rows = await enrichmentWorkbenchIngredients(ctx.db);
+
+    const flour = rows.find((r) => r.id === used.id);
+    expect(flour).toBeDefined();
+    expect(flour!.recipeCount).toBe(1);
+    // A plain web recipe isn't book-sourced, so bool_and(...) → false.
+    expect(flour!.cookbookOnly).toBe(false);
+    expect(flour!.product).toHaveLength(1);
+    expect(flour!.product[0]!.name).toBe("Test flour");
+    // Every returned row is recipe-used; the orphan is absent.
+    expect(rows.every((r) => r.recipeCount > 0)).toBe(true);
+    expect(rows.some((r) => r.name === "orphan")).toBe(false);
   });
 });

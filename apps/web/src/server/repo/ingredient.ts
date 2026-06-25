@@ -54,6 +54,7 @@ import {
 } from "~/server/repo/database-helpers";
 import {
   computeRecipeUsages,
+  cookbookOnlyForIngredientSql,
   dbRecipeToAPIShallow,
   liveRecipeCountForIngredientSql,
 } from "./recipe";
@@ -226,6 +227,25 @@ type IngredientDeepDB = typeof ingredient.$inferSelect & {
   >;
 };
 
+/**
+ * Shape an ingredient's joined product rows into the API product list: brand the
+ * shortcode, lift images out of the join table, drop soft-deleted external ids,
+ * and attach unit-mapping source metadata. Shared by the full ingredient
+ * transform and the lean enrichment-workbench fetch so they can't drift.
+ */
+const mapIngredientProducts = (productRel: IngredientDeepDB["product"]) =>
+  mapRelation(productRel, (prod) => {
+    const { ingredientId: _ingredientId, ...prodRest } = prod;
+    return {
+      ...prodRest,
+      id: prod.id,
+      shortcode: unsafeProductShortcode(prod.shortcode),
+      images: extractImagesFromJoinTable(prod.images),
+      externalIds: prod.externalIds.filter((eid) => eid.deletedAt === null),
+      unitMappings: addProductSourceMetadata(prod.id, prod.unitMappings),
+    };
+  });
+
 const dbIngredientToAPI = async (
   _db: Database | DrizzleTransaction,
   ingredientData: IngredientDeepDB,
@@ -237,17 +257,7 @@ const dbIngredientToAPI = async (
     ...restOfIngredient
   } = ingredientData;
 
-  const productWithMappings = mapRelation(productRel, (prod) => {
-    const { ingredientId: _ingredientId, ...prodRest } = prod;
-    return {
-      ...prodRest,
-      id: prod.id,
-      shortcode: unsafeProductShortcode(prod.shortcode),
-      images: extractImagesFromJoinTable(prod.images),
-      externalIds: prod.externalIds.filter((eid) => eid.deletedAt === null),
-      unitMappings: addProductSourceMetadata(prod.id, prod.unitMappings),
-    };
-  });
+  const productWithMappings = mapIngredientProducts(productRel);
 
   // One row per usage (a recipe repeats when it uses this ingredient in multiple
   // sections); the deduped `appearsInRecipes` is derived from these. Shared with
@@ -319,6 +329,67 @@ export const getIngredientsByIDs = async (
     ...relations.ingredient.full,
   });
   return await Promise.all(rows.map((row) => dbIngredientToAPI(db, row)));
+};
+
+/**
+ * Lean fetch for the enrichment workbench: every recipe-used standalone
+ * ingredient with its products (mappings / images / external ids) plus two
+ * computed scalars — `recipeCount` and `cookbookOnly`. The workbench sizes and
+ * filters its worklist from these WITHOUT shipping recipe bodies: the
+ * `relations.ingredient.full` path embeds the full Recipe + RecipeSection (jsonb
+ * `instructions`/`totals`/`notes`) once per RSI usage — a ~24 MB payload for
+ * ~1.4k ingredients that made this query ~40s (transfer + JS marshalling, not
+ * Postgres). Recipe usages for the expanded-row footer load on demand via
+ * {@link getRecipeUsagesForIngredient}.
+ */
+export const enrichmentWorkbenchIngredients = async (db: Database) => {
+  // The relational query builder rewrites column refs in a custom orderBy/extras
+  // to the root alias, so these correlated subqueries MUST be raw strings
+  // hand-qualified to "ingredient"."id" (see ingredientList's orderBy note).
+  const ref = '"ingredient"."id"';
+  const recipeCountSql = liveRecipeCountForIngredientSql(ref);
+  const rows = await getDb(db).query.ingredient.findMany({
+    where: and(
+      isNull(ingredient.recipeId),
+      notDeleted(ingredient),
+      // Skip the long tail of never-used ingredients up front — the workbench is
+      // a worklist of recipe-used gaps.
+      sql.raw(`${recipeCountSql} > 0`),
+    ),
+    with: {
+      product: {
+        with: {
+          unitMappings: true,
+          externalIds: true,
+          images: { with: { image: true } },
+        },
+      },
+    },
+    extras: {
+      recipeCount: sql<number>`${sql.raw(recipeCountSql)}`.as("recipeCount"),
+      cookbookOnly: sql<boolean>`${sql.raw(
+        cookbookOnlyForIngredientSql(ref),
+      )}`.as("cookbookOnly"),
+    },
+    orderBy: [sql.raw(`${recipeCountSql} desc nulls last`)],
+  });
+  return rows.map((row) => {
+    const {
+      product: productRel,
+      recipeCount,
+      cookbookOnly,
+      ...restOfIngredient
+    } = row;
+    return {
+      ...restOfIngredient,
+      product: mapIngredientProducts(productRel),
+      // count() returns bigint (string over the wire), so coerce; the boolean comes
+      // back native — `=== true` avoids the Boolean("false") === true trap if a
+      // future driver ever stringifies it.
+      recipeCount: Number(recipeCount),
+      cookbookOnly: cookbookOnly === true,
+    };
+  });
 };
 
 export const getIngredientByName = async (db: Database, name: string) => {

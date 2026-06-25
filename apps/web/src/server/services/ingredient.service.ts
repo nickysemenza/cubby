@@ -4,13 +4,12 @@ import {
 } from "@cubby/schemas/combo";
 import type { ActorContext } from "@cubby/schemas/context";
 import { type IngredientId, ingredientId } from "@cubby/schemas/identifiers";
-import type { ingredientBase } from "@cubby/schemas/ingredient";
+import { type ingredientBase, ingredientOut } from "@cubby/schemas/ingredient";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { baseKind } from "@cubby/schemas/problems";
 import { productTopLevelOut } from "@cubby/schemas/product";
 import { unitMappingOut } from "@cubby/schemas/unitmapping";
 import { foodSummary } from "@cubby/usda-schemas";
-import { uniq } from "es-toolkit";
 import { z } from "zod";
 import { conversionCoverage, gradedKinds } from "~/lib/conversion-coverage";
 import { classifyIngredientFix } from "~/lib/recipe-costing-gaps";
@@ -20,6 +19,7 @@ import type { Database } from "~/server/db";
 import type { USDAClient } from "../clients/usda";
 import {
   createIngredient as createIngredientRepo,
+  enrichmentWorkbenchIngredients as enrichmentWorkbenchIngredientsRepo,
   findFuzzyMergeCandidates,
   getIngredientByID as getIngredientByIDRepo,
   getIngredientByName as getIngredientByNameRepo,
@@ -58,13 +58,27 @@ const enrichmentFixKind = z.enum([
   "done",
 ]);
 
+// Lean ingredient+food shape for the workbench worklist: products (so the inline
+// editor can create/update) WITHOUT the per-usage recipe bodies that
+// `ingredientWithFoodOut` carries. Those (full Recipe + Section jsonb per usage)
+// are a ~24 MB payload over ~1.4k ingredients; the row only needs a usage count
+// and the cookbook-only flag, and the expanded footer loads usages on demand.
+const ingredientWithFoodLeanOut = ingredientOut.extend({
+  product: z.array(productWithMappingsAndFoodOut),
+});
+
 /**
- * A workbench row: the full ingredient (products + food, so the inline editor
- * can create/update directly) decorated with its conversion coverage, the
- * recommended next fix, a price-entry mode, and merge candidates.
+ * A workbench row: the lean ingredient (products + food, so the inline editor
+ * can create/update directly) decorated with its recipe-usage count, the
+ * cookbook-only flag, conversion coverage, the recommended next fix, a
+ * price-entry mode, and merge candidates.
  */
-export const enrichmentRowOut = ingredientWithFoodOut.extend({
+export const enrichmentRowOut = ingredientWithFoodLeanOut.extend({
   recipeCount: z.number(),
+  // Every live recipe using this ingredient is book-sourced (the imported-cookbook
+  // tail the workbench can hide). Computed in SQL — was derived client-side from
+  // the now-omitted `appearsInRecipes`.
+  cookbookOnly: z.boolean(),
   coverage: z.object({
     covered: z.array(baseKind),
     // Kinds graded against (all four minus the ingredient's N/A opt-outs), so the
@@ -189,17 +203,9 @@ export class IngredientService {
    * drop the fully-covered rows — the workbench is a list of gaps.
    */
   async enrichmentWorkbench(): Promise<EnrichmentRow[]> {
-    const { data: ingredients } = await ingredientListRepo(
-      this.db,
-      undefined,
-      { orderBy: "appearsInRecipes", direction: "desc" },
-      { pageIndex: 0, pageSize: 5000 },
-      false,
-    );
-
-    const candidates = ingredients.filter(
-      (ing) => ing.appearsInRecipes.length > 0,
-    );
+    // Lean fetch: recipe-used ingredients + products + recipeCount/cookbookOnly
+    // scalars (no per-usage recipe bodies). The footer loads usages on demand.
+    const candidates = await enrichmentWorkbenchIngredientsRepo(this.db);
 
     const enriched = await batchEnrichNestedItems(
       candidates,
@@ -227,7 +233,6 @@ export class IngredientService {
       });
       return {
         ...ing,
-        recipeCount: uniq(ing.appearsInRecipes.map((r) => r.id)).length,
         coverage: {
           covered: [...coverage.covered],
           applicable,

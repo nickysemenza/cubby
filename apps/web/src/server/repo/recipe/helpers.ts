@@ -48,6 +48,26 @@ export const liveRecipeCountForIngredientSql = (
   `WHERE rsi."ingredientId" = ${ingredientRef} AND rsi."deletedAt" IS NULL)`;
 
 /**
+ * Boolean: the ingredient is used in ≥1 live recipe AND *every* such recipe is
+ * book-sourced (an imported cookbook). Mirrors the API-side `isCookbookOnly`
+ * (`appearsInRecipes.length > 0 && every source.type === "book"`) but in SQL so
+ * the workbench can carry it as a scalar instead of shipping every recipe body
+ * to derive it client-side. "Book-sourced" matches {@link recipeSourceFromDb}:
+ * `SourceType = 'Book'` with a non-empty `SourceData`. Same `ingredientRef`
+ * contract as {@link liveRecipeCountForIngredientSql} (trusted column expr only).
+ *
+ * `bool_and` over the live usages is empty-set NULL, but `count(...) > 0` is then
+ * false, so an unused ingredient correctly returns false.
+ */
+export const cookbookOnlyForIngredientSql = (ingredientRef: string): string =>
+  `(SELECT count(DISTINCT rs."recipeId") > 0 ` +
+  `AND bool_and(r."SourceType" = 'Book' AND r."SourceData" IS NOT NULL AND r."SourceData" <> '') ` +
+  `FROM "RecipeSectionIngredient" rsi ` +
+  `JOIN "RecipeSection" rs ON rs."id" = rsi."recipeSectionId" AND rs."deletedAt" IS NULL ` +
+  `JOIN "Recipe" r ON r."id" = rs."recipeId" AND r."deletedAt" IS NULL ` +
+  `WHERE rsi."ingredientId" = ${ingredientRef} AND rsi."deletedAt" IS NULL)`;
+
+/**
  * A RecipeSectionIngredient row joined up to its section and recipe — the input
  * shape for {@link computeRecipeUsages}.
  */

@@ -897,7 +897,15 @@ function WorkbenchEditor({
   initialFood: FoodSummaryWithLinkedProducts | null;
   onDone: () => void;
 }) {
+  const api = useTRPC();
   const product = row.product[0] ?? null;
+
+  // Recipe usages are fetched lazily (this editor mounts only when the row is
+  // expanded) so the worklist query stays lean — it no longer ships every usage's
+  // recipe body per row.
+  const usages = useQuery(
+    api.ingredient.recipeUsages.queryOptions({ id: row.id }),
+  );
 
   return (
     <EnrichmentEditor
@@ -940,19 +948,25 @@ function WorkbenchEditor({
           </Row>
         ),
         footer:
-          row.recipeUsages.length > 0 ? (
+          row.recipeCount > 0 ? (
             <Stack gap="sm">
               <p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
                 Appears in {row.recipeCount} recipe
                 {row.recipeCount === 1 ? "" : "s"}
               </p>
-              <div className="overflow-x-auto rounded-md border border-[var(--border-chunky)] bg-background/60 p-2">
-                <RecipeUsagesTable
-                  usages={row.recipeUsages}
-                  ingredientName={row.name}
-                  aliases={row.aliases}
-                />
-              </div>
+              {usages.data && usages.data.length > 0 ? (
+                <div className="overflow-x-auto rounded-md border border-[var(--border-chunky)] bg-background/60 p-2">
+                  <RecipeUsagesTable
+                    usages={usages.data}
+                    ingredientName={row.name}
+                    aliases={row.aliases}
+                  />
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-xs">
+                  {usages.isLoading ? "Loading usages…" : "No live usages."}
+                </p>
+              )}
             </Stack>
           ) : null,
       }}
