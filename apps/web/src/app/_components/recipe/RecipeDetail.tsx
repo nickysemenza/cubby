@@ -1,10 +1,8 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
 import { Link } from "@tanstack/react-router";
 import {
-  BarChart3,
   BookOpen,
   ClipboardList,
-  Grid3x3,
   ListChecks,
   Printer,
   Table2,
@@ -46,8 +44,8 @@ import { getIngredientName, getServingBasis } from "./recipe-utils";
 import { RecipeIngredientList } from "./recipeingredientlist";
 import { useRecipeTree } from "./useRecipeTree";
 
-// d3-hierarchy is heavy and only renders in the Data view's "charts" sub-mode, so
-// keep it out of the recipe-detail route chunk until that sub-mode is opened.
+// d3-hierarchy is heavy and only renders in the Data view, so keep it out of the
+// recipe-detail route chunk until that view is opened (lazy import + Suspense).
 const NutritionBars = lazy(
   () => import("~/app/_components/visualizations/nutrition-bars"),
 );
@@ -55,12 +53,10 @@ const RecipeCostTreemap = lazy(
   () => import("~/app/_components/visualizations/recipe-cost-treemap"),
 );
 
-/** The four top-level recipe views. */
+/** The four top-level recipe views. Data stacks its charts above the table and
+ * Prep folds its ingredient × component grid in as a disclosure, so there are no
+ * sub-modes — one flat row of tabs. */
 export type RecipeViewMode = "read" | "spec" | "data" | "prep";
-/** Data view sub-mode: the numeric table or its charted form. */
-export type RecipeDataMode = "table" | "charts";
-/** Prep view sub-mode: the actionable checklist or the ingredient × component grid. */
-export type RecipePrepMode = "checklist" | "grid";
 
 const RECIPE_VIEW_OPTIONS: ViewSwitcherOption<RecipeViewMode>[] = [
   { value: "read", label: "Read", icon: BookOpen },
@@ -69,51 +65,30 @@ const RECIPE_VIEW_OPTIONS: ViewSwitcherOption<RecipeViewMode>[] = [
   { value: "prep", label: "Prep", icon: ListChecks },
 ];
 
-const DATA_MODE_OPTIONS: ViewSwitcherOption<RecipeDataMode>[] = [
-  { value: "table", label: "Table", icon: Table2 },
-  { value: "charts", label: "Charts", icon: BarChart3 },
-];
-
-const PREP_MODE_OPTIONS: ViewSwitcherOption<RecipePrepMode>[] = [
-  { value: "checklist", label: "Checklist", icon: ListChecks },
-  { value: "grid", label: "Grid", icon: Grid3x3 },
-];
-
 /**
- * Normalize a URL view value — which may be one of the five legacy names from an
- * old bookmark — into the current {view, dataMode, prepMode} triple. The merges:
- * magazine→read, nested→spec, table/charts→data(+sub-mode), matrix→prep(grid).
- * Explicitly-passed sub-modes win; legacy names supply the implied sub-mode.
+ * Normalize a URL view value — which may be one of the legacy names from an old
+ * bookmark — into a current view. The merges: magazine→read, nested→spec,
+ * table/charts→data, matrix→prep. (The former table/charts and checklist/grid
+ * sub-modes are gone; charts stack inside Data and the grid folds into Prep.)
  */
-export function remapLegacyView(
-  view: string | undefined,
-  dataMode: RecipeDataMode | undefined,
-  prepMode: RecipePrepMode | undefined,
-): {
-  view: RecipeViewMode;
-  dataMode: RecipeDataMode;
-  prepMode: RecipePrepMode;
-} {
-  const data = dataMode ?? "table";
-  const prep = prepMode ?? "checklist";
+export function remapLegacyView(view: string | undefined): RecipeViewMode {
   switch (view) {
     case "read":
     case "spec":
     case "data":
     case "prep":
-      return { view, dataMode: data, prepMode: prep };
+      return view;
     case "magazine":
-      return { view: "read", dataMode: data, prepMode: prep };
+      return "read";
     case "table":
-      return { view: "data", dataMode: dataMode ?? "table", prepMode: prep };
     case "charts":
-      return { view: "data", dataMode: dataMode ?? "charts", prepMode: prep };
+      return "data";
     case "nested":
-      return { view: "spec", dataMode: data, prepMode: prep };
+      return "spec";
     case "matrix":
-      return { view: "prep", dataMode: data, prepMode: prepMode ?? "grid" };
+      return "prep";
     default:
-      return { view: "read", dataMode: data, prepMode: prep };
+      return "read";
   }
 }
 
@@ -122,12 +97,6 @@ const RecipeDetailInner: React.FC<{
   /** Controlled view mode (e.g. URL-driven on the detail route). */
   view?: RecipeViewMode;
   onViewChange?: (view: RecipeViewMode) => void;
-  /** Controlled Data sub-mode (URL-driven on the detail route). */
-  dataMode?: RecipeDataMode;
-  onDataModeChange?: (mode: RecipeDataMode) => void;
-  /** Controlled Prep sub-mode (URL-driven on the detail route). */
-  prepMode?: RecipePrepMode;
-  onPrepModeChange?: (mode: RecipePrepMode) => void;
   /** Controlled scale factor (URL-driven on the detail route); 1 = unscaled. */
   scale?: number;
   onScaleChange?: (factor: number) => void;
@@ -135,28 +104,16 @@ const RecipeDetailInner: React.FC<{
   recipe,
   view: controlledView,
   onViewChange,
-  dataMode: controlledDataMode,
-  onDataModeChange,
-  prepMode: controlledPrepMode,
-  onPrepModeChange,
   scale: controlledScale,
   onScaleChange,
 }) => {
   // Controlled when the parent supplies view/onViewChange; otherwise self-managed
   // (e.g. the search preview panel embeds this without URL state).
   const [internalView, setInternalView] = useState<RecipeViewMode>("read");
-  const [internalDataMode, setInternalDataMode] =
-    useState<RecipeDataMode>("table");
-  const [internalPrepMode, setInternalPrepMode] =
-    useState<RecipePrepMode>("checklist");
   const [internalScale, setInternalScale] = useState(1);
   const { isDebugEnabled } = useDebug();
   const viewMode = controlledView ?? internalView;
   const setViewMode = onViewChange ?? setInternalView;
-  const dataMode = controlledDataMode ?? internalDataMode;
-  const setDataMode = onDataModeChange ?? setInternalDataMode;
-  const prepMode = controlledPrepMode ?? internalPrepMode;
-  const setPrepMode = onPrepModeChange ?? setInternalPrepMode;
   const factor = controlledScale ?? internalScale;
   const setFactor = onScaleChange ?? setInternalScale;
 
@@ -238,14 +195,9 @@ const RecipeDetailInner: React.FC<{
     [costingGaps],
   );
 
-  // Export format: spec ⇒ the "nested" markdown flavor, prep+grid ⇒ "matrix";
-  // everything else uses the export sheet's default (prep).
-  const exportFormat =
-    viewMode === "spec"
-      ? ("nested" as const)
-      : viewMode === "prep" && prepMode === "grid"
-        ? ("matrix" as const)
-        : undefined;
+  // Export format: spec ⇒ the "nested" markdown flavor; everything else uses the
+  // export sheet's own format picker (which still offers prep / nested / matrix).
+  const exportFormat = viewMode === "spec" ? ("nested" as const) : undefined;
 
   return (
     <Stack gap="lg">
@@ -293,29 +245,6 @@ const RecipeDetailInner: React.FC<{
         </Row>
       </Row>
 
-      {/* Sub-mode toggle for the views that have one (Data, Prep). Its own row so
-          it doesn't crowd the main switcher; URL-driven on the detail route. */}
-      {viewMode === "data" && (
-        <Row justify="end" className="print:hidden">
-          <ViewSwitcher
-            ariaLabel="Data sub-view"
-            options={DATA_MODE_OPTIONS}
-            value={dataMode}
-            onValueChange={setDataMode}
-          />
-        </Row>
-      )}
-      {viewMode === "prep" && (
-        <Row justify="end" className="print:hidden">
-          <ViewSwitcher
-            ariaLabel="Prep sub-view"
-            options={PREP_MODE_OPTIONS}
-            value={prepMode}
-            onValueChange={setPrepMode}
-          />
-        </Row>
-      )}
-
       {/* View Components */}
       {viewMode === "read" && (
         <RecipeMagazineView
@@ -334,31 +263,15 @@ const RecipeDetailInner: React.FC<{
         ))}
       {viewMode === "prep" &&
         (tree ? (
-          <RecipePrepSheetView tree={tree} mode={prepMode} />
+          <RecipePrepSheetView tree={tree} />
         ) : (
           <div className="h-[300px]">
             <SimpleLoading />
           </div>
         ))}
-      {viewMode === "data" && dataMode === "table" && (
-        <>
-          {recipeImages.length > 0 && (
-            <div className="mb-2">
-              <EntityImageList images={recipeImages} />
-            </div>
-          )}
-          <RecipeIngredientList
-            ingredients={ingredients}
-            ingMap={ingMap ?? undefined}
-            costing={costing}
-            perServing={getServingBasis(scaledRecipe)}
-          />
-        </>
-      )}
-      {viewMode === "data" && dataMode === "charts" && (
+      {viewMode === "data" && (
         <Stack gap="lg">
-          {/* Yield/Servings Summary — the same shared card the table sub-mode
-              uses, so the two never disagree on totals. */}
+          {/* Recipe Summary — rendered once here; the table below omits its own. */}
           {totals && (
             <EntitySummaryCard
               title="Recipe Summary"
@@ -366,8 +279,19 @@ const RecipeDetailInner: React.FC<{
                 type: "recipe",
                 data: {
                   price: totals.price,
+                  // Carry the range upper bounds (ranged amounts like "1–2 cups")
+                  // so the card shows "$4.50–$6.20", matching the table's own card.
+                  ...(totals.priceUpper != null
+                    ? { priceUpper: totals.priceUpper }
+                    : {}),
                   weight: totals.weight,
+                  ...(totals.weightUpper != null
+                    ? { weightUpper: totals.weightUpper }
+                    : {}),
                   nutrients: totals.nutrients,
+                  ...(totals.nutrientsUpper
+                    ? { nutrientsUpper: totals.nutrientsUpper }
+                    : {}),
                   totalIngredients: totals.totalIngredients,
                   missingByType: totals.missingByType,
                   perServing: getServingBasis(scaledRecipe),
@@ -376,6 +300,7 @@ const RecipeDetailInner: React.FC<{
             />
           )}
 
+          {/* Charts overview, stacked above the table (d3 stays lazy-loaded). */}
           <Suspense
             fallback={
               <div className="h-[300px]">
@@ -420,6 +345,15 @@ const RecipeDetailInner: React.FC<{
               </Card>
             </div>
           </Suspense>
+
+          {recipeImages.length > 0 && <EntityImageList images={recipeImages} />}
+          <RecipeIngredientList
+            ingredients={ingredients}
+            ingMap={ingMap ?? undefined}
+            costing={costing}
+            perServing={getServingBasis(scaledRecipe)}
+            hideSummary
+          />
         </Stack>
       )}
 
