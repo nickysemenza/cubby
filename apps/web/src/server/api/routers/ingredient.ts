@@ -6,6 +6,7 @@
  * See CLAUDE.md "Service Layer Architecture" for details.
  */
 
+import { recipeUsageOut } from "@cubby/schemas/combo";
 import { type IngredientId, ingredientId } from "@cubby/schemas/identifiers";
 import {
   ingredientBase,
@@ -16,6 +17,7 @@ import { z } from "zod";
 import {
   deleteIngredients,
   getIngredientMatches,
+  getRecipeUsagesForIngredient,
   resolveOrCreateIngredients,
 } from "~/server/repo/ingredient";
 import {
@@ -118,6 +120,17 @@ const enrichmentWorkbench = protectedProcedure
     return await ctx.services.ingredient.enrichmentWorkbench();
   });
 
+// On-demand recipe usages for one ingredient. The workbench's expanded-row footer
+// fetches this lazily so the worklist query itself stays lean — it no longer
+// ships every usage's recipe body per row (see enrichmentWorkbenchIngredients).
+const recipeUsages = protectedProcedure
+  .input(z.object({ id: ingredientId }))
+  .output(z.array(recipeUsageOut))
+  .query(async ({ ctx, input }) => {
+    const usages = await getRecipeUsagesForIngredient(ctx.db, input.id);
+    return usages.recipeUsages;
+  });
+
 const getByName = protectedProcedure
   .input(
     z.object({
@@ -191,6 +204,7 @@ const deleteItem = createDeleteProcedure<IngredientId>(
 export const ingredientRouter = createTRPCRouter({
   getByName,
   enrichmentWorkbench,
+  recipeUsages,
   matchNames,
   resolveOrCreate,
   getByID,

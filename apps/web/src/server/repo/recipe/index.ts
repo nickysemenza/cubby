@@ -48,6 +48,7 @@ export {
 // Row → API shaping helpers
 export {
   computeRecipeUsages,
+  cookbookOnlyForIngredientSql,
   dbRecipeToAPIShallow,
   liveRecipeCountForIngredientSql,
 } from "./helpers";

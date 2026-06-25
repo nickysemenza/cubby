@@ -154,11 +154,10 @@ export const hasUsdaLink = (row: EnrichmentRow): boolean =>
 /**
  * An ingredient used only in imported cookbook ("book") recipes — i.e. it has
  * recipe usages and every one is book-sourced. Used to hide the cookbook tail
- * from the enrichment worklist. A null-source usage means NOT cookbook-only.
+ * from the enrichment worklist. Computed server-side now (the workbench row no
+ * longer ships `appearsInRecipes`); see `cookbookOnlyForIngredientSql`.
  */
-export const isCookbookOnly = (row: EnrichmentRow): boolean =>
-  row.appearsInRecipes.length > 0 &&
-  row.appearsInRecipes.every((r) => r.source?.type === "book");
+export const isCookbookOnly = (row: EnrichmentRow): boolean => row.cookbookOnly;
 
 /** The gap-aware analysis that drives which editor inputs a row needs. */
 interface GapAnalysis {
