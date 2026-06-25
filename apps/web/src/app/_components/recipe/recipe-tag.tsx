@@ -7,6 +7,7 @@ import {
   getTagColor,
   getTagDisplayLabel,
   getTagIcon,
+  getTagTint,
   parseTag,
 } from "./tag-theme";
 
@@ -29,6 +30,7 @@ export const RecipeTag: FC<RecipeTagProps> = ({
   const { prefix } = parseTag(tag);
   const Icon = getTagIcon(prefix);
   const color = getTagColor(prefix);
+  const tint = getTagTint(prefix);
   const displayLabel = getTagDisplayLabel(tag);
 
   return (
@@ -42,7 +44,7 @@ export const RecipeTag: FC<RecipeTagProps> = ({
       )}
       style={{
         borderColor: color,
-        backgroundColor: `${color}15`,
+        backgroundColor: tint,
       }}
     >
       <Icon
