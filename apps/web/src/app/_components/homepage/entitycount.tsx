@@ -76,7 +76,7 @@ function ProblemsStatCard({ enabled }: { enabled: boolean }) {
             <p
               className={cn(
                 "mt-1 truncate font-mono text-2xs uppercase tracking-wider",
-                alert ? "text-destructive/80" : "text-eyebrow",
+                alert ? "text-destructive/80" : "text-slate",
               )}
             >
               Problems

@@ -70,7 +70,7 @@ function RecipeCoverageCard({ recipe }: { recipe: RecipeAvailability }) {
     <Link
       to="/recipes/$id"
       params={{ id: recipe.recipeId }}
-      className="flex flex-col gap-2 rounded-lg border border-[var(--border-chunky)] p-4 transition-colors hover:bg-accent"
+      className="flex flex-col gap-2 rounded-lg border border-[var(--border)] p-4 transition-colors hover:bg-accent"
     >
       <Row align="start" justify="between" gap="sm">
         <span className="font-medium">{recipe.recipeName}</span>

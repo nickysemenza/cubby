@@ -131,6 +131,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
         },
       }),
       createExternalLinkColumn(columnHelper, "upc", "/usda/upc/$code", {
+        header: "UPC",
         className: "w-32",
         filterConfig: { placeholder: "Filter UPC..." },
         editable: {

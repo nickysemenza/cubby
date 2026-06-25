@@ -168,7 +168,7 @@ function Treemap({ data }: TreemapProps) {
   return (
     <div
       ref={containerRef}
-      className="relative h-[300px] w-full overflow-hidden rounded-md border border-[var(--border-chunky)]"
+      className="relative h-[300px] w-full overflow-hidden rounded-md border border-[var(--border)]"
     >
       <svg
         aria-hidden="true"
@@ -210,7 +210,7 @@ function Treemap({ data }: TreemapProps) {
                 width={width}
                 height={height}
                 fill={getNodeFill(node)}
-                stroke={isHovered ? "var(--primary)" : "var(--border-chunky)"}
+                stroke={isHovered ? "var(--primary)" : "var(--border)"}
                 strokeWidth={isHovered ? 2.5 : 1.5}
                 strokeDasharray={node.data.hasPrice ? undefined : "4 3"}
                 rx={0}

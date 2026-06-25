@@ -111,7 +111,7 @@ export function FilterableCombobox({
               // Size constraints - match trigger width
               "w-(--anchor-width)",
               // Shape — flat ruled panel, no elevation
-              "rounded-none border border-[var(--border-chunky)]",
+              "rounded-none border border-[var(--border)]",
               // Animation
               "data-open:animate-in data-closed:animate-out",
               "data-closed:fade-out-0 data-open:fade-in-0",

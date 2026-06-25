@@ -16,7 +16,7 @@ export const nivoChartTheme = {
     },
     legend: {
       text: {
-        fill: "var(--eyebrow)",
+        fill: "var(--slate)",
         fontSize: 10,
         fontFamily: "var(--font-mono)",
       },
@@ -42,6 +42,6 @@ export const nivoChartTheme = {
 // <ResponsiveBar {...nivoBarChrome}>.
 export const nivoBarChrome = {
   borderWidth: 1,
-  borderColor: "var(--border-chunky)",
+  borderColor: "var(--border)",
   borderRadius: 0,
 } as const;

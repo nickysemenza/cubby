@@ -105,10 +105,13 @@ export function createNameColumn<T extends BaseRow>(
     /** Filter configuration for inline header filter */
     filterConfig?: FilterConfig;
     /**
-     * Override the column width class. Defaults to `min-w-0` (auto): under the
-     * fixed table layout the name then absorbs leftover space and is the widest
-     * column. On sparse tables (few columns) pass an explicit width like `w-64`
-     * so the name doesn't balloon and the columns scale proportionally instead.
+     * Override the column width class. Defaults to `w-64` (16rem). The fixed
+     * table layout IGNORES `min-width` on cells (only `width` counts), so a
+     * `min-w-*` floor does nothing — an explicit width is the only lever. At
+     * `w-64` the name still grows to absorb leftover space on sparse tables
+     * (fixed layout distributes surplus across width-bearing columns) but holds
+     * a readable 16rem on dense tables (many columns) instead of collapsing to a
+     * few characters; the table scrolls horizontally for the rest.
      */
     className?: string;
     /** Enable inline editing */
@@ -124,7 +127,7 @@ export function createNameColumn<T extends BaseRow>(
     id: String(fieldName),
     enableSorting: true,
     meta: {
-      className: options?.className ?? "min-w-0",
+      className: options?.className ?? "w-64",
       filterConfig: options?.filterConfig,
       mobile: options?.mobile ?? { slot: "title", priority: 0 },
     },

@@ -71,7 +71,7 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
   // title lives in the page header, so the photo doesn't repeat it as an
   // overlay — the caption names the figure instead.
   return (
-    <figure className="my-0 rounded-lg border border-[var(--border-chunky)] bg-card p-2 shadow-[var(--shadow-chunky)]">
+    <figure className="my-0 rounded-lg border border-[var(--border)] bg-card p-2 shadow-[var(--shadow-chunky)]">
       <Image
         src={heroImage.url}
         alt={recipe.name}

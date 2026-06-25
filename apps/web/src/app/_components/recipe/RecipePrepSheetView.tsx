@@ -47,7 +47,7 @@ function ShoppingList({
 }) {
   if (needs.length === 0) return null;
   return (
-    <details className="rounded-lg border border-[var(--border-chunky)] bg-muted/30 px-4 py-2 print:border-0 print:bg-transparent print:px-0">
+    <details className="rounded-lg border border-[var(--border)] bg-muted/30 px-4 py-2 print:border-0 print:bg-transparent print:px-0">
       <summary className="eyebrow cursor-pointer marker:content-none">
         <ShoppingCart className="mr-2 inline h-3 w-3 align-[-2px]" />
         Shopping list
@@ -197,7 +197,7 @@ function Component({
             {node.recipe.name}
           </EntityPreviewLink>
         </h3>
-        <div className="ml-auto text-right font-mono text-2xs text-eyebrow uppercase leading-tight tracking-wider">
+        <div className="ml-auto text-right font-mono text-2xs text-slate uppercase leading-tight tracking-wider">
           {makes && (
             <div>
               makes {makes}
@@ -228,7 +228,7 @@ function Component({
         </div>
       )}
 
-      <div className="border-[var(--border-chunky)] border-t">
+      <div className="border-[var(--border)] border-t">
         {node.sections.map((section, si) => (
           <div key={section.id}>
             {node.sections.length > 1 && section.name && (
@@ -287,7 +287,7 @@ export const RecipePrepSheetView = memo(function RecipePrepSheetView({
   return (
     <Stack
       gap="lg"
-      className="rounded-xl border border-[var(--border-chunky)] bg-card px-6 py-6"
+      className="rounded-xl border border-[var(--border)] bg-card px-6 py-6"
     >
       <header className="border-primary border-b-2 pb-2">
         <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
@@ -320,7 +320,7 @@ export const RecipePrepSheetView = memo(function RecipePrepSheetView({
           onToggle={(e) => {
             if (e.currentTarget.open) setGridOpened(true);
           }}
-          className="rounded-lg border border-[var(--border-chunky)] bg-muted/30 px-4 py-2 print:hidden"
+          className="rounded-lg border border-[var(--border)] bg-muted/30 px-4 py-2 print:hidden"
         >
           <summary className="eyebrow cursor-pointer marker:content-none">
             <Grid3x3 className="mr-2 inline h-3 w-3 align-[-2px]" />

@@ -19,6 +19,6 @@ export const ENTITY_ACCENTS: Record<Entity, string> = {
   ingredient: "var(--slate)",
   location: "var(--slate)",
   meal: "var(--warning)",
-  image: "var(--subtle)",
+  image: "var(--slate)",
   "usda-food": "var(--positive)",
 };

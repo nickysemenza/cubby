@@ -60,8 +60,11 @@ import { densityConfig, useTableDensity } from "./useTableDensity";
 // Scroll position cache for navigate-back restoration
 const scrollPositionCache = new Map<string, number>();
 
-// Sticky top nav height (h-16 = 4rem = 64px); the sticky toolbar pins below it.
-const NAV_HEIGHT = 64;
+// Sticky top nav height: the h-12 (48px) nav bar + its 3px ink bottom-rule =
+// 51px (see __root.tsx). The sticky toolbar pins flush below it; if these drift
+// apart a sliver of scrolled rows peeks through the seam. Keep `top-[51px]` on
+// the toolbar in sync with this constant.
+const NAV_HEIGHT = 51;
 
 // Faint row guides every `rowHeight` px so the virtualized spacer (the gap the
 // renderer hasn't filled yet on a fast scroll) reads as empty table rows
@@ -320,10 +323,10 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
   const styles = {
     table: "text-xs leading-tight border-collapse border-spacing-0",
     header:
-      "h-8 px-2 py-1 text-2xs font-mono font-semibold uppercase tracking-wider text-eyebrow border-b border-[var(--border-chunky)]",
-    filterRow: "h-7 px-2 py-0.5 border-b border-border/50" /* tight */,
+      "h-8 px-2 py-1 text-2xs font-mono font-semibold uppercase tracking-wider text-slate border-b-[3px] border-b-foreground",
+    filterRow: "h-7 px-2 py-0.5 border-b border-border" /* tight */,
     cell: cn(dConfig.cellClass, "overflow-hidden align-middle"),
-    row: cn(dConfig.rowClass, "table-row-hover border-border/30 border-b"),
+    row: cn(dConfig.rowClass, "table-row-hover border-border border-b"),
     sortIcon: "h-3 w-3",
   };
 
@@ -468,7 +471,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
           --row-accent so hover/selected bars match the section's color. */}
       {!isMobile && (
         <div
-          className="border-[var(--border-chunky)] border-y"
+          className="border-[var(--border)] border-y"
           style={
             {
               ...(entity ? { "--row-accent": ENTITY_ACCENTS[entity] } : {}),
@@ -481,7 +484,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
               filters reset, the bulk-action bar, and a page-size control. */}
           <div
             ref={toolbarRef}
-            className="sticky top-16 z-30 border-border/50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80"
+            className="sticky top-[51px] z-30 border-border border-b bg-background"
           >
             <DataTableToolbar
               table={table}
@@ -567,7 +570,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
               containerClassName="overflow-visible"
             >
               <TableHeader
-                className="sticky z-20 bg-background shadow-[var(--shadow-chunky-sm)] [&_tr]:border-b-0"
+                className="sticky z-20 bg-background [&_tr]:border-b-0"
                 style={{ top: "var(--table-header-top)" }}
               >
                 {table.getHeaderGroups().map((headerGroup) => {
@@ -769,7 +772,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
       {/* Desktop: persistent pagination/status bar pinned to the viewport
           bottom (page-size + page nav stay reachable without scrolling). */}
       {!isMobile && (
-        <div className="sticky bottom-0 z-30 border-[var(--border-chunky)] border-t bg-background/90 px-2 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/75">
+        <div className="sticky bottom-0 z-30 border-[var(--border)] border-t bg-background px-2 py-2">
           <DataTablePagination table={table} timing={timing} />
         </div>
       )}

@@ -163,18 +163,14 @@ const SURFACE_TOKENS = [
   "--accent",
   "--secondary",
   "--border",
-  "--border-chunky",
   "--input",
 ];
 const SEMANTIC_TOKENS = [
   "--primary",
   "--destructive",
   "--positive",
-  "--eyebrow",
   "--plum",
   "--slate",
-  "--subtle",
-  "--glow",
 ];
 const CHART_TOKENS = [
   "--chart-1",
@@ -271,8 +267,8 @@ function GallerySection({
 }) {
   return (
     <section className="space-y-3">
-      <div className="flex items-baseline justify-between gap-2 border-[var(--border-chunky)] border-b pb-1">
-        <h2 className="border-0 p-0 font-mono text-eyebrow text-sm uppercase tracking-wider">
+      <div className="flex items-baseline justify-between gap-2 border-[var(--border)] border-b pb-1">
+        <h2 className="border-0 p-0 font-mono text-slate text-sm uppercase tracking-wider">
           {title}
         </h2>
         {source && (
@@ -549,7 +545,7 @@ export function DesignGallery() {
         </p>
         <div className="grid gap-4 sm:grid-cols-2">
           {/* Ruled ledger panel: ink top-rule + hairline frame + zebra rows */}
-          <div className="border border-[var(--border-chunky)] border-t-[3px] border-t-foreground bg-card">
+          <div className="border border-[var(--border)] border-t-[3px] border-t-foreground bg-card">
             <div className="flex items-baseline justify-between px-3 py-2">
               <span className="eyebrow">Ledger panel</span>
               <span className="font-mono text-3xs text-muted-foreground">
@@ -587,13 +583,13 @@ export function DesignGallery() {
               </span>
             </div>
             <div className="flex items-center gap-3">
-              <div className="h-8 w-12 shrink-0 border border-[var(--border-chunky)] bg-card" />
+              <div className="h-8 w-12 shrink-0 border border-[var(--border)] bg-card" />
               <span className="font-mono text-3xs text-muted-foreground">
-                hairline border (var(--border-chunky)) — quiet division
+                hairline border (var(--border)) — quiet division
               </span>
             </div>
             <div className="flex items-center gap-3">
-              <div className="flex h-8 w-12 shrink-0 flex-col border border-[var(--border-chunky)]">
+              <div className="flex h-8 w-12 shrink-0 flex-col border border-[var(--border)]">
                 <div className="flex-1 bg-card" />
                 <div className="flex-1 bg-muted" />
               </div>
@@ -602,7 +598,7 @@ export function DesignGallery() {
               </span>
             </div>
             <div className="flex items-center gap-3">
-              <div className="h-8 w-12 shrink-0 border border-[var(--border-chunky)] border-l-4 border-l-primary bg-card" />
+              <div className="h-8 w-12 shrink-0 border border-[var(--border)] border-l-4 border-l-primary bg-card" />
               <span className="font-mono text-3xs text-muted-foreground">
                 ultramarine spine (border-l-primary) — the one live accent
               </span>
@@ -759,12 +755,8 @@ export function DesignGallery() {
             <Button size="xs">xs</Button>
             <Button size="sm">sm</Button>
             <Button size="default">default</Button>
-            <Button size="lg">lg</Button>
           </Row>
           <Row label="Icon">
-            <Button size="icon-xs" aria-label="bell">
-              <Bell />
-            </Button>
             <Button size="icon-sm" aria-label="bell">
               <Bell />
             </Button>
@@ -942,7 +934,7 @@ export function DesignGallery() {
       </GallerySection>
 
       <GallerySection title="Table" source="components/ui/table">
-        <div className="overflow-hidden rounded-none border border-[var(--border-chunky)]">
+        <div className="overflow-hidden rounded-none border border-[var(--border)]">
           <Table>
             <TableHeader>
               <TableRow>
@@ -1190,7 +1182,7 @@ export function DesignGallery() {
             {PREVIEW_DEMOS.map(({ key, node }) => (
               <div
                 key={key}
-                className="w-80 rounded-none border border-[var(--border-chunky)] bg-popover p-3 text-popover-foreground text-xs"
+                className="w-80 rounded-none border border-[var(--border)] bg-popover p-3 text-popover-foreground text-xs"
               >
                 {node}
               </div>
@@ -1350,7 +1342,7 @@ export function DesignGallery() {
       </GallerySection>
 
       <GallerySection title="Empty state" source="components/ui/empty">
-        <Empty className="max-w-md border border-[var(--border-chunky)]">
+        <Empty className="max-w-md border border-[var(--border)]">
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <Inbox />
@@ -1367,7 +1359,7 @@ export function DesignGallery() {
       </GallerySection>
 
       <GallerySection title="Scroll area" source="components/ui/scroll-area">
-        <ScrollArea className="h-32 max-w-xs rounded-none border border-[var(--border-chunky)] p-3">
+        <ScrollArea className="h-32 max-w-xs rounded-none border border-[var(--border)] p-3">
           <div className="space-y-1 text-sm">
             {SCROLL_ROWS.map((label) => (
               <div key={label}>{label}</div>

@@ -144,7 +144,7 @@ function BodyBlockView({ block }: { block: BodyBlock }) {
       <img
         src={b.url}
         alt=""
-        className="h-24 w-full rounded-md border border-border object-cover"
+        className="h-24 w-full rounded-md border border-border bg-card object-contain"
       />
     ))
     .with({ kind: "nutrients" }, (b) => (

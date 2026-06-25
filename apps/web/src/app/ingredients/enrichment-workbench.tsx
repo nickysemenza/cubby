@@ -460,7 +460,7 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
           {visible.length > 0 && (
             <Table
               className="table-auto"
-              containerClassName="overflow-hidden rounded-lg border border-[var(--border-chunky)]"
+              containerClassName="overflow-hidden rounded-lg border border-[var(--border)]"
             >
               <TableHeader>
                 <TableRow>
@@ -500,7 +500,7 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
               align="center"
               wrap
               gap="sm"
-              className="sticky bottom-4 rounded-lg border border-[var(--border-chunky)] bg-background/95 px-4 py-2 shadow-sm backdrop-blur"
+              className="sticky bottom-4 rounded-lg border border-[var(--border)] bg-background/95 px-4 py-2 shadow-sm backdrop-blur"
             >
               <span className="font-medium text-sm">
                 {selected.size} selected

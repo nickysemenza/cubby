@@ -120,7 +120,7 @@ export function ImportToolsPanel({
       {/* Scrape panel (kept mounted so in-flight scrapes aren't lost) */}
       <div
         className={cn(
-          "rounded-lg border border-[var(--border-chunky)] bg-card p-4",
+          "rounded-lg border border-[var(--border)] bg-card p-4",
           openTool !== "scrape" && "hidden",
         )}
       >
@@ -167,7 +167,7 @@ export function ImportToolsPanel({
       <Stack
         gap="sm"
         className={cn(
-          "rounded-lg border border-[var(--border-chunky)] bg-card p-4",
+          "rounded-lg border border-[var(--border)] bg-card p-4",
           openTool !== "text" && "hidden",
         )}
       >
@@ -184,7 +184,7 @@ export function ImportToolsPanel({
           </Field>
           <div>
             <FieldLabel>Parsed Ingredients</FieldLabel>
-            <div className="mt-2 min-h-[120px] rounded border border-[var(--border-chunky)] bg-muted/30 p-2">
+            <div className="mt-2 min-h-[120px] rounded border border-[var(--border)] bg-muted/30 p-2">
               <IngredientPreviewTable ingredientLines={ingredientLines} />
             </div>
           </div>
@@ -203,7 +203,7 @@ export function ImportToolsPanel({
           </Field>
           <div>
             <FieldLabel>Instructions Preview</FieldLabel>
-            <div className="mt-2 min-h-[120px] rounded border border-[var(--border-chunky)] bg-muted/30 p-2">
+            <div className="mt-2 min-h-[120px] rounded border border-[var(--border)] bg-muted/30 p-2">
               {richInstructions.length > 0 ? (
                 <Stack as="ol" gap="sm" className="list-decimal pl-4 text-sm">
                   {richInstructions.map((richItems, idx) => (
@@ -264,7 +264,7 @@ export function ImportToolsPanel({
       <Stack
         gap="sm"
         className={cn(
-          "rounded-lg border border-[var(--border-chunky)] bg-card p-4",
+          "rounded-lg border border-[var(--border)] bg-card p-4",
           openTool !== "html" && "hidden",
         )}
       >

@@ -23,7 +23,7 @@ export function InkStamp({
         "inline-block -rotate-2 rounded-none border-[1.5px] px-2 py-0.5 font-mono font-semibold text-2xs uppercase tracking-wider",
         tone === "red" && "border-destructive/70 text-destructive",
         tone === "green" && "border-positive/70 text-positive",
-        tone === "ink" && "border-eyebrow/70 text-eyebrow",
+        tone === "ink" && "border-slate/70 text-slate",
         className,
       )}
     >

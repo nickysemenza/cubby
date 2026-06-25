@@ -41,7 +41,7 @@ export const EntityHero: FC<EntityHeroProps> = ({ images }) => {
     >
       <CardHeader className="pb-4">
         <Row align="center" gap="sm">
-          <ImageIcon className="h-3.5 w-3.5 text-eyebrow" />
+          <ImageIcon className="h-3.5 w-3.5 text-slate" />
           <CardTitle>Images</CardTitle>
         </Row>
       </CardHeader>
@@ -53,12 +53,12 @@ export const EntityHero: FC<EntityHeroProps> = ({ images }) => {
           className="group block"
         >
           <figure className="my-0 rounded-sm border border-border p-2">
-            <div className="relative aspect-video overflow-hidden">
+            <div className="relative aspect-[4/3] overflow-hidden bg-card">
               <Image
                 src={activeImage.url}
                 alt={activeImage.filename}
                 displayWidth={800}
-                className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                className="absolute inset-0 h-full w-full object-contain transition-transform duration-300 group-hover:scale-[1.02]"
               />
             </div>
             <figcaption className="eyebrow pt-2">
@@ -87,7 +87,7 @@ export const EntityHero: FC<EntityHeroProps> = ({ images }) => {
                     src={image.url}
                     alt={image.filename}
                     displayWidth={96}
-                    className="absolute inset-0 h-full w-full object-cover"
+                    className="absolute inset-0 h-full w-full bg-card object-contain"
                   />
                 </button>
               ))}

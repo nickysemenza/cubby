@@ -43,7 +43,7 @@ export function SuggestionReviewTray({
   return (
     <Stack
       gap="sm"
-      className="rounded-lg border border-[var(--border-chunky)] bg-muted/20 p-4"
+      className="rounded-lg border border-[var(--border)] bg-muted/20 p-4"
     >
       <Row align="center" justify="between" gap="sm">
         <span className="font-medium text-sm">

@@ -211,7 +211,7 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
     // biome-ignore lint/a11y/noStaticElementInteractions: D3 force-directed graph visualization interaction
     <div
       ref={containerRef}
-      className="relative h-[400px] w-full overflow-hidden rounded-md border border-[var(--border-chunky)]"
+      className="relative h-[400px] w-full overflow-hidden rounded-md border border-[var(--border)]"
       onClick={() => setSelectedLinkKey(null)}
     >
       <svg

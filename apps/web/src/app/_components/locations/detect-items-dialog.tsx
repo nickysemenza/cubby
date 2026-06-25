@@ -153,7 +153,7 @@ export const DetectItemsDialog: FC<DetectItemsDialogProps> = ({
                     key={`${item.name}-${index}`}
                     align="center"
                     gap="sm"
-                    className="rounded-md border border-[var(--border-chunky)] p-4"
+                    className="rounded-md border border-[var(--border)] p-4"
                   >
                     <div className="min-w-0 flex-1">
                       <Row align="center" gap="sm">

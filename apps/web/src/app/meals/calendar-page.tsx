@@ -218,7 +218,7 @@ function TableView() {
       )}
       <Table
         className="table-auto"
-        containerClassName="overflow-hidden rounded-lg border border-[var(--border-chunky)]"
+        containerClassName="overflow-hidden rounded-lg border border-[var(--border)]"
       >
         <TableHeader>
           <TableRow>

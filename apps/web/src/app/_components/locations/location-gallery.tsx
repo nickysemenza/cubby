@@ -508,7 +508,7 @@ export function LocationGallery() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-12rem)] overflow-hidden rounded-lg border border-[var(--border-chunky)] bg-background">
+    <div className="flex h-[calc(100vh-12rem)] overflow-hidden rounded-lg border border-[var(--border)] bg-background">
       {/* Sidebar */}
       <GallerySidebar
         locations={displayLocations}

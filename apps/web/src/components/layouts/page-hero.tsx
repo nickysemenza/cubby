@@ -212,7 +212,7 @@ export function PageHero({
           {showEntityIcon && def && EntityIconComponent && (
             <span
               className={cn(
-                "flex h-10 w-10 shrink-0 items-center justify-center rounded-none border border-[var(--border-chunky)] sm:h-11 sm:w-11",
+                "flex h-10 w-10 shrink-0 items-center justify-center rounded-none border border-[var(--border)] sm:h-11 sm:w-11",
                 def.color.bg,
                 def.color.text,
               )}

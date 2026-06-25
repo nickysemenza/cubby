@@ -129,7 +129,7 @@ function QueueUsdaPicker({
               <Spinner className="h-3 w-3" /> Searching…
             </Row>
           ) : (
-            <div className="divide-y rounded-md border border-[var(--border-chunky)]">
+            <div className="divide-y rounded-md border border-[var(--border)]">
               {alternatives.map((alt) => (
                 <button
                   key={alt.food.fdc_id}
@@ -205,7 +205,7 @@ export function ReviewCard({
   const usdaLinked = hasUsdaLink(row);
 
   return (
-    <div className="rounded-lg border border-[var(--border-chunky)] bg-background p-4 shadow-sm">
+    <div className="rounded-lg border border-[var(--border)] bg-background p-4 shadow-sm">
       <EnrichmentEditor
         ref={editorRef}
         row={row}

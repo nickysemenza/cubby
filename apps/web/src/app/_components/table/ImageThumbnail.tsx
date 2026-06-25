@@ -53,6 +53,7 @@ export const ImageThumbnail = ({
           lazyPreview={lazyPreview}
           fallback={fallbackIcon}
           displayWidth={64}
+          fit="contain"
           className="absolute inset-0 h-full w-full rounded-none border-0"
         />
         {images.length > 1 && (

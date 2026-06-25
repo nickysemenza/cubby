@@ -110,12 +110,12 @@ export default function NutritionBars({
         <StatTile label="Calories by ingredient">
           {Math.round(totalKcal)} kcal
         </StatTile>
-        <div className="mt-2 flex h-7 overflow-hidden border border-[var(--border-chunky)] bg-card">
+        <div className="mt-2 flex h-7 overflow-hidden border border-[var(--border)] bg-card">
           {kcalRows.map((row, i) => (
             <div
               key={row.key}
               title={`${row.name}: ${Math.round(row.kcal)} kcal`}
-              className="h-full border-[var(--border-chunky)] border-r last:border-r-0"
+              className="h-full border-[var(--border)] border-r last:border-r-0"
               style={{
                 width: `${(row.kcal / totalKcal) * 100}%`,
                 backgroundColor: SEGMENT_COLORS[i % SEGMENT_COLORS.length],
@@ -130,7 +130,7 @@ export default function NutritionBars({
               className="inline-flex items-center gap-2 font-mono text-2xs text-muted-foreground"
             >
               <span
-                className="h-2 w-2 rounded-full border border-[var(--border-chunky)]"
+                className="h-2 w-2 rounded-full border border-[var(--border)]"
                 style={{
                   backgroundColor: SEGMENT_COLORS[i % SEGMENT_COLORS.length],
                 }}
@@ -154,9 +154,9 @@ export default function NutritionBars({
                     : "—"}
                 </span>
               </div>
-              <div className="h-3.5 overflow-hidden border-[1.5px] border-[var(--border-chunky)] bg-card">
+              <div className="h-3.5 overflow-hidden border-[1.5px] border-[var(--border)] bg-card">
                 <div
-                  className="h-full border-[var(--border-chunky)] border-r-[1.5px]"
+                  className="h-full border-[var(--border)] border-r-[1.5px]"
                   style={{
                     width: `${Math.min(100, (rangeMidpoint(m.grams, m.gramsUpper) / maxMacro) * 100)}%`,
                     backgroundColor: m.color,

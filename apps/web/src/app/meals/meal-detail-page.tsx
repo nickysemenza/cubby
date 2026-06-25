@@ -180,7 +180,7 @@ function RecipeRow({
     <Row
       align="center"
       gap="sm"
-      className="rounded-lg border border-[var(--border-chunky)] p-2"
+      className="rounded-lg border border-[var(--border)] p-2"
     >
       <Link
         to="/recipes/$id"

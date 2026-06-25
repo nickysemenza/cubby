@@ -31,6 +31,13 @@ export interface ImageWithPreviewProps {
   fallback?: ReactNode;
   /** Thumbnail display width in px for CF image transforms (the popup uses previewSize). */
   displayWidth?: number;
+  /**
+   * How the thumbnail fills its box. `"cover"` (default) crops to fill — right
+   * for square/uniform items; `"contain"` letterboxes the whole image on the
+   * container surface — right for portrait product photos (jars, bottles) so
+   * nothing is cut off. The hover-preview popup always uses `contain`.
+   */
+  fit?: "cover" | "contain";
 }
 
 /**
@@ -49,6 +56,7 @@ export function ImageWithPreview({
   className,
   fallback,
   displayWidth,
+  fit = "cover",
 }: ImageWithPreviewProps) {
   const thumbnailClasses = cn(
     "bg-background relative flex-shrink-0 overflow-hidden rounded-none border transition-transform hover:scale-105",
@@ -76,12 +84,15 @@ export function ImageWithPreview({
           alt={alt}
           fallback={fallback}
           displayWidth={displayWidth}
-          className="absolute inset-0 h-full w-full object-cover"
+          className={cn(
+            "absolute inset-0 h-full w-full",
+            fit === "contain" ? "bg-card object-contain" : "object-cover",
+          )}
         />
       </TooltipTrigger>
       <TooltipContent
         side={previewSide}
-        className="bg-popover border-[var(--border-chunky)] overflow-hidden rounded-none border p-0"
+        className="bg-popover border-[var(--border)] overflow-hidden rounded-none border p-0"
       >
         <div
           className="relative"
@@ -91,7 +102,7 @@ export function ImageWithPreview({
             src={src}
             alt={alt}
             displayWidth={previewSize}
-            className="absolute inset-0 h-full w-full object-cover"
+            className="absolute inset-0 h-full w-full bg-card object-contain"
           />
         </div>
       </TooltipContent>

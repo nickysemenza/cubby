@@ -581,7 +581,7 @@ function FormatToggle({
     { value: "ptouch" as const, label: "P-Touch" },
   ];
   return (
-    <div className="flex rounded-md border border-[var(--border-chunky)]">
+    <div className="flex rounded-md border border-[var(--border)]">
       {options.map((opt) => (
         <button
           key={opt.value}

@@ -41,7 +41,7 @@ function SectionCard({
     >
       <CardHeader className="pb-2">
         <div className="flex items-center gap-2">
-          <section.icon className="h-3.5 w-3.5 text-eyebrow" />
+          <section.icon className="h-3.5 w-3.5 text-slate" />
           <CardTitle>{section.title}</CardTitle>
         </div>
       </CardHeader>

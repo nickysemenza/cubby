@@ -208,7 +208,7 @@ export function MobileCard({
       className={cn(
         // No mount fade-in: the mobile list is virtualized, so a per-card
         // fade-in replays every time a card scrolls back into view (flicker).
-        "rounded-lg border border-[var(--border-chunky)] border-l-4 bg-card p-2 shadow-[var(--shadow-chunky-sm)] transition-all duration-300 hover:shadow-[var(--shadow-chunky)]",
+        "rounded-lg border border-[var(--border)] border-l-4 bg-card p-2 shadow-[var(--shadow-chunky-sm)] transition-all duration-300 hover:shadow-[var(--shadow-chunky)]",
         borderColor,
         // Touch devices have no :hover — give a pressed state so taps register.
         onClick && "cursor-pointer active:bg-muted/40",

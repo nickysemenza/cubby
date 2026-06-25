@@ -71,7 +71,7 @@ export function ShelfCard({
     <Link
       to={to}
       params={params}
-      className="flex flex-col overflow-hidden rounded-lg border border-[var(--border-chunky)] bg-card transition-shadow duration-150 hover:shadow-[var(--shadow-chunky)]"
+      className="flex flex-col overflow-hidden rounded-lg border border-[var(--border)] bg-card transition-shadow duration-150 hover:shadow-[var(--shadow-chunky)]"
     >
       <div className="relative aspect-square w-full overflow-hidden bg-muted/20">
         <Image
@@ -127,7 +127,7 @@ function ShelfSkeleton() {
         <div
           // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length placeholders
           key={i}
-          className="overflow-hidden rounded-lg border border-[var(--border-chunky)]"
+          className="overflow-hidden rounded-lg border border-[var(--border)]"
         >
           <Skeleton className="aspect-square w-full rounded-none" />
           <div className="space-y-2 px-2 py-2">

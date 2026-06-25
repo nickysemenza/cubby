@@ -190,7 +190,7 @@ function SpecNode({
             </span>
           </EntityPreviewLink>
           {node.recipe.yield?.value ? (
-            <span className="text-eyebrow">
+            <span className="text-slate">
               · yields {formatYield(node.recipe.yield)}
             </span>
           ) : null}
@@ -243,7 +243,7 @@ export const RecipeNestedSpecView = memo(function RecipeNestedSpecView({
   const recipe = tree.recipe;
   const expanded = useMemo(() => firstExpansionRowIds(tree), [tree]);
   return (
-    <div className="rounded-xl border border-[var(--border-chunky)] bg-card px-6 py-6">
+    <div className="rounded-xl border border-[var(--border)] bg-card px-6 py-6">
       <header className="mb-4 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
         <h2 className="my-0 font-heading font-semibold text-2xl tracking-tight">
           {recipe.name}
