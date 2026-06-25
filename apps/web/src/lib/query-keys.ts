@@ -8,6 +8,7 @@ export const queryKeys = {
   },
   product: {
     list: ["product", "list"] as const,
+    search: ["product", "search"] as const,
   },
   location: {
     list: ["location", "list"] as const,
