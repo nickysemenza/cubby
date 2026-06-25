@@ -21,8 +21,7 @@ import { editableDetailSection } from "../data-table/editable-detail-section";
 import { EntityPillLinkList } from "../EntityPillLinkList";
 import { useEntityDetail } from "../hooks/useEntityDetail";
 import { RecipeUsagesTable } from "../recipe/recipe-usages-table";
-import { ConversionCapabilities } from "../units/ConversionCapabilities";
-import { UnitMappingsTable } from "../units/unitmappingstable";
+import { UnitCoveragePanel } from "../units/UnitCoveragePanel";
 import { NutritionInfoTable } from "../usda/nutrition";
 import { EnrichIngredientDialog } from "./enrich-ingredient-dialog";
 import { IngredientBasicInfo } from "./ingredient-basic-info";
@@ -109,12 +108,7 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
     {
       title: "Unit Mappings",
       icon: Scale,
-      content: (
-        <Stack gap="sm">
-          <ConversionCapabilities mappings={mappings} />
-          <UnitMappingsTable mappings={mappings} />
-        </Stack>
-      ),
+      content: <UnitCoveragePanel mappings={mappings} />,
     },
     // Custom section: Appears In Recipes — one row per usage, with amount,
     // source line, and a read-only parser-drift flag. Full-width so the 5-column

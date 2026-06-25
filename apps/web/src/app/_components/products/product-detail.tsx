@@ -2,7 +2,6 @@ import type { ProductCreateInput } from "@cubby/schemas/product";
 import { uniq } from "es-toolkit";
 import { Apple, ChefHat, Info, Scale } from "lucide-react";
 import type { FC } from "react";
-import { Stack } from "~/components/layout";
 import { MutedBox } from "~/components/layout/muted-box";
 import { Page } from "~/components/page/Page";
 import { Description } from "~/components/ui/description";
@@ -18,8 +17,7 @@ import {
 import { editableDetailSection } from "../data-table/editable-detail-section";
 import { useEntityDetail } from "../hooks/useEntityDetail";
 import { RecipeUsagesTable } from "../recipe/recipe-usages-table";
-import { ConversionCapabilities } from "../units/ConversionCapabilities";
-import { UnitMappingsTable } from "../units/unitmappingstable";
+import { UnitCoveragePanel } from "../units/UnitCoveragePanel";
 import { NutritionInfoTable } from "../usda/nutrition";
 import { ProductBasicInfo } from "./product-basic-info";
 import { ProductForm } from "./product-form";
@@ -71,12 +69,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
     {
       title: "Unit Mappings",
       icon: Scale,
-      content: (
-        <Stack gap="sm">
-          <ConversionCapabilities mappings={mappings} />
-          <UnitMappingsTable mappings={mappings} />
-        </Stack>
-      ),
+      content: <UnitCoveragePanel mappings={mappings} />,
     },
     // Custom section: Appears In Recipes — recipes the product's linked ingredient
     // is used in, one row per usage with amount, source line, and parser-drift flag.

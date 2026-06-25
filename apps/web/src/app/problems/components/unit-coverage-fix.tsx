@@ -1,21 +1,22 @@
 import type { UnitMappingInput } from "@cubby/schemas/unitmapping";
 import { useQuery } from "@tanstack/react-query";
-import { Check } from "lucide-react";
 import { type ComponentProps, useState } from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
 import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
 import { Row, Stack } from "~/components/layout";
-import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { BASE_KINDS } from "~/lib/conversion-coverage";
 import { queryKeys } from "~/lib/query-keys";
 import { type RouterOutputs, useTRPC } from "~/trpc/react";
 import type { UnitCoverageItem } from "./unit-coverage-items";
 
 type ProductDetail = NonNullable<RouterOutputs["product"]["getByID"]>;
 
+// CoverageChips moved to the units folder (lean deps — Badge/Row/BASE_KINDS only)
+// so list/detail bundles that show coverage don't pull in this file's mutation
+// hooks + tRPC. Re-exported here for existing problems-page callers.
+export { CoverageChips } from "~/app/_components/units/CoverageChips";
 // Re-export the pure core (defined in unit-coverage-items.ts so it stays
 // unit-testable) so the registry can import everything from one place.
 export {
@@ -28,69 +29,6 @@ export {
 function NumberInput({ step = "any", ...props }: ComponentProps<typeof Input>) {
   return (
     <Input type="number" inputMode="decimal" min="0" step={step} {...props} />
-  );
-}
-
-const KIND_LABEL: Record<(typeof BASE_KINDS)[number], string> = {
-  weight: "weight",
-  volume: "volume",
-  money: "price",
-  calories: "calories",
-};
-
-/**
- * The four base measurement kinds, lit when the graph can already reach them.
- * When `usdaLinked` is provided, also shows a "USDA" chip — so it's clear
- * whether a gap (e.g. calories) is because nothing's linked, or because the
- * linked food simply has no data for that kind.
- *
- * `applicable` (the kinds graded against — see `gradedKinds`) splits the unlit
- * chips into two: a kind that's applicable but unreached is a real gap (faded);
- * a kind the user marked N/A is struck through ("—" / not applicable), so a
- * count-only ingredient doesn't read as missing a volume it never uses. Omitting
- * `applicable` grades all four (legacy callers / placeholders).
- */
-export function CoverageChips({
-  covered,
-  applicable,
-  usdaLinked,
-}: {
-  covered: string[];
-  applicable?: string[];
-  usdaLinked?: boolean;
-}) {
-  const lit = new Set(covered);
-  const na = applicable
-    ? new Set(BASE_KINDS.filter((k) => !applicable.includes(k)))
-    : new Set<string>();
-  const chip = (key: string, label: string, on: boolean) => (
-    <Badge
-      key={key}
-      variant={on ? "secondary" : "outline"}
-      className={on ? undefined : "text-muted-foreground/50"}
-    >
-      {on && <Check className="mr-1 h-3 w-3" />}
-      {label}
-    </Badge>
-  );
-  return (
-    <Row gap="xs" wrap>
-      {BASE_KINDS.map((kind) =>
-        na.has(kind) ? (
-          <Badge
-            key={kind}
-            variant="outline"
-            className="text-muted-foreground/40 line-through"
-            title="not applicable"
-          >
-            {KIND_LABEL[kind]}
-          </Badge>
-        ) : (
-          chip(kind, KIND_LABEL[kind], lit.has(kind))
-        ),
-      )}
-      {usdaLinked !== undefined && chip("usda", "USDA", usdaLinked)}
-    </Row>
   );
 }
 
