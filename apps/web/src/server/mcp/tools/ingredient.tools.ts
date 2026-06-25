@@ -146,11 +146,14 @@ export function registerIngredientTools(server: McpServer) {
           results.push({ target, ok: false, error: formatToolError(error) });
         }
       }
-      return json({
-        merged: results.filter((r) => r.ok).length,
-        total: results.length,
-        results,
-      });
+      const merged = results.filter((r) => r.ok).length;
+      const payload = { merged, total: results.length, results };
+      // Partial success stays a success — the per-cluster `ok` flags carry the
+      // detail. But if EVERY cluster failed, flag the envelope `isError` too so a
+      // client that only checks the top-level flag still detects total failure.
+      return merged === 0
+        ? { ...json(payload), isError: true as const }
+        : json(payload);
     }),
   );
 
