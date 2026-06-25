@@ -11,6 +11,7 @@ import { type RecipeId, recipeId } from "@cubby/schemas/identifiers";
 import {
   recipeCreateInput,
   recipeFiltersSchema,
+  recipeListItemOut,
   recipeOut,
   recipeUpdateInput,
 } from "@cubby/schemas/recipe";
@@ -28,17 +29,30 @@ import {
 } from "~/server/repo/recipe";
 import {
   createDeleteProcedure,
-  createEntityCrudProcedures,
+  createEntityCrudWithoutListProcedures,
+  createEntityListProcedure,
 } from "../../crud-factory";
 import { protectedProcedure } from "../../trpc";
 
 // Create standardized CRUD procedures using factory
-const { getByID, list, create, update } = createEntityCrudProcedures({
+// List returns a lean summary (scalar fields + totals, no section graph); detail
+// (getByID/create/update) keeps the full recipeOut. Split into the two sub-
+// factories so the two surfaces carry different output schemas.
+const { list } = createEntityListProcedure({
+  schemas: { output: recipeListItemOut, filters: recipeFiltersSchema },
+  repository: {
+    list: async (services, filters, sort, pagination) => {
+      return await recipeList(services.db, filters, sort, pagination);
+    },
+  },
+  entityName: "recipe",
+});
+
+const { getByID, create, update } = createEntityCrudWithoutListProcedures({
   schemas: {
     createInput: recipeCreateInput,
     updateInput: recipeUpdateInput.shape.data,
     output: recipeOut,
-    filters: recipeFiltersSchema,
     idSchema: recipeId,
   },
   repository: {
@@ -48,9 +62,6 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
         throw createAppError("RECIPE_NOT_FOUND", "Recipe not found");
       }
       return res;
-    },
-    list: async (services, filters, sort, pagination) => {
-      return await recipeList(services.db, filters, sort, pagination);
     },
     create: async (services, data) => {
       const created = await createRecipe(
@@ -73,7 +84,6 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
       return updated;
     },
   },
-  entityName: "recipe",
 });
 
 // Get recipe by shortcode (e.g., R-X7K9)

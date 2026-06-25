@@ -7,7 +7,7 @@ import type {
 } from "@cubby/schemas/identifiers";
 import type { LocationOut } from "@cubby/schemas/location";
 import type { ProductTopLevelOut } from "@cubby/schemas/product";
-import type { RecipeOut } from "@cubby/schemas/recipe";
+import type { RecipeListItem } from "@cubby/schemas/recipe";
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 
@@ -41,7 +41,7 @@ export const buildIngredientComboboxItem = (
 });
 
 export const buildRecipeComboboxItem = (
-  recipe: RecipeOut,
+  recipe: RecipeListItem,
 ): ComboboxItem<RecipeId> => ({
   id: recipe.id,
   name: recipe.name,

@@ -287,6 +287,15 @@ export const recipeOut = z
   })
   .extend(recipeTopLevel.shape);
 
+// Summary shape for `recipe.list`: scalar recipe fields + the persisted cost/
+// calorie totals the list renders, but NONE of the section/ingredient graph. The
+// list (and the recipe pickers) never read `.sections`, so shipping + reshaping +
+// Zod-validating them per recipe was pure over-fetch (~4.7s on ~700 recipes).
+export const recipeListItemOut = recipeTopLevel.extend({
+  totals: recipeTotals.nullish(),
+});
+export type RecipeListItem = z.infer<typeof recipeListItemOut>;
+
 export type RecipeOut = z.infer<typeof recipeOut>;
 
 // A cookbook as seen on the browse index: the `Cookbook` row plus how many
