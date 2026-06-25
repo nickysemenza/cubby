@@ -196,6 +196,25 @@ export const traceAll = async <
 };
 
 /**
+ * Sequential sibling of {@link traceAll}: runs the thunks one at a time (each
+ * still in its own key-named span) instead of concurrently. Use when the tasks
+ * share a single DB connection — a pg client runs one query at a time, and
+ * firing several concurrently on it is deprecated (removed in pg@9) — so a
+ * shared-connection fan-out must serialize. The per-task spans are preserved.
+ */
+export const traceAllSeq = async <
+  T extends Record<string, () => Promise<unknown>>,
+>(
+  tasks: T,
+): Promise<{ [K in keyof T]: Awaited<ReturnType<T[K]>> }> => {
+  const out: Record<string, unknown> = {};
+  for (const [name, run] of Object.entries(tasks)) {
+    out[name] = await withTrace(name, run);
+  }
+  return out as { [K in keyof T]: Awaited<ReturnType<T[K]>> };
+};
+
+/**
  * Trace id of the active span, for surfacing to clients (e.g. an `x-trace-id`
  * header). Undefined in the CF backend — its `Span` exposes no trace id.
  */

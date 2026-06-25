@@ -10,30 +10,28 @@ const stats = new Hono<{ Bindings: Env }>();
 export async function getStats(
   db: ReturnType<typeof createDb>,
 ): Promise<StatsResponse> {
-  // Get total product count
-  const totalResult = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(schema.products);
-  const totalProducts = totalResult[0]?.count ?? 0;
+  // The two aggregates are independent — run them in one round trip. Total
+  // products is the sum of the per-source counts (every row has a source), so
+  // it's derived rather than a third query.
+  const [sourceRows, imagesResult] = await Promise.all([
+    db
+      .select({
+        source: schema.products.source,
+        count: sql<number>`count(*)`,
+      })
+      .from(schema.products)
+      .groupBy(schema.products.source),
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(schema.products)
+      .where(sql`${schema.products.imageKey} IS NOT NULL`),
+  ]);
 
-  // Get counts grouped by source (open-ended — supports any registered source)
-  const sourceRows = await db
-    .select({
-      source: schema.products.source,
-      count: sql<number>`count(*)`,
-    })
-    .from(schema.products)
-    .groupBy(schema.products.source);
   const bySource: Record<string, number> = {};
   for (const row of sourceRows) {
     bySource[row.source] = row.count;
   }
-
-  // Get count of products with images (R2 objects)
-  const imagesResult = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(schema.products)
-    .where(sql`${schema.products.imageKey} IS NOT NULL`);
+  const totalProducts = Object.values(bySource).reduce((a, b) => a + b, 0);
   const r2Objects = imagesResult[0]?.count ?? 0;
 
   return {

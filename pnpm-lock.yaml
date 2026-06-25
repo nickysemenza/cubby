@@ -58,6 +58,9 @@ importers:
       hono:
         specifier: ^4.11.9
         version: 4.12.3
+      p-map:
+        specifier: ^7.0.3
+        version: 7.0.4
       zod:
         specifier: ^4.3.6
         version: 4.4.3
@@ -128,6 +131,9 @@ importers:
       hono:
         specifier: ^4.11.9
         version: 4.12.3
+      p-map:
+        specifier: ^7.0.3
+        version: 7.0.4
       zod:
         specifier: ^4.3.6
         version: 4.4.3
@@ -7951,6 +7957,10 @@ packages:
   p-locate@5.0.0:
     resolution: {integrity: sha512-LaNjtRWUBY++zB5nE/NwcaoMylSPk+S+ZHNB1TzdbMJMny6dynpAGt7X/tl/QYq3TIeE6nxHppbo2LGymrG5Pw==}
     engines: {node: '>=10'}
+
+  p-map@7.0.4:
+    resolution: {integrity: sha512-tkAQEw8ysMzmkhgw8k+1U/iPhWNhykKnSk4Rd5zLoPJCuJaGRPo6YposrZgaxHKzDHdDWWZvE/Sk7hsL2X/CpQ==}
+    engines: {node: '>=18'}
 
   p-retry@4.6.2:
     resolution: {integrity: sha512-312Id396EbJdvRONlngUx0NydfrIQ5lsYu0znKVUzVvArzEIt08V1qhtyESbGVd1FGX7UKtiFp5uwKZdM8wIuQ==}
@@ -17189,6 +17199,8 @@ snapshots:
   p-locate@5.0.0:
     dependencies:
       p-limit: 3.1.0
+
+  p-map@7.0.4: {}
 
   p-retry@4.6.2:
     dependencies:

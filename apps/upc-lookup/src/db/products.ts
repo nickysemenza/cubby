@@ -1,5 +1,6 @@
 import { and, desc, eq, inArray, like, or, sql } from "drizzle-orm";
 import { chunk, clamp } from "es-toolkit";
+import pMap from "p-map";
 import type { Database } from "./index";
 import { schema } from "./index";
 import type { Env } from "../types";
@@ -38,14 +39,15 @@ export async function getProducts(
   upcs: string[],
 ): Promise<Product[]> {
   if (upcs.length === 0) return [];
-  const out: Product[] = [];
-  for (const batch of chunk(upcs, IN_CHUNK)) {
-    const rows = await db.query.products.findMany({
-      where: inArray(schema.products.upc, batch),
-    });
-    out.push(...rows);
-  }
-  return out;
+  const batches = await pMap(
+    chunk(upcs, IN_CHUNK),
+    (batch) =>
+      db.query.products.findMany({
+        where: inArray(schema.products.upc, batch),
+      }),
+    { concurrency: 5 },
+  );
+  return batches.flat();
 }
 
 /** Insert a product row and return it. */
@@ -138,17 +140,19 @@ export async function listProducts(
   }
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 
-  const rows = await db.query.products.findMany({
-    where,
-    orderBy: [desc(schema.products.createdAt)],
-    limit: safePageSize,
-    offset: (safePage - 1) * safePageSize,
-  });
-
-  const countResult = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(schema.products)
-    .where(where);
+  // Page rows and total count are independent — one round trip.
+  const [rows, countResult] = await Promise.all([
+    db.query.products.findMany({
+      where,
+      orderBy: [desc(schema.products.createdAt)],
+      limit: safePageSize,
+      offset: (safePage - 1) * safePageSize,
+    }),
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(schema.products)
+      .where(where),
+  ]);
   const total = countResult[0]?.count ?? 0;
 
   return { rows, total, page: safePage, pageSize: safePageSize };
