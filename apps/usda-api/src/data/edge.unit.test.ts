@@ -257,4 +257,62 @@ describe("createEdgeUsdaDataSource", () => {
     expect(result.count).toBe(1); // count comes from the index, unaffected
     expect(result.data).toHaveLength(0); // bad row dropped, not a thrown 500
   });
+
+  it("serves getCounts from the Cache API on the second call (no second R2 read)", async () => {
+    const counts = {
+      usda_food: 5,
+      usda_branded_food: 4,
+      usda_nutrient: 3,
+      usda_food_nutrient: 2,
+      usda_measure_unit: 1,
+      usda_food_portion: 6,
+      usda_sr_legacy_food: 7,
+    };
+    const manifestText = JSON.stringify({ counts });
+    let r2Reads = 0;
+    const store = new Map<string, Response>();
+    // Minimal colo Cache API stand-in (absent under Node by default).
+    vi.stubGlobal("caches", {
+      default: {
+        match: async (req: Request) => store.get(req.url),
+        put: async (req: Request, res: Response) => {
+          store.set(req.url, res);
+        },
+      },
+    });
+
+    try {
+      const env = {
+        DB: {
+          prepare(query: string) {
+            const stmt = {
+              bind() {
+                return stmt;
+              },
+              async first<T>() {
+                if (query.includes("usda_edge_meta"))
+                  return { value: "vtest" } as T;
+                return null;
+              },
+            };
+            return stmt;
+          },
+        },
+        USDA_BUNDLES: {
+          get: async () => {
+            r2Reads += 1;
+            return { text: async () => manifestText };
+          },
+        },
+      } as unknown as EdgeBindings;
+
+      const dataSource = createEdgeUsdaDataSource(env);
+      expect(await dataSource.getCounts()).toEqual(counts);
+      expect(r2Reads).toBe(1); // miss → one R2 read
+      expect(await dataSource.getCounts()).toEqual(counts);
+      expect(r2Reads).toBe(1); // hit → served from cache, no second R2 read
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

@@ -93,6 +93,14 @@ const traceQuery =
 const IN_TX = Symbol("worker-tracing:inTransaction");
 type TracedClient = pg.PoolClient & { [TRACED]?: boolean; [IN_TX]?: boolean };
 
+// Exposes the traced `acquire` on the pool so a non-transaction checkout (e.g.
+// withConnection) can request transaction:false — pool.connect() always stamps
+// transaction:true via the override below, which would mislabel the spans.
+const ACQUIRE = Symbol("worker-tracing:acquire");
+type TracedPool = pg.Pool & {
+  [ACQUIRE]?: (inTransaction: boolean) => Promise<pg.PoolClient>;
+};
+
 const tracePool = (pool: pg.Pool): pg.Pool => {
   const rawQuery = pool.query.bind(pool) as (...args: unknown[]) => unknown;
   const rawConnect = pool.connect.bind(pool) as (...args: unknown[]) => unknown;
@@ -135,6 +143,9 @@ const tracePool = (pool: pg.Pool): pg.Pool => {
     if (typeof args[0] === "function") return rawConnect(...args); // callback form
     return acquire(true);
   }) as typeof pool.connect;
+
+  // Expose the traced acquire for non-transaction single-connection checkouts.
+  (pool as TracedPool)[ACQUIRE] = acquire;
 
   return pool;
 };
@@ -282,9 +293,9 @@ export const drizzle = dbProxy;
  * connection), which is free when each is instant.
  *
  * Unlike withTransaction this issues NO BEGIN/COMMIT — the detectors are
- * read-only and need no snapshot. The single `db.acquire` span comes from the
- * traced pool.connect() (labelled transaction:true by the tracer — cosmetic;
- * there is no real transaction).
+ * read-only and need no snapshot. The single `db.acquire` span (and the query
+ * spans under it) are honestly labelled transaction:false via the traced
+ * read-only acquire.
  */
 export const withConnection = async <T>(
   db: Database,
@@ -293,8 +304,11 @@ export const withConnection = async <T>(
   // DBClient is typed as NodePgDatabase<schema> (which hides `$client` to avoid
   // a type mismatch — see top of file), but the runtime instance always carries
   // the traced pg.Pool as `$client`. Cast through the known runtime shape.
-  const pool = (db as unknown as { $client: pg.Pool }).$client;
-  const client = await pool.connect();
+  const pool = (db as unknown as { $client: TracedPool }).$client;
+  // Read-only checkout → transaction:false spans. Fall back to the (transaction-
+  // labelled) connect only if the pool somehow wasn't traced.
+  const acquire = pool[ACQUIRE];
+  const client = await (acquire ? acquire(false) : pool.connect());
   try {
     const scoped = toBrandedDatabase(drizzleNodePostgres({ client, schema }));
     return await fn(scoped);
