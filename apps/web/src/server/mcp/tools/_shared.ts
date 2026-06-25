@@ -73,7 +73,7 @@ export function withErrorHandling(
  * { reason } }`, so an AppError's `code` (and its `reason`, when present) is
  * surfaced to the MCP client — e.g. `NOT_FOUND: Recipe not found (recipeMissing)`.
  */
-function formatToolError(error: unknown): string {
+export function formatToolError(error: unknown): string {
   if (error instanceof TRPCError) {
     const reason = (error.cause as { reason?: string })?.reason;
     return reason

@@ -1,7 +1,8 @@
+import type { RecipeUsage } from "@cubby/schemas/combo";
 import { mcpPaginationParams } from "@cubby/schemas/pagination";
 import { recipeCreateInput, recipeUpdateInput } from "@cubby/schemas/recipe";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { omitBy } from "es-toolkit";
+import { groupBy, omitBy } from "es-toolkit";
 import { z } from "zod";
 import {
   deleteHandler,
@@ -114,6 +115,35 @@ export function registerRecipeTools(server: McpServer) {
         limit: params.limit,
       });
       return json(result);
+    }),
+  );
+
+  server.tool(
+    "find_recipes_using_ingredient",
+    "Reverse lookup: given an ingredient ID, return every recipe that uses it. The efficient answer to 'which recipes call for this ingredient?' — don't enumerate list_recipes. Get the ID from search_ingredients. Each recipe appears once (a recipe using the ingredient in multiple sections gets multiple `usages`); each usage carries `lineId` (the RecipeSectionIngredient id — the stable handle for re-pointing or fixing one line), `rawLine`/`modifier`/`amounts` (parser-triage signal), and `sectionName`. The top-level `ingredientId` echoes the queried ingredient (the current link for every line).",
+    { id: idParam("Ingredient") },
+    withErrorHandling(async (params, extra) => {
+      const caller = getCaller(extra);
+      // ingredient.recipeUsages returns one row per RecipeSectionIngredient, so a
+      // recipe repeats once per section that uses the ingredient. Collapse to one
+      // entry per recipe (slimmed) with its per-section usage contexts. Each usage
+      // keeps its RSI `lineId` so a caller can re-point or triage that exact line.
+      const usages = (await caller.ingredient.recipeUsages({
+        id: params.id,
+      })) as RecipeUsage[];
+      const recipes = Object.values(groupBy(usages, (u) => u.recipe.id)).map(
+        (rows) => ({
+          ...slimRecipe(rows[0]!.recipe),
+          usages: rows.map((u) => ({
+            lineId: u.id,
+            sectionName: u.sectionName ?? null,
+            amounts: u.amounts,
+            rawLine: u.rawLine ?? null,
+            modifier: u.modifier ?? null,
+          })),
+        }),
+      );
+      return json({ ingredientId: params.id, count: recipes.length, recipes });
     }),
   );
 
