@@ -163,9 +163,7 @@ export function IngredientComponentGrid({
               {components.map((node) => (
                 <td key={node.recipe.id} className={cellMono}>
                   {costByComponent.has(node.recipe.id)
-                    ? formatCurrency(
-                        costByComponent.get(node.recipe.id)!,
-                      )
+                    ? formatCurrency(costByComponent.get(node.recipe.id)!)
                     : "·"}
                 </td>
               ))}
