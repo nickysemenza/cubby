@@ -235,13 +235,20 @@ export async function batchUpdateWithCaseWhen<
         for (const update of batch) {
           const value = update[columnName];
           // Build: WHEN "id" = {id} THEN {value}
-          // Cast numeric values to avoid Postgres type inference issues
+          // Cast values to head off Postgres type inference issues inside CASE:
+          //   - numbers → ::real (float4 columns)
+          //   - objects/arrays → JSON-encoded ::jsonb (jsonb columns, e.g.
+          //     location.valuation). node-postgres would bind a bare object as
+          //     untyped text, which Postgres can't coerce inside a CASE branch.
+          //   - strings/other → bound as-is (text).
           const typedValue =
             typeof value === "number"
               ? sql`${value}::real`
               : value === null
                 ? sql`NULL`
-                : sql`${value}`;
+                : typeof value === "object"
+                  ? sql`${JSON.stringify(value)}::jsonb`
+                  : sql`${value}`;
           cases.push(
             sql`WHEN ${sql.identifier("id")} = ${update.id} THEN ${typedValue}`,
           );

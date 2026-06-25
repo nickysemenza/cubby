@@ -21,7 +21,7 @@ import { RouteNotFound } from "~/components/route-not-found";
 import { Toaster } from "~/components/ui/sonner";
 import { DebugContextProvider, useDebug } from "~/hooks/useDebug";
 import type { TRPCRouter } from "~/integrations/trpc/router";
-import { getGuardSession } from "~/lib/auth-guard";
+import { getClientAuthed, getGuardSession } from "~/lib/auth-guard";
 import { useFlag } from "~/lib/flags";
 import { PerfProfiler } from "~/lib/perf/PerfProfiler";
 import TanStackQueryDevtools from "../integrations/tanstack-query/devtools";
@@ -60,14 +60,20 @@ interface MyRouterContext {
 }
 
 export const Route = createRootRouteWithContext<MyRouterContext>()({
-  // Read the signed session cookie server-side on every route so nav chrome
-  // (MainNav, BottomNav) can render the correct logged-in/out state on the
-  // first paint instead of flashing. Cheap — cookie only, no DB (see
-  // getGuardSession). Child guards (`/`, `_authenticated`) reuse this via
-  // `context.isAuthed` rather than reading the session again.
+  // Resolve `isAuthed` for nav chrome (MainNav, BottomNav) + the child guards
+  // (`/`, `_authenticated`). On the SERVER (SSR / direct + refresh loads) read
+  // the signed session cookie in-process so the first paint isn't a flash and
+  // direct loads to protected routes gate server-side (the security path). On
+  // CLIENT navigations read better-auth's in-memory session store synchronously
+  // instead — `import.meta.env.SSR` is statically replaced, so the server-fn is
+  // dead-code-eliminated from the client bundle and an in-app navigation no
+  // longer pays a `/_serverFn/` round-trip.
   beforeLoad: async () => {
-    const session = await getGuardSession();
-    return { isAuthed: !!session };
+    if (import.meta.env.SSR) {
+      const session = await getGuardSession();
+      return { isAuthed: !!session };
+    }
+    return { isAuthed: getClientAuthed() };
   },
   head: () => ({
     meta: [

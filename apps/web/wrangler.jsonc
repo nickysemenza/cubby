@@ -5,15 +5,14 @@
   // API (shipped 2026-06-16) — see src/server/tracing.ts prod backend.
   "compatibility_date": "2026-06-16",
   "compatibility_flags": ["nodejs_compat"],
-  // STOPGAP: raise the per-invocation CPU ceiling above the 30s default. The
-  // Problems page (problems.getAllProblems) is CPU-bound — it re-parses every
-  // recipe line through WASM in two detectors on every load — and intermittently
-  // exceeded the 30s default, killing the request. This is a guardrail, not the
-  // fix; the real fix is the per-detector lazy split (each detector → its own
-  // Worker invocation/CPU budget) + persisting/incrementalizing the parse sweeps.
-  // Single-user app, so the extra CPU headroom is negligible cost.
+  // Runaway-request guardrail above the 30s default. The original 120s stopgap
+  // was for the Problems WASM parse-sweeps, which have since moved off the hot
+  // path into Settings → Maintenance manual actions (the per-detector lazy split
+  // landed). 45s keeps headroom for an eager costing recompute on a large recipe
+  // tree while letting a pathological request fail fast instead of burning 2 min
+  // of CPU. Single-user app, so the headroom is negligible cost.
   "limits": {
-    "cpu_ms": 120000
+    "cpu_ms": 45000
   },
   "observability": {
     "enabled": true,

@@ -11,6 +11,7 @@ import { eq } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { inventoryEntry, location, product } from "~/server/db/schema";
 import {
+  batchUpdateWithCaseWhen,
   getDb,
   notDeleted,
   withTransaction,
@@ -55,17 +56,18 @@ export const getLocationValuationInputs = async (
   return { entries, locations };
 };
 
-/** Persist the recomputed rollups — one update per location, in a transaction. */
+/**
+ * Persist the recomputed rollups in a single batched UPDATE (CASE WHEN) per
+ * chunk instead of one round-trip per location — a whole-tree recompute can
+ * touch every location, and each serial `await` was its own Hyperdrive round
+ * trip. Wrapped in a transaction so a multi-chunk write stays atomic.
+ */
 export const writeLocationValuations = async (
   db: Database,
   updates: { id: LocationId; valuation: LocationValuation | null }[],
 ): Promise<void> => {
+  if (updates.length === 0) return;
   await withTransaction(db, async (tx) => {
-    for (const u of updates) {
-      await tx
-        .update(location)
-        .set({ valuation: u.valuation })
-        .where(eq(location.id, u.id));
-    }
+    await batchUpdateWithCaseWhen(tx, location, updates);
   });
 };

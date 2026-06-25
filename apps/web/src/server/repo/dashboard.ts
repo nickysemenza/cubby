@@ -1,4 +1,5 @@
-import { and, isNull } from "drizzle-orm";
+import { and, isNull, type SQL, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import type { Database } from "~/server/db";
 import {
   image,
@@ -8,16 +9,19 @@ import {
   product,
   recipe,
 } from "~/server/db/schema";
-import { countWhere, notDeleted } from "~/server/repo/database-helpers";
+import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
-interface DashboardEntityCounts {
+// A `type` (not `interface`) so it satisfies the `Record<string, unknown>`
+// constraint on `db.execute<T>()` below — interfaces don't get the implicit
+// index signature that type-literal aliases do.
+type DashboardEntityCounts = {
   products: number;
   recipes: number;
   ingredients: number;
   locations: number;
   inventory: number;
   images: number;
-}
+};
 
 /**
  * The six DB-backed dashboard count-card totals, as cheap parallel `COUNT(*)`s —
@@ -35,19 +39,32 @@ interface DashboardEntityCounts {
 export const getDashboardEntityCounts = async (
   db: Database,
 ): Promise<DashboardEntityCounts> => {
-  const [products, recipes, ingredients, locations, inventory, images] =
-    await Promise.all([
-      countWhere(db, product, notDeleted(product)),
-      countWhere(db, recipe, notDeleted(recipe)),
-      countWhere(
-        db,
-        ingredient,
-        and(isNull(ingredient.recipeId), notDeleted(ingredient)),
-      ),
-      countWhere(db, location, notDeleted(location)),
-      countWhere(db, inventoryEntry, notDeleted(inventoryEntry)),
-      countWhere(db, image, notDeleted(image)),
-    ]);
+  // One round-trip, six scalar `COUNT(*)` subqueries — instead of six parallel
+  // queries that also overran the per-request pool (max 5). `::int` keeps the
+  // bigint count a JS number; the WHEREs reuse the same condition builders as
+  // the `*List` repos so the totals stay in lockstep.
+  const countCol = (table: PgTable, where: SQL | undefined): SQL =>
+    where
+      ? sql`(SELECT count(*)::int FROM ${table} WHERE ${where})`
+      : sql`(SELECT count(*)::int FROM ${table})`;
 
-  return { products, recipes, ingredients, locations, inventory, images };
+  const res = await getDb(db).execute<DashboardEntityCounts>(sql`
+    SELECT
+      ${countCol(product, notDeleted(product))} AS products,
+      ${countCol(recipe, notDeleted(recipe))} AS recipes,
+      ${countCol(ingredient, and(isNull(ingredient.recipeId), notDeleted(ingredient)))} AS ingredients,
+      ${countCol(location, notDeleted(location))} AS locations,
+      ${countCol(inventoryEntry, notDeleted(inventoryEntry))} AS inventory,
+      ${countCol(image, notDeleted(image))} AS images
+  `);
+
+  const row = res.rows[0];
+  return {
+    products: row?.products ?? 0,
+    recipes: row?.recipes ?? 0,
+    ingredients: row?.ingredients ?? 0,
+    locations: row?.locations ?? 0,
+    inventory: row?.inventory ?? 0,
+    images: row?.images ?? 0,
+  };
 };
