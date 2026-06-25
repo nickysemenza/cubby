@@ -79,8 +79,6 @@ function getUrl() {
 const UNBATCHED_PATHS = new Set([
   "problems.getFast",
   "problems.getCoverage",
-  "problems.getAliases",
-  "problems.getParses",
   "problems.getUpc",
 ]);
 

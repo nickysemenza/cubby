@@ -7,7 +7,7 @@
 
 import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
 import type { RecipeTotals } from "@cubby/schemas/recipe";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import {
   ingredient,
@@ -92,15 +92,24 @@ export const findRecipeIdsUsingIngredient = async (
 };
 
 /**
- * Parent recipes that use the given recipe as a sub-recipe (recipe-as-ingredient
- * is modelled as an ingredient row whose `recipeId` points at the sub-recipe).
+ * Parent recipes that use any of the given recipes as a sub-recipe (recipe-as-
+ * ingredient is modelled as an ingredient row whose `recipeId` points at the
+ * sub-recipe), returned as `subRecipeId → parentRecipeId[]`. The recompute
+ * cascade calls this once per level instead of one query per recipe (the old N+1
+ * that fanned out a DB round-trip per changed recipe). Sub-recipes with no parent
+ * are absent from the map.
  */
-export const findParentRecipeIds = async (
+export const findParentRecipeIdsBatch = async (
   db: Database,
-  subRecipeId: RecipeId,
-): Promise<RecipeId[]> => {
+  subRecipeIds: RecipeId[],
+): Promise<Map<RecipeId, RecipeId[]>> => {
+  const bySubRecipe = new Map<RecipeId, RecipeId[]>();
+  if (subRecipeIds.length === 0) return bySubRecipe;
   const rows = await getDb(db)
-    .selectDistinct({ recipeId: recipeSection.recipeId })
+    .selectDistinct({
+      subRecipeId: ingredient.recipeId,
+      parentRecipeId: recipeSection.recipeId,
+    })
     .from(recipeSectionIngredient)
     .innerJoin(
       recipeSection,
@@ -110,6 +119,13 @@ export const findParentRecipeIds = async (
       ingredient,
       eq(recipeSectionIngredient.ingredientId, ingredient.id),
     )
-    .where(eq(ingredient.recipeId, subRecipeId));
-  return rows.map((r) => r.recipeId as RecipeId);
+    .where(inArray(ingredient.recipeId, subRecipeIds));
+  for (const r of rows) {
+    if (r.subRecipeId == null) continue; // narrow the nullable FK
+    const sub = r.subRecipeId as RecipeId;
+    const parents = bySubRecipe.get(sub) ?? [];
+    parents.push(r.parentRecipeId as RecipeId);
+    bySubRecipe.set(sub, parents);
+  }
+  return bySubRecipe;
 };

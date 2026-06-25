@@ -149,10 +149,13 @@ export const productWithBetterUpcDataSchema = productProblemBase.extend({
 // Grouped output schemas — the Problems page loads detectors in cost-grouped
 // chunks (one tRPC query each, routed through an UNBATCHED link so each runs in
 // its own Worker invocation/CPU budget; see root-provider.tsx). The groups split
-// by cost: `fast` is all DB-only detectors; the rest isolate the expensive ones
-// (two WASM parse-sweeps, USDA-coverage, UPC) so no single invocation sums all
-// the CPU. `allProblemsSchema` is composed from these so the section roster
-// stays single-source-of-truth (badge/homepage/MCP still read the combined one).
+// by cost: `fast` is all DB-only detectors; the rest isolate the heavier ones
+// (USDA-coverage, UPC) so no single invocation sums all the CPU. The two WASM
+// parse-sweeps (stale parses, unused aliases) are NOT here — they re-parse every
+// recipe line and blew the CPU/memory budget on the request path, so they live as
+// manual dry-run/fix-all actions in Settings → Maintenance instead.
+// `allProblemsSchema` is composed from these so the section roster stays
+// single-source-of-truth (badge/homepage/MCP still read the combined one).
 
 // DB-only detectors — cheap, no WASM/network.
 export const problemsFastSchema = z.object({
@@ -173,16 +176,6 @@ export const problemsCoverageSchema = z.object({
   productsWithIslandedMappings: z.array(productWithIslandedMappingsSchema),
 });
 
-// WASM parse-sweep: re-parses every recipe line to find unused aliases.
-export const problemsAliasesSchema = z.object({
-  ingredientsWithUnusedAliases: z.array(ingredientWithUnusedAliasesSchema),
-});
-
-// WASM parse-sweep: re-parses every recipe line to find drifted parses.
-export const problemsParsesSchema = z.object({
-  staleIngredientParses: z.array(staleIngredientParseSchema),
-});
-
 // UPC-lookup network detector.
 export const problemsUpcSchema = z.object({
   productsWithBetterUpcData: z.array(productWithBetterUpcDataSchema),
@@ -192,8 +185,6 @@ export const problemsUpcSchema = z.object({
 // total) so adding a detector to a group automatically flows into the badge.
 export const allProblemsSchema = problemsFastSchema
   .merge(problemsCoverageSchema)
-  .merge(problemsAliasesSchema)
-  .merge(problemsParsesSchema)
   .merge(problemsUpcSchema)
   .extend({ totalProblems: z.number() });
 
@@ -213,8 +204,6 @@ export const problemsCountSchema = z.object({
 export type AllProblems = z.infer<typeof allProblemsSchema>;
 export type ProblemsFast = z.infer<typeof problemsFastSchema>;
 export type ProblemsCoverage = z.infer<typeof problemsCoverageSchema>;
-export type ProblemsAliases = z.infer<typeof problemsAliasesSchema>;
-export type ProblemsParses = z.infer<typeof problemsParsesSchema>;
 export type ProblemsUpc = z.infer<typeof problemsUpcSchema>;
 export type ProblemsCount = z.infer<typeof problemsCountSchema>;
 
@@ -229,7 +218,7 @@ export const countProblems = (all: AllProblems): ProblemsCount => {
   return { total: totalProblems, byType };
 };
 
-// Assemble the five cost-grouped detector results into the combined AllProblems
+// Assemble the cost-grouped detector results into the combined AllProblems
 // shape (with derived total). Shared by the service-layer findAllProblems
 // aggregator and the MCP list_problems tool so the merge + total live in one
 // place. (The Problems page merges client-side in useProblemsData, which is
@@ -237,15 +226,11 @@ export const countProblems = (all: AllProblems): ProblemsCount => {
 export const assembleAllProblems = (groups: {
   fast: ProblemsFast;
   coverage: ProblemsCoverage;
-  aliases: ProblemsAliases;
-  parses: ProblemsParses;
   upc: ProblemsUpc;
 }): AllProblems => {
   const sections = {
     ...groups.fast,
     ...groups.coverage,
-    ...groups.aliases,
-    ...groups.parses,
     ...groups.upc,
   };
   const totalProblems = Object.values(sections).reduce(
@@ -293,7 +278,6 @@ export type ProductWithBetterUpcData = z.infer<
 // canonical `problemsCount.byType` names (a Pick of them) so the Maintenance row
 // and the Problems section read the same field — no third naming convention.
 export const maintenanceCountsSchema = z.object({
-  staleIngredientParses: z.number().int(),
   productsWithNoImages: z.number().int(),
   locationsWithoutAiDescription: z.number().int(),
 });

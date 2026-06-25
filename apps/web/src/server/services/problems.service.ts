@@ -21,15 +21,13 @@ import {
   assembleAllProblems,
   type IngredientWithPartialCoverage,
   type MaintenanceCounts,
-  type ProblemsAliases,
   type ProblemsCoverage,
   type ProblemsFast,
-  type ProblemsParses,
   type ProblemsUpc,
   type ProductWithIslandedMappings,
 } from "@cubby/schemas/problems";
 import { isMiscProduct } from "@cubby/shared";
-import { uniq, uniqBy } from "es-toolkit";
+import { sum, uniq, uniqBy } from "es-toolkit";
 import {
   BASE_KINDS,
   conversionCoverage,
@@ -47,6 +45,7 @@ import {
 } from "~/server/repo/ingredient";
 import {
   applyReparsedStaleLines,
+  countReparseableLines,
   findDuplicateUniqueProducts,
   findEmptyLocations,
   findIngredientsWithoutProduct,
@@ -59,6 +58,7 @@ import {
   findStaleIngredientParses,
   findUnusedIngredients,
   loadProductsForCoverage,
+  pruneUnusedAliases,
   type ReparsedStaleLineWrite,
   synthesizeEffectiveMappings,
 } from "~/server/repo/problems";
@@ -298,22 +298,21 @@ export const deleteUnusedIngredients = async (
   return { deleted, failed };
 };
 
-// Counts for the Settings → Maintenance "N affected" dry-run. Runs only the
-// detectors behind that panel's buttons — all DB/WASM, no USDA/UPC network — so
-// it's far cheaper than a full findAllProblems scan. Recompute is a forced full
-// pass, so its number is every active recipe, not just the stale ones.
+// Cheap always-on counts for the Settings → Maintenance "N affected" labels —
+// only DB detectors (no WASM sweep, no USDA/UPC network). The two WASM parse
+// sweeps (stale parses, unused aliases) are deliberately NOT counted here: they
+// re-parse every recipe line, so their numbers come from an on-demand dry run
+// (dryRunReparse / dryRunPruneAliases) rather than this eager query.
 export const findMaintenanceCounts = async (
   db: Database,
 ): Promise<MaintenanceCounts> => {
   const r = await traceAll({
-    staleIngredientParses: () => findStaleIngredientParses(db),
     productsWithNoImages: () =>
       findProductsWithNoImages(db, { excludeIngredients: true }),
     locationsWithoutAiDescription: () => findLocationsWithoutAiDescription(db),
   });
 
   return {
-    staleIngredientParses: r.staleIngredientParses.length,
     // Deliberately a SUBSET of the Problems-page productsWithNoImages count:
     // backfillUPCImages can only act on products that have a UPC to look up, so
     // this counts just those. Same canonical key, intentionally narrower number.
@@ -322,6 +321,56 @@ export const findMaintenanceCounts = async (
     locationsWithoutAiDescription: r.locationsWithoutAiDescription.length,
   };
 };
+
+// ---------------------------------------------------------------------------
+// Settings → Maintenance: the two WASM parse-sweep detectors, re-homed off the
+// Problems hot path as manual dry-run + fix-all actions (they re-parse every
+// recipe line — ~30s CPU and heap pressure that blew the request budget).
+// ---------------------------------------------------------------------------
+
+// Dry run for "Re-parse recipe lines": how many live imported lines would change
+// (the expensive WASM sweep) out of all re-parseable lines (a cheap count).
+export const dryRunReparse = async (
+  db: Database,
+): Promise<{ wouldChange: number; total: number }> => {
+  const [stale, total] = await Promise.all([
+    findStaleIngredientParses(db),
+    countReparseableLines(db),
+  ]);
+  return { wouldChange: stale.length, total };
+};
+
+// Dry run for "Prune unused aliases": how many aliases would be stripped, across
+// how many ingredients.
+export const dryRunPruneAliases = async (
+  db: Database,
+): Promise<{ wouldPrune: number; ingredients: number }> => {
+  const rows = await findIngredientsWithUnusedAliases(db);
+  return {
+    wouldPrune: sum(rows.map((r) => r.unusedAliases.length)),
+    ingredients: rows.length,
+  };
+};
+
+// Fix-all for unused aliases: detect every ingredient's unused aliases and strip
+// them in one pass. Streams coarse progress like reparseStaleIngredientParses
+// (the WASM sweep is the slow part; the prune itself is a single transaction).
+export async function* pruneAllUnusedAliases(
+  db: Database,
+): AsyncGenerator<{ done: number; total: number }, { pruned: number }> {
+  const rows = await findIngredientsWithUnusedAliases(db);
+  if (rows.length === 0) {
+    yield { done: 0, total: 0 };
+    return { pruned: 0 };
+  }
+  yield { done: 0, total: rows.length };
+  const { pruned } = await pruneUnusedAliases(
+    db,
+    rows.map((r) => ({ ingredientId: r.id, remove: r.unusedAliases })),
+  );
+  yield { done: rows.length, total: rows.length };
+  return { pruned };
+}
 
 // ---------------------------------------------------------------------------
 // Cost-grouped detector bundles. The Problems page loads these as separate tRPC
@@ -364,21 +413,6 @@ export const findCoverageProblems = (
   usdaClient: USDAClient,
 ): Promise<ProblemsCoverage> => findProductCoverageProblems(db, usdaClient);
 
-// WASM parse-sweep: unused aliases. Isolated so its CPU doesn't stack with the
-// other heavy detectors in one invocation.
-export const findAliasesProblems = async (
-  db: Database,
-): Promise<ProblemsAliases> => ({
-  ingredientsWithUnusedAliases: await findIngredientsWithUnusedAliases(db),
-});
-
-// WASM parse-sweep: stale parses. Isolated for the same reason.
-export const findParsesProblems = async (
-  db: Database,
-): Promise<ProblemsParses> => ({
-  staleIngredientParses: await findStaleIngredientParses(db),
-});
-
 // UPC-lookup network detector.
 export const findUpcProblems = async (
   db: Database,
@@ -401,8 +435,6 @@ export const findAllProblems = async (
   const groups = await traceAll({
     fast: () => findFastProblems(db),
     coverage: () => findCoverageProblems(db, usdaClient),
-    aliases: () => findAliasesProblems(db),
-    parses: () => findParsesProblems(db),
     upc: () => findUpcProblems(db, upcLookupClient),
   });
   return assembleAllProblems(groups);

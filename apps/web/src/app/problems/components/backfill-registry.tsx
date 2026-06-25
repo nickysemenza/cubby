@@ -15,24 +15,11 @@ const def = <TResult,>(config: BackfillButtonProps<TResult>) => config;
  * so the two surfaces can't drift; each surface keeps only its own display copy
  * (Problems: the section title/description; Maintenance: the row label + count).
  *
- * Recompute is intentionally absent — totals now recompute eagerly on every
- * write, so the only recompute surface left is Maintenance's force-rebuild-all
- * (`recipe.recomputeAll`, with a dry run), declared at its own call site.
+ * Recompute and the two WASM parse-sweeps (re-parse lines, prune unused aliases)
+ * are intentionally absent — they're Maintenance-only dry-run/fix-all actions
+ * (no Problems-page section), declared at their own call site in settings.tsx.
  */
 export const BACKFILL = {
-  reparse: def<{ updated: number; recipesAffected: number }>({
-    run: (client) => client.problems.reparseStale.mutate(),
-    invalidateKeys: (api) => [api.recipe.list.queryKey()],
-    idleLabel: "Re-parse all",
-    pendingLabel: "Re-parsing…",
-    toastResult: (r) => ({
-      tone: r.updated > 0 ? "success" : "info",
-      message:
-        r.updated > 0
-          ? `Re-parsed ${countLabel(r.updated, "line")} across ${countLabel(r.recipesAffected, "recipe")}.`
-          : "Nothing to re-parse.",
-    }),
-  }),
   fetchUpcImages: def<{
     found: number;
     imported: number;

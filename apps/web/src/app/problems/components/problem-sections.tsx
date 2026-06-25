@@ -12,9 +12,6 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
-import { formatAmounts } from "~/app/_components/inventory/format-amount";
-import { DriftIndicator } from "~/app/_components/parse-drift-indicator";
-import { DecompositionView } from "~/app/_components/recipe/decomposition-view";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { EntityIcon } from "~/entities/entities";
@@ -25,9 +22,7 @@ import { useTRPC } from "~/trpc/react";
 import { BACKFILL } from "./backfill-registry";
 import { EmptyLocationsList } from "./empty-locations-list";
 import {
-  AliasPruneFix,
   DeleteAllUnusedButton,
-  RemoveAllAliasesButton,
   UnusedIngredientDeleteFix,
 } from "./ingredient-cleanup-fixes";
 import { BackfillButton } from "./problem-backfill-action";
@@ -360,41 +355,6 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     }),
   }),
   section({
-    id: "unused-aliases",
-    label: "Unused aliases",
-    select: (p) => p.ingredientsWithUnusedAliases,
-    entity: "ingredient",
-    title: "Ingredients with unused aliases",
-    description:
-      "Aliases that duplicate the ingredient's name (or each other), or that no recipe line ever matches. Removing an alias leaves the ingredient untouched.",
-    emptyMessage: "No unused aliases — every alias is doing something.",
-    headerAction: (items) => (
-      <RemoveAllAliasesButton
-        rows={items.map((i) => ({ id: i.id, unusedAliases: i.unusedAliases }))}
-      />
-    ),
-    renderItem: (ing) => ({
-      title: ing.name,
-      badges: ing.unusedAliases.map((alias) => (
-        <Badge key={alias} variant="outline">
-          {alias}
-        </Badge>
-      )),
-      route: { to: "/ingredients/$id", params: { id: ing.id } },
-      inlineFix: {
-        label: "Remove aliases",
-        render: (close) => (
-          <AliasPruneFix
-            id={ing.id}
-            name={ing.name}
-            unusedAliases={ing.unusedAliases}
-            close={close}
-          />
-        ),
-      },
-    }),
-  }),
-  section({
     id: "unused-with-product",
     label: "Unused (has product)",
     select: (p) => p.unusedIngredientsWithProduct,
@@ -509,65 +469,6 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
         </Badge>,
       ],
       route: { to: "/locations/$id", params: { id: location.id } },
-    }),
-  }),
-  section({
-    id: "stale-parses",
-    label: "Stale Parses",
-    select: (p) => p.staleIngredientParses ?? [],
-    entity: "recipe",
-    title: "Stale Parses",
-    description:
-      "Ingredient lines whose original text, re-parsed with the current parser, would now differ from what's stored — on name, amounts, or modifier. Re-parsing would update them.",
-    emptyMessage:
-      "No stale parses — every stored ingredient matches a fresh parse of its original line.",
-    headerAction: <BackfillButton {...BACKFILL.reparse} />,
-    // Title is the stable ingredient name; every drifted axis (name included) is a
-    // DriftIndicator in the details — the card title is string-typed, so a colored
-    // diff can't live there.
-    renderItem: (item) => ({
-      // The same ingredient name can appear twice in one recipe, so key on the
-      // row id rather than the default storedName-recipeId composite.
-      key: item.recipeSectionIngredientId,
-      title: item.storedName,
-      subtitle: item.recipeName,
-      details: [
-        <div
-          key="drifts"
-          className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs"
-        >
-          {item.nameDrift && (
-            <DriftIndicator
-              axis="name"
-              before={item.storedName}
-              after={item.parsedName}
-            />
-          )}
-          {item.amountDrift && (
-            <DriftIndicator
-              axis="amount"
-              before={formatAmounts(item.storedAmounts)}
-              after={formatAmounts(item.parsedAmounts)}
-            />
-          )}
-          {item.modifierDrift && (
-            <DriftIndicator
-              axis="modifier"
-              before={item.storedModifier ?? ""}
-              after={item.parsedModifier ?? ""}
-            />
-          )}
-        </div>,
-        <div
-          key="rawLine"
-          className="flex flex-wrap items-baseline gap-x-1 text-muted-foreground/70 text-xs"
-          title="How the current parser carves the original line"
-        >
-          <span className="italic">parsed from:</span>
-          <DecompositionView rawLine={item.rawLine} />
-        </div>,
-      ],
-      route: { to: "/recipes/$id", params: { id: item.recipeId } },
     }),
   }),
   section({
