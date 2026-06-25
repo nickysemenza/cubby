@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/cloudflare";
 import { withSpan } from "@cubby/worker-tracing";
 import { createUsdaApp } from "./app.js";
 import { createEdgeUsdaDataSource } from "./data/edge.js";
@@ -5,7 +6,7 @@ import type { EdgeBindings } from "./data/cloudflare-types.js";
 
 let app: ReturnType<typeof createUsdaApp> | undefined;
 
-export default {
+const handler = {
   fetch(request: Request, env: EdgeBindings, executionContext: unknown) {
     app ??= createUsdaApp(createEdgeUsdaDataSource(env), {
       logRequests: true,
@@ -28,3 +29,19 @@ export default {
     );
   },
 };
+
+// Error capture into the shared `cubby` Sentry project, tagged `service:usda-api`
+// so this worker's exceptions (CPU/OOM/throws) surface at their source rather
+// than as a downstream JSON-parse error on the web side (see CUBBY-AH). Errors
+// only — `@cubby/worker-tracing` (OTel) keeps owning spans, so tracesSampleRate
+// is 0 (errors are captured regardless of trace sampling).
+export default Sentry.withSentry(
+  () => ({
+    // Public DSN — canonical copy in apps/web/src/lib/sentry-dsn.ts.
+    dsn: "https://a50b2f76dd1586f95cdd29cd13a6c0dc@o83311.ingest.us.sentry.io/4508775559135232",
+    tracesSampleRate: 0,
+    sendDefaultPii: true,
+    initialScope: { tags: { service: "usda-api" } },
+  }),
+  handler,
+);

@@ -36,6 +36,7 @@
     "@cubby/worker-tracing": "workspace:*",
     "@openapi-contrib/json-schema-to-openapi-schema": "^4.3.1",
     "@scalar/hono-api-reference": "^0.10.0",
+    "@sentry/cloudflare": "^10.60.0",
     "@ts-rest/core": "3.53.0-rc.1",
     "@ts-rest/open-api": "3.53.0-rc.1",
     "better-sqlite3": "^12.6.2",

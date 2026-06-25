@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/cloudflare";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { setCookie, deleteCookie } from "hono/cookie";
@@ -161,4 +162,19 @@ app.get(
   }),
 );
 
-export default app;
+// Error capture into the shared `cubby` Sentry project, tagged `service:upc-lookup`
+// so this worker's exceptions surface at their source instead of as opaque
+// failures on the web side. Errors only — `@cubby/worker-tracing` (OTel) keeps
+// owning spans, so tracesSampleRate is 0 (errors are captured regardless).
+const handler = { fetch: app.fetch } satisfies ExportedHandler<Env>;
+
+export default Sentry.withSentry(
+  () => ({
+    // Public DSN — canonical copy in apps/web/src/lib/sentry-dsn.ts.
+    dsn: "https://a50b2f76dd1586f95cdd29cd13a6c0dc@o83311.ingest.us.sentry.io/4508775559135232",
+    tracesSampleRate: 0,
+    sendDefaultPii: true,
+    initialScope: { tags: { service: "upc-lookup" } },
+  }),
+  handler,
+);
