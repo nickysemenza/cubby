@@ -3,13 +3,14 @@ import { sum } from "es-toolkit";
 import { useTRPC } from "~/trpc/react";
 
 /**
- * Loads the Problems page data as five cost-grouped tRPC queries instead of one
+ * Loads the Problems page data as three cost-grouped tRPC queries instead of one
  * `getAllProblems` scan. Each group is routed through the unbatched link (see
  * root-provider.tsx), so it runs in its own Worker invocation / CPU budget —
- * the combined scan re-parsed every recipe line through WASM in two detectors
- * and intermittently blew the 30s CPU limit.
+ * the combined scan re-parsed every recipe line through WASM and intermittently
+ * blew the 30s CPU limit. (The two WASM parse-sweeps it used to include now live
+ * as manual Settings → Maintenance actions, off this hot path.)
  *
- * The five group results are merged back into the same `AllProblems` shape the
+ * The three group results are merged back into the same `AllProblems` shape the
  * section renderers expect (missing groups default to empty arrays while they
  * load), with `totalProblems` re-derived as the sum of section lengths. Uses
  * `useQueries` + `combine` for a referentially-stable result (per the repo's
@@ -31,11 +32,9 @@ export function useProblemsData(opts?: {
     queries: [
       { ...api.problems.getFast.queryOptions(), staleTime, enabled },
       { ...api.problems.getCoverage.queryOptions(), staleTime, enabled },
-      { ...api.problems.getAliases.queryOptions(), staleTime, enabled },
-      { ...api.problems.getParses.queryOptions(), staleTime, enabled },
       { ...api.problems.getUpc.queryOptions(), staleTime, enabled },
     ],
-    combine: ([fast, coverage, aliases, parses, upc]) => {
+    combine: ([fast, coverage, upc]) => {
       const sections = {
         duplicateUniqueProducts: fast.data?.duplicateUniqueProducts ?? [],
         orphanedProducts: fast.data?.orphanedProducts ?? [],
@@ -53,12 +52,9 @@ export function useProblemsData(opts?: {
           coverage.data?.ingredientsWithPartialCoverage ?? [],
         productsWithIslandedMappings:
           coverage.data?.productsWithIslandedMappings ?? [],
-        ingredientsWithUnusedAliases:
-          aliases.data?.ingredientsWithUnusedAliases ?? [],
-        staleIngredientParses: parses.data?.staleIngredientParses ?? [],
         productsWithBetterUpcData: upc.data?.productsWithBetterUpcData ?? [],
       };
-      const results = [fast, coverage, aliases, parses, upc];
+      const results = [fast, coverage, upc];
       return {
         problems: {
           ...sections,

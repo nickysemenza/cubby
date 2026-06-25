@@ -29,47 +29,6 @@ import { useTRPC } from "~/trpc/react";
 
 // ── Per-card fixes ───────────────────────────────────────────────────────────
 
-/** Strip the listed unused aliases from one ingredient (leaves the ingredient). */
-export function AliasPruneFix({
-  id,
-  name,
-  unusedAliases,
-  close,
-}: {
-  id: string;
-  name: string;
-  unusedAliases: string[];
-  close: () => void;
-}) {
-  const api = useTRPC();
-  const prune = useProblemCardMutation({
-    mutationFn: api.problems.pruneAliases.mutationOptions,
-    success: `Removed ${countLabel(unusedAliases.length, "alias", "aliases")} from ${name}`,
-    invalidateKeys: [queryKeys.ingredient.list],
-    onSuccess: close,
-  });
-
-  return (
-    <Stack gap="sm">
-      <p className="text-muted-foreground text-xs">
-        Remove <span className="font-medium">{unusedAliases.join(", ")}</span>{" "}
-        from <span className="font-medium">{name}</span>? The ingredient itself
-        stays.
-      </p>
-      <Button
-        size="sm"
-        variant="destructive"
-        onClick={() =>
-          prune.mutate({ items: [{ ingredientId: id, remove: unusedAliases }] })
-        }
-        disabled={prune.isPending}
-      >
-        Remove {countLabel(unusedAliases.length, "alias", "aliases")}
-      </Button>
-    </Stack>
-  );
-}
-
 /** Delete one unused ingredient (and, when `alsoDeleteProducts`, its products). */
 export function UnusedIngredientDeleteFix({
   id,
@@ -171,38 +130,6 @@ function ConfirmHeaderButton({
         </AlertDialogContent>
       </AlertDialog>
     </>
-  );
-}
-
-/** Bulk "Remove all" for the unused-aliases section. */
-export function RemoveAllAliasesButton({
-  rows,
-}: {
-  rows: { id: string; unusedAliases: string[] }[];
-}) {
-  const api = useTRPC();
-  const total = rows.reduce((n, r) => n + r.unusedAliases.length, 0);
-  const prune = useActionMutation({
-    mutationFn: api.problems.pruneAliases.mutationOptions,
-    success: (data) => `Removed ${countLabel(data.pruned, "alias", "aliases")}`,
-    invalidateKeys: [queryKeys.problems.all, queryKeys.ingredient.list],
-  });
-
-  return (
-    <ConfirmHeaderButton
-      label={`Remove all (${total})`}
-      title="Remove all unused aliases?"
-      body={`This strips ${countLabel(total, "alias", "aliases")} across ${countLabel(rows.length, "ingredient")}. The ingredients themselves stay.`}
-      isPending={prune.isPending}
-      onConfirm={() =>
-        prune.mutate({
-          items: rows.map((r) => ({
-            ingredientId: r.id,
-            remove: r.unusedAliases,
-          })),
-        })
-      }
-    />
   );
 }
 

@@ -34,7 +34,7 @@ import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import { getRecipesByIDs } from "~/server/repo/recipe/crud";
 import {
-  findParentRecipeIds,
+  findParentRecipeIdsBatch,
   findRecipeIdsUsingIngredient,
   getRecipeTotalsState,
   selectAllActiveRecipeIds,
@@ -368,7 +368,7 @@ export class RecipeCostingService {
 
     const recipes = await getRecipesByIDs(this.db, todo);
     const totalsMap = await this.computeTotals(recipes);
-    const changedParents = new Set<RecipeId>();
+    const changedIds: RecipeId[] = [];
     for (const r of recipes) {
       const computed = totalsMap.get(r.id as RecipeId);
       if (!computed) continue;
@@ -380,12 +380,15 @@ export class RecipeCostingService {
         !r.totals ||
         r.totals.costTotal !== next.costTotal ||
         r.totals.caloriesTotal !== next.caloriesTotal;
-      if (changed) {
-        for (const p of await findParentRecipeIds(this.db, r.id as RecipeId))
-          changedParents.add(p);
-      }
+      if (changed) changedIds.push(r.id as RecipeId);
     }
-    // Recurse into changed parents (visited prevents re-work / cycles).
+    // One batched lookup for every changed recipe's parents (was an N+1 — a query
+    // per changed recipe). Recurse into the union (visited prevents re-work /
+    // cycles).
+    const parentsByRecipe = await findParentRecipeIdsBatch(this.db, changedIds);
+    const changedParents = new Set<RecipeId>();
+    for (const parents of parentsByRecipe.values())
+      for (const p of parents) changedParents.add(p);
     if (changedParents.size > 0) {
       await this.recomputeTree([...changedParents], visited);
     }

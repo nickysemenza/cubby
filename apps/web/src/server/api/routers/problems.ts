@@ -1,36 +1,35 @@
 import { ingredientId } from "@cubby/schemas/identifiers";
 import {
   maintenanceCountsSchema,
-  problemsAliasesSchema,
   problemsCoverageSchema,
   problemsFastSchema,
-  problemsParsesSchema,
   problemsUpcSchema,
 } from "@cubby/schemas/problems";
 import { z } from "zod";
 import { streamProgress } from "~/lib/bulk-progress";
-import {
-  pruneUnusedAliases,
-  recipeUsageCountsByProduct,
-} from "~/server/repo/problems";
+import { recipeUsageCountsByProduct } from "~/server/repo/problems";
 import {
   deleteUnusedIngredients,
-  findAliasesProblems,
+  dryRunPruneAliases,
+  dryRunReparse,
   findCoverageProblems,
   findFastProblems,
   findMaintenanceCounts,
-  findParsesProblems,
   findUpcProblems,
+  pruneAllUnusedAliases,
   reparseStaleIngredientParses,
 } from "~/server/services/problems.service";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
-// The Problems surfaces (page, navbar badge, homepage card) all load these five
+// The Problems surfaces (page, navbar badge, homepage card) all load these three
 // cost-grouped procedures and assemble the combined result client-side — each
 // over an UNBATCHED link so it gets its own Worker invocation / CPU budget. The
-// old monolithic getAllProblems ran every detector (two re-parse every recipe
-// line through WASM) in ONE invocation and exceeded the 30s CPU limit; it was
-// removed. MCP composes these five the same way (assembleAllProblems).
+// old monolithic getAllProblems ran every detector in ONE invocation and exceeded
+// the 30s CPU limit; it was removed. The two WASM parse-sweeps that re-parse every
+// recipe line (stale parses, unused aliases) used to be two more groups here but
+// blew the CPU/memory budget on the request path — they're now manual dry-run /
+// fix-all actions in Settings → Maintenance (see below). MCP composes these three
+// the same way (assembleAllProblems).
 
 // Group: DB-only detectors (cheap).
 const getFast = protectedProcedure
@@ -41,16 +40,6 @@ const getFast = protectedProcedure
 const getCoverage = protectedProcedure
   .output(problemsCoverageSchema)
   .query(async ({ ctx }) => findCoverageProblems(ctx.db, ctx.usdaClient));
-
-// Group: unused-aliases WASM parse-sweep (isolated CPU budget).
-const getAliases = protectedProcedure
-  .output(problemsAliasesSchema)
-  .query(async ({ ctx }) => findAliasesProblems(ctx.db));
-
-// Group: stale-parses WASM parse-sweep (isolated CPU budget).
-const getParses = protectedProcedure
-  .output(problemsParsesSchema)
-  .query(async ({ ctx }) => findParsesProblems(ctx.db));
 
 // Group: better-UPC network detector.
 const getUpc = protectedProcedure
@@ -77,6 +66,28 @@ const reparseStale = protectedProcedure.mutation(async function* ({ ctx }) {
   });
 });
 
+// On-demand dry run behind the Settings → Maintenance "Re-parse recipe lines"
+// button (the WASM sweep is too expensive for an always-on count).
+const dryRunReparseProc = protectedProcedure
+  .output(z.object({ wouldChange: z.number().int(), total: z.number().int() }))
+  .query(async ({ ctx }) => dryRunReparse(ctx.db));
+
+// On-demand dry run behind the Settings → Maintenance "Prune unused aliases"
+// button.
+const dryRunPruneAliasesProc = protectedProcedure
+  .output(
+    z.object({ wouldPrune: z.number().int(), ingredients: z.number().int() }),
+  )
+  .query(async ({ ctx }) => dryRunPruneAliases(ctx.db));
+
+// Fix-all for unused aliases: detect + strip every ingredient's unused aliases in
+// one streamed pass (replaces the old per-alias picker on the Problems page).
+const pruneAllUnusedAliasesStream = protectedProcedure.mutation(
+  async function* ({ ctx }) {
+    yield* streamProgress(pruneAllUnusedAliases(ctx.db), async (r) => r);
+  },
+);
+
 // Batch: distinct non-deleted recipe count per product (via its ingredient).
 // Powers the "used in N recipes" signal on product problem cards. Only
 // ingredient-linked products are returned; absence ⇒ no ingredient link.
@@ -85,19 +96,6 @@ const recipeUsageByProduct = protectedProcedure
   .output(z.record(z.string(), z.number()))
   .query(async ({ ctx, input }) => {
     return await recipeUsageCountsByProduct(ctx.db, input.productIds);
-  });
-
-// Strip "unused" aliases from one or more ingredients (per-card removes one, the
-// section's bulk button removes all). The ingredient itself is never deleted.
-const pruneAliases = protectedProcedure
-  .input(
-    z.object({
-      items: z.array(z.object({ ingredientId, remove: z.array(z.string()) })),
-    }),
-  )
-  .output(z.object({ pruned: z.number() }))
-  .mutation(async ({ ctx, input }) => {
-    return await pruneUnusedAliases(ctx.db, input.items);
   });
 
 // Delete entirely-unused ingredients (per-card or bulk). `alsoDeleteProducts`
@@ -129,12 +127,12 @@ const deleteUnused = protectedProcedure
 export const problemsRouter = createTRPCRouter({
   getFast,
   getCoverage,
-  getAliases,
-  getParses,
   getUpc,
   getMaintenanceCounts,
   reparseStale,
+  dryRunReparse: dryRunReparseProc,
+  dryRunPruneAliases: dryRunPruneAliasesProc,
+  pruneAllUnusedAliasesStream,
   recipeUsageByProduct,
-  pruneAliases,
   deleteUnused,
 });

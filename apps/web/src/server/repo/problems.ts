@@ -16,6 +16,7 @@ import type {
 import { isMiscProduct } from "@cubby/shared";
 import {
   and,
+  count,
   eq,
   exists,
   inArray,
@@ -715,6 +716,34 @@ export const findStaleIngredientParses = async (
     span.setAttributes({ lineCount: rows.length, staleCount: stale.length });
     return stale;
   });
+};
+
+// Cheap DB-only count of the lines findStaleIngredientParses would re-parse (live
+// imported lines with a rawLine, excluding recipe-link ingredients). Powers the
+// "N of M would change" denominator in the Settings → Maintenance dry run without
+// running the expensive WASM sweep.
+export const countReparseableLines = async (db: Database): Promise<number> => {
+  const [row] = await getDb(db)
+    .select({ n: count() })
+    .from(recipeSectionIngredient)
+    .innerJoin(
+      ingredient,
+      eq(ingredient.id, recipeSectionIngredient.ingredientId),
+    )
+    .innerJoin(
+      recipeSection,
+      eq(recipeSection.id, recipeSectionIngredient.recipeSectionId),
+    )
+    .innerJoin(recipe, eq(recipe.id, recipeSection.recipeId))
+    .where(
+      and(
+        notDeleted(recipeSectionIngredient),
+        isNotNull(recipeSectionIngredient.rawLine),
+        isNull(ingredient.recipeId),
+        notDeleted(recipe),
+      ),
+    );
+  return row?.n ?? 0;
 };
 
 // Distinct non-deleted recipes each product feeds into, via its linked

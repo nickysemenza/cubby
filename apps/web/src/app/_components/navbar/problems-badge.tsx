@@ -29,25 +29,23 @@ const PROBLEM_LABELS: Record<
   productsWithoutMappings: (n) => `${n} without pricing`,
   ingredientsWithPartialCoverage: (n) => `${n} partial coverage`,
   ingredientsWithoutProduct: (n) => `${n} without a product`,
-  ingredientsWithUnusedAliases: (n) => pl(n, "unused alias", "unused aliases"),
   unusedIngredientsWithProduct: (n) => `${n} unused (has product)`,
   unusedIngredientsWithoutProduct: (n) => `${n} unused`,
   productsWithIslandedMappings: (n) => pl(n, "islanded mapping"),
   emptyLocations: (n) => pl(n, "empty location"),
   productsWithNoImages: (n) => pl(n, "missing image"),
   locationsWithoutAiDescription: (n) => pl(n, "missing AI description"),
-  staleIngredientParses: (n) => pl(n, "stale parse"),
   productsWithBetterUpcData: (n) => pl(n, "UPC update"),
 };
 
 export const ProblemsBadge = () => {
   const hydrated = useHydrated();
-  // Defer the 5 detector invocations until the browser is idle — the badge
+  // Defer the detector invocations until the browser is idle — the badge
   // renders on every page, so firing them on each navigation put them on the
   // critical path app-wide. `useIdle` holds the fetch until after first paint.
   const idle = useIdle();
 
-  // Assemble the count from the SAME five cost-grouped detector queries the
+  // Assemble the count from the SAME cost-grouped detector queries the
   // Problems page uses (shared cache → no second scan, and the page is already
   // warm when opened). 5-min staleTime keeps this background indicator from
   // refetching on every navigation. Replaces the old monolithic getAllProblems,

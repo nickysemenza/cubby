@@ -14,6 +14,7 @@ import {
 } from "../services/problems.service";
 import { getDb } from "./database-helpers";
 import { createIngredient, getIngredientByName } from "./ingredient";
+import { findStaleIngredientParses } from "./problems";
 import { createProduct } from "./product";
 import { createRecipe } from "./recipe";
 import {
@@ -22,9 +23,10 @@ import {
   makeRecipeInput,
 } from "./repo.fixtures";
 
-// Repo-layer tests for the WASM-driven, highest-logic problem scans. The private
-// find* helpers are exercised through the public findAllProblems aggregator;
-// reparseStaleIngredientParses is called directly.
+// Repo-layer tests for the WASM-driven, highest-logic problem scans. The
+// coverage/UPC find* helpers are exercised through the public findAllProblems
+// aggregator; the stale-parse detector (now a Settings → Maintenance action, off
+// the aggregator) and reparseStaleIngredientParses are called directly.
 
 // reparseStaleIngredientParses streams `{done,total}` progress and returns its
 // summary; drain to the return value for assertions.
@@ -127,11 +129,7 @@ describe("problems repo", () => {
         rawLine: "2 cups flour",
       });
 
-      const { staleIngredientParses } = await findAllProblems(
-        ctx.db,
-        fakeUpcClient().client,
-        fakeUsdaClient(),
-      );
+      const staleIngredientParses = await findStaleIngredientParses(ctx.db);
       const driftedEntry = staleIngredientParses.find(
         (s) => s.recipeId === drifted.id,
       );
@@ -161,11 +159,7 @@ describe("problems repo", () => {
       expect(result.recipesAffected).toContain(recipe.id);
 
       // The drift is gone, and a second run finds nothing.
-      const { staleIngredientParses } = await findAllProblems(
-        ctx.db,
-        fakeUpcClient().client,
-        fakeUsdaClient(),
-      );
+      const staleIngredientParses = await findStaleIngredientParses(ctx.db);
       expect(staleIngredientParses.some((s) => s.recipeId === recipe.id)).toBe(
         false,
       );

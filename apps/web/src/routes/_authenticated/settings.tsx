@@ -27,6 +27,7 @@ import {
   isDevBuildOnlyFlag,
   useFlags,
 } from "~/lib/flags";
+import { countLabel } from "~/lib/pluralize";
 import { queryKeys } from "~/lib/query-keys";
 import type { TimingResponse } from "~/routes/api/debug/timing";
 import { useTRPC } from "~/trpc/react";
@@ -252,6 +253,42 @@ function MaintenanceRow({
   );
 }
 
+// Shared layout for a Maintenance action whose "N affected" figure is too
+// expensive for an always-on count, so it's fetched on demand: an optional
+// summary, a "Dry run" button that triggers it, and the streaming "fix all"
+// button. Each action component owns its own (typed) tRPC dry-run query + backfill
+// and feeds the resolved pieces in — keeping trpc's inference natural per site.
+function MaintenanceDryRunRow({
+  summary,
+  onDryRun,
+  dryRunPending,
+  backfill,
+}: {
+  summary: string | null;
+  onDryRun: () => void;
+  dryRunPending: boolean;
+  backfill: ReactNode;
+}) {
+  return (
+    <Row align="center" gap="sm">
+      {summary && (
+        <span className="font-mono text-2xs text-muted-foreground tabular-nums">
+          {summary}
+        </span>
+      )}
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={onDryRun}
+        disabled={dryRunPending}
+      >
+        {dryRunPending ? "Checking…" : "Dry run"}
+      </Button>
+      {backfill}
+    </Row>
+  );
+}
+
 // Recompute's accurate "would change" needs a full compute+diff (~as costly as
 // recomputing), so it's an on-demand dry run rather than an always-on count. The
 // force-recompute button stays — it's the only path that catches logic-change
@@ -263,31 +300,101 @@ function RecomputeAction() {
     enabled: false,
   });
   return (
-    <Row align="center" gap="sm">
-      {dryRun.data && (
-        <span className="font-mono text-2xs text-muted-foreground tabular-nums">
-          {dryRun.data.wouldChange} of {dryRun.data.total} would change
-        </span>
-      )}
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => dryRun.refetch()}
-        disabled={dryRun.isFetching}
-      >
-        {dryRun.isFetching ? "Checking…" : "Dry run"}
-      </Button>
-      <BackfillButton<{ processed: number }>
-        run={(client) => client.recipe.recomputeAllStream.mutate()}
-        invalidateKeys={(api) => [api.recipe.list.queryKey()]}
-        idleLabel="Recompute all"
-        pendingLabel="Recomputing…"
-        toastResult={(r) => ({
-          tone: "success",
-          message: `Recomputed ${r.processed} recipe${r.processed === 1 ? "" : "s"}.`,
-        })}
-      />
-    </Row>
+    <MaintenanceDryRunRow
+      summary={
+        dryRun.data
+          ? `${dryRun.data.wouldChange} of ${dryRun.data.total} would change`
+          : null
+      }
+      onDryRun={() => void dryRun.refetch()}
+      dryRunPending={dryRun.isFetching}
+      backfill={
+        <BackfillButton<{ processed: number }>
+          run={(client) => client.recipe.recomputeAllStream.mutate()}
+          invalidateKeys={(api) => [api.recipe.list.queryKey()]}
+          idleLabel="Recompute all"
+          pendingLabel="Recomputing…"
+          toastResult={(r) => ({
+            tone: "success",
+            message: `Recomputed ${countLabel(r.processed, "recipe")}.`,
+          })}
+        />
+      }
+    />
+  );
+}
+
+// Re-parse imported recipe lines with the current parser (the WASM sweep that
+// used to run on every Problems-page load). Dry run counts the drifted lines;
+// "Re-parse all" applies + recomputes affected totals.
+function ReparseAction() {
+  const trpc = useTRPC();
+  const dryRun = useQuery({
+    ...trpc.problems.dryRunReparse.queryOptions(),
+    enabled: false,
+  });
+  return (
+    <MaintenanceDryRunRow
+      summary={
+        dryRun.data
+          ? `${dryRun.data.wouldChange} of ${dryRun.data.total} would change`
+          : null
+      }
+      onDryRun={() => void dryRun.refetch()}
+      dryRunPending={dryRun.isFetching}
+      backfill={
+        <BackfillButton<{ updated: number; recipesAffected: number }>
+          run={(client) => client.problems.reparseStale.mutate()}
+          invalidateKeys={(api) => [api.recipe.list.queryKey()]}
+          idleLabel="Re-parse all"
+          pendingLabel="Re-parsing…"
+          toastResult={(r) => ({
+            tone: r.updated > 0 ? "success" : "info",
+            message:
+              r.updated > 0
+                ? `Re-parsed ${countLabel(r.updated, "line")} across ${countLabel(r.recipesAffected, "recipe")}.`
+                : "Nothing to re-parse.",
+          })}
+        />
+      }
+    />
+  );
+}
+
+// Strip aliases that no recipe line matches (or that duplicate the name) from
+// every ingredient at once — the other WASM sweep, also re-homed here. Dry run
+// counts what would be pruned; "Prune all" applies it.
+function PruneAliasesAction() {
+  const trpc = useTRPC();
+  const dryRun = useQuery({
+    ...trpc.problems.dryRunPruneAliases.queryOptions(),
+    enabled: false,
+  });
+  return (
+    <MaintenanceDryRunRow
+      summary={
+        dryRun.data
+          ? `${countLabel(dryRun.data.wouldPrune, "alias", "aliases")} across ${countLabel(dryRun.data.ingredients, "ingredient")}`
+          : null
+      }
+      onDryRun={() => void dryRun.refetch()}
+      dryRunPending={dryRun.isFetching}
+      backfill={
+        <BackfillButton<{ pruned: number }>
+          run={(client) => client.problems.pruneAllUnusedAliasesStream.mutate()}
+          invalidateKeys={(api) => [api.ingredient.list.queryKey()]}
+          idleLabel="Prune all"
+          pendingLabel="Pruning…"
+          toastResult={(r) => ({
+            tone: r.pruned > 0 ? "success" : "info",
+            message:
+              r.pruned > 0
+                ? `Pruned ${countLabel(r.pruned, "alias", "aliases")}.`
+                : "No unused aliases to prune.",
+          })}
+        />
+      }
+    />
   );
 }
 
@@ -316,9 +423,14 @@ const MAINTENANCE_TOOLS: {
   {
     label: "Re-parse recipe lines",
     description:
-      "Re-run the ingredient parser over imported lines (rawLine). Reverts manual structured edits — intended.",
-    count: (c) => c.staleIngredientParses,
-    action: <BackfillButton {...BACKFILL.reparse} />,
+      "Re-run the ingredient parser over imported lines (rawLine). Reverts manual structured edits — intended. Dry run before applying.",
+    action: <ReparseAction />,
+  },
+  {
+    label: "Prune unused aliases",
+    description:
+      "Strip aliases that no recipe line matches (or that duplicate the ingredient's name) from every ingredient. The ingredients themselves stay.",
+    action: <PruneAliasesAction />,
   },
   {
     label: "Fetch UPC images",
