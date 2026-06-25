@@ -1,5 +1,4 @@
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
-import { ArrowLeftRight } from "lucide-react";
 import { memo, useMemo } from "react";
 import { Row, Stack } from "~/components/layout";
 import { StatusText } from "~/components/ui/status-text";
@@ -15,7 +14,8 @@ import {
   conversionCoverage,
 } from "~/lib/conversion-coverage";
 import { ConversionDialog } from "./ConversionDialog";
-import { formatKindsLabel, kindIconMap } from "./kind-icons";
+import { CoverageChips, MacroChips } from "./CoverageChips";
+import { kindIconMap } from "./kind-icons";
 
 interface ConversionCapabilitiesProps {
   mappings: UnitMapping[];
@@ -43,7 +43,7 @@ interface ConversionCapabilitiesProps {
   kinds?: readonly BaseKind[];
 }
 
-// kindIconMap and formatKindsLabel shared in kind-icons.ts
+// kindIconMap shared in kind-icons.ts
 
 const TIER_LABEL: Record<CoverageTier, string> = {
   complete: "Complete",
@@ -151,54 +151,18 @@ export const ConversionCapabilities = memo(function ConversionCapabilities({
         </Row>
       </Row>
 
+      {/* Detail: the big-4 chips (the directional pair grid's data, summarized
+          per kind — same vocabulary the workbench and list cells use) plus the
+          macro chips (protein/fat/carbs/fiber/sodium the recipe table consumes).
+          `applicable` lets a USDA 3-kind universe strike money through. */}
       {coverage && !compact && (
-        <div className="grid grid-cols-3 gap-1 text-xs">
-          {coverage.pairs.map((pair) => {
-            const label = formatKindsLabel(pair.from, pair.to);
-            const fromMeta = kindIconMap[pair.from];
-            const toMeta = kindIconMap[pair.to];
-            if (!fromMeta || !toMeta) return null;
-            const FromIcon = fromMeta.Icon;
-            const ToIcon = toMeta.Icon;
-            return (
-              <Row
-                key={`${pair.from}-${pair.to}`}
-                align="center"
-                justify="center"
-                gap="sm"
-                className={
-                  /* tight: dense conversion-pair pill (text-2xs) */ `rounded-md px-1.5 py-0.5 ${
-                    pair.success
-                      ? "border border-secondary bg-secondary/60 text-secondary-foreground"
-                      : "border border-destructive/30 bg-destructive/10 text-muted-foreground/60"
-                  }`
-                }
-              >
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <Row
-                        align="center"
-                        justify="center"
-                        gap="sm"
-                        className="p-0.5" /* tight */
-                      />
-                    }
-                  >
-                    <span className="sr-only">{label}</span>
-                    <FromIcon className="h-3.5 w-3.5" aria-hidden />
-                    <ArrowLeftRight
-                      className="h-3.5 w-3.5 opacity-60"
-                      aria-hidden
-                    />
-                    <ToIcon className="h-3.5 w-3.5" aria-hidden />
-                  </TooltipTrigger>
-                  <TooltipContent sideOffset={6}>{label}</TooltipContent>
-                </Tooltip>
-              </Row>
-            );
-          })}
-        </div>
+        <Stack gap="sm">
+          <CoverageChips
+            covered={[...coverage.covered]}
+            applicable={[...coverageKinds]}
+          />
+          <MacroChips mappings={mappings} />
+        </Stack>
       )}
     </Stack>
   );

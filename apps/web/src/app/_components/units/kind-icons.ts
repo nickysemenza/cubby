@@ -24,7 +24,3 @@ export const kindIconMap: Record<
   length: { Icon: Ruler, label: "Length" },
   other: { Icon: Shapes, label: "Other" },
 };
-
-export function formatKindsLabel(from: AmountKind, to: AmountKind): string {
-  return `${kindIconMap[from]?.label ?? from} ↔ ${kindIconMap[to]?.label ?? to}`;
-}

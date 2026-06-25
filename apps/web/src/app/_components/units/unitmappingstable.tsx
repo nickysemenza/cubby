@@ -7,10 +7,68 @@ import {
 } from "@tanstack/react-table";
 import { useMemo } from "react";
 import { Row } from "~/components/layout";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/components/ui/tooltip";
+import {
+  BASE_KINDS,
+  type BaseKind,
+  conversionCoverage,
+} from "~/lib/conversion-coverage";
 import { wasm } from "~/lib/wasm";
 import { useTRPC } from "~/trpc/react";
 import RTable from "../data-table/Table";
 import { EntityPillLink } from "../EntityPill";
+import { kindIconMap } from "./kind-icons";
+
+const BASE_KIND_SET: ReadonlySet<string> = new Set(BASE_KINDS);
+
+// The base measurement kind a unit belongs to, or null for nutrient:* / other:*
+// units (which `kindIconMap` has no icon for). `amount_kind` is a cheap, cached
+// WASM probe; it never throws today, but guard defensively.
+const baseKindForUnit = (unit: string): BaseKind | null => {
+  try {
+    const k = wasm.amount_kind({ value: 1, unit });
+    return BASE_KIND_SET.has(k) ? (k as BaseKind) : null;
+  } catch {
+    return null;
+  }
+};
+
+// Leading per-row marker: the target amount's kind icon, lit when that big-4
+// kind participates in a working conversion (ties each row to the coverage
+// chips above). Nutrient/other rows get a muted dot so the column stays aligned.
+const KindAccent: React.FC<{
+  unit: string;
+  covered: ReadonlySet<BaseKind>;
+}> = ({ unit, covered }) => {
+  const kind = baseKindForUnit(unit);
+  if (!kind) {
+    return (
+      <span
+        aria-hidden
+        className="inline-block h-1 w-1 shrink-0 rounded-full bg-muted-foreground/30"
+      />
+    );
+  }
+  const { Icon, label } = kindIconMap[kind];
+  const lit = covered.has(kind);
+  const state = lit ? "convertible" : "no conversion";
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<span className="inline-flex shrink-0" />}>
+        <span className="sr-only">{`${label}: ${state}`}</span>
+        <Icon
+          className={`h-3.5 w-3.5 ${lit ? "text-foreground" : "text-muted-foreground/40"}`}
+          aria-hidden
+        />
+      </TooltipTrigger>
+      <TooltipContent sideOffset={6}>{`${label}: ${state}`}</TooltipContent>
+    </Tooltip>
+  );
+};
 
 // Component for lazy loading food data and rendering FoodPillLink
 const LazyFoodPillLink: React.FC<{ fdcId: number }> = ({ fdcId }) => {
@@ -78,8 +136,18 @@ const MappingSource: React.FC<{ mapping: UnitMapping }> = ({ mapping }) => {
 
 export const UnitMappingsTable: React.FC<{
   mappings: UnitMapping[];
-}> = ({ mappings }) => {
+  /** Must match the `kinds` passed to the sibling ConversionCapabilities so
+   * row icons and coverage chips grade against the same kind universe. */
+  kinds?: readonly BaseKind[];
+}> = ({ mappings, kinds }) => {
   const columnHelper = createColumnHelper<UnitMapping>();
+
+  // Same engine the coverage chips read, so a row's lit icon and the chip above
+  // can't disagree. Cheap (6 cached probes), memoized per mapping set.
+  const covered = useMemo(
+    () => conversionCoverage(mappings, kinds).covered,
+    [mappings, kinds],
+  );
 
   const columns = useMemo(
     () => [
@@ -96,6 +164,12 @@ export const UnitMappingsTable: React.FC<{
         header: "To",
         enableSorting: false,
         meta: { className: "w-32 whitespace-nowrap p-0.5" /* tight */ },
+        cell: (info) => (
+          <Row as="span" align="center" gap="xs" className="whitespace-nowrap">
+            <KindAccent unit={info.row.original.b.unit} covered={covered} />
+            <span>{info.getValue()}</span>
+          </Row>
+        ),
       }),
       columnHelper.accessor("source", {
         id: "source",
@@ -107,7 +181,7 @@ export const UnitMappingsTable: React.FC<{
         cell: (info) => <MappingSource mapping={info.row.original} />,
       }),
     ],
-    [columnHelper],
+    [columnHelper, covered],
   );
 
   const table = useReactTable({
@@ -133,9 +207,16 @@ export const UnitMappingsTable: React.FC<{
             gap="sm"
             className="border-b px-1 py-2 text-sm"
           >
-            <span className="whitespace-nowrap font-medium">
-              {wasm.format_amount(m.a)} = {wasm.format_amount(m.b)}
-            </span>
+            <Row
+              as="span"
+              align="center"
+              gap="xs"
+              className="whitespace-nowrap font-medium"
+            >
+              <span>{wasm.format_amount(m.a)} =</span>
+              <KindAccent unit={m.b.unit} covered={covered} />
+              <span>{wasm.format_amount(m.b)}</span>
+            </Row>
             <Row
               as="span"
               align="center"

@@ -48,6 +48,33 @@ export const TIER1_CODES = Object.values(TIER1_NUTRIENTS).map(
 ) as string[];
 
 /**
+ * The key nutrients shown in summaries, the recipe table, and the unit-mapping
+ * macro chips, in display order. A deliberate whitelist — only these appear,
+ * even when more nutrient data is present, so those surfaces stay scannable and
+ * never drift. Macros first, then the most diet-relevant extra. The single
+ * source of truth for that ordered membership (presentation labels stay
+ * per-surface; see `NutrientsSummary`).
+ */
+export const KEY_NUTRIENT_KEYS = [
+  "kcal",
+  "protein",
+  "fat",
+  "carbs",
+  "fiber",
+  "sodium",
+] as const satisfies ReadonlyArray<NutrientKey>;
+
+/**
+ * The macro nutrients a unit-mapping graph can carry as `nutrient:*` edges — the
+ * key nutrients minus `kcal`, which is already the base measurement kind
+ * `calories`. Drives the unit-mapping panel's macro-coverage chips, so the chips
+ * and the recipe table read from one ordered list.
+ */
+export const MACRO_KEYS: readonly NutrientKey[] = KEY_NUTRIENT_KEYS.filter(
+  (k) => k !== "kcal",
+);
+
+/**
  * Lookup map from nutrient code to nutrient info.
  */
 const CODE_TO_NUTRIENT: Record<string, NutrientInfo> = Object.fromEntries(

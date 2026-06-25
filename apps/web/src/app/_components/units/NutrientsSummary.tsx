@@ -1,31 +1,29 @@
 import {
   getNutrientDisplayName,
   getNutrientUnit,
-  type NutrientKey,
+  KEY_NUTRIENT_KEYS,
   type NutrientsPer100,
   TIER1_NUTRIENTS,
 } from "@cubby/usda-schemas";
 import { Row } from "~/components/layout";
 import { cn } from "~/lib/utils";
 
-// The key nutrients shown in summaries and the recipe table, in display order.
-// A deliberate whitelist — only these appear, even when more nutrient data is
-// present, to keep things scannable. Macros first, then the most diet-relevant
-// extra. Codes derive from TIER1_NUTRIENTS by key (no raw nutrient_nbr lives
-// here); `label` is the short table header — the one per-surface override of the
-// long displayName. Single source of truth so summary and table can't drift.
-const KEY_NUTRIENT_SHORT_LABELS = [
-  ["kcal", "Cal"],
-  ["protein", "Protein"],
-  ["fat", "Fat"],
-  ["carbs", "Carbs"],
-  ["fiber", "Fiber"],
-  ["sodium", "Sodium"],
-] as const satisfies ReadonlyArray<readonly [NutrientKey, string]>;
+// Short table headers — the one per-surface override of the long displayName.
+// The ordered key membership is canonical in `@cubby/usda-schemas`
+// (`KEY_NUTRIENT_KEYS`), shared with the unit-mapping macro chips so they can't
+// drift; only these presentation labels live here.
+const SHORT_LABEL: Record<(typeof KEY_NUTRIENT_KEYS)[number], string> = {
+  kcal: "Cal",
+  protein: "Protein",
+  fat: "Fat",
+  carbs: "Carbs",
+  fiber: "Fiber",
+  sodium: "Sodium",
+};
 
-export const KEY_NUTRIENTS = KEY_NUTRIENT_SHORT_LABELS.map(([key, label]) => ({
+export const KEY_NUTRIENTS = KEY_NUTRIENT_KEYS.map((key) => ({
   code: TIER1_NUTRIENTS[key].code,
-  label,
+  label: SHORT_LABEL[key],
   // Lowercased display unit ("kcal" / "g" / "mg") for the table column subhead.
   unit: TIER1_NUTRIENTS[key].unit.toLowerCase(),
 }));
