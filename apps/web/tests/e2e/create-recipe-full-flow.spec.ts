@@ -91,9 +91,11 @@ test.describe("Create Recipe - Full Flow", () => {
     await expect(ingredientLink).toBeVisible();
     await expect(ingredientLink).toHaveAttribute("href", /\/ingredients\//);
 
-    // Verify cost calculation (2 cups at $2.50/cup = $5.00)
+    // Verify cost calculation (2 cups at $2.50/cup = $5.00).
+    // $5.00 now appears twice — the summary card (rendered first) and the
+    // ingredient table's Totals footer row — so scope to the first (the card).
     await expect(page.getByText("Total Cost", { exact: true })).toBeVisible();
-    await expect(page.getByText("$5.00")).toBeVisible();
+    await expect(page.getByText("$5.00").first()).toBeVisible();
 
     // Verify weight calculation (2 cups → 333g via chained conversion)
     await expect(page.getByText("Total Weight", { exact: true })).toBeVisible();
