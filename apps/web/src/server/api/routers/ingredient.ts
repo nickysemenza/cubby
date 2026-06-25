@@ -22,29 +22,26 @@ import {
 } from "~/server/repo/ingredient";
 import {
   enrichmentRowOut,
+  ingredientListItemOut,
   ingredientWithFoodLeanOut,
   ingredientWithFoodOut,
 } from "~/server/services/ingredient.service";
 import {
   createDeleteProcedure,
-  createEntityCrudProcedures,
+  createEntityCrudWithoutListProcedures,
+  createEntityListProcedure,
 } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 // Create standardized CRUD procedures using factory (update is customized below
 // so it can eagerly recompute dependent recipes and report the side-effects).
-const { getByID, list, create } = createEntityCrudProcedures({
-  schemas: {
-    createInput: ingredientBase,
-    updateInput: ingredientBase.partial(),
-    output: ingredientWithFoodOut,
-    filters: ingredientFiltersSchema,
-    idSchema: ingredientId,
-  },
+// List returns a lean summary (lean ingredient + food + {id,name} recipe refs, no
+// per-usage recipe bodies); detail (getByID/create) keeps the full
+// ingredientWithFoodOut. Split into the two sub-factories so each surface carries
+// its own output schema. (update is customized below.)
+const { list } = createEntityListProcedure({
+  schemas: { output: ingredientListItemOut, filters: ingredientFiltersSchema },
   repository: {
-    getByID: async (services, id: IngredientId) => {
-      return await services.services.ingredient.getIngredientByID(id);
-    },
     list: async (services, filters, sort, pagination) => {
       return await services.services.ingredient.ingredientList(
         filters.nameFilter,
@@ -52,6 +49,21 @@ const { getByID, list, create } = createEntityCrudProcedures({
         pagination,
         filters.missingProductsOnly,
       );
+    },
+  },
+  entityName: "ingredient",
+});
+
+const { getByID, create } = createEntityCrudWithoutListProcedures({
+  schemas: {
+    createInput: ingredientBase,
+    updateInput: ingredientBase.partial(),
+    output: ingredientWithFoodOut,
+    idSchema: ingredientId,
+  },
+  repository: {
+    getByID: async (services, id: IngredientId) => {
+      return await services.services.ingredient.getIngredientByID(id);
     },
     create: async (services, data) => {
       return await services.services.ingredient.createIngredient(
@@ -67,7 +79,6 @@ const { getByID, list, create } = createEntityCrudProcedures({
       );
     },
   },
-  entityName: "ingredient",
 });
 
 // Custom update: an ingredient edit changes its contribution to recipe cost, so

@@ -59,6 +59,23 @@ export const liveRecipeCountForIngredientSql = (
  * `bool_and` over the live usages is empty-set NULL, but `count(...) > 0` is then
  * false, so an unused ingredient correctly returns false.
  */
+/**
+ * A jsonb array of `{id, name}` for the DISTINCT live recipes an ingredient
+ * appears in — the lean replacement for the ingredient list's full
+ * `appearsInRecipes: recipeTopLevel[]`. Same `ingredientRef` contract /
+ * live-filtering as {@link liveRecipeCountForIngredientSql}. `coalesce` to `[]`
+ * so an unused ingredient returns an empty array, not null.
+ */
+export const appearsInRecipesRefsForIngredientSql = (
+  ingredientRef: string,
+): string =>
+  `(SELECT coalesce(jsonb_agg(rec ORDER BY rec->>'name'), '[]'::jsonb) FROM (` +
+  `SELECT DISTINCT jsonb_build_object('id', r."id", 'name', r."name") AS rec ` +
+  `FROM "RecipeSectionIngredient" rsi ` +
+  `JOIN "RecipeSection" rs ON rs."id" = rsi."recipeSectionId" AND rs."deletedAt" IS NULL ` +
+  `JOIN "Recipe" r ON r."id" = rs."recipeId" AND r."deletedAt" IS NULL ` +
+  `WHERE rsi."ingredientId" = ${ingredientRef} AND rsi."deletedAt" IS NULL) sub)`;
+
 export const cookbookOnlyForIngredientSql = (ingredientRef: string): string =>
   `(SELECT count(DISTINCT rs."recipeId") > 0 ` +
   `AND bool_and(r."SourceType" = 'Book' AND r."SourceData" IS NOT NULL AND r."SourceData" <> '') ` +

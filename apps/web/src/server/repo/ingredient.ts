@@ -11,6 +11,7 @@ import {
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
+import type { RecipeRef } from "@cubby/schemas/recipe";
 import { and, count, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { z } from "zod";
@@ -53,6 +54,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import {
+  appearsInRecipesRefsForIngredientSql,
   computeRecipeUsages,
   cookbookOnlyForIngredientSql,
   dbRecipeToAPIShallow,
@@ -725,6 +727,43 @@ export const ingredientList = async (
 
   const { take, skip } = buildTakeSkip(pagination);
 
+  // Lean list shape: products (mapped) + a jsonb {id,name}[] of the recipes the
+  // ingredient appears in (the list reads count = length, and the first ref for
+  // the pill). Drops the per-usage Recipe + Section jsonb bodies the full graph
+  // shipped — the list never reads them (that was the over-fetch).
+  const leanRelations = {
+    with: {
+      product: {
+        with: {
+          unitMappings: true,
+          externalIds: true,
+          images: { with: { image: true } },
+        },
+      },
+    },
+    extras: {
+      appearsInRecipes: sql<RecipeRef[]>`${sql.raw(
+        appearsInRecipesRefsForIngredientSql('"ingredient"."id"'),
+      )}`.as("appearsInRecipes"),
+    },
+  } as const;
+
+  const toListItem = <
+    R extends {
+      product: IngredientDeepDB["product"];
+      appearsInRecipes: RecipeRef[];
+    },
+  >(
+    row: R,
+  ) => {
+    const { product: productRel, appearsInRecipes, ...rest } = row;
+    return {
+      ...rest,
+      product: mapIngredientProducts(productRel),
+      appearsInRecipes: appearsInRecipes ?? [],
+    };
+  };
+
   if (missingProductsOnly) {
     // Use a subquery to find ingredients with no products
     const ingredientsWithNoProducts = getDb(db)
@@ -744,7 +783,7 @@ export const ingredientList = async (
               .select({ id: ingredientsWithNoProducts.id })
               .from(ingredientsWithNoProducts),
           ),
-          ...relations.ingredient.full,
+          ...leanRelations,
           orderBy: orderByClause,
           limit: take,
           offset: skip,
@@ -757,18 +796,14 @@ export const ingredientList = async (
           .then((rows) => rows[0]?.count ?? 0),
       );
 
-    const ingredients = await Promise.all(
-      results.map((ing) => dbIngredientToAPI(db, ing)),
-    );
-
-    return { data: ingredients, count: totalCount };
+    return { data: results.map(toListItem), count: totalCount };
   } else {
     // Normal query without missing products filter
     const { data: results, count: totalCount } =
       await executeListQueryWithCount(
         getDb(db).query.ingredient.findMany({
           where: whereClause,
-          ...relations.ingredient.full,
+          ...leanRelations,
           orderBy: orderByClause,
           limit: take,
           offset: skip,
@@ -776,11 +811,7 @@ export const ingredientList = async (
         countWhere(db, ingredient, whereClause),
       );
 
-    const ingredients = await Promise.all(
-      results.map((ing) => dbIngredientToAPI(db, ing)),
-    );
-
-    return { data: ingredients, count: totalCount };
+    return { data: results.map(toListItem), count: totalCount };
   }
 };
 

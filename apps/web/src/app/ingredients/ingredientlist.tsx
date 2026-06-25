@@ -19,7 +19,7 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { queryKeys } from "~/lib/query-keys";
 import { savedWithRecompute } from "~/lib/recompute-summary";
 import { getIngredientMappings } from "~/lib/unit-mapping-utils";
-import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
+import type { IngredientListItem } from "~/server/services/ingredient.service";
 import { useTRPC, useTRPCClient } from "~/trpc/react";
 import {
   createCreatedAtColumn,
@@ -35,7 +35,7 @@ import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { TruncatedList } from "../_components/TruncatedList";
 
-type IngredientProduct = IngredientWithFoodOut["product"][number];
+type IngredientProduct = IngredientListItem["product"][number];
 
 /**
  * Product column for the ingredients list. Renders the product pill plus a small
@@ -84,11 +84,7 @@ function ProductPillsCell({ products }: { products: IngredientProduct[] }) {
  * the column sorts on, so it stays put even as the narrow column clips the pill.
  * `appearsInRecipes` rides on the shared list output — no extra fetch.
  */
-function RecipeUsageCell({
-  ingredient,
-}: {
-  ingredient: IngredientWithFoodOut;
-}) {
+function RecipeUsageCell({ ingredient }: { ingredient: IngredientListItem }) {
   const recipes = ingredient.appearsInRecipes;
   if (recipes.length === 0) return <NoneState />;
   return (
@@ -121,7 +117,7 @@ export function IngredientList() {
   const trpcClient = useTRPCClient();
   const queryClient = useQueryClient();
   const columnHelper = useMemo(
-    () => createColumnHelper<IngredientWithFoodOut>(),
+    () => createColumnHelper<IngredientListItem>(),
     [],
   );
   const { onRowClick, onRowHover, PreviewSheet } =

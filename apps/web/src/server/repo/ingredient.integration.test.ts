@@ -8,6 +8,7 @@ import {
   createIngredient,
   enrichmentWorkbenchIngredients,
   findOrCreateIngredient,
+  ingredientList,
   mergeIngredients,
   resolveOrCreateIngredients,
 } from "./ingredient";
@@ -299,5 +300,44 @@ describe("ingredient", () => {
     // Every returned row is recipe-used; the orphan is absent.
     expect(rows.every((r) => r.recipeCount > 0)).toBe(true);
     expect(rows.some((r) => r.name === "orphan")).toBe(false);
+  });
+
+  // Regression: the ingredient list is lean — `appearsInRecipes` is {id,name}
+  // refs (count + first pill), NOT the full recipe bodies / recipeUsages the old
+  // `relations.ingredient.full` shipped (the over-fetch).
+  it("ingredientList: appearsInRecipes is lean {id,name} refs, no recipe bodies", async () => {
+    const used = await createIngredient(
+      ctx.db,
+      { name: "flour", aliases: [] },
+      ctx.actor,
+    );
+    const recipe = await createRecipe(
+      ctx.db,
+      makeRecipeInput({
+        name: "Web Recipe",
+        sections: [
+          {
+            instructions: [{ instruction: "Mix" }],
+            ingredients: [ingredientRef(used.id)],
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+
+    const { data } = await ingredientList(
+      ctx.db,
+      undefined,
+      { orderBy: "name", direction: "asc" },
+      { pageIndex: 0, pageSize: 50 },
+    );
+    const flour = data.find((i) => i.id === used.id)!;
+    expect(flour).toBeDefined();
+    expect(flour.appearsInRecipes).toEqual([
+      { id: recipe.id, name: "Web Recipe" },
+    ]);
+    // Lean: no per-usage recipe bodies, no recipeUsages.
+    expect(flour).not.toHaveProperty("recipeUsages");
+    expect(flour.appearsInRecipes[0]).not.toHaveProperty("sections");
   });
 });
