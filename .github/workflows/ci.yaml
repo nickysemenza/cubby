@@ -276,7 +276,7 @@ jobs:
         continue-on-error: true
         run: |
           cd apps/web
-          pnpm test --project integration --shard=${{ matrix.shard }}/2 --coverage --reporter=default --reporter=github-actions --reporter=junit --outputFile=test-results/vitest-junit.xml
+          pnpm test --project integration --shard=${{ matrix.shard }}/${{ strategy.job-total }} --coverage --reporter=default --reporter=github-actions --reporter=junit --outputFile=test-results/vitest-junit.xml
 
       - name: Publish Test Results
         if: always()
@@ -458,7 +458,7 @@ jobs:
         run: pnpm --filter @cubby/web run build:cf
       - name: Run Playwright tests
         id: e2e-test
-        run: cd apps/web && npx playwright test --shard=${{ matrix.shard }}/2
+        run: cd apps/web && npx playwright test --shard=${{ matrix.shard }}/${{ strategy.job-total }}
       - name: Publish Playwright Results
         if: always()
         uses: dorny/test-reporter@v2
