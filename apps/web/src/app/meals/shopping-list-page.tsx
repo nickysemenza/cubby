@@ -157,7 +157,10 @@ export function ShoppingListPage() {
           {rows.length === 0 ? (
             <Description>Nothing to buy for the selected meals.</Description>
           ) : (
-            <Table containerClassName="overflow-hidden rounded-lg border border-[var(--border-chunky)]">
+            <Table
+              containerClassName="overflow-hidden rounded-lg border border-[var(--border-chunky)]"
+              className="table-auto"
+            >
               <TableHeader>
                 <TableRow>
                   <TableHead>Ingredient</TableHead>
