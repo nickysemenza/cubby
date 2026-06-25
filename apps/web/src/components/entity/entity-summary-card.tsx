@@ -7,9 +7,7 @@ import {
   recipeHeadlineTotals,
 } from "~/app/_components/recipe/recipe-utils";
 import type { SummaryItem } from "~/app/_components/SummaryCard";
-import { Badge } from "~/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { Eyebrow } from "~/components/ui/eyebrow";
 import { StatGrid, StatTile } from "~/components/ui/stat-tile";
 import { formatNumberRange } from "~/lib/format-range";
 import { formatCurrency } from "~/lib/utils";
@@ -176,55 +174,10 @@ const formatRecipeSummary = (data: RecipeSummaryData): SummaryItem[] => {
   ];
 };
 
-// Missing-data footer, rendered below the summary grid for recipes so the long
-// list of ingredient names doesn't dominate a single cramped grid cell.
-const MissingDataFooter: React.FC<{
-  missingByType: RecipeSummaryData["missingByType"];
-}> = ({ missingByType }) => {
-  const categories = [
-    { label: "Price", names: missingByType.price },
-    { label: "Weight", names: missingByType.weight },
-    { label: "Nutrition", names: missingByType.nutrients },
-  ].filter((c) => c.names.length > 0);
-
-  if (categories.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="mt-4 space-y-2 border-foreground/10 border-t pt-4">
-      <Eyebrow as="div" className="font-medium">
-        Missing data
-      </Eyebrow>
-      {categories.map((category) => (
-        <div
-          key={category.label}
-          className="flex flex-wrap items-baseline gap-2"
-        >
-          <span className="font-medium text-foreground text-sm">
-            {category.label}
-            <span className="text-muted-foreground">
-              {" "}
-              · {category.names.length}
-            </span>
-          </span>
-          {category.names.map((name, index) => (
-            <Badge
-              // Names can repeat (a recipe may list the same ingredient twice),
-              // so the name alone isn't unique; this list is static (no reorder).
-              // biome-ignore lint/suspicious/noArrayIndexKey: names aren't unique and the list is static
-              key={`${name}-${index}`}
-              variant="outline"
-              className="font-normal"
-            >
-              {name}
-            </Badge>
-          ))}
-        </div>
-      ))}
-    </div>
-  );
-};
+// The per-ingredient "missing data" breakdown moved into the recipe view's
+// "N block costing" coverage popover (RecipeCostingCoverage), which carries the
+// same names plus the highest-leverage fix + a deep-link — so the summary card
+// stays a clean four-stat grid.
 
 const formatNutritionSummary = (data: NutritionSummaryData): SummaryItem[] => [
   {
@@ -325,9 +278,6 @@ export const EntitySummaryCard: React.FC<EntitySummaryCardProps> = ({
             <StatTile key={item.label} item={item} />
           ))}
         </StatGrid>
-        {summaryData.type === "recipe" && (
-          <MissingDataFooter missingByType={summaryData.data.missingByType} />
-        )}
       </CardContent>
     </Card>
   );

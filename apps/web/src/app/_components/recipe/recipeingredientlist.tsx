@@ -6,7 +6,7 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { mapValues } from "es-toolkit";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { match } from "ts-pattern";
 import { NoneState } from "~/app/_components/NoneState";
 import { KEY_NUTRIENTS } from "~/app/_components/units/NutrientsSummary";
@@ -24,6 +24,7 @@ import type {
   RecipeCosting,
 } from "~/lib/recipe-costing";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
+import { cn } from "~/lib/utils";
 import { renderValueOrMissing } from "~/misc/result";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { createActionsColumnBase } from "../data-table/columnHelpers";
@@ -34,7 +35,11 @@ import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import { CopyCorpusButton } from "./copy-corpus-button";
 import { EstimateMarker } from "./estimate-marker";
 import { IngredientModifier } from "./IngredientQuantities";
-import { formatScalingPct } from "./recipe-scaling-pct";
+import {
+  computeScalingPercentages,
+  formatScalingPct,
+  pickDefaultBaseRowId,
+} from "./recipe-scaling-pct";
 import { getIngredientName, type ServingBasis } from "./recipe-utils";
 
 // What an unmeasured estimated row shows in its Amounts cell, per usage.
@@ -50,7 +55,15 @@ const ESTIMATE_AMOUNT_LABELS: Partial<Record<IngredientUsage, string>> = {
 
 // Stable empties for the loading state (referenced by cell renderers).
 const EMPTY_ESTIMATED = new Map<string, IngredientUsage>();
-const EMPTY_BAKER = new Map<string, number | null>();
+
+// The row data with the re-anchorable scaling % + base flag baked in. RTable
+// memoizes rows and only re-renders them when `row.original` changes, so a cell
+// that reads the base from closure would never update on a re-anchor click —
+// carrying it in the row identity is what makes clicking a % re-scale the column.
+type ScalingRow = IngredientDataItem & {
+  scalingPct: number | null;
+  isScalingBase: boolean;
+};
 
 export const RecipeIngredientList: React.FC<{
   ingredients: CostingRow[];
@@ -67,10 +80,40 @@ export const RecipeIngredientList: React.FC<{
   /** Per-portion basis (from the scaled recipe); drives the per-serving sub-lines. */
   perServing?: ServingBasis | null;
 }> = ({ ingredients, ingMap, costing, perServing }) => {
-  const displayData = costing?.rows ?? [];
   const totals = costing?.totals;
   const estimatedRows = costing?.estimatedRows ?? EMPTY_ESTIMATED;
-  const bakerPct = costing?.bakerPct ?? EMPTY_BAKER;
+
+  // Scaling % (Modernist Cuisine's column): baker's percentage with a
+  // re-anchorable 100% base instead of flour-only — the same single scaling
+  // system the Spec view uses. Defaults to flour/heaviest; clicking a row's %
+  // re-anchors it, recomputed client-side from resolved grams (no WASM call).
+  const [pickedBaseId, setPickedBaseId] = useState<string | null>(null);
+  const defaultBaseId = useMemo(
+    () => (costing ? pickDefaultBaseRowId(costing) : null),
+    [costing],
+  );
+  const baseId = pickedBaseId ?? defaultBaseId;
+  const scalingPct = useMemo(
+    () =>
+      costing
+        ? computeScalingPercentages(costing, baseId)
+        : new Map<string, number | null>(),
+    [costing, baseId],
+  );
+
+  // Bake the scaling % + base flag into each row so re-anchoring (which doesn't
+  // touch the engine rows) still changes `row.original` and re-renders the
+  // memoized RTable rows. Identity changes only when the base/costing change, so
+  // unrelated parent re-renders still skip the rows.
+  const displayData: ScalingRow[] = useMemo(
+    () =>
+      (costing?.rows ?? []).map((r) => ({
+        ...r,
+        scalingPct: scalingPct.get(r.id) ?? null,
+        isScalingBase: r.id === baseId,
+      })),
+    [costing, scalingPct, baseId],
+  );
 
   // Load unit mappings
   const mappingsMap = useMemo(() => {
@@ -80,7 +123,7 @@ export const RecipeIngredientList: React.FC<{
     );
   }, [ingMap]);
 
-  const columnHelper = createColumnHelper<IngredientDataItem>();
+  const columnHelper = createColumnHelper<ScalingRow>();
 
   const columns = [
     columnHelper.accessor((ingredient) => getIngredientName(ingredient), {
@@ -200,23 +243,30 @@ export const RecipeIngredientList: React.FC<{
         },
       },
     ),
-    columnHelper.accessor((row) => bakerPct.get(row.id) ?? undefined, {
-      id: "bakerPct",
-      header: "Baker's %",
+    columnHelper.accessor((row) => row.scalingPct ?? undefined, {
+      id: "scalingPct",
+      header: "Scaling %",
       meta: { className: "w-20" },
       sortUndefined: "last",
       cell: (props) => {
         const row = props.row.original;
-        const pct = bakerPct.get(row.id);
+        const pct = row.scalingPct;
         if (pct == null) {
           return <NoneState />;
         }
-        const label = formatScalingPct(pct);
-        // Mark the flour base (the 100% reference) so the column reads at a glance.
-        return (costing?.isFlourRows.get(row.id) ?? false) ? (
-          <span className="font-semibold text-primary">{label}</span>
-        ) : (
-          label
+        return (
+          <button
+            type="button"
+            onClick={() => setPickedBaseId(row.id)}
+            aria-pressed={row.isScalingBase}
+            title="Set as 100% base"
+            className={cn(
+              "cursor-pointer tabular-nums hover:text-primary",
+              row.isScalingBase && "font-semibold text-primary",
+            )}
+          >
+            {formatScalingPct(pct)}
+          </button>
         );
       },
     }),

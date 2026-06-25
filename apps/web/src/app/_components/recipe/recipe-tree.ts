@@ -400,3 +400,42 @@ export const fullBatchNeeds = (root: RecipeTreeNode): CombinedNeed[] =>
     grams: r.byComponent.size > 0 ? r.total : null,
     estimated: r.estimated,
   }));
+
+/**
+ * The full-batch shopping COST on the same axis as {@link fullBatchNeeds}: each
+ * component's DIRECT leaf-ingredient price summed (sub-recipe rows excluded, so a
+ * sub-recipe's cost is counted once — in its own column — not also rolled into
+ * its parent). Per-component sums add up to `total`, mirroring the matrix's gram
+ * subtotal row. Returns null costs when nothing priced in. Reads the resolved
+ * `priceInfo.price` Result the same way {@link numericGrams} reads grams. */
+export const fullBatchCostByComponent = (
+  root: RecipeTreeNode,
+): { byComponent: Map<string, number>; total: number | null } => {
+  const byComponent = new Map<string, number>();
+  let any = false;
+  for (const node of flattenComponents(root)) {
+    const costing = node.costing;
+    if (!costing) continue;
+    let sum = 0;
+    let has = false;
+    for (const section of node.sections) {
+      for (const row of section.rows) {
+        if (row.kind !== "ingredient") continue;
+        const price = costing.rows.find((r) => r.id === row.id)?.priceInfo
+          ?.price;
+        if (price?.isOk()) {
+          sum += price.value.value;
+          has = true;
+          any = true;
+        }
+      }
+    }
+    if (has) byComponent.set(node.recipe.id, sum);
+  }
+  let total: number | null = null;
+  if (any) {
+    total = 0;
+    for (const v of byComponent.values()) total += v;
+  }
+  return { byComponent, total };
+};
