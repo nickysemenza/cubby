@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Merge, Scale, Sparkles } from "lucide-react";
@@ -16,6 +16,7 @@ import {
 } from "~/components/ui/tooltip";
 import { EntityIcon } from "~/entities/entities";
 import { queryKeys } from "~/lib/query-keys";
+import { savedWithRecompute } from "~/lib/recompute-summary";
 import { getIngredientMappings } from "~/lib/unit-mapping-utils";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { useTRPC, useTRPCClient } from "~/trpc/react";
@@ -117,6 +118,7 @@ export function IngredientList() {
   const missingProductsId = useId();
   const api = useTRPC();
   const trpcClient = useTRPCClient();
+  const queryClient = useQueryClient();
   const columnHelper = useMemo(
     () => createColumnHelper<IngredientWithFoodOut>(),
     [],
@@ -273,12 +275,21 @@ export function IngredientList() {
             const target = ingredients.find((i) => i.id === targetId);
             if (!target) return { success: false };
             const aliasRows = ingredients.filter((i) => i.id !== target.id);
-            await trpcClient.ingredient.merge.mutate({
+            const result = await trpcClient.ingredient.merge.mutate({
               target: target.id,
               aliases: aliasRows.map((a) => a.id),
             });
+            // The bulk-action framework doesn't auto-invalidate. A merge's blast
+            // radius is wide (ingredients deleted, products repointed,
+            // Recipe.totals recomputed, meals read those totals), and it's a rare
+            // manual action — so blow away the whole cache rather than risk
+            // under-invalidating a dependent view.
+            void queryClient.invalidateQueries();
             toast.success(
-              `Merged into ${target.name} (${aliasRows.length} ingredient${aliasRows.length === 1 ? "" : "s"})`,
+              savedWithRecompute(
+                result.sideEffects,
+                `Merged into ${target.name} (${aliasRows.length} ingredient${aliasRows.length === 1 ? "" : "s"})`,
+              ),
             );
             mergeTargetRef.current = null;
             return { success: true };
