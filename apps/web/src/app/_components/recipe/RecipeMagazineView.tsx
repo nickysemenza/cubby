@@ -9,7 +9,7 @@ import type {
   CalculateTotalsResult,
   RecipeCosting,
 } from "~/lib/recipe-costing";
-import { cn } from "~/lib/utils";
+import { cn, formatCurrency } from "~/lib/utils";
 import { dottedEntityLink, EntityPreviewLink } from "../EntityPreviewLink";
 import {
   buildDisplayQuantities,
@@ -25,9 +25,117 @@ import {
   getEffectiveServings,
   getIngredientName,
   getServingBasis,
-  recipeMacroSegments,
+  type RecipeMacroStats,
+  recipeMacroStats,
 } from "./recipe-utils";
 import { SectionHeading } from "./section-heading";
+
+// Macro split for the vitals card: each macro's color (warm chart ramp) + its
+// calorie density, so the proportion bar is weighted by energy contribution.
+const MACRO_DEFS = [
+  { key: "protein", label: "Protein", color: "var(--chart-1)", kcalPerG: 4 },
+  { key: "fat", label: "Fat", color: "var(--chart-3)", kcalPerG: 9 },
+  { key: "carbs", label: "Carbs", color: "var(--chart-5)", kcalPerG: 4 },
+] as const;
+
+/** The Read view's cost + macro card: a cost/calorie headline, an energy-
+ * weighted macro proportion bar, and the P/F/C grams. Toggled by the reader. */
+function VitalsPanel({
+  stats,
+  show,
+  onToggle,
+}: {
+  stats: RecipeMacroStats;
+  show: boolean;
+  onToggle: () => void;
+}) {
+  const macros = MACRO_DEFS.map((m) => ({
+    label: m.label,
+    color: m.color,
+    grams: stats[m.key] ?? 0,
+    kcal: (stats[m.key] ?? 0) * m.kcalPerG,
+  })).filter((m) => m.grams > 0);
+  const macroKcal = macros.reduce((sum, m) => sum + m.kcal, 0);
+
+  return (
+    <aside className="w-full lg:w-[230px] lg:self-start lg:justify-self-end">
+      {show ? (
+        <div className="rounded-xl border border-[var(--border-chunky)] bg-card p-4">
+          <Row align="center" justify="between" className="mb-3">
+            <span className="eyebrow">{stats.basisLabel}</span>
+            <button
+              type="button"
+              onClick={onToggle}
+              title="Hide nutrition & cost"
+              className="text-muted-foreground/50 hover:text-foreground"
+            >
+              <EyeOff className="h-3.5 w-3.5" />
+            </button>
+          </Row>
+
+          {(stats.cost != null || stats.kcal != null) && (
+            <Row align="baseline" justify="between" className="mb-3">
+              {stats.cost != null && (
+                <span className="font-heading font-semibold text-2xl tracking-tight">
+                  {formatCurrency(stats.cost)}
+                </span>
+              )}
+              {stats.kcal != null && (
+                <span className="font-mono text-muted-foreground text-sm tabular-nums">
+                  {Math.round(stats.kcal)}
+                  <span className="ml-1 text-2xs uppercase tracking-wide">
+                    kcal
+                  </span>
+                </span>
+              )}
+            </Row>
+          )}
+
+          {macros.length > 0 && macroKcal > 0 && (
+            <>
+              <div className="flex h-2 overflow-hidden rounded-full bg-muted">
+                {macros.map((m) => (
+                  <div
+                    key={m.label}
+                    style={{
+                      width: `${(m.kcal / macroKcal) * 100}%`,
+                      backgroundColor: m.color,
+                    }}
+                  />
+                ))}
+              </div>
+              <div className="mt-2 grid grid-cols-3 gap-1 text-center">
+                {macros.map((m) => (
+                  <div key={m.label}>
+                    <div className="font-mono text-sm tabular-nums">
+                      {Math.round(m.grams)}g
+                    </div>
+                    <div className="flex items-center justify-center gap-1 text-2xs text-muted-foreground uppercase tracking-wide">
+                      <span
+                        className="inline-block size-1.5 rounded-full"
+                        style={{ backgroundColor: m.color }}
+                      />
+                      {m.label}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={onToggle}
+          className="inline-flex items-center gap-1.5 text-muted-foreground text-xs hover:text-foreground"
+        >
+          <Eye className="h-3.5 w-3.5" />
+          Show nutrition &amp; cost
+        </button>
+      )}
+    </aside>
+  );
+}
 
 interface RecipeMagazineViewProps {
   recipe: RecipeOut;
@@ -160,13 +268,19 @@ export function RecipeMagazineView({
   const gramById = useMemo(() => gramMapFromCosting(costing), [costing]);
 
   // Makes/Serves on the eyebrow; the cost + macro split (the macro atom — per
-  // serving when there's a basis, else total) lives in a toggleable vitals panel
+  // serving when there's a basis, else total) lives in a toggleable vitals card
   // to the right of the headnote, so the reader can hide the numbers.
   const kicker = buildRecipeKicker({ yield: recipe.yield, servings }).join(
     "  ·  ",
   );
-  const macro = totals ? recipeMacroSegments(totals, basis) : null;
-  const hasMacro = !!macro && macro.parts.length > 0;
+  const stats = totals ? recipeMacroStats(totals, basis) : null;
+  const hasStats =
+    !!stats &&
+    (stats.cost != null ||
+      stats.kcal != null ||
+      stats.protein != null ||
+      stats.fat != null ||
+      stats.carbs != null);
   const [showVitals, setShowVitals] = useState(true);
 
   return (
@@ -181,10 +295,10 @@ export function RecipeMagazineView({
         </Eyebrow>
       )}
 
-      {/* Headnote (left) + a toggleable cost/macro panel (right) — the panel
+      {/* Headnote (left) + a toggleable cost/macro card (right) — the card
           fills the rail beside the prose instead of leaving dead space. */}
-      {(recipe.notes || hasMacro) && (
-        <div className="grid gap-6 lg:grid-cols-[1fr_220px] lg:gap-10">
+      {(recipe.notes || hasStats) && (
+        <div className="grid gap-6 lg:grid-cols-[1fr_230px] lg:gap-10">
           <div>
             {recipe.notes && (
               <MarkdownText className="max-w-prose text-muted-foreground">
@@ -192,39 +306,12 @@ export function RecipeMagazineView({
               </MarkdownText>
             )}
           </div>
-          {hasMacro && (
-            <aside className="lg:self-start lg:justify-self-end">
-              <Row align="center" justify="between" className="mb-1.5">
-                <span className="eyebrow">{macro.basisLabel}</span>
-                <button
-                  type="button"
-                  onClick={() => setShowVitals((v) => !v)}
-                  aria-pressed={showVitals}
-                  title={
-                    showVitals
-                      ? "Hide nutrition & cost"
-                      : "Show nutrition & cost"
-                  }
-                  className="text-muted-foreground/60 hover:text-foreground"
-                >
-                  {showVitals ? (
-                    <EyeOff className="h-3.5 w-3.5" />
-                  ) : (
-                    <Eye className="h-3.5 w-3.5" />
-                  )}
-                </button>
-              </Row>
-              {showVitals && (
-                <Stack
-                  gap="tight"
-                  className="rounded-lg border border-[var(--border-chunky)] bg-card px-4 py-3 font-mono text-foreground/90 text-sm tabular-nums"
-                >
-                  {macro.parts.map((p) => (
-                    <div key={p}>{p}</div>
-                  ))}
-                </Stack>
-              )}
-            </aside>
+          {hasStats && stats && (
+            <VitalsPanel
+              stats={stats}
+              show={showVitals}
+              onToggle={() => setShowVitals((v) => !v)}
+            />
           )}
         </div>
       )}

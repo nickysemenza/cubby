@@ -244,6 +244,36 @@ export function recipeMacroSegments(
   return { basisLabel: basis ? `per ${basis.noun}` : "total", parts };
 }
 
+/** Structured cost + macro numbers (per-serving when a basis is given, else
+ * total) for the Read view's vitals card — same figures as
+ * {@link recipeMacroSegments} but as raw numbers, so the card can draw a macro
+ * proportion bar. Zero/absent values come back null so the card omits them. */
+export type RecipeMacroStats = {
+  basisLabel: string;
+  cost: number | null;
+  kcal: number | null;
+  protein: number | null;
+  fat: number | null;
+  carbs: number | null;
+};
+
+export function recipeMacroStats(
+  totals: { price: number; nutrients: NutrientsPer100 },
+  basis: ServingBasis | null,
+): RecipeMacroStats {
+  const div = basis ? basis.divisor : 1;
+  const per = (n: number) => n / div;
+  const nz = (n: number): number | null => (n > 0 ? per(n) : null);
+  return {
+    basisLabel: basis ? `per ${basis.noun}` : "total",
+    cost: totals.price > 0 ? per(totals.price) : null,
+    kcal: nz(getNutrientValueByKey(totals.nutrients, "kcal")),
+    protein: nz(getNutrientValueByKey(totals.nutrients, "protein")),
+    fat: nz(getNutrientValueByKey(totals.nutrients, "fat")),
+    carbs: nz(getNutrientValueByKey(totals.nutrients, "carbs")),
+  };
+}
+
 export const getIngredientName = getRecipeIngredientName;
 
 /**
