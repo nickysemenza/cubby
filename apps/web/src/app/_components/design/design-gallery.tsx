@@ -194,6 +194,21 @@ const CHART_SEQ_TOKENS = [
   "--chart-seq-5",
 ];
 
+// The core palette for the design-language prose, rendered live from the tokens
+// (the swatch reads `var(token)` — colors are never hardcoded here).
+const DESIGN_PALETTE: { token: string; name: string; role: string }[] = [
+  { token: "--brand-paper", name: "paper", role: "base canvas" },
+  { token: "--brand-paper-alt", name: "paper-alt", role: "zebra / inset" },
+  { token: "--brand-cream", name: "paper-surface", role: "headers / panels" },
+  { token: "--brand-foreground", name: "ink", role: "text + thick rules" },
+  { token: "--brand-hairline", name: "hairline", role: "dividers / borders" },
+  {
+    token: "--brand-ultramarine",
+    name: "ultramarine",
+    role: "the lone accent",
+  },
+];
+
 // Spans every node kind so the conversion-graph theming (volume/weight/money/
 // nutrient/calories/other) is all visible on one canvas. Module-level keeps the
 // reference stable for the memoized graph.
@@ -366,6 +381,119 @@ export function DesignGallery() {
         </p>
       </div>
 
+      <GallerySection title="Design language" source="Warm-Paper Ledger">
+        <div className="space-y-4 text-sm">
+          <p className="text-foreground">
+            A print-editorial aesthetic applied to a data-dense dashboard. Cubby
+            is still a dashboard — panels, metrics, charts, tables — but it
+            reads like a printed control sheet or ledger, not a lit-up glass UI.{" "}
+            <span className="font-medium">
+              Matte instrument panel, not glass dashboard:
+            </span>{" "}
+            no glass, glow, drop shadows, dark canvas, neon, or gradient fills.
+            Light mode only.
+          </p>
+          <p className="border-foreground border-l-[3px] bg-muted/40 px-3 py-2 text-foreground">
+            <span className="font-medium">The one rule —</span> separation by
+            rule and tone, never by elevation. The moment something casts a
+            shadow or glows it reads as glass. Keep everything flat on the paper
+            and it stays a ledger.
+          </p>
+
+          <div>
+            <p className="eyebrow mb-2">Palette</p>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
+              {DESIGN_PALETTE.map(({ token, name, role }) => (
+                <div key={name} className="flex items-center gap-2">
+                  <span
+                    className="h-7 w-7 shrink-0 border border-border"
+                    style={{ backgroundColor: `var(${token})` }}
+                  />
+                  <span className="min-w-0">
+                    <span className="block font-mono text-2xs text-foreground">
+                      {name}
+                    </span>
+                    <span className="block text-2xs text-muted-foreground">
+                      {role}
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <p className="eyebrow">Type</p>
+            <ul className="space-y-1 text-muted-foreground">
+              <li>
+                <span className="font-mono text-foreground">
+                  JetBrains Mono
+                </span>{" "}
+                — data, cells, metrics, numerals (tabular-nums, right-aligned).
+              </li>
+              <li>
+                <span className="font-heading text-foreground">
+                  Space Grotesk
+                </span>{" "}
+                — headings &amp; panel titles, letter-spacing -0.02em.
+              </li>
+              <li>
+                <span className="text-foreground">Inter</span> — body &amp;
+                prose. Eyebrows are mono, uppercase, tracked-out.
+              </li>
+            </ul>
+          </div>
+
+          <div className="space-y-1">
+            <p className="eyebrow">How dashboard elements translate</p>
+            <ul className="space-y-1 text-muted-foreground">
+              <li>
+                · Panels → ruled regions: a hairline border or a 3px ink
+                top-rule, paper-surface background, square corners, zero shadow.
+              </li>
+              <li>
+                · Stat tiles → ledger entries: a big mono number + small label,
+                hairline-divided. Accent only on the one live metric.
+              </li>
+              <li>
+                · Charts → matte &amp; ruled: a flat ink ladder + a single
+                ultramarine, hairline gridlines, no gradients or glow. Rating
+                scales stay off the blue axis.
+              </li>
+              <li>
+                · Tables → zebra by paper tone; category fills are tints, not
+                chips; sticky paper-surface headers under a 3px ink rule; tight
+                rows.
+              </li>
+              <li>
+                · Nav &amp; chrome → hairline-divided and flat. No raised or
+                shadowed bars.
+              </li>
+              <li>
+                · Accent is the loudest thing on screen — active row, hover,
+                focus, the one live value. Everywhere else stays ink + paper.
+              </li>
+            </ul>
+          </div>
+
+          <p className="border-border border-l-2 pl-3 text-muted-foreground italic">
+            A warm-paper instrument panel: dense mono data on soft paper, panels
+            defined by ink rules and hairlines instead of shadows, matte flat
+            charts, and a lone ultramarine accent reserved for the live/active
+            value — a dashboard that reads like a printed ledger, not a glass
+            one.
+          </p>
+
+          <p className="text-2xs text-muted-foreground">
+            <span className="eyebrow">References</span> McMaster-Carr ·
+            Datasette · The Monospace Web · Oxide Computer (light) · US /
+            Berkeley Graphics · Gwern + Tufte CSS. Not the vibe: Fey, Mercury,
+            glass / dark dashboards — same density, opposite material. Paper,
+            not glass.
+          </p>
+        </div>
+      </GallerySection>
+
       <GallerySection title="Color tokens" source="styles.css :root">
         <div className="space-y-4">
           <div>
@@ -485,10 +613,10 @@ export function DesignGallery() {
 
       <GallerySection title="Typography" source="styles.css @layer base">
         <div className="space-y-2">
-          <h1>Heading 1 — Fraunces display</h1>
-          <h2 className="border-0 p-0">Heading 2 — Fraunces</h2>
+          <h1>Heading 1 — Space Grotesk</h1>
+          <h2 className="border-0 p-0">Heading 2 — Space Grotesk</h2>
           <h3 className="font-heading font-semibold text-lg">
-            Heading 3 — Fraunces
+            Heading 3 — Space Grotesk
           </h3>
           <p className="text-sm">
             Body copy is Inter. The quick brown fox jumps over the lazy dog —

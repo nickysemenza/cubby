@@ -222,6 +222,23 @@ function adjustLight(hsl: string, delta: number): string {
   return makeHSL(h, s, Math.max(0, Math.min(100, l + delta)));
 }
 
+// The category/location colors come from @cubby/shared as CSS custom-property
+// tokens (`var(--chart-*)`) — correct for DOM/SVG consumers, where the browser
+// resolves them. But the canvas 2D context can NOT resolve `var()`: an invalid
+// fillStyle is silently ignored, so an item would paint with the previous
+// color. Resolve any `var(--x)` to its concrete value before it reaches the
+// canvas. Client-only (getComputedStyle); on the server the value is unused
+// (the canvas never paints there) so the raw token passes through harmlessly.
+function resolveCssColor(color: string): string {
+  if (typeof window === "undefined" || !color.startsWith("var(")) return color;
+  const name = color.slice(4, -1).split(",")[0]?.trim();
+  if (!name) return color;
+  const resolved = getComputedStyle(document.documentElement)
+    .getPropertyValue(name)
+    .trim();
+  return resolved || color;
+}
+
 // ─── Drawing Primitives ─────────────────────────────────────────────────────
 
 function drawCuboid(
@@ -798,7 +815,7 @@ function collectPiecesFromSubtree(
         w: spec.w,
         d: spec.d,
         h: spec.h,
-        color: getLocationTypeColor(node.type),
+        color: resolveCssColor(getLocationTypeColor(node.type)),
         name: node.name,
         locationType: node.type,
         locationId: node.id,
@@ -854,7 +871,7 @@ function buildRooms(
       productName: inv.product.name,
       category: inv.product.category,
       amount: `${inv.amount.value} ${inv.amount.unit}`,
-      color: getCategoryColor(inv.product.category),
+      color: resolveCssColor(getCategoryColor(inv.product.category)),
       inventoryId: inv.id,
       valuation: inv.valuation,
     });
@@ -900,7 +917,7 @@ function buildRooms(
           w: spec.w,
           d: spec.d,
           h: spec.h,
-          color: getLocationTypeColor(container.type),
+          color: resolveCssColor(getLocationTypeColor(container.type)),
           name: `${container.name} (items)`,
           locationType: "table",
           locationId: container.id,
@@ -956,7 +973,7 @@ function buildRooms(
           w: spec.w,
           d: spec.d,
           h: spec.h,
-          color: getLocationTypeColor(child.type),
+          color: resolveCssColor(getLocationTypeColor(child.type)),
           name: child.name,
           locationType: child.type,
           locationId: child.id,
@@ -986,7 +1003,7 @@ function buildRooms(
         w: spec.w,
         d: spec.d,
         h: spec.h,
-        color: getLocationTypeColor(rootNode.type),
+        color: resolveCssColor(getLocationTypeColor(rootNode.type)),
         name: `${rootNode.name} (direct)`,
         locationType: "table",
         locationId: rootNode.id,
