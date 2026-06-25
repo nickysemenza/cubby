@@ -79,7 +79,10 @@ export const RecipeIngredientList: React.FC<{
   costing: RecipeCosting | null;
   /** Per-portion basis (from the scaled recipe); drives the per-serving sub-lines. */
   perServing?: ServingBasis | null;
-}> = ({ ingredients, ingMap, costing, perServing }) => {
+  /** Suppress the built-in Recipe Summary card (the Data view renders it once,
+   * above the stacked charts, so the table shouldn't repeat it). */
+  hideSummary?: boolean;
+}> = ({ ingredients, ingMap, costing, perServing, hideSummary }) => {
   const totals = costing?.totals;
   const estimatedRows = costing?.estimatedRows ?? EMPTY_ESTIMATED;
 
@@ -403,7 +406,7 @@ export const RecipeIngredientList: React.FC<{
 
   return (
     <div>
-      {totals && (
+      {!hideSummary && totals && (
         <EntitySummaryCard
           title="Recipe Summary"
           summaryData={{

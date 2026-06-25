@@ -158,7 +158,7 @@ function RecipeExportPage() {
 
         {tree ? (
           format === "prep" ? (
-            <RecipePrepSheetView tree={tree} mode="checklist" />
+            <RecipePrepSheetView tree={tree} />
           ) : format === "matrix" ? (
             <RecipeIngredientMatrixView tree={tree} />
           ) : (

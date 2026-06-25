@@ -11,8 +11,6 @@ import { useEntityDelete } from "~/app/_components/hooks/useEntityDelete";
 import { CopyRecipeParseButton } from "~/app/_components/recipe/copy-corpus-button";
 import EditRecipeForm from "~/app/_components/recipe/edit-recipe";
 import RecipeDetail, {
-  type RecipeDataMode,
-  type RecipePrepMode,
   type RecipeViewMode,
   remapLegacyView,
 } from "~/app/_components/recipe/RecipeDetail";
@@ -30,7 +28,7 @@ const searchSchema = z.object({
   edit: z.boolean().optional().catch(undefined),
   // The enum accepts the four current views PLUS the five legacy names so old
   // bookmarks/links don't get stripped; `remapLegacyView` normalizes a legacy
-  // value (incl. its implied sub-mode) at render time.
+  // value at render time.
   view: z
     .enum([
       "read",
@@ -45,10 +43,6 @@ const searchSchema = z.object({
     ])
     .optional()
     .catch(undefined),
-  // Sub-modes within Data (table|charts) and Prep (checklist|grid), URL-driven
-  // so a chosen sub-view is shareable and survives reload.
-  dataMode: z.enum(["table", "charts"]).optional().catch(undefined),
-  prepMode: z.enum(["checklist", "grid"]).optional().catch(undefined),
   // Scaling is purely derived/display state, kept in the URL so a scaled view is
   // shareable and printable. `scale` is the resolved factor (absent = 1×).
   scale: z.number().positive().optional().catch(undefined),
@@ -57,8 +51,6 @@ const searchSchema = z.object({
 const searchDefaults = {
   edit: undefined,
   view: undefined,
-  dataMode: undefined,
-  prepMode: undefined,
   scale: undefined,
 } as const;
 
@@ -84,21 +76,11 @@ export const Route = createFileRoute("/_authenticated/recipes/$id")({
 
 function RecipeDetailPage() {
   const { id } = Route.useParams();
-  const {
-    edit: isEditing,
-    view,
-    dataMode,
-    prepMode,
-    scale,
-  } = Route.useSearch();
+  const { edit: isEditing, view, scale } = Route.useSearch();
   const navigate = useNavigate();
 
-  // Normalize the (possibly legacy) URL view + sub-modes into the current shape.
-  const {
-    view: recipeView,
-    dataMode: recipeDataMode,
-    prepMode: recipePrepMode,
-  } = remapLegacyView(view, dataMode, prepMode);
+  // Normalize the (possibly legacy) URL view into a current view.
+  const recipeView = remapLegacyView(view);
 
   const setRecipeView = (next: RecipeViewMode) => {
     // Keep the default ("read") out of the URL for clean links.
@@ -107,24 +89,6 @@ function RecipeDetailPage() {
       search: (prev) => ({
         ...prev,
         view: next === "read" ? undefined : next,
-      }),
-    });
-  };
-  const setDataMode = (next: RecipeDataMode) => {
-    navigate({
-      to: ".",
-      search: (prev) => ({
-        ...prev,
-        dataMode: next === "table" ? undefined : next,
-      }),
-    });
-  };
-  const setPrepMode = (next: RecipePrepMode) => {
-    navigate({
-      to: ".",
-      search: (prev) => ({
-        ...prev,
-        prepMode: next === "checklist" ? undefined : next,
       }),
     });
   };
@@ -194,10 +158,6 @@ function RecipeDetailPage() {
           recipe={recipe}
           view={recipeView}
           onViewChange={setRecipeView}
-          dataMode={recipeDataMode}
-          onDataModeChange={setDataMode}
-          prepMode={recipePrepMode}
-          onPrepModeChange={setPrepMode}
           scale={scale}
           onScaleChange={setScale}
         />

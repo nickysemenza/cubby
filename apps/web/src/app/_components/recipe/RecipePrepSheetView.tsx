@@ -1,4 +1,4 @@
-import { ShoppingCart } from "lucide-react";
+import { Grid3x3, ShoppingCart } from "lucide-react";
 import { memo, useMemo } from "react";
 import { Row, Stack } from "~/components/layout";
 import { MarkdownText } from "~/components/markdown";
@@ -11,7 +11,6 @@ import {
   IngredientModifier,
   IngredientQuantities,
 } from "./IngredientQuantities";
-import type { RecipePrepMode } from "./RecipeDetail";
 import {
   asUsedGramsByRecipe,
   batchYieldGrams,
@@ -265,11 +264,8 @@ function Component({
 // per-row WASM formatting + markdown ran on every parent re-render (load freeze).
 export const RecipePrepSheetView = memo(function RecipePrepSheetView({
   tree,
-  mode,
 }: {
   tree: RecipeTreeNode;
-  /** Sub-mode: actionable checklist (default) or the ingredient × component grid. */
-  mode: RecipePrepMode;
 }) {
   const recipe = tree.recipe;
   // Derived tree walks — memoized so RecipeDetail's streaming re-renders don't
@@ -307,26 +303,31 @@ export const RecipePrepSheetView = memo(function RecipePrepSheetView({
         </span>
       </header>
 
-      {/* Grid mode's Total column + cost row already aggregate the full batch,
-          so the shopping list (collapsed) only rides along on the checklist. */}
-      {mode === "checklist" && (
-        <ShoppingList needs={combined} totalCost={shoppingCost} />
-      )}
+      <ShoppingList needs={combined} totalCost={shoppingCost} />
 
-      {mode === "grid" ? (
-        <IngredientComponentGrid tree={tree} showCost />
-      ) : (
-        <Stack gap="lg">
-          {components.map((node, i) => (
-            <Component
-              key={node.recipe.id}
-              node={node}
-              index={i}
-              usedGrams={usedByRecipe.get(node.recipe.id)}
-            />
-          ))}
-        </Stack>
-      )}
+      {/* The ingredient × component pivot, folded in as a disclosure (collapsed)
+          so it's reachable without a sub-tab; its Total column + cost row mirror
+          the shopping list. */}
+      <details className="rounded-lg border border-[var(--border-chunky)] bg-muted/30 px-4 py-2 print:border-0 print:bg-transparent print:px-0">
+        <summary className="eyebrow cursor-pointer marker:content-none">
+          <Grid3x3 className="mr-2 inline h-3 w-3 align-[-2px]" />
+          Ingredient × component grid
+        </summary>
+        <div className="mt-2">
+          <IngredientComponentGrid tree={tree} showCost />
+        </div>
+      </details>
+
+      <Stack gap="lg">
+        {components.map((node, i) => (
+          <Component
+            key={node.recipe.id}
+            node={node}
+            index={i}
+            usedGrams={usedByRecipe.get(node.recipe.id)}
+          />
+        ))}
+      </Stack>
     </Stack>
   );
 });
