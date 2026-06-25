@@ -38,6 +38,9 @@ interface WithEntitySearchProps {
     onSearchChange: (query: string) => void;
     isLoading: boolean;
     onCreateNew?: (name: string) => Promise<ComboboxItem>;
+    // Wire this to the combobox's open/close so the options query stays deferred
+    // until the user actually opens the picker (off the page's critical path).
+    onOpenChange: (open: boolean) => void;
   }) => ReactNode;
 }
 
@@ -45,6 +48,23 @@ const pagination = {
   pageIndex: 0,
   pageSize: 20,
 };
+
+/**
+ * Defer an entity-list options query until the picker is first opened (or the
+ * user starts typing). Returns an `enabled` flag for the query plus the
+ * `onOpenChange` handler to hand back through the render prop. Once activated it
+ * stays on, so closing/reopening keeps the cached options.
+ */
+function useDeferredSearch(searchQuery: string) {
+  const [activated, setActivated] = useState(false);
+  const onOpenChange = useCallback((open: boolean) => {
+    if (open) setActivated(true);
+  }, []);
+  return {
+    enabled: activated || searchQuery.length > 0,
+    onOpenChange,
+  };
+}
 
 /**
  * Custom hook for basic entity search (no dialog).
@@ -269,13 +289,15 @@ export function WithIngredientSearch({ children }: WithEntitySearchProps) {
     closeDialog,
     resolveWithEntity,
   } = useEntitySearchWithDialog();
+  const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
 
-  const { data, isLoading } = useQuery(
-    api.ingredient.list.queryOptions({
+  const { data, isLoading } = useQuery({
+    ...api.ingredient.list.queryOptions({
       filters: { nameFilter: searchQuery },
       pagination,
     }),
-  );
+    enabled,
+  });
 
   const createMutation = useActionMutation({
     mutationFn: api.ingredient.create.mutationOptions,
@@ -303,6 +325,7 @@ export function WithIngredientSearch({ children }: WithEntitySearchProps) {
         onSearchChange,
         isLoading,
         onCreateNew: openDialog,
+        onOpenChange,
       })}
     </>
   );
@@ -320,13 +343,15 @@ export function WithLocationSearch({ children }: WithEntitySearchProps) {
     closeDialog,
     resolveWithEntity,
   } = useEntitySearchWithDialog();
+  const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
 
-  const { data, isLoading } = useQuery(
-    api.location.list.queryOptions({
+  const { data, isLoading } = useQuery({
+    ...api.location.list.queryOptions({
       filters: { nameFilter: searchQuery },
       pagination,
     }),
-  );
+    enabled,
+  });
 
   const createMutation = useActionMutation({
     mutationFn: api.location.create.mutationOptions,
@@ -354,6 +379,7 @@ export function WithLocationSearch({ children }: WithEntitySearchProps) {
         onSearchChange,
         isLoading,
         onCreateNew: openDialog,
+        onOpenChange,
       })}
     </>
   );
@@ -371,13 +397,18 @@ export function WithProductSearch({ children }: WithEntitySearchProps) {
     closeDialog,
     resolveWithEntity,
   } = useEntitySearchWithDialog();
+  const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
 
-  const { data, isLoading } = useQuery(
-    api.product.list.queryOptions({
+  // `product.search` (not `.list`): the picker needs only {id, name,
+  // manufacturer}, so it skips the per-row USDA food enrichment + relation joins
+  // that `.list` pays for.
+  const { data, isLoading } = useQuery({
+    ...api.product.search.queryOptions({
       filters: { nameFilter: searchQuery },
       pagination,
     }),
-  );
+    enabled,
+  });
 
   const createMutation = useActionMutation({
     mutationFn: api.product.create.mutationOptions,
@@ -405,6 +436,7 @@ export function WithProductSearch({ children }: WithEntitySearchProps) {
         onSearchChange,
         isLoading,
         onCreateNew: openDialog,
+        onOpenChange,
       })}
     </>
   );
@@ -413,13 +445,15 @@ export function WithProductSearch({ children }: WithEntitySearchProps) {
 export function WithRecipeSearch({ children }: WithEntitySearchProps) {
   const api = useTRPC();
   const { searchQuery, onSearchChange } = useEntitySearch();
+  const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
 
-  const { data, isLoading } = useQuery(
-    api.recipe.list.queryOptions({
+  const { data, isLoading } = useQuery({
+    ...api.recipe.list.queryOptions({
       filters: { nameFilter: searchQuery },
       pagination,
     }),
-  );
+    enabled,
+  });
 
   // For recipes, we don't provide the ability to create from this interface
   return (
@@ -428,6 +462,7 @@ export function WithRecipeSearch({ children }: WithEntitySearchProps) {
         items: data?.items.map(buildRecipeComboboxItem) ?? [],
         onSearchChange,
         isLoading,
+        onOpenChange,
       })}
     </>
   );

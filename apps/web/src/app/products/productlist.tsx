@@ -1,12 +1,21 @@
 import { formatCategoryLabel, getCategoryColor } from "@cubby/shared";
+import type { FoodSummary } from "@cubby/usda-schemas";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import type { ColumnFiltersState } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Package, Printer } from "lucide-react";
 import type { ReactNode } from "react";
-import { useCallback, useMemo, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+} from "react";
 import { Row } from "~/components/layout";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
+import { Skeleton } from "~/components/ui/skeleton";
 import {
   Tooltip,
   TooltipContent,
@@ -30,13 +39,45 @@ import {
 } from "../_components/data-table/shelf";
 import RTable from "../_components/data-table/Table";
 import type { GroupConfig } from "../_components/data-table/useGroupedList";
+import { EntityPillLink } from "../_components/EntityPill";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
+import { NoneState } from "../_components/NoneState";
 import { CategoryBadge } from "../_components/products/CategoryBadge";
 import { productCategoryOptionsWithTheme } from "../_components/products/product-category-icons";
 import { ProductShelf } from "../_components/products/product-shelf";
+
+// Lazy "USDA Food" column plumbing. The products table renders immediately from
+// `product.list` (food = null); food is fetched separately via
+// `product.foodForIds` and handed to the cells through context. Context updates
+// bypass the row-level `React.memo` in Table.tsx, so cells refresh when food
+// lands without rebuilding columns or mutating row data.
+const ProductFoodContext = createContext<{
+  foodById: Record<string, FoodSummary | null>;
+  isLoading: boolean;
+}>({ foodById: {}, isLoading: false });
+
+function FoodCell({
+  productId,
+  canHaveFood,
+}: {
+  productId: string;
+  canHaveFood: boolean;
+}) {
+  const { foodById, isLoading } = useContext(ProductFoodContext);
+  const food = foodById[productId];
+  if (food) {
+    return <EntityPillLink entity="usda-food" data={food} compact />;
+  }
+  // Still loading and this product *could* resolve a food (has fdc_id/upc) →
+  // show a placeholder rather than a "none" dash that would later flip to a pill.
+  if (isLoading && canHaveFood && !(productId in foodById)) {
+    return <Skeleton className="h-5 w-16" />;
+  }
+  return <NoneState />;
+}
 
 interface ProductListProps {
   initialCategory?: string;
@@ -199,10 +240,24 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
           },
         },
       }),
-      createSingleEntityPillColumn(columnHelper, "food", "usda-food", {
+      // Lazy USDA food: rendered from context (fetched via product.foodForIds),
+      // not from row data — keeps the USDA round-trip off the list query.
+      columnHelper.display({
+        id: "food",
         header: "USDA Food",
-        className: "w-32",
-        mobile: { slot: "meta", priority: 70 },
+        enableSorting: false,
+        meta: {
+          className: "w-32",
+          mobile: { slot: "meta", priority: 70 },
+        },
+        cell: ({ row }) => (
+          <FoodCell
+            productId={row.original.id}
+            canHaveFood={
+              row.original.fdc_id != null || row.original.upc != null
+            }
+          />
+        ),
       }),
       createInventoryEntriesColumn(
         columnHelper,
@@ -301,6 +356,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
 
   const {
     table,
+    data,
     isLoading,
     error,
     timing,
@@ -334,42 +390,61 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   const [view, setView] = useState<ShelfView>("table");
   const items = table.getRowModel().rows.map((r) => r.original);
 
+  // Lazy USDA food for the visible page. Only the table view shows the column,
+  // so the shelf view never triggers the USDA round-trip.
+  const productIds = useMemo(() => data.map((p) => p.id), [data]);
+  const foodForIdsQuery = useQuery({
+    ...api.product.foodForIds.queryOptions({ ids: productIds }),
+    enabled: view === "table" && productIds.length > 0,
+  });
+  const foodContextValue = useMemo(
+    () => ({
+      foodById: Object.fromEntries(
+        (foodForIdsQuery.data ?? []).map((r) => [r.id, r.food]),
+      ),
+      isLoading: foodForIdsQuery.isLoading,
+    }),
+    [foodForIdsQuery.data, foodForIdsQuery.isLoading],
+  );
+
   return (
-    <div>
-      <Row align="center" justify="between" gap="sm" className="mb-4">
-        {/* Keep primary actions reachable in shelf view (they live in the
+    <ProductFoodContext.Provider value={foodContextValue}>
+      <div>
+        <Row align="center" justify="between" gap="sm" className="mb-4">
+          {/* Keep primary actions reachable in shelf view (they live in the
             table toolbar otherwise). */}
-        <div className="min-w-0">{view === "shelf" ? actions : null}</div>
-        <ShelfTableToggle value={view} onChange={setView} />
-      </Row>
-      {view === "shelf" ? (
-        <ProductShelf
-          items={items}
-          isLoading={isLoading}
-          error={error}
-          infiniteScroll={infiniteScroll}
-        />
-      ) : (
-        <RTable
-          table={table}
-          isLoading={isLoading}
-          error={error}
-          ariaLabel="Products Table"
-          timing={timing}
-          entity="product"
-          onRowClick={onRowClick}
-          onRowHover={onRowHover}
-          actions={actions}
-          bulkActionBar={bulkActionBar}
-          infiniteScroll={infiniteScroll}
-          refreshControls={refreshControls}
-          groupConfig={groupConfig}
-          grouped={grouped}
-          onGroupedChange={onGroupedChange}
-        />
-      )}
-      <PreviewSheet />
-      {deleteDialog}
-    </div>
+          <div className="min-w-0">{view === "shelf" ? actions : null}</div>
+          <ShelfTableToggle value={view} onChange={setView} />
+        </Row>
+        {view === "shelf" ? (
+          <ProductShelf
+            items={items}
+            isLoading={isLoading}
+            error={error}
+            infiniteScroll={infiniteScroll}
+          />
+        ) : (
+          <RTable
+            table={table}
+            isLoading={isLoading}
+            error={error}
+            ariaLabel="Products Table"
+            timing={timing}
+            entity="product"
+            onRowClick={onRowClick}
+            onRowHover={onRowHover}
+            actions={actions}
+            bulkActionBar={bulkActionBar}
+            infiniteScroll={infiniteScroll}
+            refreshControls={refreshControls}
+            groupConfig={groupConfig}
+            grouped={grouped}
+            onGroupedChange={onGroupedChange}
+          />
+        )}
+        <PreviewSheet />
+        {deleteDialog}
+      </div>
+    </ProductFoodContext.Provider>
   );
 }

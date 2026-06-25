@@ -21,7 +21,7 @@ import {
 } from "@cubby/schemas/product";
 import { recomputeSummary } from "@cubby/schemas/recipe";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import { upc } from "@cubby/usda-schemas";
+import { foodSummary, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { streamItems, streamProgress } from "~/lib/bulk-progress";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -32,6 +32,7 @@ import {
   getCategoryDistribution,
   getProductByShortcode,
   getProductsByShortcodes,
+  productSearch,
   quickCreateProduct,
 } from "~/server/repo/product";
 import { importImageFromUPC } from "~/server/services/image-import";
@@ -43,6 +44,7 @@ import {
 import {
   createDeleteProcedure,
   createEntityCrudProcedures,
+  createEntityListProcedure,
 } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
@@ -86,6 +88,30 @@ const { getByID, list } = createEntityCrudProcedures({
         services.actorContext,
       );
     },
+  },
+  entityName: "product",
+});
+
+// Lightweight typeahead for product-picker comboboxes. Same filters/pagination
+// shape as `list`, but the repo skips relation joins AND the per-row USDA food
+// enrichment `list` does — pickers only need {id, name, manufacturer}, so the
+// cross-Worker USDA batch (list's long pole) has no business on this path.
+const { list: search } = createEntityListProcedure({
+  schemas: {
+    output: productTopLevelOut,
+    filters: productFiltersSchema,
+  },
+  repository: {
+    list: async (services, filters, sort, pagination) =>
+      productSearch(
+        services.db,
+        filters.nameFilter,
+        filters.manufacturerFilter,
+        filters.upcFilter,
+        filters.categoryFilter,
+        sort,
+        pagination,
+      ),
   },
   entityName: "product",
 });
@@ -227,6 +253,17 @@ const applyUpcData = protectedProcedure
       ...result,
       sideEffects: { recipesRecomputed, inventoryValuationsUpdated },
     };
+  });
+
+// Lazy USDA food resolution for a page of products. The products table renders
+// immediately from `list` (food = null) and then fills the "USDA Food" column
+// from this batch — keeping the cross-Worker USDA round-trip off the navigation
+// critical path. Capped at one page's worth of ids.
+const foodForIds = protectedProcedure
+  .input(z.object({ ids: z.array(productId).max(200) }))
+  .output(z.array(z.object({ id: productId, food: foodSummary.nullable() })))
+  .query(async ({ ctx, input }) => {
+    return await ctx.services.product.foodForProductIds(input.ids);
   });
 
 // Quick create a product with minimal data (just name required)
@@ -396,6 +433,8 @@ export const productRouter = createTRPCRouter({
   getByShortcode,
   getByShortcodes,
   list,
+  search,
+  foodForIds,
   create,
   createMany,
   markUsdaUnavailableMany,

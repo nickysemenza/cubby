@@ -31,8 +31,10 @@ export {
   deleteProducts,
   getProductByID,
   getProductByShortcode,
+  getProductFoodLinks,
   getProductsByShortcodes,
   productList,
+  productSearch,
   quickCreateProduct,
   updateProduct,
 } from "./crud";

@@ -619,7 +619,13 @@ export default function QuickCaptureForm({
               {/* Product field with quick create */}
               <div className="w-1/2 min-w-0 flex-1">
                 <WithProductSearch>
-                  {({ items, onSearchChange, isLoading, onCreateNew }) => (
+                  {({
+                    items,
+                    onSearchChange,
+                    isLoading,
+                    onCreateNew,
+                    onOpenChange,
+                  }) => (
                     <ComboboxField
                       form={form}
                       name={`items.${index}.product`}
@@ -628,6 +634,7 @@ export default function QuickCaptureForm({
                       onSearchChange={onSearchChange}
                       isLoading={isLoading}
                       onCreateNew={onCreateNew}
+                      onOpenChange={onOpenChange}
                     />
                   )}
                 </WithProductSearch>

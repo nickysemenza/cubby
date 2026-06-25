@@ -186,6 +186,89 @@ export const productList = async (
 };
 
 /**
+ * Minimal product rows ({id, upc, fdc_id}) for USDA food resolution — the input
+ * to `foodLookupParamFromProduct`. Used by the lazy "USDA Food" column on the
+ * products table so it can batch-enrich the visible page without re-fetching the
+ * full product graph.
+ */
+export const getProductFoodLinks = async (
+  db: Database,
+  ids: ProductId[],
+): Promise<{ id: ProductId; upc: string | null; fdc_id: number | null }[]> => {
+  if (ids.length === 0) return [];
+  return getDb(db).query.product.findMany({
+    where: and(inArray(product.id, ids), notDeleted(product)),
+    columns: { id: true, upc: true, fdc_id: true },
+  });
+};
+
+/**
+ * Lightweight product search for typeahead/picker comboboxes.
+ *
+ * Returns scalar product fields only (`productTopLevelOut`) — it deliberately
+ * skips the inventory / ingredient / unit-mapping relation joins that
+ * `productList` pulls AND the per-row USDA food enrichment the product service
+ * layers on top. Pickers only need `{id, name, manufacturer}`, so paying the
+ * cross-Worker USDA batch (the list path's long pole) here is pure waste.
+ */
+export const productSearch = async (
+  db: Database,
+  name: string | undefined,
+  manufacturer: string | undefined,
+  upc: string | undefined,
+  category: ProductCategory | undefined,
+  sort: SortParams,
+  pagination: PaginationParams,
+): Promise<{ data: ProductTopLevelOut[]; count: number }> => {
+  const whereClause = buildSearchConditions(
+    product,
+    [
+      { column: product.name, term: name },
+      { column: product.manufacturer, term: manufacturer },
+      { column: product.upc, term: upc },
+    ],
+    [category !== undefined ? eq(product.category, category) : undefined],
+  );
+
+  // Same ordering rules as productList (incl. the linked-ingredient subquery),
+  // so picker results match the table's sort. The raw subquery references the
+  // "product" root alias, which holds with no relations selected.
+  const orderByArray =
+    sort.orderBy === "ingredient"
+      ? [
+          sql.raw(
+            `(SELECT i."name" FROM "Ingredient" i WHERE i."id" = "product"."ingredientId") ${
+              sort.direction === "asc" ? "asc nulls last" : "desc nulls last"
+            }`,
+          ),
+        ]
+      : buildOrderBy(product, sort, [...getSortableFields("product")]);
+
+  const { take, skip } = buildTakeSkip(pagination);
+
+  const { data: results, count } = await executeListQueryWithCount(
+    // No `...relations.product.full` — scalar columns only. Zod strips the extra
+    // columns (ingredientId, deletedAt) and defaults images/externalIds to [].
+    getDb(db).query.product.findMany({
+      where: whereClause,
+      orderBy: orderByArray,
+      limit: take,
+      offset: skip,
+    }),
+    countWhere(db, product, whereClause),
+  );
+
+  const data = results.map((row) =>
+    parseWithContext(productTopLevelOut, row, {
+      entityType: "Product",
+      identifier: { id: row.id, name: row.name },
+    }),
+  );
+
+  return { data, count };
+};
+
+/**
  * Walk an error's `cause` chain looking for a Postgres unique-violation (23505).
  * Drizzle wraps the driver error as "Failed query: …" and hides the real cause,
  * so the raw message never says "duplicate" — we dig it out here.

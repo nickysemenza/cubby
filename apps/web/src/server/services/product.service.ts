@@ -9,6 +9,7 @@ import type {
   ProductCategory,
   ProductCreateInput,
 } from "@cubby/schemas/product";
+import type { FoodSummary } from "@cubby/usda-schemas";
 import { foodSummary } from "@cubby/usda-schemas";
 import { z } from "zod";
 import type { Database } from "~/server/db";
@@ -18,6 +19,7 @@ import {
   createProduct as createProductRepo,
   foodLookupParamFromProduct,
   getProductByID as getProductByIDRepo,
+  getProductFoodLinks,
   productList as productListRepo,
   updateProduct as updateProductRepo,
 } from "../repo/product";
@@ -81,17 +83,35 @@ export class ProductService {
       groupBy,
     );
 
-    const productsWithFood = await batchEnrichWithFood(
-      products,
+    // USDA food is hydrated lazily by the products table (via `foodForProductIds`
+    // → product.foodForIds), so the list path no longer pays the per-row USDA
+    // batch POST — its long pole. `food`/`recipeUsages` are defaulted to satisfy
+    // the shared `productWithFoodOut` shape (recipeUsages is detail-only anyway).
+    const data = products.map((p) => ({
+      ...p,
+      food: null,
+      recipeUsages: [],
+    }));
+
+    return { data, count };
+  }
+
+  /**
+   * Resolve USDA food for a set of products in one batch. Powers the products
+   * table's lazy "USDA Food" column: the table renders immediately from
+   * `productList` (food = null), then fills food in from this call, keeping the
+   * cross-Worker USDA round-trip off the navigation critical path.
+   */
+  async foodForProductIds(
+    ids: ProductId[],
+  ): Promise<{ id: ProductId; food: FoodSummary | null }[]> {
+    const links = await getProductFoodLinks(this.db, ids);
+    const enriched = await batchEnrichWithFood(
+      links,
       foodLookupParamFromProduct,
       this.usdaClient,
     );
-
-    // The list doesn't compute recipe usages (detail-only); satisfy the shared
-    // `productWithFoodOut` shape with an empty array per row.
-    const data = productsWithFood.map((p) => ({ ...p, recipeUsages: [] }));
-
-    return { data, count };
+    return enriched.map((e) => ({ id: e.id, food: e.food }));
   }
 
   async createProduct(

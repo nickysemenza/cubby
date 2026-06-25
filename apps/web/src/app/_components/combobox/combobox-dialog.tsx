@@ -50,6 +50,7 @@ export function DialogCompatibleCombobox<TId extends string = string>({
   value,
   setValue,
   onCreateNew,
+  onOpenChange,
   renderItem,
   wide,
 }: {
@@ -60,6 +61,12 @@ export function DialogCompatibleCombobox<TId extends string = string>({
   value: ComboboxItem<TId> | null;
   setValue: (item: ComboboxItem<TId> | null) => void;
   onCreateNew?: (name: string) => Promise<ComboboxItem<TId>>;
+  /**
+   * Notified whenever the dropdown opens or closes. Lets an async-search parent
+   * defer its options query until the user actually opens the picker, instead of
+   * firing it on mount (keeps the list query off the page's critical path).
+   */
+  onOpenChange?: (open: boolean) => void;
   /**
    * Optional custom renderer for each dropdown row. When provided it replaces the
    * default truncated-name span, and rows switch to a multi-line layout. The
@@ -83,6 +90,13 @@ export function DialogCompatibleCombobox<TId extends string = string>({
   React.useEffect(() => {
     onSearchChange(debouncedInput);
   }, [debouncedInput, onSearchChange]);
+
+  // Notify parent on open/close so an async-search wrapper can lazily enable its
+  // options query (handler is idempotent, so the mount call with `false` is a
+  // no-op).
+  React.useEffect(() => {
+    onOpenChange?.(open);
+  }, [open, onOpenChange]);
 
   // Focus the input when the dropdown is opened
   React.useEffect(() => {
