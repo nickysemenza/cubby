@@ -5,6 +5,7 @@
 
 import type {
   RecipeOut,
+  RecipeTotals,
   recipeTopLevel,
   SectionIngredient,
 } from "@cubby/schemas/recipe";
@@ -151,7 +152,9 @@ const sectionIngredientToAPI = (
  */
 export const dbRecipeToAPIShallow: (
   recipeParam: RecipeSelect,
-) => z.infer<typeof recipeTopLevel> = (recipeData) => {
+) => z.infer<typeof recipeTopLevel> & { totals: RecipeTotals | null } = (
+  recipeData,
+) => {
   // cookbookId is the FK, not a top-level API field — pull it out of the row so it
   // isn't spread into the output, but feed it to the source codec so a book
   // recipe's `source` carries its cookbook id (for linking).

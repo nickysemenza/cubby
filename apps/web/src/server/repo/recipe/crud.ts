@@ -52,7 +52,7 @@ import {
 import { generateUniqueRecipeShortcode } from "~/server/repo/shortcode-utils";
 import { TraceNames, withTrace } from "~/server/tracing";
 
-import { dbRecipeToAPI } from "./helpers";
+import { dbRecipeToAPI, dbRecipeToAPIShallow } from "./helpers";
 import type { RecipeFilters } from "./internal-types";
 import {
   type RecipeProvenance,
@@ -289,19 +289,18 @@ export const recipeList = async (
 
   const { take, skip } = buildTakeSkip(pagination);
 
-  // Execute both queries and transform results
+  // Summary fetch: flat recipe rows (no section graph) + persisted totals via dbRecipeToAPIShallow — the nested graph nobody renders was the ~4.7s over-fetch.
   const { data: results, count: totalCount } = await executeListQueryWithCount(
     dbClient.query.recipe.findMany({
       where: whereClause,
       orderBy: orderByClause,
       limit: take,
       offset: skip,
-      ...relations.recipe.list,
     }),
     countWhere(db, recipe, whereClause),
   );
 
-  const items = results.map(dbRecipeToAPI);
+  const items = results.map(dbRecipeToAPIShallow);
   return { data: items, count: totalCount };
 };
 

@@ -287,6 +287,12 @@ export const recipeOut = z
   })
   .extend(recipeTopLevel.shape);
 
+// Summary shape for `recipe.list`: scalar fields + persisted totals, no section graph (the list/pickers never read `.sections` — that was the ~4.7s over-fetch).
+export const recipeListItemOut = recipeTopLevel.extend({
+  totals: recipeTotals.nullish(),
+});
+export type RecipeListItem = z.infer<typeof recipeListItemOut>;
+
 export type RecipeOut = z.infer<typeof recipeOut>;
 
 // A cookbook as seen on the browse index: the `Cookbook` row plus how many

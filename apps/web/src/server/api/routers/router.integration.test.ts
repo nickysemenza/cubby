@@ -39,5 +39,10 @@ describe("recipe router", () => {
     const caller = createTestCaller(recipeRouter, ctx.db);
     const recipeList = await caller.list({ filters: {} });
     expect(recipeList.items.length).toEqual(TEST_RECIPES.length);
+    // Regression: recipe.list is a lean summary — it must NOT ship the section/
+    // ingredient graph (that over-fetch was the ~4.7s pole). Totals still ride along.
+    const first = recipeList.items[0]!;
+    expect(first).not.toHaveProperty("sections");
+    expect(first).toHaveProperty("name");
   });
 });
