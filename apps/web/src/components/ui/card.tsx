@@ -19,7 +19,7 @@ function Card({
       // paper-surface fill + a hairline border, square corners, zero shadow.
       // Separation by rule and tone, never elevation.
       className={cn(
-        "bg-card text-card-foreground group/card flex flex-col gap-2.5 overflow-hidden rounded-none border border-[var(--border-chunky)] py-2.5 text-xs/relaxed has-[>img:first-child]:pt-0 data-[size=sm]:gap-2 data-[size=sm]:py-2",
+        "bg-card text-card-foreground group/card flex flex-col gap-2.5 overflow-hidden rounded-none border border-[var(--border)] py-2.5 text-xs/relaxed has-[>img:first-child]:pt-0 data-[size=sm]:gap-2 data-[size=sm]:py-2",
         className,
       )}
       {...props}
@@ -55,7 +55,7 @@ function SelectableCard({
         "focus-visible:ring-ring/40 focus-visible:ring-2",
         selected
           ? "border-primary bg-[var(--row-selected)] border"
-          : "hover:border-foreground/40 border border-[var(--border-chunky)]",
+          : "hover:border-foreground/40 border border-[var(--border)]",
         className,
       )}
       {...props}

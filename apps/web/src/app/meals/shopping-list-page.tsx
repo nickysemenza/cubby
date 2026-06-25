@@ -158,7 +158,7 @@ export function ShoppingListPage() {
             <Description>Nothing to buy for the selected meals.</Description>
           ) : (
             <Table
-              containerClassName="overflow-hidden rounded-lg border border-[var(--border-chunky)]"
+              containerClassName="overflow-hidden rounded-lg border border-[var(--border)]"
               className="table-auto"
             >
               <TableHeader>

@@ -32,7 +32,7 @@ export function DashboardCard({
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Icon className="h-3.5 w-3.5 text-eyebrow" />
+            <Icon className="h-3.5 w-3.5 text-slate" />
             <CardTitle>{title}</CardTitle>
           </div>
           {action}

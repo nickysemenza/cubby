@@ -210,7 +210,7 @@ function Graph({
   return (
     <div
       ref={containerRef}
-      className="relative h-[540px] w-full overflow-hidden rounded-md border border-[var(--border-chunky)]"
+      className="relative h-[540px] w-full overflow-hidden rounded-md border border-[var(--border)]"
     >
       <svg
         aria-hidden="true"
@@ -227,7 +227,7 @@ function Graph({
             markerHeight="6"
             orient="auto-start-reverse"
           >
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--border-chunky)" />
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--border)" />
           </marker>
         </defs>
 
@@ -253,7 +253,7 @@ function Graph({
                 y1={source.y}
                 x2={tx}
                 y2={ty}
-                stroke={active ? "var(--primary)" : "var(--border-chunky)"}
+                stroke={active ? "var(--primary)" : "var(--border)"}
                 strokeWidth={active ? 2 : 1.25}
                 strokeOpacity={hovered ? (active ? 0.9 : 0.12) : 0.5}
                 markerEnd={`url(#${arrowId})`}

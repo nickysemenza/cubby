@@ -58,9 +58,9 @@ export const densityConfig = {
     rowClass: "h-11",
   },
   compact: {
-    rowHeight: 36,
-    cellClass: "h-9 px-2 py-1 text-xs",
-    rowClass: "h-9",
+    rowHeight: 32,
+    cellClass: "h-8 px-2 py-0.5 text-xs" /* tight */,
+    rowClass: "h-8",
   },
   dense: {
     rowHeight: 28,

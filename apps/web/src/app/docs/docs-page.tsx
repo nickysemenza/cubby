@@ -128,7 +128,7 @@ export function DocsPage() {
 
       <div className="my-6">
         <div className="mb-2 font-medium">Entity Relationships</div>
-        <div className="overflow-hidden rounded-lg border border-[var(--border-chunky)] bg-card p-4">
+        <div className="overflow-hidden rounded-lg border border-[var(--border)] bg-card p-4">
           <Suspense fallback={<div className="h-75" />}>
             <Graphviz
               dot={entityRelationshipsDot}

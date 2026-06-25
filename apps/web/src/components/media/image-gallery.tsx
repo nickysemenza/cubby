@@ -86,7 +86,7 @@ export function ImageGallery({ images, className }: ImageGalleryProps) {
               src={transformedImageUrl(image.url, 800)}
               srcSet={transformedSrcSet(image.url, 800)}
               alt={image.filename}
-              className="aspect-[4/3] w-full object-cover"
+              className="aspect-[4/3] w-full bg-card object-contain"
               loading={index === 0 ? "eager" : "lazy"}
             />
           </div>

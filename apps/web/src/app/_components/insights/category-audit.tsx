@@ -87,10 +87,7 @@ function SuggestionCard({
   suggestion: CategoryAuditResult["suggestions"][number];
 }) {
   return (
-    <Stack
-      gap="sm"
-      className="rounded-lg border border-[var(--border-chunky)] p-4"
-    >
+    <Stack gap="sm" className="rounded-lg border border-[var(--border)] p-4">
       <Row align="center" gap="sm">
         <Badge variant="secondary">{suggestion.categoryName}</Badge>
       </Row>

@@ -153,7 +153,7 @@
    One home for the class cluster that was inlined ~30× across components; the
    `EYEBROW_CLASS` constant and `<Eyebrow>` component both resolve to this. */
 @utility eyebrow {
-  @apply font-mono text-2xs text-eyebrow uppercase tracking-wider;
+  @apply font-mono text-2xs text-slate uppercase tracking-wider;
 }
 
 /*
@@ -183,11 +183,15 @@
   --brand-terracotta: var(--brand-ultramarine);
   --brand-terra-light: var(--brand-ultramarine);
   --brand-sage: oklch(0.94 0.025 145);
+  /* Aubergine - the second accent: a not-blue spot color reserved for the
+     recipe/cookbook entity identity, so those entities read distinct from the
+     ultramarine interactive accent. Off the blue/green/amber/red axes. */
+  --brand-aubergine: #7a3f63;
 
   /* Ledger elevation: NONE. Separation comes from rules and tone, never from
      shadow — the moment a surface casts a shadow it reads as glass. The
      "chunky" shadow tokens are kept (so primitives don't break) but flattened
-     to `none`; panels are defined by --border-chunky hairlines or the 3px
+     to `none`; panels are defined by --border hairlines or the 3px
      --rule-ink top-rule instead. */
   --shadow-chunky-sm: none;
   --shadow-chunky: none;
@@ -201,8 +205,6 @@
   --shadow-scan-flash: 0 0 0 9999px oklch(0 0 0 / 0.55);
   /* Chart labels sit on flat matte fills now, so no text shadow is needed. */
   --text-shadow-chart: none;
-  /* Panel/card border - the hairline that defines a ruled region. */
-  --border-chunky: var(--brand-hairline);
   /* The signature 3px ink top-rule for panels and sticky table headers — the
      "printed control sheet" header underline. Use via border-top / border-bottom. */
   --rule-ink: 3px solid var(--brand-foreground);
@@ -262,15 +264,13 @@
   );
 
   /* Extended palette */
-  /* Eyebrow - muted ink for mono uppercase micro-labels (page-hero eyebrows,
-     table column headers, stat-card labels). A step lighter than the ink so
-     labels recede and stay quiet. */
-  --eyebrow: var(--brand-shelf);
   --highlight: var(--brand-ultramarine);
-  --subtle: oklch(0.55 0.01 80); /* muted ink-leaning neutral */
-  --glow: var(--brand-ultramarine);
-  --plum: var(--brand-ultramarine); /* recipes accent → ultramarine */
-  --slate: oklch(0.5 0.008 80); /* neutral ink-slate */
+  --plum: var(--brand-aubergine); /* recipe/cookbook accent → aubergine */
+  /* Slate - the single muted-ink neutral for mono micro-labels (eyebrows, table
+     column headers, stat-card labels), quiet entity accents (ingredient,
+     location, image), and neutral status pills. Consolidates the former
+     eyebrow/subtle/slate trio into one tone. */
+  --slate: oklch(0.5 0.008 80);
 
   /* Ingredient parts - one tone per section of the "amount name modifier"
      display format. Kept deliberately off the pure red/green axis and now on
@@ -362,10 +362,7 @@
   --color-input: var(--input);
   --color-checkbox-border: var(--checkbox-border);
   --color-ring: var(--ring);
-  --color-eyebrow: var(--eyebrow);
   --color-highlight: var(--highlight);
-  --color-subtle: var(--subtle);
-  --color-glow: var(--glow);
   --color-plum: var(--plum);
   --color-slate: var(--slate);
   --color-positive: var(--positive);
@@ -439,14 +436,14 @@
   /* Command dialog cmdk child selectors — group headings read as ledger
      eyebrows to match card/table section labels. */
   .command-dialog-styles {
-    @apply [&_[cmdk-group-heading]]:text-eyebrow [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-mono [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-2xs [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group]]:px-2 [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5;
+    @apply [&_[cmdk-group-heading]]:text-slate [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-mono [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-2xs [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group]]:px-2 [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5;
   }
 
   /* Sonner toasts wear the signature chrome like dialogs (they're transient
      modals). Sonner injects its own border/shadow, hence the overrides. */
   .cn-toast {
     /* biome-ignore lint/complexity/noImportantStyles: sonner sets inline border/shadow */
-    border-color: var(--border-chunky) !important;
+    border-color: var(--border) !important;
     /* biome-ignore lint/complexity/noImportantStyles: sonner sets inline border/shadow */
     box-shadow: var(--shadow-chunky-lg) !important;
   }

@@ -67,7 +67,7 @@ function SettingsPage() {
             render={
               <button
                 type="button"
-                className="flex w-full items-center justify-between border border-[var(--border-chunky)] bg-muted/40 px-4 py-2 text-left transition-colors hover:bg-muted"
+                className="flex w-full items-center justify-between border border-[var(--border)] bg-muted/40 px-4 py-2 text-left transition-colors hover:bg-muted"
               />
             }
           >

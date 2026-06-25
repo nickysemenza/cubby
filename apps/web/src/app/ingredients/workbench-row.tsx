@@ -270,7 +270,7 @@ function WorkbenchEditor({
                 {row.recipeCount === 1 ? "" : "s"}
               </p>
               {usages.data && usages.data.length > 0 ? (
-                <div className="overflow-x-auto rounded-md border border-[var(--border-chunky)] bg-background/60 p-2">
+                <div className="overflow-x-auto rounded-md border border-[var(--border)] bg-background/60 p-2">
                   <RecipeUsagesTable
                     usages={usages.data}
                     ingredientName={row.name}

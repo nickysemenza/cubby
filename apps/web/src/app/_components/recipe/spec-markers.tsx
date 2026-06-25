@@ -21,7 +21,7 @@ export const StepNumberBadge = ({
 }) => (
   <span
     className={cn(
-      "mt-px inline-flex size-[16px] shrink-0 items-center justify-center rounded-full border border-[var(--border-chunky)] font-mono text-[9px] text-muted-foreground tabular-nums",
+      "mt-px inline-flex size-[16px] shrink-0 items-center justify-center rounded-full border border-[var(--border)] font-mono text-[9px] text-muted-foreground tabular-nums",
       className,
     )}
   >

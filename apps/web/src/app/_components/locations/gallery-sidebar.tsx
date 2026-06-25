@@ -163,7 +163,7 @@ export function GallerySidebar({
       {/* Header */}
       <Row align="center" justify="between" className="border-b px-2 py-2">
         <Row align="center" gap="sm">
-          <ImageIcon className="h-3.5 w-3.5 text-eyebrow" />
+          <ImageIcon className="h-3.5 w-3.5 text-slate" />
           <span className="font-semibold text-foreground text-sm tracking-tight">
             Locations
           </span>

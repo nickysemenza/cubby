@@ -86,7 +86,7 @@ export function NutrientsSummary({
               dense ? "px-1 py-0" : "px-1.5 py-0.5" /* tight: nutrient chip */,
             )}
           >
-            <span className="font-medium text-subtle">{displayName}</span>
+            <span className="font-medium text-slate">{displayName}</span>
             <span className="text-highlight">
               {dense ? trimAmount(value) : value.toFixed(1)}
             </span>

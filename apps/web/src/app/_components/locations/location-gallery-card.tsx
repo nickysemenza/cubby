@@ -72,7 +72,7 @@ export const LocationGalleryCard = function LocationGalleryCard({
       ref={ref}
       data-location-id={location.id}
       className={cn(
-        "group rounded-xl border border-[var(--border-chunky)] bg-card transition-all duration-300",
+        "group rounded-xl border border-[var(--border)] bg-card transition-all duration-300",
         // Highlight state for search matches
         isHighlighted && "ring-2 ring-primary/50 ring-offset-2",
         // Faded state for non-matches

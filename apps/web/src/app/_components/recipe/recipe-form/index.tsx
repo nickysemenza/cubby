@@ -458,7 +458,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
               <Stack
                 key={sectionField.id}
                 gap="sm"
-                className="rounded-lg border border-[var(--border-chunky)] bg-card p-4 shadow-[var(--shadow-chunky-sm)]"
+                className="rounded-lg border border-[var(--border)] bg-card p-4 shadow-[var(--shadow-chunky-sm)]"
               >
                 <Row align="center" justify="between">
                   <h4 className="my-0 font-heading font-semibold text-sm">
@@ -555,7 +555,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
 
         {/* Live page preview — the cookbook spread builds as you type */}
         <aside className="hidden xl:sticky xl:top-20 xl:block">
-          <div className="max-h-[75vh] overflow-y-auto rounded-lg border border-[var(--border-chunky)] bg-card p-4 shadow-[var(--shadow-chunky)]">
+          <div className="max-h-[75vh] overflow-y-auto rounded-lg border border-[var(--border)] bg-card p-4 shadow-[var(--shadow-chunky)]">
             <p className="eyebrow mb-2">Live preview</p>
             <RecipeLivePreview control={form.control} />
           </div>

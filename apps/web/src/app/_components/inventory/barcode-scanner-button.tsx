@@ -16,7 +16,7 @@ interface BarcodeScannerButtonProps {
   onScan: (barcode: string) => void;
   disabled?: boolean;
   variant?: "default" | "outline" | "ghost";
-  size?: "default" | "sm" | "lg" | "icon";
+  size?: "default" | "sm" | "icon";
   className?: string;
 }
 

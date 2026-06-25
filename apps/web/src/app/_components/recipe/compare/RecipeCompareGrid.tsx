@@ -257,7 +257,7 @@ export const RecipeCompareGrid: React.FC<{
   );
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-[var(--border-chunky)] bg-card">
+    <div className="overflow-x-auto rounded-lg border border-[var(--border)] bg-card">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b px-2 py-2">
         <div className="inline-flex rounded-md border p-1 text-sm">
           {(["gram", "baker"] as const).map((b) => (

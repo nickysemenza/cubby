@@ -108,7 +108,7 @@ function TidyTree({ data }: TidyTreeProps) {
     // biome-ignore lint/a11y/noStaticElementInteractions: D3 visualization pan/zoom interaction
     <div
       ref={containerRef}
-      className="h-[600px] w-full cursor-grab overflow-hidden rounded-md border border-[var(--border-chunky)] active:cursor-grabbing"
+      className="h-[600px] w-full cursor-grab overflow-hidden rounded-md border border-[var(--border)] active:cursor-grabbing"
       onWheel={handleWheel}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}

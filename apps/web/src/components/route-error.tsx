@@ -165,7 +165,7 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
         <CollapsibleContent>
           <Stack
             gap="sm"
-            className="mt-2 max-w-lg rounded-md border border-[var(--border-chunky)] bg-muted/50 p-2 text-left font-mono text-xs"
+            className="mt-2 max-w-lg rounded-md border border-[var(--border)] bg-muted/50 p-2 text-left font-mono text-xs"
           >
             {code && (
               <div>
