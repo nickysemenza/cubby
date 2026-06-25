@@ -13,7 +13,7 @@ import {
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
-import { Description } from "~/components/ui/description";
+import { Empty, EmptyActions, EmptyDescription } from "~/components/ui/empty";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithRecompute } from "~/lib/recompute-summary";
 import type { EnrichmentRow } from "~/server/services/ingredient.service";
@@ -234,19 +234,18 @@ export function ReviewQueue({
 
   if (queue.length === 0) {
     return (
-      <Stack
-        gap="sm"
-        className="rounded-lg border border-dashed p-6 text-center"
-      >
-        <Description>
+      <Empty>
+        <EmptyDescription>
           {reviewedThisSession > 0
             ? `Reviewed ${reviewedThisSession} this session — nothing left in this filter.`
             : "Nothing to review in this filter."}
-        </Description>
-        <Button variant="outline" size="sm" onClick={onExit}>
-          Back to browse
-        </Button>
-      </Stack>
+        </EmptyDescription>
+        <EmptyActions>
+          <Button variant="outline" size="sm" onClick={onExit}>
+            Back to browse
+          </Button>
+        </EmptyActions>
+      </Empty>
     );
   }
 

@@ -10,6 +10,7 @@ import {
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import { useTRPC } from "~/trpc/react";
 import { VisualizationPlaceholder } from "./visualization-placeholder";
+import { VizTooltip } from "./viz-overlay";
 
 type CategoryData = {
   category: ProductCategory | null;
@@ -208,7 +209,7 @@ function DonutChart({ data }: DonutChartProps) {
 
 function HoverTooltip({ slice }: { slice: CategoryData }) {
   return (
-    <div className="pointer-events-none absolute top-4 left-4 z-50 rounded-md bg-popover px-4 py-2 text-sm shadow-lg">
+    <VizTooltip>
       <div className="flex items-center gap-2 font-medium">
         <div
           className="h-3 w-3 rounded-full"
@@ -234,6 +235,6 @@ function HoverTooltip({ slice }: { slice: CategoryData }) {
       <div className="mt-2 border-t pt-2 text-muted-foreground text-xs">
         Click to view products →
       </div>
-    </div>
+    </VizTooltip>
   );
 }

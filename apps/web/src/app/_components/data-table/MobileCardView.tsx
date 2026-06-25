@@ -18,6 +18,37 @@ import type { GroupConfig } from "./useGroupedList";
 import { useGroupedList } from "./useGroupedList";
 import { useMobileListModel } from "./useMobileListModel";
 
+// Absolutely-positioned virtualizer row wrapper — virtualizer mechanics
+// (measureElement ref + data-index + translateY), shared by all 3 render sites.
+type WindowVirtualizer = ReturnType<typeof useWindowVirtualizer>;
+type VirtualItem = ReturnType<WindowVirtualizer["getVirtualItems"]>[number];
+
+function VirtualRow({
+  vi,
+  virtualizer,
+  children,
+}: {
+  vi: VirtualItem;
+  virtualizer: WindowVirtualizer;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      ref={virtualizer.measureElement}
+      data-index={vi.index}
+      style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        width: "100%",
+        transform: `translateY(${vi.start - virtualizer.options.scrollMargin}px)`,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 interface MobileCardViewProps<TItem> {
   table: ITable<TItem>;
   /** Entity type for navigation - when provided, cards show a view button */
@@ -135,24 +166,17 @@ export function MobileCardView<TItem>({
 
       if (gItem.kind === "header") {
         return (
-          <div
+          <VirtualRow
             key={`header-${gItem.title}`}
-            ref={virtualizer.measureElement}
-            data-index={vi.index}
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              width: "100%",
-              transform: `translateY(${vi.start - virtualizer.options.scrollMargin}px)`,
-            }}
+            vi={vi}
+            virtualizer={virtualizer}
           >
             <SectionHeader
               title={gItem.title}
               count={gItem.count}
               color={gItem.color}
             />
-          </div>
+          </VirtualRow>
         );
       }
 
@@ -196,20 +220,9 @@ export function MobileCardView<TItem>({
     // Allow custom rendering for special cases (e.g., inline editing)
     if (renderMobileCard) {
       return (
-        <div
-          key={row.id}
-          ref={virtualizer.measureElement}
-          data-index={vi.index}
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            width: "100%",
-            transform: `translateY(${vi.start - virtualizer.options.scrollMargin}px)`,
-          }}
-        >
+        <VirtualRow key={row.id} vi={vi} virtualizer={virtualizer}>
           {renderMobileCard(row, defaultContent)}
-        </div>
+        </VirtualRow>
       );
     }
 
@@ -253,24 +266,13 @@ export function MobileCardView<TItem>({
     );
 
     return (
-      <div
-        key={row.id}
-        ref={virtualizer.measureElement}
-        data-index={vi.index}
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: "100%",
-          transform: `translateY(${vi.start - virtualizer.options.scrollMargin}px)`,
-        }}
-      >
+      <VirtualRow key={row.id} vi={vi} virtualizer={virtualizer}>
         {swipeActions ? (
           <SwipeRow actions={swipeActions(row)}>{card}</SwipeRow>
         ) : (
           card
         )}
-      </div>
+      </VirtualRow>
     );
   };
 

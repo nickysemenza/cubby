@@ -20,6 +20,13 @@ import {
   formatYield,
   getIngredientName,
 } from "./recipe-utils";
+import {
+  BasePill,
+  NoWeightPill,
+  SeeAbovePointer,
+  StepNumberBadge,
+  StubWarning,
+} from "./spec-markers";
 
 // Modernist-Cuisine-style spec sheet: the recipe and every sub-recipe expanded
 // inline, recursively. Each node is a self-contained batch with its own
@@ -90,9 +97,9 @@ function SpecRow({
       <div className={rowGrid}>
         <span className="py-1 text-muted-foreground text-sm italic">
           {row.name}{" "}
-          <span className="font-mono text-2xs text-warning uppercase tracking-wide">
+          <StubWarning>
             {row.reason === "cycle" ? "↻ cycle" : "missing"}
-          </span>
+          </StubWarning>
         </span>
         <span />
         <span />
@@ -130,21 +137,9 @@ function SpecRow({
           name
         )}
         <IngredientModifier modifier={row.row.modifier} />
-        {isSubrecipe && !isExpanded && (
-          <span className="ml-2 align-middle font-mono text-[10px] text-muted-foreground/60 lowercase">
-            ↑ see above
-          </span>
-        )}
-        {isBase && (
-          <span className="ml-2 rounded-sm bg-primary/10 px-1 py-px align-middle font-mono text-[9px] text-primary uppercase tracking-wide">
-            100% base
-          </span>
-        )}
-        {noWeight && row.kind === "ingredient" && (
-          <span className="ml-2 rounded-sm bg-warning/15 px-1 py-px align-middle font-mono text-[9px] text-warning uppercase tracking-wide">
-            no weight
-          </span>
-        )}
+        {isSubrecipe && !isExpanded && <SeeAbovePointer />}
+        {isBase && <BasePill />}
+        {noWeight && row.kind === "ingredient" && <NoWeightPill />}
       </span>
       <IngredientQuantities
         quantities={quantities}
@@ -223,9 +218,7 @@ function SpecNode({
             <Stack as="ol" gap="xs" className="mt-2 mb-1 pl-0">
               {section.steps.map((step) => (
                 <Row as="li" gap="sm" key={step.n}>
-                  <span className="mt-px inline-flex size-[16px] shrink-0 items-center justify-center rounded-full border border-[var(--border-chunky)] font-mono text-[9px] text-muted-foreground tabular-nums">
-                    {step.n}
-                  </span>
+                  <StepNumberBadge>{step.n}</StepNumberBadge>
                   <span className="text-foreground/80 text-xs leading-snug">
                     <MarkdownText className="[&_p]:my-0">
                       {step.text}

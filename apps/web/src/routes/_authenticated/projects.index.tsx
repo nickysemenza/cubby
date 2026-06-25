@@ -1,8 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Suspense } from "react";
 import { ProjectsDashboard } from "~/app/projects/projects-dashboard";
-import { Stack } from "~/components/layout";
-import { PageWrapper } from "~/components/layout/page-wrapper";
+import { Page } from "~/components/page/Page";
 
 export const Route = createFileRoute("/_authenticated/projects/")({
   component: ProjectsPage,
@@ -11,26 +9,8 @@ export const Route = createFileRoute("/_authenticated/projects/")({
 
 function ProjectsPage() {
   return (
-    <PageWrapper>
-      <div className="fade-in animate-in duration-300">
-        <Suspense fallback={<ProjectsSkeleton />}>
-          <ProjectsDashboard />
-        </Suspense>
-      </div>
-    </PageWrapper>
-  );
-}
-
-function ProjectsSkeleton() {
-  return (
-    <Stack>
-      <div className="h-8 w-48 animate-pulse rounded bg-muted" />
-      <div className="grid gap-4 sm:grid-cols-3">
-        {["s1", "s2", "s3"].map((k) => (
-          <div key={k} className="h-24 animate-pulse rounded-lg bg-muted" />
-        ))}
-      </div>
-      <div className="h-64 animate-pulse rounded-lg bg-muted" />
-    </Stack>
+    <Page variant="list" title="Projects" fullWidth>
+      <ProjectsDashboard />
+    </Page>
   );
 }

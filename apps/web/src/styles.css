@@ -179,6 +179,13 @@
   --shadow-chunky-lg:
     0 2px 4px -1px oklch(from var(--brand-foreground) l c h / 0.06),
     0 8px 24px -6px oklch(from var(--brand-foreground) l c h / 0.16);
+  /* Destructive zero-blur offset slab for the alert state of the homepage
+     Problems stat card (was inline oklch on entitycount.tsx). The base is the
+     resting 3px offset; -hover is the 4px lift on hover. */
+  --shadow-chunky-destructive: 3px 3px 0 0
+    oklch(from var(--destructive) l c h / 0.55);
+  --shadow-chunky-destructive-hover: 4px 4px 0 0
+    oklch(from var(--destructive) l c h / 0.55);
   /* Inset "gloss" highlight for small gradient tiles (was inline rgba on the
      homepage entity-count chips). */
   --shadow-inset-gloss:

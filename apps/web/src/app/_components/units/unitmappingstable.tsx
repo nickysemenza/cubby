@@ -11,11 +11,6 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "~/components/ui/tooltip";
-import {
   BASE_KINDS,
   type BaseKind,
   conversionCoverage,
@@ -23,7 +18,7 @@ import {
 import { wasm } from "~/lib/wasm";
 import { useTRPC } from "~/trpc/react";
 import { EntityPillLink } from "../EntityPill";
-import { kindIconMap } from "./kind-icons";
+import { KindIcon } from "./kind-icon";
 
 const BASE_KIND_SET: ReadonlySet<string> = new Set(BASE_KINDS);
 
@@ -55,21 +50,7 @@ const KindAccent: React.FC<{
       />
     );
   }
-  const { Icon, label } = kindIconMap[kind];
-  const lit = covered.has(kind);
-  const state = lit ? "convertible" : "no conversion";
-  return (
-    <Tooltip>
-      <TooltipTrigger render={<span className="inline-flex shrink-0" />}>
-        <span className="sr-only">{`${label}: ${state}`}</span>
-        <Icon
-          className={`h-3.5 w-3.5 ${lit ? "text-foreground" : "text-muted-foreground/40"}`}
-          aria-hidden
-        />
-      </TooltipTrigger>
-      <TooltipContent sideOffset={6}>{`${label}: ${state}`}</TooltipContent>
-    </Tooltip>
-  );
+  return <KindIcon kind={kind} lit={covered.has(kind)} />;
 };
 
 // Component for lazy loading food data and rendering FoodPillLink

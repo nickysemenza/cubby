@@ -11,6 +11,7 @@ import { formatPricingStatusSummary } from "../locations/calculate-inventory-val
 import { LocationTypeBadge } from "../locations/LocationTypeBadge";
 import { LocationIcon } from "../locations/location-icons";
 import { VisualizationPlaceholder } from "./visualization-placeholder";
+import { VizTooltip } from "./viz-overlay";
 
 export default function LocationSunburst() {
   const { data, isLoading } = useLocationHierarchy({
@@ -235,7 +236,7 @@ function HoverTooltip({
   node: d3Hierarchy.HierarchyRectangularNode<LocationHierarchyNode>;
 }) {
   return (
-    <div className="pointer-events-none absolute top-4 left-4 z-50 rounded-md bg-popover px-4 py-2 text-sm shadow-lg">
+    <VizTooltip>
       <div className="flex items-center gap-2 font-medium">
         <LocationIcon type={node.data.type} size={14} />
         <Link
@@ -265,6 +266,6 @@ function HoverTooltip({
           return summary ? <div>{summary}</div> : null;
         })()}
       </div>
-    </div>
+    </VizTooltip>
   );
 }

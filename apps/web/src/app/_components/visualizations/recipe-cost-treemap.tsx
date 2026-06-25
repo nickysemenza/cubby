@@ -5,6 +5,7 @@ import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import type { IngredientDataItem } from "~/lib/recipe-costing";
 import { formatCurrency } from "~/lib/utils";
 import { VisualizationPlaceholder } from "./visualization-placeholder";
+import { VizTooltip } from "./viz-overlay";
 
 interface CostNode {
   name: string;
@@ -303,7 +304,7 @@ function HoverTooltip({
   if (!node) return null;
 
   return (
-    <div className="pointer-events-none absolute top-4 left-4 z-50 rounded-md bg-popover px-4 py-2 text-sm shadow-lg">
+    <VizTooltip>
       <div className="font-medium">{node.data.name}</div>
       <div className="mt-1 text-muted-foreground">
         {node.data.hasPrice ? (
@@ -315,6 +316,6 @@ function HoverTooltip({
           <div>No pricing data</div>
         )}
       </div>
-    </div>
+    </VizTooltip>
   );
 }

@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import { useTRPC } from "~/trpc/react";
 import { VisualizationPlaceholder } from "./visualization-placeholder";
+import { VizOverlay, VizTooltip } from "./viz-overlay";
 
 interface NetworkNode extends IngredientNode, d3Force.SimulationNodeDatum {}
 
@@ -328,9 +329,8 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
 
       {/* Tooltip for selected link */}
       {selectedLink && !hoveredNode && (
-        // biome-ignore lint/a11y/noStaticElementInteractions: Tooltip click prevention
-        <div
-          className="absolute top-4 left-4 z-50 max-w-xs rounded-md border bg-popover px-4 py-2 text-sm shadow-lg"
+        <VizTooltip
+          className="pointer-events-auto max-w-xs border"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-start justify-between gap-2">
@@ -362,12 +362,12 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
               </Link>
             ))}
           </div>
-        </div>
+        </VizTooltip>
       )}
 
       {/* Tooltip for hovered node */}
       {hoveredNode && (
-        <div className="absolute top-4 left-4 z-50 max-w-xs rounded-md bg-popover px-4 py-2 text-sm shadow-lg">
+        <VizTooltip className="max-w-xs">
           <div className="font-medium">
             <Link
               to="/ingredients/$id"
@@ -396,15 +396,15 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
             }{" "}
             connections
           </div>
-        </div>
+        </VizTooltip>
       )}
 
       {/* Legend */}
-      <div className="absolute right-2 bottom-2 rounded bg-background/80 px-2 py-1 text-xs backdrop-blur">
+      <VizOverlay>
         <div className="text-muted-foreground">
           Node size = recipe count • Line thickness = co-occurrence
         </div>
-      </div>
+      </VizOverlay>
     </div>
   );
 }

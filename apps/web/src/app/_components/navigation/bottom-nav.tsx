@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { Bug, BugOff, LogIn, MoreHorizontal } from "lucide-react";
+import type * as React from "react";
 import { useState } from "react";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -23,6 +24,56 @@ import {
 
 const buildDate = formatBuildDate(__BUILD_DATE__);
 
+type BottomNavItemProps = {
+  /** Optional leading icon. Scales up subtly when `active`. */
+  icon?: React.ComponentType<{ className?: string }>;
+  /** Short label rendered under the icon. */
+  label: string;
+  /** Active (current) tab — drives the primary color + icon scale. */
+  active?: boolean;
+  /**
+   * Element to render. Defaults to `Link` (the common nav-link case). Pass
+   * `as="button"` for the handler-driven trigger (e.g. the "More" sheet).
+   */
+  as?: React.ElementType;
+  className?: string;
+} & Record<string, unknown>;
+
+/**
+ * The shared bottom-nav tab shape (icon over label, 48px touch target). Renders
+ * a `Link` by default; `as="button"` covers the handler/trigger case. Extra
+ * props (`to`/`search`/`params`/`aria-*`, or trigger props injected by a base-ui
+ * `render` slot) forward straight to the rendered element.
+ */
+function BottomNavItem({
+  icon: Icon,
+  label,
+  active = false,
+  as: Comp = Link,
+  className,
+  ...rest
+}: BottomNavItemProps) {
+  return (
+    <Comp
+      className={cn(
+        "flex min-h-[48px] min-w-[48px] flex-1 flex-col items-center justify-center gap-1 transition-colors active:bg-muted/60",
+        active ? "text-primary" : "text-muted-foreground hover:text-foreground",
+        className,
+      )}
+      aria-current={active ? "page" : undefined}
+      {...rest}
+    >
+      {Icon && (
+        <Icon
+          className={cn("h-5 w-5", active && "scale-110")}
+          aria-hidden="true"
+        />
+      )}
+      <span className="font-medium text-2xs">{label}</span>
+    </Comp>
+  );
+}
+
 export function BottomNav() {
   const activeTo = useActiveTo();
   const [isOpen, setIsOpen] = useState(false);
@@ -43,58 +94,33 @@ export function BottomNav() {
       <Row align="center" justify="around" className="h-16">
         {authed ? (
           <>
-            {bottomNavItems.map((item) => {
-              const active = item.to === activeTo;
-              const Icon = item.icon;
-
-              return (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  // `search` can't be correlated to the union `to` here; only
-                  // the Scan shortcut sets it (see nav-items). Cast is local.
-                  search={item.search as never}
-                  className={cn(
-                    "flex min-h-[48px] min-w-[48px] flex-1 flex-col items-center justify-center gap-1 transition-colors active:bg-muted/60",
-                    active
-                      ? "text-primary"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                  aria-current={active ? "page" : undefined}
-                >
-                  {Icon && (
-                    <Icon
-                      className={cn("h-5 w-5", active && "scale-110")}
-                      aria-hidden="true"
-                    />
-                  )}
-                  <span className="font-medium text-2xs">{item.label}</span>
-                </Link>
-              );
-            })}
+            {bottomNavItems.map((item) => (
+              <BottomNavItem
+                key={item.to}
+                to={item.to}
+                // `search` can't be correlated to the union `to` here; only
+                // the Scan shortcut sets it (see nav-items). Cast is local.
+                search={item.search as never}
+                icon={item.icon}
+                label={item.label}
+                active={item.to === activeTo}
+              />
+            ))}
 
             {/* More button with sheet */}
             <Sheet open={isOpen} onOpenChange={setIsOpen}>
               <SheetTrigger
                 render={
-                  <button
+                  <BottomNavItem
+                    as="button"
                     type="button"
-                    className={cn(
-                      "flex min-h-[48px] min-w-[48px] flex-1 flex-col items-center justify-center gap-1 transition-colors active:bg-muted/60",
-                      isMoreActive
-                        ? "text-primary"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
+                    icon={MoreHorizontal}
+                    label="More"
+                    active={isMoreActive}
                     aria-label="More options"
                   />
                 }
-              >
-                <MoreHorizontal
-                  className={cn("h-5 w-5", isMoreActive && "scale-110")}
-                  aria-hidden="true"
-                />
-                <span className="font-medium text-2xs">More</span>
-              </SheetTrigger>
+              />
               <SheetContent
                 side="bottom"
                 className="flex max-h-[70vh] flex-col rounded-t-xl"
@@ -162,37 +188,21 @@ export function BottomNav() {
           </>
         ) : (
           <>
-            {publicNavItems.map((item) => {
-              const active = item.to === activeTo;
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  className={cn(
-                    "flex min-h-[48px] min-w-[48px] flex-1 flex-col items-center justify-center gap-1 transition-colors active:bg-muted/60",
-                    active
-                      ? "text-primary"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                  aria-current={active ? "page" : undefined}
-                >
-                  <Icon
-                    className={cn("h-5 w-5", active && "scale-110")}
-                    aria-hidden="true"
-                  />
-                  <span className="font-medium text-2xs">{item.label}</span>
-                </Link>
-              );
-            })}
-            <Link
+            {publicNavItems.map((item) => (
+              <BottomNavItem
+                key={item.to}
+                to={item.to}
+                icon={item.icon}
+                label={item.label}
+                active={item.to === activeTo}
+              />
+            ))}
+            <BottomNavItem
               to="/auth/$authView"
               params={{ authView: "sign-in" }}
-              className="flex min-h-[48px] min-w-[48px] flex-1 flex-col items-center justify-center gap-1 text-muted-foreground transition-colors hover:text-foreground active:bg-muted/60"
-            >
-              <LogIn className="h-5 w-5" aria-hidden="true" />
-              <span className="font-medium text-2xs">Sign In</span>
-            </Link>
+              icon={LogIn}
+              label="Sign In"
+            />
           </>
         )}
       </Row>
