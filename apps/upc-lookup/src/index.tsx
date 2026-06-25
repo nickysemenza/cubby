@@ -173,7 +173,6 @@ export default Sentry.withSentry(
     // Public DSN — canonical copy in apps/web/src/lib/sentry-dsn.ts.
     dsn: "https://a50b2f76dd1586f95cdd29cd13a6c0dc@o83311.ingest.us.sentry.io/4508775559135232",
     tracesSampleRate: 0,
-    sendDefaultPii: true,
     initialScope: { tags: { service: "upc-lookup" } },
   }),
   handler,
