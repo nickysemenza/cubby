@@ -278,6 +278,11 @@ Key constraints:
 
 - **Hyperdrive** pools TCP connections at CF's edge. The connection string comes from `env.HYPERDRIVE.connectionString` (not a secret).
 - **Per-request `pg.Pool`** (`max: 5`) via `withRequestDb()` + `AsyncLocalStorage`. A single `pg.Client` would serialize a request's query fan-out on one connection; a small pool lets independent queries run in parallel. `max: 5` is the Workers per-invocation connection ceiling (~6 simultaneous outbound TCP), distinct from Hyperdrive's 60-connection origin pool shared across all invocations.
+- **Hyperdrive query caching is ON** — read queries are cached at the CF edge (~4ms PoP hit vs a us-west-2 round trip), which also relieves Neon's egress cap. This is **account-level config on the Hyperdrive object, not expressible in `wrangler.jsonc`** (the binding only holds `binding` + `id`). It's set via the dashboard or, reproducibly:
+  ```sh
+  wrangler hyperdrive update adc9757dfffd45bc94d5c2a66b2ad410 --max-age 60 --swr 15
+  ```
+  Caveats: only SELECTs **outside** an explicit transaction are cached (so keep hot list reads out of `withTransaction`), and queries containing STABLE functions (`NOW()`/`CURRENT_DATE`) are uncacheable — repo reads pass `new Date()` as a bound param, so they stay cacheable.
 - **WASM uses `?init`** because `vite-plugin-wasm` doesn't apply to CF's SSR environment. `cfWasmPlugin()` redirects `@cubby/recipebridge` to `recipebridge-cf.ts`.
 - **`__CF_WORKERS__` define** eliminates module-level Pool creation from the CF build.
 - **OTel disabled in production** — only runs in dev via `instrument.server.mjs`.

@@ -1,0 +1,15 @@
+# Cloudflare Workers Static Assets custom headers.
+# https://developers.cloudflare.com/workers/static-assets/headers/
+#
+# Vite emits content-hashed filenames under /assets/ (JS, CSS, @fontsource woff2,
+# images) and a content-hashed recipebridge_bg-<hash>.wasm. A new build that
+# changes a file produces a new URL, so `immutable` long-TTL caching is safe —
+# browsers keep the cached bytes (incl. the 2.3MB WASM) across deploys that don't
+# change them. No broad /* rule: HTML documents / navigations stay uncached so a
+# deploy is picked up immediately.
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.wasm
+  Cache-Control: public, max-age=31536000, immutable
