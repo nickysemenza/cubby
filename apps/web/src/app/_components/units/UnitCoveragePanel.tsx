@@ -1,13 +1,16 @@
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { ChevronRight, Network } from "lucide-react";
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useId, useMemo, useState } from "react";
 import { Row, Stack } from "~/components/layout";
+import { Checkbox } from "~/components/ui/checkbox";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "~/components/ui/collapsible";
+import { Label } from "~/components/ui/label";
 import type { BaseKind } from "~/lib/conversion-coverage";
+import { wasm } from "~/lib/wasm";
 import { ConversionCapabilities } from "./ConversionCapabilities";
 import { UnitMappingsTable } from "./unitmappingstable";
 
@@ -17,6 +20,18 @@ import { UnitMappingsTable } from "./unitmappingstable";
 const UnitMappingGraph = lazy(() =>
   import("./unit-mapping-graph").then((m) => ({ default: m.UnitMappingGraph })),
 );
+
+// A mapping is a nutrient edge when either endpoint classifies as `nutrient:*`.
+// Detected by unit (the graph's own filter is unit-based), NOT source string, so
+// the toggle matches exactly what the graph hides — and stays lazy (no import of
+// the d3 module just to count). `amount_kind` is a cheap, cached WASM probe.
+const isNutrientUnit = (unit: string): boolean => {
+  try {
+    return wasm.amount_kind({ value: 1, unit }).startsWith("nutrient:");
+  } catch {
+    return false;
+  }
+};
 
 /**
  * The one rich unit-mapping surface: coverage chips (big-4 + macros) over a
@@ -38,6 +53,19 @@ export function UnitCoveragePanel({
   defaultGraphOpen?: boolean;
 }) {
   const [graphOpen, setGraphOpen] = useState(defaultGraphOpen);
+  const [showNutrients, setShowNutrients] = useState(false);
+  const showNutrientsId = useId();
+
+  // Nutrient edges (USDA per-nutrient `100 g = X g protein`, macro labels, …) are
+  // hidden from the graph by default — they explode the node count and aren't
+  // about convertibility — so offer a toggle when there are any to reveal.
+  const nutrientCount = useMemo(
+    () =>
+      mappings.filter(
+        (m) => isNutrientUnit(m.a.unit) || isNutrientUnit(m.b.unit),
+      ).length,
+    [mappings],
+  );
 
   return (
     <Stack gap="sm">
@@ -55,7 +83,7 @@ export function UnitCoveragePanel({
               type="button"
               align="center"
               gap="sm"
-              className="w-full rounded-md px-2 py-1.5 text-muted-foreground text-sm hover:bg-accent"
+              className="w-full rounded-md px-2 py-1 text-muted-foreground text-sm hover:bg-accent"
             />
           }
         >
@@ -69,13 +97,30 @@ export function UnitCoveragePanel({
         <CollapsibleContent>
           {/* Guard the mount so d3-force only loads + simulates once expanded. */}
           {graphOpen && (
-            <Suspense
-              fallback={
-                <div className="h-[260px] animate-pulse rounded-md border bg-muted/30" />
-              }
-            >
-              <UnitMappingGraph mappings={mappings} />
-            </Suspense>
+            <Stack gap="sm">
+              {nutrientCount > 0 && (
+                <Row align="center" gap="sm">
+                  <Checkbox
+                    id={showNutrientsId}
+                    checked={showNutrients}
+                    onCheckedChange={(c) => setShowNutrients(c === true)}
+                  />
+                  <Label htmlFor={showNutrientsId} className="text-sm">
+                    Show nutrient mappings ({nutrientCount})
+                  </Label>
+                </Row>
+              )}
+              <Suspense
+                fallback={
+                  <div className="h-[260px] animate-pulse rounded-md border bg-muted/30" />
+                }
+              >
+                <UnitMappingGraph
+                  mappings={mappings}
+                  includeNutrients={showNutrients}
+                />
+              </Suspense>
+            </Stack>
           )}
         </CollapsibleContent>
       </Collapsible>
