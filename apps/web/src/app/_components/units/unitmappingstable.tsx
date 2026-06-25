@@ -139,10 +139,10 @@ const MappingSource: React.FC<{ mapping: UnitMapping }> = ({ mapping }) => {
 /**
  * A small, read-only conversions list (From = To · Source) for the compact
  * preview surfaces — the enrichment editor's live panel, the coverage panel, and
- * the conversion dialog. Deliberately a bare `table-fixed` table, NOT the generic
- * data-table: those panels are narrow and the mapping set is tiny, so the full
- * toolbar / rows-per-page / pagination / selection chrome just overflowed the
- * panel and read as broken.
+ * the conversion dialog. Deliberately a bare table, NOT the generic data-table:
+ * those panels are narrow and the mapping set is tiny, so the full toolbar /
+ * rows-per-page / pagination / selection chrome just overflowed the panel and
+ * read as broken.
  */
 export const UnitMappingsTable: React.FC<{
   mappings: UnitMapping[];
@@ -160,35 +160,36 @@ export const UnitMappingsTable: React.FC<{
   if (mappings.length === 0) return null;
 
   const head = "h-auto p-1 text-2xs uppercase tracking-wide";
-  const cell = "p-1 align-middle";
+  // `table-auto` + nowrap: From/To get exactly their content width (no fixed
+  // columns that long units like "½ chicken, bone(s) removed" or nutrient labels
+  // like "0.35 mg vitamin_b6" overflow into); Source takes the slack via `w-full`
+  // and truncates the long food name. Adapts to both the narrow editor panel and
+  // a wide detail page.
+  const cell = "whitespace-nowrap p-1 align-top";
   return (
-    <Table>
+    <Table className="table-auto">
       <TableHeader>
-        {/* table-fixed: size From/To to their short content; Source takes the rest. */}
         <TableRow className="hover:bg-transparent">
-          <TableHead className={`${head} w-14`}>From</TableHead>
-          <TableHead className={`${head} w-28`}>To</TableHead>
-          <TableHead className={head}>Source</TableHead>
+          <TableHead className={head}>From</TableHead>
+          <TableHead className={head}>To</TableHead>
+          <TableHead className={`${head} w-full`}>Source</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {mappings.map((m, i) => (
           <TableRow key={`${i}-${m.source}`} className="hover:bg-transparent">
-            <TableCell className={`${cell} whitespace-nowrap`}>
+            <TableCell className={`${cell} pr-3 tabular-nums`}>
               {wasm.format_amount(m.a)}
             </TableCell>
-            <TableCell className={cell}>
-              <Row
-                as="span"
-                align="center"
-                gap="xs"
-                className="whitespace-nowrap"
-              >
+            <TableCell className={`${cell} pr-3`}>
+              <Row as="span" align="center" gap="xs">
                 <KindAccent unit={m.b.unit} covered={covered} />
-                <span>{wasm.format_amount(m.b)}</span>
+                <span className="tabular-nums">{wasm.format_amount(m.b)}</span>
               </Row>
             </TableCell>
-            <TableCell className={`${cell} truncate text-muted-foreground`}>
+            <TableCell
+              className={`${cell} w-full truncate text-muted-foreground`}
+            >
               <MappingSource mapping={m} />
             </TableCell>
           </TableRow>
