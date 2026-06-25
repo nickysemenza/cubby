@@ -167,10 +167,10 @@ export const UnitMappingsTable: React.FC<{
       <TableBody>
         {mappings.map((m, i) => (
           <TableRow key={`${i}-${m.source}`} className="hover:bg-transparent">
-            <TableCell className={`${cell} pr-3 tabular-nums`}>
+            <TableCell className={`${cell} pr-4 tabular-nums`}>
               {wasm.format_amount(m.a)}
             </TableCell>
-            <TableCell className={`${cell} pr-3`}>
+            <TableCell className={`${cell} pr-4`}>
               <Row as="span" align="center" gap="xs">
                 <KindAccent unit={m.b.unit} covered={covered} />
                 <span className="tabular-nums">{wasm.format_amount(m.b)}</span>
