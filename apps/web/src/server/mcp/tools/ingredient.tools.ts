@@ -7,6 +7,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
   deleteHandler,
+  formatToolError,
   getByIdHandler,
   getCaller,
   idParam,
@@ -97,21 +98,59 @@ export function registerIngredientTools(server: McpServer) {
 
   server.tool(
     "merge_ingredients",
-    "Merge duplicate ingredients into one. Aliases are absorbed into the target, and their recipes/products are re-pointed to it.",
+    "Merge one or more clusters of duplicate ingredients in a single call — the bulk way to clean up a dedup sweep without one tool call per cluster. Each cluster folds its `aliases` into `target`: the target absorbs their names/aliases, and their recipe lines + products (USDA links, prices, unit mappings) re-point onto it; the alias ingredients are then deleted. Clusters merge independently and IN SEQUENCE — one failure (e.g. a missing target) is reported in that cluster's result and does NOT abort the rest. Pass a single-element array to merge just one cluster.",
     {
-      target: idParam("Ingredient").describe("ID of the ingredient to keep"),
-      aliases: z
-        .array(idParam("Ingredient"))
+      merges: z
+        .array(
+          z.object({
+            target: idParam("Ingredient").describe(
+              "ID of the ingredient to keep",
+            ),
+            aliases: z
+              .array(idParam("Ingredient"))
+              .min(1)
+              .describe("IDs of duplicate ingredients to fold into the target"),
+          }),
+        )
         .min(1)
-        .describe("IDs of duplicate ingredients to merge into the target"),
+        .describe("One entry per duplicate cluster to merge"),
     },
     withErrorHandling(async (params, extra) => {
       const caller = getCaller(extra);
-      const result = await caller.ingredient.merge({
-        target: params.target,
-        aliases: params.aliases,
+      const merges = params.merges as Array<{
+        target: string;
+        aliases: string[];
+      }>;
+      // Merge each cluster IN SEQUENCE: a merge re-points its aliases' recipe
+      // lines/products onto the target and recomputes the target's recipes, so
+      // running clusters concurrently could race on a shared product/recipe.
+      // Capture per-cluster success/failure — a bad target in one cluster must
+      // not sink the batch (partial-result contract).
+      const results: Array<{
+        target: string;
+        ok: boolean;
+        mergedAliasCount?: number;
+        recipesRecomputed?: number;
+        error?: string;
+      }> = [];
+      for (const { target, aliases } of merges) {
+        try {
+          const result = await caller.ingredient.merge({ target, aliases });
+          results.push({
+            target,
+            ok: true,
+            mergedAliasCount: aliases.length,
+            recipesRecomputed: result.sideEffects.recipesRecomputed,
+          });
+        } catch (error) {
+          results.push({ target, ok: false, error: formatToolError(error) });
+        }
+      }
+      return json({
+        merged: results.filter((r) => r.ok).length,
+        total: results.length,
+        results,
       });
-      return respond(result, slimIngredient);
     }),
   );
 
