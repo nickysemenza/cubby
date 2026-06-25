@@ -75,8 +75,8 @@ export function CategoryTreemap({
         }}
         parentLabelPosition="top"
         parentLabelPadding={6}
-        parentLabelTextColor="white"
-        labelTextColor="white"
+        parentLabelTextColor="var(--background)"
+        labelTextColor="var(--background)"
         colors={(node) => {
           // pathComponents is [root, category, subcategory] — use index 1 for the category
           const category = node.pathComponents[1] ?? node.pathComponents[0];

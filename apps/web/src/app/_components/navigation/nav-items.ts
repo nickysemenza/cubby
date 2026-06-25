@@ -116,7 +116,6 @@ export const desktopNav: NavNode[] = [
     label: "Reports",
     icon: LayoutDashboard,
     children: [
-      { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { to: "/insights", label: "Insights", icon: TrendingUp },
       { to: "/activity", label: "Activity", icon: Activity },
       { to: "/problems", label: "Problems", icon: AlertTriangle },

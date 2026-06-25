@@ -40,7 +40,8 @@ function ingredientName(ing: IngredientDataItem): string {
 /**
  * Nutrition breakdown in the brand's ledger-chart language (replaces the old
  * sunburst): a bordered stacked bar of calories by ingredient, then one
- * bordered bar per macro. Same warm ramp and mono labels as the homepage.
+ * bordered bar per macro. Flat ink-ladder fills and mono labels, ruled like a
+ * printed figure — same as the homepage.
  */
 export default function NutritionBars({
   ingredients,
@@ -109,7 +110,7 @@ export default function NutritionBars({
         <StatTile label="Calories by ingredient">
           {Math.round(totalKcal)} kcal
         </StatTile>
-        <div className="mt-2 flex h-7 overflow-hidden rounded-md border border-[var(--border-chunky)] bg-card">
+        <div className="mt-2 flex h-7 overflow-hidden border border-[var(--border-chunky)] bg-card">
           {kcalRows.map((row, i) => (
             <div
               key={row.key}
@@ -153,7 +154,7 @@ export default function NutritionBars({
                     : "—"}
                 </span>
               </div>
-              <div className="h-3.5 overflow-hidden rounded-sm border-[1.5px] border-[var(--border-chunky)] bg-card">
+              <div className="h-3.5 overflow-hidden border-[1.5px] border-[var(--border-chunky)] bg-card">
                 <div
                   className="h-full border-[var(--border-chunky)] border-r-[1.5px]"
                   style={{

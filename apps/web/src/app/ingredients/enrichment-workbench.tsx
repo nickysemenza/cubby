@@ -1,25 +1,12 @@
-import type { Confidence } from "@cubby/schemas/ai";
-import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import {
-  Check,
-  ChevronDown,
-  ChevronRight,
-  GitMerge,
-  Sparkles,
-  X,
-} from "lucide-react";
-import { type Ref, useEffect, useMemo, useRef, useState } from "react";
+import { Sparkles } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
-import { confidenceColor } from "~/app/_components/ai/ai-suggest";
-import { UsdaFoodSearchField } from "~/app/_components/combobox/with-usda-food-search";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useBulkActionMutation } from "~/app/_components/hooks/useBulkActionMutation";
 import { MergeConfirmation } from "~/app/_components/ingredient/merge-confirmation";
-import { RecipeUsagesTable } from "~/app/_components/recipe/recipe-usages-table";
-import { CoverageChips } from "~/app/problems/components/unit-coverage-fix";
 import { Row, Stack } from "~/components/layout";
 import {
   AlertDialog,
@@ -30,19 +17,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
-import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { Checkbox } from "~/components/ui/checkbox";
-import { Description } from "~/components/ui/description";
 import { Empty, EmptyDescription } from "~/components/ui/empty";
-import { Input } from "~/components/ui/input";
 import { Progress } from "~/components/ui/progress";
 import { Spinner } from "~/components/ui/spinner";
 import { StatusText } from "~/components/ui/status-text";
 import {
   Table,
   TableBody,
-  TableCell,
   TableHead,
   TableHeader,
   TableRow,
@@ -50,51 +32,17 @@ import {
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithRecompute } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
-import type { EnrichmentRow } from "~/server/services/ingredient.service";
 import { useTRPC } from "~/trpc/react";
-import { EnrichmentEditor } from "./enrichment-editor";
 import { ReviewQueue } from "./review-queue";
+import { SuggestionReviewTray } from "./suggestion-review-tray";
 import {
   buildPackagePrice,
-  hasPriceEntry,
   hasUsdaLink,
   isCookbookOnly,
-  UnitInput,
 } from "./workbench-editor-core";
+import { type Suggestion, WorkbenchRow } from "./workbench-row";
 
 type FilterKey = "all" | "no-product" | "partial" | "no-usda";
-
-/** An AI USDA suggestion for one row, kept at the table level for bulk review. */
-type Suggestion = {
-  food: FoodSummaryWithLinkedProducts;
-  confidence: Confidence;
-  reasoning: string;
-};
-
-const FIX_LABEL: Record<EnrichmentRow["recommendedFix"], string> = {
-  "no-product": "Link product",
-  "link-usda": "Link USDA",
-  "set-per-item-price": "Set price",
-  "add-purchase-mapping": "Set price",
-  "add-weight-mapping": "Add weight",
-  "add-volume-mapping": "Add volume",
-  done: "Done",
-};
-
-// The "Next" badge label. A priced-but-money-uncovered row is islanded — the fix
-// is to connect the existing price, not set a new one, so say so.
-const fixBadgeLabel = (row: EnrichmentRow): string => {
-  if (
-    !row.coverage.covered.includes("money") &&
-    hasPriceEntry(row) &&
-    (row.recommendedFix === "set-per-item-price" ||
-      row.recommendedFix === "add-purchase-mapping" ||
-      row.recommendedFix === "add-weight-mapping")
-  ) {
-    return "Connect price";
-  }
-  return FIX_LABEL[row.recommendedFix];
-};
 
 /**
  * Dense bulk-enrichment table for ingredients that can't be fully costed yet —
@@ -482,109 +430,17 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
       {view === "browse" && (
         <>
           {suggestionCount > 0 && (
-            <Stack
-              gap="sm"
-              className="rounded-lg border border-[var(--border-chunky)] bg-muted/20 p-4"
-            >
-              <Row align="center" justify="between" gap="sm">
-                <span className="font-medium text-sm">
-                  Review {suggestionCount} USDA suggestion
-                  {suggestionCount === 1 ? "" : "s"}
-                </span>
-                <Button
-                  size="sm"
-                  onClick={handleCreate}
-                  disabled={createMany.isPending || creatable.length === 0}
-                >
-                  Create {creatable.length} product
-                  {creatable.length === 1 ? "" : "s"}
-                </Button>
-              </Row>
-              {createMany.progress && (
-                <Progress
-                  value={createMany.progress.done}
-                  max={createMany.progress.total}
-                />
-              )}
-              <Stack gap="sm">
-                {Object.entries(suggestions).map(([id, sug]) => {
-                  const row = rows.find((r) => r.id === id);
-                  if (!row) return null;
-                  const p = suggestionPrices[id] ?? {
-                    dollars: "",
-                    qty: "1",
-                    unit: "lb",
-                  };
-                  return (
-                    <Row
-                      key={id}
-                      align="center"
-                      wrap
-                      gap="sm"
-                      className="text-sm"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => rejectSuggestion(id)}
-                        aria-label={`Reject suggestion for ${row.name}`}
-                        className="text-muted-foreground hover:text-destructive"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                      <span className="font-medium">{row.name}</span>
-                      <span className="truncate text-muted-foreground">
-                        → {sug.food.foodInfo.description}
-                      </span>
-                      <span
-                        className={cn(
-                          "text-2xs",
-                          confidenceColor[sug.confidence],
-                        )}
-                        title={sug.reasoning}
-                      >
-                        {sug.confidence}
-                      </span>
-                      <Row
-                        as="span"
-                        align="center"
-                        gap="xs"
-                        className="ml-auto text-xs"
-                      >
-                        <span className="text-muted-foreground">$</span>
-                        <Input
-                          value={p.dollars}
-                          onChange={(e) =>
-                            setSuggestionPrice(id, { dollars: e.target.value })
-                          }
-                          placeholder="price"
-                          aria-label={`Price for ${row.name}`}
-                          className="h-7 w-16"
-                        />
-                        <span className="text-muted-foreground">/</span>
-                        <Input
-                          value={p.qty}
-                          onChange={(e) =>
-                            setSuggestionPrice(id, { qty: e.target.value })
-                          }
-                          aria-label={`Price quantity for ${row.name}`}
-                          className="h-7 w-12"
-                        />
-                        <UnitInput
-                          value={p.unit}
-                          onChange={(v) => setSuggestionPrice(id, { unit: v })}
-                          ariaLabel={`Price unit for ${row.name}`}
-                        />
-                      </Row>
-                    </Row>
-                  );
-                })}
-              </Stack>
-              <Description size="2xs">
-                Price optional — leave blank to create the USDA link and price
-                later. Foods are usually priced by package (e.g. $5.99 / 2 lb);
-                a unit of “each” stores a per-item price.
-              </Description>
-            </Stack>
+            <SuggestionReviewTray
+              rows={rows}
+              suggestions={suggestions}
+              suggestionPrices={suggestionPrices}
+              creatableCount={creatable.length}
+              isPending={createMany.isPending}
+              progress={createMany.progress}
+              onCreate={handleCreate}
+              onReject={rejectSuggestion}
+              onPriceChange={setSuggestionPrice}
+            />
           )}
 
           {error && (
@@ -719,269 +575,5 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
         </>
       )}
     </Stack>
-  );
-}
-
-/** Inline "≈ candidate · Merge" hint shown under an ingredient name. */
-function MergeHint({
-  tone,
-  targetName,
-  onMerge,
-}: {
-  tone: "ai" | "fuzzy";
-  targetName: string;
-  onMerge: () => void;
-}) {
-  return (
-    <Row align="center" gap="sm" className="mt-1">
-      <span
-        className={cn(
-          "text-xs",
-          tone === "ai" ? "text-info" : "text-muted-foreground",
-        )}
-      >
-        {tone === "ai" ? "≈" : "possible dup:"} {targetName}
-      </span>
-      <Button
-        size="sm"
-        variant="outline"
-        className="h-6 px-2 text-xs"
-        onClick={(e) => {
-          e.stopPropagation();
-          onMerge();
-        }}
-      >
-        <GitMerge className="h-3 w-3" />
-        Merge
-      </Button>
-    </Row>
-  );
-}
-
-function WorkbenchRow({
-  row,
-  selected,
-  onToggle,
-  suggestion,
-  mergeSuggestion,
-  onRequestMerge,
-  defaultOpen = false,
-  rowRef,
-}: {
-  row: EnrichmentRow;
-  selected: boolean;
-  onToggle: () => void;
-  suggestion: Suggestion | null;
-  mergeSuggestion: { targetId: string; targetName: string } | null;
-  onRequestMerge: (pair: {
-    source: { id: string; name: string };
-    target: { id: string; name: string };
-  }) => void;
-  /** Start expanded (deep-link focus from the Problems page). */
-  defaultOpen?: boolean;
-  /** Ref on the row's first <tr>, so the parent can scroll it into view. */
-  rowRef?: Ref<HTMLTableRowElement>;
-}) {
-  const [open, setOpen] = useState(defaultOpen);
-
-  return (
-    <>
-      <TableRow
-        ref={rowRef}
-        className={cn(
-          "cursor-pointer hover:bg-accent/40",
-          (open || selected) && "bg-accent/30",
-        )}
-        onClick={(e) => {
-          // Don't toggle the row when the click came from the checkbox, the
-          // merge button, or any other interactive control inside it.
-          if (
-            (e.target as HTMLElement).closest(
-              'button, input, a, [role="checkbox"]',
-            )
-          ) {
-            return;
-          }
-          setOpen((v) => !v);
-        }}
-      >
-        <TableCell>
-          <Checkbox
-            checked={selected}
-            onCheckedChange={onToggle}
-            aria-label={`Select ${row.name}`}
-          />
-        </TableCell>
-        <TableCell className="text-muted-foreground">
-          {open ? (
-            <ChevronDown className="h-4 w-4" />
-          ) : (
-            <ChevronRight className="h-4 w-4" />
-          )}
-        </TableCell>
-        <TableCell className="whitespace-normal">
-          <div className="font-medium">{row.name}</div>
-          <div className="text-muted-foreground text-xs">
-            × {row.recipeCount} recipe{row.recipeCount === 1 ? "" : "s"}
-            {suggestion && (
-              <span className="ml-2 text-info">
-                · AI: {suggestion.food.foodInfo.description}{" "}
-                <span className={confidenceColor[suggestion.confidence]}>
-                  ({suggestion.confidence})
-                </span>
-              </span>
-            )}
-          </div>
-          {mergeSuggestion ? (
-            <MergeHint
-              tone="ai"
-              targetName={mergeSuggestion.targetName}
-              onMerge={() =>
-                onRequestMerge({
-                  source: { id: row.id, name: row.name },
-                  target: {
-                    id: mergeSuggestion.targetId,
-                    name: mergeSuggestion.targetName,
-                  },
-                })
-              }
-            />
-          ) : (
-            // Tier-1/2 trigram near-dup hint — no AI call needed. Suggestion only;
-            // the confirm dialog guards against false positives.
-            row.mergeCandidates[0] && (
-              <MergeHint
-                tone="fuzzy"
-                targetName={row.mergeCandidates[0].name}
-                onMerge={() => {
-                  const cand = row.mergeCandidates[0];
-                  if (cand)
-                    onRequestMerge({
-                      source: { id: row.id, name: row.name },
-                      target: { id: cand.id, name: cand.name },
-                    });
-                }}
-              />
-            )
-          )}
-        </TableCell>
-        <TableCell>
-          <CoverageChips
-            covered={row.coverage.covered}
-            applicable={row.coverage.applicable}
-          />
-        </TableCell>
-        <TableCell>
-          <Badge variant="outline" className="font-normal">
-            {fixBadgeLabel(row)}
-          </Badge>
-        </TableCell>
-      </TableRow>
-      {open && (
-        <TableRow className="bg-muted/20">
-          <TableCell />
-          <TableCell />
-          <TableCell colSpan={3} className="whitespace-normal pr-4">
-            <WorkbenchEditor
-              row={row}
-              initialFood={suggestion?.food ?? null}
-              onDone={() => setOpen(false)}
-            />
-          </TableCell>
-        </TableRow>
-      )}
-    </>
-  );
-}
-
-/**
- * Browse-table chrome around the shared {@link EnrichmentEditor}: a plain USDA
- * search picker, Save/Cancel, and the recipe-usages footer. All the gap-aware
- * editing (link/price/conversions/N-A + live graph) lives in EnrichmentEditor,
- * shared with the review card so the two can't drift.
- */
-function WorkbenchEditor({
-  row,
-  initialFood,
-  onDone,
-}: {
-  row: EnrichmentRow;
-  initialFood: FoodSummaryWithLinkedProducts | null;
-  onDone: () => void;
-}) {
-  const api = useTRPC();
-  const product = row.product[0] ?? null;
-
-  // Recipe usages are fetched lazily (this editor mounts only when the row is
-  // expanded) so the worklist query stays lean — it no longer ships every usage's
-  // recipe body per row.
-  const usages = useQuery(
-    api.ingredient.recipeUsages.queryOptions({ id: row.id }),
-  );
-
-  return (
-    <EnrichmentEditor
-      row={row}
-      initialFood={initialFood}
-      onSaved={onDone}
-      slots={{
-        usdaPicker: ({ food, setFood }) => (
-          <>
-            <UsdaFoodSearchField
-              initialQuery={row.name}
-              label=""
-              onSelect={setFood}
-            />
-            {food && (
-              <Row
-                as="p"
-                align="center"
-                gap="xs"
-                className="text-positive text-xs"
-              >
-                <Check className="h-3 w-3" />
-                {food.foodInfo.description}
-              </Row>
-            )}
-          </>
-        ),
-        actions: ({ save, isPending }) => (
-          <Row align="center" gap="sm">
-            <Button size="sm" onClick={save} disabled={isPending}>
-              {isPending
-                ? "Saving…"
-                : product == null
-                  ? "Create product"
-                  : "Save"}
-            </Button>
-            <Button size="sm" variant="ghost" onClick={onDone}>
-              Cancel
-            </Button>
-          </Row>
-        ),
-        footer:
-          row.recipeCount > 0 ? (
-            <Stack gap="sm">
-              <p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
-                Appears in {row.recipeCount} recipe
-                {row.recipeCount === 1 ? "" : "s"}
-              </p>
-              {usages.data && usages.data.length > 0 ? (
-                <div className="overflow-x-auto rounded-md border border-[var(--border-chunky)] bg-background/60 p-2">
-                  <RecipeUsagesTable
-                    usages={usages.data}
-                    ingredientName={row.name}
-                    aliases={row.aliases}
-                  />
-                </div>
-              ) : (
-                <p className="text-muted-foreground text-xs">
-                  {usages.isLoading ? "Loading usages…" : "No live usages."}
-                </p>
-              )}
-            </Stack>
-          ) : null,
-      }}
-    />
   );
 }

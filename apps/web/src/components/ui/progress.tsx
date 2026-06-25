@@ -36,7 +36,7 @@ export function Progress({
       aria-valuemax={indeterminate ? undefined : max}
       aria-valuenow={indeterminate ? undefined : value}
       className={cn(
-        "h-1.5 w-full overflow-hidden rounded-full bg-muted",
+        "h-1.5 w-full overflow-hidden rounded-none bg-muted",
         className,
       )}
       {...props}
@@ -45,7 +45,7 @@ export function Progress({
         <div className="skeleton-shimmer h-full w-full" />
       ) : (
         <div
-          className="h-full rounded-full bg-primary transition-all duration-300"
+          className="h-full rounded-none bg-primary transition-all duration-300"
           style={{ width: `${pct}%` }}
         />
       )}

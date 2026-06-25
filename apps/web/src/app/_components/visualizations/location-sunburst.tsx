@@ -100,8 +100,9 @@ function Sunburst({ data }: SunburstProps) {
     [],
   );
 
-  // Brand sequential ramp by depth: the root ring burns deepest and each
-  // nested ring lightens toward cream. Empty locations sit out in muted.
+  // Sequential ink ramp (paper -> ultramarine) by depth: the root ring burns
+  // deepest and each nested ring lightens toward paper. Empty locations sit out
+  // in muted.
   const getNodeColor = useCallback(
     (node: d3Hierarchy.HierarchyRectangularNode<LocationHierarchyNode>) => {
       if (node.data.totalCount === 0) return "var(--muted)";
@@ -116,7 +117,7 @@ function Sunburst({ data }: SunburstProps) {
     },
     [],
   );
-  // Deep rings need light ink; shallow rings read with the brand foreground.
+  // Deep rings need paper-colored ink; shallow rings read with the foreground.
   const isDeepRing = useCallback(
     (node: d3Hierarchy.HierarchyRectangularNode<LocationHierarchyNode>) =>
       node.data.totalCount > 0 && node.depth <= 2,
@@ -190,8 +191,8 @@ function Sunburst({ data }: SunburstProps) {
                       node.data.totalCount === 0
                         ? "var(--muted-foreground)"
                         : isDeepRing(node)
-                          ? "var(--brand-cream)"
-                          : "var(--brand-foreground)"
+                          ? "var(--background)"
+                          : "var(--foreground)"
                     }
                   >
                     {node.data.name.length > 12

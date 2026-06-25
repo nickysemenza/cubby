@@ -105,7 +105,7 @@ export function PullToRefresh({
       >
         <div
           className={cn(
-            "flex items-center justify-center rounded-full bg-muted p-2 transition-transform",
+            "flex items-center justify-center rounded-none bg-muted p-2 transition-transform",
             isRefreshing && "animate-pulse",
           )}
           style={{

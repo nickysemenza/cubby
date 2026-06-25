@@ -153,6 +153,7 @@ import {
 } from "~/components/ui/tooltip";
 import { ViewSwitcher } from "~/components/ui/view-switcher";
 import { INGREDIENT_PART_COLOR } from "~/lib/ingredient-part-colors";
+import { cn } from "~/lib/utils";
 
 /** Surface + semantic palette tokens, grouped for the swatch grid. */
 const SURFACE_TOKENS = [
@@ -191,6 +192,21 @@ const CHART_SEQ_TOKENS = [
   "--chart-seq-3",
   "--chart-seq-4",
   "--chart-seq-5",
+];
+
+// The core palette for the design-language prose, rendered live from the tokens
+// (the swatch reads `var(token)` — colors are never hardcoded here).
+const DESIGN_PALETTE: { token: string; name: string; role: string }[] = [
+  { token: "--brand-paper", name: "paper", role: "base canvas" },
+  { token: "--brand-paper-alt", name: "paper-alt", role: "zebra / inset" },
+  { token: "--brand-cream", name: "paper-surface", role: "headers / panels" },
+  { token: "--brand-foreground", name: "ink", role: "text + thick rules" },
+  { token: "--brand-hairline", name: "hairline", role: "dividers / borders" },
+  {
+    token: "--brand-ultramarine",
+    name: "ultramarine",
+    role: "the lone accent",
+  },
 ];
 
 // Spans every node kind so the conversion-graph theming (volume/weight/money/
@@ -233,7 +249,7 @@ function Swatch({ token }: { token: string }) {
   return (
     <div className="flex flex-col gap-1">
       <div
-        className="h-12 w-full rounded-md border border-border"
+        className="h-12 w-full rounded-none border border-border"
         style={{ backgroundColor: `var(${token})` }}
       />
       <span className="font-mono text-3xs text-muted-foreground">
@@ -365,6 +381,119 @@ export function DesignGallery() {
         </p>
       </div>
 
+      <GallerySection title="Design language" source="Warm-Paper Ledger">
+        <div className="space-y-4 text-sm">
+          <p className="text-foreground">
+            A print-editorial aesthetic applied to a data-dense dashboard. Cubby
+            is still a dashboard — panels, metrics, charts, tables — but it
+            reads like a printed control sheet or ledger, not a lit-up glass UI.{" "}
+            <span className="font-medium">
+              Matte instrument panel, not glass dashboard:
+            </span>{" "}
+            no glass, glow, drop shadows, dark canvas, neon, or gradient fills.
+            Light mode only.
+          </p>
+          <p className="border-foreground border-l-[3px] bg-muted/40 px-3 py-2 text-foreground">
+            <span className="font-medium">The one rule —</span> separation by
+            rule and tone, never by elevation. The moment something casts a
+            shadow or glows it reads as glass. Keep everything flat on the paper
+            and it stays a ledger.
+          </p>
+
+          <div>
+            <p className="eyebrow mb-2">Palette</p>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
+              {DESIGN_PALETTE.map(({ token, name, role }) => (
+                <div key={name} className="flex items-center gap-2">
+                  <span
+                    className="h-7 w-7 shrink-0 border border-border"
+                    style={{ backgroundColor: `var(${token})` }}
+                  />
+                  <span className="min-w-0">
+                    <span className="block font-mono text-2xs text-foreground">
+                      {name}
+                    </span>
+                    <span className="block text-2xs text-muted-foreground">
+                      {role}
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <p className="eyebrow">Type</p>
+            <ul className="space-y-1 text-muted-foreground">
+              <li>
+                <span className="font-mono text-foreground">
+                  JetBrains Mono
+                </span>{" "}
+                — data, cells, metrics, numerals (tabular-nums, right-aligned).
+              </li>
+              <li>
+                <span className="font-heading text-foreground">
+                  Space Grotesk
+                </span>{" "}
+                — headings &amp; panel titles, letter-spacing -0.02em.
+              </li>
+              <li>
+                <span className="text-foreground">Inter</span> — body &amp;
+                prose. Eyebrows are mono, uppercase, tracked-out.
+              </li>
+            </ul>
+          </div>
+
+          <div className="space-y-1">
+            <p className="eyebrow">How dashboard elements translate</p>
+            <ul className="space-y-1 text-muted-foreground">
+              <li>
+                · Panels → ruled regions: a hairline border or a 3px ink
+                top-rule, paper-surface background, square corners, zero shadow.
+              </li>
+              <li>
+                · Stat tiles → ledger entries: a big mono number + small label,
+                hairline-divided. Accent only on the one live metric.
+              </li>
+              <li>
+                · Charts → matte &amp; ruled: a flat ink ladder + a single
+                ultramarine, hairline gridlines, no gradients or glow. Rating
+                scales stay off the blue axis.
+              </li>
+              <li>
+                · Tables → zebra by paper tone; category fills are tints, not
+                chips; sticky paper-surface headers under a 3px ink rule; tight
+                rows.
+              </li>
+              <li>
+                · Nav &amp; chrome → hairline-divided and flat. No raised or
+                shadowed bars.
+              </li>
+              <li>
+                · Accent is the loudest thing on screen — active row, hover,
+                focus, the one live value. Everywhere else stays ink + paper.
+              </li>
+            </ul>
+          </div>
+
+          <p className="border-border border-l-2 pl-3 text-muted-foreground italic">
+            A warm-paper instrument panel: dense mono data on soft paper, panels
+            defined by ink rules and hairlines instead of shadows, matte flat
+            charts, and a lone ultramarine accent reserved for the live/active
+            value — a dashboard that reads like a printed ledger, not a glass
+            one.
+          </p>
+
+          <p className="text-2xs text-muted-foreground">
+            <span className="eyebrow">References</span> McMaster-Carr ·
+            Datasette · The Monospace Web · Oxide Computer (light) · US /
+            Berkeley Graphics · Gwern + Tufte CSS. Not the vibe: Fey, Mercury,
+            glass / dark dashboards — same density, opposite material. Paper,
+            not glass.
+          </p>
+        </div>
+      </GallerySection>
+
       <GallerySection title="Color tokens" source="styles.css :root">
         <div className="space-y-4">
           <div>
@@ -410,67 +539,84 @@ export function DesignGallery() {
         </div>
       </GallerySection>
 
-      <GallerySection title="Elevation & shadows" source="styles.css :root">
-        <div className="flex flex-wrap items-end gap-4">
-          {(
-            [
-              ["--shadow-chunky-sm", "chunky-sm"],
-              ["--shadow-chunky", "chunky"],
-              ["--shadow-chunky-lg", "chunky-lg"],
-            ] as const
-          ).map(([token, label]) => (
-            <div key={token} className="flex flex-col items-center gap-1.5">
-              <div
-                className="h-16 w-24 rounded-lg border border-[var(--border-chunky)] bg-card"
-                style={{ boxShadow: `var(${token})` }}
-              />
+      <GallerySection
+        title="Rule & tone separation"
+        source="Warm-Paper Ledger — no elevation"
+      >
+        <p className="mb-3 font-mono text-3xs text-muted-foreground uppercase tracking-wider">
+          Panels are defined by a 3px ink top-rule + hairline border and zebra
+          paper tone — never a shadow, glow, or gradient. Corners are square.
+        </p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {/* Ruled ledger panel: ink top-rule + hairline frame + zebra rows */}
+          <div className="border border-[var(--border-chunky)] border-t-[3px] border-t-foreground bg-card">
+            <div className="flex items-baseline justify-between px-3 py-2">
+              <span className="eyebrow">Ledger panel</span>
               <span className="font-mono text-3xs text-muted-foreground">
-                {label}
+                rule + hairline
               </span>
             </div>
-          ))}
-          <div className="flex flex-col items-center gap-1.5">
-            <div
-              className="h-16 w-24 rounded-lg bg-gradient-to-br from-chart-1 to-chart-5"
-              style={{ boxShadow: "var(--shadow-inset-gloss)" }}
-            />
-            <span className="font-mono text-3xs text-muted-foreground">
-              inset-gloss
-            </span>
-          </div>
-          <div className="flex flex-col items-center gap-1.5">
-            <div className="grid h-16 w-24 place-items-center rounded-lg bg-foreground">
-              <div
-                className="h-10 w-16 rounded border-2 border-positive"
-                style={{ boxShadow: "var(--shadow-scan-flash)" }}
-              />
+            <div className="border-border border-t font-mono text-xs tabular-nums">
+              {[
+                ["rolled oats", "$9.41"],
+                ["almond milk", "$5.42"],
+                ["kosher salt", "$11.00"],
+                ["bread flour", "$4.20"],
+              ].map(([name, price], i) => (
+                <div
+                  key={name}
+                  className={cn(
+                    "flex items-center justify-between px-3 py-1.5",
+                    // Zebra by tone — alternating paper / paper-alt, no border
+                    i % 2 === 1 && "bg-muted",
+                  )}
+                >
+                  <span>{name}</span>
+                  <span>{price}</span>
+                </div>
+              ))}
             </div>
-            <span className="font-mono text-3xs text-muted-foreground">
-              scan-flash
-            </span>
           </div>
-          <div className="flex flex-col items-center gap-1.5">
-            <div className="grid h-16 w-24 place-items-center rounded-lg bg-chart-3">
-              <span
-                className="font-semibold text-white text-xs"
-                style={{ textShadow: "var(--text-shadow-chart)" }}
-              >
-                Label
+
+          {/* Separation primitives: the three load-bearing rules/tones */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-12 shrink-0 border-t-[3px] border-t-foreground bg-card" />
+              <span className="font-mono text-3xs text-muted-foreground">
+                3px ink top-rule (var(--rule-ink)) — panel / header edge
               </span>
             </div>
-            <span className="font-mono text-3xs text-muted-foreground">
-              text-shadow-chart
-            </span>
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-12 shrink-0 border border-[var(--border-chunky)] bg-card" />
+              <span className="font-mono text-3xs text-muted-foreground">
+                hairline border (var(--border-chunky)) — quiet division
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-12 shrink-0 flex-col border border-[var(--border-chunky)]">
+                <div className="flex-1 bg-card" />
+                <div className="flex-1 bg-muted" />
+              </div>
+              <span className="font-mono text-3xs text-muted-foreground">
+                zebra tone (bg-card / bg-muted) — row banding, no rule
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-12 shrink-0 border border-[var(--border-chunky)] border-l-4 border-l-primary bg-card" />
+              <span className="font-mono text-3xs text-muted-foreground">
+                ultramarine spine (border-l-primary) — the one live accent
+              </span>
+            </div>
           </div>
         </div>
       </GallerySection>
 
       <GallerySection title="Typography" source="styles.css @layer base">
         <div className="space-y-2">
-          <h1>Heading 1 — Fraunces display</h1>
-          <h2 className="border-0 p-0">Heading 2 — Fraunces</h2>
+          <h1>Heading 1 — Space Grotesk</h1>
+          <h2 className="border-0 p-0">Heading 2 — Space Grotesk</h2>
           <h3 className="font-heading font-semibold text-lg">
-            Heading 3 — Fraunces
+            Heading 3 — Space Grotesk
           </h3>
           <p className="text-sm">
             Body copy is Inter. The quick brown fox jumps over the lazy dog —
@@ -768,8 +914,9 @@ export function DesignGallery() {
               <CardTitle icon={Package}>Card</CardTitle>
             </CardHeader>
             <CardContent className="px-0 text-sm">
-              One surface — hairline border + soft elevation. Eyebrow title
-              takes an optional <code>icon</code>.
+              One ruled region — paper-surface fill + hairline border, square
+              corners, zero shadow. Eyebrow title takes an optional{" "}
+              <code>icon</code>.
             </CardContent>
           </Card>
           <DashboardCard icon={Layers} title="Dashboard card">
@@ -782,18 +929,20 @@ export function DesignGallery() {
           <SelectableCard selected>
             <span className="font-medium text-sm">Selectable — selected</span>
             <span className="text-muted-foreground text-xs">
-              Primary border + elevation
+              Ultramarine border + tint
             </span>
           </SelectableCard>
           <SelectableCard>
             <span className="font-medium text-sm">Selectable — idle</span>
-            <span className="text-muted-foreground text-xs">Inner ring</span>
+            <span className="text-muted-foreground text-xs">
+              Hairline border
+            </span>
           </SelectableCard>
         </div>
       </GallerySection>
 
       <GallerySection title="Table" source="components/ui/table">
-        <div className="overflow-hidden rounded-lg border border-[var(--border-chunky)] shadow-[var(--shadow-chunky)]">
+        <div className="overflow-hidden rounded-none border border-[var(--border-chunky)]">
           <Table>
             <TableHeader>
               <TableRow>
@@ -845,7 +994,7 @@ export function DesignGallery() {
           </Table>
         </div>
         <p className="font-mono text-3xs text-muted-foreground">
-          The selected row shows the warm tint + terracotta spine.
+          The selected row shows the paper tint + ultramarine spine.
         </p>
       </GallerySection>
 
@@ -860,7 +1009,8 @@ export function DesignGallery() {
               <DialogHeader>
                 <DialogTitle>Dialog title</DialogTitle>
                 <DialogDescription>
-                  Signature chrome frame with layered elevation.
+                  Flat ledger panel — hairline frame, square corners, no
+                  elevation.
                 </DialogDescription>
               </DialogHeader>
               <p className="text-sm">Body content goes here.</p>
@@ -1040,7 +1190,7 @@ export function DesignGallery() {
             {PREVIEW_DEMOS.map(({ key, node }) => (
               <div
                 key={key}
-                className="w-80 rounded-lg border border-[var(--border-chunky)] bg-popover p-3 text-popover-foreground text-xs shadow-[var(--shadow-chunky-sm)]"
+                className="w-80 rounded-none border border-[var(--border-chunky)] bg-popover p-3 text-popover-foreground text-xs"
               >
                 {node}
               </div>
@@ -1217,7 +1367,7 @@ export function DesignGallery() {
       </GallerySection>
 
       <GallerySection title="Scroll area" source="components/ui/scroll-area">
-        <ScrollArea className="h-32 max-w-xs rounded-md border border-[var(--border-chunky)] p-3">
+        <ScrollArea className="h-32 max-w-xs rounded-none border border-[var(--border-chunky)] p-3">
           <div className="space-y-1 text-sm">
             {SCROLL_ROWS.map((label) => (
               <div key={label}>{label}</div>

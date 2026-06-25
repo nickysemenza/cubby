@@ -107,7 +107,7 @@ export function TaskStatusBoard({
                   <td key={status} className="px-2 py-2 text-center">
                     {count > 0 ? (
                       <span
-                        className="inline-flex h-6 w-8 items-center justify-center rounded font-medium text-white text-xs"
+                        className="inline-flex h-6 w-8 items-center justify-center font-medium text-background text-xs"
                         style={{
                           backgroundColor: color,
                           opacity: 0.3 + intensity * 0.7,

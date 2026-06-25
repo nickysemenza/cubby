@@ -19,7 +19,8 @@ import { useTRPC } from "~/trpc/react";
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 import { VizOverlay, VizTooltip } from "./viz-overlay";
 
-// Warm chart ramp tokens, cycled across cookbooks for node fill.
+// Ink ladder tokens (ultramarine accent -> light grey), cycled across
+// cookbooks for node fill.
 const COOKBOOK_COLORS = [
   "var(--chart-1)",
   "var(--chart-2)",

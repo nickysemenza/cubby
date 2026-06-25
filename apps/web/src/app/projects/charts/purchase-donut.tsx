@@ -57,7 +57,7 @@ export function PurchaseDonut({
         margin={{ top: 30, right: 100, bottom: 30, left: 100 }}
         innerRadius={0.6}
         padAngle={1}
-        cornerRadius={3}
+        cornerRadius={0}
         activeOuterRadiusOffset={6}
         arcLinkLabelsSkipAngle={10}
         arcLinkLabelsTextColor="var(--foreground)"
@@ -65,7 +65,7 @@ export function PurchaseDonut({
         arcLinkLabel={(d) => `${d.label} ${formatCurrency(d.value, 0)}`}
         arcLabelsSkipAngle={20}
         arcLabel={(d) => `${Math.round((d.value / total) * 100)}%`}
-        arcLabelsTextColor="white"
+        arcLabelsTextColor="var(--background)"
         enableArcLabels
         tooltip={({ datum }) => (
           <div className="rounded-md bg-popover px-4 py-2 text-sm shadow-md ring-1 ring-border">

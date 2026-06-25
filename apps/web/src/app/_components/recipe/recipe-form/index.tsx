@@ -2,27 +2,15 @@ import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useMutation } from "@tanstack/react-query";
-import { sumBy } from "es-toolkit";
 import {
   ChevronDown,
   ChevronUp,
-  ClipboardList,
-  Code,
   Image as ImageIcon,
-  Import,
-  Link2,
   Plus,
   Trash,
 } from "lucide-react";
-import { type FC, useId, useMemo, useState } from "react";
-import {
-  type Control,
-  Controller,
-  useFieldArray,
-  useForm,
-  useFormState,
-  useWatch,
-} from "react-hook-form";
+import { type FC, useMemo, useState } from "react";
+import { Controller, useFieldArray, useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { Row, Stack } from "~/components/layout";
 import {
@@ -37,33 +25,26 @@ import {
 } from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
-import { Description } from "~/components/ui/description";
 import { Field, FieldLabel } from "~/components/ui/field";
-import { InkStamp } from "~/components/ui/ink-stamp";
-import { Input } from "~/components/ui/input";
-import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
 import { useImageState } from "~/hooks/useImageState";
-import { cn } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
 import { useTRPC } from "~/trpc/react";
 import {
   FormWrapper,
   getSubmitButtonText,
-  NullableNumericField,
-  SideBySideFields,
   UnifiedTextField,
 } from "../../form-utils";
 import { PendingImageUpload } from "../../PendingImageUpload";
-import { formatRichText } from "../richtext";
 import {
   recipeFormValuesToCreateInput,
   recipeFormValuesToUpdateInput,
   recipeToFormValues,
 } from "./adapters";
+import { EditorTally, YieldServingsFields } from "./form-strips";
+import { ImportToolsPanel } from "./import-tools-panel";
 import { IngredientFieldArray } from "./ingredient-field-array";
 import {
-  IngredientPreviewTable,
   useIngredientImport,
   useIngredientResolver,
 } from "./ingredient-preview-table";
@@ -75,81 +56,6 @@ import {
   type RecipeFormProps,
   type RecipeFormValues,
 } from "./types";
-
-// Yield and Servings fields with smart hide behavior
-const YieldServingsFields: FC<{
-  form: ReturnType<typeof useForm<RecipeFormValues>>;
-}> = ({ form }) => {
-  const yieldUnitId = useId();
-  const yieldUnit = useWatch({ control: form.control, name: "yield.unit" });
-
-  // Show servings field if yield unit is set and not "servings"
-  const showServings = yieldUnit && yieldUnit !== "servings";
-
-  return (
-    <Stack gap="sm">
-      <SideBySideFields>
-        <NullableNumericField
-          form={form}
-          name="yield.value"
-          label="Yield Value (Optional)"
-          placeholder="e.g., 24"
-        />
-        <Controller
-          control={form.control}
-          name="yield.unit"
-          render={({ field }) => (
-            <Field>
-              <FieldLabel htmlFor={yieldUnitId}>Yield Unit</FieldLabel>
-              <Input
-                id={yieldUnitId}
-                placeholder="e.g., cookies, servings, cups"
-                value={field.value ?? ""}
-                onChange={(e) => field.onChange(e.target.value || null)}
-              />
-            </Field>
-          )}
-        />
-      </SideBySideFields>
-
-      {showServings && (
-        <NullableNumericField
-          form={form}
-          name="servings"
-          label="Servings"
-          placeholder="How many portions?"
-        />
-      )}
-    </Stack>
-  );
-};
-
-// Live tally for the sticky footer: counts + a dirty stamp. Subscribed
-// narrowly via control so keystrokes re-render this strip, not the form.
-const EditorTally: FC<{ control: Control<RecipeFormValues> }> = ({
-  control,
-}) => {
-  const sections = useWatch({ control, name: "sections" });
-  // dirtyFields, not isDirty: registering the URL/yield inputs materializes
-  // their objects ({url: undefined} vs null), which trips isDirty on load.
-  const { dirtyFields } = useFormState({ control });
-  const isDirty = Object.keys(dirtyFields).length > 0;
-  const ingredients = sumBy(sections ?? [], (s) => s?.ingredients?.length ?? 0);
-  const steps = sumBy(sections ?? [], (s) => s?.instructions?.length ?? 0);
-
-  return (
-    <Row
-      align="center"
-      gap="sm"
-      className="min-w-0 font-mono text-2xs text-muted-foreground uppercase"
-    >
-      <span className="truncate tabular-nums">
-        {ingredients} ingredients · {steps} steps
-      </span>
-      {isDirty && <InkStamp tone="red">Unsaved</InkStamp>}
-    </Row>
-  );
-};
 
 export const RecipeForm: FC<RecipeFormProps> = (props) => {
   const { mode, isPending, error, onCancel } = props;
@@ -457,257 +363,30 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
     >
       <div className="gap-6 xl:grid xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
         <Stack>
-          {/* Import toolbar — one-time tools, tucked out of the recipe's way */}
-          <Row wrap align="center" justify="between" gap="sm">
-            <span className="eyebrow">
-              {mode === "edit" ? "Editing recipe" : "New recipe"}
-            </span>
-            <Row gap="sm">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                aria-expanded={openTool === "scrape"}
-                className={cn(openTool === "scrape" && "bg-muted")}
-                onClick={() => toggleTool("scrape")}
-              >
-                <Link2 className="mr-2 h-3.5 w-3.5" />
-                Scrape URL
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                aria-expanded={openTool === "text"}
-                className={cn(openTool === "text" && "bg-muted")}
-                onClick={() => toggleTool("text")}
-              >
-                <ClipboardList className="mr-2 h-3.5 w-3.5" />
-                Paste text
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                aria-expanded={openTool === "html"}
-                className={cn(openTool === "html" && "bg-muted")}
-                onClick={() => toggleTool("html")}
-              >
-                <Code className="mr-2 h-3.5 w-3.5" />
-                Paste HTML
-              </Button>
-            </Row>
-          </Row>
-
-          {/* Scrape panel (kept mounted so in-flight scrapes aren't lost) */}
-          <div
-            className={cn(
-              "rounded-lg border border-[var(--border-chunky)] bg-card p-4",
-              openTool !== "scrape" && "hidden",
-            )}
-          >
-            <Field>
-              <FieldLabel>URL (Optional)</FieldLabel>
-              <Row gap="sm">
-                <Controller
-                  control={form.control}
-                  name="meta.url"
-                  render={({ field }) => (
-                    <Input
-                      placeholder="Enter recipe URL"
-                      value={field.value ?? ""}
-                      onChange={(e) => field.onChange(e.target.value || null)}
-                      className="flex-1"
-                    />
-                  )}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleScrape}
-                  disabled={
-                    !urlValue || scrapeMutation.isPending || isResolving
-                  }
-                  className="shrink-0"
-                >
-                  {scrapeMutation.isPending || isResolving ? (
-                    <Spinner className="mr-1" />
-                  ) : (
-                    <Import className="mr-1 h-4 w-4" />
-                  )}
-                  Scrape
-                </Button>
-              </Row>
-              {isResolving && progress.total > 0 && (
-                <Description size="xs">
-                  Resolving ingredients {progress.done}/{progress.total}…
-                </Description>
-              )}
-            </Field>
-          </div>
-
-          {/* Paste-text panel */}
-          <Stack
-            gap="sm"
-            className={cn(
-              "rounded-lg border border-[var(--border-chunky)] bg-card p-4",
-              openTool !== "text" && "hidden",
-            )}
-          >
-            {/* Ingredients: textarea + pills preview */}
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-              <Field>
-                <FieldLabel>Ingredients (one per line)</FieldLabel>
-                <Textarea
-                  placeholder="1 cup flour&#10;2 eggs&#10;1/2 tsp salt"
-                  value={textImportIngredients}
-                  onChange={(e) => setTextImportIngredients(e.target.value)}
-                  rows={6}
-                />
-              </Field>
-              <div>
-                <FieldLabel>Parsed Ingredients</FieldLabel>
-                <div className="mt-2 min-h-[120px] rounded border border-[var(--border-chunky)] bg-muted/30 p-2">
-                  <IngredientPreviewTable ingredientLines={ingredientLines} />
-                </div>
-              </div>
-            </div>
-
-            {/* Instructions: textarea + preview */}
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-              <Field>
-                <FieldLabel>Instructions (one per line)</FieldLabel>
-                <Textarea
-                  placeholder="Preheat oven to 350°F&#10;Mix dry ingredients&#10;Add wet ingredients"
-                  value={textImportInstructions}
-                  onChange={(e) => setTextImportInstructions(e.target.value)}
-                  rows={6}
-                />
-              </Field>
-              <div>
-                <FieldLabel>Instructions Preview</FieldLabel>
-                <div className="mt-2 min-h-[120px] rounded border border-[var(--border-chunky)] bg-muted/30 p-2">
-                  {richInstructions.length > 0 ? (
-                    <Stack
-                      as="ol"
-                      gap="sm"
-                      className="list-decimal pl-4 text-sm"
-                    >
-                      {richInstructions.map((richItems, idx) => (
-                        // biome-ignore lint/suspicious/noArrayIndexKey: instructions are ordered by line
-                        <li key={idx}>{formatRichText(richItems)}</li>
-                      ))}
-                    </Stack>
-                  ) : (
-                    <Description as="div">
-                      Enter instructions to see preview
-                    </Description>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Import button */}
-            <Row align="center" justify="between">
-              <Description as="div">
-                {ingredientImport.totalCount > 0 && (
-                  <>
-                    {ingredientImport.matchedCount}/
-                    {ingredientImport.totalCount} ingredients matched
-                    {ingredientImport.missingCount > 0 && (
-                      <span className="text-warning">
-                        {" "}
-                        ({ingredientImport.missingCount} will be created)
-                      </span>
-                    )}
-                  </>
-                )}
-              </Description>
-              <Button
-                type="button"
-                variant="default"
-                size="sm"
-                onClick={handleImportAll}
-                disabled={
-                  ingredientImport.isLoading ||
-                  ingredientImport.isImporting ||
-                  (ingredientLines.length === 0 &&
-                    instructionLines.length === 0)
-                }
-              >
-                {ingredientImport.isImporting ? (
-                  <Spinner className="mr-1" />
-                ) : (
-                  <Import className="mr-1 h-4 w-4" />
-                )}
-                {ingredientImport.missingCount > 0
-                  ? `Import All (create ${ingredientImport.missingCount})`
-                  : "Import All"}
-              </Button>
-            </Row>
-          </Stack>
-
-          {/* Paste-HTML panel — fallback when a URL scrape is blocked. Open the
-              page in your browser, View Source, copy all, and paste it here. */}
-          <Stack
-            gap="sm"
-            className={cn(
-              "rounded-lg border border-[var(--border-chunky)] bg-card p-4",
-              openTool !== "html" && "hidden",
-            )}
-          >
-            <Field>
-              <FieldLabel>Source URL</FieldLabel>
-              <Controller
-                control={form.control}
-                name="meta.url"
-                render={({ field }) => (
-                  <Input
-                    placeholder="https://example.com/the-recipe"
-                    value={field.value ?? ""}
-                    onChange={(e) => field.onChange(e.target.value || null)}
-                  />
-                )}
-              />
-            </Field>
-            <Field>
-              <FieldLabel>Page HTML</FieldLabel>
-              <Textarea
-                placeholder="Paste the full page HTML here (open the recipe in your browser → View Source → Copy All)"
-                value={htmlInput}
-                onChange={(e) => setHtmlInput(e.target.value)}
-                rows={8}
-                className="font-mono text-xs"
-              />
-            </Field>
-            <Row align="center" justify="between" gap="sm">
-              <Description size="xs">
-                The source URL is saved with the recipe and used to resolve
-                relative image and link references.
-              </Description>
-              <Button
-                type="button"
-                variant="default"
-                size="sm"
-                onClick={handleParseHtml}
-                disabled={
-                  !htmlInput.trim() ||
-                  !urlValue ||
-                  parseHtmlMutation.isPending ||
-                  isResolving
-                }
-                className="shrink-0"
-              >
-                {parseHtmlMutation.isPending || isResolving ? (
-                  <Spinner className="mr-1" />
-                ) : (
-                  <Import className="mr-1 h-4 w-4" />
-                )}
-                Parse HTML
-              </Button>
-            </Row>
-          </Stack>
+          <ImportToolsPanel
+            mode={mode}
+            control={form.control}
+            openTool={openTool}
+            onToggleTool={toggleTool}
+            urlValue={urlValue}
+            textImportIngredients={textImportIngredients}
+            onTextImportIngredientsChange={setTextImportIngredients}
+            textImportInstructions={textImportInstructions}
+            onTextImportInstructionsChange={setTextImportInstructions}
+            htmlInput={htmlInput}
+            onHtmlInputChange={setHtmlInput}
+            ingredientLines={ingredientLines}
+            instructionLines={instructionLines}
+            richInstructions={richInstructions}
+            ingredientImport={ingredientImport}
+            isResolving={isResolving}
+            progress={progress}
+            scrapePending={scrapeMutation.isPending}
+            parseHtmlPending={parseHtmlMutation.isPending}
+            onScrape={handleScrape}
+            onParseHtml={handleParseHtml}
+            onImportAll={handleImportAll}
+          />
 
           {/* Spec plate: the recipe's vitals in one chunky placard */}
           <Card>

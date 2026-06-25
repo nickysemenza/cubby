@@ -4,15 +4,19 @@ import type { Entity } from "@cubby/schemas/entity";
  * Per-entity accent inks for decorative chrome: the page-hero accent bar,
  * table row-hover/selected bars, and similar. Each value feeds the
  * `--page-accent` / `--row-accent` CSS variables (styles.css), which default
- * to terracotta when unset. Values stay in the warm oklch family so sections
- * read as different drawers of the same hutch.
+ * to ultramarine when unset.
+ *
+ * Warm-Paper Ledger: there is no per-entity warm hue ladder anymore — the live
+ * accent is the lone ultramarine (`--primary`), and quieter sections fall to
+ * the neutral ink-slate. Status semantics (`--positive`/`--warning`) are the
+ * only colored exceptions, kept for the entities whose accent encodes state.
  */
 export const ENTITY_ACCENTS: Record<Entity, string> = {
-  inventory: "var(--brand-terracotta)",
-  product: "oklch(0.55 0.07 145)",
-  recipe: "var(--plum)",
-  cookbook: "var(--plum)",
-  ingredient: "oklch(0.65 0.12 50)",
+  inventory: "var(--primary)",
+  product: "var(--primary)",
+  recipe: "var(--primary)",
+  cookbook: "var(--primary)",
+  ingredient: "var(--slate)",
   location: "var(--slate)",
   meal: "var(--warning)",
   image: "var(--subtle)",

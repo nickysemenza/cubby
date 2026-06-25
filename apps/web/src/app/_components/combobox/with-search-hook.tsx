@@ -1,26 +1,9 @@
 import type { IngredientWithRecipesAndProductOut } from "@cubby/schemas/combo";
-import type { LocationCreateInput, LocationOut } from "@cubby/schemas/location";
-import type {
-  ProductCreateInput,
-  ProductTopLevelOut,
-} from "@cubby/schemas/product";
+import type { LocationOut } from "@cubby/schemas/location";
+import type { ProductTopLevelOut } from "@cubby/schemas/product";
 import { useQuery } from "@tanstack/react-query";
-import {
-  type ComponentProps,
-  type ReactNode,
-  useCallback,
-  useState,
-} from "react";
+import type { ReactNode } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { IngredientForm } from "~/app/_components/ingredients/ingredient-form";
-import { LocationForm } from "~/app/_components/locations/location-form";
-import { ProductForm } from "~/app/_components/products/product-form";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
 import { getErrorMessage } from "~/lib/error-utils";
 import { queryKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
@@ -31,6 +14,21 @@ import {
   buildRecipeComboboxItem,
 } from "./combobox-builders";
 import type { ComboboxItem } from "./combobox-types";
+import {
+  CreateIngredientDialog,
+  CreateLocationDialog,
+  CreateProductDialog,
+} from "./create-entity-dialogs";
+import {
+  pagination,
+  useDeferredSearch,
+  useEntitySearch,
+  useEntitySearchWithDialog,
+} from "./entity-search-hooks";
+
+// Re-export the only Create*Dialog consumed outside this module (the recipe
+// form's ingredient preview table), so the public import path stays stable.
+export { CreateIngredientDialog };
 
 interface WithEntitySearchProps {
   children: (props: {
@@ -42,239 +40,6 @@ interface WithEntitySearchProps {
     // until the user actually opens the picker (off the page's critical path).
     onOpenChange: (open: boolean) => void;
   }) => ReactNode;
-}
-
-const pagination = {
-  pageIndex: 0,
-  pageSize: 20,
-};
-
-/**
- * Defer an entity-list options query until the picker is first opened (or the
- * user starts typing). Returns an `enabled` flag for the query plus the
- * `onOpenChange` handler to hand back through the render prop. Once activated it
- * stays on, so closing/reopening keeps the cached options.
- */
-function useDeferredSearch(searchQuery: string) {
-  const [activated, setActivated] = useState(false);
-  const onOpenChange = useCallback((open: boolean) => {
-    if (open) setActivated(true);
-  }, []);
-  return {
-    enabled: activated || searchQuery.length > 0,
-    onOpenChange,
-  };
-}
-
-/**
- * Custom hook for basic entity search (no dialog).
- * Use this for simple search-only scenarios or when creating entities without a dialog.
- */
-function useEntitySearch() {
-  const [searchQuery, setSearchQuery] = useState("");
-
-  const onSearchChange = useCallback((query: string) => {
-    setSearchQuery(query);
-  }, []);
-
-  return {
-    searchQuery,
-    onSearchChange,
-  };
-}
-
-/**
- * Custom hook for entity search with dialog-based creation.
- * Extracts common state management for search hooks that need:
- * - Search query state
- * - Dialog open/close state
- * - Promise-based dialog resolution for combobox integration
- */
-function useEntitySearchWithDialog() {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [pendingName, setPendingName] = useState("");
-  const [pendingResolve, setPendingResolve] = useState<
-    ((item: ComboboxItem) => void) | null
-  >(null);
-
-  const onSearchChange = useCallback((query: string) => {
-    setSearchQuery(query);
-  }, []);
-
-  const openDialog = useCallback((name: string): Promise<ComboboxItem> => {
-    setPendingName(name);
-    setIsDialogOpen(true);
-    return new Promise<ComboboxItem>((resolve) => {
-      setPendingResolve(() => resolve);
-    });
-  }, []);
-
-  const closeDialog = useCallback(() => {
-    setIsDialogOpen(false);
-    setPendingResolve(null);
-  }, []);
-
-  const resolveWithEntity = useCallback(
-    (item: ComboboxItem) => {
-      setIsDialogOpen(false);
-      if (pendingResolve) {
-        pendingResolve(item);
-        setPendingResolve(null);
-      }
-    },
-    [pendingResolve],
-  );
-
-  return {
-    searchQuery,
-    onSearchChange,
-    isDialogOpen,
-    setIsDialogOpen,
-    pendingName,
-    openDialog,
-    closeDialog,
-    resolveWithEntity,
-  };
-}
-
-/**
- * Common dialog wrapper that prevents closing when clicking on Popover contents.
- * Used by all Create*Dialog components.
- */
-function CreateEntityDialogWrapper({
-  isOpen,
-  onOpenChange,
-  title,
-  children,
-  size = "md",
-}: {
-  isOpen: boolean;
-  onOpenChange: (open: boolean) => void;
-  title: string;
-  children: ReactNode;
-  size?: ComponentProps<typeof DialogContent>["size"];
-}) {
-  return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent size={size}>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-        </DialogHeader>
-        {children}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-export function CreateIngredientDialog({
-  isOpen,
-  onOpenChange,
-  onCancel,
-  onCreate,
-  isPending,
-  error,
-  initialName,
-}: {
-  isOpen: boolean;
-  onOpenChange: (open: boolean) => void;
-  onCancel: () => void;
-  onCreate: (data: { name: string; aliases: string[] }) => void;
-  isPending: boolean;
-  error?: string;
-  initialName?: string;
-}) {
-  return (
-    <CreateEntityDialogWrapper
-      isOpen={isOpen}
-      onOpenChange={onOpenChange}
-      title="Create New Ingredient"
-    >
-      <IngredientForm
-        mode="create"
-        isPending={isPending}
-        error={error}
-        onCancel={onCancel}
-        onCreate={onCreate}
-        initialName={initialName}
-      />
-    </CreateEntityDialogWrapper>
-  );
-}
-
-function CreateLocationDialog({
-  isOpen,
-  onOpenChange,
-  onCancel,
-  onCreate,
-  isPending,
-  error,
-  initialName,
-}: {
-  isOpen: boolean;
-  onOpenChange: (open: boolean) => void;
-  onCancel: () => void;
-  onCreate: (data: LocationCreateInput) => Promise<LocationOut>;
-  isPending: boolean;
-  error?: string;
-  initialName?: string;
-}) {
-  return (
-    <CreateEntityDialogWrapper
-      isOpen={isOpen}
-      onOpenChange={onOpenChange}
-      title="Create New Location"
-    >
-      <LocationForm
-        mode="create"
-        isPending={isPending}
-        error={error}
-        onCancel={onCancel}
-        onCreate={onCreate}
-        initialName={initialName}
-      />
-    </CreateEntityDialogWrapper>
-  );
-}
-
-function CreateProductDialog({
-  isOpen,
-  onOpenChange,
-  onCancel,
-  onCreate,
-  isPending,
-  error,
-  initialName,
-  initialExpectedQuantity,
-}: {
-  isOpen: boolean;
-  onOpenChange: (open: boolean) => void;
-  onCancel: () => void;
-  onCreate: (data: ProductCreateInput) => void;
-  isPending: boolean;
-  error?: string;
-  initialName?: string;
-  initialExpectedQuantity?: number | null;
-}) {
-  return (
-    <CreateEntityDialogWrapper
-      isOpen={isOpen}
-      onOpenChange={onOpenChange}
-      title="Create New Product"
-      size="xl"
-    >
-      <ProductForm
-        mode="create"
-        isPending={isPending}
-        error={error}
-        onCancel={onCancel}
-        onCreate={onCreate}
-        initialName={initialName}
-        initialExpectedQuantity={initialExpectedQuantity}
-        embedded
-      />
-    </CreateEntityDialogWrapper>
-  );
 }
 
 export function WithIngredientSearch({ children }: WithEntitySearchProps) {

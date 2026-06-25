@@ -1,5 +1,8 @@
-// Fontsource variable fonts - loaded via bundler for better performance
-import "@fontsource-variable/fraunces";
+// Fontsource variable fonts - loaded via bundler for better performance.
+// Warm-Paper Ledger type system: Space Grotesk (geometric sans) for headings,
+// JetBrains Mono for all data/metrics, Inter for body/UI prose. Fraunces retired.
+import "@fontsource-variable/space-grotesk";
+import "@fontsource-variable/jetbrains-mono";
 import "@fontsource-variable/inter";
 
 import { TanStackDevtools } from "@tanstack/react-devtools";
@@ -89,8 +92,10 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
         title: "Cubby",
       },
       {
+        // Warm-Paper Ledger: the iOS status-bar tint matches the paper-surface
+        // sticky header (bg-card) instead of the old dark chrome.
         name: "theme-color",
-        content: "#212329",
+        content: "#fcfaf4",
       },
       {
         name: "apple-mobile-web-app-title",
@@ -235,8 +240,8 @@ function RootComponent() {
     <Provider queryClient={queryClient}>
       <DebugContextProvider>
         <div className="flex min-h-dvh flex-col">
-          <div className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 print:hidden">
-            <div className="mx-auto flex h-16 w-full max-w-7xl items-center px-4 md:px-6">
+          <div className="sticky top-0 z-40 border-b-[3px] border-b-foreground bg-card print:hidden">
+            <div className="mx-auto flex h-12 w-full max-w-7xl items-center px-4 md:px-6">
               <MainNav className="mx-0" onSearchClick={openCommandMenu} />
             </div>
           </div>

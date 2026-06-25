@@ -27,13 +27,13 @@ interface PageListProps extends PageBaseProps {
   entity?: Entity;
   /** Smaller title for utility pages (e.g. Ask). */
   compact?: boolean;
-  /** "none" drops the terracotta accent bar under the title. */
+  /** "none" drops the ultramarine accent rule under the title. */
   decoration?: "accent" | "none";
 }
 
 interface PageDetailProps extends PageBaseProps {
   variant: "detail";
-  /** Required on detail — drives the spec-plate's entity-colored spine. */
+  /** Required on detail — drives the spec-plate eyebrow + ink spine. */
   entity: Entity;
   /** Status stamp on the plate (e.g. IN STOCK). */
   heroStamp?: { label: string; tone?: "ink" | "red" | "green" };

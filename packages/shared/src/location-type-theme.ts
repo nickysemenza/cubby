@@ -19,32 +19,34 @@ export const locationTypeValues = [
 export type LocationType = (typeof locationTypeValues)[number];
 
 /**
- * Location type colors - warm-anchored color families with variations.
- * Each group keeps a distinct earthy hue; items vary by lightness/chroma.
- * Tuned to harmonize with the app's warm palette (no cold cyan/lime).
+ * Location type colors — Warm-Paper Ledger (2026-06-25). Drawn from the app's
+ * retoned categorical chart ramp: the lone ultramarine (chart-1) for the
+ * top-level "room", then the monochrome ink ladder (chart-2..8) for everything
+ * else. Grouped families share a rung so related types read together; matte,
+ * off the warm axis, distinguished by value not hue.
  */
 export const locationTypeColors: Record<LocationType, string> = {
-  // Spaces group (warm brown family)
-  room: "oklch(0.5 0.08 50)", // base
-  area: "oklch(0.6 0.06 52)", // lighter/muted
+  // Spaces group
+  room: "var(--chart-1)", // top-level space gets the accent
+  area: "var(--chart-2)",
 
-  // Surfaces group (olive-sage family)
-  table: "oklch(0.58 0.08 135)", // base
-  cart: "oklch(0.64 0.09 130)", // brighter
-  shelf: "oklch(0.5 0.06 138)", // muted/darker
+  // Surfaces group
+  table: "var(--chart-3)",
+  cart: "var(--chart-4)",
+  shelf: "var(--chart-2)",
 
-  // Storage group (warm plum-rose family)
-  cabinet: "oklch(0.55 0.11 350)", // base
-  drawer: "oklch(0.62 0.12 352)", // lighter
+  // Storage group
+  cabinet: "var(--chart-5)",
+  drawer: "var(--chart-6)",
 
-  // Containers group (muted warm teal family)
-  box: "oklch(0.58 0.07 200)", // base
-  crate: "oklch(0.52 0.06 202)", // darker
-  "half-crate": "oklch(0.62 0.07 198)", // slightly lighter
-  "quarter-crate": "oklch(0.6 0.07 199)", // between crate and half-crate
-  "milk-crate": "oklch(0.68 0.07 196)", // lighter
-  "tote-bin": "oklch(0.54 0.05 202)", // muted
-  bag: "oklch(0.64 0.08 195)", // brighter
+  // Containers group (ink ladder, light end)
+  box: "var(--chart-6)",
+  crate: "var(--chart-7)",
+  "half-crate": "var(--chart-7)",
+  "quarter-crate": "var(--chart-7)",
+  "milk-crate": "var(--chart-8)",
+  "tote-bin": "var(--chart-7)",
+  bag: "var(--chart-8)",
 };
 
 /**

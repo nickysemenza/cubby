@@ -76,7 +76,7 @@ export function CostVsEstimate({
           d.value && d.value > 0 ? formatCurrency(d.value, 0) : ""
         }
         labelSkipWidth={50}
-        labelTextColor="white"
+        labelTextColor="var(--background)"
         enableGridX
         enableGridY={false}
         tooltip={({ id, value, indexValue }) => (

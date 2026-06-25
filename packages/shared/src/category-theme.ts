@@ -14,35 +14,37 @@ export const productCategoryValues = [
 export type ProductCategory = (typeof productCategoryValues)[number];
 
 /**
- * Color palette for product categories - warm-anchored families with variations.
- * Each group keeps a distinct earthy hue; items vary by lightness/chroma.
- * Tuned to harmonize with the app's warm palette (no cold blue/teal/purple).
+ * Color palette for product categories — Warm-Paper Ledger (2026-06-25).
+ * Pulls from the app's retoned categorical chart ramp: a monochrome ink ladder
+ * (chart-2..8, dark→light) with the lone ultramarine (chart-1) reserved for the
+ * dominant "food" category. Matte, off the warm axis — distinguishes categories
+ * by value, not hue, so category dots/donut segments read as one printed figure.
  */
 export const categoryColors: Record<ProductCategory | "uncategorized", string> =
   {
-    // Food group (warm green)
-    food: "oklch(0.58 0.09 140)",
+    // Food — the dominant category gets the ultramarine accent
+    food: "var(--chart-1)",
 
-    // Tools group (earthy clay/brown family)
-    tools: "oklch(0.5 0.07 50)", // base (darker)
-    "tool-consumables": "oklch(0.62 0.07 55)", // lighter
-    "tool-accessories": "oklch(0.44 0.05 58)", // muted/darker
+    // Tools group (ink ladder)
+    tools: "var(--chart-2)",
+    "tool-consumables": "var(--chart-4)",
+    "tool-accessories": "var(--chart-6)",
 
-    // Organization group (honey/amber)
-    storage: "oklch(0.7 0.12 70)",
+    // Organization
+    storage: "var(--chart-3)",
 
-    // Building group (warm brick-red)
-    hardware: "oklch(0.6 0.13 8)",
+    // Building
+    hardware: "var(--chart-5)",
 
-    // Tech group (warm plum)
-    electronics: "oklch(0.5 0.13 345)",
+    // Tech
+    electronics: "var(--chart-7)",
 
-    // Home group (muted warm teal family)
-    household: "oklch(0.6 0.06 198)", // base
-    supplies: "oklch(0.68 0.07 196)", // lighter/brighter
+    // Home group
+    household: "var(--chart-8)",
+    supplies: "var(--chart-6)",
 
-    // Fallback (warm grey)
-    uncategorized: "oklch(0.7 0.02 70)",
+    // Fallback (neutral)
+    uncategorized: "var(--chart-neutral)",
   };
 
 /**

@@ -15,11 +15,11 @@ function Card({
     <div
       data-slot="card"
       data-size={size}
-      // One card surface (2026-06-12 consolidation): a defined hairline border
-      // + soft elevation, everywhere. The old soft(ring)/chunky(border) split
-      // had visually converged after the crisp refresh, so `emphasis` is gone.
+      // Warm-Paper Ledger: a card is a ruled region, not a floating surface —
+      // paper-surface fill + a hairline border, square corners, zero shadow.
+      // Separation by rule and tone, never elevation.
       className={cn(
-        "bg-card text-card-foreground group/card flex flex-col gap-2.5 overflow-hidden rounded-lg border border-[var(--border-chunky)] py-2.5 text-xs/relaxed shadow-[var(--shadow-chunky)] has-[>img:first-child]:pt-0 data-[size=sm]:gap-2 data-[size=sm]:py-2 *:[img:first-child]:rounded-t-lg *:[img:last-child]:rounded-b-lg",
+        "bg-card text-card-foreground group/card flex flex-col gap-2.5 overflow-hidden rounded-none border border-[var(--border-chunky)] py-2.5 text-xs/relaxed has-[>img:first-child]:pt-0 data-[size=sm]:gap-2 data-[size=sm]:py-2",
         className,
       )}
       {...props}
@@ -51,11 +51,11 @@ function SelectableCard({
       data-size={size}
       data-selected={selected}
       className={cn(
-        "bg-card text-card-foreground group/card ease-cozy flex w-full flex-col gap-1 overflow-hidden rounded-lg px-4 py-3 text-left text-xs/relaxed transition-all outline-none",
+        "bg-card text-card-foreground group/card ease-cozy flex w-full flex-col gap-1 overflow-hidden rounded-none px-4 py-3 text-left text-xs/relaxed transition-colors outline-none",
         "focus-visible:ring-ring/40 focus-visible:ring-2",
         selected
-          ? "border-primary border shadow-[var(--shadow-chunky)]"
-          : "hover:border-foreground/40 border border-transparent ring-1 ring-border/80 ring-inset",
+          ? "border-primary bg-[var(--row-selected)] border"
+          : "hover:border-foreground/40 border border-[var(--border-chunky)]",
         className,
       )}
       {...props}

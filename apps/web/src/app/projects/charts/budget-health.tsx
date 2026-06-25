@@ -64,9 +64,9 @@ export function BudgetHealth({
                   : ` (${formatCurrency(d.estimate - d.actual, 0)} left)`}
               </span>
             </div>
-            <div className="relative h-3 w-full overflow-hidden rounded-full bg-muted">
+            <div className="relative h-3 w-full overflow-hidden bg-muted">
               <div
-                className={`h-full rounded-full transition-all ${overBudget ? "bg-destructive" : "bg-primary"}`}
+                className={`h-full transition-all ${overBudget ? "bg-destructive" : "bg-primary"}`}
                 style={{ width: `${barWidth}%` }}
               />
               {/* 100% marker */}
