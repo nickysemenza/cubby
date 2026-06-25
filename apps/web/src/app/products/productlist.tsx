@@ -392,7 +392,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
 
   // Lazy USDA food for the visible page. Only the table view shows the column,
   // so the shelf view never triggers the USDA round-trip.
-  const productIds = useMemo(() => data.map((p) => p.id), [data]);
+  const productIds = useMemo(() => data.slice(0, 200).map((p) => p.id), [data]);
   const foodForIdsQuery = useQuery({
     ...api.product.foodForIds.queryOptions({ ids: productIds }),
     enabled: view === "table" && productIds.length > 0,
