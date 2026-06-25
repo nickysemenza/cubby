@@ -147,7 +147,7 @@ export function IngredientComponentGrid({
             {components.map((node) => (
               <td key={node.recipe.id} className={cellMono}>
                 {columnTotals.has(node.recipe.id)
-                  ? gramText(columnTotals.get(node.recipe.id) as number)
+                  ? gramText(columnTotals.get(node.recipe.id)!)
                   : "·"}
               </td>
             ))}
@@ -164,7 +164,7 @@ export function IngredientComponentGrid({
                 <td key={node.recipe.id} className={cellMono}>
                   {costByComponent.has(node.recipe.id)
                     ? formatCurrency(
-                        costByComponent.get(node.recipe.id) as number,
+                        costByComponent.get(node.recipe.id)!,
                       )
                     : "·"}
                 </td>

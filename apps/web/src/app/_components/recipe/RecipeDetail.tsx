@@ -105,13 +105,13 @@ export function remapLegacyView(
     case "magazine":
       return { view: "read", dataMode: data, prepMode: prep };
     case "table":
-      return { view: "data", dataMode: "table", prepMode: prep };
+      return { view: "data", dataMode: dataMode ?? "table", prepMode: prep };
     case "charts":
-      return { view: "data", dataMode: "charts", prepMode: prep };
+      return { view: "data", dataMode: dataMode ?? "charts", prepMode: prep };
     case "nested":
       return { view: "spec", dataMode: data, prepMode: prep };
     case "matrix":
-      return { view: "prep", dataMode: data, prepMode: "grid" };
+      return { view: "prep", dataMode: data, prepMode: prepMode ?? "grid" };
     default:
       return { view: "read", dataMode: data, prepMode: prep };
   }
