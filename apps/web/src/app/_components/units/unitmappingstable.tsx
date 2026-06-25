@@ -1,12 +1,15 @@
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { useQuery } from "@tanstack/react-query";
-import {
-  createColumnHelper,
-  getCoreRowModel,
-  useReactTable,
-} from "@tanstack/react-table";
 import { useMemo } from "react";
 import { Row } from "~/components/layout";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table";
 import {
   Tooltip,
   TooltipContent,
@@ -19,7 +22,6 @@ import {
 } from "~/lib/conversion-coverage";
 import { wasm } from "~/lib/wasm";
 import { useTRPC } from "~/trpc/react";
-import RTable from "../data-table/Table";
 import { EntityPillLink } from "../EntityPill";
 import { kindIconMap } from "./kind-icons";
 
@@ -134,14 +136,20 @@ const MappingSource: React.FC<{ mapping: UnitMapping }> = ({ mapping }) => {
   );
 };
 
+/**
+ * A small, read-only conversions list (From = To · Source) for the compact
+ * preview surfaces — the enrichment editor's live panel, the coverage panel, and
+ * the conversion dialog. Deliberately a bare `table-fixed` table, NOT the generic
+ * data-table: those panels are narrow and the mapping set is tiny, so the full
+ * toolbar / rows-per-page / pagination / selection chrome just overflowed the
+ * panel and read as broken.
+ */
 export const UnitMappingsTable: React.FC<{
   mappings: UnitMapping[];
   /** Must match the `kinds` passed to the sibling ConversionCapabilities so
    * row icons and coverage chips grade against the same kind universe. */
   kinds?: readonly BaseKind[];
 }> = ({ mappings, kinds }) => {
-  const columnHelper = createColumnHelper<UnitMapping>();
-
   // Same engine the coverage chips read, so a row's lit icon and the chip above
   // can't disagree. Cheap (6 cached probes), memoized per mapping set.
   const covered = useMemo(
@@ -149,85 +157,43 @@ export const UnitMappingsTable: React.FC<{
     [mappings, kinds],
   );
 
-  const columns = useMemo(
-    () => [
-      columnHelper.accessor((row) => wasm.format_amount(row.a), {
-        id: "from",
-        header: "From",
-        enableSorting: false,
-        // The table uses table-layout:fixed, so give From/To explicit widths sized
-        // to their short content; the unspecified Source column then claims the rest.
-        meta: { className: "w-16 whitespace-nowrap p-0.5" /* tight */ },
-      }),
-      columnHelper.accessor((row) => wasm.format_amount(row.b), {
-        id: "to",
-        header: "To",
-        enableSorting: false,
-        meta: { className: "w-32 whitespace-nowrap p-0.5" /* tight */ },
-        cell: (info) => (
-          <Row as="span" align="center" gap="xs" className="whitespace-nowrap">
-            <KindAccent unit={info.row.original.b.unit} covered={covered} />
-            <span>{info.getValue()}</span>
-          </Row>
-        ),
-      }),
-      columnHelper.accessor("source", {
-        id: "source",
-        header: "Source",
-        enableSorting: false,
-        // Unspecified width: in table-layout:fixed this column absorbs the
-        // remaining space; truncate ellipsizes the long source label/pill.
-        meta: { className: "truncate p-0.5" /* tight */ },
-        cell: (info) => <MappingSource mapping={info.row.original} />,
-      }),
-    ],
-    [columnHelper, covered],
-  );
+  if (mappings.length === 0) return null;
 
-  const table = useReactTable({
-    data: mappings,
-    columns,
-    enableSorting: false,
-    enableFilters: false,
-    getCoreRowModel: getCoreRowModel(),
-    getRowId: (row, i) => `${i}-${row.source}`,
-  });
-
-  // A mapping row has no entity name, so the generic mobile card derives a
-  // "Unknown" title. Render the conversion itself instead: "from = to · source".
+  const head = "h-auto p-1 text-2xs uppercase tracking-wide";
+  const cell = "p-1 align-middle";
   return (
-    <RTable
-      table={table}
-      renderMobileCard={(row) => {
-        const m = row.original;
-        return (
-          <Row
-            align="center"
-            justify="between"
-            gap="sm"
-            className="border-b px-1 py-2 text-sm"
-          >
-            <Row
-              as="span"
-              align="center"
-              gap="xs"
-              className="whitespace-nowrap font-medium"
-            >
-              <span>{wasm.format_amount(m.a)} =</span>
-              <KindAccent unit={m.b.unit} covered={covered} />
-              <span>{wasm.format_amount(m.b)}</span>
-            </Row>
-            <Row
-              as="span"
-              align="center"
-              gap="xs"
-              className="min-w-0 truncate text-muted-foreground text-xs"
-            >
+    <Table>
+      <TableHeader>
+        {/* table-fixed: size From/To to their short content; Source takes the rest. */}
+        <TableRow className="hover:bg-transparent">
+          <TableHead className={`${head} w-14`}>From</TableHead>
+          <TableHead className={`${head} w-28`}>To</TableHead>
+          <TableHead className={head}>Source</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {mappings.map((m, i) => (
+          <TableRow key={`${i}-${m.source}`} className="hover:bg-transparent">
+            <TableCell className={`${cell} whitespace-nowrap`}>
+              {wasm.format_amount(m.a)}
+            </TableCell>
+            <TableCell className={cell}>
+              <Row
+                as="span"
+                align="center"
+                gap="xs"
+                className="whitespace-nowrap"
+              >
+                <KindAccent unit={m.b.unit} covered={covered} />
+                <span>{wasm.format_amount(m.b)}</span>
+              </Row>
+            </TableCell>
+            <TableCell className={`${cell} truncate text-muted-foreground`}>
               <MappingSource mapping={m} />
-            </Row>
-          </Row>
-        );
-      }}
-    />
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
   );
 };
