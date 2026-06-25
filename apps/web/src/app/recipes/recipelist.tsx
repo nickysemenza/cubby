@@ -101,6 +101,7 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
         id: "yield",
         header: "Yield",
         meta: {
+          numeric: true,
           className: "w-24",
           // Mobile: yield/servings is the most useful at-a-glance datum, and
           // recipe rows have no image — surface it as the row subtitle.
@@ -120,6 +121,7 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
         id: "costTotal",
         header: "Cost",
         meta: {
+          numeric: true,
           className: "w-24",
           mobile: { slot: "trailing", priority: 5 },
         },
@@ -161,6 +163,7 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
         id: "caloriesTotal",
         header: "Calories",
         meta: {
+          numeric: true,
           className: "w-28",
           mobile: { slot: "trailing", priority: 10 },
         },

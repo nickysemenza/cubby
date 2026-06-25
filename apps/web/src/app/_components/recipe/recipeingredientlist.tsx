@@ -170,7 +170,7 @@ export const RecipeIngredientList: React.FC<{
     columnHelper.accessor("amounts", {
       header: "Amounts",
       enableSorting: false,
-      meta: { className: "w-32" },
+      meta: { numeric: true, className: "w-32" },
       cell: (info) => {
         const amounts = info.getValue();
 
@@ -208,7 +208,7 @@ export const RecipeIngredientList: React.FC<{
       {
         id: "dollars",
         header: "Cost",
-        meta: { className: "w-24" },
+        meta: { numeric: true, className: "w-24" },
         sortUndefined: "last",
         cell: (info) => {
           const measure = info.row.original.priceInfo?.price;
@@ -230,7 +230,7 @@ export const RecipeIngredientList: React.FC<{
       {
         id: "grams",
         header: "Weight",
-        meta: { className: "w-24" },
+        meta: { numeric: true, className: "w-24" },
         sortUndefined: "last",
         cell: (info) => {
           const measure = info.row.original.priceInfo?.gram;
@@ -249,7 +249,7 @@ export const RecipeIngredientList: React.FC<{
     columnHelper.accessor((row) => row.scalingPct ?? undefined, {
       id: "scalingPct",
       header: "Scaling %",
-      meta: { className: "w-20" },
+      meta: { numeric: true, className: "w-20" },
       sortUndefined: "last",
       cell: (props) => {
         const row = props.row.original;
@@ -293,7 +293,7 @@ export const RecipeIngredientList: React.FC<{
               </span>
             </div>
           ),
-          meta: { className: "w-14 text-right tabular-nums" },
+          meta: { numeric: true, className: "w-14" },
           sortUndefined: "last",
           cell: (info) => {
             const nutrientResult = info.row.original.priceInfo?.nutrient;
@@ -420,6 +420,7 @@ export const RecipeIngredientList: React.FC<{
         isLoading={displayData.length === 0}
         error={undefined}
         ariaLabel="Recipe Ingredients Table"
+        verticalAlign="top"
         getRowClassName={(row) =>
           // Wash estimated rows in a soft honey tint so usage-adjusted numbers
           // read as approximate at a glance, not just via the "est." markers.

@@ -74,6 +74,8 @@ declare module "@tanstack/react-table" {
     /** @deprecated Use `mobile: { slot: "hidden" }` instead */
     mobileHidden?: boolean;
     className?: string;
+    /** Right-align + tabular figures for numeric/quantity columns. */
+    numeric?: boolean;
     /** Filter configuration for inline header filter */
     filterConfig?: FilterConfig;
   }
@@ -628,7 +630,8 @@ export function createCurrencyColumn<
     id: String(accessor),
     header: options?.header,
     meta: {
-      className: options?.className ?? "w-20 text-right font-mono tabular-nums",
+      numeric: true,
+      className: options?.className ?? "w-20",
       mobile: options?.mobile,
     },
     footer: (info) => {
@@ -941,7 +944,8 @@ export function createEditableAmountColumn<T extends Record<string, unknown>>(
     id: String(accessor),
     header: options.header ?? "Amount",
     meta: {
-      className: cn("w-40 font-mono tabular-nums", options.className),
+      numeric: true,
+      className: cn("w-40", options.className),
     },
     cell: (info) => {
       const amount = info.getValue();
