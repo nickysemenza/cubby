@@ -22,6 +22,7 @@ import {
 } from "~/server/repo/ingredient";
 import {
   enrichmentRowOut,
+  ingredientWithFoodLeanOut,
   ingredientWithFoodOut,
 } from "~/server/services/ingredient.service";
 import {
@@ -188,7 +189,10 @@ const resolveOrCreate = protectedProcedure
 // in a single round-trip instead of one getByID per ingredient (hundreds).
 const getManyByIDs = protectedProcedure
   .input(z.object({ ids: z.array(ingredientId) }))
-  .output(z.array(ingredientWithFoodOut))
+  // Lean output: products + food only (the consumer computes costs and reads no
+  // recipe-usage data) — the full ingredient graph's per-usage recipe bodies were
+  // a ~1s over-fetch on a recipe's ingredient set.
+  .output(z.array(ingredientWithFoodLeanOut))
   .query(async ({ ctx, input }) => {
     return await ctx.services.ingredient.getIngredientsByIDs(input.ids);
   });

@@ -30,7 +30,7 @@ import { toWFoodInput } from "~/lib/unit-mapping-utils";
 import { wasm } from "~/lib/wasm";
 import type { Result } from "~/misc/result-types";
 import type {
-  IngredientWithFoodOut,
+  IngredientWithFoodLeanOut,
   ProductWithMappingsAndFoodOut,
 } from "~/server/services/ingredient.service";
 
@@ -333,7 +333,7 @@ const reshape = (w: WRecipeCosting, rows: CostingRow[]): RecipeCosting => {
  */
 export const computeRecipeCosting = (
   recipes: RecipeOut[],
-  ingMap: Record<string, IngredientWithFoodOut>,
+  ingMap: Record<string, IngredientWithFoodLeanOut>,
   getIngredientName: (ingredient: SectionIngredientOut) => string,
   recipeMap: Record<string, RecipeOut> = {},
   opts: { explain?: boolean } = {},

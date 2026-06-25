@@ -9,13 +9,13 @@ import {
   recipeLinkSignature,
 } from "~/lib/recipe-graph";
 import { ID_CHUNK_SIZE } from "~/misc/array-helpers";
-import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
+import type { IngredientWithFoodLeanOut } from "~/server/services/ingredient.service";
 import { useTRPC } from "~/trpc/react";
 
 type TRPC = ReturnType<typeof useTRPC>;
 
 type RecipeCostingData = {
-  ingMap: Record<string, IngredientWithFoodOut>;
+  ingMap: Record<string, IngredientWithFoodLeanOut>;
   recipeMap: Record<string, RecipeOut>;
 };
 
@@ -85,7 +85,7 @@ async function loadRecipeCostingData(
  * signature so streaming/refetch re-renders don't restart the work.
  */
 export function useRecipeCostingData(recipes: RecipeOut[]): {
-  ingMap: Record<string, IngredientWithFoodOut> | null;
+  ingMap: Record<string, IngredientWithFoodLeanOut> | null;
   recipeMap: Record<string, RecipeOut>;
   isLoading: boolean;
 } {
@@ -94,7 +94,7 @@ export function useRecipeCostingData(recipes: RecipeOut[]): {
 
   const [ingMap, setIngMap] = useState<Record<
     string,
-    IngredientWithFoodOut
+    IngredientWithFoodLeanOut
   > | null>(null);
   const [recipeMap, setRecipeMap] = useState<Record<string, RecipeOut>>({});
   const [isLoading, setIsLoading] = useState(false);

@@ -1,7 +1,7 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
 import { useMemo } from "react";
 import { computeRecipeCosting, type RecipeCosting } from "~/lib/recipe-costing";
-import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
+import type { IngredientWithFoodLeanOut } from "~/server/services/ingredient.service";
 import { buildRecipeTree, type RecipeTreeNode } from "./recipe-tree";
 import { getIngredientName } from "./recipe-utils";
 
@@ -21,7 +21,7 @@ import { getIngredientName } from "./recipe-utils";
  */
 export function useRecipeTree(
   scaledRecipe: RecipeOut,
-  ingMap: Record<string, IngredientWithFoodOut> | null,
+  ingMap: Record<string, IngredientWithFoodLeanOut> | null,
   recipeMap: Record<string, RecipeOut>,
   enabled: boolean,
 ): {
