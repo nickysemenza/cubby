@@ -158,7 +158,7 @@ function RecipeExportPage() {
 
         {tree ? (
           format === "prep" ? (
-            <RecipePrepSheetView tree={tree} />
+            <RecipePrepSheetView tree={tree} hideGrid />
           ) : format === "matrix" ? (
             <RecipeIngredientMatrixView tree={tree} />
           ) : (

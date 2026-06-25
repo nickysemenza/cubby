@@ -264,8 +264,12 @@ function Component({
 // per-row WASM formatting + markdown ran on every parent re-render (load freeze).
 export const RecipePrepSheetView = memo(function RecipePrepSheetView({
   tree,
+  hideGrid = false,
 }: {
   tree: RecipeTreeNode;
+  /** Omit the ingredient × component grid disclosure — the print/export sheet
+   * has its own dedicated "matrix" format, so it doesn't need the in-app one. */
+  hideGrid?: boolean;
 }) {
   const recipe = tree.recipe;
   // Derived tree walks — memoized so RecipeDetail's streaming re-renders don't
@@ -310,21 +314,24 @@ export const RecipePrepSheetView = memo(function RecipePrepSheetView({
 
       {/* The ingredient × component pivot, folded in as a disclosure (collapsed)
           so it's reachable without a sub-tab; its Total column + cost row mirror
-          the shopping list. */}
-      <details
-        onToggle={(e) => {
-          if (e.currentTarget.open) setGridOpened(true);
-        }}
-        className="rounded-lg border border-[var(--border-chunky)] bg-muted/30 px-4 py-2 print:border-0 print:bg-transparent print:px-0"
-      >
-        <summary className="eyebrow cursor-pointer marker:content-none">
-          <Grid3x3 className="mr-2 inline h-3 w-3 align-[-2px]" />
-          Ingredient × component grid
-        </summary>
-        <div className="mt-2">
-          {gridOpened && <IngredientComponentGrid tree={tree} showCost />}
-        </div>
-      </details>
+          the shopping list. Omitted on the print/export sheet (its own "matrix"
+          format covers the pivot) and never printed. */}
+      {!hideGrid && (
+        <details
+          onToggle={(e) => {
+            if (e.currentTarget.open) setGridOpened(true);
+          }}
+          className="rounded-lg border border-[var(--border-chunky)] bg-muted/30 px-4 py-2 print:hidden"
+        >
+          <summary className="eyebrow cursor-pointer marker:content-none">
+            <Grid3x3 className="mr-2 inline h-3 w-3 align-[-2px]" />
+            Ingredient × component grid
+          </summary>
+          <div className="mt-2">
+            {gridOpened && <IngredientComponentGrid tree={tree} showCost />}
+          </div>
+        </details>
+      )}
 
       <Stack gap="lg">
         {components.map((node, i) => (
