@@ -625,19 +625,38 @@ jobs:
           echo "url=$url" >> "$GITHUB_OUTPUT"
           [ -n "$url" ] || echo "::warning::No preview URL — enable Preview URLs (workers.dev) for the cubby worker."
 
-  deploy-usda-api:
-    name: Deploy usda-api Worker
+  # The two aux (leaf) workers deploy identically — same gate, same shape, only
+  # the package + its changes-flag differ — so they share one matrix job. Each
+  # runs its own `deploy` script (usda-api: wrangler deploy; upc-lookup: vite
+  # build + wrangler deploy). The web/cubby worker is deliberately NOT here: it
+  # deploys a prebuilt artifact, gates on the full E2E suite, and its dep closure
+  # is ~the whole repo — see deploy-cf.
+  #
+  # CODE ONLY — no D1 migrations run in CI for either worker. Prod schema changes
+  # are a deliberate, explicit act: usda-api's edge D1 + R2 bundles ride the manual
+  # seed pipeline (edge:d1:migrate:remote + edge:seed:remote); upc-lookup owns its
+  # D1 directly — run `pnpm --filter @cubby/upc-lookup db:migrate:remote` by hand
+  # before merging code that depends on a new schema.
+  deploy-worker:
+    name: Deploy ${{ matrix.worker.pkg }} Worker
     needs: [changes, lint-format, test-unit-aux]
     runs-on: ubuntu-latest
-    # Decoupled from the web E2E/integration gate: this aux worker rides only on
-    # lint-format + its own unit legs (the test-unit-aux matrix covers usda-api +
-    # its shared usda-schemas/usda-contract/schemas packages). A flaky web E2E
-    # won't block it. `always()` is required so a skipped `changes` path doesn't
-    # cascade-skip the explicit result checks below.
+    strategy:
+      matrix:
+        worker:
+          # `changed` indexes the per-worker boolean from the `changes` job below.
+          - pkg: usda-api
+            changed: usda
+          - pkg: upc-lookup
+            changed: upc
+    # Decoupled from the web E2E/integration gate: aux workers ride only on
+    # lint-format + their own unit legs (the test-unit-aux matrix). A flaky web
+    # E2E won't block them. `always()` is required so a skipped `changes` path
+    # doesn't cascade-skip the explicit result checks below.
     if: |
       always() &&
       github.ref == 'refs/heads/main' &&
-      needs.changes.outputs.usda == 'true' &&
+      needs.changes.outputs[matrix.worker.changed] == 'true' &&
       needs.lint-format.result == 'success' &&
       needs.test-unit-aux.result == 'success'
     environment:
@@ -647,43 +666,10 @@ jobs:
       - uses: ./.github/actions/setup-node-with-deps
         with:
           # workspace deps must be installed so wrangler's esbuild can resolve the
-          # usda-schemas/usda-contract imports it bundles (no prebuilt artifact).
+          # workspace imports each worker bundles (no prebuilt artifact).
           download-wasm: "false"
-      # Worker CODE only. The edge D1 schema (edge-migrations dir) + R2 bundles are
-      # loaded by the separate, manual seed pipeline (edge:d1:migrate:remote +
-      # edge:seed:remote) — a worker that reads a freshly-seeded column is merged
-      # alongside that seed, so coupling deploy to an auto-migration would be wrong.
-      - name: Deploy usda-api
-        run: pnpm --filter @cubby/usda-api run deploy:worker
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: 9f10f078d35d86c78dedece2300a6b88
-
-  deploy-upc-lookup:
-    name: Deploy upc-lookup Worker
-    needs: [changes, lint-format, test-unit-aux]
-    runs-on: ubuntu-latest
-    # Same own-unit-legs gate as deploy-usda-api (see note there).
-    if: |
-      always() &&
-      github.ref == 'refs/heads/main' &&
-      needs.changes.outputs.upc == 'true' &&
-      needs.lint-format.result == 'success' &&
-      needs.test-unit-aux.result == 'success'
-    environment:
-      name: cloudflare
-    steps:
-      - uses: actions/checkout@v6
-      - uses: ./.github/actions/setup-node-with-deps
-        with:
-          download-wasm: "false"
-      # Worker CODE only. upc-lookup owns its D1 (upc-lookup-db) directly, but D1
-      # migrations are NOT run here — schema changes to prod are a deliberate,
-      # explicit act: run `pnpm --filter @cubby/upc-lookup db:migrate:remote` by
-      # hand (before merging code that depends on the new schema). Keeps CI deploys
-      # free of prod-schema side effects. `deploy` = vite build then wrangler deploy.
-      - name: Deploy upc-lookup
-        run: pnpm --filter @cubby/upc-lookup run deploy
+      - name: Deploy ${{ matrix.worker.pkg }}
+        run: pnpm --filter @cubby/${{ matrix.worker.pkg }} run deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 9f10f078d35d86c78dedece2300a6b88

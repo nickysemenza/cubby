@@ -17,7 +17,7 @@
     "edge:seed:remote": "tsx scripts/seed-edge-artifacts.ts --remote",
     "edge:d1:migrate:local": "wrangler d1 migrations apply usda-api-index --local",
     "edge:d1:migrate:remote": "wrangler d1 migrations apply usda-api-index --remote",
-    "deploy:worker": "wrangler deploy",
+    "deploy": "wrangler deploy",
     "generate:openapi": "tsx -e \"import('./src/openapi.js').then(m => console.log(JSON.stringify(m.openApiDocument, null, 2)))\" > openapi.json",
     "lint": "biome lint",
     "lint:fix": "biome lint --write",

@@ -75,7 +75,8 @@ SQL, then activates the version last.
 ## Deploy
 
 ```bash
-pnpm deploy:worker
+# `run` is required — `pnpm deploy` (no run) hits pnpm's built-in deploy command.
+pnpm run deploy
 ```
 
 Current production resources are configured in `wrangler.jsonc`:
