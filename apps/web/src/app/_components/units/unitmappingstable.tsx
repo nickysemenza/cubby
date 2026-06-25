@@ -136,14 +136,7 @@ const MappingSource: React.FC<{ mapping: UnitMapping }> = ({ mapping }) => {
   );
 };
 
-/**
- * A small, read-only conversions list (From = To · Source) for the compact
- * preview surfaces — the enrichment editor's live panel, the coverage panel, and
- * the conversion dialog. Deliberately a bare table, NOT the generic data-table:
- * those panels are narrow and the mapping set is tiny, so the full toolbar /
- * rows-per-page / pagination / selection chrome just overflowed the panel and
- * read as broken.
- */
+// Bare read-only conversions list for compact panels; the generic data-table's toolbar/pagination/selection chrome overflowed them (see PR for context).
 export const UnitMappingsTable: React.FC<{
   mappings: UnitMapping[];
   /** Must match the `kinds` passed to the sibling ConversionCapabilities so
@@ -160,11 +153,7 @@ export const UnitMappingsTable: React.FC<{
   if (mappings.length === 0) return null;
 
   const head = "h-auto p-1 text-2xs uppercase tracking-wide";
-  // `table-auto` + nowrap: From/To get exactly their content width (no fixed
-  // columns that long units like "½ chicken, bone(s) removed" or nutrient labels
-  // like "0.35 mg vitamin_b6" overflow into); Source takes the slack via `w-full`
-  // and truncates the long food name. Adapts to both the narrow editor panel and
-  // a wide detail page.
+  // table-auto: From/To size to content (no overflow into neighbors); Source takes the slack via w-full and truncates the food name.
   const cell = "whitespace-nowrap p-1 align-top";
   return (
     <Table className="table-auto">
