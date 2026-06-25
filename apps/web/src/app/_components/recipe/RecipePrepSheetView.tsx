@@ -1,5 +1,5 @@
 import { Grid3x3, ShoppingCart } from "lucide-react";
-import { memo, useMemo } from "react";
+import { memo, useMemo, useState } from "react";
 import { Row, Stack } from "~/components/layout";
 import { MarkdownText } from "~/components/markdown";
 import { formatCurrency } from "~/lib/utils";
@@ -277,6 +277,9 @@ export const RecipePrepSheetView = memo(function RecipePrepSheetView({
     () => fullBatchCostByComponent(tree).total,
     [tree],
   );
+  // The grid disclosure is collapsed by default; defer building/rendering it
+  // (matrix walk + table) until the cook first opens it, then keep it mounted.
+  const [gridOpened, setGridOpened] = useState(false);
 
   return (
     <Stack
@@ -308,13 +311,18 @@ export const RecipePrepSheetView = memo(function RecipePrepSheetView({
       {/* The ingredient × component pivot, folded in as a disclosure (collapsed)
           so it's reachable without a sub-tab; its Total column + cost row mirror
           the shopping list. */}
-      <details className="rounded-lg border border-[var(--border-chunky)] bg-muted/30 px-4 py-2 print:border-0 print:bg-transparent print:px-0">
+      <details
+        onToggle={(e) => {
+          if (e.currentTarget.open) setGridOpened(true);
+        }}
+        className="rounded-lg border border-[var(--border-chunky)] bg-muted/30 px-4 py-2 print:border-0 print:bg-transparent print:px-0"
+      >
         <summary className="eyebrow cursor-pointer marker:content-none">
           <Grid3x3 className="mr-2 inline h-3 w-3 align-[-2px]" />
           Ingredient × component grid
         </summary>
         <div className="mt-2">
-          <IngredientComponentGrid tree={tree} showCost />
+          {gridOpened && <IngredientComponentGrid tree={tree} showCost />}
         </div>
       </details>
 

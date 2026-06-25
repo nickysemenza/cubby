@@ -279,8 +279,19 @@ const RecipeDetailInner: React.FC<{
                 type: "recipe",
                 data: {
                   price: totals.price,
+                  // Carry the range upper bounds (ranged amounts like "1–2 cups")
+                  // so the card shows "$4.50–$6.20", matching the table's own card.
+                  ...(totals.priceUpper != null
+                    ? { priceUpper: totals.priceUpper }
+                    : {}),
                   weight: totals.weight,
+                  ...(totals.weightUpper != null
+                    ? { weightUpper: totals.weightUpper }
+                    : {}),
                   nutrients: totals.nutrients,
+                  ...(totals.nutrientsUpper
+                    ? { nutrientsUpper: totals.nutrientsUpper }
+                    : {}),
                   totalIngredients: totals.totalIngredients,
                   missingByType: totals.missingByType,
                   perServing: getServingBasis(scaledRecipe),
