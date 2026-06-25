@@ -232,7 +232,7 @@ export default function QuickCaptureForm({
     api.product.findOrCreateByUPC.mutationOptions({
       onSuccess: () => {
         // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
-        queryClient.invalidateQueries({ queryKey: [queryKeys.product.list] });
+        queryClient.invalidateQueries({ queryKey: [queryKeys.product.all] });
       },
     }),
   );
@@ -619,7 +619,13 @@ export default function QuickCaptureForm({
               {/* Product field with quick create */}
               <div className="w-1/2 min-w-0 flex-1">
                 <WithProductSearch>
-                  {({ items, onSearchChange, isLoading, onCreateNew }) => (
+                  {({
+                    items,
+                    onSearchChange,
+                    isLoading,
+                    onCreateNew,
+                    onOpenChange,
+                  }) => (
                     <ComboboxField
                       form={form}
                       name={`items.${index}.product`}
@@ -628,6 +634,7 @@ export default function QuickCaptureForm({
                       onSearchChange={onSearchChange}
                       isLoading={isLoading}
                       onCreateNew={onCreateNew}
+                      onOpenChange={onOpenChange}
                     />
                   )}
                 </WithProductSearch>

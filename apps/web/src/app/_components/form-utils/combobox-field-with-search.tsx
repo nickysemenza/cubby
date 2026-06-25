@@ -17,6 +17,7 @@ interface WithEntitySearchProps {
     onSearchChange: (query: string) => void;
     isLoading: boolean;
     onCreateNew?: (name: string) => Promise<ComboboxItem>;
+    onOpenChange: (open: boolean) => void;
   }) => ReactNode;
 }
 
@@ -51,7 +52,7 @@ export function ComboboxFieldWithSearch<TFieldValues extends FieldValues>({
 
   return (
     <SearchWrapper>
-      {({ items, onSearchChange, isLoading, onCreateNew }) => (
+      {({ items, onSearchChange, isLoading, onCreateNew, onOpenChange }) => (
         <ComboboxField
           form={form}
           name={name}
@@ -60,6 +61,7 @@ export function ComboboxFieldWithSearch<TFieldValues extends FieldValues>({
           onSearchChange={onSearchChange}
           isLoading={isLoading}
           onCreateNew={onCreateNew}
+          onOpenChange={onOpenChange}
         />
       )}
     </SearchWrapper>

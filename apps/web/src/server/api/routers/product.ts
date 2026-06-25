@@ -32,6 +32,7 @@ import {
   getCategoryDistribution,
   getProductByShortcode,
   getProductsByShortcodes,
+  productSearch,
   quickCreateProduct,
 } from "~/server/repo/product";
 import { importImageFromUPC } from "~/server/services/image-import";
@@ -43,6 +44,7 @@ import {
 import {
   createDeleteProcedure,
   createEntityCrudProcedures,
+  createEntityListProcedure,
 } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
@@ -86,6 +88,30 @@ const { getByID, list } = createEntityCrudProcedures({
         services.actorContext,
       );
     },
+  },
+  entityName: "product",
+});
+
+// Lightweight typeahead for product-picker comboboxes. Same filters/pagination
+// shape as `list`, but the repo skips relation joins AND the per-row USDA food
+// enrichment `list` does — pickers only need {id, name, manufacturer}, so the
+// cross-Worker USDA batch (list's long pole) has no business on this path.
+const { list: search } = createEntityListProcedure({
+  schemas: {
+    output: productTopLevelOut,
+    filters: productFiltersSchema,
+  },
+  repository: {
+    list: async (services, filters, sort, pagination) =>
+      productSearch(
+        services.db,
+        filters.nameFilter,
+        filters.manufacturerFilter,
+        filters.upcFilter,
+        filters.categoryFilter,
+        sort,
+        pagination,
+      ),
   },
   entityName: "product",
 });
@@ -396,6 +422,7 @@ export const productRouter = createTRPCRouter({
   getByShortcode,
   getByShortcodes,
   list,
+  search,
   create,
   createMany,
   markUsdaUnavailableMany,

@@ -137,7 +137,7 @@ function UpcApplyAction({ product }: { product: ProductWithBetterUpcData }) {
     // The whole problems.* path is always invalidated by the hook (which also
     // feeds the navbar badge count); add the product/recipe lists (price feeds
     // cost).
-    invalidateKeys: [queryKeys.product.list, queryKeys.recipe.list],
+    invalidateKeys: [queryKeys.product.all, queryKeys.recipe.list],
   });
   return (
     <Button

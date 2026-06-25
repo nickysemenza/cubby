@@ -382,6 +382,7 @@ export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
   isLoading,
   onCreateNew,
   onSelect,
+  onOpenChange,
 }: {
   form: UseFormReturn<TFieldValues>;
   name: Path<TFieldValues>;
@@ -394,6 +395,9 @@ export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
   // Lets callers sync a sibling field — e.g. write the ingredient's aliases to
   // the row so the Re-parse drift check sees them.
   onSelect?: (item: ComboboxItem | null) => void;
+  // Forwarded to the combobox so an async-search wrapper can defer its options
+  // query until the dropdown opens.
+  onOpenChange?: (open: boolean) => void;
 }) {
   return (
     <Controller
@@ -419,6 +423,7 @@ export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
               onSelect?.(value);
             }}
             onCreateNew={onCreateNew}
+            onOpenChange={onOpenChange}
           />
         </FormFieldGroup>
       )}

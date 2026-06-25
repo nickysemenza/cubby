@@ -53,7 +53,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("product");
 
   // Memoize invalidate keys to prevent recreating on every render
-  const invalidateKeys = useMemo(() => [queryKeys.product.list] as const, []);
+  const invalidateKeys = useMemo(() => [queryKeys.product.all] as const, []);
 
   // Mutation for inline editing (price, category, etc.)
   const updateProductMutation = useUpdateMutation({
@@ -80,7 +80,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   const deletableConfig = useDeletableConfig({
     mutationFn: api.product.delete.mutationOptions,
     entityLabel: "Product",
-    invalidateKeys: [[queryKeys.product.list]],
+    invalidateKeys: [[queryKeys.product.all]],
   });
 
   // Memoize columns to prevent recreating on every render

@@ -50,6 +50,7 @@ export function DialogCompatibleCombobox<TId extends string = string>({
   value,
   setValue,
   onCreateNew,
+  onOpenChange,
   renderItem,
   wide,
 }: {
@@ -60,6 +61,12 @@ export function DialogCompatibleCombobox<TId extends string = string>({
   value: ComboboxItem<TId> | null;
   setValue: (item: ComboboxItem<TId> | null) => void;
   onCreateNew?: (name: string) => Promise<ComboboxItem<TId>>;
+  /**
+   * Notified whenever the dropdown opens or closes. Lets an async-search parent
+   * defer its options query until the user actually opens the picker, instead of
+   * firing it on mount (keeps the list query off the page's critical path).
+   */
+  onOpenChange?: (open: boolean) => void;
   /**
    * Optional custom renderer for each dropdown row. When provided it replaces the
    * default truncated-name span, and rows switch to a multi-line layout. The
@@ -84,6 +91,21 @@ export function DialogCompatibleCombobox<TId extends string = string>({
     onSearchChange(debouncedInput);
   }, [debouncedInput, onSearchChange]);
 
+  // Single open/close mutator: every transition (trigger click, Escape,
+  // click-outside, item select, create-new) goes through this so `onOpenChange`
+  // fires on EVERY change, honoring its "opens or closes" contract. It's
+  // synchronous (not a post-paint effect) so an async-search wrapper's
+  // `setActivated(true)` batches with the open render — the first painted frame
+  // of the open dropdown already has the query enabled (loading spinner) instead
+  // of flashing "No items found".
+  const changeOpen = React.useCallback(
+    (next: boolean) => {
+      setOpen(next);
+      onOpenChange?.(next);
+    },
+    [onOpenChange],
+  );
+
   // Focus the input when the dropdown is opened
   React.useEffect(() => {
     if (open && inputRef.current) {
@@ -102,7 +124,7 @@ export function DialogCompatibleCombobox<TId extends string = string>({
         !containerRef.current.contains(event.target as Node) &&
         open
       ) {
-        setOpen(false);
+        changeOpen(false);
       }
     };
 
@@ -110,7 +132,7 @@ export function DialogCompatibleCombobox<TId extends string = string>({
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [open]);
+  }, [open, changeOpen]);
 
   // Stop propagation to prevent dialog from capturing events
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -118,7 +140,7 @@ export function DialogCompatibleCombobox<TId extends string = string>({
 
     // Close on escape
     if (e.key === "Escape") {
-      setOpen(false);
+      changeOpen(false);
     }
   };
 
@@ -138,7 +160,7 @@ export function DialogCompatibleCombobox<TId extends string = string>({
           // Prevent the click from bubbling up to the form and triggering a submit
           e.preventDefault();
           e.stopPropagation();
-          setOpen(!open);
+          changeOpen(!open);
         }}
         // Prevent form submission when clicking the button
         type="button"
@@ -197,7 +219,7 @@ export function DialogCompatibleCombobox<TId extends string = string>({
 
                       const newItem = await onCreateNew(inputValue);
                       setValue(newItem);
-                      setOpen(false);
+                      changeOpen(false);
                       setInputValue("");
                     }}
                   >
@@ -232,7 +254,7 @@ export function DialogCompatibleCombobox<TId extends string = string>({
                       } else {
                         setValue(result);
                       }
-                      setOpen(false);
+                      changeOpen(false);
                     }}
                   >
                     <Check

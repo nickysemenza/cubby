@@ -285,4 +285,46 @@ describe("product router", () => {
       });
     });
   });
+
+  describe("search (lightweight picker typeahead)", () => {
+    it("returns matching products without food or relation fields", async () => {
+      const caller = createTestCaller(productRouter, ctx.db);
+      const created = await caller.create(
+        makeProductInput({
+          name: "Sea Salt",
+          manufacturer: "Acme",
+          pendingImageIds: [],
+        }),
+      );
+
+      const result = await caller.search(
+        listParams({ filters: { nameFilter: "Sea Salt" } }),
+      );
+
+      const match = result.items.find((p) => p.id === created.id);
+      expect(match).toBeDefined();
+      expect(match?.name).toBe("Sea Salt");
+      expect(match?.manufacturer).toBe("Acme");
+      // The picker path returns the lean productTopLevelOut shape — no USDA food
+      // (which is `list`'s long pole) and no inventory/mapping relation joins.
+      expect(match && "food" in match).toBe(false);
+      expect(match && "inventoryEntry" in match).toBe(false);
+    });
+
+    it("filters by name", async () => {
+      const caller = createTestCaller(productRouter, ctx.db);
+      await caller.create(
+        makeProductInput({ name: "Olive Oil", pendingImageIds: [] }),
+      );
+      await caller.create(
+        makeProductInput({ name: "Canola Oil", pendingImageIds: [] }),
+      );
+
+      const result = await caller.search(
+        listParams({ filters: { nameFilter: "Olive" } }),
+      );
+      expect(result.items.length).toBe(1);
+      expect(result.items[0]!.name).toBe("Olive Oil");
+    });
+  });
 });

@@ -33,6 +33,7 @@ export {
   getProductByShortcode,
   getProductsByShortcodes,
   productList,
+  productSearch,
   quickCreateProduct,
   updateProduct,
 } from "./crud";

@@ -188,6 +188,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                           onSearchChange,
                           isLoading,
                           onCreateNew,
+                          onOpenChange,
                         }) => (
                           <ComboboxField
                             form={form}
@@ -196,6 +197,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                             onSearchChange={onSearchChange}
                             isLoading={isLoading}
                             onCreateNew={onCreateNew}
+                            onOpenChange={onOpenChange}
                             // Keep the row's aliases in sync with the picked
                             // ingredient so the Re-parse drift check doesn't
                             // false-positive on an alias match.
@@ -210,13 +212,19 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                       </WithIngredientSearch>
                     ) : (
                       <WithRecipeSearch>
-                        {({ items, onSearchChange, isLoading }) => (
+                        {({
+                          items,
+                          onSearchChange,
+                          isLoading,
+                          onOpenChange,
+                        }) => (
                           <ComboboxField
                             form={form}
                             name={`${path}.recipe`}
                             items={items}
                             onSearchChange={onSearchChange}
                             isLoading={isLoading}
+                            onOpenChange={onOpenChange}
                           />
                         )}
                       </WithRecipeSearch>
