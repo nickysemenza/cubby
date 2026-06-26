@@ -47,7 +47,6 @@ export const ingredientOut = z
 export const ingredientCreateInput = ingredientBase.extend({
   name: requiredName("Ingredient name").meta({ mock: "food.ingredient" }),
 });
-export type IngredientCreateInput = z.infer<typeof ingredientCreateInput>;
 
 /**
  * Input schema for updating ingredients
