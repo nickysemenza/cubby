@@ -21,11 +21,14 @@ export interface RecomputeMessage {
 }
 
 /**
- * Chunk size when fanning recipe ids into messages. One message ≈ one
- * `recomputeTree` unit — matches the 25-recipe batch the full backfill
- * (`recomputeAll`) already uses to bound a single transaction's work.
+ * Recipe ids per queue message. The consumer auto-scales to many concurrent
+ * invocations (one per message, up to the `max_concurrency` cap), so a SMALLER
+ * chunk = more messages = more parallel drain — at the cost of slightly less
+ * per-message WASM batching (one engine call per chunk) and more DB pool churn.
+ * 10 balances those: a popular-ingredient merge (~100 recipes) fans into ~10
+ * messages that drain together, each well under the per-invocation budget.
  */
-export const RECOMPUTE_CHUNK_SIZE = 25;
+export const RECOMPUTE_CHUNK_SIZE = 10;
 
 /**
  * At or below this many recipes, `dispatchRecompute` recomputes inline (instant

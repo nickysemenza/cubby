@@ -78,8 +78,12 @@
   // ingredient merge can touch 100+ recipes; recomputing inline overruns the
   // per-invocation CPU/memory budget, so dispatchRecompute fans the recipe ids
   // into RECOMPUTE_CHUNK_SIZE chunks (one message each) and the consumer drains
-  // each chunk in its own invocation (fresh budget). max_batch_size:1 keeps it to
-  // one chunk per invocation. Create once before first deploy:
+  // each chunk in its own invocation (fresh budget). The consumer auto-scales to
+  // many concurrent invocations, so chunks drain in PARALLEL — max_batch_size:1
+  // keeps one chunk per invocation (raising it would batch many chunks back into
+  // one invocation, the opposite of what we want). max_concurrency caps the
+  // fan-out so a big backlog can't spike DB connections / Neon egress — every
+  // invocation opens a Hyperdrive pool. Create once before first deploy:
   //   wrangler queues create cubby-recompute
   //   wrangler queues create cubby-recompute-dlq
   "queues": {
@@ -89,6 +93,7 @@
         "queue": "cubby-recompute",
         "max_batch_size": 1,
         "max_batch_timeout": 5,
+        "max_concurrency": 10,
         "max_retries": 3,
         "dead_letter_queue": "cubby-recompute-dlq"
       }
