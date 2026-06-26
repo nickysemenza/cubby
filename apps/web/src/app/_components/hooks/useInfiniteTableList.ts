@@ -11,6 +11,8 @@ interface TableStateOptions {
   initialSort?: string;
   initialFilter?: ColumnFiltersState;
   initialPagination?: PaginationState;
+  /** Mirror sort + pagination to the URL (see useTableState). */
+  urlSync?: boolean;
 }
 
 // Response shape from list queries

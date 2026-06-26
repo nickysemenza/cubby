@@ -245,12 +245,23 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     [defaultSort, tableStateOptions],
   );
 
+  // URL-sync only the ACTIVE hook's tableState so the two instances never both
+  // write the URL (which would conflict). Memoized to keep stable references.
+  const infiniteTableStateOptions = useMemo(
+    () => ({ ...mergedTableStateOptions, urlSync: useInfiniteMode }),
+    [mergedTableStateOptions, useInfiniteMode],
+  );
+  const paginatedTableStateOptions = useMemo(
+    () => ({ ...mergedTableStateOptions, urlSync: !useInfiniteMode }),
+    [mergedTableStateOptions, useInfiniteMode],
+  );
+
   // Always call both hooks unconditionally (Rules of Hooks).
   // The unused hook has enabled: false so its query won't fire.
   const infiniteResult = useInfiniteTableList<TFilters, TData>({
     queryOptions,
     buildFilters,
-    tableStateOptions: mergedTableStateOptions,
+    tableStateOptions: infiniteTableStateOptions,
     groupBy: groupByField,
     enabled: useInfiniteMode,
   });
@@ -258,7 +269,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   const paginatedResult = useTableList<TFilters, TData>({
     queryOptions,
     buildFilters,
-    tableStateOptions: mergedTableStateOptions,
+    tableStateOptions: paginatedTableStateOptions,
     groupBy: groupByField,
     enabled: !useInfiniteMode,
   });
