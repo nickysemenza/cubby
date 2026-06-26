@@ -25,11 +25,13 @@ export type ProductDeepDB = typeof product.$inferSelect & {
       location: typeof location.$inferSelect & {
         images: Array<{
           image: typeof image.$inferSelect;
+          deletedAt?: Date | null;
         }>;
       };
     }
   >;
   images: Array<{
     image: typeof image.$inferSelect;
+    deletedAt?: Date | null;
   }>;
 };

@@ -4,8 +4,73 @@ import {
   buildPaginatedResponse,
   buildTakeSkip,
   createPaginatedResponseSchema,
+  sortPaginationCombo,
   type PaginationParams,
 } from "./pagination";
+
+describe("sortPaginationCombo", () => {
+  it("defaults omitted sort to createdAt descending", () => {
+    const result = sortPaginationCombo.parse({});
+
+    expect(result.sort).toEqual({
+      orderBy: "createdAt",
+      direction: "desc",
+    });
+  });
+
+  it("defaults partial sort direction to ascending", () => {
+    const result = sortPaginationCombo.parse({
+      sort: { orderBy: "name" },
+    });
+
+    expect(result.sort).toEqual({
+      orderBy: "name",
+      direction: "asc",
+    });
+  });
+
+  it("defaults empty sort object to createdAt ascending", () => {
+    const result = sortPaginationCombo.parse({
+      sort: {},
+    });
+
+    expect(result.sort).toEqual({
+      orderBy: "createdAt",
+      direction: "asc",
+    });
+  });
+
+  it("defaults explicit createdAt sort direction to ascending", () => {
+    const result = sortPaginationCombo.parse({
+      sort: { orderBy: "createdAt" },
+    });
+
+    expect(result.sort).toEqual({
+      orderBy: "createdAt",
+      direction: "asc",
+    });
+  });
+
+  it("preserves explicit ascending and descending sort directions", () => {
+    expect(
+      sortPaginationCombo.parse({
+        sort: { orderBy: "name", direction: "asc" },
+      }).sort,
+    ).toEqual({
+      orderBy: "name",
+      direction: "asc",
+    });
+
+    expect(
+      sortPaginationCombo.parse({
+        sort: { orderBy: "name", direction: "desc" },
+      }).sort,
+    ).toEqual({
+      orderBy: "name",
+      direction: "desc",
+    });
+  });
+});
 
 describe("buildPaginatedResponse", () => {
   it("builds correct response structure with data", () => {

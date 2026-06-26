@@ -2,14 +2,18 @@
 // owning response module: inventory-responses, product-responses,
 // ingredient-responses, location-responses, recipe, or usda.
 export {
+  type IngredientWithFoodAndSideEffectsOut,
   type IngredientWithRecipesAndProductOut,
   type IngredientListItem,
+  type IngredientMergeOut,
   type IngredientWithFoodLeanOut,
   type IngredientWithFoodOut,
   type ProductWithMappingsAndFoodOut,
   enrichmentFixKind,
   enrichmentRowOut,
   ingredientListItemOut,
+  ingredientMergeOut,
+  ingredientWithFoodAndSideEffectsOut,
   ingredientWithFoodLeanOut,
   ingredientWithFoodOut,
   ingredientWithRecipesAndProductOut,
@@ -28,13 +32,17 @@ export {
 } from "./inventory-responses";
 export {
   type LocationOutWithParentChildren,
+  type LocationWithParentNameOut,
   locationOutWithParentChildrenAndInventoryOut,
+  locationWithParentNameOut,
 } from "./location-responses";
 export {
+  type ProductWithFoodAndSideEffectsOut,
   type ProductListItem,
   type ProductWithFoodOut,
   type ProductWithMappingsOut,
   productListItemOut,
+  productWithFoodAndSideEffectsOut,
   productWithFoodOut,
   productWithIngredientAndInventoryAndMappingsOut,
   productWithMappingsOut,

@@ -19,6 +19,7 @@ import type { image, location } from "~/server/db/schema";
 import {
   extractImagesFromJoinTable,
   mapRelation,
+  parseInventoryAmount,
 } from "~/server/repo/database-helpers";
 
 import type { LocationDeepDB, LocationWithParentChild } from "./internal-types";
@@ -65,7 +66,7 @@ export const dbLocationToAPIWithChildren = (
       const { product, ...rest } = x;
       return {
         id: rest.id,
-        amount: rest.amount as { value: number; unit: string },
+        amount: parseInventoryAmount(rest.amount, rest.id),
         valuation: rest.valuation,
         createdAt: rest.createdAt,
         updatedAt: rest.updatedAt,

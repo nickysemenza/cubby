@@ -12,15 +12,16 @@ import {
   ingredientFiltersSchema,
   ingredientRawLineOut,
   ingredientUpdateData,
-  mergeSummary,
 } from "@cubby/schemas/ingredient";
 import {
   enrichmentRowOut,
   ingredientListItemOut,
+  ingredientMergeOut,
+  ingredientWithFoodAndSideEffectsOut,
   ingredientWithFoodLeanOut,
   ingredientWithFoodOut,
 } from "@cubby/schemas/ingredient-responses";
-import { recipeUsageOut, recomputeSummary } from "@cubby/schemas/recipe";
+import { recipeUsageOut } from "@cubby/schemas/recipe";
 import { z } from "zod";
 import {
   deleteIngredients,
@@ -89,7 +90,7 @@ const { getByID, create } = createEntityCrudWithoutListProcedures({
 // through this proc) and report the count.
 const update = protectedProcedure
   .input(z.object({ id: ingredientId, data: ingredientUpdateData }))
-  .output(ingredientWithFoodOut.extend({ sideEffects: recomputeSummary }))
+  .output(ingredientWithFoodAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
     const result = await ctx.services.ingredient.updateIngredient(
       input.id,
@@ -113,12 +114,7 @@ const merge = protectedProcedure
       dryRun: z.boolean().optional(),
     }),
   )
-  .output(
-    ingredientWithFoodOut.extend({
-      sideEffects: recomputeSummary,
-      mergeSummary,
-    }),
-  )
+  .output(ingredientMergeOut)
   .mutation(async ({ ctx, input }) => {
     const { ingredient: merged, summary } =
       await ctx.services.ingredient.mergeIngredients(

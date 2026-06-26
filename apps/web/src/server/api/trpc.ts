@@ -40,30 +40,6 @@ import {
 } from "~/server/tracing";
 
 /**
- * Map database product record to ProductTopLevelOut format
- * Excludes DB-only fields (deletedAt, ingredientId)
- */
-const mapProductToTopLevelOut = (
-  dbProduct: Awaited<ReturnType<typeof findProductsByFoodIdentifier>>[number],
-) => {
-  const {
-    ingredientId: _ingredientId,
-    id,
-    externalIds,
-    images,
-    ...rest
-  } = dbProduct;
-  return {
-    ...rest,
-    id: id,
-    images: images ?? [],
-    externalIds: (externalIds ?? []).filter(
-      (externalId) => externalId.deletedAt === null,
-    ),
-  };
-};
-
-/**
  * Helper function to build crud services for both production and test contexts.
  * Also reused by the recompute queue consumer (cf-server `queue()`), which needs
  * `services.recipeCosting` without a full tRPC request context.
@@ -85,8 +61,7 @@ export const buildCrudServices = (
     { fetcher: getBindingFetcher("UPC_LOOKUP") },
   );
   const usdaService = new USDAService(usdaClient, async (lookup) => {
-    const products = await findProductsByFoodIdentifier(db, lookup);
-    return products.map(mapProductToTopLevelOut);
+    return await findProductsByFoodIdentifier(db, lookup);
   });
   const ingredient = new IngredientService(db, usdaClient);
   const services = {

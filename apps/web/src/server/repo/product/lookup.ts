@@ -3,25 +3,16 @@
  * Find products by various identifiers (UPC, name, manufacturer).
  */
 
-import { unsafeProductShortcode } from "@cubby/schemas/identifiers";
-import {
-  type ProductTopLevelOut,
-  productTopLevelOut,
-} from "@cubby/schemas/product";
+import type { ProductTopLevelOut } from "@cubby/schemas/product";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { type FoodLookupParam, foodLookupParam } from "@cubby/usda-schemas";
 import { and, eq, ilike, type SQL, sql } from "drizzle-orm";
 import { match } from "ts-pattern";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
-import { parseWithContext } from "~/lib/zod-utils";
 import type { Database } from "~/server/db";
 import { product } from "~/server/db/schema";
-import {
-  extractImagesFromJoinTable,
-  getDb,
-  notDeleted,
-  relations,
-} from "~/server/repo/database-helpers";
+import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { dbProductToTopLevelAPI } from "./mappers";
 
 /**
  * Find products by UPC or NDB number - used for food items in usda.ts
@@ -49,14 +40,17 @@ export const findProductsByFoodIdentifier = async (
 
   const res = await getDb(db).query.product.findMany({
     where: and(linkCondition, notDeleted(product)),
-    ...relations.product.full,
+    with: {
+      externalIds: true,
+      images: {
+        with: {
+          image: true,
+        },
+      },
+    },
   });
 
-  return res.map((p) => ({
-    ...p,
-    shortcode: unsafeProductShortcode(p.shortcode),
-    images: extractImagesFromJoinTable(p.images),
-  }));
+  return res.map(dbProductToTopLevelAPI);
 };
 
 /**
@@ -84,18 +78,7 @@ const findProductToAPI = async (
     return null;
   }
 
-  return parseWithContext(
-    productTopLevelOut,
-    {
-      ...res,
-      externalIds: res.externalIds.filter((eid) => eid.deletedAt === null),
-      images: extractImagesFromJoinTable(res.images),
-    },
-    {
-      entityType: "Product",
-      identifier: { id: res.id, name: res.name },
-    },
-  );
+  return dbProductToTopLevelAPI(res);
 };
 
 // Find a product by UPC code (excludes soft-deleted)

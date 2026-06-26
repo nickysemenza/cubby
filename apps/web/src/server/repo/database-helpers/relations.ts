@@ -12,7 +12,7 @@
  * is only available on to-many relations; a to-one relation — e.g. a section's
  * `recipe` — can't carry one, so when liveness depends on a to-one parent the
  * transform must still filter (see `dbIngredientToAPI`). The transform-layer helpers
- * (`mapRelation`, `extractImagesFromJoinTable`, `addProductSourceMetadata`,
+ * (`mapRelation`, `extractImagesFromJoinTable`,
  * `Array.filter(deletedAt === null)`) remain as backstops and still cover the
  * relations not yet annotated here.
  */

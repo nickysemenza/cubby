@@ -31,7 +31,6 @@ export {
 export { relations } from "./relations";
 // Transform helpers
 export {
-  addProductSourceMetadata,
   buildPartialUpdateValues,
   extractImagesFromJoinTable,
   mapRelation,

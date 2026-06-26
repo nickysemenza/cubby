@@ -15,7 +15,10 @@ import {
   locationType,
   locationUpdateInput,
 } from "@cubby/schemas/location";
-import { locationOutWithParentChildrenAndInventoryOut } from "@cubby/schemas/location-responses";
+import {
+  locationOutWithParentChildrenAndInventoryOut,
+  locationWithParentNameOut,
+} from "@cubby/schemas/location-responses";
 import { z } from "zod";
 import {
   buildLocationTree,
@@ -109,7 +112,7 @@ const touchLastBulkInventory = protectedProcedure
 // Batch lookup: multiple locations by shortcode (e.g. for label printing)
 const getByShortcodes = protectedProcedure
   .input(z.object({ shortcodes: z.array(z.string()) }))
-  .output(z.array(locationOut.extend({ parentName: z.string().nullable() })))
+  .output(z.array(locationWithParentNameOut))
   .query(async ({ ctx, input }) => {
     return await getLocationsByShortcodes(ctx.db, input.shortcodes);
   });
