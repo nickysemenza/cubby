@@ -9,6 +9,7 @@ import {
   type IngredientId,
   unsafeIngredientId,
 } from "@cubby/schemas/identifiers";
+import type { MergeSummaryOut } from "@cubby/schemas/ingredient";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
@@ -26,22 +27,13 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 
-/** Per-cluster change summary returned by {@link mergeIngredients}. */
-export interface MergeSummary {
-  /** Names newly added to the target's `aliases` array (excludes pre-existing). */
-  aliasesAdded: string[];
-  /** Distinct recipes that had at least one line re-pointed onto the target. */
-  recipesMoved: number;
-  /** Product rows re-pointed onto the target (incl. soft-deleted). */
-  productsMoved: number;
-  /** Ingredient ids that were absorbed and hard-deleted. */
-  deletedIds: IngredientId[];
-  /**
-   * The distinct recipe ids whose totals are now stale and must be recomputed.
-   * Marked stale in-transaction; the caller dispatches the recompute.
-   */
-  affectedRecipeIds: RecipeId[];
-}
+/**
+ * The serialized {@link MergeSummaryOut} (aliasesAdded / recipesMoved /
+ * productsMoved / deletedIds) plus the internal `affectedRecipeIds` the caller
+ * marks stale + dispatches for recompute (never serialized — superset of the
+ * moved set, see the read in `resolve`).
+ */
+export type MergeSummary = MergeSummaryOut & { affectedRecipeIds: RecipeId[] };
 
 interface FuzzyMergeCandidate {
   id: IngredientId;

@@ -11,6 +11,7 @@ import { type IngredientId, ingredientId } from "@cubby/schemas/identifiers";
 import {
   ingredientBase,
   ingredientFiltersSchema,
+  mergeSummary,
 } from "@cubby/schemas/ingredient";
 import { recomputeSummary } from "@cubby/schemas/recipe";
 import { z } from "zod";
@@ -102,15 +103,6 @@ const update = protectedProcedure
     };
   });
 
-// Per-cluster change summary surfaced to the MCP tool (and any UI caller). The
-// counts make a merge auditable — and a silent no-op impossible to miss.
-const mergeSummaryOut = z.object({
-  aliasesAdded: z.array(z.string()),
-  recipesMoved: z.number().int().nonnegative(),
-  productsMoved: z.number().int().nonnegative(),
-  deletedIds: z.array(ingredientId),
-});
-
 const merge = protectedProcedure
   .input(
     z.object({
@@ -123,7 +115,7 @@ const merge = protectedProcedure
   .output(
     ingredientWithFoodOut.extend({
       sideEffects: recomputeSummary,
-      mergeSummary: mergeSummaryOut,
+      mergeSummary,
     }),
   )
   .mutation(async ({ ctx, input }) => {
