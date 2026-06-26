@@ -18,6 +18,7 @@ import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
 import { useBulkActions } from "../data-table/useBulkActions";
 import type { GroupConfig } from "../data-table/useGroupedList";
 import { useTableConfig } from "../data-table/useTableConfig";
+import { useTableState } from "../data-table/useTableState";
 import {
   type InfiniteScrollControls,
   useInfiniteTableList,
@@ -50,8 +51,8 @@ interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
   filters: FilterInput[];
   /** For unit mappings - function to extract mappings from each row (must be synchronous) */
   getMappings?: (item: TData) => UnitMapping[];
-  /** Override table state options */
-  tableStateOptions?: UseTableListOptions<TFilters>["tableStateOptions"];
+  /** Override table state options (initialSort / initialFilter / …) */
+  tableStateOptions?: Parameters<typeof useTableState>[0];
   /** Global filter state (for custom global filters like IngredientList) */
   globalFilter?: unknown;
   /** Global filter change handler */
@@ -241,27 +242,24 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     () => ({
       initialSort: defaultSort,
       ...tableStateOptions,
+      // Mirror sort + pagination to the URL (bookmarkable / shareable).
+      urlSync: true,
     }),
     [defaultSort, tableStateOptions],
   );
 
-  // URL-sync only the ACTIVE hook's tableState so the two instances never both
-  // write the URL (which would conflict). Memoized to keep stable references.
-  const infiniteTableStateOptions = useMemo(
-    () => ({ ...mergedTableStateOptions, urlSync: useInfiniteMode }),
-    [mergedTableStateOptions, useInfiniteMode],
-  );
-  const paginatedTableStateOptions = useMemo(
-    () => ({ ...mergedTableStateOptions, urlSync: !useInfiniteMode }),
-    [mergedTableStateOptions, useInfiniteMode],
-  );
+  // ONE tableState owned here and shared by both data hooks. Keeping a single
+  // instance means sort/pagination survive the desktop⇄mobile data-mode flip
+  // (the two hooks no longer hold divergent state), and only one writer touches
+  // the URL.
+  const tableState = useTableState(mergedTableStateOptions);
 
   // Always call both hooks unconditionally (Rules of Hooks).
   // The unused hook has enabled: false so its query won't fire.
   const infiniteResult = useInfiniteTableList<TFilters, TData>({
     queryOptions,
     buildFilters,
-    tableStateOptions: infiniteTableStateOptions,
+    tableState,
     groupBy: groupByField,
     enabled: useInfiniteMode,
   });
@@ -269,20 +267,13 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   const paginatedResult = useTableList<TFilters, TData>({
     queryOptions,
     buildFilters,
-    tableStateOptions: paginatedTableStateOptions,
+    tableState,
     groupBy: groupByField,
     enabled: !useInfiniteMode,
   });
 
-  const {
-    data,
-    totalCount,
-    isLoading,
-    error,
-    tableState,
-    timing,
-    refreshControls,
-  } = useInfiniteMode ? infiniteResult : paginatedResult;
+  const { data, totalCount, isLoading, error, timing, refreshControls } =
+    useInfiniteMode ? infiniteResult : paginatedResult;
 
   // Load unit mappings synchronously if getMappings is provided
   const mappingsMap = useMemo(() => {

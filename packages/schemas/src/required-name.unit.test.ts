@@ -26,9 +26,12 @@ describe("requiredName", () => {
 
 describe("core entity create inputs reject blank names", () => {
   it("recipeCreateInput", () => {
-    expect(recipeCreateInput.safeParse({ name: "", meta: {} }).success).toBe(
-      false,
-    );
+    // Valid except for the blank name, so this isolates the name constraint
+    // (a malformed payload would fail regardless of whether name is wired up).
+    expect(
+      recipeCreateInput.safeParse({ name: "", meta: null, sections: [] })
+        .success,
+    ).toBe(false);
   });
 
   it("locationCreateInput", () => {

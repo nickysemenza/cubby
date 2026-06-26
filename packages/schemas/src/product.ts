@@ -166,7 +166,7 @@ export type ProductUpdateInput = z.infer<typeof productUpdateInput>;
 // Quick create schema - minimal required fields for rapid entry
 // Used for quick inventory capture workflow
 export const productQuickCreatePayload = z.object({
-  name: z.string().min(1),
+  name: requiredName("Product name"),
   manufacturer: z.string().default(UNSPECIFIED_MANUFACTURER),
   upc: upc.nullable().optional(),
   expectedQuantity: z.number().int().positive().nullable().optional(),

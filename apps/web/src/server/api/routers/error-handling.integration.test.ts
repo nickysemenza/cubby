@@ -19,21 +19,19 @@ describe("API Error Handling", () => {
   const ctx = withTestDb();
 
   describe("Product Router Error Cases", () => {
-    it("should allow creating product with empty name (schema permits it)", async () => {
+    it("should reject creating a product with a blank name", async () => {
       const caller = createTestCaller(productRouter, ctx.db);
 
-      // Empty name is actually allowed by the current schema
-      const result = await caller.create(
-        makeProductInput({
-          name: "", // Empty name is permitted
-          pendingImageIds: [],
-          expectedQuantity: 1,
-        }),
-      );
-
-      expect(result).toBeDefined();
-      expect(result.name).toBe("");
-      expect(result.manufacturer).toBe("Test Manufacturer");
+      // requiredName() trims then rejects empty / whitespace-only names.
+      await expect(
+        caller.create(
+          makeProductInput({
+            name: "   ",
+            pendingImageIds: [],
+            expectedQuantity: 1,
+          }),
+        ),
+      ).rejects.toThrow();
     });
 
     it("should throw error when updating non-existent product", async () => {
@@ -82,19 +80,17 @@ describe("API Error Handling", () => {
   });
 
   describe("Recipe Router Error Cases", () => {
-    it("should allow creating recipe with empty name (schema permits it)", async () => {
+    it("should reject creating a recipe with a blank name", async () => {
       const caller = createTestCaller(recipeRouter, ctx.db);
 
-      // Empty name is actually allowed by the current schema
-      const result = await caller.create({
-        name: "", // Empty name is permitted
-        sections: [],
-        meta: null,
-        pendingImageIds: [],
-      });
-
-      expect(result).toBeDefined();
-      expect(result.id).toBeDefined();
+      await expect(
+        caller.create({
+          name: "   ",
+          sections: [],
+          meta: null,
+          pendingImageIds: [],
+        }),
+      ).rejects.toThrow();
     });
 
     it("should throw error when updating non-existent recipe", async () => {
@@ -166,17 +162,12 @@ describe("API Error Handling", () => {
   });
 
   describe("Ingredient Router Error Cases", () => {
-    it("should allow creating ingredient with empty name (schema permits it)", async () => {
+    it("should reject creating an ingredient with a blank name", async () => {
       const caller = createTestCaller(ingredientRouter, ctx.db);
 
-      // Empty name is actually allowed by the current schema
-      const result = await caller.create({
-        name: "", // Empty name is permitted
-        aliases: [],
-      });
-
-      expect(result).toBeDefined();
-      expect(result.name).toBe("");
+      await expect(
+        caller.create({ name: "   ", aliases: [] }),
+      ).rejects.toThrow();
     });
 
     it("should handle duplicate ingredient names", async () => {
@@ -209,31 +200,27 @@ describe("API Error Handling", () => {
   });
 
   describe("Location Router Error Cases", () => {
-    it("should allow creating location with empty name (schema permits it)", async () => {
+    it("should reject creating a location with a blank name", async () => {
       const caller = createTestCaller(locationRouter, ctx.db);
 
-      // Empty names are allowed per schema
-      const result = await caller.create(makeLocationInput({ name: "" }));
-
-      expect(result.name).toBe("");
-      expect(result.type).toBe("room");
+      await expect(
+        caller.create(makeLocationInput({ name: "   " })),
+      ).rejects.toThrow();
     });
 
-    it("should create location with non-existent parent (no FK constraint)", async () => {
+    it("should reject creating a location with a non-existent parent", async () => {
       const caller = createTestCaller(locationRouter, ctx.db);
 
-      // Location with non-existent parent is created (no FK constraint on parentId)
-      const result = await caller.create(
-        makeLocationInput({
-          name: "Child Location",
-          type: "shelf",
-          parentId: unsafeLocationId(NONEXISTENT_UUID), // Non-existent parent
-        }),
-      );
-
-      // Location is created but parent is undefined since it doesn't exist
-      expect(result.name).toBe("Child Location");
-      expect(result.parent).toBeUndefined();
+      // parentId now validated against an existing, non-deleted location.
+      await expect(
+        caller.create(
+          makeLocationInput({
+            name: "Child Location",
+            type: "shelf",
+            parentId: unsafeLocationId(NONEXISTENT_UUID),
+          }),
+        ),
+      ).rejects.toThrow();
     });
 
     it("should throw error when creating circular parent-child relationship", async () => {
