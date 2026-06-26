@@ -37,6 +37,8 @@ const getFast = protectedProcedure
   .query(async ({ ctx }) => findFastProblems(ctx.db));
 
 // Group: USDA-coverage (one shared product scan + enrichment).
+// No `.input()` — takes no argument; the `input={"json":null,...}` superjson
+// payload seen in request logs is just the absent (undefined) arg, not a bug.
 const getCoverage = protectedProcedure
   .output(problemsCoverageSchema)
   .query(async ({ ctx }) => findCoverageProblems(ctx.db, ctx.usdaClient));
