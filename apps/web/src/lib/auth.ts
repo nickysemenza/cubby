@@ -66,13 +66,14 @@ export const auth = betterAuth({
     tanstackStartCookies(), // Must be last
   ],
   advanced: {
-    // Cloudflare Workers puts the real client IP in `cf-connecting-ip`; without
-    // this Better Auth can't determine the IP and skips rate limiting (logging a
-    // warning on every auth request). x-forwarded-for is spoofable and absent on
-    // Workers, so trust only the CF-set header.
-    ipAddress: {
-      ipAddressHeaders: ["cf-connecting-ip"],
-    },
+    // Cloudflare Workers (prod + preview deploys) puts the real client IP in
+    // `cf-connecting-ip`; without this Better Auth can't determine the IP and
+    // skips rate limiting (logging a warning on every auth request). x-forwarded-for
+    // is spoofable and absent on Workers, so trust only the CF-set header. Prod-only:
+    // there's no CF proxy in dev (vite Node), so the header would never be present —
+    // better-auth's default IP resolution applies there, and dev global rate limiting
+    // is off anyway, so the IP is never consulted.
+    ...(isDev ? {} : { ipAddress: { ipAddressHeaders: ["cf-connecting-ip"] } }),
     ...(previewCookieDomain
       ? {
           crossSubDomainCookies: {
