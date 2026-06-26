@@ -4,9 +4,10 @@
  * A widely-used ingredient merge (or product/ingredient edit) can touch 100+
  * recipes; recomputing them inline overruns the Workers per-invocation CPU/memory
  * budget and kills the request. Instead the mutation marks the affected recipes
- * stale and *dispatches* their ids here: in production each chunk becomes a queue
- * message drained by its own fresh invocation (its own CPU budget); on the dev
- * Node server (no binding) the caller recomputes inline, which is safe there.
+ * stale and dispatches bounded targeted recipe-id messages. The consumer filters
+ * each message against the current DB stale set, so old messages for already-fresh
+ * recipes become cheap no-ops. On the dev Node server (no binding) the caller
+ * recomputes inline, which is safe there.
  *
  * The producer binding (`RECOMPUTE_QUEUE`) and the consumer types are kept
  * minimal and self-contained — the repo has no `@cloudflare/workers-types`, so we
@@ -15,20 +16,35 @@
 
 import type { RecipeId } from "@cubby/schemas/identifiers";
 
-/** One queue message: a bounded chunk of recipe ids to recompute. */
+export const RECOMPUTE_MESSAGE_VERSION = 1;
+
+/**
+ * One queue message: a bounded targeted chunk of recipe ids to recompute.
+ */
 export interface RecomputeMessage {
+  messageVersion: number;
   recipeIds: RecipeId[];
+  /** Correlates all targeted chunks and parent-cascade messages from one wave. */
+  batchId?: string;
+  /**
+   * Wall-clock (`Date.now()`) when the wave was dispatched, copied verbatim onto
+   * every chunk + cascade follow-up. A batch spans many separate queue
+   * invocations, so there's no one process to time it end-to-end; each message
+   * instead logs `batch_elapsed_ms = Date.now() - startedAtMs`, and the largest
+   * value across the batch's log lines is the total drain time.
+   */
+  startedAtMs?: number;
 }
 
 /**
- * Recipe ids per queue message. The consumer auto-scales to many concurrent
- * invocations (one per message, up to the `max_concurrency` cap), so a SMALLER
- * chunk = more messages = more parallel drain — at the cost of slightly less
- * per-message WASM batching (one engine call per chunk) and more DB pool churn.
- * 10 balances those: a popular-ingredient merge (~100 recipes) fans into ~10
- * messages that drain together, each well under the per-invocation budget.
+ * Number of target recipe ids per queue message. The bound is now wall-time /
+ * USDA-batch size, not CPU: the WASM costing engine is ~0ms per chunk and
+ * cpu_ms is 45000, so 25 keeps each handler comfortably bounded while halving
+ * the message count (fewer USDA refetches + queue sends) vs the old 10. Raising
+ * this is safe; it only changes granularity, not correctness (stale-filter +
+ * cascade dedup are size-independent).
  */
-export const RECOMPUTE_CHUNK_SIZE = 10;
+export const RECOMPUTE_CHUNK_SIZE = 25;
 
 /**
  * At or below this many recipes, `dispatchRecompute` recomputes inline (instant
@@ -42,6 +58,12 @@ export const RECOMPUTE_INLINE_MAX = 5;
 /** The producer side of `env.RECOMPUTE_QUEUE` (the subset we call). */
 export interface RecomputeQueueProducer {
   send(body: RecomputeMessage): Promise<void>;
+  /**
+   * One round-trip for a whole wave of chunks (vs N serial `send`s in the
+   * request path). CF caps a batch at 100 messages / 256KB; callers chunk above
+   * that.
+   */
+  sendBatch(messages: Iterable<{ body: RecomputeMessage }>): Promise<void>;
 }
 
 /** A single delivered message with its ack/retry controls. */
@@ -57,16 +79,18 @@ export interface RecomputeQueueBatch {
 }
 
 /**
- * Consumer entry: recompute the recipes named in a message. Builds services on
- * the current per-request db (the caller must already be inside `withRequestDb`)
- * and runs the same recursive `recompute` the inline path uses, so cost/calorie
- * cascades to parent recipes identically. Imports are dynamic to keep the queue
- * path out of the fetch cold-start bundle.
+ * Consumer entry. Builds services on the current per-request db (the caller must
+ * already be inside `withRequestDb`). Imports are dynamic to keep the queue path
+ * out of the fetch cold-start bundle.
  */
-export async function recomputeRecipeIds(recipeIds: RecipeId[]): Promise<void> {
+export async function recomputeRecipeIds({
+  recipeIds = [],
+  batchId,
+  startedAtMs,
+}: Partial<RecomputeMessage>): Promise<void> {
   if (recipeIds.length === 0) return;
   const { db } = await import("./db");
   const { buildCrudServices } = await import("./api/trpc");
   const { services } = buildCrudServices(db);
-  await services.recipeCosting.recompute(recipeIds);
+  await services.recipeCosting.recomputeQueued(recipeIds, batchId, startedAtMs);
 }

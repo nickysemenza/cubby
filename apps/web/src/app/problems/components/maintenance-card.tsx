@@ -106,12 +106,22 @@ function RecomputeAction() {
     ...trpc.recipe.dryRunRecomputeTotals.queryOptions(),
     enabled: false,
   });
+  // Cheap always-on count of recipes whose totals are stale (pending recompute) —
+  // shares the card's cached query, so no extra round-trip. The queue normally
+  // clears these in seconds; a lingering count flags a stuck/lost wave.
+  const { data: counts } = useQuery(
+    trpc.problems.getMaintenanceCounts.queryOptions(undefined, {
+      staleTime: 30_000,
+    }),
+  );
   return (
     <MaintenanceDryRunRow
       summary={
         dryRun.data
           ? `${dryRun.data.wouldChange} of ${dryRun.data.total} would change`
-          : null
+          : counts && counts.staleRecipeTotals > 0
+            ? `${countLabel(counts.staleRecipeTotals, "recipe")} pending recompute`
+            : null
       }
       onDryRun={() => void dryRun.refetch()}
       dryRunPending={dryRun.isFetching}

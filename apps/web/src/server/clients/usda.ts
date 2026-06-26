@@ -9,8 +9,11 @@ import type {
 import { initClient } from "@ts-rest/core";
 import { injectTraceContext, TraceNames, withTrace } from "~/server/tracing";
 
-// Per-request abort ceiling for usda-api fetches. See the call site for why this
-// is generous (caller-side transport overhead, not handler work).
+// Per-request abort ceiling for usda-api fetches. Generous for caller-side
+// transport overhead (not handler work): the fetch itself resolves in ~150ms now
+// that usda-api caches resolved foods in D1. (Was briefly bumped to 33s while
+// chasing the recompute slowdown — that was a wasm_tracing CPU-starvation
+// artifact mis-timed by workerd's frozen clock, since fixed; 15s is ample.)
 const USDA_FETCH_TIMEOUT_MS = 15_000;
 
 export class USDAClient {

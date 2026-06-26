@@ -41,6 +41,7 @@ import {
   dbIngredientToAPI,
   type IngredientDeepDB,
   mapIngredientProducts,
+  mapIngredientProductsLean,
 } from "./internal-types";
 
 /**
@@ -152,19 +153,17 @@ export const getIngredientsByIDsLean = async (
   if (ids.length === 0) return [];
   const rows = await getDb(db).query.ingredient.findMany({
     where: and(inArray(ingredient.id, ids), notDeleted(ingredient)),
-    with: {
-      product: {
-        with: {
-          unitMappings: true,
-          externalIds: true,
-          images: { with: { image: true } },
-        },
-      },
-    },
+    // Unit mappings only — NOT images/externalIds. Costing + getManyByIDs never
+    // read them, and pulling full Image records here was ~4MB + ~11s of drizzle
+    // object-building per call (worker CPU that starved the recompute isolate).
+    with: { product: { with: { unitMappings: true } } },
   });
   return rows.map((row) => {
     const { product: productRel, ...restOfIngredient } = row;
-    return { ...restOfIngredient, product: mapIngredientProducts(productRel) };
+    return {
+      ...restOfIngredient,
+      product: mapIngredientProductsLean(productRel),
+    };
   });
 };
 

@@ -244,6 +244,77 @@ function rowsFromResult<T>(result: { results?: T[]; success: boolean }): T[] {
   return result.results ?? [];
 }
 
+// ── Resolved-food cache ──────────────────────────────────────────────────────
+// USDA foods are immutable per (dataset version, fdc_id), so a never-expiring D1
+// cache lets a hot fdc_id skip the R2 range-read + JSON/zod parse on every
+// lookup. cubby only ever resolves a few hundred distinct foods (its products'
+// fdc_ids), so the cache stays tiny; after a warm-up pass a recompute fan-out is
+// pure D1 (two ~0.5ms reads, no R2). Scoped by version so a dataset re-import
+// transparently uses a fresh cache.
+const FOOD_CACHE_TABLE = "food_cache";
+let foodCacheEnsured = false;
+
+async function ensureFoodCacheTable(db: D1Database): Promise<void> {
+  if (foodCacheEnsured) return;
+  await db
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS ${FOOD_CACHE_TABLE} (
+         version TEXT NOT NULL,
+         fdc_id INTEGER NOT NULL,
+         data TEXT NOT NULL,
+         PRIMARY KEY (version, fdc_id)
+       )`,
+    )
+    .run();
+  foodCacheEnsured = true;
+}
+
+/** Parsed foods already cached for this version, keyed by fdc_id. */
+async function readFoodCache(
+  db: D1Database,
+  version: string,
+  fdcIds: number[],
+): Promise<Map<number, FoodSummary>> {
+  const out = new Map<number, FoodSummary>();
+  if (fdcIds.length === 0) return out;
+  await ensureFoodCacheTable(db);
+  for (let i = 0; i < fdcIds.length; i += MAX_SQL_VARIABLES - 1) {
+    const chunk = fdcIds.slice(i, i + MAX_SQL_VARIABLES - 1);
+    const placeholders = chunk.map(() => "?").join(", ");
+    const res = await db
+      .prepare(
+        `SELECT fdc_id, data FROM ${FOOD_CACHE_TABLE} WHERE version = ? AND fdc_id IN (${placeholders})`,
+      )
+      .bind(version, ...chunk)
+      .all<{ fdc_id: number; data: string }>();
+    for (const row of res.results ?? []) {
+      // Validated when written; trust it and skip the re-parse (that's the point).
+      out.set(row.fdc_id, JSON.parse(row.data) as FoodSummary);
+    }
+  }
+  return out;
+}
+
+/**
+ * Persist newly-hydrated foods so future lookups skip R2. `INSERT OR IGNORE` so a
+ * cold fan-out where many concurrent requests miss the same food don't conflict.
+ */
+async function writeFoodCache(
+  db: D1Database,
+  version: string,
+  foods: FoodSummary[],
+): Promise<void> {
+  if (foods.length === 0) return;
+  const stmts = foods.map((food) =>
+    db
+      .prepare(
+        `INSERT OR IGNORE INTO ${FOOD_CACHE_TABLE} (version, fdc_id, data) VALUES (?, ?, ?)`,
+      )
+      .bind(version, food.fdc_id, JSON.stringify(food)),
+  );
+  await db.batch(stmts);
+}
+
 export function createEdgeUsdaDataSource(
   env: EdgeBindings,
   options: { r2Concurrency?: number } = {},
@@ -559,10 +630,38 @@ export function createEdgeUsdaDataSource(
           }
           const uniqueRowList = [...uniqueRows.values()];
           span.setAttribute("uniqueRowCount", uniqueRowList.length);
-          const hydrated = await hydrateRows(uniqueRowList);
-          const hydratedById = new Map<number, FoodSummary | null>(
-            uniqueRowList.map((row, i) => [row.fdc_id, hydrated[i] ?? null]),
+
+          // Serve already-resolved foods straight from the D1 cache (no R2, no
+          // parse); hydrate ONLY the misses from R2, then cache them. This is what
+          // makes a recompute fan-out cheap — the same few hundred foods are
+          // re-requested constantly, and after warm-up they're all cache hits.
+          const tables = await getActiveVersion(env.DB);
+          const cached = await readFoodCache(
+            env.DB,
+            tables.version,
+            uniqueRowList.map((row) => row.fdc_id),
           );
+          const missRows = uniqueRowList.filter(
+            (row) => !cached.has(row.fdc_id),
+          );
+          span.setAttribute(
+            "cacheHits",
+            uniqueRowList.length - missRows.length,
+          );
+          span.setAttribute("cacheMisses", missRows.length);
+
+          const hydratedMisses = await hydrateRows(missRows);
+          await writeFoodCache(
+            env.DB,
+            tables.version,
+            hydratedMisses.filter((food): food is FoodSummary => food !== null),
+          );
+
+          const hydratedById = new Map<number, FoodSummary | null>();
+          for (const [id, food] of cached) hydratedById.set(id, food);
+          missRows.forEach((row, i) => {
+            hydratedById.set(row.fdc_id, hydratedMisses[i] ?? null);
+          });
 
           return rows.map((row) =>
             row ? (hydratedById.get(row.fdc_id) ?? null) : null,

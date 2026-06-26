@@ -2,15 +2,18 @@
 //
 // 1. Dynamic import catches module-level errors (which would otherwise be silent 500s)
 // 2. Per-request database connections via withRequestDb — Hyperdrive provides pooled
-//    TCP connections, and each Worker invocation opens a per-request pg.Pool so a
-//    single request's query fan-out runs in parallel instead of serializing.
+//    TCP connections, and fetch invocations use a per-request pg.Pool so a single
+//    request's query fan-out runs in parallel instead of serializing.
 // 3. Intercepts console.error to capture real error details for `wrangler tail`.
 
 import * as Sentry from "@sentry/cloudflare";
 import { SENTRY_DSN } from "./lib/sentry-dsn";
 import { setCfEnv } from "./server/cf-env";
-import { withRequestDb } from "./server/db";
-import type { RecomputeQueueBatch } from "./server/queue-recompute";
+import { withRequestDb, withRequestDbClient } from "./server/db";
+import {
+  RECOMPUTE_MESSAGE_VERSION,
+  type RecomputeQueueBatch,
+} from "./server/queue-recompute";
 import { withTrace } from "./server/tracing";
 
 // Cache the handler module promise so the dynamic import only runs once (on
@@ -137,14 +140,51 @@ const handler = {
   // chunk doesn't replay the rest; exhausted retries land in the DLQ.
   async queue(batch: RecomputeQueueBatch, env: Env) {
     setCfEnv(env);
-    await withRequestDb(env.HYPERDRIVE.connectionString, async () => {
+    const validMessages: Array<{
+      message: RecomputeQueueBatch["messages"][number];
+      batchId: string | undefined;
+    }> = [];
+    for (const message of batch.messages) {
+      const batchId = message.body.batchId;
+      if (message.body.messageVersion !== RECOMPUTE_MESSAGE_VERSION) {
+        console.warn(
+          `[recompute-queue] dropped stale message version=${String(message.body.messageVersion)} current=${RECOMPUTE_MESSAGE_VERSION}${batchId ? ` batch=${batchId}` : ""} recipe_ids=${(message.body.recipeIds ?? []).length}`,
+        );
+        message.ack();
+        continue;
+      }
+      validMessages.push({ message, batchId });
+    }
+    if (validMessages.length === 0) return;
+    // Serial queue work does not need a local pg.Pool. Use one Worker-side
+    // client for the whole invocation; Hyperdrive still owns the origin DB pool.
+    await withRequestDbClient(env.HYPERDRIVE.connectionString, async () => {
       const { recomputeRecipeIds } = await import("./server/queue-recompute");
-      for (const message of batch.messages) {
+      for (const { message, batchId } of validMessages) {
+        // Per-message clock: a batch is processed serially in this one
+        // invocation, so capture t0 at each message's start (NOT at batch
+        // arrival) or `duration_ms` would accumulate across the batch.
+        const t0 = performance.now();
         try {
-          await recomputeRecipeIds(message.body.recipeIds);
+          await recomputeRecipeIds(message.body);
+          // `batch_elapsed_ms` = wall-clock since the wave was dispatched
+          // (Date.now() across invocations is real time; the per-message
+          // performance.now() can't span the multi-invocation batch). The
+          // largest value across a batch's lines is the total drain time.
+          const startedAtMs = message.body.startedAtMs;
+          const batchElapsed =
+            startedAtMs != null
+              ? ` batch_elapsed_ms=${Date.now() - startedAtMs}`
+              : "";
+          console.log(
+            `[recompute-queue] message ack${batchId ? ` batch=${batchId}` : ""} duration_ms=${Math.round(performance.now() - t0)}${batchElapsed}`,
+          );
           message.ack();
         } catch (error) {
-          console.error("[recompute-queue] chunk failed", error);
+          console.error(
+            `[recompute-queue] message failed${batchId ? ` batch=${batchId}` : ""} duration_ms=${Math.round(performance.now() - t0)}`,
+            error,
+          );
           Sentry.captureException(error);
           message.retry();
         }

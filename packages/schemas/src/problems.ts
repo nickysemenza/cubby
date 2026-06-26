@@ -280,5 +280,9 @@ export type ProductWithBetterUpcData = z.infer<
 export const maintenanceCountsSchema = z.object({
   productsWithNoImages: z.number().int(),
   locationsWithoutAiDescription: z.number().int(),
+  // Active recipes whose persisted totals are stale (pending recompute). The
+  // recompute queue normally drains these in seconds; a lingering count means a
+  // wave was lost (DLQ) — recompute-all clears it.
+  staleRecipeTotals: z.number().int(),
 });
 export type MaintenanceCounts = z.infer<typeof maintenanceCountsSchema>;

@@ -8,6 +8,13 @@ Three layers, one rule: never recompute in a higher layer what a lower one alrea
 - **`recipebridge`** (cubby's WASM crate) — cubby-domain compute (recipe costing, availability evaluation, food-mapping synthesis from products + USDA) plus the WASM boundary (`W*` tsify types, serde-wasm-bindgen marshalling). The single source of truth for those engines, consumed by the browser **and** the server (`*.service.ts`) via WASM. **Do not move these engines into `ingredient-parser`** — they're application domain with no upstream consumer; that's a layering violation, not consolidation. (Pure, generic unit helpers with no cubby coupling are the *only* thing that may migrate down — see the TODO in `recipebridge/src/reconcile.rs`.)
 - **TS (`apps/web`)** — a thin boundary: assemble WASM inputs from the DB / UI, call WASM, reshape outputs into zod / React types. Do **not** reimplement costing, availability, unit conversion, parsing, or formatting in TS — call the WASM. (The old TS `calculateTotals` was deleted when the Rust costing engine landed; don't reintroduce that pattern.)
 
+## Cloudflare Workers: clocks & WASM tracing
+
+Two runtime traps that turned a WASM CPU leak into a "slow DB write" misdiagnosis — **distrust per-op timing logs on workerd**:
+
+- **The workerd clock is frozen during synchronous CPU.** `performance.now()` / `Date.now()` advance only on I/O, never during pure-CPU execution — so a `performance.now()` delta around a synchronous block (a WASM call, a hot JS loop) reads ~0 and that CPU is silently charged to the **next awaited I/O**. A "slow query/write" in a log is often mis-attributed WASM/JS CPU. Localize CPU with the CF **CPU-time** metric (CPU ≈ wall ⇒ compute, not I/O-wait) or a sampling profile, not wall-clock deltas; to time a CPU block, flush the clock with a trivial awaited I/O (`SELECT 1`) right after it.
+- **No active `tracing` subscriber at INFO on the WASM hot path.** recipebridge runs in a long-lived, reused isolate, so a global `wasm_tracing` subscriber at INFO + a `#[tracing::instrument]` on a per-call fn (it Debug-formats every arg, e.g. the whole `MeasureGraph`) accumulates unbounded and burns CPU that **grows per call** until it trips `cpu_ms`. Held at WARN on workerd in `recipebridge/src/lib.rs`; hot-path instruments must use `level = "trace", skip_all`.
+
 ## Required Helpers
 
 Use these instead of inline patterns:

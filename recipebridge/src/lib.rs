@@ -46,13 +46,39 @@ pub use parse::*;
 pub fn init() {
     console_error_panic_hook::set_once();
     let mut config = wasm_tracing::WasmLayerConfig::new();
-    config.set_max_level(tracing::Level::INFO);
+    // The costing engine's per-conversion hot path
+    // (ingredient::unit::convert_measure_with_graph_explained) is
+    // `#[tracing::instrument]` at INFO, so at an INFO subscriber level EVERY
+    // conversion builds a span that Debug-formats the whole MeasureGraph. One
+    // `cost_recipes` call does thousands of conversions → thousands of such spans
+    // through this GLOBAL subscriber. In a browser that's a short-lived page and
+    // harmless; on the REUSED workerd isolate the subscriber's span registry
+    // accumulates across calls and per-call CPU climbs without bound — a recompute
+    // drain measured 47ms → 53s on identical 10-recipe chunks until it tripped the
+    // 45s CPU limit. (The cost was invisible because workerd freezes
+    // performance.now() during the pure-CPU WASM call, so it mis-attributed to the
+    // next DB write.) Cap workerd at WARN so those INFO spans are never created
+    // (tracing short-circuits at the level check); the multi-priced `warn!`
+    // tripwire still fires. Browsers / Node keep INFO for devtools spans.
+    config.set_max_level(if is_workerd() {
+        tracing::Level::WARN
+    } else {
+        tracing::Level::INFO
+    });
     // workerd (CF Workers) ships a `performance` global without the User
     // Timing API — wasm-tracing's span timings call performance.mark()/
     // measure() unguarded, throwing "performance.mark is not a function" on
     // every traced call. Only report timings where the API actually exists
     // (browsers, Node), so devtools profiles keep their marks in dev.
     config.set_report_logs_in_timings(performance_supports_user_timing());
+    // Cloudflare's workerd console.log does NOT interpret the `%c` CSS format
+    // directives that wasm-tracing's colored output emits, so styled logs leak
+    // raw `%c … ; color: orange` noise into `wrangler tail`. Browsers render the
+    // colors; Node's console silently ignores `%c`. Only workerd mangles them —
+    // emit plain, un-styled logs there.
+    if is_workerd() {
+        config.set_console_config(wasm_tracing::ConsoleConfig::ReportWithoutConsoleColor);
+    }
     let _ = wasm_tracing::set_as_global_default_with_config(config);
 }
 
@@ -66,6 +92,19 @@ fn performance_supports_user_timing() -> bool {
         .filter(|p| !p.is_undefined() && !p.is_null())
         .and_then(|p| js_sys::Reflect::get(&p, &JsValue::from_str("mark")).ok())
         .is_some_and(|m| m.is_function())
+}
+
+/// True when running inside Cloudflare's workerd runtime, which sets
+/// `navigator.userAgent` to the sentinel "Cloudflare-Workers". Any Reflect
+/// failure (missing `navigator`, a throwing getter) folds to `false` — the safe
+/// "assume a console that understands `%c`" path — so detection never panics init.
+fn is_workerd() -> bool {
+    js_sys::Reflect::get(&js_sys::global(), &JsValue::from_str("navigator"))
+        .ok()
+        .filter(|n| !n.is_undefined() && !n.is_null())
+        .and_then(|n| js_sys::Reflect::get(&n, &JsValue::from_str("userAgent")).ok())
+        .and_then(|ua| ua.as_string())
+        .is_some_and(|ua| ua == "Cloudflare-Workers")
 }
 
 // A pair of measures that can be used for unit conversion

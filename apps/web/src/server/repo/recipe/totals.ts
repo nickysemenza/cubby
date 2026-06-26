@@ -7,7 +7,7 @@
 
 import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
 import type { RecipeTotals } from "@cubby/schemas/recipe";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, count, eq, inArray, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import {
   ingredient,
@@ -19,37 +19,139 @@ import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { TraceNames, withTrace } from "~/server/tracing";
 
 /**
- * Persist a recipe's computed totals. Stamps it fresh unless `stale` is set —
- * stale leaves `totalsComputedAt` NULL so the drain retries (used when the USDA
- * enrichment was incomplete, e.g. a cold backend), while still writing the
- * best-effort blob so the UI shows something rather than a perpetual skeleton.
+ * Persist computed totals for one or many recipes in one raw `UPDATE ... FROM
+ * (VALUES ...)`, stamping them fresh without touching `Recipe.updatedAt`.
+ *
+ * Avoid the Drizzle update builder here: the schema's `$onUpdate` hook adds
+ * `updatedAt = now()` to every update, but recomputing derived totals is not a
+ * user-visible recipe edit. The `VALUES` shape also binds each id once instead
+ * of duplicating ids across a `CASE ... WHERE id IN (...)` statement.
  */
-export const updateRecipeTotals = async (
+export const updateRecipeTotalsBatch = async (
   db: Database,
-  id: RecipeId,
-  totals: RecipeTotals,
-  opts?: { stale?: boolean },
+  entries: ReadonlyArray<{ id: RecipeId; totals: RecipeTotals }>,
 ): Promise<void> => {
-  await getDb(db)
-    .update(recipe)
-    .set({ totals, totalsComputedAt: opts?.stale ? null : new Date() })
-    .where(eq(recipe.id, id));
+  if (entries.length === 0) return;
+  const computedAt = new Date();
+  const values = sql.join(
+    entries.map(
+      (e) => sql`(${e.id}::uuid, ${JSON.stringify(e.totals)}::jsonb)`,
+    ),
+    sql`, `,
+  );
+  await getDb(db).execute(sql`
+    UPDATE ${recipe}
+    SET
+      ${sql.identifier("totals")} = v.totals,
+      ${sql.identifier("totalsComputedAt")} = ${computedAt}
+    FROM (VALUES ${values}) AS v(id, totals)
+    WHERE ${recipe.id} = v.id
+  `);
+};
+
+/**
+ * Stamp recipes fresh without rewriting the `totals` jsonb payload. Used when a
+ * recompute proves the persisted totals are already correct.
+ */
+export const markRecipeTotalsFresh = async (
+  db: Database,
+  ids: RecipeId[],
+): Promise<void> => {
+  if (ids.length === 0) return;
+  await getDb(db).execute(sql`
+    UPDATE ${recipe}
+    SET ${sql.identifier("totalsComputedAt")} = ${new Date()}
+    WHERE ${recipe.id} IN (${sql.join(
+      ids.map((id) => sql`${id}`),
+      sql`, `,
+    )})
+  `);
 };
 
 /**
  * Flag recipes' totals stale (`totalsComputedAt = null`) without recomputing —
  * the correctness floor when the recompute is deferred to the queue: the rows
- * read as pending and the Problems page can catch them if the queue never drains.
+ * read as pending until the queue drains. If a wave is lost (DLQ), they stay
+ * stale and are surfaced by `countStaleRecipeTotals` on Settings → Maintenance,
+ * cleared by recompute-all. Unconditional on purpose: this is the durable
+ * "these are pending" stamp at dispatch (and at merge). The cascade tail uses
+ * {@link markRecipesStaleReturningTransitioned} instead, to avoid re-staling
+ * recipes a sibling chunk already queued.
  */
 export const markRecipesStale = async (
   db: Database,
   ids: RecipeId[],
 ): Promise<void> => {
   if (ids.length === 0) return;
-  await getDb(db)
-    .update(recipe)
-    .set({ totalsComputedAt: null })
-    .where(inArray(recipe.id, ids));
+  await getDb(db).execute(sql`
+    UPDATE ${recipe}
+    SET ${sql.identifier("totalsComputedAt")} = NULL
+    WHERE ${recipe.id} IN (${sql.join(
+      ids.map((id) => sql`${id}`),
+      sql`, `,
+    )})
+  `);
+};
+
+/**
+ * Stale recipes and return ONLY the ids that actually transitioned fresh→stale.
+ * The `AND "totalsComputedAt" IS NOT NULL` predicate (+ `RETURNING id`) makes a
+ * recipe that is already stale a no-op that yields nothing — so the parent
+ * cascade enqueues a follow-up only on the edge, never re-sending a parent that
+ * the initial dispatch set or a sibling chunk already staled+queued. Backed by
+ * the partial index `Recipe_totals_stale_idx`. This is the fan-out-amplification
+ * suppressor on the recursive tail — NOT a correctness floor (use
+ * {@link markRecipesStale} for that): the only false-negative is a recipe left
+ * stale by a prior lost wave, healed by recompute-all.
+ */
+export const markRecipesStaleReturningTransitioned = async (
+  db: Database,
+  ids: RecipeId[],
+): Promise<RecipeId[]> => {
+  if (ids.length === 0) return [];
+  const rows = await getDb(db).execute<{ id: RecipeId }>(sql`
+    UPDATE ${recipe}
+    SET ${sql.identifier("totalsComputedAt")} = NULL
+    WHERE ${recipe.id} IN (${sql.join(
+      ids.map((id) => sql`${id}`),
+      sql`, `,
+    )})
+      AND ${recipe.totalsComputedAt} IS NOT NULL
+    RETURNING ${recipe.id}
+  `);
+  return rows.rows.map((r) => r.id);
+};
+
+/** Count of active recipes whose persisted totals are stale (pending recompute). */
+export const countStaleRecipeTotals = async (db: Database): Promise<number> => {
+  const [row] = await getDb(db)
+    .select({ n: count() })
+    .from(recipe)
+    .where(and(sql`${recipe.totalsComputedAt} IS NULL`, notDeleted(recipe)));
+  return row?.n ?? 0;
+};
+
+/**
+ * Filter a queued message down to recipes that are still stale. Queue messages
+ * are just wakeups: repeated product edits or parent cascades may enqueue ids
+ * that another invocation has already recomputed.
+ */
+export const selectStaleRecipeIds = async (
+  db: Database,
+  ids: RecipeId[],
+): Promise<RecipeId[]> => {
+  if (ids.length === 0) return [];
+  const rows = await getDb(db)
+    .select({ id: recipe.id })
+    .from(recipe)
+    .where(
+      and(
+        inArray(recipe.id, ids),
+        sql`${recipe.totalsComputedAt} IS NULL`,
+        notDeleted(recipe),
+      ),
+    );
+  return rows.map((r) => r.id as RecipeId);
 };
 
 /** Persisted totals state for one recipe (explain endpoint). Null = not found. */

@@ -67,6 +67,7 @@ import {
   findProductsWithNoImages,
 } from "~/server/repo/product";
 import { foodLookupParamFromProduct } from "~/server/repo/product/helpers";
+import { countStaleRecipeTotals } from "~/server/repo/recipe/totals";
 import { batchEnrichWithFood } from "~/server/services/usda-helpers";
 import { traceAll, traceAllSeq } from "~/server/tracing";
 
@@ -310,6 +311,7 @@ export const findMaintenanceCounts = async (
     productsWithNoImages: () =>
       findProductsWithNoImages(db, { excludeIngredients: true }),
     locationsWithoutAiDescription: () => findLocationsWithoutAiDescription(db),
+    staleRecipeTotals: () => countStaleRecipeTotals(db),
   });
 
   return {
@@ -319,6 +321,7 @@ export const findMaintenanceCounts = async (
     productsWithNoImages: r.productsWithNoImages.filter((p) => p.upc != null)
       .length,
     locationsWithoutAiDescription: r.locationsWithoutAiDescription.length,
+    staleRecipeTotals: r.staleRecipeTotals,
   };
 };
 

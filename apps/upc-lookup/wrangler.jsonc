@@ -26,6 +26,9 @@
       "destinations": ["grafana-traces"]
     }
   },
+  "placement": {
+    "mode": "smart"
+  },
 
   // D1 Database for product cache
   "d1_databases": [

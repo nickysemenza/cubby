@@ -25,6 +25,9 @@
       "destinations": ["grafana-traces"]
     }
   },
+  "placement": {
+    "mode": "smart"
+  },
 
   "d1_databases": [
     {

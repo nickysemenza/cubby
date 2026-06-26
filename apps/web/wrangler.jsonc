@@ -77,13 +77,10 @@
   // Recipe-totals recompute offloaded off the request path. A heavily-used
   // ingredient merge can touch 100+ recipes; recomputing inline overruns the
   // per-invocation CPU/memory budget, so dispatchRecompute fans the recipe ids
-  // into RECOMPUTE_CHUNK_SIZE chunks (one message each) and the consumer drains
-  // each chunk in its own invocation (fresh budget). The consumer auto-scales to
-  // many concurrent invocations, so chunks drain in PARALLEL — max_batch_size:1
-  // keeps one chunk per invocation (raising it would batch many chunks back into
-  // one invocation, the opposite of what we want). max_concurrency caps the
-  // fan-out so a big backlog can't spike DB connections / Neon egress — every
-  // invocation opens a Hyperdrive pool. Create once before first deploy:
+  // into RECOMPUTE_CHUNK_SIZE targeted chunks (one message each). max_batch_size:1
+  // keeps one chunk per invocation; max_concurrency:1 keeps the drain serial and
+  // predictable while stale-id filtering makes old duplicate chunks cheap no-ops.
+  // Create once before first deploy:
   //   wrangler queues create cubby-recompute
   //   wrangler queues create cubby-recompute-dlq
   "queues": {
@@ -91,9 +88,33 @@
     "consumers": [
       {
         "queue": "cubby-recompute",
-        "max_batch_size": 1,
-        "max_batch_timeout": 5,
-        "max_concurrency": 10,
+        // Batch many chunks into one invocation. The per-chunk work is small and
+        // IO-bound (~250-500ms: a USDA service fetch + a few small DB writes); at
+        // batch_size:1 the drain wall-time was dominated by SERIAL queue-dispatch
+        // latency — the gap between one single-message invocation acking and the
+        // next being delivered, paid once per chunk. Batching pays that gap ~once
+        // per 10 chunks instead, collapsing a ~26s drain toward ~10s. The handler
+        // (cf-server.ts queue()) loops over the batch and acks/retries EACH message
+        // individually, so per-message ack isolation is preserved — this is NOT
+        // union-processing. timeout:0 delivers as soon as messages are present
+        // (the burst is sent in one sendBatch, so a full batch is already waiting);
+        // it only stops the trailing cascade messages (which arrive 1-4 at a time)
+        // from sitting in a fill-the-batch wait. The inherent ~1s queue pickup
+        // latency is a Queues property, not tunable by these knobs.
+        "max_batch_size": 10,
+        "max_batch_timeout": 0,
+        // SERIAL by choice (concurrency:1), independent of batch size. With
+        // concurrency:1 there is still at most ONE invocation in flight, so no two
+        // messages race the same recipe — the parent-cascade stays simple and fully
+        // consistent (the stale-filter + cascade dedup rely on this). Concurrency
+        // WOULD be safe perf-wise (the work is IO-bound, not CPU-bound) and faster,
+        // but it reintroduces a lost-update window not worth it for a single-user
+        // app; batching is the throughput lever instead. NOTE: the earlier
+        // "CPU-bound / 16965ms load+compute" rationale here was a MISDIAGNOSIS — a
+        // wasm_tracing CPU leak (fixed in recipebridge/src/lib.rs) mis-timed by
+        // workerd's frozen clock. If you ever raise concurrency, re-check the
+        // cascade race (see recipe-costing.service.ts enqueueParentCascade).
+        "max_concurrency": 1,
         "max_retries": 3,
         "dead_letter_queue": "cubby-recompute-dlq"
       }

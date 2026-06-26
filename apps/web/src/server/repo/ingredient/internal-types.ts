@@ -71,6 +71,37 @@ export const mapIngredientProducts = (
     };
   });
 
+/** Product relation for the lean costing/getManyByIDs fetch: unit mappings only. */
+type IngredientLeanDB = typeof ingredient.$inferSelect & {
+  product: Array<
+    typeof product.$inferSelect & {
+      unitMappings: Array<typeof productUnitMappings.$inferSelect>;
+    }
+  >;
+};
+
+/**
+ * Lean product map: skips the `images` (full Image records) + `externalIds`
+ * joins that costing / getManyByIDs never read. That over-fetch was ~4MB and
+ * ~11s of drizzle object-building per call — pure worker CPU that blocked the
+ * recompute-queue isolate's event loop while Postgres sat idle. Same shape as
+ * {@link mapIngredientProducts} with the two unused relations emptied.
+ */
+export const mapIngredientProductsLean = (
+  productRel: IngredientLeanDB["product"],
+) =>
+  mapRelation(productRel, (prod) => {
+    const { ingredientId: _ingredientId, ...prodRest } = prod;
+    return {
+      ...prodRest,
+      id: prod.id,
+      shortcode: unsafeProductShortcode(prod.shortcode),
+      images: [] as Array<typeof image.$inferSelect>,
+      externalIds: [] as Array<typeof productExternalId.$inferSelect>,
+      unitMappings: addProductSourceMetadata(prod.id, prod.unitMappings),
+    };
+  });
+
 export const dbIngredientToAPI = async (
   _db: Database | DrizzleTransaction,
   ingredientData: IngredientDeepDB,

@@ -92,6 +92,10 @@ const traceQuery =
 // signal we need to tell "connection: 5s" apart from "query: 7ms".
 const IN_TX = Symbol("worker-tracing:inTransaction");
 type TracedClient = pg.PoolClient & { [TRACED]?: boolean; [IN_TX]?: boolean };
+type TracedStandaloneClient = pg.Client & {
+  [TRACED]?: boolean;
+  [IN_TX]?: boolean;
+};
 
 // Exposes the traced `acquire` on the pool so a non-transaction checkout (e.g.
 // withConnection) can request transaction:false — pool.connect() always stamps
@@ -110,7 +114,15 @@ const tracePool = (pool: pg.Pool): pg.Pool => {
   const acquire = (inTransaction: boolean): Promise<pg.PoolClient> =>
     withTrace(TraceNames.db("acquire"), async (span) => {
       span.setAttribute("db.acquire.transaction", inTransaction);
+      const t0 = performance.now();
       const client = (await rawConnect()) as TracedClient;
+      const ms = Math.round(performance.now() - t0);
+      span.setAttribute("db.acquire.duration_ms", ms);
+      if (ms > 500) {
+        console.warn(
+          `[db-acquire] transaction=${inTransaction} duration_ms=${ms}`,
+        );
+      }
       client[IN_TX] = inTransaction;
       if (!client[TRACED]) {
         client.query = traceQuery(
@@ -148,6 +160,19 @@ const tracePool = (pool: pg.Pool): pg.Pool => {
   (pool as TracedPool)[ACQUIRE] = acquire;
 
   return pool;
+};
+
+const traceStandaloneClient = (client: pg.Client): pg.Client => {
+  const traced = client as TracedStandaloneClient;
+  traced[IN_TX] = false;
+  if (!traced[TRACED]) {
+    traced.query = traceQuery(
+      traced.query.bind(traced),
+      () => traced[IN_TX] ?? false,
+    ) as typeof traced.query;
+    traced[TRACED] = true;
+  }
+  return client;
 };
 
 const createPoolClient = (connectionString: string) => {
@@ -193,7 +218,36 @@ export const withRequestDb = async <T>(
   connectionString: string,
   fn: () => Promise<T>,
 ): Promise<T> => {
-  return requestDbStore.run({ connectionString }, fn);
+  const holder: LazyDbHolder = { connectionString };
+  return requestDbStore.run(holder, fn);
+};
+
+/**
+ * Queue-only DB scope: one Worker-side pg.Client for the whole queue invocation.
+ * Hyperdrive still owns the origin DB pool; this only avoids a local pg.Pool for
+ * serial queue work. We intentionally do not call client.end() here: the client
+ * is not reused across invocations, and Hyperdrive/Workers own the edge socket
+ * lifecycle once the handler settles.
+ */
+export const withRequestDbClient = async <T>(
+  connectionString: string,
+  fn: () => Promise<T>,
+): Promise<T> => {
+  const client = traceStandaloneClient(new pg.Client({ connectionString }));
+  const t0 = performance.now();
+  await withTrace(TraceNames.db("connect"), async (span) => {
+    await client.connect();
+    span.setAttributes({
+      "db.system.name": DB_SYSTEM,
+      "db.namespace": DB_NAMESPACE,
+      "db.connect.duration_ms": Math.round(performance.now() - t0),
+    });
+  });
+  const holder: LazyDbHolder = {
+    connectionString,
+    db: drizzleNodePostgres({ client, schema }),
+  };
+  return requestDbStore.run(holder, fn);
 };
 
 // ---------------------------------------------------------------------------
@@ -231,21 +285,26 @@ const getDbInstance = (): DBClient => {
       // max:5 is Cloudflare's recommended ceiling for a per-request DB pool: a
       // Worker invocation can hold at most ~6 simultaneous outbound TCP
       // connections, and Hyperdrive client connections count against that limit.
-      // (This is NOT the Hyperdrive→origin pool size of 60 — that's shared
-      // across all invocations and protects the database, not this request.) So
-      // the Problems fan-out gets 5-way parallelism, the platform maximum.
+      // (This is NOT the Hyperdrive→origin pool size — that's shared across all
+      // invocations and protects the database, not this request.) So the Problems
+      // fan-out gets 5-way parallelism, the platform maximum.
       //
-      // We deliberately never call pool.end() — Hyperdrive manages connection
-      // lifecycle, and httpBatchStreamLink streams the response before all
-      // batched procedures finish. A Pool makes that safe for free: an in-flight
-      // (still-streaming) query keeps its client checked out and never idle, so
-      // it's never closed under it, while a finished query returns its client to
-      // the pool to self-drain via the idle timeout. allowExitOnIdle lets idle
-      // clients close without keeping the isolate alive.
+      // MINIMAL on purpose: Cloudflare's documented pattern is just
+      // {connectionString, max}; the dev pool already does this, and Hyperdrive
+      // owns the connection lifecycle, keepalive, and timeouts. Do NOT re-add
+      // `statement_timeout`/`query_timeout`/keepAlive/connectionTimeout here.
+      //
+      // HISTORY (don't repeat): a recompute drain showed a 2-row UPDATE climbing
+      // 0.8s→30s, and this code once blamed session-level settings degrading
+      // Hyperdrive toward dedicated origin connections. That diagnosis was WRONG —
+      // Neon/Hyperdrive were idle and healthy throughout. The real cause was
+      // entirely in the WASM costing engine (a wasm_tracing INFO-span leak), and
+      // workerd's frozen clock (performance.now() doesn't tick during pure-CPU
+      // work) mis-attributed that CPU to the next I/O — the DB write. See
+      // recipebridge/src/lib.rs. The connection layer was never the problem.
       const pool = new pg.Pool({
         connectionString: holder.connectionString,
         max: 5,
-        allowExitOnIdle: true,
       });
       const db = drizzleNodePostgres({ client: tracePool(pool), schema });
       holder.db = db;

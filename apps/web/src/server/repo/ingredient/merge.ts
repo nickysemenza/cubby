@@ -261,8 +261,9 @@ export const mergeIngredients = async (
     await tx.delete(ingredient).where(inArray(ingredient.id, uniqueAliases));
 
     // Correctness floor: flag the absorbed recipes stale atomically with the
-    // merge, so they read as pending (and the Problems page can catch them) even
-    // if the dispatched recompute never lands.
+    // merge, so they read as pending — countable on Settings → Maintenance
+    // (countStaleRecipeTotals) and healable by recompute-all — even if the
+    // dispatched recompute never lands.
     if (r.affectedRecipeIds.length > 0) {
       await tx
         .update(recipe)
