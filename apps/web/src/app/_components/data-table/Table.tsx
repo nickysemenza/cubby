@@ -356,13 +356,18 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     .map((c) => c.id)
     .join(",");
 
+  // Columns the table actually renders. Use VISIBLE leaves: getAllColumns()
+  // counts hidden columns too, so a colSpan built from it exceeds the rendered
+  // column count and the browser invents a phantom trailing column that steals
+  // table width — the "empty right half" bug under table-fixed. Shared by the
+  // status rows and the virtualizer spacer rows below.
+  const colSpan =
+    table.getVisibleLeafColumns().length + (isDebugEnabled ? 1 : 0);
+
   // Helper to render status rows (loading, error, empty)
   const renderStatusRow = (content: ReactNode, height = "h-16") => (
     <TableRow>
-      <TableCell
-        colSpan={table.getAllColumns().length + (isDebugEnabled ? 1 : 0)}
-        className={cn("text-center", height)}
-      >
+      <TableCell colSpan={colSpan} className={cn("text-center", height)}>
         {content}
       </TableCell>
     </TableRow>
@@ -405,8 +410,6 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
       );
       return renderStatusRow(emptyContent, "h-24");
     }
-
-    const colSpan = table.getAllColumns().length + (isDebugEnabled ? 1 : 0);
 
     // Always use virtualized rendering for consistent behavior
     return (
