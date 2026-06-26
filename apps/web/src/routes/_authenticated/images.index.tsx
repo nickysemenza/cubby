@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Suspense } from "react";
 import ImageList from "~/app/images/imagelist";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
-import { PageWrapper } from "~/components/layout/page-wrapper";
+import { Page } from "~/components/page/Page";
 
 export const Route = createFileRoute("/_authenticated/images/")({
   component: ImagesPage,
@@ -10,10 +10,10 @@ export const Route = createFileRoute("/_authenticated/images/")({
 
 function ImagesPage() {
   return (
-    <PageWrapper>
+    <Page variant="list" title="Images" entity="image" fullWidth>
       <Suspense fallback={<SimpleLoading text="Loading images..." />}>
         <ImageList />
       </Suspense>
-    </PageWrapper>
+    </Page>
   );
 }

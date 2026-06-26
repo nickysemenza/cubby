@@ -4,6 +4,7 @@ import { useCallback } from "react";
 import { toast } from "sonner";
 import type { BulkProgressEvent } from "~/lib/bulk-progress";
 import { getErrorMessage } from "~/lib/error-utils";
+import { invalidateTRPCQueries } from "~/lib/query-keys";
 import { useTRPCClient } from "~/trpc/react";
 import { useBulkStream } from "./useBulkStream";
 
@@ -50,9 +51,7 @@ export function useBulkActionMutation<Vars, Result>({
           toast.success(
             typeof success === "function" ? success(data) : success,
           );
-          for (const key of invalidateKeys) {
-            void queryClient.invalidateQueries({ queryKey: [key] });
-          }
+          invalidateTRPCQueries(queryClient, invalidateKeys);
           onSuccess?.(data);
         },
         errorToast: (err) =>

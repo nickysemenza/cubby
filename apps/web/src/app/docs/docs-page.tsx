@@ -47,7 +47,6 @@ export function DocsPage() {
   return (
     <>
       <Prose>
-        <h1>cubby Documentation</h1>
         <p>
           cubby helps you organize recipes, track ingredients, manage inventory,
           and keep everything in its place.

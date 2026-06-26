@@ -35,7 +35,8 @@ import {
   updateAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { assertLiveTargets, dbInventoryEntryToAPI } from "./helpers";
+import { assertLiveTargets } from "./helpers";
+import { dbInventoryEntryToAPI, dbInventoryEntryToListAPI } from "./mappers";
 import type {
   CreateInventoryEntryData,
   UpdateInventoryEntryData,
@@ -285,22 +286,22 @@ export const inventoryentryList = async (
         .where(whereCondition),
     ]);
 
-    // Fetch full data with relations in a single batched query (avoids N+1)
+    // Fetch row-display data with relations in a single batched query (avoids N+1)
     const ids = results.map((row) => row.inventoryEntry.id);
-    const fullResults =
+    const listResults =
       ids.length > 0
         ? await getDb(db).query.inventoryEntry.findMany({
             where: inArray(inventoryEntry.id, ids),
-            ...relations.inventory.full,
+            ...relations.inventory.list,
           })
         : [];
 
     // Preserve original order from the filtered query
-    const resultsById = new Map(fullResults.map((r) => [r.id, r]));
+    const resultsById = new Map(listResults.map((r) => [r.id, r]));
     const inventoryEntries = ids
       .map((id) => resultsById.get(id))
       .filter((r) => r !== undefined)
-      .map((r) => dbInventoryEntryToAPI(r));
+      .map((r) => dbInventoryEntryToListAPI(r));
     return { data: inventoryEntries, count: countResult?.count ?? 0 };
   }
 
@@ -315,7 +316,7 @@ export const inventoryentryList = async (
   const [results, totalCount] = await Promise.all([
     getDb(db).query.inventoryEntry.findMany({
       where: whereClause,
-      ...relations.inventory.full,
+      ...relations.inventory.list,
       orderBy: orderByArray,
       limit: take,
       offset: skip,
@@ -323,7 +324,7 @@ export const inventoryentryList = async (
     countWhere(db, inventoryEntry, whereClause),
   ]);
 
-  const inventoryEntries = results.map((r) => dbInventoryEntryToAPI(r));
+  const inventoryEntries = results.map((r) => dbInventoryEntryToListAPI(r));
   return { data: inventoryEntries, count: totalCount };
 };
 

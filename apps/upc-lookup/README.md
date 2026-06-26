@@ -27,13 +27,30 @@ the `source` type and the validation enum derive from that array automatically.
 ## Development
 
 ```sh
-pnpm --filter @cubby/upc-lookup dev:local      # vite dev server
-pnpm --filter @cubby/upc-lookup db:generate    # generate a migration after schema edits
-pnpm --filter @cubby/upc-lookup db:migrate:local
-pnpm --filter @cubby/upc-lookup test           # vitest
-pnpm --filter @cubby/upc-lookup deploy         # build + wrangler deploy
-pnpm --filter @cubby/upc-lookup db:migrate:remote
+pnpm --filter @cubby/upc-lookup run dev:local       # vite dev server
+pnpm --filter @cubby/upc-lookup run check           # biome + typecheck
+pnpm --filter @cubby/upc-lookup run test            # vitest run
+pnpm --filter @cubby/upc-lookup run test:watch      # vitest watch
 ```
+
+Root recursive script surfaces include this package and use non-watch commands:
+`pnpm -r check`, plus root `pnpm run typecheck`, `lint`, `format:check`,
+`format:write`, and `test`.
+
+For D1 schema changes:
+
+```sh
+pnpm --filter @cubby/upc-lookup run db:generate        # after schema edits
+pnpm --filter @cubby/upc-lookup run db:migrate:local   # validate on local D1
+pnpm --filter @cubby/upc-lookup run check
+pnpm --filter @cubby/upc-lookup run test
+pnpm --filter @cubby/upc-lookup run db:migrate:remote  # apply production D1 migrations
+pnpm --filter @cubby/upc-lookup run deploy             # build + wrangler deploy
+```
+
+Deploy code that assumes new columns after the remote migration is applied. For
+incompatible changes, use the usual expand/migrate/deploy/cleanup sequence so the
+currently deployed Worker and the next Worker both have a compatible schema.
 
 The `API_KEY` secret gates the API, admin, and MCP. Set it with
 `wrangler secret put API_KEY` (and `.dev.vars` locally).

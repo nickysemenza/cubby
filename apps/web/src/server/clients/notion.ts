@@ -83,6 +83,16 @@ export type NotionBlock = {
   children?: NotionBlock[];
 };
 
+export const notionBlockSchema: z.ZodType<NotionBlock> = z.lazy(() =>
+  z.object({
+    type: z.string(),
+    text: z.string().optional(),
+    checked: z.boolean().optional(),
+    imageUrl: z.string().optional(),
+    children: z.array(notionBlockSchema).optional(),
+  }),
+);
+
 // One row of the Recipes database: the column metadata (the body comes from
 // `getPageContent`). `yieldText`/`servings`/`tags` are read only if those
 // optional columns exist on the data source.

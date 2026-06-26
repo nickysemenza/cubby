@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { toast } from "sonner";
 import { entities } from "~/entities/entities";
+import { invalidateTRPCQueries } from "~/lib/query-keys";
 
 /**
  * Hook for creating memoized update mutations that properly invalidate caches.
@@ -29,10 +30,7 @@ export function useUpdateMutation<TVariables, TData>({
       mutationFn({
         onSuccess: () => {
           toast.success(`${entityLabel} updated`);
-          for (const key of invalidateKeys) {
-            // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
-            void queryClient.invalidateQueries({ queryKey: [key] });
-          }
+          invalidateTRPCQueries(queryClient, invalidateKeys);
         },
         onError: (err) => {
           toast.error(

@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Hono } from "hono";
+import {
+  MAX_BATCH_LOOKUP_SIZE,
+  MAX_LIST_FOODS_PAGE_SIZE,
+} from "@cubby/usda-contract";
 import type { USDADataSource } from "../data/types.js";
 import { createFoodRoutes } from "./foods.js";
 
@@ -224,6 +228,58 @@ describe("Foods API routes", () => {
       expect(await res.json()).toMatchObject({
         results: [expect.objectContaining({ fdc_id: 12345 }), null],
       });
+    });
+
+    it("should return 400 when the batch exceeds the lookup limit", async () => {
+      const lookups = Array.from(
+        { length: MAX_BATCH_LOOKUP_SIZE + 1 },
+        (_, i) => ({
+          kind: "fdc" as const,
+          fdc_id: i + 1,
+        }),
+      );
+
+      const res = await app.request("/api/foods/search/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lookups }),
+      });
+
+      expect(res.status).toBe(400);
+      expect(dataSource.findFoodsByLookupBatch).not.toHaveBeenCalled();
+      expect(await res.json()).toEqual({ error: "Invalid batch lookup" });
+    });
+  });
+
+  describe("GET /api/foods", () => {
+    it("should pass bounded pagination through to the data source", async () => {
+      vi.mocked(dataSource.listFoods).mockResolvedValueOnce({
+        data: [],
+        count: 0,
+      });
+
+      const res = await app.request(
+        `/api/foods?pageIndex=0&pageSize=${MAX_LIST_FOODS_PAGE_SIZE}`,
+      );
+
+      expect(res.status).toBe(200);
+      expect(dataSource.listFoods).toHaveBeenCalledWith(
+        expect.objectContaining({
+          pageIndex: 0,
+          pageSize: MAX_LIST_FOODS_PAGE_SIZE,
+        }),
+      );
+      expect(await res.json()).toEqual({ data: [], count: 0 });
+    });
+
+    it("should return 400 for out-of-bounds pagination", async () => {
+      const res = await app.request(
+        `/api/foods?pageIndex=0&pageSize=${MAX_LIST_FOODS_PAGE_SIZE + 1}`,
+      );
+
+      expect(res.status).toBe(400);
+      expect(dataSource.listFoods).not.toHaveBeenCalled();
+      expect(await res.json()).toEqual({ error: "Invalid query parameters" });
     });
   });
 });

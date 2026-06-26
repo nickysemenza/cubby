@@ -4,6 +4,7 @@
  */
 
 import type {
+  RecipeGraphOut,
   RecipeOut,
   RecipeTotals,
   recipeTopLevel,
@@ -20,7 +21,11 @@ import {
   mapRelation,
 } from "~/server/repo/database-helpers";
 
-import type { RecipeDeepDB, SectionIngredientDB } from "./internal-types";
+import type {
+  RecipeDeepDB,
+  RecipeGraphDB,
+  SectionIngredientDB,
+} from "./internal-types";
 import { recipeSourceFromDb } from "./source";
 
 type RecipeSelect = typeof recipe.$inferSelect;
@@ -223,6 +228,37 @@ export const dbRecipeToAPI = (recipeData: RecipeDeepDB): RecipeOut => {
           ? instructions.map((instruction: { text: string }) => {
               return { instruction: instruction.text };
             })
+          : [],
+      };
+    }),
+  };
+};
+
+/**
+ * Convert a full recipe graph without media. Used by costing/sub-recipe closure
+ * fetches that need sections but deliberately do not load recipe images.
+ */
+export const dbRecipeToAPIGraph = (
+  recipeData: RecipeGraphDB,
+): RecipeGraphOut => {
+  const { sections, SourceData, SourceType, cookbookId, ...restOfRecipe } =
+    recipeData;
+
+  return {
+    ...restOfRecipe,
+    meta: {
+      url: SourceType === "Website" ? SourceData : null,
+    },
+    source: recipeSourceFromDb({ SourceType, SourceData, cookbookId }),
+    sections: mapRelation(sections, (section) => {
+      const { ingredients, instructions, ...restOfSection } = section;
+      return {
+        ...restOfSection,
+        ingredients: mapRelation(ingredients, sectionIngredientToAPI),
+        instructions: Array.isArray(instructions)
+          ? instructions.map((instruction: { text: string }) => ({
+              instruction: instruction.text,
+            }))
           : [],
       };
     }),

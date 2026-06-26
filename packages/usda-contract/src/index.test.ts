@@ -6,6 +6,11 @@ import {
   listFoodsQuery,
   listFoodsResponse,
   fdcIdParam,
+  batchLookupBody,
+  DEFAULT_LIST_FOODS_PAGE_INDEX,
+  DEFAULT_LIST_FOODS_PAGE_SIZE,
+  MAX_BATCH_LOOKUP_SIZE,
+  MAX_LIST_FOODS_PAGE_SIZE,
 } from "./index";
 
 describe("USDA Contract", () => {
@@ -121,8 +126,8 @@ describe("USDA Contract", () => {
         const parsed = listFoodsQuery.parse(minimalQuery);
         expect(parsed.orderBy).toBe("description");
         expect(parsed.direction).toBe("asc");
-        expect(parsed.pageIndex).toBe(0);
-        expect(parsed.pageSize).toBe(10);
+        expect(parsed.pageIndex).toBe(DEFAULT_LIST_FOODS_PAGE_INDEX);
+        expect(parsed.pageSize).toBe(DEFAULT_LIST_FOODS_PAGE_SIZE);
       });
 
       it("should coerce string numbers to numbers", () => {
@@ -140,6 +145,25 @@ describe("USDA Contract", () => {
           orderBy: "invalid_field",
         };
         expect(() => listFoodsQuery.parse(invalidQuery)).toThrow();
+      });
+
+      it("should enforce hard pagination bounds", () => {
+        expect(
+          listFoodsQuery.parse({
+            pageIndex: "0",
+            pageSize: String(MAX_LIST_FOODS_PAGE_SIZE),
+          }).pageSize,
+        ).toBe(MAX_LIST_FOODS_PAGE_SIZE);
+
+        expect(() => listFoodsQuery.parse({ pageIndex: "-1" })).toThrow();
+        expect(() => listFoodsQuery.parse({ pageIndex: "1.5" })).toThrow();
+        expect(() => listFoodsQuery.parse({ pageSize: "0" })).toThrow();
+        expect(() =>
+          listFoodsQuery.parse({
+            pageSize: String(MAX_LIST_FOODS_PAGE_SIZE + 1),
+          }),
+        ).toThrow();
+        expect(() => listFoodsQuery.parse({ pageSize: "1.5" })).toThrow();
       });
 
       it("accepts the relevance orderBy", () => {
@@ -177,6 +201,25 @@ describe("USDA Contract", () => {
       it("should reject non-numeric fdc_id", () => {
         const invalidParam = { fdc_id: "not-a-number" };
         expect(() => fdcIdParam.parse(invalidParam)).toThrow();
+      });
+    });
+
+    describe("batchLookupBody", () => {
+      it("should enforce the max batch lookup size", () => {
+        const lookups = Array.from(
+          { length: MAX_BATCH_LOOKUP_SIZE },
+          (_, i) => ({
+            kind: "fdc" as const,
+            fdc_id: i + 1,
+          }),
+        );
+
+        expect(() => batchLookupBody.parse({ lookups })).not.toThrow();
+        expect(() =>
+          batchLookupBody.parse({
+            lookups: [...lookups, { kind: "fdc", fdc_id: 999_999 }],
+          }),
+        ).toThrow();
       });
     });
 

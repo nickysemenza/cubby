@@ -2,7 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { Stack } from "~/components/layout";
-import { PageWrapper } from "~/components/layout/page-wrapper";
+import { Page } from "~/components/page/Page";
+import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Skeleton } from "~/components/ui/skeleton";
 import { useTRPC } from "~/trpc/react";
 
@@ -38,26 +39,48 @@ function USDANDBLookupPage() {
 
   if (isLoading) {
     return (
-      <PageWrapper>
+      <Page
+        variant="list"
+        title="Looking up USDA food"
+        entity="usda-food"
+        compact
+      >
         <Stack>
           <Skeleton className="h-8 w-48" />
           <Skeleton className="h-32 w-full" />
         </Stack>
-      </PageWrapper>
+      </Page>
     );
   }
 
   if (error || !food) {
     return (
-      <PageWrapper>
-        <div>NDB {code} not found</div>
-      </PageWrapper>
+      <Page
+        variant="list"
+        title="USDA food not found"
+        entity="usda-food"
+        compact
+      >
+        <Empty>
+          <EmptyTitle>NDB {code} not found</EmptyTitle>
+          <EmptyDescription>
+            No USDA food record matched this legacy NDB number.
+          </EmptyDescription>
+        </Empty>
+      </Page>
     );
   }
 
   return (
-    <PageWrapper>
-      <div>Redirecting to USDA food...</div>
-    </PageWrapper>
+    <Page
+      variant="list"
+      title="Redirecting to USDA food"
+      entity="usda-food"
+      compact
+    >
+      <p className="text-muted-foreground text-sm">
+        Redirecting to USDA food...
+      </p>
+    </Page>
   );
 }

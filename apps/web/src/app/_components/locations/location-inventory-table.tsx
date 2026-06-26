@@ -1,16 +1,15 @@
-import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
 import type { LocationId } from "@cubby/schemas/identifiers";
+import type { inventoryListItemOut } from "@cubby/schemas/inventory-responses";
 import type { Row } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
-import { ArrowRightLeft, Trash } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ArrowRightLeft, ImageIcon, Trash } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import type { z } from "zod";
 import { Button } from "~/components/ui/button";
 import { queryKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 import {
   createEditableAmountColumn,
-  createImageColumn,
   createSingleEntityPillColumn,
 } from "../data-table/columnHelpers";
 import { ShelfTableToggle, type ShelfView } from "../data-table/shelf";
@@ -20,18 +19,33 @@ import { useUpdateMutation } from "../hooks/useUpdateMutation";
 import { DeleteInventoryDialog } from "../inventory/delete-inventory-dialog";
 import { InventoryShelf } from "../inventory/inventory-shelf";
 import { MoveInventoryDialog } from "../inventory/move-inventory-dialog";
+import {
+  ProductImageSummariesProvider,
+  useHydratedProductImages,
+} from "../products/product-image-summaries";
+import { useProductUnitMappingSummaries } from "../products/product-unit-mapping-summaries";
+import { ImageThumbnail } from "../table/ImageThumbnail";
 
-type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
+type InventoryItem = z.infer<typeof inventoryListItemOut>;
 
 interface LocationInventoryTableProps {
   locationId: LocationId;
 }
+
+const sameIds = (a: readonly string[], b: readonly string[]) =>
+  a.length === b.length && a.every((id, index) => id === b[index]);
 
 export function LocationInventoryTable({
   locationId,
 }: LocationInventoryTableProps) {
   const api = useTRPC();
   const columnHelper = createColumnHelper<InventoryItem>();
+  const [unitMappingProductIds, setUnitMappingProductIds] = useState<string[]>(
+    [],
+  );
+  const unitMappingSummaries = useProductUnitMappingSummaries(
+    unitMappingProductIds,
+  );
   const updateMutation = useUpdateMutation({
     mutationFn: api.inventory.update.mutationOptions,
     entity: "inventory",
@@ -82,7 +96,7 @@ export function LocationInventoryTable({
     [],
   );
 
-  const { table, isLoading, error, bulkActionBar } = useEntityList<
+  const { table, data, isLoading, error, bulkActionBar } = useEntityList<
     InventoryItem,
     Record<string, never>
   >({
@@ -96,9 +110,17 @@ export function LocationInventoryTable({
     buildFilters: () => ({}),
     filters: [],
     columns: [
-      createImageColumn(columnHelper, {
-        getImages: (row) => row.product.images,
-        entity: "inventory",
+      columnHelper.accessor((row) => row.product.id, {
+        id: "image",
+        header: () => <ImageIcon className="h-3 w-3 text-muted-foreground" />,
+        enableSorting: false,
+        meta: {
+          className: "h-px w-10 overflow-hidden px-0 py-0",
+          mobile: { slot: "image", priority: -10 },
+        },
+        cell: (info) => (
+          <InventoryProductImageCell productId={info.getValue()} />
+        ),
       }),
 
       createSingleEntityPillColumn(columnHelper, "product", "product", {
@@ -113,16 +135,7 @@ export function LocationInventoryTable({
             data: { amount: newAmount },
           });
         },
-        getUnitMappings: (row) =>
-          row.product.unitMappings.map((m) => ({
-            a: m.a,
-            b: m.b,
-            source: m.source,
-            sourceMetadata: m.sourceMetadata ?? {
-              type: "product",
-              productId: row.product.id,
-            },
-          })),
+        getUnitMappings: (row) => unitMappingSummaries[row.product.id] ?? [],
       }),
     ],
     extraActions: (item) => (
@@ -150,9 +163,16 @@ export function LocationInventoryTable({
   });
 
   const items = table.getRowModel().rows.map((r) => r.original);
+  const productIds = useMemo(() => data.map((item) => item.product.id), [data]);
+
+  useEffect(() => {
+    setUnitMappingProductIds((current) =>
+      sameIds(current, productIds) ? current : productIds,
+    );
+  }, [productIds]);
 
   return (
-    <>
+    <ProductImageSummariesProvider productIds={productIds}>
       <ShelfTableToggle
         value={view}
         onChange={setView}
@@ -197,6 +217,19 @@ export function LocationInventoryTable({
           table.resetRowSelection();
         }}
       />
-    </>
+    </ProductImageSummariesProvider>
+  );
+}
+
+function InventoryProductImageCell({ productId }: { productId: string }) {
+  const images = useHydratedProductImages(productId);
+
+  return (
+    <ImageThumbnail
+      images={images}
+      alt="Image"
+      lazyPreview={true}
+      entity="inventory"
+    />
   );
 }

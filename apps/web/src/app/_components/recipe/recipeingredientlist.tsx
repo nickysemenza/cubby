@@ -1,3 +1,4 @@
+import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient-responses";
 import {
   createColumnHelper,
   getCoreRowModel,
@@ -27,7 +28,6 @@ import type {
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { cn } from "~/lib/utils";
 import { renderValueOrMissing } from "~/misc/result";
-import type { IngredientWithFoodLeanOut } from "~/server/services/ingredient.service";
 import { createActionsColumnBase } from "../data-table/columnHelpers";
 import RTable from "../data-table/Table";
 import { EntityPillLink } from "../EntityPill";

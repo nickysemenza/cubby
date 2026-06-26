@@ -1,11 +1,12 @@
-import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
 import type { ProductId } from "@cubby/schemas/identifiers";
+import type { EnrichmentRow } from "@cubby/schemas/ingredient-responses";
 import type { ProductCreateInput } from "@cubby/schemas/product";
 import {
   manualUnitMapping,
   type UnitMapping,
   type UnitMappingInput,
 } from "@cubby/schemas/unitmapping";
+import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import type { FoodSummary } from "@cubby/usda-schemas";
 import { getHoverableMeasureUnitIcon } from "~/app/_components/inventory/format-amount";
@@ -17,7 +18,6 @@ import {
   getIngredientMappings,
   unitMappingsFromFood,
 } from "~/lib/unit-mapping-utils";
-import type { EnrichmentRow } from "~/server/services/ingredient.service";
 
 // Shared core for the two enrichment surfaces — the dense Browse table editor
 // (`WorkbenchEditor`) and the focused Review-queue card — so price parsing,

@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { NotionImport } from "~/app/_components/recipe/notion-import";
-import { PageWrapper } from "~/components/layout/page-wrapper";
+import { Page } from "~/components/page/Page";
 
 export const Route = createFileRoute("/_authenticated/recipes/import-notion")({
   component: ImportNotionPage,
@@ -9,8 +9,14 @@ export const Route = createFileRoute("/_authenticated/recipes/import-notion")({
 
 function ImportNotionPage() {
   return (
-    <PageWrapper>
+    <Page
+      variant="list"
+      title="Import from Notion"
+      eyebrow="Recipes"
+      compact
+      decoration="none"
+    >
       <NotionImport />
-    </PageWrapper>
+    </Page>
   );
 }

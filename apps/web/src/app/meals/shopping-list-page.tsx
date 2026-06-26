@@ -2,7 +2,7 @@ import type { IngredientAvailabilityStatus } from "@cubby/schemas/availability";
 import type { ShoppingListItem } from "@cubby/schemas/meal";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { addDays, format, parseISO, startOfWeek } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { sumBy } from "es-toolkit";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useId, useMemo, useState } from "react";
@@ -21,8 +21,15 @@ import {
 import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import { formatAmount, statusClass, statusLabel } from "./meal-format";
+import { getDefaultShoppingRange } from "./meal-search";
 
 const EPSILON = 1e-6;
+
+interface ShoppingListPageProps {
+  from?: string;
+  to?: string;
+  onRangeChange: (range: { from?: string; to?: string }) => void;
+}
 
 /** Recompute an item's status from its (post-exclusion) adjusted need. */
 const adjustedStatus = (
@@ -38,18 +45,16 @@ const adjustedStatus = (
   return "missing";
 };
 
-export function ShoppingListPage() {
+export function ShoppingListPage({
+  from,
+  to,
+  onRangeChange,
+}: ShoppingListPageProps) {
   const api = useTRPC();
 
-  const [fromStr, setFromStr] = useState(() =>
-    format(startOfWeek(new Date(), { weekStartsOn: 0 }), "yyyy-MM-dd"),
-  );
-  const [toStr, setToStr] = useState(() =>
-    format(
-      addDays(startOfWeek(new Date(), { weekStartsOn: 0 }), 6),
-      "yyyy-MM-dd",
-    ),
-  );
+  const defaultRange = useMemo(() => getDefaultShoppingRange(), []);
+  const fromStr = from ?? defaultRange.from;
+  const toStr = to ?? defaultRange.to;
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const fromId = useId();
@@ -104,7 +109,9 @@ export function ShoppingListPage() {
             type="date"
             value={fromStr}
             className="h-8 w-40"
-            onChange={(e) => setFromStr(e.target.value)}
+            onChange={(e) =>
+              onRangeChange({ from: e.target.value || undefined, to })
+            }
           />
         </Stack>
         <Stack gap="xs">
@@ -116,7 +123,9 @@ export function ShoppingListPage() {
             type="date"
             value={toStr}
             className="h-8 w-40"
-            onChange={(e) => setToStr(e.target.value)}
+            onChange={(e) =>
+              onRangeChange({ from, to: e.target.value || undefined })
+            }
           />
         </Stack>
       </Row>

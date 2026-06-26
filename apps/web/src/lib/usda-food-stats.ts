@@ -1,4 +1,4 @@
-import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
+import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { type NutrientKey, TIER1_NUTRIENTS } from "@cubby/usda-schemas";
 
 // Core nutrients we surface an at-a-glance coverage row for. Code + tooltip name

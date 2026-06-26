@@ -1,3 +1,4 @@
+import type { QueryKey } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Trash } from "lucide-react";
 import type { ReactNode } from "react";
@@ -8,6 +9,11 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "~/components/ui/dropdown-menu";
+import {
+  cancelTRPCQueries,
+  invalidateTRPCQueries,
+  normalizeTRPCQueryKey,
+} from "~/lib/query-keys";
 import type { BulkAction } from "../data-table/bulk-actions.types";
 
 interface DeletableConfig {
@@ -19,7 +25,7 @@ interface DeletableConfig {
   /** Entity type label for dialog (e.g., "Product", "Ingredient") */
   entityLabel: string;
   /** Query keys to invalidate on success */
-  invalidateKeys: readonly unknown[][];
+  invalidateKeys: readonly QueryKey[];
 }
 
 interface UseOptimisticDeleteOptions<TData extends { id: string }> {
@@ -38,6 +44,82 @@ interface UseOptimisticDeleteReturn<TData> {
   deleteDialog: ReactNode | null;
   /** Opens the delete confirmation dialog for one item (e.g. swipe actions) */
   requestDelete: (item: TData) => void;
+}
+
+type CachedList = {
+  items?: Array<{ id: string }>;
+  data?: Array<{ id: string }>;
+  count?: number;
+  meta?: { totalCount?: number; [key: string]: unknown };
+};
+
+type CachedInfiniteList = {
+  pages?: unknown[];
+  pageParams?: unknown[];
+};
+
+function removeDeletedIdsFromCache(
+  old: unknown,
+  deletedIds: Set<string>,
+): unknown {
+  if (Array.isArray(old)) {
+    return old.filter(
+      (item) =>
+        !(
+          item &&
+          typeof item === "object" &&
+          deletedIds.has(String((item as { id?: unknown }).id))
+        ),
+    );
+  }
+
+  if (!old || typeof old !== "object") {
+    return old;
+  }
+
+  const maybeInfinite = old as CachedInfiniteList;
+  if (Array.isArray(maybeInfinite.pages)) {
+    return {
+      ...maybeInfinite,
+      pages: maybeInfinite.pages.map((page) =>
+        removeDeletedIdsFromCache(page, deletedIds),
+      ),
+    };
+  }
+
+  const list = old as CachedList;
+  const source = Array.isArray(list.items)
+    ? "items"
+    : Array.isArray(list.data)
+      ? "data"
+      : null;
+
+  if (source === null) {
+    return old;
+  }
+
+  const current = list[source] ?? [];
+  const next = current.filter((item) => !deletedIds.has(item.id));
+  const removed = current.length - next.length;
+  if (removed === 0) {
+    return old;
+  }
+
+  return {
+    ...list,
+    [source]: next,
+    ...(typeof list.count === "number"
+      ? { count: Math.max(0, list.count - removed) }
+      : null),
+    ...(list.meta && typeof list.meta.totalCount === "number"
+      ? {
+          meta: {
+            ...list.meta,
+            totalCount: Math.max(0, list.meta.totalCount - removed),
+          },
+        }
+      : null),
+  };
 }
 
 /**
@@ -67,11 +149,7 @@ export function useOptimisticDelete<
     const baseMutationOptions = deletable.mutationOptions({
       onSuccess: () => {
         toast.success(`${deletable.entityLabel} deleted`);
-        // Refetch to ensure data is in sync with server
-        // Wrap keys in array to match tRPC's nested structure: [["entity", "list"], {...}]
-        for (const key of deletable.invalidateKeys) {
-          void queryClient.invalidateQueries({ queryKey: [key as unknown[]] });
-        }
+        invalidateTRPCQueries(queryClient, deletable.invalidateKeys);
       },
       onError: (err) => {
         toast.error(
@@ -85,41 +163,25 @@ export function useOptimisticDelete<
     return {
       ...baseMutationOptions,
       onMutate: async (variables: { ids: string[] }) => {
-        // Cancel any outgoing refetches to prevent them from overwriting optimistic update
-        // Wrap keys in array to match tRPC's nested structure: [["entity", "list"], {...}]
-        for (const key of deletable.invalidateKeys) {
-          await queryClient.cancelQueries({ queryKey: [key as unknown[]] });
-        }
+        await cancelTRPCQueries(queryClient, deletable.invalidateKeys);
 
         // Snapshot the previous value for rollback
-        const previousData: Array<unknown> = [];
+        const previousData: Array<[QueryKey, unknown]> = [];
         for (const key of deletable.invalidateKeys) {
-          const currentData = queryClient.getQueryData([key as unknown[]]);
-          previousData.push(currentData);
+          previousData.push(
+            ...queryClient.getQueriesData({
+              queryKey: normalizeTRPCQueryKey(key),
+            }),
+          );
         }
 
         // Optimistically remove deleted items from all relevant queries
+        const deletedIds = new Set(variables.ids);
         for (const key of deletable.invalidateKeys) {
-          queryClient.setQueryData([key as unknown[]], (old: unknown) => {
-            if (!old || typeof old !== "object") {
-              return old;
-            }
-            if (
-              !("data" in old) ||
-              !Array.isArray((old as { data?: unknown }).data)
-            ) {
-              return old;
-            }
-
-            const oldData = old as { data: Array<{ id: string }> };
-            const newData = {
-              ...oldData,
-              data: oldData.data.filter(
-                (item) => !variables.ids.includes(item.id),
-              ),
-            };
-            return newData;
-          });
+          queryClient.setQueriesData(
+            { queryKey: normalizeTRPCQueryKey(key) },
+            (old: unknown) => removeDeletedIdsFromCache(old, deletedIds),
+          );
         }
 
         return { previousData };
@@ -127,17 +189,13 @@ export function useOptimisticDelete<
       onError: (
         err: unknown,
         _variables: unknown,
-        context: { previousData?: unknown[] } | undefined,
+        context: { previousData?: Array<[QueryKey, unknown]> } | undefined,
       ) => {
         // Roll back optimistic update on error
         if (context?.previousData) {
-          deletable.invalidateKeys.forEach((key, index) => {
-            // Wrap key in array to match tRPC's nested structure
-            queryClient.setQueryData(
-              [key as unknown[]],
-              context.previousData?.[index],
-            );
-          });
+          for (const [key, data] of context.previousData) {
+            queryClient.setQueryData(key, data);
+          }
         }
         // Call the base onError from tRPC (cast to avoid type mismatch)
         if (baseMutationOptions.onError) {

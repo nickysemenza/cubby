@@ -1,5 +1,5 @@
-import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
 import type { InventoryUpdateInput } from "@cubby/schemas/inventory";
+import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/inventory-responses";
 import { ArrowRightLeft, Package, Pencil } from "lucide-react";
 import type { FC } from "react";
 import { useState } from "react";
@@ -44,7 +44,7 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
     entityLabel: "Inventory Entry",
     mutationOptions: (callbacks) =>
       api.inventory.delete.mutationOptions(callbacks),
-    invalidateKeys: [[queryKeys.inventory.list], [queryKeys.location.all]],
+    invalidateKeys: [queryKeys.inventory.all, queryKeys.location.all],
     redirectTo: "/inventory",
   });
 

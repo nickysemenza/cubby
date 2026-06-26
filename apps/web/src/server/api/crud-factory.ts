@@ -184,7 +184,9 @@ export function createEntityListProcedure<TOutput, TFilters>({
 export function createEntityCrudWithoutListProcedures<
   SCreate extends ZodSchema,
   SUpdate extends ZodSchema,
-  TOutput,
+  TDetailOutput,
+  TCreateOutput = TDetailOutput,
+  TUpdateOutput = TDetailOutput,
   TId extends string = string,
 >({
   schemas,
@@ -193,36 +195,49 @@ export function createEntityCrudWithoutListProcedures<
   schemas: {
     createInput: SCreate;
     updateInput: SUpdate;
-    output: ZodSchema<TOutput>;
+    /** Default output for get/create/update. */
+    output: ZodSchema<TDetailOutput>;
+    /** Override when getByID carries a different shape than mutations. */
+    detailOutput?: ZodSchema<TDetailOutput>;
+    /** Override when create returns a different shape than detail. */
+    createOutput?: ZodSchema<TCreateOutput>;
+    /** Override when update returns a different shape than detail/create. */
+    updateOutput?: ZodSchema<TUpdateOutput>;
     idSchema?: z.ZodType<unknown>;
   };
   repository: {
-    getByID: (ctx: ProtectedCrudServices, id: TId) => Promise<TOutput>;
+    getByID: (ctx: ProtectedCrudServices, id: TId) => Promise<TDetailOutput>;
     create: (
       ctx: ProtectedCrudServices,
       data: z.infer<SCreate>,
-    ) => Promise<TOutput>;
+    ) => Promise<TCreateOutput>;
     update: (
       ctx: ProtectedCrudServices,
       id: TId,
       data: z.infer<SUpdate>,
-    ) => Promise<TOutput>;
+    ) => Promise<TUpdateOutput>;
   };
 }) {
+  const detailOutput = schemas.detailOutput ?? schemas.output;
+  const createOutput = (schemas.createOutput ??
+    schemas.output) as ZodSchema<TCreateOutput>;
+  const updateOutput = (schemas.updateOutput ??
+    schemas.output) as ZodSchema<TUpdateOutput>;
+
   return {
     getByID: createGetByIdProcedure(
-      schemas.output,
+      detailOutput,
       repository.getByID,
       schemas.idSchema,
     ),
     create: createCreateProcedure(
       schemas.createInput,
-      schemas.output,
+      createOutput,
       repository.create,
     ),
     update: createUpdateProcedure(
       schemas.updateInput,
-      schemas.output,
+      updateOutput,
       repository.update,
       schemas.idSchema,
     ),
@@ -233,8 +248,11 @@ export function createEntityCrudWithoutListProcedures<
 export function createEntityCrudProcedures<
   SCreate extends ZodSchema,
   SUpdate extends ZodSchema,
-  TOutput,
+  TDetailOutput,
   TFilters,
+  TListOutput = TDetailOutput,
+  TCreateOutput = TDetailOutput,
+  TUpdateOutput = TDetailOutput,
   TId extends string = string,
 >({
   schemas,
@@ -244,35 +262,40 @@ export function createEntityCrudProcedures<
   schemas: {
     createInput: SCreate;
     updateInput: SUpdate;
-    output: ZodSchema<TOutput>;
+    /** Default output for every operation unless an operation-specific schema is supplied. */
+    output: ZodSchema<TDetailOutput>;
+    listOutput?: ZodSchema<TListOutput>;
+    detailOutput?: ZodSchema<TDetailOutput>;
+    createOutput?: ZodSchema<TCreateOutput>;
+    updateOutput?: ZodSchema<TUpdateOutput>;
     filters: ZodSchema<TFilters>;
     idSchema?: z.ZodType<unknown>;
   };
   repository: {
-    getByID: (ctx: ProtectedCrudServices, id: TId) => Promise<TOutput>;
+    getByID: (ctx: ProtectedCrudServices, id: TId) => Promise<TDetailOutput>;
     list: (
       ctx: ProtectedCrudServices,
       filters: TFilters,
       sort: SortParams,
       pagination: PaginationParams,
       groupBy?: string,
-    ) => Promise<{ data: TOutput[]; count: number }>;
+    ) => Promise<{ data: TListOutput[]; count: number }>;
     create: (
       ctx: ProtectedCrudServices,
       data: z.infer<SCreate>,
-    ) => Promise<TOutput>;
+    ) => Promise<TCreateOutput>;
     update: (
       ctx: ProtectedCrudServices,
       id: TId,
       data: z.infer<SUpdate>,
-    ) => Promise<TOutput>;
+    ) => Promise<TUpdateOutput>;
   };
   /** Entity type for enhanced error messages */
   entityName: Entity;
 }) {
-  const { list } = createEntityListProcedure({
+  const { list } = createEntityListProcedure<TListOutput, TFilters>({
     schemas: {
-      output: schemas.output,
+      output: (schemas.listOutput ?? schemas.output) as ZodSchema<TListOutput>,
       filters: schemas.filters,
     },
     repository: {
@@ -286,6 +309,9 @@ export function createEntityCrudProcedures<
       createInput: schemas.createInput,
       updateInput: schemas.updateInput,
       output: schemas.output,
+      detailOutput: schemas.detailOutput,
+      createOutput: schemas.createOutput,
+      updateOutput: schemas.updateOutput,
       idSchema: schemas.idSchema,
     },
     repository: {

@@ -8,8 +8,8 @@ import {
   parsedSearchSchema,
   productIdentificationSchema,
 } from "@cubby/schemas/ai";
-import { foodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
 import { ingredientId, locationId } from "@cubby/schemas/identifiers";
+import { foodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { z } from "zod";
 import { streamProgress } from "~/lib/bulk-progress";
 import {

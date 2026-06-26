@@ -1,4 +1,4 @@
-import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
+import type { inventoryListItemOut } from "@cubby/schemas/inventory-responses";
 import type { InfLocation } from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
 import { type Ref, useMemo } from "react";
@@ -7,10 +7,16 @@ import { Row } from "~/components/layout";
 import { ImageWithPreview } from "~/components/ui/image-with-preview";
 import { EntityIcon } from "~/entities/entities";
 import { cn } from "~/lib/utils";
+import { useHydratedProductImages } from "../products/product-image-summaries";
 import { InventoryValuationSummary } from "./inventory-valuation-summary";
 import { LocationIcon } from "./location-icons";
 
-type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
+type InventoryItem = z.infer<typeof inventoryListItemOut>;
+type ProductPreview = {
+  id: string;
+  name: string;
+  totalAmount: string;
+};
 
 interface LocationGalleryCardProps {
   location: InfLocation;
@@ -38,15 +44,7 @@ export const LocationGalleryCard = function LocationGalleryCard({
 }: LocationGalleryCardProps & { ref?: Ref<HTMLDivElement> }) {
   // Group inventory items by product for display
   const productImages = useMemo(() => {
-    const productMap = new Map<
-      string,
-      {
-        id: string;
-        name: string;
-        images: Array<{ id: string; url: string }>;
-        totalAmount: string;
-      }
-    >();
+    const productMap = new Map<string, ProductPreview>();
 
     for (const item of inventoryItems) {
       const existing = productMap.get(item.product.id);
@@ -57,7 +55,6 @@ export const LocationGalleryCard = function LocationGalleryCard({
       productMap.set(item.product.id, {
         id: item.product.id,
         name: item.product.name,
-        images: item.product.images ?? [],
         totalAmount: `${item.amount.value} ${item.amount.unit}`,
       });
     }
@@ -132,27 +129,7 @@ export const LocationGalleryCard = function LocationGalleryCard({
           <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
             {productImages.map((product) => (
               <Row key={product.id} align="center" gap="sm">
-                {product.images[0] ? (
-                  <ImageWithPreview
-                    src={product.images[0].url}
-                    alt={product.name}
-                    to="/products/$id"
-                    params={{ id: product.id }}
-                    size={32}
-                    previewSize={200}
-                  />
-                ) : (
-                  <Link
-                    to="/products/$id"
-                    params={{ id: product.id }}
-                    className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded border bg-muted/50"
-                  >
-                    <EntityIcon
-                      entity="product"
-                      className="h-3 w-3 text-muted-foreground/40"
-                    />
-                  </Link>
-                )}
+                <ProductPreviewImage product={product} />
                 <Link
                   to="/products/$id"
                   params={{ id: product.id }}
@@ -178,3 +155,34 @@ export const LocationGalleryCard = function LocationGalleryCard({
     </div>
   );
 };
+
+function ProductPreviewImage({ product }: { product: ProductPreview }) {
+  const images = useHydratedProductImages(product.id);
+  const image = images[0];
+
+  if (image) {
+    return (
+      <ImageWithPreview
+        src={image.url}
+        alt={product.name}
+        to="/products/$id"
+        params={{ id: product.id }}
+        size={32}
+        previewSize={200}
+      />
+    );
+  }
+
+  return (
+    <Link
+      to="/products/$id"
+      params={{ id: product.id }}
+      className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded border bg-muted/50"
+    >
+      <EntityIcon
+        entity="product"
+        className="h-3 w-3 text-muted-foreground/40"
+      />
+    </Link>
+  );
+}

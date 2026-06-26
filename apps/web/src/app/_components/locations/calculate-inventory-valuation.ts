@@ -1,8 +1,8 @@
-import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
+import type { inventoryListItemOut } from "@cubby/schemas/inventory-responses";
 import { isMiscProduct } from "@cubby/shared";
 import type { z } from "zod";
 
-export type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
+export type InventoryItem = z.infer<typeof inventoryListItemOut>;
 
 type InventoryValuationBreakdown = {
   key: string;

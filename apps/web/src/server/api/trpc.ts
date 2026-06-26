@@ -46,10 +46,20 @@ import {
 const mapProductToTopLevelOut = (
   dbProduct: Awaited<ReturnType<typeof findProductsByFoodIdentifier>>[number],
 ) => {
-  const { ingredientId: _ingredientId, id, ...rest } = dbProduct;
+  const {
+    ingredientId: _ingredientId,
+    id,
+    externalIds,
+    images,
+    ...rest
+  } = dbProduct;
   return {
     ...rest,
     id: id,
+    images: images ?? [],
+    externalIds: (externalIds ?? []).filter(
+      (externalId) => externalId.deletedAt === null,
+    ),
   };
 };
 

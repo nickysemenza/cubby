@@ -25,7 +25,8 @@ import {
   updateAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { assertLiveTargets, dbInventoryEntryToAPI } from "./helpers";
+import { assertLiveTargets } from "./helpers";
+import { dbInventoryEntryToAPI } from "./mappers";
 import type { InventoryEntryDeepDB } from "./types";
 
 /** Batch fetch inventory entries with full relations, preserving order. */

@@ -1,9 +1,10 @@
 import type { DetectedItem } from "@cubby/schemas/ai";
 import type { LocationId } from "@cubby/schemas/identifiers";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { Package, Sparkles, Trash2 } from "lucide-react";
 import { type FC, useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useCreateInventoryMutation } from "~/app/_components/inventory/hooks";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -20,7 +21,6 @@ import { ScrollArea } from "~/components/ui/scroll-area";
 import { Spinner } from "~/components/ui/spinner";
 import { getErrorMessage } from "~/lib/error-utils";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
-import { queryKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 
 interface DetectItemsDialogProps {
@@ -43,7 +43,6 @@ export const DetectItemsDialog: FC<DetectItemsDialogProps> = ({
   locationName,
 }) => {
   const api = useTRPC();
-  const queryClient = useQueryClient();
   const [items, setItems] = useState<DetectedItem[]>([]);
   const [summary, setSummary] = useState<string>("");
 
@@ -59,13 +58,11 @@ export const DetectItemsDialog: FC<DetectItemsDialogProps> = ({
     }),
   );
 
-  const createMutation = useMutation(
-    api.inventory.create.mutationOptions({
-      onError: (error) => {
-        toast.error(getErrorMessage(error));
-      },
-    }),
-  );
+  const createMutation = useCreateInventoryMutation({
+    onError: (error) => {
+      toast.error(getErrorMessage(error));
+    },
+  });
 
   // Use ref to avoid re-triggering effect when mutation reference changes
   const detectRef = useRef(detectMutation.mutate);
@@ -106,12 +103,9 @@ export const DetectItemsDialog: FC<DetectItemsDialogProps> = ({
       toast.success(
         `Added ${added} item${added === 1 ? "" : "s"} to inventory`,
       );
-      void queryClient.invalidateQueries({
-        queryKey: [queryKeys.inventory.list],
-      });
       onOpenChange(false);
     }
-  }, [items, locationId, createMutation, queryClient, onOpenChange]);
+  }, [items, locationId, createMutation, onOpenChange]);
 
   const isLoading = detectMutation.isPending;
   const hasResults = items.length > 0;

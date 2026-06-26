@@ -1,3 +1,4 @@
+import type { EnrichmentRow } from "@cubby/schemas/ingredient-responses";
 import { X } from "lucide-react";
 import { confidenceColor } from "~/app/_components/ai/ai-suggest";
 import { Row, Stack } from "~/components/layout";
@@ -6,7 +7,6 @@ import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { Progress } from "~/components/ui/progress";
 import { cn } from "~/lib/utils";
-import type { EnrichmentRow } from "~/server/services/ingredient.service";
 import { UnitInput } from "./workbench-editor-core";
 import type { Suggestion } from "./workbench-row";
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ingredientBase,
+  ingredientCreateInput,
   ingredientOut,
   ingredientUpdateInput,
 } from "./ingredient";
@@ -51,6 +52,7 @@ describe("ingredientOut schema", () => {
         id: UUID,
         name: "Flour",
         aliases: ["All Purpose Flour"],
+        naKinds: [],
         createdAt: now,
         updatedAt: now,
       },
@@ -62,6 +64,7 @@ describe("ingredientOut schema", () => {
         id: "not-a-uuid",
         name: "Flour",
         aliases: ["All Purpose Flour"],
+        naKinds: [],
         createdAt: now,
         updatedAt: now,
       },
@@ -69,7 +72,12 @@ describe("ingredientOut schema", () => {
     },
     {
       name: "missing timestamp fields",
-      input: { id: UUID, name: "Flour", aliases: ["All Purpose Flour"] },
+      input: {
+        id: UUID,
+        name: "Flour",
+        aliases: ["All Purpose Flour"],
+        naKinds: [],
+      },
       valid: false,
     },
   ];
@@ -112,5 +120,25 @@ describe("ingredientUpdateInput schema", () => {
 
   it.each(CASES)("$name → $valid", ({ input, valid }) => {
     expect(ingredientUpdateInput.safeParse(input).success).toBe(valid);
+  });
+
+  it("does not default naKinds on partial updates", () => {
+    const parsed = ingredientUpdateInput.parse({
+      id: UUID,
+      data: { name: "Flour" },
+    });
+
+    expect("naKinds" in parsed.data).toBe(false);
+  });
+});
+
+describe("ingredientCreateInput schema", () => {
+  it("defaults naKinds on create only", () => {
+    const parsed = ingredientCreateInput.parse({
+      name: "Flour",
+      aliases: [],
+    });
+
+    expect(parsed.naKinds).toEqual([]);
   });
 });

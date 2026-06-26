@@ -5,8 +5,8 @@
  */
 
 import type { Confidence, LocationDescription } from "@cubby/schemas/ai";
-import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
 import type { IngredientId, LocationId } from "@cubby/schemas/identifiers";
+import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { type DataType, dataTypeEnum } from "@cubby/usda-schemas";
 import { chat, maxIterations, toolDefinition } from "@tanstack/ai";
 import type { BulkProgressEvent } from "~/lib/bulk-progress";

@@ -6,7 +6,6 @@
  * See CLAUDE.md "Service Layer Architecture" for details.
  */
 
-import { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
 import {
   type InventoryId,
   inventoryId,
@@ -19,6 +18,10 @@ import {
   inventoryFiltersSchema,
   inventoryUpdateInput,
 } from "@cubby/schemas/inventory";
+import {
+  inventoryListItemOut,
+  inventoryWithLocationAndProductOut,
+} from "@cubby/schemas/inventory-responses";
 import { duplicateUniqueProductSchema } from "@cubby/schemas/problems";
 import { z } from "zod";
 import { createAppError } from "~/server/errors/app-error";
@@ -37,17 +40,30 @@ import {
 import { findDuplicateUniqueProducts } from "~/server/repo/product";
 import {
   createDeleteProcedure,
-  createEntityCrudProcedures,
+  createEntityCrudWithoutListProcedures,
+  createEntityListProcedure,
 } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 // Create standardized CRUD procedures using factory
-const { getByID, list, create, update } = createEntityCrudProcedures({
+const { list } = createEntityListProcedure({
+  schemas: {
+    output: inventoryListItemOut,
+    filters: inventoryFiltersSchema,
+  },
+  repository: {
+    list: async (services, filters, sort, pagination) => {
+      return await inventoryentryList(services.db, filters, sort, pagination);
+    },
+  },
+  entityName: "inventory",
+});
+
+const { getByID, create, update } = createEntityCrudWithoutListProcedures({
   schemas: {
     createInput: inventoryCreatePayloadData,
     updateInput: inventoryUpdateInput.shape.data,
     output: inventoryWithLocationAndProductOut,
-    filters: inventoryFiltersSchema,
     idSchema: inventoryId,
   },
   repository: {
@@ -60,9 +76,6 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
         );
       }
       return res;
-    },
-    list: async (services, filters, sort, pagination) => {
-      return await inventoryentryList(services.db, filters, sort, pagination);
     },
     create: async (services, data) => {
       // Check if this is a unique product that already exists elsewhere
@@ -99,7 +112,6 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
       return updated;
     },
   },
-  entityName: "inventory",
 });
 
 // Delete procedure using standalone factory

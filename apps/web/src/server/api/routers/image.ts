@@ -13,13 +13,12 @@ import {
 import { buildPaginatedResponse } from "@cubby/schemas/pagination";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { createAppError } from "~/server/errors/app-error";
+import { getImageById, imageList } from "~/server/repo/image";
 import {
-  cullPendingImages,
-  getImageById,
-  imageList,
+  cullPendingImageStorage,
   importImageFromUrl,
   initiateImageUploadWithoutEntity,
-} from "~/server/repo/image";
+} from "~/server/services/image-storage.service";
 
 export const imageRouter = createTRPCRouter({
   /**
@@ -133,7 +132,10 @@ export const imageRouter = createTRPCRouter({
     .output(cullPendingImagesResponseSchema)
     .mutation(async ({ ctx, input }) => {
       try {
-        const result = await cullPendingImages(ctx.db, input.olderThanHours);
+        const result = await cullPendingImageStorage(
+          ctx.db,
+          input.olderThanHours,
+        );
 
         return result;
       } catch (error) {

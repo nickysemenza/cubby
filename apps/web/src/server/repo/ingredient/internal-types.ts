@@ -7,8 +7,8 @@
  * these are re-exported from the package barrel.
  */
 
-import type { IngredientWithRecipesAndProductOut } from "@cubby/schemas/combo";
 import { unsafeProductShortcode } from "@cubby/schemas/identifiers";
+import type { IngredientWithRecipesAndProductOut } from "@cubby/schemas/ingredient-responses";
 import { and, inArray, isNull, or, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {

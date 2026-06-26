@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { DocsPage as DocsContent } from "~/app/docs/docs-page";
-import { PageWrapper } from "~/components/layout/page-wrapper";
+import { Page } from "~/components/page/Page";
 
 export const Route = createFileRoute("/docs")({
   component: DocsPage,
@@ -8,8 +8,8 @@ export const Route = createFileRoute("/docs")({
 
 function DocsPage() {
   return (
-    <PageWrapper>
+    <Page variant="list" title="Documentation" compact>
       <DocsContent />
-    </PageWrapper>
+    </Page>
   );
 }

@@ -1,16 +1,15 @@
-import {
-  productWithIngredientAndInventoryAndMappingsOut,
-  recipeUsageOut,
-} from "@cubby/schemas/combo";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ProductId } from "@cubby/schemas/identifiers";
+import type { ImageOut } from "@cubby/schemas/image";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type {
   ProductCategory,
   ProductCreateInput,
+  ProductUpdateInput,
 } from "@cubby/schemas/product";
-import { foodSummary } from "@cubby/usda-schemas";
-import { z } from "zod";
+import type { ProductWithFoodOut } from "@cubby/schemas/product-responses";
+import type { UnitMapping } from "@cubby/schemas/unitmapping";
+import type { FoodSummary } from "@cubby/usda-schemas";
 import type { Database } from "~/server/db";
 import type { USDAClient } from "../clients/usda";
 import { getRecipeUsagesForIngredient } from "../repo/ingredient";
@@ -18,21 +17,13 @@ import {
   createProduct as createProductRepo,
   foodLookupParamFromProduct,
   getProductByID as getProductByIDRepo,
+  getProductImagesByProductIds,
+  getProductsForFoodLookup,
+  getProductUnitMappingsByProductIds,
   productList as productListRepo,
   updateProduct as updateProductRepo,
 } from "../repo/product";
 import { batchEnrichWithFood } from "./usda-helpers";
-
-// Extended schema that includes food data plus the recipes the product's linked
-// ingredient appears in. `recipeUsages` defaults to [] so the list path (which
-// doesn't compute usages) stays valid against this shared output schema.
-export const productWithFoodOut =
-  productWithIngredientAndInventoryAndMappingsOut.extend({
-    food: foodSummary.nullable(),
-    recipeUsages: z.array(recipeUsageOut).default([]),
-  });
-
-export type ProductWithFoodOut = z.infer<typeof productWithFoodOut>;
 
 export class ProductService {
   constructor(
@@ -81,17 +72,42 @@ export class ProductService {
       groupBy,
     );
 
+    return { data: products, count };
+  }
+
+  async getFoodSummariesByProductIds(
+    ids: ProductId[],
+  ): Promise<Record<string, FoodSummary | null>> {
+    const uniqueIds = [...new Set(ids)];
+    const result: Record<string, FoodSummary | null> = Object.fromEntries(
+      uniqueIds.map((id) => [id, null]),
+    );
+    if (uniqueIds.length === 0) return result;
+
+    const products = await getProductsForFoodLookup(this.db, uniqueIds);
     const productsWithFood = await batchEnrichWithFood(
       products,
       foodLookupParamFromProduct,
       this.usdaClient,
     );
 
-    // The list doesn't compute recipe usages (detail-only); satisfy the shared
-    // `productWithFoodOut` shape with an empty array per row.
-    const data = productsWithFood.map((p) => ({ ...p, recipeUsages: [] }));
+    for (const product of productsWithFood) {
+      result[product.id] = product.food;
+    }
 
-    return { data, count };
+    return result;
+  }
+
+  async getImageSummariesByProductIds(
+    ids: ProductId[],
+  ): Promise<Record<string, ImageOut[]>> {
+    return await getProductImagesByProductIds(this.db, ids);
+  }
+
+  async getUnitMappingSummariesByProductIds(
+    ids: ProductId[],
+  ): Promise<Record<string, UnitMapping[]>> {
+    return await getProductUnitMappingsByProductIds(this.db, ids);
   }
 
   async createProduct(
@@ -107,7 +123,7 @@ export class ProductService {
 
   async updateProduct(
     id: ProductId,
-    data: Partial<ProductCreateInput>,
+    data: ProductUpdateInput["data"],
     actor: ActorContext,
   ): Promise<ProductWithFoodOut> {
     await updateProductRepo(this.db, id, data, actor);

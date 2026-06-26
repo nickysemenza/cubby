@@ -1,13 +1,13 @@
-import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import type { inventoryListItemOut } from "@cubby/schemas/inventory-responses";
+import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { z } from "zod";
+import { useInventoryInvalidation } from "~/app/_components/inventory/hooks";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { countLabel, pluralize } from "~/lib/pluralize";
-import { queryKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 
-type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
+type InventoryItem = z.infer<typeof inventoryListItemOut>;
 
 interface DeleteInventoryDialogProps {
   open: boolean;
@@ -23,16 +23,11 @@ export function DeleteInventoryDialog({
   onSuccess,
 }: DeleteInventoryDialogProps) {
   const api = useTRPC();
-  const queryClient = useQueryClient();
+  const invalidateInventory = useInventoryInvalidation();
 
   const deleteMutation = useMutation(
     api.inventory.delete.mutationOptions({
-      onSuccess: () => {
-        // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
-        queryClient.invalidateQueries({
-          queryKey: [queryKeys.inventory.list],
-        });
-      },
+      onSuccess: invalidateInventory,
     }),
   );
 

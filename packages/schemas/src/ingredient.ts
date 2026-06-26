@@ -1,19 +1,23 @@
 import { z } from "zod";
+import { amount } from "./codec";
 import { dbTimestampsOut, requiredName } from "./common";
-import { ingredientId } from "./identifiers";
+import { id, ingredientId, recipeId } from "./identifiers";
 import { baseKind } from "./problems";
 
-export const ingredientBase = z.object({
+export const ingredientFields = z.object({
   // `mock` is a faker dot-path consumed by the test mock generator
   // (apps/web .../test/mock-schema.ts); it is plain metadata, faker-free here.
   name: z.string().meta({ mock: "food.ingredient" }),
   aliases: z.array(z.string()),
+});
+
+export const ingredientBase = ingredientFields;
+
+const ingredientPersistedFields = ingredientFields.extend({
   // Base measurement kinds the user has marked "not applicable" for this
-  // ingredient (e.g. volume on a count-only item). Optional everywhere (the DB
-  // column defaults to '{}', so reads always have it); the coverage layer
-  // subtracts these from the graded universe. See the `naKinds` column in
-  // schema.ts and `gradedKinds` in conversion-coverage.
-  naKinds: z.array(baseKind).optional(),
+  // ingredient (e.g. volume on a count-only item). The DB column is non-null
+  // with an empty-array default, so public read contracts always carry it.
+  naKinds: z.array(baseKind),
 });
 
 /**
@@ -37,7 +41,7 @@ export const ingredientOut = z
   .object({
     id: ingredientId,
   })
-  .extend(ingredientBase.shape)
+  .extend(ingredientPersistedFields.shape)
   .extend(dbTimestampsOut.shape);
 
 /**
@@ -46,7 +50,16 @@ export const ingredientOut = z
  */
 export const ingredientCreateInput = ingredientBase.extend({
   name: requiredName("Ingredient name").meta({ mock: "food.ingredient" }),
+  naKinds: z.array(baseKind).optional().default([]),
 });
+export type IngredientCreateInput = z.infer<typeof ingredientCreateInput>;
+
+export const ingredientUpdateData = ingredientFields
+  .extend({
+    name: requiredName("Ingredient name").meta({ mock: "food.ingredient" }),
+    naKinds: z.array(baseKind),
+  })
+  .partial();
 
 /**
  * Input schema for updating ingredients
@@ -54,7 +67,7 @@ export const ingredientCreateInput = ingredientBase.extend({
  */
 export const ingredientUpdateInput = z.object({
   id: ingredientId,
-  data: ingredientCreateInput.partial(),
+  data: ingredientUpdateData,
 });
 
 export type IngredientUpdateInput = z.infer<typeof ingredientUpdateInput>;
@@ -75,3 +88,15 @@ export const mergeSummary = z.object({
   deletedIds: z.array(ingredientId),
 });
 export type MergeSummaryOut = z.infer<typeof mergeSummary>;
+
+export const ingredientRawLineOut = z.object({
+  ingredientId,
+  lineId: id,
+  rawLine: z.string().nullable(),
+  modifier: z.string().nullable(),
+  amounts: z.array(amount),
+  recipeId,
+  recipeName: z.string(),
+  sectionName: z.string().nullable(),
+});
+export type IngredientRawLineOut = z.infer<typeof ingredientRawLineOut>;

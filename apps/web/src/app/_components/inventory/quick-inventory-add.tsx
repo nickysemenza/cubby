@@ -16,7 +16,7 @@ import { unitMappingInput } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { upc } from "@cubby/usda-schemas";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { ChevronDown, Plus, X } from "lucide-react";
 import { useCallback, useState } from "react";
 import { FormProvider, useForm } from "react-hook-form";
@@ -33,20 +33,22 @@ import {
   NullableNumericField,
   UnifiedTextField,
 } from "~/app/_components/form-utils";
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Collapsible, CollapsibleContent } from "~/components/ui/collapsible";
 import { Spinner } from "~/components/ui/spinner";
 import { useImageState } from "~/hooks/useImageState";
 import { getErrorMessage } from "~/lib/error-utils";
-import { queryKeys } from "~/lib/query-keys";
 import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import type { ComboboxItem } from "../combobox/combobox-types";
 import { ProductFormFields } from "../products/product-form-fields";
 import { useProductSearch } from "../products/use-product-search";
 import { AmountFieldGroup } from "./amount-field-group";
+import {
+  useCreateInventoryMutation,
+  useProductLookupInvalidation,
+} from "./hooks";
 
 interface QuickInventoryAddProps {
   locationId: LocationId;
@@ -86,7 +88,7 @@ export function QuickInventoryAdd({
   onSuccess,
 }: QuickInventoryAddProps) {
   const api = useTRPC();
-  const queryClient = useQueryClient();
+  const invalidateProductLookup = useProductLookupInvalidation();
   const [mode, setMode] = useState<"select" | "create">("select");
   const [fieldsExpanded, setFieldsExpanded] = useState(false);
 
@@ -104,17 +106,16 @@ export function QuickInventoryAdd({
     },
   });
 
-  const addMutation = useActionMutation({
-    mutationFn: api.inventory.create.mutationOptions,
-    success: "Tucked it into your cubby.",
+  const addMutation = useCreateInventoryMutation({
     onSuccess: () => {
+      toast.success("Tucked it into your cubby.");
       selectForm.reset({
         product: undefined,
         amount: { value: 1, unit: "" },
       });
       onSuccess();
     },
-    error: (err) => getErrorMessage(err) || "Failed to add item",
+    onError: (err) => toast.error(getErrorMessage(err) || "Failed to add item"),
   });
 
   const onSelectSubmit = async (values: SelectFormValues) => {
@@ -144,11 +145,9 @@ export function QuickInventoryAdd({
   });
 
   const productCreateMutation = useMutation(
-    api.product.create.mutationOptions(),
+    api.product.create.mutationOptions({ onSuccess: invalidateProductLookup }),
   );
-  const inventoryCreateMutation = useMutation(
-    api.inventory.create.mutationOptions(),
-  );
+  const inventoryCreateMutation = useCreateInventoryMutation();
 
   const [isCreating, setIsCreating] = useState(false);
 
@@ -179,9 +178,6 @@ export function QuickInventoryAdd({
         });
 
         toast.success(`Created "${newProduct.name}" and added to inventory`);
-        void queryClient.invalidateQueries({
-          queryKey: [queryKeys.product.all],
-        });
         switchToSelectMode();
         onSuccess();
       } catch (inventoryErr) {
@@ -189,9 +185,7 @@ export function QuickInventoryAdd({
         toast.error(
           `Product "${newProduct.name}" was created, but adding to inventory failed: ${getErrorMessage(inventoryErr)}. Search for it to add manually.`,
         );
-        void queryClient.invalidateQueries({
-          queryKey: [queryKeys.product.all],
-        });
+        invalidateProductLookup();
         switchToSelectMode();
       }
     } catch (productErr) {

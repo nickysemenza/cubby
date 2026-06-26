@@ -2,7 +2,7 @@ import { z } from "zod";
 
 const sortParams = z.object({
   orderBy: z.string().default("createdAt"),
-  direction: z.enum(["asc", "desc"]).default("asc"),
+  direction: z.enum(["asc", "desc"]).default("desc"),
 });
 
 const paginationParams = z.object({

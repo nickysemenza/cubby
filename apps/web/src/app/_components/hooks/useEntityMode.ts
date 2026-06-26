@@ -4,7 +4,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { entities } from "~/entities/entities";
 import { getErrorMessage } from "~/lib/error-utils";
-import { queryKeys } from "~/lib/query-keys";
+import { invalidateTRPCQueries, queryKeys } from "~/lib/query-keys";
 
 type EntityMutationCallbacks<TResult> = {
   onSuccess?: (result: TResult) => void;
@@ -47,8 +47,7 @@ export function useEntityCreateMode<TData, TResult extends { id: string }>(
           ? entityQueryKeys.list
           : undefined;
       if (listKey) {
-        // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
-        void queryClient.invalidateQueries({ queryKey: [listKey] });
+        invalidateTRPCQueries(queryClient, [listKey]);
       }
 
       callbacks?.onSuccess?.(result);

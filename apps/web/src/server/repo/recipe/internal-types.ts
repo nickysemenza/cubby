@@ -39,13 +39,14 @@ export type RecipeDeepDB = typeof recipe.$inferSelect & {
       ingredients: Array<SectionIngredientDB>;
     }
   >;
-  // Optional: the recipe LIST query (relations.recipe.list) omits images since
-  // the table never renders them; the detail query (relations.recipe.full)
-  // still includes them. extractImagesFromJoinTable() returns [] when absent.
-  images?: Array<{
+  images: Array<{
     image: typeof image.$inferSelect;
   }>;
 };
+
+// Same section graph as RecipeDeepDB, but intentionally omits images. Used by
+// costing/sub-recipe fetches that need recipe structure without media.
+export type RecipeGraphDB = Omit<RecipeDeepDB, "images">;
 
 /**
  * Type for existing recipe with sections (used in update operations).

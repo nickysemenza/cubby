@@ -1,17 +1,18 @@
-import {
-  ingredientWithRecipesAndProductOut,
-  type ProductWithMappingsOut,
-} from "@cubby/schemas/combo";
 import type { ActorContext } from "@cubby/schemas/context";
-import { type IngredientId, ingredientId } from "@cubby/schemas/identifiers";
-import { type ingredientBase, ingredientOut } from "@cubby/schemas/ingredient";
+import type { IngredientId } from "@cubby/schemas/identifiers";
+import type {
+  ingredientCreateInput,
+  ingredientUpdateData,
+} from "@cubby/schemas/ingredient";
+import type {
+  EnrichmentRow,
+  IngredientWithFoodLeanOut,
+  IngredientWithFoodOut,
+  ProductWithMappingsAndFoodOut,
+} from "@cubby/schemas/ingredient-responses";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { baseKind } from "@cubby/schemas/problems";
-import { productTopLevelOut } from "@cubby/schemas/product";
-import { recipeRefOut } from "@cubby/schemas/recipe";
-import { unitMappingOut } from "@cubby/schemas/unitmapping";
-import { foodSummary } from "@cubby/usda-schemas";
-import { z } from "zod";
+import type { ProductWithMappingsOut as ProductWithMappings } from "@cubby/schemas/product-responses";
+import type { z } from "zod";
 import { conversionCoverage, gradedKinds } from "~/lib/conversion-coverage";
 import { classifyIngredientFix } from "~/lib/recipe-costing-gaps";
 import { getIngredientMappings } from "~/lib/unit-mapping-utils";
@@ -34,85 +35,6 @@ import { foodLookupParamFromProduct } from "../repo/product";
 import { TraceNames, withTrace } from "../tracing";
 import { batchEnrichNestedItems, batchEnrichWithFood } from "./usda-helpers";
 
-const productWithMappingsAndFoodOut = productTopLevelOut.extend({
-  unitMappings: z.array(unitMappingOut),
-  food: foodSummary.nullable(),
-});
-
-export type ProductWithMappingsAndFoodOut = z.infer<
-  typeof productWithMappingsAndFoodOut
->;
-
-export const ingredientWithFoodOut = ingredientWithRecipesAndProductOut.extend({
-  product: z.array(productWithMappingsAndFoodOut),
-});
-
-export type IngredientWithFoodOut = z.infer<typeof ingredientWithFoodOut>;
-
-/** The single highest-leverage fix for an ingredient, or "done" when complete. */
-const enrichmentFixKind = z.enum([
-  "no-product",
-  "link-usda",
-  "set-per-item-price",
-  "add-purchase-mapping",
-  "add-weight-mapping",
-  "add-volume-mapping",
-  "done",
-]);
-
-// Lean ingredient+food shape: products (with food) WITHOUT the per-usage recipe
-// bodies `ingredientWithFoodOut` carries (full Recipe + Section jsonb per usage —
-// a huge over-fetch). Used by every surface that only needs products/mappings/food
-// — the workbench worklist and the costing path (getManyByIDs / recompute).
-export const ingredientWithFoodLeanOut = ingredientOut.extend({
-  product: z.array(productWithMappingsAndFoodOut),
-});
-
-export type IngredientWithFoodLeanOut = z.infer<
-  typeof ingredientWithFoodLeanOut
->;
-
-// The ingredient LIST row: lean ingredient + food, plus the {id,name} refs of the
-// recipes it appears in (the list renders a count + the first as a pill). No
-// per-usage recipe bodies / recipeUsages — those are detail-page only.
-export const ingredientListItemOut = ingredientWithFoodLeanOut.extend({
-  appearsInRecipes: z.array(recipeRefOut),
-});
-export type IngredientListItem = z.infer<typeof ingredientListItemOut>;
-
-/**
- * A workbench row: the lean ingredient (products + food, so the inline editor
- * can create/update directly) decorated with its recipe-usage count, the
- * cookbook-only flag, conversion coverage, the recommended next fix, a
- * price-entry mode, and merge candidates.
- */
-export const enrichmentRowOut = ingredientWithFoodLeanOut.extend({
-  recipeCount: z.number(),
-  // Every live recipe using this ingredient is book-sourced (the imported-cookbook
-  // tail the workbench can hide). Computed in SQL — was derived client-side from
-  // the now-omitted `appearsInRecipes`.
-  cookbookOnly: z.boolean(),
-  coverage: z.object({
-    covered: z.array(baseKind),
-    // Kinds graded against (all four minus the ingredient's N/A opt-outs), so the
-    // UI can render an N/A kind as "—" rather than a missing gap.
-    applicable: z.array(baseKind),
-    tier: z.enum(["complete", "good", "partial", "none"]),
-  }),
-  recommendedFix: enrichmentFixKind,
-  priceMode: z.enum(["per-each", "package"]),
-  mergeCandidates: z.array(
-    z.object({
-      id: ingredientId,
-      name: z.string(),
-      // pg_trgm similarity (0–1) to this row — suggestion-only, confirm before merging.
-      similarity: z.number(),
-    }),
-  ),
-});
-
-export type EnrichmentRow = z.infer<typeof enrichmentRowOut>;
-
 export class IngredientService {
   constructor(
     private db: Database,
@@ -120,7 +42,7 @@ export class IngredientService {
   ) {}
 
   async enrichProductsWithFood(
-    products: ProductWithMappingsOut[],
+    products: ProductWithMappings[],
   ): Promise<ProductWithMappingsAndFoodOut[]> {
     return batchEnrichWithFood(
       products,
@@ -197,15 +119,7 @@ export class IngredientService {
       missingProductsOnly,
     );
 
-    // Batch enrich products within all ingredients
-    const ingredientsWithFood = await batchEnrichNestedItems(
-      ingredients,
-      (ing) => ing.product,
-      (products) => this.enrichProductsWithFood(products),
-      (ing, enrichedProducts) => ({ ...ing, product: enrichedProducts }),
-    );
-
-    return { data: ingredientsWithFood, count };
+    return { data: ingredients, count };
   }
 
   /**
@@ -271,7 +185,7 @@ export class IngredientService {
   }
 
   async createIngredient(
-    data: z.infer<typeof ingredientBase>,
+    data: z.input<typeof ingredientCreateInput>,
     actor: ActorContext,
   ): Promise<IngredientWithFoodOut> {
     const ingredient = await createIngredientRepo(this.db, data, actor);
@@ -287,7 +201,7 @@ export class IngredientService {
 
   async updateIngredient(
     id: IngredientId,
-    data: Partial<z.infer<typeof ingredientBase>>,
+    data: z.infer<typeof ingredientUpdateData>,
     actor: ActorContext,
   ): Promise<IngredientWithFoodOut> {
     const ingredient = await updateIngredientRepo(this.db, id, data, actor);

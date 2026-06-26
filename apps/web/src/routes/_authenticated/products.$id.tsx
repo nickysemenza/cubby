@@ -1,9 +1,10 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { ProductDetail } from "~/app/_components/products/product-detail";
-import { PageWrapper } from "~/components/layout/page-wrapper";
+import { Page } from "~/components/page/Page";
 import { RouteErrorComponent } from "~/components/route-error";
 import { DetailPagePending } from "~/components/route-pending";
+import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 import { useTRPC } from "~/trpc/react";
 
@@ -18,9 +19,14 @@ export const Route = createFileRoute("/_authenticated/products/$id")({
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,
   notFoundComponent: () => (
-    <PageWrapper>
-      <div>Product not found</div>
-    </PageWrapper>
+    <Page variant="list" title="Product not found" entity="product" compact>
+      <Empty>
+        <EmptyTitle>Product not found</EmptyTitle>
+        <EmptyDescription>
+          This catalog product is no longer available.
+        </EmptyDescription>
+      </Empty>
+    </Page>
   ),
   component: ProductDetailPage,
 });

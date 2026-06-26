@@ -420,6 +420,7 @@ export const chunkRequestInput = z.object({
 
 const extractCookbookChunkProc = protectedProcedure
   .input(chunkRequestInput)
+  .output(z.record(z.string(), z.unknown()))
   .mutation(async ({ input }) => {
     return await extractCookbookChunk({
       system: input.system,

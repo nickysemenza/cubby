@@ -14,6 +14,11 @@ import type {
 } from "@cubby/recipebridge";
 import type { Amount } from "@cubby/schemas/codec";
 import type {
+  IngredientWithFoodLeanOut,
+  ProductWithMappingsAndFoodOut,
+} from "@cubby/schemas/ingredient-responses";
+import type {
+  RecipeGraphOut,
   RecipeOut,
   RowDiagnosticOut,
   SectionIngredientOut,
@@ -29,10 +34,6 @@ import { err, ok } from "neverthrow";
 import { toWFoodInput } from "~/lib/unit-mapping-utils";
 import { wasm } from "~/lib/wasm";
 import type { Result } from "~/misc/result-types";
-import type {
-  IngredientWithFoodLeanOut,
-  ProductWithMappingsAndFoodOut,
-} from "~/server/services/ingredient.service";
 
 // The costing engine (two-pass totals, consumption model, sub-recipe yield
 // scaling, baker %, diagnostics) lives in Rust — recipebridge's costing module
@@ -52,6 +53,10 @@ export type IngredientUsage = WIngredientUsage;
  * `flattenSections` so every costing entry point agrees.
  */
 export type CostingRow = SectionIngredientOut & { sectionName: string | null };
+export type RecipeCostingInput = Pick<
+  RecipeOut | RecipeGraphOut,
+  "id" | "yield" | "sections"
+>;
 
 /** Flatten a recipe's sections into costing rows, attaching each section name. */
 export const flattenSections = (
@@ -332,14 +337,14 @@ const reshape = (w: WRecipeCosting, rows: CostingRow[]): RecipeCosting => {
  * mirroring the old behavior.
  */
 export const computeRecipeCosting = (
-  recipes: RecipeOut[],
+  recipes: RecipeCostingInput[],
   ingMap: Record<string, IngredientWithFoodLeanOut>,
   getIngredientName: (ingredient: SectionIngredientOut) => string,
-  recipeMap: Record<string, RecipeOut> = {},
+  recipeMap: Record<string, RecipeCostingInput> = {},
   opts: { explain?: boolean } = {},
 ): Map<string, RecipeCosting> => {
   // The closure: roots + every fetched sub-recipe, each serialized once.
-  const closure = new Map<string, RecipeOut>();
+  const closure = new Map<string, RecipeCostingInput>();
   for (const r of Object.values(recipeMap)) closure.set(r.id, r);
   for (const r of recipes) closure.set(r.id, r);
 

@@ -1,6 +1,5 @@
-import type { IngredientWithRecipesAndProductOut } from "@cubby/schemas/combo";
+import type { IngredientWithRecipesAndProductOut } from "@cubby/schemas/ingredient-responses";
 import type { LocationOut } from "@cubby/schemas/location";
-import type { ProductTopLevelOut } from "@cubby/schemas/product";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
@@ -177,8 +176,7 @@ export function WithProductSearch({ children }: WithEntitySearchProps) {
 
   const createMutation = useActionMutation({
     mutationFn: api.product.create.mutationOptions,
-    success: (newProduct: ProductTopLevelOut) =>
-      `Added ${newProduct.name} to your shelves.`,
+    success: (newProduct) => `Added ${newProduct.name} to your shelves.`,
     invalidateKeys: [queryKeys.product.all],
     onSuccess: (newProduct) =>
       resolveWithEntity(buildProductComboboxItem(newProduct)),

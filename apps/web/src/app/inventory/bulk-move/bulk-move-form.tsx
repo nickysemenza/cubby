@@ -13,11 +13,11 @@
  * @see MoveInventoryDialog - Lightweight modal for quick moves
  */
 
-import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
 import { unsafeInventoryId } from "@cubby/schemas/identifiers";
 import type { BulkMoveItem } from "@cubby/schemas/inventory";
+import type { inventoryListItemOut } from "@cubby/schemas/inventory-responses";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -33,6 +33,7 @@ import {
   ComboboxFieldWithSearch,
   FormWrapper,
 } from "~/app/_components/form-utils";
+import { useInventoryInvalidation } from "~/app/_components/inventory/hooks";
 import { Row, Stack } from "~/components/layout";
 import { MutedBox } from "~/components/layout/muted-box";
 import { Button } from "~/components/ui/button";
@@ -40,12 +41,9 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { EntityIcon } from "~/entities/entities";
-import { queryKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 
-type InventoryWithLocationAndProductOut = z.infer<
-  typeof inventoryWithLocationAndProductOut
->;
+type InventoryListItem = z.infer<typeof inventoryListItemOut>;
 
 // Type for an item to move
 interface MoveItem {
@@ -65,9 +63,15 @@ const formSchema = z.object({
 
 type BulkMoveFormValues = z.infer<typeof formSchema>;
 
-export default function BulkMoveForm() {
+interface BulkMoveFormProps {
+  initialSourceLocationId?: string;
+}
+
+export default function BulkMoveForm({
+  initialSourceLocationId,
+}: BulkMoveFormProps) {
   const api = useTRPC();
-  const queryClient = useQueryClient();
+  const invalidateInventory = useInventoryInvalidation();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [moveItems, setMoveItems] = useState<MoveItem[]>([]);
@@ -99,24 +103,30 @@ export default function BulkMoveForm() {
 
   // Update URL when source location changes
   useEffect(() => {
-    if (sourceLocation) {
-      const params = new URLSearchParams(window.location.search);
-      params.set("sourceLocationId", sourceLocation.id);
-      navigate({ to: `/inventory/bulk-move?${params.toString()}` });
+    if (sourceLocation && sourceLocation.id !== initialSourceLocationId) {
+      navigate({
+        to: "/inventory/bulk-move",
+        search: { sourceLocationId: sourceLocation.id },
+        replace: true,
+      });
     }
-  }, [sourceLocation, navigate]);
+  }, [sourceLocation, initialSourceLocationId, navigate]);
 
   // Set initial source location from URL
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const locationId = params.get("sourceLocationId");
-    if (locationId && locations.length > 0) {
-      const location = locations.find((loc) => loc.id === locationId);
+    if (
+      initialSourceLocationId &&
+      locations.length > 0 &&
+      sourceLocation?.id !== initialSourceLocationId
+    ) {
+      const location = locations.find(
+        (loc) => loc.id === initialSourceLocationId,
+      );
       if (location) {
         form.setValue("sourceLocation", buildLocationComboboxItem(location));
       }
     }
-  }, [locations, form]);
+  }, [initialSourceLocationId, locations, form, sourceLocation]);
 
   // Fetch inventory items from source location
   const { data: inventoryItemsData, refetch: refetchInventoryItems } = useQuery(
@@ -134,7 +144,7 @@ export default function BulkMoveForm() {
   useEffect(() => {
     if (sourceLocation && inventoryItemsData?.items) {
       const items: MoveItem[] = inventoryItemsData.items.map(
-        (item: InventoryWithLocationAndProductOut) => ({
+        (item: InventoryListItem) => ({
           inventoryEntryId: item.id,
           productName: item.product.name,
           currentQuantity: item.amount.value,
@@ -185,10 +195,7 @@ export default function BulkMoveForm() {
     api.inventory.bulkMove.mutationOptions({
       onSuccess: () => {
         refetchInventoryItems();
-        // Refresh persisted location valuations (recomputed server-side).
-        void queryClient.invalidateQueries({
-          queryKey: [queryKeys.location.all],
-        });
+        invalidateInventory();
       },
     }),
   );

@@ -8,6 +8,8 @@ import {
 } from "./e2e-helpers";
 
 test.describe("Bulk Move Inventory - Selection", () => {
+  test.describe.configure({ mode: "serial" });
+
   test("can select source location and see inventory items", async ({
     page,
   }) => {

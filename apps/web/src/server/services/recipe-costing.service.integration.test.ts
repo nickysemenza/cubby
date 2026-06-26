@@ -366,6 +366,13 @@ describe("RecipeCostingService", () => {
           send: async (m: { recipeIds: RecipeId[] }) => {
             sent.push(m.recipeIds);
           },
+          sendBatch: async (
+            messages: Iterable<{ body: { recipeIds: RecipeId[] } }>,
+          ) => {
+            for (const { body } of messages) {
+              sent.push(body.recipeIds);
+            }
+          },
         },
       } as unknown as Env);
       return { sent, reset: () => setCfEnv(undefined as unknown as Env) };

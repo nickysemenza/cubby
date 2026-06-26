@@ -59,22 +59,13 @@
   h4 {
     font-family: var(--font-heading);
   }
-  /* Warm-Paper Ledger: Space Grotesk headings, tight tracking, no shout. The
-     -0.02em letter-spacing is the geometric-sans signature of the look. */
+  /* Warm-Paper Ledger: Space Grotesk headings, tight tracking, no shout. */
   h1 {
     @apply scroll-m-20 text-3xl font-semibold tracking-tight lg:text-4xl;
-    letter-spacing: -0.02em;
-  }
-  h2 {
-    @apply scroll-m-20 border-b pb-2 text-2xl font-semibold tracking-tight first:mt-0;
-    letter-spacing: -0.02em;
   }
   h3,
   h4 {
-    letter-spacing: -0.02em;
-  }
-  ul {
-    @apply my-6 ml-6 list-inside list-disc [&>li]:mt-2;
+    @apply font-heading;
   }
   code {
     @apply bg-muted relative rounded px-[0.3rem] py-[0.2rem] font-mono text-sm font-semibold;

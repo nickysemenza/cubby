@@ -11,21 +11,29 @@ import {
   type ProductId,
   productId,
 } from "@cubby/schemas/identifiers";
+import { imageOut } from "@cubby/schemas/image";
 import {
   productCategory,
   productCreateInput,
   productFiltersSchema,
+  productPickerItemOut,
   productQuickCreatePayload,
   productTopLevelOut,
   productUpdateData,
 } from "@cubby/schemas/product";
+import {
+  productListItemOut,
+  productWithFoodOut,
+} from "@cubby/schemas/product-responses";
 import { recomputeSummary } from "@cubby/schemas/recipe";
+import { unitMappingWithMetadata } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import { upc } from "@cubby/usda-schemas";
+import { foodSummary, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { streamItems, streamProgress } from "~/lib/bulk-progress";
 import { getErrorMessage } from "~/lib/error-utils";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
+import { ID_CHUNK_SIZE } from "~/misc/array-helpers";
 import { countActiveInventoryForProduct } from "~/server/repo/inventory/crud";
 import {
   deleteProducts,
@@ -36,34 +44,25 @@ import {
   quickCreateProduct,
 } from "~/server/repo/product";
 import { importImageFromUPC } from "~/server/services/image-import";
-import { productWithFoodOut } from "~/server/services/product.service";
 import {
   backfillUPCImages as backfillUPCImagesService,
   findOrCreateByUPC as findOrCreateByUPCService,
 } from "~/server/services/product-orchestration.service";
 import {
   createDeleteProcedure,
-  createEntityCrudProcedures,
+  createEntityCrudWithoutListProcedures,
   createEntityListProcedure,
 } from "../crud-factory";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
-// Create standardized CRUD procedures using factory (create + update are
-// customized below — create imports UPC images, update eagerly recomputes).
-const { getByID, list } = createEntityCrudProcedures({
+// Product lists are lean DB rows. Detail/create/update are enriched with USDA
+// food and recipe usages, so the list contract is split from the detail one.
+const { list } = createEntityListProcedure({
   schemas: {
-    createInput: productCreateInput,
-    // Defaults-stripped so a partial update never resets an omitted field (e.g.
-    // wiping fdc_id / unitMappings). See productUpdateData.
-    updateInput: productUpdateData,
-    output: productWithFoodOut,
+    output: productListItemOut,
     filters: productFiltersSchema,
-    idSchema: productId,
   },
   repository: {
-    getByID: async (services, id: ProductId) => {
-      return await services.services.product.getProductByID(id);
-    },
     list: async (services, filters, sort, pagination, groupBy) => {
       return await services.services.product.productList(
         filters.nameFilter,
@@ -74,6 +73,25 @@ const { getByID, list } = createEntityCrudProcedures({
         pagination,
         groupBy,
       );
+    },
+  },
+  entityName: "product",
+});
+
+// Create standardized detail/create/update procedures using the enriched schema
+// (create + update are overridden below for side effects).
+const { getByID } = createEntityCrudWithoutListProcedures({
+  schemas: {
+    createInput: productCreateInput,
+    // Defaults-stripped so a partial update never resets an omitted field (e.g.
+    // wiping fdc_id / unitMappings). See productUpdateData.
+    updateInput: productUpdateData,
+    output: productWithFoodOut,
+    idSchema: productId,
+  },
+  repository: {
+    getByID: async (services, id: ProductId) => {
+      return await services.services.product.getProductByID(id);
     },
     create: async (services, data) => {
       return await services.services.product.createProduct(
@@ -89,7 +107,6 @@ const { getByID, list } = createEntityCrudProcedures({
       );
     },
   },
-  entityName: "product",
 });
 
 // Lightweight typeahead for product-picker comboboxes. Same filters/pagination
@@ -98,7 +115,7 @@ const { getByID, list } = createEntityCrudProcedures({
 // cross-Worker USDA batch (list's long pole) has no business on this path.
 const { list: search } = createEntityListProcedure({
   schemas: {
-    output: productTopLevelOut,
+    output: productPickerItemOut,
     filters: productFiltersSchema,
   },
   repository: {
@@ -253,6 +270,29 @@ const applyUpcData = protectedProcedure
       ...result,
       sideEffects: { recipesRecomputed, inventoryValuationsUpdated },
     };
+  });
+
+const foodSummaries = protectedProcedure
+  .input(z.object({ ids: z.array(productId).max(ID_CHUNK_SIZE) }))
+  .output(z.record(z.string(), foodSummary.nullable()))
+  .query(async ({ ctx, input }) => {
+    return await ctx.services.product.getFoodSummariesByProductIds(input.ids);
+  });
+
+const imageSummaries = protectedProcedure
+  .input(z.object({ ids: z.array(productId).max(ID_CHUNK_SIZE) }))
+  .output(z.record(z.string(), z.array(imageOut)))
+  .query(async ({ ctx, input }) => {
+    return await ctx.services.product.getImageSummariesByProductIds(input.ids);
+  });
+
+const unitMappingSummaries = protectedProcedure
+  .input(z.object({ ids: z.array(productId).max(ID_CHUNK_SIZE) }))
+  .output(z.record(z.string(), z.array(unitMappingWithMetadata)))
+  .query(async ({ ctx, input }) => {
+    return await ctx.services.product.getUnitMappingSummariesByProductIds(
+      input.ids,
+    );
   });
 
 // Quick create a product with minimal data (just name required)
@@ -422,6 +462,9 @@ export const productRouter = createTRPCRouter({
   getByShortcode,
   getByShortcodes,
   list,
+  foodSummaries,
+  imageSummaries,
+  unitMappingSummaries,
   search,
   create,
   createMany,

@@ -1,4 +1,4 @@
-import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
+import type { inventoryListItemOut } from "@cubby/schemas/inventory-responses";
 import type { InfLocation } from "@cubby/schemas/location";
 import type { RefCallback } from "react";
 import type { z } from "zod";
@@ -6,7 +6,7 @@ import { Stack } from "~/components/layout";
 import { cn } from "~/lib/utils";
 import { LocationGalleryCard } from "./location-gallery-card";
 
-type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
+type InventoryItem = z.infer<typeof inventoryListItemOut>;
 
 interface GalleryUnifiedViewProps {
   locations: InfLocation[];

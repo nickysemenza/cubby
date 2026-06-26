@@ -4,12 +4,12 @@
  * Used by: Quick-Capture, Bulk-Edit, and Scanner functionality
  */
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { toast } from "sonner";
 import { getErrorMessage } from "~/lib/error-utils";
-import { queryKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
+import { useProductLookupInvalidation } from "./useInventoryMutation";
 
 /**
  * Check if input looks like a UPC barcode (8-14 digits only).
@@ -44,13 +44,11 @@ interface UseUpcLookupOptions {
  */
 export function useUpcLookup(options: UseUpcLookupOptions = {}) {
   const api = useTRPC();
-  const queryClient = useQueryClient();
+  const invalidateProductLookup = useProductLookupInvalidation();
 
   const findOrCreateByUPCMutation = useMutation(
     api.product.findOrCreateByUPC.mutationOptions({
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: [queryKeys.product.all] });
-      },
+      onSuccess: invalidateProductLookup,
     }),
   );
 

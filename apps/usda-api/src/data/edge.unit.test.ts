@@ -177,6 +177,149 @@ function makeEnv(bindCounts: number[]): EdgeBindings {
   };
 }
 
+function validFoodText(fdcId: number): string {
+  return JSON.stringify({
+    fdc_id: fdcId,
+    brandedFoodInfo: null,
+    foodInfo: {
+      data_type: "foundation_food",
+      description: `Food ${fdcId}`,
+    },
+    legacyFoodInfo: null,
+    nutritionInfo: {
+      nutrientSummary: [],
+      nutrientsPer100: {
+        kcal: 52,
+      },
+    },
+    portionInfoRaw: [],
+  });
+}
+
+function indexRow(fdcId: number, bundleText = validFoodText(fdcId)) {
+  return {
+    fdc_id: fdcId,
+    data_type: "foundation_food",
+    description: `Food ${fdcId}`,
+    gtin_upc: null,
+    ndb_number: null,
+    bundle_key: `bundle-${fdcId}`,
+    byte_offset: 0,
+    byte_length: bundleText.length,
+  };
+}
+
+function makeBatchHydrationEnv({
+  fdcId = 1,
+  cachedRows = [],
+  foodCacheReadError,
+  foodCacheWriteError,
+  bundleText = validFoodText(fdcId),
+}: {
+  fdcId?: number;
+  cachedRows?: Array<{ fdc_id: number; data: string }>;
+  foodCacheReadError?: Error;
+  foodCacheWriteError?: Error;
+  bundleText?: string;
+}) {
+  const row = indexRow(fdcId, bundleText);
+  const r2Get = vi.fn(async () => ({ text: async () => bundleText }));
+  const db = {
+    prepare(query: string) {
+      const statement = {
+        query,
+        bind() {
+          return statement;
+        },
+        async first<T>() {
+          if (query.includes("usda_edge_meta")) {
+            return { value: "vtest" } as T;
+          }
+          return null;
+        },
+        async all<T>() {
+          if (query.includes("food_cache")) {
+            if (foodCacheReadError) throw foodCacheReadError;
+            return { success: true, results: cachedRows as T[] };
+          }
+          if (query.includes("WHERE fdc_id IN")) {
+            return { success: true, results: [row] as T[] };
+          }
+          return { success: true, results: [] as T[] };
+        },
+        async run() {
+          return { success: true };
+        },
+      };
+      return statement;
+    },
+    async batch<T>(
+      statements: Array<{
+        query?: string;
+        all(): Promise<T>;
+        run(): Promise<T>;
+      }>,
+    ) {
+      if (
+        statements.some((statement) =>
+          statement.query?.includes("INSERT OR IGNORE INTO food_cache"),
+        )
+      ) {
+        if (foodCacheWriteError) throw foodCacheWriteError;
+        return Promise.all(statements.map((statement) => statement.run()));
+      }
+      return Promise.all(statements.map((statement) => statement.all()));
+    },
+  };
+
+  return {
+    env: {
+      DB: db as unknown as EdgeBindings["DB"],
+      USDA_BUNDLES: { get: r2Get } as unknown as EdgeBindings["USDA_BUNDLES"],
+    },
+    r2Get,
+  };
+}
+
+function makeListHydrationEnv({
+  fdcId = 1,
+  bundleText = validFoodText(fdcId),
+}: {
+  fdcId?: number;
+  bundleText?: string;
+}) {
+  const row = indexRow(fdcId, bundleText);
+  const r2Get = vi.fn(async () => ({ text: async () => bundleText }));
+  const db = {
+    prepare(query: string) {
+      const statement = {
+        bind() {
+          return statement;
+        },
+        async first<T>() {
+          if (query.includes("usda_edge_meta")) {
+            return { value: "vtest" } as T;
+          }
+          if (query.includes("count(*)")) return { count: 1 } as T;
+          return null;
+        },
+        async all<T>() {
+          return { success: true, results: [row] as T[] };
+        },
+      };
+      return statement;
+    },
+  };
+
+  return {
+    env: {
+      DB: db as unknown as EdgeBindings["DB"],
+      USDA_BUNDLES: { get: r2Get } as unknown as EdgeBindings["USDA_BUNDLES"],
+    },
+    r2Get,
+  };
+}
+
 describe("createEdgeUsdaDataSource", () => {
   it("chunks batch lookup D1 IN queries to the D1 bound parameter limit", async () => {
     const bindCounts: number[] = [];
@@ -263,6 +406,129 @@ describe("createEdgeUsdaDataSource", () => {
 
     expect(result.count).toBe(1); // count comes from the index, unaffected
     expect(result.data).toHaveLength(0); // bad row dropped, not a thrown 500
+  });
+
+  it("treats unparseable resolved-food cache rows as misses", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const { env, r2Get } = makeBatchHydrationEnv({
+        fdcId: 2,
+        cachedRows: [{ fdc_id: 2, data: "not json" }],
+      });
+      const dataSource = createEdgeUsdaDataSource(env);
+
+      const result = await dataSource.findFoodsByLookupBatch([
+        { kind: "fdc", fdc_id: 2 },
+      ]);
+
+      expect(result[0]?.fdc_id).toBe(2);
+      expect(r2Get).toHaveBeenCalledTimes(1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("treats resolved-food cache read failures as misses", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const { env, r2Get } = makeBatchHydrationEnv({
+        fdcId: 3,
+        foodCacheReadError: new Error("cache read failed"),
+      });
+      const dataSource = createEdgeUsdaDataSource(env);
+
+      const result = await dataSource.findFoodsByLookupBatch([
+        { kind: "fdc", fdc_id: 3 },
+      ]);
+
+      expect(result[0]?.fdc_id).toBe(3);
+      expect(r2Get).toHaveBeenCalledTimes(1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("does not fail lookups when resolved-food cache writes fail", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const { env, r2Get } = makeBatchHydrationEnv({
+        fdcId: 4,
+        foodCacheWriteError: new Error("cache write failed"),
+      });
+      const dataSource = createEdgeUsdaDataSource(env);
+
+      const result = await dataSource.findFoodsByLookupBatch([
+        { kind: "fdc", fdc_id: 4 },
+      ]);
+
+      expect(result[0]?.fdc_id).toBe(4);
+      expect(r2Get).toHaveBeenCalledTimes(1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("treats bundle Cache API read and write failures as R2 misses", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.stubGlobal("caches", {
+      default: {
+        match: async () => {
+          throw new Error("cache read failed");
+        },
+        put: async () => {
+          throw new Error("cache write failed");
+        },
+      },
+    });
+
+    try {
+      const { env, r2Get } = makeListHydrationEnv({ fdcId: 5 });
+      const dataSource = createEdgeUsdaDataSource(env);
+
+      const result = await dataSource.listFoods({
+        pageIndex: 0,
+        pageSize: 10,
+        orderBy: "description",
+        direction: "asc",
+      });
+
+      expect(result.data[0]?.fdc_id).toBe(5);
+      expect(result.count).toBe(1);
+      expect(r2Get).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+      warn.mockRestore();
+    }
+  });
+
+  it("falls back to R2 when a cached bundle payload is unparseable", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const bundleText = validFoodText(6);
+    vi.stubGlobal("caches", {
+      default: {
+        match: async () => new Response("not json"),
+        put: vi.fn(),
+      },
+    });
+
+    try {
+      const { env, r2Get } = makeListHydrationEnv({ fdcId: 6, bundleText });
+      const dataSource = createEdgeUsdaDataSource(env);
+
+      const result = await dataSource.listFoods({
+        pageIndex: 0,
+        pageSize: 10,
+        orderBy: "description",
+        direction: "asc",
+      });
+
+      expect(result.data[0]?.fdc_id).toBe(6);
+      expect(result.count).toBe(1);
+      expect(r2Get).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+      warn.mockRestore();
+    }
   });
 
   it("serves getCounts from the Cache API on the second call (no second R2 read)", async () => {

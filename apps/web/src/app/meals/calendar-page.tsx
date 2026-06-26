@@ -1,14 +1,7 @@
 import type { MealOut } from "@cubby/schemas/meal";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import {
-  addDays,
-  addWeeks,
-  format,
-  isSameDay,
-  parseISO,
-  startOfWeek,
-} from "date-fns";
+import { addDays, addWeeks, format, isSameDay, parseISO } from "date-fns";
 import {
   CalendarDays,
   ChevronLeft,
@@ -17,7 +10,6 @@ import {
   ShoppingCart,
   Table as TableIcon,
 } from "lucide-react";
-import { useState } from "react";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -32,12 +24,27 @@ import {
 } from "~/components/ui/table";
 import { useTRPC } from "~/trpc/react";
 import { formatMealCost } from "./meal-format";
+import {
+  formatWeekSearch,
+  type MealCalendarView,
+  parseWeekStart,
+} from "./meal-search";
 import { useInvalidateMeals } from "./use-meal-mutations";
 
-type View = "calendar" | "table";
+interface MealCalendarPageProps {
+  view: MealCalendarView;
+  week?: string;
+  onViewChange: (view: MealCalendarView) => void;
+  onWeekChange: (week?: string) => void;
+}
 
-export function MealCalendarPage() {
-  const [view, setView] = useState<View>("calendar");
+export function MealCalendarPage({
+  view,
+  week,
+  onViewChange,
+  onWeekChange,
+}: MealCalendarPageProps) {
+  const weekStart = parseWeekStart(week);
 
   return (
     <Stack>
@@ -45,7 +52,7 @@ export function MealCalendarPage() {
         <div className="inline-flex overflow-hidden rounded-md border">
           <button
             type="button"
-            onClick={() => setView("calendar")}
+            onClick={() => onViewChange("calendar")}
             className={`flex items-center gap-1.5 px-2.5 py-1 text-sm ${view === "calendar" ? "bg-accent font-medium" : "text-muted-foreground"}`} /* tight: segmented toggle icon+label */
           >
             <CalendarDays className="size-4" />
@@ -53,7 +60,7 @@ export function MealCalendarPage() {
           </button>
           <button
             type="button"
-            onClick={() => setView("table")}
+            onClick={() => onViewChange("table")}
             className={`flex items-center gap-1.5 border-l px-2.5 py-1 text-sm ${view === "table" ? "bg-accent font-medium" : "text-muted-foreground"}`} /* tight: segmented toggle icon+label */
           >
             <TableIcon className="size-4" />
@@ -68,18 +75,25 @@ export function MealCalendarPage() {
         </Link>
       </Row>
 
-      {view === "calendar" ? <CalendarView /> : <TableView />}
+      {view === "calendar" ? (
+        <CalendarView weekStart={weekStart} onWeekChange={onWeekChange} />
+      ) : (
+        <TableView />
+      )}
     </Stack>
   );
 }
 
-function CalendarView() {
+function CalendarView({
+  weekStart,
+  onWeekChange,
+}: {
+  weekStart: Date;
+  onWeekChange: (week?: string) => void;
+}) {
   const api = useTRPC();
   const navigate = useNavigate();
   const invalidate = useInvalidateMeals();
-  const [weekStart, setWeekStart] = useState(() =>
-    startOfWeek(new Date(), { weekStartsOn: 0 }),
-  );
 
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   // Date-only bounds (no time) so the range matches the calendar's days exactly.
@@ -109,7 +123,9 @@ function CalendarView() {
           variant="outline"
           size="icon"
           aria-label="Previous week"
-          onClick={() => setWeekStart((w) => addWeeks(w, -1))}
+          onClick={() =>
+            onWeekChange(formatWeekSearch(addWeeks(weekStart, -1)))
+          }
         >
           <ChevronLeft className="size-4" />
         </Button>
@@ -117,9 +133,7 @@ function CalendarView() {
           type="button"
           variant="outline"
           size="sm"
-          onClick={() =>
-            setWeekStart(startOfWeek(new Date(), { weekStartsOn: 0 }))
-          }
+          onClick={() => onWeekChange(undefined)}
         >
           Today
         </Button>
@@ -128,7 +142,7 @@ function CalendarView() {
           variant="outline"
           size="icon"
           aria-label="Next week"
-          onClick={() => setWeekStart((w) => addWeeks(w, 1))}
+          onClick={() => onWeekChange(formatWeekSearch(addWeeks(weekStart, 1)))}
         >
           <ChevronRight className="size-4" />
         </Button>

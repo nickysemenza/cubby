@@ -12,6 +12,7 @@ import {
 } from "@cubby/schemas/pagination";
 import type {
   RecipeCreateInput,
+  RecipeGraphOut,
   RecipeOut,
   RecipeUpdateInput,
 } from "@cubby/schemas/recipe";
@@ -52,7 +53,11 @@ import {
 import { generateUniqueRecipeShortcode } from "~/server/repo/shortcode-utils";
 import { TraceNames, withTrace } from "~/server/tracing";
 
-import { dbRecipeToAPI, dbRecipeToAPIShallow } from "./helpers";
+import {
+  dbRecipeToAPI,
+  dbRecipeToAPIGraph,
+  dbRecipeToAPIShallow,
+} from "./helpers";
 import type { RecipeFilters } from "./internal-types";
 import {
   type RecipeProvenance,
@@ -90,7 +95,7 @@ export const getRecipeByID = async (
 export const getRecipesByIDs = async (
   db: Database,
   ids: RecipeId[],
-): Promise<RecipeOut[]> => {
+): Promise<RecipeGraphOut[]> => {
   if (ids.length === 0) return [];
   return withTrace(TraceNames.db("recipe.getRecipesByIDs"), async (span) => {
     span.setAttribute("db.table", "recipe");
@@ -100,7 +105,7 @@ export const getRecipesByIDs = async (
       ...relations.recipe.list,
     });
     span.setAttribute("db.result_count", rows.length);
-    return rows.map(dbRecipeToAPI);
+    return rows.map(dbRecipeToAPIGraph);
   });
 };
 
@@ -218,7 +223,7 @@ export const getNotionRecipePageIds = async (
  */
 export const getNotionRecipesForDiff = async (
   db: Database,
-): Promise<Array<{ id: string; pageId: string; recipe: RecipeOut }>> => {
+): Promise<Array<{ id: string; pageId: string; recipe: RecipeGraphOut }>> => {
   const rows = await getDb(db).query.recipe.findMany({
     where: and(eq(recipe.SourceType, "Notion"), notDeleted(recipe)),
     columns: { id: true, SourceData: true },

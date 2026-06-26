@@ -1,4 +1,5 @@
 import type { IngredientUpdateInput } from "@cubby/schemas/ingredient";
+import type { IngredientWithFoodOut } from "@cubby/schemas/ingredient-responses";
 import {
   Apple,
   ChefHat,
@@ -14,7 +15,6 @@ import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { getIngredientMappings } from "~/lib/unit-mapping-utils";
-import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { useTRPC } from "~/trpc/react";
 import { type DetailSection, DetailSections } from "../data-table/detail-page";
 import { editableDetailSection } from "../data-table/editable-detail-section";

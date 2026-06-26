@@ -1,24 +1,9 @@
-import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
 import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
-import {
-  unsafeLocationShortcode,
-  unsafeProductShortcode,
-} from "@cubby/schemas/identifiers";
-import { locationType } from "@cubby/schemas/location";
 import { and, eq } from "drizzle-orm";
-import type { z } from "zod";
-import { parseWithContext } from "~/lib/zod-utils";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { location, product } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
-import {
-  addProductSourceMetadata,
-  extractImagesFromJoinTable,
-  notDeleted,
-  parseInventoryAmount,
-  unwrapDb,
-} from "~/server/repo/database-helpers";
-import type { InventoryEntryDeepDB } from "./types";
+import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 
 /**
  * Reject inventory writes whose target product/location is soft-deleted. Without
@@ -57,44 +42,4 @@ export const assertLiveTargets = async (
       );
     }
   }
-};
-
-export const dbInventoryEntryToAPI: (
-  inventoryentry: InventoryEntryDeepDB,
-) => z.infer<typeof inventoryWithLocationAndProductOut> = (inventoryentry) => {
-  const { product, location, ...restOfInventoryEntry } = inventoryentry;
-  const { type, images: locationImages, ...restOfLocation } = location;
-
-  // Validate amount from JSON column
-  const parsedAmount = parseInventoryAmount(
-    restOfInventoryEntry.amount,
-    restOfInventoryEntry.id,
-  );
-
-  return {
-    ...restOfInventoryEntry,
-    id: restOfInventoryEntry.id,
-    amount: parsedAmount,
-    location: {
-      ...restOfLocation,
-      id: restOfLocation.id,
-      shortcode: unsafeLocationShortcode(restOfLocation.shortcode),
-      type: parseWithContext(locationType, type, {
-        entityType: "Location",
-        identifier: { id: restOfLocation.id, name: restOfLocation.name },
-      }),
-      images: extractImagesFromJoinTable(locationImages),
-    },
-    product: {
-      ...(() => {
-        const { ingredientId: _ingredientId, ...rest } = product;
-        return rest;
-      })(),
-      id: product.id,
-      shortcode: unsafeProductShortcode(product.shortcode),
-      unitMappings: addProductSourceMetadata(product.id, product.unitMappings),
-      externalIds: product.externalIds.filter((eid) => eid.deletedAt === null),
-      images: extractImagesFromJoinTable(product.images),
-    },
-  };
 };

@@ -1,4 +1,4 @@
-import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
+import type { inventoryListItemOut } from "@cubby/schemas/inventory-responses";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -21,13 +21,14 @@ import {
 } from "~/hooks/useGalleryViewState";
 import { useIsMobile } from "~/hooks/useMobile";
 import { useTRPC } from "~/trpc/react";
+import { ProductImageSummariesProvider } from "../products/product-image-summaries";
 import { GalleryHeader } from "./gallery-header";
 import { GallerySidebar } from "./gallery-sidebar";
 import { GalleryUnifiedView } from "./gallery-unified-view";
 import { LocationGalleryCard } from "./location-gallery-card";
 import { LocationIcon } from "./location-icons";
 
-type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
+type InventoryItem = z.infer<typeof inventoryListItemOut>;
 
 /** Find all location IDs matching search term (searches location names and product names) */
 function findMatchingIds(
@@ -355,6 +356,10 @@ export function LocationGallery() {
     }
     return map;
   }, [inventoryData]);
+  const inventoryProductIds = useMemo(
+    () => inventoryData?.items.map((item) => item.product.id) ?? [],
+    [inventoryData],
+  );
 
   // Find matching IDs for type filter (always needed for fading)
   const typeMatchingIds = useMemo(
@@ -500,57 +505,61 @@ export function LocationGallery() {
 
   if (isMobile) {
     return (
-      <MobileGalleryDrillDown
-        locations={displayLocations}
-        inventoryByLocation={inventoryByLocation}
-      />
+      <ProductImageSummariesProvider productIds={inventoryProductIds}>
+        <MobileGalleryDrillDown
+          locations={displayLocations}
+          inventoryByLocation={inventoryByLocation}
+        />
+      </ProductImageSummariesProvider>
     );
   }
 
   return (
-    <div className="flex h-[calc(100vh-12rem)] overflow-hidden rounded-lg border border-[var(--border)] bg-background">
-      {/* Sidebar */}
-      <GallerySidebar
-        locations={displayLocations}
-        searchTerm={searchTerm}
-        onLocationClick={scrollToLocation}
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={toggleSidebar}
-        activeLocationId={activeLocationId}
-        searchMatchingIds={searchMatchingIds}
-        fadedIds={fadedIds}
-      />
-
-      {/* Main Content */}
-      <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Header with breadcrumb */}
-        <GalleryHeader
+    <ProductImageSummariesProvider productIds={inventoryProductIds}>
+      <div className="flex h-[calc(100vh-12rem)] overflow-hidden rounded-lg border border-[var(--border)] bg-background">
+        {/* Sidebar */}
+        <GallerySidebar
+          locations={displayLocations}
           searchTerm={searchTerm}
-          onSearchChange={setSearchTerm}
-          locationTypeFilter={locationTypeFilter}
-          onTypeFilterChange={setLocationTypeFilter}
-          emptyFilter={emptyFilter}
-          onEmptyFilterChange={setEmptyFilter}
-          hideNonMatching={hideNonMatching}
-          onHideNonMatchingChange={setHideNonMatching}
-          breadcrumbPath={breadcrumbPath}
-          onBreadcrumbClick={scrollToLocation}
-          stats={stats}
+          onLocationClick={scrollToLocation}
+          isCollapsed={sidebarCollapsed}
+          onToggleCollapse={toggleSidebar}
+          activeLocationId={activeLocationId}
+          searchMatchingIds={searchMatchingIds}
+          fadedIds={fadedIds}
         />
 
-        {/* Gallery Content */}
-        <div ref={mainContentRef} className="flex-1 overflow-y-auto px-4">
-          <GalleryUnifiedView
-            locations={displayLocations}
-            inventoryByLocation={inventoryByLocation}
+        {/* Main Content */}
+        <div className="flex flex-1 flex-col overflow-hidden">
+          {/* Header with breadcrumb */}
+          <GalleryHeader
             searchTerm={searchTerm}
-            searchMatchingIds={searchMatchingIds}
-            fadedIds={fadedIds}
-            createLocationRef={createLocationRef}
+            onSearchChange={setSearchTerm}
+            locationTypeFilter={locationTypeFilter}
+            onTypeFilterChange={setLocationTypeFilter}
+            emptyFilter={emptyFilter}
+            onEmptyFilterChange={setEmptyFilter}
+            hideNonMatching={hideNonMatching}
+            onHideNonMatchingChange={setHideNonMatching}
+            breadcrumbPath={breadcrumbPath}
+            onBreadcrumbClick={scrollToLocation}
+            stats={stats}
           />
+
+          {/* Gallery Content */}
+          <div ref={mainContentRef} className="flex-1 overflow-y-auto px-4">
+            <GalleryUnifiedView
+              locations={displayLocations}
+              inventoryByLocation={inventoryByLocation}
+              searchTerm={searchTerm}
+              searchMatchingIds={searchMatchingIds}
+              fadedIds={fadedIds}
+              createLocationRef={createLocationRef}
+            />
+          </div>
         </div>
       </div>
-    </div>
+    </ProductImageSummariesProvider>
   );
 }
 
@@ -563,10 +572,7 @@ function MobileGalleryDrillDown({
   inventoryByLocation,
 }: {
   locations: InfLocation[];
-  inventoryByLocation: Map<
-    string,
-    z.infer<typeof inventoryWithLocationAndProductOut>[]
-  >;
+  inventoryByLocation: Map<string, InventoryItem[]>;
 }) {
   const navigate = useNavigate();
   const [path, setPath] = useState<InfLocation[]>([]);

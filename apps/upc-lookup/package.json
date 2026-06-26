@@ -20,7 +20,15 @@
     "db:migrate:local": "wrangler d1 migrations apply upc-lookup-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply upc-lookup-db --remote",
     "db:studio": "drizzle-kit studio",
-    "test": "vitest",
+    "lint": "biome lint",
+    "lint:fix": "biome lint --write",
+    "typecheck": "tsgo --noEmit",
+    "typecheck:stable": "tsc --noEmit",
+    "check": "biome check && pnpm typecheck",
+    "format:check": "biome check",
+    "format:write": "biome check --write",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "test:run": "vitest run"
   },
   "dependencies": {

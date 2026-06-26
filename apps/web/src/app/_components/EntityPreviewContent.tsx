@@ -391,8 +391,8 @@ export function UsdaFoodPreviewContent({ fdcId }: { fdcId: number }) {
           data.brandedFoodInfo?.brand_owner ??
           undefined,
         nutrients: data.nutritionInfo.nutrientsPer100,
-        linkedProductId: data.linkedProducts?.[0]?.id,
-        linkedProductName: data.linkedProducts?.[0]?.name,
+        linkedProductId: data.linkedProducts[0]?.id,
+        linkedProductName: data.linkedProducts[0]?.name,
       })}
     />
   );

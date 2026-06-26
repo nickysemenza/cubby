@@ -1,10 +1,17 @@
+import type { ProductListItem } from "@cubby/schemas/product-responses";
 import { formatCategoryLabel, getCategoryColor } from "@cubby/shared";
 import { Link } from "@tanstack/react-router";
 import type { ColumnFiltersState } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Package, Printer } from "lucide-react";
 import type { ReactNode } from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { NoneState } from "~/app/_components/NoneState";
+import {
+  ProductFoodSummariesProvider,
+  useHydratedProductFood,
+  useProductFoodSummaries,
+} from "~/app/_components/products/product-food-summaries";
 import { Row } from "~/components/layout";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import {
@@ -14,7 +21,6 @@ import {
 } from "~/components/ui/tooltip";
 import { queryKeys } from "~/lib/query-keys";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
-import type { ProductWithFoodOut } from "~/server/services/product.service";
 import { useTRPC } from "~/trpc/react";
 import {
   createCurrencyColumn,
@@ -30,6 +36,7 @@ import {
 } from "../_components/data-table/shelf";
 import RTable from "../_components/data-table/Table";
 import type { GroupConfig } from "../_components/data-table/useGroupedList";
+import { EntityPillLink } from "../_components/EntityPill";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
@@ -44,13 +51,23 @@ interface ProductListProps {
   actions?: ReactNode;
 }
 
+function ProductFoodCell({ product }: { product: ProductListItem }) {
+  const food = useHydratedProductFood(product);
+  return food ? (
+    <EntityPillLink entity="usda-food" data={food} compact />
+  ) : (
+    <NoneState />
+  );
+}
+
 export function ProductList({ initialCategory, actions }: ProductListProps) {
   const api = useTRPC();
-  const columnHelper = useMemo(
-    () => createColumnHelper<ProductWithFoodOut>(),
+  const columnHelper = useMemo(() => createColumnHelper<ProductListItem>(), []);
+  const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("product");
+  const [foodHydrationIds, setFoodHydrationIds] = useState<readonly string[]>(
     [],
   );
-  const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("product");
+  const foodByProductId = useProductFoodSummaries(foodHydrationIds);
 
   // Memoize invalidate keys to prevent recreating on every render
   const invalidateKeys = useMemo(() => [queryKeys.product.all] as const, []);
@@ -80,8 +97,17 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   const deletableConfig = useDeletableConfig({
     mutationFn: api.product.delete.mutationOptions,
     entityLabel: "Product",
-    invalidateKeys: [[queryKeys.product.all]],
+    invalidateKeys: [queryKeys.product.all],
   });
+
+  const getProductListMappings = useCallback(
+    (product: ProductListItem) =>
+      getAllUnitMappingsFromProduct({
+        ...product,
+        food: foodByProductId[product.id] ?? null,
+      }),
+    [foodByProductId],
+  );
 
   // Memoize columns to prevent recreating on every render
   // Note: updateProductMutation is NOT in dependencies because useMutation returns a new object every render
@@ -200,10 +226,14 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
           },
         },
       }),
-      createSingleEntityPillColumn(columnHelper, "food", "usda-food", {
+      columnHelper.display({
+        id: "food",
         header: "USDA Food",
-        className: "w-32",
-        mobile: { slot: "meta", priority: 70 },
+        meta: {
+          className: "w-32",
+          mobile: { slot: "meta", priority: 70 },
+        },
+        cell: ({ row }) => <ProductFoodCell product={row.original} />,
       }),
       createInventoryEntriesColumn(
         columnHelper,
@@ -247,7 +277,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   );
 
   const extraActions = useCallback(
-    (row: ProductWithFoodOut) => (
+    (row: ProductListItem) => (
       <>
         <DropdownMenuItem
           render={
@@ -275,7 +305,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
 
   // Group by product category for mobile section headers
   const groupKeyFn = useCallback(
-    (item: ProductWithFoodOut) => formatCategoryLabel(item.category),
+    (item: ProductListItem) => formatCategoryLabel(item.category),
     [],
   );
   const groupColorFn = useCallback(
@@ -288,7 +318,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
     [],
   );
   const groupConfig = useMemo(
-    (): GroupConfig<ProductWithFoodOut> => ({
+    (): GroupConfig<ProductListItem> => ({
       field: "category",
       keyFn: groupKeyFn,
       colorFn: groupColorFn,
@@ -302,6 +332,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
 
   const {
     table,
+    data,
     isLoading,
     error,
     timing,
@@ -315,7 +346,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
     entity: "product",
     queryOptions,
     buildFilters,
-    getMappings: getAllUnitMappingsFromProduct,
+    getMappings: getProductListMappings,
     tableStateOptions,
     columns,
     filters,
@@ -334,9 +365,25 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
 
   const [view, setView] = useState<ShelfView>("table");
   const items = table.getRowModel().rows.map((r) => r.original);
+  const productIds = useMemo(() => data.map((product) => product.id), [data]);
+  useEffect(() => {
+    const nextIds = [...new Set(productIds)].sort();
+    setFoodHydrationIds((currentIds) => {
+      if (
+        currentIds.length === nextIds.length &&
+        currentIds.every((id, index) => id === nextIds[index])
+      ) {
+        return currentIds;
+      }
+      return nextIds;
+    });
+  }, [productIds]);
 
   return (
-    <div>
+    <ProductFoodSummariesProvider
+      productIds={productIds}
+      summaries={foodByProductId}
+    >
       <Row align="center" justify="between" gap="sm" className="mb-4">
         {/* Keep primary actions reachable in shelf view (they live in the
             table toolbar otherwise). */}
@@ -371,6 +418,6 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
       )}
       <PreviewSheet />
       {deleteDialog}
-    </div>
+    </ProductFoodSummariesProvider>
   );
 }
