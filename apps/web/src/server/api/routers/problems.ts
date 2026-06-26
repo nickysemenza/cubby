@@ -60,8 +60,9 @@ const getMaintenanceCounts = protectedProcedure
 // costing reflects the updated lines immediately. Clears the Stale Parses section.
 const reparseStale = protectedProcedure.mutation(async function* ({ ctx }) {
   yield* streamProgress(reparseStaleIngredientParses(ctx.db), async (r) => {
-    // After the parses land, recompute the affected recipes' totals.
-    await ctx.services.recipeCosting.recompute(r.recipesAffected);
+    // After the parses land, recompute the affected recipes' totals — off the
+    // request path when the set is large (a sweep can touch many recipes).
+    await ctx.services.recipeCosting.dispatchRecompute(r.recipesAffected);
     return { updated: r.updated, recipesAffected: r.recipesAffected.length };
   });
 });

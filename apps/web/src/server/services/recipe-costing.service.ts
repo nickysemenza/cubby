@@ -33,12 +33,16 @@ import {
 import { getRecomputeQueue } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
-import { RECOMPUTE_CHUNK_SIZE } from "~/server/queue-recompute";
+import {
+  RECOMPUTE_CHUNK_SIZE,
+  RECOMPUTE_INLINE_MAX,
+} from "~/server/queue-recompute";
 import { getRecipesByIDs } from "~/server/repo/recipe/crud";
 import {
   findParentRecipeIdsBatch,
   findRecipeIdsUsingIngredient,
   getRecipeTotalsState,
+  markRecipesStale,
   selectAllActiveRecipeIds,
   updateRecipeTotals,
 } from "~/server/repo/recipe/totals";
@@ -397,10 +401,11 @@ export class RecipeCostingService {
   }
 
   /**
-   * Eagerly recompute every recipe whose cost depends on an ingredient — its
-   * product's price/USDA-link changed, the ingredient was edited, or a merge
-   * repointed rows onto it. Returns the total number of recipes recomputed
-   * (direct users + cascaded parents) for the mutation's side-effects summary.
+   * Recompute every recipe whose cost depends on an ingredient — its product's
+   * price/USDA-link changed, the ingredient was edited, or a merge repointed rows
+   * onto it. Routes through {@link dispatchRecompute}, so a handful of affected
+   * recipes recompute inline (instant) while a popular ingredient's large set
+   * defers to the queue. Returns the count recomputed (inline) or queued.
    */
   async recomputeForIngredient(ingredientId: IngredientId): Promise<number> {
     return this.recomputeForIngredients([ingredientId]);
@@ -408,8 +413,8 @@ export class RecipeCostingService {
 
   /**
    * Batched {@link recomputeForIngredient}: dedupe the affected recipes across
-   * many ingredients (e.g. a bulk product-create) and recompute the union once,
-   * so recipes shared by several created products aren't recomputed N times.
+   * many ingredients (e.g. a bulk product-create) so recipes shared by several
+   * are dispatched once.
    */
   async recomputeForIngredients(
     ingredientIds: IngredientId[],
@@ -429,34 +434,37 @@ export class RecipeCostingService {
             )
           ).flat(),
         );
-        const visited = new Set<RecipeId>();
-        await this.recomputeTree(recipeIds, visited);
-        return visited.size;
+        return await this.dispatchRecompute(recipeIds);
       },
     );
   }
 
   /**
-   * Recompute the given recipes **off the request path**. In production (the
-   * `RECOMPUTE_QUEUE` binding is present) the ids are fanned into bounded chunks,
-   * one queue message each, so each chunk drains in its own invocation with a
-   * fresh CPU/memory budget. On the dev Node server (no binding) it recomputes
-   * inline — safe, since dev has no per-invocation budget. Callers that can touch
-   * many recipes (an ingredient merge) use this instead of the synchronous
-   * {@link recompute}, whose single-invocation pass overruns the Workers budget
-   * for a heavily-used ingredient and kills the mutation.
+   * The single entry for recompute triggered by a request-path mutation. A small
+   * set ({@link RECOMPUTE_INLINE_MAX} or fewer) recomputes inline — instant
+   * totals, no budget risk. A larger set, in production (the `RECOMPUTE_QUEUE`
+   * binding present), is marked stale and fanned into bounded chunks (one message
+   * each), so each chunk drains in its own invocation with a fresh CPU/memory
+   * budget — this is what stops a popular-ingredient edit / merge / bulk import
+   * from overrunning the Workers per-invocation budget and killing the mutation.
+   * On the dev Node server (no binding) everything recomputes inline (no
+   * per-invocation budget). Returns the count recomputed (inline) or queued.
    */
-  async dispatchRecompute(recipeIds: RecipeId[]): Promise<void> {
-    if (recipeIds.length === 0) return;
-    const queue = getRecomputeQueue();
-    if (!queue) {
-      await this.recompute(recipeIds);
-      return;
-    }
+  async dispatchRecompute(recipeIds: RecipeId[]): Promise<number> {
     const ids = uniq(recipeIds);
+    if (ids.length === 0) return 0;
+    const queue = getRecomputeQueue();
+    if (!queue || ids.length <= RECOMPUTE_INLINE_MAX) {
+      return await this.recompute(ids);
+    }
+    // Deferred: mark stale first so the rows read as pending (and Problems can
+    // catch them) until the consumer drains; the inline branch above doesn't need
+    // this since it restamps fresh immediately.
+    await markRecipesStale(this.db, ids);
     for (let i = 0; i < ids.length; i += RECOMPUTE_CHUNK_SIZE) {
       await queue.send({ recipeIds: ids.slice(i, i + RECOMPUTE_CHUNK_SIZE) });
     }
+    return ids.length;
   }
 
   /**

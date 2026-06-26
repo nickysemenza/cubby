@@ -27,6 +27,15 @@ export interface RecomputeMessage {
  */
 export const RECOMPUTE_CHUNK_SIZE = 25;
 
+/**
+ * At or below this many recipes, `dispatchRecompute` recomputes inline (instant
+ * totals, no budget risk) rather than queuing. Above it, the set is large enough
+ * to threaten the per-invocation budget, so it goes to the queue. The common
+ * single-entity edit (one recipe, or an ingredient used by a handful) stays
+ * instant; only a popular-ingredient edit / bulk import defers.
+ */
+export const RECOMPUTE_INLINE_MAX = 5;
+
 /** The producer side of `env.RECOMPUTE_QUEUE` (the subset we call). */
 export interface RecomputeQueueProducer {
   send(body: RecomputeMessage): Promise<void>;
