@@ -45,6 +45,13 @@ describe("lookupUPCitemdb status mapping", () => {
     expect(await lookupUPCitemdb("012345678905")).toEqual({ status: "error" });
   });
 
+  it("returns error (not a miss) on a 200 whose shape lacks items entirely", async () => {
+    // A wholesale response-shape change (no `items` key) must fail parse and
+    // surface as transient — not be cached as a not_found miss.
+    mockFetch(() => jsonResponse({ code: "OK", total: 0, offset: 0 }));
+    expect(await lookupUPCitemdb("012345678905")).toEqual({ status: "error" });
+  });
+
   it("returns not_found on a 200 with no items", async () => {
     mockFetch(() =>
       jsonResponse({ code: "OK", total: 0, offset: 0, items: [] }),

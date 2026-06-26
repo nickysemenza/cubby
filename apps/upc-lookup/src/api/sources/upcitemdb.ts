@@ -45,7 +45,7 @@ export async function lookupUPCitemdb(
     }
     const data = parsed.data;
 
-    if (!data.items || data.items.length === 0) {
+    if (data.items.length === 0) {
       return { status: "not_found" };
     }
 

@@ -70,6 +70,10 @@ export const upcitemdbResponseSchema = z.looseObject({
   code: z.string().optional(),
   total: z.number().optional(),
   offset: z.number().optional(),
-  items: z.array(upcitemdbItemSchema).optional(),
+  // Required: a successful 200 always carries `items` (an empty array when the
+  // UPC has no matches). Keeping it required means a wholesale response-shape
+  // change (key renamed/dropped) fails parse → transient `error`, instead of
+  // slipping through as a cached `not_found` miss.
+  items: z.array(upcitemdbItemSchema),
 });
 export type UPCitemdbResponse = z.infer<typeof upcitemdbResponseSchema>;
