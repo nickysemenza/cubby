@@ -252,7 +252,14 @@ describe("createEdgeUsdaDataSource", () => {
     } as unknown as EdgeBindings;
 
     const dataSource = createEdgeUsdaDataSource(env);
-    const result = await dataSource.listFoods({ pageIndex: 0, pageSize: 10 });
+    // listFoods receives the PARSED query (defaults applied), so orderBy/
+    // direction are always present — mirror that here.
+    const result = await dataSource.listFoods({
+      pageIndex: 0,
+      pageSize: 10,
+      orderBy: "description",
+      direction: "asc",
+    });
 
     expect(result.count).toBe(1); // count comes from the index, unaffected
     expect(result.data).toHaveLength(0); // bad row dropped, not a thrown 500

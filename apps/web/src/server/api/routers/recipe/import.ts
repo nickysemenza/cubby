@@ -402,21 +402,24 @@ const reprocessCookbookStreamEndpoint = protectedProcedure
 // gateway key stays server-side. Returns the raw forced-tool `input`
 // (`{ recipes: [...] }`) for the WASM driver (`extract_cookbook`) to parse — no
 // recipe logic lives here. One short, network-bound request per chunk.
+// Input for `recipe.extractCookbookChunk` (camelCased WASM request). Exported
+// so the client carrier type derives from it via `z.infer` instead of being
+// maintained in two places.
+export const chunkRequestInput = z.object({
+  system: z.string(),
+  user: z.string(),
+  toolName: z.string(),
+  // The output JSON Schema, built in WASM and forwarded verbatim.
+  toolSchema: z.record(z.string(), z.unknown()),
+  // Escalate this chunk to the stronger fallback model. The browser sets
+  // this only after the default model fails to return parseable output. The
+  // model itself stays server-owned (a bool, not a model id) so a client
+  // can't pick an arbitrary expensive model.
+  escalate: z.boolean().optional(),
+});
+
 const extractCookbookChunkProc = protectedProcedure
-  .input(
-    z.object({
-      system: z.string(),
-      user: z.string(),
-      toolName: z.string(),
-      // The output JSON Schema, built in WASM and forwarded verbatim.
-      toolSchema: z.record(z.string(), z.unknown()),
-      // Escalate this chunk to the stronger fallback model. The browser sets
-      // this only after the default model fails to return parseable output. The
-      // model itself stays server-owned (a bool, not a model id) so a client
-      // can't pick an arbitrary expensive model.
-      escalate: z.boolean().optional(),
-    }),
-  )
+  .input(chunkRequestInput)
   .mutation(async ({ input }) => {
     return await extractCookbookChunk({
       system: input.system,

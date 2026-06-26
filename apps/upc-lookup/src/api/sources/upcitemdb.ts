@@ -1,4 +1,4 @@
-import type { ExternalLookupResult, UPCitemdbResponse } from "../types";
+import { type ExternalLookupResult, upcitemdbResponseSchema } from "../types";
 import { extractBestPrice } from "../price";
 import type { ProductSource } from "./types";
 
@@ -36,9 +36,16 @@ export async function lookupUPCitemdb(
       return { status: "error" };
     }
 
-    const data = (await response.json()) as UPCitemdbResponse;
+    const parsed = upcitemdbResponseSchema.safeParse(await response.json());
+    if (!parsed.success) {
+      // A changed/malformed upstream shape is transient from our side — do NOT
+      // cache it as a miss; surface as an error so the UPC is retried later.
+      console.error("UPCitemdb malformed response:", parsed.error);
+      return { status: "error" };
+    }
+    const data = parsed.data;
 
-    if (!data.items || data.items.length === 0) {
+    if (data.items.length === 0) {
       return { status: "not_found" };
     }
 

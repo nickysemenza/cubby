@@ -1,6 +1,7 @@
 import {
   ingredientBase,
   ingredientFiltersSchema,
+  type MergeSummaryOut,
 } from "@cubby/schemas/ingredient";
 import { mcpPaginationParams } from "@cubby/schemas/pagination";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -137,12 +138,7 @@ export function registerIngredientTools(server: McpServer) {
       const results: Array<{
         target: string;
         ok: boolean;
-        summary?: {
-          aliasesAdded: string[];
-          recipesMoved: number;
-          productsMoved: number;
-          deletedIds: string[];
-        };
+        summary?: MergeSummaryOut;
         error?: string;
       }> = [];
       for (const { target, aliases } of merges) {

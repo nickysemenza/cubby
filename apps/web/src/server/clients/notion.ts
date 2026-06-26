@@ -7,6 +7,7 @@ import type { PageObjectResponse } from "@notionhq/client/build/src/api-endpoint
 import type { QueryDataSourceResponse } from "@notionhq/client/build/src/api-endpoints/data-sources";
 import { LRUCache } from "lru-cache";
 import pRetry from "p-retry";
+import { z } from "zod";
 import { getErrorMessage } from "~/lib/error-utils";
 import { TraceNames, withTrace } from "~/server/tracing";
 
@@ -20,45 +21,59 @@ const DATA_SOURCE_IDS = {
 } as const;
 
 // -- Output types --
+// Zod-sourced so the procedure `.output()` schemas (api/routers/notion.ts) and
+// these types share one definition.
 
-export type NotionProject = {
-  id: string;
-  name: string;
-  status: string | null;
-  kind: string | null;
-  location: string[];
-  costEstimate: number | null;
-  date: string | null;
-  dateEnd: string | null;
-  icon: string | null;
-  coverImage: string | null;
-  blockedBy: string[];
-  blocking: string[];
-  notionUrl: string;
-};
+export const notionProjectSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  status: z.string().nullable(),
+  kind: z.string().nullable(),
+  location: z.array(z.string()),
+  costEstimate: z.number().nullable(),
+  date: z.string().nullable(),
+  dateEnd: z.string().nullable(),
+  icon: z.string().nullable(),
+  coverImage: z.string().nullable(),
+  blockedBy: z.array(z.string()),
+  blocking: z.array(z.string()),
+  notionUrl: z.string(),
+});
+export type NotionProject = z.infer<typeof notionProjectSchema>;
 
-export type NotionTask = {
-  id: string;
-  name: string;
-  status: string | null;
-  due: string | null;
-  category: string | null;
-  projectName: string | null;
-  notionUrl: string;
-};
+export const notionTaskSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  status: z.string().nullable(),
+  due: z.string().nullable(),
+  category: z.string().nullable(),
+  projectName: z.string().nullable(),
+  notionUrl: z.string(),
+});
+export type NotionTask = z.infer<typeof notionTaskSchema>;
 
-export type NotionPurchase = {
-  id: string;
-  name: string;
-  cost: number | null;
-  date: string | null;
-  category: string | null;
-  subcategory: string | null;
-  purchaser: string | null;
-  projectName: string | null;
-  url: string | null;
-  notionUrl: string;
-};
+export const notionPurchaseSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  cost: z.number().nullable(),
+  date: z.string().nullable(),
+  category: z.string().nullable(),
+  subcategory: z.string().nullable(),
+  purchaser: z.string().nullable(),
+  projectName: z.string().nullable(),
+  url: z.string().nullable(),
+  notionUrl: z.string(),
+});
+export type NotionPurchase = z.infer<typeof notionPurchaseSchema>;
+
+// Output of the `notion.dashboard` query (null when Notion isn't configured).
+export const notionDashboardSchema = z
+  .object({
+    projects: z.array(notionProjectSchema),
+    tasks: z.array(notionTaskSchema),
+    purchases: z.array(notionPurchaseSchema),
+  })
+  .nullable();
 
 export type NotionBlock = {
   type: string;
@@ -71,15 +86,16 @@ export type NotionBlock = {
 // One row of the Recipes database: the column metadata (the body comes from
 // `getPageContent`). `yieldText`/`servings`/`tags` are read only if those
 // optional columns exist on the data source.
-export type NotionRecipeRow = {
-  id: string;
-  name: string;
-  source: string | null;
-  yieldText: string | null;
-  servings: number | null;
-  tags: string[];
-  notionUrl: string;
-};
+export const notionRecipeRowSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  source: z.string().nullable(),
+  yieldText: z.string().nullable(),
+  servings: z.number().nullable(),
+  tags: z.array(z.string()),
+  notionUrl: z.string(),
+});
+export type NotionRecipeRow = z.infer<typeof notionRecipeRowSchema>;
 
 // -- Property extraction helpers --
 

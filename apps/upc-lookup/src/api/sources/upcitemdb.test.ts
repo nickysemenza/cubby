@@ -36,6 +36,22 @@ describe("lookupUPCitemdb status mapping", () => {
     }
   });
 
+  it("returns error (not a miss) on a malformed 200 payload", async () => {
+    // Item present but `title` is the wrong type — the schema rejects it, so we
+    // must surface a transient error rather than caching the UPC as missing.
+    mockFetch(() =>
+      jsonResponse({ code: "OK", total: 1, offset: 0, items: [{ title: 42 }] }),
+    );
+    expect(await lookupUPCitemdb("012345678905")).toEqual({ status: "error" });
+  });
+
+  it("returns error (not a miss) on a 200 whose shape lacks items entirely", async () => {
+    // A wholesale response-shape change (no `items` key) must fail parse and
+    // surface as transient — not be cached as a not_found miss.
+    mockFetch(() => jsonResponse({ code: "OK", total: 0, offset: 0 }));
+    expect(await lookupUPCitemdb("012345678905")).toEqual({ status: "error" });
+  });
+
   it("returns not_found on a 200 with no items", async () => {
     mockFetch(() =>
       jsonResponse({ code: "OK", total: 0, offset: 0, items: [] }),

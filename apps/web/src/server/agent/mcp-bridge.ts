@@ -1,3 +1,4 @@
+import type { AgentToolCall } from "@cubby/schemas/agent";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { type Tool, toolDefinition } from "@tanstack/ai";
@@ -21,14 +22,15 @@ export function isReadOnlyTool(name: string): boolean {
   return READ_ONLY_PREFIXES.some((prefix) => name.startsWith(prefix));
 }
 
-export interface ToolCallRecord {
-  tool: string;
-  args: Record<string, unknown>;
-  durationMs: number;
-  ok: boolean;
+/**
+ * The serialized telemetry shape (`AgentToolCall`) plus the in-process-only
+ * parsed result. Sourced from the schema so the shared fields can't drift;
+ * `runtime.ts` strips `result` to produce the `AgentToolCall[]` that ships.
+ */
+export type ToolCallRecord = AgentToolCall & {
   /** Parsed JSON of the tool's text output, used for source extraction. */
   result: unknown;
-}
+};
 
 interface AgentToolset {
   tools: Tool[];
