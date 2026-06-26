@@ -1,17 +1,7 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
-import type {
-  ColumnFiltersState,
-  PaginationState,
-} from "@tanstack/react-table";
 import { useMemo } from "react";
 import type { QueryTiming } from "~/lib/query-timing";
-import { useTableState } from "../data-table/useTableState";
-
-interface TableStateOptions {
-  initialSort?: string;
-  initialFilter?: ColumnFiltersState;
-  initialPagination?: PaginationState;
-}
+import type { TableStateReturn } from "../data-table/useTableState";
 
 // Response shape from list queries
 interface ListQueryResponse<TData> {
@@ -30,8 +20,9 @@ type TRPCQueryOptionsFn<TFilters> = (params: {
 
 interface UseInfiniteTableListOptions<TFilters> {
   queryOptions: TRPCQueryOptionsFn<TFilters>;
-  buildFilters: (tableState: ReturnType<typeof useTableState>) => TFilters;
-  tableStateOptions?: TableStateOptions;
+  buildFilters: (tableState: TableStateReturn) => TFilters;
+  /** Shared table state, owned by the caller (one instance per page). */
+  tableState: TableStateReturn;
   /** DB column name to group by (prepends primary ORDER BY on server) */
   groupBy?: string;
   /** Disable the query (hook still called but query doesn't fire) */
@@ -49,7 +40,7 @@ interface UseInfiniteTableListReturn<TData = unknown> {
   totalCount: number;
   isLoading: boolean;
   error: Error | null;
-  tableState: ReturnType<typeof useTableState>;
+  tableState: TableStateReturn;
   timing: QueryTiming;
   infiniteScroll: InfiniteScrollControls;
   refreshControls: {
@@ -67,12 +58,10 @@ interface UseInfiniteTableListReturn<TData = unknown> {
 export function useInfiniteTableList<TFilters, TData = unknown>({
   queryOptions,
   buildFilters,
-  tableStateOptions,
+  tableState,
   groupBy,
   enabled = true,
 }: UseInfiniteTableListOptions<TFilters>): UseInfiniteTableListReturn<TData> {
-  const tableState = useTableState(tableStateOptions);
-
   const filters = useMemo(
     () => buildFilters(tableState),
     [buildFilters, tableState],

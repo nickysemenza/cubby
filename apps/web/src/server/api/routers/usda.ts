@@ -6,16 +6,20 @@ import {
 } from "@cubby/schemas/pagination";
 import { dataTypeEnum, foodLookupParam } from "@cubby/usda-schemas";
 import { z } from "zod";
-import { createTRPCRouter, publicProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure } from "../trpc";
 
-const getByAlternateID = publicProcedure
+// These return `foodSummaryWithLinkedProducts`, which embeds internal Cubby
+// product data (ids, prices, externalIds). The app is deployed publicly, so
+// these must require an authenticated session — do not downgrade to
+// publicProcedure without splitting off the linkedProducts enrichment.
+const getByAlternateID = protectedProcedure
   .input(foodLookupParam)
   .output(foodSummaryWithLinkedProducts.nullable())
   .query(async ({ ctx, input }) => {
     return await ctx.usdaService.findFood(input);
   });
 
-const getByID = publicProcedure
+const getByID = protectedProcedure
   .input(
     z.object({
       id: z.number(),
@@ -26,7 +30,7 @@ const getByID = publicProcedure
     return await ctx.usdaService.getFoodSummaryByID(input.id);
   });
 
-const list = publicProcedure
+const list = protectedProcedure
   .input(
     z
       .object({

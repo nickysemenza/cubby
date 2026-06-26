@@ -9,7 +9,7 @@
 import { recipeUsageOut } from "@cubby/schemas/combo";
 import { type IngredientId, ingredientId } from "@cubby/schemas/identifiers";
 import {
-  ingredientBase,
+  ingredientCreateInput,
   ingredientFiltersSchema,
 } from "@cubby/schemas/ingredient";
 import { recomputeSummary } from "@cubby/schemas/recipe";
@@ -56,8 +56,8 @@ const { list } = createEntityListProcedure({
 
 const { getByID, create } = createEntityCrudWithoutListProcedures({
   schemas: {
-    createInput: ingredientBase,
-    updateInput: ingredientBase.partial(),
+    createInput: ingredientCreateInput,
+    updateInput: ingredientCreateInput.partial(),
     output: ingredientWithFoodOut,
     idSchema: ingredientId,
   },
@@ -85,7 +85,7 @@ const { getByID, create } = createEntityCrudWithoutListProcedures({
 // recompute every dependent recipe eagerly (covers UI + MCP, which both call
 // through this proc) and report the count.
 const update = protectedProcedure
-  .input(z.object({ id: ingredientId, data: ingredientBase.partial() }))
+  .input(z.object({ id: ingredientId, data: ingredientCreateInput.partial() }))
   .output(ingredientWithFoodOut.extend({ sideEffects: recomputeSummary }))
   .mutation(async ({ ctx, input }) => {
     const result = await ctx.services.ingredient.updateIngredient(

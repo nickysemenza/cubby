@@ -81,8 +81,9 @@ test.describe("Create Recipe - Full Flow", () => {
       .filter({ has: page.getByText("Ingredients") });
     await expect(ingredientsSidebar.getByText(ingredientName)).toBeVisible();
 
-    // Switch to the Data view (table sub-mode) for cost/weight verification
-    await page.getByRole("button", { name: "Data" }).click();
+    // Switch to the Data view (table sub-mode) for cost/weight verification.
+    // Exact match avoids colliding with the "Data" nav-group dropdown trigger.
+    await page.getByRole("button", { name: "Data view", exact: true }).click();
 
     // Verify ingredient link
     const ingredientLink = page

@@ -5,6 +5,7 @@ import {
 } from "@tanstack/react-router";
 import { Suspense } from "react";
 import { z } from "zod";
+import { tableSearchSchema } from "~/app/_components/data-table/table-search";
 import LocationTreeGraph from "~/app/_components/inventory/location-tree-graph";
 import LocationTreeView from "~/app/_components/inventory/location-tree-view";
 import LocationTreemap from "~/app/_components/inventory/location-treemap";
@@ -29,9 +30,11 @@ const VIEW_SWITCHER_OPTIONS: ViewSwitcherOption<ViewOption>[] = [
   { value: "visualizations", label: "Visualizations" },
 ];
 
-const searchSchema = z.object({
-  view: z.enum(viewOptions).optional().catch(undefined),
-});
+const searchSchema = z
+  .object({
+    view: z.enum(viewOptions).optional().catch(undefined),
+  })
+  .extend(tableSearchSchema.shape);
 
 const searchDefaults = { view: undefined } as const;
 

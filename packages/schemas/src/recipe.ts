@@ -1,7 +1,7 @@
 import { fdcId, type NutrientKey } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { amount } from "./codec";
-import { baseEntitySchema, dbTimestampsOut } from "./common";
+import { baseEntitySchema, dbTimestampsOut, requiredName } from "./common";
 import { cookbookId, id, ingredientId, recipeId } from "./identifiers";
 import { createInputImages, imageOut, updateInputImages } from "./image";
 
@@ -376,7 +376,7 @@ export const recipeFiltersSchema = z.object({
 // update_recipe tools. `recipeUpdateInput` inherits them through `.partial()`.
 export const recipeCreateInput = z
   .object({
-    name: z.string().describe("Recipe name"),
+    name: requiredName("Recipe name").describe("Recipe name"),
     meta: recipeMeta.describe(
       "Source metadata, e.g. { url } of the web source",
     ),

@@ -5,13 +5,16 @@ import {
 } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { z } from "zod";
+import { tableSearchSchema } from "~/app/_components/data-table/table-search";
 import { ProductList } from "~/app/products/productlist";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 
-const searchSchema = z.object({
-  category: z.string().optional().catch(undefined),
-});
+const searchSchema = z
+  .object({
+    category: z.string().optional().catch(undefined),
+  })
+  .extend(tableSearchSchema.shape);
 
 const searchDefaults = { category: undefined } as const;
 

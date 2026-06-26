@@ -1,10 +1,18 @@
 import type { SortParams } from "@cubby/schemas/pagination";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import type {
   ColumnFiltersState,
   PaginationState,
   SortingState,
 } from "@tanstack/react-table";
-import { useCallback, useMemo, useState, useTransition } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import {
   buildSortParams,
   defaultPagination,
@@ -15,6 +23,33 @@ interface TableStateOptions {
   initialSort?: string;
   initialFilter?: ColumnFiltersState;
   initialPagination?: PaginationState;
+  /**
+   * Mirror sort + pagination to the URL search params (bookmarkable / shareable
+   * / survives reload). Write-through is keyed on the serialized state, never
+   * URL→state, so it can't render-loop. Enable on exactly one tableState per
+   * page (the active data hook) — see useEntityList.
+   */
+  urlSync?: boolean;
+}
+
+// URL search keys for table state.
+const SORT_KEY = "sort";
+const PAGE_KEY = "page";
+const SIZE_KEY = "pageSize";
+
+/** `[{ id, desc }]` → `name` / `-name` (dash = descending); undefined if empty. */
+function sortToParam(sorting: SortingState): string | undefined {
+  const s = sorting[0];
+  if (!s) return undefined;
+  return `${s.desc ? "-" : ""}${s.id}`;
+}
+
+/** `name` / `-name` → `[{ id, desc }]`; undefined if not a usable string. */
+function paramToSort(value: unknown): SortingState | undefined {
+  if (typeof value !== "string" || value.length === 0) return undefined;
+  const desc = value.startsWith("-");
+  const id = desc ? value.slice(1) : value;
+  return id ? [{ id, desc }] : undefined;
 }
 
 export interface TableStateReturn {
@@ -43,17 +78,40 @@ export function useTableState(
     initialSort = "createdAt",
     initialFilter = [],
     initialPagination = defaultPagination,
+    urlSync = false,
   } = options;
 
   const [, startTransition] = useTransition();
 
-  const [sorting, setSortingRaw] = useState<SortingState>(
-    defaultSortState(initialSort),
-  );
+  // Router hooks are called unconditionally (Rules of Hooks); their results are
+  // only consumed when urlSync is on. useSearch(strict:false) works on any route.
+  const search = useSearch({ strict: false }) as Record<string, unknown>;
+  const navigate = useNavigate();
+
+  // Lazy initializers read the URL once (first render, incl. SSR) so a shared /
+  // reloaded link restores sort + page before first paint. Reading is
+  // unconditional (the keys are table-specific, absent on non-synced lists) —
+  // only the write-back below is gated on urlSync. Reading regardless also fixes
+  // the mobile case where the active hook flips after hydration (useIsMobile is
+  // false at SSR), so its tableState must still honor the incoming params.
+  const [sorting, setSortingRaw] = useState<SortingState>(() => {
+    const fromUrl = paramToSort(search[SORT_KEY]);
+    return fromUrl ?? defaultSortState(initialSort);
+  });
   const [columnFilters, setColumnFiltersRaw] =
     useState<ColumnFiltersState>(initialFilter);
-  const [pagination, setPaginationRaw] =
-    useState<PaginationState>(initialPagination);
+  const [pagination, setPaginationRaw] = useState<PaginationState>(() => {
+    const page = Number(search[PAGE_KEY]);
+    const size = Number(search[SIZE_KEY]);
+    return {
+      pageIndex:
+        Number.isFinite(page) && page > 0
+          ? page - 1
+          : initialPagination.pageIndex,
+      pageSize:
+        Number.isFinite(size) && size > 0 ? size : initialPagination.pageSize,
+    };
+  });
 
   // Wrap state setters in startTransition to prevent UI freezing
   const setSorting = useCallback(
@@ -96,6 +154,46 @@ export function useTableState(
   const getSortParams = useCallback(() => {
     return buildSortParams(sorting, initialSort);
   }, [sorting, initialSort]);
+
+  // --- URL write-through (urlSync only) ------------------------------------
+  // The default sort is descending on `initialSort` (see defaultSortState), so
+  // that value is omitted from the URL to keep it clean. Serialize the
+  // URL-relevant slice; the effect navigates only when this string changes —
+  // it depends on STATE, not the URL, so writing the URL can't re-trigger it
+  // (no render loop, even if the route's validateSearch strips the keys).
+  const defaultSortParam = `-${initialSort}`;
+  const serializedUrlState = useMemo(() => {
+    const sortP = sortToParam(sorting);
+    return JSON.stringify({
+      [SORT_KEY]: sortP === defaultSortParam ? undefined : sortP,
+      [PAGE_KEY]:
+        pagination.pageIndex > 0 ? pagination.pageIndex + 1 : undefined,
+      [SIZE_KEY]:
+        pagination.pageSize !== defaultPagination.pageSize
+          ? pagination.pageSize
+          : undefined,
+    });
+  }, [sorting, pagination, defaultSortParam]);
+
+  const lastWrittenUrlState = useRef<string | null>(null);
+  useEffect(() => {
+    if (!urlSync) return;
+    if (lastWrittenUrlState.current === serializedUrlState) return;
+    lastWrittenUrlState.current = serializedUrlState;
+    const next = JSON.parse(serializedUrlState) as Record<string, unknown>;
+    void navigate({
+      to: ".",
+      search: (prev: Record<string, unknown>) => {
+        const merged = { ...prev };
+        for (const key of [SORT_KEY, PAGE_KEY, SIZE_KEY]) {
+          if (next[key] === undefined) delete merged[key];
+          else merged[key] = next[key];
+        }
+        return merged;
+      },
+      replace: true,
+    });
+  }, [urlSync, serializedUrlState, navigate]);
 
   // Memoize the entire return object to prevent recreating on every render - CRITICAL
   return useMemo(

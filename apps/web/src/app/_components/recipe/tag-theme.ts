@@ -42,13 +42,17 @@ function isKnownPrefix(prefix: string): prefix is TagPrefix {
 }
 
 /**
- * Color palette for tag prefixes
+ * Color palette for tag prefixes, mapped onto the Warm-Paper Ledger semantic
+ * tokens (styles.css) rather than raw HSL so tags track the design system:
+ * cuisine→warning (warm), author→primary (ultramarine), cookbook→plum
+ * (aubergine, the recipe/cookbook accent), plain→slate (neutral). Returned as
+ * `var(--token)` strings for use in inline `color` / `borderColor`.
  */
 const tagPrefixColors: Record<TagPrefix, string> = {
-  cuisine: "hsl(25, 75%, 50%)", // Orange
-  author: "hsl(220, 65%, 50%)", // Blue
-  cookbook: "hsl(280, 55%, 50%)", // Purple
-  none: "hsl(0, 0%, 55%)", // Neutral gray
+  cuisine: "var(--warning)",
+  author: "var(--primary)",
+  cookbook: "var(--plum)",
+  none: "var(--slate)",
 };
 
 /**
@@ -56,6 +60,14 @@ const tagPrefixColors: Record<TagPrefix, string> = {
  */
 export const getTagColor = (prefix: TagPrefix): string =>
   tagPrefixColors[prefix];
+
+/**
+ * Faint background tint for a tag chip — the prefix color mixed down over the
+ * surface via color-mix. (The previous `${color}15` alpha-concat produced
+ * invalid CSS for both hsl() and var() values, so the tint never rendered.)
+ */
+export const getTagTint = (prefix: TagPrefix): string =>
+  `color-mix(in oklch, ${tagPrefixColors[prefix]} 12%, transparent)`;
 
 /**
  * Get the icon component for a tag prefix

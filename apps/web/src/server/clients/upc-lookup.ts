@@ -1,5 +1,7 @@
 import {
   bulkLookupResponseSchema,
+  type SearchResponse,
+  searchResponseSchema,
   type UPCLookupResponse,
   upcLookupResponseSchema,
 } from "@cubby/upc-lookup/schemas";
@@ -149,10 +151,7 @@ export class UPCLookupClient {
     });
   }
 
-  async search(
-    query: string,
-    limit = 20,
-  ): Promise<{ products: UPCLookupResponse[]; total: number }> {
+  async search(query: string, limit = 20): Promise<SearchResponse> {
     return this.traced("search", async () => {
       const url = new URL("/search", this.baseUrl);
       url.searchParams.set("q", query);
@@ -169,8 +168,18 @@ export class UPCLookupClient {
           return { products: [], total: 0 };
         }
 
-        const data = await res.json();
-        return data as { products: UPCLookupResponse[]; total: number };
+        // The /search response omits `cached` (it's not a cache read), so
+        // validate against searchResponseSchema rather than casting — a cast
+        // here silently produced the wrong shape (claimed `cached` present).
+        const parsed = searchResponseSchema.safeParse(await res.json());
+        if (!parsed.success) {
+          console.warn(
+            "[UPC Lookup] Search response parse error:",
+            parsed.error,
+          );
+          return { products: [], total: 0 };
+        }
+        return parsed.data;
       } catch (error) {
         if (error instanceof Error && error.name === "TimeoutError") {
           console.warn(`[UPC Lookup] Search timeout after ${this.timeoutMs}ms`);

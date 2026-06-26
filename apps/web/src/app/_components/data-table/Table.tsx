@@ -272,18 +272,9 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
   // Keyboard navigation: focused row index (desktop only)
   const [focusedRowIndex, setFocusedRowIndex] = useState<number | null>(null);
 
-  // On desktop with infinite scroll, eagerly fetch all pages so client-side
-  // pagination works over the complete dataset. Mobile uses scroll-to-load.
-  // Depend on primitives (not the `infiniteScroll` object, which is recreated
-  // every render) so this effect only re-runs when fetch state actually changes.
-  const hasNextPage = infiniteScroll?.hasNextPage ?? false;
-  const isFetchingNextPage = infiniteScroll?.isFetchingNextPage ?? false;
-  const fetchNextPage = infiniteScroll?.fetchNextPage;
-  useEffect(() => {
-    if (!isMobile && hasNextPage && !isFetchingNextPage) {
-      fetchNextPage?.();
-    }
-  }, [isMobile, hasNextPage, isFetchingNextPage, fetchNextPage]);
+  // `infiniteScroll` is now only supplied on mobile (useEntityList picks
+  // server-backed pagination on desktop), so the desktop eager-fetch-all-pages
+  // loop is gone — mobile scroll-to-load lives in MobileListScreen.
 
   const { rows } = table.getRowModel();
 

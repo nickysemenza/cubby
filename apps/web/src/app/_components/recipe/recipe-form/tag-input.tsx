@@ -7,7 +7,13 @@ import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { useTRPC } from "~/trpc/react";
-import { getTagColor, getTagIcon, parseTag, TAG_PREFIXES } from "../tag-theme";
+import {
+  getTagColor,
+  getTagIcon,
+  getTagTint,
+  parseTag,
+  TAG_PREFIXES,
+} from "../tag-theme";
 
 interface TagInputProps {
   value: string[] | null;
@@ -116,7 +122,7 @@ export const TagInput: FC<TagInputProps> = ({ value, onChange, className }) => {
                 className="gap-1 pr-1 font-normal"
                 style={{
                   borderColor: color,
-                  backgroundColor: `${color}15`,
+                  backgroundColor: getTagTint(prefix),
                 }}
               >
                 <Icon size={12} style={{ color }} className="shrink-0" />

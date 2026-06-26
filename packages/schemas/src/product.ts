@@ -1,7 +1,7 @@
 import { productCategoryValues, UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { fdcId, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
-import { dbTimestampsOut } from "./common";
+import { dbTimestampsOut, requiredName } from "./common";
 import { externalIdInput, externalIdOut } from "./external-id";
 import {
   ingredientId,
@@ -87,6 +87,11 @@ const productBase = z.object({
 export const productCreateInput = productBase
   .omit({ category: true })
   .extend({
+    // Override the base `name` (lax for reads) with a non-empty constraint on
+    // the create/update boundary; keep the mock hint for test fixtures.
+    name: requiredName("Product name")
+      .describe("Product name")
+      .meta({ mock: "commerce.productName" }),
     category: productCategory.nullable().optional(),
     ingredientId: ingredientId
       .nullable()
@@ -161,7 +166,7 @@ export type ProductUpdateInput = z.infer<typeof productUpdateInput>;
 // Quick create schema - minimal required fields for rapid entry
 // Used for quick inventory capture workflow
 export const productQuickCreatePayload = z.object({
-  name: z.string().min(1),
+  name: requiredName("Product name"),
   manufacturer: z.string().default(UNSPECIFIED_MANUFACTURER),
   upc: upc.nullable().optional(),
   expectedQuantity: z.number().int().positive().nullable().optional(),

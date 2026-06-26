@@ -131,6 +131,7 @@ import { Separator } from "~/components/ui/separator";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Spinner } from "~/components/ui/spinner";
 import { StatGrid, StatTile } from "~/components/ui/stat-tile";
+import { Surface } from "~/components/ui/surface";
 import { Switch } from "~/components/ui/switch";
 import {
   Table,
@@ -151,6 +152,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
+import {
+  Caption,
+  DenseMeta,
+  MonoValue,
+  TableLabel,
+} from "~/components/ui/typography";
 import { ViewSwitcher } from "~/components/ui/view-switcher";
 import { INGREDIENT_PART_COLOR } from "~/lib/ingredient-part-colors";
 import { cn } from "~/lib/utils";
@@ -630,6 +637,41 @@ export function DesignGallery() {
             <span className="text-sm">text-sm</span>
             <span className="text-base">text-base</span>
           </div>
+          <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2 border-[var(--border)] border-t pt-2">
+            <Row label="TableLabel">
+              <TableLabel>Unit price</TableLabel>
+            </Row>
+            <Row label="MonoValue">
+              <MonoValue>$9.41</MonoValue>
+              <MonoValue tone="muted">248</MonoValue>
+              <MonoValue tone="strong">041570052600</MonoValue>
+            </Row>
+            <Row label="Caption">
+              <Caption>A figure caption.</Caption>
+            </Row>
+            <Row label="DenseMeta">
+              <DenseMeta>updated 2h ago · 12 items</DenseMeta>
+            </Row>
+          </div>
+        </div>
+      </GallerySection>
+
+      <GallerySection title="Surfaces" source="components/ui/surface">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {(
+            [
+              "panel",
+              "specPlate",
+              "figure",
+              "overlay",
+              "mobileRow",
+              "mobileCard",
+            ] as const
+          ).map((variant) => (
+            <Surface key={variant} variant={variant} className="p-3">
+              <TableLabel>{variant}</TableLabel>
+            </Surface>
+          ))}
         </div>
       </GallerySection>
 

@@ -1,17 +1,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import type {
-  ColumnFiltersState,
-  PaginationState,
-} from "@tanstack/react-table";
 import { useEffect, useMemo, useRef } from "react";
 import type { QueryTiming } from "~/lib/query-timing";
-import { useTableState } from "../data-table/useTableState";
-
-interface TableStateOptions {
-  initialSort?: string;
-  initialFilter?: ColumnFiltersState;
-  initialPagination?: PaginationState;
-}
+import type { TableStateReturn } from "../data-table/useTableState";
 
 // Response shape from list queries (used for type narrowing)
 interface ListQueryResponse<TData> {
@@ -33,8 +23,9 @@ type TRPCQueryOptionsFn<TFilters> = (params: {
 export interface UseTableListOptions<TFilters> {
   // tRPC queryOptions function that takes list params and returns query options
   queryOptions: TRPCQueryOptionsFn<TFilters>;
-  buildFilters: (tableState: ReturnType<typeof useTableState>) => TFilters;
-  tableStateOptions?: TableStateOptions;
+  buildFilters: (tableState: TableStateReturn) => TFilters;
+  /** Shared table state, owned by the caller (one instance per page). */
+  tableState: TableStateReturn;
   /** DB column name to group by (prepends primary ORDER BY on server) */
   groupBy?: string;
   /** Disable the query (hook still called but query doesn't fire) */
@@ -47,7 +38,7 @@ interface UseTableListReturn<TData = unknown> {
   isLoading: boolean;
   isPlaceholderData: boolean;
   error: Error | null;
-  tableState: ReturnType<typeof useTableState>;
+  tableState: TableStateReturn;
   timing: QueryTiming;
   refreshControls: {
     onRefresh: () => Promise<void>;
@@ -66,12 +57,10 @@ interface UseTableListReturn<TData = unknown> {
 export function useTableList<TFilters, TData = unknown>({
   queryOptions,
   buildFilters,
-  tableStateOptions,
+  tableState,
   groupBy,
   enabled = true,
 }: UseTableListOptions<TFilters>): UseTableListReturn<TData> {
-  const tableState = useTableState(tableStateOptions);
-
   // Memoize filters to prevent recreating on every render
   const filters = useMemo(
     () => buildFilters(tableState),

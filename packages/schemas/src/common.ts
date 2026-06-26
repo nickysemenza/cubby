@@ -17,6 +17,17 @@ export function extractDbTimestampsFromDBRec<
   };
 }
 
+/**
+ * A non-empty entity name for CREATE/UPDATE *input* schemas. Trims surrounding
+ * whitespace and rejects empty / whitespace-only values.
+ *
+ * Apply this on input schemas only — never on the `*Base` / `*Out` schemas that
+ * are reused for reads, so any pre-existing rows with empty names still parse on
+ * read (the gap this guards against is *new* blank names, not historical ones).
+ */
+export const requiredName = (label = "Name") =>
+  z.string().trim().min(1, `${label} is required`);
+
 export const IDInput = z
   .object({
     id: id,
