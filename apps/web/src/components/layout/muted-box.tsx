@@ -1,4 +1,5 @@
 import type * as React from "react";
+import { Surface } from "~/components/ui/surface";
 import { cn } from "~/lib/utils";
 
 interface MutedBoxProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -7,15 +8,19 @@ interface MutedBoxProps extends React.HTMLAttributes<HTMLDivElement> {
 
 const paddingClasses = { sm: "p-2", md: "p-4", lg: "p-6" };
 
+// Thin wrapper over the Surface `specPlate` variant (muted ruled region). Kept
+// as a named layout helper for its padding axis; the surface look itself now
+// lives in the shared primitive so it tracks the design system.
 export const MutedBox = ({
   padding = "md",
   className,
   ref,
   ...props
 }: MutedBoxProps & { ref?: React.Ref<HTMLDivElement> }) => (
-  <div
-    ref={ref}
-    className={cn("rounded-md bg-muted", paddingClasses[padding], className)}
+  <Surface
+    variant="specPlate"
+    ref={ref as React.Ref<HTMLElement>}
+    className={cn(paddingClasses[padding], className)}
     {...props}
   />
 );

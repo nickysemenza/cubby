@@ -10,6 +10,7 @@ import {
   CalendarRange,
   Camera,
   ChefHat,
+  Database,
   FileText,
   Hammer,
   Home,
@@ -96,7 +97,6 @@ export const desktopNav: NavNode[] = [
     children: [
       inventory,
       locations,
-      { to: "/products", label: "Products", icon: entities.product.lucideIcon },
       { to: "/pantry-view", label: "Pantry view", icon: Package },
     ],
   },
@@ -118,6 +118,17 @@ export const desktopNav: NavNode[] = [
     children: [
       { to: "/insights", label: "Insights", icon: TrendingUp },
       { to: "/activity", label: "Activity", icon: Activity },
+    ],
+  },
+  {
+    // Data surfaces — the reference/admin tables behind the workflows above.
+    // Pulled out of Pantry/Reports/Dev where they were miscategorized.
+    label: "Data",
+    icon: Database,
+    children: [
+      { to: "/products", label: "Products", icon: entities.product.lucideIcon },
+      { to: "/usda", label: "USDA", icon: entities["usda-food"].lucideIcon },
+      { to: "/images", label: "Images", icon: entities.image.lucideIcon },
       { to: "/problems", label: "Problems", icon: AlertTriangle },
     ],
   },
@@ -152,12 +163,6 @@ export const desktopNav: NavNode[] = [
         label: "Equivalences",
         icon: ArrowLeftRight,
       },
-      {
-        to: "/usda",
-        label: "USDA",
-        icon: entities["usda-food"].lucideIcon,
-      },
-      { to: "/images", label: "Images", icon: entities.image.lucideIcon },
       { to: "/projects", label: "Projects", icon: Hammer },
       { to: "/design", label: "Design", icon: Palette },
       { to: "/ai-smoke-test", label: "AI smoke test", icon: Sparkles },
