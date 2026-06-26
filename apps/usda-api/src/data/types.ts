@@ -1,31 +1,14 @@
 import type { z } from "zod";
-import type { countsSchema } from "@cubby/usda-contract";
 import type {
-  DataType,
-  FoodLookupParam,
-  FoodSummary,
-} from "@cubby/usda-schemas";
+  ListFoodsArgs,
+  ListFoodsResult,
+  countsSchema,
+} from "@cubby/usda-contract";
+import type { FoodLookupParam, FoodSummary } from "@cubby/usda-schemas";
+
+export type { ListFoodsArgs, ListFoodsResult };
 
 export type Counts = z.infer<typeof countsSchema>;
-
-export interface ListFoodsArgs {
-  nameFilter?: string;
-  dataTypeFilter?: DataType;
-  /** Comma-joined data types (multi-type filter). `dataTypeFilter` takes precedence. */
-  dataTypes?: string;
-  /** Restrict to the four user-facing food types; dataTypeFilter/dataTypes take precedence. */
-  foodsOnly?: boolean;
-  /** "relevance" orders by FTS bm25 rank (only meaningful with a nameFilter). */
-  orderBy?: "description" | "data_type" | "fdc_id" | "relevance";
-  direction?: "asc" | "desc";
-  pageIndex?: number;
-  pageSize?: number;
-}
-
-export interface ListFoodsResult {
-  data: FoodSummary[];
-  count: number;
-}
 
 export interface USDADataSource {
   getCounts(): Promise<Counts>;

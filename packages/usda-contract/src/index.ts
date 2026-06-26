@@ -57,6 +57,13 @@ export const listFoodsResponse = z.object({
   count: z.number(),
 });
 
+// Derived directly from the validation boundary: the route hands the PARSED
+// query (defaults applied) straight to `dataSource.listFoods`, so the inferred
+// output type — where `orderBy`/`direction`/`pageIndex`/`pageSize` are always
+// present — is strictly more accurate than a hand-written interface.
+export type ListFoodsArgs = z.infer<typeof listFoodsQuery>;
+export type ListFoodsResult = z.infer<typeof listFoodsResponse>;
+
 // Path params
 // Path param: arrives as a string, so coerce then validate as a real fdcId.
 export const fdcIdParam = z.object({ fdc_id: z.coerce.number().pipe(fdcId) });

@@ -1,4 +1,4 @@
-import type { ImageStatus } from "@cubby/schemas/image";
+import type { ImageWithEntity } from "@cubby/schemas/image";
 import { ImageIcon } from "lucide-react";
 import { match } from "ts-pattern";
 import { EntityPillLink } from "~/app/_components/EntityPill";
@@ -10,22 +10,8 @@ import { Description } from "~/components/ui/description";
 import { Image } from "~/components/ui/image";
 import { formatBytes } from "~/lib/format";
 
-interface ImageData {
-  id: string;
-  filename: string;
-  url: string;
-  contentType: string;
-  size: number;
-  status: ImageStatus;
-  entityType: "PRODUCT" | "LOCATION" | "RECIPE" | "COOKBOOK" | null;
-  entityId: string | null;
-  entityName: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
 interface ImageDetailProps {
-  image: ImageData;
+  image: ImageWithEntity;
 }
 
 export function ImageDetail({ image }: ImageDetailProps) {

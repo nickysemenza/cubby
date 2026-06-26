@@ -1,4 +1,3 @@
-import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, Import } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
@@ -13,19 +12,13 @@ import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
 import { getErrorMessage } from "~/lib/error-utils";
 import { queryKeys } from "~/lib/query-keys";
-import { useTRPC, useTRPCClient } from "~/trpc/react";
+import { type RouterOutputs, useTRPC, useTRPCClient } from "~/trpc/react";
 import type { ImportResult } from "../cookbook-import/types";
 import { RecipeImportCard } from "../recipe-import-card";
 
-type PreviewItem = {
-  pageId: string;
-  name: string;
-  notionUrl: string;
-  status: "new" | "unchanged" | "will-update" | "needs-formatting";
-  existingId: string | null;
-  reasons: string[];
-  recipe: ImportRecipe;
-};
+// Sourced from the procedure's `.output(z.array(notionPreviewItem))` so this
+// can never drift from the server shape.
+type PreviewItem = RouterOutputs["recipe"]["previewNotionSync"][number];
 
 /**
  * Import recipes from the Notion "Recipes" database. Mirrors the cookbook
@@ -61,7 +54,7 @@ export function NotionImport() {
     { succeeded: number; failed: number }
   >();
 
-  const items = (preview.data ?? []) as PreviewItem[];
+  const items: PreviewItem[] = preview.data ?? [];
   // Checkbox is enabled for anything that isn't malformed (incl. unchanged, in
   // case you want to force a re-import); "select all" only ticks the actionable
   // ones (new + will-update) since re-importing an unchanged recipe is a no-op.

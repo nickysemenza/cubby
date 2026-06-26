@@ -1,4 +1,6 @@
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
+import type { z } from "zod";
+import type { chunkRequestInput } from "~/server/api/routers/recipe/import";
 
 /** Result of importing a single recipe into the DB. */
 export type ImportResult =
@@ -40,16 +42,14 @@ export type Book = {
   expanded: boolean;
 };
 
-/** Input to the `recipe.extractCookbookChunk` proxy (camelCased WASM request). */
-export type ChunkRequestInput = {
-  system: string;
-  user: string;
-  toolName: string;
-  toolSchema: Record<string, unknown>;
-  /** Ask the server-owned proxy for the stronger escalation model. Set by the
-   * Rust driver only after the default model returned unparseable output. */
-  escalate?: boolean;
-};
+/**
+ * Input to the `recipe.extractCookbookChunk` proxy (camelCased WASM request).
+ * Sourced from the procedure's `chunkRequestInput` schema so it can't drift
+ * from the tRPC boundary. `escalate` asks the server-owned proxy for the
+ * stronger escalation model — set by the Rust driver only after the default
+ * model returned unparseable output.
+ */
+export type ChunkRequestInput = z.infer<typeof chunkRequestInput>;
 
 /** Callbacks the parent passes to each {@link Book} card. */
 export type BookHandlers = {

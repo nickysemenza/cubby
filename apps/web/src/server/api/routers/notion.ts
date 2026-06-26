@@ -1,35 +1,38 @@
 import { z } from "zod";
+import { notionDashboardSchema } from "~/server/clients/notion";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 export const notionRouter = createTRPCRouter({
-  dashboard: protectedProcedure.query(async ({ ctx }) => {
-    if (!ctx.notionClient) return null;
+  dashboard: protectedProcedure
+    .output(notionDashboardSchema)
+    .query(async ({ ctx }) => {
+      if (!ctx.notionClient) return null;
 
-    const [projects, tasks, purchases] = await Promise.all([
-      ctx.notionClient.queryProjects(),
-      ctx.notionClient.queryTasks(),
-      ctx.notionClient.queryPurchases(),
-    ]);
+      const [projects, tasks, purchases] = await Promise.all([
+        ctx.notionClient.queryProjects(),
+        ctx.notionClient.queryTasks(),
+        ctx.notionClient.queryPurchases(),
+      ]);
 
-    // Resolve task/purchase project names from the projects list
-    const projectMap = new Map(projects.map((p) => [p.id, p.name]));
+      // Resolve task/purchase project names from the projects list
+      const projectMap = new Map(projects.map((p) => [p.id, p.name]));
 
-    const tasksWithNames = tasks.map((t) => ({
-      ...t,
-      projectName: (t.projectName && projectMap.get(t.projectName)) ?? null,
-    }));
+      const tasksWithNames = tasks.map((t) => ({
+        ...t,
+        projectName: (t.projectName && projectMap.get(t.projectName)) ?? null,
+      }));
 
-    const purchasesWithNames = purchases.map((p) => ({
-      ...p,
-      projectName: (p.projectName && projectMap.get(p.projectName)) ?? null,
-    }));
+      const purchasesWithNames = purchases.map((p) => ({
+        ...p,
+        projectName: (p.projectName && projectMap.get(p.projectName)) ?? null,
+      }));
 
-    return {
-      projects,
-      tasks: tasksWithNames,
-      purchases: purchasesWithNames,
-    };
-  }),
+      return {
+        projects,
+        tasks: tasksWithNames,
+        purchases: purchasesWithNames,
+      };
+    }),
 
   /** Separate query for cover images — loaded lazily so dashboard isn't blocked. */
   projectImages: protectedProcedure.query(async ({ ctx }) => {

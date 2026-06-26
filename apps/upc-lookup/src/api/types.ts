@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { SourceName } from "./sources";
 
 // Common product data extracted from external APIs
@@ -24,43 +25,51 @@ export type ExternalLookupResult =
   | { status: "not_found" }
   | { status: "error" };
 
-// UPCitemdb API response types
-export interface UPCitemdbResponse {
-  code: string;
-  total: number;
-  offset: number;
-  items: UPCitemdbItem[];
-}
+// UPCitemdb API response — zod-validated at the fetch boundary (sources/
+// upcitemdb.ts) so a changed/malformed upstream payload fails loud as a
+// transient error instead of silently producing bad cached products.
+// `looseObject` preserves unknown keys so the full payload is still stored in
+// `sourceData`. Only the fields we actually consume are required; everything
+// else is optional, so a sparse-but-valid item is not rejected.
+export const upcitemdbOfferSchema = z.looseObject({
+  merchant: z.string().optional(),
+  domain: z.string().optional(),
+  title: z.string(),
+  currency: z.string().optional(),
+  list_price: z.string().optional(),
+  price: z.number(),
+  shipping: z.string().optional(),
+  condition: z.string().optional(),
+  availability: z.string().optional(),
+  link: z.string().optional(),
+  updated_t: z.number().optional(),
+});
+export type UPCitemdbOffer = z.infer<typeof upcitemdbOfferSchema>;
 
-export interface UPCitemdbItem {
-  ean: string;
-  title: string;
-  description?: string;
-  upc?: string;
-  brand?: string;
-  model?: string;
-  color?: string;
-  size?: string;
-  dimension?: string;
-  weight?: string;
-  category?: string;
-  currency?: string;
-  lowest_recorded_price?: number;
-  highest_recorded_price?: number;
-  images?: string[];
-  offers?: UPCitemdbOffer[];
-}
+export const upcitemdbItemSchema = z.looseObject({
+  ean: z.string().optional(),
+  title: z.string(),
+  description: z.string().optional(),
+  upc: z.string().optional(),
+  brand: z.string().optional(),
+  model: z.string().optional(),
+  color: z.string().optional(),
+  size: z.string().optional(),
+  dimension: z.string().optional(),
+  weight: z.string().optional(),
+  category: z.string().optional(),
+  currency: z.string().optional(),
+  lowest_recorded_price: z.number().optional(),
+  highest_recorded_price: z.number().optional(),
+  images: z.array(z.string()).optional(),
+  offers: z.array(upcitemdbOfferSchema).optional(),
+});
+export type UPCitemdbItem = z.infer<typeof upcitemdbItemSchema>;
 
-export interface UPCitemdbOffer {
-  merchant: string;
-  domain: string;
-  title: string;
-  currency: string;
-  list_price?: string;
-  price: number;
-  shipping?: string;
-  condition?: string;
-  availability?: string;
-  link: string;
-  updated_t: number;
-}
+export const upcitemdbResponseSchema = z.looseObject({
+  code: z.string().optional(),
+  total: z.number().optional(),
+  offset: z.number().optional(),
+  items: z.array(upcitemdbItemSchema).optional(),
+});
+export type UPCitemdbResponse = z.infer<typeof upcitemdbResponseSchema>;
