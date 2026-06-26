@@ -5,7 +5,7 @@ import { createContext, type ReactNode, useContext, useMemo } from "react";
 import { ID_CHUNK_SIZE } from "~/misc/array-helpers";
 import { useTRPC } from "~/trpc/react";
 
-export type ProductFoodMap = Record<string, FoodSummary | null>;
+type ProductFoodMap = Record<string, FoodSummary | null>;
 
 const ProductFoodSummariesContext = createContext<ProductFoodMap>({});
 const EMPTY_PRODUCT_FOOD_MAP: ProductFoodMap = {};
@@ -22,7 +22,7 @@ export function useProductFoodSummaries(productIds: readonly string[]) {
   const ids = useMemo(() => (idsKey ? idsKey.split(",") : []), [idsKey]);
   const idChunks = useMemo(() => chunk(ids, ID_CHUNK_SIZE), [ids]);
 
-  const results = useQueries({
+  return useQueries({
     queries: idChunks.map((chunkIds) =>
       api.product.foodSummaries.queryOptions(
         { ids: chunkIds },
@@ -33,18 +33,17 @@ export function useProductFoodSummaries(productIds: readonly string[]) {
         },
       ),
     ),
+    combine: (results) => {
+      if (results.every((result) => !result.data)) {
+        return EMPTY_PRODUCT_FOOD_MAP;
+      }
+
+      return Object.assign(
+        {},
+        ...results.map((result) => result.data ?? EMPTY_PRODUCT_FOOD_MAP),
+      );
+    },
   });
-
-  return useMemo(() => {
-    if (results.every((result) => !result.data)) {
-      return EMPTY_PRODUCT_FOOD_MAP;
-    }
-
-    return Object.assign(
-      {},
-      ...results.map((result) => result.data ?? EMPTY_PRODUCT_FOOD_MAP),
-    );
-  }, [results]);
 }
 
 export function ProductFoodSummariesProvider({

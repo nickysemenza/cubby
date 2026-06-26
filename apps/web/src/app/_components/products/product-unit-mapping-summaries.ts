@@ -5,7 +5,7 @@ import { useMemo } from "react";
 import { ID_CHUNK_SIZE } from "~/misc/array-helpers";
 import { useTRPC } from "~/trpc/react";
 
-export type ProductUnitMappingMap = Record<string, UnitMapping[]>;
+type ProductUnitMappingMap = Record<string, UnitMapping[]>;
 
 const EMPTY_PRODUCT_UNIT_MAPPING_MAP: ProductUnitMappingMap = {};
 
@@ -21,7 +21,7 @@ export function useProductUnitMappingSummaries(productIds: readonly string[]) {
   const ids = useMemo(() => (idsKey ? idsKey.split(",") : []), [idsKey]);
   const idChunks = useMemo(() => chunk(ids, ID_CHUNK_SIZE), [ids]);
 
-  const results = useQueries({
+  return useQueries({
     queries: idChunks.map((chunkIds) =>
       api.product.unitMappingSummaries.queryOptions(
         { ids: chunkIds },
@@ -32,16 +32,17 @@ export function useProductUnitMappingSummaries(productIds: readonly string[]) {
         },
       ),
     ),
+    combine: (results) => {
+      if (results.every((result) => !result.data)) {
+        return EMPTY_PRODUCT_UNIT_MAPPING_MAP;
+      }
+
+      return Object.assign(
+        {},
+        ...results.map(
+          (result) => result.data ?? EMPTY_PRODUCT_UNIT_MAPPING_MAP,
+        ),
+      );
+    },
   });
-
-  return useMemo(() => {
-    if (results.every((result) => !result.data)) {
-      return EMPTY_PRODUCT_UNIT_MAPPING_MAP;
-    }
-
-    return Object.assign(
-      {},
-      ...results.map((result) => result.data ?? EMPTY_PRODUCT_UNIT_MAPPING_MAP),
-    );
-  }, [results]);
 }

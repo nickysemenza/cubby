@@ -44,7 +44,7 @@ export const mealSuggestionsSearchSchema = z.object({
 
 export const mealSuggestionsSearchDefaults = { filter: undefined } as const;
 
-export const getCurrentWeekStart = (referenceDate = new Date()) =>
+const getCurrentWeekStart = (referenceDate = new Date()) =>
   startOfWeek(referenceDate, { weekStartsOn: 0 });
 
 export const parseWeekStart = (week?: string, referenceDate = new Date()) => {

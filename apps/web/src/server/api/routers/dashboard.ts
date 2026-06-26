@@ -23,13 +23,18 @@ const dashboardCountsSchema = z.object({
 const counts = protectedProcedure
   .output(dashboardCountsSchema)
   .query(async ({ ctx }) => {
-    // usda-api is always-up Cloudflare infra (D1 + R2 + worker). A getCounts
-    // failure is a real error we want surfaced, NOT masked — so it propagates
-    // and fails the procedure rather than silently degrading the USDA card.
-    // Reviewers: the Promise.all coupling here is intentional, not an oversight.
     const [entityCounts, usdaCounts] = await Promise.all([
       getDashboardEntityCounts(ctx.db),
-      ctx.usdaClient.getCounts(),
+      // The USDA total is ancillary on most pages (footer/home card). Keep the
+      // local entity totals usable when the bound worker is unavailable in dev,
+      // CI, or a transient deploy window.
+      ctx.usdaClient.getCounts().catch((error) => {
+        console.warn(
+          "[dashboard.counts] USDA count unavailable; using 0",
+          error,
+        );
+        return null;
+      }),
     ]);
     return { ...entityCounts, usdaFoods: usdaCounts?.usda_food ?? 0 };
   });

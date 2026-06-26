@@ -5,8 +5,6 @@
 
 import { type FoodLookupParam, foodLookupParam } from "@cubby/usda-schemas";
 
-export { dbProductToAPI } from "./mappers";
-
 /**
  * Convert a product to a USDA food lookup parameter.
  *

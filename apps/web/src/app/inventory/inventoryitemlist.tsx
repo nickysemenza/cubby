@@ -223,7 +223,7 @@ export function InventoryItemList() {
 
   const [view, setView] = useState<ShelfView>("table");
   const items = table.getRowModel().rows.map((r) => r.original);
-  const productIds = items.map((item) => item.product.id);
+  const productIds = useMemo(() => data.map((item) => item.product.id), [data]);
 
   // Swipe-to-reveal Move/Delete on mobile rows — same flows as the ⋮ menu
   // (Move opens the single-item dialog, Delete the optimistic confirm).

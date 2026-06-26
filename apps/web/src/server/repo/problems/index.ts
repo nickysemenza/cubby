@@ -44,7 +44,6 @@ export {
   findProductsWithUpcGaps,
   loadProductsForCoverage,
   type ProductWithBetterUpcData,
-  type ProductWithUpcGapCandidate,
   recipeUsageCountsByProduct,
   synthesizeEffectiveMappings,
 } from "./detectors-product";

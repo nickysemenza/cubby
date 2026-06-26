@@ -210,5 +210,8 @@ export async function addInventory(
   await page.getByRole("textbox", { name: "Amount Unit" }).fill(unit);
 
   await page.getByRole("button", { name: /^Create$/ }).click();
-  await expect(page).toHaveURL(/\/inventory\//, { timeout: 15000 });
+  await expect(page).toHaveURL(/\/inventory\/[a-f0-9-]+/, { timeout: 15000 });
+  await expect(page.getByText(productName).first()).toBeVisible({
+    timeout: 10000,
+  });
 }

@@ -5,8 +5,6 @@ import { location, product } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 
-export { dbInventoryEntryToAPI, dbInventoryEntryToListAPI } from "./mappers";
-
 /**
  * Reject inventory writes whose target product/location is soft-deleted. Without
  * this, an entry can be created or re-pointed (single CRUD via crud.ts AND the

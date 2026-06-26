@@ -44,7 +44,7 @@ import { getDb, notDeleted } from "~/server/repo/database-helpers";
 // Problems-page components that import it from there.
 export type { ProductWithBetterUpcData };
 
-export type ProductWithUpcGapCandidate = {
+type ProductWithUpcGapCandidate = {
   id: ProductId;
   name: string;
   manufacturer: string;

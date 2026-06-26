@@ -309,7 +309,6 @@ async function readFoodCache(
       }
     } catch (err) {
       console.warn("[food-cache] read failed; treating cache as a miss", err);
-      return out;
     }
   }
   return out;

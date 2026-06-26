@@ -3,7 +3,7 @@ import type { inventoryListItemOut } from "@cubby/schemas/inventory-responses";
 import type { Row } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import { ArrowRightLeft, ImageIcon, Trash } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { z } from "zod";
 import { Button } from "~/components/ui/button";
 import { queryKeys } from "~/lib/query-keys";
@@ -23,10 +23,7 @@ import {
   ProductImageSummariesProvider,
   useHydratedProductImages,
 } from "../products/product-image-summaries";
-import {
-  type ProductUnitMappingMap,
-  useProductUnitMappingSummaries,
-} from "../products/product-unit-mapping-summaries";
+import { useProductUnitMappingSummaries } from "../products/product-unit-mapping-summaries";
 import { ImageThumbnail } from "../table/ImageThumbnail";
 
 type InventoryItem = z.infer<typeof inventoryListItemOut>;
@@ -35,12 +32,20 @@ interface LocationInventoryTableProps {
   locationId: LocationId;
 }
 
+const sameIds = (a: readonly string[], b: readonly string[]) =>
+  a.length === b.length && a.every((id, index) => id === b[index]);
+
 export function LocationInventoryTable({
   locationId,
 }: LocationInventoryTableProps) {
   const api = useTRPC();
   const columnHelper = createColumnHelper<InventoryItem>();
-  const unitMappingSummariesRef = useRef<ProductUnitMappingMap>({});
+  const [unitMappingProductIds, setUnitMappingProductIds] = useState<string[]>(
+    [],
+  );
+  const unitMappingSummaries = useProductUnitMappingSummaries(
+    unitMappingProductIds,
+  );
   const updateMutation = useUpdateMutation({
     mutationFn: api.inventory.update.mutationOptions,
     entity: "inventory",
@@ -91,7 +96,7 @@ export function LocationInventoryTable({
     [],
   );
 
-  const { table, isLoading, error, bulkActionBar } = useEntityList<
+  const { table, data, isLoading, error, bulkActionBar } = useEntityList<
     InventoryItem,
     Record<string, never>
   >({
@@ -130,8 +135,7 @@ export function LocationInventoryTable({
             data: { amount: newAmount },
           });
         },
-        getUnitMappings: (row) =>
-          unitMappingSummariesRef.current[row.product.id] ?? [],
+        getUnitMappings: (row) => unitMappingSummaries[row.product.id] ?? [],
       }),
     ],
     extraActions: (item) => (
@@ -159,9 +163,13 @@ export function LocationInventoryTable({
   });
 
   const items = table.getRowModel().rows.map((r) => r.original);
-  const productIds = items.map((item) => item.product.id);
-  const unitMappingSummaries = useProductUnitMappingSummaries(productIds);
-  unitMappingSummariesRef.current = unitMappingSummaries;
+  const productIds = useMemo(() => data.map((item) => item.product.id), [data]);
+
+  useEffect(() => {
+    setUnitMappingProductIds((current) =>
+      sameIds(current, productIds) ? current : productIds,
+    );
+  }, [productIds]);
 
   return (
     <ProductImageSummariesProvider productIds={productIds}>

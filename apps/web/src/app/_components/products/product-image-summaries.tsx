@@ -5,7 +5,7 @@ import { createContext, type ReactNode, useContext, useMemo } from "react";
 import { ID_CHUNK_SIZE } from "~/misc/array-helpers";
 import { useTRPC } from "~/trpc/react";
 
-export type ProductImageMap = Record<string, ImageOut[]>;
+type ProductImageMap = Record<string, ImageOut[]>;
 
 const ProductImageSummariesContext = createContext<ProductImageMap>({});
 const EMPTY_PRODUCT_IMAGE_MAP: ProductImageMap = {};
@@ -13,7 +13,7 @@ const EMPTY_PRODUCT_IMAGE_MAP: ProductImageMap = {};
 const uniqueSortedIds = (ids: readonly string[]) =>
   [...new Set(ids.filter(Boolean))].sort();
 
-export function useProductImageSummaries(productIds: readonly string[]) {
+function useProductImageSummaries(productIds: readonly string[]) {
   const api = useTRPC();
   const idsKey = useMemo(
     () => uniqueSortedIds(productIds).join(","),
@@ -22,7 +22,7 @@ export function useProductImageSummaries(productIds: readonly string[]) {
   const ids = useMemo(() => (idsKey ? idsKey.split(",") : []), [idsKey]);
   const idChunks = useMemo(() => chunk(ids, ID_CHUNK_SIZE), [ids]);
 
-  const results = useQueries({
+  return useQueries({
     queries: idChunks.map((chunkIds) =>
       api.product.imageSummaries.queryOptions(
         { ids: chunkIds },
@@ -33,18 +33,17 @@ export function useProductImageSummaries(productIds: readonly string[]) {
         },
       ),
     ),
+    combine: (results) => {
+      if (results.every((result) => !result.data)) {
+        return EMPTY_PRODUCT_IMAGE_MAP;
+      }
+
+      return Object.assign(
+        {},
+        ...results.map((result) => result.data ?? EMPTY_PRODUCT_IMAGE_MAP),
+      );
+    },
   });
-
-  return useMemo(() => {
-    if (results.every((result) => !result.data)) {
-      return EMPTY_PRODUCT_IMAGE_MAP;
-    }
-
-    return Object.assign(
-      {},
-      ...results.map((result) => result.data ?? EMPTY_PRODUCT_IMAGE_MAP),
-    );
-  }, [results]);
 }
 
 export function ProductImageSummariesProvider({
