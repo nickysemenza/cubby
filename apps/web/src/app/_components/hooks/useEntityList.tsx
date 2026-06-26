@@ -11,6 +11,7 @@ import { createColumnHelper } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
 import { entities } from "~/entities/entities";
+import { useIsMobile } from "~/hooks/useMobile";
 import type { QueryTiming } from "~/lib/query-timing";
 import { BulkActionBar } from "../data-table/BulkActionBar";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
@@ -157,6 +158,15 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
 }: UseEntityListOptions<TData, TFilters>): UseEntityListReturn<TData> {
   const [grouped, setGrouped] = useState(false);
 
+  // Viewport-aware data mode: mobile uses infinite scroll-to-load; desktop uses
+  // server-backed pagination (the footer page controls drive one page at a
+  // time). Previously `infinite` applied to both viewports, so desktop eagerly
+  // pulled EVERY page up front to back its client pagination. `useIsMobile` is
+  // false on SSR/first paint, so desktop is correct immediately and mobile
+  // upgrades to infinite after hydration.
+  const isMobile = useIsMobile();
+  const useInfiniteMode = infinite && isMobile;
+
   const onGroupedChange = useCallback((value: boolean) => {
     setGrouped(value);
   }, []);
@@ -242,7 +252,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     buildFilters,
     tableStateOptions: mergedTableStateOptions,
     groupBy: groupByField,
-    enabled: infinite,
+    enabled: useInfiniteMode,
   });
 
   const paginatedResult = useTableList<TFilters, TData>({
@@ -250,7 +260,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     buildFilters,
     tableStateOptions: mergedTableStateOptions,
     groupBy: groupByField,
-    enabled: !infinite,
+    enabled: !useInfiniteMode,
   });
 
   const {
@@ -261,7 +271,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     tableState,
     timing,
     refreshControls,
-  } = infinite ? infiniteResult : paginatedResult;
+  } = useInfiniteMode ? infiniteResult : paginatedResult;
 
   // Load unit mappings synchronously if getMappings is provided
   const mappingsMap = useMemo(() => {
@@ -302,8 +312,8 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     data,
     columns: allColumns,
     tableState,
-    totalCount: infinite ? data.length : totalCount,
-    manualPagination: !infinite,
+    totalCount: useInfiniteMode ? data.length : totalCount,
+    manualPagination: !useInfiniteMode,
     globalFilter,
     onGlobalFilterChange,
     getRowId,
@@ -342,7 +352,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     bulkActionBar,
     deleteDialog,
     requestDelete,
-    infiniteScroll: infinite ? infiniteResult.infiniteScroll : undefined,
+    infiniteScroll: useInfiniteMode ? infiniteResult.infiniteScroll : undefined,
     refreshControls,
     grouped,
     onGroupedChange,
