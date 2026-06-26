@@ -54,9 +54,11 @@ const mapProductToTopLevelOut = (
 };
 
 /**
- * Helper function to build crud services for both production and test contexts
+ * Helper function to build crud services for both production and test contexts.
+ * Also reused by the recompute queue consumer (cf-server `queue()`), which needs
+ * `services.recipeCosting` without a full tRPC request context.
  */
-const buildCrudServices = (
+export const buildCrudServices = (
   db: Database,
   opts?: { usdaFetcher?: typeof fetch },
 ) => {

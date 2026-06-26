@@ -49,4 +49,15 @@ export function registerProblemsTools(server: McpServer) {
       return json(all);
     }),
   );
+
+  server.tool(
+    "reparse_stale_parses",
+    "Re-parse every recipe line whose stored parse has drifted from the current parser, persisting the fresh name/amounts/modifier. Name drift re-resolves the line to an ingredient by name OR ALIAS (case-insensitive), so this is the recovery primitive after a mis-merge: once the correct ingredient carries the right alias, re-parsing re-points the affected lines onto it (and leaves correctly-linked lines untouched). Idempotent — a second run finds nothing. Affected recipes' totals are recomputed off the request path. Returns { updated, recipesAffected }.",
+    {},
+    withErrorHandling(async (_params, extra) => {
+      const caller = getCaller(extra);
+      const result = await caller.problems.reparseStaleSync();
+      return json(result);
+    }),
+  );
 }

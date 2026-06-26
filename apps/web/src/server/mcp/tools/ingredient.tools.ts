@@ -4,6 +4,7 @@ import {
 } from "@cubby/schemas/ingredient";
 import { mcpPaginationParams } from "@cubby/schemas/pagination";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { groupBy } from "es-toolkit";
 import { z } from "zod";
 import {
   deleteHandler,
@@ -98,7 +99,7 @@ export function registerIngredientTools(server: McpServer) {
 
   server.tool(
     "merge_ingredients",
-    "Merge one or more clusters of duplicate ingredients in a single call — the bulk way to clean up a dedup sweep without one tool call per cluster. Each cluster folds its `aliases` into `target`: the target absorbs their names/aliases, and their recipe lines + products (USDA links, prices, unit mappings) re-point onto it; the alias ingredients are then deleted. Clusters merge independently and IN SEQUENCE — one failure (e.g. a missing target) is reported in that cluster's result and does NOT abort the rest. Pass a single-element array to merge just one cluster.",
+    "Merge one or more clusters of duplicate ingredients in a single call — the bulk way to clean up a dedup sweep without one tool call per cluster. Each cluster folds its `aliases` into `target`: the target absorbs their names/aliases, and their recipe lines + products (USDA links, prices, unit mappings) re-point onto it; the alias ingredients are then deleted. Clusters merge independently and IN SEQUENCE — one failure is reported in that cluster's result and does NOT abort the rest. A cluster fails LOUD (no silent no-op) if the target/alias is itself in the other side, or any alias id doesn't resolve to a live ingredient. Each successful cluster returns a `summary` ({ aliasesAdded, recipesMoved, productsMoved, deletedIds }). Recompute of the affected recipes is queued off the request path, so even a target used in 100+ recipes merges fast. Set `dryRun` to validate + count every cluster without writing. Pass a single-element array to merge just one cluster.",
     {
       merges: z
         .array(
@@ -114,6 +115,12 @@ export function registerIngredientTools(server: McpServer) {
         )
         .min(1)
         .describe("One entry per duplicate cluster to merge"),
+      dryRun: z
+        .boolean()
+        .optional()
+        .describe(
+          "Validate ids and report what each cluster WOULD change, without writing.",
+        ),
     },
     withErrorHandling(async (params, extra) => {
       const caller = getCaller(extra);
@@ -121,27 +128,31 @@ export function registerIngredientTools(server: McpServer) {
         target: string;
         aliases: string[];
       }>;
+      const dryRun = params.dryRun as boolean | undefined;
       // Merge each cluster IN SEQUENCE: a merge re-points its aliases' recipe
-      // lines/products onto the target and recomputes the target's recipes, so
-      // running clusters concurrently could race on a shared product/recipe.
-      // Capture per-cluster success/failure — a bad target in one cluster must
-      // not sink the batch (partial-result contract).
+      // lines/products onto the target and queues the target's recipes for
+      // recompute, so running clusters concurrently could race on a shared
+      // product/recipe. Capture per-cluster success/failure — a bad target in one
+      // cluster must not sink the batch (partial-result contract).
       const results: Array<{
         target: string;
         ok: boolean;
-        mergedAliasCount?: number;
-        recipesRecomputed?: number;
+        summary?: {
+          aliasesAdded: string[];
+          recipesMoved: number;
+          productsMoved: number;
+          deletedIds: string[];
+        };
         error?: string;
       }> = [];
       for (const { target, aliases } of merges) {
         try {
-          const result = await caller.ingredient.merge({ target, aliases });
-          results.push({
+          const result = await caller.ingredient.merge({
             target,
-            ok: true,
-            mergedAliasCount: aliases.length,
-            recipesRecomputed: result.sideEffects.recipesRecomputed,
+            aliases,
+            dryRun,
           });
+          results.push({ target, ok: true, summary: result.mergeSummary });
         } catch (error) {
           results.push({ target, ok: false, error: formatToolError(error) });
         }
@@ -162,5 +173,48 @@ export function registerIngredientTools(server: McpServer) {
     "Soft-delete ingredients by IDs. Fails if an ingredient is used in recipes or linked to products.",
     { ids: idsParam("ingredient") },
     deleteHandler("ingredient"),
+  );
+
+  server.tool(
+    "get_ingredient_raw_lines",
+    "Bulk parser-triage dump: for each ingredient id, the original `rawLine` (plus parsed `modifier`/`amounts`) of every recipe line currently linked to it, with the owning recipe. The signal for spotting junk/mis-parsed ingredients — instruction fragments ('Arrange the vegetables'), quantity stubs ('plus 2 tsp salt'), bare modifiers ('medium') — that the importer created as ingredients. Get many ids' source lines in ONE call instead of paging find_recipes_using_ingredient per id. Returns one entry per ingredient with its `lines`.",
+    {
+      ids: z
+        .array(z.string())
+        .min(1)
+        .describe("Ingredient IDs to dump raw lines for"),
+    },
+    withErrorHandling(async (params, extra) => {
+      const caller = getCaller(extra);
+      const rows = (await caller.ingredient.rawLines({
+        ids: params.ids,
+      })) as Array<{
+        ingredientId: string;
+        lineId: string;
+        rawLine: string | null;
+        modifier: string | null;
+        amounts: unknown[];
+        recipeId: string;
+        recipeName: string;
+        sectionName: string | null;
+      }>;
+      const byIngredient = groupBy(rows, (r) => r.ingredientId);
+      const ingredients = Object.entries(byIngredient).map(
+        ([ingredientId, lines]) => ({
+          ingredientId,
+          lineCount: lines.length,
+          lines: lines.map((l) => ({
+            lineId: l.lineId,
+            rawLine: l.rawLine,
+            modifier: l.modifier,
+            amounts: l.amounts,
+            recipeId: l.recipeId,
+            recipeName: l.recipeName,
+            sectionName: l.sectionName,
+          })),
+        }),
+      );
+      return json({ count: ingredients.length, ingredients });
+    }),
   );
 }

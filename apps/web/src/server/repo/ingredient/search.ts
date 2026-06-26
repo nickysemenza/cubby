@@ -101,6 +101,43 @@ export const getRecipeUsagesForIngredient = async (
 };
 
 /**
+ * Bulk parser-triage dump: every live recipe line currently linked to any of the
+ * given ingredients, with its original `rawLine` + parsed modifier/amounts and
+ * the owning recipe/section. One `inArray` query (not N) so a junk-ingredient
+ * sweep can pull source lines for ~hundreds of ids in a couple of calls. Lines on
+ * soft-deleted sections/recipes are dropped. Caller groups by `ingredientId`.
+ */
+export const getRawLinesForIngredients = async (
+  db: Database,
+  ingredientIds: IngredientId[],
+) => {
+  if (ingredientIds.length === 0) return [];
+  const rows = await getDb(db).query.recipeSectionIngredient.findMany({
+    where: and(
+      inArray(recipeSectionIngredient.ingredientId, ingredientIds),
+      notDeleted(recipeSectionIngredient),
+    ),
+    with: { recipeSection: { with: { recipe: true } } },
+  });
+  return rows
+    .filter(
+      (r) =>
+        r.recipeSection.deletedAt === null &&
+        r.recipeSection.recipe.deletedAt === null,
+    )
+    .map((r) => ({
+      ingredientId: r.ingredientId,
+      lineId: r.id,
+      rawLine: r.rawLine,
+      modifier: r.modifier,
+      amounts: r.amounts,
+      recipeId: r.recipeSection.recipe.id,
+      recipeName: r.recipeSection.recipe.name,
+      sectionName: r.recipeSection.name,
+    }));
+};
+
+/**
  * Lean batched fetch by id for the costing path: ingredients + their products
  * (mappings / images / external ids), in ONE query via `inArray`. Deliberately
  * drops the recipe-usage relation that the full ingredient graph carries (the

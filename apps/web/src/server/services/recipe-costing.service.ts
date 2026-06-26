@@ -30,8 +30,10 @@ import {
   collectSubRecipeIds,
   getRecipeIngredientName,
 } from "~/lib/recipe-graph";
+import { getRecomputeQueue } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
+import { RECOMPUTE_CHUNK_SIZE } from "~/server/queue-recompute";
 import { getRecipesByIDs } from "~/server/repo/recipe/crud";
 import {
   findParentRecipeIdsBatch,
@@ -432,6 +434,29 @@ export class RecipeCostingService {
         return visited.size;
       },
     );
+  }
+
+  /**
+   * Recompute the given recipes **off the request path**. In production (the
+   * `RECOMPUTE_QUEUE` binding is present) the ids are fanned into bounded chunks,
+   * one queue message each, so each chunk drains in its own invocation with a
+   * fresh CPU/memory budget. On the dev Node server (no binding) it recomputes
+   * inline — safe, since dev has no per-invocation budget. Callers that can touch
+   * many recipes (an ingredient merge) use this instead of the synchronous
+   * {@link recompute}, whose single-invocation pass overruns the Workers budget
+   * for a heavily-used ingredient and kills the mutation.
+   */
+  async dispatchRecompute(recipeIds: RecipeId[]): Promise<void> {
+    if (recipeIds.length === 0) return;
+    const queue = getRecomputeQueue();
+    if (!queue) {
+      await this.recompute(recipeIds);
+      return;
+    }
+    const ids = uniq(recipeIds);
+    for (let i = 0; i < ids.length; i += RECOMPUTE_CHUNK_SIZE) {
+      await queue.send({ recipeIds: ids.slice(i, i + RECOMPUTE_CHUNK_SIZE) });
+    }
   }
 
   /**

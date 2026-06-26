@@ -74,6 +74,26 @@
       "id": "adc9757dfffd45bc94d5c2a66b2ad410"
     }
   ],
+  // Recipe-totals recompute offloaded off the request path. A heavily-used
+  // ingredient merge can touch 100+ recipes; recomputing inline overruns the
+  // per-invocation CPU/memory budget, so dispatchRecompute fans the recipe ids
+  // into RECOMPUTE_CHUNK_SIZE chunks (one message each) and the consumer drains
+  // each chunk in its own invocation (fresh budget). max_batch_size:1 keeps it to
+  // one chunk per invocation. Create once before first deploy:
+  //   wrangler queues create cubby-recompute
+  //   wrangler queues create cubby-recompute-dlq
+  "queues": {
+    "producers": [{ "binding": "RECOMPUTE_QUEUE", "queue": "cubby-recompute" }],
+    "consumers": [
+      {
+        "queue": "cubby-recompute",
+        "max_batch_size": 1,
+        "max_batch_timeout": 5,
+        "max_retries": 3,
+        "dead_letter_queue": "cubby-recompute-dlq"
+      }
+    ]
+  },
   "vars": {
     "NODE_ENV": "production",
     // Signup is closed (personal instance). Flip to "true" + deploy to

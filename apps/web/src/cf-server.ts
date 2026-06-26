@@ -10,6 +10,7 @@ import * as Sentry from "@sentry/cloudflare";
 import { SENTRY_DSN } from "./lib/sentry-dsn";
 import { setCfEnv } from "./server/cf-env";
 import { withRequestDb } from "./server/db";
+import type { RecomputeQueueBatch } from "./server/queue-recompute";
 import { withTrace } from "./server/tracing";
 
 // Cache the handler module promise so the dynamic import only runs once (on
@@ -127,6 +128,28 @@ const handler = {
       console.error("[cf-server]", detail);
       return new Response("Internal Server Error", { status: 500 });
     }
+  },
+
+  // Recompute-queue consumer. Each message is a bounded chunk of recipe ids
+  // (produced by RecipeCostingService.dispatchRecompute) recomputed in its own
+  // invocation — a fresh CPU/memory budget per chunk, which is the whole point of
+  // moving heavy recompute off the request path. Per-message ack/retry so one bad
+  // chunk doesn't replay the rest; exhausted retries land in the DLQ.
+  async queue(batch: RecomputeQueueBatch, env: Env) {
+    setCfEnv(env);
+    await withRequestDb(env.HYPERDRIVE.connectionString, async () => {
+      const { recomputeRecipeIds } = await import("./server/queue-recompute");
+      for (const message of batch.messages) {
+        try {
+          await recomputeRecipeIds(message.body.recipeIds);
+          message.ack();
+        } catch (error) {
+          console.error("[recompute-queue] chunk failed", error);
+          Sentry.captureException(error);
+          message.retry();
+        }
+      }
+    });
   },
 };
 

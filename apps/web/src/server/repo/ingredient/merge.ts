@@ -4,6 +4,7 @@
  * surviving target before hard-deleting the absorbed rows.
  */
 
+import type { RecipeId } from "@cubby/schemas/identifiers";
 import {
   type IngredientId,
   unsafeIngredientId,
@@ -14,6 +15,8 @@ import type { Database } from "~/server/db";
 import {
   ingredient,
   product,
+  recipe,
+  recipeSection,
   recipeSectionIngredient,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -22,6 +25,23 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
+
+/** Per-cluster change summary returned by {@link mergeIngredients}. */
+export interface MergeSummary {
+  /** Names newly added to the target's `aliases` array (excludes pre-existing). */
+  aliasesAdded: string[];
+  /** Distinct recipes that had at least one line re-pointed onto the target. */
+  recipesMoved: number;
+  /** Product rows re-pointed onto the target (incl. soft-deleted). */
+  productsMoved: number;
+  /** Ingredient ids that were absorbed and hard-deleted. */
+  deletedIds: IngredientId[];
+  /**
+   * The distinct recipe ids whose totals are now stale and must be recomputed.
+   * Marked stale in-transaction; the caller dispatches the recompute.
+   */
+  affectedRecipeIds: RecipeId[];
+}
 
 interface FuzzyMergeCandidate {
   id: IngredientId;
@@ -83,16 +103,72 @@ export const findFuzzyMergeCandidates = async (
   return out;
 };
 
+/**
+ * Distinct recipe ids that use any of the given ingredients (via any section).
+ * Read with the same `tx`/db client the caller is on so a dry-run and the
+ * transactional path share one query shape.
+ */
+const recipeIdsUsingIngredients = async (
+  conn: Pick<ReturnType<typeof getDb>, "selectDistinct">,
+  ingredientIds: IngredientId[],
+): Promise<RecipeId[]> => {
+  if (ingredientIds.length === 0) return [];
+  const rows = await conn
+    .selectDistinct({ recipeId: recipeSection.recipeId })
+    .from(recipeSectionIngredient)
+    .innerJoin(
+      recipeSection,
+      eq(recipeSectionIngredient.recipeSectionId, recipeSection.id),
+    )
+    .where(inArray(recipeSectionIngredient.ingredientId, ingredientIds));
+  return rows.map((r) => r.recipeId as RecipeId);
+};
+
+/**
+ * Merge `aliases` into `target`: fold their names/aliases into the target, then
+ * re-point their recipe lines + products onto it before hard-deleting them. The
+ * absorbed recipes' totals are marked stale (`totalsComputedAt = null`)
+ * **inside the transaction** so they are never silently wrong; the caller
+ * dispatches the (potentially heavy) recompute off the request path.
+ *
+ * Fails loudly — and writes nothing — when:
+ * - `target` is itself in `aliases` (self-merge would delete the survivor), or
+ * - any alias id doesn't resolve to a live ingredient (the old code silently
+ *   no-op'd on a typo'd/deleted id, returning "success" while changing nothing).
+ *
+ * `dryRun` runs the same validation and counts what *would* change without
+ * writing — the safe preview for a dedup sweep.
+ */
 export const mergeIngredients = async (
   db: Database,
   target: IngredientId,
   aliases: IngredientId[],
-) => {
-  return await withTransaction(db, async (tx) => {
-    const targetRec = await tx.query.ingredient.findFirst({
+  opts?: { dryRun?: boolean },
+): Promise<MergeSummary> => {
+  const uniqueAliases = uniq(aliases);
+  if (uniqueAliases.includes(target)) {
+    throw createAppError(
+      "INGREDIENT_MERGE_INVALID",
+      `Cannot merge ingredient ${target} into itself`,
+    );
+  }
+
+  // Validate + resolve against the given client; returns the survivor + the
+  // freshly-computed alias set + the absorbed recipes. Shared by both paths so
+  // the dry-run and the real merge can't diverge on what counts as valid.
+  const resolve = async (
+    conn: ReturnType<typeof getDb>,
+  ): Promise<{
+    aliasNames: string[];
+    newAliases: string[];
+    aliasesAdded: string[];
+    deletedIds: IngredientId[];
+    affectedRecipeIds: RecipeId[];
+    productsMoved: number;
+  }> => {
+    const targetRec = await conn.query.ingredient.findFirst({
       where: eq(ingredient.id, target),
     });
-
     if (!targetRec) {
       throw createAppError(
         "INGREDIENT_NOT_FOUND",
@@ -100,29 +176,70 @@ export const mergeIngredients = async (
       );
     }
 
-    const aliasRecs = await tx.query.ingredient.findMany({
-      where: and(inArray(ingredient.id, aliases), notDeleted(ingredient)),
+    const aliasRecs = await conn.query.ingredient.findMany({
+      where: and(inArray(ingredient.id, uniqueAliases), notDeleted(ingredient)),
     });
+    // Fail loud on a no-op: any id that didn't resolve to a live ingredient is a
+    // typo or already-deleted row, NOT a silent success.
+    if (aliasRecs.length !== uniqueAliases.length) {
+      const found = new Set(aliasRecs.map((a) => a.id));
+      const missing = uniqueAliases.filter((id) => !found.has(id));
+      throw createAppError(
+        "INGREDIENT_NOT_FOUND",
+        `Alias ingredient(s) not found or already deleted: ${missing.join(", ")}`,
+      );
+    }
 
-    // update target ingredient to have new aliases
+    const newAliases = uniq([
+      ...targetRec.aliases,
+      ...aliasRecs.map((a) => a.name),
+      ...aliasRecs.flatMap((a) => a.aliases ?? []),
+    ]);
+    const existing = new Set(targetRec.aliases);
+    const affectedRecipeIds = await recipeIdsUsingIngredients(
+      conn,
+      uniqueAliases,
+    );
+    const movedProducts = await conn
+      .select({ id: product.id })
+      .from(product)
+      .where(inArray(product.ingredientId, uniqueAliases));
+
+    return {
+      aliasNames: newAliases,
+      newAliases,
+      aliasesAdded: newAliases.filter((a) => !existing.has(a)),
+      deletedIds: aliasRecs.map((a) => a.id),
+      affectedRecipeIds,
+      productsMoved: movedProducts.length,
+    };
+  };
+
+  if (opts?.dryRun) {
+    const r = await resolve(getDb(db));
+    return {
+      aliasesAdded: r.aliasesAdded,
+      recipesMoved: r.affectedRecipeIds.length,
+      productsMoved: r.productsMoved,
+      deletedIds: r.deletedIds,
+      affectedRecipeIds: r.affectedRecipeIds,
+    };
+  }
+
+  return await withTransaction(db, async (tx) => {
+    const r = await resolve(tx);
+
+    // fold the absorbed names/aliases into the survivor
     await tx
       .update(ingredient)
-      .set({
-        aliases: uniq([
-          ...targetRec.aliases,
-          ...aliasRecs.map((a) => a.name),
-          ...aliasRecs.flatMap((a) => a.aliases ?? []),
-        ]),
-      })
+      .set({ aliases: r.newAliases })
       .where(eq(ingredient.id, target));
 
-    // update all recipeSectionIngredients to point to the target
+    // re-point every recipe line onto the target
     await tx
       .update(recipeSectionIngredient)
-      .set({
-        ingredientId: target,
-      })
-      .where(inArray(recipeSectionIngredient.ingredientId, aliases));
+      .set({ ingredientId: target })
+      .where(inArray(recipeSectionIngredient.ingredientId, uniqueAliases));
 
     // Re-point any products linked to the alias ingredients onto the target.
     // Otherwise the FK from Product.ingredientId blocks the hard delete below
@@ -132,9 +249,27 @@ export const mergeIngredients = async (
     await tx
       .update(product)
       .set({ ingredientId: target })
-      .where(inArray(product.ingredientId, aliases));
+      .where(inArray(product.ingredientId, uniqueAliases));
 
-    // delete stale
-    await tx.delete(ingredient).where(inArray(ingredient.id, aliases));
+    // delete the absorbed ingredients
+    await tx.delete(ingredient).where(inArray(ingredient.id, uniqueAliases));
+
+    // Correctness floor: flag the absorbed recipes stale atomically with the
+    // merge, so they read as pending (and the Problems page can catch them) even
+    // if the dispatched recompute never lands.
+    if (r.affectedRecipeIds.length > 0) {
+      await tx
+        .update(recipe)
+        .set({ totalsComputedAt: null })
+        .where(inArray(recipe.id, r.affectedRecipeIds));
+    }
+
+    return {
+      aliasesAdded: r.aliasesAdded,
+      recipesMoved: r.affectedRecipeIds.length,
+      productsMoved: r.productsMoved,
+      deletedIds: r.deletedIds,
+      affectedRecipeIds: r.affectedRecipeIds,
+    };
   });
 };

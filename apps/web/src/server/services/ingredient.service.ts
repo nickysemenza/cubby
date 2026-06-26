@@ -26,6 +26,7 @@ import {
   getIngredientByName as getIngredientByNameRepo,
   getIngredientsByIDsLean as getIngredientsByIDsLeanRepo,
   ingredientList as ingredientListRepo,
+  type MergeSummary,
   mergeIngredients as mergeIngredientsRepo,
   updateIngredient as updateIngredientRepo,
 } from "../repo/ingredient";
@@ -303,16 +304,20 @@ export class IngredientService {
   }
 
   /**
-   * Merge `aliases` into `target` (repoints recipe rows + soft-deletes aliases).
-   * Post-merge the repointed rows reference the target, so the router's eager
-   * recompute of the *target*'s recipes covers every recipe that used an alias.
-   * This is why merge lives in the service, not as a direct repo call.
+   * Merge `aliases` into `target` (repoints recipe rows + hard-deletes aliases).
+   * Returns the surviving ingredient plus a structured change summary. The
+   * absorbed recipes are marked stale in-transaction; the caller dispatches the
+   * recompute off the request path (a widely-used target can touch 100+ recipes,
+   * which overruns the Workers CPU budget if recomputed inline). `dryRun`
+   * validates + counts what would change without writing.
    */
   async mergeIngredients(
     target: IngredientId,
     aliases: IngredientId[],
-  ): Promise<IngredientWithFoodOut> {
-    await mergeIngredientsRepo(this.db, target, aliases);
-    return this.getIngredientByID(target);
+    opts?: { dryRun?: boolean },
+  ): Promise<{ ingredient: IngredientWithFoodOut; summary: MergeSummary }> {
+    const summary = await mergeIngredientsRepo(this.db, target, aliases, opts);
+    const ingredient = await this.getIngredientByID(target);
+    return { ingredient, summary };
   }
 }
