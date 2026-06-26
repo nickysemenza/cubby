@@ -1,9 +1,9 @@
+import type { IngredientWithFoodOut } from "@cubby/schemas/ingredient-responses";
 import type { FC } from "react";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { queryKeys } from "~/lib/query-keys";
-import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { useTRPC } from "~/trpc/react";
 import { useEntityDelete } from "../hooks/useEntityDelete";
 
@@ -23,7 +23,7 @@ export const IngredientBasicInfo: FC<IngredientBasicInfoProps> = ({
     entityLabel: "Ingredient",
     mutationOptions: (callbacks) =>
       api.ingredient.delete.mutationOptions(callbacks),
-    invalidateKeys: [[queryKeys.ingredient.list]],
+    invalidateKeys: [queryKeys.ingredient.list],
     redirectTo: "/ingredients",
   });
 

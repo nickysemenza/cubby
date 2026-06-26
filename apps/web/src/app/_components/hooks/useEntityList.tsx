@@ -1,5 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
+import type { QueryKey } from "@tanstack/react-query";
 import type {
   ColumnDef,
   ColumnHelper,
@@ -89,7 +90,7 @@ interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
     /** Entity type label for dialog (e.g., "Product", "Ingredient") */
     entityLabel: string;
     /** Query keys to invalidate on success */
-    invalidateKeys: readonly unknown[][];
+    invalidateKeys: readonly QueryKey[];
   };
 }
 

@@ -26,7 +26,9 @@ Based on Tailwind's 4px base unit:
 
 ### Semantic Colors (Preferred)
 
-Use these for theme-aware styling that works across light/dark/terminal modes:
+Use these for Warm-Paper Ledger styling. Cubby currently ships a light-only
+theme, so these tokens should be treated as the canonical surface colors rather
+than theme switches:
 
 | Token                                  | Use Case                        |
 | -------------------------------------- | ------------------------------- |
@@ -44,26 +46,25 @@ Hard-coded colors (e.g., `text-red-600`) are acceptable for:
 2. **Data visualization** (charts, progress bars)
 3. **Semantic values** (positive/negative changes)
 
-**Required**: Always include dark mode variants when using hard-coded colors:
+**Required**: Prefer existing semantic tokens before adding hard-coded colors:
 
 ```tsx
-// Good - includes dark mode
-className = 'text-red-600 dark:text-red-400';
-className = 'bg-red-50 dark:bg-red-950';
+// Good - semantic token
+className = "text-destructive";
+className = "bg-destructive/10";
 
-// Bad - no dark mode
-className = 'text-red-600';
+// Avoid - bypasses the design token system
+className = "text-red-600";
 ```
 
 ### Error State Pattern
 
 ```tsx
 // Full error box
-className =
-  'rounded border border-red-200 bg-red-50 p-3 text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300';
+className = "rounded-none border border-destructive/40 bg-destructive/10 p-3 text-destructive";
 
 // Simple error text (prefer semantic token)
-className = 'text-destructive';
+className = "text-destructive";
 ```
 
 ## Component Patterns
@@ -155,24 +156,20 @@ Prefer standard Tailwind scale:
 - `text-[10px]` - Badge text (intentionally compact)
 - `text-[11px]` - Button text (dense UI)
 
-## Dark Mode
+## Theme Model
 
-All components support three themes via CSS custom properties:
+Cubby currently supports one production theme: Warm-Paper Ledger. It is a
+light-only matte interface built from CSS custom properties in
+`apps/web/src/styles.css`.
 
-- Light (Catppuccin Latte)
-- Dark (Catppuccin Frappe)
-- Terminal (NeoHtop warm cream)
-
-### Implementation
-
-- Themes are applied via class on `<html>`: `.dark`, `.terminal`
-- Use Tailwind's `dark:` prefix for dark-mode-specific styles
-- Terminal theme uses `terminal:` custom variant
+Do not add `.dark`, `.terminal`, `dark:`, or `terminal:` styling unless those
+themes are rebuilt intentionally across the whole design system.
 
 ## Best Practices
 
 1. **Use semantic tokens first** - Fall back to hard-coded colors only for status/data
-2. **Always include dark mode** - When using hard-coded colors
+2. **Avoid theme-only variants** - Use semantic tokens instead of `dark:` or
+   `terminal:` branches
 3. **Prefer helper components** - FlexContainer/GridContainer for repeated patterns
 4. **Extract long classNames** - Move to `@layer components` when >100 chars
 5. **Use `cn()` utility** - For merging classNames with conflict resolution

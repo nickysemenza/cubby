@@ -1,4 +1,4 @@
-import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
+import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { describe, expect, it } from "vitest";
 import { dedupeUsdaFoodsByUpc, nutrientCount } from "./usda-food-stats";
 

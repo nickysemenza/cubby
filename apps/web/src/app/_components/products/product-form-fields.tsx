@@ -1,8 +1,8 @@
-import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
 import type { ExternalIdInput } from "@cubby/schemas/external-id";
 import type { IngredientId } from "@cubby/schemas/identifiers";
 import { hasFoodIndicators } from "@cubby/schemas/product";
 import type { UnitMappingInput } from "@cubby/schemas/unitmapping";
+import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { isMiscProduct } from "@cubby/shared";
 import { Search } from "lucide-react";
 import { type ReactNode, useState } from "react";

@@ -1,10 +1,10 @@
-import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
 import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
 import type {
   InventoryUpdateInput,
   inventoryCreatePayloadData,
   inventoryUpdatePayloadData,
 } from "@cubby/schemas/inventory";
+import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/inventory-responses";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { FC } from "react";
 import { useForm } from "react-hook-form";

@@ -140,7 +140,7 @@ erDiagram
 
 ## 🛠️ Development Setup
 
-Prereqs: **Node** (see [.nvmrc](.nvmrc), currently `v24`), **pnpm** (pinned in [package.json](package.json) — `packageManager: pnpm@10.33.4`), **Docker**, **wrangler** (for CF Workers work).
+Prereqs: **Node** (see [.nvmrc](.nvmrc), currently `v24`), **pnpm** (pinned in [package.json](package.json) — `packageManager: pnpm@10.34.1`), **Docker**, **wrangler** (for CF Workers work).
 
 ```sh
 # 1. Install
@@ -153,8 +153,8 @@ cp apps/web/.env.example apps/web/.env
 # 3. Local services (Postgres 17 + IntegresQL + Jaeger)
 docker-compose up -d
 
-# 4. DB schema
-pnpm --filter @cubby/web run db:migrate
+# 4. Web DB schema
+pnpm --filter @cubby/web run db:push
 
 # 5. Build the WASM shim (one-time, or whenever recipebridge/ changes)
 pnpm run wasm
@@ -227,17 +227,25 @@ Claude Code can run parallel sessions, each in its own git worktree under
 | Command | What it does |
 |---|---|
 | `pnpm run dev` | Start all dev servers (Node, not Workers) |
-| `pnpm run check` | Biome (lint + format check) + parallel typecheck |
-| `pnpm run typecheck` | Typecheck with `tsgo` (TS 7.0 preview, fast) |
-| `pnpm run typecheck:stable` | Typecheck with stable TypeScript (fallback) |
-| `pnpm run format:write` | Auto-fix formatting (Biome) |
-| `pnpm run test` | Vitest unit + integration |
+| `pnpm run check` | Root Biome check + recursive typecheck + conventions |
+| `pnpm run typecheck` | Recursive package typecheck with `tsgo` (TS 7.0 preview, fast) |
+| `pnpm run typecheck:stable` | Recursive package typecheck with stable TypeScript (fallback) |
+| `pnpm run lint` | Recursive package Biome lint |
+| `pnpm run format:check` | Recursive package Biome format/lint check |
+| `pnpm run format:write` | Recursive package Biome auto-fix |
+| `pnpm run test` | Recursive non-watch Vitest unit + integration |
 | `pnpm run test:e2e` | Playwright E2E (uses IntegresQL) |
-| `pnpm --filter @cubby/web run db:migrate` | Apply Drizzle migrations |
+| `pnpm --filter @cubby/web run db:push` | Push the web Drizzle schema to the configured Postgres DB |
 | `pnpm --filter @cubby/web run build:cf` | Build for Cloudflare Workers |
 | `pnpm --filter @cubby/web run preview:cf` | Run the Workers build locally |
 | `pnpm --filter @cubby/web run deploy:cf` | Deploy to Cloudflare Workers |
 | `pnpm run wasm` | Rebuild `@cubby/recipebridge` from Rust source |
+
+The auxiliary Workers (`@cubby/upc-lookup` and `@cubby/usda-api`) are included in
+recursive checks/tests. Their D1 databases do not use the web `db:push` workflow:
+generate/apply their D1 migrations locally first, run the package checks, then apply
+remote D1 migrations before deploying code that depends on the new schema. Use staged
+expand/migrate/deploy/cleanup changes for incompatible D1 schema changes.
 
 In dev, `await __jsProfile(5000)` in the browser console captures a CPU flame summary (the hottest main-thread frames over the next N ms) — it catches "every measurement is fast but the page is slow" jank that React's profiler can't see (commit-phase / native / third-party work).
 

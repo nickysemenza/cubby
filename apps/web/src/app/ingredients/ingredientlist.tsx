@@ -1,11 +1,24 @@
+import type { IngredientListItem } from "@cubby/schemas/ingredient-responses";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Merge, Scale, Sparkles } from "lucide-react";
-import { useId, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 import { MergeConfirmation } from "~/app/_components/ingredient/merge-confirmation";
 import { NoneState } from "~/app/_components/NoneState";
+import {
+  ProductFoodSummariesProvider,
+  useHydratedProductFood,
+  useProductFoodSummaries,
+} from "~/app/_components/products/product-food-summaries";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -18,8 +31,7 @@ import { EntityIcon } from "~/entities/entities";
 import { getErrorMessage } from "~/lib/error-utils";
 import { queryKeys } from "~/lib/query-keys";
 import { savedWithRecompute } from "~/lib/recompute-summary";
-import { getIngredientMappings } from "~/lib/unit-mapping-utils";
-import type { IngredientListItem } from "~/server/services/ingredient.service";
+import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { useTRPC, useTRPCClient } from "~/trpc/react";
 import {
   createCreatedAtColumn,
@@ -41,8 +53,8 @@ type IngredientProduct = IngredientListItem["product"][number];
  * Product column for the ingredients list. Renders the product pill plus a small
  * USDA apple adornment when the product resolved to a USDA food — a coverage
  * signal so you can triage which ingredients are nutrition/cost-linked without
- * opening each product. `food` is already batch-enriched on the list query
- * (IngredientService.ingredientList), so this is free of extra fetches.
+ * opening each product. The list row stays DB-only; USDA summaries hydrate for
+ * the visible nested products after the first table paint.
  */
 function ProductPillsCell({ products }: { products: IngredientProduct[] }) {
   return (
@@ -50,31 +62,33 @@ function ProductPillsCell({ products }: { products: IngredientProduct[] }) {
       items={products}
       maxItems={1}
       renderItem={(product: IngredientProduct) => (
-        <span
-          key={product.id}
-          className="inline-flex min-w-0 items-center gap-1"
-        >
-          <EntityPillLink entity="product" data={product} compact />
-          {product.food ? (
-            <Tooltip>
-              <TooltipTrigger
-                render={<span className="inline-flex shrink-0" />}
-              >
-                <EntityIcon
-                  entity="usda-food"
-                  size={12}
-                  colored
-                  aria-label="Linked to USDA food data"
-                />
-              </TooltipTrigger>
-              <TooltipContent className="max-w-xs">
-                USDA: {product.food.foodInfo.description ?? "linked food"}
-              </TooltipContent>
-            </Tooltip>
-          ) : null}
-        </span>
+        <ProductPillWithFood key={product.id} product={product} />
       )}
     />
+  );
+}
+
+function ProductPillWithFood({ product }: { product: IngredientProduct }) {
+  const food = useHydratedProductFood(product);
+  return (
+    <span className="inline-flex min-w-0 items-center gap-1">
+      <EntityPillLink entity="product" data={product} compact />
+      {food ? (
+        <Tooltip>
+          <TooltipTrigger render={<span className="inline-flex shrink-0" />}>
+            <EntityIcon
+              entity="usda-food"
+              size={12}
+              colored
+              aria-label="Linked to USDA food data"
+            />
+          </TooltipTrigger>
+          <TooltipContent className="max-w-xs">
+            USDA: {food.foodInfo.description ?? "linked food"}
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
+    </span>
   );
 }
 
@@ -122,6 +136,10 @@ export function IngredientList() {
   );
   const { onRowClick, onRowHover, PreviewSheet } =
     useEntityPreview("ingredient");
+  const [foodHydrationIds, setFoodHydrationIds] = useState<readonly string[]>(
+    [],
+  );
+  const foodByProductId = useProductFoodSummaries(foodHydrationIds);
 
   // Memoize invalidate keys to prevent recreating on every render
   const invalidateKeys = useMemo(
@@ -158,8 +176,19 @@ export function IngredientList() {
   const deletableConfig = useDeletableConfig({
     mutationFn: api.ingredient.delete.mutationOptions,
     entityLabel: "Ingredient",
-    invalidateKeys: [[queryKeys.ingredient.list]],
+    invalidateKeys: [queryKeys.ingredient.list],
   });
+
+  const getIngredientListMappings = useCallback(
+    (ingredient: IngredientListItem) =>
+      ingredient.product.flatMap((product) =>
+        getAllUnitMappingsFromProduct({
+          ...product,
+          food: foodByProductId[product.id] ?? null,
+        }),
+      ),
+    [foodByProductId],
+  );
 
   // Memoize columns to prevent recreating on every render
   // Note: updateIngredientMutation is NOT in dependencies because useMutation returns a new object every render
@@ -229,6 +258,7 @@ export function IngredientList() {
 
   const {
     table,
+    data,
     isLoading,
     error,
     timing,
@@ -243,7 +273,7 @@ export function IngredientList() {
       nameFilter: ts.getColumnFilter("name"),
       missingProductsOnly: globalFilter.missingProductsOnly,
     }),
-    getMappings: getIngredientMappings,
+    getMappings: getIngredientListMappings,
     columns,
     filters: [{ id: "name", placeholder: "Filter by ingredient name..." }],
     globalFilter,
@@ -308,8 +338,28 @@ export function IngredientList() {
     infinite: true,
   });
 
+  const productIds = useMemo(
+    () => data.flatMap((ingredient) => ingredient.product.map((p) => p.id)),
+    [data],
+  );
+  useEffect(() => {
+    const nextIds = [...new Set(productIds)].sort();
+    setFoodHydrationIds((currentIds) => {
+      if (
+        currentIds.length === nextIds.length &&
+        currentIds.every((id, index) => id === nextIds[index])
+      ) {
+        return currentIds;
+      }
+      return nextIds;
+    });
+  }, [productIds]);
+
   return (
-    <div>
+    <ProductFoodSummariesProvider
+      productIds={productIds}
+      summaries={foodByProductId}
+    >
       <RTable
         table={table}
         isLoading={isLoading}
@@ -371,6 +421,6 @@ export function IngredientList() {
       />
       <PreviewSheet />
       {deleteDialog}
-    </div>
+    </ProductFoodSummariesProvider>
   );
 }

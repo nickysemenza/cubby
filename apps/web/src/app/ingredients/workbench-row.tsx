@@ -1,5 +1,6 @@
 import type { Confidence } from "@cubby/schemas/ai";
-import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
+import type { EnrichmentRow } from "@cubby/schemas/ingredient-responses";
+import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { useQuery } from "@tanstack/react-query";
 import { Check, ChevronDown, ChevronRight, GitMerge } from "lucide-react";
 import { type Ref, useState } from "react";
@@ -13,7 +14,6 @@ import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { TableCell, TableRow } from "~/components/ui/table";
 import { cn } from "~/lib/utils";
-import type { EnrichmentRow } from "~/server/services/ingredient.service";
 import { useTRPC } from "~/trpc/react";
 import { EnrichmentEditor } from "./enrichment-editor";
 import { fixBadgeLabel } from "./workbench-fix-label";

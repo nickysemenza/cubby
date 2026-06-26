@@ -72,10 +72,14 @@ interface EntityListConfig {
 
 /** Entity color classes for consistent visual identification */
 interface EntityColor {
+  /** CSS color token for inline accent variables */
+  accent: string;
   /** Background color classes (e.g., "bg-blue-100") */
   bg: string;
   /** Text color classes (e.g., "text-blue-500") */
   text: string;
+  /** Border color classes for entity-accented rows/cards */
+  border: string;
 }
 
 /** Full entity definition including UI conventions */

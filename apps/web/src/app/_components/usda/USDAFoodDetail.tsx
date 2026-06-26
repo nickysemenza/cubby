@@ -1,4 +1,4 @@
-import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
+import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import {
   Apple,
   Info,
@@ -144,7 +144,7 @@ export const USDAFoodDetail: React.FC<{
   // Section for displaying linked products
   const linkedProductsSection = (
     <div>
-      {!linkedProducts || linkedProducts.length === 0 ? (
+      {linkedProducts.length === 0 ? (
         <div className="text-muted-foreground">
           No associated products found
         </div>

@@ -139,7 +139,7 @@ function genString(def: AnyDef): string {
 }
 
 function genNumber(def: AnyDef): number {
-  const { intFmt, gt, lt } = readChecks(def.checks);
+  const { intFmt, gt, lt } = readChecks([def, ...(def.checks ?? [])]);
   const min = gt != null ? gt + (intFmt ? 1 : 0.01) : 1;
   const max = lt != null ? lt - (intFmt ? 1 : 0.01) : min + 1000;
   return intFmt

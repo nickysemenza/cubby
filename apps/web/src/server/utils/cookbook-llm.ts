@@ -66,7 +66,7 @@ type OutputSchema = Parameters<typeof chat>[0]["outputSchema"];
  */
 export async function extractCookbookChunk(
   req: CookbookChunkRequest,
-): Promise<unknown> {
+): Promise<Record<string, unknown>> {
   const t0 = performance.now();
   // Reuse the shared client's adapter (gateway binding in prod / REST in dev).
   // Escalated chunks use the stronger model; the default stays Haiku.
@@ -90,5 +90,8 @@ export async function extractCookbookChunk(
   console.log(
     `[cookbook-llm] ${model ?? "claude (default)"} ${Math.round(performance.now() - t0)}ms`,
   );
-  return out ?? { recipes: [] };
+  if (out && typeof out === "object" && !Array.isArray(out)) {
+    return out as Record<string, unknown>;
+  }
+  return { recipes: [] };
 }

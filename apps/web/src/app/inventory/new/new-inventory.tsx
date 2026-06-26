@@ -14,16 +14,13 @@ const CreateInventoryItem: FC = () => {
   >("inventory", api.inventory.create.mutationOptions());
 
   return (
-    <div>
-      <h1 className="mb-6 font-bold text-2xl">Create New Inventory Item</h1>
-      <InventoryForm
-        mode="create"
-        onCreate={handleCreate}
-        isPending={isPending}
-        error={error}
-        onCancel={handleCancel}
-      />
-    </div>
+    <InventoryForm
+      mode="create"
+      onCreate={handleCreate}
+      isPending={isPending}
+      error={error}
+      onCancel={handleCancel}
+    />
   );
 };
 

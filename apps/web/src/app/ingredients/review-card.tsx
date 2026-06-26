@@ -1,4 +1,5 @@
-import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
+import type { EnrichmentRow } from "@cubby/schemas/ingredient-responses";
+import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { useQuery } from "@tanstack/react-query";
 import { GitMerge, Search } from "lucide-react";
 import { type Ref, useEffect, useMemo, useRef, useState } from "react";
@@ -11,7 +12,6 @@ import { Kbd, KbdGroup } from "~/components/ui/kbd";
 import { Spinner } from "~/components/ui/spinner";
 import { dedupeUsdaFoodsByUpc } from "~/lib/usda-food-stats";
 import type { EnrichmentProposal } from "~/server/services/ai-enrichment.service";
-import type { EnrichmentRow } from "~/server/services/ingredient.service";
 import { useTRPC } from "~/trpc/react";
 import {
   EnrichmentEditor,

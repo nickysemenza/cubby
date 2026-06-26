@@ -4,9 +4,7 @@ import { PantryValueCard } from "~/app/_components/home/PantryValueCard";
 import { QuickActionsCard } from "~/app/_components/home/QuickActionsCard";
 import { RecentActivityFeed } from "~/app/_components/home/RecentActivityFeed";
 import EntityCount from "~/app/_components/homepage/entitycount";
-import { Row } from "~/components/layout";
-import { PageWrapper } from "~/components/layout/page-wrapper";
-import { Eyebrow } from "~/components/ui/eyebrow";
+import { Page } from "~/components/page/Page";
 import { authClient } from "~/lib/auth-client";
 
 export const Route = createFileRoute("/")({
@@ -63,18 +61,12 @@ function Home() {
       : "Welcome home.";
 
   return (
-    <PageWrapper className="gradient-mesh space-y-4">
-      {/* Warm greeting with a ledger-style date stamp */}
-      <Row align="end" justify="between" className="page-header-accent pb-2">
-        <div>
-          <Eyebrow className="mb-1 font-medium tracking-[0.18em]">
-            Keep everything in its place
-          </Eyebrow>
-          <h1 className="font-bold font-heading text-2xl tracking-tight sm:text-4xl">
-            {greeting}
-          </h1>
-        </div>
-        {now && (
+    <Page
+      variant="list"
+      eyebrow="Keep everything in its place"
+      title={greeting}
+      actions={
+        now ? (
           <p className="hidden font-mono text-2xs text-muted-foreground uppercase sm:block">
             {now.toLocaleDateString("en-US", {
               weekday: "short",
@@ -83,9 +75,10 @@ function Home() {
               year: "numeric",
             })}
           </p>
-        )}
-      </Row>
-
+        ) : null
+      }
+      fullWidth
+    >
       {/* Entity Stats + problems alert */}
       <EntityCount />
 
@@ -100,6 +93,6 @@ function Home() {
           <RecentActivityFeed limit={6} />
         </div>
       </div>
-    </PageWrapper>
+    </Page>
   );
 }

@@ -36,13 +36,12 @@ import {
   cookbookOnlyForIngredientSql,
   liveRecipeCountForIngredientSql,
 } from "../recipe";
+import { buildIngredientWhere, type IngredientDeepDB } from "./internal-types";
 import {
-  buildIngredientWhere,
   dbIngredientToAPI,
-  type IngredientDeepDB,
   mapIngredientProducts,
   mapIngredientProductsLean,
-} from "./internal-types";
+} from "./mappers";
 
 /**
  * Name-search standalone ingredients for the AI merge suggester's `search`

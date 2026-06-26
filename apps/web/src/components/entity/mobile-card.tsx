@@ -75,10 +75,9 @@ export function MobileCard({
   variant = "card",
   rightValues,
 }: MobileCardProps) {
-  // Get entity-specific border color, fallback to primary
   const borderColor = entity
-    ? entities[entity].color.text.replace("text-", "border-l-")
-    : "border-l-primary/30";
+    ? entities[entity].color.border
+    : "border-l-primary";
 
   const isRow = variant === "row";
   const hasSecondLine =

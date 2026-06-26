@@ -6,14 +6,21 @@
  * See CLAUDE.md "Service Layer Architecture" for details.
  */
 
-import { recipeUsageOut } from "@cubby/schemas/combo";
 import { type IngredientId, ingredientId } from "@cubby/schemas/identifiers";
 import {
   ingredientCreateInput,
   ingredientFiltersSchema,
+  ingredientRawLineOut,
+  ingredientUpdateData,
   mergeSummary,
 } from "@cubby/schemas/ingredient";
-import { recomputeSummary } from "@cubby/schemas/recipe";
+import {
+  enrichmentRowOut,
+  ingredientListItemOut,
+  ingredientWithFoodLeanOut,
+  ingredientWithFoodOut,
+} from "@cubby/schemas/ingredient-responses";
+import { recipeUsageOut, recomputeSummary } from "@cubby/schemas/recipe";
 import { z } from "zod";
 import {
   deleteIngredients,
@@ -22,12 +29,6 @@ import {
   getRecipeUsagesForIngredient,
   resolveOrCreateIngredients,
 } from "~/server/repo/ingredient";
-import {
-  enrichmentRowOut,
-  ingredientListItemOut,
-  ingredientWithFoodLeanOut,
-  ingredientWithFoodOut,
-} from "~/server/services/ingredient.service";
 import {
   createDeleteProcedure,
   createEntityCrudWithoutListProcedures,
@@ -59,7 +60,7 @@ const { list } = createEntityListProcedure({
 const { getByID, create } = createEntityCrudWithoutListProcedures({
   schemas: {
     createInput: ingredientCreateInput,
-    updateInput: ingredientCreateInput.partial(),
+    updateInput: ingredientUpdateData,
     output: ingredientWithFoodOut,
     idSchema: ingredientId,
   },
@@ -87,7 +88,7 @@ const { getByID, create } = createEntityCrudWithoutListProcedures({
 // recompute every dependent recipe eagerly (covers UI + MCP, which both call
 // through this proc) and report the count.
 const update = protectedProcedure
-  .input(z.object({ id: ingredientId, data: ingredientCreateInput.partial() }))
+  .input(z.object({ id: ingredientId, data: ingredientUpdateData }))
   .output(ingredientWithFoodOut.extend({ sideEffects: recomputeSummary }))
   .mutation(async ({ ctx, input }) => {
     const result = await ctx.services.ingredient.updateIngredient(
@@ -179,6 +180,7 @@ const recipeUsages = protectedProcedure
 // ingredients) without paging recipeUsages per id. Grouped by the MCP tool.
 const rawLines = protectedProcedure
   .input(z.object({ ids: z.array(ingredientId).min(1) }))
+  .output(z.array(ingredientRawLineOut))
   .query(async ({ ctx, input }) => {
     return await getRawLinesForIngredients(ctx.db, input.ids);
   });

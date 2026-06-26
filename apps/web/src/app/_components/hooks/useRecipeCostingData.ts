@@ -1,5 +1,6 @@
 import type { RecipeId } from "@cubby/schemas/identifiers";
-import type { RecipeOut } from "@cubby/schemas/recipe";
+import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient-responses";
+import type { RecipeGraphOut, RecipeOut } from "@cubby/schemas/recipe";
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { chunk, keyBy } from "es-toolkit";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -9,14 +10,13 @@ import {
   recipeLinkSignature,
 } from "~/lib/recipe-graph";
 import { ID_CHUNK_SIZE } from "~/misc/array-helpers";
-import type { IngredientWithFoodLeanOut } from "~/server/services/ingredient.service";
 import { useTRPC } from "~/trpc/react";
 
 type TRPC = ReturnType<typeof useTRPC>;
 
 type RecipeCostingData = {
   ingMap: Record<string, IngredientWithFoodLeanOut>;
-  recipeMap: Record<string, RecipeOut>;
+  recipeMap: Record<string, RecipeGraphOut>;
 };
 
 /**
@@ -36,7 +36,7 @@ async function loadRecipeCostingData(
 ): Promise<RecipeCostingData> {
   // 1. Transitive closure of sub-recipes (recipe-as-ingredient). Each fetched
   // recipe may reference further sub-recipes; loop until none are new.
-  const fetched: Record<string, RecipeOut> = {};
+  const fetched: Record<string, RecipeGraphOut> = {};
   const seen = new Set<string>();
   let frontier = collectSubRecipeIds(recipes);
   while (frontier.length > 0) {
@@ -86,7 +86,7 @@ async function loadRecipeCostingData(
  */
 export function useRecipeCostingData(recipes: RecipeOut[]): {
   ingMap: Record<string, IngredientWithFoodLeanOut> | null;
-  recipeMap: Record<string, RecipeOut>;
+  recipeMap: Record<string, RecipeGraphOut>;
   isLoading: boolean;
 } {
   const api = useTRPC();
@@ -96,7 +96,9 @@ export function useRecipeCostingData(recipes: RecipeOut[]): {
     string,
     IngredientWithFoodLeanOut
   > | null>(null);
-  const [recipeMap, setRecipeMap] = useState<Record<string, RecipeOut>>({});
+  const [recipeMap, setRecipeMap] = useState<Record<string, RecipeGraphOut>>(
+    {},
+  );
   const [isLoading, setIsLoading] = useState(false);
 
   // Read the latest recipes through a ref so the effect can depend on a stable

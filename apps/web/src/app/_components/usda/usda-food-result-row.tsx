@@ -1,4 +1,4 @@
-import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
+import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { dataTypeLabel } from "@cubby/usda-schemas";
 import { Copy, Link2 } from "lucide-react";
 import { Row } from "~/components/layout";
@@ -54,7 +54,7 @@ export function UsdaFoodResultRow({
       ? `${serving.serving_size} ${serving.serving_size_unit}`
       : null);
 
-  const linkedCount = food.linkedProducts?.length ?? 0;
+  const linkedCount = food.linkedProducts.length;
 
   // Mirror NutrientsSummary's whitelist so we only show the "/100g" hint when at
   // least one key nutrient will actually render (foundation/legacy foods often

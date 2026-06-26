@@ -277,19 +277,39 @@ async function readFoodCache(
 ): Promise<Map<number, FoodSummary>> {
   const out = new Map<number, FoodSummary>();
   if (fdcIds.length === 0) return out;
-  await ensureFoodCacheTable(db);
+  try {
+    await ensureFoodCacheTable(db);
+  } catch (err) {
+    console.warn(
+      "[food-cache] table setup failed; continuing without cache",
+      err,
+    );
+    return out;
+  }
   for (let i = 0; i < fdcIds.length; i += MAX_SQL_VARIABLES - 1) {
     const chunk = fdcIds.slice(i, i + MAX_SQL_VARIABLES - 1);
     const placeholders = chunk.map(() => "?").join(", ");
-    const res = await db
-      .prepare(
-        `SELECT fdc_id, data FROM ${FOOD_CACHE_TABLE} WHERE version = ? AND fdc_id IN (${placeholders})`,
-      )
-      .bind(version, ...chunk)
-      .all<{ fdc_id: number; data: string }>();
-    for (const row of res.results ?? []) {
-      // Validated when written; trust it and skip the re-parse (that's the point).
-      out.set(row.fdc_id, JSON.parse(row.data) as FoodSummary);
+    try {
+      const res = await db
+        .prepare(
+          `SELECT fdc_id, data FROM ${FOOD_CACHE_TABLE} WHERE version = ? AND fdc_id IN (${placeholders})`,
+        )
+        .bind(version, ...chunk)
+        .all<{ fdc_id: number; data: string }>();
+      for (const row of res.results ?? []) {
+        try {
+          // Validated when written; trust the shape and only guard malformed JSON.
+          out.set(row.fdc_id, JSON.parse(row.data) as FoodSummary);
+        } catch (err) {
+          console.warn(
+            `[food-cache] ignoring unparseable cached food ${row.fdc_id}`,
+            err,
+          );
+        }
+      }
+    } catch (err) {
+      console.warn("[food-cache] read failed; treating cache as a miss", err);
+      return out;
     }
   }
   return out;
@@ -305,14 +325,19 @@ async function writeFoodCache(
   foods: FoodSummary[],
 ): Promise<void> {
   if (foods.length === 0) return;
-  const stmts = foods.map((food) =>
-    db
-      .prepare(
-        `INSERT OR IGNORE INTO ${FOOD_CACHE_TABLE} (version, fdc_id, data) VALUES (?, ?, ?)`,
-      )
-      .bind(version, food.fdc_id, JSON.stringify(food)),
-  );
-  await db.batch(stmts);
+  try {
+    await ensureFoodCacheTable(db);
+    const stmts = foods.map((food) =>
+      db
+        .prepare(
+          `INSERT OR IGNORE INTO ${FOOD_CACHE_TABLE} (version, fdc_id, data) VALUES (?, ?, ?)`,
+        )
+        .bind(version, food.fdc_id, JSON.stringify(food)),
+    );
+    await db.batch(stmts);
+  } catch (err) {
+    console.warn("[food-cache] write failed; continuing without cache", err);
+  }
 }
 
 export function createEdgeUsdaDataSource(
@@ -338,7 +363,8 @@ export function createEdgeUsdaDataSource(
   async function readBundleText(
     row: FoodIndexRow,
     stats?: HydrateStats,
-  ): Promise<string | null> {
+    options: { skipCacheRead?: boolean } = {},
+  ): Promise<{ text: string; fromCache: boolean } | null> {
     // `caches.default` is a Cloudflare extension absent from the DOM
     // CacheStorage type (mirrors the cast in the web USDA client); it's also
     // absent under Node (unit tests), so guard before use and read R2 directly.
@@ -349,10 +375,27 @@ export function createEdgeUsdaDataSource(
     const cacheKey = new Request(
       `https://usda-cache/food/${encodeURIComponent(row.bundle_key)}/${row.byte_offset}/${row.byte_length}`,
     );
-    const cached = cache ? await cache.match(cacheKey) : undefined;
-    if (cached) {
-      if (stats) stats.cacheHits += 1;
-      return cached.text();
+    if (cache && !options.skipCacheRead) {
+      try {
+        const cached = await cache.match(cacheKey);
+        if (cached) {
+          try {
+            const text = await cached.text();
+            if (stats) stats.cacheHits += 1;
+            return { text, fromCache: true };
+          } catch (err) {
+            console.warn(
+              `[bundle-cache] read body failed for ${row.fdc_id}; falling back to R2`,
+              err,
+            );
+          }
+        }
+      } catch (err) {
+        console.warn(
+          `[bundle-cache] read failed for ${row.fdc_id}; falling back to R2`,
+          err,
+        );
+      }
     }
 
     const object = await env.USDA_BUNDLES.get(row.bundle_key, {
@@ -368,13 +411,20 @@ export function createEdgeUsdaDataSource(
       stats.r2Reads += 1;
       stats.bytesRead += text.length;
     }
-    await cache?.put(
-      cacheKey,
-      new Response(text, {
-        headers: { "Cache-Control": "public, max-age=31536000, immutable" },
-      }),
-    );
-    return text;
+    try {
+      await cache?.put(
+        cacheKey,
+        new Response(text, {
+          headers: { "Cache-Control": "public, max-age=31536000, immutable" },
+        }),
+      );
+    } catch (err) {
+      console.warn(
+        `[bundle-cache] write failed for ${row.fdc_id}; continuing without cache`,
+        err,
+      );
+    }
+    return { text, fromCache: false };
   }
 
   async function hydrate(
@@ -383,8 +433,27 @@ export function createEdgeUsdaDataSource(
   ): Promise<FoodSummary | null> {
     if (!row) return null;
 
-    const text = await readBundleText(row, stats);
-    if (text === null) return null;
+    const bundle = await readBundleText(row, stats);
+    if (bundle === null) return null;
+    const loadFreshAfterCacheFailure = async () => {
+      const fresh = await readBundleText(row, stats, { skipCacheRead: true });
+      if (fresh === null) return null;
+      let freshParsed: FoodSummary;
+      try {
+        freshParsed = foodSummary.parse(
+          normalizeFoodSummaryPayload(JSON.parse(fresh.text)),
+        );
+      } catch (err) {
+        console.warn(`[hydrate] skipping unparseable food ${row.fdc_id}`, err);
+        return null;
+      }
+      if (freshParsed.fdc_id !== row.fdc_id) {
+        throw new Error(
+          `R2 pointer mismatch for ${row.fdc_id}: read ${freshParsed.fdc_id}`,
+        );
+      }
+      return freshParsed;
+    };
     // A single malformed record must not 500 the whole page: drop it (callers
     // filter nulls / treat null as not-found). This makes a page slightly
     // shorter than totalCount (the count is from the index, not hydrated rows) —
@@ -392,12 +461,27 @@ export function createEdgeUsdaDataSource(
     // mismatch below still throws: that's index corruption, not data quality.
     let parsed: FoodSummary;
     try {
-      parsed = foodSummary.parse(normalizeFoodSummaryPayload(JSON.parse(text)));
+      parsed = foodSummary.parse(
+        normalizeFoodSummaryPayload(JSON.parse(bundle.text)),
+      );
     } catch (err) {
+      if (bundle.fromCache) {
+        console.warn(
+          `[hydrate] ignoring unparseable cached food ${row.fdc_id}`,
+          err,
+        );
+        return loadFreshAfterCacheFailure();
+      }
       console.warn(`[hydrate] skipping unparseable food ${row.fdc_id}`, err);
       return null;
     }
     if (parsed.fdc_id !== row.fdc_id) {
+      if (bundle.fromCache) {
+        console.warn(
+          `[hydrate] ignoring cached pointer mismatch for ${row.fdc_id}: read ${parsed.fdc_id}`,
+        );
+        return loadFreshAfterCacheFailure();
+      }
       throw new Error(
         `R2 pointer mismatch for ${row.fdc_id}: read ${parsed.fdc_id}`,
       );
@@ -525,9 +609,22 @@ export function createEdgeUsdaDataSource(
       const cacheKey = new Request(
         `https://usda-cache/counts/${encodeURIComponent(key)}`,
       );
-      const cached = cache ? await cache.match(cacheKey) : undefined;
-      if (cached) {
-        return countsSchema.parse(await cached.json());
+      if (cache) {
+        try {
+          const cached = await cache.match(cacheKey);
+          if (cached) {
+            try {
+              return countsSchema.parse(await cached.json());
+            } catch (err) {
+              console.warn(
+                "[counts-cache] ignoring unparseable cached counts",
+                err,
+              );
+            }
+          }
+        } catch (err) {
+          console.warn("[counts-cache] read failed; falling back to R2", err);
+        }
       }
 
       const object = await env.USDA_BUNDLES.get(key);
@@ -536,12 +633,19 @@ export function createEdgeUsdaDataSource(
       }
       const manifest = JSON.parse(await object.text()) as Manifest;
       const counts = countsSchema.parse(manifest.counts);
-      await cache?.put(
-        cacheKey,
-        new Response(JSON.stringify(counts), {
-          headers: { "Cache-Control": "public, max-age=31536000, immutable" },
-        }),
-      );
+      try {
+        await cache?.put(
+          cacheKey,
+          new Response(JSON.stringify(counts), {
+            headers: { "Cache-Control": "public, max-age=31536000, immutable" },
+          }),
+        );
+      } catch (err) {
+        console.warn(
+          "[counts-cache] write failed; continuing without cache",
+          err,
+        );
+      }
       return counts;
     },
 

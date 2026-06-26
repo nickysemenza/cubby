@@ -1,4 +1,4 @@
-import { auditEntitySchema } from "@cubby/schemas/audit";
+import { auditEntitySchema, auditLogListOut } from "@cubby/schemas/audit";
 import { z } from "zod";
 import { getAuditLog } from "~/server/repo/audit-log";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
@@ -13,6 +13,7 @@ export const auditLogRouter = createTRPCRouter({
         cursor: z.string().optional(),
       }),
     )
+    .output(auditLogListOut)
     .query(({ ctx, input }) =>
       getAuditLog(ctx.db, {
         entityType: input.entityType,

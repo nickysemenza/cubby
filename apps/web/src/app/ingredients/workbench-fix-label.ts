@@ -1,4 +1,4 @@
-import type { EnrichmentRow } from "~/server/services/ingredient.service";
+import type { EnrichmentRow } from "@cubby/schemas/ingredient-responses";
 import { hasPriceEntry } from "./workbench-editor-core";
 
 const FIX_LABEL: Record<EnrichmentRow["recommendedFix"], string> = {

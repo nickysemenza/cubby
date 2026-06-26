@@ -1,6 +1,6 @@
-import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type { ProductTopLevelOut } from "@cubby/schemas/product";
+import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import type {
   DataType,
   FoodLookupParam,

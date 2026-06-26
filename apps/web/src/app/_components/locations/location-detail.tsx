@@ -24,7 +24,6 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "~/components/ui/empty";
-import { queryKeys } from "~/lib/query-keys";
 import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import { type DetailSection, DetailSections } from "../data-table/detail-page";
@@ -183,11 +182,7 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
           <Stack gap="sm">
             <QuickInventoryAdd
               locationId={location.id}
-              onSuccess={() => {
-                void queryClient.invalidateQueries({
-                  queryKey: [queryKeys.inventory.list],
-                });
-              }}
+              onSuccess={() => undefined}
             />
             <Row gap="sm">
               <Button

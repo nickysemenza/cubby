@@ -30,6 +30,11 @@ export const errorSchema = z.object({
   message: z.string().optional(),
 });
 
+export const DEFAULT_LIST_FOODS_PAGE_INDEX = 0;
+export const DEFAULT_LIST_FOODS_PAGE_SIZE = 10;
+export const MAX_LIST_FOODS_PAGE_SIZE = 1000;
+export const MAX_BATCH_LOOKUP_SIZE = 1000;
+
 export const listFoodsQuery = z.object({
   nameFilter: z.string().optional(),
   dataTypeFilter: dataTypeEnum.optional(),
@@ -48,8 +53,17 @@ export const listFoodsQuery = z.object({
     .optional()
     .default("description"),
   direction: z.enum(["asc", "desc"]).optional().default("asc"),
-  pageIndex: z.coerce.number().default(0),
-  pageSize: z.coerce.number().default(10),
+  pageIndex: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .default(DEFAULT_LIST_FOODS_PAGE_INDEX),
+  pageSize: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(MAX_LIST_FOODS_PAGE_SIZE)
+    .default(DEFAULT_LIST_FOODS_PAGE_SIZE),
 });
 
 export const listFoodsResponse = z.object({
@@ -70,7 +84,7 @@ export const fdcIdParam = z.object({ fdc_id: z.coerce.number().pipe(fdcId) });
 
 // Pre-define batch schemas to avoid ts-rest type depth issues
 export const batchLookupBody = z.object({
-  lookups: z.array(foodLookupParam),
+  lookups: z.array(foodLookupParam).max(MAX_BATCH_LOOKUP_SIZE),
 });
 
 export const batchLookupResponse = z.object({

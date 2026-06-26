@@ -11,15 +11,22 @@ import {
   Package,
 } from "lucide-react";
 import { cn } from "~/lib/utils";
+import { ENTITY_ACCENTS } from "./entity-accents";
 import type { Entity, EntityDefinition } from "./types";
 
-// Entity colors using theme palette:
-// - primary (terracotta): inventory - core entity
-// - secondary (sage green): products, usda-food - items/data
-// - accent (golden amber): ingredients - food-related
-// - plum (warm plum): recipes - creative
-// - slate (slate blue): locations - places
-// - muted: images - supporting
+const entityColor = (
+  entity: Entity,
+  {
+    bg,
+    text = "text-primary",
+    border = "border-l-primary",
+  }: { bg: string; text?: string; border?: string },
+) => ({
+  accent: ENTITY_ACCENTS[entity],
+  bg,
+  text,
+  border,
+});
 
 export const entities: Record<Entity, EntityDefinition> = {
   ingredient: {
@@ -27,10 +34,11 @@ export const entities: Record<Entity, EntityDefinition> = {
     pluralLabel: "Ingredients",
     basePath: "ingredients",
     lucideIcon: Carrot,
-    color: {
+    color: entityColor("ingredient", {
       bg: "bg-warning/20",
       text: "text-accent-foreground",
-    },
+      border: "border-l-warning",
+    }),
     routes: {
       detail: "/ingredients/$id",
       list: "/ingredients",
@@ -55,10 +63,7 @@ export const entities: Record<Entity, EntityDefinition> = {
     pluralLabel: "Products",
     basePath: "products",
     lucideIcon: Barcode,
-    color: {
-      bg: "bg-secondary",
-      text: "text-secondary-foreground",
-    },
+    color: entityColor("product", { bg: "bg-primary/10" }),
     routes: {
       detail: "/products/$id",
       list: "/products",
@@ -92,10 +97,7 @@ export const entities: Record<Entity, EntityDefinition> = {
     pluralLabel: "Recipes",
     basePath: "recipes",
     lucideIcon: ChefHat,
-    color: {
-      bg: "bg-plum/20",
-      text: "text-plum",
-    },
+    color: entityColor("recipe", { bg: "bg-primary/10" }),
     routes: {
       detail: "/recipes/$id",
       list: "/recipes",
@@ -123,10 +125,7 @@ export const entities: Record<Entity, EntityDefinition> = {
     pluralLabel: "Cookbooks",
     basePath: "cookbooks",
     lucideIcon: BookOpen,
-    color: {
-      bg: "bg-plum/20",
-      text: "text-plum",
-    },
+    color: entityColor("cookbook", { bg: "bg-primary/10" }),
     // Keyed by FK id (rename-safe); no generic list columns or "new" form
     // (cookbooks are created by EPUB import, not a create form).
     routes: {
@@ -139,10 +138,11 @@ export const entities: Record<Entity, EntityDefinition> = {
     pluralLabel: "Locations",
     basePath: "locations",
     lucideIcon: MapPin,
-    color: {
+    color: entityColor("location", {
       bg: "bg-slate/20",
       text: "text-slate",
-    },
+      border: "border-l-slate",
+    }),
     routes: {
       detail: "/locations/$id",
       list: "/locations",
@@ -164,10 +164,7 @@ export const entities: Record<Entity, EntityDefinition> = {
     pluralLabel: "Inventory",
     basePath: "inventory",
     lucideIcon: Package,
-    color: {
-      bg: "bg-primary/15",
-      text: "text-primary",
-    },
+    color: entityColor("inventory", { bg: "bg-primary/10" }),
     routes: {
       detail: "/inventory/$id",
       list: "/inventory",
@@ -187,10 +184,11 @@ export const entities: Record<Entity, EntityDefinition> = {
     pluralLabel: "Meals",
     basePath: "meals",
     lucideIcon: CalendarDays,
-    color: {
+    color: entityColor("meal", {
       bg: "bg-warning/20",
       text: "text-warning",
-    },
+      border: "border-l-warning",
+    }),
     routes: {
       detail: "/meals/$id",
       list: "/meals",
@@ -208,10 +206,11 @@ export const entities: Record<Entity, EntityDefinition> = {
     pluralLabel: "USDA Foods",
     basePath: "usda",
     lucideIcon: Apple,
-    color: {
-      bg: "bg-secondary",
-      text: "text-secondary-foreground",
-    },
+    color: entityColor("usda-food", {
+      bg: "bg-positive/15",
+      text: "text-positive",
+      border: "border-l-positive",
+    }),
     routes: {
       detail: "/usda/$id",
       list: "/usda",
@@ -224,10 +223,11 @@ export const entities: Record<Entity, EntityDefinition> = {
     pluralLabel: "Images",
     basePath: "images",
     lucideIcon: Image,
-    color: {
+    color: entityColor("image", {
       bg: "bg-muted",
       text: "text-muted-foreground",
-    },
+      border: "border-l-muted-foreground",
+    }),
     routes: {
       detail: "/images/$id",
       list: "/images",

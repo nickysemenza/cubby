@@ -8,10 +8,8 @@ import type { ProductId } from "@cubby/schemas/identifiers";
 import { env } from "~/env";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { Database } from "~/server/db";
-import {
-  associateImagesWithProduct,
-  importImageFromUrl,
-} from "~/server/repo/image";
+import { associateImagesWithProduct } from "~/server/repo/image";
+import { importImageFromUrl } from "~/server/services/image-storage.service";
 
 /**
  * Import an image from UPC lookup and associate it with a product.

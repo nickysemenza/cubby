@@ -1,6 +1,9 @@
 import { Hono } from "hono";
-import { z } from "zod";
-import { fdcIdParam, listFoodsQuery } from "@cubby/usda-contract";
+import {
+  batchLookupBody,
+  fdcIdParam,
+  listFoodsQuery,
+} from "@cubby/usda-contract";
 import { foodLookupParam } from "@cubby/usda-schemas";
 import type { USDADataSource } from "../data/types.js";
 
@@ -47,11 +50,7 @@ export function createFoodRoutes(dataSource: USDADataSource) {
 
   app.post("/api/foods/search/batch", async (c) => {
     const body = await c.req.json().catch(() => undefined);
-    const parsed = z
-      .object({
-        lookups: z.array(foodLookupParam),
-      })
-      .safeParse(body);
+    const parsed = batchLookupBody.safeParse(body);
     if (!parsed.success) {
       return c.json({ error: "Invalid batch lookup" }, 400);
     }

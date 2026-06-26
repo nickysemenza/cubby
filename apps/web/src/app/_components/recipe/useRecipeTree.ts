@@ -1,7 +1,7 @@
-import type { RecipeOut } from "@cubby/schemas/recipe";
+import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient-responses";
+import type { RecipeGraphOut, RecipeOut } from "@cubby/schemas/recipe";
 import { useMemo } from "react";
 import { computeRecipeCosting, type RecipeCosting } from "~/lib/recipe-costing";
-import type { IngredientWithFoodLeanOut } from "~/server/services/ingredient.service";
 import { buildRecipeTree, type RecipeTreeNode } from "./recipe-tree";
 import { getIngredientName } from "./recipe-utils";
 
@@ -22,7 +22,7 @@ import { getIngredientName } from "./recipe-utils";
 export function useRecipeTree(
   scaledRecipe: RecipeOut,
   ingMap: Record<string, IngredientWithFoodLeanOut> | null,
-  recipeMap: Record<string, RecipeOut>,
+  recipeMap: Record<string, RecipeGraphOut>,
   enabled: boolean,
 ): {
   tree: RecipeTreeNode | null;

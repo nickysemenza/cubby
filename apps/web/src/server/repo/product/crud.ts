@@ -5,6 +5,7 @@
 
 import type { ActorContext } from "@cubby/schemas/context";
 import type { IngredientId, ProductId } from "@cubby/schemas/identifiers";
+import type { ImageOut } from "@cubby/schemas/image";
 import {
   buildTakeSkip,
   type PaginationParams,
@@ -14,9 +15,13 @@ import {
   hasFoodIndicators,
   type ProductCategory,
   type ProductCreateInput,
+  type ProductPickerItemOut,
   type ProductTopLevelOut,
+  type ProductUpdateInput,
+  productPickerItemOut,
   productTopLevelOut,
 } from "@cubby/schemas/product";
+import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { countBy } from "es-toolkit";
@@ -57,7 +62,7 @@ import {
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import { generateUniqueProductShortcode } from "~/server/repo/shortcode-utils";
 
-import { dbProductToAPI } from "./helpers";
+import { dbProductToAPI } from "./mappers";
 import type { ProductDeepDB } from "./types";
 import {
   assertNoCanonicalPriceMapping,
@@ -77,6 +82,82 @@ export const getProductByID = async (db: Database, id: ProductId) => {
   }
 
   return dbProductToAPI(res);
+};
+
+export const getProductsForFoodLookup = async (
+  db: Database,
+  ids: ProductId[],
+) => {
+  if (ids.length === 0) return [];
+  return await getDb(db).query.product.findMany({
+    where: and(inArray(product.id, ids), notDeleted(product)),
+    columns: {
+      id: true,
+      upc: true,
+      fdc_id: true,
+    },
+  });
+};
+
+export const getProductImagesByProductIds = async (
+  db: Database,
+  ids: ProductId[],
+): Promise<Record<string, ImageOut[]>> => {
+  const uniqueIds = [...new Set(ids)];
+  const result: Record<string, ImageOut[]> = Object.fromEntries(
+    uniqueIds.map((id) => [id, []]),
+  );
+  if (uniqueIds.length === 0) return result;
+
+  const rows = await getDb(db)
+    .select({
+      productId: productImage.productId,
+      image,
+    })
+    .from(productImage)
+    .innerJoin(image, eq(productImage.imageId, image.id))
+    .where(
+      and(
+        inArray(productImage.productId, uniqueIds),
+        notDeleted(productImage),
+        notDeleted(image),
+      ),
+    );
+
+  for (const row of rows) {
+    result[row.productId]?.push(row.image);
+  }
+
+  return result;
+};
+
+export const getProductUnitMappingsByProductIds = async (
+  db: Database,
+  ids: ProductId[],
+): Promise<Record<string, UnitMapping[]>> => {
+  const uniqueIds = [...new Set(ids)];
+  const result: Record<string, UnitMapping[]> = Object.fromEntries(
+    uniqueIds.map((id) => [id, []]),
+  );
+  if (uniqueIds.length === 0) return result;
+
+  const rows = await getDb(db).query.productUnitMappings.findMany({
+    where: and(
+      inArray(productUnitMappings.productId, uniqueIds),
+      notDeleted(productUnitMappings),
+    ),
+  });
+
+  for (const row of rows) {
+    result[row.productId]?.push({
+      a: row.a,
+      b: row.b,
+      source: row.source,
+      sourceMetadata: { type: "product", productId: row.productId },
+    });
+  }
+
+  return result;
 };
 
 /**
@@ -188,11 +269,10 @@ export const productList = async (
 /**
  * Lightweight product search for typeahead/picker comboboxes.
  *
- * Returns scalar product fields only (`productTopLevelOut`) — it deliberately
- * skips the inventory / ingredient / unit-mapping relation joins that
- * `productList` pulls AND the per-row USDA food enrichment the product service
- * layers on top. Pickers only need `{id, name, manufacturer}`, so paying the
- * cross-Worker USDA batch (the list path's long pole) here is pure waste.
+ * Returns the product picker shape only — it deliberately skips the inventory /
+ * ingredient / unit-mapping / image / external-id relation joins that
+ * `productList` pulls. Pickers only need `{id, name, manufacturer, shortcode}`,
+ * so this endpoint should not pretend to carry full product rows.
  */
 export const productSearch = async (
   db: Database,
@@ -202,7 +282,7 @@ export const productSearch = async (
   category: ProductCategory | undefined,
   sort: SortParams,
   pagination: PaginationParams,
-): Promise<{ data: ProductTopLevelOut[]; count: number }> => {
+): Promise<{ data: ProductPickerItemOut[]; count: number }> => {
   const whereClause = buildSearchConditions(
     product,
     [
@@ -230,8 +310,8 @@ export const productSearch = async (
   const { take, skip } = buildTakeSkip(pagination);
 
   const { data: results, count } = await executeListQueryWithCount(
-    // No `...relations.product.full` — scalar columns only. Zod strips the extra
-    // columns (ingredientId, deletedAt) and defaults images/externalIds to [].
+    // No `...relations.product.full` — scalar columns only. The picker output
+    // schema omits relations that were not loaded.
     getDb(db).query.product.findMany({
       where: whereClause,
       orderBy: orderByArray,
@@ -242,7 +322,7 @@ export const productSearch = async (
   );
 
   const data = results.map((row) =>
-    parseWithContext(productTopLevelOut, row, {
+    parseWithContext(productPickerItemOut, row, {
       entityType: "Product",
       identifier: { id: row.id, name: row.name },
     }),
@@ -442,7 +522,7 @@ export const createProduct = async (
 export const updateProduct = async (
   db: Database,
   id: ProductId,
-  data: Partial<ProductCreateInput>,
+  data: ProductUpdateInput["data"],
   actor: ActorContext,
 ): Promise<ProductTopLevelOut> => {
   const {
@@ -627,6 +707,7 @@ export const quickCreateProduct = async (
     {
       ...newProduct,
       images: [],
+      externalIds: [],
     },
     {
       entityType: "Product",

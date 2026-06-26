@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import CreateInventoryItem from "~/app/inventory/new/new-inventory";
-import { PageWrapper } from "~/components/layout/page-wrapper";
+import { Page } from "~/components/page/Page";
 
 export const Route = createFileRoute("/_authenticated/inventory/new")({
   component: NewInventoryPage,
@@ -8,8 +8,8 @@ export const Route = createFileRoute("/_authenticated/inventory/new")({
 
 function NewInventoryPage() {
   return (
-    <PageWrapper>
+    <Page variant="list" title="New inventory" entity="inventory" compact>
       <CreateInventoryItem />
-    </PageWrapper>
+    </Page>
   );
 }

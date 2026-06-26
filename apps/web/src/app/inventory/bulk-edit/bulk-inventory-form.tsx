@@ -1,7 +1,7 @@
 import { unsafeInventoryId } from "@cubby/schemas/identifiers";
 import type { InventoryBulkOperationItem } from "@cubby/schemas/inventory";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Plus, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -25,10 +25,12 @@ import {
 } from "~/app/_components/form-utils";
 import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
 import { BarcodeScannerButton } from "~/app/_components/inventory/barcode-scanner-button";
-import { useUpcLookup } from "~/app/_components/inventory/hooks";
+import {
+  useInventoryInvalidation,
+  useUpcLookup,
+} from "~/app/_components/inventory/hooks";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
-import { queryKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 
 // Schema for a single inventory item using shared field schemas
@@ -42,9 +44,15 @@ const formSchema = z.object({
 
 type BulkInventoryFormValues = z.input<typeof formSchema>;
 
-export default function BulkInventoryForm() {
+interface BulkInventoryFormProps {
+  initialLocationId?: string;
+}
+
+export default function BulkInventoryForm({
+  initialLocationId,
+}: BulkInventoryFormProps) {
   const api = useTRPC();
-  const queryClient = useQueryClient();
+  const invalidateInventory = useInventoryInvalidation();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -80,31 +88,28 @@ export default function BulkInventoryForm() {
 
   // Update URL when location changes
   useEffect(() => {
-    if (selectedLocation) {
-      const currentParams = new URLSearchParams(window.location.search);
-      const currentLocationId = currentParams.get("locationId");
-      // Only update URL if it's different to avoid infinite loop
-      if (currentLocationId !== selectedLocation.id) {
-        currentParams.set("locationId", selectedLocation.id);
-        navigate({
-          to: `/inventory/bulk-edit?${currentParams.toString()}`,
-          replace: true,
-        });
-      }
+    if (selectedLocation && selectedLocation.id !== initialLocationId) {
+      navigate({
+        to: "/inventory/bulk-edit",
+        search: { locationId: selectedLocation.id },
+        replace: true,
+      });
     }
-  }, [selectedLocation, navigate]);
+  }, [selectedLocation, initialLocationId, navigate]);
 
   // Set initial location from URL
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const locationId = params.get("locationId");
-    if (locationId && locations.length > 0) {
-      const location = locations.find((loc) => loc.id === locationId);
+    if (
+      initialLocationId &&
+      locations.length > 0 &&
+      selectedLocation?.id !== initialLocationId
+    ) {
+      const location = locations.find((loc) => loc.id === initialLocationId);
       if (location) {
         form.setValue("location", buildLocationComboboxItem(location));
       }
     }
-  }, [locations, form]);
+  }, [initialLocationId, locations, form, selectedLocation]);
 
   // Fetch existing inventory items when location is selected
   const { data: inventoryItemsData, refetch: refetchInventoryItems } = useQuery(
@@ -147,10 +152,7 @@ export default function BulkInventoryForm() {
     api.inventory.bulkProcess.mutationOptions({
       onSuccess: () => {
         refetchInventoryItems();
-        // Refresh persisted location valuations (recomputed server-side).
-        void queryClient.invalidateQueries({
-          queryKey: [queryKeys.location.all],
-        });
+        invalidateInventory();
       },
     }),
   );

@@ -244,6 +244,21 @@ export const recipeTopLevel = baseEntitySchema.extend({
 export const recipeRefOut = z.object({ id: recipeId, name: z.string() });
 export type RecipeRef = z.infer<typeof recipeRefOut>;
 
+// One row per RecipeSectionIngredient — the same recipe repeats when it uses the
+// ingredient in multiple sections. Carries the per-usage provenance (raw imported
+// line, parser-derived modifier) and amounts so ingredient/product detail pages
+// can show usage and surface parser drift.
+export const recipeUsageOut = z.object({
+  // RecipeSectionIngredient id — stable row identity (a recipe can appear twice).
+  id: z.uuid(),
+  recipe: recipeTopLevel,
+  sectionName: z.string().nullish(),
+  amounts: z.array(amount),
+  rawLine: z.string().nullish(),
+  modifier: z.string().nullish(),
+});
+export type RecipeUsage = z.infer<typeof recipeUsageOut>;
+
 // Create a base schema with common fields
 const sectioningredientOut = z
   .object({
@@ -286,12 +301,17 @@ export type SectionIngredientOut = z.infer<typeof sectionIngredientOut>;
 export const recipeOut = z
   .object({
     sections: z.array(recipeSectionOut),
-    images: z.array(imageOut).default([]),
+    images: z.array(imageOut),
     // Precomputed cost/calorie rollup (null until first computed). Populated by
     // recipe.list; getByID may leave it null (the detail page computes its own).
     totals: recipeTotals.nullish(),
   })
   .extend(recipeTopLevel.shape);
+
+// Full recipe graph without media. Used by costing/sub-recipe closure fetches
+// that need sections but deliberately do not load images.
+export const recipeGraphOut = recipeOut.omit({ images: true });
+export type RecipeGraphOut = z.infer<typeof recipeGraphOut>;
 
 // Summary shape for `recipe.list`: scalar fields + persisted totals, no section graph (the list/pickers never read `.sections` — that was the ~4.7s over-fetch).
 export const recipeListItemOut = recipeTopLevel.extend({

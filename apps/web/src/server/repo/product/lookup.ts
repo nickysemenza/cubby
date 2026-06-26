@@ -71,6 +71,7 @@ const findProductToAPI = async (
   const res = await getDb(db).query.product.findFirst({
     where,
     with: {
+      externalIds: true,
       images: {
         with: {
           image: true,
@@ -87,6 +88,7 @@ const findProductToAPI = async (
     productTopLevelOut,
     {
       ...res,
+      externalIds: res.externalIds.filter((eid) => eid.deletedAt === null),
       images: extractImagesFromJoinTable(res.images),
     },
     {

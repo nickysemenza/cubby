@@ -5,13 +5,13 @@ import {
   unsafeProductShortcode,
   unsafeRecipeId,
 } from "@cubby/schemas/identifiers";
+import type { IngredientWithFoodOut } from "@cubby/schemas/ingredient-responses";
 import type { RecipeOut, SectionIngredientOut } from "@cubby/schemas/recipe";
 import {
   type CostingRow,
   computeRecipeCosting,
   type RecipeCosting,
 } from "~/lib/recipe-costing";
-import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 
 // Shared fixture builders for the recipe-costing test suites
 // (recipe-costing.unit.test.ts and recipe-costing-gaps.unit.test.ts).
@@ -100,6 +100,7 @@ export const ingredientWith = (
   recipeUsages: [],
   appearsInRecipes: [],
   aliases: [],
+  naKinds: [],
   ...dates,
   product,
 });

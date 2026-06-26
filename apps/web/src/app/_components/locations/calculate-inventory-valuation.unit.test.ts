@@ -36,12 +36,6 @@ function makeInventoryItem(params: {
       shortcode: unsafeLocationShortcode("L-TEST"),
       name: "Test Location",
       type: "room",
-      images: [],
-      createdAt: now,
-      updatedAt: now,
-      lastBulkInventory: null,
-      aiDescription: null,
-      valuation: null,
     },
     product: {
       id: unsafeProductId(params.product.id),
@@ -55,11 +49,6 @@ function makeInventoryItem(params: {
       expectedQuantity: null,
       price: null,
       usdaUnavailable: null,
-      images: [],
-      createdAt: now,
-      updatedAt: now,
-      unitMappings: [],
-      externalIds: [],
     },
   };
 }

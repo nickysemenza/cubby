@@ -1,5 +1,5 @@
+import type { ProductListItem } from "@cubby/schemas/product-responses";
 import { formatCurrency } from "~/lib/utils";
-import type { ProductWithFoodOut } from "~/server/services/product.service";
 import { ShelfCard, ShelfEmpty, ShelfGrid } from "../data-table/shelf";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 
@@ -13,7 +13,7 @@ export function ProductShelf({
   error,
   infiniteScroll,
 }: {
-  items: ProductWithFoodOut[];
+  items: ProductListItem[];
   isLoading?: boolean;
   error?: unknown;
   infiniteScroll?: InfiniteScrollControls;

@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { notionDashboardSchema } from "~/server/clients/notion";
+import {
+  notionBlockSchema,
+  notionDashboardSchema,
+} from "~/server/clients/notion";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 export const notionRouter = createTRPCRouter({
@@ -35,28 +38,31 @@ export const notionRouter = createTRPCRouter({
     }),
 
   /** Separate query for cover images — loaded lazily so dashboard isn't blocked. */
-  projectImages: protectedProcedure.query(async ({ ctx }) => {
-    if (!ctx.notionClient) return {};
+  projectImages: protectedProcedure
+    .output(z.record(z.string(), z.string()))
+    .query(async ({ ctx }) => {
+      if (!ctx.notionClient) return {};
 
-    const projects = await ctx.notionClient.queryProjects();
-    const needImages = projects.filter((p) => !p.coverImage);
-    if (needImages.length === 0) return {};
+      const projects = await ctx.notionClient.queryProjects();
+      const needImages = projects.filter((p) => !p.coverImage);
+      if (needImages.length === 0) return {};
 
-    const contentImages = await ctx.notionClient.getProjectImages(
-      needImages.map((p) => p.id),
-    );
+      const contentImages = await ctx.notionClient.getProjectImages(
+        needImages.map((p) => p.id),
+      );
 
-    // Merge page-level covers with content images
-    const allImages: Record<string, string> = {};
-    for (const p of projects) {
-      const img = p.coverImage ?? contentImages[p.id];
-      if (img) allImages[p.id] = img;
-    }
-    return allImages;
-  }),
+      // Merge page-level covers with content images
+      const allImages: Record<string, string> = {};
+      for (const p of projects) {
+        const img = p.coverImage ?? contentImages[p.id];
+        if (img) allImages[p.id] = img;
+      }
+      return allImages;
+    }),
 
   projectContent: protectedProcedure
     .input(z.object({ pageId: z.string() }))
+    .output(z.array(notionBlockSchema).nullable())
     .query(async ({ ctx, input }) => {
       if (!ctx.notionClient) return null;
       return ctx.notionClient.getPageContent(input.pageId);

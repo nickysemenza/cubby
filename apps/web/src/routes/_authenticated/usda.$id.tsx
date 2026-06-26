@@ -1,9 +1,10 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { USDAFoodDetail } from "~/app/_components/usda/USDAFoodDetail";
-import { PageWrapper } from "~/components/layout/page-wrapper";
+import { Page } from "~/components/page/Page";
 import { RouteErrorComponent } from "~/components/route-error";
 import { DetailPagePending } from "~/components/route-pending";
+import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 import { useTRPC } from "~/trpc/react";
 
@@ -18,9 +19,14 @@ export const Route = createFileRoute("/_authenticated/usda/$id")({
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,
   notFoundComponent: () => (
-    <PageWrapper>
-      <div>USDA food not found</div>
-    </PageWrapper>
+    <Page variant="list" title="USDA food not found" entity="usda-food" compact>
+      <Empty>
+        <EmptyTitle>USDA food not found</EmptyTitle>
+        <EmptyDescription>
+          This USDA food record is not available in Cubby.
+        </EmptyDescription>
+      </Empty>
+    </Page>
   ),
   component: USDAFoodDetailPage,
 });

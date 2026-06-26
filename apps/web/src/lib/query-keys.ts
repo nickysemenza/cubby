@@ -1,9 +1,12 @@
+import type { QueryClient, QueryKey } from "@tanstack/react-query";
+
 /**
  * Centralized query key definitions for React Query.
  * Use these constants to ensure consistency across query invalidations.
  */
 export const queryKeys = {
   inventory: {
+    all: ["inventory"] as const,
     list: ["inventory", "list"] as const,
   },
   product: {
@@ -35,6 +38,12 @@ export const queryKeys = {
     // getAllProblems scan. The page loads the groups, not getAllProblems.
     all: ["problems"] as const,
   },
+  search: {
+    all: ["search"] as const,
+  },
+  dashboard: {
+    counts: ["dashboard", "counts"] as const,
+  },
   debug: {
     timing: ["debug", "timing"] as const,
   },
@@ -54,3 +63,39 @@ export const queryKeys = {
     all: ["meal"] as const,
   },
 } as const;
+
+export const inventoryMutationInvalidateKeys = [
+  queryKeys.inventory.all,
+  queryKeys.location.all,
+  queryKeys.product.all,
+  queryKeys.problems.all,
+  queryKeys.search.all,
+  queryKeys.dashboard.counts,
+] as const satisfies readonly QueryKey[];
+
+export function normalizeTRPCQueryKey(key: QueryKey): QueryKey {
+  if (key.length === 0) return key;
+  return Array.isArray(key[0]) ? key : [key];
+}
+
+export function invalidateTRPCQueries(
+  queryClient: QueryClient,
+  keys: readonly QueryKey[],
+) {
+  for (const key of keys) {
+    void queryClient.invalidateQueries({
+      queryKey: normalizeTRPCQueryKey(key),
+    });
+  }
+}
+
+export async function cancelTRPCQueries(
+  queryClient: QueryClient,
+  keys: readonly QueryKey[],
+) {
+  await Promise.all(
+    keys.map((key) =>
+      queryClient.cancelQueries({ queryKey: normalizeTRPCQueryKey(key) }),
+    ),
+  );
+}

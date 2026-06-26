@@ -18,7 +18,7 @@
 import type { ProductId } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
 import {
   Check,
@@ -51,7 +51,12 @@ import {
 } from "~/app/_components/form-utils";
 import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
 import { BarcodeScannerButton } from "~/app/_components/inventory/barcode-scanner-button";
-import { useUpcLookup } from "~/app/_components/inventory/hooks";
+import {
+  useCreateInventoryMutation,
+  useInventoryInvalidation,
+  useProductLookupInvalidation,
+  useUpcLookup,
+} from "~/app/_components/inventory/hooks";
 import {
   BARCODE_FORMATS,
   PersistentScanner,
@@ -71,9 +76,13 @@ import { Kbd } from "~/components/ui/kbd";
 import { Label } from "~/components/ui/label";
 import { Spinner } from "~/components/ui/spinner";
 import { Switch } from "~/components/ui/switch";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/components/ui/tooltip";
 import { EntityIcon } from "~/entities/entities";
 import { getErrorMessage } from "~/lib/error-utils";
-import { queryKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 
 // Schema for the entire form using shared field schema
@@ -109,7 +118,8 @@ export default function QuickCaptureForm({
   const [showInventory, setShowInventory] = useState(true);
   const [scannerEnabled, setScannerEnabled] = useState(initialScannerMode);
   const [recentScans, setRecentScans] = useState<RecentScanItem[]>([]);
-  const queryClient = useQueryClient();
+  const invalidateInventory = useInventoryInvalidation();
+  const invalidateProductLookup = useProductLookupInvalidation();
 
   // Initialize the form
   const form = useForm<QuickCaptureFormValues>({
@@ -216,24 +226,14 @@ export default function QuickCaptureForm({
   // Bulk process mutation
   const bulkProcessMutation = useMutation(
     api.inventory.bulkProcess.mutationOptions({
-      onSuccess: () => {
-        // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
-        queryClient.invalidateQueries({
-          queryKey: [queryKeys.inventory.list],
-        });
-        // Persisted per-location valuations were recomputed server-side.
-        queryClient.invalidateQueries({ queryKey: [queryKeys.location.all] });
-      },
+      onSuccess: invalidateInventory,
     }),
   );
 
   // Find or create product by UPC
   const findOrCreateByUPCMutation = useMutation(
     api.product.findOrCreateByUPC.mutationOptions({
-      onSuccess: () => {
-        // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
-        queryClient.invalidateQueries({ queryKey: [queryKeys.product.all] });
-      },
+      onSuccess: invalidateProductLookup,
     }),
   );
 
@@ -259,16 +259,7 @@ export default function QuickCaptureForm({
   );
 
   // Inventory create mutation for persistent scanner mode
-  const createInventoryMutation = useMutation(
-    api.inventory.create.mutationOptions({
-      onSuccess: () => {
-        queryClient.invalidateQueries({
-          queryKey: [queryKeys.inventory.list],
-        });
-        queryClient.invalidateQueries({ queryKey: [queryKeys.location.all] });
-      },
-    }),
-  );
+  const createInventoryMutation = useCreateInventoryMutation();
 
   // UPC lookup for persistent scanner
   const { lookupUpc, isPending: isUpcPending } = useUpcLookup();
@@ -586,10 +577,24 @@ export default function QuickCaptureForm({
         <h3 className="font-medium text-lg">
           {scannerEnabled ? "Manual Entry" : "Add Items"}
         </h3>
-        <Button type="button" onClick={addInventoryItem} size="sm">
-          <Plus className="mr-1 h-4 w-4" />
-          Add Row <Kbd className="ml-1">Ctrl+N</Kbd>
-        </Button>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                type="button"
+                onClick={addInventoryItem}
+                size="sm"
+                aria-label="Add row. Shortcut: Ctrl+N"
+              />
+            }
+          >
+            <Plus className="mr-1 h-4 w-4" />
+            Add Row
+          </TooltipTrigger>
+          <TooltipContent>
+            Add row <Kbd className="ml-1">Ctrl+N</Kbd>
+          </TooltipContent>
+        </Tooltip>
       </Row>
 
       <Stack gap="sm">
@@ -722,21 +727,6 @@ export default function QuickCaptureForm({
           )}
         </Card>
       )}
-
-      <div className="mt-4 text-muted-foreground text-sm">
-        <p>Keyboard shortcuts:</p>
-        <ul className="list-inside list-disc">
-          <li>
-            <Kbd>Ctrl+Enter</Kbd> - Save all items
-          </li>
-          <li>
-            <Kbd>Ctrl+N</Kbd> - Add new item (copies location from above)
-          </li>
-          <li>
-            <Kbd>Tab</Kbd> - Navigate fields
-          </li>
-        </ul>
-      </div>
     </FormWrapper>
   );
 }

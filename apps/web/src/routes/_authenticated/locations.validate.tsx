@@ -1,14 +1,7 @@
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
 import { LocationValidateForm } from "~/app/locations/validate/location-validate-form";
-import { PageWrapper } from "~/components/layout/page-wrapper";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card";
+import { Page } from "~/components/page/Page";
 
 const searchSchema = z.object({
   parentId: z.string().optional().catch(undefined),
@@ -26,19 +19,14 @@ function LocationValidatePage() {
   const { parentId } = Route.useSearch();
 
   return (
-    <PageWrapper>
-      <Card>
-        <CardHeader>
-          <CardTitle>Validate Location</CardTitle>
-          <CardDescription>
-            Scan QR codes on child locations to verify they are where the system
-            expects them
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <LocationValidateForm initialParentId={parentId} />
-        </CardContent>
-      </Card>
-    </PageWrapper>
+    <Page
+      variant="list"
+      title="Validate location"
+      eyebrow="Locations"
+      compact
+      decoration="none"
+    >
+      <LocationValidateForm initialParentId={parentId} />
+    </Page>
   );
 }

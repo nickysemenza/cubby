@@ -2,6 +2,7 @@ import type { QueryKey, UseMutationOptions } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getErrorMessage } from "~/lib/error-utils";
+import { invalidateTRPCQueries } from "~/lib/query-keys";
 
 /** A tRPC `*.mutationOptions` reference, e.g. `api.ingredient.create.mutationOptions`. */
 type MutationOptionsFn = (opts: never) => UseMutationOptions<
@@ -60,10 +61,7 @@ export function useActionMutation<TFn extends MutationOptionsFn>({
   const mutationOptions = mutationFn({
     onSuccess: (data: DataOf<TFn>) => {
       toast.success(typeof success === "function" ? success(data) : success);
-      for (const key of invalidateKeys) {
-        // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
-        void queryClient.invalidateQueries({ queryKey: [key] });
-      }
+      invalidateTRPCQueries(queryClient, invalidateKeys);
       onSuccess?.(data);
     },
     onError: (err: unknown) => {

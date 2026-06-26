@@ -10,10 +10,11 @@
  */
 
 import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
+import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient-responses";
 import type {
   RecipeCostingExplain,
+  RecipeGraphOut,
   RecipeMacroColumn,
-  RecipeOut,
   RecipeTotals,
 } from "@cubby/schemas/recipe";
 import { RECIPE_MACRO_KEYS, recipeTotals } from "@cubby/schemas/recipe";
@@ -24,6 +25,7 @@ import {
   type CostingRow,
   computeRecipeCosting,
   flattenSections,
+  type RecipeCostingInput,
 } from "~/lib/recipe-costing";
 import {
   collectIngredientIds,
@@ -52,10 +54,7 @@ import {
   updateRecipeTotalsBatch,
 } from "~/server/repo/recipe/totals";
 import { TraceNames, withTrace } from "~/server/tracing";
-import type {
-  IngredientService,
-  IngredientWithFoodLeanOut,
-} from "./ingredient.service";
+import type { IngredientService } from "./ingredient.service";
 
 const toRecipeTotals = (t: CalculateTotalsResult): RecipeTotals => {
   // Upper bounds only when the recipe has ranged amounts (additive — absent
@@ -167,14 +166,14 @@ export class RecipeCostingService {
    * closure of sub-recipes (recipe-as-ingredient, cycle-guarded) and the
    * USDA-enriched ingredient map.
    */
-  private async loadContext(recipes: RecipeOut[]): Promise<{
+  private async loadContext(recipes: RecipeCostingInput[]): Promise<{
     ingMap: Record<string, IngredientWithFoodLeanOut>;
-    recipeMap: Record<string, RecipeOut>;
+    recipeMap: Record<string, RecipeGraphOut>;
   }> {
     return withTrace(
       TraceNames.service("recipeCosting", "loadContext"),
       async (span) => {
-        const recipeMap: Record<string, RecipeOut> = {};
+        const recipeMap: Record<string, RecipeGraphOut> = {};
         const seen = new Set<string>();
         let frontier = collectSubRecipeIds(recipes);
         while (frontier.length > 0) {
@@ -213,7 +212,7 @@ export class RecipeCostingService {
    * than bake in.
    */
   async computeTotals(
-    recipes: RecipeOut[],
+    recipes: RecipeCostingInput[],
   ): Promise<Map<RecipeId, { totals: RecipeTotals; complete: boolean }>> {
     return withTrace(
       TraceNames.service("recipeCosting", "computeTotals"),
@@ -225,7 +224,7 @@ export class RecipeCostingService {
   }
 
   private async computeTotalsInner(
-    recipes: RecipeOut[],
+    recipes: RecipeCostingInput[],
   ): Promise<Map<RecipeId, { totals: RecipeTotals; complete: boolean }>> {
     const { ingMap, recipeMap } = await this.loadContext(recipes);
 
@@ -586,27 +585,26 @@ export class RecipeCostingService {
   /**
    * The single entry for recompute triggered by a request-path mutation. A small
    * set ({@link RECOMPUTE_INLINE_MAX} or fewer) recomputes inline — instant
-   * totals, no budget risk. A larger set, in production (the `RECOMPUTE_QUEUE`
-   * binding present), is marked stale and fanned into bounded chunks (one message
-   * each), so each chunk drains in its own invocation with a fresh CPU/memory
-   * budget — this is what stops a popular-ingredient edit / merge / bulk import
-   * from overrunning the Workers per-invocation budget and killing the mutation.
-   * On the dev Node server (no binding) everything recomputes inline (no
-   * per-invocation budget). Returns the count recomputed (inline) or queued.
+   * totals, no budget risk. Every dispatch first marks the affected recipes
+   * stale; a failed inline recompute therefore leaves a visible maintenance gap
+   * instead of a fresh-looking wrong total. A larger set, in production (the
+   * `RECOMPUTE_QUEUE` binding present), is fanned into bounded chunks (one
+   * message each), so each chunk drains in its own invocation with a fresh
+   * CPU/memory budget. On the dev Node server (no binding) everything recomputes
+   * inline. Returns the count recomputed (inline) or queued.
    */
   async dispatchRecompute(recipeIds: RecipeId[]): Promise<number> {
     const ids = uniq(recipeIds);
     if (ids.length === 0) return 0;
+    // Correctness floor for both inline and deferred paths: callers may have
+    // already committed the triggering write, so stamp stale before any work
+    // that can fail independently.
+    await markRecipesStale(this.db, ids);
     const queue = getRecomputeQueue();
     if (!queue || ids.length <= RECOMPUTE_INLINE_MAX) {
       return await this.recompute(ids);
     }
-    // Deferred: mark stale (unconditionally — the durable "these are pending"
-    // floor) so the rows read as pending, and a stuck wave is countable on
-    // Settings → Maintenance (countStaleRecipeTotals) + healable by recompute-all,
-    // until the targeted queue chunks drain.
     const startedAtMs = Date.now();
-    await markRecipesStale(this.db, ids);
     const batchId = newRecomputeBatchId();
     await this.enqueueTargetedChunks(ids, batchId, startedAtMs);
     console.log(

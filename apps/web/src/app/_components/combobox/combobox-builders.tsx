@@ -5,13 +5,13 @@ import type {
   RecipeId,
 } from "@cubby/schemas/identifiers";
 import type { LocationOut } from "@cubby/schemas/location";
-import type { ProductTopLevelOut } from "@cubby/schemas/product";
+import type { ProductPickerItemOut } from "@cubby/schemas/product";
 import type { RecipeListItem } from "@cubby/schemas/recipe";
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 
 export const buildProductComboboxItem = (
-  product: ProductTopLevelOut,
+  product: ProductPickerItemOut,
 ): ComboboxItem<ProductId> => ({
   id: product.id,
   name: `${product.name} (${product.manufacturer})`,

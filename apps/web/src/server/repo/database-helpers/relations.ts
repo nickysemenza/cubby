@@ -191,6 +191,12 @@ export const relations = {
     },
   },
   inventory: {
+    list: {
+      with: {
+        product: true,
+        location: true,
+      },
+    },
     full: {
       with: {
         product: {

@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { CookbookImport } from "~/app/_components/recipe/cookbook-import";
-import { PageWrapper } from "~/components/layout/page-wrapper";
+import { Page } from "~/components/page/Page";
 
 // `?from=<cookbookId>` re-opens that cookbook's stored extraction for selective
 // re-import (the "Add from source" path); absent for the normal drag-EPUB flow.
@@ -18,8 +18,14 @@ export const Route = createFileRoute("/_authenticated/recipes/import-cookbook")(
 function ImportCookbookPage() {
   const { from } = Route.useSearch();
   return (
-    <PageWrapper>
+    <Page
+      variant="list"
+      title="Import cookbook"
+      entity="recipe"
+      compact
+      decoration="none"
+    >
       <CookbookImport loadCookbookId={from} />
-    </PageWrapper>
+    </Page>
   );
 }

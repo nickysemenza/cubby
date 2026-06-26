@@ -1,10 +1,16 @@
 import type { RecipeId } from "@cubby/schemas/identifiers";
-import type { RecipeOut, SectionIngredientOut } from "@cubby/schemas/recipe";
+import type {
+  RecipeGraphOut,
+  RecipeOut,
+  SectionIngredientOut,
+} from "@cubby/schemas/recipe";
 import type { RecipeCosting } from "~/lib/recipe-costing";
 import {
   computeScalingPercentages,
   pickDefaultBaseRowId,
 } from "./recipe-scaling-pct";
+
+type RecipeTreeRecipe = RecipeOut | RecipeGraphOut;
 
 // A recipe expanded into its full sub-recipe tree for the prep-sheet and
 // nested-spec views. Pure + alias-free (only type-only imports from
@@ -60,7 +66,7 @@ type RecipeTreeSection = {
 };
 
 export type RecipeTreeNode = {
-  recipe: RecipeOut;
+  recipe: RecipeTreeRecipe;
   costing: RecipeCosting | null;
   /** 0 = root. */
   depth: number;
@@ -107,7 +113,7 @@ const MASS_TO_GRAMS: Record<string, number> = {
 };
 
 /** A recipe's yield expressed in grams, or null when its unit isn't a mass. */
-const yieldGrams = (recipe: RecipeOut): number | null => {
+const yieldGrams = (recipe: RecipeTreeRecipe): number | null => {
   const y = recipe.yield;
   if (!y?.value) return null;
   const factor = MASS_TO_GRAMS[y.unit.toLowerCase().trim()];
@@ -121,7 +127,7 @@ const yieldGrams = (recipe: RecipeOut): number | null => {
  * reference amount shares the yield's unit, else null.
  */
 const yieldUnitRatio = (
-  recipe: RecipeOut,
+  recipe: RecipeTreeRecipe,
   amounts: readonly { value: number; unit: string }[],
 ): number | null => {
   const y = recipe.yield;
@@ -140,10 +146,10 @@ const yieldUnitRatio = (
 export const buildRecipeTree = (
   root: RecipeOut,
   costingById: Map<string, RecipeCosting>,
-  recipeMap: Record<string, RecipeOut>,
+  recipeMap: Record<string, RecipeGraphOut>,
 ): RecipeTreeNode => {
   const buildNode = (
-    recipe: RecipeOut,
+    recipe: RecipeTreeRecipe,
     depth: number,
     cumulativeFactor: number,
     visited: ReadonlySet<RecipeId>,

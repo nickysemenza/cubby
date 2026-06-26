@@ -1,3 +1,4 @@
+import type { QueryKey } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Trash } from "lucide-react";
@@ -5,6 +6,7 @@ import { type FC, useCallback, useState } from "react";
 import { toast } from "sonner";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { Button } from "~/components/ui/button";
+import { invalidateTRPCQueries } from "~/lib/query-keys";
 
 interface UseEntityDeleteOptions {
   /** Entity ID */
@@ -19,7 +21,7 @@ interface UseEntityDeleteOptions {
     onError: (err: { message?: string }) => void;
   }) => unknown;
   /** Query keys to invalidate on success */
-  invalidateKeys: readonly unknown[][];
+  invalidateKeys: readonly QueryKey[];
   /** Route to navigate to after deletion */
   redirectTo: string;
 }
@@ -56,10 +58,7 @@ export function useEntityDelete({
     mutationOptions({
       onSuccess: () => {
         toast.success(`${entityLabel} deleted`);
-        for (const key of invalidateKeys) {
-          // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
-          void queryClient.invalidateQueries({ queryKey: [key as unknown[]] });
-        }
+        invalidateTRPCQueries(queryClient, invalidateKeys);
         void navigate({ to: redirectTo });
       },
       onError: (err) => {

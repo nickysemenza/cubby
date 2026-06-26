@@ -1,7 +1,7 @@
-import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
+import type { inventoryListItemOut } from "@cubby/schemas/inventory-responses";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { createColumnHelper, type Row } from "@tanstack/react-table";
-import { ArrowRightLeft, Trash } from "lucide-react";
+import { ArrowRightLeft, ImageIcon, Trash } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { z } from "zod";
@@ -13,7 +13,6 @@ import { useTRPC } from "~/trpc/react";
 import {
   createCreatedAtColumn,
   createCurrencyColumn,
-  createImageColumn,
   createSingleEntityPillColumn,
 } from "../_components/data-table/columnHelpers";
 import {
@@ -31,9 +30,26 @@ import { InventoryShelf } from "../_components/inventory/inventory-shelf";
 import { MoveInventoryDialog } from "../_components/inventory/move-inventory-dialog";
 import type { InventoryItem } from "../_components/locations/calculate-inventory-valuation";
 import { InventoryValuationSummary } from "../_components/locations/inventory-valuation-summary";
+import {
+  ProductImageSummariesProvider,
+  useHydratedProductImages,
+} from "../_components/products/product-image-summaries";
+import { ImageThumbnail } from "../_components/table/ImageThumbnail";
 import { TableLink } from "../_components/table/TableLink";
 
-type InventoryListItem = z.infer<typeof inventoryWithLocationAndProductOut>;
+type InventoryListItem = z.infer<typeof inventoryListItemOut>;
+
+function InventoryProductImageCell({ productId }: { productId: string }) {
+  const images = useHydratedProductImages(productId);
+  return (
+    <ImageThumbnail
+      images={images}
+      alt="Image"
+      lazyPreview={true}
+      entity="inventory"
+    />
+  );
+}
 
 export function InventoryItemList() {
   const api = useTRPC();
@@ -63,7 +79,7 @@ export function InventoryItemList() {
   const deletableConfig = useDeletableConfig({
     mutationFn: api.inventory.delete.mutationOptions,
     entityLabel: "Inventory Entry",
-    invalidateKeys: [[queryKeys.inventory.list], [queryKeys.location.all]],
+    invalidateKeys: [queryKeys.inventory.all, queryKeys.location.all],
   });
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: navigate is stable
@@ -121,9 +137,17 @@ export function InventoryItemList() {
     }),
     // Inventory has custom columns (product image, amount instead of name)
     columns: [
-      createImageColumn(columnHelper, {
-        getImages: (row) => row.product.images,
-        entity: "inventory",
+      columnHelper.accessor((row) => row.product.id, {
+        id: "image",
+        header: () => <ImageIcon className="h-3 w-3 text-muted-foreground" />,
+        enableSorting: false,
+        meta: {
+          className: "h-px w-10 overflow-hidden px-0 py-0",
+          mobile: { slot: "image", priority: -10 },
+        },
+        cell: (info) => (
+          <InventoryProductImageCell productId={info.getValue()} />
+        ),
       }),
       columnHelper.accessor("amount", {
         header: "Qty",
@@ -199,6 +223,7 @@ export function InventoryItemList() {
 
   const [view, setView] = useState<ShelfView>("table");
   const items = table.getRowModel().rows.map((r) => r.original);
+  const productIds = items.map((item) => item.product.id);
 
   // Swipe-to-reveal Move/Delete on mobile rows — same flows as the ⋮ menu
   // (Move opens the single-item dialog, Delete the optimistic confirm).
@@ -220,7 +245,7 @@ export function InventoryItemList() {
   );
 
   return (
-    <div>
+    <ProductImageSummariesProvider productIds={productIds}>
       <AiSearchBar table={table} />
       <FlexRow align="center" justify="between" gap="sm" className="mb-4">
         <div className="min-w-0">
@@ -284,6 +309,6 @@ export function InventoryItemList() {
           onSuccess={() => setBulkMoveItems([])}
         />
       )}
-    </div>
+    </ProductImageSummariesProvider>
   );
 }

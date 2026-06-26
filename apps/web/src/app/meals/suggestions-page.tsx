@@ -1,7 +1,6 @@
 import type { RecipeAvailability } from "@cubby/schemas/availability";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Grid, Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -9,17 +8,25 @@ import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { StatusText } from "~/components/ui/status-text";
 import { useTRPC } from "~/trpc/react";
+import {
+  type MealSuggestionFilter,
+  mealSuggestionFilters,
+} from "./meal-search";
 
-/** Filter presets for the minimum-coverage control. */
-const FILTERS = [
-  { label: "All", minCoverage: 0 },
-  { label: "Almost there", minCoverage: 0.5 },
-  { label: "Ready", minCoverage: 1 },
-] as const;
+interface MealSuggestionsPageProps {
+  filter: MealSuggestionFilter;
+  onFilterChange: (filter: MealSuggestionFilter) => void;
+}
 
-export function MealSuggestionsPage() {
+export function MealSuggestionsPage({
+  filter,
+  onFilterChange,
+}: MealSuggestionsPageProps) {
   const api = useTRPC();
-  const [minCoverage, setMinCoverage] = useState(0);
+  const activeFilter =
+    mealSuggestionFilters.find((f) => f.value === filter) ??
+    mealSuggestionFilters[0];
+  const minCoverage = activeFilter.minCoverage;
 
   const { data, isLoading, error } = useQuery(
     api.suggestions.getMakeable.queryOptions({ minCoverage }),
@@ -28,13 +35,13 @@ export function MealSuggestionsPage() {
   return (
     <Stack>
       <Row align="center" wrap gap="sm">
-        {FILTERS.map((f) => (
+        {mealSuggestionFilters.map((f) => (
           <Button
             key={f.label}
             type="button"
             size="sm"
-            variant={minCoverage === f.minCoverage ? "default" : "outline"}
-            onClick={() => setMinCoverage(f.minCoverage)}
+            variant={activeFilter.value === f.value ? "default" : "outline"}
+            onClick={() => onFilterChange(f.value)}
           >
             {f.label}
           </Button>

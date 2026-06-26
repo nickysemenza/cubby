@@ -110,13 +110,13 @@ function StatCard({ entity, count, isLoading, isError }: StatCardProps) {
           "p-2 transition-all duration-150 ease-cozy",
           "hover:-translate-y-0.5 hover:shadow-[var(--shadow-chunky)]",
           "cursor-pointer border-l-4",
-          def.color.text.replace("text-", "border-l-"),
+          def.color.border,
         )}
       >
         <div className="flex flex-col items-start gap-2">
           <IconTile
             size="sm"
-            className={cn("bg-gradient-to-br", def.color.bg, def.color.text)}
+            className={cn(def.color.bg, def.color.text)}
             style={{ boxShadow: "var(--shadow-inset-gloss)" }}
           >
             <Icon />

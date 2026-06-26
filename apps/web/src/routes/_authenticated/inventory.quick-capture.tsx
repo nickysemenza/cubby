@@ -1,14 +1,7 @@
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
 import QuickCaptureForm from "~/app/inventory/quick-capture/quick-capture-form";
-import { PageWrapper } from "~/components/layout/page-wrapper";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card";
+import { Page } from "~/components/page/Page";
 import { useIsMobile } from "~/hooks/useMobile";
 
 const searchSchema = z.object({
@@ -28,6 +21,7 @@ export const Route = createFileRoute("/_authenticated/inventory/quick-capture")(
     validateSearch: searchSchema,
     search: { middlewares: [stripSearchParams(searchDefaults)] },
     component: QuickCapturePage,
+    head: () => ({ meta: [{ title: "Quick capture | cubby" }] }),
   },
 );
 
@@ -49,24 +43,18 @@ function QuickCapturePage() {
   }
 
   return (
-    <PageWrapper>
-      <Card>
-        <CardHeader>
-          <CardTitle>Add Inventory</CardTitle>
-          <CardDescription>
-            {scanner
-              ? "Scan barcodes to quickly add items to inventory"
-              : "Quickly add inventory items by scanning barcodes or typing"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <QuickCaptureForm
-            initialLocationId={locationId}
-            initialProductId={productId}
-            initialScannerMode={scanner}
-          />
-        </CardContent>
-      </Card>
-    </PageWrapper>
+    <Page
+      variant="list"
+      eyebrow="Quick capture"
+      title={scanner ? "Scan inventory" : "Add inventory"}
+      compact
+      decoration="none"
+    >
+      <QuickCaptureForm
+        initialLocationId={locationId}
+        initialProductId={productId}
+        initialScannerMode={scanner}
+      />
+    </Page>
   );
 }

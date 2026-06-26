@@ -24,16 +24,19 @@ import {
   type ProblemsCoverage,
   type ProblemsFast,
   type ProblemsUpc,
+  type ProductWithBetterUpcData,
   type ProductWithIslandedMappings,
 } from "@cubby/schemas/problems";
 import { isMiscProduct } from "@cubby/shared";
 import { sum, uniq, uniqBy } from "es-toolkit";
+import { env } from "~/env";
 import {
   BASE_KINDS,
   conversionCoverage,
   gradedKinds,
 } from "~/lib/conversion-coverage";
 import { getErrorMessage } from "~/lib/error-utils";
+import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { isMoneyUnit } from "~/lib/price-mapping-utils";
 import { wasm } from "~/lib/wasm";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
@@ -53,8 +56,8 @@ import {
   findLinkedProductIds,
   findLocationsWithoutAiDescription,
   findOrphanedProducts,
-  findProductsWithBetterUpcData,
   findProductsWithoutMappings,
+  findProductsWithUpcGaps,
   findStaleIngredientParses,
   findUnusedIngredients,
   loadProductsForCoverage,
@@ -426,6 +429,56 @@ export const findCoverageProblems = (
 ): Promise<ProblemsCoverage> => findProductCoverageProblems(db, usdaClient);
 
 // UPC-lookup network detector.
+const findProductsWithBetterUpcData = async (
+  db: Database,
+  upcLookupClient: UPCLookupClient,
+): Promise<ProductWithBetterUpcData[]> => {
+  const candidates = await findProductsWithUpcGaps(db);
+  const lookups = await upcLookupClient.lookupBatch(
+    candidates.map((c) => c.upc),
+  );
+
+  const problems: ProductWithBetterUpcData[] = [];
+  for (const cand of candidates) {
+    const lookup = lookups.get(cand.upc);
+    if (!lookup) continue;
+
+    const proposed = {
+      manufacturer:
+        isUnspecifiedManufacturer(cand.manufacturer) &&
+        !isUnspecifiedManufacturer(lookup.manufacturer ?? lookup.brand)
+          ? (lookup.manufacturer ?? lookup.brand)
+          : null,
+      price:
+        cand.price == null && lookup.priceDollars != null
+          ? lookup.priceDollars
+          : null,
+      imageUrl:
+        !cand.hasImage && lookup.imageUrl
+          ? new URL(lookup.imageUrl, env.UPC_LOOKUP_API_URL).toString()
+          : null,
+    };
+
+    if (
+      proposed.manufacturer == null &&
+      proposed.price == null &&
+      proposed.imageUrl == null
+    ) {
+      continue;
+    }
+
+    problems.push({
+      id: cand.id,
+      name: cand.name,
+      manufacturer: cand.manufacturer,
+      upc: cand.upc,
+      proposed,
+    });
+  }
+
+  return problems;
+};
+
 export const findUpcProblems = async (
   db: Database,
   upcLookupClient: UPCLookupClient,

@@ -84,6 +84,12 @@ describe("product router", () => {
     // Should return all products
     expect(allProducts.items.length).toEqual(3);
     expect(allProducts.meta.totalCount).toEqual(3);
+    expect(allProducts.items.every((product) => !("food" in product))).toBe(
+      true,
+    );
+    expect(
+      allProducts.items.every((product) => !("recipeUsages" in product)),
+    ).toBe(true);
 
     // Test filtering by name
     const appleProducts = await caller.list(
@@ -115,6 +121,28 @@ describe("product router", () => {
     expect(upcProducts.items.length).toEqual(1);
     expect(upcProducts.meta.totalCount).toEqual(1);
     expect(upcProducts.items[0]!.upc).toEqual("123456789012");
+  });
+
+  it("hydrates USDA food summaries separately from the list path", async () => {
+    const caller = createTestCaller(productRouter, ctx.db);
+    const createdProduct = await caller.create(
+      makeProductInput({
+        name: "Hydration Product",
+        manufacturer: "Hydration Co",
+        upc: "123456789012",
+        pendingImageIds: [],
+        expectedQuantity: 1,
+      }),
+    );
+
+    const listResult = await caller.list(
+      listParams({ filters: { nameFilter: "Hydration Product" } }),
+    );
+    expect(listResult.items).toHaveLength(1);
+    expect("food" in listResult.items[0]!).toBe(false);
+
+    const hydrated = await caller.foodSummaries({ ids: [createdProduct.id] });
+    expect(hydrated).toHaveProperty(createdProduct.id);
   });
 
   it("should update a product", async () => {

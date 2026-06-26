@@ -1,4 +1,5 @@
 import type { ProductCreateInput } from "@cubby/schemas/product";
+import type { ProductWithFoodOut } from "@cubby/schemas/product-responses";
 import { uniq } from "es-toolkit";
 import { Apple, ChefHat, Info, Scale } from "lucide-react";
 import type { FC } from "react";
@@ -7,7 +8,6 @@ import { Page } from "~/components/page/Page";
 import { Description } from "~/components/ui/description";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { formatCurrency } from "~/lib/utils";
-import type { ProductWithFoodOut } from "~/server/services/product.service";
 import { useTRPC } from "~/trpc/react";
 import {
   type DetailHeroStat,

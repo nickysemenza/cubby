@@ -1,5 +1,6 @@
-import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
+import type { EnrichmentRow } from "@cubby/schemas/ingredient-responses";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
+import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { Check, Plus, X } from "lucide-react";
 import {
   type ReactNode,
@@ -23,7 +24,6 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { queryKeys } from "~/lib/query-keys";
 import { savedWithRecompute } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
-import type { EnrichmentRow } from "~/server/services/ingredient.service";
 import { useTRPC } from "~/trpc/react";
 import {
   analyzeGaps,
@@ -380,7 +380,7 @@ export function EnrichmentEditor({
     error: (err) => `Failed to update: ${getErrorMessage(err)}`,
   });
 
-  const naKinds = row.naKinds ?? [];
+  const naKinds = row.naKinds;
   const toggleNaKind = (kind: BaseKind) => {
     const next = new Set(naKinds);
     if (next.has(kind)) next.delete(kind);

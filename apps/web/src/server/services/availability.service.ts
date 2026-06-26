@@ -6,6 +6,7 @@ import type {
 } from "@cubby/schemas/availability";
 import type { Amount } from "@cubby/schemas/codec";
 import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
+import type { IngredientWithFoodOut } from "@cubby/schemas/ingredient-responses";
 import type { SectionIngredientOut } from "@cubby/schemas/recipe";
 import { uniq } from "es-toolkit";
 import {
@@ -17,10 +18,7 @@ import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import { getInventoryForProducts } from "~/server/repo/inventory";
 import { getRecipeByID } from "~/server/repo/recipe";
-import type {
-  IngredientService,
-  IngredientWithFoodOut,
-} from "./ingredient.service";
+import type { IngredientService } from "./ingredient.service";
 
 // Output types live in @cubby/schemas/availability (single source of truth, shared
 // with the suggestions router's .output()).

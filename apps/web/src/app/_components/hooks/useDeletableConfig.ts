@@ -1,3 +1,4 @@
+import type { QueryKey } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 /**
@@ -16,7 +17,7 @@ export function useDeletableConfig<T>({
     onError: (err: { message?: string }) => void;
   }) => T;
   entityLabel: string;
-  invalidateKeys: readonly unknown[][];
+  invalidateKeys: readonly QueryKey[];
 }) {
   return useMemo(
     () => ({

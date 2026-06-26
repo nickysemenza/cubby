@@ -1,3 +1,4 @@
+import type { ProductWithFoodOut } from "@cubby/schemas/product-responses";
 import { Link } from "@tanstack/react-router";
 import { Package } from "lucide-react";
 import type { FC } from "react";
@@ -9,7 +10,6 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { queryKeys } from "~/lib/query-keys";
 import { savedWithRecompute } from "~/lib/recompute-summary";
 import { formatCurrency } from "~/lib/utils";
-import type { ProductWithFoodOut } from "~/server/services/product.service";
 import { useTRPC } from "~/trpc/react";
 import { EditableCell } from "../data-table/editable-cell";
 import { EntityPillLink } from "../EntityPill";
@@ -51,7 +51,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
     entityLabel: "Product",
     mutationOptions: (callbacks) =>
       api.product.delete.mutationOptions(callbacks),
-    invalidateKeys: [[queryKeys.product.all]],
+    invalidateKeys: [queryKeys.product.all],
     redirectTo: "/products",
   });
 

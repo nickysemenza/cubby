@@ -4,10 +4,13 @@
  * resolve-or-create primitives.
  */
 
-import type { IngredientWithRecipesAndProductOut } from "@cubby/schemas/combo";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { IngredientId } from "@cubby/schemas/identifiers";
-import type { ingredientBase } from "@cubby/schemas/ingredient";
+import type {
+  ingredientCreateInput,
+  ingredientUpdateData,
+} from "@cubby/schemas/ingredient";
+import type { IngredientWithRecipesAndProductOut } from "@cubby/schemas/ingredient-responses";
 import { and, eq } from "drizzle-orm";
 import type { z } from "zod";
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -23,7 +26,8 @@ import {
   unwrapDb,
   updateAndReturn,
 } from "~/server/repo/database-helpers";
-import { buildIngredientWhere, dbIngredientToAPI } from "./internal-types";
+import { buildIngredientWhere } from "./internal-types";
+import { dbIngredientToAPI } from "./mappers";
 
 export const getIngredientByID = async (db: Database, id: IngredientId) => {
   const ingredientData = await getDb(db).query.ingredient.findFirst({
@@ -40,12 +44,13 @@ export const getIngredientByID = async (db: Database, id: IngredientId) => {
 
 export const createIngredient = async (
   db: Database | DrizzleTransaction,
-  data: z.infer<typeof ingredientBase>,
+  data: z.input<typeof ingredientCreateInput>,
   actor: ActorContext,
 ): Promise<IngredientWithRecipesAndProductOut> => {
   const newIngredient = await insertAndReturn(db, ingredient, {
     name: data.name,
     aliases: data.aliases || [],
+    naKinds: data.naKinds ?? [],
   });
 
   // Log audit entry
@@ -73,7 +78,7 @@ export const createIngredient = async (
 export const updateIngredient = async (
   db: Database,
   id: IngredientId,
-  data: Partial<z.infer<typeof ingredientBase>>,
+  data: z.infer<typeof ingredientUpdateData>,
   actor: ActorContext,
 ): Promise<IngredientWithRecipesAndProductOut> => {
   // Capture before state for audit logging

@@ -2,6 +2,14 @@ packages:
   - apps/*
   - packages/*
 
+overrides:
+  vite: ^8.0.0
+
+packageExtensions:
+  "@hookform/resolvers":
+    peerDependencies:
+      zod: ^4.0.0
+
 onlyBuiltDependencies:
   - better-sqlite3
   - esbuild

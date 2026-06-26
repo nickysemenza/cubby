@@ -1,5 +1,5 @@
 import type { AuditEntityType } from "@cubby/schemas/audit";
-import type { ActorContext } from "@cubby/schemas/context";
+import type { ActorContext, AuditSource } from "@cubby/schemas/context";
 import { and, desc, eq, lt } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { auditLog } from "~/server/db/schema";
@@ -25,7 +25,13 @@ type AuditLogUser = {
 } | null;
 
 // Output type for audit log entries with user relation
-type AuditLogRow = typeof auditLog.$inferSelect & {
+type AuditLogRow = Omit<
+  typeof auditLog.$inferSelect,
+  "action" | "changes" | "source"
+> & {
+  action: AuditAction;
+  changes: Record<string, { from: unknown; to: unknown }> | null;
+  source: AuditSource;
   user: AuditLogUser;
 };
 
@@ -169,7 +175,14 @@ export async function getAuditLog(
 
   // Determine if there are more entries
   const hasMore = entries.length > params.limit;
-  const returnEntries = hasMore ? entries.slice(0, params.limit) : entries;
+  const returnEntries: AuditLogRow[] = (
+    hasMore ? entries.slice(0, params.limit) : entries
+  ).map((entry) => ({
+    ...entry,
+    action: entry.action as AuditAction,
+    source: entry.source as AuditSource,
+    changes: entry.changes ?? null,
+  }));
   const nextCursor = hasMore
     ? returnEntries[returnEntries.length - 1]?.createdAt.toISOString()
     : undefined;

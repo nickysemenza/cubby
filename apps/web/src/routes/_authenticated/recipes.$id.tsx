@@ -15,11 +15,11 @@ import RecipeDetail, {
   remapLegacyView,
 } from "~/app/_components/recipe/RecipeDetail";
 import { AddToMeal } from "~/app/meals/add-to-meal";
-import { PageWrapper } from "~/components/layout/page-wrapper";
 import { Page } from "~/components/page/Page";
 import { RouteErrorComponent } from "~/components/route-error";
 import { DetailPagePending } from "~/components/route-pending";
 import { Button } from "~/components/ui/button";
+import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 import { queryKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
@@ -67,9 +67,12 @@ export const Route = createFileRoute("/_authenticated/recipes/$id")({
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,
   notFoundComponent: () => (
-    <PageWrapper>
-      <div>Recipe not found</div>
-    </PageWrapper>
+    <Page variant="list" title="Recipe not found" entity="recipe" compact>
+      <Empty>
+        <EmptyTitle>Recipe not found</EmptyTitle>
+        <EmptyDescription>This recipe is no longer available.</EmptyDescription>
+      </Empty>
+    </Page>
   ),
   component: RecipeDetailPage,
 });
@@ -112,7 +115,7 @@ function RecipeDetailPage() {
     entityLabel: "Recipe",
     mutationOptions: (callbacks) =>
       api.recipe.delete.mutationOptions(callbacks),
-    invalidateKeys: [[queryKeys.recipe.list]],
+    invalidateKeys: [queryKeys.recipe.list],
     redirectTo: "/recipes",
   });
 

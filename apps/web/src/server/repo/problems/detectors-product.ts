@@ -26,10 +26,8 @@ import {
   notExists,
   sql,
 } from "drizzle-orm";
-import { env } from "~/env";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
-import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { Database } from "~/server/db";
 import {
   inventoryEntry,
@@ -45,6 +43,15 @@ import { getDb, notDeleted } from "~/server/repo/database-helpers";
 // ProductWithBetterUpcData is re-exported from the package barrel for the
 // Problems-page components that import it from there.
 export type { ProductWithBetterUpcData };
+
+export type ProductWithUpcGapCandidate = {
+  id: ProductId;
+  name: string;
+  manufacturer: string;
+  upc: string;
+  price: number | null;
+  hasImage: boolean;
+};
 
 // Find products with expectedQuantity=1 that appear in multiple locations
 export const findDuplicateUniqueProducts = async (
@@ -194,18 +201,12 @@ export const synthesizeEffectiveMappings = (
 // would write per field (null ⇒ no change), so the panel can show the actual
 // before→after, not just which fields are missing.
 
-// Find products that a fresh UPC lookup could enrich. We first narrow to
-// *candidates* purely from the DB — products with a UPC that already have a
-// stored gap (unspecified manufacturer, null price, or no image). A
-// fully-populated product never triggers a lookup. Candidate UPCs are then
-// resolved in a single bulk cache-read (no per-UPC round-trips), so this stays
-// cheap enough to run inside the always-on scan that also backs the navbar
-// badge. The worker only returns already-cached data and never re-queries dead
-// UPCs, so the scan can't burn the external lookup quota.
-export const findProductsWithBetterUpcData = async (
+// DB-only prefilter for ProductWithBetterUpcData. The service layer owns the UPC
+// client call and proposed-value construction; the repo layer only identifies
+// products with stored UPC-sourced gaps that are worth looking up.
+export const findProductsWithUpcGaps = async (
   db: Database,
-  upcLookupClient: UPCLookupClient,
-): Promise<ProductWithBetterUpcData[]> => {
+): Promise<ProductWithUpcGapCandidate[]> => {
   const dbClient = getDb(db);
 
   const rows = await dbClient
@@ -235,51 +236,10 @@ export const findProductsWithBetterUpcData = async (
         !r.hasImage),
   );
 
-  const lookups = await upcLookupClient.lookupBatch(
-    candidates.map((c) => c.upc),
-  );
-
-  const problems: ProductWithBetterUpcData[] = [];
-  for (const cand of candidates) {
-    const lookup = lookups.get(cand.upc);
-    if (!lookup) continue;
-
-    // Each field is set only when a fresh lookup would fill it (stored value
-    // empty AND lookup has one); null ⇒ no change. The non-null fields are
-    // exactly the old `gaps` booleans, now carrying the value that would land.
-    const proposed = {
-      manufacturer:
-        isUnspecifiedManufacturer(cand.manufacturer) &&
-        !isUnspecifiedManufacturer(lookup.manufacturer ?? lookup.brand)
-          ? (lookup.manufacturer ?? lookup.brand)
-          : null,
-      price:
-        cand.price == null && lookup.priceDollars != null
-          ? lookup.priceDollars
-          : null,
-      imageUrl:
-        !cand.hasImage && lookup.imageUrl
-          ? new URL(lookup.imageUrl, env.UPC_LOOKUP_API_URL).toString()
-          : null,
-    };
-
-    if (
-      proposed.manufacturer == null &&
-      proposed.price == null &&
-      proposed.imageUrl == null
-    )
-      continue;
-
-    problems.push({
-      id: cand.id,
-      name: cand.name,
-      manufacturer: cand.manufacturer,
-      upc: cand.upc,
-      proposed,
-    });
-  }
-
-  return problems;
+  return candidates.map((candidate) => ({
+    ...candidate,
+    hasImage: Boolean(candidate.hasImage),
+  }));
 };
 
 // Distinct non-deleted recipes each product feeds into, via its linked

@@ -1,7 +1,6 @@
 import { locationTypeValues } from "@cubby/shared";
 import { z } from "zod";
 import { amount } from "./codec";
-import type { locationOutWithParentChildrenAndInventoryOut } from "./combo";
 import { dbTimestampsOut, requiredName } from "./common";
 import {
   inventoryId,
@@ -99,9 +98,7 @@ export const infLocation: z.ZodType<InfLocation> = locationOut.extend({
   inventoryItems: z.array(inventoryItemForTree).optional(),
 });
 
-export type LocationOutWithParentChildren = z.infer<
-  typeof locationOutWithParentChildrenAndInventoryOut
->;
+export type { LocationOutWithParentChildren } from "./location-responses";
 
 // Helper to coerce empty strings to null for optional ID fields
 const optionalLocationId = z

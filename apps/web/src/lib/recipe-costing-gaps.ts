@@ -1,7 +1,7 @@
+import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient-responses";
 import type { BaseKind, ConversionCoverage } from "~/lib/conversion-coverage";
 import type { RecipeCosting } from "~/lib/recipe-costing";
 import { wasm } from "~/lib/wasm";
-import type { IngredientWithFoodLeanOut } from "~/server/services/ingredient.service";
 
 /**
  * The single highest-leverage fix we suggest for an uncosted ingredient.

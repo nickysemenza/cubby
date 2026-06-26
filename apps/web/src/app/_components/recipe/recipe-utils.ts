@@ -97,7 +97,9 @@ export const getEffectiveServings = (recipe: RecipeOut): number | null => {
  * — where the per-unit figure would just equal the total). */
 export type ServingBasis = { divisor: number; noun: string };
 
-export const getServingBasis = (recipe: RecipeOut): ServingBasis | null => {
+export const getServingBasis = (
+  recipe: Pick<RecipeOut, "servings" | "yield">,
+): ServingBasis | null => {
   if (recipe.servings && recipe.servings > 1)
     return { divisor: recipe.servings, noun: "serving" };
   const y = recipe.yield;

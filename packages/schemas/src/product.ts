@@ -9,7 +9,7 @@ import {
   productId,
   productShortcode,
 } from "./identifiers";
-import { imageOut, updateInputImages } from "./image";
+import { createInputImages, imageOut, updateInputImages } from "./image";
 import { unitMappingInput } from "./unitmapping";
 
 // Product category enum for filtering/organization
@@ -56,12 +56,8 @@ const productBase = z.object({
   upc: upc.nullable(),
   // Explicit USDA link by FoodData Central id (the universal PK across all food
   // types — see `fdcId`). Resolution prefers this over UPC auto-matching.
-  // Defaults to null so product summaries from queries that don't select it
-  // (inventory / ingredient embeds) validate instead of 500ing, and inputs may
-  // omit it.
   fdc_id: fdcId
     .nullable()
-    .default(null)
     .describe(
       "USDA FoodData Central id — links the product to any USDA food (takes precedence over the product's UPC). null to unlink.",
     ),
@@ -92,6 +88,12 @@ export const productCreateInput = productBase
     name: requiredName("Product name")
       .describe("Product name")
       .meta({ mock: "commerce.productName" }),
+    fdc_id: fdcId
+      .nullable()
+      .optional()
+      .describe(
+        "USDA FoodData Central id — links the product to any USDA food (takes precedence over the product's UPC). null to unlink.",
+      ),
     category: productCategory.nullable().optional(),
     ingredientId: ingredientId
       .nullable()
@@ -117,7 +119,7 @@ export const productCreateInput = productBase
       .optional()
       .describe("no USDA food exists — expect manual weight/volume/calories"),
   })
-  .merge(updateInputImages);
+  .merge(createInputImages);
 
 // A partial update must leave omitted fields UNCHANGED. `.partial()` keeps the
 // create-time `.default()`s, so an omitted `fdc_id` (default null) or
@@ -125,11 +127,14 @@ export const productCreateInput = productBase
 // — e.g. adding one conversion to an already-USDA-linked product nulled its
 // fdc_id (audit: 171287 → null, 2026-06-19). Override those fields to plain
 // optional (no default) so omitting them is a true no-op.
-export const productUpdateData = productCreateInput.partial().extend({
-  fdc_id: fdcId.nullable().optional(),
-  unitMappings: z.array(unitMappingInput).optional(),
-  externalIds: z.array(externalIdInput).optional(),
-});
+export const productUpdateData = productCreateInput
+  .partial()
+  .extend({
+    fdc_id: fdcId.nullable().optional(),
+    unitMappings: z.array(unitMappingInput).optional(),
+    externalIds: z.array(externalIdInput).optional(),
+  })
+  .extend(updateInputImages.shape);
 
 // Input schema for updating products (matches location/recipe/ingredient pattern)
 export const productUpdateInput = z.object({
@@ -151,8 +156,8 @@ export const productTopLevelOut = z
   .object({
     id: productId,
     shortcode: productShortcode,
-    images: z.array(imageOut).default([]),
-    externalIds: z.array(externalIdOut).default([]),
+    images: z.array(imageOut),
+    externalIds: z.array(externalIdOut),
     price: z.number().nullable(), // Price per each ($); source of truth (the 1 each -> $X costing edge is synthesized from this at compute time)
     usdaUnavailable: z.boolean().nullable(),
   })
@@ -160,6 +165,13 @@ export const productTopLevelOut = z
   .extend(dbTimestampsOut.shape);
 
 export type ProductTopLevelOut = z.infer<typeof productTopLevelOut>;
+export const productPickerItemOut = productTopLevelOut.pick({
+  id: true,
+  shortcode: true,
+  name: true,
+  manufacturer: true,
+});
+export type ProductPickerItemOut = z.infer<typeof productPickerItemOut>;
 export type ProductCreateInput = z.infer<typeof productCreateInput>;
 export type ProductUpdateInput = z.infer<typeof productUpdateInput>;
 

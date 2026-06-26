@@ -56,7 +56,7 @@ export function LocationList() {
   const deletableConfig = useDeletableConfig({
     mutationFn: api.location.delete.mutationOptions,
     entityLabel: "Location",
-    invalidateKeys: [[queryKeys.location.list]],
+    invalidateKeys: [queryKeys.location.list],
   });
 
   // Memoize columns to prevent recreating on every render

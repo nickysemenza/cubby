@@ -236,7 +236,7 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
   const deletableConfig = useDeletableConfig({
     mutationFn: api.recipe.delete.mutationOptions,
     entityLabel: "Recipe",
-    invalidateKeys: [[queryKeys.recipe.list]],
+    invalidateKeys: [queryKeys.recipe.list],
   });
 
   const {

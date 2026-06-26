@@ -2,7 +2,7 @@ import { type SearchType, searchTypeSchema } from "@cubby/schemas/search";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
 import { SearchPage } from "~/app/_components/search/search-page";
-import { PageWrapper } from "~/components/layout/page-wrapper";
+import { Page } from "~/components/page/Page";
 
 const searchSchema = z.object({
   q: z.string().optional().catch(undefined),
@@ -21,11 +21,11 @@ export const Route = createFileRoute("/_authenticated/search/")({
 function SearchPageRoute() {
   const search = Route.useSearch();
   return (
-    <PageWrapper>
+    <Page variant="list" title="Search" compact decoration="none">
       <SearchPage
         query={search.q}
         type={(search.type ?? "all") as SearchType}
       />
-    </PageWrapper>
+    </Page>
   );
 }

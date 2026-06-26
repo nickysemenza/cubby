@@ -1,9 +1,10 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { InventoryDetail } from "~/app/_components/inventory/inventory-detail";
-import { PageWrapper } from "~/components/layout/page-wrapper";
+import { Page } from "~/components/page/Page";
 import { RouteErrorComponent } from "~/components/route-error";
 import { DetailPagePending } from "~/components/route-pending";
+import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 import { useTRPC } from "~/trpc/react";
 
@@ -18,9 +19,19 @@ export const Route = createFileRoute("/_authenticated/inventory/$id")({
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,
   notFoundComponent: () => (
-    <PageWrapper>
-      <div>Inventory item not found</div>
-    </PageWrapper>
+    <Page
+      variant="list"
+      title="Inventory item not found"
+      entity="inventory"
+      compact
+    >
+      <Empty>
+        <EmptyTitle>Inventory item not found</EmptyTitle>
+        <EmptyDescription>
+          This pantry item is no longer available.
+        </EmptyDescription>
+      </Empty>
+    </Page>
   ),
   component: InventoryDetailPage,
 });

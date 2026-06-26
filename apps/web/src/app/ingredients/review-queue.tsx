@@ -1,3 +1,4 @@
+import type { EnrichmentRow } from "@cubby/schemas/ingredient-responses";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
@@ -17,7 +18,6 @@ import { Empty, EmptyActions, EmptyDescription } from "~/components/ui/empty";
 import { getErrorMessage } from "~/lib/error-utils";
 import { queryKeys } from "~/lib/query-keys";
 import { savedWithRecompute } from "~/lib/recompute-summary";
-import type { EnrichmentRow } from "~/server/services/ingredient.service";
 import { useTRPC } from "~/trpc/react";
 import type { EnrichmentEditorHandle } from "./enrichment-editor";
 import { type MergeOption, ReviewCard } from "./review-card";

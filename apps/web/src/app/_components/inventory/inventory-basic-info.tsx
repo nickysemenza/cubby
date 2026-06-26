@@ -1,4 +1,4 @@
-import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
+import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/inventory-responses";
 import type { FC } from "react";
 import type { z } from "zod";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";

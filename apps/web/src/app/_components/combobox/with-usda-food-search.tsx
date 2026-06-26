@@ -1,5 +1,5 @@
 import type { Confidence } from "@cubby/schemas/ai";
-import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
+import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import type { DataType } from "@cubby/usda-schemas";
 import { useQuery } from "@tanstack/react-query";
 import { Sparkles } from "lucide-react";

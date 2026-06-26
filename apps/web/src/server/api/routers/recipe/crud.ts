@@ -11,6 +11,7 @@ import { type RecipeId, recipeId } from "@cubby/schemas/identifiers";
 import {
   recipeCreateInput,
   recipeFiltersSchema,
+  recipeGraphOut,
   recipeListItemOut,
   recipeOut,
   recipeUpdateInput,
@@ -100,7 +101,7 @@ const getByShortcode = protectedProcedure
 // fan-out of getByID calls. Missing/deleted ids are omitted from the result.
 const getManyByIDs = protectedProcedure
   .input(z.object({ ids: z.array(recipeId) }))
-  .output(z.array(recipeOut))
+  .output(z.array(recipeGraphOut))
   .query(async ({ ctx, input }) => {
     return await getRecipesByIDs(ctx.db, input.ids);
   });
