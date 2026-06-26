@@ -47,6 +47,22 @@ export class UPCLookupClient {
     return withTrace(TraceNames.api("upc-lookup", operation), fn);
   }
 
+  // Best-effort read of the worker's error body on a non-2xx, so an intermittent
+  // 401 logs the full envelope (e.g. `{"error":"...","code":"MISSING_API_KEY"}`,
+  // distinguishing no-key-sent from stale/wrong-key) instead of a bare status.
+  // Length-capped so a stray HTML/platform error page can't flood the log. Never
+  // throws.
+  private async errorBody(res: Response): Promise<string> {
+    try {
+      const body = (await res.clone().text()).trim();
+      if (!body) return "";
+      const capped = body.length > 300 ? `${body.slice(0, 300)}…` : body;
+      return ` — ${capped}`;
+    } catch {
+      return "";
+    }
+  }
+
   async lookup(upc: string): Promise<UPCLookupResponse | null> {
     return this.traced("lookup", async () => {
       const url = new URL(`/lookup/${upc}`, this.baseUrl);
@@ -63,7 +79,7 @@ export class UPCLookupClient {
           // not a failure. Only warn on genuinely unexpected statuses.
           if (res.status !== 404) {
             console.warn(
-              `[UPC Lookup] Failed for ${upc}: ${res.status} ${res.statusText}`,
+              `[UPC Lookup] Failed for ${upc}: ${res.status} ${res.statusText}${await this.errorBody(res)}`,
             );
           }
           return null;
@@ -119,7 +135,7 @@ export class UPCLookupClient {
 
           if (!res.ok) {
             console.warn(
-              `[UPC Lookup] Batch failed: ${res.status} ${res.statusText}`,
+              `[UPC Lookup] Batch failed: ${res.status} ${res.statusText}${await this.errorBody(res)}`,
             );
             continue;
           }

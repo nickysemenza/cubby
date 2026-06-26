@@ -65,14 +65,24 @@ export const auth = betterAuth({
     }),
     tanstackStartCookies(), // Must be last
   ],
-  advanced: previewCookieDomain
-    ? {
-        crossSubDomainCookies: {
-          enabled: true,
-          domain: previewCookieDomain,
-        },
-      }
-    : undefined,
+  advanced: {
+    // Cloudflare Workers (prod + preview deploys) puts the real client IP in
+    // `cf-connecting-ip`; without this Better Auth can't determine the IP and
+    // skips rate limiting (logging a warning on every auth request). x-forwarded-for
+    // is spoofable and absent on Workers, so trust only the CF-set header. Prod-only:
+    // there's no CF proxy in dev (vite Node), so the header would never be present —
+    // better-auth's default IP resolution applies there, and dev global rate limiting
+    // is off anyway, so the IP is never consulted.
+    ...(isDev ? {} : { ipAddress: { ipAddressHeaders: ["cf-connecting-ip"] } }),
+    ...(previewCookieDomain
+      ? {
+          crossSubDomainCookies: {
+            enabled: true,
+            domain: previewCookieDomain,
+          },
+        }
+      : {}),
+  },
   // In dev, trust any localhost/127.0.0.1 origin regardless of port so worktree
   // dev servers (which run on auto-assigned ports — see README "Worktrees") can
   // perform auth POSTs. The session cookie itself isn't port-scoped (RFC 6265) and
