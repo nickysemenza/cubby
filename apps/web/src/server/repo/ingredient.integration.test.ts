@@ -308,6 +308,48 @@ describe("ingredient", () => {
     expect(keeper!.aliases).toHaveLength(0);
   });
 
+  it("merge marks recipes ALREADY using the target stale (moved products change its cost)", async () => {
+    // A recipe uses the target directly; the alias contributes a product (no
+    // recipe of its own). Moving that product onto the target can change the
+    // target's cost, so the target-using recipe must be recomputed — even though
+    // none of its lines "moved".
+    await upsertImportRecipe(
+      makeImportRecipe({
+        meta: { title: "pepper recipe" },
+        sections: [{ instructions: ["grind"], ingredients: ["pepper"] }],
+      }),
+      ctx.db,
+      ctx.actor,
+    );
+    const target = await findOrCreateIngredient(ctx.db, "pepper");
+    const alias = await findOrCreateIngredient(ctx.db, "peppercorns");
+    await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Tellicherry peppercorns",
+        manufacturer: "test",
+        ingredientId: alias.id,
+      }),
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(recipe)
+      .set({ totalsComputedAt: new Date() })
+      .where(eq(recipe.name, "pepper recipe"));
+
+    const summary = await mergeIngredients(ctx.db, target.id, [alias.id]);
+
+    // No recipe used the alias, so nothing "moved"…
+    expect(summary.recipesMoved).toEqual(0);
+    expect(summary.productsMoved).toEqual(1);
+    // …but the target-using recipe is in the recompute set and marked stale.
+    const pepperRecipe = await getDb(ctx.db).query.recipe.findFirst({
+      where: eq(recipe.name, "pepper recipe"),
+    });
+    expect(summary.affectedRecipeIds).toContain(pepperRecipe!.id);
+    expect(pepperRecipe!.totalsComputedAt).toBeNull();
+  });
+
   it("merge dryRun reports counts and writes nothing", async () => {
     const a = await findOrCreateIngredient(ctx.db, "dry keeper");
     const b = await findOrCreateIngredient(ctx.db, "dry alias");

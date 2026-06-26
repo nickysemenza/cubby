@@ -146,7 +146,11 @@ const merge = protectedProcedure
     return {
       ...merged,
       sideEffects: {
-        recipesRecomputed: summary.recipesMoved,
+        // The full recompute scope dispatched off the request path (alias-using
+        // AND already-target-using recipes), not just the lines that moved. The
+        // recompute is async (queued in prod), so this is the count queued, not
+        // yet completed.
+        recipesRecomputed: summary.affectedRecipeIds.length,
         inventoryValuationsUpdated: 0,
       },
       mergeSummary: {

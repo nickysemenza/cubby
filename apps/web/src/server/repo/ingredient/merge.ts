@@ -159,15 +159,23 @@ export const mergeIngredients = async (
   const resolve = async (
     conn: ReturnType<typeof getDb>,
   ): Promise<{
-    aliasNames: string[];
     newAliases: string[];
     aliasesAdded: string[];
     deletedIds: IngredientId[];
+    /** Recipes whose lines move off an alias onto the target (the summary count). */
+    movedRecipeIds: RecipeId[];
+    /**
+     * Every recipe whose totals can change — alias-using AND already-target-using
+     * (moving the aliases' products onto the target shifts the target's cost). The
+     * recompute / stale-marking set; superset of movedRecipeIds.
+     */
     affectedRecipeIds: RecipeId[];
     productsMoved: number;
   }> => {
     const targetRec = await conn.query.ingredient.findFirst({
-      where: eq(ingredient.id, target),
+      // notDeleted: a soft-deleted target would otherwise pass validation and
+      // recipe lines would re-point onto a row hidden from every normal query.
+      where: and(eq(ingredient.id, target), notDeleted(ingredient)),
     });
     if (!targetRec) {
       throw createAppError(
@@ -196,20 +204,26 @@ export const mergeIngredients = async (
       ...aliasRecs.flatMap((a) => a.aliases ?? []),
     ]);
     const existing = new Set(targetRec.aliases);
-    const affectedRecipeIds = await recipeIdsUsingIngredients(
-      conn,
-      uniqueAliases,
-    );
+    // Read both sets BEFORE the re-point: lines using an alias are the ones that
+    // move; recipes already using the target also need recompute because the
+    // moved products change the target's cost. `[...aliases, target]` is exactly
+    // the post-merge target-using set the old `recomputeForIngredient(target)`
+    // covered.
+    const movedRecipeIds = await recipeIdsUsingIngredients(conn, uniqueAliases);
+    const affectedRecipeIds = await recipeIdsUsingIngredients(conn, [
+      ...uniqueAliases,
+      target,
+    ]);
     const movedProducts = await conn
       .select({ id: product.id })
       .from(product)
       .where(inArray(product.ingredientId, uniqueAliases));
 
     return {
-      aliasNames: newAliases,
       newAliases,
       aliasesAdded: newAliases.filter((a) => !existing.has(a)),
       deletedIds: aliasRecs.map((a) => a.id),
+      movedRecipeIds,
       affectedRecipeIds,
       productsMoved: movedProducts.length,
     };
@@ -219,7 +233,7 @@ export const mergeIngredients = async (
     const r = await resolve(getDb(db));
     return {
       aliasesAdded: r.aliasesAdded,
-      recipesMoved: r.affectedRecipeIds.length,
+      recipesMoved: r.movedRecipeIds.length,
       productsMoved: r.productsMoved,
       deletedIds: r.deletedIds,
       affectedRecipeIds: r.affectedRecipeIds,
@@ -266,7 +280,7 @@ export const mergeIngredients = async (
 
     return {
       aliasesAdded: r.aliasesAdded,
-      recipesMoved: r.affectedRecipeIds.length,
+      recipesMoved: r.movedRecipeIds.length,
       productsMoved: r.productsMoved,
       deletedIds: r.deletedIds,
       affectedRecipeIds: r.affectedRecipeIds,
