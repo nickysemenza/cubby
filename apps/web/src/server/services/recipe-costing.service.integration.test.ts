@@ -1,6 +1,8 @@
 import type { RecipeId } from "@cubby/schemas/identifiers";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { setCfEnv } from "~/server/cf-env";
+import { RECOMPUTE_INLINE_MAX } from "~/server/queue-recompute";
 import { createProduct, updateProduct } from "~/server/repo/product";
 import {
   createRecipe,
@@ -350,6 +352,63 @@ describe("RecipeCostingService", () => {
       expect(parentAfter?.totalsComputedAt?.getTime() ?? 0).toBeGreaterThan(
         parentBefore?.totalsComputedAt?.getTime() ?? 0,
       );
+    });
+  });
+
+  describe("dispatchRecompute threshold", () => {
+    // Install a fake RECOMPUTE_QUEUE binding (the repo has no real one in tests).
+    // Returns the captured chunks + a reset to clear the module-level cfEnv so the
+    // queue doesn't leak into other tests (which expect the inline/no-binding path).
+    const installFakeQueue = () => {
+      const sent: RecipeId[][] = [];
+      setCfEnv({
+        RECOMPUTE_QUEUE: {
+          send: async (m: { recipeIds: RecipeId[] }) => {
+            sent.push(m.recipeIds);
+          },
+        },
+      } as unknown as Env);
+      return { sent, reset: () => setCfEnv(undefined as unknown as Env) };
+    };
+
+    it("recomputes inline at/below the threshold even when a queue is bound", async () => {
+      const { sent, reset } = installFakeQueue();
+      try {
+        const ids: RecipeId[] = [];
+        for (let i = 0; i < RECOMPUTE_INLINE_MAX; i++) {
+          ids.push((await seedPricedRecipe(`Inline ${i}`)).id as RecipeId);
+        }
+        const n = await service().dispatchRecompute(ids);
+        // No message queued; recipes recomputed in-process (totals stamped fresh).
+        expect(sent).toHaveLength(0);
+        expect(n).toBeGreaterThanOrEqual(ids.length);
+        for (const id of ids) {
+          const state = await getRecipeTotalsState(ctx.db, id);
+          expect(state?.totalsComputedAt).not.toBeNull();
+        }
+      } finally {
+        reset();
+      }
+    });
+
+    it("queues above the threshold, marking recipes stale instead of recomputing", async () => {
+      const { sent, reset } = installFakeQueue();
+      try {
+        const ids: RecipeId[] = [];
+        for (let i = 0; i <= RECOMPUTE_INLINE_MAX; i++) {
+          ids.push((await seedPricedRecipe(`Queued ${i}`)).id as RecipeId);
+        }
+        const n = await service().dispatchRecompute(ids);
+        expect(n).toEqual(ids.length);
+        // Every id was sent (chunked) and the rows were marked stale, NOT recomputed.
+        expect([...sent.flat()].sort()).toEqual([...ids].sort());
+        for (const id of ids) {
+          const state = await getRecipeTotalsState(ctx.db, id);
+          expect(state?.totalsComputedAt).toBeNull();
+        }
+      } finally {
+        reset();
+      }
     });
   });
 });

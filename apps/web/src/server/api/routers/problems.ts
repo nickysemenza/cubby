@@ -1,4 +1,4 @@
-import { ingredientId } from "@cubby/schemas/identifiers";
+import { ingredientId, type RecipeId } from "@cubby/schemas/identifiers";
 import {
   maintenanceCountsSchema,
   problemsCoverageSchema,
@@ -60,11 +60,45 @@ const getMaintenanceCounts = protectedProcedure
 // costing reflects the updated lines immediately. Clears the Stale Parses section.
 const reparseStale = protectedProcedure.mutation(async function* ({ ctx }) {
   yield* streamProgress(reparseStaleIngredientParses(ctx.db), async (r) => {
-    // After the parses land, recompute the affected recipes' totals.
-    await ctx.services.recipeCosting.recompute(r.recipesAffected);
+    // After the parses land, recompute the affected recipes' totals — off the
+    // request path when the set is large (a sweep can touch many recipes).
+    await ctx.services.recipeCosting.dispatchRecompute(r.recipesAffected);
     return { updated: r.updated, recipesAffected: r.recipesAffected.length };
   });
 });
+
+// Non-streaming twin of {@link reparseStale} for MCP/agent callers (no progress
+// stream). Re-parse every stale line, then DISPATCH the affected recipes'
+// recompute off the request path (queue in prod) so a big sweep can't overrun the
+// Workers budget. This is the agent's mis-merge recovery primitive: once a merge
+// folds the right alias onto the surviving ingredient, a re-parse re-points every
+// line whose `rawLine` now resolves (via alias match) to the correct ingredient.
+const reparseStaleSync = protectedProcedure
+  .output(
+    z.object({
+      updated: z.number().int().nonnegative(),
+      recipesAffected: z.number().int().nonnegative(),
+    }),
+  )
+  .mutation(async ({ ctx }) => {
+    const gen = reparseStaleIngredientParses(ctx.db);
+    let result: { updated: number; recipesAffected: RecipeId[] } = {
+      updated: 0,
+      recipesAffected: [],
+    };
+    for (;;) {
+      const next = await gen.next();
+      if (next.done) {
+        result = next.value;
+        break;
+      }
+    }
+    await ctx.services.recipeCosting.dispatchRecompute(result.recipesAffected);
+    return {
+      updated: result.updated,
+      recipesAffected: result.recipesAffected.length,
+    };
+  });
 
 // On-demand dry run behind the Settings → Maintenance "Re-parse recipe lines"
 // button (the WASM sweep is too expensive for an always-on count).
@@ -130,6 +164,7 @@ export const problemsRouter = createTRPCRouter({
   getUpc,
   getMaintenanceCounts,
   reparseStale,
+  reparseStaleSync,
   dryRunReparse: dryRunReparseProc,
   dryRunPruneAliases: dryRunPruneAliasesProc,
   pruneAllUnusedAliasesStream,

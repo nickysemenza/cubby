@@ -67,8 +67,11 @@ const { getByID, create, update } = createEntityCrudWithoutListProcedures({
         data,
         services.actorContext,
       );
-      // Recompute its totals now (instant freshness) + null any parents.
-      await services.services.recipeCosting.recompute([created.id as RecipeId]);
+      // One new recipe — under the queue threshold, so this recomputes inline
+      // (instant totals) + nulls any parents.
+      await services.services.recipeCosting.dispatchRecompute([
+        created.id as RecipeId,
+      ]);
       return created;
     },
     update: async (services, id: RecipeId, data) => {
@@ -78,7 +81,7 @@ const { getByID, create, update } = createEntityCrudWithoutListProcedures({
         data,
         services.actorContext,
       );
-      await services.services.recipeCosting.recompute([id]);
+      await services.services.recipeCosting.dispatchRecompute([id]);
       return updated;
     },
   },

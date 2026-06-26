@@ -30,13 +30,18 @@ export {
 // Soft delete with dependency guards
 export { deleteIngredients } from "./deletion";
 // Merge: fuzzy candidates + merge op
-export { findFuzzyMergeCandidates, mergeIngredients } from "./merge";
+export {
+  findFuzzyMergeCandidates,
+  type MergeSummary,
+  mergeIngredients,
+} from "./merge";
 // Search / lookup / list reads
 export {
   enrichmentWorkbenchIngredients,
   getIngredientByName,
   getIngredientMatches,
   getIngredientsByIDsLean,
+  getRawLinesForIngredients,
   getRecipeUsagesForIngredient,
   ingredientList,
   searchIngredientsForMerge,

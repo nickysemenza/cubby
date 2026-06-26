@@ -11,12 +11,14 @@ import { type IngredientId, ingredientId } from "@cubby/schemas/identifiers";
 import {
   ingredientCreateInput,
   ingredientFiltersSchema,
+  mergeSummary,
 } from "@cubby/schemas/ingredient";
 import { recomputeSummary } from "@cubby/schemas/recipe";
 import { z } from "zod";
 import {
   deleteIngredients,
   getIngredientMatches,
+  getRawLinesForIngredients,
   getRecipeUsagesForIngredient,
   resolveOrCreateIngredients,
 } from "~/server/repo/ingredient";
@@ -106,21 +108,49 @@ const merge = protectedProcedure
     z.object({
       target: ingredientId,
       aliases: z.array(ingredientId).min(1),
+      // Validate + count what would change without writing.
+      dryRun: z.boolean().optional(),
     }),
   )
-  .output(ingredientWithFoodOut.extend({ sideEffects: recomputeSummary }))
+  .output(
+    ingredientWithFoodOut.extend({
+      sideEffects: recomputeSummary,
+      mergeSummary,
+    }),
+  )
   .mutation(async ({ ctx, input }) => {
-    const result = await ctx.services.ingredient.mergeIngredients(
-      input.target,
-      input.aliases,
-    );
-    // Post-merge the alias rows reference the target, so recomputing the target's
-    // recipes covers every recipe that used a merged alias.
-    const recipesRecomputed =
-      await ctx.services.recipeCosting.recomputeForIngredient(input.target);
+    const { ingredient: merged, summary } =
+      await ctx.services.ingredient.mergeIngredients(
+        input.target,
+        input.aliases,
+        {
+          dryRun: input.dryRun,
+        },
+      );
+    // The merge marked the absorbed recipes stale in-transaction; dispatch their
+    // recompute OFF the request path (queue in prod, inline in dev) so a
+    // heavily-used target can't overrun the Workers budget and sink the mutation.
+    if (!input.dryRun) {
+      await ctx.services.recipeCosting.dispatchRecompute(
+        summary.affectedRecipeIds,
+      );
+    }
     return {
-      ...result,
-      sideEffects: { recipesRecomputed, inventoryValuationsUpdated: 0 },
+      ...merged,
+      sideEffects: {
+        // The full recompute scope dispatched off the request path (alias-using
+        // AND already-target-using recipes), not just the lines that moved. The
+        // recompute is async (queued in prod), so this is the count queued, not
+        // yet completed.
+        recipesRecomputed: summary.affectedRecipeIds.length,
+        inventoryValuationsUpdated: 0,
+      },
+      mergeSummary: {
+        aliasesAdded: summary.aliasesAdded,
+        recipesMoved: summary.recipesMoved,
+        productsMoved: summary.productsMoved,
+        deletedIds: summary.deletedIds,
+      },
     };
   });
 
@@ -141,6 +171,16 @@ const recipeUsages = protectedProcedure
   .query(async ({ ctx, input }) => {
     const usages = await getRecipeUsagesForIngredient(ctx.db, input.id);
     return usages.recipeUsages;
+  });
+
+// Bulk parser-triage: original `rawLine` + parsed modifier/amounts of every live
+// recipe line linked to each ingredient, in one query. Powers the junk-ingredient
+// sweep (instruction fragments / quantity stubs the importer mis-created as
+// ingredients) without paging recipeUsages per id. Grouped by the MCP tool.
+const rawLines = protectedProcedure
+  .input(z.object({ ids: z.array(ingredientId).min(1) }))
+  .query(async ({ ctx, input }) => {
+    return await getRawLinesForIngredients(ctx.db, input.ids);
   });
 
 const getByName = protectedProcedure
@@ -220,6 +260,7 @@ export const ingredientRouter = createTRPCRouter({
   getByName,
   enrichmentWorkbench,
   recipeUsages,
+  rawLines,
   matchNames,
   resolveOrCreate,
   getByID,

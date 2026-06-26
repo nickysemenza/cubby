@@ -36,6 +36,22 @@ export const updateRecipeTotals = async (
     .where(eq(recipe.id, id));
 };
 
+/**
+ * Flag recipes' totals stale (`totalsComputedAt = null`) without recomputing —
+ * the correctness floor when the recompute is deferred to the queue: the rows
+ * read as pending and the Problems page can catch them if the queue never drains.
+ */
+export const markRecipesStale = async (
+  db: Database,
+  ids: RecipeId[],
+): Promise<void> => {
+  if (ids.length === 0) return;
+  await getDb(db)
+    .update(recipe)
+    .set({ totalsComputedAt: null })
+    .where(inArray(recipe.id, ids));
+};
+
 /** Persisted totals state for one recipe (explain endpoint). Null = not found. */
 export const getRecipeTotalsState = async (
   db: Database,

@@ -1,7 +1,8 @@
+import { unsafeIngredientId } from "@cubby/schemas/identifiers";
 import { count, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { ingredient } from "~/server/db/schema";
+import { ingredient, recipe } from "~/server/db/schema";
 import { createRecipe, upsertImportRecipe } from "~/server/repo/recipe";
 import { getDb, withTransaction } from "./database-helpers";
 import {
@@ -238,7 +239,14 @@ describe("ingredient", () => {
       .from(ingredient);
     expect(resultAfterUpsert!.count).toEqual(3);
 
-    await mergeIngredients(ctx.db, a.id, [b.id, c.id]);
+    // Simulate a freshly-costed recipe so the merge's in-tx stale-marking is
+    // observable (otherwise a brand-new recipe is already null).
+    await getDb(ctx.db)
+      .update(recipe)
+      .set({ totalsComputedAt: new Date() })
+      .where(eq(recipe.name, "egg recipe"));
+
+    const summary = await mergeIngredients(ctx.db, a.id, [b.id, c.id]);
     const [resultAfterMerge] = await getDb(ctx.db)
       .select({ count: count() })
       .from(ingredient);
@@ -251,6 +259,116 @@ describe("ingredient", () => {
     expect(updatedIngredient!.aliases).toContain(b.name);
     expect(updatedIngredient!.aliases).toContain(c.name);
     expect(updatedIngredient!.aliases).toContain("large eggs");
+
+    // Structured summary: both aliases absorbed, the one recipe using "eggs"
+    // moved, nothing-silently-nothing.
+    expect(summary.deletedIds).toEqual(expect.arrayContaining([b.id, c.id]));
+    expect(summary.deletedIds).toHaveLength(2);
+    expect(summary.recipesMoved).toEqual(1);
+    expect(summary.aliasesAdded).toEqual(
+      expect.arrayContaining([b.name, c.name, "large eggs"]),
+    );
+
+    // Correctness floor: the absorbed recipe is marked stale in the same tx.
+    const movedRecipe = await getDb(ctx.db).query.recipe.findFirst({
+      where: eq(recipe.name, "egg recipe"),
+    });
+    expect(movedRecipe!.totalsComputedAt).toBeNull();
+    expect(summary.affectedRecipeIds).toContain(movedRecipe!.id);
+  });
+
+  it("merge rejects a self-merge without deleting the target", async () => {
+    const a = await findOrCreateIngredient(ctx.db, "self target");
+    const b = await findOrCreateIngredient(ctx.db, "self alias");
+
+    await expect(mergeIngredients(ctx.db, a.id, [a.id, b.id])).rejects.toThrow(
+      /itself/i,
+    );
+
+    // Target (and alias) untouched — the old code would have hard-deleted `a`.
+    const [survivors] = await getDb(ctx.db)
+      .select({ count: count() })
+      .from(ingredient);
+    expect(survivors!.count).toEqual(2);
+  });
+
+  it("merge fails loud on an unknown alias id (no silent no-op)", async () => {
+    const a = await findOrCreateIngredient(ctx.db, "keeper");
+    const bogus = unsafeIngredientId("00000000-0000-0000-0000-000000000000");
+
+    await expect(mergeIngredients(ctx.db, a.id, [bogus])).rejects.toThrow(
+      /not found/i,
+    );
+
+    // Nothing changed: the survivor still exists, gained no aliases.
+    const keeper = await getDb(ctx.db).query.ingredient.findFirst({
+      where: eq(ingredient.id, a.id),
+    });
+    expect(keeper).toBeDefined();
+    expect(keeper!.aliases).toHaveLength(0);
+  });
+
+  it("merge marks recipes ALREADY using the target stale (moved products change its cost)", async () => {
+    // A recipe uses the target directly; the alias contributes a product (no
+    // recipe of its own). Moving that product onto the target can change the
+    // target's cost, so the target-using recipe must be recomputed — even though
+    // none of its lines "moved".
+    await upsertImportRecipe(
+      makeImportRecipe({
+        meta: { title: "pepper recipe" },
+        sections: [{ instructions: ["grind"], ingredients: ["pepper"] }],
+      }),
+      ctx.db,
+      ctx.actor,
+    );
+    const target = await findOrCreateIngredient(ctx.db, "pepper");
+    const alias = await findOrCreateIngredient(ctx.db, "peppercorns");
+    await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Tellicherry peppercorns",
+        manufacturer: "test",
+        ingredientId: alias.id,
+      }),
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(recipe)
+      .set({ totalsComputedAt: new Date() })
+      .where(eq(recipe.name, "pepper recipe"));
+
+    const summary = await mergeIngredients(ctx.db, target.id, [alias.id]);
+
+    // No recipe used the alias, so nothing "moved"…
+    expect(summary.recipesMoved).toEqual(0);
+    expect(summary.productsMoved).toEqual(1);
+    // …but the target-using recipe is in the recompute set and marked stale.
+    const pepperRecipe = await getDb(ctx.db).query.recipe.findFirst({
+      where: eq(recipe.name, "pepper recipe"),
+    });
+    expect(summary.affectedRecipeIds).toContain(pepperRecipe!.id);
+    expect(pepperRecipe!.totalsComputedAt).toBeNull();
+  });
+
+  it("merge dryRun reports counts and writes nothing", async () => {
+    const a = await findOrCreateIngredient(ctx.db, "dry keeper");
+    const b = await findOrCreateIngredient(ctx.db, "dry alias");
+
+    const summary = await mergeIngredients(ctx.db, a.id, [b.id], {
+      dryRun: true,
+    });
+    expect(summary.deletedIds).toEqual([b.id]);
+    expect(summary.aliasesAdded).toContain(b.name);
+
+    // No write: both ingredients still exist, target gained no aliases.
+    const [after] = await getDb(ctx.db)
+      .select({ count: count() })
+      .from(ingredient);
+    expect(after!.count).toEqual(2);
+    const keeper = await getDb(ctx.db).query.ingredient.findFirst({
+      where: eq(ingredient.id, a.id),
+    });
+    expect(keeper!.aliases).toHaveLength(0);
   });
 
   // Regression: the lean workbench fetch uses a relational query with raw-SQL

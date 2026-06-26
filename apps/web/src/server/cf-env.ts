@@ -5,11 +5,24 @@
 // dev server (plain Node via vite) setCfEnv is never called, so accessors
 // return undefined and callers fall back to public URLs + global fetch.
 
+import type { RecomputeQueueProducer } from "./queue-recompute";
+
 let cfEnv: Env | undefined;
 
 export const setCfEnv = (env: Env): void => {
   cfEnv = env;
 };
+
+/**
+ * The recompute queue producer (`env.RECOMPUTE_QUEUE`) on CF Workers, or
+ * undefined on the dev Node server (where setCfEnv is never called). When absent,
+ * callers recompute inline — safe in dev, which has no Workers CPU budget. The
+ * binding has no ambient type in this repo (no @cloudflare/workers-types), so we
+ * cast to the minimal producer shape we use.
+ */
+export const getRecomputeQueue = (): RecomputeQueueProducer | undefined =>
+  (cfEnv as { RECOMPUTE_QUEUE?: RecomputeQueueProducer } | undefined)
+    ?.RECOMPUTE_QUEUE;
 
 // Cubby's Cloudflare account + AI Gateway identifiers. Single source of truth
 // for the gateway binding (below) and the gateway-REST base URL built in

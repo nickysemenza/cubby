@@ -77,9 +77,9 @@ const insertImport = protectedProcedure
   .output(recipeIdOut)
   .mutation(async ({ ctx, input }) => {
     const result = await upsertImportRecipe(input, ctx.db, ctx.actorContext);
-    // Recompute eagerly so totals are fresh on import (cheap — a fresh import's
-    // ingredients are bare, so there's no USDA/price work yet). No drain anymore.
-    await ctx.services.recipeCosting.recompute([result.id]);
+    // One recipe — under the queue threshold, so totals are fresh inline on
+    // import (cheap: a fresh import's ingredients are bare, no USDA/price work).
+    await ctx.services.recipeCosting.dispatchRecompute([result.id]);
     return result;
   });
 // Create/refresh a cookbook from a full EPUB extraction. Called once at the start
@@ -195,7 +195,7 @@ const importCookbookStream = protectedProcedure
         // affects reference resolution, so deferring to the end is safe.
         finalize: async (summary) => {
           if (insertedIds.length > 0) {
-            await ctx.services.recipeCosting.recompute(insertedIds);
+            await ctx.services.recipeCosting.dispatchRecompute(insertedIds);
           }
           return summary;
         },
@@ -352,7 +352,7 @@ const importNotionSyncStream = protectedProcedure
         }),
         finalize: async (summary) => {
           if (insertedIds.length > 0) {
-            await ctx.services.recipeCosting.recompute(insertedIds);
+            await ctx.services.recipeCosting.dispatchRecompute(insertedIds);
           }
           return summary;
         },
@@ -391,7 +391,7 @@ const reprocessCookbookStreamEndpoint = protectedProcedure
     yield* streamProgress(
       reprocessCookbookStream(ctx.db, input.cookbookId, ctx.actorContext),
       async ({ recipeIds, reprocessed, importableExtras }) => {
-        await ctx.services.recipeCosting.recompute(recipeIds);
+        await ctx.services.recipeCosting.dispatchRecompute(recipeIds);
         return { reprocessed, importableExtras };
       },
     );
