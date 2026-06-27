@@ -11,28 +11,34 @@ import {
   type ProductId,
   productId,
 } from "@cubby/schemas/identifiers";
-import { imageOut } from "@cubby/schemas/image-responses";
 import {
-  productCategory,
+  productApplyUpcInput,
   productCreateInput,
+  productCreateManyInput,
   productFiltersSchema,
+  productFindOrCreateByUPCInput,
+  productMarkUsdaUnavailableManyInput,
   productQuickCreatePayload,
+  productShortcodeInput,
+  productShortcodesInput,
+  productSummaryBatchInput,
   productTopLevelOut,
-  productUpdateData,
+  productUpdateInput,
 } from "@cubby/schemas/product";
 import {
+  productCategoryDistributionOut,
+  productFoodSummariesOut,
+  productImageSummariesOut,
   productListItemOut,
   productPickerItemOut,
+  productShortcodeListOut,
+  productUnitMappingSummariesOut,
   productWithFoodAndSideEffectsOut,
   productWithFoodOut,
 } from "@cubby/schemas/product-responses";
-import { unitMappingWithMetadata } from "@cubby/schemas/unitmapping-responses";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import { foodSummary, upc } from "@cubby/usda-schemas";
-import { z } from "zod";
 import { streamItems, streamProgress } from "~/lib/bulk-progress";
 import { getErrorMessage } from "~/lib/error-utils";
-import { ID_CHUNK_SIZE } from "~/misc/array-helpers";
 import {
   deleteProducts,
   getCategoryDistribution,
@@ -85,7 +91,7 @@ const { getByID } = createEntityCrudWithoutListProcedures({
     createInput: productCreateInput,
     // Defaults-stripped so a partial update never resets an omitted field (e.g.
     // wiping fdc_id / unitMappings). See productUpdateData.
-    updateInput: productUpdateData,
+    updateInput: productUpdateInput.shape.data,
     output: productWithFoodOut,
     idSchema: productId,
   },
@@ -158,7 +164,7 @@ const create = protectedProcedure
 // ingredient, so recompute every dependent recipe eagerly (covers UI + MCP) and
 // report the count. Inventory-valuation recompute is added here too (stage D).
 const update = protectedProcedure
-  .input(z.object({ id: productId, data: productUpdateData }))
+  .input(productUpdateInput)
   .output(productWithFoodAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
     return await updateProductWithSideEffects(
@@ -181,7 +187,7 @@ const update = protectedProcedure
 // dependent recipes, since price feeds cost); the image is imported separately.
 // Mirrors the field mapping in findOrCreateByUPC and the recompute in `update`.
 const applyUpcData = protectedProcedure
-  .input(z.object({ id: productId, upc: upc }))
+  .input(productApplyUpcInput)
   .output(productWithFoodAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
     return await applyUpcDataWithSideEffects(
@@ -198,22 +204,22 @@ const applyUpcData = protectedProcedure
   });
 
 const foodSummaries = protectedProcedure
-  .input(z.object({ ids: z.array(productId).max(ID_CHUNK_SIZE) }))
-  .output(z.record(z.string(), foodSummary.nullable()))
+  .input(productSummaryBatchInput)
+  .output(productFoodSummariesOut)
   .query(async ({ ctx, input }) => {
     return await ctx.services.product.getFoodSummariesByProductIds(input.ids);
   });
 
 const imageSummaries = protectedProcedure
-  .input(z.object({ ids: z.array(productId).max(ID_CHUNK_SIZE) }))
-  .output(z.record(z.string(), z.array(imageOut)))
+  .input(productSummaryBatchInput)
+  .output(productImageSummariesOut)
   .query(async ({ ctx, input }) => {
     return await ctx.services.product.getImageSummariesByProductIds(input.ids);
   });
 
 const unitMappingSummaries = protectedProcedure
-  .input(z.object({ ids: z.array(productId).max(ID_CHUNK_SIZE) }))
-  .output(z.record(z.string(), z.array(unitMappingWithMetadata)))
+  .input(productSummaryBatchInput)
+  .output(productUnitMappingSummariesOut)
   .query(async ({ ctx, input }) => {
     return await ctx.services.product.getUnitMappingSummariesByProductIds(
       input.ids,
@@ -242,12 +248,7 @@ const quickCreate = protectedProcedure
 // Find or create a product by UPC code
 // Checks local DB first, then USDA, then UPC worker, then creates with defaults
 const findOrCreateByUPC = protectedProcedure
-  .input(
-    z.object({
-      upc: upc,
-      defaultName: z.string().optional(),
-    }),
-  )
+  .input(productFindOrCreateByUPCInput)
   .output(productTopLevelOut)
   .mutation(async ({ ctx, input }) => {
     return findOrCreateByUPCService(
@@ -279,36 +280,22 @@ const backfillUPCImages = protectedProcedure.mutation(async function* ({
 
 // Get category distribution for insights visualization
 const categoryDistribution = protectedProcedure
-  .output(
-    z.array(
-      z.object({
-        category: productCategory.nullable(),
-        productCount: z.number(),
-        locations: z.array(
-          z.object({
-            id: z.string(),
-            name: z.string(),
-            count: z.number(),
-          }),
-        ),
-      }),
-    ),
-  )
+  .output(productCategoryDistributionOut)
   .query(async ({ ctx }) => {
     return await getCategoryDistribution(ctx.db);
   });
 
 // Batch lookup: multiple products by shortcode (e.g. for label printing)
 const getByShortcodes = protectedProcedure
-  .input(z.object({ shortcodes: z.array(z.string()) }))
-  .output(z.array(productTopLevelOut))
+  .input(productShortcodesInput)
+  .output(productShortcodeListOut)
   .query(async ({ ctx, input }) => {
     return await getProductsByShortcodes(ctx.db, input.shortcodes);
   });
 
 // Get product by shortcode (e.g., P-X7K9)
 const getByShortcode = protectedProcedure
-  .input(z.object({ shortcode: z.string() }))
+  .input(productShortcodeInput)
   .output(productTopLevelOut.nullable())
   .query(async ({ ctx, input }) => {
     return await getProductByShortcode(ctx.db, input.shortcode);
@@ -324,7 +311,7 @@ type CreateManyResult = {
   failed: { index: number; name: string; error: string }[];
 };
 const createMany = protectedProcedure
-  .input(z.array(productCreateInput).min(1).max(50))
+  .input(productCreateManyInput)
   .mutation(async function* ({ ctx, input }) {
     const failed: { index: number; name: string; error: string }[] = [];
     const ingredientIds: IngredientId[] = [];
@@ -363,7 +350,7 @@ const createMany = protectedProcedure
 // those products drop out of the link-USDA worklist and switch to manual entry.
 // Streamed with per-id progress; each update is its own tx.
 const markUsdaUnavailableMany = protectedProcedure
-  .input(z.object({ ids: z.array(productId).min(1).max(100) }))
+  .input(productMarkUsdaUnavailableManyInput)
   .mutation(async function* ({ ctx, input }) {
     yield* streamItems<(typeof input.ids)[number], never, { updated: number }>(
       input.ids,

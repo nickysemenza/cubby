@@ -1,15 +1,19 @@
 import { foodSummary } from "@cubby/usda-schemas";
 import { z } from "zod";
+import { imageOut } from "./image-responses";
 import { ingredientOut } from "./ingredient";
 import {
   inventoryListLocationOut,
   inventoryWithLocationOut,
 } from "./inventory-responses";
 import { inventoryEntryOut } from "./inventory";
-import { productTopLevelOut } from "./product";
+import { productCategory, productTopLevelOut } from "./product";
 import { recipeUsageOut } from "./recipe-responses";
 import { recomputeSummary } from "./recipe-shared";
-import { unitMappingOut } from "./unitmapping-responses";
+import {
+  unitMappingOut,
+  unitMappingWithMetadata,
+} from "./unitmapping-responses";
 
 export const productWithMappingsOut = productTopLevelOut.extend({
   unitMappings: z.array(unitMappingOut),
@@ -66,3 +70,31 @@ export const productWithFoodAndSideEffectsOut = productWithFoodOut.extend({
 export type ProductWithFoodAndSideEffectsOut = z.infer<
   typeof productWithFoodAndSideEffectsOut
 >;
+
+export const productFoodSummariesOut = z.record(
+  z.string(),
+  foodSummary.nullable(),
+);
+
+export const productImageSummariesOut = z.record(z.string(), z.array(imageOut));
+
+export const productUnitMappingSummariesOut = z.record(
+  z.string(),
+  z.array(unitMappingWithMetadata),
+);
+
+export const productShortcodeListOut = z.array(productTopLevelOut);
+
+export const productCategoryDistributionOut = z.array(
+  z.object({
+    category: productCategory.nullable(),
+    productCount: z.number(),
+    locations: z.array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        count: z.number(),
+      }),
+    ),
+  }),
+);

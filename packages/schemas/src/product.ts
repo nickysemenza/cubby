@@ -144,6 +144,42 @@ export const productUpdateInput = z.object({
   data: productUpdateData,
 });
 
+// Ancillary product hydration endpoints run through tRPC GET batching. Keep this
+// stricter than the general 1000-row backend ceiling so product list hydration
+// stays under URL/dispatch limits.
+export const PRODUCT_SUMMARY_BATCH_MAX = 50;
+
+export const productSummaryBatchInput = z.object({
+  ids: z.array(productId).max(PRODUCT_SUMMARY_BATCH_MAX),
+});
+
+export const productApplyUpcInput = z.object({
+  id: productId,
+  upc,
+});
+
+export const productFindOrCreateByUPCInput = z.object({
+  upc,
+  defaultName: z.string().optional(),
+});
+
+export const productShortcodesInput = z.object({
+  shortcodes: z.array(z.string()),
+});
+
+export const productShortcodeInput = z.object({
+  shortcode: z.string(),
+});
+
+export const productCreateManyInput = z
+  .array(productCreateInput)
+  .min(1)
+  .max(50);
+
+export const productMarkUsdaUnavailableManyInput = z.object({
+  ids: z.array(productId).min(1).max(100),
+});
+
 // Filters accepted by the product list endpoint. Canonical shape shared by the
 // tRPC router (and available to any other list caller).
 export const productFiltersSchema = z.object({
