@@ -15,7 +15,7 @@ import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMu
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { EntityIcon } from "~/entities/entities";
-import { queryKeys } from "~/lib/query-keys";
+import { productRecipeMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import type { ProductWithBetterUpcData } from "~/server/repo/problems";
 import { useTRPC } from "~/trpc/react";
@@ -132,7 +132,7 @@ function UpcApplyAction({ product }: { product: ProductWithBetterUpcData }) {
     // The whole problems.* path is always invalidated by the hook (which also
     // feeds the navbar badge count); add the product/recipe lists (price feeds
     // cost).
-    invalidateKeys: [queryKeys.product.all, queryKeys.recipe.list],
+    invalidateKeys: productRecipeMutationInvalidateKeys,
   });
   return (
     <Button

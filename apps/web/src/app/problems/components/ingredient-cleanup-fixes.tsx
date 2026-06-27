@@ -15,7 +15,11 @@ import {
 } from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
 import { countLabel } from "~/lib/pluralize";
-import { queryKeys } from "~/lib/query-keys";
+import {
+  ingredientMutationInvalidateKeys,
+  productMutationInvalidateKeys,
+  queryKeys,
+} from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 
 /**
@@ -52,8 +56,8 @@ export function UnusedIngredientDeleteFix({
         ? `${noun} deleted`
         : `Could not delete: ${data.failed[0]?.reason ?? "unknown error"}`,
     invalidateKeys: [
-      queryKeys.ingredient.list,
-      ...(alsoDeleteProducts ? [queryKeys.product.all] : []),
+      ...ingredientMutationInvalidateKeys,
+      ...(alsoDeleteProducts ? productMutationInvalidateKeys : []),
     ],
     onSuccess: (data) => {
       if (data.deleted > 0) close();
@@ -150,8 +154,8 @@ export function DeleteAllUnusedButton({
         : `Deleted ${countLabel(data.deleted, "ingredient")}`,
     invalidateKeys: [
       queryKeys.problems.all,
-      queryKeys.ingredient.list,
-      ...(alsoDeleteProducts ? [queryKeys.product.all] : []),
+      ...ingredientMutationInvalidateKeys,
+      ...(alsoDeleteProducts ? productMutationInvalidateKeys : []),
     ],
   });
 

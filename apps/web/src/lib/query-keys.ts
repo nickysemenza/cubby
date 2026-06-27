@@ -77,6 +77,11 @@ export const productMutationInvalidateKeys = [
   queryKeys.product.all,
 ] as const satisfies readonly QueryKey[];
 
+export const productRecipeMutationInvalidateKeys = [
+  ...productMutationInvalidateKeys,
+  queryKeys.recipe.list,
+] as const satisfies readonly QueryKey[];
+
 export const locationMutationInvalidateKeys = [
   queryKeys.location.list,
 ] as const satisfies readonly QueryKey[];
@@ -87,6 +92,16 @@ export const ingredientMutationInvalidateKeys = [
 
 export const ingredientAllMutationInvalidateKeys = [
   queryKeys.ingredient.all,
+] as const satisfies readonly QueryKey[];
+
+export const ingredientProductMutationInvalidateKeys = [
+  ...ingredientAllMutationInvalidateKeys,
+  ...productMutationInvalidateKeys,
+] as const satisfies readonly QueryKey[];
+
+export const ingredientRecipeMutationInvalidateKeys = [
+  ...ingredientAllMutationInvalidateKeys,
+  queryKeys.recipe.all,
 ] as const satisfies readonly QueryKey[];
 
 export const recipeMutationInvalidateKeys = [
