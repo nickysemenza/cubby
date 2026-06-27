@@ -1,4 +1,4 @@
-import { infLocation } from "@cubby/schemas/location";
+import { infLocation } from "@cubby/schemas/location-responses";
 import { unitMappingWithMetadata } from "@cubby/schemas/unitmapping";
 import { AlertTriangle, Apple, Scale } from "lucide-react";
 import { lazy, Suspense } from "react";

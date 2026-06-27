@@ -8,7 +8,6 @@
 
 import { type LocationId, locationId } from "@cubby/schemas/identifiers";
 import {
-  infLocation,
   locationCreateInput,
   locationFiltersSchema,
   locationOut,
@@ -16,6 +15,7 @@ import {
   locationUpdateInput,
 } from "@cubby/schemas/location";
 import {
+  infLocation,
   locationListItemOut,
   locationWithParentNameOut,
 } from "@cubby/schemas/location-responses";

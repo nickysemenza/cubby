@@ -5,12 +5,9 @@
 
 import { extractDbTimestampsFromDBRec } from "@cubby/schemas/common";
 import { unsafeLocationShortcode } from "@cubby/schemas/identifiers";
-import {
-  type InfLocation,
-  type LocationOut,
-  locationType,
-} from "@cubby/schemas/location";
+import { type LocationOut, locationType } from "@cubby/schemas/location";
 import type {
+  InfLocation,
   LocationListItemOut,
   LocationListRefOut,
 } from "@cubby/schemas/location-responses";

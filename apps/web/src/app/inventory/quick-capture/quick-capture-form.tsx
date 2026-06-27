@@ -16,7 +16,7 @@
  */
 
 import type { ProductId } from "@cubby/schemas/identifiers";
-import type { InfLocation } from "@cubby/schemas/location";
+import type { InfLocation } from "@cubby/schemas/location-responses";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";

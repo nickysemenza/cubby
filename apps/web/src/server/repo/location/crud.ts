@@ -6,10 +6,10 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { LocationId } from "@cubby/schemas/identifiers";
 import type {
-  InfLocation,
   LocationCreateInput,
   LocationUpdateInput,
 } from "@cubby/schemas/location";
+import type { InfLocation } from "@cubby/schemas/location-responses";
 import {
   buildTakeSkip,
   type PaginationParams,

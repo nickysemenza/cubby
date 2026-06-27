@@ -1,4 +1,4 @@
-import type { InfLocation } from "@cubby/schemas/location";
+import type { InfLocation } from "@cubby/schemas/location-responses";
 import { Link } from "@tanstack/react-router";
 import type { FC } from "react";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";

@@ -1,5 +1,5 @@
 import type { LocationId } from "@cubby/schemas/identifiers";
-import type { InfLocation } from "@cubby/schemas/location";
+import type { InfLocation } from "@cubby/schemas/location-responses";
 import { extractShortcodeFromScan } from "@cubby/shared";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";

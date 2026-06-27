@@ -1,5 +1,6 @@
 import type { LocationId } from "@cubby/schemas/identifiers";
-import type { InfLocation, LocationType } from "@cubby/schemas/location";
+import type { LocationType } from "@cubby/schemas/location";
+import type { InfLocation } from "@cubby/schemas/location-responses";
 import * as d3Hierarchy from "d3-hierarchy";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EntityPillLink } from "~/app/_components/EntityPill";

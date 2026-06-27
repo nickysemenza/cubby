@@ -1,4 +1,5 @@
-import type { InfLocation, LocationUpdateInput } from "@cubby/schemas/location";
+import type { LocationUpdateInput } from "@cubby/schemas/location";
+import type { InfLocation } from "@cubby/schemas/location-responses";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
