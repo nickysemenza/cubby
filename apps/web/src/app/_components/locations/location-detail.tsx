@@ -25,6 +25,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "~/components/ui/empty";
+import { invalidateTRPCQueries } from "~/lib/query-keys";
 import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import { InventoryCaptureWorkspace } from "../../inventory/capture/InventoryCaptureWorkspace";
@@ -236,9 +237,9 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
         onOpenChange={setCreateChildOpen}
         parentLocation={location}
         onSuccess={() => {
-          void queryClient.invalidateQueries({
-            queryKey: api.location.getByID.queryKey({ id: location.id }),
-          });
+          invalidateTRPCQueries(queryClient, [
+            api.location.getByID.queryKey({ id: location.id }),
+          ]);
         }}
       />
       <DetectItemsDialog

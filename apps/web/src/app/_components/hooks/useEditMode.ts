@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 import { getErrorMessage } from "~/lib/error-utils";
-import { invalidateTRPCQueries } from "~/lib/query-keys";
+import { invalidateAllQueries, invalidateTRPCQueries } from "~/lib/query-keys";
 
 /**
  * Mutation options from tRPC's .mutationOptions() call.
@@ -69,7 +69,7 @@ export function useEditMode<TData, TResult = unknown>({
           invalidateTRPCQueries(queryClient, invalidateKeys);
         } else {
           // Fall back to invalidating all queries
-          queryClient.invalidateQueries();
+          invalidateAllQueries(queryClient);
         }
       }
     },

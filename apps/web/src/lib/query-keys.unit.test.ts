@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ingredientAllMutationInvalidateKeys,
+  ingredientMergeMutationInvalidateKeys,
   ingredientMutationInvalidateKeys,
   ingredientProductMutationInvalidateKeys,
   ingredientRecipeMutationInvalidateKeys,
@@ -12,10 +13,12 @@ import {
   productLookupMutationInvalidateKeys,
   productMutationInvalidateKeys,
   productRecipeMutationInvalidateKeys,
+  productValuationMutationInvalidateKeys,
   queryKeys,
   recipeAllMutationInvalidateKeys,
   recipeCookbookMutationInvalidateKeys,
   recipeMutationInvalidateKeys,
+  unusedIngredientCleanupInvalidateKeys,
 } from "./query-keys";
 
 describe("normalizeTRPCQueryKey", () => {
@@ -68,6 +71,11 @@ describe("mutation invalidation groups", () => {
       queryKeys.product.all,
       queryKeys.recipe.list,
     ]);
+    expect(productValuationMutationInvalidateKeys).toEqual([
+      queryKeys.product.all,
+      queryKeys.recipe.list,
+      queryKeys.location.all,
+    ]);
     expect(productLookupMutationInvalidateKeys).toEqual([
       queryKeys.product.all,
       queryKeys.problems.all,
@@ -80,6 +88,21 @@ describe("mutation invalidation groups", () => {
     expect(ingredientRecipeMutationInvalidateKeys).toEqual([
       queryKeys.ingredient.all,
       queryKeys.recipe.all,
+    ]);
+    expect(ingredientMergeMutationInvalidateKeys).toEqual([
+      queryKeys.ingredient.all,
+      queryKeys.product.all,
+      queryKeys.recipe.all,
+      queryKeys.meal.all,
+      queryKeys.inventory.all,
+      queryKeys.location.all,
+      queryKeys.problems.all,
+      queryKeys.search.all,
+      queryKeys.dashboard.counts,
+    ]);
+    expect(unusedIngredientCleanupInvalidateKeys).toEqual([
+      queryKeys.problems.all,
+      queryKeys.ingredient.list,
     ]);
   });
 });

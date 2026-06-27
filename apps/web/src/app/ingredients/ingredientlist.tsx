@@ -29,7 +29,11 @@ import {
 } from "~/components/ui/tooltip";
 import { EntityIcon } from "~/entities/entities";
 import { getErrorMessage } from "~/lib/error-utils";
-import { ingredientMutationInvalidateKeys } from "~/lib/query-keys";
+import {
+  ingredientMergeMutationInvalidateKeys,
+  ingredientMutationInvalidateKeys,
+  invalidateTRPCQueries,
+} from "~/lib/query-keys";
 import { savedWithRecompute } from "~/lib/recompute-summary";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { useTRPC, useTRPCClient } from "~/trpc/react";
@@ -305,12 +309,14 @@ export function IngredientList() {
                 target: target.id,
                 aliases: aliasRows.map((a) => a.id),
               });
-              // The bulk-action framework doesn't auto-invalidate. A merge's blast
-              // radius is wide (ingredients deleted, products repointed,
-              // Recipe.totals recomputed, meals read those totals), and it's a rare
-              // manual action — so blow away the whole cache rather than risk
-              // under-invalidating a dependent view.
-              void queryClient.invalidateQueries();
+              // The bulk-action framework doesn't auto-invalidate. A merge's
+              // blast radius is wide: ingredients are deleted, products
+              // repoint, recipe totals are recomputed, and meals read those
+              // totals.
+              invalidateTRPCQueries(
+                queryClient,
+                ingredientMergeMutationInvalidateKeys,
+              );
               toast.success(
                 savedWithRecompute(
                   result.sideEffects,

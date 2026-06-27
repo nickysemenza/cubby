@@ -194,11 +194,11 @@ export function LocationValidateForm({
       onSuccess: () => {
         invalidateTRPCQueries(queryClient, locationMutationInvalidateKeys);
         if (parentLocationId) {
-          queryClient.invalidateQueries({
-            queryKey: api.location.getByID.queryKey({
+          invalidateTRPCQueries(queryClient, [
+            api.location.getByID.queryKey({
               id: parentLocationId,
             }),
-          });
+          ]);
         }
       },
     }),

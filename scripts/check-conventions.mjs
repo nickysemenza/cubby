@@ -18,6 +18,8 @@
  *  5. Schema contract derivation — schema contract modules must not compose
  *     response/input variants via `.extend()`, `.shape`, `.pick()`, `.omit()`,
  *     or `.partial()`; use private field maps plus explicit exported schemas.
+ *  6. Query invalidation boundaries — app code must use the typed helpers in
+ *     apps/web/src/lib/query-keys.ts instead of raw React Query invalidation.
  *
  * Exit 1 + a report on any violation; exit 0 + one-line OK when clean.
  */
@@ -116,6 +118,9 @@ const RESPONSE_EXPORT_RE =
 const SCHEMA_DERIVATION_RE =
   /\.(extend|pick|omit|partial)\s*\(|\.shape\b/;
 
+const DIRECT_QUERY_INVALIDATION_RE =
+  /\bqueryClient\.(invalidateQueries|cancelQueries)\s*\(/;
+
 const RESPONSE_SPLIT_ALLOWLIST = new Map([
   ["packages/schemas/src/common.ts", new Set(["dbTimestampsOut"])],
   [
@@ -189,6 +194,10 @@ function isSchemaContractFile(path) {
     rel.startsWith("apps/upc-lookup/src/schemas/") ||
     rel.startsWith("apps/upc-lookup/src/openapi")
   );
+}
+
+function isQueryKeyHelperFile(path) {
+  return relative(repoRoot, path) === "apps/web/src/lib/query-keys.ts";
 }
 
 /** @typedef {{ file: string, line: number, snippet: string, rule: string }} Violation */
@@ -293,6 +302,21 @@ function scan(files) {
           rule: "schema-contract-derivation",
         });
       }
+
+      // Rule 6: all raw React Query invalidation/cancellation goes through the
+      // typed query-key helpers so tRPC's nested query-key shape stays correct.
+      if (
+        !isQueryKeyHelperFile(file) &&
+        !isCommentLine(line) &&
+        DIRECT_QUERY_INVALIDATION_RE.test(line)
+      ) {
+        violations.push({
+          file,
+          line: i + 1,
+          snippet: line.trim(),
+          rule: "direct-query-invalidation",
+        });
+      }
     }
   }
 
@@ -324,6 +348,8 @@ const byRule = {
     "Response schema drift — split input/domain schema files must not export new response contracts; move them to the owning *-responses.ts module.",
   "schema-contract-derivation":
     "Schema contract derivation — use private field maps plus explicit z.object contracts instead of `.extend()`, `.shape`, `.pick()`, `.omit()`, or `.partial()`.",
+  "direct-query-invalidation":
+    "Direct React Query invalidation — use invalidateTRPCQueries/cancelTRPCQueries/invalidateAllQueries from apps/web/src/lib/query-keys.ts.",
 };
 
 console.error(

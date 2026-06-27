@@ -82,6 +82,12 @@ export const productRecipeMutationInvalidateKeys = [
   queryKeys.recipe.list,
 ] as const satisfies readonly QueryKey[];
 
+export const productValuationMutationInvalidateKeys = [
+  queryKeys.product.all,
+  queryKeys.recipe.list,
+  queryKeys.location.all,
+] as const satisfies readonly QueryKey[];
+
 export const productLookupMutationInvalidateKeys = [
   queryKeys.product.all,
   queryKeys.problems.all,
@@ -108,6 +114,23 @@ export const ingredientProductMutationInvalidateKeys = [
 export const ingredientRecipeMutationInvalidateKeys = [
   ...ingredientAllMutationInvalidateKeys,
   queryKeys.recipe.all,
+] as const satisfies readonly QueryKey[];
+
+export const ingredientMergeMutationInvalidateKeys = [
+  queryKeys.ingredient.all,
+  queryKeys.product.all,
+  queryKeys.recipe.all,
+  queryKeys.meal.all,
+  queryKeys.inventory.all,
+  queryKeys.location.all,
+  queryKeys.problems.all,
+  queryKeys.search.all,
+  queryKeys.dashboard.counts,
+] as const satisfies readonly QueryKey[];
+
+export const unusedIngredientCleanupInvalidateKeys = [
+  queryKeys.problems.all,
+  ...ingredientMutationInvalidateKeys,
 ] as const satisfies readonly QueryKey[];
 
 export const recipeMutationInvalidateKeys = [
@@ -145,6 +168,10 @@ export function invalidateTRPCQueries(
       queryKey: normalizeTRPCQueryKey(key),
     });
   }
+}
+
+export function invalidateAllQueries(queryClient: QueryClient) {
+  void queryClient.invalidateQueries();
 }
 
 export async function cancelTRPCQueries(
