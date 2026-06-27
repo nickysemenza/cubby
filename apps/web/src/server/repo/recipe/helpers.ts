@@ -18,7 +18,7 @@ import type {
   recipeSection,
   recipeSectionIngredient,
 } from "~/server/db/schema";
-import { mapRelation } from "~/server/repo/database-helpers";
+import { isNotDeleted, mapRelation } from "~/server/repo/database-helpers";
 
 import type {
   RecipeDeepDB,
@@ -34,19 +34,17 @@ type RecipeImageRow = {
 };
 
 const mapRecipeImages = (images: RecipeImageRow[] | undefined): ImageOut[] =>
-  (images ?? [])
-    .filter((row) => row.deletedAt === undefined || row.deletedAt === null)
-    .map((row) => ({
-      id: row.image.id,
-      url: row.image.url,
-      key: row.image.key,
-      filename: row.image.filename,
-      size: row.image.size,
-      contentType: row.image.contentType,
-      status: row.image.status,
-      createdAt: row.image.createdAt,
-      updatedAt: row.image.updatedAt,
-    }));
+  (images ?? []).filter(isNotDeleted).map((row) => ({
+    id: row.image.id,
+    url: row.image.url,
+    key: row.image.key,
+    filename: row.image.filename,
+    size: row.image.size,
+    contentType: row.image.contentType,
+    status: row.image.status,
+    createdAt: row.image.createdAt,
+    updatedAt: row.image.updatedAt,
+  }));
 
 /**
  * Correlated subquery counting the DISTINCT *live* recipes an ingredient appears
