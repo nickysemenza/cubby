@@ -14,8 +14,8 @@ export const ingredientBase = ingredientFields;
 
 /**
  * List/search filters for ingredients. Field names match the MCP
- * `search_ingredients` tool exactly, so it reuses this schema's `.shape`
- * (descriptions and all) instead of re-declaring the fields.
+ * `search_ingredients` tool exactly; the MCP tool has its own explicit field
+ * roster with matching names and descriptions.
  */
 export const ingredientFiltersSchema = z.object({
   nameFilter: z
@@ -29,6 +29,18 @@ export const ingredientFiltersSchema = z.object({
     .describe("Only return ingredients with no linked products"),
 });
 export type IngredientFilters = z.infer<typeof ingredientFiltersSchema>;
+
+export const mcpIngredientSearchInputShape = {
+  nameFilter: z
+    .string()
+    .optional()
+    .describe("Filter by ingredient name (substring)"),
+  missingProductsOnly: z
+    .boolean()
+    .optional()
+    .default(false)
+    .describe("Only return ingredients with no linked products"),
+};
 export const ingredientOut = z.object({
   id: ingredientId,
   name: z.string().meta({ mock: "food.ingredient" }),
@@ -102,3 +114,16 @@ export const ingredientNamesInput = z.object({
 export const ingredientResolvableNamesInput = z.object({
   names: z.array(z.string().min(1)),
 });
+
+export const mcpIngredientCreateInputShape = {
+  name: z.string().describe("Ingredient name"),
+  aliases: z
+    .array(z.string())
+    .optional()
+    .describe("Alternate names for this ingredient"),
+};
+
+export const mcpIngredientUpdateInputShape = {
+  name: z.string().optional().describe("New name"),
+  aliases: z.array(z.string()).optional().describe("New aliases (replaces)"),
+};

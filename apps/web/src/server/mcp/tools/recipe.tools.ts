@@ -1,5 +1,8 @@
 import { mcpPaginationParams } from "@cubby/schemas/pagination";
-import { recipeCreateInput, recipeUpdateInput } from "@cubby/schemas/recipe";
+import {
+  mcpRecipeCreateInputShape,
+  mcpRecipeUpdateInputShape,
+} from "@cubby/schemas/recipe";
 import type { RecipeUsage } from "@cubby/schemas/recipe-responses";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { groupBy, omitBy } from "es-toolkit";
@@ -21,7 +24,7 @@ import {
 // pre-resolved IDs). The server WASM-parses each ingredient line and
 // find-or-creates ingredients — the same pipeline as URL/Notion import. Maps
 // onto the `ImportRecipe` carrier consumed by `recipe.insertImport`.
-const createRecipeFromTextInput = z.object({
+const createRecipeFromTextInputShape = {
   name: z.string().min(1).describe("Recipe name"),
   servings: z
     .number()
@@ -60,7 +63,9 @@ const createRecipeFromTextInput = z.object({
     .describe(
       "Recipe sections; each holds raw ingredient lines and instruction steps",
     ),
-});
+};
+
+const createRecipeFromTextInput = z.object(createRecipeFromTextInputShape);
 
 export function registerRecipeTools(server: McpServer) {
   // -------------------------------------------------------------------------
@@ -177,7 +182,7 @@ export function registerRecipeTools(server: McpServer) {
   server.tool(
     "create_recipe_from_text",
     "Create a recipe from raw text lines WITHOUT pre-resolving ingredient IDs. Pass ingredient and instruction lines as plain strings; the server parses each ingredient line (quantity/unit/name) and find-or-creates ingredients automatically. Mirrors the app's 'from text' / Notion import. Prefer this over resolve_ingredients + create_recipe when building a recipe from a prep sheet or pasted text. Returns the new recipe's id.",
-    createRecipeFromTextInput.shape,
+    createRecipeFromTextInputShape,
     withErrorHandling(async (params, extra) => {
       const caller = getCaller(extra);
       const input = createRecipeFromTextInput.parse(params);
@@ -206,7 +211,7 @@ export function registerRecipeTools(server: McpServer) {
   server.tool(
     "create_recipe",
     "Create a recipe from structured input (sections with ingredient IDs and instructions). Use search_ingredients to resolve ingredient IDs first.",
-    recipeCreateInput.shape,
+    mcpRecipeCreateInputShape,
     withErrorHandling(async (params, extra) => {
       const caller = getCaller(extra);
       const result = await caller.recipe.create(params);
@@ -218,8 +223,7 @@ export function registerRecipeTools(server: McpServer) {
     "update_recipe",
     "Update a recipe's fields. Only provided fields are changed.",
     {
-      id: idParam("Recipe"),
-      ...recipeUpdateInput.shape.data.shape,
+      ...mcpRecipeUpdateInputShape,
     },
     withErrorHandling(async (params, extra) => {
       const caller = getCaller(extra);

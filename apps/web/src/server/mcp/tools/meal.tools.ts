@@ -1,9 +1,9 @@
 import {
-  mealCreateInput,
+  mcpMealAddRecipeInputShape,
+  mcpMealCreateInputShape,
+  mcpMealUpdateInputShape,
   mealDate,
-  mealRecipeInput,
   mealScale,
-  mealUpdateData,
 } from "@cubby/schemas/meal";
 import { mcpPaginationParams } from "@cubby/schemas/pagination";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -54,7 +54,7 @@ export function registerMealTools(server: McpServer) {
   server.tool(
     "create_meal",
     "Create a meal on a calendar day. Optionally include recipes (by recipe ID) to plan in one call; use list_recipes/get_recipe to resolve IDs.",
-    mealCreateInput.shape,
+    mcpMealCreateInputShape,
     withErrorHandling(async (params, extra) => {
       const caller = getCaller(extra);
       const result = await caller.meal.create(params);
@@ -67,7 +67,7 @@ export function registerMealTools(server: McpServer) {
     "Update a meal's date, name, or sort order. Recipes are managed via add/update/remove_meal_recipe.",
     {
       id: idParam("Meal"),
-      ...mealUpdateData.shape,
+      ...mcpMealUpdateInputShape,
     },
     updateHandler("meal", slimMeal),
   );
@@ -117,8 +117,7 @@ export function registerMealTools(server: McpServer) {
     "add_recipe_to_meal",
     "Plan a recipe into a meal at a given scale multiplier (1 = as-written).",
     {
-      mealId: idParam("Meal"),
-      ...mealRecipeInput.shape,
+      ...mcpMealAddRecipeInputShape,
     },
     withErrorHandling(async (params, extra) => {
       const caller = getCaller(extra);

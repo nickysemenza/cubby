@@ -119,3 +119,19 @@ export const locationIdsInput = z.object({
 
 export type LocationCreateInput = z.infer<typeof locationCreateInput>;
 export type LocationUpdateInput = z.infer<typeof locationUpdateInput>;
+
+export const mcpLocationCreateInputShape = {
+  name: requiredName("Location name").describe("name of location"),
+  type: locationType.optional(),
+  parentId: optionalLocationId
+    .optional()
+    .describe(
+      "Parent location id — nest this location under another (omit/null for a top-level location).",
+    ),
+};
+
+export const mcpLocationUpdateInputShape = {
+  name: requiredName("Location name").describe("name of location").optional(),
+  type: locationType.optional(),
+  parentId: optionalLocationId.optional(),
+};

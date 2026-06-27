@@ -13,7 +13,7 @@ import {
   recipeFiltersSchema,
   recipeIdsInput,
   recipeShortcodeInput,
-  recipeUpdateInput,
+  recipeUpdateData,
 } from "@cubby/schemas/recipe";
 import {
   recipeGraphListOut,
@@ -54,7 +54,7 @@ const { list } = createEntityListProcedure({
 const { getByID, create, update } = createEntityCrudWithoutListProcedures({
   schemas: {
     createInput: recipeCreateInput,
-    updateInput: recipeUpdateInput.shape.data,
+    updateInput: recipeUpdateData,
     output: recipeOut,
     idSchema: recipeId,
   },

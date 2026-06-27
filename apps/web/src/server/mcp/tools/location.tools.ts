@@ -1,4 +1,7 @@
-import { locationCreateInput } from "@cubby/schemas/location";
+import {
+  mcpLocationCreateInputShape,
+  mcpLocationUpdateInputShape,
+} from "@cubby/schemas/location";
 import { mcpPaginationParams } from "@cubby/schemas/pagination";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -63,11 +66,7 @@ export function registerLocationTools(server: McpServer) {
     "create_location",
     "Create a new location. Use list_locations to find a parent location ID.",
     {
-      // Field shapes + descriptions from canonical locationCreateInput (name
-      // required; type/parentId optional). Images are managed elsewhere.
-      name: locationCreateInput.shape.name,
-      ...locationCreateInput.pick({ type: true, parentId: true }).partial()
-        .shape,
+      ...mcpLocationCreateInputShape,
     },
     withErrorHandling(async (params, extra) => {
       const caller = getCaller(extra);
@@ -85,10 +84,7 @@ export function registerLocationTools(server: McpServer) {
     "Update a location's name, type, or parent.",
     {
       id: idParam("Location"),
-      // Curated subset of canonical locationCreateInput (all optional for update).
-      ...locationCreateInput
-        .pick({ name: true, type: true, parentId: true })
-        .partial().shape,
+      ...mcpLocationUpdateInputShape,
     },
     updateHandler("location", slimLocation),
   );

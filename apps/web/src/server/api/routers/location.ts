@@ -14,7 +14,7 @@ import {
   locationIdsInput,
   locationShortcodeInput,
   locationShortcodesInput,
-  locationUpdateInput,
+  locationUpdateData,
   recentlyActiveLocationsInput,
 } from "@cubby/schemas/location";
 import {
@@ -73,7 +73,7 @@ const { list } = createEntityListProcedure({
 const { getByID, create, update } = createEntityCrudWithoutListProcedures({
   schemas: {
     createInput: locationCreateInput,
-    updateInput: locationUpdateInput.shape.data,
+    updateInput: locationUpdateData,
     output: infLocation,
     idSchema: locationId,
   },

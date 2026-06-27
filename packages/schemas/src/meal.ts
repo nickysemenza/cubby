@@ -76,3 +76,28 @@ export const mealFiltersSchema = z.object({
   to: mealDate.optional(),
 });
 export type MealFilters = z.infer<typeof mealFiltersSchema>;
+
+export const mcpMealCreateInputShape = {
+  date: mealDate,
+  name: z.string().nullable().optional(),
+  sortOrder: z.number().int().nullable().optional(),
+  recipes: z.array(mealRecipeInput).optional(),
+};
+
+export const mcpMealUpdateInputShape = {
+  date: mealDate.optional(),
+  name: z.string().nullable().optional(),
+  sortOrder: z.number().int().nullable().optional(),
+};
+
+export const mcpMealAddRecipeInputShape = {
+  mealId: mealId.describe("Meal ID"),
+  recipeId: recipeId.describe("Recipe ID to plan into the meal"),
+  scale: mealScale.default(1).describe("Scale multiplier (1 = as written)"),
+  sortOrder: z
+    .number()
+    .int()
+    .nullable()
+    .optional()
+    .describe("Sort order within the meal"),
+};

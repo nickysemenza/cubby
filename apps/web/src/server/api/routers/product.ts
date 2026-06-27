@@ -23,6 +23,7 @@ import {
   productShortcodesInput,
   productSummaryBatchInput,
   productTopLevelOut,
+  productUpdateData,
   productUpdateInput,
 } from "@cubby/schemas/product";
 import {
@@ -91,7 +92,7 @@ const { getByID } = createEntityCrudWithoutListProcedures({
     createInput: productCreateInput,
     // Defaults-stripped so a partial update never resets an omitted field (e.g.
     // wiping fdc_id / unitMappings). See productUpdateData.
-    updateInput: productUpdateInput.shape.data,
+    updateInput: productUpdateData,
     output: productWithFoodOut,
     idSchema: productId,
   },

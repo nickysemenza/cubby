@@ -14,7 +14,7 @@ import {
   inventoryFiltersSchema,
   inventoryFindDuplicatesInput,
   inventoryLocationIdsInput,
-  inventoryUpdateInput,
+  inventoryUpdatePayloadData,
 } from "@cubby/schemas/inventory";
 import {
   inventoryCountsByLocationOut,
@@ -61,7 +61,7 @@ const { list } = createEntityListProcedure({
 const { getByID, create, update } = createEntityCrudWithoutListProcedures({
   schemas: {
     createInput: inventoryCreatePayloadData,
-    updateInput: inventoryUpdateInput.shape.data,
+    updateInput: inventoryUpdatePayloadData,
     output: inventoryWithLocationAndProductOut,
     idSchema: inventoryId,
   },

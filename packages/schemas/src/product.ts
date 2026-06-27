@@ -11,7 +11,7 @@ import {
   productShortcode,
 } from "./identifiers";
 import { imageOut } from "./image-responses";
-import { unitMappingInput } from "./unitmapping";
+import { mcpUnitMappingInput, unitMappingInput } from "./unitmapping";
 
 // Product category enum for filtering/organization
 export const productCategory = z
@@ -102,8 +102,8 @@ export const productCreateInput = z.object({
 });
 
 // A partial update must leave omitted fields UNCHANGED. This schema is explicit
-// instead of `productCreateInput.partial()` so create-time defaults never become
-// destructive update defaults for `unitMappings`/`externalIds`.
+// so create-time defaults never become destructive update defaults for
+// `unitMappings`/`externalIds`.
 export const productUpdateData = z.object({
   name: requiredName("Product name")
     .describe("Product name")
@@ -232,3 +232,54 @@ export const productQuickCreatePayload = z.object({
   notes: z.string().nullable().optional(),
   price: z.number().positive().nullable().optional(),
 });
+
+export const mcpProductCreateInputShape = {
+  name: requiredName("Product name")
+    .describe("Product name")
+    .meta({ mock: "commerce.productName" }),
+  manufacturer: z
+    .string()
+    .describe("Manufacturer or 'generic'")
+    .meta({ mock: "company.name" })
+    .optional(),
+  upc: upc.nullable().optional(),
+  price: z
+    .number()
+    .positive()
+    .nullable()
+    .optional()
+    .describe("price per each ($), source of truth"),
+  expectedQuantity: z
+    .number()
+    .int()
+    .positive()
+    .nullable()
+    .optional()
+    .describe("null means unlimited, 1 for unique items"),
+  ingredientId: ingredientId
+    .nullable()
+    .optional()
+    .describe(
+      "Link this product to an ingredient (its id) so recipes using that ingredient can cost from this product.",
+    ),
+  unitMappings: z.array(mcpUnitMappingInput).optional(),
+};
+
+export const mcpProductUpdateInputShape = {
+  name: requiredName("Product name")
+    .describe("Product name")
+    .meta({ mock: "commerce.productName" })
+    .optional(),
+  manufacturer: z
+    .string()
+    .describe("Manufacturer or 'generic'")
+    .meta({ mock: "company.name" })
+    .optional(),
+  upc: upc.nullable().optional(),
+  fdc_id: fdcId.nullable().optional(),
+  usdaUnavailable: z.boolean().nullable().optional(),
+  price: z.number().positive().nullable().optional(),
+  category: productCategory.nullable().optional(),
+  notes: z.string().nullish(),
+  externalIds: z.array(externalIdInput).optional(),
+};

@@ -63,9 +63,8 @@ export const recipeFiltersSchema = z.object({
   cookbookId: cookbookId.optional(),
 });
 
-// Descriptions surface to MCP clients through `recipeCreateInput.shape` and
-// `recipeUpdateInput.shape.data.shape`; keep this explicit so create-required
-// fields and update-optional fields do not derive from `.partial()`.
+// Descriptions surface to MCP clients through the explicit `mcpRecipe*Shape`
+// exports below; keep create-required fields and update-optional fields separate.
 export const recipeCreateInput = z.object({
   name: requiredName("Recipe name").describe("Recipe name"),
   meta: recipeMeta.describe("Source metadata, e.g. { url } of the web source"),
@@ -149,3 +148,56 @@ export const recipeIdInput = z.object({
 
 export type RecipeCreateInput = z.infer<typeof recipeCreateInput>;
 export type RecipeUpdateInput = z.infer<typeof recipeUpdateInput>;
+
+export const mcpRecipeCreateInputShape = {
+  name: requiredName("Recipe name").describe("Recipe name"),
+  meta: recipeMeta.describe("Source metadata, e.g. { url } of the web source"),
+  yield: recipeYieldSchema
+    .nullable()
+    .optional()
+    .describe('What the recipe produces, e.g. { value: 2, unit: "loaves" }'),
+  servings: recipeServings
+    .nullable()
+    .optional()
+    .describe("Number of servings (positive integer)"),
+  tags: recipeTags.nullable().optional().describe("Free-form tags"),
+  notes: recipeNotes
+    .nullable()
+    .optional()
+    .describe("Freeform markdown headnote/intro plus tips"),
+  sections: z
+    .array(recipeSectionInput)
+    .describe(
+      "Recipe sections, each with ingredients (by ingredient/recipe id) and instructions",
+    ),
+  pendingImageIds: z.array(z.uuid()).optional(),
+};
+
+export const mcpRecipeUpdateInputShape = {
+  id: recipeId.describe("Recipe ID"),
+  name: requiredName("Recipe name").describe("Recipe name").optional(),
+  meta: recipeMeta
+    .describe("Source metadata, e.g. { url } of the web source")
+    .optional(),
+  yield: recipeYieldSchema
+    .nullable()
+    .optional()
+    .describe('What the recipe produces, e.g. { value: 2, unit: "loaves" }'),
+  servings: recipeServings
+    .nullable()
+    .optional()
+    .describe("Number of servings (positive integer)"),
+  tags: recipeTags.nullable().optional().describe("Free-form tags"),
+  notes: recipeNotes
+    .nullable()
+    .optional()
+    .describe("Freeform markdown headnote/intro plus tips"),
+  sections: z
+    .array(recipeSectionInput)
+    .optional()
+    .describe(
+      "Recipe sections, each with ingredients (by ingredient/recipe id) and instructions",
+    ),
+  pendingImageIds: z.array(z.uuid()).optional(),
+  removeImageIds: z.array(z.uuid()).optional(),
+};
