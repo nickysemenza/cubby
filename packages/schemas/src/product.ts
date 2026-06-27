@@ -9,7 +9,8 @@ import {
   productId,
   productShortcode,
 } from "./identifiers";
-import { createInputImages, imageOut, updateInputImages } from "./image";
+import { createInputImages, updateInputImages } from "./image";
+import { imageOut } from "./image-responses";
 import { unitMappingInput } from "./unitmapping";
 
 // Product category enum for filtering/organization

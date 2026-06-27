@@ -1,4 +1,4 @@
-import type { ImageWithEntity } from "@cubby/schemas/image";
+import type { ImageWithEntity } from "@cubby/schemas/image-responses";
 import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { createImageColumn } from "~/app/_components/data-table/columnHelpers";

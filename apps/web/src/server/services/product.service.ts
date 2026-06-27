@@ -1,6 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ProductId } from "@cubby/schemas/identifiers";
-import type { ImageOut } from "@cubby/schemas/image";
+import type { ImageOut } from "@cubby/schemas/image-responses";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type {
   ProductCategory,

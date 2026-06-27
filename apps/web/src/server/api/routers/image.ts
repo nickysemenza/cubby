@@ -1,15 +1,17 @@
 import {
-  cullPendingImagesResponseSchema,
   cullPendingImagesSchema,
   getImageByIdSchema,
   imageListFiltersSchema,
+  importImageFromUrlSchema,
+  initiateUploadWithoutEntitySchema,
+} from "@cubby/schemas/image";
+import {
+  cullPendingImagesResponseSchema,
   imageListResponseSchema,
   imageWithEntitySchema,
   importImageFromUrlResponseSchema,
-  importImageFromUrlSchema,
   initiateUploadWithoutEntityResponseSchema,
-  initiateUploadWithoutEntitySchema,
-} from "@cubby/schemas/image";
+} from "@cubby/schemas/image-responses";
 import { buildPaginatedResponse } from "@cubby/schemas/pagination";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { createAppError } from "~/server/errors/app-error";

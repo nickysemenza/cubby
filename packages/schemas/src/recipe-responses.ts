@@ -2,7 +2,7 @@ import { z } from "zod";
 import { amount } from "./codec";
 import { baseEntitySchema, dbTimestampsOut } from "./common";
 import { cookbookId, ingredientId, recipeId } from "./identifiers";
-import { imageOut } from "./image";
+import { imageOut } from "./image-responses";
 import {
   recipeMeta,
   recipeNotes,

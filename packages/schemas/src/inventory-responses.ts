@@ -1,7 +1,7 @@
 import { fdcId, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { externalIdOut } from "./external-id";
-import { imageOut } from "./image";
+import { imageOut } from "./image-responses";
 import { inventoryEntryOut } from "./inventory";
 import {
   locationId,

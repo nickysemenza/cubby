@@ -5,7 +5,7 @@
 
 import type { ActorContext } from "@cubby/schemas/context";
 import type { IngredientId, ProductId } from "@cubby/schemas/identifiers";
-import type { ImageOut } from "@cubby/schemas/image";
+import type { ImageOut } from "@cubby/schemas/image-responses";
 import {
   buildTakeSkip,
   type PaginationParams,

@@ -1,4 +1,4 @@
-import type { ImageOut } from "@cubby/schemas/image";
+import type { ImageOut } from "@cubby/schemas/image-responses";
 import { createContext, type ReactNode, useContext } from "react";
 import { useChunkedRecordQuery } from "~/app/_components/hooks/useChunkedRecordQuery";
 import { useTRPC } from "~/trpc/react";

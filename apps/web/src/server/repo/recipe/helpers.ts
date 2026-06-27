@@ -3,7 +3,7 @@
  * Convert database records to API types.
  */
 
-import type { ImageOut } from "@cubby/schemas/image";
+import type { ImageOut } from "@cubby/schemas/image-responses";
 import type {
   RecipeGraphOut,
   RecipeListItem,

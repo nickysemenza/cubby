@@ -11,7 +11,7 @@ import {
   type ProductId,
   productId,
 } from "@cubby/schemas/identifiers";
-import { imageOut } from "@cubby/schemas/image";
+import { imageOut } from "@cubby/schemas/image-responses";
 import {
   productCategory,
   productCreateInput,

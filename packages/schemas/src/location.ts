@@ -2,7 +2,8 @@ import { locationTypeValues } from "@cubby/shared";
 import { z } from "zod";
 import { dbTimestampsOut, requiredName } from "./common";
 import { locationId, locationShortcode } from "./identifiers";
-import { createInputImages, imageOut, updateInputImages } from "./image";
+import { createInputImages, updateInputImages } from "./image";
+import { imageOut } from "./image-responses";
 
 export const locationType = z
   .enum(locationTypeValues)

@@ -1,4 +1,4 @@
-import type { ImageOut } from "@cubby/schemas/image";
+import type { ImageOut } from "@cubby/schemas/image-responses";
 import type {
   RecipeCreateInput,
   RecipeUpdateInput,

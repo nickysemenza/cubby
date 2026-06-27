@@ -1,6 +1,6 @@
 import { externalIdInput } from "@cubby/schemas/external-id";
 import type { IngredientId } from "@cubby/schemas/identifiers";
-import type { ImageOut } from "@cubby/schemas/image";
+import type { ImageOut } from "@cubby/schemas/image-responses";
 import {
   type ProductCreateInput,
   type ProductTopLevelOut,

@@ -23,6 +23,7 @@
     "./recipe-responses": "./src/recipe-responses.ts",
     "./recipe-shared": "./src/recipe-shared.ts",
     "./image": "./src/image.ts",
+    "./image-responses": "./src/image-responses.ts",
     "./unitmapping": "./src/unitmapping.ts",
     "./external-id": "./src/external-id.ts",
     "./product": "./src/product.ts",
