@@ -43,6 +43,7 @@ export const ingredientOut = z
   })
   .extend(ingredientPersistedFields.shape)
   .extend(dbTimestampsOut.shape);
+export type IngredientOut = z.infer<typeof ingredientOut>;
 
 /**
  * Input schema for creating ingredients. Overrides the base `name` (lax for

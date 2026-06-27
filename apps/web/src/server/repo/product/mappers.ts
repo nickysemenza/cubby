@@ -3,6 +3,10 @@ import {
   unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
+import type {
+  InventoryListProductOut,
+  ProductInventoryEmbedOut,
+} from "@cubby/schemas/inventory-responses";
 import { locationType } from "@cubby/schemas/location";
 import {
   type ProductPickerItemOut,
@@ -20,6 +24,7 @@ import type {
   productUnitMappings,
 } from "~/server/db/schema";
 import {
+  isNotDeleted,
   mapRelation,
   parseInventoryAmount,
 } from "~/server/repo/database-helpers";
@@ -43,7 +48,10 @@ export const mapProductImages = (
   if (!images) return [];
 
   return images
-    .filter((row) => !("deletedAt" in row) || row.deletedAt === null)
+    .filter((row) => {
+      const dbImage = "image" in row ? row.image : row;
+      return isNotDeleted(row) && isNotDeleted(dbImage);
+    })
     .map((row) => {
       const dbImage = "image" in row ? row.image : row;
       return {
@@ -144,6 +152,41 @@ export const dbProductToPickerItemAPI = (
     identifier: { id: productData.id, name: productData.name },
   });
 };
+
+export const dbProductToInventoryEmbedShape = (
+  productData: typeof product.$inferSelect,
+): ProductInventoryEmbedOut => ({
+  id: productData.id,
+  shortcode: unsafeProductShortcode(productData.shortcode),
+  name: productData.name,
+  upc: productData.upc,
+  fdc_id: productData.fdc_id,
+  manufacturer: productData.manufacturer,
+  model: productData.model,
+  notes: productData.notes,
+  expectedQuantity: productData.expectedQuantity,
+  category: productData.category,
+  price: productData.price,
+  usdaUnavailable: productData.usdaUnavailable,
+  createdAt: productData.createdAt,
+  updatedAt: productData.updatedAt,
+});
+
+export const dbProductToInventoryListShape = (
+  productData: typeof product.$inferSelect,
+): InventoryListProductOut => ({
+  id: productData.id,
+  shortcode: unsafeProductShortcode(productData.shortcode),
+  name: productData.name,
+  manufacturer: productData.manufacturer,
+  upc: productData.upc,
+  fdc_id: productData.fdc_id,
+  category: productData.category,
+  expectedQuantity: productData.expectedQuantity,
+  model: productData.model,
+  price: productData.price,
+  usdaUnavailable: productData.usdaUnavailable,
+});
 
 /**
  * Transform a deeply nested product DB record to API format.

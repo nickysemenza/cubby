@@ -16,7 +16,7 @@ import {
   locationUpdateInput,
 } from "@cubby/schemas/location";
 import {
-  locationOutWithParentChildrenAndInventoryOut,
+  locationListItemOut,
   locationWithParentNameOut,
 } from "@cubby/schemas/location-responses";
 import { z } from "zod";
@@ -44,7 +44,7 @@ import { createTRPCRouter, protectedProcedure } from "../trpc";
 // Create standardized list procedure using factory
 const { list } = createEntityListProcedure({
   schemas: {
-    output: locationOutWithParentChildrenAndInventoryOut,
+    output: locationListItemOut,
     filters: locationFiltersSchema,
   },
   repository: {

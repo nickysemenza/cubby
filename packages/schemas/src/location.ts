@@ -98,7 +98,10 @@ export const infLocation: z.ZodType<InfLocation> = locationOut.extend({
   inventoryItems: z.array(inventoryItemForTree).optional(),
 });
 
-export type { LocationOutWithParentChildren } from "./location-responses";
+export type {
+  LocationListItemOut,
+  LocationListRefOut,
+} from "./location-responses";
 
 // Helper to coerce empty strings to null for optional ID fields
 const optionalLocationId = z

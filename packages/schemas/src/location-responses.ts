@@ -1,18 +1,22 @@
 import { z } from "zod";
-import { imageOut } from "./image";
+import { locationId, locationShortcode } from "./identifiers";
 import { inventoryWithProductOut } from "./inventory-responses";
-import { locationOut } from "./location";
+import { locationOut, locationType } from "./location";
 
-export const locationOutWithParentChildrenAndInventoryOut = locationOut.extend({
-  children: z.array(locationOut),
-  parent: locationOut.nullable(),
-  inventoryEntries: z.array(inventoryWithProductOut),
-  images: z.array(imageOut),
+export const locationListRefOut = z.object({
+  id: locationId,
+  shortcode: locationShortcode,
+  name: z.string(),
+  type: locationType,
 });
+export type LocationListRefOut = z.infer<typeof locationListRefOut>;
 
-export type LocationOutWithParentChildren = z.infer<
-  typeof locationOutWithParentChildrenAndInventoryOut
->;
+export const locationListItemOut = locationOut.extend({
+  children: z.array(locationListRefOut),
+  parent: locationListRefOut.nullable(),
+  inventoryEntries: z.array(inventoryWithProductOut),
+});
+export type LocationListItemOut = z.infer<typeof locationListItemOut>;
 
 export const locationWithParentNameOut = locationOut.extend({
   parentName: z.string().nullable(),

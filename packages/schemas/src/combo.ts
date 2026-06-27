@@ -31,9 +31,11 @@ export {
   productInventoryEmbedOut,
 } from "./inventory-responses";
 export {
-  type LocationOutWithParentChildren,
+  type LocationListItemOut,
+  type LocationListRefOut,
   type LocationWithParentNameOut,
-  locationOutWithParentChildrenAndInventoryOut,
+  locationListItemOut,
+  locationListRefOut,
   locationWithParentNameOut,
 } from "./location-responses";
 export {

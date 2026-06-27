@@ -4,6 +4,7 @@
  */
 
 import { amount } from "@cubby/schemas/codec";
+import type { ImageOut } from "@cubby/schemas/image";
 import type { z } from "zod";
 import { parseWithContext } from "~/lib/zod-utils";
 import { isNotDeleted } from "./query";
@@ -14,12 +15,38 @@ import { isNotDeleted } from "./query";
  * Automatically filters out soft-deleted join table records.
  */
 export const extractImagesFromJoinTable = <
-  T extends { image: { id: string }; deletedAt?: Date | null },
+  T extends {
+    image: {
+      id: string;
+      url: string;
+      key: string;
+      filename: string;
+      size: number;
+      contentType: string;
+      status: ImageOut["status"];
+      createdAt: Date;
+      updatedAt: Date;
+      deletedAt?: Date | null;
+    };
+    deletedAt?: Date | null;
+  },
 >(
   joinTableRecords: T[] | undefined | null,
-): T["image"][] => {
+): ImageOut[] => {
   return (
-    joinTableRecords?.filter(isNotDeleted).map((record) => record.image) ?? []
+    joinTableRecords
+      ?.filter((record) => isNotDeleted(record) && isNotDeleted(record.image))
+      .map((record) => ({
+        id: record.image.id,
+        url: record.image.url,
+        key: record.image.key,
+        filename: record.image.filename,
+        size: record.image.size,
+        contentType: record.image.contentType,
+        status: record.image.status,
+        createdAt: record.image.createdAt,
+        updatedAt: record.image.updatedAt,
+      })) ?? []
   );
 };
 

@@ -18,7 +18,12 @@
  */
 
 import { type AnyColumn, asc } from "drizzle-orm";
-import { recipeSection, recipeSectionIngredient } from "~/server/db/schema";
+import {
+  inventoryEntry,
+  location,
+  recipeSection,
+  recipeSectionIngredient,
+} from "~/server/db/schema";
 import { notDeleted } from "./query";
 
 /**
@@ -156,6 +161,25 @@ export const relations = {
     },
   },
   location: {
+    list: {
+      with: {
+        parent: true,
+        children: {
+          where: notDeleted(location),
+        },
+        inventoryEntries: {
+          where: notDeleted(inventoryEntry),
+          with: {
+            product: true,
+          },
+        },
+        images: {
+          with: {
+            image: true,
+          },
+        },
+      },
+    },
     full: {
       with: {
         parent: true,

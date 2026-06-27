@@ -36,9 +36,11 @@ import {
   cookbookOnlyForIngredientSql,
   liveRecipeCountForIngredientSql,
 } from "../recipe";
-import { buildIngredientWhere, type IngredientDeepDB } from "./internal-types";
+import { buildIngredientWhere } from "./internal-types";
 import {
   dbIngredientToAPI,
+  dbIngredientToListAPI,
+  dbIngredientToTopLevelShape,
   mapIngredientProducts,
   mapIngredientProductsLean,
 } from "./mappers";
@@ -158,9 +160,9 @@ export const getIngredientsByIDsLean = async (
     with: { product: { with: { unitMappings: true } } },
   });
   return rows.map((row) => {
-    const { product: productRel, ...restOfIngredient } = row;
+    const { product: productRel } = row;
     return {
-      ...restOfIngredient,
+      ...dbIngredientToTopLevelShape(row),
       product: mapIngredientProductsLean(productRel),
     };
   });
@@ -209,14 +211,9 @@ export const enrichmentWorkbenchIngredients = async (db: Database) => {
     orderBy: [sql.raw(`${recipeCountSql} desc nulls last`)],
   });
   return rows.map((row) => {
-    const {
-      product: productRel,
-      recipeCount,
-      cookbookOnly,
-      ...restOfIngredient
-    } = row;
+    const { product: productRel, recipeCount, cookbookOnly } = row;
     return {
-      ...restOfIngredient,
+      ...dbIngredientToTopLevelShape(row),
       product: mapIngredientProducts(productRel),
       // count() returns bigint (string over the wire), so coerce; the boolean comes
       // back native — `=== true` avoids the Boolean("false") === true trap if a
@@ -348,22 +345,6 @@ export const ingredientList = async (
     },
   } as const;
 
-  const toListItem = <
-    R extends {
-      product: IngredientDeepDB["product"];
-      appearsInRecipes: RecipeRef[];
-    },
-  >(
-    row: R,
-  ) => {
-    const { product: productRel, appearsInRecipes, ...rest } = row;
-    return {
-      ...rest,
-      product: mapIngredientProducts(productRel),
-      appearsInRecipes: appearsInRecipes ?? [],
-    };
-  };
-
   if (missingProductsOnly) {
     // Use a subquery to find ingredients with no products
     const ingredientsWithNoProducts = getDb(db)
@@ -396,7 +377,7 @@ export const ingredientList = async (
           .then((rows) => rows[0]?.count ?? 0),
       );
 
-    return { data: results.map(toListItem), count: totalCount };
+    return { data: results.map(dbIngredientToListAPI), count: totalCount };
   } else {
     // Normal query without missing products filter
     const { data: results, count: totalCount } =
@@ -411,6 +392,6 @@ export const ingredientList = async (
         countWhere(db, ingredient, whereClause),
       );
 
-    return { data: results.map(toListItem), count: totalCount };
+    return { data: results.map(dbIngredientToListAPI), count: totalCount };
   }
 };

@@ -1,5 +1,5 @@
 import type { CookbookId } from "@cubby/schemas/identifiers";
-import type { RecipeOut } from "@cubby/schemas/recipe";
+import type { RecipeListItem } from "@cubby/schemas/recipe";
 import { useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Scale } from "lucide-react";
@@ -69,7 +69,7 @@ interface RecipeListProps {
 export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
   const api = useTRPC();
   const navigate = useNavigate();
-  const columnHelper = createColumnHelper<RecipeOut>();
+  const columnHelper = createColumnHelper<RecipeListItem>();
   const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("recipe");
 
   const columns = useMemo(

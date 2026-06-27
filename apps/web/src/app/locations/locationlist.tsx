@@ -1,7 +1,5 @@
-import type {
-  LocationOutWithParentChildren,
-  LocationType,
-} from "@cubby/schemas/location";
+import type { LocationType } from "@cubby/schemas/location";
+import type { LocationListItemOut } from "@cubby/schemas/location-responses";
 import { getLocationTypeColor } from "@cubby/shared";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
@@ -37,7 +35,7 @@ export function LocationList() {
   const api = useTRPC();
   const navigate = useNavigate();
   const columnHelper = useMemo(
-    () => createColumnHelper<LocationOutWithParentChildren>(),
+    () => createColumnHelper<LocationListItemOut>(),
     [],
   );
   const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("location");
@@ -150,7 +148,7 @@ export function LocationList() {
           icon: <Printer className="h-4 w-4" />,
           minSelection: 1,
           onExecute: async (
-            rows: import("@tanstack/react-table").Row<LocationOutWithParentChildren>[],
+            rows: import("@tanstack/react-table").Row<LocationListItemOut>[],
           ) => {
             const eligible = rows.filter((r) =>
               typeSupportsQrCode(r.original.type),
@@ -182,7 +180,7 @@ export function LocationList() {
   );
 
   const extraActions = useCallback(
-    (row: LocationOutWithParentChildren) => (
+    (row: LocationListItemOut) => (
       <>
         <DropdownMenuItem
           render={
@@ -209,16 +207,13 @@ export function LocationList() {
   );
 
   // Group by location type for mobile section headers
-  const groupKeyFn = useCallback(
-    (item: LocationOutWithParentChildren) => item.type,
-    [],
-  );
+  const groupKeyFn = useCallback((item: LocationListItemOut) => item.type, []);
   const groupColorFn = useCallback(
     (key: string) => getLocationTypeColor(key as LocationType),
     [],
   );
   const groupConfig = useMemo(
-    (): GroupConfig<LocationOutWithParentChildren> => ({
+    (): GroupConfig<LocationListItemOut> => ({
       field: "type",
       keyFn: groupKeyFn,
       colorFn: groupColorFn,

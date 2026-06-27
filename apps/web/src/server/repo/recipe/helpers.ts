@@ -203,7 +203,9 @@ const sectionIngredientToAPI = (
  * This is the shared, unvalidated field mapper for recipe list rows and recipe
  * references.
  */
-const dbRecipeToTopLevelShape = (recipeData: RecipeSelect): RecipeTopLevel => {
+export const dbRecipeToTopLevelShape = (
+  recipeData: RecipeSelect,
+): RecipeTopLevel => {
   // cookbookId is the FK, not a top-level API field — pull it out of the row so it
   // isn't spread into the output, but feed it to the source codec so a book
   // recipe's `source` carries its cookbook id (for linking).

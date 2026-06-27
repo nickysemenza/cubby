@@ -29,6 +29,7 @@ export const productInventoryEmbedOut = z.object({
   createdAt: z.date(),
   updatedAt: z.date(),
 });
+export type ProductInventoryEmbedOut = z.infer<typeof productInventoryEmbedOut>;
 
 export const inventoryWithProductOut = inventoryEntryOut.extend({
   product: productInventoryEmbedOut,
@@ -51,6 +52,7 @@ export const inventoryListProductOut = z.object({
   price: z.number().nullable(),
   usdaUnavailable: z.boolean().nullable(),
 });
+export type InventoryListProductOut = z.infer<typeof inventoryListProductOut>;
 
 export const inventoryListLocationOut = z.object({
   id: locationId,
@@ -58,6 +60,7 @@ export const inventoryListLocationOut = z.object({
   name: z.string(),
   type: locationType,
 });
+export type InventoryListLocationOut = z.infer<typeof inventoryListLocationOut>;
 
 export const inventoryListItemOut = inventoryEntryOut.extend({
   product: inventoryListProductOut,
