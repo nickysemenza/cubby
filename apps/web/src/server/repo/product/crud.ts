@@ -60,10 +60,11 @@ import { generateUniqueProductShortcode } from "~/server/repo/shortcode-utils";
 
 import {
   dbProductToAPI,
+  dbProductToListAPI,
   dbProductToPickerItemAPI,
   dbProductToTopLevelAPI,
 } from "./mappers";
-import type { ProductDeepDB } from "./types";
+import type { ProductListDB } from "./types";
 import {
   assertNoCanonicalPriceMapping,
   syncProductExternalIds,
@@ -256,12 +257,14 @@ export const productList = async (
       orderBy: orderByArray,
       limit: take,
       offset: skip,
-      ...relations.product.full,
+      ...relations.product.list,
     }),
     countWhere(db, product, whereClause),
   );
 
-  const products = results.map((prod: ProductDeepDB) => dbProductToAPI(prod));
+  const products = results.map((prod: ProductListDB) =>
+    dbProductToListAPI(prod),
+  );
 
   return { data: products, count: totalCount };
 };

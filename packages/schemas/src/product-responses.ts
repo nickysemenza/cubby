@@ -1,7 +1,11 @@
 import { foodSummary } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { ingredientOut } from "./ingredient";
-import { inventoryWithLocationOut } from "./inventory-responses";
+import {
+  inventoryListLocationOut,
+  inventoryWithLocationOut,
+} from "./inventory-responses";
+import { inventoryEntryOut } from "./inventory";
 import { productTopLevelOut } from "./product";
 import { recipeUsageOut, recomputeSummary } from "./recipe";
 import { unitMappingOut } from "./unitmapping";
@@ -18,10 +22,16 @@ export const productWithIngredientAndInventoryAndMappingsOut =
     inventoryEntry: z.array(inventoryWithLocationOut),
   });
 
-// Product list rows stay DB-only. USDA summaries and recipe usages hydrate
+export const productListInventoryEntryOut = inventoryEntryOut.extend({
+  location: inventoryListLocationOut,
+});
+
+// Product list rows stay list-shaped. USDA summaries and recipe usages hydrate
 // through separate/detail paths so list paint is not blocked by ancillary data.
-export const productListItemOut =
-  productWithIngredientAndInventoryAndMappingsOut;
+export const productListItemOut = productWithMappingsOut.extend({
+  ingredient: ingredientOut.nullable(),
+  inventoryEntry: z.array(productListInventoryEntryOut),
+});
 export type ProductListItem = z.infer<typeof productListItemOut>;
 
 // Enriched product shape for detail/create/update responses. recipeUsages is

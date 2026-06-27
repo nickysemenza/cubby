@@ -10,14 +10,18 @@ import {
   productPickerItemOut,
   productTopLevelOut,
 } from "@cubby/schemas/product";
-import { productWithIngredientAndInventoryAndMappingsOut } from "@cubby/schemas/product-responses";
+import {
+  productListItemOut,
+  productWithIngredientAndInventoryAndMappingsOut,
+} from "@cubby/schemas/product-responses";
 import { describe, expect, it } from "vitest";
 import {
   dbProductToAPI,
+  dbProductToListAPI,
   dbProductToPickerItemAPI,
   dbProductToTopLevelAPI,
 } from "./mappers";
-import type { ProductDeepDB } from "./types";
+import type { ProductDeepDB, ProductListDB } from "./types";
 
 const PRODUCT_ID = unsafeProductId("123e4567-e89b-12d3-a456-426614174000");
 const INGREDIENT_ID = unsafeIngredientId(
@@ -25,6 +29,9 @@ const INGREDIENT_ID = unsafeIngredientId(
 );
 const LOCATION_ID = unsafeLocationId("323e4567-e89b-12d3-a456-426614174000");
 const INVENTORY_ID = unsafeInventoryId("423e4567-e89b-12d3-a456-426614174000");
+const DELETED_LOCATION_INVENTORY_ID = unsafeInventoryId(
+  "023e4567-e89b-12d3-a456-426614174000",
+);
 const IMAGE_ID = "523e4567-e89b-12d3-a456-426614174000";
 const JOIN_IMAGE_ID = "623e4567-e89b-12d3-a456-426614174000";
 const DELETED_IMAGE_ID = "723e4567-e89b-12d3-a456-426614174000";
@@ -125,6 +132,27 @@ const deletedUnitMapping = {
   deletedAt: DELETED_AT,
 };
 
+const activeLocation = {
+  id: LOCATION_ID,
+  shortcode: "L-TEST",
+  name: "Pantry",
+  createdAt: CREATED_AT,
+  updatedAt: UPDATED_AT,
+  deletedAt: null,
+  lastBulkInventory: null,
+  parentId: null,
+  type: "room",
+  aiDescription: null,
+  valuation: null,
+};
+
+const deletedLocation = {
+  ...activeLocation,
+  id: unsafeLocationId("c23e4567-e89b-12d3-a456-426614174000"),
+  shortcode: "L-OLD",
+  deletedAt: DELETED_AT,
+};
+
 describe("product mappers", () => {
   it("maps top-level products exactly and filters soft-deleted relations", () => {
     const result = dbProductToTopLevelAPI({
@@ -171,6 +199,87 @@ describe("product mappers", () => {
     expect(productPickerItemOut.parse(result)).toEqual(result);
   });
 
+  it("maps list rows to the list contract without full location payloads", () => {
+    const row = {
+      ...baseProduct,
+      ingredient: {
+        id: INGREDIENT_ID,
+        name: "Wheat flour",
+        aliases: ["flour"],
+        naKinds: [],
+        createdAt: CREATED_AT,
+        updatedAt: UPDATED_AT,
+        deletedAt: null,
+        recipeId: null,
+      },
+      unitMappings: [activeUnitMapping, deletedUnitMapping],
+      externalIds: [activeExternalId, deletedExternalId],
+      images: [
+        { image: baseImage, deletedAt: null },
+        { image: joinedImage, deletedAt: DELETED_AT },
+      ],
+      inventoryEntry: [
+        {
+          id: INVENTORY_ID,
+          productId: PRODUCT_ID,
+          amount: { value: 2, unit: "each" },
+          createdAt: CREATED_AT,
+          updatedAt: UPDATED_AT,
+          deletedAt: null,
+          locationId: LOCATION_ID,
+          valuation: 9,
+          location: activeLocation,
+        },
+        {
+          id: DELETED_LOCATION_INVENTORY_ID,
+          productId: PRODUCT_ID,
+          amount: { value: 1, unit: "each" },
+          createdAt: CREATED_AT,
+          updatedAt: UPDATED_AT,
+          deletedAt: null,
+          locationId: deletedLocation.id,
+          valuation: 4.5,
+          location: deletedLocation,
+        },
+      ],
+    } satisfies ProductListDB;
+
+    const result = dbProductToListAPI(row);
+
+    expect(result).toMatchObject({
+      id: PRODUCT_ID,
+      ingredient: {
+        id: INGREDIENT_ID,
+        name: "Wheat flour",
+      },
+      unitMappings: [
+        {
+          id: UNIT_MAPPING_ID,
+          sourceMetadata: { type: "product", productId: PRODUCT_ID },
+        },
+      ],
+      externalIds: [{ id: EXTERNAL_ID }],
+      images: [{ id: IMAGE_ID }],
+      inventoryEntry: [
+        {
+          id: INVENTORY_ID,
+          amount: { value: 2, unit: "each" },
+          location: {
+            id: LOCATION_ID,
+            shortcode: unsafeLocationShortcode("L-TEST"),
+            name: "Pantry",
+            type: "room",
+          },
+        },
+      ],
+    });
+    expect(result.inventoryEntry).toHaveLength(1);
+    expect(result.inventoryEntry[0]?.location).not.toHaveProperty("images");
+    expect(result.inventoryEntry[0]).not.toHaveProperty("productId");
+    expect(result.inventoryEntry[0]).not.toHaveProperty("locationId");
+    expect(productListItemOut.parse(result)).toEqual(result);
+  });
+
   it("maps full product detail rows exactly", () => {
     const row = {
       ...baseProduct,
@@ -201,17 +310,8 @@ describe("product mappers", () => {
           locationId: LOCATION_ID,
           valuation: 9,
           location: {
-            id: LOCATION_ID,
-            shortcode: "L-TEST",
-            name: "Pantry",
-            createdAt: CREATED_AT,
-            updatedAt: UPDATED_AT,
+            ...activeLocation,
             deletedAt: DELETED_AT,
-            lastBulkInventory: null,
-            parentId: null,
-            type: "room",
-            aiDescription: null,
-            valuation: null,
             images: [],
           },
         },

@@ -14,11 +14,17 @@ import {
   productPickerItemOut,
   productTopLevelOut,
 } from "@cubby/schemas/product";
-import { productWithIngredientAndInventoryAndMappingsOut } from "@cubby/schemas/product-responses";
+import {
+  type ProductListItem,
+  productListItemOut,
+  productWithIngredientAndInventoryAndMappingsOut,
+} from "@cubby/schemas/product-responses";
 import type { z } from "zod";
 import { parseWithContext } from "~/lib/zod-utils";
 import type {
   image,
+  ingredient,
+  location,
   product,
   productExternalId,
   productUnitMappings,
@@ -28,7 +34,7 @@ import {
   mapRelation,
   parseInventoryAmount,
 } from "~/server/repo/database-helpers";
-import type { ProductDeepDB } from "./types";
+import type { ProductDeepDB, ProductListDB } from "./types";
 
 type ProductImageRow =
   | typeof image.$inferSelect
@@ -188,6 +194,63 @@ export const dbProductToInventoryListShape = (
   usdaUnavailable: productData.usdaUnavailable,
 });
 
+const dbProductIngredientToShape = (
+  ingredientData: typeof ingredient.$inferSelect,
+) => ({
+  id: ingredientData.id,
+  name: ingredientData.name,
+  aliases: ingredientData.aliases,
+  naKinds: ingredientData.naKinds,
+  createdAt: ingredientData.createdAt,
+  updatedAt: ingredientData.updatedAt,
+});
+
+const dbLocationToProductListInventoryShape = (
+  locationData: typeof location.$inferSelect,
+) => ({
+  id: locationData.id,
+  shortcode: unsafeLocationShortcode(locationData.shortcode),
+  name: locationData.name,
+  type: parseWithContext(locationType, locationData.type, {
+    entityType: "Location",
+    identifier: { id: locationData.id, name: locationData.name },
+  }),
+});
+
+export const dbProductToListAPI = (
+  productData: ProductListDB,
+): ProductListItem => {
+  const result = {
+    ...dbProductToTopLevelShape(productData),
+    ingredient:
+      productData.ingredient && productData.ingredient.deletedAt === null
+        ? dbProductIngredientToShape(productData.ingredient)
+        : null,
+    unitMappings: mapProductUnitMappings(
+      productData.id,
+      productData.unitMappings,
+    ),
+    inventoryEntry: mapRelation(
+      productData.inventoryEntry.filter(
+        (entry) => entry.location.deletedAt === null,
+      ),
+      (entry) => ({
+        id: entry.id,
+        amount: parseInventoryAmount(entry.amount, entry.id),
+        valuation: entry.valuation,
+        createdAt: entry.createdAt,
+        updatedAt: entry.updatedAt,
+        location: dbLocationToProductListInventoryShape(entry.location),
+      }),
+    ),
+  };
+
+  return parseWithContext(productListItemOut, result, {
+    entityType: "Product",
+    identifier: { id: productData.id, name: productData.name },
+  });
+};
+
 /**
  * Transform a deeply nested product DB record to API format.
  * Handles shortcode branding, image extraction, and nested transforms.
@@ -212,16 +275,7 @@ export const dbProductToAPI = (
     usdaUnavailable: productData.usdaUnavailable,
     createdAt: productData.createdAt,
     updatedAt: productData.updatedAt,
-    ingredient: ingredient
-      ? {
-          id: ingredient.id,
-          name: ingredient.name,
-          aliases: ingredient.aliases,
-          naKinds: ingredient.naKinds,
-          createdAt: ingredient.createdAt,
-          updatedAt: ingredient.updatedAt,
-        }
-      : null,
+    ingredient: ingredient ? dbProductIngredientToShape(ingredient) : null,
     unitMappings: mapProductUnitMappings(productData.id, unitMappings),
     externalIds: mapProductExternalIds(productData.externalIds),
     images: mapProductImages(images),
