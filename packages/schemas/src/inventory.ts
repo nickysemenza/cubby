@@ -81,3 +81,11 @@ export const bulkMovePayload = z.object({
 });
 
 export type BulkMovePayload = z.infer<typeof bulkMovePayload>;
+
+export const inventoryFindDuplicatesInput = z.object({
+  excludeLocationId: locationId.optional(),
+});
+
+export const inventoryLocationIdsInput = z.object({
+  locationIds: z.array(locationId),
+});

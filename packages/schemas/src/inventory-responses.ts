@@ -11,6 +11,7 @@ import {
 } from "./identifiers";
 import { locationOut, locationType } from "./location";
 import { productCategory } from "./product";
+import { duplicateUniqueProductSchema } from "./problems";
 import { unitMappingOut } from "./unitmapping-responses";
 
 export const productInventoryEmbedOut = z.object({
@@ -81,3 +82,13 @@ export const inventoryWithLocationAndProductOut = inventoryEntryOut.extend({
 export type InventoryWithLocationAndProductOut = z.infer<
   typeof inventoryWithLocationAndProductOut
 >;
+
+export const inventoryWithLocationAndProductListOut = z.array(
+  inventoryWithLocationAndProductOut,
+);
+
+export const inventoryDuplicateUniqueProductsOut = z.array(
+  duplicateUniqueProductSchema,
+);
+
+export const inventoryCountsByLocationOut = z.record(z.string(), z.number());

@@ -71,3 +71,34 @@ export const ingredientUpdateInput = z.object({
 });
 
 export type IngredientUpdateInput = z.infer<typeof ingredientUpdateInput>;
+
+export const ingredientMergeInput = z.object({
+  target: ingredientId,
+  aliases: z.array(ingredientId).min(1),
+  // Validate + count what would change without writing.
+  dryRun: z.boolean().optional(),
+});
+
+export const ingredientIdInput = z.object({
+  id: ingredientId,
+});
+
+export const ingredientIdsInput = z.object({
+  ids: z.array(ingredientId),
+});
+
+export const ingredientRawLinesInput = z.object({
+  ids: z.array(ingredientId).min(1),
+});
+
+export const ingredientNameFilterInput = z.object({
+  nameFilter: z.string(),
+});
+
+export const ingredientNamesInput = z.object({
+  names: z.array(z.string()),
+});
+
+export const ingredientResolvableNamesInput = z.object({
+  names: z.array(z.string().min(1)),
+});

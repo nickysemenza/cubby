@@ -43,6 +43,31 @@ export const ingredientRawLineOut = z.object({
 });
 export type IngredientRawLineOut = z.infer<typeof ingredientRawLineOut>;
 
+export const ingredientRecipeUsagesOut = z.array(recipeUsageOut);
+
+export const ingredientRawLinesOut = z.array(ingredientRawLineOut);
+
+export const ingredientMatchOut = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    aliases: z.array(z.string()),
+  })
+  .nullable();
+
+export const ingredientMatchesOut = z.record(z.string(), ingredientMatchOut);
+
+export const ingredientResolveOrCreateResultOut = z.object({
+  name: z.string(),
+  id: ingredientId,
+  matched: z.boolean(),
+  created: z.boolean(),
+});
+
+export const ingredientResolveOrCreateOut = z.array(
+  ingredientResolveOrCreateResultOut,
+);
+
 export const ingredientWithRecipesAndProductOut = ingredientOut.extend({
   recipe: recipeTopLevel.nullable(),
   recipeUsages: z.array(recipeUsageOut),
@@ -122,3 +147,7 @@ export const enrichmentRowOut = ingredientWithFoodLeanOut.extend({
   ),
 });
 export type EnrichmentRow = z.infer<typeof enrichmentRowOut>;
+
+export const enrichmentRowsOut = z.array(enrichmentRowOut);
+
+export const ingredientWithFoodLeanListOut = z.array(ingredientWithFoodLeanOut);
