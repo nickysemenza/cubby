@@ -65,8 +65,10 @@ export function USDAFoodList() {
   );
 
   const { data: foodsResp, isLoading, error, isFetching } = query;
-  const baseData = foodsResp?.items || [];
-  const fdcIds = useMemo(() => baseData.map((food) => food.fdc_id), [baseData]);
+  const fdcIds = useMemo(
+    () => foodsResp?.items?.map((food) => food.fdc_id) ?? [],
+    [foodsResp?.items],
+  );
   const enrichmentsQuery = useQuery(
     api.usda.enrichmentsByID.queryOptions(
       { fdcIds },
@@ -97,11 +99,11 @@ export function USDAFoodList() {
 
   const data = useMemo(
     () =>
-      baseData.map((food) => ({
+      (foodsResp?.items ?? []).map((food) => ({
         ...food,
         ...(enrichmentsQuery.data?.[String(food.fdc_id)] ?? EMPTY_ENRICHMENT),
       })),
-    [baseData, enrichmentsQuery.data],
+    [foodsResp?.items, enrichmentsQuery.data],
   );
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
 
