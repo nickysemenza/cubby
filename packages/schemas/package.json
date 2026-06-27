@@ -34,6 +34,7 @@
     "./meal": "./src/meal.ts",
     "./meal-responses": "./src/meal-responses.ts",
     "./meal-shared": "./src/meal-shared.ts",
+    "./mcp-responses": "./src/mcp-responses.ts",
     "./problems": "./src/problems.ts",
     "./recipe": "./src/recipe.ts",
     "./usda": "./src/usda.ts",
