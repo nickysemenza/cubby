@@ -1,29 +1,36 @@
 import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
 import { Link } from "@tanstack/react-router";
 import { ScanBarcode } from "lucide-react";
+import { QuickInventoryAdd } from "~/app/_components/inventory/quick-inventory-add";
 import { CaptureFlow } from "~/app/capture/capture-flow";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { useIsMobile } from "~/hooks/useMobile";
 import QuickCaptureForm from "../quick-capture/quick-capture-form";
 
-export type InventoryCaptureMode = "quick" | "photo";
+export type InventoryCaptureMode = "quick" | "photo" | "inline";
 
-interface InventoryCaptureWorkspaceProps {
-  mode: InventoryCaptureMode;
-  initialLocationId?: LocationId;
-  initialProductId?: ProductId;
-  initialScannerMode?: boolean;
-}
+type InventoryCaptureWorkspaceProps =
+  | {
+      mode: "quick";
+      initialLocationId?: LocationId;
+      initialProductId?: ProductId;
+      initialScannerMode?: boolean;
+    }
+  | {
+      mode: "photo";
+    }
+  | {
+      mode: "inline";
+      locationId: LocationId;
+      onSuccess: () => void;
+    };
 
-export function InventoryCaptureWorkspace({
-  mode,
-  initialLocationId,
-  initialProductId,
-  initialScannerMode = false,
-}: InventoryCaptureWorkspaceProps) {
+export function InventoryCaptureWorkspace(
+  props: InventoryCaptureWorkspaceProps,
+) {
+  const { mode } = props;
   const isMobile = useIsMobile();
-  const isImmersiveScan = mode === "quick" && isMobile && initialScannerMode;
 
   if (mode === "photo") {
     return (
@@ -49,12 +56,24 @@ export function InventoryCaptureWorkspace({
     );
   }
 
+  if (mode === "inline") {
+    return (
+      <QuickInventoryAdd
+        locationId={props.locationId}
+        onSuccess={props.onSuccess}
+      />
+    );
+  }
+
+  const initialScannerMode = props.initialScannerMode ?? false;
+  const isImmersiveScan = isMobile && initialScannerMode;
+
   if (isImmersiveScan) {
     return (
       <div className="safe-top safe-bottom min-h-[100dvh] px-4 py-4">
         <QuickCaptureForm
-          initialLocationId={initialLocationId}
-          initialProductId={initialProductId}
+          initialLocationId={props.initialLocationId}
+          initialProductId={props.initialProductId}
           initialScannerMode={initialScannerMode}
         />
       </div>
@@ -70,8 +89,8 @@ export function InventoryCaptureWorkspace({
       decoration="none"
     >
       <QuickCaptureForm
-        initialLocationId={initialLocationId}
-        initialProductId={initialProductId}
+        initialLocationId={props.initialLocationId}
+        initialProductId={props.initialProductId}
         initialScannerMode={initialScannerMode}
       />
     </Page>

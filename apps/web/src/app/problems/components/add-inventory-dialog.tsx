@@ -1,5 +1,5 @@
 import type { LocationId } from "@cubby/schemas/identifiers";
-import { QuickInventoryAdd } from "~/app/_components/inventory/quick-inventory-add";
+import { InventoryCaptureWorkspace } from "~/app/inventory/capture/InventoryCaptureWorkspace";
 import {
   Dialog,
   DialogContent,
@@ -33,7 +33,11 @@ export function AddInventoryDialog({
             multiple items.
           </DialogDescription>
         </DialogHeader>
-        <QuickInventoryAdd locationId={locationId} onSuccess={onSuccess} />
+        <InventoryCaptureWorkspace
+          mode="inline"
+          locationId={locationId}
+          onSuccess={onSuccess}
+        />
       </DialogContent>
     </Dialog>
   );
