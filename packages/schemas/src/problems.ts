@@ -10,22 +10,23 @@ export const baseKind = z.enum(["weight", "volume", "money", "calories"]);
 export type BaseKind = z.infer<typeof baseKind>;
 
 // Shared field fragments — the product-summary head and the coverage shape
-// repeat across many item schemas, so declare them once and .extend().
-const productProblemBase = z.object({
+// repeat across many item schemas, so declare the reusable field maps once.
+const productProblemFields = {
   id: z.string(),
   name: z.string(),
   manufacturer: z.string(),
-});
+};
 // `covered` = kinds the graph can actually reach; `applicable` = the kinds graded
 // against (BASE_KINDS minus the ingredient's N/A opt-outs). A kind in `applicable`
 // but not `covered` is a real gap; a kind in neither is "not applicable" (—).
-const coverageShape = z.object({
+const coverageFields = {
   covered: z.array(baseKind),
   applicable: z.array(baseKind),
-});
+};
 
 // Output schemas for each problem type.
-export const duplicateUniqueProductSchema = productProblemBase.extend({
+export const duplicateUniqueProductSchema = z.object({
+  ...productProblemFields,
   expectedQuantity: z.number().nullable(),
   locations: z.array(
     z.object({
@@ -35,11 +36,13 @@ export const duplicateUniqueProductSchema = productProblemBase.extend({
   ),
 });
 
-export const orphanedProductSchema = productProblemBase.extend({
+export const orphanedProductSchema = z.object({
+  ...productProblemFields,
   createdAt: z.date(),
 });
 
-export const productWithoutMappingsSchema = productProblemBase.extend({
+export const productWithoutMappingsSchema = z.object({
+  ...productProblemFields,
   createdAt: z.date(),
   isIngredient: z.boolean(),
   usdaUnavailable: z.boolean(),
@@ -48,8 +51,9 @@ export const productWithoutMappingsSchema = productProblemBase.extend({
   ingredientId: ingredientId.nullable(),
 });
 
-export const ingredientWithPartialCoverageSchema = productProblemBase.extend({
-  coverage: coverageShape,
+export const ingredientWithPartialCoverageSchema = z.object({
+  ...productProblemFields,
+  coverage: z.object(coverageFields),
   hasPrice: z.boolean(),
   hasUsdaLink: z.boolean(),
   usdaUnavailable: z.boolean(),
@@ -95,11 +99,13 @@ export const emptyLocationSchema = z.object({
   firstImageId: z.string().nullable(),
 });
 
-export const productWithNoImagesSchema = productProblemBase.extend({
+export const productWithNoImagesSchema = z.object({
+  ...productProblemFields,
   upc: z.string().nullable(),
 });
 
-export const productWithIslandedMappingsSchema = productProblemBase.extend({
+export const productWithIslandedMappingsSchema = z.object({
+  ...productProblemFields,
   islandCount: z.number(),
   islands: z.array(
     z.object({
@@ -107,7 +113,7 @@ export const productWithIslandedMappingsSchema = productProblemBase.extend({
       exampleUnit: z.string(),
     }),
   ),
-  coverage: coverageShape,
+  coverage: z.object(coverageFields),
 });
 
 export const locationWithoutAiDescriptionSchema = z.object({
@@ -134,7 +140,8 @@ export const staleIngredientParseSchema = z.object({
   modifierDrift: z.boolean(),
 });
 
-export const productWithBetterUpcDataSchema = productProblemBase.extend({
+export const productWithBetterUpcDataSchema = z.object({
+  ...productProblemFields,
   upc: z.string(),
   // Each field is set only when a fresh lookup would fill it (stored value empty
   // AND lookup has one). null ⇒ no change for that field. A row always has ≥1
@@ -187,20 +194,23 @@ export const problemsUpcSchema = z.object(problemsUpcShape);
 // Combined output schema for all problems. It intentionally spells out the wire
 // contract while sharing the grouped shapes above, so lazy loading/cost grouping
 // never makes fields appear optional on the aggregate response.
-export const allProblemsSchema = z.object({
+const allProblemArrayFields = {
   ...problemsFastShape,
   ...problemsCoverageShape,
   ...problemsUpcShape,
+};
+
+export const allProblemsSchema = z.object({
+  ...allProblemArrayFields,
   totalProblems: z.number(),
 });
 
 // Count-only output schema for badge display. byType derives mechanically from
 // allProblemsSchema — every array key becomes a count — so the count roster
 // can't drift from the set of detectors (the runtime derives it the same way).
-const { totalProblems: _total, ...problemArrays } = allProblemsSchema.shape;
 const byTypeShape = Object.fromEntries(
-  Object.keys(problemArrays).map((k) => [k, z.number()]),
-) as { [K in keyof typeof problemArrays]: z.ZodNumber };
+  Object.keys(allProblemArrayFields).map((k) => [k, z.number()]),
+) as { [K in keyof typeof allProblemArrayFields]: z.ZodNumber };
 
 export const problemsCountSchema = z.object({
   total: z.number(),

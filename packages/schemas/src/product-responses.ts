@@ -1,14 +1,15 @@
-import { foodSummary } from "@cubby/usda-schemas";
+import { fdcId, foodSummary, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
+import { amount } from "./codec";
+import { externalIdOut } from "./external-id-responses";
 import { imageOut } from "./image-responses";
 import { ingredientOut } from "./ingredient";
 import {
   inventoryListLocationOut,
   inventoryWithLocationOut,
 } from "./inventory-responses";
-import { inventoryEntryOut } from "./inventory";
+import { inventoryId, productId, productShortcode } from "./identifiers";
 import { productCategory, productTopLevelOut } from "./product";
-import { productId, productShortcode } from "./identifiers";
 import { recipeUsageOut } from "./recipe-responses";
 import { recomputeSummary } from "./recipe-shared";
 import {
@@ -16,12 +17,34 @@ import {
   unitMappingWithMetadata,
 } from "./unitmapping-responses";
 
-export const productWithMappingsOut = productTopLevelOut.extend({
+const productTopLevelResponseFields = {
+  id: productId,
+  shortcode: productShortcode,
+  name: z.string(),
+  upc: upc.nullable(),
+  fdc_id: fdcId.nullable(),
+  manufacturer: z.string(),
+  model: z.string().nullish(),
+  notes: z.string().nullish(),
+  expectedQuantity: z.number().int().positive().nullable(),
+  category: productCategory.nullable(),
+  images: z.array(imageOut),
+  externalIds: z.array(externalIdOut),
+  price: z.number().nullable(),
+  usdaUnavailable: z.boolean().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+};
+
+export const productWithMappingsOut = z.object({
+  ...productTopLevelResponseFields,
   unitMappings: z.array(unitMappingOut),
 });
 export type ProductWithMappingsOut = z.infer<typeof productWithMappingsOut>;
 
-export const productWithMappingsAndFoodOut = productWithMappingsOut.extend({
+export const productWithMappingsAndFoodOut = z.object({
+  ...productTopLevelResponseFields,
+  unitMappings: z.array(unitMappingOut),
   food: foodSummary.nullable(),
 });
 export type ProductWithMappingsAndFoodOut = z.infer<
@@ -36,20 +59,27 @@ export const productPickerItemOut = z.object({
 });
 export type ProductPickerItemOut = z.infer<typeof productPickerItemOut>;
 
-export const productWithIngredientAndInventoryAndMappingsOut =
-  productTopLevelOut.extend({
-    ingredient: ingredientOut.nullable(),
-    unitMappings: z.array(unitMappingOut),
-    inventoryEntry: z.array(inventoryWithLocationOut),
-  });
+export const productWithIngredientAndInventoryAndMappingsOut = z.object({
+  ...productTopLevelResponseFields,
+  ingredient: ingredientOut.nullable(),
+  unitMappings: z.array(unitMappingOut),
+  inventoryEntry: z.array(inventoryWithLocationOut),
+});
 
-export const productListInventoryEntryOut = inventoryEntryOut.extend({
+export const productListInventoryEntryOut = z.object({
+  id: inventoryId,
+  amount,
+  valuation: z.number().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
   location: inventoryListLocationOut,
 });
 
 // Product list rows stay list-shaped. USDA summaries and recipe usages hydrate
 // through separate/detail paths so list paint is not blocked by ancillary data.
-export const productListItemOut = productWithMappingsOut.extend({
+export const productListItemOut = z.object({
+  ...productTopLevelResponseFields,
+  unitMappings: z.array(unitMappingOut),
   ingredient: ingredientOut.nullable(),
   inventoryEntry: z.array(productListInventoryEntryOut),
 });
@@ -58,14 +88,23 @@ export type ProductListItem = z.infer<typeof productListItemOut>;
 // Enriched product shape for detail/create/update responses. recipeUsages is
 // required here because this schema represents a fully hydrated product detail
 // response, not list rows or lazy-loaded recipe usage data.
-export const productWithFoodOut =
-  productWithIngredientAndInventoryAndMappingsOut.extend({
-    food: foodSummary.nullable(),
-    recipeUsages: z.array(recipeUsageOut),
-  });
+export const productWithFoodOut = z.object({
+  ...productTopLevelResponseFields,
+  ingredient: ingredientOut.nullable(),
+  unitMappings: z.array(unitMappingOut),
+  inventoryEntry: z.array(inventoryWithLocationOut),
+  food: foodSummary.nullable(),
+  recipeUsages: z.array(recipeUsageOut),
+});
 export type ProductWithFoodOut = z.infer<typeof productWithFoodOut>;
 
-export const productWithFoodAndSideEffectsOut = productWithFoodOut.extend({
+export const productWithFoodAndSideEffectsOut = z.object({
+  ...productTopLevelResponseFields,
+  ingredient: ingredientOut.nullable(),
+  unitMappings: z.array(unitMappingOut),
+  inventoryEntry: z.array(inventoryWithLocationOut),
+  food: foodSummary.nullable(),
+  recipeUsages: z.array(recipeUsageOut),
   sideEffects: recomputeSummary,
 });
 export type ProductWithFoodAndSideEffectsOut = z.infer<

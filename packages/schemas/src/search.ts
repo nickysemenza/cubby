@@ -24,40 +24,44 @@ export const globalSearchInputSchema = z.object({
   limit: z.number().min(1).max(50).default(5),
 });
 
-// Base fields shared by all search results
-const baseSearchResult = z.object({
+const searchResultBaseFields = {
   id: z.string(),
   name: z.string(),
   subtitle: z.string().nullable(),
   typeHint: z.string().nullable(),
   imageUrl: z.string().nullable(),
   createdAt: z.coerce.date(),
-});
+};
 
 // Per-entity result schemas
-const productResult = baseSearchResult.extend({
+const productResult = z.object({
+  ...searchResultBaseFields,
   entityType: z.literal("product"),
   price: z.number().nullable(),
   stockCount: z.number().nullable(),
 });
 
-const locationResult = baseSearchResult.extend({
+const locationResult = z.object({
+  ...searchResultBaseFields,
   entityType: z.literal("location"),
   itemCount: z.number().nullable(),
   childCount: z.number().nullable(),
 });
 
-const inventoryResult = baseSearchResult.extend({
+const inventoryResult = z.object({
+  ...searchResultBaseFields,
   entityType: z.literal("inventory"),
   amount: amount.nullable(),
 });
 
-const recipeResult = baseSearchResult.extend({
+const recipeResult = z.object({
+  ...searchResultBaseFields,
   entityType: z.literal("recipe"),
   ingredientCount: z.number().nullable(),
 });
 
-const ingredientResult = baseSearchResult.extend({
+const ingredientResult = z.object({
+  ...searchResultBaseFields,
   entityType: z.literal("ingredient"),
   recipeCount: z.number().nullable(),
 });

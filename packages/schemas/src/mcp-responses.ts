@@ -1,5 +1,4 @@
 import {
-  brandedFoodInfo,
   dataTypeEnum,
   fdcId,
   foodPortion,
@@ -141,6 +140,12 @@ export const mcpMealOut = z.object({
 });
 export type McpMealOut = z.infer<typeof mcpMealOut>;
 
+const mcpBrandedServingOut = z.object({
+  serving_size: z.number().nullable(),
+  serving_size_unit: z.string().nullable(),
+  household_serving_fulltext: z.string().nullable(),
+});
+
 export const mcpUsdaFoodOut = z.object({
   fdc_id: fdcId,
   description: z.string().nullable(),
@@ -152,7 +157,7 @@ export const mcpUsdaFoodOut = z.object({
   ingredients: z.string().nullable(),
   // Branded serving + portion table + named nutrient summary are not reachable
   // through a separate MCP portion/nutrient decode tool.
-  serving: brandedFoodInfo.shape.serving.nullable(),
+  serving: mcpBrandedServingOut.nullable(),
   nutrientsPer100: nutrientsPer100.nullable(),
   nutrientSummary: z.array(nutrientSummary),
   portionInfoRaw: z.array(foodPortion),

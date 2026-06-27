@@ -98,7 +98,10 @@ export const usdaFoodSuggestionBatchInput = z.object({
 });
 
 export const usdaFoodSuggestionBatchOut = z.array(
-  usdaFoodSuggestionOut.extend({
+  z.object({
+    food: foodSummaryWithLinkedProducts.nullable(),
+    confidence,
+    reasoning: z.string(),
     name: z.string(),
   }),
 );

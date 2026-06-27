@@ -1,11 +1,11 @@
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
-import { tableSearchSchema } from "~/app/_components/data-table/table-search";
+import { tableSearchFields } from "~/app/_components/data-table/table-search";
 import { InventoryActions } from "~/app/inventory/inventory-actions";
 import { InventoryItemList } from "~/app/inventory/inventoryitemlist";
 import { Page } from "~/components/page/Page";
 
-const searchSchema = z.object({}).extend(tableSearchSchema.shape);
+const searchSchema = z.object(tableSearchFields);
 const searchDefaults = {} as const;
 
 export const Route = createFileRoute("/_authenticated/inventory/")({

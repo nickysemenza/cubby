@@ -6,8 +6,28 @@ import {
   locationShortcode,
   productId,
 } from "./identifiers";
+import { imageOut } from "./image-responses";
 import { inventoryWithProductOut } from "./inventory-responses";
-import { type LocationOut, locationOut, locationType } from "./location";
+import {
+  type LocationOut,
+  locationOut,
+  locationType,
+  locationValuation,
+} from "./location";
+
+const locationResponseFields = {
+  id: locationId,
+  shortcode: locationShortcode,
+  name: z.string().describe("name of location"),
+  type: locationType,
+  lastBulkInventory: z.date().nullable(),
+  aiDescription: z.string().nullable(),
+  images: z.array(imageOut),
+  // Persisted valuation rollup; null until first recompute.
+  valuation: locationValuation.nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+};
 
 export const locationListRefOut = z.object({
   id: locationId,
@@ -17,14 +37,16 @@ export const locationListRefOut = z.object({
 });
 export type LocationListRefOut = z.infer<typeof locationListRefOut>;
 
-export const locationListItemOut = locationOut.extend({
+export const locationListItemOut = z.object({
+  ...locationResponseFields,
   children: z.array(locationListRefOut),
   parent: locationListRefOut.nullable(),
   inventoryEntries: z.array(inventoryWithProductOut),
 });
 export type LocationListItemOut = z.infer<typeof locationListItemOut>;
 
-export const locationWithParentNameOut = locationOut.extend({
+export const locationWithParentNameOut = z.object({
+  ...locationResponseFields,
   parentName: z.string().nullable(),
 });
 export type LocationWithParentNameOut = z.infer<
@@ -69,7 +91,8 @@ export type InfLocation = LocationOut & {
   inventoryItems?: InventoryItemForTree[];
 };
 
-export const infLocation: z.ZodType<InfLocation> = locationOut.extend({
+export const infLocation: z.ZodType<InfLocation> = z.object({
+  ...locationResponseFields,
   children: z.lazy(() => infLocation.array()).optional(),
   parent: z.lazy(() => infLocation.optional()),
   childCount: z.number().optional(),

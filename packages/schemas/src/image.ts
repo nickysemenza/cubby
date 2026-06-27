@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { entityImage } from "./entity";
 import { id } from "./identifiers";
-import { sortPaginationCombo } from "./pagination";
+import { sortPaginationFields } from "./pagination";
 
 // Image status values - single source of truth for both Zod and Drizzle
 export const imageStatusValues = ["PENDING", "UPLOADED", "FAILED"] as const;
@@ -55,13 +55,12 @@ export const getImageByIdSchema = z.object({
 });
 
 // New schema for standardized list endpoint
-export const imageListFiltersSchema = z
-  .object({
-    filters: z.object({
-      searchFilter: z.string().optional(),
-    }),
-  })
-  .extend(sortPaginationCombo.shape);
+export const imageListFiltersSchema = z.object({
+  filters: z.object({
+    searchFilter: z.string().optional(),
+  }),
+  ...sortPaginationFields,
+});
 
 // Schema for importing an image from a URL
 export const importImageFromUrlSchema = z.object({

@@ -1,9 +1,10 @@
 import { fdcId, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
+import { amount } from "./codec";
 import { externalIdOut } from "./external-id-responses";
 import { imageOut } from "./image-responses";
-import { inventoryEntryOut } from "./inventory";
 import {
+  inventoryId,
   locationId,
   locationShortcode,
   productId,
@@ -14,7 +15,15 @@ import { productCategory } from "./product";
 import { duplicateUniqueProductSchema } from "./problems";
 import { unitMappingOut } from "./unitmapping-responses";
 
-export const productInventoryEmbedOut = z.object({
+const inventoryEntryResponseFields = {
+  id: inventoryId,
+  amount,
+  valuation: z.number().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+};
+
+const productInventoryEmbedFields = {
   id: productId,
   shortcode: productShortcode,
   name: z.string(),
@@ -29,14 +38,18 @@ export const productInventoryEmbedOut = z.object({
   usdaUnavailable: z.boolean().nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),
-});
+};
+
+export const productInventoryEmbedOut = z.object(productInventoryEmbedFields);
 export type ProductInventoryEmbedOut = z.infer<typeof productInventoryEmbedOut>;
 
-export const inventoryWithProductOut = inventoryEntryOut.extend({
+export const inventoryWithProductOut = z.object({
+  ...inventoryEntryResponseFields,
   product: productInventoryEmbedOut,
 });
 
-export const inventoryWithLocationOut = inventoryEntryOut.extend({
+export const inventoryWithLocationOut = z.object({
+  ...inventoryEntryResponseFields,
   location: locationOut,
 });
 
@@ -63,19 +76,22 @@ export const inventoryListLocationOut = z.object({
 });
 export type InventoryListLocationOut = z.infer<typeof inventoryListLocationOut>;
 
-export const inventoryListItemOut = inventoryEntryOut.extend({
+export const inventoryListItemOut = z.object({
+  ...inventoryEntryResponseFields,
   product: inventoryListProductOut,
   location: inventoryListLocationOut,
 });
 export type InventoryListItemOut = z.infer<typeof inventoryListItemOut>;
 
-export const inventoryDetailProductOut = productInventoryEmbedOut.extend({
+export const inventoryDetailProductOut = z.object({
+  ...productInventoryEmbedFields,
   images: z.array(imageOut),
   externalIds: z.array(externalIdOut),
   unitMappings: z.array(unitMappingOut),
 });
 
-export const inventoryWithLocationAndProductOut = inventoryEntryOut.extend({
+export const inventoryWithLocationAndProductOut = z.object({
+  ...inventoryEntryResponseFields,
   product: inventoryDetailProductOut,
   location: locationOut,
 });

@@ -7,7 +7,7 @@ import {
   createPaginatedResponseSchemaWithContext,
   type PaginationParams,
   type SortParams,
-  sortPaginationCombo,
+  sortPaginationFields,
 } from "@cubby/schemas/pagination";
 import { type ZodSchema, z } from "zod";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
@@ -157,11 +157,10 @@ export function createEntityListProcedure<TOutput, TFilters>({
 }) {
   const list = protectedProcedure
     .input(
-      z
-        .object({
-          filters: schemas.filters,
-        })
-        .extend(sortPaginationCombo.shape),
+      z.object({
+        filters: schemas.filters,
+        ...sortPaginationFields,
+      }),
     )
     .output(
       createPaginatedResponseSchemaWithContext(schemas.output, entityName),

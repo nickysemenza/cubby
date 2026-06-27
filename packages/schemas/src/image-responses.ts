@@ -28,7 +28,16 @@ export const initiateUploadWithoutEntityResponseSchema = z.object({
 });
 
 // Image with entity information
-export const imageWithEntitySchema = imageOut.extend({
+export const imageWithEntitySchema = z.object({
+  id: id,
+  url: z.url(),
+  key: z.string(),
+  filename: z.string(),
+  size: z.int().positive(),
+  contentType: z.string(),
+  status: ImageStatus,
+  createdAt: z.date(),
+  updatedAt: z.date(),
   entityType: entityImage.nullable(),
   entityId: id.nullable(),
   entityName: z.string().nullable(),
