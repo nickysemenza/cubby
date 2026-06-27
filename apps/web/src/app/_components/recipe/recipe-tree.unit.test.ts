@@ -1,4 +1,4 @@
-import type { RecipeOut } from "@cubby/schemas/recipe";
+import type { RecipeOut } from "@cubby/schemas/recipe-responses";
 import { ok } from "neverthrow";
 import { describe, expect, it } from "vitest";
 import type { IngredientDataItem, RecipeCosting } from "~/lib/recipe-costing";

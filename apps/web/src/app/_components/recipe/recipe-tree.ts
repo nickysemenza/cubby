@@ -3,7 +3,7 @@ import type {
   RecipeGraphOut,
   RecipeOut,
   SectionIngredientOut,
-} from "@cubby/schemas/recipe";
+} from "@cubby/schemas/recipe-responses";
 import type { RecipeCosting } from "~/lib/recipe-costing";
 import {
   computeScalingPercentages,

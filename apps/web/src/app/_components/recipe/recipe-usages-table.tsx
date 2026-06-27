@@ -1,4 +1,4 @@
-import type { RecipeUsage } from "@cubby/schemas/recipe";
+import type { RecipeUsage } from "@cubby/schemas/recipe-responses";
 import { AlertCircle } from "lucide-react";
 import { useMemo } from "react";
 import {

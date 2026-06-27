@@ -1,12 +1,14 @@
 import type { ImageOut } from "@cubby/schemas/image";
+import type {
+  RecipeCreateInput,
+  RecipeUpdateInput,
+} from "@cubby/schemas/recipe";
+import type { RecipeOut } from "@cubby/schemas/recipe-responses";
 import {
-  type RecipeCreateInput,
-  type RecipeOut,
-  type RecipeUpdateInput,
   recipeNotes,
   recipeServings,
   recipeTags,
-} from "@cubby/schemas/recipe";
+} from "@cubby/schemas/recipe-shared";
 import { z } from "zod";
 import { ComboboxItem } from "../../combobox/combobox-types";
 import type { PendingImage } from "../../PendingImageUpload";

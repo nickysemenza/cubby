@@ -1,5 +1,5 @@
 import type { CookbookId } from "@cubby/schemas/identifiers";
-import type { RecipeListItem } from "@cubby/schemas/recipe";
+import type { RecipeListItem } from "@cubby/schemas/recipe-responses";
 import { useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Scale } from "lucide-react";

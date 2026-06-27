@@ -1,6 +1,6 @@
 import type { Amount } from "@cubby/schemas/codec";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
-import type { RecipeOut } from "@cubby/schemas/recipe";
+import type { RecipeOut } from "@cubby/schemas/recipe-responses";
 import { CopyDebugButton } from "./copy-debug-button";
 import {
   buildImportRecipeParseReport,
