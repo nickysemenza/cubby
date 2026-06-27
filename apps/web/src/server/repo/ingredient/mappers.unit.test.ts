@@ -2,11 +2,21 @@ import {
   unsafeIngredientId,
   unsafeProductId,
   unsafeProductShortcode,
+  unsafeRecipeId,
 } from "@cubby/schemas/identifiers";
+import { ingredientOut } from "@cubby/schemas/ingredient";
+import {
+  ingredientListItemOut,
+  ingredientWithRecipesAndProductOut,
+} from "@cubby/schemas/ingredient-responses";
 import { productWithMappingsOut } from "@cubby/schemas/product-responses";
 import { describe, expect, it } from "vitest";
 import {
+  dbIngredientToAPI,
+  dbIngredientToListAPI,
+  dbIngredientToTopLevelShape,
   type IngredientDeepDB,
+  type IngredientListDB,
   mapIngredientProducts,
   mapIngredientProductsLean,
 } from "./internal-types";
@@ -15,6 +25,8 @@ const PRODUCT_ID = unsafeProductId("123e4567-e89b-12d3-a456-426614174000");
 const INGREDIENT_ID = unsafeIngredientId(
   "223e4567-e89b-12d3-a456-426614174000",
 );
+const RECIPE_ID = unsafeRecipeId("923e4567-e89b-12d3-a456-426614174000");
+const RECIPE_REF_ID = unsafeRecipeId("a23e4567-e89b-12d3-a456-426614174000");
 const IMAGE_ID = "323e4567-e89b-12d3-a456-426614174000";
 const DELETED_IMAGE_ID = "423e4567-e89b-12d3-a456-426614174000";
 const EXTERNAL_ID = "523e4567-e89b-12d3-a456-426614174000";
@@ -44,6 +56,35 @@ const baseProduct = {
   usdaUnavailable: null,
 };
 
+const baseIngredient = {
+  id: INGREDIENT_ID,
+  name: "Wheat flour",
+  aliases: ["flour"],
+  naKinds: [],
+  createdAt: CREATED_AT,
+  updatedAt: UPDATED_AT,
+  deletedAt: DELETED_AT,
+  recipeId: null,
+};
+
+const baseRecipe = {
+  id: RECIPE_ID,
+  shortcode: "R-TEST",
+  name: "Pancakes",
+  createdAt: CREATED_AT,
+  updatedAt: UPDATED_AT,
+  deletedAt: DELETED_AT,
+  SourceType: "Website" as const,
+  SourceData: "https://example.com/pancakes",
+  cookbookId: null,
+  yield: null,
+  servings: null,
+  tags: null,
+  notes: null,
+  totals: null,
+  totalsComputedAt: null,
+};
+
 const activeUnitMapping = {
   id: UNIT_MAPPING_ID,
   productId: PRODUCT_ID,
@@ -69,6 +110,22 @@ const firstResult = <T>(items: T[]): T => {
 };
 
 describe("ingredient product mappers", () => {
+  it("maps ingredient scalar rows without DB-only fields", () => {
+    const result = dbIngredientToTopLevelShape(baseIngredient);
+
+    expect(result).toEqual({
+      id: INGREDIENT_ID,
+      name: "Wheat flour",
+      aliases: ["flour"],
+      naKinds: [],
+      createdAt: CREATED_AT,
+      updatedAt: UPDATED_AT,
+    });
+    expect(result).not.toHaveProperty("deletedAt");
+    expect(result).not.toHaveProperty("recipeId");
+    expect(ingredientOut.parse(result)).toEqual(result);
+  });
+
   it("maps full ingredient products exactly and filters soft-deleted relations", () => {
     const rows = [
       {
@@ -170,5 +227,80 @@ describe("ingredient product mappers", () => {
       unitMappings: [{ id: UNIT_MAPPING_ID }],
     });
     expect(productWithMappingsOut.parse(result)).toEqual(result);
+  });
+
+  it("maps ingredient list rows through the canonical list shape", () => {
+    const row = {
+      ...baseIngredient,
+      product: [
+        {
+          ...baseProduct,
+          unitMappings: [activeUnitMapping],
+          externalIds: [],
+          images: [],
+        },
+      ],
+      appearsInRecipes: [{ id: RECIPE_REF_ID, name: "Waffles" }],
+    } satisfies IngredientListDB;
+
+    const result = dbIngredientToListAPI(row);
+
+    expect(result).toMatchObject({
+      id: INGREDIENT_ID,
+      product: [{ id: PRODUCT_ID, unitMappings: [{ id: UNIT_MAPPING_ID }] }],
+      appearsInRecipes: [{ id: RECIPE_REF_ID, name: "Waffles" }],
+    });
+    expect(result).not.toHaveProperty("deletedAt");
+    expect(result).not.toHaveProperty("recipeId");
+    expect(ingredientListItemOut.parse(result)).toEqual(result);
+  });
+
+  it("maps full ingredient rows without leaking DB-only recipe fields", async () => {
+    const liveRecipe = { ...baseRecipe, deletedAt: null };
+    const result = await dbIngredientToAPI({} as never, {
+      ...baseIngredient,
+      recipe: liveRecipe,
+      product: [
+        {
+          ...baseProduct,
+          unitMappings: [activeUnitMapping],
+          externalIds: [],
+          images: [],
+        },
+      ],
+      recipeSectionIngredient: [
+        {
+          id: "b23e4567-e89b-12d3-a456-426614174000",
+          recipeSectionId: "c23e4567-e89b-12d3-a456-426614174000",
+          ingredientId: INGREDIENT_ID,
+          amounts: [{ value: 1, unit: "cup" }],
+          rawLine: "1 cup flour",
+          modifier: null,
+          sortOrder: 0,
+          createdAt: CREATED_AT,
+          updatedAt: UPDATED_AT,
+          deletedAt: null,
+          recipeSection: {
+            id: "c23e4567-e89b-12d3-a456-426614174000",
+            recipeId: RECIPE_ID,
+            name: "Batter",
+            instructions: [],
+            sortOrder: 0,
+            createdAt: CREATED_AT,
+            updatedAt: UPDATED_AT,
+            deletedAt: null,
+            recipe: liveRecipe,
+          },
+        },
+      ],
+    } satisfies IngredientDeepDB);
+
+    expect(result.recipe).toMatchObject({ id: RECIPE_ID, name: "Pancakes" });
+    expect(result.recipe).not.toHaveProperty("shortcode");
+    expect(result.recipe).not.toHaveProperty("totals");
+    expect(result.recipeUsages[0]?.recipe).not.toHaveProperty("totals");
+    expect(result).not.toHaveProperty("deletedAt");
+    expect(result).not.toHaveProperty("recipeId");
+    expect(ingredientWithRecipesAndProductOut.parse(result)).toEqual(result);
   });
 });

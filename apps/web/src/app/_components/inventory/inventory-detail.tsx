@@ -7,7 +7,7 @@ import type { z } from "zod";
 import { Row } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
-import { queryKeys } from "~/lib/query-keys";
+import { inventoryMutationInvalidateKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 import { type DetailSection, DetailSections } from "../data-table/detail-page";
 import { editableDetailSection } from "../data-table/editable-detail-section";
@@ -36,6 +36,7 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
     entity: "inventory",
     data: inventoryitem,
     mutationOptions: api.inventory.update.mutationOptions(),
+    invalidateKeys: inventoryMutationInvalidateKeys,
   });
 
   const { DeleteButton, DeleteDialog, isPending } = useEntityDelete({
@@ -44,7 +45,7 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
     entityLabel: "Inventory Entry",
     mutationOptions: (callbacks) =>
       api.inventory.delete.mutationOptions(callbacks),
-    invalidateKeys: [queryKeys.inventory.all, queryKeys.location.all],
+    invalidateKeys: inventoryMutationInvalidateKeys,
     redirectTo: "/inventory",
   });
 

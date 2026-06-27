@@ -6,7 +6,7 @@ import { ArrowRightLeft, ImageIcon, Trash } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { z } from "zod";
 import { Button } from "~/components/ui/button";
-import { queryKeys } from "~/lib/query-keys";
+import { inventoryMutationInvalidateKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 import {
   createEditableAmountColumn,
@@ -49,7 +49,7 @@ export function LocationInventoryTable({
   const updateMutation = useUpdateMutation({
     mutationFn: api.inventory.update.mutationOptions,
     entity: "inventory",
-    invalidateKeys: [queryKeys.inventory.list],
+    invalidateKeys: inventoryMutationInvalidateKeys,
   });
 
   // Browse as a photo "shelf" by default; the editable table is one toggle away.

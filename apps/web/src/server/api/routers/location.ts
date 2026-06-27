@@ -8,18 +8,26 @@
 
 import { type LocationId, locationId } from "@cubby/schemas/identifiers";
 import {
-  infLocation,
   locationCreateInput,
   locationFiltersSchema,
-  locationOut,
-  locationType,
-  locationUpdateInput,
+  locationIdInput,
+  locationIdsInput,
+  locationShortcodeInput,
+  locationShortcodesInput,
+  locationUpdateData,
+  recentlyActiveLocationsInput,
 } from "@cubby/schemas/location";
 import {
-  locationOutWithParentChildrenAndInventoryOut,
-  locationWithParentNameOut,
+  infLocation,
+  infLocationListOut,
+  locationChildCountsOut,
+  locationListItemOut,
+  locationsWithParentNameOut,
+  locationTypeCountsOut,
+  recentlyActiveLocationsOut,
+  recomputeLocationValuationsOut,
+  touchLastBulkInventoryOut,
 } from "@cubby/schemas/location-responses";
-import { z } from "zod";
 import {
   buildLocationTree,
   buildLocationTypeCount,
@@ -44,7 +52,7 @@ import { createTRPCRouter, protectedProcedure } from "../trpc";
 // Create standardized list procedure using factory
 const { list } = createEntityListProcedure({
   schemas: {
-    output: locationOutWithParentChildrenAndInventoryOut,
+    output: locationListItemOut,
     filters: locationFiltersSchema,
   },
   repository: {
@@ -65,7 +73,7 @@ const { list } = createEntityListProcedure({
 const { getByID, create, update } = createEntityCrudWithoutListProcedures({
   schemas: {
     createInput: locationCreateInput,
-    updateInput: locationUpdateInput.shape.data,
+    updateInput: locationUpdateData,
     output: infLocation,
     idSchema: locationId,
   },
@@ -91,19 +99,19 @@ const { getByID, create, update } = createEntityCrudWithoutListProcedures({
 });
 
 const getLocationTypesCount = protectedProcedure
-  .output(z.record(locationType, z.number()))
+  .output(locationTypeCountsOut)
   .query(async ({ ctx }) => {
     return await buildLocationTypeCount(ctx.db);
   });
 
 const makeTree = protectedProcedure
-  .output(z.array(infLocation))
+  .output(infLocationListOut)
   .query(async ({ ctx }) => await buildLocationTree(ctx.db));
 
 // Touch lastBulkInventory timestamp (for Scanner page "Mark Complete" button)
 const touchLastBulkInventory = protectedProcedure
-  .input(z.object({ id: locationId }))
-  .output(z.object({ success: z.boolean() }))
+  .input(locationIdInput)
+  .output(touchLastBulkInventoryOut)
   .mutation(async ({ ctx, input }) => {
     await touchLastBulkInventoryRepo(ctx.db, input.id);
     return { success: true };
@@ -111,15 +119,15 @@ const touchLastBulkInventory = protectedProcedure
 
 // Batch lookup: multiple locations by shortcode (e.g. for label printing)
 const getByShortcodes = protectedProcedure
-  .input(z.object({ shortcodes: z.array(z.string()) }))
-  .output(z.array(locationWithParentNameOut))
+  .input(locationShortcodesInput)
+  .output(locationsWithParentNameOut)
   .query(async ({ ctx, input }) => {
     return await getLocationsByShortcodes(ctx.db, input.shortcodes);
   });
 
 // Get location by shortcode (e.g., L-A3F2)
 const getByShortcode = protectedProcedure
-  .input(z.object({ shortcode: z.string() }))
+  .input(locationShortcodeInput)
   .output(infLocation.nullable())
   .query(async ({ ctx, input }) => {
     return await getLocationByShortcode(ctx.db, input.shortcode);
@@ -127,8 +135,8 @@ const getByShortcode = protectedProcedure
 
 // Get recently active locations for scanner quick-select
 const getRecentlyActive = protectedProcedure
-  .input(z.object({ limit: z.number().min(1).max(10).default(5) }).optional())
-  .output(z.array(locationOut))
+  .input(recentlyActiveLocationsInput)
+  .output(recentlyActiveLocationsOut)
   .query(async ({ ctx, input }) => {
     return await getRecentlyActiveLocations(ctx.db, input?.limit ?? 5);
   });
@@ -143,7 +151,7 @@ const deleteItem = createDeleteProcedure<LocationId>(async (services, ids) => {
 // after the column is first added, and as a safety net for writes that bypass the
 // router (raw SQL / postgres MCP). Idempotent — same inventory → same numbers.
 const recomputeValuations = protectedProcedure
-  .output(z.object({ updated: z.number() }))
+  .output(recomputeLocationValuationsOut)
   .mutation(async ({ ctx }) => {
     const updated = await ctx.services.locationValuation.recompute();
     return { updated };
@@ -151,8 +159,8 @@ const recomputeValuations = protectedProcedure
 
 // Get child location counts for multiple parent locations (batched to avoid N+1)
 const getChildCountsByLocations = protectedProcedure
-  .input(z.object({ locationIds: z.array(locationId) }))
-  .output(z.record(z.string(), z.number()))
+  .input(locationIdsInput)
+  .output(locationChildCountsOut)
   .query(async ({ ctx, input }) => {
     return await getChildCountsByLocationIds(ctx.db, input.locationIds);
   });

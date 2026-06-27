@@ -1,30 +1,22 @@
-import {
-  ingredientId,
-  locationId,
-  productId,
-  recipeShortcode,
-} from "@cubby/schemas/identifiers";
-import { ingredientOut } from "@cubby/schemas/ingredient";
-import { inventoryEntryOut } from "@cubby/schemas/inventory";
-import { locationOut } from "@cubby/schemas/location";
-import { mealOut, mealRecipeOut } from "@cubby/schemas/meal";
-import { productTopLevelOut } from "@cubby/schemas/product";
-import { recipeTopLevel } from "@cubby/schemas/recipe";
-import {
-  type mcpUnitMappingInput,
-  unitMappingOut,
-} from "@cubby/schemas/unitmapping";
-import {
-  brandedFoodInfo,
-  dataTypeEnum,
-  fdcId,
-  foodPortion,
-  type foodSummary,
-  ndb,
-  nutrientSummary,
-  nutrientsPer100,
-  upc,
-} from "@cubby/usda-schemas";
+import type { IngredientOut } from "@cubby/schemas/ingredient";
+import type { LocationOut } from "@cubby/schemas/location";
+import type {
+  McpIngredientOut,
+  McpInventoryLocationOut,
+  McpInventoryOut,
+  McpInventoryProductOut,
+  McpLocationOut,
+  McpMealOut,
+  McpProductOut,
+  McpProductUnitMappingOut,
+  McpRecipeOut,
+  McpUsdaFoodOut,
+} from "@cubby/schemas/mcp-responses";
+import type { MealOut } from "@cubby/schemas/meal-responses";
+import type { ProductTopLevelOut } from "@cubby/schemas/product";
+import type { RecipeTopLevel } from "@cubby/schemas/recipe-responses";
+import type { mcpUnitMappingInput } from "@cubby/schemas/unitmapping";
+import type { foodSummary } from "@cubby/usda-schemas";
 import { TRPCError } from "@trpc/server";
 import { omitBy } from "es-toolkit";
 import { z } from "zod";
@@ -127,29 +119,20 @@ export function notionUnavailable() {
 // Slim output projections
 //
 // Each read tool returns a compact projection of a router's rich output. The
-// shapes are pinned to the canonical schemas via `slim*Out` (a `.pick()` of the
-// entity's output schema) so the field lists can't drift; the functions map the
-// (list- or detail-shaped) row onto that shape. Return types are annotated with
-// `z.infer<typeof slim*Out>`, so a canonical field rename/removal surfaces here
+// shapes are named schema exports from `@cubby/schemas/mcp-responses`, so the
+// MCP tool surface no longer hand-rolls response contracts in the app. The
+// functions below only map list- or detail-shaped router rows onto those
+// contracts. Return types are annotated with the schema-inferred exports so
+// a canonical field rename/removal surfaces here
 // at typecheck. The same projection runs over both list rows and detail rows,
 // which carry different extra fields — hence the permissive row input types.
 // ---------------------------------------------------------------------------
 
-const slimLocationOut = locationOut
-  .pick({ id: true, name: true, shortcode: true, type: true })
-  .extend({
-    // Hierarchy as pointers, not nested objects. get_location / list_locations
-    // both already carry parent + immediate children on the row, so these are
-    // reachable in the same call — id+name is enough to navigate.
-    parentName: z.string().nullable(),
-    parentId: locationId.nullable(),
-    children: z.array(z.object({ id: locationId, name: z.string() })),
-  });
-type LocationRow = z.infer<typeof locationOut> & {
-  parent?: Pick<z.infer<typeof locationOut>, "id" | "name"> | null;
-  children?: Array<Pick<z.infer<typeof locationOut>, "id" | "name">>;
+type LocationRow = LocationOut & {
+  parent?: Pick<LocationOut, "id" | "name"> | null;
+  children?: Array<Pick<LocationOut, "id" | "name">>;
 };
-export function slimLocation(locRow: Row): z.infer<typeof slimLocationOut> {
+export function slimLocation(locRow: Row): McpLocationOut {
   const loc = locRow as LocationRow;
   return {
     id: loc.id,
@@ -162,23 +145,11 @@ export function slimLocation(locRow: Row): z.infer<typeof slimLocationOut> {
   };
 }
 
-const slimInventoryProduct = productTopLevelOut.pick({
-  id: true,
-  name: true,
-  manufacturer: true,
-  shortcode: true,
-});
-const slimInventoryOut = inventoryEntryOut
-  .pick({ id: true, amount: true, valuation: true })
-  .extend({
-    product: slimInventoryProduct.nullable(),
-    location: locationOut.pick({ id: true, name: true }).nullable(),
-  });
-type InventoryRow = z.infer<typeof inventoryEntryOut> & {
-  product?: z.infer<typeof slimInventoryProduct> | null;
-  location?: Pick<z.infer<typeof locationOut>, "id" | "name"> | null;
+type InventoryRow = Pick<McpInventoryOut, "id" | "amount" | "valuation"> & {
+  product?: McpInventoryProductOut | null;
+  location?: McpInventoryLocationOut | null;
 };
-export function slimInventory(entryRow: Row): z.infer<typeof slimInventoryOut> {
+export function slimInventory(entryRow: Row): McpInventoryOut {
   const entry = entryRow as InventoryRow;
   return {
     id: entry.id,
@@ -198,38 +169,13 @@ export function slimInventory(entryRow: Row): z.infer<typeof slimInventoryOut> {
   };
 }
 
-const slimProductOut = productTopLevelOut
-  .pick({
-    id: true,
-    name: true,
-    shortcode: true,
-    manufacturer: true,
-    upc: true,
-    category: true,
-    price: true,
-    expectedQuantity: true,
-    fdc_id: true,
-    usdaUnavailable: true,
-    externalIds: true,
-  })
-  .extend({
-    // USDA linkage is resolved at query time (explicit fdc_id, else UPC
-    // auto-match) and surfaced as `p.food`; a non-null `usdaFdcId` is the
-    // canonical "is it linked" signal — it covers the UPC-only path (stored
-    // fdc_id null) too. An agent reaches the full food via get_usda_food.
-    usdaFdcId: z.number().nullable(),
-    ingredientId: ingredientId.nullable(),
-    unitMappings: z.array(
-      unitMappingOut.pick({ a: true, b: true, source: true }),
-    ),
-  });
-type ProductRow = z.infer<typeof productTopLevelOut> & {
+type ProductRow = ProductTopLevelOut & {
   food?: { fdc_id?: number | null } | null;
-  ingredient?: { id?: z.infer<typeof ingredientId> } | null;
-  ingredientId?: z.infer<typeof ingredientId> | null;
-  unitMappings?: Array<z.infer<typeof unitMappingOut>>;
+  ingredient?: { id?: McpProductOut["ingredientId"] } | null;
+  ingredientId?: McpProductOut["ingredientId"];
+  unitMappings?: McpProductUnitMappingOut[];
 };
-export function slimProduct(pRow: Row): z.infer<typeof slimProductOut> {
+export function slimProduct(pRow: Row): McpProductOut {
   const p = pRow as ProductRow;
   return {
     id: p.id,
@@ -253,14 +199,10 @@ export function slimProduct(pRow: Row): z.infer<typeof slimProductOut> {
   };
 }
 
-const slimRecipeOut = recipeTopLevel
-  .pick({ id: true, name: true, yield: true, servings: true, tags: true })
-  // recipeTopLevel doesn't model shortcode (the row carries it); keep it nullish.
-  .extend({ shortcode: recipeShortcode.nullish() });
-type RecipeRow = z.infer<typeof recipeTopLevel> & {
-  shortcode?: z.infer<typeof recipeShortcode> | null;
+type RecipeRow = RecipeTopLevel & {
+  shortcode?: McpRecipeOut["shortcode"];
 };
-export function slimRecipe(rRow: Row): z.infer<typeof slimRecipeOut> {
+export function slimRecipe(rRow: Row): McpRecipeOut {
   const r = rRow as RecipeRow;
   return {
     id: r.id,
@@ -272,20 +214,12 @@ export function slimRecipe(rRow: Row): z.infer<typeof slimRecipeOut> {
   };
 }
 
-const slimIngredientOut = ingredientOut
-  .pick({ id: true, name: true, aliases: true })
-  .extend({
-    products: z.array(z.object({ id: productId, name: z.string() })),
-    recipeCount: z.number().int().nonnegative(),
-    // Pointer to the ingredient's own USDA food link (reach it via get_usda_food).
-    usdaFdcId: z.number().nullable(),
-  });
-type IngredientRow = z.infer<typeof ingredientOut> & {
-  product?: Array<{ id: z.infer<typeof productId>; name: string }>;
+type IngredientRow = IngredientOut & {
+  product?: McpIngredientOut["products"];
   appearsInRecipes?: unknown[];
   food?: { fdc_id?: number | null } | null;
 };
-export function slimIngredient(iRow: Row): z.infer<typeof slimIngredientOut> {
+export function slimIngredient(iRow: Row): McpIngredientOut {
   const i = iRow as IngredientRow;
   return {
     id: i.id,
@@ -297,16 +231,10 @@ export function slimIngredient(iRow: Row): z.infer<typeof slimIngredientOut> {
   };
 }
 
-const slimMealRecipeOut = mealRecipeOut
-  .pick({ id: true, recipeId: true, scale: true, scaledTotals: true })
-  .extend({ name: z.string().nullable() });
-const slimMealOut = mealOut
-  .pick({ id: true, date: true, name: true, sortOrder: true, totals: true })
-  .extend({ recipes: z.array(slimMealRecipeOut) });
 /** Strip a meal to its essentials and summarize each planned recipe. The per-recipe
  * `id` is the mealRecipe id — pass it to update_meal_recipe / remove_meal_recipe. */
-export function slimMeal(mRow: Row): z.infer<typeof slimMealOut> {
-  const m = mRow as z.infer<typeof mealOut>;
+export function slimMeal(mRow: Row): McpMealOut {
+  const m = mRow as MealOut;
   return {
     id: m.id,
     date: m.date,
@@ -323,29 +251,12 @@ export function slimMeal(mRow: Row): z.infer<typeof slimMealOut> {
   };
 }
 
-const slimUsdaFoodOut = z.object({
-  fdc_id: fdcId,
-  description: z.string().nullable(),
-  data_type: dataTypeEnum.nullable(),
-  brand_owner: z.string().nullable(),
-  brand_name: z.string().nullable(),
-  gtin_upc: upc.nullable(),
-  ndb_number: ndb.nullable(),
-  ingredients: z.string().nullable(),
-  // Branded serving + the portion table + named-nutrient summary: an agent
-  // can't reach these any other way (no portion/nutrient-decode tool exists).
-  serving: brandedFoodInfo.shape.serving.nullable(),
-  nutrientsPer100: nutrientsPer100.nullable(),
-  nutrientSummary: z.array(nutrientSummary),
-  portionInfoRaw: z.array(foodPortion),
-  linkedProducts: z.array(z.object({ id: productId, name: z.string() })),
-});
 type UsdaFoodRow = z.infer<typeof foodSummary> & {
-  linkedProducts?: Array<{ id: z.infer<typeof productId>; name: string }>;
+  linkedProducts?: McpUsdaFoodOut["linkedProducts"];
 };
 /** Project a USDA food: description/link keys, full nutrition (per-100 + named
  * summary), the portion table, and branded serving info. */
-export function slimUsdaFood(fRow: Row): z.infer<typeof slimUsdaFoodOut> {
+export function slimUsdaFood(fRow: Row): McpUsdaFoodOut {
   const f = fRow as UsdaFoodRow;
   return {
     fdc_id: f.fdc_id,

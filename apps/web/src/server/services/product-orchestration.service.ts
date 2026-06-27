@@ -7,19 +7,152 @@
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
-import type { ProductTopLevelOut } from "@cubby/schemas/product";
+import type { ProductId } from "@cubby/schemas/identifiers";
+import type {
+  ProductCreateInput,
+  ProductTopLevelOut,
+  ProductUpdateInput,
+} from "@cubby/schemas/product";
+import type { ProductWithFoodAndSideEffectsOut } from "@cubby/schemas/product-responses";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { getErrorMessage } from "~/lib/error-utils";
+import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import { runWithConflictRecovery } from "~/server/errors/db-errors";
+import { countActiveInventoryForProduct } from "~/server/repo/inventory/crud";
 import {
   findProductByUPC,
   findProductsWithNoImages,
   quickCreateProduct,
 } from "~/server/repo/product";
 import { importImageFromUPC } from "./image-import";
+import type { LocationValuationService } from "./location-valuation.service";
+import type { ProductService } from "./product.service";
+import type { RecipeCostingService } from "./recipe-costing.service";
+
+interface ProductWriteServices {
+  db: Database;
+  product: ProductService;
+  recipeCosting: RecipeCostingService;
+  locationValuation: LocationValuationService;
+}
+
+export async function createProductWithSideEffects(
+  services: ProductWriteServices & { upcLookupClient: UPCLookupClient },
+  input: ProductCreateInput,
+  actor: ActorContext,
+): Promise<ProductWithFoodAndSideEffectsOut> {
+  const product = await services.product.createProduct(input, actor);
+
+  if (input.upc) {
+    try {
+      await importImageFromUPC(
+        services.db,
+        services.upcLookupClient,
+        input.upc,
+        product.id,
+      );
+    } catch (error) {
+      console.error(`[product.create] Image import failed:`, error);
+    }
+  }
+
+  const ingredientId = product.ingredient?.id;
+  const recipesRecomputed = ingredientId
+    ? await services.recipeCosting.recomputeForIngredient(ingredientId)
+    : 0;
+
+  return {
+    ...product,
+    sideEffects: { recipesRecomputed, inventoryValuationsUpdated: 0 },
+  };
+}
+
+export async function updateProductWithSideEffects(
+  services: ProductWriteServices,
+  id: ProductId,
+  data: ProductUpdateInput["data"],
+  actor: ActorContext,
+): Promise<ProductWithFoodAndSideEffectsOut> {
+  const result = await services.product.updateProduct(id, data, actor);
+  const ingredientId = result.ingredient?.id;
+  const recipesRecomputed = ingredientId
+    ? await services.recipeCosting.recomputeForIngredient(ingredientId)
+    : 0;
+
+  const priceChanged = data.price !== undefined;
+  const inventoryValuationsUpdated = priceChanged
+    ? await countActiveInventoryForProduct(services.db, id)
+    : 0;
+  if (priceChanged) {
+    await services.locationValuation.recompute();
+  }
+
+  return {
+    ...result,
+    sideEffects: { recipesRecomputed, inventoryValuationsUpdated },
+  };
+}
+
+export async function applyUpcDataWithSideEffects(
+  services: ProductWriteServices & { upcLookupClient: UPCLookupClient },
+  input: { id: ProductId; upc: string },
+  actor: ActorContext,
+): Promise<ProductWithFoodAndSideEffectsOut> {
+  const current = await services.product.getProductByID(input.id);
+  const lookup = await services.upcLookupClient.lookup(input.upc);
+
+  const data: { manufacturer?: string; price?: number } = {};
+  const lookupManufacturer = lookup?.manufacturer ?? lookup?.brand ?? null;
+  if (
+    lookupManufacturer != null &&
+    isUnspecifiedManufacturer(current.manufacturer) &&
+    !isUnspecifiedManufacturer(lookupManufacturer)
+  ) {
+    data.manufacturer = lookupManufacturer;
+  }
+  if (current.price == null && lookup?.priceDollars != null) {
+    data.price = lookup.priceDollars;
+  }
+
+  const priceChanged = data.price !== undefined;
+  if (Object.keys(data).length > 0) {
+    await services.product.updateProduct(input.id, data, actor);
+  }
+
+  if (current.images.length === 0 && lookup?.imageUrl) {
+    try {
+      await importImageFromUPC(
+        services.db,
+        services.upcLookupClient,
+        input.upc,
+        input.id,
+      );
+    } catch (error) {
+      console.error(`[product.applyUpcData] Image import failed:`, error);
+    }
+  }
+
+  const result = await services.product.getProductByID(input.id);
+  const ingredientId = result.ingredient?.id;
+  const recipesRecomputed =
+    priceChanged && ingredientId
+      ? await services.recipeCosting.recomputeForIngredient(ingredientId)
+      : 0;
+  const inventoryValuationsUpdated = priceChanged
+    ? await countActiveInventoryForProduct(services.db, input.id)
+    : 0;
+  if (priceChanged) {
+    await services.locationValuation.recompute();
+  }
+
+  return {
+    ...result,
+    sideEffects: { recipesRecomputed, inventoryValuationsUpdated },
+  };
+}
 
 /**
  * Find or create a product by UPC code.

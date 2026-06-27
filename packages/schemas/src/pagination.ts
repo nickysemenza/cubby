@@ -32,7 +32,7 @@ export const mcpPaginationParams = {
     .describe("Items per page (default 50, max 100)"),
 };
 
-export const sortPaginationCombo = z.object({
+export const sortPaginationFields = {
   sort: sortParams
     .optional()
     .default({ orderBy: "createdAt", direction: "desc" }),
@@ -40,7 +40,9 @@ export const sortPaginationCombo = z.object({
     .optional()
     .default({ pageIndex: 0, pageSize: 10 }),
   groupBy: z.string().optional(),
-});
+};
+
+export const sortPaginationCombo = z.object(sortPaginationFields);
 
 export const buildTakeSkip = (pagination: PaginationParams) => {
   return {

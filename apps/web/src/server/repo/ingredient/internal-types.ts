@@ -7,8 +7,15 @@
  * these are re-exported from the package barrel.
  */
 
-import type { IngredientWithRecipesAndProductOut } from "@cubby/schemas/ingredient-responses";
+import type { IngredientOut } from "@cubby/schemas/ingredient";
+import {
+  type IngredientListItem,
+  type IngredientWithRecipesAndProductOut,
+  ingredientListItemOut,
+} from "@cubby/schemas/ingredient-responses";
+import type { RecipeRef } from "@cubby/schemas/recipe-responses";
 import { and, inArray, isNull, or, sql } from "drizzle-orm";
+import { parseWithContext } from "~/lib/zod-utils";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   type image,
@@ -30,7 +37,9 @@ import {
   dbProductToTopLevelShape,
   mapProductUnitMappings,
 } from "~/server/repo/product/mappers";
-import { computeRecipeUsages, dbRecipeToAPIShallow } from "../recipe";
+import { computeRecipeUsages, dbRecipeToTopLevelShape } from "../recipe";
+
+type IngredientSelect = typeof ingredient.$inferSelect;
 
 export type IngredientDeepDB = typeof ingredient.$inferSelect & {
   product: Array<
@@ -79,6 +88,37 @@ type IngredientLeanDB = typeof ingredient.$inferSelect & {
   >;
 };
 
+export const dbIngredientToTopLevelShape = (
+  ingredientData: IngredientSelect,
+): IngredientOut => ({
+  id: ingredientData.id,
+  name: ingredientData.name,
+  aliases: ingredientData.aliases,
+  naKinds: ingredientData.naKinds,
+  createdAt: ingredientData.createdAt,
+  updatedAt: ingredientData.updatedAt,
+});
+
+export type IngredientListDB = IngredientSelect & {
+  product: IngredientDeepDB["product"];
+  appearsInRecipes: RecipeRef[] | null;
+};
+
+export const dbIngredientToListAPI = (
+  ingredientData: IngredientListDB,
+): IngredientListItem => {
+  const result = {
+    ...dbIngredientToTopLevelShape(ingredientData),
+    product: mapIngredientProducts(ingredientData.product),
+    appearsInRecipes: ingredientData.appearsInRecipes ?? [],
+  };
+
+  return parseWithContext(ingredientListItemOut, result, {
+    entityType: "Ingredient",
+    identifier: { id: ingredientData.id, name: ingredientData.name },
+  });
+};
+
 /**
  * Lean product map: skips the `images` (full Image records) + `externalIds`
  * joins that costing / getManyByIDs never read. That over-fetch was ~4MB and
@@ -105,7 +145,6 @@ export const dbIngredientToAPI = async (
     product: productRel,
     recipe: recipeRel,
     recipeSectionIngredient: recipeSectionIngredientRel,
-    ...restOfIngredient
   } = ingredientData;
 
   const productWithMappings = mapIngredientProducts(productRel);
@@ -118,9 +157,11 @@ export const dbIngredientToAPI = async (
   );
 
   return {
-    ...restOfIngredient,
-    id: restOfIngredient.id,
-    recipe: recipeRel ? dbRecipeToAPIShallow(recipeRel) : null,
+    ...dbIngredientToTopLevelShape(ingredientData),
+    recipe:
+      recipeRel && recipeRel.deletedAt === null
+        ? dbRecipeToTopLevelShape(recipeRel)
+        : null,
     product: productWithMappings,
     recipeUsages,
     appearsInRecipes,

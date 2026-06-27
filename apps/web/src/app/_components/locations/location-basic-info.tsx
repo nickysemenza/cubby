@@ -1,11 +1,11 @@
-import type { InfLocation } from "@cubby/schemas/location";
+import type { InfLocation } from "@cubby/schemas/location-responses";
 import { Link } from "@tanstack/react-router";
 import type { FC } from "react";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { queryKeys } from "~/lib/query-keys";
+import { locationMutationInvalidateKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 import { EntityPillLink } from "../EntityPill";
 import { useEntityDelete } from "../hooks/useEntityDelete";
@@ -30,7 +30,7 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
     entityLabel: "Location",
     mutationOptions: (callbacks) =>
       api.location.delete.mutationOptions(callbacks),
-    invalidateKeys: [queryKeys.location.list],
+    invalidateKeys: locationMutationInvalidateKeys,
     redirectTo: "/locations",
   });
 

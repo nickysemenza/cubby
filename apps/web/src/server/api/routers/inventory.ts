@@ -6,24 +6,23 @@
  * See CLAUDE.md "Service Layer Architecture" for details.
  */
 
-import {
-  type InventoryId,
-  inventoryId,
-  locationId,
-} from "@cubby/schemas/identifiers";
+import { type InventoryId, inventoryId } from "@cubby/schemas/identifiers";
 import {
   bulkMovePayload,
   inventoryBulkOperationPayload,
   inventoryCreatePayloadData,
   inventoryFiltersSchema,
-  inventoryUpdateInput,
+  inventoryFindDuplicatesInput,
+  inventoryLocationIdsInput,
+  inventoryUpdatePayloadData,
 } from "@cubby/schemas/inventory";
 import {
+  inventoryCountsByLocationOut,
+  inventoryDuplicateUniqueProductsOut,
   inventoryListItemOut,
+  inventoryWithLocationAndProductListOut,
   inventoryWithLocationAndProductOut,
 } from "@cubby/schemas/inventory-responses";
-import { duplicateUniqueProductSchema } from "@cubby/schemas/problems";
-import { z } from "zod";
 import { createAppError } from "~/server/errors/app-error";
 import {
   bulkMoveInventoryEntries,
@@ -62,7 +61,7 @@ const { list } = createEntityListProcedure({
 const { getByID, create, update } = createEntityCrudWithoutListProcedures({
   schemas: {
     createInput: inventoryCreatePayloadData,
-    updateInput: inventoryUpdateInput.shape.data,
+    updateInput: inventoryUpdatePayloadData,
     output: inventoryWithLocationAndProductOut,
     idSchema: inventoryId,
   },
@@ -123,7 +122,7 @@ const deleteItem = createDeleteProcedure<InventoryId>(async (services, ids) => {
 // Bulk process inventory entries (creates and updates in one call)
 const bulkProcess = protectedProcedure
   .input(inventoryBulkOperationPayload)
-  .output(z.array(inventoryWithLocationAndProductOut))
+  .output(inventoryWithLocationAndProductListOut)
   .mutation(async ({ ctx, input }) => {
     const result = await bulkProcessInventoryEntries(
       ctx.db,
@@ -143,7 +142,7 @@ const bulkProcess = protectedProcedure
 // Bulk move inventory entries between locations
 const bulkMove = protectedProcedure
   .input(bulkMovePayload)
-  .output(z.array(inventoryWithLocationAndProductOut))
+  .output(inventoryWithLocationAndProductListOut)
   .mutation(async ({ ctx, input }) => {
     const result = await bulkMoveInventoryEntries(
       ctx.db,
@@ -156,12 +155,8 @@ const bulkMove = protectedProcedure
 
 // Find products with expectedQuantity=1 in multiple locations
 const findDuplicates = protectedProcedure
-  .input(
-    z.object({
-      excludeLocationId: locationId.optional(),
-    }),
-  )
-  .output(z.array(duplicateUniqueProductSchema))
+  .input(inventoryFindDuplicatesInput)
+  .output(inventoryDuplicateUniqueProductsOut)
   .query(async ({ ctx }) => {
     const duplicates = await findDuplicateUniqueProducts(ctx.db);
 
@@ -179,16 +174,16 @@ const findDuplicates = protectedProcedure
 
 // Get inventory counts for multiple locations (batched query to avoid N+1)
 const getCountsByLocations = protectedProcedure
-  .input(z.object({ locationIds: z.array(locationId) }))
-  .output(z.record(z.string(), z.number()))
+  .input(inventoryLocationIdsInput)
+  .output(inventoryCountsByLocationOut)
   .query(async ({ ctx, input }) => {
     return await getInventoryCountsByLocations(ctx.db, input.locationIds);
   });
 
 // Get inventory entries for multiple locations (batched query to avoid N+1)
 const getByLocationIds = protectedProcedure
-  .input(z.object({ locationIds: z.array(locationId) }))
-  .output(z.array(inventoryWithLocationAndProductOut))
+  .input(inventoryLocationIdsInput)
+  .output(inventoryWithLocationAndProductListOut)
   .query(async ({ ctx, input }) => {
     return await getInventoryByLocationIds(ctx.db, input.locationIds);
   });

@@ -6,10 +6,10 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { LocationId } from "@cubby/schemas/identifiers";
 import type {
-  InfLocation,
   LocationCreateInput,
   LocationUpdateInput,
 } from "@cubby/schemas/location";
+import type { InfLocation } from "@cubby/schemas/location-responses";
 import {
   buildTakeSkip,
   type PaginationParams,
@@ -51,10 +51,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { generateUniqueLocationShortcode } from "~/server/repo/shortcode-utils";
 
-import {
-  buildLocationWithChildren,
-  dbLocationToAPIWithChildren,
-} from "./helpers";
+import { buildLocationWithChildren, dbLocationToListAPI } from "./helpers";
 import type {
   LocationFilters,
   LocationWithParentChild,
@@ -321,7 +318,7 @@ export const locationList = async (
   const { data: results, count: totalCount } = await executeListQueryWithCount(
     getDb(db).query.location.findMany({
       where: whereClause,
-      ...relations.location.full,
+      ...relations.location.list,
       orderBy: orderByClause,
       limit: take,
       offset: skip,
@@ -329,7 +326,7 @@ export const locationList = async (
     countWhere(db, location, whereClause),
   );
 
-  const items = results.map(dbLocationToAPIWithChildren);
+  const items = results.map(dbLocationToListAPI);
   return { data: items, count: totalCount };
 };
 

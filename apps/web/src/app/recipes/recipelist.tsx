@@ -1,5 +1,5 @@
 import type { CookbookId } from "@cubby/schemas/identifiers";
-import type { RecipeOut } from "@cubby/schemas/recipe";
+import type { RecipeListItem } from "@cubby/schemas/recipe-responses";
 import { useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Scale } from "lucide-react";
@@ -7,7 +7,7 @@ import { type ReactNode, useMemo } from "react";
 import { Stack } from "~/components/layout";
 import { Skeleton } from "~/components/ui/skeleton";
 import { formatCurrencyRange, formatNumberRange } from "~/lib/format-range";
-import { queryKeys } from "~/lib/query-keys";
+import { recipeMutationInvalidateKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 import RTable from "../_components/data-table/Table";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
@@ -69,7 +69,7 @@ interface RecipeListProps {
 export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
   const api = useTRPC();
   const navigate = useNavigate();
-  const columnHelper = createColumnHelper<RecipeOut>();
+  const columnHelper = createColumnHelper<RecipeListItem>();
   const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("recipe");
 
   const columns = useMemo(
@@ -236,7 +236,7 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
   const deletableConfig = useDeletableConfig({
     mutationFn: api.recipe.delete.mutationOptions,
     entityLabel: "Recipe",
-    invalidateKeys: [queryKeys.recipe.list],
+    invalidateKeys: recipeMutationInvalidateKeys,
   });
 
   const {

@@ -3,7 +3,7 @@
  * Convert database records to API types.
  */
 
-import type { ImageOut } from "@cubby/schemas/image";
+import type { ImageOut } from "@cubby/schemas/image-responses";
 import type {
   RecipeGraphOut,
   RecipeListItem,
@@ -11,7 +11,7 @@ import type {
   RecipeSectionOut,
   RecipeTopLevel,
   SectionIngredient,
-} from "@cubby/schemas/recipe";
+} from "@cubby/schemas/recipe-responses";
 import type {
   image,
   recipe,
@@ -203,7 +203,9 @@ const sectionIngredientToAPI = (
  * This is the shared, unvalidated field mapper for recipe list rows and recipe
  * references.
  */
-const dbRecipeToTopLevelShape = (recipeData: RecipeSelect): RecipeTopLevel => {
+export const dbRecipeToTopLevelShape = (
+  recipeData: RecipeSelect,
+): RecipeTopLevel => {
   // cookbookId is the FK, not a top-level API field — pull it out of the row so it
   // isn't spread into the output, but feed it to the source codec so a book
   // recipe's `source` carries its cookbook id (for linking).

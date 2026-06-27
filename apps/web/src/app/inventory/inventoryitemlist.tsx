@@ -8,7 +8,7 @@ import type { z } from "zod";
 import type { SwipeAction } from "~/components/entity/swipe-row";
 import { Row as FlexRow, Stack } from "~/components/layout";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
-import { queryKeys } from "~/lib/query-keys";
+import { inventoryMutationInvalidateKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 import {
   createCreatedAtColumn,
@@ -79,7 +79,7 @@ export function InventoryItemList() {
   const deletableConfig = useDeletableConfig({
     mutationFn: api.inventory.delete.mutationOptions,
     entityLabel: "Inventory Entry",
-    invalidateKeys: [queryKeys.inventory.all, queryKeys.location.all],
+    invalidateKeys: inventoryMutationInvalidateKeys,
   });
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: navigate is stable

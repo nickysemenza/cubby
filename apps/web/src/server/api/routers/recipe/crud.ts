@@ -11,12 +11,16 @@ import { type RecipeId, recipeId } from "@cubby/schemas/identifiers";
 import {
   recipeCreateInput,
   recipeFiltersSchema,
-  recipeGraphOut,
+  recipeIdsInput,
+  recipeShortcodeInput,
+  recipeUpdateData,
+} from "@cubby/schemas/recipe";
+import {
+  recipeGraphListOut,
   recipeListItemOut,
   recipeOut,
-  recipeUpdateInput,
-} from "@cubby/schemas/recipe";
-import { z } from "zod";
+  recipeTagsOut,
+} from "@cubby/schemas/recipe-responses";
 import { createAppError } from "~/server/errors/app-error";
 import {
   createRecipe,
@@ -50,7 +54,7 @@ const { list } = createEntityListProcedure({
 const { getByID, create, update } = createEntityCrudWithoutListProcedures({
   schemas: {
     createInput: recipeCreateInput,
-    updateInput: recipeUpdateInput.shape.data,
+    updateInput: recipeUpdateData,
     output: recipeOut,
     idSchema: recipeId,
   },
@@ -90,7 +94,7 @@ const { getByID, create, update } = createEntityCrudWithoutListProcedures({
 
 // Get recipe by shortcode (e.g., R-X7K9)
 const getByShortcode = protectedProcedure
-  .input(z.object({ shortcode: z.string() }))
+  .input(recipeShortcodeInput)
   .output(recipeOut.nullable())
   .query(async ({ ctx, input }) => {
     return await getRecipeByShortcode(ctx.db, input.shortcode);
@@ -100,8 +104,8 @@ const getByShortcode = protectedProcedure
 // cost rollup to resolve sub-recipes (recipe-as-ingredient) without an N+1
 // fan-out of getByID calls. Missing/deleted ids are omitted from the result.
 const getManyByIDs = protectedProcedure
-  .input(z.object({ ids: z.array(recipeId) }))
-  .output(z.array(recipeGraphOut))
+  .input(recipeIdsInput)
+  .output(recipeGraphListOut)
   .query(async ({ ctx, input }) => {
     return await getRecipesByIDs(ctx.db, input.ids);
   });
@@ -112,7 +116,7 @@ const deleteItem = createDeleteProcedure<RecipeId>(async (services, ids) => {
 }, recipeId);
 
 const getAllTagsEndpoint = protectedProcedure
-  .output(z.array(z.string()))
+  .output(recipeTagsOut)
   .query(async ({ ctx }) => {
     return await getAllTags(ctx.db);
   });

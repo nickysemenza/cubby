@@ -1,5 +1,5 @@
 import type { MealId } from "@cubby/schemas/identifiers";
-import type { MealRecipeOut } from "@cubby/schemas/meal";
+import type { MealRecipeOut } from "@cubby/schemas/meal-responses";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Trash2 } from "lucide-react";

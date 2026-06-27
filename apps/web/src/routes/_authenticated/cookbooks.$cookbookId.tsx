@@ -4,7 +4,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Plus, RefreshCw, Trash } from "lucide-react";
 import { useState } from "react";
 import { z } from "zod";
-import { tableSearchSchema } from "~/app/_components/data-table/table-search";
+import { tableSearchFields } from "~/app/_components/data-table/table-search";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
 import { IngredientUsagePanel } from "~/app/_components/ingredient/ingredient-usage-panel";
@@ -20,17 +20,20 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 import { useTabParam } from "~/hooks/useTabParam";
 import { getErrorMessage } from "~/lib/error-utils";
-import { queryKeys } from "~/lib/query-keys";
+import {
+  invalidateTRPCQueries,
+  recipeCookbookMutationInvalidateKeys,
+  recipeMutationInvalidateKeys,
+} from "~/lib/query-keys";
 import { useTRPC, useTRPCClient } from "~/trpc/react";
 
-const searchSchema = z
-  .object({
-    // Active tab, deep-linkable. Default ("recipes") is omitted from the URL.
-    tab: z.enum(["recipes", "ingredients"]).optional().catch(undefined),
-  })
+const searchSchema = z.object({
+  // Active tab, deep-linkable. Default ("recipes") is omitted from the URL.
+  tab: z.enum(["recipes", "ingredients"]).optional().catch(undefined),
   // Embedded RecipeList mirrors sort/page to the URL (useTableState urlSync) —
   // merge so this strict schema doesn't strip those keys.
-  .extend(tableSearchSchema.shape);
+  ...tableSearchFields,
+});
 
 export const Route = createFileRoute("/_authenticated/cookbooks/$cookbookId")({
   ssr: false,
@@ -93,9 +96,7 @@ function CookbookDetailPage() {
           return `Reprocessed ${reprocessed} recipe${reprocessed === 1 ? "" : "s"} from ${name}${extra}`;
         },
         onDone: () => {
-          void queryClient.invalidateQueries({
-            queryKey: queryKeys.recipe.list,
-          });
+          invalidateTRPCQueries(queryClient, recipeMutationInvalidateKeys);
         },
       },
     );
@@ -104,7 +105,7 @@ function CookbookDetailPage() {
     mutationFn: api.recipe.deleteByCookbook.mutationOptions,
     success: ({ deleted }) =>
       `Deleted ${deleted} recipe${deleted === 1 ? "" : "s"} from ${name}`,
-    invalidateKeys: [queryKeys.recipe.list, queryKeys.recipe.listCookbooks],
+    invalidateKeys: recipeCookbookMutationInvalidateKeys,
     onSuccess: () => {
       void navigate({ to: "/cookbooks" });
     },

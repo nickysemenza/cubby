@@ -11,7 +11,10 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
 import { getErrorMessage } from "~/lib/error-utils";
-import { queryKeys } from "~/lib/query-keys";
+import {
+  invalidateTRPCQueries,
+  recipeAllMutationInvalidateKeys,
+} from "~/lib/query-keys";
 import { type RouterOutputs, useTRPC, useTRPCClient } from "~/trpc/react";
 import type { ImportResult } from "../cookbook-import/types";
 import { RecipeImportCard } from "../recipe-import-card";
@@ -108,9 +111,7 @@ export function NotionImport() {
         onDone: (r) => {
           // Refresh the recipe list + re-run the preview (flips new → will-update).
           if (r.succeeded > 0) {
-            void queryClient.invalidateQueries({
-              queryKey: [queryKeys.recipe.all],
-            });
+            invalidateTRPCQueries(queryClient, recipeAllMutationInvalidateKeys);
           }
         },
         successToast: (r) =>

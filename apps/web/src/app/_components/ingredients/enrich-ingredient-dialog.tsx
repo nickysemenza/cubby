@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { getErrorMessage } from "~/lib/error-utils";
-import { queryKeys } from "~/lib/query-keys";
+import { ingredientAllMutationInvalidateKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 
 interface EnrichIngredientDialogProps {
@@ -39,7 +39,7 @@ export function EnrichIngredientDialog({
     mutationFn: api.product.create.mutationOptions,
     success: `Enriched ${ingredient?.name ?? "ingredient"}.`,
     // Refresh react-query consumers (list, preview getByID)...
-    invalidateKeys: [queryKeys.ingredient.all],
+    invalidateKeys: ingredientAllMutationInvalidateKeys,
     onSuccess: () => {
       // ...and any route loader (the full /ingredients/$id detail).
       void router.invalidate();

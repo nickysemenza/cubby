@@ -3,9 +3,9 @@ import type { MealId, MealRecipeId } from "@cubby/schemas/identifiers";
 import type {
   MealCreateInput,
   MealFilters,
-  MealOut,
   MealRecipeInput,
 } from "@cubby/schemas/meal";
+import type { MealOut } from "@cubby/schemas/meal-responses";
 import {
   buildTakeSkip,
   type PaginationParams,

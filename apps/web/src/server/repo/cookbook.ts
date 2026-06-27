@@ -11,7 +11,7 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { CookbookId, RecipeId } from "@cubby/schemas/identifiers";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
-import type { CookbookSummary } from "@cubby/schemas/recipe";
+import type { CookbookSummary } from "@cubby/schemas/recipe-responses";
 import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { cookbook, image, recipe } from "~/server/db/schema";

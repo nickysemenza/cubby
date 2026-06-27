@@ -16,7 +16,10 @@ import {
 import { Button } from "~/components/ui/button";
 import { Empty, EmptyActions, EmptyDescription } from "~/components/ui/empty";
 import { getErrorMessage } from "~/lib/error-utils";
-import { queryKeys } from "~/lib/query-keys";
+import {
+  ingredientProductMutationInvalidateKeys,
+  ingredientRecipeMutationInvalidateKeys,
+} from "~/lib/query-keys";
 import { savedWithRecompute } from "~/lib/recompute-summary";
 import { useTRPC } from "~/trpc/react";
 import type { EnrichmentEditorHandle } from "./enrichment-editor";
@@ -88,14 +91,14 @@ export function ReviewQueue({
   const markNoUsdaMut = useActionMutation({
     mutationFn: api.product.update.mutationOptions,
     success: "Marked: no USDA entry.",
-    invalidateKeys: [queryKeys.ingredient.all, queryKeys.product.all],
+    invalidateKeys: ingredientProductMutationInvalidateKeys,
     onSuccess: () => markProcessed(flaggedIdRef.current),
     error: (err) => `Failed: ${getErrorMessage(err)}`,
   });
   const mergeMutation = useActionMutation({
     mutationFn: api.ingredient.merge.mutationOptions,
     success: (d) => savedWithRecompute(d.sideEffects, "Merged"),
-    invalidateKeys: [queryKeys.ingredient.all, queryKeys.recipe.all],
+    invalidateKeys: ingredientRecipeMutationInvalidateKeys,
     onSuccess: () => markProcessed(mergeSourceRef.current),
     error: (err) => `Merge failed: ${getErrorMessage(err)}`,
   });

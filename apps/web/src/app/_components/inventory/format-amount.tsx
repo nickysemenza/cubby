@@ -1,6 +1,6 @@
 import type { WAmount } from "@cubby/recipebridge";
 import type { Amount } from "@cubby/schemas/codec";
-import type { UnitMapping } from "@cubby/schemas/unitmapping";
+import type { UnitMapping } from "@cubby/schemas/unitmapping-responses";
 import type { ReadonlyDeep } from "type-fest";
 import { NoneState } from "~/app/_components/NoneState";
 import {

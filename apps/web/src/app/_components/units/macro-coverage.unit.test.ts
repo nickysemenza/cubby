@@ -1,4 +1,4 @@
-import { manualUnitMapping } from "@cubby/schemas/unitmapping";
+import { manualUnitMapping } from "@cubby/schemas/unitmapping-responses";
 import { getNutrientUnitString } from "@cubby/usda-schemas";
 import { describe, expect, it } from "vitest";
 import { macroCoverage } from "./macro-coverage";

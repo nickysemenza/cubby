@@ -1,5 +1,6 @@
 import type { inventoryListItemOut } from "@cubby/schemas/inventory-responses";
-import type { InfLocation, LocationType } from "@cubby/schemas/location";
+import type { LocationType } from "@cubby/schemas/location";
+import type { InfLocation } from "@cubby/schemas/location-responses";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { ChevronLeft } from "lucide-react";

@@ -6,9 +6,14 @@
  * /meals/suggestions UI and the find_cookable_recipes MCP tool.
  */
 
-import { recipeAvailabilityOut } from "@cubby/schemas/availability";
-import { recipeId } from "@cubby/schemas/identifiers";
-import { z } from "zod";
+import {
+  recipeAvailabilityListOut,
+  recipeAvailabilityOut,
+} from "@cubby/schemas/availability-responses";
+import {
+  makeableRecipesInput,
+  recipeAvailabilityInput,
+} from "@cubby/schemas/suggestions";
 import { recipeList } from "~/server/repo/recipe";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
@@ -16,20 +21,15 @@ import { createTRPCRouter, protectedProcedure } from "../trpc";
 const CANDIDATE_CAP = 500;
 
 const getRecipeAvailability = protectedProcedure
-  .input(z.object({ recipeId }))
+  .input(recipeAvailabilityInput)
   .output(recipeAvailabilityOut)
   .query(async ({ ctx, input }) =>
     ctx.services.availability.getRecipeAvailability(input.recipeId),
   );
 
 const getMakeable = protectedProcedure
-  .input(
-    z.object({
-      minCoverage: z.number().min(0).max(1).optional(),
-      limit: z.number().int().positive().max(100).optional(),
-    }),
-  )
-  .output(z.array(recipeAvailabilityOut))
+  .input(makeableRecipesInput)
+  .output(recipeAvailabilityListOut)
   .query(async ({ ctx, input }) => {
     const minCoverage = input.minCoverage ?? 0;
     const limit = input.limit ?? 24;

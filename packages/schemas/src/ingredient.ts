@@ -1,7 +1,6 @@
 import { z } from "zod";
-import { amount } from "./codec";
-import { dbTimestampsOut, requiredName } from "./common";
-import { id, ingredientId, recipeId } from "./identifiers";
+import { requiredName } from "./common";
+import { ingredientId } from "./identifiers";
 import { baseKind } from "./problems";
 
 export const ingredientFields = z.object({
@@ -13,17 +12,10 @@ export const ingredientFields = z.object({
 
 export const ingredientBase = ingredientFields;
 
-const ingredientPersistedFields = ingredientFields.extend({
-  // Base measurement kinds the user has marked "not applicable" for this
-  // ingredient (e.g. volume on a count-only item). The DB column is non-null
-  // with an empty-array default, so public read contracts always carry it.
-  naKinds: z.array(baseKind),
-});
-
 /**
  * List/search filters for ingredients. Field names match the MCP
- * `search_ingredients` tool exactly, so it reuses this schema's `.shape`
- * (descriptions and all) instead of re-declaring the fields.
+ * `search_ingredients` tool exactly; the MCP tool has its own explicit field
+ * roster with matching names and descriptions.
  */
 export const ingredientFiltersSchema = z.object({
   nameFilter: z
@@ -37,29 +29,49 @@ export const ingredientFiltersSchema = z.object({
     .describe("Only return ingredients with no linked products"),
 });
 export type IngredientFilters = z.infer<typeof ingredientFiltersSchema>;
-export const ingredientOut = z
-  .object({
-    id: ingredientId,
-  })
-  .extend(ingredientPersistedFields.shape)
-  .extend(dbTimestampsOut.shape);
+
+export const mcpIngredientSearchInputShape = {
+  nameFilter: z
+    .string()
+    .optional()
+    .describe("Filter by ingredient name (substring)"),
+  missingProductsOnly: z
+    .boolean()
+    .optional()
+    .default(false)
+    .describe("Only return ingredients with no linked products"),
+};
+export const ingredientOut = z.object({
+  id: ingredientId,
+  name: z.string().meta({ mock: "food.ingredient" }),
+  aliases: z.array(z.string()),
+  // Base measurement kinds the user has marked "not applicable" for this
+  // ingredient (e.g. volume on a count-only item). The DB column is non-null
+  // with an empty-array default, so public read contracts always carry it.
+  naKinds: z.array(baseKind),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
+export type IngredientOut = z.infer<typeof ingredientOut>;
 
 /**
  * Input schema for creating ingredients. Overrides the base `name` (lax for
  * reads) with a non-empty constraint; keep the mock hint for test fixtures.
  */
-export const ingredientCreateInput = ingredientBase.extend({
+export const ingredientCreateInput = z.object({
   name: requiredName("Ingredient name").meta({ mock: "food.ingredient" }),
+  aliases: z.array(z.string()),
   naKinds: z.array(baseKind).optional().default([]),
 });
 export type IngredientCreateInput = z.infer<typeof ingredientCreateInput>;
 
-export const ingredientUpdateData = ingredientFields
-  .extend({
-    name: requiredName("Ingredient name").meta({ mock: "food.ingredient" }),
-    naKinds: z.array(baseKind),
-  })
-  .partial();
+export const ingredientUpdateData = z.object({
+  name: requiredName("Ingredient name")
+    .meta({ mock: "food.ingredient" })
+    .optional(),
+  aliases: z.array(z.string()).optional(),
+  naKinds: z.array(baseKind).optional(),
+});
 
 /**
  * Input schema for updating ingredients
@@ -72,31 +84,46 @@ export const ingredientUpdateInput = z.object({
 
 export type IngredientUpdateInput = z.infer<typeof ingredientUpdateInput>;
 
-/**
- * Per-cluster change summary returned by an ingredient merge — the serialized
- * shape surfaced to the MCP tool / any caller. The repo's internal `MergeSummary`
- * extends this with the (never-serialized) `affectedRecipeIds` it dispatches.
- */
-export const mergeSummary = z.object({
-  /** Names newly added to the target's `aliases` (excludes pre-existing). */
-  aliasesAdded: z.array(z.string()),
-  /** Distinct recipes that had a line re-pointed onto the target. */
-  recipesMoved: z.number().int().nonnegative(),
-  /** Product rows re-pointed onto the target (incl. soft-deleted). */
-  productsMoved: z.number().int().nonnegative(),
-  /** Ingredient ids absorbed and hard-deleted. */
-  deletedIds: z.array(ingredientId),
+export const ingredientMergeInput = z.object({
+  target: ingredientId,
+  aliases: z.array(ingredientId).min(1),
+  // Validate + count what would change without writing.
+  dryRun: z.boolean().optional(),
 });
-export type MergeSummaryOut = z.infer<typeof mergeSummary>;
 
-export const ingredientRawLineOut = z.object({
-  ingredientId,
-  lineId: id,
-  rawLine: z.string().nullable(),
-  modifier: z.string().nullable(),
-  amounts: z.array(amount),
-  recipeId,
-  recipeName: z.string(),
-  sectionName: z.string().nullable(),
+export const ingredientIdInput = z.object({
+  id: ingredientId,
 });
-export type IngredientRawLineOut = z.infer<typeof ingredientRawLineOut>;
+
+export const ingredientIdsInput = z.object({
+  ids: z.array(ingredientId),
+});
+
+export const ingredientRawLinesInput = z.object({
+  ids: z.array(ingredientId).min(1),
+});
+
+export const ingredientNameFilterInput = z.object({
+  nameFilter: z.string(),
+});
+
+export const ingredientNamesInput = z.object({
+  names: z.array(z.string()),
+});
+
+export const ingredientResolvableNamesInput = z.object({
+  names: z.array(z.string().min(1)),
+});
+
+export const mcpIngredientCreateInputShape = {
+  name: z.string().describe("Ingredient name"),
+  aliases: z
+    .array(z.string())
+    .optional()
+    .describe("Alternate names for this ingredient"),
+};
+
+export const mcpIngredientUpdateInputShape = {
+  name: z.string().optional().describe("New name"),
+  aliases: z.array(z.string()).optional().describe("New aliases (replaces)"),
+};

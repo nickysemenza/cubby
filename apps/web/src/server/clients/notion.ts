@@ -93,6 +93,14 @@ export const notionBlockSchema: z.ZodType<NotionBlock> = z.lazy(() =>
   }),
 );
 
+export const notionProjectImagesOut = z.record(z.string(), z.string());
+
+export const notionProjectContentInput = z.object({
+  pageId: z.string(),
+});
+
+export const notionProjectContentOut = z.array(notionBlockSchema).nullable();
+
 // One row of the Recipes database: the column metadata (the body comes from
 // `getPageContent`). `yieldText`/`servings`/`tags` are read only if those
 // optional columns exist on the data source.

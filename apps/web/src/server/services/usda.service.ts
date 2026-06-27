@@ -1,6 +1,9 @@
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type { ProductTopLevelOut } from "@cubby/schemas/product";
-import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
+import type {
+  FoodSummaryEnrichment,
+  FoodSummaryWithLinkedProducts,
+} from "@cubby/schemas/usda";
 import type {
   DataType,
   FoodLookupParam,
@@ -76,9 +79,53 @@ export class USDAService {
     };
   }
 
+  async listFoodSummaries(
+    nameFilter: string | undefined,
+    dataTypeFilter: DataType | undefined,
+    sort: SortParams,
+    pagination: PaginationParams,
+    foodsOnly?: boolean,
+    dataTypes?: DataType[],
+  ): Promise<{
+    data: FoodSummary[];
+    count: number;
+  }> {
+    return await this.usdaClient.listFoods(
+      nameFilter,
+      dataTypeFilter,
+      sort,
+      pagination,
+      foodsOnly,
+      dataTypes,
+    );
+  }
+
+  async getFoodEnrichmentsByID(
+    fdcIds: number[],
+  ): Promise<Record<string, FoodSummaryEnrichment>> {
+    const uniqueIds = [...new Set(fdcIds)];
+    const entries = await Promise.all(
+      uniqueIds.map(async (fdcId) => {
+        const food = await this.usdaClient.getFoodSummaryByID(fdcId);
+        if (!food) return null;
+        return [String(fdcId), await this.getFoodEnrichment(food)] as const;
+      }),
+    );
+    return Object.fromEntries(entries.filter((entry) => entry !== null));
+  }
+
   private async enrichWithLinkedProducts(
     foodSummary: FoodSummary,
   ): Promise<FoodSummaryWithLinkedProducts> {
+    return {
+      ...foodSummary,
+      ...(await this.getFoodEnrichment(foodSummary)),
+    };
+  }
+
+  private async getFoodEnrichment(
+    foodSummary: FoodSummary,
+  ): Promise<FoodSummaryEnrichment> {
     const upc = foodSummary.brandedFoodInfo?.gtin_upc;
 
     const linkedProducts: ProductTopLevelOut[] = await this.getLinkedProducts(
@@ -91,7 +138,6 @@ export class USDAService {
     const inferredUnitMappings = unitMappingsFromFood(foodSummary);
 
     return {
-      ...foodSummary,
       inferredUnitMappings,
       linkedProducts,
     };

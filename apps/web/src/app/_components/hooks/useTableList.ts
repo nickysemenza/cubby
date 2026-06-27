@@ -6,8 +6,7 @@ import type { TableStateReturn } from "../data-table/useTableState";
 // Response shape from list queries (used for type narrowing)
 interface ListQueryResponse<TData> {
   items: TData[];
-  count: number;
-  meta?: { totalCount?: number };
+  meta: { totalCount: number };
 }
 
 // tRPC queryOptions has complex internal typing that doesn't map cleanly to a simple function type.
@@ -140,7 +139,7 @@ export function useTableList<TFilters, TData = unknown>({
   // useQuery returns error as Error | null when throwOnError is false (default)
   return {
     data: dataArray,
-    totalCount: response?.meta?.totalCount ?? response?.count ?? 0,
+    totalCount: response?.meta.totalCount ?? 0,
     isLoading,
     isPlaceholderData,
     error: error instanceof Error ? error : null,

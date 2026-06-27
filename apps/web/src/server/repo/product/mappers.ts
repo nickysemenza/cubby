@@ -2,28 +2,39 @@ import {
   unsafeLocationShortcode,
   unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
-import type { ImageOut } from "@cubby/schemas/image";
+import type { ImageOut } from "@cubby/schemas/image-responses";
+import type {
+  InventoryListProductOut,
+  ProductInventoryEmbedOut,
+} from "@cubby/schemas/inventory-responses";
 import { locationType } from "@cubby/schemas/location";
 import {
-  type ProductPickerItemOut,
   type ProductTopLevelOut,
-  productPickerItemOut,
   productTopLevelOut,
 } from "@cubby/schemas/product";
-import { productWithIngredientAndInventoryAndMappingsOut } from "@cubby/schemas/product-responses";
+import {
+  type ProductListItem,
+  type ProductPickerItemOut,
+  productListItemOut,
+  productPickerItemOut,
+  productWithIngredientAndInventoryAndMappingsOut,
+} from "@cubby/schemas/product-responses";
 import type { z } from "zod";
 import { parseWithContext } from "~/lib/zod-utils";
 import type {
   image,
+  ingredient,
+  location,
   product,
   productExternalId,
   productUnitMappings,
 } from "~/server/db/schema";
 import {
+  isNotDeleted,
   mapRelation,
   parseInventoryAmount,
 } from "~/server/repo/database-helpers";
-import type { ProductDeepDB } from "./types";
+import type { ProductDeepDB, ProductListDB } from "./types";
 
 type ProductImageRow =
   | typeof image.$inferSelect
@@ -43,21 +54,21 @@ export const mapProductImages = (
   if (!images) return [];
 
   return images
-    .filter((row) => !("deletedAt" in row) || row.deletedAt === null)
-    .map((row) => {
+    .flatMap((row) => {
       const dbImage = "image" in row ? row.image : row;
-      return {
-        id: dbImage.id,
-        url: dbImage.url,
-        key: dbImage.key,
-        filename: dbImage.filename,
-        size: dbImage.size,
-        contentType: dbImage.contentType,
-        status: dbImage.status,
-        createdAt: dbImage.createdAt,
-        updatedAt: dbImage.updatedAt,
-      };
-    });
+      return isNotDeleted(row) && isNotDeleted(dbImage) ? [dbImage] : [];
+    })
+    .map((dbImage) => ({
+      id: dbImage.id,
+      url: dbImage.url,
+      key: dbImage.key,
+      filename: dbImage.filename,
+      size: dbImage.size,
+      contentType: dbImage.contentType,
+      status: dbImage.status,
+      createdAt: dbImage.createdAt,
+      updatedAt: dbImage.updatedAt,
+    }));
 };
 
 export const mapProductExternalIds = (
@@ -145,6 +156,98 @@ export const dbProductToPickerItemAPI = (
   });
 };
 
+export const dbProductToInventoryEmbedShape = (
+  productData: typeof product.$inferSelect,
+): ProductInventoryEmbedOut => ({
+  id: productData.id,
+  shortcode: unsafeProductShortcode(productData.shortcode),
+  name: productData.name,
+  upc: productData.upc,
+  fdc_id: productData.fdc_id,
+  manufacturer: productData.manufacturer,
+  model: productData.model,
+  notes: productData.notes,
+  expectedQuantity: productData.expectedQuantity,
+  category: productData.category,
+  price: productData.price,
+  usdaUnavailable: productData.usdaUnavailable,
+  createdAt: productData.createdAt,
+  updatedAt: productData.updatedAt,
+});
+
+export const dbProductToInventoryListShape = (
+  productData: typeof product.$inferSelect,
+): InventoryListProductOut => ({
+  id: productData.id,
+  shortcode: unsafeProductShortcode(productData.shortcode),
+  name: productData.name,
+  manufacturer: productData.manufacturer,
+  upc: productData.upc,
+  fdc_id: productData.fdc_id,
+  category: productData.category,
+  expectedQuantity: productData.expectedQuantity,
+  model: productData.model,
+  price: productData.price,
+  usdaUnavailable: productData.usdaUnavailable,
+});
+
+const dbProductIngredientToShape = (
+  ingredientData: typeof ingredient.$inferSelect,
+) => ({
+  id: ingredientData.id,
+  name: ingredientData.name,
+  aliases: ingredientData.aliases,
+  naKinds: ingredientData.naKinds,
+  createdAt: ingredientData.createdAt,
+  updatedAt: ingredientData.updatedAt,
+});
+
+const dbLocationToProductListInventoryShape = (
+  locationData: typeof location.$inferSelect,
+) => ({
+  id: locationData.id,
+  shortcode: unsafeLocationShortcode(locationData.shortcode),
+  name: locationData.name,
+  type: parseWithContext(locationType, locationData.type, {
+    entityType: "Location",
+    identifier: { id: locationData.id, name: locationData.name },
+  }),
+});
+
+export const dbProductToListAPI = (
+  productData: ProductListDB,
+): ProductListItem => {
+  const result = {
+    ...dbProductToTopLevelShape(productData),
+    ingredient:
+      productData.ingredient && isNotDeleted(productData.ingredient)
+        ? dbProductIngredientToShape(productData.ingredient)
+        : null,
+    unitMappings: mapProductUnitMappings(
+      productData.id,
+      productData.unitMappings,
+    ),
+    inventoryEntry: mapRelation(
+      productData.inventoryEntry.filter((entry) =>
+        isNotDeleted(entry.location),
+      ),
+      (entry) => ({
+        id: entry.id,
+        amount: parseInventoryAmount(entry.amount, entry.id),
+        valuation: entry.valuation,
+        createdAt: entry.createdAt,
+        updatedAt: entry.updatedAt,
+        location: dbLocationToProductListInventoryShape(entry.location),
+      }),
+    ),
+  };
+
+  return parseWithContext(productListItemOut, result, {
+    entityType: "Product",
+    identifier: { id: productData.id, name: productData.name },
+  });
+};
+
 /**
  * Transform a deeply nested product DB record to API format.
  * Handles shortcode branding, image extraction, and nested transforms.
@@ -169,16 +272,7 @@ export const dbProductToAPI = (
     usdaUnavailable: productData.usdaUnavailable,
     createdAt: productData.createdAt,
     updatedAt: productData.updatedAt,
-    ingredient: ingredient
-      ? {
-          id: ingredient.id,
-          name: ingredient.name,
-          aliases: ingredient.aliases,
-          naKinds: ingredient.naKinds,
-          createdAt: ingredient.createdAt,
-          updatedAt: ingredient.updatedAt,
-        }
-      : null,
+    ingredient: ingredient ? dbProductIngredientToShape(ingredient) : null,
     unitMappings: mapProductUnitMappings(productData.id, unitMappings),
     externalIds: mapProductExternalIds(productData.externalIds),
     images: mapProductImages(images),

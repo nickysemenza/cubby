@@ -1,8 +1,9 @@
 import {
-  ingredientBase,
-  ingredientFiltersSchema,
-  type MergeSummaryOut,
+  mcpIngredientCreateInputShape,
+  mcpIngredientSearchInputShape,
+  mcpIngredientUpdateInputShape,
 } from "@cubby/schemas/ingredient";
+import type { MergeSummaryOut } from "@cubby/schemas/ingredient-responses";
 import { mcpPaginationParams } from "@cubby/schemas/pagination";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { groupBy } from "es-toolkit";
@@ -27,8 +28,7 @@ export function registerIngredientTools(server: McpServer) {
     "search_ingredients",
     "Search ingredients by name. Returns id, name, aliases, linked products, and recipe count.",
     {
-      // Field names match the router filter exactly — reuse its shape + docs.
-      ...ingredientFiltersSchema.shape,
+      ...mcpIngredientSearchInputShape,
       ...mcpPaginationParams,
     },
     listHandler("ingredient", slimIngredient, {
@@ -51,10 +51,7 @@ export function registerIngredientTools(server: McpServer) {
     "create_ingredient",
     "Create a new ingredient. Use search_ingredients first to avoid duplicates.",
     {
-      name: ingredientBase.shape.name.describe("Ingredient name"),
-      aliases: ingredientBase.shape.aliases
-        .optional()
-        .describe("Alternate names for this ingredient"),
+      ...mcpIngredientCreateInputShape,
     },
     withErrorHandling(async (params, extra) => {
       const caller = getCaller(extra);
@@ -90,10 +87,7 @@ export function registerIngredientTools(server: McpServer) {
     "Update an ingredient's name or aliases.",
     {
       id: idParam("Ingredient"),
-      name: ingredientBase.shape.name.optional().describe("New name"),
-      aliases: ingredientBase.shape.aliases
-        .optional()
-        .describe("New aliases (replaces)"),
+      ...mcpIngredientUpdateInputShape,
     },
     updateHandler("ingredient", slimIngredient),
   );

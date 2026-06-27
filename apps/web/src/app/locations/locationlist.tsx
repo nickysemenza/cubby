@@ -1,7 +1,5 @@
-import type {
-  LocationOutWithParentChildren,
-  LocationType,
-} from "@cubby/schemas/location";
+import type { LocationType } from "@cubby/schemas/location";
+import type { LocationListItemOut } from "@cubby/schemas/location-responses";
 import { getLocationTypeColor } from "@cubby/shared";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
@@ -9,7 +7,7 @@ import { Printer, ScanBarcode } from "lucide-react";
 import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
-import { queryKeys } from "~/lib/query-keys";
+import { locationMutationInvalidateKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 import {
   createCreatedAtColumn,
@@ -37,26 +35,23 @@ export function LocationList() {
   const api = useTRPC();
   const navigate = useNavigate();
   const columnHelper = useMemo(
-    () => createColumnHelper<LocationOutWithParentChildren>(),
+    () => createColumnHelper<LocationListItemOut>(),
     [],
   );
   const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("location");
-
-  // Memoize invalidate keys to prevent recreating on every render
-  const invalidateKeys = useMemo(() => [queryKeys.location.list] as const, []);
 
   // Mutation for inline editing (name, type)
   const updateLocationMutation = useUpdateMutation({
     mutationFn: api.location.update.mutationOptions,
     entity: "location",
-    invalidateKeys,
+    invalidateKeys: locationMutationInvalidateKeys,
   });
 
   // Memoize deletable config to prevent infinite render loop
   const deletableConfig = useDeletableConfig({
     mutationFn: api.location.delete.mutationOptions,
     entityLabel: "Location",
-    invalidateKeys: [queryKeys.location.list],
+    invalidateKeys: locationMutationInvalidateKeys,
   });
 
   // Memoize columns to prevent recreating on every render
@@ -150,7 +145,7 @@ export function LocationList() {
           icon: <Printer className="h-4 w-4" />,
           minSelection: 1,
           onExecute: async (
-            rows: import("@tanstack/react-table").Row<LocationOutWithParentChildren>[],
+            rows: import("@tanstack/react-table").Row<LocationListItemOut>[],
           ) => {
             const eligible = rows.filter((r) =>
               typeSupportsQrCode(r.original.type),
@@ -182,7 +177,7 @@ export function LocationList() {
   );
 
   const extraActions = useCallback(
-    (row: LocationOutWithParentChildren) => (
+    (row: LocationListItemOut) => (
       <>
         <DropdownMenuItem
           render={
@@ -209,16 +204,13 @@ export function LocationList() {
   );
 
   // Group by location type for mobile section headers
-  const groupKeyFn = useCallback(
-    (item: LocationOutWithParentChildren) => item.type,
-    [],
-  );
+  const groupKeyFn = useCallback((item: LocationListItemOut) => item.type, []);
   const groupColorFn = useCallback(
     (key: string) => getLocationTypeColor(key as LocationType),
     [],
   );
   const groupConfig = useMemo(
-    (): GroupConfig<LocationOutWithParentChildren> => ({
+    (): GroupConfig<LocationListItemOut> => ({
       field: "type",
       keyFn: groupKeyFn,
       colorFn: groupColorFn,

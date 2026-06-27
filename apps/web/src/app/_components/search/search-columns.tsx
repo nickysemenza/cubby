@@ -10,8 +10,9 @@ import {
 } from "../data-table/columnHelpers";
 import { NoneState } from "../NoneState";
 import {
-  entityTypeMap,
   getEnrichmentText,
+  getSearchResultEntity,
+  getSearchResultRoute,
   SearchResultItemIcon,
 } from "./search-utils";
 
@@ -68,7 +69,7 @@ export const searchColumns = [
       },
     },
     cell: ({ row }) => {
-      const entity = entityTypeMap[row.original.entityType];
+      const entity = getSearchResultEntity(row.original);
       const entityDef = entities[entity];
       return (
         <span className="inline-flex items-center gap-2">
@@ -115,8 +116,5 @@ export const searchColumns = [
   createCreatedAtColumn(columnHelper),
 
   // Actions - polymorphic (entity varies per row)
-  createActionsColumnBase(columnHelper, (row) => ({
-    to: entities[entityTypeMap[row.entityType]].routes.detail,
-    params: { id: row.id },
-  })),
+  createActionsColumnBase(columnHelper, getSearchResultRoute),
 ];

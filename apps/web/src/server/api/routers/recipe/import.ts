@@ -8,17 +8,26 @@
  * in `../recipe.ts`, so client procedure paths are unchanged.
  */
 
+import type { RecipeId } from "@cubby/schemas/identifiers";
 import {
-  cookbookId,
-  type RecipeId,
-  recipeId,
-} from "@cubby/schemas/identifiers";
-import {
+  chunkRequestInput,
+  chunkResponseOut,
+  cookbookDiffInput,
+  cookbookDiffOut,
+  cookbookIdInput,
+  cookbookIdOut,
+  cookbookSourceOut,
+  cookbookSummariesOut,
+  deleteCookbookRecipesOut,
+  importCookbookStreamInput,
+  importNotionSyncInput,
   importRecipeSchema,
-  importRecipesSchema,
+  notionPreviewOut,
+  parseRecipeHtmlInput,
+  recipeImportIdOut,
+  scrapeRecipeInput,
+  upsertCookbookInput,
 } from "@cubby/schemas/import-recipe";
-import { cookbookSummary } from "@cubby/schemas/recipe";
-import { z } from "zod";
 import {
   type BulkProgressEvent,
   streamItems,
@@ -59,22 +68,19 @@ import {
 } from "~/server/utils/scraper";
 import { protectedProcedure } from "../../trpc";
 
-// Shared output for endpoints that just return a newly upserted recipe's id.
-const recipeIdOut = z.object({ id: recipeId });
-
 const scrape = protectedProcedure
-  .input(z.url())
+  .input(scrapeRecipeInput)
   .output(importRecipeSchema)
   .mutation(async ({ input }) => await scrapeToImportRecipe(input));
 // Parse-only fallback for when a URL scrape is blocked (anti-bot, auth wall,
 // JS-rendered): the user pastes the page HTML and we run the same parser.
 const parseHtml = protectedProcedure
-  .input(z.object({ html: z.string().min(1), url: z.url() }))
+  .input(parseRecipeHtmlInput)
   .output(importRecipeSchema)
   .mutation(({ input }) => htmlToImportRecipe(input.html, input.url));
 const insertImport = protectedProcedure
   .input(importRecipeSchema)
-  .output(recipeIdOut)
+  .output(recipeImportIdOut)
   .mutation(async ({ ctx, input }) => {
     const result = await upsertImportRecipe(input, ctx.db, ctx.actorContext);
     // One recipe — under the queue threshold, so totals are fresh inline on
@@ -87,17 +93,8 @@ const insertImport = protectedProcedure
 // + OPF metadata are stored for reprocessing. Returns the cookbook id the
 // per-recipe inserts attach to.
 const upsertCookbookEndpoint = protectedProcedure
-  .input(
-    z.object({
-      name: z.string().min(1),
-      rawJson: importRecipesSchema,
-      author: z.array(z.string()).optional(),
-      subjects: z.array(z.string()).optional(),
-      sourceLabel: z.string(),
-      coverImageId: z.uuid().optional(),
-    }),
-  )
-  .output(z.object({ id: cookbookId }))
+  .input(upsertCookbookInput)
+  .output(cookbookIdOut)
   .mutation(async ({ ctx, input }) => {
     return await upsertCookbook(ctx.db, input, {
       ...ctx.actorContext,
@@ -107,14 +104,8 @@ const upsertCookbookEndpoint = protectedProcedure
 // Hand back a cookbook's stored extraction so the importer can re-open it for
 // selective re-import (no LLM, no EPUB). See the import flow's "from stored source".
 const getCookbookSourceEndpoint = protectedProcedure
-  .input(z.object({ cookbookId }))
-  .output(
-    z.object({
-      id: cookbookId,
-      name: z.string(),
-      recipes: importRecipesSchema,
-    }),
-  )
+  .input(cookbookIdInput)
+  .output(cookbookSourceOut)
   .query(async ({ ctx, input }) => {
     return await getCookbookSource(ctx.db, input.cookbookId);
   });
@@ -135,12 +126,7 @@ type ImportSummary = { succeeded: number; failed: number };
 // progress, then runs a single batched costing recompute at the end. Re-imports
 // upsert by (cookbookId, title) and stamp "Book" provenance + the FK.
 const importCookbookStream = protectedProcedure
-  .input(
-    z.object({
-      cookbookId,
-      indices: z.array(z.number().int().nonnegative()).min(1),
-    }),
-  )
+  .input(importCookbookStreamInput)
   // A mutation (it writes): input rides in the POST body, and httpBatchStreamLink
   // streams the async-generator's yields incrementally (jsonl) just like a query.
   .mutation(async function* ({
@@ -206,10 +192,8 @@ const importCookbookStream = protectedProcedure
 // link) and a content signature (so the preview shows "no changes" vs "will
 // update" per title). Empty when the cookbook doesn't exist yet.
 const getCookbookDiff = protectedProcedure
-  .input(z.object({ book: z.string().min(1) }))
-  .output(
-    z.array(z.object({ title: z.string(), id: z.uuid(), sig: z.string() })),
-  )
+  .input(cookbookDiffInput)
+  .output(cookbookDiffOut)
   .query(async ({ ctx, input }) => {
     const cb = await getCookbookByName(ctx.db, input.book);
     if (!cb) return [];
@@ -220,25 +204,12 @@ const getCookbookDiff = protectedProcedure
 // Stable, deterministic import from the Notion "Recipes" database. Preview parses
 // every row server-side (no writes), diffs against already-imported page ids, and
 // lints each for importability; the per-recipe commit upserts keyed on page id.
-const notionPreviewItem = z.object({
-  pageId: z.string(),
-  name: z.string(),
-  notionUrl: z.string(),
-  status: z.enum(["new", "unchanged", "will-update", "needs-formatting"]),
-  // The existing Cubby recipe id when already imported — drives the in-app link.
-  existingId: z.string().nullable(),
-  reasons: z.array(z.string()),
-  // The mapped recipe in the shared cookbook shape, so the Notion and EPUB
-  // previews render with the exact same card.
-  recipe: importRecipeSchema,
-});
-
 // Notion page ids come dashed from the API but are stored dashless-tolerant;
 // compare on the dashless form so a format difference never desyncs the diff.
 const normalizeNotionId = (id: string): string => id.replace(/-/g, "");
 
 const previewNotionSync = protectedProcedure
-  .output(z.array(notionPreviewItem))
+  .output(notionPreviewOut)
   .query(async ({ ctx }) => {
     const client = ctx.notionClient;
     if (!client) return [];
@@ -291,7 +262,7 @@ type NotionSummary = { succeeded: number; failed: number };
 // in its own tx (sequential, per-page error isolation), yields per-page progress,
 // then runs a single batched costing recompute. Upserts are keyed on page id.
 const importNotionSyncStream = protectedProcedure
-  .input(z.object({ pageIds: z.array(z.string()).min(1) }))
+  .input(importNotionSyncInput)
   .mutation(async function* ({
     ctx,
     input,
@@ -362,7 +333,7 @@ const importNotionSyncStream = protectedProcedure
 
 // Distinct cookbooks with recipe counts, for the browse-by-source index.
 const listCookbooksEndpoint = protectedProcedure
-  .output(z.array(cookbookSummary))
+  .output(cookbookSummariesOut)
   .query(async ({ ctx }) => {
     return await listCookbooks(ctx.db);
   });
@@ -370,8 +341,8 @@ const listCookbooksEndpoint = protectedProcedure
 // Bulk-delete every recipe linked to one cookbook (cascades to sections,
 // ingredients, and images via the shared deleteRecipes path).
 const deleteByCookbook = protectedProcedure
-  .input(z.object({ cookbookId }))
-  .output(z.object({ deleted: z.number().int().nonnegative() }))
+  .input(cookbookIdInput)
+  .output(deleteCookbookRecipesOut)
   .mutation(async ({ ctx, input }) => {
     return await deleteRecipesByCookbook(
       ctx.db,
@@ -385,7 +356,7 @@ const deleteByCookbook = protectedProcedure
 // for a live bar, then runs a single batched recompute and yields the final
 // summary (how many were reprocessed + any extracted recipes never imported).
 const reprocessCookbookStreamEndpoint = protectedProcedure
-  .input(z.object({ cookbookId }))
+  .input(cookbookIdInput)
   // A mutation (it re-derives + writes recipes); streams progress like a query.
   .mutation(async function* ({ ctx, input }) {
     yield* streamProgress(
@@ -397,30 +368,9 @@ const reprocessCookbookStreamEndpoint = protectedProcedure
     );
   });
 
-// LLM passthrough for the in-browser EPUB extractor: the client builds each
-// chunk's request in WASM (`recipebridge.chunk_epub`) and sends it here so the
-// gateway key stays server-side. Returns the raw forced-tool `input`
-// (`{ recipes: [...] }`) for the WASM driver (`extract_cookbook`) to parse — no
-// recipe logic lives here. One short, network-bound request per chunk.
-// Input for `recipe.extractCookbookChunk` (camelCased WASM request). Exported
-// so the client carrier type derives from it via `z.infer` instead of being
-// maintained in two places.
-export const chunkRequestInput = z.object({
-  system: z.string(),
-  user: z.string(),
-  toolName: z.string(),
-  // The output JSON Schema, built in WASM and forwarded verbatim.
-  toolSchema: z.record(z.string(), z.unknown()),
-  // Escalate this chunk to the stronger fallback model. The browser sets
-  // this only after the default model fails to return parseable output. The
-  // model itself stays server-owned (a bool, not a model id) so a client
-  // can't pick an arbitrary expensive model.
-  escalate: z.boolean().optional(),
-});
-
 const extractCookbookChunkProc = protectedProcedure
   .input(chunkRequestInput)
-  .output(z.record(z.string(), z.unknown()))
+  .output(chunkResponseOut)
   .mutation(async ({ input }) => {
     return await extractCookbookChunk({
       system: input.system,

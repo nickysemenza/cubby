@@ -15,16 +15,19 @@ import {
 } from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
 import { countLabel } from "~/lib/pluralize";
-import { queryKeys } from "~/lib/query-keys";
+import {
+  ingredientMutationInvalidateKeys,
+  productMutationInvalidateKeys,
+  unusedIngredientCleanupInvalidateKeys,
+} from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 
 /**
  * Per-card and bulk cleanup actions for the three ingredient problem sections.
  * Per-card fixes own a mutation hook (mounted only while the card is expanded)
  * and clear their card on success; the bulk buttons confirm first, then act on
- * every rendered row at once. All invalidate the whole `problems.*` path
- * (queryKeys.problems.all) so the page's cost-grouped queries and the badge's
- * combined scan both re-read.
+ * every rendered row at once. All invalidate the problems path so the page's
+ * cost-grouped queries and the badge's combined scan both re-read.
  */
 
 // ── Per-card fixes ───────────────────────────────────────────────────────────
@@ -52,8 +55,8 @@ export function UnusedIngredientDeleteFix({
         ? `${noun} deleted`
         : `Could not delete: ${data.failed[0]?.reason ?? "unknown error"}`,
     invalidateKeys: [
-      queryKeys.ingredient.list,
-      ...(alsoDeleteProducts ? [queryKeys.product.all] : []),
+      ...ingredientMutationInvalidateKeys,
+      ...(alsoDeleteProducts ? productMutationInvalidateKeys : []),
     ],
     onSuccess: (data) => {
       if (data.deleted > 0) close();
@@ -149,9 +152,8 @@ export function DeleteAllUnusedButton({
         ? `Deleted ${data.deleted}, ${data.failed.length} failed (e.g. ${data.failed[0]?.reason ?? "unknown"})`
         : `Deleted ${countLabel(data.deleted, "ingredient")}`,
     invalidateKeys: [
-      queryKeys.problems.all,
-      queryKeys.ingredient.list,
-      ...(alsoDeleteProducts ? [queryKeys.product.all] : []),
+      ...unusedIngredientCleanupInvalidateKeys,
+      ...(alsoDeleteProducts ? productMutationInvalidateKeys : []),
     ],
   });
 

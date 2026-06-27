@@ -5,7 +5,7 @@
 
 import type { ActorContext } from "@cubby/schemas/context";
 import type { IngredientId, ProductId } from "@cubby/schemas/identifiers";
-import type { ImageOut } from "@cubby/schemas/image";
+import type { ImageOut } from "@cubby/schemas/image-responses";
 import {
   buildTakeSkip,
   type PaginationParams,
@@ -15,11 +15,11 @@ import {
   hasFoodIndicators,
   type ProductCategory,
   type ProductCreateInput,
-  type ProductPickerItemOut,
   type ProductTopLevelOut,
   type ProductUpdateInput,
 } from "@cubby/schemas/product";
-import type { UnitMapping } from "@cubby/schemas/unitmapping";
+import type { ProductPickerItemOut } from "@cubby/schemas/product-responses";
+import type { UnitMapping } from "@cubby/schemas/unitmapping-responses";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { countBy } from "es-toolkit";
@@ -60,10 +60,11 @@ import { generateUniqueProductShortcode } from "~/server/repo/shortcode-utils";
 
 import {
   dbProductToAPI,
+  dbProductToListAPI,
   dbProductToPickerItemAPI,
   dbProductToTopLevelAPI,
 } from "./mappers";
-import type { ProductDeepDB } from "./types";
+import type { ProductListDB } from "./types";
 import {
   assertNoCanonicalPriceMapping,
   syncProductExternalIds,
@@ -256,12 +257,14 @@ export const productList = async (
       orderBy: orderByArray,
       limit: take,
       offset: skip,
-      ...relations.product.full,
+      ...relations.product.list,
     }),
     countWhere(db, product, whereClause),
   );
 
-  const products = results.map((prod: ProductDeepDB) => dbProductToAPI(prod));
+  const products = results.map((prod: ProductListDB) =>
+    dbProductToListAPI(prod),
+  );
 
   return { data: products, count: totalCount };
 };

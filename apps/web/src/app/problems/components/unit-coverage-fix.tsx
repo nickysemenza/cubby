@@ -7,7 +7,7 @@ import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMu
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { queryKeys } from "~/lib/query-keys";
+import { productMutationInvalidateKeys } from "~/lib/query-keys";
 import { type RouterOutputs, useTRPC } from "~/trpc/react";
 import type { UnitCoverageItem } from "./unit-coverage-items";
 
@@ -89,7 +89,7 @@ function PriceFix({ id, close }: { id: string; close: () => void }) {
   const update = useProblemCardMutation({
     mutationFn: api.product.update.mutationOptions,
     success: "Price saved",
-    invalidateKeys: [queryKeys.product.all],
+    invalidateKeys: productMutationInvalidateKeys,
     onSuccess: close,
   });
 
@@ -157,7 +157,7 @@ function DisconnectedFix({
     mutationFn: api.product.update.mutationOptions,
     success: "Conversion saved",
     invalidateKeys: [
-      queryKeys.product.all,
+      ...productMutationInvalidateKeys,
       api.product.getByID.queryKey({ id }),
     ],
     onSuccess: close,

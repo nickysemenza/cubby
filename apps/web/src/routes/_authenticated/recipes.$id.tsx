@@ -21,7 +21,7 @@ import { DetailPagePending } from "~/components/route-pending";
 import { Button } from "~/components/ui/button";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
-import { queryKeys } from "~/lib/query-keys";
+import { recipeMutationInvalidateKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 
 const searchSchema = z.object({
@@ -115,7 +115,7 @@ function RecipeDetailPage() {
     entityLabel: "Recipe",
     mutationOptions: (callbacks) =>
       api.recipe.delete.mutationOptions(callbacks),
-    invalidateKeys: [queryKeys.recipe.list],
+    invalidateKeys: recipeMutationInvalidateKeys,
     redirectTo: "/recipes",
   });
 

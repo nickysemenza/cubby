@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { cookbookId, recipeId } from "./identifiers";
+import { cookbookSummary } from "./recipe-responses";
 
 // The raw "import recipe" carrier: a recipe from any import source (EPUB cookbook
 // via food-cli/WASM, the URL scraper, Notion) before it's parsed and resolved
@@ -96,3 +98,93 @@ export type ImportRecipe = z.infer<typeof importRecipeSchema>;
 
 // What an uploaded `--json` file / the WASM extractor produces.
 export const importRecipesSchema = z.array(importRecipeSchema);
+
+export const scrapeRecipeInput = z.url();
+
+export const parseRecipeHtmlInput = z.object({
+  html: z.string().min(1),
+  url: z.url(),
+});
+
+export const recipeImportIdOut = z.object({
+  id: recipeId,
+});
+
+export const upsertCookbookInput = z.object({
+  name: z.string().min(1),
+  rawJson: importRecipesSchema,
+  author: z.array(z.string()).optional(),
+  subjects: z.array(z.string()).optional(),
+  sourceLabel: z.string(),
+  coverImageId: z.uuid().optional(),
+});
+
+export const cookbookIdOut = z.object({
+  id: cookbookId,
+});
+
+export const cookbookIdInput = z.object({
+  cookbookId,
+});
+
+export const cookbookSourceOut = z.object({
+  id: cookbookId,
+  name: z.string(),
+  recipes: importRecipesSchema,
+});
+
+export const importCookbookStreamInput = z.object({
+  cookbookId,
+  indices: z.array(z.number().int().nonnegative()).min(1),
+});
+
+export const cookbookDiffInput = z.object({
+  book: z.string().min(1),
+});
+
+export const cookbookDiffOut = z.array(
+  z.object({ title: z.string(), id: z.uuid(), sig: z.string() }),
+);
+
+export const notionPreviewItem = z.object({
+  pageId: z.string(),
+  name: z.string(),
+  notionUrl: z.string(),
+  status: z.enum(["new", "unchanged", "will-update", "needs-formatting"]),
+  // The existing Cubby recipe id when already imported — drives the in-app link.
+  existingId: z.string().nullable(),
+  reasons: z.array(z.string()),
+  // The mapped recipe in the shared cookbook shape, so the Notion and EPUB
+  // previews render with the exact same card.
+  recipe: importRecipeSchema,
+});
+
+export const notionPreviewOut = z.array(notionPreviewItem);
+
+export const importNotionSyncInput = z.object({
+  pageIds: z.array(z.string()).min(1),
+});
+
+export const cookbookSummariesOut = z.array(cookbookSummary);
+
+export const deleteCookbookRecipesOut = z.object({
+  deleted: z.number().int().nonnegative(),
+});
+
+// Input for `recipe.extractCookbookChunk` (camelCased WASM request). Exported
+// so the client carrier type derives from it via `z.infer` instead of being
+// maintained in two places.
+export const chunkRequestInput = z.object({
+  system: z.string(),
+  user: z.string(),
+  toolName: z.string(),
+  // The output JSON Schema, built in WASM and forwarded verbatim.
+  toolSchema: z.record(z.string(), z.unknown()),
+  // Escalate this chunk to the stronger fallback model. The browser sets
+  // this only after the default model fails to return parseable output. The
+  // model itself stays server-owned (a bool, not a model id) so a client
+  // can't pick an arbitrary expensive model.
+  escalate: z.boolean().optional(),
+});
+
+export const chunkResponseOut = z.record(z.string(), z.unknown());

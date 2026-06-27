@@ -4,25 +4,24 @@
  */
 
 import { extractDbTimestampsFromDBRec } from "@cubby/schemas/common";
-import {
-  unsafeLocationShortcode,
-  unsafeProductShortcode,
-} from "@cubby/schemas/identifiers";
-import {
-  type InfLocation,
-  type LocationOut,
-  type LocationOutWithParentChildren,
-  locationType,
-} from "@cubby/schemas/location";
+import { unsafeLocationShortcode } from "@cubby/schemas/identifiers";
+import { type LocationOut, locationType } from "@cubby/schemas/location";
+import type {
+  InfLocation,
+  LocationListItemOut,
+  LocationListRefOut,
+} from "@cubby/schemas/location-responses";
 import { parseWithContext } from "~/lib/zod-utils";
 import type { image, location } from "~/server/db/schema";
 import {
   extractImagesFromJoinTable,
+  isNotDeleted,
   mapRelation,
   parseInventoryAmount,
 } from "~/server/repo/database-helpers";
+import { dbProductToInventoryEmbedShape } from "~/server/repo/product/mappers";
 
-import type { LocationDeepDB, LocationWithParentChild } from "./internal-types";
+import type { LocationListDB, LocationWithParentChild } from "./internal-types";
 
 /**
  * Transform a location DB record to API format.
@@ -30,7 +29,10 @@ import type { LocationDeepDB, LocationWithParentChild } from "./internal-types";
  */
 export const dbLocationToAPI = (
   locationData: typeof location.$inferSelect & {
-    images?: Array<{ image: typeof image.$inferSelect }>;
+    images?: Array<{
+      image: typeof image.$inferSelect;
+      deletedAt?: Date | null;
+    }>;
   },
 ): LocationOut => {
   return {
@@ -49,46 +51,41 @@ export const dbLocationToAPI = (
   };
 };
 
-/**
- * Transform a deeply nested location to API format with parent/children.
- */
-export const dbLocationToAPIWithChildren = (
-  locationData: LocationDeepDB,
-): LocationOutWithParentChildren => {
-  const { parent, children, inventoryEntries, ...restOfLocation } =
-    locationData;
+const dbLocationToListRefShape = (
+  locationData: typeof location.$inferSelect,
+): LocationListRefOut => ({
+  id: locationData.id,
+  shortcode: unsafeLocationShortcode(locationData.shortcode),
+  name: locationData.name,
+  type: parseWithContext(locationType, locationData.type, {
+    entityType: "Location",
+    identifier: { id: locationData.id, name: locationData.name },
+  }),
+});
 
-  return {
-    ...dbLocationToAPI(restOfLocation),
-    parent: parent ? dbLocationToAPI(parent) : null,
-    children: mapRelation(children, dbLocationToAPI),
-    inventoryEntries: mapRelation(inventoryEntries, (x) => {
-      const { product, ...rest } = x;
-      return {
-        id: rest.id,
-        amount: parseInventoryAmount(rest.amount, rest.id),
-        valuation: rest.valuation,
-        createdAt: rest.createdAt,
-        updatedAt: rest.updatedAt,
-        product: {
-          id: product.id,
-          shortcode: unsafeProductShortcode(product.shortcode),
-          name: product.name,
-          manufacturer: product.manufacturer,
-          category: product.category,
-          upc: product.upc,
-          fdc_id: product.fdc_id,
-          model: product.model,
-          expectedQuantity: product.expectedQuantity,
-          price: product.price,
-          usdaUnavailable: product.usdaUnavailable,
-          createdAt: product.createdAt,
-          updatedAt: product.updatedAt,
-        },
-      };
+export const dbLocationToListAPI = (
+  locationData: LocationListDB,
+): LocationListItemOut => ({
+  ...dbLocationToAPI(locationData),
+  parent:
+    locationData.parent && isNotDeleted(locationData.parent)
+      ? dbLocationToListRefShape(locationData.parent)
+      : null,
+  children: mapRelation(locationData.children, dbLocationToListRefShape),
+  inventoryEntries: mapRelation(
+    locationData.inventoryEntries.filter((entry) =>
+      isNotDeleted(entry.product),
+    ),
+    (entry) => ({
+      id: entry.id,
+      amount: parseInventoryAmount(entry.amount, entry.id),
+      valuation: entry.valuation,
+      createdAt: entry.createdAt,
+      updatedAt: entry.updatedAt,
+      product: dbProductToInventoryEmbedShape(entry.product),
     }),
-  };
-};
+  ),
+});
 
 /**
  * Build a hierarchical InfLocation from a LocationWithParentChild record.

@@ -2,7 +2,7 @@ import type { RecipeId } from "@cubby/schemas/identifiers";
 import type {
   RecipeCostingExplain,
   RowDiagnosticOut,
-} from "@cubby/schemas/recipe";
+} from "@cubby/schemas/recipe-shared";
 import { useQuery } from "@tanstack/react-query";
 import { match } from "ts-pattern";
 import { Row } from "~/components/layout";

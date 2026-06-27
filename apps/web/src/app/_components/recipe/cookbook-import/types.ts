@@ -1,6 +1,8 @@
-import type { ImportRecipe } from "@cubby/schemas/import-recipe";
+import type {
+  chunkRequestInput,
+  ImportRecipe,
+} from "@cubby/schemas/import-recipe";
 import type { z } from "zod";
-import type { chunkRequestInput } from "~/server/api/routers/recipe/import";
 
 /** Result of importing a single recipe into the DB. */
 export type ImportResult =

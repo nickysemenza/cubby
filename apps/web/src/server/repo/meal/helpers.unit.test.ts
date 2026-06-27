@@ -1,4 +1,4 @@
-import type { MealRecipeOut } from "@cubby/schemas/meal";
+import type { MealRecipeOut } from "@cubby/schemas/meal-responses";
 import { describe, expect, it } from "vitest";
 import { rollupMealTotals, scaleTotals } from "./helpers";
 

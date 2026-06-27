@@ -1,6 +1,5 @@
 import type { ProposedItem } from "@cubby/schemas/capture";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation } from "@tanstack/react-query";
 import { Check } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
@@ -13,6 +12,7 @@ import {
 } from "~/app/_components/form-fields";
 import { ComboboxFieldWithSearch } from "~/app/_components/form-utils";
 import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
+import { useCreateInventoryMutation } from "~/app/_components/inventory/hooks";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -20,7 +20,6 @@ import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
 import { getErrorMessage } from "~/lib/error-utils";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
-import { useTRPC } from "~/trpc/react";
 
 const confidenceVariant = {
   high: "secondary",
@@ -33,7 +32,6 @@ type ItemFormValues = z.input<typeof itemFormSchema>;
 
 /** One proposed item from a shelf scan: an inline form to add it to inventory. */
 export function CaptureItemCard({ proposal }: { proposal: ProposedItem }) {
-  const api = useTRPC();
   const [added, setAdded] = useState(false);
 
   const form = useForm<ItemFormValues>({
@@ -45,15 +43,13 @@ export function CaptureItemCard({ proposal }: { proposal: ProposedItem }) {
     },
   });
 
-  const create = useMutation(
-    api.inventory.create.mutationOptions({
-      onSuccess: () => {
-        toast.success(`Tucked ${proposal.name} into your cubby.`);
-        setAdded(true);
-      },
-      onError: (error) => toast.error(getErrorMessage(error)),
-    }),
-  );
+  const create = useCreateInventoryMutation({
+    onSuccess: () => {
+      toast.success(`Tucked ${proposal.name} into your cubby.`);
+      setAdded(true);
+    },
+    onError: (error) => toast.error(getErrorMessage(error)),
+  });
 
   const onSubmit = (values: ItemFormValues) => {
     create.mutate({

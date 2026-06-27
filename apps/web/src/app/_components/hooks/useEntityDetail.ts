@@ -1,6 +1,6 @@
 import type { AuditEntityType } from "@cubby/schemas/audit";
 import type { Entity } from "@cubby/schemas/entity";
-import type { UnitMapping } from "@cubby/schemas/unitmapping";
+import type { UnitMapping } from "@cubby/schemas/unitmapping-responses";
 import { Clock, ImageIcon, Scale } from "lucide-react";
 import { createElement, useMemo } from "react";
 import { entities } from "~/entities/entities";
@@ -40,6 +40,8 @@ interface UseEntityDetailOptions<TData extends WithId, _TUpdateInput> {
   getMappings?: (data: TData) => UnitMapping[];
   /** Custom callback on successful update */
   onSuccess?: () => void;
+  /** Optional query keys to invalidate after successful update. */
+  invalidateKeys?: readonly (readonly unknown[])[];
 }
 
 interface UseEntityDetailReturn<TUpdateInput> {
@@ -68,6 +70,7 @@ export function useEntityDetail<
   mutationOptions,
   getMappings,
   onSuccess,
+  invalidateKeys,
 }: UseEntityDetailOptions<
   TData,
   unknown
@@ -81,6 +84,7 @@ export function useEntityDetail<
     mutationOptions,
     useRouterRefresh: true,
     onSuccess,
+    invalidateKeys,
   });
 
   const mappings = useMemo(

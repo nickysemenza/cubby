@@ -4,11 +4,8 @@
  */
 
 import type { LocationId } from "@cubby/schemas/identifiers";
-import type {
-  InfLocation,
-  LocationOut,
-  LocationType,
-} from "@cubby/schemas/location";
+import type { LocationOut, LocationType } from "@cubby/schemas/location";
+import type { InfLocation } from "@cubby/schemas/location-responses";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";

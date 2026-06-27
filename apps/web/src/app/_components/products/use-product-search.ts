@@ -20,7 +20,7 @@ export function useProductSearch() {
   }, []);
 
   const { data, isLoading } = useQuery(
-    api.product.list.queryOptions({
+    api.product.search.queryOptions({
       filters: { nameFilter: searchQuery },
       pagination,
     }),

@@ -1,6 +1,6 @@
 // Compatibility barrel for older imports. New code should import from the
 // owning response module: inventory-responses, product-responses,
-// ingredient-responses, location-responses, recipe, or usda.
+// ingredient-responses, location-responses, recipe-responses, or usda.
 export {
   type IngredientWithFoodAndSideEffectsOut,
   type IngredientWithRecipesAndProductOut,
@@ -8,7 +8,6 @@ export {
   type IngredientMergeOut,
   type IngredientWithFoodLeanOut,
   type IngredientWithFoodOut,
-  type ProductWithMappingsAndFoodOut,
   enrichmentFixKind,
   enrichmentRowOut,
   ingredientListItemOut,
@@ -17,7 +16,6 @@ export {
   ingredientWithFoodLeanOut,
   ingredientWithFoodOut,
   ingredientWithRecipesAndProductOut,
-  productWithMappingsAndFoodOut,
 } from "./ingredient-responses";
 export {
   type InventoryListItemOut,
@@ -31,17 +29,23 @@ export {
   productInventoryEmbedOut,
 } from "./inventory-responses";
 export {
-  type LocationOutWithParentChildren,
+  type LocationListItemOut,
+  type LocationListRefOut,
   type LocationWithParentNameOut,
-  locationOutWithParentChildrenAndInventoryOut,
+  locationListItemOut,
+  locationListRefOut,
   locationWithParentNameOut,
 } from "./location-responses";
 export {
   type ProductWithFoodAndSideEffectsOut,
   type ProductListItem,
+  type ProductPickerItemOut,
   type ProductWithFoodOut,
+  type ProductWithMappingsAndFoodOut,
   type ProductWithMappingsOut,
   productListItemOut,
+  productPickerItemOut,
+  productWithMappingsAndFoodOut,
   productWithFoodAndSideEffectsOut,
   productWithFoodOut,
   productWithIngredientAndInventoryAndMappingsOut,
@@ -64,7 +68,7 @@ export {
   recipeUsageOut,
   recipeWithSectionsOut,
   sectionIngredientOut,
-} from "./recipe";
+} from "./recipe-responses";
 export {
   type FoodSummaryWithLinkedProducts,
   foodSummaryWithLinkedProducts,

@@ -1,16 +1,24 @@
 import {
+  aiLocationIdInput,
   categoryAuditSchema,
+  categorySuggestionInput,
   categorySuggestionSchema,
-  confidence,
   detectedInventorySchema,
+  enrichmentProposalPrecomputeInput,
+  ingredientMergeSuggestionBatchInput,
+  ingredientMergeSuggestionBatchOut,
   locationDescriptionSchema,
+  locationTypeSuggestionInput,
   locationTypeSuggestionSchema,
   parsedSearchSchema,
+  parseSearchInput,
+  productIdentificationInput,
   productIdentificationSchema,
+  usdaFoodSuggestionBatchInput,
+  usdaFoodSuggestionBatchOut,
+  usdaFoodSuggestionInput,
+  usdaFoodSuggestionOut,
 } from "@cubby/schemas/ai";
-import { ingredientId, locationId } from "@cubby/schemas/identifiers";
-import { foodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
-import { z } from "zod";
 import { streamProgress } from "~/lib/bulk-progress";
 import {
   CATEGORY_DESCRIPTIONS,
@@ -33,12 +41,7 @@ import { createTRPCRouter, protectedProcedure } from "../trpc";
  * Suggest a category for a product based on its name and manufacturer
  */
 const suggestCategory = protectedProcedure
-  .input(
-    z.object({
-      productName: z.string().min(1),
-      manufacturer: z.string().min(1),
-    }),
-  )
+  .input(categorySuggestionInput)
   .output(categorySuggestionSchema)
   .query(async ({ input }) => {
     const client = getAnthropicClient();
@@ -49,7 +52,7 @@ const suggestCategory = protectedProcedure
  * Suggest a location type based on the location name
  */
 const suggestLocationType = protectedProcedure
-  .input(z.object({ locationName: z.string().min(1) }))
+  .input(locationTypeSuggestionInput)
   .output(locationTypeSuggestionSchema)
   .query(async ({ input }) => {
     const client = getAnthropicClient();
@@ -60,13 +63,13 @@ export const aiRouter = createTRPCRouter({
   suggestCategory,
   suggestLocationType,
   describeLocation: protectedProcedure
-    .input(z.object({ locationId }))
+    .input(aiLocationIdInput)
     .output(locationDescriptionSchema)
     .mutation(async ({ ctx, input }) => {
       return describeLocation(ctx.db, input.locationId);
     }),
   detectInventoryItems: protectedProcedure
-    .input(z.object({ locationId }))
+    .input(aiLocationIdInput)
     .output(detectedInventorySchema)
     .mutation(async ({ ctx, input }) => {
       return detectInventoryItems(ctx.db, input.locationId);
@@ -77,11 +80,7 @@ export const aiRouter = createTRPCRouter({
     yield* streamProgress(backfillLocationDescriptions(ctx.db), (r) => r);
   }),
   identifyProduct: protectedProcedure
-    .input(
-      z.object({
-        imageUrls: z.array(z.string().url()).min(1).max(5),
-      }),
-    )
+    .input(productIdentificationInput)
     .output(productIdentificationSchema)
     .mutation(async ({ input }) => {
       const client = getAnthropicClient();
@@ -90,57 +89,24 @@ export const aiRouter = createTRPCRouter({
   // Agentic USDA matcher: the model searches USDA itself, then picks the best
   // food for a stub ingredient. Returns the full chosen food (or null).
   suggestUsdaFood: protectedProcedure
-    .input(z.object({ ingredientName: z.string().min(1) }))
-    .output(
-      z.object({
-        food: foodSummaryWithLinkedProducts.nullable(),
-        confidence,
-        reasoning: z.string(),
-      }),
-    )
+    .input(usdaFoodSuggestionInput)
+    .output(usdaFoodSuggestionOut)
     .mutation(async ({ ctx, input }) => {
       return suggestUsdaFood(ctx.usdaService, input.ingredientName);
     }),
   // Batch USDA matcher for the workbench's "Suggest USDA for selected" action.
   // Read-only: returns one suggestion per name for review; links nothing.
   suggestUsdaFoodBatch: protectedProcedure
-    .input(
-      z.object({ ingredientNames: z.array(z.string().min(1)).min(1).max(20) }),
-    )
-    .output(
-      z.array(
-        z.object({
-          name: z.string(),
-          food: foodSummaryWithLinkedProducts.nullable(),
-          confidence,
-          reasoning: z.string(),
-        }),
-      ),
-    )
+    .input(usdaFoodSuggestionBatchInput)
+    .output(usdaFoodSuggestionBatchOut)
     .mutation(async ({ ctx, input }) => {
       return suggestUsdaFoodBatch(ctx.usdaService, input.ingredientNames);
     }),
   // Batch AI merge suggester for the workbench's "Suggest merges" action. Tool-
   // calling agent searches existing ingredients; read-only, the user confirms.
   suggestIngredientMergeBatch: protectedProcedure
-    .input(
-      z.object({
-        ingredients: z
-          .array(z.object({ id: ingredientId, name: z.string().min(1) }))
-          .min(1)
-          .max(20),
-      }),
-    )
-    .output(
-      z.array(
-        z.object({
-          source: z.object({ id: ingredientId, name: z.string() }),
-          target: z.object({ id: ingredientId, name: z.string() }).nullable(),
-          confidence,
-          reasoning: z.string(),
-        }),
-      ),
-    )
+    .input(ingredientMergeSuggestionBatchInput)
+    .output(ingredientMergeSuggestionBatchOut)
     .mutation(async ({ ctx, input }) => {
       return suggestIngredientMergeBatch(ctx.db, input.ingredients);
     }),
@@ -149,21 +115,7 @@ export const aiRouter = createTRPCRouter({
   // client can fill a cache ahead of the user. Links/merges nothing. The client
   // pages the worklist (~25/page); cap a page so one request stays bounded.
   precomputeEnrichmentProposals: protectedProcedure
-    .input(
-      z.object({
-        items: z
-          .array(
-            z.object({
-              id: ingredientId,
-              name: z.string().min(1),
-              wantUsda: z.boolean(),
-              wantMerge: z.boolean(),
-            }),
-          )
-          .min(1)
-          .max(50),
-      }),
-    )
+    .input(enrichmentProposalPrecomputeInput)
     .mutation(async function* ({ ctx, input }) {
       yield* precomputeEnrichmentProposals(
         ctx.usdaService,
@@ -172,7 +124,7 @@ export const aiRouter = createTRPCRouter({
       );
     }),
   parseSearch: protectedProcedure
-    .input(z.object({ query: z.string().min(1) }))
+    .input(parseSearchInput)
     .output(parsedSearchSchema)
     .mutation(async ({ ctx, input }) => {
       const client = getAnthropicClient();

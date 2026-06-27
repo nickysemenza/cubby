@@ -1,24 +1,83 @@
-import { foodSummary } from "@cubby/usda-schemas";
 import { z } from "zod";
-import { ingredientId } from "./identifiers";
-import { ingredientOut, mergeSummary } from "./ingredient";
-import { productWithMappingsOut } from "./product-responses";
+import { amount } from "./codec";
+import { id, ingredientId, recipeId } from "./identifiers";
+import {
+  productWithMappingsAndFoodOut,
+  productWithMappingsOut,
+} from "./product-responses";
 import { baseKind } from "./problems";
 import {
   recipeRefOut,
   recipeTopLevel,
   recipeUsageOut,
-  recomputeSummary,
-} from "./recipe";
+} from "./recipe-responses";
+import { recomputeSummary } from "./recipe-shared";
 
-export const productWithMappingsAndFoodOut = productWithMappingsOut.extend({
-  food: foodSummary.nullable(),
+const ingredientResponseFields = {
+  id: ingredientId,
+  name: z.string().meta({ mock: "food.ingredient" }),
+  aliases: z.array(z.string()),
+  naKinds: z.array(baseKind),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+};
+
+/**
+ * Per-cluster change summary returned by an ingredient merge — the serialized
+ * shape surfaced to the MCP tool / any caller. The repo's internal `MergeSummary`
+ * extends this with the (never-serialized) `affectedRecipeIds` it dispatches.
+ */
+export const mergeSummary = z.object({
+  /** Names newly added to the target's `aliases` (excludes pre-existing). */
+  aliasesAdded: z.array(z.string()),
+  /** Distinct recipes that had a line re-pointed onto the target. */
+  recipesMoved: z.number().int().nonnegative(),
+  /** Product rows re-pointed onto the target (incl. soft-deleted). */
+  productsMoved: z.number().int().nonnegative(),
+  /** Ingredient ids absorbed and hard-deleted. */
+  deletedIds: z.array(ingredientId),
 });
-export type ProductWithMappingsAndFoodOut = z.infer<
-  typeof productWithMappingsAndFoodOut
->;
+export type MergeSummaryOut = z.infer<typeof mergeSummary>;
 
-export const ingredientWithRecipesAndProductOut = ingredientOut.extend({
+export const ingredientRawLineOut = z.object({
+  ingredientId,
+  lineId: id,
+  rawLine: z.string().nullable(),
+  modifier: z.string().nullable(),
+  amounts: z.array(amount),
+  recipeId,
+  recipeName: z.string(),
+  sectionName: z.string().nullable(),
+});
+export type IngredientRawLineOut = z.infer<typeof ingredientRawLineOut>;
+
+export const ingredientRecipeUsagesOut = z.array(recipeUsageOut);
+
+export const ingredientRawLinesOut = z.array(ingredientRawLineOut);
+
+export const ingredientMatchOut = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    aliases: z.array(z.string()),
+  })
+  .nullable();
+
+export const ingredientMatchesOut = z.record(z.string(), ingredientMatchOut);
+
+export const ingredientResolveOrCreateResultOut = z.object({
+  name: z.string(),
+  id: ingredientId,
+  matched: z.boolean(),
+  created: z.boolean(),
+});
+
+export const ingredientResolveOrCreateOut = z.array(
+  ingredientResolveOrCreateResultOut,
+);
+
+export const ingredientWithRecipesAndProductOut = z.object({
+  ...ingredientResponseFields,
   recipe: recipeTopLevel.nullable(),
   recipeUsages: z.array(recipeUsageOut),
   appearsInRecipes: z.array(recipeTopLevel),
@@ -28,28 +87,42 @@ export type IngredientWithRecipesAndProductOut = z.infer<
   typeof ingredientWithRecipesAndProductOut
 >;
 
-export const ingredientWithFoodOut = ingredientWithRecipesAndProductOut.extend({
+export const ingredientWithFoodOut = z.object({
+  ...ingredientResponseFields,
+  recipe: recipeTopLevel.nullable(),
+  recipeUsages: z.array(recipeUsageOut),
+  appearsInRecipes: z.array(recipeTopLevel),
   product: z.array(productWithMappingsAndFoodOut),
 });
 export type IngredientWithFoodOut = z.infer<typeof ingredientWithFoodOut>;
 
-export const ingredientWithFoodAndSideEffectsOut = ingredientWithFoodOut.extend(
-  {
-    sideEffects: recomputeSummary,
-  },
-);
+export const ingredientWithFoodAndSideEffectsOut = z.object({
+  ...ingredientResponseFields,
+  recipe: recipeTopLevel.nullable(),
+  recipeUsages: z.array(recipeUsageOut),
+  appearsInRecipes: z.array(recipeTopLevel),
+  product: z.array(productWithMappingsAndFoodOut),
+  sideEffects: recomputeSummary,
+});
 export type IngredientWithFoodAndSideEffectsOut = z.infer<
   typeof ingredientWithFoodAndSideEffectsOut
 >;
 
-export const ingredientMergeOut = ingredientWithFoodAndSideEffectsOut.extend({
+export const ingredientMergeOut = z.object({
+  ...ingredientResponseFields,
+  recipe: recipeTopLevel.nullable(),
+  recipeUsages: z.array(recipeUsageOut),
+  appearsInRecipes: z.array(recipeTopLevel),
+  product: z.array(productWithMappingsAndFoodOut),
+  sideEffects: recomputeSummary,
   mergeSummary,
 });
 export type IngredientMergeOut = z.infer<typeof ingredientMergeOut>;
 
 // Lean ingredient+food shape: products (with food) without the per-usage recipe
 // bodies that detail responses carry. Used by workbench and costing paths.
-export const ingredientWithFoodLeanOut = ingredientOut.extend({
+export const ingredientWithFoodLeanOut = z.object({
+  ...ingredientResponseFields,
   product: z.array(productWithMappingsAndFoodOut),
 });
 export type IngredientWithFoodLeanOut = z.infer<
@@ -58,7 +131,8 @@ export type IngredientWithFoodLeanOut = z.infer<
 
 // The ingredient list row: lean ingredient + DB-only products, plus {id,name}
 // refs of recipes it appears in. USDA summaries hydrate separately.
-export const ingredientListItemOut = ingredientOut.extend({
+export const ingredientListItemOut = z.object({
+  ...ingredientResponseFields,
   product: z.array(productWithMappingsOut),
   appearsInRecipes: z.array(recipeRefOut),
 });
@@ -75,7 +149,9 @@ export const enrichmentFixKind = z.enum([
   "done",
 ]);
 
-export const enrichmentRowOut = ingredientWithFoodLeanOut.extend({
+export const enrichmentRowOut = z.object({
+  ...ingredientResponseFields,
+  product: z.array(productWithMappingsAndFoodOut),
   recipeCount: z.number(),
   // Every live recipe using this ingredient is book-sourced. Computed in SQL.
   cookbookOnly: z.boolean(),
@@ -97,3 +173,7 @@ export const enrichmentRowOut = ingredientWithFoodLeanOut.extend({
   ),
 });
 export type EnrichmentRow = z.infer<typeof enrichmentRowOut>;
+
+export const enrichmentRowsOut = z.array(enrichmentRowOut);
+
+export const ingredientWithFoodLeanListOut = z.array(ingredientWithFoodLeanOut);

@@ -8,7 +8,10 @@
  */
 
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
-import type { RecipeGraphOut, RecipeOut } from "@cubby/schemas/recipe";
+import type {
+  RecipeGraphOut,
+  RecipeOut,
+} from "@cubby/schemas/recipe-responses";
 import { normalizedImportSignatureShape } from "~/lib/import-recipe-normalizer";
 
 type SignatureShape = {

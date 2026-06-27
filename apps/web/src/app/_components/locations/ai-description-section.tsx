@@ -7,6 +7,7 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
+import { invalidateTRPCQueries } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 
 interface AiDescriptionSectionProps {
@@ -26,12 +27,10 @@ export const AiDescriptionSection: FC<AiDescriptionSectionProps> = ({
   const describeMutation = useActionMutation({
     mutationFn: api.ai.describeLocation.mutationOptions,
     success: "Description saved.",
-    // getByID returns a full tRPC key (not a wrappable list key), so invalidate
-    // it directly rather than through `invalidateKeys`.
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: api.location.getByID.queryKey({ id: locationId }),
-      });
+      invalidateTRPCQueries(queryClient, [
+        api.location.getByID.queryKey({ id: locationId }),
+      ]);
     },
   });
 

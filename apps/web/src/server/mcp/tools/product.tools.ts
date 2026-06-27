@@ -1,8 +1,8 @@
 import { mcpPaginationParams } from "@cubby/schemas/pagination";
 import {
+  mcpProductCreateInputShape,
+  mcpProductUpdateInputShape,
   productCategory,
-  productCreateInput,
-  productUpdateData,
 } from "@cubby/schemas/product";
 import { mcpUnitMappingInput } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
@@ -56,20 +56,7 @@ export function registerProductTools(server: McpServer) {
     "create_product",
     'Create a new product. Use for items not found via search_products. Pass ingredientId to link it to an ingredient and/or unitMappings (e.g. "8 oz = $10") so recipes can cost it; useful for specialty items with no USDA match.',
     {
-      // Field shapes + descriptions come from the canonical productCreateInput
-      // (name required; the rest optional for quick entry). unitMappings uses the
-      // MCP edge variant (source omittable).
-      name: productCreateInput.shape.name,
-      ...productCreateInput
-        .pick({
-          manufacturer: true,
-          upc: true,
-          price: true,
-          expectedQuantity: true,
-          ingredientId: true,
-        })
-        .partial().shape,
-      unitMappings: z.array(mcpUnitMappingInput).optional(),
+      ...mcpProductCreateInputShape,
     },
     withErrorHandling(async (params, extra) => {
       const caller = getCaller(extra);
@@ -110,20 +97,8 @@ export function registerProductTools(server: McpServer) {
     "Update a product's fields. To set fdc_id, get the id from find_usda_food/search_usda_foods first. externalIds replaces the full set when provided.",
     {
       id: idParam("Product"),
-      // Curated subset of productUpdateData — field shapes + descriptions are
-      // canonical (so forms / tRPC / MCP stay in sync). unitMappings are managed
-      // by update_product_unit_mappings, not here.
-      ...productUpdateData.pick({
-        name: true,
-        manufacturer: true,
-        upc: true,
-        fdc_id: true,
-        usdaUnavailable: true,
-        price: true,
-        category: true,
-        notes: true,
-        externalIds: true,
-      }).shape,
+      // unitMappings are managed by update_product_unit_mappings, not here.
+      ...mcpProductUpdateInputShape,
     },
     updateHandler("product", slimProduct),
   );

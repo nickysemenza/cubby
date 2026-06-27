@@ -1,5 +1,5 @@
 import type { LocationId } from "@cubby/schemas/identifiers";
-import type { ImageOut } from "@cubby/schemas/image";
+import type { ImageOut } from "@cubby/schemas/image-responses";
 import {
   type LocationCreateInput,
   type LocationOut,

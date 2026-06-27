@@ -1,16 +1,6 @@
-import { z } from "zod";
+import { dashboardCountsOut } from "@cubby/schemas/dashboard";
 import { getDashboardEntityCounts } from "~/server/repo/dashboard";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
-
-const dashboardCountsSchema = z.object({
-  products: z.number().int(),
-  recipes: z.number().int(),
-  ingredients: z.number().int(),
-  locations: z.number().int(),
-  inventory: z.number().int(),
-  images: z.number().int(),
-  usdaFoods: z.number().int(),
-});
 
 /**
  * One call powering the homepage stat cards. The six DB totals are cheap
@@ -21,7 +11,7 @@ const dashboardCountsSchema = z.object({
  * /usda) enriched a row just to read `meta.totalCount`.
  */
 const counts = protectedProcedure
-  .output(dashboardCountsSchema)
+  .output(dashboardCountsOut)
   .query(async ({ ctx }) => {
     const [entityCounts, usdaCounts] = await Promise.all([
       getDashboardEntityCounts(ctx.db),

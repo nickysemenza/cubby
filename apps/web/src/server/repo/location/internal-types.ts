@@ -3,7 +3,7 @@
  * Types used across location modules.
  */
 
-import type { InventoryItemForTree } from "@cubby/schemas/location";
+import type { InventoryItemForTree } from "@cubby/schemas/location-responses";
 import type {
   image,
   inventoryEntry,
@@ -11,17 +11,9 @@ import type {
   product,
 } from "~/server/db/schema";
 
-/**
- * Type for deeply nested location query results.
- * Used when fetching locations with full relations.
- */
-export type LocationDeepDB = typeof location.$inferSelect & {
+export type LocationListDB = typeof location.$inferSelect & {
   parent: typeof location.$inferSelect | null;
-  children: Array<
-    typeof location.$inferSelect & {
-      images: Array<{ image: typeof image.$inferSelect }>;
-    }
-  >;
+  children: Array<typeof location.$inferSelect>;
   inventoryEntries: Array<
     typeof inventoryEntry.$inferSelect & {
       product: typeof product.$inferSelect;
@@ -29,6 +21,7 @@ export type LocationDeepDB = typeof location.$inferSelect & {
   >;
   images: Array<{
     image: typeof image.$inferSelect;
+    deletedAt?: Date | null;
   }>;
 };
 
@@ -41,6 +34,7 @@ export type LocationWithParentChild = typeof location.$inferSelect & {
   parent?: LocationWithParentChild | null;
   images?: Array<{
     image: typeof image.$inferSelect;
+    deletedAt?: Date | null;
   }>;
   childCount?: number;
   directItemCount?: number;

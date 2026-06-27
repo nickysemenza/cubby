@@ -1,6 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ProductId } from "@cubby/schemas/identifiers";
-import type { ImageOut } from "@cubby/schemas/image";
+import type { ImageOut } from "@cubby/schemas/image-responses";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type {
   ProductCategory,
@@ -8,7 +8,7 @@ import type {
   ProductUpdateInput,
 } from "@cubby/schemas/product";
 import type { ProductWithFoodOut } from "@cubby/schemas/product-responses";
-import type { UnitMapping } from "@cubby/schemas/unitmapping";
+import type { UnitMapping } from "@cubby/schemas/unitmapping-responses";
 import type { FoodSummary } from "@cubby/usda-schemas";
 import type { Database } from "~/server/db";
 import type { USDAClient } from "../clients/usda";

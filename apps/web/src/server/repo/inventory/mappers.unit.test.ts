@@ -203,19 +203,7 @@ describe("inventory mappers", () => {
       product: {
         id: PRODUCT_ID,
         shortcode: unsafeProductShortcode("P-TEST"),
-        images: [
-          {
-            id: IMAGE_ID,
-            url: "https://example.com/image.jpg",
-            key: "image.jpg",
-            filename: "image.jpg",
-            size: 100,
-            contentType: "image/jpeg",
-            status: "UPLOADED",
-            createdAt: CREATED_AT,
-            updatedAt: UPDATED_AT,
-          },
-        ],
+        images: [],
         externalIds: [
           {
             id: EXTERNAL_ID,

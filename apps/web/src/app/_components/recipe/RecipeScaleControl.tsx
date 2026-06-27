@@ -1,4 +1,4 @@
-import type { RecipeOut } from "@cubby/schemas/recipe";
+import type { RecipeOut } from "@cubby/schemas/recipe-responses";
 import { Link } from "@tanstack/react-router";
 import { Scaling, X } from "lucide-react";
 import { useMemo, useState } from "react";

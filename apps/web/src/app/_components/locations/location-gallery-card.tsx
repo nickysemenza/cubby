@@ -1,5 +1,5 @@
 import type { inventoryListItemOut } from "@cubby/schemas/inventory-responses";
-import type { InfLocation } from "@cubby/schemas/location";
+import type { InfLocation } from "@cubby/schemas/location-responses";
 import { Link } from "@tanstack/react-router";
 import { type Ref, useMemo } from "react";
 import type { z } from "zod";

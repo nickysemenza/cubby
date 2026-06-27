@@ -1,6 +1,6 @@
 import type { WFoodInput, WUnitMapping } from "@cubby/recipebridge";
 import { type ProductId, unsafeProductId } from "@cubby/schemas/identifiers";
-import type { UnitMapping } from "@cubby/schemas/unitmapping";
+import type { UnitMapping } from "@cubby/schemas/unitmapping-responses";
 import {
   type FoodSummary,
   getNutrientKey,

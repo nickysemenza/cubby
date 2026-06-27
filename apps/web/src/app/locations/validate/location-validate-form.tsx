@@ -1,5 +1,5 @@
 import type { LocationId } from "@cubby/schemas/identifiers";
-import type { InfLocation } from "@cubby/schemas/location";
+import type { InfLocation } from "@cubby/schemas/location-responses";
 import { extractShortcodeFromScan } from "@cubby/shared";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -23,7 +23,10 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { getErrorMessage } from "~/lib/error-utils";
-import { queryKeys } from "~/lib/query-keys";
+import {
+  invalidateTRPCQueries,
+  locationMutationInvalidateKeys,
+} from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 
 type Phase = "SELECT_LOCATION" | "SCANNING" | "RECONCILIATION";
@@ -189,15 +192,13 @@ export function LocationValidateForm({
   const updateMutation = useMutation(
     api.location.update.mutationOptions({
       onSuccess: () => {
-        queryClient.invalidateQueries({
-          queryKey: [queryKeys.location.list],
-        });
+        invalidateTRPCQueries(queryClient, locationMutationInvalidateKeys);
         if (parentLocationId) {
-          queryClient.invalidateQueries({
-            queryKey: api.location.getByID.queryKey({
+          invalidateTRPCQueries(queryClient, [
+            api.location.getByID.queryKey({
               id: parentLocationId,
             }),
-          });
+          ]);
         }
       },
     }),

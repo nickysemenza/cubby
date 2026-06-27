@@ -13,17 +13,15 @@ import type {
   WRowResult,
 } from "@cubby/recipebridge";
 import type { Amount } from "@cubby/schemas/codec";
-import type {
-  IngredientWithFoodLeanOut,
-  ProductWithMappingsAndFoodOut,
-} from "@cubby/schemas/ingredient-responses";
+import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient-responses";
+import type { ProductWithMappingsAndFoodOut } from "@cubby/schemas/product-responses";
 import type {
   RecipeGraphOut,
   RecipeOut,
-  RowDiagnosticOut,
   SectionIngredientOut,
-} from "@cubby/schemas/recipe";
-import type { UnitMapping } from "@cubby/schemas/unitmapping";
+} from "@cubby/schemas/recipe-responses";
+import type { RowDiagnosticOut } from "@cubby/schemas/recipe-shared";
+import type { UnitMapping } from "@cubby/schemas/unitmapping-responses";
 import {
   getNutrientUnitString,
   type NutrientKey,
@@ -119,7 +117,7 @@ export type IngredientDataItem = CostingRow & {
 
 /**
  * The diagnostic shapes are declared once as the zod wire contract in
- * `@cubby/schemas/recipe` and inferred here, so the contract and the source
+ * `@cubby/schemas/recipe-shared` and inferred here, so the contract and the source
  * can't silently diverge (the structural compat between the WASM types the
  * reshaper feeds in — PlanTrio, WConversionStep, WIngredientUsage — and these
  * is compiler-enforced at `toRowDiagnostic`).

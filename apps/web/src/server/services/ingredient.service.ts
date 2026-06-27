@@ -8,10 +8,12 @@ import type {
   EnrichmentRow,
   IngredientWithFoodLeanOut,
   IngredientWithFoodOut,
-  ProductWithMappingsAndFoodOut,
 } from "@cubby/schemas/ingredient-responses";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import type { ProductWithMappingsOut as ProductWithMappings } from "@cubby/schemas/product-responses";
+import type {
+  ProductWithMappingsOut as ProductWithMappings,
+  ProductWithMappingsAndFoodOut,
+} from "@cubby/schemas/product-responses";
 import type { z } from "zod";
 import { conversionCoverage, gradedKinds } from "~/lib/conversion-coverage";
 import { classifyIngredientFix } from "~/lib/recipe-costing-gaps";

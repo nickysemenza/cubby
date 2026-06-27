@@ -1,16 +1,17 @@
 import { productCategoryValues, UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { fdcId, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
-import { dbTimestampsOut, requiredName } from "./common";
-import { externalIdInput, externalIdOut } from "./external-id";
+import { requiredName } from "./common";
+import { externalIdInput } from "./external-id";
+import { externalIdOut } from "./external-id-responses";
 import {
   ingredientId,
   type IngredientId,
   productId,
   productShortcode,
 } from "./identifiers";
-import { createInputImages, imageOut, updateInputImages } from "./image";
-import { unitMappingInput } from "./unitmapping";
+import { imageOut } from "./image-responses";
+import { mcpUnitMappingInput, unitMappingInput } from "./unitmapping";
 
 // Product category enum for filtering/organization
 export const productCategory = z
@@ -46,16 +47,148 @@ export const hasFoodIndicators = (product: {
   hasFdcLink(product.fdc_id) ||
   (product.ingredientId != null && product.ingredientId.length > 0);
 
-// Base schema for product data (without relationships)
-const productBase = z.object({
-  // `mock` is a faker dot-path read by the test mock generator (faker-free here).
+// Input schema for creating products (includes relationships)
+// Note: category is optional in input (defaults to null) but required in output
+export const productCreateInput = z.object({
+  // Override the output/read `name` (lax for reads) with a non-empty constraint on
+  // the create/update boundary; keep the mock hint for test fixtures.
+  name: requiredName("Product name")
+    .describe("Product name")
+    .meta({ mock: "commerce.productName" }),
+  upc: upc.nullable(),
+  fdc_id: fdcId
+    .nullable()
+    .optional()
+    .describe(
+      "USDA FoodData Central id — links the product to any USDA food (takes precedence over the product's UPC). null to unlink.",
+    ),
+  manufacturer: z
+    .string()
+    .describe("Manufacturer or 'generic'")
+    .meta({ mock: "company.name" }),
+  model: z.string().nullish().describe("model number"),
+  notes: z.string().nullish().describe("product notes, URLs, or other details"),
+  expectedQuantity: z
+    .number()
+    .int()
+    .positive()
+    .nullable()
+    .describe("null means unlimited, 1 for unique items"),
+  category: productCategory.nullable().optional(),
+  ingredientId: ingredientId
+    .nullable()
+    .describe(
+      "Link this product to an ingredient (its id) so recipes using that ingredient can cost from this product.",
+    ),
+  price: z
+    .number()
+    .positive()
+    .nullable()
+    .optional()
+    .describe("price per each ($), source of truth"),
+  unitMappings: z
+    .array(unitMappingInput)
+    .default([])
+    .describe(
+      'Conversion/price edges, e.g. 8 oz = $10 → [{ a: { value: 8, unit: "oz" }, b: { value: 10, unit: "dollar" } }]. For a weight-measured ingredient an oz/g → dollar edge is the cost basis.',
+    ),
+  externalIds: z.array(externalIdInput).default([]),
+  usdaUnavailable: z
+    .boolean()
+    .nullable()
+    .optional()
+    .describe("no USDA food exists — expect manual weight/volume/calories"),
+  pendingImageIds: z.array(z.uuid()).optional(),
+});
+
+// A partial update must leave omitted fields UNCHANGED. This schema is explicit
+// so create-time defaults never become destructive update defaults for
+// `unitMappings`/`externalIds`.
+export const productUpdateData = z.object({
+  name: requiredName("Product name")
+    .describe("Product name")
+    .meta({ mock: "commerce.productName" })
+    .optional(),
+  upc: upc.nullable().optional(),
+  fdc_id: fdcId.nullable().optional(),
+  manufacturer: z
+    .string()
+    .describe("Manufacturer or 'generic'")
+    .meta({ mock: "company.name" })
+    .optional(),
+  model: z.string().nullish(),
+  notes: z.string().nullish(),
+  expectedQuantity: z.number().int().positive().nullable().optional(),
+  category: productCategory.nullable().optional(),
+  ingredientId: ingredientId.nullable().optional(),
+  price: z.number().positive().nullable().optional(),
+  unitMappings: z.array(unitMappingInput).optional(),
+  externalIds: z.array(externalIdInput).optional(),
+  usdaUnavailable: z.boolean().nullable().optional(),
+  pendingImageIds: z.array(z.uuid()).optional(),
+  removeImageIds: z.array(z.uuid()).optional(),
+});
+
+// Input schema for updating products (matches location/recipe/ingredient pattern)
+export const productUpdateInput = z.object({
+  id: productId,
+  data: productUpdateData,
+});
+
+// Ancillary product hydration endpoints run through tRPC GET batching. Keep this
+// stricter than the general 1000-row backend ceiling so product list hydration
+// stays under URL/dispatch limits.
+export const PRODUCT_SUMMARY_BATCH_MAX = 50;
+
+export const productSummaryBatchInput = z.object({
+  ids: z.array(productId).max(PRODUCT_SUMMARY_BATCH_MAX),
+});
+
+export const productApplyUpcInput = z.object({
+  id: productId,
+  upc,
+});
+
+export const productFindOrCreateByUPCInput = z.object({
+  upc,
+  defaultName: z.string().optional(),
+});
+
+export const productShortcodesInput = z.object({
+  shortcodes: z.array(z.string()),
+});
+
+export const productShortcodeInput = z.object({
+  shortcode: z.string(),
+});
+
+export const productCreateManyInput = z
+  .array(productCreateInput)
+  .min(1)
+  .max(50);
+
+export const productMarkUsdaUnavailableManyInput = z.object({
+  ids: z.array(productId).min(1).max(100),
+});
+
+// Filters accepted by the product list endpoint. Canonical shape shared by the
+// tRPC router (and available to any other list caller).
+export const productFiltersSchema = z.object({
+  nameFilter: z.string().optional(),
+  manufacturerFilter: z.string().optional(),
+  upcFilter: z.string().optional(),
+  categoryFilter: productCategory.optional(),
+});
+
+// Response schema for product data
+export const productTopLevelOut = z.object({
+  id: productId,
+  shortcode: productShortcode,
   name: z
     .string()
     .describe("Product name")
     .meta({ mock: "commerce.productName" }),
   upc: upc.nullable(),
-  // Explicit USDA link by FoodData Central id (the universal PK across all food
-  // types — see `fdcId`). Resolution prefers this over UPC auto-matching.
   fdc_id: fdcId
     .nullable()
     .describe(
@@ -76,102 +209,15 @@ const productBase = z.object({
   category: productCategory
     .nullable()
     .describe("product category for filtering"),
+  images: z.array(imageOut),
+  externalIds: z.array(externalIdOut),
+  price: z.number().nullable(), // Price per each ($); source of truth (the 1 each -> $X costing edge is synthesized from this at compute time)
+  usdaUnavailable: z.boolean().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
 });
-
-// Input schema for creating products (includes relationships)
-// Note: category is optional in input (defaults to null) but required in output
-export const productCreateInput = productBase
-  .omit({ category: true })
-  .extend({
-    // Override the base `name` (lax for reads) with a non-empty constraint on
-    // the create/update boundary; keep the mock hint for test fixtures.
-    name: requiredName("Product name")
-      .describe("Product name")
-      .meta({ mock: "commerce.productName" }),
-    fdc_id: fdcId
-      .nullable()
-      .optional()
-      .describe(
-        "USDA FoodData Central id — links the product to any USDA food (takes precedence over the product's UPC). null to unlink.",
-      ),
-    category: productCategory.nullable().optional(),
-    ingredientId: ingredientId
-      .nullable()
-      .describe(
-        "Link this product to an ingredient (its id) so recipes using that ingredient can cost from this product.",
-      ),
-    price: z
-      .number()
-      .positive()
-      .nullable()
-      .optional()
-      .describe("price per each ($), source of truth"),
-    unitMappings: z
-      .array(unitMappingInput)
-      .default([])
-      .describe(
-        'Conversion/price edges, e.g. 8 oz = $10 → [{ a: { value: 8, unit: "oz" }, b: { value: 10, unit: "dollar" } }]. For a weight-measured ingredient an oz/g → dollar edge is the cost basis.',
-      ),
-    externalIds: z.array(externalIdInput).default([]),
-    usdaUnavailable: z
-      .boolean()
-      .nullable()
-      .optional()
-      .describe("no USDA food exists — expect manual weight/volume/calories"),
-  })
-  .merge(createInputImages);
-
-// A partial update must leave omitted fields UNCHANGED. `.partial()` keeps the
-// create-time `.default()`s, so an omitted `fdc_id` (default null) or
-// `unitMappings`/`externalIds` (default []) would be reset on any partial update
-// — e.g. adding one conversion to an already-USDA-linked product nulled its
-// fdc_id (audit: 171287 → null, 2026-06-19). Override those fields to plain
-// optional (no default) so omitting them is a true no-op.
-export const productUpdateData = productCreateInput
-  .partial()
-  .extend({
-    fdc_id: fdcId.nullable().optional(),
-    unitMappings: z.array(unitMappingInput).optional(),
-    externalIds: z.array(externalIdInput).optional(),
-  })
-  .extend(updateInputImages.shape);
-
-// Input schema for updating products (matches location/recipe/ingredient pattern)
-export const productUpdateInput = z.object({
-  id: productId,
-  data: productUpdateData,
-});
-
-// Filters accepted by the product list endpoint. Canonical shape shared by the
-// tRPC router (and available to any other list caller).
-export const productFiltersSchema = z.object({
-  nameFilter: z.string().optional(),
-  manufacturerFilter: z.string().optional(),
-  upcFilter: z.string().optional(),
-  categoryFilter: productCategory.optional(),
-});
-
-// Response schema for product data
-export const productTopLevelOut = z
-  .object({
-    id: productId,
-    shortcode: productShortcode,
-    images: z.array(imageOut),
-    externalIds: z.array(externalIdOut),
-    price: z.number().nullable(), // Price per each ($); source of truth (the 1 each -> $X costing edge is synthesized from this at compute time)
-    usdaUnavailable: z.boolean().nullable(),
-  })
-  .extend(productBase.shape)
-  .extend(dbTimestampsOut.shape);
 
 export type ProductTopLevelOut = z.infer<typeof productTopLevelOut>;
-export const productPickerItemOut = productTopLevelOut.pick({
-  id: true,
-  shortcode: true,
-  name: true,
-  manufacturer: true,
-});
-export type ProductPickerItemOut = z.infer<typeof productPickerItemOut>;
 export type ProductCreateInput = z.infer<typeof productCreateInput>;
 export type ProductUpdateInput = z.infer<typeof productUpdateInput>;
 
@@ -186,3 +232,54 @@ export const productQuickCreatePayload = z.object({
   notes: z.string().nullable().optional(),
   price: z.number().positive().nullable().optional(),
 });
+
+export const mcpProductCreateInputShape = {
+  name: requiredName("Product name")
+    .describe("Product name")
+    .meta({ mock: "commerce.productName" }),
+  manufacturer: z
+    .string()
+    .describe("Manufacturer or 'generic'")
+    .meta({ mock: "company.name" })
+    .optional(),
+  upc: upc.nullable().optional(),
+  price: z
+    .number()
+    .positive()
+    .nullable()
+    .optional()
+    .describe("price per each ($), source of truth"),
+  expectedQuantity: z
+    .number()
+    .int()
+    .positive()
+    .nullable()
+    .optional()
+    .describe("null means unlimited, 1 for unique items"),
+  ingredientId: ingredientId
+    .nullable()
+    .optional()
+    .describe(
+      "Link this product to an ingredient (its id) so recipes using that ingredient can cost from this product.",
+    ),
+  unitMappings: z.array(mcpUnitMappingInput).optional(),
+};
+
+export const mcpProductUpdateInputShape = {
+  name: requiredName("Product name")
+    .describe("Product name")
+    .meta({ mock: "commerce.productName" })
+    .optional(),
+  manufacturer: z
+    .string()
+    .describe("Manufacturer or 'generic'")
+    .meta({ mock: "company.name" })
+    .optional(),
+  upc: upc.nullable().optional(),
+  fdc_id: fdcId.nullable().optional(),
+  usdaUnavailable: z.boolean().nullable().optional(),
+  price: z.number().positive().nullable().optional(),
+  category: productCategory.nullable().optional(),
+  notes: z.string().nullish(),
+  externalIds: z.array(externalIdInput).optional(),
+};

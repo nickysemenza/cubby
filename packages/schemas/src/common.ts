@@ -35,9 +35,9 @@ export const IDInput = z
   .describe("input for retrieving by ID");
 
 // Base entity schema with common fields
-export const baseEntitySchema = z
-  .object({
-    id: id,
-    name: z.string(),
-  })
-  .extend(dbTimestampsOut.shape);
+export const baseEntitySchema = z.object({
+  id: id,
+  name: z.string(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});

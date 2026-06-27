@@ -18,7 +18,16 @@
  */
 
 import { type AnyColumn, asc } from "drizzle-orm";
-import { recipeSection, recipeSectionIngredient } from "~/server/db/schema";
+import {
+  inventoryEntry,
+  location,
+  product,
+  productExternalId,
+  productImage,
+  productUnitMappings,
+  recipeSection,
+  recipeSectionIngredient,
+} from "~/server/db/schema";
 import { notDeleted } from "./query";
 
 /**
@@ -62,6 +71,27 @@ export const relations = {
         },
       },
     },
+    list: {
+      with: {
+        product: {
+          where: notDeleted(product),
+          with: {
+            unitMappings: {
+              where: notDeleted(productUnitMappings),
+            },
+            externalIds: {
+              where: notDeleted(productExternalId),
+            },
+            images: {
+              where: notDeleted(productImage),
+              with: {
+                image: true,
+              },
+            },
+          },
+        },
+      },
+    },
   },
   product: {
     full: {
@@ -91,13 +121,25 @@ export const relations = {
     },
     list: {
       with: {
+        ingredient: true,
         images: {
+          where: notDeleted(productImage),
           with: {
             image: true,
           },
         },
-        unitMappings: true,
-        externalIds: true,
+        unitMappings: {
+          where: notDeleted(productUnitMappings),
+        },
+        externalIds: {
+          where: notDeleted(productExternalId),
+        },
+        inventoryEntry: {
+          where: notDeleted(inventoryEntry),
+          with: {
+            location: true,
+          },
+        },
       },
     },
   },
@@ -156,6 +198,25 @@ export const relations = {
     },
   },
   location: {
+    list: {
+      with: {
+        parent: true,
+        children: {
+          where: notDeleted(location),
+        },
+        inventoryEntries: {
+          where: notDeleted(inventoryEntry),
+          with: {
+            product: true,
+          },
+        },
+        images: {
+          with: {
+            image: true,
+          },
+        },
+      },
+    },
     full: {
       with: {
         parent: true,

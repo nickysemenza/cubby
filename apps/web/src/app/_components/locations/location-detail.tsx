@@ -1,4 +1,5 @@
-import type { InfLocation, LocationUpdateInput } from "@cubby/schemas/location";
+import type { LocationUpdateInput } from "@cubby/schemas/location";
+import type { InfLocation } from "@cubby/schemas/location-responses";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
@@ -24,12 +25,13 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "~/components/ui/empty";
+import { invalidateTRPCQueries } from "~/lib/query-keys";
 import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
+import { InventoryCaptureWorkspace } from "../../inventory/capture/InventoryCaptureWorkspace";
 import { type DetailSection, DetailSections } from "../data-table/detail-page";
 import { editableDetailSection } from "../data-table/editable-detail-section";
 import { useEntityDetail } from "../hooks/useEntityDetail";
-import { QuickInventoryAdd } from "../inventory/quick-inventory-add";
 import { AiDescriptionSection } from "./ai-description-section";
 import { CreateChildLocationDialog } from "./create-child-location-dialog";
 import { DetectItemsDialog } from "./detect-items-dialog";
@@ -180,7 +182,8 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
       content: (
         <Stack gap="sm">
           <Stack gap="sm">
-            <QuickInventoryAdd
+            <InventoryCaptureWorkspace
+              mode="inline"
               locationId={location.id}
               onSuccess={() => undefined}
             />
@@ -234,9 +237,9 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
         onOpenChange={setCreateChildOpen}
         parentLocation={location}
         onSuccess={() => {
-          void queryClient.invalidateQueries({
-            queryKey: api.location.getByID.queryKey({ id: location.id }),
-          });
+          invalidateTRPCQueries(queryClient, [
+            api.location.getByID.queryKey({ id: location.id }),
+          ]);
         }}
       />
       <DetectItemsDialog

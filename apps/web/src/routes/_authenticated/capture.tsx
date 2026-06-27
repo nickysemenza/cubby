@@ -1,10 +1,8 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { ScanBarcode } from "lucide-react";
-import { CaptureFlow } from "~/app/capture/capture-flow";
+import { createFileRoute } from "@tanstack/react-router";
+import { InventoryCaptureWorkspace } from "~/app/inventory/capture/InventoryCaptureWorkspace";
 import { Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { RouteErrorComponent } from "~/components/route-error";
-import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
 
 export const Route = createFileRoute("/_authenticated/capture")({
@@ -15,27 +13,7 @@ export const Route = createFileRoute("/_authenticated/capture")({
 });
 
 function CapturePage() {
-  return (
-    <Page
-      variant="list"
-      eyebrow="Beta"
-      title="Scan a shelf"
-      compact
-      decoration="none"
-      actions={
-        <Button
-          variant="outline"
-          render={<Link to="/inventory/quick-capture" />}
-          nativeButton={false}
-        >
-          <ScanBarcode className="mr-1 h-3.5 w-3.5" />
-          Quick capture
-        </Button>
-      }
-    >
-      <CaptureFlow />
-    </Page>
-  );
+  return <InventoryCaptureWorkspace mode="photo" />;
 }
 
 function CapturePagePending() {

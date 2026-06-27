@@ -12,10 +12,12 @@ import {
 } from "@cubby/schemas/pagination";
 import type {
   RecipeCreateInput,
-  RecipeGraphOut,
-  RecipeOut,
   RecipeUpdateInput,
 } from "@cubby/schemas/recipe";
+import type {
+  RecipeGraphOut,
+  RecipeOut,
+} from "@cubby/schemas/recipe-responses";
 import { type AnyColumn, and, eq, inArray, type SQL, sql } from "drizzle-orm";
 import { countBy } from "es-toolkit";
 import { getSortableFields } from "~/entities/entities";

@@ -1,7 +1,4 @@
-import {
-  unsafeLocationShortcode,
-  unsafeProductShortcode,
-} from "@cubby/schemas/identifiers";
+import { unsafeLocationShortcode } from "@cubby/schemas/identifiers";
 import type {
   inventoryListItemOut,
   inventoryWithLocationAndProductOut,
@@ -11,6 +8,8 @@ import type { z } from "zod";
 import { parseWithContext } from "~/lib/zod-utils";
 import { parseInventoryAmount } from "~/server/repo/database-helpers";
 import {
+  dbProductToInventoryEmbedShape,
+  dbProductToInventoryListShape,
   mapProductExternalIds,
   mapProductImages,
   mapProductUnitMappings,
@@ -49,22 +48,9 @@ export const dbInventoryEntryToAPI: (
       updatedAt: location.updatedAt,
     },
     product: {
-      id: product.id,
-      shortcode: unsafeProductShortcode(product.shortcode),
+      ...dbProductToInventoryEmbedShape(product),
       images: mapProductImages(product.images),
       externalIds: mapProductExternalIds(product.externalIds),
-      price: product.price,
-      usdaUnavailable: product.usdaUnavailable,
-      name: product.name,
-      upc: product.upc,
-      fdc_id: product.fdc_id,
-      manufacturer: product.manufacturer,
-      model: product.model,
-      notes: product.notes,
-      expectedQuantity: product.expectedQuantity,
-      category: product.category,
-      createdAt: product.createdAt,
-      updatedAt: product.updatedAt,
       unitMappings: mapProductUnitMappings(product.id, product.unitMappings),
     },
   };
@@ -95,18 +81,6 @@ export const dbInventoryEntryToListAPI: (
         identifier: { id: location.id, name: location.name },
       }),
     },
-    product: {
-      id: product.id,
-      shortcode: unsafeProductShortcode(product.shortcode),
-      name: product.name,
-      manufacturer: product.manufacturer,
-      upc: product.upc,
-      fdc_id: product.fdc_id,
-      category: product.category,
-      expectedQuantity: product.expectedQuantity,
-      model: product.model,
-      price: product.price,
-      usdaUnavailable: product.usdaUnavailable,
-    },
+    product: dbProductToInventoryListShape(product),
   };
 };

@@ -1,5 +1,5 @@
 import type { WAmount } from "@cubby/recipebridge";
-import type { SectionIngredientOut } from "@cubby/schemas/recipe";
+import type { SectionIngredientOut } from "@cubby/schemas/recipe-responses";
 import type { RecipeCosting } from "~/lib/recipe-costing";
 import { cn } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";

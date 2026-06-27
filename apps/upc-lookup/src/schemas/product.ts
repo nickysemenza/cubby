@@ -6,9 +6,7 @@ import { SOURCE_NAMES } from "../api/sources";
 export const productSourceSchema = z.enum(SOURCE_NAMES);
 export type ProductSource = z.infer<typeof productSourceSchema>;
 
-// Successful lookup response
-// Note: priceDollars is always in USD
-export const productLookupResponseSchema = z.object({
+const productLookupPublicFields = {
   upc: z.string(),
   name: z.string(),
   manufacturer: z.string().nullable(),
@@ -18,6 +16,20 @@ export const productLookupResponseSchema = z.object({
   priceDollars: z.number().nullable(),
   imageUrl: z.string().nullable(),
   source: productSourceSchema,
+};
+
+// Successful lookup/search response without transport/cache metadata.
+// Note: priceDollars is always in USD.
+export const productLookupPublicResponseSchema = z.object(
+  productLookupPublicFields,
+);
+export type ProductLookupPublicResponse = z.infer<
+  typeof productLookupPublicResponseSchema
+>;
+
+// Successful lookup response with cache metadata for direct lookup callers.
+export const productLookupResponseSchema = z.object({
+  ...productLookupPublicFields,
   cached: z.boolean(),
 });
 export type ProductLookupResponse = z.infer<typeof productLookupResponseSchema>;
@@ -41,7 +53,7 @@ export type UPCLookupNotFound = ProductNotFoundResponse;
 
 // Search response
 export const searchResponseSchema = z.object({
-  products: z.array(productLookupResponseSchema.omit({ cached: true })),
+  products: z.array(productLookupPublicResponseSchema),
   total: z.number(),
 });
 export type SearchResponse = z.infer<typeof searchResponseSchema>;
@@ -55,7 +67,7 @@ export type BulkLookupRequest = z.infer<typeof bulkLookupRequestSchema>;
 
 export const bulkLookupResponseSchema = z.object({
   // Found products only (absent UPC = no cached data).
-  products: z.array(productLookupResponseSchema.omit({ cached: true })),
+  products: z.array(productLookupPublicResponseSchema),
   // Count of never-checked UPCs this call did not resolve (some may get a
   // bounded background first-try; results surface on a later call).
   pending: z.number(),

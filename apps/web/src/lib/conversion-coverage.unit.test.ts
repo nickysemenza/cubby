@@ -1,5 +1,5 @@
 import type { Amount } from "@cubby/schemas/codec";
-import { manualUnitMapping } from "@cubby/schemas/unitmapping";
+import { manualUnitMapping } from "@cubby/schemas/unitmapping-responses";
 import { describe, expect, it } from "vitest";
 import {
   BASE_KINDS,

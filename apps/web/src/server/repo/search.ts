@@ -6,7 +6,7 @@ import type {
   RecipeSearchResult,
   SearchResultItem,
 } from "@cubby/schemas/search";
-import { and, eq, or, sql } from "drizzle-orm";
+import { and, eq, isNull, or, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import {
   ingredient,
@@ -45,6 +45,7 @@ export async function globalSearch(
             JOIN "Image" i ON i."id" = pi."imageId"
             WHERE pi."productId" = "Product"."id"
             AND pi."deletedAt" IS NULL
+            AND i."deletedAt" IS NULL
             ORDER BY pi."createdAt" ASC
             LIMIT 1
           )`.as("imageUrl"),
@@ -82,6 +83,7 @@ export async function globalSearch(
             JOIN "Image" i ON i."id" = ri."imageId"
             WHERE ri."recipeId" = "Recipe"."id"
             AND ri."deletedAt" IS NULL
+            AND i."deletedAt" IS NULL
             ORDER BY ri."createdAt" ASC
             LIMIT 1
           )`.as("imageUrl"),
@@ -112,7 +114,11 @@ export async function globalSearch(
         })
         .from(ingredient)
         .where(
-          and(notDeleted(ingredient), formatSearchTerm(ingredient.name, query)),
+          and(
+            notDeleted(ingredient),
+            isNull(ingredient.recipeId),
+            formatSearchTerm(ingredient.name, query),
+          ),
         )
         .limit(limitPerType) as Promise<IngredientSearchResult[]>,
 
@@ -129,6 +135,7 @@ export async function globalSearch(
             JOIN "Image" i ON i."id" = li."imageId"
             WHERE li."locationId" = "Location"."id"
             AND li."deletedAt" IS NULL
+            AND i."deletedAt" IS NULL
             ORDER BY li."createdAt" ASC
             LIMIT 1
           )`.as("imageUrl"),
@@ -163,6 +170,7 @@ export async function globalSearch(
             JOIN "Image" i ON i."id" = pi."imageId"
             WHERE pi."productId" = "Product"."id"
             AND pi."deletedAt" IS NULL
+            AND i."deletedAt" IS NULL
             ORDER BY pi."createdAt" ASC
             LIMIT 1
           )`.as("imageUrl"),

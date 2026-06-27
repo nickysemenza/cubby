@@ -1,4 +1,4 @@
-import type { RecipeOut } from "@cubby/schemas/recipe";
+import type { RecipeOut } from "@cubby/schemas/recipe-responses";
 import { Clock, ExternalLink, Users } from "lucide-react";
 import { Row } from "~/components/layout";
 import { Image } from "~/components/ui/image";

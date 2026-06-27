@@ -6,8 +6,7 @@ import type { TableStateReturn } from "../data-table/useTableState";
 // Response shape from list queries
 interface ListQueryResponse<TData> {
   items: TData[];
-  count: number;
-  meta?: { pageIndex?: number; pageSize?: number; totalCount?: number };
+  meta: { pageIndex: number; pageSize: number; totalCount: number };
 }
 
 type TRPCQueryOptionsFn<TFilters> = (params: {
@@ -111,8 +110,8 @@ export function useInfiniteTableList<TFilters, TData = unknown>({
     initialPageParam: 0,
     getNextPageParam: (lastPage: ListQueryResponse<TData>) => {
       const meta = lastPage.meta;
-      if (!meta?.totalCount || !meta.pageSize) return undefined;
-      const pageIndex = meta.pageIndex ?? 0;
+      if (!meta.totalCount || !meta.pageSize) return undefined;
+      const pageIndex = meta.pageIndex;
       const loaded = (pageIndex + 1) * meta.pageSize;
       return loaded < meta.totalCount ? pageIndex + 1 : undefined;
     },

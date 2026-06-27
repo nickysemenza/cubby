@@ -1,5 +1,9 @@
-import type { MealOut, MealRecipeOut, MealTotals } from "@cubby/schemas/meal";
-import type { RecipeTotals } from "@cubby/schemas/recipe";
+import type {
+  MealOut,
+  MealRecipeOut,
+  MealTotals,
+} from "@cubby/schemas/meal-responses";
+import type { RecipeTotals } from "@cubby/schemas/recipe-shared";
 
 /**
  * Scale a recipe's persisted totals by a meal-recipe multiplier. Totals are

@@ -161,7 +161,7 @@ describe("slimUsdaFood", () => {
 
 describe("createMcpServer registration", () => {
   // Smoke test: constructing the server registers every tool, which forces the
-  // SDK to accept each tool's input shape (including the reused `.shape` spreads
+  // SDK to accept each tool's input shape (including reused field spreads
   // for recipes/meals and the shared mcpPaginationParams). A bad shape throws here.
   it("registers all tools without throwing", () => {
     expect(() => createMcpServer()).not.toThrow();

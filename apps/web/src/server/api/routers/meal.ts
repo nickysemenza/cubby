@@ -8,19 +8,22 @@
  */
 
 import type { RecipeId } from "@cubby/schemas/identifiers";
-import { type MealId, mealId, mealRecipeId } from "@cubby/schemas/identifiers";
+import { type MealId, mealId } from "@cubby/schemas/identifiers";
 import {
+  mealAddRecipeInput,
   mealCreateInput,
   mealDateRange,
   mealFiltersSchema,
-  mealOut,
-  mealRecipeInput,
-  mealScale,
+  mealRecipeIdInput,
   mealUpdateData,
+  mealUpdateRecipeInput,
+} from "@cubby/schemas/meal";
+import {
+  mealListOut,
+  mealOut,
   type ShoppingListContribution,
   shoppingListOut,
-} from "@cubby/schemas/meal";
-import { z } from "zod";
+} from "@cubby/schemas/meal-responses";
 import { createAppError } from "~/server/errors/app-error";
 import {
   addRecipeToMeal,
@@ -71,11 +74,11 @@ const deleteItem = createDeleteProcedure<MealId>(async (services, ids) => {
 
 const getByDateRange = protectedProcedure
   .input(mealDateRange)
-  .output(z.array(mealOut))
+  .output(mealListOut)
   .query(({ ctx, input }) => getMealsByDateRange(ctx.db, input.from, input.to));
 
 const addRecipe = protectedProcedure
-  .input(z.object({ mealId }).extend(mealRecipeInput.shape))
+  .input(mealAddRecipeInput)
   .output(mealOut)
   .mutation(({ ctx, input }) =>
     addRecipeToMeal(
@@ -91,13 +94,7 @@ const addRecipe = protectedProcedure
   );
 
 const updateRecipe = protectedProcedure
-  .input(
-    z.object({
-      id: mealRecipeId,
-      scale: mealScale.optional(),
-      sortOrder: z.number().int().nullable().optional(),
-    }),
-  )
+  .input(mealUpdateRecipeInput)
   .output(mealOut)
   .mutation(({ ctx, input }) =>
     updateMealRecipe(
@@ -109,7 +106,7 @@ const updateRecipe = protectedProcedure
   );
 
 const removeRecipe = protectedProcedure
-  .input(z.object({ id: mealRecipeId }))
+  .input(mealRecipeIdInput)
   .output(mealOut)
   .mutation(({ ctx, input }) =>
     removeMealRecipe(ctx.db, input.id, ctx.actorContext),

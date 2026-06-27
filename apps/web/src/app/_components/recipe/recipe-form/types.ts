@@ -1,12 +1,14 @@
-import type { ImageOut } from "@cubby/schemas/image";
+import type { ImageOut } from "@cubby/schemas/image-responses";
+import type {
+  RecipeCreateInput,
+  RecipeUpdateInput,
+} from "@cubby/schemas/recipe";
+import type { RecipeOut } from "@cubby/schemas/recipe-responses";
 import {
-  type RecipeCreateInput,
-  type RecipeOut,
-  type RecipeUpdateInput,
   recipeNotes,
   recipeServings,
   recipeTags,
-} from "@cubby/schemas/recipe";
+} from "@cubby/schemas/recipe-shared";
 import { z } from "zod";
 import { ComboboxItem } from "../../combobox/combobox-types";
 import type { PendingImage } from "../../PendingImageUpload";
@@ -36,9 +38,8 @@ const draftAmount = z
     },
   );
 
-// Fields shared by both ingredient-union variants. Mirrors the schema package's
-// sectioningredientOut base + extend idiom so the form union is defined once.
-const ingItemBase = z.object({
+// Fields shared by both ingredient-union variants.
+const ingItemFields = {
   id: z.string().uuid().optional(),
   amounts: z.array(draftAmount),
   // Import provenance: the original unparsed line and the parser-derived modifier.
@@ -49,15 +50,17 @@ const ingItemBase = z.object({
   // The current ingredient's aliases, so the "re-parse" check can tell real drift
   // from a parse that just matches one of its aliases. Display-only, not submitted.
   aliases: z.array(z.string()).optional(),
-});
+};
 
 const ingItem = z.discriminatedUnion("type", [
-  ingItemBase.extend({
+  z.object({
+    ...ingItemFields,
     type: z.literal("ingredient"),
     ingredient: ComboboxItem,
     recipe: z.null(),
   }),
-  ingItemBase.extend({
+  z.object({
+    ...ingItemFields,
     type: z.literal("recipe"),
     ingredient: z.null(),
     recipe: ComboboxItem,

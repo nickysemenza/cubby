@@ -1,4 +1,4 @@
-import type { ImageWithEntity } from "@cubby/schemas/image";
+import type { ImageWithEntity } from "@cubby/schemas/image-responses";
 import { ImageIcon } from "lucide-react";
 import { match } from "ts-pattern";
 import { EntityPillLink } from "~/app/_components/EntityPill";

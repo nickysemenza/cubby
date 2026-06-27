@@ -11,30 +11,35 @@ import {
   type ProductId,
   productId,
 } from "@cubby/schemas/identifiers";
-import { imageOut } from "@cubby/schemas/image";
 import {
-  productCategory,
+  productApplyUpcInput,
   productCreateInput,
+  productCreateManyInput,
   productFiltersSchema,
-  productPickerItemOut,
+  productFindOrCreateByUPCInput,
+  productMarkUsdaUnavailableManyInput,
   productQuickCreatePayload,
+  productShortcodeInput,
+  productShortcodesInput,
+  productSummaryBatchInput,
   productTopLevelOut,
   productUpdateData,
+  productUpdateInput,
 } from "@cubby/schemas/product";
 import {
+  productCategoryDistributionOut,
+  productFoodSummariesOut,
+  productImageSummariesOut,
   productListItemOut,
+  productPickerItemOut,
+  productShortcodeListOut,
+  productUnitMappingSummariesOut,
   productWithFoodAndSideEffectsOut,
   productWithFoodOut,
 } from "@cubby/schemas/product-responses";
-import { unitMappingWithMetadata } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import { foodSummary, upc } from "@cubby/usda-schemas";
-import { z } from "zod";
 import { streamItems, streamProgress } from "~/lib/bulk-progress";
 import { getErrorMessage } from "~/lib/error-utils";
-import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
-import { ID_CHUNK_SIZE } from "~/misc/array-helpers";
-import { countActiveInventoryForProduct } from "~/server/repo/inventory/crud";
 import {
   deleteProducts,
   getCategoryDistribution,
@@ -43,10 +48,12 @@ import {
   productSearch,
   quickCreateProduct,
 } from "~/server/repo/product";
-import { importImageFromUPC } from "~/server/services/image-import";
 import {
+  applyUpcDataWithSideEffects,
   backfillUPCImages as backfillUPCImagesService,
+  createProductWithSideEffects,
   findOrCreateByUPC as findOrCreateByUPCService,
+  updateProductWithSideEffects,
 } from "~/server/services/product-orchestration.service";
 import {
   createDeleteProcedure,
@@ -141,66 +148,37 @@ const create = protectedProcedure
   .input(productCreateInput)
   .output(productWithFoodAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
-    // Create the product
-    const product = await ctx.services.product.createProduct(
+    return await createProductWithSideEffects(
+      {
+        db: ctx.db,
+        product: ctx.services.product,
+        recipeCosting: ctx.services.recipeCosting,
+        locationValuation: ctx.services.locationValuation,
+        upcLookupClient: ctx.upcLookupClient,
+      },
       input,
       ctx.actorContext,
     );
-
-    // If product has a UPC, try to import image from UPC lookup (non-blocking)
-    if (input.upc) {
-      try {
-        await importImageFromUPC(
-          ctx.db,
-          ctx.upcLookupClient,
-          input.upc,
-          product.id,
-        );
-      } catch (error) {
-        console.error(`[product.create] Image import failed:`, error);
-      }
-    }
-
-    const ingredientId = product.ingredient?.id;
-    const recipesRecomputed = ingredientId
-      ? await ctx.services.recipeCosting.recomputeForIngredient(ingredientId)
-      : 0;
-    return {
-      ...product,
-      sideEffects: { recipesRecomputed, inventoryValuationsUpdated: 0 },
-    };
   });
 
 // Custom update: a product's price/USDA link feeds recipe cost via its linked
 // ingredient, so recompute every dependent recipe eagerly (covers UI + MCP) and
 // report the count. Inventory-valuation recompute is added here too (stage D).
 const update = protectedProcedure
-  .input(z.object({ id: productId, data: productUpdateData }))
+  .input(productUpdateInput)
   .output(productWithFoodAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
-    const result = await ctx.services.product.updateProduct(
+    return await updateProductWithSideEffects(
+      {
+        db: ctx.db,
+        product: ctx.services.product,
+        recipeCosting: ctx.services.recipeCosting,
+        locationValuation: ctx.services.locationValuation,
+      },
       input.id,
       input.data,
       ctx.actorContext,
     );
-    const ingredientId = result.ingredient?.id;
-    const recipesRecomputed = ingredientId
-      ? await ctx.services.recipeCosting.recomputeForIngredient(ingredientId)
-      : 0;
-    // updateProduct already resynced inventory valuations in its tx when the
-    // price changed (amount × price); report how many entries that covered, and
-    // refresh the persisted per-location valuation rollups those entries feed.
-    const inventoryValuationsUpdated =
-      input.data.price !== undefined
-        ? await countActiveInventoryForProduct(ctx.db, input.id)
-        : 0;
-    if (input.data.price !== undefined) {
-      await ctx.services.locationValuation.recompute();
-    }
-    return {
-      ...result,
-      sideEffects: { recipesRecomputed, inventoryValuationsUpdated },
-    };
   });
 
 // One-click "Apply" for the Problems page "Better UPC data available" panel:
@@ -210,85 +188,39 @@ const update = protectedProcedure
 // dependent recipes, since price feeds cost); the image is imported separately.
 // Mirrors the field mapping in findOrCreateByUPC and the recompute in `update`.
 const applyUpcData = protectedProcedure
-  .input(z.object({ id: productId, upc: upc }))
+  .input(productApplyUpcInput)
   .output(productWithFoodAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
-    const current = await ctx.services.product.getProductByID(input.id);
-    const lookup = await ctx.upcLookupClient.lookup(input.upc);
-
-    // Build a partial update from the gaps the lookup can actually fill.
-    const data: { manufacturer?: string; price?: number } = {};
-    const lookupManufacturer = lookup?.manufacturer ?? lookup?.brand ?? null;
-    if (
-      lookupManufacturer != null &&
-      isUnspecifiedManufacturer(current.manufacturer) &&
-      !isUnspecifiedManufacturer(lookupManufacturer)
-    ) {
-      data.manufacturer = lookupManufacturer;
-    }
-    if (current.price == null && lookup?.priceDollars != null) {
-      data.price = lookup.priceDollars;
-    }
-
-    const priceChanged = data.price !== undefined;
-    if (Object.keys(data).length > 0) {
-      await ctx.services.product.updateProduct(
-        input.id,
-        data,
-        ctx.actorContext,
-      );
-    }
-
-    // Image is a separate write (R2 import + association); only when missing.
-    if (current.images.length === 0 && lookup?.imageUrl) {
-      try {
-        await importImageFromUPC(
-          ctx.db,
-          ctx.upcLookupClient,
-          input.upc,
-          input.id,
-        );
-      } catch (error) {
-        console.error(`[product.applyUpcData] Image import failed:`, error);
-      }
-    }
-
-    // Re-fetch so the returned payload reflects every write (incl. the image).
-    const result = await ctx.services.product.getProductByID(input.id);
-    const ingredientId = result.ingredient?.id;
-    const recipesRecomputed =
-      priceChanged && ingredientId
-        ? await ctx.services.recipeCosting.recomputeForIngredient(ingredientId)
-        : 0;
-    const inventoryValuationsUpdated = priceChanged
-      ? await countActiveInventoryForProduct(ctx.db, input.id)
-      : 0;
-    if (priceChanged) {
-      await ctx.services.locationValuation.recompute();
-    }
-    return {
-      ...result,
-      sideEffects: { recipesRecomputed, inventoryValuationsUpdated },
-    };
+    return await applyUpcDataWithSideEffects(
+      {
+        db: ctx.db,
+        product: ctx.services.product,
+        recipeCosting: ctx.services.recipeCosting,
+        locationValuation: ctx.services.locationValuation,
+        upcLookupClient: ctx.upcLookupClient,
+      },
+      input,
+      ctx.actorContext,
+    );
   });
 
 const foodSummaries = protectedProcedure
-  .input(z.object({ ids: z.array(productId).max(ID_CHUNK_SIZE) }))
-  .output(z.record(z.string(), foodSummary.nullable()))
+  .input(productSummaryBatchInput)
+  .output(productFoodSummariesOut)
   .query(async ({ ctx, input }) => {
     return await ctx.services.product.getFoodSummariesByProductIds(input.ids);
   });
 
 const imageSummaries = protectedProcedure
-  .input(z.object({ ids: z.array(productId).max(ID_CHUNK_SIZE) }))
-  .output(z.record(z.string(), z.array(imageOut)))
+  .input(productSummaryBatchInput)
+  .output(productImageSummariesOut)
   .query(async ({ ctx, input }) => {
     return await ctx.services.product.getImageSummariesByProductIds(input.ids);
   });
 
 const unitMappingSummaries = protectedProcedure
-  .input(z.object({ ids: z.array(productId).max(ID_CHUNK_SIZE) }))
-  .output(z.record(z.string(), z.array(unitMappingWithMetadata)))
+  .input(productSummaryBatchInput)
+  .output(productUnitMappingSummariesOut)
   .query(async ({ ctx, input }) => {
     return await ctx.services.product.getUnitMappingSummariesByProductIds(
       input.ids,
@@ -317,12 +249,7 @@ const quickCreate = protectedProcedure
 // Find or create a product by UPC code
 // Checks local DB first, then USDA, then UPC worker, then creates with defaults
 const findOrCreateByUPC = protectedProcedure
-  .input(
-    z.object({
-      upc: upc,
-      defaultName: z.string().optional(),
-    }),
-  )
+  .input(productFindOrCreateByUPCInput)
   .output(productTopLevelOut)
   .mutation(async ({ ctx, input }) => {
     return findOrCreateByUPCService(
@@ -354,36 +281,22 @@ const backfillUPCImages = protectedProcedure.mutation(async function* ({
 
 // Get category distribution for insights visualization
 const categoryDistribution = protectedProcedure
-  .output(
-    z.array(
-      z.object({
-        category: productCategory.nullable(),
-        productCount: z.number(),
-        locations: z.array(
-          z.object({
-            id: z.string(),
-            name: z.string(),
-            count: z.number(),
-          }),
-        ),
-      }),
-    ),
-  )
+  .output(productCategoryDistributionOut)
   .query(async ({ ctx }) => {
     return await getCategoryDistribution(ctx.db);
   });
 
 // Batch lookup: multiple products by shortcode (e.g. for label printing)
 const getByShortcodes = protectedProcedure
-  .input(z.object({ shortcodes: z.array(z.string()) }))
-  .output(z.array(productTopLevelOut))
+  .input(productShortcodesInput)
+  .output(productShortcodeListOut)
   .query(async ({ ctx, input }) => {
     return await getProductsByShortcodes(ctx.db, input.shortcodes);
   });
 
 // Get product by shortcode (e.g., P-X7K9)
 const getByShortcode = protectedProcedure
-  .input(z.object({ shortcode: z.string() }))
+  .input(productShortcodeInput)
   .output(productTopLevelOut.nullable())
   .query(async ({ ctx, input }) => {
     return await getProductByShortcode(ctx.db, input.shortcode);
@@ -399,7 +312,7 @@ type CreateManyResult = {
   failed: { index: number; name: string; error: string }[];
 };
 const createMany = protectedProcedure
-  .input(z.array(productCreateInput).min(1).max(50))
+  .input(productCreateManyInput)
   .mutation(async function* ({ ctx, input }) {
     const failed: { index: number; name: string; error: string }[] = [];
     const ingredientIds: IngredientId[] = [];
@@ -438,7 +351,7 @@ const createMany = protectedProcedure
 // those products drop out of the link-USDA worklist and switch to manual entry.
 // Streamed with per-id progress; each update is its own tx.
 const markUsdaUnavailableMany = protectedProcedure
-  .input(z.object({ ids: z.array(productId).min(1).max(100) }))
+  .input(productMarkUsdaUnavailableManyInput)
   .mutation(async function* ({ ctx, input }) {
     yield* streamItems<(typeof input.ids)[number], never, { updated: number }>(
       input.ids,

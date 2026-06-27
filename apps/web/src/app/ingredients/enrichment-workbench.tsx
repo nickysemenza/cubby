@@ -30,7 +30,10 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { getErrorMessage } from "~/lib/error-utils";
-import { queryKeys } from "~/lib/query-keys";
+import {
+  ingredientProductMutationInvalidateKeys,
+  ingredientRecipeMutationInvalidateKeys,
+} from "~/lib/query-keys";
 import { savedWithRecompute } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
@@ -174,7 +177,7 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
       data.failed.length === 0
         ? `Created ${data.created} product${data.created === 1 ? "" : "s"}.`
         : `Created ${data.created}, ${data.failed.length} failed.`,
-    invalidateKeys: [queryKeys.ingredient.all, queryKeys.product.all],
+    invalidateKeys: ingredientProductMutationInvalidateKeys,
     onSuccess: (data) => {
       // Drop only the suggestions that actually created; keep failed rows (and
       // their selection) so they can be retried without re-suggesting.
@@ -208,7 +211,7 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
       vars: Parameters<typeof client.product.markUsdaUnavailableMany.mutate>[0],
     ) => client.product.markUsdaUnavailableMany.mutate(vars),
     success: "Marked: no USDA entry.",
-    invalidateKeys: [queryKeys.ingredient.all, queryKeys.product.all],
+    invalidateKeys: ingredientProductMutationInvalidateKeys,
     onSuccess: clearSelection,
     error: (err) => `Failed: ${getErrorMessage(err)}`,
   });
@@ -218,7 +221,7 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
   const mergeMutation = useActionMutation({
     mutationFn: api.ingredient.merge.mutationOptions,
     success: (data) => savedWithRecompute(data.sideEffects, "Merged"),
-    invalidateKeys: [queryKeys.ingredient.all, queryKeys.recipe.all],
+    invalidateKeys: ingredientRecipeMutationInvalidateKeys,
     error: (err) => `Merge failed: ${getErrorMessage(err)}`,
   });
 

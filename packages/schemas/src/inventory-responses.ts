@@ -1,9 +1,10 @@
 import { fdcId, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
-import { externalIdOut } from "./external-id";
-import { imageOut } from "./image";
-import { inventoryEntryOut } from "./inventory";
+import { amount } from "./codec";
+import { externalIdOut } from "./external-id-responses";
+import { imageOut } from "./image-responses";
 import {
+  inventoryId,
   locationId,
   locationShortcode,
   productId,
@@ -11,9 +12,18 @@ import {
 } from "./identifiers";
 import { locationOut, locationType } from "./location";
 import { productCategory } from "./product";
-import { unitMappingOut } from "./unitmapping";
+import { duplicateUniqueProductSchema } from "./problems";
+import { unitMappingOut } from "./unitmapping-responses";
 
-export const productInventoryEmbedOut = z.object({
+const inventoryEntryResponseFields = {
+  id: inventoryId,
+  amount,
+  valuation: z.number().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+};
+
+const productInventoryEmbedFields = {
   id: productId,
   shortcode: productShortcode,
   name: z.string(),
@@ -28,13 +38,18 @@ export const productInventoryEmbedOut = z.object({
   usdaUnavailable: z.boolean().nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),
-});
+};
 
-export const inventoryWithProductOut = inventoryEntryOut.extend({
+export const productInventoryEmbedOut = z.object(productInventoryEmbedFields);
+export type ProductInventoryEmbedOut = z.infer<typeof productInventoryEmbedOut>;
+
+export const inventoryWithProductOut = z.object({
+  ...inventoryEntryResponseFields,
   product: productInventoryEmbedOut,
 });
 
-export const inventoryWithLocationOut = inventoryEntryOut.extend({
+export const inventoryWithLocationOut = z.object({
+  ...inventoryEntryResponseFields,
   location: locationOut,
 });
 
@@ -51,6 +66,7 @@ export const inventoryListProductOut = z.object({
   price: z.number().nullable(),
   usdaUnavailable: z.boolean().nullable(),
 });
+export type InventoryListProductOut = z.infer<typeof inventoryListProductOut>;
 
 export const inventoryListLocationOut = z.object({
   id: locationId,
@@ -58,23 +74,37 @@ export const inventoryListLocationOut = z.object({
   name: z.string(),
   type: locationType,
 });
+export type InventoryListLocationOut = z.infer<typeof inventoryListLocationOut>;
 
-export const inventoryListItemOut = inventoryEntryOut.extend({
+export const inventoryListItemOut = z.object({
+  ...inventoryEntryResponseFields,
   product: inventoryListProductOut,
   location: inventoryListLocationOut,
 });
 export type InventoryListItemOut = z.infer<typeof inventoryListItemOut>;
 
-export const inventoryDetailProductOut = productInventoryEmbedOut.extend({
+export const inventoryDetailProductOut = z.object({
+  ...productInventoryEmbedFields,
   images: z.array(imageOut),
   externalIds: z.array(externalIdOut),
   unitMappings: z.array(unitMappingOut),
 });
 
-export const inventoryWithLocationAndProductOut = inventoryEntryOut.extend({
+export const inventoryWithLocationAndProductOut = z.object({
+  ...inventoryEntryResponseFields,
   product: inventoryDetailProductOut,
   location: locationOut,
 });
 export type InventoryWithLocationAndProductOut = z.infer<
   typeof inventoryWithLocationAndProductOut
 >;
+
+export const inventoryWithLocationAndProductListOut = z.array(
+  inventoryWithLocationAndProductOut,
+);
+
+export const inventoryDuplicateUniqueProductsOut = z.array(
+  duplicateUniqueProductSchema,
+);
+
+export const inventoryCountsByLocationOut = z.record(z.string(), z.number());

@@ -2,8 +2,9 @@ import {
   unsafeLocationId,
   unsafeLocationShortcode,
 } from "@cubby/schemas/identifiers";
-import type { infLocation, LocationType } from "@cubby/schemas/location";
-import type { unitMappingWithMetadata } from "@cubby/schemas/unitmapping";
+import type { LocationType } from "@cubby/schemas/location";
+import type { infLocation } from "@cubby/schemas/location-responses";
+import type { unitMappingWithMetadata } from "@cubby/schemas/unitmapping-responses";
 import { generateLocationShortcode } from "@cubby/shared";
 import { z } from "zod";
 import type { entitySummaryDataSchema } from "~/components/entity/entity-summary-card";

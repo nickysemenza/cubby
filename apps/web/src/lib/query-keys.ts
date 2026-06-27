@@ -33,9 +33,8 @@ export const queryKeys = {
   },
   problems: {
     // Broad prefix — invalidate every problems query so a fix re-reads whichever
-    // cost-grouped detector query (getFast / getCoverage / getAliases /
-    // getParses / getUpc) owns the resolved card, plus the badge's combined
-    // getAllProblems scan. The page loads the groups, not getAllProblems.
+    // cost-grouped detector query (getFast / getCoverage / getUpc) owns the
+    // resolved card.
     all: ["problems"] as const,
   },
   search: {
@@ -73,6 +72,87 @@ export const inventoryMutationInvalidateKeys = [
   queryKeys.dashboard.counts,
 ] as const satisfies readonly QueryKey[];
 
+export const productMutationInvalidateKeys = [
+  queryKeys.product.all,
+] as const satisfies readonly QueryKey[];
+
+export const productRecipeMutationInvalidateKeys = [
+  ...productMutationInvalidateKeys,
+  queryKeys.recipe.list,
+] as const satisfies readonly QueryKey[];
+
+export const productValuationMutationInvalidateKeys = [
+  queryKeys.product.all,
+  queryKeys.recipe.list,
+  queryKeys.location.all,
+] as const satisfies readonly QueryKey[];
+
+export const productLookupMutationInvalidateKeys = [
+  queryKeys.product.all,
+  queryKeys.problems.all,
+  queryKeys.search.all,
+] as const satisfies readonly QueryKey[];
+
+export const locationMutationInvalidateKeys = [
+  queryKeys.location.list,
+] as const satisfies readonly QueryKey[];
+
+export const ingredientMutationInvalidateKeys = [
+  queryKeys.ingredient.list,
+] as const satisfies readonly QueryKey[];
+
+export const ingredientAllMutationInvalidateKeys = [
+  queryKeys.ingredient.all,
+] as const satisfies readonly QueryKey[];
+
+export const ingredientProductMutationInvalidateKeys = [
+  ...ingredientAllMutationInvalidateKeys,
+  ...productMutationInvalidateKeys,
+] as const satisfies readonly QueryKey[];
+
+export const ingredientRecipeMutationInvalidateKeys = [
+  ...ingredientAllMutationInvalidateKeys,
+  queryKeys.recipe.all,
+] as const satisfies readonly QueryKey[];
+
+export const ingredientMergeMutationInvalidateKeys = [
+  queryKeys.ingredient.all,
+  queryKeys.product.all,
+  queryKeys.recipe.all,
+  queryKeys.meal.all,
+  queryKeys.inventory.all,
+  queryKeys.location.all,
+  queryKeys.problems.all,
+  queryKeys.search.all,
+  queryKeys.dashboard.counts,
+] as const satisfies readonly QueryKey[];
+
+export const unusedIngredientCleanupInvalidateKeys = [
+  queryKeys.problems.all,
+  ...ingredientMutationInvalidateKeys,
+] as const satisfies readonly QueryKey[];
+
+export const recipeMutationInvalidateKeys = [
+  queryKeys.recipe.list,
+] as const satisfies readonly QueryKey[];
+
+export const recipeCookbookMutationInvalidateKeys = [
+  queryKeys.recipe.list,
+  queryKeys.recipe.listCookbooks,
+] as const satisfies readonly QueryKey[];
+
+export const recipeAllMutationInvalidateKeys = [
+  queryKeys.recipe.all,
+] as const satisfies readonly QueryKey[];
+
+export const problemsMutationInvalidateKeys = [
+  queryKeys.problems.all,
+] as const satisfies readonly QueryKey[];
+
+export const mealMutationInvalidateKeys = [
+  queryKeys.meal.all,
+] as const satisfies readonly QueryKey[];
+
 export function normalizeTRPCQueryKey(key: QueryKey): QueryKey {
   if (key.length === 0) return key;
   return Array.isArray(key[0]) ? key : [key];
@@ -87,6 +167,10 @@ export function invalidateTRPCQueries(
       queryKey: normalizeTRPCQueryKey(key),
     });
   }
+}
+
+export function invalidateAllQueries(queryClient: QueryClient) {
+  void queryClient.invalidateQueries();
 }
 
 export async function cancelTRPCQueries(

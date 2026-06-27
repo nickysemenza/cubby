@@ -20,7 +20,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
-import { queryKeys } from "~/lib/query-keys";
+import { invalidateTRPCQueries, queryKeys } from "~/lib/query-keys";
 import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import { CreateIngredientDialog } from "../../combobox/with-search-hook";
@@ -129,10 +129,7 @@ export function IngredientPreviewTable({
   const createIngredient = useMutation(
     api.ingredient.create.mutationOptions({
       onSuccess: () => {
-        // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
-        queryClient.invalidateQueries({
-          queryKey: [queryKeys.ingredient.getByName],
-        });
+        invalidateTRPCQueries(queryClient, [queryKeys.ingredient.getByName]);
         toast.success("Ingredient added.");
         setCreateDialogOpen(false);
       },
@@ -389,11 +386,8 @@ export function useIngredientImport(ingredientLines: string[]) {
       }
     }
 
-    // Invalidate queries to refresh matches
-    // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
-    await queryClient.invalidateQueries({
-      queryKey: [queryKeys.ingredient.getByName],
-    });
+    // Invalidate queries to refresh matches.
+    invalidateTRPCQueries(queryClient, [queryKeys.ingredient.getByName]);
 
     // Build structured ingredients
     const structuredIngredients: IngItem[] = parsedIngredients

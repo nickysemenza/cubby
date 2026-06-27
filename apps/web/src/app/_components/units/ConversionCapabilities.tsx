@@ -1,4 +1,4 @@
-import type { UnitMapping } from "@cubby/schemas/unitmapping";
+import type { UnitMapping } from "@cubby/schemas/unitmapping-responses";
 import { memo, useMemo } from "react";
 import { Row, Stack } from "~/components/layout";
 import { StatusText } from "~/components/ui/status-text";
