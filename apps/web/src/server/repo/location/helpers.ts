@@ -18,6 +18,7 @@ import { parseWithContext } from "~/lib/zod-utils";
 import type { image, location } from "~/server/db/schema";
 import {
   extractImagesFromJoinTable,
+  isNotDeleted,
   mapRelation,
   parseInventoryAmount,
 } from "~/server/repo/database-helpers";
@@ -70,13 +71,13 @@ export const dbLocationToListAPI = (
 ): LocationListItemOut => ({
   ...dbLocationToAPI(locationData),
   parent:
-    locationData.parent && locationData.parent.deletedAt === null
+    locationData.parent && isNotDeleted(locationData.parent)
       ? dbLocationToListRefShape(locationData.parent)
       : null,
   children: mapRelation(locationData.children, dbLocationToListRefShape),
   inventoryEntries: mapRelation(
-    locationData.inventoryEntries.filter(
-      (entry) => entry.product.deletedAt === null,
+    locationData.inventoryEntries.filter((entry) =>
+      isNotDeleted(entry.product),
     ),
     (entry) => ({
       id: entry.id,

@@ -54,24 +54,21 @@ export const mapProductImages = (
   if (!images) return [];
 
   return images
-    .filter((row) => {
+    .flatMap((row) => {
       const dbImage = "image" in row ? row.image : row;
-      return isNotDeleted(row) && isNotDeleted(dbImage);
+      return isNotDeleted(row) && isNotDeleted(dbImage) ? [dbImage] : [];
     })
-    .map((row) => {
-      const dbImage = "image" in row ? row.image : row;
-      return {
-        id: dbImage.id,
-        url: dbImage.url,
-        key: dbImage.key,
-        filename: dbImage.filename,
-        size: dbImage.size,
-        contentType: dbImage.contentType,
-        status: dbImage.status,
-        createdAt: dbImage.createdAt,
-        updatedAt: dbImage.updatedAt,
-      };
-    });
+    .map((dbImage) => ({
+      id: dbImage.id,
+      url: dbImage.url,
+      key: dbImage.key,
+      filename: dbImage.filename,
+      size: dbImage.size,
+      contentType: dbImage.contentType,
+      status: dbImage.status,
+      createdAt: dbImage.createdAt,
+      updatedAt: dbImage.updatedAt,
+    }));
 };
 
 export const mapProductExternalIds = (
@@ -223,7 +220,7 @@ export const dbProductToListAPI = (
   const result = {
     ...dbProductToTopLevelShape(productData),
     ingredient:
-      productData.ingredient && productData.ingredient.deletedAt === null
+      productData.ingredient && isNotDeleted(productData.ingredient)
         ? dbProductIngredientToShape(productData.ingredient)
         : null,
     unitMappings: mapProductUnitMappings(
@@ -231,8 +228,8 @@ export const dbProductToListAPI = (
       productData.unitMappings,
     ),
     inventoryEntry: mapRelation(
-      productData.inventoryEntry.filter(
-        (entry) => entry.location.deletedAt === null,
+      productData.inventoryEntry.filter((entry) =>
+        isNotDeleted(entry.location),
       ),
       (entry) => ({
         id: entry.id,
