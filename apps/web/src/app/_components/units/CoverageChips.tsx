@@ -1,4 +1,4 @@
-import type { UnitMapping } from "@cubby/schemas/unitmapping";
+import type { UnitMapping } from "@cubby/schemas/unitmapping-responses";
 import { MACRO_KEYS } from "@cubby/usda-schemas";
 import { Check } from "lucide-react";
 import { Row } from "~/components/layout";

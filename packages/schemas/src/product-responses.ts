@@ -9,7 +9,7 @@ import { inventoryEntryOut } from "./inventory";
 import { productTopLevelOut } from "./product";
 import { recipeUsageOut } from "./recipe-responses";
 import { recomputeSummary } from "./recipe-shared";
-import { unitMappingOut } from "./unitmapping";
+import { unitMappingOut } from "./unitmapping-responses";
 
 export const productWithMappingsOut = productTopLevelOut.extend({
   unitMappings: z.array(unitMappingOut),

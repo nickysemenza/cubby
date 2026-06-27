@@ -1,4 +1,4 @@
-import type { UnitMapping } from "@cubby/schemas/unitmapping";
+import type { UnitMapping } from "@cubby/schemas/unitmapping-responses";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { Row } from "~/components/layout";

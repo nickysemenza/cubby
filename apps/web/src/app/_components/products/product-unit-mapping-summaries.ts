@@ -1,4 +1,4 @@
-import type { UnitMapping } from "@cubby/schemas/unitmapping";
+import type { UnitMapping } from "@cubby/schemas/unitmapping-responses";
 import { useChunkedRecordQuery } from "~/app/_components/hooks/useChunkedRecordQuery";
 import { useTRPC } from "~/trpc/react";
 

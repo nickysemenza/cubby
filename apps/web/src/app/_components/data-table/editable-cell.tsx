@@ -1,7 +1,7 @@
 "use client";
 
 import type { Amount } from "@cubby/schemas/codec";
-import type { UnitMapping } from "@cubby/schemas/unitmapping";
+import type { UnitMapping } from "@cubby/schemas/unitmapping-responses";
 import { Check, Pencil, X } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";

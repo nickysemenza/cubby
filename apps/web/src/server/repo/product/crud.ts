@@ -19,7 +19,7 @@ import {
   type ProductUpdateInput,
 } from "@cubby/schemas/product";
 import type { ProductPickerItemOut } from "@cubby/schemas/product-responses";
-import type { UnitMapping } from "@cubby/schemas/unitmapping";
+import type { UnitMapping } from "@cubby/schemas/unitmapping-responses";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { countBy } from "es-toolkit";

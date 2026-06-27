@@ -23,7 +23,7 @@ import type {
   SectionIngredientOut,
 } from "@cubby/schemas/recipe-responses";
 import type { RowDiagnosticOut } from "@cubby/schemas/recipe-shared";
-import type { UnitMapping } from "@cubby/schemas/unitmapping";
+import type { UnitMapping } from "@cubby/schemas/unitmapping-responses";
 import {
   getNutrientUnitString,
   type NutrientKey,

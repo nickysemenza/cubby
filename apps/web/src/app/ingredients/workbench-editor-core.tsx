@@ -1,11 +1,11 @@
 import type { ProductId } from "@cubby/schemas/identifiers";
 import type { EnrichmentRow } from "@cubby/schemas/ingredient-responses";
 import type { ProductCreateInput } from "@cubby/schemas/product";
+import type { UnitMappingInput } from "@cubby/schemas/unitmapping";
 import {
   manualUnitMapping,
   type UnitMapping,
-  type UnitMappingInput,
-} from "@cubby/schemas/unitmapping";
+} from "@cubby/schemas/unitmapping-responses";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import type { FoodSummary } from "@cubby/usda-schemas";

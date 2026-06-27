@@ -2,7 +2,8 @@ import { productCategoryValues, UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { fdcId, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { dbTimestampsOut, requiredName } from "./common";
-import { externalIdInput, externalIdOut } from "./external-id";
+import { externalIdInput } from "./external-id";
+import { externalIdOut } from "./external-id-responses";
 import {
   ingredientId,
   type IngredientId,

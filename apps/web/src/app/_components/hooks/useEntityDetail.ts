@@ -1,6 +1,6 @@
 import type { AuditEntityType } from "@cubby/schemas/audit";
 import type { Entity } from "@cubby/schemas/entity";
-import type { UnitMapping } from "@cubby/schemas/unitmapping";
+import type { UnitMapping } from "@cubby/schemas/unitmapping-responses";
 import { Clock, ImageIcon, Scale } from "lucide-react";
 import { createElement, useMemo } from "react";
 import { entities } from "~/entities/entities";

@@ -21,7 +21,7 @@ import { locationOut } from "./location";
 import { mealOut, mealRecipeOut } from "./meal-responses";
 import { productTopLevelOut } from "./product";
 import { recipeTopLevel } from "./recipe-responses";
-import { unitMappingOut } from "./unitmapping";
+import { unitMappingOut } from "./unitmapping-responses";
 
 export const mcpLocationOut = locationOut
   .pick({ id: true, name: true, shortcode: true, type: true })

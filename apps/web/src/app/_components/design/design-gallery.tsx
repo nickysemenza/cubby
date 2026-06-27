@@ -1,4 +1,4 @@
-import { manualUnitMapping } from "@cubby/schemas/unitmapping";
+import { manualUnitMapping } from "@cubby/schemas/unitmapping-responses";
 import { locationTypeValues, productCategoryValues } from "@cubby/shared";
 import { buildNutrients } from "@cubby/usda-schemas";
 import {

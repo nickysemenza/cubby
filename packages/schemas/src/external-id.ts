@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { dbTimestampsOut } from "./common";
 
 export const externalIdInput = z.object({
   id: z.uuid().optional(),
@@ -18,12 +17,4 @@ export const externalIdInput = z.object({
     .describe("Optional direct link to the product page"),
 });
 
-export const externalIdOut = z
-  .object({
-    id: z.uuid(),
-  })
-  .extend(externalIdInput.omit({ id: true }).shape)
-  .extend(dbTimestampsOut.shape);
-
 export type ExternalIdInput = z.infer<typeof externalIdInput>;
-export type ExternalIdOut = z.infer<typeof externalIdOut>;

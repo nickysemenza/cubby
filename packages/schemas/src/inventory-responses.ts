@@ -1,6 +1,6 @@
 import { fdcId, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
-import { externalIdOut } from "./external-id";
+import { externalIdOut } from "./external-id-responses";
 import { imageOut } from "./image-responses";
 import { inventoryEntryOut } from "./inventory";
 import {
@@ -11,7 +11,7 @@ import {
 } from "./identifiers";
 import { locationOut, locationType } from "./location";
 import { productCategory } from "./product";
-import { unitMappingOut } from "./unitmapping";
+import { unitMappingOut } from "./unitmapping-responses";
 
 export const productInventoryEmbedOut = z.object({
   id: productId,

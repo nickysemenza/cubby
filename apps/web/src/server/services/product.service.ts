@@ -8,7 +8,7 @@ import type {
   ProductUpdateInput,
 } from "@cubby/schemas/product";
 import type { ProductWithFoodOut } from "@cubby/schemas/product-responses";
-import type { UnitMapping } from "@cubby/schemas/unitmapping";
+import type { UnitMapping } from "@cubby/schemas/unitmapping-responses";
 import type { FoodSummary } from "@cubby/usda-schemas";
 import type { Database } from "~/server/db";
 import type { USDAClient } from "../clients/usda";

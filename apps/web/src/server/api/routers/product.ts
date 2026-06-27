@@ -26,7 +26,7 @@ import {
   productWithFoodAndSideEffectsOut,
   productWithFoodOut,
 } from "@cubby/schemas/product-responses";
-import { unitMappingWithMetadata } from "@cubby/schemas/unitmapping";
+import { unitMappingWithMetadata } from "@cubby/schemas/unitmapping-responses";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { foodSummary, upc } from "@cubby/usda-schemas";
 import { z } from "zod";

@@ -1,6 +1,6 @@
 import type { AmountKind, WAmount, WConversionStep } from "@cubby/recipebridge";
 import { type Amount, amount } from "@cubby/schemas/codec";
-import type { UnitMapping } from "@cubby/schemas/unitmapping";
+import type { UnitMapping } from "@cubby/schemas/unitmapping-responses";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Calculator } from "lucide-react";
 import * as React from "react";
