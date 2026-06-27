@@ -8,7 +8,6 @@ export {
   type IngredientMergeOut,
   type IngredientWithFoodLeanOut,
   type IngredientWithFoodOut,
-  type ProductWithMappingsAndFoodOut,
   enrichmentFixKind,
   enrichmentRowOut,
   ingredientListItemOut,
@@ -17,7 +16,6 @@ export {
   ingredientWithFoodLeanOut,
   ingredientWithFoodOut,
   ingredientWithRecipesAndProductOut,
-  productWithMappingsAndFoodOut,
 } from "./ingredient-responses";
 export {
   type InventoryListItemOut,
@@ -43,9 +41,11 @@ export {
   type ProductListItem,
   type ProductPickerItemOut,
   type ProductWithFoodOut,
+  type ProductWithMappingsAndFoodOut,
   type ProductWithMappingsOut,
   productListItemOut,
   productPickerItemOut,
+  productWithMappingsAndFoodOut,
   productWithFoodAndSideEffectsOut,
   productWithFoodOut,
   productWithIngredientAndInventoryAndMappingsOut,

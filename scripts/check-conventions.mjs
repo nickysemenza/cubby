@@ -13,6 +13,8 @@
  *  3. Off-scale Tailwind spacing — gap/space/padding/margin must use the strict
  *     {1,2,4,6} scale. Exempts components/ui (design-system primitives), the
  *     /design gallery, and any line marked `/* tight *\/` (intentional density).
+ *  4. Response schema drift — split input/domain schema files must not grow new
+ *     response exports; put list/detail/hydrated variants in *-responses.ts.
  *
  * Exit 1 + a report on any violation; exit 0 + one-line OK when clean.
  */
@@ -24,16 +26,22 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const webSrc = join(repoRoot, "apps", "web", "src");
+const schemasSrc = join(repoRoot, "packages", "schemas", "src");
 
 // ---------------------------------------------------------------------------
 // File discovery
 // ---------------------------------------------------------------------------
 
 /** @returns {string[]} absolute paths */
-function gitTrackedTsx() {
+function gitTrackedSources() {
   const out = execFileSync(
     "git",
-    ["ls-files", "apps/web/src/**/*.tsx", "apps/web/src/**/*.ts"],
+    [
+      "ls-files",
+      "apps/web/src/**/*.tsx",
+      "apps/web/src/**/*.ts",
+      "packages/schemas/src",
+    ],
     { cwd: repoRoot, encoding: "utf8" },
   );
   return out
@@ -58,13 +66,13 @@ function walk(dir) {
 
 function listFiles() {
   try {
-    const files = gitTrackedTsx();
+    const files = gitTrackedSources();
     if (files.length > 0) return files;
   } catch {
     // fall through to walk
   }
   try {
-    return walk(webSrc);
+    return [...walk(webSrc), ...walk(schemasSrc)];
   } catch {
     return [];
   }
@@ -97,6 +105,33 @@ const CALC_TOTALS_RE = /\bfunction\s+calculateTotals\b|\bcalculateTotals\s*=/;
 const SPACING_RE =
   /\b(gap(-[xy])?|space-[xy]|[pm][xytblr]?)-(0\.5|1\.5|2\.5|3|3\.5|5|7|9|10|11|13|14)\b/;
 
+const RESPONSE_EXPORT_RE =
+  /\bexport\s+(const|type|interface)\s+([A-Za-z0-9_]+(?:Out|Response)(?:Schema)?)\b/;
+
+const RESPONSE_SPLIT_ALLOWLIST = new Map([
+  ["packages/schemas/src/common.ts", new Set(["dbTimestampsOut"])],
+  [
+    "packages/schemas/src/ingredient.ts",
+    new Set(["ingredientOut", "IngredientOut"]),
+  ],
+  [
+    "packages/schemas/src/inventory.ts",
+    new Set(["inventoryEntryOut", "InventoryEntryOut"]),
+  ],
+  ["packages/schemas/src/location.ts", new Set(["locationOut", "LocationOut"])],
+  [
+    "packages/schemas/src/product.ts",
+    new Set(["productTopLevelOut", "ProductTopLevelOut"]),
+  ],
+]);
+
+const RESPONSE_SPLIT_STRICT_FILES = new Set([
+  "packages/schemas/src/external-id.ts",
+  "packages/schemas/src/image.ts",
+  "packages/schemas/src/recipe.ts",
+  "packages/schemas/src/unitmapping.ts",
+]);
+
 // components/ui holds the shadcn-derived primitives whose internal padding (px-3,
 // p-6, ...) IS the design system's defined component spacing — exempt from the
 // app-level {1,2,4,6} scale.
@@ -122,6 +157,18 @@ function isTestOrFixture(path) {
     b.includes(".fixtures.") ||
     b.includes(".fixture.")
   );
+}
+
+function responseExportAllowlist(path) {
+  const rel = relative(repoRoot, path);
+  if (!rel.startsWith("packages/schemas/src/")) return null;
+  if (rel.endsWith("-responses.ts")) return null;
+  if (rel.endsWith(".unit.test.ts")) return null;
+  if (RESPONSE_SPLIT_ALLOWLIST.has(rel)) {
+    return RESPONSE_SPLIT_ALLOWLIST.get(rel);
+  }
+  if (RESPONSE_SPLIT_STRICT_FILES.has(rel)) return new Set();
+  return null;
 }
 
 /** @typedef {{ file: string, line: number, snippet: string, rule: string }} Violation */
@@ -193,6 +240,24 @@ function scan(files) {
           rule: "off-scale-spacing",
         });
       }
+
+      // Rule 4: once a schema module has been split, response exports belong in
+      // an owning *-responses.ts module. A small allowlist covers persisted base
+      // row contracts that still intentionally seed response variants.
+      const allowedResponseExports = responseExportAllowlist(file);
+      const responseExport = line.match(RESPONSE_EXPORT_RE);
+      if (
+        allowedResponseExports &&
+        responseExport &&
+        !allowedResponseExports.has(responseExport[2])
+      ) {
+        violations.push({
+          file,
+          line: i + 1,
+          snippet: line.trim(),
+          rule: "schema-response-drift",
+        });
+      }
     }
   }
 
@@ -220,6 +285,8 @@ const byRule = {
     "TS `calculateTotals` costing reimplementation — costing must stay in the WASM crate (recipebridge), not TS.",
   "off-scale-spacing":
     "Off-scale spacing — use the {1,2,4,6} scale (see CLAUDE.md Spacing). Mark genuinely-dense exceptions with an inline /* tight */ comment.",
+  "schema-response-drift":
+    "Response schema drift — split input/domain schema files must not export new response contracts; move them to the owning *-responses.ts module.",
 };
 
 console.error(

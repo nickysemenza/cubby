@@ -9,7 +9,7 @@ import {
   type IngredientId,
   unsafeIngredientId,
 } from "@cubby/schemas/identifiers";
-import type { MergeSummaryOut } from "@cubby/schemas/ingredient";
+import type { MergeSummaryOut } from "@cubby/schemas/ingredient-responses";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";

@@ -16,6 +16,13 @@ export const productWithMappingsOut = productTopLevelOut.extend({
 });
 export type ProductWithMappingsOut = z.infer<typeof productWithMappingsOut>;
 
+export const productWithMappingsAndFoodOut = productWithMappingsOut.extend({
+  food: foodSummary.nullable(),
+});
+export type ProductWithMappingsAndFoodOut = z.infer<
+  typeof productWithMappingsAndFoodOut
+>;
+
 export const productPickerItemOut = productTopLevelOut.pick({
   id: true,
   shortcode: true,

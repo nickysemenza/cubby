@@ -13,10 +13,8 @@ import type {
   WRowResult,
 } from "@cubby/recipebridge";
 import type { Amount } from "@cubby/schemas/codec";
-import type {
-  IngredientWithFoodLeanOut,
-  ProductWithMappingsAndFoodOut,
-} from "@cubby/schemas/ingredient-responses";
+import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient-responses";
+import type { ProductWithMappingsAndFoodOut } from "@cubby/schemas/product-responses";
 import type {
   RecipeGraphOut,
   RecipeOut,

@@ -1,7 +1,6 @@
 import { z } from "zod";
-import { amount } from "./codec";
 import { dbTimestampsOut, requiredName } from "./common";
-import { id, ingredientId, recipeId } from "./identifiers";
+import { ingredientId } from "./identifiers";
 import { baseKind } from "./problems";
 
 export const ingredientFields = z.object({
@@ -72,32 +71,3 @@ export const ingredientUpdateInput = z.object({
 });
 
 export type IngredientUpdateInput = z.infer<typeof ingredientUpdateInput>;
-
-/**
- * Per-cluster change summary returned by an ingredient merge — the serialized
- * shape surfaced to the MCP tool / any caller. The repo's internal `MergeSummary`
- * extends this with the (never-serialized) `affectedRecipeIds` it dispatches.
- */
-export const mergeSummary = z.object({
-  /** Names newly added to the target's `aliases` (excludes pre-existing). */
-  aliasesAdded: z.array(z.string()),
-  /** Distinct recipes that had a line re-pointed onto the target. */
-  recipesMoved: z.number().int().nonnegative(),
-  /** Product rows re-pointed onto the target (incl. soft-deleted). */
-  productsMoved: z.number().int().nonnegative(),
-  /** Ingredient ids absorbed and hard-deleted. */
-  deletedIds: z.array(ingredientId),
-});
-export type MergeSummaryOut = z.infer<typeof mergeSummary>;
-
-export const ingredientRawLineOut = z.object({
-  ingredientId,
-  lineId: id,
-  rawLine: z.string().nullable(),
-  modifier: z.string().nullable(),
-  amounts: z.array(amount),
-  recipeId,
-  recipeName: z.string(),
-  sectionName: z.string().nullable(),
-});
-export type IngredientRawLineOut = z.infer<typeof ingredientRawLineOut>;

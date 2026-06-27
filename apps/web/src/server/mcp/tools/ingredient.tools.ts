@@ -1,8 +1,8 @@
 import {
   ingredientBase,
   ingredientFiltersSchema,
-  type MergeSummaryOut,
 } from "@cubby/schemas/ingredient";
+import type { MergeSummaryOut } from "@cubby/schemas/ingredient-responses";
 import { mcpPaginationParams } from "@cubby/schemas/pagination";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { groupBy } from "es-toolkit";

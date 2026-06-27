@@ -1,8 +1,11 @@
-import { foodSummary } from "@cubby/usda-schemas";
 import { z } from "zod";
-import { ingredientId } from "./identifiers";
-import { ingredientOut, mergeSummary } from "./ingredient";
-import { productWithMappingsOut } from "./product-responses";
+import { amount } from "./codec";
+import { id, ingredientId, recipeId } from "./identifiers";
+import { ingredientOut } from "./ingredient";
+import {
+  productWithMappingsAndFoodOut,
+  productWithMappingsOut,
+} from "./product-responses";
 import { baseKind } from "./problems";
 import {
   recipeRefOut,
@@ -11,12 +14,34 @@ import {
 } from "./recipe-responses";
 import { recomputeSummary } from "./recipe-shared";
 
-export const productWithMappingsAndFoodOut = productWithMappingsOut.extend({
-  food: foodSummary.nullable(),
+/**
+ * Per-cluster change summary returned by an ingredient merge — the serialized
+ * shape surfaced to the MCP tool / any caller. The repo's internal `MergeSummary`
+ * extends this with the (never-serialized) `affectedRecipeIds` it dispatches.
+ */
+export const mergeSummary = z.object({
+  /** Names newly added to the target's `aliases` (excludes pre-existing). */
+  aliasesAdded: z.array(z.string()),
+  /** Distinct recipes that had a line re-pointed onto the target. */
+  recipesMoved: z.number().int().nonnegative(),
+  /** Product rows re-pointed onto the target (incl. soft-deleted). */
+  productsMoved: z.number().int().nonnegative(),
+  /** Ingredient ids absorbed and hard-deleted. */
+  deletedIds: z.array(ingredientId),
 });
-export type ProductWithMappingsAndFoodOut = z.infer<
-  typeof productWithMappingsAndFoodOut
->;
+export type MergeSummaryOut = z.infer<typeof mergeSummary>;
+
+export const ingredientRawLineOut = z.object({
+  ingredientId,
+  lineId: id,
+  rawLine: z.string().nullable(),
+  modifier: z.string().nullable(),
+  amounts: z.array(amount),
+  recipeId,
+  recipeName: z.string(),
+  sectionName: z.string().nullable(),
+});
+export type IngredientRawLineOut = z.infer<typeof ingredientRawLineOut>;
 
 export const ingredientWithRecipesAndProductOut = ingredientOut.extend({
   recipe: recipeTopLevel.nullable(),
