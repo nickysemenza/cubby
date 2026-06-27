@@ -1,5 +1,4 @@
 import { unsafeLocationId } from "@cubby/schemas/identifiers";
-import { useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { Calendar } from "lucide-react";
 import { type ReactNode, useState } from "react";
@@ -7,7 +6,6 @@ import { CardThumbnail } from "~/components/entity/card-thumbnail";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { queryKeys } from "~/lib/query-keys";
 import type { EmptyLocation } from "~/server/repo/problems";
 import { AddInventoryDialog } from "./add-inventory-dialog";
 import { ProblemSection } from "./problem-section";
@@ -20,7 +18,6 @@ export function EmptyLocationsList({
 }) {
   const [addDialogLocation, setAddDialogLocation] =
     useState<EmptyLocation | null>(null);
-  const queryClient = useQueryClient();
 
   return (
     <>
@@ -103,14 +100,7 @@ export function EmptyLocationsList({
           }}
           locationId={unsafeLocationId(addDialogLocation.id)}
           locationName={addDialogLocation.name}
-          onSuccess={() => {
-            queryClient.invalidateQueries({
-              queryKey: [queryKeys.problems.all],
-            });
-            queryClient.invalidateQueries({
-              queryKey: queryKeys.inventory.list,
-            });
-          }}
+          onSuccess={() => undefined}
         />
       )}
     </>

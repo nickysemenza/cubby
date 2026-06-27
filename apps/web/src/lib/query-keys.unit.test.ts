@@ -6,11 +6,15 @@ import {
   ingredientRecipeMutationInvalidateKeys,
   inventoryMutationInvalidateKeys,
   locationMutationInvalidateKeys,
+  mealMutationInvalidateKeys,
   normalizeTRPCQueryKey,
+  problemsMutationInvalidateKeys,
+  productLookupMutationInvalidateKeys,
   productMutationInvalidateKeys,
   productRecipeMutationInvalidateKeys,
   queryKeys,
   recipeAllMutationInvalidateKeys,
+  recipeCookbookMutationInvalidateKeys,
   recipeMutationInvalidateKeys,
 } from "./query-keys";
 
@@ -50,13 +54,24 @@ describe("mutation invalidation groups", () => {
       queryKeys.ingredient.all,
     ]);
     expect(recipeMutationInvalidateKeys).toEqual([queryKeys.recipe.list]);
+    expect(recipeCookbookMutationInvalidateKeys).toEqual([
+      queryKeys.recipe.list,
+      queryKeys.recipe.listCookbooks,
+    ]);
     expect(recipeAllMutationInvalidateKeys).toEqual([queryKeys.recipe.all]);
+    expect(problemsMutationInvalidateKeys).toEqual([queryKeys.problems.all]);
+    expect(mealMutationInvalidateKeys).toEqual([queryKeys.meal.all]);
   });
 
   it("keeps cross-entity mutation groups explicit", () => {
     expect(productRecipeMutationInvalidateKeys).toEqual([
       queryKeys.product.all,
       queryKeys.recipe.list,
+    ]);
+    expect(productLookupMutationInvalidateKeys).toEqual([
+      queryKeys.product.all,
+      queryKeys.problems.all,
+      queryKeys.search.all,
     ]);
     expect(ingredientProductMutationInvalidateKeys).toEqual([
       queryKeys.ingredient.all,

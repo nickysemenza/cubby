@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   invalidateTRPCQueries,
   inventoryMutationInvalidateKeys,
-  queryKeys,
+  productLookupMutationInvalidateKeys,
 } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 
@@ -39,10 +39,6 @@ export function useProductLookupInvalidation() {
   const queryClient = useQueryClient();
 
   return () => {
-    invalidateTRPCQueries(queryClient, [
-      queryKeys.product.all,
-      queryKeys.problems.all,
-      queryKeys.search.all,
-    ]);
+    invalidateTRPCQueries(queryClient, productLookupMutationInvalidateKeys);
   };
 }

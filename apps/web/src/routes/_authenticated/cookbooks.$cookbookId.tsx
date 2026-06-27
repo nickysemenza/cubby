@@ -20,7 +20,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 import { useTabParam } from "~/hooks/useTabParam";
 import { getErrorMessage } from "~/lib/error-utils";
-import { queryKeys } from "~/lib/query-keys";
+import {
+  invalidateTRPCQueries,
+  recipeCookbookMutationInvalidateKeys,
+  recipeMutationInvalidateKeys,
+} from "~/lib/query-keys";
 import { useTRPC, useTRPCClient } from "~/trpc/react";
 
 const searchSchema = z.object({
@@ -92,9 +96,7 @@ function CookbookDetailPage() {
           return `Reprocessed ${reprocessed} recipe${reprocessed === 1 ? "" : "s"} from ${name}${extra}`;
         },
         onDone: () => {
-          void queryClient.invalidateQueries({
-            queryKey: queryKeys.recipe.list,
-          });
+          invalidateTRPCQueries(queryClient, recipeMutationInvalidateKeys);
         },
       },
     );
@@ -103,7 +105,7 @@ function CookbookDetailPage() {
     mutationFn: api.recipe.deleteByCookbook.mutationOptions,
     success: ({ deleted }) =>
       `Deleted ${deleted} recipe${deleted === 1 ? "" : "s"} from ${name}`,
-    invalidateKeys: [queryKeys.recipe.list, queryKeys.recipe.listCookbooks],
+    invalidateKeys: recipeCookbookMutationInvalidateKeys,
     onSuccess: () => {
       void navigate({ to: "/cookbooks" });
     },
