@@ -1,14 +1,14 @@
 import type { ProductCategory } from "@cubby/schemas/product";
-import { DotLabel } from "~/app/_components/DotLabel";
-import { NoneState } from "~/app/_components/NoneState";
+import { DotLabel } from "~/components/ui/dot-label";
+import { NoneValue } from "~/components/ui/none-value";
 import { getCategoryColor } from "./category-theme";
 
-interface CategoryBadgeProps {
+interface CategoryLabelProps {
   category: ProductCategory | null;
 }
 
-export function CategoryBadge({ category }: CategoryBadgeProps) {
-  if (!category) return <NoneState />;
+export function CategoryLabel({ category }: CategoryLabelProps) {
+  if (!category) return <NoneValue />;
 
   return (
     <DotLabel color={getCategoryColor(category)}>

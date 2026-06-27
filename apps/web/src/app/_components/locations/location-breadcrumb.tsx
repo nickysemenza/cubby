@@ -1,5 +1,4 @@
-import type { LocationType } from "@cubby/schemas/location";
-import type { InfLocation } from "@cubby/schemas/location-responses";
+import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
 import { Home } from "lucide-react";
 import * as React from "react";

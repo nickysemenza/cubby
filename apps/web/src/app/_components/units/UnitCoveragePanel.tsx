@@ -1,4 +1,4 @@
-import type { UnitMapping } from "@cubby/schemas/unitmapping-responses";
+import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { ChevronRight, Network } from "lucide-react";
 import { lazy, Suspense, useId, useMemo, useState } from "react";
 import { Row, Stack } from "~/components/layout";

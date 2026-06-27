@@ -1,4 +1,4 @@
-import type { IngredientListItem } from "@cubby/schemas/ingredient-responses";
+import type { IngredientListItem } from "@cubby/schemas/ingredient";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
@@ -13,7 +13,6 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { MergeConfirmation } from "~/app/_components/ingredient/merge-confirmation";
-import { NoneState } from "~/app/_components/NoneState";
 import {
   ProductFoodSummariesProvider,
   useHydratedProductFood,
@@ -22,6 +21,7 @@ import {
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
+import { NoneValue } from "~/components/ui/none-value";
 import {
   Tooltip,
   TooltipContent,
@@ -43,8 +43,8 @@ import {
   createNameColumn,
 } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
-import { EntityPillLink } from "../_components/EntityPill";
-import { EntityPillLinkList } from "../_components/EntityPillLinkList";
+import { EntityInlineLink } from "../_components/EntityInlineLink";
+import { EntityInlineLinkList } from "../_components/EntityInlineLinkList";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
@@ -76,7 +76,7 @@ function ProductPillWithFood({ product }: { product: IngredientProduct }) {
   const food = useHydratedProductFood(product);
   return (
     <span className="inline-flex min-w-0 items-center gap-1">
-      <EntityPillLink entity="product" data={product} compact />
+      <EntityInlineLink entity="product" data={product} compact />
       {food ? (
         <Tooltip>
           <TooltipTrigger render={<span className="inline-flex shrink-0" />}>
@@ -104,7 +104,7 @@ function ProductPillWithFood({ product }: { product: IngredientProduct }) {
  */
 function RecipeUsageCell({ ingredient }: { ingredient: IngredientListItem }) {
   const recipes = ingredient.appearsInRecipes;
-  if (recipes.length === 0) return <NoneState />;
+  if (recipes.length === 0) return <NoneValue />;
   return (
     <Row align="center" gap="sm" className="min-w-0">
       {recipes.length > 1 && (
@@ -119,7 +119,7 @@ function RecipeUsageCell({ ingredient }: { ingredient: IngredientListItem }) {
           <TooltipContent>Appears in {recipes.length} recipes</TooltipContent>
         </Tooltip>
       )}
-      <EntityPillLinkList
+      <EntityInlineLinkList
         entity="recipe"
         items={recipes.slice(0, 1)}
         maxItems={1}

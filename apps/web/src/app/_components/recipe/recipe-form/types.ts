@@ -1,9 +1,9 @@
-import type { ImageOut } from "@cubby/schemas/image-responses";
+import type { ImageOut } from "@cubby/schemas/image";
 import type {
   RecipeCreateInput,
+  RecipeOut,
   RecipeUpdateInput,
 } from "@cubby/schemas/recipe";
-import type { RecipeOut } from "@cubby/schemas/recipe-responses";
 import {
   recipeNotes,
   recipeServings,
@@ -29,6 +29,10 @@ const draftAmount = z
   .refine((a) => (a.value == null) === !a.unit?.trim(), {
     error: "Enter both a quantity and unit, or leave both blank",
     path: ["unit"],
+  })
+  .refine((a) => a.value == null || a.value > 0, {
+    error: "Amount must be greater than zero",
+    path: ["value"],
   })
   .refine(
     (a) => a.upperValue == null || (a.value != null && a.upperValue > a.value),

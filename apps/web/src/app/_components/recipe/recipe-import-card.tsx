@@ -16,7 +16,7 @@ import { Spinner } from "~/components/ui/spinner";
 import { StatusText } from "~/components/ui/status-text";
 import { cn } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
-import { EntityPillLink } from "../EntityPill";
+import { EntityInlineLink } from "../EntityInlineLink";
 import { normalize } from "./cookbook-import/import-order";
 import type { ImportResult } from "./cookbook-import/types";
 import { CopyImportRecipeParseButton } from "./copy-corpus-button";
@@ -172,7 +172,7 @@ function RecipeImportCardImpl({
             )}
             <Badge variant={badge.variant}>{badge.label}</Badge>
             {existingId && (
-              <EntityPillLink
+              <EntityInlineLink
                 entity="recipe"
                 data={{ id: existingId, name: recipe.meta.title }}
                 compact

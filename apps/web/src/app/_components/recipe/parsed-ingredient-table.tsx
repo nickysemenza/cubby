@@ -4,7 +4,7 @@ import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Table, TableBody, TableCell, TableRow } from "~/components/ui/table";
 import { cn } from "~/lib/utils";
-import { EntityPillLink } from "../EntityPill";
+import { EntityInlineLink } from "../EntityInlineLink";
 import { formatAmounts } from "../inventory/format-amount";
 import { CopyCorpusButton } from "./copy-corpus-button";
 import { parseIngredientLines } from "./recipe-form/ingredient-line-utils";
@@ -13,7 +13,7 @@ import type { IngredientMatchMap } from "./use-ingredient-matches";
 /**
  * Compact parsed-ingredient table shared by the cookbook importer and (optionally)
  * the recipe form: each line is parsed with WASM and shown as name / amount /
- * modifier, with matched ingredients rendered as a green pill link and unmatched
+ * modifier, with matched ingredients rendered as an inline link and unmatched
  * ones flagged. `matchMap` comes from {@link useIngredientMatches} (one batched
  * lookup); when `onCreate` is given, unmatched rows get a "+" to create the
  * ingredient (recipe-form behavior); otherwise they read "· new" (cookbook
@@ -50,7 +50,7 @@ export function ParsedIngredientTable({
               <TableRow className={cn("border-b-0", tint)}>
                 <TableCell className="whitespace-normal align-top">
                   {match ? (
-                    <EntityPillLink entity="ingredient" data={match} />
+                    <EntityInlineLink entity="ingredient" data={match} />
                   ) : (
                     <Row as="span" align="center" gap="xs">
                       {isNew && (

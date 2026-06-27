@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
+import { NoneValue } from "~/components/ui/none-value";
 import { Spinner } from "~/components/ui/spinner";
 import {
   Table,
@@ -24,9 +25,8 @@ import { invalidateTRPCQueries, queryKeys } from "~/lib/query-keys";
 import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import { CreateIngredientDialog } from "../../combobox/with-search-hook";
-import { EntityPillLink } from "../../EntityPill";
+import { EntityInlineLink } from "../../EntityInlineLink";
 import { formatAmounts } from "../../inventory/format-amount";
-import { NoneState } from "../../NoneState";
 import { DecompositionView } from "../decomposition-view";
 import { useIngredientMatches } from "../use-ingredient-matches";
 import {
@@ -245,7 +245,7 @@ function IngredientRow({
               <span>{item.parsed.name}</span>
             </>
           ) : isMatched && item.match ? (
-            <EntityPillLink
+            <EntityInlineLink
               entity="ingredient"
               data={{ id: item.match.id, name: item.match.name }}
             />
@@ -290,11 +290,11 @@ function IngredientRow({
             </TooltipContent>
           </Tooltip>
         ) : (
-          <NoneState />
+          <NoneValue />
         )}
       </TableCell>
       <TableCell className="text-muted-foreground">
-        {item.parsed.modifier || <NoneState />}
+        {item.parsed.modifier || <NoneValue />}
       </TableCell>
       {/* Raw carve: where each refined field came from in the source line. The
             columns above carry the parser's *structured* reading (e.g. two

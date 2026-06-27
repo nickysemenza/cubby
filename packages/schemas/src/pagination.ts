@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const MAX_PAGE_SIZE = 500;
+
 const sortParams = z.object({
   orderBy: z.string().default("createdAt"),
   direction: z.enum(["asc", "desc"]).default("asc"),
@@ -7,7 +9,7 @@ const sortParams = z.object({
 
 const paginationParams = z.object({
   pageIndex: z.number().min(0).default(0),
-  pageSize: z.number().min(1).default(10),
+  pageSize: z.number().min(1).max(MAX_PAGE_SIZE).default(10),
 });
 
 /**

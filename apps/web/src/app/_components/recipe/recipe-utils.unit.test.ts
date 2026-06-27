@@ -1,8 +1,5 @@
 import { unsafeIngredientId, unsafeRecipeId } from "@cubby/schemas/identifiers";
-import type {
-  RecipeOut,
-  SectionIngredient,
-} from "@cubby/schemas/recipe-responses";
+import type { RecipeOut, SectionIngredient } from "@cubby/schemas/recipe";
 import { expect, it } from "vitest";
 import {
   formatYield,

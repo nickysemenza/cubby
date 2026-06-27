@@ -1,4 +1,4 @@
-import type { inventoryListItemOut } from "@cubby/schemas/inventory-responses";
+import type { inventoryListItemOut } from "@cubby/schemas/inventory";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { z } from "zod";

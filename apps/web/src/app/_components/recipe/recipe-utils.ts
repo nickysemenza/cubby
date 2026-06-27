@@ -1,4 +1,4 @@
-import type { RecipeOut } from "@cubby/schemas/recipe-responses";
+import type { RecipeOut } from "@cubby/schemas/recipe";
 import {
   getNutrientValueByKey,
   type NutrientsPer100,

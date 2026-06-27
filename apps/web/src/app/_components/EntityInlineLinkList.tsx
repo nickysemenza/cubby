@@ -2,8 +2,8 @@ import type { LocationType } from "@cubby/schemas/location";
 import type React from "react";
 import { Stack } from "~/components/layout";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
-import { EntityPillLink } from "./EntityPill";
-import { NoneState } from "./NoneState";
+import { NoneValue } from "~/components/ui/none-value";
+import { EntityInlineLink } from "./EntityInlineLink";
 import { TruncatedList } from "./TruncatedList";
 
 // Base props shared across all entity types
@@ -15,7 +15,7 @@ type BaseProps = {
 };
 
 // Discriminated union for entity-specific list data
-type EntityPillLinkListProps = BaseProps &
+type EntityInlineLinkListProps = BaseProps &
   (
     | {
         entity: "ingredient";
@@ -39,14 +39,14 @@ type EntityPillLinkListProps = BaseProps &
       }
   );
 
-export const EntityPillLinkList: React.FC<EntityPillLinkListProps> = (
+export const EntityInlineLinkList: React.FC<EntityInlineLinkListProps> = (
   props,
 ) => {
   const { items, compact, maxItems } = props;
 
   if (!items || items.length === 0) {
     if (compact) {
-      return <NoneState />;
+      return <NoneValue />;
     }
     return (
       <Empty variant="minimal" className="py-2">
@@ -65,7 +65,7 @@ export const EntityPillLinkList: React.FC<EntityPillLinkListProps> = (
   };
 
   const renderItem = (item: (typeof items)[number], index: number) => (
-    <EntityPillLink
+    <EntityInlineLink
       key={getKey(item, index)}
       entity={props.entity}
       data={item as never}

@@ -1,4 +1,4 @@
-import type { RecipeOut } from "@cubby/schemas/recipe-responses";
+import type { RecipeOut } from "@cubby/schemas/recipe";
 import { Eye, EyeOff } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 import { Row, Stack } from "~/components/layout";

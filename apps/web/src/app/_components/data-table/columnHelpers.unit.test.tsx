@@ -118,8 +118,8 @@ vi.mock("~/lib/utils", () => ({
   formatCurrency: (val: number) => `$${val.toFixed(2)}`,
 }));
 
-vi.mock("../EntityPill", () => ({
-  EntityPillLink: ({
+vi.mock("../EntityInlineLink", () => ({
+  EntityInlineLink: ({
     entity,
     data,
     compact,
@@ -128,14 +128,18 @@ vi.mock("../EntityPill", () => ({
     data: { id: string; name: string };
     compact?: boolean;
   }) => (
-    <span data-testid="entity-pill" data-entity={entity} data-compact={compact}>
+    <span
+      data-testid="entity-inline-link"
+      data-entity={entity}
+      data-compact={compact}
+    >
       {data.name}
     </span>
   ),
 }));
 
-vi.mock("../EntityPillLinkList", () => ({
-  EntityPillLinkList: ({
+vi.mock("../EntityInlineLinkList", () => ({
+  EntityInlineLinkList: ({
     entity,
     items,
     maxItems,
@@ -147,7 +151,7 @@ vi.mock("../EntityPillLinkList", () => ({
     compact?: boolean;
   }) => (
     <div
-      data-testid="entity-pill-list"
+      data-testid="entity-inline-link-list"
       data-entity={entity}
       data-max={maxItems}
       data-compact={compact}
@@ -170,8 +174,8 @@ vi.mock("../inventory/format-amount", () => ({
     `${amount.value} ${amount.unit}`,
 }));
 
-vi.mock("../NoneState", () => ({
-  NoneState: () => <span data-testid="none-state">-</span>,
+vi.mock("~/components/ui/none-value", () => ({
+  NoneValue: () => <span data-testid="none-value">-</span>,
 }));
 
 vi.mock("../TruncatedList", () => ({
@@ -265,12 +269,12 @@ vi.mock("~/components/layout", async (importOriginal) => ({
 import {
   createCreatedAtColumn,
   createCurrencyColumn,
-  createEntityPillColumn,
+  createEntityInlineLinkColumn,
   createExternalLinkColumn,
   createImageColumn,
   createInventoryEntriesColumn,
   createNameColumn,
-  createSingleEntityPillColumn,
+  createSingleEntityInlineLinkColumn,
   createTextColumn,
   createTimestampColumn,
   createUnitMappingsColumn,
@@ -382,13 +386,13 @@ describe("createCreatedAtColumn", () => {
     expect(screen.getByText("2024-01-15")).toBeInTheDocument();
   });
 
-  it("renders NoneState when no timestamp", () => {
+  it("renders NoneValue when no timestamp", () => {
     const column = createCreatedAtColumn(columnHelper);
     const row: TestRow = { id: "1", name: "Test" };
 
     renderCell(column, row);
 
-    expect(screen.getByTestId("none-state")).toBeInTheDocument();
+    expect(screen.getByTestId("none-value")).toBeInTheDocument();
   });
 });
 
@@ -444,7 +448,7 @@ describe("createImageColumn", () => {
   });
 });
 
-describe("createEntityPillColumn", () => {
+describe("createEntityInlineLinkColumn", () => {
   interface RowWithLocations extends Record<string, unknown> {
     id: string;
     locations: { id: string; name: string }[];
@@ -452,7 +456,7 @@ describe("createEntityPillColumn", () => {
   const columnHelper = createColumnHelper<RowWithLocations>();
 
   it("creates column with correct id", () => {
-    const column = createEntityPillColumn(
+    const column = createEntityInlineLinkColumn(
       columnHelper,
       "locations",
       "location",
@@ -461,8 +465,8 @@ describe("createEntityPillColumn", () => {
     expect((column as any).id).toBe("locations");
   });
 
-  it("renders entity pill list", () => {
-    const column = createEntityPillColumn(
+  it("renders entity inline link list", () => {
+    const column = createEntityInlineLinkColumn(
       columnHelper,
       "locations",
       "location",
@@ -477,13 +481,13 @@ describe("createEntityPillColumn", () => {
 
     renderCell(column, row);
 
-    expect(screen.getByTestId("entity-pill-list")).toBeInTheDocument();
+    expect(screen.getByTestId("entity-inline-link-list")).toBeInTheDocument();
     expect(screen.getByText("Kitchen")).toBeInTheDocument();
     expect(screen.getByText("Pantry")).toBeInTheDocument();
   });
 
   it("dedupes items when option is set", () => {
-    const column = createEntityPillColumn(
+    const column = createEntityInlineLinkColumn(
       columnHelper,
       "locations",
       "location",
@@ -561,7 +565,7 @@ describe("createInventoryEntriesColumn", () => {
     expect((column as any).id).toBe("inventoryEntry");
   });
 
-  it("renders NoneState for empty entries", () => {
+  it("renders NoneValue for empty entries", () => {
     const column = createInventoryEntriesColumn(
       columnHelper,
       "inventoryEntry",
@@ -576,7 +580,7 @@ describe("createInventoryEntriesColumn", () => {
 
     renderCell(column, row);
 
-    expect(screen.getByTestId("none-state")).toBeInTheDocument();
+    expect(screen.getByTestId("none-value")).toBeInTheDocument();
   });
 
   it("renders entries with inline layout by default", () => {
@@ -623,13 +627,13 @@ describe("createTextColumn", () => {
     expect(screen.getByText("Acme Corp")).toBeInTheDocument();
   });
 
-  it("renders NoneState for null value", () => {
+  it("renders NoneValue for null value", () => {
     const column = createTextColumn(columnHelper, "manufacturer");
     const row: TestRow = { id: "1", name: "Test", manufacturer: null };
 
     renderCell(column, row);
 
-    expect(screen.getByTestId("none-state")).toBeInTheDocument();
+    expect(screen.getByTestId("none-value")).toBeInTheDocument();
   });
 
   it("renders editable cell when editable option provided", () => {
@@ -668,13 +672,13 @@ describe("createCurrencyColumn", () => {
     expect(screen.getByText("$9.99")).toBeInTheDocument();
   });
 
-  it("renders NoneState for null price", () => {
+  it("renders NoneValue for null price", () => {
     const column = createCurrencyColumn(columnHelper, "price");
     const row: TestRow = { id: "1", name: "Test", price: null };
 
     renderCell(column, row);
 
-    expect(screen.getByTestId("none-state")).toBeInTheDocument();
+    expect(screen.getByTestId("none-value")).toBeInTheDocument();
   });
 
   it("renders editable cell when editable option provided", () => {
@@ -695,7 +699,7 @@ describe("createCurrencyColumn", () => {
   });
 });
 
-describe("createSingleEntityPillColumn", () => {
+describe("createSingleEntityInlineLinkColumn", () => {
   interface RowWithIngredient extends Record<string, unknown> {
     id: string;
     ingredient: { id: string; name: string } | null;
@@ -703,7 +707,7 @@ describe("createSingleEntityPillColumn", () => {
   const columnHelper = createColumnHelper<RowWithIngredient>();
 
   it("creates column with correct id", () => {
-    const column = createSingleEntityPillColumn(
+    const column = createSingleEntityInlineLinkColumn(
       columnHelper,
       "ingredient",
       "ingredient",
@@ -712,8 +716,8 @@ describe("createSingleEntityPillColumn", () => {
     expect((column as any).id).toBe("ingredient");
   });
 
-  it("renders entity pill when data exists", () => {
-    const column = createSingleEntityPillColumn(
+  it("renders entity inline link when data exists", () => {
+    const column = createSingleEntityInlineLinkColumn(
       columnHelper,
       "ingredient",
       "ingredient",
@@ -725,12 +729,12 @@ describe("createSingleEntityPillColumn", () => {
 
     renderCell(column, row);
 
-    expect(screen.getByTestId("entity-pill")).toBeInTheDocument();
+    expect(screen.getByTestId("entity-inline-link")).toBeInTheDocument();
     expect(screen.getByText("Flour")).toBeInTheDocument();
   });
 
-  it("renders NoneState when data is null", () => {
-    const column = createSingleEntityPillColumn(
+  it("renders NoneValue when data is null", () => {
+    const column = createSingleEntityInlineLinkColumn(
       columnHelper,
       "ingredient",
       "ingredient",
@@ -739,7 +743,7 @@ describe("createSingleEntityPillColumn", () => {
 
     renderCell(column, row);
 
-    expect(screen.getByTestId("none-state")).toBeInTheDocument();
+    expect(screen.getByTestId("none-value")).toBeInTheDocument();
   });
 });
 
@@ -771,7 +775,7 @@ describe("createExternalLinkColumn", () => {
     expect(link.closest("a")).toHaveAttribute("href", "/usda/upc/$code");
   });
 
-  it("renders NoneState for null value", () => {
+  it("renders NoneValue for null value", () => {
     const column = createExternalLinkColumn(
       columnHelper,
       "upc",
@@ -781,7 +785,7 @@ describe("createExternalLinkColumn", () => {
 
     renderCell(column, row);
 
-    expect(screen.getByTestId("none-state")).toBeInTheDocument();
+    expect(screen.getByTestId("none-value")).toBeInTheDocument();
   });
 
   it("renders editable cell when editable option provided", () => {
@@ -825,13 +829,13 @@ describe("createTimestampColumn", () => {
     expect(screen.getByTestId("hoverable-timestamp")).toBeInTheDocument();
   });
 
-  it("renders NoneState when value is null", () => {
+  it("renders NoneValue when value is null", () => {
     const column = createTimestampColumn(columnHelper, "lastUpdated");
     const row: RowWithTimestamp = { id: "1", lastUpdated: null };
 
     renderCell(column, row);
 
-    expect(screen.getByTestId("none-state")).toBeInTheDocument();
+    expect(screen.getByTestId("none-value")).toBeInTheDocument();
   });
 
   it("renders custom fallback when provided", () => {

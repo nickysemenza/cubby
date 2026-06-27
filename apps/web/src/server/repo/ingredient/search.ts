@@ -12,7 +12,7 @@ import {
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
-import type { RecipeRef } from "@cubby/schemas/recipe-responses";
+import type { RecipeRef } from "@cubby/schemas/recipe";
 import { and, count, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { getSortableFields } from "~/entities/entities";
 import type { Database } from "~/server/db";

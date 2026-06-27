@@ -1,4 +1,4 @@
-import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient-responses";
+import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient";
 import type { BaseKind, ConversionCoverage } from "~/lib/conversion-coverage";
 import type { RecipeCosting } from "~/lib/recipe-costing";
 import { wasm } from "~/lib/wasm";

@@ -2,13 +2,13 @@ import type { SearchableEntity, SearchResultItem } from "@cubby/schemas/search";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Row } from "~/components/layout";
 import { Description } from "~/components/ui/description";
+import { NoneValue } from "~/components/ui/none-value";
 import { EntityIcon, entities } from "~/entities/entities";
 import {
   createActionsColumnBase,
   createCreatedAtColumn,
   createImageColumn,
 } from "../data-table/columnHelpers";
-import { NoneState } from "../NoneState";
 import {
   getEnrichmentText,
   getSearchResultEntity,
@@ -90,7 +90,7 @@ export const searchColumns = [
       return value ? (
         <Description as="span">{value}</Description>
       ) : (
-        <NoneState />
+        <NoneValue />
       );
     },
   }),
@@ -107,7 +107,7 @@ export const searchColumns = [
           {enrichment}
         </Description>
       ) : (
-        <NoneState />
+        <NoneValue />
       );
     },
   }),

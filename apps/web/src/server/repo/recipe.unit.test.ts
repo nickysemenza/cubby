@@ -4,7 +4,7 @@ import {
   recipeListItemOut,
   recipeOut,
   recipeUsageOut,
-} from "@cubby/schemas/recipe-responses";
+} from "@cubby/schemas/recipe";
 import { describe, expect, it } from "vitest";
 import { computeRecipeUsages, dbRecipeToAPIShallow } from "./recipe";
 import { dbRecipeToAPI, dbRecipeToAPIGraph } from "./recipe/helpers";

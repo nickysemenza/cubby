@@ -2,7 +2,7 @@ import type { Amount } from "@cubby/schemas/codec";
 import {
   manualUnitMapping,
   type UnitMapping,
-} from "@cubby/schemas/unitmapping-responses";
+} from "@cubby/schemas/unitmapping";
 import { describe, expect, it } from "vitest";
 import {
   computeRecipeCosting,

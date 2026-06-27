@@ -15,8 +15,7 @@ import {
   staleIngredientParseSchema,
 } from "@cubby/schemas/problems";
 import { productCreateInput } from "@cubby/schemas/product";
-import { recipeCreateInput } from "@cubby/schemas/recipe";
-import { recipeOut } from "@cubby/schemas/recipe-responses";
+import { recipeCreateInput, recipeOut } from "@cubby/schemas/recipe";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { mock } from "./mock-schema";

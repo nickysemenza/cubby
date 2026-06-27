@@ -14,7 +14,7 @@ import {
   sortPaginationFields,
 } from "./pagination";
 import { productTopLevelOut } from "./product";
-import { unitMappingWithMetadata } from "./unitmapping-responses";
+import { unitMappingWithMetadata } from "./unitmapping";
 
 export const usdaListInput = z.object({
   filters: z.object({

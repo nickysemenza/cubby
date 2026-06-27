@@ -1,7 +1,7 @@
-import type { ImageWithEntity } from "@cubby/schemas/image-responses";
+import type { ImageWithEntity } from "@cubby/schemas/image";
 import { ImageIcon } from "lucide-react";
 import { match } from "ts-pattern";
-import { EntityPillLink } from "~/app/_components/EntityPill";
+import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { HoverableTimestamp } from "~/app/_components/HoverableTimestamp";
 import { ImageStatusBadge } from "~/app/_components/table/StatusBadge";
 import { Row, Stack } from "~/components/layout";
@@ -29,7 +29,7 @@ export function ImageDetail({ image }: ImageDetailProps) {
 
     return match(entityType)
       .with("PRODUCT", () => (
-        <EntityPillLink
+        <EntityInlineLink
           entity="product"
           data={{
             id: entityId,
@@ -39,13 +39,13 @@ export function ImageDetail({ image }: ImageDetailProps) {
         />
       ))
       .with("LOCATION", () => (
-        <EntityPillLink
+        <EntityInlineLink
           entity="location"
           data={{ id: entityId, name: entityName, type: "room" }}
         />
       ))
       .with("RECIPE", () => (
-        <EntityPillLink
+        <EntityInlineLink
           entity="recipe"
           data={{ id: entityId, name: entityName }}
         />

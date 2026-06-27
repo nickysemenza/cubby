@@ -1,5 +1,7 @@
-import type { IngredientUpdateInput } from "@cubby/schemas/ingredient";
-import type { IngredientWithFoodOut } from "@cubby/schemas/ingredient-responses";
+import type {
+  IngredientUpdateInput,
+  IngredientWithFoodOut,
+} from "@cubby/schemas/ingredient";
 import {
   Apple,
   ChefHat,
@@ -18,7 +20,7 @@ import { getIngredientMappings } from "~/lib/unit-mapping-utils";
 import { useTRPC } from "~/trpc/react";
 import { type DetailSection, DetailSections } from "../data-table/detail-page";
 import { editableDetailSection } from "../data-table/editable-detail-section";
-import { EntityPillLinkList } from "../EntityPillLinkList";
+import { EntityInlineLinkList } from "../EntityInlineLinkList";
 import { useEntityDetail } from "../hooks/useEntityDetail";
 import { RecipeUsagesTable } from "../recipe/recipe-usages-table";
 import { UnitCoveragePanel } from "../units/UnitCoveragePanel";
@@ -84,7 +86,7 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
       content: (
         <Stack gap="sm">
           {ingredient.product.length > 0 ? (
-            <EntityPillLinkList entity="product" items={ingredient.product} />
+            <EntityInlineLinkList entity="product" items={ingredient.product} />
           ) : (
             <Description>
               No products linked yet — enrich this ingredient to add pricing and

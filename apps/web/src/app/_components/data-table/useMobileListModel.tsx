@@ -5,9 +5,9 @@ import {
   type Row,
 } from "@tanstack/react-table";
 import { isValidElement, type ReactNode, useMemo } from "react";
+import { NoneValue } from "~/components/ui/none-value";
 import { entities } from "~/entities/entities";
 import { extractEntityTitle } from "~/lib/entity-utils";
-import { NoneState } from "../NoneState";
 import type { MobileColumnMeta, MobileSlot } from "./columnHelpers";
 
 const DEFAULT_HIDDEN_COLUMN_IDS = new Set([
@@ -51,7 +51,7 @@ function hasRenderableContent(content: ReactNode): boolean {
     const trimmed = content.trim();
     return trimmed !== "" && trimmed !== "—";
   }
-  if (isValidElement(content) && content.type === NoneState) return false;
+  if (isValidElement(content) && content.type === NoneValue) return false;
   return true;
 }
 

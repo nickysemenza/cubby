@@ -4,12 +4,12 @@ import {
   unsafeProductShortcode,
   unsafeRecipeId,
 } from "@cubby/schemas/identifiers";
-import { ingredientOut } from "@cubby/schemas/ingredient";
 import {
   ingredientListItemOut,
+  ingredientOut,
   ingredientWithRecipesAndProductOut,
-} from "@cubby/schemas/ingredient-responses";
-import { productWithMappingsOut } from "@cubby/schemas/product-responses";
+} from "@cubby/schemas/ingredient";
+import { productWithMappingsOut } from "@cubby/schemas/product";
 import { describe, expect, it } from "vitest";
 import {
   dbIngredientToAPI,

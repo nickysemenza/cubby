@@ -1,5 +1,7 @@
-import type { InventoryUpdateInput } from "@cubby/schemas/inventory";
-import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/inventory-responses";
+import type {
+  InventoryUpdateInput,
+  inventoryWithLocationAndProductOut,
+} from "@cubby/schemas/inventory";
 import { ArrowRightLeft, Package, Pencil } from "lucide-react";
 import type { FC } from "react";
 import { useState } from "react";

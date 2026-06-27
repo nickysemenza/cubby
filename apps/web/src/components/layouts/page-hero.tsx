@@ -17,7 +17,6 @@ const heroVariants = cva(
     variants: {
       variant: {
         list: "mb-4",
-        detail: "mb-4",
         compact: "mb-2",
       },
     },
@@ -29,7 +28,6 @@ const titleVariants = cva("break-words font-heading tracking-tight", {
   variants: {
     variant: {
       list: "font-semibold text-3xl",
-      detail: "font-bold text-3xl sm:text-4xl lg:text-5xl",
       compact: "font-bold text-2xl",
     },
   },
@@ -158,7 +156,7 @@ interface PageHeroProps extends VariantProps<typeof heroVariants> {
   meta?: PageHeroMetaItem[];
   /** Right-aligned action area (typically buttons). */
   actions?: ReactNode;
-  /** Optional entity — when set, shows the entity's icon tinted with its color on detail variant. */
+  /** Optional entity used for derived eyebrow text and accent color. */
   entity?: Entity;
   /** Decoration under title. "accent" applies the ultramarine page-header-accent rule. */
   decoration?: "accent" | "none";
@@ -180,9 +178,6 @@ export function PageHero({
   decoration = "accent",
   className,
 }: PageHeroProps) {
-  const def = entity ? entities[entity] : null;
-  const EntityIconComponent = def?.lucideIcon;
-  const showEntityIcon = variant === "detail" && EntityIconComponent && def;
   const showAccent = decoration === "accent" && variant !== "compact";
   const effectiveEyebrow =
     eyebrow ?? (entity ? deriveEyebrow(entity, title) : null);
@@ -209,17 +204,6 @@ export function PageHero({
             showAccent && "page-header-accent pb-2",
           )}
         >
-          {showEntityIcon && def && EntityIconComponent && (
-            <span
-              className={cn(
-                "flex h-10 w-10 shrink-0 items-center justify-center rounded-none border border-[var(--border)] sm:h-11 sm:w-11",
-                def.color.bg,
-                def.color.text,
-              )}
-            >
-              <EntityIconComponent className="h-5 w-5 sm:h-6 sm:w-6" />
-            </span>
-          )}
           <h1 className={titleVariants({ variant })}>{title}</h1>
         </div>
         {meta && meta.length > 0 && (

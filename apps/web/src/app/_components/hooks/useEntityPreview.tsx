@@ -2,6 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 import { Sheet, SheetContent } from "~/components/ui/sheet";
+import { getEntityContract } from "~/entities/entity-contracts";
 import { entityQueryOptions } from "~/entities/entity-query";
 import { useTRPC } from "~/trpc/react";
 import { EntityPreviewPanel } from "../search/entity-preview-panel";
@@ -15,10 +16,6 @@ interface UseEntityPreviewOptions {
   /** Field to use as ID (default: "id") */
   idField?: string;
 }
-
-// Entities the preview panel can't fetch by id (entityQueryOptions returns a
-// skipped query for these) — don't try to prefetch them.
-const NON_FETCHABLE: ReadonlySet<Entity> = new Set(["cookbook", "meal"]);
 
 /**
  * Hook for adding row-click preview panels to entity lists. Hovering a row
@@ -73,7 +70,9 @@ export function useEntityPreview(
   const onRowHover = useCallback(
     <T extends Record<string, unknown>>(row: { original: T }) => {
       const resolved = resolveRow(row);
-      if (!resolved || NON_FETCHABLE.has(resolved.entityType)) return;
+      if (!resolved || !getEntityContract(resolved.entityType).canPreview) {
+        return;
+      }
       void queryClient.prefetchQuery(
         // biome-ignore lint/suspicious/noExplicitAny: union of getByID queryOptions can't be narrowed for prefetchQuery (same cast the panel uses for useQuery)
         entityQueryOptions(api, resolved.entityType, resolved.id) as any,

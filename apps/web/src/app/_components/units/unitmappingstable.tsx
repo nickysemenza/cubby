@@ -1,4 +1,4 @@
-import type { UnitMapping } from "@cubby/schemas/unitmapping-responses";
+import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { Row } from "~/components/layout";
@@ -17,7 +17,7 @@ import {
 } from "~/lib/conversion-coverage";
 import { wasm } from "~/lib/wasm";
 import { useTRPC } from "~/trpc/react";
-import { EntityPillLink } from "../EntityPill";
+import { EntityInlineLink } from "../EntityInlineLink";
 import { KindIcon } from "./kind-icon";
 
 const BASE_KIND_SET: ReadonlySet<string> = new Set(BASE_KINDS);
@@ -72,7 +72,7 @@ const LazyFoodPillLink: React.FC<{ fdcId: number }> = ({ fdcId }) => {
     foodInfo: { description: `food ${fdcId}${isLoading ? "..." : ""}` },
   };
 
-  return <EntityPillLink entity="usda-food" data={displayFood} compact />;
+  return <EntityInlineLink entity="usda-food" data={displayFood} compact />;
 };
 
 // Component for lazy loading product data and rendering ProductPillLink
@@ -97,7 +97,7 @@ const LazyProductPillLink: React.FC<{ productId: string }> = ({
     manufacturer: "",
   };
 
-  return <EntityPillLink entity="product" data={displayProduct} compact />;
+  return <EntityInlineLink entity="product" data={displayProduct} compact />;
 };
 
 // Source label + provenance pill, shared by the desktop cell and the mobile card.

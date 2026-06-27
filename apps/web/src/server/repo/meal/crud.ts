@@ -3,9 +3,9 @@ import type { MealId, MealRecipeId } from "@cubby/schemas/identifiers";
 import type {
   MealCreateInput,
   MealFilters,
+  MealOut,
   MealRecipeInput,
 } from "@cubby/schemas/meal";
-import type { MealOut } from "@cubby/schemas/meal-responses";
 import {
   buildTakeSkip,
   type PaginationParams,
@@ -22,9 +22,11 @@ import {
   countWhere,
   getDb,
   insertAndReturn,
+  lockAndValidateForDelete,
   notDeleted,
   relations,
   updateAndReturn,
+  updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { dbMealToAPI } from "./helpers";
@@ -133,7 +135,7 @@ export const updateMeal = async (
 ): Promise<MealOut> => {
   // Mutation + audit in one transaction so the change is never left unrecorded.
   await withTransaction(db, async (tx) => {
-    await updateAndReturn(
+    await updateLiveAndReturn(
       tx,
       meal,
       {
@@ -141,7 +143,7 @@ export const updateMeal = async (
         ...(data.name !== undefined ? { name: data.name } : {}),
         ...(data.sortOrder !== undefined ? { sortOrder: data.sortOrder } : {}),
       },
-      eq(meal.id, id),
+      id,
     );
     await logAuditEntry(tx, actor, {
       entityType: "meal",
@@ -163,6 +165,7 @@ export const deleteMeals = async (
 ): Promise<void> => {
   if (ids.length === 0) return;
   await withTransaction(db, async (tx) => {
+    await lockAndValidateForDelete(tx, meal, ids, "Meal");
     const now = new Date();
     // notDeleted guard so rows already removed via removeMealRecipe keep their
     // original deletedAt instead of being stomped with `now`.
@@ -170,7 +173,10 @@ export const deleteMeals = async (
       .update(mealRecipe)
       .set({ deletedAt: now })
       .where(and(inArray(mealRecipe.mealId, ids), notDeleted(mealRecipe)));
-    await tx.update(meal).set({ deletedAt: now }).where(inArray(meal.id, ids));
+    await tx
+      .update(meal)
+      .set({ deletedAt: now })
+      .where(and(inArray(meal.id, ids), notDeleted(meal)));
     await logAuditEntries(
       tx,
       actor,

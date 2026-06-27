@@ -29,7 +29,7 @@ import { findProductsByFoodIdentifier } from "~/server/repo/product";
 import { AvailabilityService } from "~/server/services/availability.service";
 import { IngredientService } from "~/server/services/ingredient.service";
 import { LocationValuationService } from "~/server/services/location-valuation.service";
-import { ProductService } from "~/server/services/product.service";
+import { createProductService } from "~/server/services/product.service";
 import { RecipeCostingService } from "~/server/services/recipe-costing.service";
 import { USDAService } from "~/server/services/usda.service";
 import {
@@ -65,7 +65,7 @@ export const buildCrudServices = (
   });
   const ingredient = new IngredientService(db, usdaClient);
   const services = {
-    product: new ProductService(db, usdaClient),
+    product: createProductService(db, usdaClient),
     ingredient,
     availability: new AvailabilityService(db, ingredient),
     recipeCosting: new RecipeCostingService(db, ingredient),

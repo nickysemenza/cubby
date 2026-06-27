@@ -1,6 +1,6 @@
-import type { inventoryListItemOut } from "@cubby/schemas/inventory-responses";
-import type { LocationType } from "@cubby/schemas/location";
-import type { InfLocation } from "@cubby/schemas/location-responses";
+import type { inventoryListItemOut } from "@cubby/schemas/inventory";
+import type { InfLocation, LocationType } from "@cubby/schemas/location";
+import { MAX_PAGE_SIZE } from "@cubby/schemas/pagination";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { ChevronLeft } from "lucide-react";
@@ -340,7 +340,7 @@ export function LocationGallery() {
   const { data: inventoryData, isLoading: inventoryLoading } = useQuery(
     api.inventory.list.queryOptions({
       sort: { orderBy: "createdAt", direction: "desc" },
-      pagination: { pageIndex: 0, pageSize: 10000 },
+      pagination: { pageIndex: 0, pageSize: MAX_PAGE_SIZE },
       filters: {},
     }),
   );

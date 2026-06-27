@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ExternalLink } from "lucide-react";
 import { useMemo } from "react";
+import { MealDetailPage } from "~/app/meals/meal-detail-page";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { SheetHeader, SheetTitle } from "~/components/ui/sheet";
@@ -115,6 +116,7 @@ export function EntityPreviewPanel({
             <ImageDetail image={data as never} />
           ) : null
         ) : null}
+        {entityType === "meal" ? <MealDetailPage mealId={id as never} /> : null}
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import type { InfLocation } from "@cubby/schemas/location-responses";
+import type { InfLocation } from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
 import type { FC } from "react";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
@@ -7,10 +7,10 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { locationMutationInvalidateKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
-import { EntityPillLink } from "../EntityPill";
+import { EntityInlineLink } from "../EntityInlineLink";
 import { useEntityDelete } from "../hooks/useEntityDelete";
 import { PrintLabelButton } from "../print-label-button";
-import { LocationTypeBadge } from "./LocationTypeBadge";
+import { LocationTypeLabel } from "./LocationTypeLabel";
 import { LocationIconWithLabel } from "./location-icons";
 import { typeSupportsQrCode } from "./location-type-theme";
 
@@ -48,11 +48,11 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
           },
         ]
       : []),
-    { label: "Type", value: <LocationTypeBadge type={location.type} /> },
+    { label: "Type", value: <LocationTypeLabel type={location.type} /> },
     {
       label: "Parent Location",
       value: location.parent ? (
-        <EntityPillLink entity="location" data={location.parent} />
+        <EntityInlineLink entity="location" data={location.parent} />
       ) : undefined,
     },
   ];

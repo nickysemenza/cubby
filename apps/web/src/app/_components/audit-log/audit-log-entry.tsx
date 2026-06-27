@@ -15,7 +15,7 @@ import { EntityIcon, entities } from "~/entities/entities";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn } from "~/lib/utils";
 import type { RouterOutputs } from "~/trpc/react";
-import { EntityPillById } from "../EntityPillById";
+import { EntityInlineLinkById } from "../EntityInlineLinkById";
 import { HoverableTimestamp } from "../HoverableTimestamp";
 
 function formatChangeValue(value: unknown): string {
@@ -72,7 +72,7 @@ export function AuditLogEntryComponent({
       <Row align="center" justify="between" gap="sm" className="py-2">
         <Row align="center" gap="sm" className="min-w-0">
           {showEntityLink ? (
-            <EntityPillById
+            <EntityInlineLinkById
               entityType={entry.entityType}
               entityId={entry.entityId}
               compact
@@ -140,7 +140,7 @@ export function AuditLogEntryComponent({
           <Row align="center" gap="sm" wrap>
             {/* Entity Pill or Icon */}
             {showEntityLink ? (
-              <EntityPillById
+              <EntityInlineLinkById
                 entityType={entry.entityType}
                 entityId={entry.entityId}
                 compact

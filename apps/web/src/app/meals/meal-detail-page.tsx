@@ -1,5 +1,6 @@
 import type { MealId } from "@cubby/schemas/identifiers";
-import type { MealRecipeOut } from "@cubby/schemas/meal-responses";
+import type { MealRecipeOut } from "@cubby/schemas/meal";
+import { MAX_PAGE_SIZE } from "@cubby/schemas/pagination";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Trash2 } from "lucide-react";
@@ -28,7 +29,7 @@ export function MealDetailPage({ mealId }: { mealId: MealId }) {
     api.recipe.list.queryOptions({
       filters: {},
       sort: { orderBy: "name", direction: "asc" },
-      pagination: { pageIndex: 0, pageSize: 500 },
+      pagination: { pageIndex: 0, pageSize: MAX_PAGE_SIZE },
     }),
   );
 

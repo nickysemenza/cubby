@@ -1,4 +1,4 @@
-import type { InfLocation } from "@cubby/schemas/location-responses";
+import type { InfLocation } from "@cubby/schemas/location";
 import {
   ChevronRight,
   ImageIcon,

@@ -1,23 +1,12 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef } from "react";
 import type { QueryTiming } from "~/lib/query-timing";
 import type { TableStateReturn } from "../data-table/useTableState";
-
-// Response shape from list queries (used for type narrowing)
-interface ListQueryResponse<TData> {
-  items: TData[];
-  meta: { totalCount: number };
-}
-
-// tRPC queryOptions has complex internal typing that doesn't map cleanly to a simple function type.
-// We use a permissive type here - the TFilters generic provides type safety for buildFilters.
-type TRPCQueryOptionsFn<TFilters> = (params: {
-  sort: { orderBy: string; direction: "asc" | "desc" };
-  pagination: { pageIndex: number; pageSize: number };
-  filters: TFilters;
-  groupBy?: string;
-  // biome-ignore lint/suspicious/noExplicitAny: intentional
-}) => any;
+import {
+  type ListQueryResponse,
+  type TRPCQueryOptionsFn,
+  usePaginatedTableCore,
+  useQueryTiming,
+} from "./usePaginatedTableCore";
 
 export interface UseTableListOptions<TFilters> {
   // tRPC queryOptions function that takes list params and returns query options
@@ -60,34 +49,12 @@ export function useTableList<TFilters, TData = unknown>({
   groupBy,
   enabled = true,
 }: UseTableListOptions<TFilters>): UseTableListReturn<TData> {
-  // Memoize filters to prevent recreating on every render
-  const filters = useMemo(
-    () => buildFilters(tableState),
-    [buildFilters, tableState],
-  );
-
-  // Memoize sortParams to prevent recreating on every render
-  const sortParams = useMemo(() => tableState.getSortParams(), [tableState]);
-
-  const { pagination } = tableState;
-
-  // Memoize query params to prevent recreating on every render - CRITICAL for performance
-  const queryParams = useMemo(
-    () => ({
-      sort: sortParams,
-      pagination,
-      filters,
-      ...(groupBy && { groupBy }),
-    }),
-    [sortParams, pagination, filters, groupBy],
-  );
-
-  // CRITICAL: Memoize the result of calling queryOptions(queryParams)
-  // Otherwise React Query sees a new options object on every render and refetches!
-  const memoizedQueryOptions = useMemo(
-    () => queryOptions(queryParams),
-    [queryOptions, queryParams],
-  );
+  const { memoizedQueryOptions } = usePaginatedTableCore({
+    queryOptions,
+    buildFilters,
+    tableState,
+    groupBy,
+  });
 
   const {
     data: response,
@@ -111,28 +78,7 @@ export function useTableList<TFilters, TData = unknown>({
     refetch: () => Promise<unknown>;
   };
 
-  // Track query timing
-  const startTimeRef = useRef<number | null>(null);
-  const timingRef = useRef<QueryTiming>({
-    durationMs: null,
-    isFresh: false,
-  });
-
-  // Start timing when fetch begins - use ref instead of state to avoid rerenders
-  useEffect(() => {
-    if (isFetching && startTimeRef.current === null) {
-      startTimeRef.current = performance.now();
-    }
-  }, [isFetching]);
-
-  // Calculate duration when fetch completes - use ref instead of state
-  useEffect(() => {
-    if (!isFetching && startTimeRef.current !== null) {
-      const duration = Math.round(performance.now() - startTimeRef.current);
-      timingRef.current = { durationMs: duration, isFresh: true };
-      startTimeRef.current = null;
-    }
-  }, [isFetching]);
+  const timing = useQueryTiming(isFetching);
 
   const dataArray = response?.items ?? [];
 
@@ -144,7 +90,7 @@ export function useTableList<TFilters, TData = unknown>({
     isPlaceholderData,
     error: error instanceof Error ? error : null,
     tableState,
-    timing: timingRef.current, // Use ref instead of state to avoid triggering rerenders
+    timing,
     refreshControls: {
       onRefresh: async () => {
         await refetch();

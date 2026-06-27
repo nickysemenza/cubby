@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
-import { NoneState } from "~/app/_components/NoneState";
 import { Row } from "~/components/layout";
 import { Eyebrow } from "~/components/ui/eyebrow";
+import { NoneValue } from "~/components/ui/none-value";
 import { cn } from "~/lib/utils";
 
 interface InfoRowProps {
@@ -27,7 +27,7 @@ export const InfoRow = ({ label, children, className }: InfoRowProps) => (
       className="min-w-6 flex-1 border-border/80 border-b-2 border-dotted"
     />
     <span className="min-w-0 max-w-[65%] text-right text-sm">
-      {children ?? <NoneState />}
+      {children ?? <NoneValue />}
     </span>
   </Row>
 );

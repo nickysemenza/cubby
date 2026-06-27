@@ -1,4 +1,4 @@
-import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient-responses";
+import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient";
 import {
   createColumnHelper,
   getCoreRowModel,
@@ -9,7 +9,6 @@ import {
 import { mapValues } from "es-toolkit";
 import { useMemo, useState } from "react";
 import { match } from "ts-pattern";
-import { NoneState } from "~/app/_components/NoneState";
 import { KEY_NUTRIENTS } from "~/app/_components/units/NutrientsSummary";
 import {
   EntitySummaryCard,
@@ -17,6 +16,7 @@ import {
 } from "~/components/entity/entity-summary-card";
 import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
+import { NoneValue } from "~/components/ui/none-value";
 import { formatCurrencyRange, formatNumberRange } from "~/lib/format-range";
 import type {
   CalculateTotalsResult,
@@ -30,7 +30,7 @@ import { cn } from "~/lib/utils";
 import { renderValueOrMissing } from "~/misc/result";
 import { createActionsColumnBase } from "../data-table/columnHelpers";
 import RTable from "../data-table/Table";
-import { EntityPillLink } from "../EntityPill";
+import { EntityInlineLink } from "../EntityInlineLink";
 import { tryFormatAmount } from "../inventory/format-amount";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import { CopyCorpusButton } from "./copy-corpus-button";
@@ -275,7 +275,7 @@ export const RecipeIngredientList: React.FC<{
         const row = props.row.original;
         const pct = row.scalingPct;
         if (pct == null) {
-          return <NoneState />;
+          return <NoneValue />;
         }
         return (
           <button
@@ -355,7 +355,7 @@ export const RecipeIngredientList: React.FC<{
       cell: (props) =>
         match(props.row.original)
           .with({ type: "ingredient" }, (row) => (
-            <EntityPillLink
+            <EntityInlineLink
               entity="ingredient"
               data={{
                 name: row.ingredient.name,
@@ -365,7 +365,7 @@ export const RecipeIngredientList: React.FC<{
             />
           ))
           .with({ type: "recipe" }, (row) => (
-            <EntityPillLink entity="recipe" data={row.recipe} compact />
+            <EntityInlineLink entity="recipe" data={row.recipe} compact />
           ))
           .exhaustive(),
     }),

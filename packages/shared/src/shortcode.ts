@@ -1,3 +1,4 @@
+import { customAlphabet } from "nanoid";
 import { z } from "zod";
 
 /** Character set: 32 chars (no 0/O, 1/I/L for clarity) */
@@ -36,14 +37,11 @@ const PREFIX_MAP: Record<string, ShortcodeType> = {
   R: "recipe",
 };
 
+const shortcodeId = customAlphabet(SHORTCODE_CHARS, 4);
+
 /** Generate a random 4-character ID from the safe character set. */
 export function generateShortcodeId(): string {
-  let result = "";
-  for (let i = 0; i < 4; i++) {
-    result +=
-      SHORTCODE_CHARS[Math.floor(Math.random() * SHORTCODE_CHARS.length)];
-  }
-  return result;
+  return shortcodeId();
 }
 
 /** Generate a location shortcode (L-XXXX format). */

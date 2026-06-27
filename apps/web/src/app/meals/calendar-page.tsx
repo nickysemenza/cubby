@@ -1,4 +1,4 @@
-import type { MealOut } from "@cubby/schemas/meal-responses";
+import type { MealOut } from "@cubby/schemas/meal";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { addDays, addWeeks, format, isSameDay, parseISO } from "date-fns";

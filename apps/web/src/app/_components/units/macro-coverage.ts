@@ -1,4 +1,4 @@
-import type { UnitMapping } from "@cubby/schemas/unitmapping-responses";
+import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import {
   getNutrientUnitString,
   MACRO_KEYS,

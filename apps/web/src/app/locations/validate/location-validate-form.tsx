@@ -1,5 +1,5 @@
 import type { LocationId } from "@cubby/schemas/identifiers";
-import type { InfLocation } from "@cubby/schemas/location-responses";
+import type { InfLocation } from "@cubby/schemas/location";
 import { extractShortcodeFromScan } from "@cubby/shared";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -15,7 +15,7 @@ import {
   PersistentScanner,
   QR_CODE_FORMATS,
 } from "~/app/_components/inventory/persistent-scanner";
-import { LocationTypeBadge } from "~/app/_components/locations/LocationTypeBadge";
+import { LocationTypeLabel } from "~/app/_components/locations/LocationTypeLabel";
 import { LocationBreadcrumb } from "~/app/_components/locations/location-breadcrumb";
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { typeSupportsQrCode } from "~/app/_components/locations/location-type-theme";
@@ -272,7 +272,7 @@ export function LocationValidateForm({
                     <span className="text-xs opacity-60">
                       {child.shortcode}
                     </span>
-                    <LocationTypeBadge type={child.type} />
+                    <LocationTypeLabel type={child.type} />
                   </div>
                 ))}
               </div>

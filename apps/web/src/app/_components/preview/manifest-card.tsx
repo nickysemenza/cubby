@@ -9,7 +9,7 @@ import { Spinner } from "~/components/ui/spinner";
 import { entities } from "~/entities/entities";
 import type { Entity, EntityDetailRoute } from "~/entities/types";
 import { formatCurrency } from "~/lib/utils";
-import { EntityPillLink } from "../EntityPill";
+import { EntityInlineLink } from "../EntityInlineLink";
 import { NutrientsSummary } from "../units/NutrientsSummary";
 
 // The single "manifest" hovercard renderer. Every entity preview is expressed
@@ -173,7 +173,7 @@ function BodyBlockView({ block }: { block: BodyBlock }) {
         <SectionLabel>Product{b.products.length === 1 ? "" : "s"}</SectionLabel>
         <div className="flex flex-col gap-1">
           {b.products.slice(0, 4).map((p) => (
-            <EntityPillLink key={p.id} entity="product" data={p} compact />
+            <EntityInlineLink key={p.id} entity="product" data={p} compact />
           ))}
           {b.products.length > 4 && (
             <Description as="span" size="2xs">

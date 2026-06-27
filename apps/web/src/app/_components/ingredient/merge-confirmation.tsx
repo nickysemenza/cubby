@@ -1,11 +1,11 @@
 import { Check } from "lucide-react";
 import { type RefObject, useEffect, useState } from "react";
-import { NoneState } from "~/app/_components/NoneState";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
+import { NoneValue } from "~/components/ui/none-value";
 import { cn } from "~/lib/utils";
-import { EntityPillLink } from "../EntityPill";
+import { EntityInlineLink } from "../EntityInlineLink";
 
 /**
  * Merge confirmation body. Holds its own selected-target state so the radios
@@ -66,14 +66,14 @@ export function MergeConfirmation({
         <Row gap="xs" wrap>
           {aliases.length > 0 ? (
             aliases.map((a) => (
-              <EntityPillLink
+              <EntityInlineLink
                 key={a.id}
                 entity="ingredient"
                 data={{ name: a.name, id: a.id }}
               />
             ))
           ) : (
-            <NoneState />
+            <NoneValue />
           )}
         </Row>
       </div>

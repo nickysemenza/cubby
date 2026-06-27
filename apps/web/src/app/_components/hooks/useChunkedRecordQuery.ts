@@ -1,10 +1,10 @@
 import { useQueries } from "@tanstack/react-query";
-import { chunk } from "es-toolkit";
+import { chunk, uniq } from "es-toolkit";
 import { useMemo } from "react";
 import { ID_CHUNK_SIZE } from "~/misc/array-helpers";
 
 const uniqueSortedIds = (ids: readonly string[]) =>
-  [...new Set(ids.filter(Boolean))].sort();
+  uniq(ids.filter(Boolean)).sort();
 
 export function useChunkedRecordQuery<TRecord extends Record<string, unknown>>({
   ids,

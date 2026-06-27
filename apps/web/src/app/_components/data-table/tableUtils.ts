@@ -1,4 +1,8 @@
-import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
+import {
+  MAX_PAGE_SIZE,
+  type PaginationParams,
+  type SortParams,
+} from "@cubby/schemas/pagination";
 import type { SortingState } from "@tanstack/react-table";
 
 export const buildSortParams = (
@@ -14,9 +18,7 @@ export const buildSortParams = (
 
 export const defaultPagination: PaginationParams = {
   pageIndex: 0,
-  // Lists render through a window virtualizer, so a large default page size
-  // shows "everything" in one natural-scrolling page without a DOM blowup.
-  pageSize: 1000,
+  pageSize: MAX_PAGE_SIZE,
 };
 export const defaultSortState = (initialSort?: string): SortingState => [
   { id: initialSort ?? "createdAt", desc: true },

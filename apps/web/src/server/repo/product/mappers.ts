@@ -2,23 +2,21 @@ import {
   unsafeLocationShortcode,
   unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
-import type { ImageOut } from "@cubby/schemas/image-responses";
+import type { ImageOut } from "@cubby/schemas/image";
 import type {
   InventoryListProductOut,
   ProductInventoryEmbedOut,
-} from "@cubby/schemas/inventory-responses";
+} from "@cubby/schemas/inventory";
 import { locationType } from "@cubby/schemas/location";
-import {
-  type ProductTopLevelOut,
-  productTopLevelOut,
-} from "@cubby/schemas/product";
 import {
   type ProductListItem,
   type ProductPickerItemOut,
+  type ProductTopLevelOut,
   productListItemOut,
   productPickerItemOut,
+  productTopLevelOut,
   productWithIngredientAndInventoryAndMappingsOut,
-} from "@cubby/schemas/product-responses";
+} from "@cubby/schemas/product";
 import type { z } from "zod";
 import { parseWithContext } from "~/lib/zod-utils";
 import type {

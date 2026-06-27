@@ -1,9 +1,6 @@
 import type { RecipeId } from "@cubby/schemas/identifiers";
-import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient-responses";
-import type {
-  RecipeGraphOut,
-  RecipeOut,
-} from "@cubby/schemas/recipe-responses";
+import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient";
+import type { RecipeGraphOut, RecipeOut } from "@cubby/schemas/recipe";
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { chunk, keyBy } from "es-toolkit";
 import { useEffect, useMemo, useRef, useState } from "react";

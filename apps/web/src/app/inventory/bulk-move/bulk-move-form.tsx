@@ -14,8 +14,10 @@
  */
 
 import { unsafeInventoryId } from "@cubby/schemas/identifiers";
-import type { BulkMoveItem } from "@cubby/schemas/inventory";
-import type { inventoryListItemOut } from "@cubby/schemas/inventory-responses";
+import type {
+  BulkMoveItem,
+  inventoryListItemOut,
+} from "@cubby/schemas/inventory";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";

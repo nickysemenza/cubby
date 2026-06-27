@@ -96,12 +96,6 @@ interface TTableProps<TItem> {
   timing?: QueryTiming;
   /** Entity type for mobile card navigation - when provided, cards become clickable */
   entity?: Entity;
-  /**
-   * Custom render function for mobile cards.
-   * Receives the row and the default card content, allowing full customization.
-   * Useful for tables with inline editing or special mobile UX.
-   */
-  renderMobileCard?: (row: Row<TItem>, defaultContent: ReactNode) => ReactNode;
   /** Swipe-to-reveal actions per row on the mobile list */
   swipeActions?: (row: Row<TItem>) => SwipeAction[];
   /** Callback when a row is clicked */
@@ -244,7 +238,6 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     ariaLabel = "Data Table",
     timing,
     entity,
-    renderMobileCard,
     swipeActions,
     onRowClick,
     onRowHover,
@@ -792,7 +785,6 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
           bulkActionBar={bulkActionBar}
           isLoading={isLoading}
           error={error}
-          renderMobileCard={renderMobileCard}
           swipeActions={swipeActions}
           infiniteScroll={infiniteScroll}
           refreshControls={refreshControls}

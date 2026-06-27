@@ -9,6 +9,14 @@ export const queryKeys = {
     all: ["inventory"] as const,
     list: ["inventory", "list"] as const,
   },
+  image: {
+    all: ["image"] as const,
+    list: ["image", "list"] as const,
+  },
+  usda: {
+    all: ["usda"] as const,
+    list: ["usda", "list"] as const,
+  },
   product: {
     // Broad prefix — invalidate every product query (list / search / getByID …)
     // so the deferred product picker (product.search) AND the products table
@@ -53,6 +61,9 @@ export const queryKeys = {
     // so its key mirrors that tRPC path.
     listCookbooks: ["recipe", "listCookbooks"] as const,
     all: ["recipe"] as const,
+  },
+  cookbook: {
+    all: ["recipe", "listCookbooks"] as const,
   },
   meal: {
     list: ["meal", "list"] as const,

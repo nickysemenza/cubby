@@ -14,12 +14,13 @@ export function useProductFoodSummaries(productIds: readonly string[]) {
     ids: productIds,
     empty: EMPTY_PRODUCT_FOOD_MAP,
     queryOptions: (chunkIds) =>
-      api.product.foodSummaries.queryOptions(
-        { ids: chunkIds },
+      api.product.summaries.queryOptions(
+        { ids: chunkIds, include: ["food"] },
         {
           enabled: chunkIds.length > 0,
           staleTime: 5 * 60 * 1000,
           gcTime: 30 * 60 * 1000,
+          select: (data) => data.food ?? EMPTY_PRODUCT_FOOD_MAP,
         },
       ),
   });

@@ -8,7 +8,7 @@ import {
 import {
   locationListItemOut,
   locationListRefOut,
-} from "@cubby/schemas/location-responses";
+} from "@cubby/schemas/location";
 import { describe, expect, it } from "vitest";
 import { dbLocationToAPI, dbLocationToListAPI } from "./helpers";
 import type { LocationListDB } from "./internal-types";

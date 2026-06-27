@@ -1,13 +1,13 @@
-import type { ImageWithEntity } from "@cubby/schemas/image-responses";
+import type { ImageWithEntity } from "@cubby/schemas/image";
 import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { createImageColumn } from "~/app/_components/data-table/columnHelpers";
 import RTable from "~/app/_components/data-table/Table";
-import { EntityPillLink } from "~/app/_components/EntityPill";
+import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
-import { NoneState } from "~/app/_components/NoneState";
 import { ImageStatusBadge } from "~/app/_components/table/StatusBadge";
+import { NoneValue } from "~/components/ui/none-value";
 import { formatBytes } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 
@@ -36,7 +36,7 @@ export default function ImageList() {
                 params={{ id: row.original.id }}
                 className="font-medium text-primary hover:underline"
               >
-                {filename || <NoneState />}
+                {filename || <NoneValue />}
               </Link>
             );
           },
@@ -102,7 +102,7 @@ export default function ImageList() {
               const { entityType, entityId, entityName } = getValue();
 
               if (!entityType || !entityId || !entityName) {
-                return <NoneState />;
+                return <NoneValue />;
               }
 
               const entityMap = {
@@ -112,7 +112,7 @@ export default function ImageList() {
               } as const;
 
               return (
-                <EntityPillLink
+                <EntityInlineLink
                   entity={entityMap[entityType as keyof typeof entityMap]}
                   data={{ id: entityId, name: entityName }}
                   compact

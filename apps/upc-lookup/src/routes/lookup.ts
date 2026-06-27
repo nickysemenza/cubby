@@ -1,6 +1,9 @@
 import { withSpan } from "@cubby/worker-tracing";
+import { upc as upcSchema } from "@cubby/usda-schemas";
+import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { uniq } from "es-toolkit";
+import { z } from "zod";
 import type { Env } from "../types";
 import { createDb } from "../db";
 import { getProducts } from "../db/products";
@@ -129,12 +132,12 @@ async function runFirstTries(env: Env, upcs: string[]): Promise<void> {
   );
 }
 
-lookup.get("/:upc", async (c) => {
-  const upc = c.req.param("upc");
-  const baseUrl = new URL(c.req.url).origin;
+const upcParam = z.object({ upc: upcSchema });
 
-  // Validate UPC format
-  if (!UPC_REGEX.test(upc)) {
+lookup.get(
+  "/:upc",
+  zValidator("param", upcParam, (result, c) => {
+    if (result.success) return;
     return c.json(
       {
         error: "Invalid UPC format. Must be 8, 12, 13, or 14 digits.",
@@ -142,22 +145,26 @@ lookup.get("/:upc", async (c) => {
       },
       400,
     );
-  }
+  }),
+  async (c) => {
+    const { upc } = c.req.valid("param");
+    const baseUrl = new URL(c.req.url).origin;
 
-  const db = createDb(c.env.DB);
-  const result = await resolveProduct(db, c.env, upc);
+    const db = createDb(c.env.DB);
+    const result = await resolveProduct(db, c.env, upc);
 
-  if (!result) {
-    const notFound: ProductNotFoundResponse = { found: false, upc };
-    return c.json(notFound, 404);
-  }
+    if (!result) {
+      const notFound: ProductNotFoundResponse = { found: false, upc };
+      return c.json(notFound, 404);
+    }
 
-  const { product, cached } = result;
-  const response: ProductLookupResponse = {
-    ...toResponse(product, baseUrl),
-    cached,
-  };
-  return c.json(response);
-});
+    const { product, cached } = result;
+    const response: ProductLookupResponse = {
+      ...toResponse(product, baseUrl),
+      cached,
+    };
+    return c.json(response);
+  },
+);
 
 export { lookup };

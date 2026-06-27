@@ -5,11 +5,8 @@ import {
   unsafeProductShortcode,
   unsafeRecipeId,
 } from "@cubby/schemas/identifiers";
-import type { IngredientWithFoodOut } from "@cubby/schemas/ingredient-responses";
-import type {
-  RecipeOut,
-  SectionIngredientOut,
-} from "@cubby/schemas/recipe-responses";
+import type { IngredientWithFoodOut } from "@cubby/schemas/ingredient";
+import type { RecipeOut, SectionIngredientOut } from "@cubby/schemas/recipe";
 import {
   type CostingRow,
   computeRecipeCosting,

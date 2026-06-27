@@ -7,6 +7,7 @@ import {
   productId as productIdSchema,
   unsafeUserId,
 } from "@cubby/schemas/identifiers";
+import { MAX_PAGE_SIZE } from "@cubby/schemas/pagination";
 import {
   IntegreSQLClient,
   type IntegreSQLDatabaseConfig,
@@ -284,7 +285,7 @@ export async function seedFromCSV(
     db,
     {},
     { orderBy: "createdAt", direction: "asc" },
-    { pageIndex: 0, pageSize: 1000 },
+    { pageIndex: 0, pageSize: MAX_PAGE_SIZE },
   );
 
   for (const entry of inventoryEntries.data) {

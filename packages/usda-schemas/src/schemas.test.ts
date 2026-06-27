@@ -8,28 +8,27 @@ import {
 } from "./schemas";
 
 describe("UPC validation", () => {
-  it("should accept valid 12-digit UPC", () => {
-    expect(() => upc.parse("123456789012")).not.toThrow();
+  it.each([
+    ["12345678", "12345678"],
+    ["123456789012", "123456789012"],
+    ["1234567890123", "1234567890123"],
+    ["12345678901234", "12345678901234"],
+    [" 123456789012 ", "123456789012"],
+  ])("accepts %s", (input, expected) => {
+    expect(upc.parse(input)).toBe(expected);
   });
 
-  it("should accept valid 13-digit EAN-13", () => {
-    expect(() => upc.parse("1234567890123")).not.toThrow();
-  });
-
-  it("should accept valid 14-digit GTIN-14", () => {
-    expect(() => upc.parse("12345678901234")).not.toThrow();
-  });
-
-  it("should reject UPC shorter than 12 digits", () => {
-    expect(() => upc.parse("12345678901")).toThrow();
-  });
-
-  it("should reject UPC longer than 14 digits", () => {
-    expect(() => upc.parse("123456789012345")).toThrow();
-  });
-
-  it("should reject empty UPC", () => {
-    expect(() => upc.parse("")).toThrow();
+  it.each([
+    "",
+    "1234567",
+    "123456789",
+    "1234567890",
+    "12345678901",
+    "123456789012345",
+    "ABCDEFGHIJKL",
+    "12345678901A",
+  ])("rejects %s", (input) => {
+    expect(() => upc.parse(input)).toThrow();
   });
 });
 

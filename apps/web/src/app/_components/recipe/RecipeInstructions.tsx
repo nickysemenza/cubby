@@ -1,4 +1,4 @@
-import type { RecipeOut } from "@cubby/schemas/recipe-responses";
+import type { RecipeOut } from "@cubby/schemas/recipe";
 import { useMemo } from "react";
 import { Row, Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";

@@ -5,12 +5,12 @@
 
 import { extractDbTimestampsFromDBRec } from "@cubby/schemas/common";
 import { unsafeLocationShortcode } from "@cubby/schemas/identifiers";
-import { type LocationOut, locationType } from "@cubby/schemas/location";
 import type {
   InfLocation,
   LocationListItemOut,
   LocationListRefOut,
-} from "@cubby/schemas/location-responses";
+} from "@cubby/schemas/location";
+import { type LocationOut, locationType } from "@cubby/schemas/location";
 import { parseWithContext } from "~/lib/zod-utils";
 import type { image, location } from "~/server/db/schema";
 import {

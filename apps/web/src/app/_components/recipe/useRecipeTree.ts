@@ -1,8 +1,5 @@
-import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient-responses";
-import type {
-  RecipeGraphOut,
-  RecipeOut,
-} from "@cubby/schemas/recipe-responses";
+import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient";
+import type { RecipeGraphOut, RecipeOut } from "@cubby/schemas/recipe";
 import { useMemo } from "react";
 import { computeRecipeCosting, type RecipeCosting } from "~/lib/recipe-costing";
 import { buildRecipeTree, type RecipeTreeNode } from "./recipe-tree";

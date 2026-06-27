@@ -3,8 +3,13 @@
  * Insert, update, and batch operations with proper error handling.
  */
 
-import type { InferInsertModel, InferSelectModel, SQL } from "drizzle-orm";
-import { getTableName, inArray, sql } from "drizzle-orm";
+import type {
+  AnyColumn,
+  InferInsertModel,
+  InferSelectModel,
+  SQL,
+} from "drizzle-orm";
+import { and, eq, getTableName, inArray, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
@@ -12,6 +17,7 @@ import { image } from "~/server/db/schema";
 import { TraceNames, withTrace } from "~/server/tracing";
 
 import { unwrapDb } from "./core";
+import { notDeleted } from "./query";
 
 /**
  * Atomic find-or-create. The correct, race-free SELECT-then-INSERT primitive:
@@ -150,6 +156,22 @@ export const updateAndReturn = async <T extends PgTable>(
     }
     return updated;
   });
+};
+
+export const updateLiveAndReturn = async <
+  T extends PgTable & { id: AnyColumn; deletedAt: AnyColumn },
+>(
+  db: Database | DrizzleTransaction,
+  table: T,
+  values: Partial<InferInsertModel<T>>,
+  id: string,
+): Promise<InferSelectModel<T>> => {
+  return updateAndReturn(
+    db,
+    table,
+    values,
+    and(eq(table.id, id), notDeleted(table)),
+  );
 };
 
 /**

@@ -53,7 +53,8 @@
  *   Rendering → Tooltip → React Component
  */
 
-import type { InfLocation } from "@cubby/schemas/location-responses";
+import type { InfLocation } from "@cubby/schemas/location";
+import { MAX_PAGE_SIZE } from "@cubby/schemas/pagination";
 import {
   formatCategoryLabel,
   getCategoryColor,
@@ -1816,7 +1817,7 @@ export function IsometricPantry() {
   const inventoryQuery = useQuery(
     api.inventory.list.queryOptions({
       sort: { orderBy: "createdAt", direction: "desc" },
-      pagination: { pageIndex: 0, pageSize: 5000 },
+      pagination: { pageIndex: 0, pageSize: MAX_PAGE_SIZE },
       filters: {},
     }),
   );

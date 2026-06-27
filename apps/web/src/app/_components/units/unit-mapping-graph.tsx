@@ -1,4 +1,4 @@
-import type { UnitMapping } from "@cubby/schemas/unitmapping-responses";
+import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import * as d3Force from "d3-force";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Row } from "~/components/layout";

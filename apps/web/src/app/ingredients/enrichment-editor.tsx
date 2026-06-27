@@ -1,5 +1,5 @@
-import type { EnrichmentRow } from "@cubby/schemas/ingredient-responses";
-import type { UnitMapping } from "@cubby/schemas/unitmapping-responses";
+import type { EnrichmentRow } from "@cubby/schemas/ingredient";
+import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { Check, Plus, X } from "lucide-react";
 import {

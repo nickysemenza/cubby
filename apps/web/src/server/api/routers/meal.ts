@@ -14,16 +14,14 @@ import {
   mealCreateInput,
   mealDateRange,
   mealFiltersSchema,
+  mealListOut,
+  mealOut,
   mealRecipeIdInput,
   mealUpdateData,
   mealUpdateRecipeInput,
-} from "@cubby/schemas/meal";
-import {
-  mealListOut,
-  mealOut,
   type ShoppingListContribution,
   shoppingListOut,
-} from "@cubby/schemas/meal-responses";
+} from "@cubby/schemas/meal";
 import { createAppError } from "~/server/errors/app-error";
 import {
   addRecipeToMeal,

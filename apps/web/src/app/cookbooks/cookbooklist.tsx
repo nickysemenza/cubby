@@ -1,9 +1,9 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { BookOpen } from "lucide-react";
-import { NoneState } from "~/app/_components/NoneState";
 import { Empty, EmptyDescription, EmptyIcon } from "~/components/ui/empty";
 import { Image } from "~/components/ui/image";
+import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/trpc/react";
 
 /**
@@ -58,7 +58,7 @@ export function CookbookList() {
                 ) : (
                   <span className="flex aspect-[3/4] w-full items-center justify-center bg-plum/15 px-4 text-center">
                     <span className="line-clamp-4 font-heading font-semibold text-plum">
-                      {book || <NoneState />}
+                      {book || <NoneValue />}
                     </span>
                   </span>
                 )}

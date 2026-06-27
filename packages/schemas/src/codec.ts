@@ -15,6 +15,14 @@ export const amount = z
   });
 export type Amount = z.infer<typeof amount>;
 
+// Write boundaries require a positive lower value. Output schemas keep using the
+// looser `amount` so legacy rows and parser output can still be displayed.
+export const positiveAmount = amount.refine((a) => a.value > 0, {
+  error: "Amount must be greater than zero",
+  path: ["value"],
+});
+export const writeAmount = positiveAmount;
+
 // Section names must be 2+ chars to satisfy recipeSectionInput validation
 // downstream; drop anything shorter (or blank) to an unnamed section. Shared by
 // the URL scraper, the EPUB cookbook adapter, and the Notion mapping so they all

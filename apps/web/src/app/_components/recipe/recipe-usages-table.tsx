@@ -1,4 +1,4 @@
-import type { RecipeUsage } from "@cubby/schemas/recipe-responses";
+import type { RecipeUsage } from "@cubby/schemas/recipe";
 import { AlertCircle } from "lucide-react";
 import { useMemo } from "react";
 import {
@@ -16,7 +16,7 @@ import {
 } from "~/components/ui/tooltip";
 import { computeParseDrift, type ParseDrift } from "~/lib/parse-drift";
 import { wasm } from "~/lib/wasm";
-import { EntityPillLink } from "../EntityPill";
+import { EntityInlineLink } from "../EntityInlineLink";
 import { formatAmounts } from "../inventory/format-amount";
 import { DriftIndicator } from "../parse-drift-indicator";
 
@@ -87,7 +87,7 @@ export function RecipeUsagesTable({
         {rows.map((row) => (
           <TableRow key={row.id}>
             <TableCell className="align-top">
-              <EntityPillLink entity="recipe" data={row.recipe} />
+              <EntityInlineLink entity="recipe" data={row.recipe} />
             </TableCell>
             <TableCell className="align-top text-muted-foreground">
               {row.sectionName ?? ""}

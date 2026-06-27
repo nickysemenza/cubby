@@ -14,7 +14,7 @@ import { LocationIcon } from "./locations/location-icons";
 type MinimalEntityData = { id: string; name: string };
 
 // Discriminated union for entity-specific data shapes
-type EntityPillLinkProps = {
+type EntityInlineLinkProps = {
   openInNewTab?: boolean;
   /** Compact mode: truncates long names with max-width */
   compact?: boolean;
@@ -38,9 +38,8 @@ type EntityPillLinkProps = {
     }
 );
 
-// Crisp entity link (2026-06-12 pill diet): a colored wayfinding icon + the
-// name as a dotted-underlined text link, with optional muted metadata. Replaces
-// the old bordered pill so dense lists/tables read as text, not chips.
+// Crisp entity link: a colored wayfinding icon + the name as a
+// dotted-underlined text link, with optional muted metadata.
 const linkClass =
   "group inline-flex max-w-full items-baseline gap-2 align-baseline text-foreground transition-colors hover:text-primary";
 
@@ -78,7 +77,7 @@ function EntityLinkBody({
   );
 }
 
-export const EntityPillLink: React.FC<EntityPillLinkProps> = (props) => {
+export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
   const { openInNewTab, compact } = props;
 
   return match(props)

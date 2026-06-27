@@ -1,4 +1,4 @@
-import type { EnrichmentRow } from "@cubby/schemas/ingredient-responses";
+import type { EnrichmentRow } from "@cubby/schemas/ingredient";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";

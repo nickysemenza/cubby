@@ -8,7 +8,7 @@ import {
 import {
   inventoryListItemOut,
   inventoryWithLocationAndProductOut,
-} from "@cubby/schemas/inventory-responses";
+} from "@cubby/schemas/inventory";
 import { describe, expect, it } from "vitest";
 import { dbInventoryEntryToAPI, dbInventoryEntryToListAPI } from "./mappers";
 import type { InventoryEntryDeepDB, InventoryEntryListDB } from "./types";

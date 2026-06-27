@@ -1,9 +1,8 @@
 import type { LocationId } from "@cubby/schemas/identifiers";
-import type { LocationType } from "@cubby/schemas/location";
-import type { InfLocation } from "@cubby/schemas/location-responses";
+import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import * as d3Hierarchy from "d3-hierarchy";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { EntityPillLink } from "~/app/_components/EntityPill";
+import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { ROOT_LOCATION_ID, useLocationTree } from "~/hooks/useLocationTree";
 
 interface TreeNode {
@@ -169,7 +168,7 @@ function TidyTree({ data }: TidyTreeProps) {
                     <div
                       className={`flex ${hasChildren ? "justify-end" : "justify-start"}`}
                     >
-                      <EntityPillLink
+                      <EntityInlineLink
                         entity="location"
                         data={{
                           name: node.data.name,

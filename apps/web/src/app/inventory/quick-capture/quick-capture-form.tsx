@@ -16,7 +16,7 @@
  */
 
 import type { ProductId } from "@cubby/schemas/identifiers";
-import type { InfLocation } from "@cubby/schemas/location-responses";
+import type { InfLocation } from "@cubby/schemas/location";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
@@ -37,7 +37,7 @@ import {
   buildProductComboboxItem,
 } from "~/app/_components/combobox/combobox-builders";
 import { WithProductSearch } from "~/app/_components/combobox/with-search-hook";
-import { EntityPillLink } from "~/app/_components/EntityPill";
+import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import {
   getOptionalLocationId,
   getProductId,
@@ -711,7 +711,7 @@ export default function QuickCaptureForm({
                 <Row gap="xs" wrap>
                   {inventoryAtLocation.items.map((item) => (
                     <Row key={item.id} align="center" gap="xs">
-                      <EntityPillLink entity="product" data={item.product} />
+                      <EntityInlineLink entity="product" data={item.product} />
                       <span className="text-muted-foreground text-xs">
                         ({item.amount.value} {item.amount.unit})
                       </span>

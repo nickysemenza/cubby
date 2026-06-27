@@ -1,11 +1,11 @@
 import type { LocationType } from "@cubby/schemas/location";
-import { DotLabel } from "~/app/_components/DotLabel";
+import { DotLabel } from "~/components/ui/dot-label";
 import { getLocationTypeColor } from "./location-type-theme";
 
-interface LocationTypeBadgeProps {
+interface LocationTypeLabelProps {
   type: LocationType;
 }
 
-export function LocationTypeBadge({ type }: LocationTypeBadgeProps) {
+export function LocationTypeLabel({ type }: LocationTypeLabelProps) {
   return <DotLabel color={getLocationTypeColor(type)}>{type}</DotLabel>;
 }

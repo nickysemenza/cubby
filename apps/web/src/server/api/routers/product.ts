@@ -13,30 +13,26 @@ import {
 } from "@cubby/schemas/identifiers";
 import {
   productApplyUpcInput,
+  productCategoryDistributionOut,
   productCreateInput,
   productCreateManyInput,
   productFiltersSchema,
   productFindOrCreateByUPCInput,
+  productListItemOut,
   productMarkUsdaUnavailableManyInput,
+  productPickerItemOut,
   productQuickCreatePayload,
   productShortcodeInput,
+  productShortcodeListOut,
   productShortcodesInput,
-  productSummaryBatchInput,
+  productSummariesInput,
+  productSummariesOut,
   productTopLevelOut,
   productUpdateData,
   productUpdateInput,
-} from "@cubby/schemas/product";
-import {
-  productCategoryDistributionOut,
-  productFoodSummariesOut,
-  productImageSummariesOut,
-  productListItemOut,
-  productPickerItemOut,
-  productShortcodeListOut,
-  productUnitMappingSummariesOut,
   productWithFoodAndSideEffectsOut,
   productWithFoodOut,
-} from "@cubby/schemas/product-responses";
+} from "@cubby/schemas/product";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { streamItems, streamProgress } from "~/lib/bulk-progress";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -204,26 +200,13 @@ const applyUpcData = protectedProcedure
     );
   });
 
-const foodSummaries = protectedProcedure
-  .input(productSummaryBatchInput)
-  .output(productFoodSummariesOut)
+const summaries = protectedProcedure
+  .input(productSummariesInput)
+  .output(productSummariesOut)
   .query(async ({ ctx, input }) => {
-    return await ctx.services.product.getFoodSummariesByProductIds(input.ids);
-  });
-
-const imageSummaries = protectedProcedure
-  .input(productSummaryBatchInput)
-  .output(productImageSummariesOut)
-  .query(async ({ ctx, input }) => {
-    return await ctx.services.product.getImageSummariesByProductIds(input.ids);
-  });
-
-const unitMappingSummaries = protectedProcedure
-  .input(productSummaryBatchInput)
-  .output(productUnitMappingSummariesOut)
-  .query(async ({ ctx, input }) => {
-    return await ctx.services.product.getUnitMappingSummariesByProductIds(
+    return await ctx.services.product.getSummariesByProductIds(
       input.ids,
+      input.include,
     );
   });
 
@@ -375,9 +358,7 @@ export const productRouter = createTRPCRouter({
   getByShortcode,
   getByShortcodes,
   list,
-  foodSummaries,
-  imageSummaries,
-  unitMappingSummaries,
+  summaries,
   search,
   create,
   createMany,
