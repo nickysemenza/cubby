@@ -1,6 +1,13 @@
 import { NONEXISTENT_UUID, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { listParams, makeProductInput } from "~/server/repo/repo.fixtures";
+import { createIngredient } from "~/server/repo/ingredient";
+import { createRecipe } from "~/server/repo/recipe";
+import {
+  ingredientRef,
+  listParams,
+  makeProductInput,
+  makeRecipeInput,
+} from "~/server/repo/repo.fixtures";
 import { createTestCaller } from "../trpc";
 import { productRouter } from "./product";
 
@@ -143,6 +150,52 @@ describe("product router", () => {
 
     const hydrated = await caller.foodSummaries({ ids: [createdProduct.id] });
     expect(hydrated).toHaveProperty(createdProduct.id);
+  });
+
+  it("returns recipe usages on detail responses for linked ingredients", async () => {
+    const caller = createTestCaller(productRouter, ctx.db);
+    const ingredient = await createIngredient(
+      ctx.db,
+      { name: "Recipe Usage Flour", aliases: [] },
+      ctx.actor,
+    );
+    const product = await caller.create(
+      makeProductInput({
+        name: "Recipe Usage Product",
+        manufacturer: "Usage Co",
+        ingredientId: ingredient.id,
+        pendingImageIds: [],
+      }),
+    );
+    const recipe = await createRecipe(
+      ctx.db,
+      makeRecipeInput({
+        name: "Usage Pancakes",
+        sections: [
+          {
+            name: "Batter",
+            ingredients: [
+              ingredientRef(ingredient.id, {
+                amounts: [{ value: 2, unit: "cup" }],
+                rawLine: "2 cups flour",
+              }),
+            ],
+            instructions: [{ instruction: "Mix." }],
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+
+    const detail = await caller.getByID({ id: product.id });
+
+    expect(detail.recipeUsages).toHaveLength(1);
+    expect(detail.recipeUsages[0]).toMatchObject({
+      recipe: { id: recipe.id, name: "Usage Pancakes" },
+      sectionName: "Batter",
+      rawLine: "2 cups flour",
+      amounts: [{ value: 2, unit: "cup" }],
+    });
   });
 
   it("should update a product", async () => {

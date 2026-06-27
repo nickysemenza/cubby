@@ -162,7 +162,6 @@ DB-to-API transformations often require repetitive patterns. These helpers reduc
 import {
   extractImagesFromJoinTable,
   mapRelation,
-  addProductSourceMetadata,
 } from "~/server/repo/database-helpers";
 
 // Extract images from join table results
@@ -174,11 +173,6 @@ const images = extractImagesFromJoinTable(product.images);
 // Before: const products = Product?.map((p) => transform(p)) ?? [];
 // After:
 const products = mapRelation(Product, (p) => transform(p));
-
-// Add product source metadata to unit mappings
-// Before: manual map with sourceMetadata injection
-// After:
-const unitMappings = addProductSourceMetadata(productId, mappings);
 ```
 
 ### Relation Loaders

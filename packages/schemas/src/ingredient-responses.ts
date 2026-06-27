@@ -1,10 +1,15 @@
 import { foodSummary } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { ingredientId } from "./identifiers";
-import { ingredientOut } from "./ingredient";
+import { ingredientOut, mergeSummary } from "./ingredient";
 import { productWithMappingsOut } from "./product-responses";
 import { baseKind } from "./problems";
-import { recipeRefOut, recipeTopLevel, recipeUsageOut } from "./recipe";
+import {
+  recipeRefOut,
+  recipeTopLevel,
+  recipeUsageOut,
+  recomputeSummary,
+} from "./recipe";
 
 export const productWithMappingsAndFoodOut = productWithMappingsOut.extend({
   food: foodSummary.nullable(),
@@ -27,6 +32,20 @@ export const ingredientWithFoodOut = ingredientWithRecipesAndProductOut.extend({
   product: z.array(productWithMappingsAndFoodOut),
 });
 export type IngredientWithFoodOut = z.infer<typeof ingredientWithFoodOut>;
+
+export const ingredientWithFoodAndSideEffectsOut = ingredientWithFoodOut.extend(
+  {
+    sideEffects: recomputeSummary,
+  },
+);
+export type IngredientWithFoodAndSideEffectsOut = z.infer<
+  typeof ingredientWithFoodAndSideEffectsOut
+>;
+
+export const ingredientMergeOut = ingredientWithFoodAndSideEffectsOut.extend({
+  mergeSummary,
+});
+export type IngredientMergeOut = z.infer<typeof ingredientMergeOut>;
 
 // Lean ingredient+food shape: products (with food) without the per-usage recipe
 // bodies that detail responses carry. Used by workbench and costing paths.

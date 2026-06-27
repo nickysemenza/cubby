@@ -4,10 +4,8 @@
  */
 
 import { amount } from "@cubby/schemas/codec";
-import { unsafeProductId } from "@cubby/schemas/identifiers";
 import type { z } from "zod";
 import { parseWithContext } from "~/lib/zod-utils";
-import type { productUnitMappings } from "~/server/db/schema";
 import { isNotDeleted } from "./query";
 
 /**
@@ -48,24 +46,6 @@ export const mapRelation = <
   });
 
   return filtered.map(mapper);
-};
-
-/**
- * Add sourceMetadata to unit mappings for a product.
- * Injects { type: "product", productId } into each mapping's sourceMetadata field.
- * Automatically filters out soft-deleted unit mappings.
- */
-export const addProductSourceMetadata = (
-  productId: string,
-  unitMappings: Array<typeof productUnitMappings.$inferSelect>,
-) => {
-  return unitMappings.filter(isNotDeleted).map((mapping) => ({
-    ...mapping,
-    sourceMetadata: {
-      type: "product" as const,
-      productId: unsafeProductId(productId),
-    },
-  }));
 };
 
 /**

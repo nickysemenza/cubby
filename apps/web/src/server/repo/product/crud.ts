@@ -18,15 +18,12 @@ import {
   type ProductPickerItemOut,
   type ProductTopLevelOut,
   type ProductUpdateInput,
-  productPickerItemOut,
-  productTopLevelOut,
 } from "@cubby/schemas/product";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { countBy } from "es-toolkit";
 import { getSortableFields } from "~/entities/entities";
-import { parseWithContext } from "~/lib/zod-utils";
 import type { Database } from "~/server/db";
 import {
   image,
@@ -50,7 +47,6 @@ import {
   buildSearchConditions,
   countWhere,
   executeListQueryWithCount,
-  extractImagesFromJoinTable,
   getDb,
   insertAndReturn,
   lockAndValidateForDelete,
@@ -62,7 +58,11 @@ import {
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import { generateUniqueProductShortcode } from "~/server/repo/shortcode-utils";
 
-import { dbProductToAPI } from "./mappers";
+import {
+  dbProductToAPI,
+  dbProductToPickerItemAPI,
+  dbProductToTopLevelAPI,
+} from "./mappers";
 import type { ProductDeepDB } from "./types";
 import {
   assertNoCanonicalPriceMapping,
@@ -321,12 +321,7 @@ export const productSearch = async (
     countWhere(db, product, whereClause),
   );
 
-  const data = results.map((row) =>
-    parseWithContext(productPickerItemOut, row, {
-      entityType: "Product",
-      identifier: { id: row.id, name: row.name },
-    }),
-  );
+  const data = results.map(dbProductToPickerItemAPI);
 
   return { data, count };
 };
@@ -500,16 +495,10 @@ export const createProduct = async (
             })
           : [];
 
-      // Construct and validate the response object
-      const result = {
+      return dbProductToTopLevelAPI({
         ...newProduct,
         images,
         externalIds: createdExternalIds,
-      };
-
-      return parseWithContext(productTopLevelOut, result, {
-        entityType: "Product",
-        identifier: { id: newProduct.id, name: newProduct.name },
       });
     });
   } catch (error) {
@@ -638,16 +627,10 @@ export const updateProduct = async (
       ),
     });
 
-    // Construct and validate the response object
-    const result = {
+    return dbProductToTopLevelAPI({
       ...updated,
-      images: extractImagesFromJoinTable(productImages),
+      images: productImages,
       externalIds: currentExternalIds,
-    };
-
-    return parseWithContext(productTopLevelOut, result, {
-      entityType: "Product",
-      identifier: { id: updated.id, name: updated.name },
     });
   });
 };
@@ -702,18 +685,11 @@ export const quickCreateProduct = async (
     action: "create",
   });
 
-  return parseWithContext(
-    productTopLevelOut,
-    {
-      ...newProduct,
-      images: [],
-      externalIds: [],
-    },
-    {
-      entityType: "Product",
-      identifier: { id: newProduct.id, name: newProduct.name },
-    },
-  );
+  return dbProductToTopLevelAPI({
+    ...newProduct,
+    images: [],
+    externalIds: [],
+  });
 };
 
 /**

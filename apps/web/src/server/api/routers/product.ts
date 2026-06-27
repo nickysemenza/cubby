@@ -23,9 +23,9 @@ import {
 } from "@cubby/schemas/product";
 import {
   productListItemOut,
+  productWithFoodAndSideEffectsOut,
   productWithFoodOut,
 } from "@cubby/schemas/product-responses";
-import { recomputeSummary } from "@cubby/schemas/recipe";
 import { unitMappingWithMetadata } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { foodSummary, upc } from "@cubby/usda-schemas";
@@ -139,7 +139,7 @@ const { list: search } = createEntityListProcedure({
 // shared recipes once per product.
 const create = protectedProcedure
   .input(productCreateInput)
-  .output(productWithFoodOut.extend({ sideEffects: recomputeSummary }))
+  .output(productWithFoodAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
     // Create the product
     const product = await ctx.services.product.createProduct(
@@ -176,7 +176,7 @@ const create = protectedProcedure
 // report the count. Inventory-valuation recompute is added here too (stage D).
 const update = protectedProcedure
   .input(z.object({ id: productId, data: productUpdateData }))
-  .output(productWithFoodOut.extend({ sideEffects: recomputeSummary }))
+  .output(productWithFoodAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
     const result = await ctx.services.product.updateProduct(
       input.id,
@@ -211,7 +211,7 @@ const update = protectedProcedure
 // Mirrors the field mapping in findOrCreateByUPC and the recompute in `update`.
 const applyUpcData = protectedProcedure
   .input(z.object({ id: productId, upc: upc }))
-  .output(productWithFoodOut.extend({ sideEffects: recomputeSummary }))
+  .output(productWithFoodAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
     const current = await ctx.services.product.getProductByID(input.id);
     const lookup = await ctx.upcLookupClient.lookup(input.upc);

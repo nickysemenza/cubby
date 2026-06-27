@@ -7,7 +7,6 @@
  * these are re-exported from the package barrel.
  */
 
-import { unsafeProductShortcode } from "@cubby/schemas/identifiers";
 import type { IngredientWithRecipesAndProductOut } from "@cubby/schemas/ingredient-responses";
 import { and, inArray, isNull, or, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -22,12 +21,15 @@ import {
   type recipeSectionIngredient,
 } from "~/server/db/schema";
 import {
-  addProductSourceMetadata,
-  extractImagesFromJoinTable,
   formatSearchTerm,
   mapRelation,
   notDeleted,
 } from "~/server/repo/database-helpers";
+import {
+  dbProductToTopLevelAPI,
+  dbProductToTopLevelShape,
+  mapProductUnitMappings,
+} from "~/server/repo/product/mappers";
 import { computeRecipeUsages, dbRecipeToAPIShallow } from "../recipe";
 
 export type IngredientDeepDB = typeof ingredient.$inferSelect & {
@@ -37,6 +39,7 @@ export type IngredientDeepDB = typeof ingredient.$inferSelect & {
       externalIds: Array<typeof productExternalId.$inferSelect>;
       images: Array<{
         image: typeof image.$inferSelect;
+        deletedAt?: Date | null;
       }>;
     }
   >;
@@ -60,14 +63,10 @@ export const mapIngredientProducts = (
   productRel: IngredientDeepDB["product"],
 ) =>
   mapRelation(productRel, (prod) => {
-    const { ingredientId: _ingredientId, ...prodRest } = prod;
+    const baseProduct = dbProductToTopLevelAPI(prod);
     return {
-      ...prodRest,
-      id: prod.id,
-      shortcode: unsafeProductShortcode(prod.shortcode),
-      images: extractImagesFromJoinTable(prod.images),
-      externalIds: prod.externalIds.filter((eid) => eid.deletedAt === null),
-      unitMappings: addProductSourceMetadata(prod.id, prod.unitMappings),
+      ...baseProduct,
+      unitMappings: mapProductUnitMappings(prod.id, prod.unitMappings),
     };
   });
 
@@ -91,14 +90,10 @@ export const mapIngredientProductsLean = (
   productRel: IngredientLeanDB["product"],
 ) =>
   mapRelation(productRel, (prod) => {
-    const { ingredientId: _ingredientId, ...prodRest } = prod;
+    const baseProduct = dbProductToTopLevelShape(prod);
     return {
-      ...prodRest,
-      id: prod.id,
-      shortcode: unsafeProductShortcode(prod.shortcode),
-      images: [] as Array<typeof image.$inferSelect>,
-      externalIds: [] as Array<typeof productExternalId.$inferSelect>,
-      unitMappings: addProductSourceMetadata(prod.id, prod.unitMappings),
+      ...baseProduct,
+      unitMappings: mapProductUnitMappings(prod.id, prod.unitMappings),
     };
   });
 
