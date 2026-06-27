@@ -11,13 +11,13 @@
 
 import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
 import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient-responses";
+import type { RecipeGraphOut } from "@cubby/schemas/recipe-responses";
 import type {
   RecipeCostingExplain,
-  RecipeGraphOut,
   RecipeMacroColumn,
   RecipeTotals,
-} from "@cubby/schemas/recipe";
-import { RECIPE_MACRO_KEYS, recipeTotals } from "@cubby/schemas/recipe";
+} from "@cubby/schemas/recipe-shared";
+import { RECIPE_MACRO_KEYS, recipeTotals } from "@cubby/schemas/recipe-shared";
 import { getNutrientValueByKey } from "@cubby/usda-schemas";
 import { chunk, keyBy, uniq } from "es-toolkit";
 import {

@@ -3,10 +3,28 @@ import {
   createPaginatedResponseSchema,
   sortPaginationCombo,
 } from "@cubby/schemas/pagination";
-import { foodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
-import { dataTypeEnum, foodLookupParam } from "@cubby/usda-schemas";
+import {
+  foodSummaryEnrichment,
+  foodSummaryWithLinkedProducts,
+} from "@cubby/schemas/usda";
+import {
+  dataTypeEnum,
+  foodLookupParam,
+  foodSummary,
+} from "@cubby/usda-schemas";
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
+
+const usdaListInput = z
+  .object({
+    filters: z.object({
+      nameFilter: z.string().optional(),
+      dataTypeFilter: dataTypeEnum.optional(),
+      dataTypes: z.array(dataTypeEnum).optional(),
+      foodsOnly: z.boolean().optional(),
+    }),
+  })
+  .extend(sortPaginationCombo.shape);
 
 // These return `foodSummaryWithLinkedProducts`, which embeds internal Cubby
 // product data (ids, prices, externalIds). The app is deployed publicly, so
@@ -31,18 +49,7 @@ const getByID = protectedProcedure
   });
 
 const list = protectedProcedure
-  .input(
-    z
-      .object({
-        filters: z.object({
-          nameFilter: z.string().optional(),
-          dataTypeFilter: dataTypeEnum.optional(),
-          dataTypes: z.array(dataTypeEnum).optional(),
-          foodsOnly: z.boolean().optional(),
-        }),
-      })
-      .extend(sortPaginationCombo.shape),
-  )
+  .input(usdaListInput)
   .output(createPaginatedResponseSchema(foodSummaryWithLinkedProducts))
   .query(async ({ ctx, input }) => {
     try {
@@ -67,8 +74,42 @@ const list = protectedProcedure
     }
   });
 
+const listSummaries = protectedProcedure
+  .input(usdaListInput)
+  .output(createPaginatedResponseSchema(foodSummary))
+  .query(async ({ ctx, input }) => {
+    try {
+      const { data, count } = await ctx.usdaService.listFoodSummaries(
+        input.filters.nameFilter,
+        input.filters.dataTypeFilter,
+        input.sort,
+        input.pagination,
+        input.filters.foodsOnly,
+        input.filters.dataTypes,
+      );
+
+      return buildPaginatedResponse(input.pagination, data, count);
+    } catch (e) {
+      console.error(
+        "[usda.listSummaries] failed, returning empty:",
+        e,
+        e instanceof Error ? e.cause : undefined,
+      );
+      return buildPaginatedResponse(input.pagination, [], 0);
+    }
+  });
+
+const enrichmentsByID = protectedProcedure
+  .input(z.object({ fdcIds: z.array(z.number()).max(1000) }))
+  .output(z.record(z.string(), foodSummaryEnrichment))
+  .query(async ({ ctx, input }) => {
+    return await ctx.usdaService.getFoodEnrichmentsByID(input.fdcIds);
+  });
+
 export const usdaRouter = createTRPCRouter({
   getByAlternateID,
   getByID,
   list,
+  listSummaries,
+  enrichmentsByID,
 });

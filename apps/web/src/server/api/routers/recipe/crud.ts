@@ -11,11 +11,13 @@ import { type RecipeId, recipeId } from "@cubby/schemas/identifiers";
 import {
   recipeCreateInput,
   recipeFiltersSchema,
+  recipeUpdateInput,
+} from "@cubby/schemas/recipe";
+import {
   recipeGraphOut,
   recipeListItemOut,
   recipeOut,
-  recipeUpdateInput,
-} from "@cubby/schemas/recipe";
+} from "@cubby/schemas/recipe-responses";
 import { z } from "zod";
 import { createAppError } from "~/server/errors/app-error";
 import {

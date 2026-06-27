@@ -22,11 +22,11 @@ import {
   type IngredientUsage,
   ingredientUsageSchema,
 } from "@cubby/schemas/ingredient-usage";
-import { recipeCostingExplain } from "@cubby/schemas/recipe";
 import {
   type RecipeDependencyGraph,
   recipeDependencyGraphSchema,
 } from "@cubby/schemas/recipe-dependency-graph";
+import { recipeCostingExplain } from "@cubby/schemas/recipe-shared";
 import { uniq } from "es-toolkit";
 import { z } from "zod";
 import { streamProgress } from "~/lib/bulk-progress";

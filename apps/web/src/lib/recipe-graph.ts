@@ -3,7 +3,7 @@ import type {
   RecipeOut,
   SectionIngredient,
   SectionIngredientOut,
-} from "@cubby/schemas/recipe";
+} from "@cubby/schemas/recipe-responses";
 import { match } from "ts-pattern";
 
 type RecipeGraphRecipe = Pick<RecipeOut, "id" | "sections">;

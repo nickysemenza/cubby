@@ -1,3 +1,4 @@
+import type { FoodSummaryEnrichment } from "@cubby/schemas/usda";
 import {
   type DataType,
   dataTypeEnum,
@@ -5,7 +6,7 @@ import {
 } from "@cubby/usda-schemas";
 import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { USDA_KINDS } from "~/lib/conversion-coverage";
@@ -24,6 +25,11 @@ import { TableLink } from "../_components/table/TableLink";
 import { UnitMappingDisplay } from "../_components/units/UnitMappingDisplay";
 import { CoreNutrientCoverage } from "../_components/usda/core-nutrient-coverage";
 
+const EMPTY_ENRICHMENT = {
+  inferredUnitMappings: [],
+  linkedProducts: [],
+} satisfies FoodSummaryEnrichment;
+
 export function USDAFoodList() {
   const api = useTRPC();
   const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview(
@@ -39,7 +45,7 @@ export function USDAFoodList() {
 
   // Query data with params from table state
   const query = useQuery(
-    api.usda.list.queryOptions({
+    api.usda.listSummaries.queryOptions({
       // While searching by name, rank by FTS relevance (best match first) like
       // the picker; otherwise honor the column sort.
       sort: nameFilter
@@ -59,6 +65,14 @@ export function USDAFoodList() {
   );
 
   const { data: foodsResp, isLoading, error, isFetching } = query;
+  const baseData = foodsResp?.items || [];
+  const fdcIds = useMemo(() => baseData.map((food) => food.fdc_id), [baseData]);
+  const enrichmentsQuery = useQuery(
+    api.usda.enrichmentsByID.queryOptions(
+      { fdcIds },
+      { enabled: fdcIds.length > 0 },
+    ),
+  );
 
   // Inline ref-based timing (replaces useQueryWithTiming hook)
   const startTimeRef = useRef<number | null>(null);
@@ -81,7 +95,14 @@ export function USDAFoodList() {
     }
   }, [isFetching]);
 
-  const data = foodsResp?.items || [];
+  const data = useMemo(
+    () =>
+      baseData.map((food) => ({
+        ...food,
+        ...(enrichmentsQuery.data?.[String(food.fdc_id)] ?? EMPTY_ENRICHMENT),
+      })),
+    [baseData, enrichmentsQuery.data],
+  );
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
 
   // Set up columns

@@ -11,7 +11,7 @@ import type {
   RecipeSectionOut,
   RecipeTopLevel,
   SectionIngredient,
-} from "@cubby/schemas/recipe";
+} from "@cubby/schemas/recipe-responses";
 import type {
   image,
   recipe,

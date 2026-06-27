@@ -21,7 +21,7 @@ import {
   ingredientWithFoodLeanOut,
   ingredientWithFoodOut,
 } from "@cubby/schemas/ingredient-responses";
-import { recipeUsageOut } from "@cubby/schemas/recipe";
+import { recipeUsageOut } from "@cubby/schemas/recipe-responses";
 import { z } from "zod";
 import {
   deleteIngredients,

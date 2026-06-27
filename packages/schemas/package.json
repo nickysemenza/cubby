@@ -20,6 +20,8 @@
     "./equivalences": "./src/equivalences.ts",
     "./ingredient-usage": "./src/ingredient-usage.ts",
     "./recipe-dependency-graph": "./src/recipe-dependency-graph.ts",
+    "./recipe-responses": "./src/recipe-responses.ts",
+    "./recipe-shared": "./src/recipe-shared.ts",
     "./image": "./src/image.ts",
     "./unitmapping": "./src/unitmapping.ts",
     "./external-id": "./src/external-id.ts",

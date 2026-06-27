@@ -17,7 +17,7 @@ import {
   importRecipeSchema,
   importRecipesSchema,
 } from "@cubby/schemas/import-recipe";
-import { cookbookSummary } from "@cubby/schemas/recipe";
+import { cookbookSummary } from "@cubby/schemas/recipe-responses";
 import { z } from "zod";
 import {
   type BulkProgressEvent,

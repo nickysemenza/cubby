@@ -1,4 +1,4 @@
-import type { RecomputeSummary } from "@cubby/schemas/recipe";
+import type { RecomputeSummary } from "@cubby/schemas/recipe-shared";
 
 /**
  * Human phrase for a mutation's eager side-effects, e.g. "recomputed 3 recipes,

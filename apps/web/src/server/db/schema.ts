@@ -20,7 +20,7 @@ import {
   type RecipeTotals,
   type RecipeYield,
   recipeSourceValues,
-} from "@cubby/schemas/recipe";
+} from "@cubby/schemas/recipe-shared";
 import { relations, sql } from "drizzle-orm";
 import {
   boolean,

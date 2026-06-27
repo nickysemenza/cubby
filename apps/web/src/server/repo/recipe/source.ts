@@ -1,5 +1,5 @@
 import { type CookbookId, unsafeCookbookId } from "@cubby/schemas/identifiers";
-import type { RecipeSource } from "@cubby/schemas/recipe";
+import type { RecipeSource } from "@cubby/schemas/recipe-shared";
 import { match, P } from "ts-pattern";
 
 /**

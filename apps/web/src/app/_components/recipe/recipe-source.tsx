@@ -1,4 +1,4 @@
-import type { RecipeSource } from "@cubby/schemas/recipe";
+import type { RecipeSource } from "@cubby/schemas/recipe-shared";
 import { Link } from "@tanstack/react-router";
 import { BookOpen, ExternalLink } from "lucide-react";
 import type { MouseEvent } from "react";

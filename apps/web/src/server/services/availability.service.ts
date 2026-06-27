@@ -7,7 +7,7 @@ import type {
 import type { Amount } from "@cubby/schemas/codec";
 import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
 import type { IngredientWithFoodOut } from "@cubby/schemas/ingredient-responses";
-import type { SectionIngredientOut } from "@cubby/schemas/recipe";
+import type { SectionIngredientOut } from "@cubby/schemas/recipe-responses";
 import { uniq } from "es-toolkit";
 import {
   evaluateAvailability,

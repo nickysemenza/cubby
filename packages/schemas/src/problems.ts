@@ -146,7 +146,7 @@ export const productWithBetterUpcDataSchema = productProblemBase.extend({
   }),
 });
 
-// Grouped output schemas — the Problems page loads detectors in cost-grouped
+// Grouped output shapes — the Problems page loads detectors in cost-grouped
 // chunks (one tRPC query each, routed through an UNBATCHED link so each runs in
 // its own Worker invocation/CPU budget; see root-provider.tsx). The groups split
 // by cost: `fast` is all DB-only detectors; the rest isolate the heavier ones
@@ -154,11 +154,7 @@ export const productWithBetterUpcDataSchema = productProblemBase.extend({
 // parse-sweeps (stale parses, unused aliases) are NOT here — they re-parse every
 // recipe line and blew the CPU/memory budget on the request path, so they live as
 // manual dry-run/fix-all actions in Settings → Maintenance instead.
-// `allProblemsSchema` is composed from these so the section roster stays
-// single-source-of-truth (badge/homepage/MCP still read the combined one).
-
-// DB-only detectors — cheap, no WASM/network.
-export const problemsFastSchema = z.object({
+const problemsFastShape = {
   duplicateUniqueProducts: z.array(duplicateUniqueProductSchema),
   orphanedProducts: z.array(orphanedProductSchema),
   productsWithoutMappings: z.array(productWithoutMappingsSchema),
@@ -168,25 +164,35 @@ export const problemsFastSchema = z.object({
   emptyLocations: z.array(emptyLocationSchema),
   productsWithNoImages: z.array(productWithNoImagesSchema),
   locationsWithoutAiDescription: z.array(locationWithoutAiDescriptionSchema),
-});
+};
+
+// DB-only detectors — cheap, no WASM/network.
+export const problemsFastSchema = z.object(problemsFastShape);
 
 // USDA-coverage detectors — share one product scan + USDA enrichment.
-export const problemsCoverageSchema = z.object({
+const problemsCoverageShape = {
   ingredientsWithPartialCoverage: z.array(ingredientWithPartialCoverageSchema),
   productsWithIslandedMappings: z.array(productWithIslandedMappingsSchema),
-});
+};
+
+export const problemsCoverageSchema = z.object(problemsCoverageShape);
 
 // UPC-lookup network detector.
-export const problemsUpcSchema = z.object({
+const problemsUpcShape = {
   productsWithBetterUpcData: z.array(productWithBetterUpcDataSchema),
-});
+};
 
-// Combined output schema for all problems — composed from the groups (+ derived
-// total) so adding a detector to a group automatically flows into the badge.
-export const allProblemsSchema = problemsFastSchema
-  .merge(problemsCoverageSchema)
-  .merge(problemsUpcSchema)
-  .extend({ totalProblems: z.number() });
+export const problemsUpcSchema = z.object(problemsUpcShape);
+
+// Combined output schema for all problems. It intentionally spells out the wire
+// contract while sharing the grouped shapes above, so lazy loading/cost grouping
+// never makes fields appear optional on the aggregate response.
+export const allProblemsSchema = z.object({
+  ...problemsFastShape,
+  ...problemsCoverageShape,
+  ...problemsUpcShape,
+  totalProblems: z.number(),
+});
 
 // Count-only output schema for badge display. byType derives mechanically from
 // allProblemsSchema — every array key becomes a count — so the count roster

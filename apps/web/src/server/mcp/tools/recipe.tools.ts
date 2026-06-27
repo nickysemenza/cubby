@@ -1,6 +1,6 @@
 import { mcpPaginationParams } from "@cubby/schemas/pagination";
-import type { RecipeUsage } from "@cubby/schemas/recipe";
 import { recipeCreateInput, recipeUpdateInput } from "@cubby/schemas/recipe";
+import type { RecipeUsage } from "@cubby/schemas/recipe-responses";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { groupBy, omitBy } from "es-toolkit";
 import { z } from "zod";

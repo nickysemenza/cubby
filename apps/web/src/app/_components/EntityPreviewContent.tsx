@@ -1,5 +1,5 @@
 import type { LocationType } from "@cubby/schemas/location";
-import { RECIPE_MACRO_KEYS } from "@cubby/schemas/recipe";
+import { RECIPE_MACRO_KEYS } from "@cubby/schemas/recipe-shared";
 import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
 import type { DataType, NutrientKey } from "@cubby/usda-schemas";
 import { buildNutrients, dataTypeLabel } from "@cubby/usda-schemas";

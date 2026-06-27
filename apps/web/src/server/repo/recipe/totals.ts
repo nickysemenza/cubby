@@ -6,7 +6,7 @@
  */
 
 import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
-import type { RecipeTotals } from "@cubby/schemas/recipe";
+import type { RecipeTotals } from "@cubby/schemas/recipe-shared";
 import { and, count, eq, inArray, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import {

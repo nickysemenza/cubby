@@ -13,7 +13,7 @@ import {
   type IngredientWithRecipesAndProductOut,
   ingredientListItemOut,
 } from "@cubby/schemas/ingredient-responses";
-import type { RecipeRef } from "@cubby/schemas/recipe";
+import type { RecipeRef } from "@cubby/schemas/recipe-responses";
 import { and, inArray, isNull, or, sql } from "drizzle-orm";
 import { parseWithContext } from "~/lib/zod-utils";
 import type { Database, DrizzleTransaction } from "~/server/db";

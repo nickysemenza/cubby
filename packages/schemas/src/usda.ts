@@ -3,10 +3,16 @@ import { z } from "zod";
 import { productTopLevelOut } from "./product";
 import { unitMappingWithMetadata } from "./unitmapping";
 
-// Enhanced food summary with unit mappings and linked products.
-export const foodSummaryWithLinkedProducts = foodSummary.extend({
+export const foodSummaryEnrichment = z.object({
   inferredUnitMappings: z.array(unitMappingWithMetadata),
   linkedProducts: z.array(productTopLevelOut),
+});
+
+export type FoodSummaryEnrichment = z.infer<typeof foodSummaryEnrichment>;
+
+// Enhanced food summary with unit mappings and linked products.
+export const foodSummaryWithLinkedProducts = foodSummary.extend({
+  ...foodSummaryEnrichment.shape,
 });
 
 export type FoodSummaryWithLinkedProducts = z.infer<
