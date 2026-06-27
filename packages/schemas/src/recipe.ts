@@ -237,6 +237,7 @@ export const recipeTopLevel = baseEntitySchema.extend({
   tags: recipeTags.nullish(),
   notes: recipeNotes.nullish(),
 });
+export type RecipeTopLevel = z.infer<typeof recipeTopLevel>;
 
 // Minimal recipe reference — just enough to link + label a recipe pill. Lets
 // list surfaces carry "appears in recipes" without the full recipe body per row
@@ -272,7 +273,7 @@ const sectioningredientOut = z
   .extend(dbTimestampsOut.shape);
 
 // Create a discriminated union to ensure either recipe or ingredient is set
-const sectionIngredientOut = z.discriminatedUnion("type", [
+export const sectionIngredientOut = z.discriminatedUnion("type", [
   sectioningredientOut.extend({
     type: z.literal("ingredient"),
     recipe: z.null(),
@@ -287,7 +288,7 @@ const sectionIngredientOut = z.discriminatedUnion("type", [
 
 export type SectionIngredient = z.infer<typeof sectionIngredientOut>;
 
-const recipeSectionOut = z
+export const recipeSectionOut = z
   .object({
     id: z.uuid(),
     name: z.string().nullable(),
@@ -297,20 +298,23 @@ const recipeSectionOut = z
   .extend(dbTimestampsOut.shape);
 
 export type SectionIngredientOut = z.infer<typeof sectionIngredientOut>;
+export type RecipeSectionOut = z.infer<typeof recipeSectionOut>;
 
-export const recipeOut = z
-  .object({
-    sections: z.array(recipeSectionOut),
-    images: z.array(imageOut),
-    // Precomputed cost/calorie rollup (null until first computed). Populated by
-    // recipe.list; getByID may leave it null (the detail page computes its own).
-    totals: recipeTotals.nullish(),
-  })
-  .extend(recipeTopLevel.shape);
+export const recipeWithSectionsOut = recipeTopLevel.extend({
+  sections: z.array(recipeSectionOut),
+  // Precomputed cost/calorie rollup (null until first computed). Populated by
+  // recipe.list; getByID may leave it null (the detail page computes its own).
+  totals: recipeTotals.nullish(),
+});
+export type RecipeWithSectionsOut = z.infer<typeof recipeWithSectionsOut>;
+
+export const recipeOut = recipeWithSectionsOut.extend({
+  images: z.array(imageOut),
+});
 
 // Full recipe graph without media. Used by costing/sub-recipe closure fetches
 // that need sections but deliberately do not load images.
-export const recipeGraphOut = recipeOut.omit({ images: true });
+export const recipeGraphOut = recipeWithSectionsOut;
 export type RecipeGraphOut = z.infer<typeof recipeGraphOut>;
 
 // Summary shape for `recipe.list`: scalar fields + persisted totals, no section graph (the list/pickers never read `.sections` — that was the ~4.7s over-fetch).
