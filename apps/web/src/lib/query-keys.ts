@@ -33,9 +33,8 @@ export const queryKeys = {
   },
   problems: {
     // Broad prefix — invalidate every problems query so a fix re-reads whichever
-    // cost-grouped detector query (getFast / getCoverage / getAliases /
-    // getParses / getUpc) owns the resolved card, plus the badge's combined
-    // getAllProblems scan. The page loads the groups, not getAllProblems.
+    // cost-grouped detector query (getFast / getCoverage / getUpc) owns the
+    // resolved card.
     all: ["problems"] as const,
   },
   search: {

@@ -1,5 +1,6 @@
 import { useQueries } from "@tanstack/react-query";
 import { sum } from "es-toolkit";
+import type { ProblemsHotPathProcedure } from "~/lib/problems-query-groups";
 import { useTRPC } from "~/trpc/react";
 
 /**
@@ -28,11 +29,20 @@ export function useProblemsData(opts?: {
   // the client) to avoid a hydration mismatch, like the sibling stat cards.
   const staleTime = opts?.staleTime;
   const enabled = opts?.enabled;
+  const problemGroupQueries = {
+    getFast: { ...api.problems.getFast.queryOptions(), staleTime, enabled },
+    getCoverage: {
+      ...api.problems.getCoverage.queryOptions(),
+      staleTime,
+      enabled,
+    },
+    getUpc: { ...api.problems.getUpc.queryOptions(), staleTime, enabled },
+  } satisfies Record<ProblemsHotPathProcedure, unknown>;
   return useQueries({
     queries: [
-      { ...api.problems.getFast.queryOptions(), staleTime, enabled },
-      { ...api.problems.getCoverage.queryOptions(), staleTime, enabled },
-      { ...api.problems.getUpc.queryOptions(), staleTime, enabled },
+      problemGroupQueries.getFast,
+      problemGroupQueries.getCoverage,
+      problemGroupQueries.getUpc,
     ],
     combine: ([fast, coverage, upc]) => {
       const sections = {

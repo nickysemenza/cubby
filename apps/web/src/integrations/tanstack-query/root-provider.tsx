@@ -19,6 +19,7 @@ import type { TRPCRouter } from "~/integrations/trpc/router";
 import { authClient } from "~/lib/auth-client";
 import { getAppErrorDetails, getErrorMessage } from "~/lib/error-utils";
 import { getFlag } from "~/lib/flags";
+import { isUnbatchedTRPCPath } from "~/lib/problems-query-groups";
 import { persister } from "./persister";
 
 // Root query-key prefixes whose data is safe + useful to persist for offline
@@ -65,23 +66,6 @@ function getUrl() {
   return `${base}/api/trpc`;
 }
 
-// Problems-page detector procedures routed through the unbatched link (see the
-// splitLink below). Kept in sync with the cost-grouped procedures in the
-// problems router.
-//
-// TODO(sync-guard): this allowlist is maintained by hand — adding a new
-// expensive problems procedure but forgetting to list it here silently
-// re-batches it and brings back the CPU pileup this split was meant to fix.
-// When the persist-phase follow-up lands, add a guard so the two can't drift:
-// either a compile-time `satisfies` tied to the router's problems procedure
-// keys, or a cheap unit invariant asserting every entry here resolves to a real
-// `problems.*` procedure.
-const UNBATCHED_PATHS = new Set([
-  "problems.getFast",
-  "problems.getCoverage",
-  "problems.getUpc",
-]);
-
 const trpcHeaders = () => {
   const headers = new Headers();
   headers.set("x-trpc-source", "tanstack-start");
@@ -105,7 +89,7 @@ const trpcClient = createTRPCClient<TRPCRouter>({
       // WASM twice), which exceeded the 30s CPU limit. Route them through an
       // unbatched httpLink so each is its own invocation/CPU budget. Everything
       // else keeps the batched-stream link.
-      condition: (op) => UNBATCHED_PATHS.has(op.path),
+      condition: (op) => isUnbatchedTRPCPath(op.path),
       true: httpLink({
         transformer: superjson,
         url: getUrl(),
