@@ -6,9 +6,16 @@ import { CaptureFlow } from "~/app/capture/capture-flow";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { useIsMobile } from "~/hooks/useMobile";
+import BulkInventoryForm from "../bulk-edit/bulk-inventory-form";
+import BulkMoveForm from "../bulk-move/bulk-move-form";
 import QuickCaptureForm from "../quick-capture/quick-capture-form";
 
-export type InventoryCaptureMode = "quick" | "photo" | "inline";
+export type InventoryCaptureMode =
+  | "quick"
+  | "photo"
+  | "inline"
+  | "bulk-edit"
+  | "bulk-move";
 
 type InventoryCaptureWorkspaceProps =
   | {
@@ -24,6 +31,14 @@ type InventoryCaptureWorkspaceProps =
       mode: "inline";
       locationId: LocationId;
       onSuccess: () => void;
+    }
+  | {
+      mode: "bulk-edit";
+      initialLocationId?: LocationId;
+    }
+  | {
+      mode: "bulk-move";
+      initialSourceLocationId?: LocationId;
     };
 
 export function InventoryCaptureWorkspace(
@@ -62,6 +77,34 @@ export function InventoryCaptureWorkspace(
         locationId={props.locationId}
         onSuccess={props.onSuccess}
       />
+    );
+  }
+
+  if (mode === "bulk-edit") {
+    return (
+      <Page
+        variant="list"
+        title="Bulk inventory edit"
+        eyebrow="Inventory"
+        compact
+        decoration="none"
+      >
+        <BulkInventoryForm initialLocationId={props.initialLocationId} />
+      </Page>
+    );
+  }
+
+  if (mode === "bulk-move") {
+    return (
+      <Page
+        variant="list"
+        title="Bulk move inventory"
+        eyebrow="Inventory"
+        compact
+        decoration="none"
+      >
+        <BulkMoveForm initialSourceLocationId={props.initialSourceLocationId} />
+      </Page>
     );
   }
 

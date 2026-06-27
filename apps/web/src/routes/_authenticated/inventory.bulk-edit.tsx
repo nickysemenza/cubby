@@ -1,8 +1,7 @@
 import { locationId } from "@cubby/schemas/identifiers";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
-import BulkInventoryForm from "~/app/inventory/bulk-edit/bulk-inventory-form";
-import { Page } from "~/components/page/Page";
+import { InventoryCaptureWorkspace } from "~/app/inventory/capture/InventoryCaptureWorkspace";
 
 const searchSchema = z.object({
   locationId: locationId.optional().catch(undefined),
@@ -20,14 +19,9 @@ function BulkInventoryEditPage() {
   const { locationId } = Route.useSearch();
 
   return (
-    <Page
-      variant="list"
-      title="Bulk inventory edit"
-      eyebrow="Inventory"
-      compact
-      decoration="none"
-    >
-      <BulkInventoryForm initialLocationId={locationId} />
-    </Page>
+    <InventoryCaptureWorkspace
+      mode="bulk-edit"
+      initialLocationId={locationId}
+    />
   );
 }
