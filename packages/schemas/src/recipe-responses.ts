@@ -112,6 +112,8 @@ export const recipeOut = recipeWithSectionsOut.extend({
 export const recipeGraphOut = recipeWithSectionsOut;
 export type RecipeGraphOut = z.infer<typeof recipeGraphOut>;
 
+export const recipeGraphListOut = z.array(recipeGraphOut);
+
 // Summary shape for `recipe.list`: scalar fields + persisted totals, no section
 // graph (the list/pickers never read `.sections` — that was the ~4.7s over-fetch).
 export const recipeListItemOut = recipeTopLevel.extend({
@@ -120,6 +122,17 @@ export const recipeListItemOut = recipeTopLevel.extend({
 export type RecipeListItem = z.infer<typeof recipeListItemOut>;
 
 export type RecipeOut = z.infer<typeof recipeOut>;
+
+export const recipeTagsOut = z.array(z.string());
+
+export const recipeRecomputeAllOut = z.object({
+  processed: z.number().int(),
+});
+
+export const recipeDryRunRecomputeTotalsOut = z.object({
+  wouldChange: z.number().int(),
+  total: z.number().int(),
+});
 
 // A cookbook as seen on the browse index: the `Cookbook` row plus how many
 // non-deleted recipes link to it. `book` is the cookbook name (kept for the

@@ -19,6 +19,11 @@ export const searchTypeOptions = ["all", ...searchableEntities] as const;
 export const searchTypeSchema = z.enum(searchTypeOptions);
 export type SearchType = z.infer<typeof searchTypeSchema>;
 
+export const globalSearchInputSchema = z.object({
+  query: z.string().min(1).max(100),
+  limit: z.number().min(1).max(50).default(5),
+});
+
 // Base fields shared by all search results
 const baseSearchResult = z.object({
   id: z.string(),
@@ -65,6 +70,8 @@ export const searchResultItemSchema = z.discriminatedUnion("entityType", [
   ingredientResult,
 ]);
 export type SearchResultItem = z.infer<typeof searchResultItemSchema>;
+
+export const globalSearchOut = z.array(searchResultItemSchema);
 
 // Export individual variants for repo type hints
 export type ProductSearchResult = z.infer<typeof productResult>;

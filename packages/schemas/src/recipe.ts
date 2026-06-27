@@ -98,5 +98,29 @@ export const recipeUpdateInput = z.object({
   data: recipeCreateInput.partial().extend(updateInputImages.shape),
 });
 
+export const recipeShortcodeInput = z.object({
+  shortcode: z.string(),
+});
+
+export const recipeIdsInput = z.object({
+  ids: z.array(recipeId),
+});
+
+export const recipeCooccurrenceInput = z
+  .object({
+    minEdgeWeight: z.number().min(1).default(2),
+  })
+  .optional();
+
+export const recipeCookbookScopeInput = z
+  .object({
+    cookbookId: cookbookId.optional(),
+  })
+  .optional();
+
+export const recipeIdInput = z.object({
+  id: recipeId,
+});
+
 export type RecipeCreateInput = z.infer<typeof recipeCreateInput>;
 export type RecipeUpdateInput = z.infer<typeof recipeUpdateInput>;

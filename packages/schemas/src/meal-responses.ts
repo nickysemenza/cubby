@@ -52,6 +52,8 @@ export const mealOut = z
   .extend(dbTimestampsOut.shape);
 export type MealOut = z.infer<typeof mealOut>;
 
+export const mealListOut = z.array(mealOut);
+
 /** Which meal/recipe contributed how much of an item's total need. */
 export const shoppingListContribution = z.object({
   mealId,

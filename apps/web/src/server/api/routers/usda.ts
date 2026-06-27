@@ -1,48 +1,29 @@
+import { buildPaginatedResponse } from "@cubby/schemas/pagination";
 import {
-  buildPaginatedResponse,
-  createPaginatedResponseSchema,
-  sortPaginationCombo,
-} from "@cubby/schemas/pagination";
-import {
-  foodSummaryEnrichment,
   foodSummaryWithLinkedProducts,
+  usdaFoodEnrichmentsInput,
+  usdaFoodEnrichmentsOut,
+  usdaFoodIdInput,
+  usdaFoodListOut,
+  usdaFoodLookupInput,
+  usdaFoodSummaryListOut,
+  usdaListInput,
 } from "@cubby/schemas/usda";
-import {
-  dataTypeEnum,
-  foodLookupParam,
-  foodSummary,
-} from "@cubby/usda-schemas";
-import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
-
-const usdaListInput = z
-  .object({
-    filters: z.object({
-      nameFilter: z.string().optional(),
-      dataTypeFilter: dataTypeEnum.optional(),
-      dataTypes: z.array(dataTypeEnum).optional(),
-      foodsOnly: z.boolean().optional(),
-    }),
-  })
-  .extend(sortPaginationCombo.shape);
 
 // These return `foodSummaryWithLinkedProducts`, which embeds internal Cubby
 // product data (ids, prices, externalIds). The app is deployed publicly, so
 // these must require an authenticated session — do not downgrade to
 // publicProcedure without splitting off the linkedProducts enrichment.
 const getByAlternateID = protectedProcedure
-  .input(foodLookupParam)
+  .input(usdaFoodLookupInput)
   .output(foodSummaryWithLinkedProducts.nullable())
   .query(async ({ ctx, input }) => {
     return await ctx.usdaService.findFood(input);
   });
 
 const getByID = protectedProcedure
-  .input(
-    z.object({
-      id: z.number(),
-    }),
-  )
+  .input(usdaFoodIdInput)
   .output(foodSummaryWithLinkedProducts.nullable())
   .query(async ({ ctx, input }) => {
     return await ctx.usdaService.getFoodSummaryByID(input.id);
@@ -50,7 +31,7 @@ const getByID = protectedProcedure
 
 const list = protectedProcedure
   .input(usdaListInput)
-  .output(createPaginatedResponseSchema(foodSummaryWithLinkedProducts))
+  .output(usdaFoodListOut)
   .query(async ({ ctx, input }) => {
     try {
       const { data, count } = await ctx.usdaService.listFoods(
@@ -76,7 +57,7 @@ const list = protectedProcedure
 
 const listSummaries = protectedProcedure
   .input(usdaListInput)
-  .output(createPaginatedResponseSchema(foodSummary))
+  .output(usdaFoodSummaryListOut)
   .query(async ({ ctx, input }) => {
     try {
       const { data, count } = await ctx.usdaService.listFoodSummaries(
@@ -100,8 +81,8 @@ const listSummaries = protectedProcedure
   });
 
 const enrichmentsByID = protectedProcedure
-  .input(z.object({ fdcIds: z.array(z.number()).max(1000) }))
-  .output(z.record(z.string(), foodSummaryEnrichment))
+  .input(usdaFoodEnrichmentsInput)
+  .output(usdaFoodEnrichmentsOut)
   .query(async ({ ctx, input }) => {
     return await ctx.usdaService.getFoodEnrichmentsByID(input.fdcIds);
   });

@@ -41,13 +41,16 @@
     "./mcp-responses": "./src/mcp-responses.ts",
     "./problems": "./src/problems.ts",
     "./recipe": "./src/recipe.ts",
+    "./upc": "./src/upc.ts",
     "./usda": "./src/usda.ts",
     "./search": "./src/search.ts",
+    "./suggestions": "./src/suggestions.ts",
     "./audit": "./src/audit.ts",
     "./audit-responses": "./src/audit-responses.ts",
     "./ai": "./src/ai.ts",
     "./agent": "./src/agent.ts",
     "./capture": "./src/capture.ts",
+    "./dashboard": "./src/dashboard.ts",
     "./combo": "./src/combo.ts"
   },
   "scripts": {

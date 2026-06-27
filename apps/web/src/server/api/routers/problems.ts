@@ -1,11 +1,17 @@
-import { ingredientId, type RecipeId } from "@cubby/schemas/identifiers";
+import type { RecipeId } from "@cubby/schemas/identifiers";
 import {
+  deleteUnusedIngredientsInput,
+  deleteUnusedIngredientsOut,
+  dryRunPruneAliasesOut,
+  dryRunReparseOut,
   maintenanceCountsSchema,
   problemsCoverageSchema,
   problemsFastSchema,
   problemsUpcSchema,
+  recipeUsageByProductInput,
+  recipeUsageByProductOut,
+  reparseStaleSyncOut,
 } from "@cubby/schemas/problems";
-import { z } from "zod";
 import { streamProgress } from "~/lib/bulk-progress";
 import { recipeUsageCountsByProduct } from "~/server/repo/problems";
 import {
@@ -76,12 +82,7 @@ const reparseStale = protectedProcedure.mutation(async function* ({ ctx }) {
 // folds the right alias onto the surviving ingredient, a re-parse re-points every
 // line whose `rawLine` now resolves (via alias match) to the correct ingredient.
 const reparseStaleSync = protectedProcedure
-  .output(
-    z.object({
-      updated: z.number().int().nonnegative(),
-      recipesAffected: z.number().int().nonnegative(),
-    }),
-  )
+  .output(reparseStaleSyncOut)
   .mutation(async ({ ctx }) => {
     const gen = reparseStaleIngredientParses(ctx.db);
     let result: { updated: number; recipesAffected: RecipeId[] } = {
@@ -105,15 +106,13 @@ const reparseStaleSync = protectedProcedure
 // On-demand dry run behind the Settings → Maintenance "Re-parse recipe lines"
 // button (the WASM sweep is too expensive for an always-on count).
 const dryRunReparseProc = protectedProcedure
-  .output(z.object({ wouldChange: z.number().int(), total: z.number().int() }))
+  .output(dryRunReparseOut)
   .query(async ({ ctx }) => dryRunReparse(ctx.db));
 
 // On-demand dry run behind the Settings → Maintenance "Prune unused aliases"
 // button.
 const dryRunPruneAliasesProc = protectedProcedure
-  .output(
-    z.object({ wouldPrune: z.number().int(), ingredients: z.number().int() }),
-  )
+  .output(dryRunPruneAliasesOut)
   .query(async ({ ctx }) => dryRunPruneAliases(ctx.db));
 
 // Fix-all for unused aliases: detect + strip every ingredient's unused aliases in
@@ -128,8 +127,8 @@ const pruneAllUnusedAliasesStream = protectedProcedure.mutation(
 // Powers the "used in N recipes" signal on product problem cards. Only
 // ingredient-linked products are returned; absence ⇒ no ingredient link.
 const recipeUsageByProduct = protectedProcedure
-  .input(z.object({ productIds: z.array(z.string()) }))
-  .output(z.record(z.string(), z.number()))
+  .input(recipeUsageByProductInput)
+  .output(recipeUsageByProductOut)
   .query(async ({ ctx, input }) => {
     return await recipeUsageCountsByProduct(ctx.db, input.productIds);
   });
@@ -139,18 +138,8 @@ const recipeUsageByProduct = protectedProcedure
 // removes the linked products too. Failures (e.g. a product still has inventory)
 // are returned per ingredient rather than aborting the batch.
 const deleteUnused = protectedProcedure
-  .input(
-    z.object({
-      ingredientIds: z.array(ingredientId),
-      alsoDeleteProducts: z.boolean(),
-    }),
-  )
-  .output(
-    z.object({
-      deleted: z.number(),
-      failed: z.array(z.object({ id: ingredientId, reason: z.string() })),
-    }),
-  )
+  .input(deleteUnusedIngredientsInput)
+  .output(deleteUnusedIngredientsOut)
   .mutation(async ({ ctx, input }) => {
     return await deleteUnusedIngredients(
       ctx.db,

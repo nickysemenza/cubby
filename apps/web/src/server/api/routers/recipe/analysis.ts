@@ -13,7 +13,6 @@ import {
   type EquivalenceReport,
   equivalenceReportSchema,
 } from "@cubby/schemas/equivalences";
-import { cookbookId, recipeId } from "@cubby/schemas/identifiers";
 import {
   type IngredientCooccurrence,
   ingredientCooccurrenceSchema,
@@ -23,12 +22,20 @@ import {
   ingredientUsageSchema,
 } from "@cubby/schemas/ingredient-usage";
 import {
+  recipeCooccurrenceInput,
+  recipeCookbookScopeInput,
+  recipeIdInput,
+} from "@cubby/schemas/recipe";
+import {
   type RecipeDependencyGraph,
   recipeDependencyGraphSchema,
 } from "@cubby/schemas/recipe-dependency-graph";
+import {
+  recipeDryRunRecomputeTotalsOut,
+  recipeRecomputeAllOut,
+} from "@cubby/schemas/recipe-responses";
 import { recipeCostingExplain } from "@cubby/schemas/recipe-shared";
 import { uniq } from "es-toolkit";
-import { z } from "zod";
 import { streamProgress } from "~/lib/bulk-progress";
 import { harvestEquivalences } from "~/lib/harvest-equivalences";
 import { getIngredientMappings } from "~/lib/unit-mapping-utils";
@@ -42,21 +49,21 @@ import {
 import { protectedProcedure } from "../../trpc";
 
 const getIngredientCooccurrenceEndpoint = protectedProcedure
-  .input(z.object({ minEdgeWeight: z.number().min(1).default(2) }).optional())
+  .input(recipeCooccurrenceInput)
   .output(ingredientCooccurrenceSchema)
   .query(async ({ ctx, input }): Promise<IngredientCooccurrence> => {
     return await getIngredientCooccurrence(ctx.db, input?.minEdgeWeight ?? 2);
   });
 
 const getDependencyGraphEndpoint = protectedProcedure
-  .input(z.object({ cookbookId: cookbookId.optional() }).optional())
+  .input(recipeCookbookScopeInput)
   .output(recipeDependencyGraphSchema)
   .query(async ({ ctx, input }): Promise<RecipeDependencyGraph> => {
     return await getRecipeDependencyGraph(ctx.db, input?.cookbookId);
   });
 
 const getIngredientUsageEndpoint = protectedProcedure
-  .input(z.object({ cookbookId: cookbookId.optional() }).optional())
+  .input(recipeCookbookScopeInput)
   .output(ingredientUsageSchema)
   .query(async ({ ctx, input }): Promise<IngredientUsage> => {
     return await getIngredientUsage(ctx.db, input?.cookbookId);
@@ -66,7 +73,7 @@ const getIngredientUsageEndpoint = protectedProcedure
 // Admin/recovery (e.g. after the USDA backend was down during a drain). Kept
 // non-streaming for the MCP tool, which wants the plain `{processed}` result.
 const recomputeAll = protectedProcedure
-  .output(z.object({ processed: z.number().int() }))
+  .output(recipeRecomputeAllOut)
   .mutation(async ({ ctx }) => {
     return await ctx.services.recipeCosting.recomputeAll();
   });
@@ -85,12 +92,7 @@ const recomputeAllStream = protectedProcedure.mutation(async function* ({
 // change vs persisted, without writing. Read-only but ~as costly as recomputeAll
 // (full engine pass), so the UI triggers it on demand, not on load.
 const dryRunRecomputeTotals = protectedProcedure
-  .output(
-    z.object({
-      wouldChange: z.number().int(),
-      total: z.number().int(),
-    }),
-  )
+  .output(recipeDryRunRecomputeTotalsOut)
   .query(async ({ ctx }) => {
     return await ctx.services.recipeCosting.dryRunRecomputeTotals();
   });
@@ -100,7 +102,7 @@ const dryRunRecomputeTotals = protectedProcedure
 // per-measure errors, unit-graph conversion paths), named USDA misses, and
 // drift. Read-only — never stamps; consumed by the debug card + MCP tool.
 const explainCosting = protectedProcedure
-  .input(z.object({ id: recipeId }))
+  .input(recipeIdInput)
   .output(recipeCostingExplain)
   .query(async ({ ctx, input }) => {
     return await ctx.services.recipeCosting.explainRecipe(input.id);

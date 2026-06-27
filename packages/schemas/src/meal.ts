@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { mealId, recipeId } from "./identifiers";
+import { mealId, mealRecipeId, recipeId } from "./identifiers";
 import { mealDate, mealScale } from "./meal-shared";
 
 export { mealDate, mealDateRange, mealScale } from "./meal-shared";
@@ -48,6 +48,22 @@ export const mealUpdateInput = z.object({
   data: mealUpdateData,
 });
 export type MealUpdateInput = z.infer<typeof mealUpdateInput>;
+
+export const mealAddRecipeInput = z
+  .object({
+    mealId,
+  })
+  .extend(mealRecipeInput.shape);
+
+export const mealUpdateRecipeInput = z.object({
+  id: mealRecipeId,
+  scale: mealScale.optional(),
+  sortOrder: z.number().int().nullable().optional(),
+});
+
+export const mealRecipeIdInput = z.object({
+  id: mealRecipeId,
+});
 
 export const mealFiltersSchema = z.object({
   from: mealDate.optional(),

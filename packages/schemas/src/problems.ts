@@ -292,3 +292,34 @@ export const maintenanceCountsSchema = z.object({
   staleRecipeTotals: z.number().int(),
 });
 export type MaintenanceCounts = z.infer<typeof maintenanceCountsSchema>;
+
+export const reparseStaleSyncOut = z.object({
+  updated: z.number().int().nonnegative(),
+  recipesAffected: z.number().int().nonnegative(),
+});
+
+export const dryRunReparseOut = z.object({
+  wouldChange: z.number().int(),
+  total: z.number().int(),
+});
+
+export const dryRunPruneAliasesOut = z.object({
+  wouldPrune: z.number().int(),
+  ingredients: z.number().int(),
+});
+
+export const recipeUsageByProductInput = z.object({
+  productIds: z.array(z.string()),
+});
+
+export const recipeUsageByProductOut = z.record(z.string(), z.number());
+
+export const deleteUnusedIngredientsInput = z.object({
+  ingredientIds: z.array(ingredientId),
+  alsoDeleteProducts: z.boolean(),
+});
+
+export const deleteUnusedIngredientsOut = z.object({
+  deleted: z.number(),
+  failed: z.array(z.object({ id: ingredientId, reason: z.string() })),
+});

@@ -1,6 +1,8 @@
 import { z } from "zod";
+import { ingredientId, locationId } from "./identifiers";
 import { locationType } from "./location";
 import { productCategory } from "./product";
+import { foodSummaryWithLinkedProducts } from "./usda";
 
 // Confidence level values - single source of truth
 export const confidenceValues = ["high", "medium", "low"] as const;
@@ -19,6 +21,11 @@ export const categorySuggestionSchema = z.object({
 
 export type CategorySuggestion = z.infer<typeof categorySuggestionSchema>;
 
+export const categorySuggestionInput = z.object({
+  productName: z.string().min(1),
+  manufacturer: z.string().min(1),
+});
+
 // Location type suggestion schema
 export const locationTypeSuggestionSchema = z.object({
   type: locationType,
@@ -29,6 +36,14 @@ export const locationTypeSuggestionSchema = z.object({
 export type LocationTypeSuggestion = z.infer<
   typeof locationTypeSuggestionSchema
 >;
+
+export const locationTypeSuggestionInput = z.object({
+  locationName: z.string().min(1),
+});
+
+export const aiLocationIdInput = z.object({
+  locationId,
+});
 
 // Location description from photo analysis
 export const locationDescriptionSchema = z.object({
@@ -63,6 +78,71 @@ export const productIdentificationSchema = z.object({
   reasoning: z.string(),
 });
 export type ProductIdentification = z.infer<typeof productIdentificationSchema>;
+
+export const productIdentificationInput = z.object({
+  imageUrls: z.array(z.string().url()).min(1).max(5),
+});
+
+export const usdaFoodSuggestionInput = z.object({
+  ingredientName: z.string().min(1),
+});
+
+export const usdaFoodSuggestionOut = z.object({
+  food: foodSummaryWithLinkedProducts.nullable(),
+  confidence,
+  reasoning: z.string(),
+});
+
+export const usdaFoodSuggestionBatchInput = z.object({
+  ingredientNames: z.array(z.string().min(1)).min(1).max(20),
+});
+
+export const usdaFoodSuggestionBatchOut = z.array(
+  usdaFoodSuggestionOut.extend({
+    name: z.string(),
+  }),
+);
+
+export const ingredientMergeSuggestionItem = z.object({
+  id: ingredientId,
+  name: z.string().min(1),
+});
+
+export const ingredientMergeSuggestionBatchInput = z.object({
+  ingredients: z.array(ingredientMergeSuggestionItem).min(1).max(20),
+});
+
+const ingredientMergeSuggestionRef = z.object({
+  id: ingredientId,
+  name: z.string(),
+});
+
+export const ingredientMergeSuggestionBatchOut = z.array(
+  z.object({
+    source: ingredientMergeSuggestionRef,
+    target: ingredientMergeSuggestionRef.nullable(),
+    confidence,
+    reasoning: z.string(),
+  }),
+);
+
+export const enrichmentProposalPrecomputeInput = z.object({
+  items: z
+    .array(
+      z.object({
+        id: ingredientId,
+        name: z.string().min(1),
+        wantUsda: z.boolean(),
+        wantMerge: z.boolean(),
+      }),
+    )
+    .min(1)
+    .max(50),
+});
+
+export const parseSearchInput = z.object({
+  query: z.string().min(1),
+});
 
 // Parsed natural language search query
 export const parsedSearchSchema = z.object({

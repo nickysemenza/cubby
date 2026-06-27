@@ -69,3 +69,5 @@ export const recipeAvailabilityOut = z.object({
   missing: z.array(z.string()),
 });
 export type RecipeAvailability = z.infer<typeof recipeAvailabilityOut>;
+
+export const recipeAvailabilityListOut = z.array(recipeAvailabilityOut);

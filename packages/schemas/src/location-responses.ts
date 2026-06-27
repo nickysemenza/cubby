@@ -31,6 +31,22 @@ export type LocationWithParentNameOut = z.infer<
   typeof locationWithParentNameOut
 >;
 
+export const locationTypeCountsOut = z.record(locationType, z.number());
+
+export const touchLastBulkInventoryOut = z.object({
+  success: z.boolean(),
+});
+
+export const locationsWithParentNameOut = z.array(locationWithParentNameOut);
+
+export const recentlyActiveLocationsOut = z.array(locationOut);
+
+export const recomputeLocationValuationsOut = z.object({
+  updated: z.number(),
+});
+
+export const locationChildCountsOut = z.record(z.string(), z.number());
+
 /** Minimal inventory item info for tree display */
 const inventoryItemForTree = z.object({
   id: inventoryId,
@@ -61,3 +77,5 @@ export const infLocation: z.ZodType<InfLocation> = locationOut.extend({
   totalItemCount: z.number().optional(),
   inventoryItems: z.array(inventoryItemForTree).optional(),
 });
+
+export const infLocationListOut = z.array(infLocation);

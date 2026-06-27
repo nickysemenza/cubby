@@ -92,5 +92,27 @@ export const locationUpdateInput = z.object({
   data: locationCreateInput.partial().extend(updateInputImages.shape),
 });
 
+export const locationIdInput = z.object({
+  id: locationId,
+});
+
+export const locationShortcodesInput = z.object({
+  shortcodes: z.array(z.string()),
+});
+
+export const locationShortcodeInput = z.object({
+  shortcode: z.string(),
+});
+
+export const recentlyActiveLocationsInput = z
+  .object({
+    limit: z.number().min(1).max(10).default(5),
+  })
+  .optional();
+
+export const locationIdsInput = z.object({
+  locationIds: z.array(locationId),
+});
+
 export type LocationCreateInput = z.infer<typeof locationCreateInput>;
 export type LocationUpdateInput = z.infer<typeof locationUpdateInput>;

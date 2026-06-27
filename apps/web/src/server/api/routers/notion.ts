@@ -1,7 +1,8 @@
-import { z } from "zod";
 import {
-  notionBlockSchema,
   notionDashboardSchema,
+  notionProjectContentInput,
+  notionProjectContentOut,
+  notionProjectImagesOut,
 } from "~/server/clients/notion";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
@@ -39,7 +40,7 @@ export const notionRouter = createTRPCRouter({
 
   /** Separate query for cover images — loaded lazily so dashboard isn't blocked. */
   projectImages: protectedProcedure
-    .output(z.record(z.string(), z.string()))
+    .output(notionProjectImagesOut)
     .query(async ({ ctx }) => {
       if (!ctx.notionClient) return {};
 
@@ -61,8 +62,8 @@ export const notionRouter = createTRPCRouter({
     }),
 
   projectContent: protectedProcedure
-    .input(z.object({ pageId: z.string() }))
-    .output(z.array(notionBlockSchema).nullable())
+    .input(notionProjectContentInput)
+    .output(notionProjectContentOut)
     .query(async ({ ctx, input }) => {
       if (!ctx.notionClient) return null;
       return ctx.notionClient.getPageContent(input.pageId);
