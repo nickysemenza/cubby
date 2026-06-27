@@ -6,7 +6,7 @@
  * /meals/suggestions UI and the find_cookable_recipes MCP tool.
  */
 
-import { recipeAvailabilityOut } from "@cubby/schemas/availability";
+import { recipeAvailabilityOut } from "@cubby/schemas/availability-responses";
 import { recipeId } from "@cubby/schemas/identifiers";
 import { z } from "zod";
 import { recipeList } from "~/server/repo/recipe";

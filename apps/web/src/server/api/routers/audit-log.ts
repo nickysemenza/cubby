@@ -1,4 +1,5 @@
-import { auditEntitySchema, auditLogListOut } from "@cubby/schemas/audit";
+import { auditEntitySchema } from "@cubby/schemas/audit";
+import { auditLogListOut } from "@cubby/schemas/audit-responses";
 import { z } from "zod";
 import { getAuditLog } from "~/server/repo/audit-log";
 import { createTRPCRouter, protectedProcedure } from "../trpc";

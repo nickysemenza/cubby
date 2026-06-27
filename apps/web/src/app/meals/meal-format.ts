@@ -1,4 +1,4 @@
-import type { IngredientAvailabilityStatus } from "@cubby/schemas/availability";
+import type { IngredientAvailabilityStatus } from "@cubby/schemas/availability-responses";
 import type { MealTotals } from "@cubby/schemas/meal-responses";
 import { formatCurrency } from "~/lib/utils";
 

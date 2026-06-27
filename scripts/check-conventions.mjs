@@ -126,6 +126,8 @@ const RESPONSE_SPLIT_ALLOWLIST = new Map([
 ]);
 
 const RESPONSE_SPLIT_STRICT_FILES = new Set([
+  "packages/schemas/src/audit.ts",
+  "packages/schemas/src/availability.ts",
   "packages/schemas/src/external-id.ts",
   "packages/schemas/src/image.ts",
   "packages/schemas/src/recipe.ts",

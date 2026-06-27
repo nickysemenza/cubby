@@ -3,7 +3,7 @@ import type {
   AggregatedNeed,
   IngredientAvailability,
   RecipeAvailability,
-} from "@cubby/schemas/availability";
+} from "@cubby/schemas/availability-responses";
 import type { Amount } from "@cubby/schemas/codec";
 import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
 import type { IngredientWithFoodOut } from "@cubby/schemas/ingredient-responses";
@@ -20,8 +20,8 @@ import { getInventoryForProducts } from "~/server/repo/inventory";
 import { getRecipeByID } from "~/server/repo/recipe";
 import type { IngredientService } from "./ingredient.service";
 
-// Output types live in @cubby/schemas/availability (single source of truth, shared
-// with the suggestions router's .output()).
+// Output types live in @cubby/schemas/availability-responses (single source of
+// truth, shared with the suggestions router's .output()).
 
 /**
  * Cross-references a recipe's ingredients against current inventory, reconciling
