@@ -13,13 +13,15 @@ import {
   mealCreateInput,
   mealDateRange,
   mealFiltersSchema,
-  mealOut,
   mealRecipeInput,
   mealScale,
   mealUpdateData,
+} from "@cubby/schemas/meal";
+import {
+  mealOut,
   type ShoppingListContribution,
   shoppingListOut,
-} from "@cubby/schemas/meal";
+} from "@cubby/schemas/meal-responses";
 import { z } from "zod";
 import { createAppError } from "~/server/errors/app-error";
 import {

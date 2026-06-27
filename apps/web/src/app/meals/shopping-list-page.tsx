@@ -1,5 +1,5 @@
 import type { IngredientAvailabilityStatus } from "@cubby/schemas/availability";
-import type { ShoppingListItem } from "@cubby/schemas/meal";
+import type { ShoppingListItem } from "@cubby/schemas/meal-responses";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";

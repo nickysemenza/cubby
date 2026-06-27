@@ -7,7 +7,7 @@ import {
 import { ingredientOut } from "@cubby/schemas/ingredient";
 import { inventoryEntryOut } from "@cubby/schemas/inventory";
 import { locationOut } from "@cubby/schemas/location";
-import { mealOut, mealRecipeOut } from "@cubby/schemas/meal";
+import { mealOut, mealRecipeOut } from "@cubby/schemas/meal-responses";
 import { productTopLevelOut } from "@cubby/schemas/product";
 import { recipeTopLevel } from "@cubby/schemas/recipe-responses";
 import {

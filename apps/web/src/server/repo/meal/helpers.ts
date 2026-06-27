@@ -1,4 +1,8 @@
-import type { MealOut, MealRecipeOut, MealTotals } from "@cubby/schemas/meal";
+import type {
+  MealOut,
+  MealRecipeOut,
+  MealTotals,
+} from "@cubby/schemas/meal-responses";
 import type { RecipeTotals } from "@cubby/schemas/recipe-shared";
 
 /**

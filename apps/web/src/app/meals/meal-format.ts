@@ -1,5 +1,5 @@
 import type { IngredientAvailabilityStatus } from "@cubby/schemas/availability";
-import type { MealTotals } from "@cubby/schemas/meal";
+import type { MealTotals } from "@cubby/schemas/meal-responses";
 import { formatCurrency } from "~/lib/utils";
 
 /** Round a need/have amount for display without trailing float noise. */

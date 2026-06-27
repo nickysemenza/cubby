@@ -32,6 +32,8 @@
     "./inventory": "./src/inventory.ts",
     "./inventory-responses": "./src/inventory-responses.ts",
     "./meal": "./src/meal.ts",
+    "./meal-responses": "./src/meal-responses.ts",
+    "./meal-shared": "./src/meal-shared.ts",
     "./problems": "./src/problems.ts",
     "./recipe": "./src/recipe.ts",
     "./usda": "./src/usda.ts",
