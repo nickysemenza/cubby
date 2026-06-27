@@ -7,7 +7,7 @@ import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { getErrorMessage } from "~/lib/error-utils";
-import { queryKeys } from "~/lib/query-keys";
+import { productMutationInvalidateKeys, queryKeys } from "~/lib/query-keys";
 import { savedWithRecompute } from "~/lib/recompute-summary";
 import { formatCurrency } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
@@ -51,7 +51,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
     entityLabel: "Product",
     mutationOptions: (callbacks) =>
       api.product.delete.mutationOptions(callbacks),
-    invalidateKeys: [queryKeys.product.all],
+    invalidateKeys: productMutationInvalidateKeys,
     redirectTo: "/products",
   });
 

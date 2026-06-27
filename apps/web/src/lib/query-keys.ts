@@ -73,6 +73,22 @@ export const inventoryMutationInvalidateKeys = [
   queryKeys.dashboard.counts,
 ] as const satisfies readonly QueryKey[];
 
+export const productMutationInvalidateKeys = [
+  queryKeys.product.all,
+] as const satisfies readonly QueryKey[];
+
+export const locationMutationInvalidateKeys = [
+  queryKeys.location.list,
+] as const satisfies readonly QueryKey[];
+
+export const ingredientMutationInvalidateKeys = [
+  queryKeys.ingredient.list,
+] as const satisfies readonly QueryKey[];
+
+export const recipeMutationInvalidateKeys = [
+  queryKeys.recipe.list,
+] as const satisfies readonly QueryKey[];
+
 export function normalizeTRPCQueryKey(key: QueryKey): QueryKey {
   if (key.length === 0) return key;
   return Array.isArray(key[0]) ? key : [key];

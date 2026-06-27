@@ -7,7 +7,7 @@ import { type ReactNode, useMemo } from "react";
 import { Stack } from "~/components/layout";
 import { Skeleton } from "~/components/ui/skeleton";
 import { formatCurrencyRange, formatNumberRange } from "~/lib/format-range";
-import { queryKeys } from "~/lib/query-keys";
+import { recipeMutationInvalidateKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 import RTable from "../_components/data-table/Table";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
@@ -236,7 +236,7 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
   const deletableConfig = useDeletableConfig({
     mutationFn: api.recipe.delete.mutationOptions,
     entityLabel: "Recipe",
-    invalidateKeys: [queryKeys.recipe.list],
+    invalidateKeys: recipeMutationInvalidateKeys,
   });
 
   const {

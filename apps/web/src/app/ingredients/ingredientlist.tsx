@@ -29,7 +29,7 @@ import {
 } from "~/components/ui/tooltip";
 import { EntityIcon } from "~/entities/entities";
 import { getErrorMessage } from "~/lib/error-utils";
-import { queryKeys } from "~/lib/query-keys";
+import { ingredientMutationInvalidateKeys } from "~/lib/query-keys";
 import { savedWithRecompute } from "~/lib/recompute-summary";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { useTRPC, useTRPCClient } from "~/trpc/react";
@@ -141,17 +141,11 @@ export function IngredientList() {
   );
   const foodByProductId = useProductFoodSummaries(foodHydrationIds);
 
-  // Memoize invalidate keys to prevent recreating on every render
-  const invalidateKeys = useMemo(
-    () => [queryKeys.ingredient.list] as const,
-    [],
-  );
-
   // Mutation for inline editing (name)
   const updateIngredientMutation = useUpdateMutation({
     mutationFn: api.ingredient.update.mutationOptions,
     entity: "ingredient",
-    invalidateKeys,
+    invalidateKeys: ingredientMutationInvalidateKeys,
   });
 
   // Global filter for missing products
@@ -176,7 +170,7 @@ export function IngredientList() {
   const deletableConfig = useDeletableConfig({
     mutationFn: api.ingredient.delete.mutationOptions,
     entityLabel: "Ingredient",
-    invalidateKeys: [queryKeys.ingredient.list],
+    invalidateKeys: ingredientMutationInvalidateKeys,
   });
 
   const getIngredientListMappings = useCallback(

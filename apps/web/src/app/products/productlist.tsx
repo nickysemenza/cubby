@@ -19,7 +19,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
-import { queryKeys } from "~/lib/query-keys";
+import { productMutationInvalidateKeys } from "~/lib/query-keys";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { useTRPC } from "~/trpc/react";
 import {
@@ -69,14 +69,11 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   );
   const foodByProductId = useProductFoodSummaries(foodHydrationIds);
 
-  // Memoize invalidate keys to prevent recreating on every render
-  const invalidateKeys = useMemo(() => [queryKeys.product.all] as const, []);
-
   // Mutation for inline editing (price, category, etc.)
   const updateProductMutation = useUpdateMutation({
     mutationFn: api.product.update.mutationOptions,
     entity: "product",
-    invalidateKeys,
+    invalidateKeys: productMutationInvalidateKeys,
   });
 
   // Build initial filter from URL params
@@ -97,7 +94,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   const deletableConfig = useDeletableConfig({
     mutationFn: api.product.delete.mutationOptions,
     entityLabel: "Product",
-    invalidateKeys: [queryKeys.product.all],
+    invalidateKeys: productMutationInvalidateKeys,
   });
 
   const getProductListMappings = useCallback(

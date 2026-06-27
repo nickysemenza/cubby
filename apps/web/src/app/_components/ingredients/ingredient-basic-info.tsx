@@ -3,7 +3,7 @@ import type { FC } from "react";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
-import { queryKeys } from "~/lib/query-keys";
+import { ingredientMutationInvalidateKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 import { useEntityDelete } from "../hooks/useEntityDelete";
 
@@ -23,7 +23,7 @@ export const IngredientBasicInfo: FC<IngredientBasicInfoProps> = ({
     entityLabel: "Ingredient",
     mutationOptions: (callbacks) =>
       api.ingredient.delete.mutationOptions(callbacks),
-    invalidateKeys: [queryKeys.ingredient.list],
+    invalidateKeys: ingredientMutationInvalidateKeys,
     redirectTo: "/ingredients",
   });
 

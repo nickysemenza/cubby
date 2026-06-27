@@ -7,7 +7,7 @@ import { Printer, ScanBarcode } from "lucide-react";
 import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
-import { queryKeys } from "~/lib/query-keys";
+import { locationMutationInvalidateKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 import {
   createCreatedAtColumn,
@@ -40,21 +40,18 @@ export function LocationList() {
   );
   const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("location");
 
-  // Memoize invalidate keys to prevent recreating on every render
-  const invalidateKeys = useMemo(() => [queryKeys.location.list] as const, []);
-
   // Mutation for inline editing (name, type)
   const updateLocationMutation = useUpdateMutation({
     mutationFn: api.location.update.mutationOptions,
     entity: "location",
-    invalidateKeys,
+    invalidateKeys: locationMutationInvalidateKeys,
   });
 
   // Memoize deletable config to prevent infinite render loop
   const deletableConfig = useDeletableConfig({
     mutationFn: api.location.delete.mutationOptions,
     entityLabel: "Location",
-    invalidateKeys: [queryKeys.location.list],
+    invalidateKeys: locationMutationInvalidateKeys,
   });
 
   // Memoize columns to prevent recreating on every render
