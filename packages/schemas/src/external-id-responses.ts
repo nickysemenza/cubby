@@ -1,12 +1,22 @@
 import { z } from "zod";
-import { dbTimestampsOut } from "./common";
-import { externalIdInput } from "./external-id";
 
-export const externalIdOut = z
-  .object({
-    id: z.uuid(),
-  })
-  .extend(externalIdInput.omit({ id: true }).shape)
-  .extend(dbTimestampsOut.shape);
+export const externalIdOut = z.object({
+  id: z.uuid(),
+  source: z
+    .string()
+    .min(1)
+    .describe("Source identifier (e.g. 'amazon', 'mcmaster', 'mouser')"),
+  externalId: z
+    .string()
+    .min(1)
+    .describe("The actual identifier (ASIN, part number, etc.)"),
+  url: z
+    .string()
+    .url()
+    .nullish()
+    .describe("Optional direct link to the product page"),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
 
 export type ExternalIdOut = z.infer<typeof externalIdOut>;

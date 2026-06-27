@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { amount } from "./codec";
-import { baseEntitySchema, dbTimestampsOut } from "./common";
+import { baseEntitySchema } from "./common";
 import { cookbookId, ingredientId, recipeId } from "./identifiers";
 import { imageOut } from "./image-responses";
 import {
@@ -56,25 +56,25 @@ export const recipeUsageOut = z.object({
 export type RecipeUsage = z.infer<typeof recipeUsageOut>;
 
 // Create a base schema with common fields
-const sectioningredientOut = z
-  .object({
-    id: z.uuid(),
-    amounts: z.array(amount),
-    // Provenance from import: the original unparsed line and the parser-derived
-    // modifier. Null for rows created before capture, or manual/UI edits.
-    rawLine: z.string().nullish(),
-    modifier: z.string().nullish(),
-  })
-  .extend(dbTimestampsOut.shape);
+const sectionIngredientBaseOut = z.object({
+  id: z.uuid(),
+  amounts: z.array(amount),
+  // Provenance from import: the original unparsed line and the parser-derived
+  // modifier. Null for rows created before capture, or manual/UI edits.
+  rawLine: z.string().nullish(),
+  modifier: z.string().nullish(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
 
 // Create a discriminated union to ensure either recipe or ingredient is set
 export const sectionIngredientOut = z.discriminatedUnion("type", [
-  sectioningredientOut.extend({
+  sectionIngredientBaseOut.extend({
     type: z.literal("ingredient"),
     recipe: z.null(),
     ingredient: ingredientOut,
   }),
-  sectioningredientOut.extend({
+  sectionIngredientBaseOut.extend({
     type: z.literal("recipe"),
     recipe: recipeTopLevel,
     ingredient: z.null(),
@@ -83,14 +83,14 @@ export const sectionIngredientOut = z.discriminatedUnion("type", [
 
 export type SectionIngredient = z.infer<typeof sectionIngredientOut>;
 
-export const recipeSectionOut = z
-  .object({
-    id: z.uuid(),
-    name: z.string().nullable(),
-    ingredients: z.array(sectionIngredientOut),
-    instructions: z.array(z.object({ instruction: z.string() })),
-  })
-  .extend(dbTimestampsOut.shape);
+export const recipeSectionOut = z.object({
+  id: z.uuid(),
+  name: z.string().nullable(),
+  ingredients: z.array(sectionIngredientOut),
+  instructions: z.array(z.object({ instruction: z.string() })),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
 
 export type SectionIngredientOut = z.infer<typeof sectionIngredientOut>;
 export type RecipeSectionOut = z.infer<typeof recipeSectionOut>;

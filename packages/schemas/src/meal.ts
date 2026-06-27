@@ -49,11 +49,17 @@ export const mealUpdateInput = z.object({
 });
 export type MealUpdateInput = z.infer<typeof mealUpdateInput>;
 
-export const mealAddRecipeInput = z
-  .object({
-    mealId,
-  })
-  .extend(mealRecipeInput.shape);
+export const mealAddRecipeInput = z.object({
+  mealId,
+  recipeId: recipeId.describe("Recipe ID to plan into the meal"),
+  scale: mealScale.default(1).describe("Scale multiplier (1 = as written)"),
+  sortOrder: z
+    .number()
+    .int()
+    .nullable()
+    .optional()
+    .describe("Sort order within the meal"),
+});
 
 export const mealUpdateRecipeInput = z.object({
   id: mealRecipeId,

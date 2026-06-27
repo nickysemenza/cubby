@@ -8,6 +8,7 @@ import {
 } from "./inventory-responses";
 import { inventoryEntryOut } from "./inventory";
 import { productCategory, productTopLevelOut } from "./product";
+import { productId, productShortcode } from "./identifiers";
 import { recipeUsageOut } from "./recipe-responses";
 import { recomputeSummary } from "./recipe-shared";
 import {
@@ -27,11 +28,11 @@ export type ProductWithMappingsAndFoodOut = z.infer<
   typeof productWithMappingsAndFoodOut
 >;
 
-export const productPickerItemOut = productTopLevelOut.pick({
-  id: true,
-  shortcode: true,
-  name: true,
-  manufacturer: true,
+export const productPickerItemOut = z.object({
+  id: productId,
+  shortcode: productShortcode,
+  name: z.string(),
+  manufacturer: z.string(),
 });
 export type ProductPickerItemOut = z.infer<typeof productPickerItemOut>;
 

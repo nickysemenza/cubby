@@ -1,8 +1,7 @@
 import { fdcId } from "@cubby/usda-schemas";
 import { z } from "zod";
-import { dbTimestampsOut } from "./common";
 import { productId } from "./identifiers";
-import { unitMappingBase } from "./unitmapping";
+import { amount } from "./codec";
 
 const sourceMetadata = z.discriminatedUnion("type", [
   z.object({
@@ -19,16 +18,32 @@ const sourceMetadata = z.discriminatedUnion("type", [
 ]);
 
 // Unit mapping with sourceMetadata (for output/computed)
-export const unitMappingWithMetadata = unitMappingBase.extend({
-  sourceMetadata: sourceMetadata,
+export const unitMappingWithMetadata = z.object({
+  a: amount.describe('left side of the pair, e.g. { value: 8, unit: "oz" }'),
+  b: amount.describe(
+    'right side of the pair, e.g. { value: 10, unit: "dollar" }',
+  ),
+  source: z
+    .string()
+    .nullable()
+    .describe('provenance note (null if unknown), e.g. "manual"'),
+  sourceMetadata,
 });
 
-export const unitMappingOut = z
-  .object({
-    id: z.uuid(),
-  })
-  .extend(unitMappingWithMetadata.shape)
-  .extend(dbTimestampsOut.shape);
+export const unitMappingOut = z.object({
+  id: z.uuid(),
+  a: amount.describe('left side of the pair, e.g. { value: 8, unit: "oz" }'),
+  b: amount.describe(
+    'right side of the pair, e.g. { value: 10, unit: "dollar" }',
+  ),
+  source: z
+    .string()
+    .nullable()
+    .describe('provenance note (null if unknown), e.g. "manual"'),
+  sourceMetadata,
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
 
 export type UnitMapping = z.infer<typeof unitMappingWithMetadata>;
 

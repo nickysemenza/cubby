@@ -1,22 +1,21 @@
 import { z } from "zod";
-import { dbTimestampsOut } from "./common";
 import { entityImage } from "./entity";
 import { ImageStatus } from "./image";
 import { id } from "./identifiers";
 import { createPaginatedResponseSchema } from "./pagination";
 
 // Schema for image output (response)
-export const imageOut = z
-  .object({
-    id: id,
-    url: z.url(),
-    key: z.string(),
-    filename: z.string(),
-    size: z.int().positive(),
-    contentType: z.string(),
-    status: ImageStatus,
-  })
-  .extend(dbTimestampsOut.shape);
+export const imageOut = z.object({
+  id: id,
+  url: z.url(),
+  key: z.string(),
+  filename: z.string(),
+  size: z.int().positive(),
+  contentType: z.string(),
+  status: ImageStatus,
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
 
 export type ImageOut = z.infer<typeof imageOut>;
 

@@ -27,11 +27,10 @@ export const createInputImages = z.object({
   pendingImageIds: z.array(z.uuid()).optional(),
 });
 
-export const updateInputImages = z
-  .object({
-    removeImageIds: z.array(z.uuid()).optional(),
-  })
-  .extend(createInputImages.shape);
+export const updateInputImages = z.object({
+  pendingImageIds: z.array(z.uuid()).optional(),
+  removeImageIds: z.array(z.uuid()).optional(),
+});
 
 export type UpdateInputImages = z.infer<typeof updateInputImages>;
 

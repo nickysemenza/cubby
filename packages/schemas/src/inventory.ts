@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { amount } from "./codec";
-import { dbTimestampsOut } from "./common";
 import { inventoryId, locationId, productId } from "./identifiers";
 
 // A stored inventory quantity must be strictly positive: zero means "none left"
@@ -19,14 +18,14 @@ export const inventoryFiltersSchema = z.object({
   locationIdFilter: locationId.optional(),
 });
 
-export const inventoryEntryOut = z
-  .object({
-    id: inventoryId,
-    // inventory entries do not have a name, just ID
-    amount: amount,
-    valuation: z.number().nullable(), // Precomputed: amount.value * product.price
-  })
-  .extend(dbTimestampsOut.shape);
+export const inventoryEntryOut = z.object({
+  id: inventoryId,
+  // inventory entries do not have a name, just ID
+  amount: amount,
+  valuation: z.number().nullable(), // Precomputed: amount.value * product.price
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
 
 export const inventoryUpdatePayloadData = z.object({
   amount: positiveAmount.optional(),

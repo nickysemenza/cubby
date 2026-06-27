@@ -1,8 +1,7 @@
 import { z } from "zod";
 import { ingredientAvailabilityStatus } from "./availability";
-import { dbTimestampsOut } from "./common";
 import { ingredientId, mealId, mealRecipeId, recipeId } from "./identifiers";
-import { mealDate, mealDateRange, mealScale } from "./meal-shared";
+import { mealDate, mealScale } from "./meal-shared";
 import {
   costCalorieTotals,
   recipeTotals,
@@ -22,34 +21,40 @@ export const mealRecipeSummary = z.object({
   totals: recipeTotals.nullish(),
 });
 
-export const mealRecipeOut = z
-  .object({
-    id: mealRecipeId,
-    mealId,
-    recipeId,
-    recipe: mealRecipeSummary,
-    scale: mealScale,
-    sortOrder: z.number().int().nullable(),
-    /** recipe.totals x scale, or null when totals are absent/stale. */
-    scaledTotals: scaledTotals.nullable(),
-  })
-  .extend(dbTimestampsOut.shape);
+export const mealRecipeOut = z.object({
+  id: mealRecipeId,
+  mealId,
+  recipeId,
+  recipe: mealRecipeSummary,
+  scale: mealScale,
+  sortOrder: z.number().int().nullable(),
+  /** recipe.totals x scale, or null when totals are absent/stale. */
+  scaledTotals: scaledTotals.nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
 export type MealRecipeOut = z.infer<typeof mealRecipeOut>;
 
 /** Roll-up across a meal's recipes. `pending` means at least one recipe lacked totals. */
-export const mealTotals = costCalorieTotals.extend({ pending: z.boolean() });
+export const mealTotals = z.object({
+  costTotal: z.number(),
+  costTotalUpper: z.number().optional(),
+  caloriesTotal: z.number(),
+  caloriesTotalUpper: z.number().optional(),
+  pending: z.boolean(),
+});
 export type MealTotals = z.infer<typeof mealTotals>;
 
-export const mealOut = z
-  .object({
-    id: mealId,
-    date: mealDate,
-    name: z.string().nullable(),
-    sortOrder: z.number().int().nullable(),
-    recipes: z.array(mealRecipeOut),
-    totals: mealTotals,
-  })
-  .extend(dbTimestampsOut.shape);
+export const mealOut = z.object({
+  id: mealId,
+  date: mealDate,
+  name: z.string().nullable(),
+  sortOrder: z.number().int().nullable(),
+  recipes: z.array(mealRecipeOut),
+  totals: mealTotals,
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
 export type MealOut = z.infer<typeof mealOut>;
 
 export const mealListOut = z.array(mealOut);
@@ -83,7 +88,9 @@ export const shoppingListItem = z.object({
 });
 export type ShoppingListItem = z.infer<typeof shoppingListItem>;
 
-export const shoppingListOut = mealDateRange.extend({
+export const shoppingListOut = z.object({
+  from: mealDate,
+  to: mealDate,
   meals: z.array(
     z.object({ id: mealId, name: z.string().nullable(), date: mealDate }),
   ),

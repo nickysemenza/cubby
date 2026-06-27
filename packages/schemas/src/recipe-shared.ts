@@ -57,11 +57,11 @@ export type RecomputeSummary = z.infer<typeof recomputeSummary>;
 // The cost/calorie head of recipeTotals — the subset meal scaling carries. One
 // source so the meal schemas can't drift from recipeTotals' field names or the
 // optional upper-bound convention.
-export const costCalorieTotals = recipeTotals.pick({
-  costTotal: true,
-  costTotalUpper: true,
-  caloriesTotal: true,
-  caloriesTotalUpper: true,
+export const costCalorieTotals = z.object({
+  costTotal: z.number(),
+  costTotalUpper: z.number().optional(),
+  caloriesTotal: z.number(),
+  caloriesTotalUpper: z.number().optional(),
 });
 
 // The five whole-recipe macros carried on RecipeTotals as flat `${key}Total`
