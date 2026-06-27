@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 import { getErrorMessage } from "~/lib/error-utils";
+import { invalidateTRPCQueries } from "~/lib/query-keys";
 
 /**
  * Mutation options from tRPC's .mutationOptions() call.
@@ -65,11 +66,7 @@ export function useEditMode<TData, TResult = unknown>({
       onSuccess?.(result);
       if (useRouterRefresh) {
         if (invalidateKeys && invalidateKeys.length > 0) {
-          // Invalidate specific query keys
-          // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
-          for (const key of invalidateKeys) {
-            queryClient.invalidateQueries({ queryKey: [key] });
-          }
+          invalidateTRPCQueries(queryClient, invalidateKeys);
         } else {
           // Fall back to invalidating all queries
           queryClient.invalidateQueries();

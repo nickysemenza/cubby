@@ -1,8 +1,4 @@
-import type {
-  SearchableEntity,
-  SearchResultItem,
-  SearchType,
-} from "@cubby/schemas/search";
+import type { SearchResultItem, SearchType } from "@cubby/schemas/search";
 import { searchableEntities } from "@cubby/schemas/search";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -14,7 +10,7 @@ import {
 } from "@tanstack/react-table";
 import { uniq } from "es-toolkit";
 import { Equal, Search } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { MobileCard } from "~/components/entity/mobile-card";
 import { MobileCardSkeletonList } from "~/components/feedback/mobile-card-skeleton";
 import { Row, Stack } from "~/components/layout";
@@ -33,6 +29,10 @@ import { searchColumns } from "./search-columns";
 import {
   entityTypeMap,
   getEnrichmentText,
+  getSearchResultEntity,
+  getSearchResultRoute,
+  groupSearchResults,
+  rememberSearchResult,
   SearchResultItemIcon,
 } from "./search-utils";
 
@@ -60,9 +60,6 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
     ...api.search.global.queryOptions({ query, limit: 50 }),
     enabled: query.length > 0,
   });
-
-  // Active filter for mobile (separate from table filter)
-  const [mobileFilter, setMobileFilter] = useState<SearchType>(type);
 
   // Inline unit answer ("250 g flour in cups") — same brain as the ⌘K console.
   const conversion = useConversionAnswer(query);
@@ -105,6 +102,16 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
     });
   };
 
+  const handleTypeChange = (nextType: SearchType) => {
+    navigate({
+      to: "/search",
+      search: {
+        q: query || undefined,
+        type: nextType === "all" ? undefined : nextType,
+      },
+    });
+  };
+
   return (
     <Stack gap="md" className="container mx-auto p-1">
       {/* Search input */}
@@ -114,7 +121,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
           type="text"
           aria-label="Search Cubby"
           placeholder="Search products, recipes, locations..."
-          defaultValue={query}
+          value={query}
           onChange={(e) => handleSearchChange(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") commitRecent(e.currentTarget.value);
@@ -164,8 +171,8 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
           <MobileSearchResults
             data={data ?? []}
             isLoading={isLoading}
-            filter={mobileFilter}
-            onFilterChange={setMobileFilter}
+            filter={type}
+            onFilterChange={handleTypeChange}
           />
         ) : (
           <RTable
@@ -279,32 +286,7 @@ function MobileSearchResults({
     [data, filter],
   );
 
-  // Group results by entity type for section headers
-  const grouped = useMemo(() => {
-    const groups: Array<{
-      entityType: SearchableEntity;
-      label: string;
-      items: SearchResultItem[];
-    }> = [];
-    const byType = new Map<SearchableEntity, SearchResultItem[]>();
-
-    for (const item of filtered) {
-      const existing = byType.get(item.entityType);
-      if (existing) {
-        existing.push(item);
-      } else {
-        const arr = [item];
-        byType.set(item.entityType, arr);
-        groups.push({
-          entityType: item.entityType,
-          label: entities[entityTypeMap[item.entityType]].pluralLabel,
-          items: arr,
-        });
-      }
-    }
-
-    return groups;
-  }, [filtered]);
+  const grouped = useMemo(() => groupSearchResults(filtered), [filtered]);
 
   return (
     <Stack gap="md">
@@ -352,7 +334,7 @@ function MobileSearchResults({
               </Row>
             )}
             {group.items.map((item) => {
-              const entity = entityTypeMap[item.entityType];
+              const entity = getSearchResultEntity(item);
               const enrichment = getEnrichmentText(item);
 
               return (
@@ -388,15 +370,8 @@ function MobileSearchResults({
                   rightValues={enrichment ? [enrichment] : []}
                   entity={entity}
                   onClick={() => {
-                    pushRecent({
-                      entityType: item.entityType,
-                      id: item.id,
-                      name: item.name,
-                    });
-                    navigate({
-                      to: entities[entity].routes.detail,
-                      params: { id: item.id },
-                    });
+                    rememberSearchResult(item);
+                    navigate(getSearchResultRoute(item));
                   }}
                 />
               );

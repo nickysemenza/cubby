@@ -21,6 +21,7 @@ import { type AnyColumn, asc } from "drizzle-orm";
 import {
   inventoryEntry,
   location,
+  product,
   productExternalId,
   productImage,
   productUnitMappings,
@@ -64,6 +65,27 @@ export const relations = {
             recipeSection: {
               with: {
                 recipe: true,
+              },
+            },
+          },
+        },
+      },
+    },
+    list: {
+      with: {
+        product: {
+          where: notDeleted(product),
+          with: {
+            unitMappings: {
+              where: notDeleted(productUnitMappings),
+            },
+            externalIds: {
+              where: notDeleted(productExternalId),
+            },
+            images: {
+              where: notDeleted(productImage),
+              with: {
+                image: true,
               },
             },
           },

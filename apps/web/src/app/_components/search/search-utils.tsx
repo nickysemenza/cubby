@@ -3,8 +3,9 @@ import type { LocationType } from "@cubby/schemas/location";
 import type { ProductCategory } from "@cubby/schemas/product";
 import type { SearchableEntity, SearchResultItem } from "@cubby/schemas/search";
 import { match } from "ts-pattern";
-import { EntityIcon } from "~/entities/entities";
+import { EntityIcon, entities } from "~/entities/entities";
 import { formatCurrency } from "~/lib/utils";
+import { pushRecent } from "../command-menu/recents";
 import { tryFormatAmount } from "../inventory/format-amount";
 import {
   getLocationIcon,
@@ -20,6 +21,55 @@ export const entityTypeMap: Record<SearchableEntity, Entity> = {
   location: "location",
   inventory: "inventory",
 };
+
+export type SearchResultGroup = {
+  entityType: SearchableEntity;
+  label: string;
+  items: SearchResultItem[];
+};
+
+export function groupSearchResults(
+  results: readonly SearchResultItem[],
+): SearchResultGroup[] {
+  const groups: SearchResultGroup[] = [];
+  const byType = new Map<SearchableEntity, SearchResultItem[]>();
+
+  for (const item of results) {
+    const existing = byType.get(item.entityType);
+    if (existing) {
+      existing.push(item);
+    } else {
+      const items = [item];
+      byType.set(item.entityType, items);
+      groups.push({
+        entityType: item.entityType,
+        label: entities[entityTypeMap[item.entityType]].pluralLabel,
+        items,
+      });
+    }
+  }
+
+  return groups;
+}
+
+export function getSearchResultEntity(item: SearchResultItem): Entity {
+  return entityTypeMap[item.entityType];
+}
+
+export function getSearchResultRoute(item: SearchResultItem) {
+  return {
+    to: entities[getSearchResultEntity(item)].routes.detail,
+    params: { id: item.id },
+  };
+}
+
+export function rememberSearchResult(item: SearchResultItem): void {
+  pushRecent({
+    entityType: item.entityType,
+    id: item.id,
+    name: item.name,
+  });
+}
 
 /** Render the appropriate icon for a search result item */
 export function SearchResultItemIcon({

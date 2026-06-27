@@ -8,12 +8,14 @@
  */
 
 import type { IngredientOut } from "@cubby/schemas/ingredient";
-import type {
-  IngredientListItem,
-  IngredientWithRecipesAndProductOut,
+import {
+  type IngredientListItem,
+  type IngredientWithRecipesAndProductOut,
+  ingredientListItemOut,
 } from "@cubby/schemas/ingredient-responses";
 import type { RecipeRef } from "@cubby/schemas/recipe";
 import { and, inArray, isNull, or, sql } from "drizzle-orm";
+import { parseWithContext } from "~/lib/zod-utils";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   type image,
@@ -104,11 +106,18 @@ export type IngredientListDB = IngredientSelect & {
 
 export const dbIngredientToListAPI = (
   ingredientData: IngredientListDB,
-): IngredientListItem => ({
-  ...dbIngredientToTopLevelShape(ingredientData),
-  product: mapIngredientProducts(ingredientData.product),
-  appearsInRecipes: ingredientData.appearsInRecipes ?? [],
-});
+): IngredientListItem => {
+  const result = {
+    ...dbIngredientToTopLevelShape(ingredientData),
+    product: mapIngredientProducts(ingredientData.product),
+    appearsInRecipes: ingredientData.appearsInRecipes ?? [],
+  };
+
+  return parseWithContext(ingredientListItemOut, result, {
+    entityType: "Ingredient",
+    identifier: { id: ingredientData.id, name: ingredientData.name },
+  });
+};
 
 /**
  * Lean product map: skips the `images` (full Image records) + `externalIds`

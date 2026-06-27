@@ -329,15 +329,7 @@ export const ingredientList = async (
   // the pill). Drops the per-usage Recipe + Section jsonb bodies the full graph
   // shipped — the list never reads them (that was the over-fetch).
   const leanRelations = {
-    with: {
-      product: {
-        with: {
-          unitMappings: true,
-          externalIds: true,
-          images: { with: { image: true } },
-        },
-      },
-    },
+    ...relations.ingredient.list,
     extras: {
       appearsInRecipes: sql<RecipeRef[]>`${sql.raw(
         appearsInRecipesRefsForIngredientSql('"ingredient"."id"'),

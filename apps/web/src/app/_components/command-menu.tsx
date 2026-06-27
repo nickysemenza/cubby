@@ -1,5 +1,5 @@
 import type { AgentResult } from "@cubby/schemas/agent";
-import type { SearchableEntity } from "@cubby/schemas/search";
+import type { SearchableEntity, SearchResultItem } from "@cubby/schemas/search";
 import { parseShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -48,6 +48,10 @@ import { desktopLeaves } from "./navigation/nav-items";
 import {
   entityTypeMap,
   getEnrichmentText,
+  getSearchResultEntity,
+  getSearchResultRoute,
+  groupSearchResults,
+  rememberSearchResult,
   SearchResultItemIcon,
 } from "./search/search-utils";
 
@@ -225,6 +229,12 @@ export function GlobalCommandMenu({
     }
   };
 
+  const goToSearchResult = (item: SearchResultItem) => {
+    rememberSearchResult(item);
+    navigate(getSearchResultRoute(item));
+    setOpen(false);
+  };
+
   const goToPage = (path: string) => {
     navigate({ to: path });
     setOpen(false);
@@ -235,31 +245,10 @@ export function GlobalCommandMenu({
   const hasResults = results && results.length > 0;
 
   // Group search results by entity type for section headers
-  const groupedResults = React.useMemo(() => {
-    if (!results) return [];
-    const groups: Array<{
-      entityType: SearchableEntity;
-      label: string;
-      items: typeof results;
-    }> = [];
-    const byType = new Map<SearchableEntity, typeof results>();
-
-    for (const item of results) {
-      const existing = byType.get(item.entityType);
-      if (existing) {
-        existing.push(item);
-      } else {
-        const arr = [item];
-        byType.set(item.entityType, arr);
-        groups.push({
-          entityType: item.entityType,
-          label: entities[entityTypeMap[item.entityType]].pluralLabel,
-          items: arr,
-        });
-      }
-    }
-    return groups;
-  }, [results]);
+  const groupedResults = React.useMemo(
+    () => groupSearchResults(results ?? []),
+    [results],
+  );
 
   return (
     <CommandDialog
@@ -377,15 +366,12 @@ export function GlobalCommandMenu({
                     {group.items.map((item) => {
                       const enrichment = getEnrichmentText(item);
 
-                      const entityDef =
-                        entities[entityTypeMap[item.entityType]];
+                      const entityDef = entities[getSearchResultEntity(item)];
 
                       return (
                         <CommandItem
                           key={`${item.entityType}-${item.id}`}
-                          onSelect={() =>
-                            goToEntity(item.entityType, item.id, item.name)
-                          }
+                          onSelect={() => goToSearchResult(item)}
                           className="flex items-center gap-2"
                         >
                           {item.imageUrl ? (
