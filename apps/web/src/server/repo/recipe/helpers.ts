@@ -3,23 +3,22 @@
  * Convert database records to API types.
  */
 
+import type { ImageOut } from "@cubby/schemas/image";
 import type {
   RecipeGraphOut,
+  RecipeListItem,
   RecipeOut,
-  RecipeTotals,
-  recipeTopLevel,
+  RecipeSectionOut,
+  RecipeTopLevel,
   SectionIngredient,
 } from "@cubby/schemas/recipe";
-import type { z } from "zod";
 import type {
+  image,
   recipe,
   recipeSection,
   recipeSectionIngredient,
 } from "~/server/db/schema";
-import {
-  extractImagesFromJoinTable,
-  mapRelation,
-} from "~/server/repo/database-helpers";
+import { mapRelation } from "~/server/repo/database-helpers";
 
 import type {
   RecipeDeepDB,
@@ -29,6 +28,25 @@ import type {
 import { recipeSourceFromDb } from "./source";
 
 type RecipeSelect = typeof recipe.$inferSelect;
+type RecipeImageRow = {
+  image: typeof image.$inferSelect;
+  deletedAt?: Date | null;
+};
+
+const mapRecipeImages = (images: RecipeImageRow[] | undefined): ImageOut[] =>
+  (images ?? [])
+    .filter((row) => row.deletedAt === undefined || row.deletedAt === null)
+    .map((row) => ({
+      id: row.image.id,
+      url: row.image.url,
+      key: row.image.key,
+      filename: row.image.filename,
+      size: row.image.size,
+      contentType: row.image.contentType,
+      status: row.image.status,
+      createdAt: row.image.createdAt,
+      updatedAt: row.image.updatedAt,
+    }));
 
 /**
  * Correlated subquery counting the DISTINCT *live* recipes an ingredient appears
@@ -124,7 +142,7 @@ export const computeRecipeUsages = (
 
   const recipeUsages = mapRelation(liveRecipeUsages, (usage) => ({
     id: usage.id,
-    recipe: dbRecipeToAPIShallow(usage.recipeSection.recipe),
+    recipe: dbRecipeToTopLevelShape(usage.recipeSection.recipe),
     sectionName: usage.recipeSection.name,
     amounts: usage.amounts,
     rawLine: usage.rawLine,
@@ -150,87 +168,112 @@ const sectionIngredientToAPI = (
 ): SectionIngredient => {
   if (sectionIngredient.ingredient?.recipe) {
     return {
-      ...sectionIngredient,
+      id: sectionIngredient.id,
       type: "recipe",
-      recipe: dbRecipeToAPIShallow(sectionIngredient.ingredient.recipe),
+      recipe: dbRecipeToTopLevelShape(sectionIngredient.ingredient.recipe),
       ingredient: null,
       amounts: sectionIngredient.amounts,
+      rawLine: sectionIngredient.rawLine,
+      modifier: sectionIngredient.modifier,
+      createdAt: sectionIngredient.createdAt,
+      updatedAt: sectionIngredient.updatedAt,
     };
   } else {
     const ingredient = sectionIngredient.ingredient;
     return {
-      ...sectionIngredient,
+      id: sectionIngredient.id,
       type: "ingredient",
       recipe: null,
-      ingredient,
+      ingredient: {
+        id: ingredient.id,
+        name: ingredient.name,
+        aliases: ingredient.aliases,
+        createdAt: ingredient.createdAt,
+        updatedAt: ingredient.updatedAt,
+      },
       amounts: sectionIngredient.amounts,
+      rawLine: sectionIngredient.rawLine,
+      modifier: sectionIngredient.modifier,
+      createdAt: sectionIngredient.createdAt,
+      updatedAt: sectionIngredient.updatedAt,
     };
   }
 };
 
 /**
- * Convert a recipe DB record to shallow API type (without sections).
- * Used for recipe references within ingredients.
+ * Convert a recipe DB record to a top-level API shape without sections/images.
+ * This is the shared, unvalidated field mapper for recipe list rows and recipe
+ * references.
  */
-export const dbRecipeToAPIShallow: (
-  recipeParam: RecipeSelect,
-) => z.infer<typeof recipeTopLevel> & { totals: RecipeTotals | null } = (
-  recipeData,
-) => {
+const dbRecipeToTopLevelShape = (recipeData: RecipeSelect): RecipeTopLevel => {
   // cookbookId is the FK, not a top-level API field — pull it out of the row so it
   // isn't spread into the output, but feed it to the source codec so a book
   // recipe's `source` carries its cookbook id (for linking).
-  const { SourceType, SourceData, cookbookId, ...restOfRecipe } = recipeData;
   return {
+    id: recipeData.id,
+    name: recipeData.name,
+    createdAt: recipeData.createdAt,
+    updatedAt: recipeData.updatedAt,
     // The DB stores provenance as SourceType + SourceData; the API exposes a single
     // meta.url. This derivation is deliberately kept (rather than collapsing the two
     // columns into one nullable sourceUrl) to avoid a DB migration + backfill.
     meta: {
-      url: SourceType === "Website" ? SourceData : null,
+      url: recipeData.SourceType === "Website" ? recipeData.SourceData : null,
     },
     // Strong provenance union — surfaces the book name + cookbook id for cookbook
     // recipes (meta.url only ever held web URLs).
-    source: recipeSourceFromDb({ SourceType, SourceData, cookbookId }),
-    ...restOfRecipe,
+    source: recipeSourceFromDb({
+      SourceType: recipeData.SourceType,
+      SourceData: recipeData.SourceData,
+      cookbookId: recipeData.cookbookId,
+    }),
+    yield: recipeData.yield,
+    servings: recipeData.servings,
+    tags: recipeData.tags,
+    notes: recipeData.notes,
   };
 };
+
+/**
+ * Convert a recipe DB record to a list item API type (without sections/images).
+ */
+export const dbRecipeToAPIShallow: (
+  recipeParam: RecipeSelect,
+) => RecipeListItem = (recipeData) => ({
+  ...dbRecipeToTopLevelShape(recipeData),
+  totals: recipeData.totals,
+});
+
+const mapRecipeSections = (
+  sections: RecipeDeepDB["sections"] | RecipeGraphDB["sections"],
+): RecipeSectionOut[] =>
+  mapRelation(sections, (section) => {
+    const { ingredients, instructions } = section;
+    return {
+      id: section.id,
+      name: section.name,
+      createdAt: section.createdAt,
+      updatedAt: section.updatedAt,
+      ingredients: mapRelation(ingredients, sectionIngredientToAPI),
+      // The DB stores each instruction as { text }, the API/form use { instruction }.
+      // This rename is deliberately kept to avoid a JSONB migration + backfill.
+      instructions: Array.isArray(instructions)
+        ? instructions.map((instruction: { text: string }) => {
+            return { instruction: instruction.text };
+          })
+        : [],
+    };
+  });
 
 /**
  * Convert a full recipe DB record to API type (with sections).
  */
 export const dbRecipeToAPI = (recipeData: RecipeDeepDB): RecipeOut => {
-  const {
-    sections,
-    SourceData,
-    SourceType,
-    cookbookId,
-    images,
-    ...restOfRecipe
-  } = recipeData;
-
+  const baseRecipe = dbRecipeToAPIShallow(recipeData);
   return {
-    ...restOfRecipe,
-    // See dbRecipeToAPIShallow: SourceType/SourceData -> meta.url derivation is kept
-    // deliberately to avoid a DB migration.
-    meta: {
-      url: SourceType === "Website" ? SourceData : null,
-    },
-    source: recipeSourceFromDb({ SourceType, SourceData, cookbookId }),
-    images: extractImagesFromJoinTable(images),
-    sections: mapRelation(sections, (section) => {
-      const { ingredients, instructions, ...restOfSection } = section;
-      return {
-        ...restOfSection,
-        ingredients: mapRelation(ingredients, sectionIngredientToAPI),
-        // The DB stores each instruction as { text }, the API/form use { instruction }.
-        // This rename is deliberately kept to avoid a JSONB migration + backfill.
-        instructions: Array.isArray(instructions)
-          ? instructions.map((instruction: { text: string }) => {
-              return { instruction: instruction.text };
-            })
-          : [],
-      };
-    }),
+    ...baseRecipe,
+    images: mapRecipeImages(recipeData.images),
+    sections: mapRecipeSections(recipeData.sections),
   };
 };
 
@@ -241,26 +284,9 @@ export const dbRecipeToAPI = (recipeData: RecipeDeepDB): RecipeOut => {
 export const dbRecipeToAPIGraph = (
   recipeData: RecipeGraphDB,
 ): RecipeGraphOut => {
-  const { sections, SourceData, SourceType, cookbookId, ...restOfRecipe } =
-    recipeData;
-
+  const baseRecipe = dbRecipeToAPIShallow(recipeData);
   return {
-    ...restOfRecipe,
-    meta: {
-      url: SourceType === "Website" ? SourceData : null,
-    },
-    source: recipeSourceFromDb({ SourceType, SourceData, cookbookId }),
-    sections: mapRelation(sections, (section) => {
-      const { ingredients, instructions, ...restOfSection } = section;
-      return {
-        ...restOfSection,
-        ingredients: mapRelation(ingredients, sectionIngredientToAPI),
-        instructions: Array.isArray(instructions)
-          ? instructions.map((instruction: { text: string }) => ({
-              instruction: instruction.text,
-            }))
-          : [],
-      };
-    }),
+    ...baseRecipe,
+    sections: mapRecipeSections(recipeData.sections),
   };
 };

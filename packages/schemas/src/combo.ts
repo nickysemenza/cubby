@@ -47,7 +47,24 @@ export {
   productWithIngredientAndInventoryAndMappingsOut,
   productWithMappingsOut,
 } from "./product-responses";
-export { type RecipeUsage, recipeUsageOut } from "./recipe";
+export {
+  type RecipeGraphOut,
+  type RecipeListItem,
+  type RecipeOut,
+  type RecipeSectionOut,
+  type RecipeTopLevel,
+  type RecipeUsage,
+  type RecipeWithSectionsOut,
+  type SectionIngredientOut,
+  recipeGraphOut,
+  recipeListItemOut,
+  recipeOut,
+  recipeSectionOut,
+  recipeTopLevel,
+  recipeUsageOut,
+  recipeWithSectionsOut,
+  sectionIngredientOut,
+} from "./recipe";
 export {
   type FoodSummaryWithLinkedProducts,
   foodSummaryWithLinkedProducts,

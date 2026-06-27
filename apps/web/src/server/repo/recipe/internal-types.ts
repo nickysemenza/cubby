@@ -41,6 +41,7 @@ export type RecipeDeepDB = typeof recipe.$inferSelect & {
   >;
   images: Array<{
     image: typeof image.$inferSelect;
+    deletedAt?: Date | null;
   }>;
 };
 
