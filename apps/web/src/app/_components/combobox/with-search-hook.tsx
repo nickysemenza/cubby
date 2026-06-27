@@ -4,7 +4,11 @@ import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { getErrorMessage } from "~/lib/error-utils";
-import { queryKeys } from "~/lib/query-keys";
+import {
+  ingredientMutationInvalidateKeys,
+  locationMutationInvalidateKeys,
+  productMutationInvalidateKeys,
+} from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 import {
   buildIngredientComboboxItem,
@@ -67,7 +71,7 @@ export function WithIngredientSearch({ children }: WithEntitySearchProps) {
     mutationFn: api.ingredient.create.mutationOptions,
     success: (newIngredient: IngredientWithRecipesAndProductOut) =>
       `Added ${newIngredient.name} to your pantry.`,
-    invalidateKeys: [queryKeys.ingredient.list],
+    invalidateKeys: ingredientMutationInvalidateKeys,
     onSuccess: (newIngredient) =>
       resolveWithEntity(buildIngredientComboboxItem(newIngredient)),
     error: (err) => `Failed to create ingredient: ${getErrorMessage(err)}`,
@@ -121,7 +125,7 @@ export function WithLocationSearch({ children }: WithEntitySearchProps) {
     mutationFn: api.location.create.mutationOptions,
     success: (newLocation: LocationOut) =>
       `Made a place for ${newLocation.name}.`,
-    invalidateKeys: [queryKeys.location.list],
+    invalidateKeys: locationMutationInvalidateKeys,
     onSuccess: (newLocation) =>
       resolveWithEntity(buildLocationComboboxItem(newLocation)),
     error: (err) => `Failed to create location: ${getErrorMessage(err)}`,
@@ -177,7 +181,7 @@ export function WithProductSearch({ children }: WithEntitySearchProps) {
   const createMutation = useActionMutation({
     mutationFn: api.product.create.mutationOptions,
     success: (newProduct) => `Added ${newProduct.name} to your shelves.`,
-    invalidateKeys: [queryKeys.product.all],
+    invalidateKeys: productMutationInvalidateKeys,
     onSuccess: (newProduct) =>
       resolveWithEntity(buildProductComboboxItem(newProduct)),
     error: (err) => `Failed to create product: ${getErrorMessage(err)}`,

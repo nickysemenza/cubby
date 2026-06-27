@@ -23,7 +23,10 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { getErrorMessage } from "~/lib/error-utils";
-import { queryKeys } from "~/lib/query-keys";
+import {
+  invalidateTRPCQueries,
+  locationMutationInvalidateKeys,
+} from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 
 type Phase = "SELECT_LOCATION" | "SCANNING" | "RECONCILIATION";
@@ -189,9 +192,7 @@ export function LocationValidateForm({
   const updateMutation = useMutation(
     api.location.update.mutationOptions({
       onSuccess: () => {
-        queryClient.invalidateQueries({
-          queryKey: [queryKeys.location.list],
-        });
+        invalidateTRPCQueries(queryClient, locationMutationInvalidateKeys);
         if (parentLocationId) {
           queryClient.invalidateQueries({
             queryKey: api.location.getByID.queryKey({

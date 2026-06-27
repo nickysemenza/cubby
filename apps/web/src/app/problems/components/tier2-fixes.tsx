@@ -1,7 +1,7 @@
 import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
 import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
-import { queryKeys } from "~/lib/query-keys";
+import { productMutationInvalidateKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 
 /**
@@ -24,7 +24,7 @@ export function OrphanedDeleteFix({
   const remove = useProblemCardMutation({
     mutationFn: api.product.delete.mutationOptions,
     success: "Product deleted",
-    invalidateKeys: [queryKeys.product.all],
+    invalidateKeys: productMutationInvalidateKeys,
     onSuccess: close,
   });
 

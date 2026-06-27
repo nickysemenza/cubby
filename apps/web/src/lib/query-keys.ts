@@ -85,8 +85,16 @@ export const ingredientMutationInvalidateKeys = [
   queryKeys.ingredient.list,
 ] as const satisfies readonly QueryKey[];
 
+export const ingredientAllMutationInvalidateKeys = [
+  queryKeys.ingredient.all,
+] as const satisfies readonly QueryKey[];
+
 export const recipeMutationInvalidateKeys = [
   queryKeys.recipe.list,
+] as const satisfies readonly QueryKey[];
+
+export const recipeAllMutationInvalidateKeys = [
+  queryKeys.recipe.all,
 ] as const satisfies readonly QueryKey[];
 
 export function normalizeTRPCQueryKey(key: QueryKey): QueryKey {

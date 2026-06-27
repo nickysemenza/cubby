@@ -1,7 +1,7 @@
 import type { RecipeUpdateInput } from "@cubby/schemas/recipe";
 import type { RecipeOut } from "@cubby/schemas/recipe-responses";
 import { toast } from "sonner";
-import { queryKeys } from "~/lib/query-keys";
+import { recipeAllMutationInvalidateKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 import { useEditMode } from "../hooks/useEditMode";
 import { RecipeForm } from "./recipe-form";
@@ -25,7 +25,7 @@ export default function EditRecipeForm({
       onCancel();
     },
     // Only invalidate recipe queries to avoid triggering problematic ingredient queries
-    invalidateKeys: [queryKeys.recipe.all],
+    invalidateKeys: recipeAllMutationInvalidateKeys,
   });
 
   return (
