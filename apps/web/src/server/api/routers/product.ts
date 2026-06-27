@@ -32,9 +32,7 @@ import { foodSummary, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { streamItems, streamProgress } from "~/lib/bulk-progress";
 import { getErrorMessage } from "~/lib/error-utils";
-import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { ID_CHUNK_SIZE } from "~/misc/array-helpers";
-import { countActiveInventoryForProduct } from "~/server/repo/inventory/crud";
 import {
   deleteProducts,
   getCategoryDistribution,
@@ -43,10 +41,12 @@ import {
   productSearch,
   quickCreateProduct,
 } from "~/server/repo/product";
-import { importImageFromUPC } from "~/server/services/image-import";
 import {
+  applyUpcDataWithSideEffects,
   backfillUPCImages as backfillUPCImagesService,
+  createProductWithSideEffects,
   findOrCreateByUPC as findOrCreateByUPCService,
+  updateProductWithSideEffects,
 } from "~/server/services/product-orchestration.service";
 import {
   createDeleteProcedure,
@@ -141,34 +141,17 @@ const create = protectedProcedure
   .input(productCreateInput)
   .output(productWithFoodAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
-    // Create the product
-    const product = await ctx.services.product.createProduct(
+    return await createProductWithSideEffects(
+      {
+        db: ctx.db,
+        product: ctx.services.product,
+        recipeCosting: ctx.services.recipeCosting,
+        locationValuation: ctx.services.locationValuation,
+        upcLookupClient: ctx.upcLookupClient,
+      },
       input,
       ctx.actorContext,
     );
-
-    // If product has a UPC, try to import image from UPC lookup (non-blocking)
-    if (input.upc) {
-      try {
-        await importImageFromUPC(
-          ctx.db,
-          ctx.upcLookupClient,
-          input.upc,
-          product.id,
-        );
-      } catch (error) {
-        console.error(`[product.create] Image import failed:`, error);
-      }
-    }
-
-    const ingredientId = product.ingredient?.id;
-    const recipesRecomputed = ingredientId
-      ? await ctx.services.recipeCosting.recomputeForIngredient(ingredientId)
-      : 0;
-    return {
-      ...product,
-      sideEffects: { recipesRecomputed, inventoryValuationsUpdated: 0 },
-    };
   });
 
 // Custom update: a product's price/USDA link feeds recipe cost via its linked
@@ -178,29 +161,17 @@ const update = protectedProcedure
   .input(z.object({ id: productId, data: productUpdateData }))
   .output(productWithFoodAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
-    const result = await ctx.services.product.updateProduct(
+    return await updateProductWithSideEffects(
+      {
+        db: ctx.db,
+        product: ctx.services.product,
+        recipeCosting: ctx.services.recipeCosting,
+        locationValuation: ctx.services.locationValuation,
+      },
       input.id,
       input.data,
       ctx.actorContext,
     );
-    const ingredientId = result.ingredient?.id;
-    const recipesRecomputed = ingredientId
-      ? await ctx.services.recipeCosting.recomputeForIngredient(ingredientId)
-      : 0;
-    // updateProduct already resynced inventory valuations in its tx when the
-    // price changed (amount × price); report how many entries that covered, and
-    // refresh the persisted per-location valuation rollups those entries feed.
-    const inventoryValuationsUpdated =
-      input.data.price !== undefined
-        ? await countActiveInventoryForProduct(ctx.db, input.id)
-        : 0;
-    if (input.data.price !== undefined) {
-      await ctx.services.locationValuation.recompute();
-    }
-    return {
-      ...result,
-      sideEffects: { recipesRecomputed, inventoryValuationsUpdated },
-    };
   });
 
 // One-click "Apply" for the Problems page "Better UPC data available" panel:
@@ -213,63 +184,17 @@ const applyUpcData = protectedProcedure
   .input(z.object({ id: productId, upc: upc }))
   .output(productWithFoodAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
-    const current = await ctx.services.product.getProductByID(input.id);
-    const lookup = await ctx.upcLookupClient.lookup(input.upc);
-
-    // Build a partial update from the gaps the lookup can actually fill.
-    const data: { manufacturer?: string; price?: number } = {};
-    const lookupManufacturer = lookup?.manufacturer ?? lookup?.brand ?? null;
-    if (
-      lookupManufacturer != null &&
-      isUnspecifiedManufacturer(current.manufacturer) &&
-      !isUnspecifiedManufacturer(lookupManufacturer)
-    ) {
-      data.manufacturer = lookupManufacturer;
-    }
-    if (current.price == null && lookup?.priceDollars != null) {
-      data.price = lookup.priceDollars;
-    }
-
-    const priceChanged = data.price !== undefined;
-    if (Object.keys(data).length > 0) {
-      await ctx.services.product.updateProduct(
-        input.id,
-        data,
-        ctx.actorContext,
-      );
-    }
-
-    // Image is a separate write (R2 import + association); only when missing.
-    if (current.images.length === 0 && lookup?.imageUrl) {
-      try {
-        await importImageFromUPC(
-          ctx.db,
-          ctx.upcLookupClient,
-          input.upc,
-          input.id,
-        );
-      } catch (error) {
-        console.error(`[product.applyUpcData] Image import failed:`, error);
-      }
-    }
-
-    // Re-fetch so the returned payload reflects every write (incl. the image).
-    const result = await ctx.services.product.getProductByID(input.id);
-    const ingredientId = result.ingredient?.id;
-    const recipesRecomputed =
-      priceChanged && ingredientId
-        ? await ctx.services.recipeCosting.recomputeForIngredient(ingredientId)
-        : 0;
-    const inventoryValuationsUpdated = priceChanged
-      ? await countActiveInventoryForProduct(ctx.db, input.id)
-      : 0;
-    if (priceChanged) {
-      await ctx.services.locationValuation.recompute();
-    }
-    return {
-      ...result,
-      sideEffects: { recipesRecomputed, inventoryValuationsUpdated },
-    };
+    return await applyUpcDataWithSideEffects(
+      {
+        db: ctx.db,
+        product: ctx.services.product,
+        recipeCosting: ctx.services.recipeCosting,
+        locationValuation: ctx.services.locationValuation,
+        upcLookupClient: ctx.upcLookupClient,
+      },
+      input,
+      ctx.actorContext,
+    );
   });
 
 const foodSummaries = protectedProcedure

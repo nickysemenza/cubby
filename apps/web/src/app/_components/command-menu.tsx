@@ -48,11 +48,10 @@ import { desktopLeaves } from "./navigation/nav-items";
 import {
   entityTypeMap,
   getEnrichmentText,
-  getSearchResultEntity,
   getSearchResultRoute,
   groupSearchResults,
   rememberSearchResult,
-  SearchResultItemIcon,
+  SearchResultMedia,
 } from "./search/search-utils";
 
 /**
@@ -366,35 +365,13 @@ export function GlobalCommandMenu({
                     {group.items.map((item) => {
                       const enrichment = getEnrichmentText(item);
 
-                      const entityDef = entities[getSearchResultEntity(item)];
-
                       return (
                         <CommandItem
                           key={`${item.entityType}-${item.id}`}
                           onSelect={() => goToSearchResult(item)}
                           className="flex items-center gap-2"
                         >
-                          {item.imageUrl ? (
-                            <img
-                              src={item.imageUrl}
-                              alt=""
-                              className="h-8 w-8 shrink-0 rounded object-cover"
-                            />
-                          ) : (
-                            <IconTile
-                              size="md"
-                              className={cn(
-                                "rounded",
-                                entityDef?.color.bg ?? "bg-muted/50",
-                                entityDef?.color.text,
-                              )}
-                            >
-                              <SearchResultItemIcon
-                                item={item}
-                                className="h-4 w-4 shrink-0"
-                              />
-                            </IconTile>
-                          )}
+                          <SearchResultMedia item={item} />
                           <div className="min-w-0 flex-1">
                             <div className="truncate text-sm">{item.name}</div>
                             {(item.subtitle || enrichment) && (

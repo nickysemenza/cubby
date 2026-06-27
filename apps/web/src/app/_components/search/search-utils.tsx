@@ -3,8 +3,10 @@ import type { LocationType } from "@cubby/schemas/location";
 import type { ProductCategory } from "@cubby/schemas/product";
 import type { SearchableEntity, SearchResultItem } from "@cubby/schemas/search";
 import { match } from "ts-pattern";
+import { IconTile } from "~/components/ui/icon-tile";
+import { Image } from "~/components/ui/image";
 import { EntityIcon, entities } from "~/entities/entities";
-import { formatCurrency } from "~/lib/utils";
+import { cn, formatCurrency } from "~/lib/utils";
 import { pushRecent } from "../command-menu/recents";
 import { tryFormatAmount } from "../inventory/format-amount";
 import {
@@ -100,6 +102,54 @@ export function SearchResultItemIcon({
 
   // Default entity icon
   return <EntityIcon entity={entity} colored className={className} />;
+}
+
+const mediaVariants = {
+  command: {
+    tile: "size-8 rounded",
+    icon: "h-4 w-4 shrink-0",
+    displayWidth: 64,
+  },
+  mobile: {
+    tile: "size-11 rounded",
+    icon: "h-5 w-5 shrink-0",
+    displayWidth: 88,
+  },
+} as const;
+
+export function SearchResultMedia({
+  item,
+  variant = "command",
+}: {
+  item: SearchResultItem;
+  variant?: keyof typeof mediaVariants;
+}) {
+  const media = mediaVariants[variant];
+  const entity = getSearchResultEntity(item);
+
+  if (item.imageUrl) {
+    return (
+      <Image
+        src={item.imageUrl}
+        alt=""
+        displayWidth={media.displayWidth}
+        className={cn("shrink-0 object-cover", media.tile)}
+      />
+    );
+  }
+
+  return (
+    <IconTile
+      size={variant === "mobile" ? "lg" : "md"}
+      className={cn(
+        media.tile,
+        entities[entity]?.color.bg ?? "bg-muted/50",
+        entities[entity]?.color.text,
+      )}
+    >
+      <SearchResultItemIcon item={item} className={media.icon} />
+    </IconTile>
+  );
 }
 
 /** Format enrichment info for display in search results */

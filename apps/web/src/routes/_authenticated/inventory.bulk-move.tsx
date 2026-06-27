@@ -1,10 +1,11 @@
+import { locationId } from "@cubby/schemas/identifiers";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
 import BulkMoveForm from "~/app/inventory/bulk-move/bulk-move-form";
 import { Page } from "~/components/page/Page";
 
 const searchSchema = z.object({
-  sourceLocationId: z.string().optional().catch(undefined),
+  sourceLocationId: locationId.optional().catch(undefined),
 });
 
 const searchDefaults = { sourceLocationId: undefined } as const;

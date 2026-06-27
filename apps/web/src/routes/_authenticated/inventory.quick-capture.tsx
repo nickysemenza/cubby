@@ -1,3 +1,4 @@
+import { locationId, productId } from "@cubby/schemas/identifiers";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
 import QuickCaptureForm from "~/app/inventory/quick-capture/quick-capture-form";
@@ -6,8 +7,8 @@ import { useIsMobile } from "~/hooks/useMobile";
 
 const searchSchema = z.object({
   scanner: z.boolean().optional().catch(undefined),
-  locationId: z.string().optional().catch(undefined),
-  productId: z.string().optional().catch(undefined),
+  locationId: locationId.optional().catch(undefined),
+  productId: productId.optional().catch(undefined),
 });
 
 const searchDefaults = {

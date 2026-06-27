@@ -14,7 +14,6 @@ import { useMemo } from "react";
 import { MobileCard } from "~/components/entity/mobile-card";
 import { MobileCardSkeletonList } from "~/components/feedback/mobile-card-skeleton";
 import { Row, Stack } from "~/components/layout";
-import { Image } from "~/components/ui/image";
 import { Input } from "~/components/ui/input";
 import { EntityIcon, entities } from "~/entities/entities";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
@@ -33,7 +32,7 @@ import {
   getSearchResultRoute,
   groupSearchResults,
   rememberSearchResult,
-  SearchResultItemIcon,
+  SearchResultMedia,
 } from "./search-utils";
 
 interface SearchPageProps {
@@ -334,7 +333,6 @@ function MobileSearchResults({
               </Row>
             )}
             {group.items.map((item) => {
-              const entity = getSearchResultEntity(item);
               const enrichment = getEnrichmentText(item);
 
               return (
@@ -343,32 +341,9 @@ function MobileSearchResults({
                   variant="row"
                   title={item.name}
                   subtitle={item.subtitle}
-                  imageSlot={
-                    item.imageUrl ? (
-                      <div className="relative h-11 w-11 overflow-hidden rounded">
-                        <Image
-                          src={item.imageUrl}
-                          alt=""
-                          className="absolute inset-0 h-full w-full object-cover"
-                        />
-                      </div>
-                    ) : (
-                      <div
-                        className={cn(
-                          "flex h-11 w-11 items-center justify-center rounded",
-                          entities[entity]?.color.bg ?? "bg-muted/50",
-                          entities[entity]?.color.text,
-                        )}
-                      >
-                        <SearchResultItemIcon
-                          item={item}
-                          className="h-5 w-5 shrink-0"
-                        />
-                      </div>
-                    )
-                  }
+                  imageSlot={<SearchResultMedia item={item} variant="mobile" />}
                   rightValues={enrichment ? [enrichment] : []}
-                  entity={entity}
+                  entity={getSearchResultEntity(item)}
                   onClick={() => {
                     rememberSearchResult(item);
                     navigate(getSearchResultRoute(item));
