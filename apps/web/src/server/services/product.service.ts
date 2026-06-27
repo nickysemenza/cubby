@@ -52,7 +52,7 @@ export interface ProductService {
   ): Promise<ProductWithFoodOut>;
 }
 
-export const getProductWithFood = async (
+const getProductWithFood = async (
   db: Database,
   usdaClient: USDAClient,
   id: ProductId,
@@ -75,7 +75,7 @@ export const getProductWithFood = async (
   };
 };
 
-export const getProductFoodSummaries = async (
+const getProductFoodSummaries = async (
   db: Database,
   usdaClient: USDAClient,
   ids: ProductId[],
@@ -100,7 +100,7 @@ export const getProductFoodSummaries = async (
   return result;
 };
 
-export const getProductSummaries = async (
+const getProductSummaries = async (
   db: Database,
   usdaClient: USDAClient,
   ids: ProductId[],

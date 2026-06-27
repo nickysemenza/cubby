@@ -24,7 +24,7 @@ export const entityTypeMap: Record<SearchableEntity, Entity> = {
   inventory: "inventory",
 };
 
-export type SearchResultGroup = {
+type SearchResultGroup = {
   entityType: SearchableEntity;
   label: string;
   items: SearchResultItem[];

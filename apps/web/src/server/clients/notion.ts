@@ -83,7 +83,7 @@ export type NotionBlock = {
   children?: NotionBlock[];
 };
 
-export const notionBlockSchema: z.ZodType<NotionBlock> = z.lazy(() =>
+const notionBlockSchema: z.ZodType<NotionBlock> = z.lazy(() =>
   z.object({
     type: z.string(),
     text: z.string().optional(),

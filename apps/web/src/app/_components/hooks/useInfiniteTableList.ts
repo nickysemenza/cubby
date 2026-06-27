@@ -52,36 +52,24 @@ export function useInfiniteTableList<TFilters, TData = unknown>({
   groupBy,
   enabled = true,
 }: UseInfiniteTableListOptions<TFilters>): UseInfiniteTableListReturn<TData> {
-  const { filters, sortParams, pagination, memoizedQueryOptions } =
-    usePaginatedTableCore({
-      queryOptions,
-      buildFilters,
-      tableState,
-      groupBy,
-    });
+  const { filters, sortParams, pagination } = usePaginatedTableCore({
+    queryOptions,
+    buildFilters,
+    tableState,
+    groupBy,
+  });
 
-  // Get the base query options for page 0 to extract queryKey and queryFn shape
-  const baseOptions = useMemo(
-    () => ({
-      ...memoizedQueryOptions,
-      queryKey: [
-        ...queryOptions({
-          sort: sortParams,
-          pagination: { pageIndex: 0, pageSize: pagination.pageSize },
-          filters,
-          ...(groupBy && { groupBy }),
-        }).queryKey,
-        "__infinite__",
-      ],
-    }),
-    [
-      memoizedQueryOptions,
-      queryOptions,
-      sortParams,
-      pagination.pageSize,
-      filters,
-      groupBy,
+  const infiniteQueryKey = useMemo(
+    () => [
+      ...queryOptions({
+        sort: sortParams,
+        pagination: { pageIndex: 0, pageSize: pagination.pageSize },
+        filters,
+        ...(groupBy && { groupBy }),
+      }).queryKey,
+      "__infinite__",
     ],
+    [queryOptions, sortParams, pagination.pageSize, filters, groupBy],
   );
 
   const pageOptions = useMemo(
@@ -106,7 +94,7 @@ export function useInfiniteTableList<TFilters, TData = unknown>({
     refetch,
   } = useInfiniteQuery({
     enabled,
-    queryKey: baseOptions.queryKey,
+    queryKey: infiniteQueryKey,
     queryFn: async ({ pageParam }: { pageParam: number }) => {
       const options = pageOptions(pageParam);
       // Call the queryFn from tRPC options

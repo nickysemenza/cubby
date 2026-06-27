@@ -17,7 +17,7 @@ export type TRPCQueryOptionsFn<TFilters> = (params: {
   // biome-ignore lint/suspicious/noExplicitAny: intentional tRPC boundary
 }) => any;
 
-export interface UsePaginatedTableCoreOptions<TFilters> {
+interface UsePaginatedTableCoreOptions<TFilters> {
   queryOptions: TRPCQueryOptionsFn<TFilters>;
   buildFilters: (tableState: TableStateReturn) => TFilters;
   tableState: TableStateReturn;

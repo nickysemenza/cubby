@@ -24,20 +24,20 @@ type ListParams = {
 
 type QueryFactory = (api: Api, input: never) => unknown;
 
-export interface EntityMutationContract {
+interface EntityMutationContract {
   invalidationKeys: readonly QueryKey[];
   create?: QueryFactory;
   update?: QueryFactory;
   delete?: QueryFactory;
 }
 
-export interface EntityQueryContract {
+interface EntityQueryContract {
   list?: (api: Api, params: ListParams) => unknown;
   detail?: (api: Api, id: string) => unknown;
   pickerSearch?: (api: Api, params: ListParams) => unknown;
 }
 
-export interface EntityContract {
+interface EntityContract {
   entity: Entity;
   route: (typeof entities)[Entity]["routes"];
   defaultSort: string;
@@ -58,7 +58,7 @@ const skippedDetailQuery = {
 
 const listParams = (params: ListParams) => params as never;
 
-export const entityContracts = {
+const entityContracts = {
   product: {
     entity: "product",
     route: entities.product.routes,

@@ -54,7 +54,6 @@
  */
 
 import type { InfLocation } from "@cubby/schemas/location";
-import { MAX_PAGE_SIZE } from "@cubby/schemas/pagination";
 import {
   formatCategoryLabel,
   getCategoryColor,
@@ -70,6 +69,7 @@ import { ArrowLeft, Loader2, Maximize2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { useTRPC } from "~/trpc/react";
+import { useAllInventoryItems } from "../_components/inventory/use-all-inventory-items";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -1814,19 +1814,11 @@ export function IsometricPantry() {
 
   const treeQuery = useQuery(api.location.makeTree.queryOptions());
 
-  const inventoryQuery = useQuery(
-    api.inventory.list.queryOptions({
-      sort: { orderBy: "createdAt", direction: "desc" },
-      pagination: { pageIndex: 0, pageSize: MAX_PAGE_SIZE },
-      filters: {},
-    }),
-  );
+  const inventoryQuery = useAllInventoryItems();
 
   const inventory = useMemo(() => {
-    const items = inventoryQuery.data?.items;
-    if (!items) return [];
-    return items as unknown as InventoryData[];
-  }, [inventoryQuery.data]);
+    return inventoryQuery.items as unknown as InventoryData[];
+  }, [inventoryQuery.items]);
 
   const rooms = useMemo(() => {
     const tree = treeQuery.data;

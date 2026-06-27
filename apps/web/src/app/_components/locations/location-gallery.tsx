@@ -1,6 +1,5 @@
 import type { inventoryListItemOut } from "@cubby/schemas/inventory";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
-import { MAX_PAGE_SIZE } from "@cubby/schemas/pagination";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { ChevronLeft } from "lucide-react";
@@ -22,6 +21,7 @@ import {
 } from "~/hooks/useGalleryViewState";
 import { useIsMobile } from "~/hooks/useMobile";
 import { useTRPC } from "~/trpc/react";
+import { useAllInventoryItems } from "../inventory/use-all-inventory-items";
 import { ProductImageSummariesProvider } from "../products/product-image-summaries";
 import { GalleryHeader } from "./gallery-header";
 import { GallerySidebar } from "./gallery-sidebar";
@@ -336,30 +336,24 @@ export function LocationGallery() {
     api.location.makeTree.queryOptions(),
   );
 
-  // Fetch all inventory items (without location filter)
-  const { data: inventoryData, isLoading: inventoryLoading } = useQuery(
-    api.inventory.list.queryOptions({
-      sort: { orderBy: "createdAt", direction: "desc" },
-      pagination: { pageIndex: 0, pageSize: MAX_PAGE_SIZE },
-      filters: {},
-    }),
-  );
+  // Fetch all inventory items (without location filter) across capped pages.
+  const { items: inventoryItems, isLoadingAll: inventoryLoading } =
+    useAllInventoryItems();
 
   // Group inventory by location ID
   const inventoryByLocation = useMemo(() => {
     const map = new Map<string, InventoryItem[]>();
-    if (!inventoryData?.items) return map;
 
-    for (const item of inventoryData.items) {
+    for (const item of inventoryItems) {
       const locationId = item.location.id;
       const existing = map.get(locationId) ?? [];
       map.set(locationId, [...existing, item]);
     }
     return map;
-  }, [inventoryData]);
+  }, [inventoryItems]);
   const inventoryProductIds = useMemo(
-    () => inventoryData?.items.map((item) => item.product.id) ?? [],
-    [inventoryData],
+    () => inventoryItems.map((item) => item.product.id),
+    [inventoryItems],
   );
 
   // Find matching IDs for type filter (always needed for fading)
