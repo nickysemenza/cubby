@@ -15,6 +15,9 @@
  *     /design gallery, and any line marked `/* tight *\/` (intentional density).
  *  4. Response schema drift — split input/domain schema files must not grow new
  *     response exports; put list/detail/hydrated variants in *-responses.ts.
+ *  5. Schema contract derivation — schema contract modules must not compose
+ *     response/input variants via `.extend()`, `.shape`, `.pick()`, `.omit()`,
+ *     or `.partial()`; use private field maps plus explicit exported schemas.
  *
  * Exit 1 + a report on any violation; exit 0 + one-line OK when clean.
  */
@@ -26,6 +29,7 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const webSrc = join(repoRoot, "apps", "web", "src");
+const upcLookupSrc = join(repoRoot, "apps", "upc-lookup", "src");
 const schemasSrc = join(repoRoot, "packages", "schemas", "src");
 
 // ---------------------------------------------------------------------------
@@ -40,6 +44,7 @@ function gitTrackedSources() {
       "ls-files",
       "apps/web/src/**/*.tsx",
       "apps/web/src/**/*.ts",
+      "apps/upc-lookup/src/**/*.ts",
       "packages/schemas/src",
     ],
     { cwd: repoRoot, encoding: "utf8" },
@@ -72,7 +77,7 @@ function listFiles() {
     // fall through to walk
   }
   try {
-    return [...walk(webSrc), ...walk(schemasSrc)];
+    return [...walk(webSrc), ...walk(upcLookupSrc), ...walk(schemasSrc)];
   } catch {
     return [];
   }
@@ -107,6 +112,9 @@ const SPACING_RE =
 
 const RESPONSE_EXPORT_RE =
   /\bexport\s+(const|type|interface)\s+([A-Za-z0-9_]+(?:Out|Response)(?:Schema)?)\b/;
+
+const SCHEMA_DERIVATION_RE =
+  /\.(extend|pick|omit|partial)\s*\(|\.shape\b/;
 
 const RESPONSE_SPLIT_ALLOWLIST = new Map([
   ["packages/schemas/src/common.ts", new Set(["dbTimestampsOut"])],
@@ -171,6 +179,16 @@ function responseExportAllowlist(path) {
   }
   if (RESPONSE_SPLIT_STRICT_FILES.has(rel)) return new Set();
   return null;
+}
+
+function isSchemaContractFile(path) {
+  const rel = relative(repoRoot, path);
+  if (!rel.endsWith(".ts") || rel.endsWith(".unit.test.ts")) return false;
+  if (rel.startsWith("packages/schemas/src/")) return true;
+  return (
+    rel.startsWith("apps/upc-lookup/src/schemas/") ||
+    rel.startsWith("apps/upc-lookup/src/openapi")
+  );
 }
 
 /** @typedef {{ file: string, line: number, snippet: string, rule: string }} Violation */
@@ -260,6 +278,21 @@ function scan(files) {
           rule: "schema-response-drift",
         });
       }
+
+      // Rule 5: schema contract modules should compose reusable field maps, not
+      // derive exported contracts from other schemas or their `.shape`.
+      if (
+        isSchemaContractFile(file) &&
+        !isCommentLine(line) &&
+        SCHEMA_DERIVATION_RE.test(line)
+      ) {
+        violations.push({
+          file,
+          line: i + 1,
+          snippet: line.trim(),
+          rule: "schema-contract-derivation",
+        });
+      }
     }
   }
 
@@ -289,6 +322,8 @@ const byRule = {
     "Off-scale spacing — use the {1,2,4,6} scale (see CLAUDE.md Spacing). Mark genuinely-dense exceptions with an inline /* tight */ comment.",
   "schema-response-drift":
     "Response schema drift — split input/domain schema files must not export new response contracts; move them to the owning *-responses.ts module.",
+  "schema-contract-derivation":
+    "Schema contract derivation — use private field maps plus explicit z.object contracts instead of `.extend()`, `.shape`, `.pick()`, `.omit()`, or `.partial()`.",
 };
 
 console.error(
