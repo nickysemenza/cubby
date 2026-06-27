@@ -9,14 +9,14 @@ import type {
 } from "@cubby/schemas/inventory-responses";
 import { locationType } from "@cubby/schemas/location";
 import {
-  type ProductPickerItemOut,
   type ProductTopLevelOut,
-  productPickerItemOut,
   productTopLevelOut,
 } from "@cubby/schemas/product";
 import {
   type ProductListItem,
+  type ProductPickerItemOut,
   productListItemOut,
+  productPickerItemOut,
   productWithIngredientAndInventoryAndMappingsOut,
 } from "@cubby/schemas/product-responses";
 import type { z } from "zod";

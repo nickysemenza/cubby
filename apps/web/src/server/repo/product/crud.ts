@@ -15,10 +15,10 @@ import {
   hasFoodIndicators,
   type ProductCategory,
   type ProductCreateInput,
-  type ProductPickerItemOut,
   type ProductTopLevelOut,
   type ProductUpdateInput,
 } from "@cubby/schemas/product";
+import type { ProductPickerItemOut } from "@cubby/schemas/product-responses";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";

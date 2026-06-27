@@ -6,12 +6,10 @@ import {
   unsafeProductId,
   unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
-import {
-  productPickerItemOut,
-  productTopLevelOut,
-} from "@cubby/schemas/product";
+import { productTopLevelOut } from "@cubby/schemas/product";
 import {
   productListItemOut,
+  productPickerItemOut,
   productWithIngredientAndInventoryAndMappingsOut,
 } from "@cubby/schemas/product-responses";
 import { describe, expect, it } from "vitest";

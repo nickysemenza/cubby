@@ -16,13 +16,13 @@ import {
   productCategory,
   productCreateInput,
   productFiltersSchema,
-  productPickerItemOut,
   productQuickCreatePayload,
   productTopLevelOut,
   productUpdateData,
 } from "@cubby/schemas/product";
 import {
   productListItemOut,
+  productPickerItemOut,
   productWithFoodAndSideEffectsOut,
   productWithFoodOut,
 } from "@cubby/schemas/product-responses";

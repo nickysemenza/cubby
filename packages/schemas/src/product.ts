@@ -165,13 +165,6 @@ export const productTopLevelOut = z
   .extend(dbTimestampsOut.shape);
 
 export type ProductTopLevelOut = z.infer<typeof productTopLevelOut>;
-export const productPickerItemOut = productTopLevelOut.pick({
-  id: true,
-  shortcode: true,
-  name: true,
-  manufacturer: true,
-});
-export type ProductPickerItemOut = z.infer<typeof productPickerItemOut>;
 export type ProductCreateInput = z.infer<typeof productCreateInput>;
 export type ProductUpdateInput = z.infer<typeof productUpdateInput>;
 

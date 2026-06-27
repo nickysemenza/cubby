@@ -7,13 +7,22 @@ import {
 } from "./inventory-responses";
 import { inventoryEntryOut } from "./inventory";
 import { productTopLevelOut } from "./product";
-import { recipeUsageOut, recomputeSummary } from "./recipe";
+import { recipeUsageOut } from "./recipe-responses";
+import { recomputeSummary } from "./recipe-shared";
 import { unitMappingOut } from "./unitmapping";
 
 export const productWithMappingsOut = productTopLevelOut.extend({
   unitMappings: z.array(unitMappingOut),
 });
 export type ProductWithMappingsOut = z.infer<typeof productWithMappingsOut>;
+
+export const productPickerItemOut = productTopLevelOut.pick({
+  id: true,
+  shortcode: true,
+  name: true,
+  manufacturer: true,
+});
+export type ProductPickerItemOut = z.infer<typeof productPickerItemOut>;
 
 export const productWithIngredientAndInventoryAndMappingsOut =
   productTopLevelOut.extend({

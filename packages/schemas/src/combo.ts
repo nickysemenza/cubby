@@ -1,6 +1,6 @@
 // Compatibility barrel for older imports. New code should import from the
 // owning response module: inventory-responses, product-responses,
-// ingredient-responses, location-responses, recipe, or usda.
+// ingredient-responses, location-responses, recipe-responses, or usda.
 export {
   type IngredientWithFoodAndSideEffectsOut,
   type IngredientWithRecipesAndProductOut,
@@ -41,9 +41,11 @@ export {
 export {
   type ProductWithFoodAndSideEffectsOut,
   type ProductListItem,
+  type ProductPickerItemOut,
   type ProductWithFoodOut,
   type ProductWithMappingsOut,
   productListItemOut,
+  productPickerItemOut,
   productWithFoodAndSideEffectsOut,
   productWithFoodOut,
   productWithIngredientAndInventoryAndMappingsOut,
@@ -66,7 +68,7 @@ export {
   recipeUsageOut,
   recipeWithSectionsOut,
   sectionIngredientOut,
-} from "./recipe";
+} from "./recipe-responses";
 export {
   type FoodSummaryWithLinkedProducts,
   foodSummaryWithLinkedProducts,

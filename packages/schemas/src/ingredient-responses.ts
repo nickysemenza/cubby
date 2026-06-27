@@ -8,8 +8,8 @@ import {
   recipeRefOut,
   recipeTopLevel,
   recipeUsageOut,
-  recomputeSummary,
-} from "./recipe";
+} from "./recipe-responses";
+import { recomputeSummary } from "./recipe-shared";
 
 export const productWithMappingsAndFoodOut = productWithMappingsOut.extend({
   food: foodSummary.nullable(),
