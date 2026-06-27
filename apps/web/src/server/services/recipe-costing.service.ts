@@ -17,7 +17,10 @@ import type {
   RecipeMacroColumn,
   RecipeTotals,
 } from "@cubby/schemas/recipe-shared";
-import { RECIPE_MACRO_KEYS, recipeTotals } from "@cubby/schemas/recipe-shared";
+import {
+  RECIPE_MACRO_KEYS,
+  recipeTotalsFieldNames,
+} from "@cubby/schemas/recipe-shared";
 import { getNutrientValueByKey } from "@cubby/usda-schemas";
 import { chunk, keyBy, uniq } from "es-toolkit";
 import {
@@ -102,18 +105,14 @@ const fieldDiffers = (
   (TOTALS_EPSILON[field] ?? DEFAULT_EPSILON);
 
 // Whether a fresh compute differs from what's persisted — the honest "would
-// change" predicate behind the dry-run (catches logic-change drift the stale
-// flag misses). Every recipeTotals field is numeric, so we compare them all
-// (derived from the schema, so new fields are covered automatically) via the
-// shared per-field tolerance. Null persisted ⇒ new.
-const TOTALS_FIELDS = Object.keys(recipeTotals.shape) as (keyof RecipeTotals)[];
-
+// change" predicate behind the dry-run. The field roster is owned by the schema
+// package so adding a recipeTotals field keeps this comparison exhaustive.
 const totalsDiffer = (
   a: RecipeTotals | null | undefined,
   b: RecipeTotals,
 ): boolean => {
   if (!a) return true;
-  return TOTALS_FIELDS.some((k) => fieldDiffers(a, b, k));
+  return recipeTotalsFieldNames.some((k) => fieldDiffers(a, b, k));
 };
 
 type CascadeMode = "inline" | "queue";

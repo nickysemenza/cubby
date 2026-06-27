@@ -9,6 +9,7 @@ import { resolveProduct, resolveProductOutcome } from "../services/products";
 import { getImageUrl } from "../storage/images";
 import { bulkLookupRequestSchema } from "../schemas/product";
 import type {
+  ProductLookupPublicResponse,
   ProductLookupResponse,
   ProductNotFoundResponse,
 } from "../schemas/product";
@@ -23,10 +24,7 @@ const lookup = new Hono<{ Bindings: Env }>();
 const BULK_FIRST_TRY_LIMIT = 10;
 
 /** Map a cached product row to the public response shape (sans `cached`). */
-function toResponse(
-  p: Product,
-  baseUrl: string,
-): Omit<ProductLookupResponse, "cached"> {
+function toResponse(p: Product, baseUrl: string): ProductLookupPublicResponse {
   return {
     upc: p.upc,
     name: p.name,

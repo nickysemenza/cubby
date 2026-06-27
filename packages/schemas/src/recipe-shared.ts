@@ -21,7 +21,7 @@ export type RecipeYield = z.infer<typeof recipeYieldSchema>;
 // column and surfaced on `recipeOut.totals`. Covered counts (out of
 // ingredientCount) drive the list's coverage display. Computed server-side; see
 // recipe-costing.service.
-export const recipeTotals = z.object({
+export const recipeTotalsFields = {
   costTotal: z.number(),
   // Upper bound of the cost/calorie totals when the recipe has ranged amounts
   // ("2–3 cups"); absent for recipes with only point amounts. Additive/optional
@@ -39,8 +39,13 @@ export const recipeTotals = z.object({
   ingredientCount: z.number().int(),
   costCovered: z.number().int(),
   caloriesCovered: z.number().int(),
-});
+};
+
+export const recipeTotals = z.object(recipeTotalsFields);
 export type RecipeTotals = z.infer<typeof recipeTotals>;
+export const recipeTotalsFieldNames = Object.keys(
+  recipeTotalsFields,
+) as (keyof RecipeTotals)[];
 
 /**
  * What an edit recomputed downstream, returned on a product/ingredient/recipe
