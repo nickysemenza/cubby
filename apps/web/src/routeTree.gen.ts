@@ -22,7 +22,9 @@ import { Route as AuthenticatedMcpRouteImport } from './routes/_authenticated/mc
 import { Route as AuthenticatedLabelsRouteImport } from './routes/_authenticated/labels'
 import { Route as AuthenticatedInsightsRouteImport } from './routes/_authenticated/insights'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedBackgroundJobsRouteImport } from './routes/_authenticated/background-jobs'
 import { Route as AuthenticatedAskRouteImport } from './routes/_authenticated/ask'
+import { Route as AuthenticatedAiUsageRouteImport } from './routes/_authenticated/ai-usage'
 import { Route as AuthenticatedAiSmokeTestRouteImport } from './routes/_authenticated/ai-smoke-test'
 import { Route as AuthenticatedActivityRouteImport } from './routes/_authenticated/activity'
 import { Route as AuthenticatedShortcodeRouteImport } from './routes/_authenticated/$shortcode'
@@ -41,6 +43,7 @@ import { Route as ApiTrpcSplatRouteImport } from './routes/api/trpc/$'
 import { Route as ApiDebugTimingRouteImport } from './routes/api/debug/timing'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as AuthenticatedUsdaIdRouteImport } from './routes/_authenticated/usda.$id'
+import { Route as AuthenticatedSearchDebugRouteImport } from './routes/_authenticated/search.debug'
 import { Route as AuthenticatedRecipesNewRouteImport } from './routes/_authenticated/recipes.new'
 import { Route as AuthenticatedRecipesImportNotionRouteImport } from './routes/_authenticated/recipes.import-notion'
 import { Route as AuthenticatedRecipesImportCookbookRouteImport } from './routes/_authenticated/recipes.import-cookbook'
@@ -137,9 +140,20 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedBackgroundJobsRoute =
+  AuthenticatedBackgroundJobsRouteImport.update({
+    id: '/background-jobs',
+    path: '/background-jobs',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedAskRoute = AuthenticatedAskRouteImport.update({
   id: '/ask',
   path: '/ask',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedAiUsageRoute = AuthenticatedAiUsageRouteImport.update({
+  id: '/ai-usage',
+  path: '/ai-usage',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedAiSmokeTestRoute =
@@ -242,6 +256,12 @@ const AuthenticatedUsdaIdRoute = AuthenticatedUsdaIdRouteImport.update({
   path: '/usda/$id',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedSearchDebugRoute =
+  AuthenticatedSearchDebugRouteImport.update({
+    id: '/search/debug',
+    path: '/search/debug',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedRecipesNewRoute = AuthenticatedRecipesNewRouteImport.update({
   id: '/recipes/new',
   path: '/recipes/new',
@@ -429,7 +449,9 @@ export interface FileRoutesByFullPath {
   '/$shortcode': typeof AuthenticatedShortcodeRoute
   '/activity': typeof AuthenticatedActivityRoute
   '/ai-smoke-test': typeof AuthenticatedAiSmokeTestRoute
+  '/ai-usage': typeof AuthenticatedAiUsageRoute
   '/ask': typeof AuthenticatedAskRoute
+  '/background-jobs': typeof AuthenticatedBackgroundJobsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/insights': typeof AuthenticatedInsightsRoute
   '/labels': typeof AuthenticatedLabelsRoute
@@ -467,6 +489,7 @@ export interface FileRoutesByFullPath {
   '/recipes/import-cookbook': typeof AuthenticatedRecipesImportCookbookRoute
   '/recipes/import-notion': typeof AuthenticatedRecipesImportNotionRoute
   '/recipes/new': typeof AuthenticatedRecipesNewRoute
+  '/search/debug': typeof AuthenticatedSearchDebugRoute
   '/usda/$id': typeof AuthenticatedUsdaIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
@@ -493,7 +516,9 @@ export interface FileRoutesByTo {
   '/$shortcode': typeof AuthenticatedShortcodeRoute
   '/activity': typeof AuthenticatedActivityRoute
   '/ai-smoke-test': typeof AuthenticatedAiSmokeTestRoute
+  '/ai-usage': typeof AuthenticatedAiUsageRoute
   '/ask': typeof AuthenticatedAskRoute
+  '/background-jobs': typeof AuthenticatedBackgroundJobsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/insights': typeof AuthenticatedInsightsRoute
   '/labels': typeof AuthenticatedLabelsRoute
@@ -531,6 +556,7 @@ export interface FileRoutesByTo {
   '/recipes/import-cookbook': typeof AuthenticatedRecipesImportCookbookRoute
   '/recipes/import-notion': typeof AuthenticatedRecipesImportNotionRoute
   '/recipes/new': typeof AuthenticatedRecipesNewRoute
+  '/search/debug': typeof AuthenticatedSearchDebugRoute
   '/usda/$id': typeof AuthenticatedUsdaIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
@@ -559,7 +585,9 @@ export interface FileRoutesById {
   '/_authenticated/$shortcode': typeof AuthenticatedShortcodeRoute
   '/_authenticated/activity': typeof AuthenticatedActivityRoute
   '/_authenticated/ai-smoke-test': typeof AuthenticatedAiSmokeTestRoute
+  '/_authenticated/ai-usage': typeof AuthenticatedAiUsageRoute
   '/_authenticated/ask': typeof AuthenticatedAskRoute
+  '/_authenticated/background-jobs': typeof AuthenticatedBackgroundJobsRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/insights': typeof AuthenticatedInsightsRoute
   '/_authenticated/labels': typeof AuthenticatedLabelsRoute
@@ -597,6 +625,7 @@ export interface FileRoutesById {
   '/_authenticated/recipes/import-cookbook': typeof AuthenticatedRecipesImportCookbookRoute
   '/_authenticated/recipes/import-notion': typeof AuthenticatedRecipesImportNotionRoute
   '/_authenticated/recipes/new': typeof AuthenticatedRecipesNewRoute
+  '/_authenticated/search/debug': typeof AuthenticatedSearchDebugRoute
   '/_authenticated/usda/$id': typeof AuthenticatedUsdaIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
@@ -625,7 +654,9 @@ export interface FileRouteTypes {
     | '/$shortcode'
     | '/activity'
     | '/ai-smoke-test'
+    | '/ai-usage'
     | '/ask'
+    | '/background-jobs'
     | '/dashboard'
     | '/insights'
     | '/labels'
@@ -663,6 +694,7 @@ export interface FileRouteTypes {
     | '/recipes/import-cookbook'
     | '/recipes/import-notion'
     | '/recipes/new'
+    | '/search/debug'
     | '/usda/$id'
     | '/api/auth/$'
     | '/api/debug/timing'
@@ -689,7 +721,9 @@ export interface FileRouteTypes {
     | '/$shortcode'
     | '/activity'
     | '/ai-smoke-test'
+    | '/ai-usage'
     | '/ask'
+    | '/background-jobs'
     | '/dashboard'
     | '/insights'
     | '/labels'
@@ -727,6 +761,7 @@ export interface FileRouteTypes {
     | '/recipes/import-cookbook'
     | '/recipes/import-notion'
     | '/recipes/new'
+    | '/search/debug'
     | '/usda/$id'
     | '/api/auth/$'
     | '/api/debug/timing'
@@ -754,7 +789,9 @@ export interface FileRouteTypes {
     | '/_authenticated/$shortcode'
     | '/_authenticated/activity'
     | '/_authenticated/ai-smoke-test'
+    | '/_authenticated/ai-usage'
     | '/_authenticated/ask'
+    | '/_authenticated/background-jobs'
     | '/_authenticated/dashboard'
     | '/_authenticated/insights'
     | '/_authenticated/labels'
@@ -792,6 +829,7 @@ export interface FileRouteTypes {
     | '/_authenticated/recipes/import-cookbook'
     | '/_authenticated/recipes/import-notion'
     | '/_authenticated/recipes/new'
+    | '/_authenticated/search/debug'
     | '/_authenticated/usda/$id'
     | '/api/auth/$'
     | '/api/debug/timing'
@@ -917,11 +955,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/background-jobs': {
+      id: '/_authenticated/background-jobs'
+      path: '/background-jobs'
+      fullPath: '/background-jobs'
+      preLoaderRoute: typeof AuthenticatedBackgroundJobsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/ask': {
       id: '/_authenticated/ask'
       path: '/ask'
       fullPath: '/ask'
       preLoaderRoute: typeof AuthenticatedAskRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/ai-usage': {
+      id: '/_authenticated/ai-usage'
+      path: '/ai-usage'
+      fullPath: '/ai-usage'
+      preLoaderRoute: typeof AuthenticatedAiUsageRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/ai-smoke-test': {
@@ -1048,6 +1100,13 @@ declare module '@tanstack/react-router' {
       path: '/usda/$id'
       fullPath: '/usda/$id'
       preLoaderRoute: typeof AuthenticatedUsdaIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/search/debug': {
+      id: '/_authenticated/search/debug'
+      path: '/search/debug'
+      fullPath: '/search/debug'
+      preLoaderRoute: typeof AuthenticatedSearchDebugRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/recipes/new': {
@@ -1274,7 +1333,9 @@ interface AuthenticatedRouteChildren {
   AuthenticatedShortcodeRoute: typeof AuthenticatedShortcodeRoute
   AuthenticatedActivityRoute: typeof AuthenticatedActivityRoute
   AuthenticatedAiSmokeTestRoute: typeof AuthenticatedAiSmokeTestRoute
+  AuthenticatedAiUsageRoute: typeof AuthenticatedAiUsageRoute
   AuthenticatedAskRoute: typeof AuthenticatedAskRoute
+  AuthenticatedBackgroundJobsRoute: typeof AuthenticatedBackgroundJobsRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedInsightsRoute: typeof AuthenticatedInsightsRoute
   AuthenticatedLabelsRoute: typeof AuthenticatedLabelsRoute
@@ -1310,6 +1371,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedRecipesImportCookbookRoute: typeof AuthenticatedRecipesImportCookbookRoute
   AuthenticatedRecipesImportNotionRoute: typeof AuthenticatedRecipesImportNotionRoute
   AuthenticatedRecipesNewRoute: typeof AuthenticatedRecipesNewRoute
+  AuthenticatedSearchDebugRoute: typeof AuthenticatedSearchDebugRoute
   AuthenticatedUsdaIdRoute: typeof AuthenticatedUsdaIdRoute
   AuthenticatedCookbooksIndexRoute: typeof AuthenticatedCookbooksIndexRoute
   AuthenticatedImagesIndexRoute: typeof AuthenticatedImagesIndexRoute
@@ -1331,7 +1393,9 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedShortcodeRoute: AuthenticatedShortcodeRoute,
   AuthenticatedActivityRoute: AuthenticatedActivityRoute,
   AuthenticatedAiSmokeTestRoute: AuthenticatedAiSmokeTestRoute,
+  AuthenticatedAiUsageRoute: AuthenticatedAiUsageRoute,
   AuthenticatedAskRoute: AuthenticatedAskRoute,
+  AuthenticatedBackgroundJobsRoute: AuthenticatedBackgroundJobsRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedInsightsRoute: AuthenticatedInsightsRoute,
   AuthenticatedLabelsRoute: AuthenticatedLabelsRoute,
@@ -1370,6 +1434,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
     AuthenticatedRecipesImportCookbookRoute,
   AuthenticatedRecipesImportNotionRoute: AuthenticatedRecipesImportNotionRoute,
   AuthenticatedRecipesNewRoute: AuthenticatedRecipesNewRoute,
+  AuthenticatedSearchDebugRoute: AuthenticatedSearchDebugRoute,
   AuthenticatedUsdaIdRoute: AuthenticatedUsdaIdRoute,
   AuthenticatedCookbooksIndexRoute: AuthenticatedCookbooksIndexRoute,
   AuthenticatedImagesIndexRoute: AuthenticatedImagesIndexRoute,

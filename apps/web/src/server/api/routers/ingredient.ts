@@ -40,6 +40,10 @@ import {
 } from "~/server/repo/ingredient";
 import { IngredientService } from "~/server/services/ingredient.service";
 import {
+  runMutationSideEffects,
+  runMutationSideEffectsForEntities,
+} from "~/server/services/mutation-side-effects";
+import {
   createDeleteProcedure,
   createEntityCrudWithoutListProcedures,
   createEntityListProcedure,
@@ -82,6 +86,7 @@ const { getByID, create } = createEntityCrudWithoutListProcedures({
     createInput: ingredientCreateInput,
     updateInput: ingredientUpdateData,
     output: ingredientWithFoodOut,
+    createOutput: ingredientWithFoodAndSideEffectsOut,
     idSchema: ingredientId,
   },
   repository: {
@@ -92,10 +97,16 @@ const { getByID, create } = createEntityCrudWithoutListProcedures({
       ).getIngredientByID(id);
     },
     create: async (services, data) => {
-      return await new IngredientService(
+      const ingredient = await new IngredientService(
         services.db,
         services.usdaClient,
       ).createIngredient(data, services.actorContext);
+      const backgroundBatches = await runMutationSideEffects(services.db, {
+        action: "created",
+        entity: { entityType: "ingredient", entityId: ingredient.id },
+        source: "ingredient.create",
+      });
+      return { ...ingredient, sideEffects: { backgroundBatches } };
     },
     update: async (services, id: IngredientId, data) => {
       return await new IngredientService(
@@ -118,11 +129,21 @@ const update = protectedProcedure
       input.data,
       ctx.actorContext,
     );
-    const recipesRecomputed =
-      await ctx.services.recipeCosting.recomputeForIngredient(input.id);
+    const backgroundBatches = await runMutationSideEffects(ctx.db, {
+      action: "updated",
+      entity: { entityType: "ingredient", entityId: input.id },
+      source: "ingredient.update",
+    });
+    const recipeBatches =
+      await ctx.services.recipeCosting.recomputeForIngredient(input.id, {
+        source: "ingredient.update",
+        entity: { entityType: "ingredient", entityId: input.id },
+      });
     return {
       ...result,
-      sideEffects: { recipesRecomputed, inventoryValuationsUpdated: 0 },
+      sideEffects: {
+        backgroundBatches: [...backgroundBatches, ...recipeBatches],
+      },
     };
   });
 
@@ -142,20 +163,46 @@ const merge = protectedProcedure
     // recompute OFF the request path (queue in prod, inline in dev) so a
     // heavily-used target can't overrun the Workers budget and sink the mutation.
     if (!input.dryRun) {
-      await ctx.services.recipeCosting.dispatchRecompute(
+      const recipeBatches = await ctx.services.recipeCosting.dispatchRecompute(
         summary.affectedRecipeIds,
+        {
+          source: "ingredient.merge",
+          entity: { entityType: "ingredient", entityId: merged.id },
+        },
       );
+      const backgroundBatches = await runMutationSideEffects(ctx.db, {
+        action: "updated",
+        entity: { entityType: "ingredient", entityId: merged.id },
+        source: "ingredient.merge",
+      });
+      const deletedBatches = await runMutationSideEffectsForEntities(
+        ctx.db,
+        summary.deletedIds.map((id) => ({
+          action: "deleted" as const,
+          entity: { entityType: "ingredient" as const, entityId: id },
+          source: "ingredient.merge",
+        })),
+      );
+      return {
+        ...merged,
+        sideEffects: {
+          backgroundBatches: [
+            ...recipeBatches,
+            ...backgroundBatches,
+            ...deletedBatches,
+          ],
+        },
+        mergeSummary: {
+          aliasesAdded: summary.aliasesAdded,
+          recipesMoved: summary.recipesMoved,
+          productsMoved: summary.productsMoved,
+          deletedIds: summary.deletedIds,
+        },
+      };
     }
     return {
       ...merged,
-      sideEffects: {
-        // The full recompute scope dispatched off the request path (alias-using
-        // AND already-target-using recipes), not just the lines that moved. The
-        // recompute is async (queued in prod), so this is the count queued, not
-        // yet completed.
-        recipesRecomputed: summary.affectedRecipeIds.length,
-        inventoryValuationsUpdated: 0,
-      },
+      sideEffects: { backgroundBatches: [] },
       mergeSummary: {
         aliasesAdded: summary.aliasesAdded,
         recipesMoved: summary.recipesMoved,
@@ -220,7 +267,21 @@ const resolveOrCreate = protectedProcedure
   .input(ingredientResolvableNamesInput)
   .output(ingredientResolveOrCreateOut)
   .mutation(async ({ ctx, input }) => {
-    return await resolveOrCreateIngredients(ctx.db, input.names);
+    const result = await resolveOrCreateIngredients(ctx.db, input.names);
+    await runMutationSideEffectsForEntities(
+      ctx.db,
+      result
+        .filter((ingredient) => ingredient.created)
+        .map((ingredient) => ({
+          action: "created" as const,
+          entity: {
+            entityType: "ingredient" as const,
+            entityId: ingredient.id,
+          },
+          source: "ingredient.resolveOrCreate",
+        })),
+    );
+    return result;
   });
 
 // Batched id→ingredient lookup in one query (+ one cross-ingredient USDA enrich).
@@ -240,6 +301,14 @@ const getManyByIDs = protectedProcedure
 const deleteItem = createDeleteProcedure<IngredientId>(
   async (services, ids) => {
     await deleteIngredients(services.db, ids, services.actorContext);
+    return await runMutationSideEffectsForEntities(
+      services.db,
+      ids.map((id) => ({
+        action: "deleted" as const,
+        entity: { entityType: "ingredient" as const, entityId: id },
+        source: "ingredient.delete",
+      })),
+    );
   },
   ingredientId,
 );

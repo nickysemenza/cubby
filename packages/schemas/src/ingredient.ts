@@ -9,7 +9,7 @@ import {
 } from "./product";
 import { baseKind } from "./problems";
 import { recipeRefOut, recipeTopLevel, recipeUsageOut } from "./recipe";
-import { recomputeSummary } from "./recipe-shared";
+import { mutationSideEffectsSchema } from "./background-jobs";
 
 export const ingredientBaseFields = {
   // `mock` is a faker dot-path consumed by the test mock generator
@@ -148,7 +148,7 @@ export const ingredientWithFoodAndSideEffectsOut = z.object({
   recipeUsages: z.array(recipeUsageOut),
   appearsInRecipes: z.array(recipeTopLevel),
   product: z.array(productWithMappingsAndFoodOut),
-  sideEffects: recomputeSummary,
+  sideEffects: mutationSideEffectsSchema,
 });
 export type IngredientWithFoodAndSideEffectsOut = z.infer<
   typeof ingredientWithFoodAndSideEffectsOut
@@ -160,7 +160,7 @@ export const ingredientMergeOut = z.object({
   recipeUsages: z.array(recipeUsageOut),
   appearsInRecipes: z.array(recipeTopLevel),
   product: z.array(productWithMappingsAndFoodOut),
-  sideEffects: recomputeSummary,
+  sideEffects: mutationSideEffectsSchema,
   mergeSummary,
 });
 export type IngredientMergeOut = z.infer<typeof ingredientMergeOut>;

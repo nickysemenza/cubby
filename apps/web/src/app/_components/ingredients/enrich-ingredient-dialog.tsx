@@ -11,6 +11,7 @@ import {
 } from "~/components/ui/dialog";
 import { getErrorMessage } from "~/lib/error-utils";
 import { ingredientAllMutationInvalidateKeys } from "~/lib/query-keys";
+import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { useTRPC } from "~/trpc/react";
 
 interface EnrichIngredientDialogProps {
@@ -37,7 +38,11 @@ export function EnrichIngredientDialog({
 
   const createProduct = useActionMutation({
     mutationFn: api.product.create.mutationOptions,
-    success: `Enriched ${ingredient?.name ?? "ingredient"}.`,
+    success: (product) =>
+      savedWithBackgroundWork(
+        product.sideEffects,
+        `Enriched ${ingredient?.name ?? "ingredient"}`,
+      ),
     // Refresh react-query consumers (list, preview getByID)...
     invalidateKeys: ingredientAllMutationInvalidateKeys,
     onSuccess: () => {

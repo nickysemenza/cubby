@@ -57,6 +57,10 @@ import {
   upsertImportRecipe,
   upsertNotionRecipeFromImport,
 } from "~/server/repo/recipe";
+import {
+  runMutationSideEffects,
+  runMutationSideEffectsForEntities,
+} from "~/server/services/mutation-side-effects";
 import { extractCookbookChunk } from "~/server/utils/cookbook-llm";
 import {
   lintImportRecipe,
@@ -83,9 +87,17 @@ const insertImport = protectedProcedure
   .output(recipeImportIdOut)
   .mutation(async ({ ctx, input }) => {
     const result = await upsertImportRecipe(input, ctx.db, ctx.actorContext);
-    // One recipe — under the queue threshold, so totals are fresh inline on
-    // import (cheap: a fresh import's ingredients are bare, no USDA/price work).
-    await ctx.services.recipeCosting.dispatchRecompute([result.id]);
+    // Persist recompute work through the background dispatcher. In dev this
+    // still drains inline, but the operation is visible on Background Jobs.
+    await ctx.services.recipeCosting.dispatchRecompute([result.id], {
+      source: "recipe.import",
+      entity: { entityType: "recipe", entityId: result.id },
+    });
+    await runMutationSideEffects(ctx.db, {
+      action: "updated",
+      entity: { entityType: "recipe", entityId: result.id },
+      source: "recipe.import",
+    });
     return result;
   });
 // Create/refresh a cookbook from a full EPUB extraction. Called once at the start
@@ -181,7 +193,17 @@ const importCookbookStream = protectedProcedure
         // affects reference resolution, so deferring to the end is safe.
         finalize: async (summary) => {
           if (insertedIds.length > 0) {
-            await ctx.services.recipeCosting.dispatchRecompute(insertedIds);
+            await ctx.services.recipeCosting.dispatchRecompute(insertedIds, {
+              source: "recipe.importCookbook",
+            });
+            await runMutationSideEffectsForEntities(
+              ctx.db,
+              insertedIds.map((id) => ({
+                action: "updated" as const,
+                entity: { entityType: "recipe" as const, entityId: id },
+                source: "recipe.cookbookImport",
+              })),
+            );
           }
           return summary;
         },
@@ -323,7 +345,17 @@ const importNotionSyncStream = protectedProcedure
         }),
         finalize: async (summary) => {
           if (insertedIds.length > 0) {
-            await ctx.services.recipeCosting.dispatchRecompute(insertedIds);
+            await ctx.services.recipeCosting.dispatchRecompute(insertedIds, {
+              source: "recipe.syncNotionCookbook",
+            });
+            await runMutationSideEffectsForEntities(
+              ctx.db,
+              insertedIds.map((id) => ({
+                action: "updated" as const,
+                entity: { entityType: "recipe" as const, entityId: id },
+                source: "recipe.notionSync",
+              })),
+            );
           }
           return summary;
         },
@@ -344,11 +376,23 @@ const deleteByCookbook = protectedProcedure
   .input(cookbookIdInput)
   .output(deleteCookbookRecipesOut)
   .mutation(async ({ ctx, input }) => {
-    return await deleteRecipesByCookbook(
+    const recipeIds = (
+      await getCookbookRecipesForDiff(ctx.db, input.cookbookId)
+    ).map((row) => row.id as RecipeId);
+    const result = await deleteRecipesByCookbook(
       ctx.db,
       input.cookbookId,
       ctx.actorContext,
     );
+    await runMutationSideEffectsForEntities(
+      ctx.db,
+      recipeIds.map((id) => ({
+        action: "deleted" as const,
+        entity: { entityType: "recipe" as const, entityId: id },
+        source: "recipe.deleteByCookbook",
+      })),
+    );
+    return result;
   });
 
 // Re-derive a cookbook's recipes from its stored raw JSON (re-runs the WASM
@@ -362,7 +406,9 @@ const reprocessCookbookStreamEndpoint = protectedProcedure
     yield* streamProgress(
       reprocessCookbookStream(ctx.db, input.cookbookId, ctx.actorContext),
       async ({ recipeIds, reprocessed, importableExtras }) => {
-        await ctx.services.recipeCosting.dispatchRecompute(recipeIds);
+        await ctx.services.recipeCosting.dispatchRecompute(recipeIds, {
+          source: "recipe.reprocessCookbook",
+        });
         return { reprocessed, importableExtras };
       },
     );
@@ -371,14 +417,17 @@ const reprocessCookbookStreamEndpoint = protectedProcedure
 const extractCookbookChunkProc = protectedProcedure
   .input(chunkRequestInput)
   .output(chunkResponseOut)
-  .mutation(async ({ input }) => {
-    return await extractCookbookChunk({
-      system: input.system,
-      user: input.user,
-      toolName: input.toolName,
-      toolSchema: input.toolSchema,
-      escalate: input.escalate ?? false,
-    });
+  .mutation(async ({ ctx, input }) => {
+    return await extractCookbookChunk(
+      {
+        system: input.system,
+        user: input.user,
+        toolName: input.toolName,
+        toolSchema: input.toolSchema,
+        escalate: input.escalate ?? false,
+      },
+      { db: ctx.db },
+    );
   });
 
 export const recipeImportProcedures = {

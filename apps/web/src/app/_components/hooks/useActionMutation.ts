@@ -1,5 +1,6 @@
 import type { QueryKey, UseMutationOptions } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 import { toast } from "sonner";
 import { getErrorMessage } from "~/lib/error-utils";
 import { invalidateTRPCQueries } from "~/lib/query-keys";
@@ -47,8 +48,8 @@ export function useActionMutation<TFn extends MutationOptionsFn>({
   error,
 }: {
   mutationFn: TFn;
-  /** Success toast — a fixed string or one derived from the result. */
-  success: string | ((data: DataOf<TFn>) => string);
+  /** Success toast — a fixed message or one derived from the result. */
+  success: ReactNode | ((data: DataOf<TFn>) => ReactNode);
   /** Entity lists to invalidate. Each is wrapped to match tRPC's nested key structure. */
   invalidateKeys?: readonly QueryKey[];
   /** Side effect after the toast + invalidations (close dialog, resolve, navigate). */

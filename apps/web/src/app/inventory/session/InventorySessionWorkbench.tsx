@@ -76,6 +76,7 @@ import {
   locationMutationInvalidateKeys,
   productLookupMutationInvalidateKeys,
 } from "~/lib/query-keys";
+import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import {
@@ -1640,7 +1641,10 @@ function SessionCaptureActions({ location }: { location: SessionLocation }) {
       onSuccess: (data) => {
         invalidateSession();
         toast.success(
-          `${data.createdProduct ? "Created and added" : "Added"} ${data.productName}.`,
+          savedWithBackgroundWork(
+            data.sideEffects,
+            `${data.createdProduct ? "Created and added" : "Added"} ${data.productName}`,
+          ),
         );
       },
     }),
@@ -1710,12 +1714,14 @@ function SessionCaptureActions({ location }: { location: SessionLocation }) {
   const handleBarcode = async (barcode: string) => {
     const product = await lookupUpc(barcode);
     if (!product) return;
-    await createInventory.mutateAsync({
+    const created = await createInventory.mutateAsync({
       productId: product.id,
       locationId: location.id,
       amount: { value: 1, unit: "each" },
     });
-    toast.success(`Added ${product.name}.`);
+    toast.success(
+      savedWithBackgroundWork(created.sideEffects, `Added ${product.name}`),
+    );
   };
 
   return (
@@ -1894,10 +1900,10 @@ function ManualAdd({ locationId }: { locationId: LocationId }) {
   });
   const createInventory = useMutation(
     api.inventory.create.mutationOptions({
-      onSuccess: () => {
+      onSuccess: (data) => {
         invalidateTRPCQueries(queryClient, inventoryMutationInvalidateKeys);
         form.reset({ product: undefined, amount: { value: 1, unit: "each" } });
-        toast.success("Added item.");
+        toast.success(savedWithBackgroundWork(data.sideEffects, "Added item"));
       },
       onError: (error) => toast.error(getErrorMessage(error)),
     }),

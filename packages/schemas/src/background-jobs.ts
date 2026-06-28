@@ -1,0 +1,214 @@
+import { searchableEntitySchema } from "./search";
+import { z } from "zod";
+
+export const backgroundJobKinds = [
+  "recipe-totals.recompute",
+  "entity-embedding.refresh",
+  "location-ai.description.refresh",
+  "location-ai.inventory.refresh",
+  "location-valuation.recompute",
+] as const;
+
+export const backgroundJobKindSchema = z.enum(backgroundJobKinds);
+export type BackgroundJobKind = z.infer<typeof backgroundJobKindSchema>;
+
+export const backgroundBatchStatuses = [
+  "queued",
+  "running",
+  "succeeded",
+  "partial",
+  "failed",
+  "cancelled",
+] as const;
+
+export const backgroundBatchStatusSchema = z.enum(backgroundBatchStatuses);
+export type BackgroundBatchStatus = z.infer<typeof backgroundBatchStatusSchema>;
+
+export const backgroundJobStatuses = [
+  "pending",
+  "queued",
+  "running",
+  "succeeded",
+  "skipped",
+  "failed",
+  "cancelled",
+] as const;
+
+export const backgroundJobStatusSchema = z.enum(backgroundJobStatuses);
+export type BackgroundJobStatus = z.infer<typeof backgroundJobStatusSchema>;
+
+export const backgroundBatchSources = [
+  "ui",
+  "mutation",
+  "backfill",
+  "maintenance",
+  "queue",
+  "dev-inline",
+] as const;
+
+export const backgroundBatchSourceSchema = z.enum(backgroundBatchSources);
+export type BackgroundBatchSource = z.infer<typeof backgroundBatchSourceSchema>;
+
+export const backgroundBatchProcessors = ["queue", "inline"] as const;
+
+export const backgroundBatchProcessorSchema = z.enum(backgroundBatchProcessors);
+export type BackgroundBatchProcessor = z.infer<
+  typeof backgroundBatchProcessorSchema
+>;
+
+export const recipeTotalsRecomputePayloadSchema = z.object({
+  recipeIds: z.array(z.string()).min(1),
+});
+
+export const entityEmbeddingRefreshPayloadSchema = z.object({
+  entityType: searchableEntitySchema,
+  entityId: z.string(),
+});
+
+export const locationAiRefreshPayloadSchema = z.object({
+  locationId: z.string(),
+});
+
+export const locationValuationRecomputePayloadSchema = z.object({
+  reason: z.string().optional(),
+});
+
+export const backgroundJobPayloadSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("recipe-totals.recompute"),
+    payload: recipeTotalsRecomputePayloadSchema,
+  }),
+  z.object({
+    kind: z.literal("entity-embedding.refresh"),
+    payload: entityEmbeddingRefreshPayloadSchema,
+  }),
+  z.object({
+    kind: z.literal("location-ai.description.refresh"),
+    payload: locationAiRefreshPayloadSchema,
+  }),
+  z.object({
+    kind: z.literal("location-ai.inventory.refresh"),
+    payload: locationAiRefreshPayloadSchema,
+  }),
+  z.object({
+    kind: z.literal("location-valuation.recompute"),
+    payload: locationValuationRecomputePayloadSchema,
+  }),
+]);
+
+export type BackgroundJobPayload = z.infer<typeof backgroundJobPayloadSchema>;
+
+export const enqueueEmbeddingBackfillInputSchema = z.object({
+  entityTypes: z.array(searchableEntitySchema).optional(),
+  limit: z.number().int().min(1).max(10_000).optional(),
+});
+
+export const enqueueEmbeddingBackfillOutSchema = z.object({
+  batchId: z.string(),
+  totalJobs: z.number().int().nonnegative(),
+});
+
+export type EnqueueEmbeddingBackfillOut = z.infer<
+  typeof enqueueEmbeddingBackfillOutSchema
+>;
+
+const backgroundBatchSummaryFields = {
+  id: z.string(),
+  kind: backgroundJobKindSchema,
+  source: backgroundBatchSourceSchema,
+  processor: backgroundBatchProcessorSchema,
+  status: backgroundBatchStatusSchema,
+  totalJobs: z.number().int().nonnegative(),
+  queuedJobs: z.number().int().nonnegative(),
+  runningJobs: z.number().int().nonnegative(),
+  succeededJobs: z.number().int().nonnegative(),
+  failedJobs: z.number().int().nonnegative(),
+  skippedJobs: z.number().int().nonnegative(),
+  cancelledJobs: z.number().int().nonnegative(),
+  firstEnqueuedAt: z.coerce.date().nullable(),
+  lastEnqueuedAt: z.coerce.date().nullable(),
+  firstJobStartedAt: z.coerce.date().nullable(),
+  lastJobFinishedAt: z.coerce.date().nullable(),
+  processingDurationMs: z.number().int().nonnegative().nullable(),
+  wallDurationMs: z.number().int().nonnegative().nullable(),
+  activeDurationMs: z.number().int().nonnegative(),
+  metadata: z.unknown().nullable(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+};
+
+export const backgroundBatchRefSchema = z.object({
+  id: backgroundBatchSummaryFields.id,
+  kind: backgroundBatchSummaryFields.kind,
+  source: backgroundBatchSummaryFields.source,
+  processor: backgroundBatchSummaryFields.processor,
+  status: backgroundBatchSummaryFields.status,
+  totalJobs: backgroundBatchSummaryFields.totalJobs,
+});
+
+export type BackgroundBatchRef = z.infer<typeof backgroundBatchRefSchema>;
+
+export const mutationSideEffectsSchema = z.object({
+  backgroundBatches: z.array(backgroundBatchRefSchema),
+});
+
+export type MutationSideEffects = z.infer<typeof mutationSideEffectsSchema>;
+
+export const backgroundBatchSummarySchema = z.object(
+  backgroundBatchSummaryFields,
+);
+
+export type BackgroundBatchSummary = z.infer<
+  typeof backgroundBatchSummarySchema
+>;
+
+export const backgroundJobSummarySchema = z.object({
+  id: z.string(),
+  batchId: z.string(),
+  kind: backgroundJobKindSchema,
+  dedupeKey: z.string(),
+  status: backgroundJobStatusSchema,
+  attempts: z.number().int().nonnegative(),
+  maxAttempts: z.number().int().positive(),
+  queuedAt: z.coerce.date().nullable(),
+  startedAt: z.coerce.date().nullable(),
+  finishedAt: z.coerce.date().nullable(),
+  durationMs: z.number().int().nonnegative().nullable(),
+  lastError: z.string().nullable(),
+  payload: z.unknown(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+});
+
+export type BackgroundJobSummary = z.infer<typeof backgroundJobSummarySchema>;
+
+export const backgroundBatchDetailSchema = z.object({
+  ...backgroundBatchSummaryFields,
+  jobs: z.array(backgroundJobSummarySchema),
+});
+
+export type BackgroundBatchDetail = z.infer<typeof backgroundBatchDetailSchema>;
+
+export const backgroundBatchListInputSchema = z.object({
+  limit: z.number().int().min(1).max(100).default(25),
+});
+
+export const backgroundBatchListOutSchema = z.array(
+  backgroundBatchSummarySchema,
+);
+
+export const backgroundBatchIdInputSchema = z.object({
+  batchId: z.string(),
+});
+
+export const backgroundJobIdInputSchema = z.object({
+  jobId: z.string(),
+});
+
+export const backgroundDrainInputSchema = z.object({
+  limit: z.number().int().min(1).max(100).default(25),
+});
+
+export const backgroundDrainOutSchema = z.object({
+  processed: z.number().int().nonnegative(),
+});

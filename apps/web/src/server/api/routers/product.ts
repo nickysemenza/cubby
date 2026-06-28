@@ -6,6 +6,7 @@
  * See CLAUDE.md "Service Layer Architecture" for details.
  */
 
+import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
 import {
   type IngredientId,
   type ProductId,
@@ -41,11 +42,17 @@ import {
   deleteProducts,
   getCategoryDistribution,
   getProductByShortcode,
+  getProductPickerItemsByIds,
   getProductsByShortcodes,
   productList as productListRepo,
   productSearch,
   quickCreateProduct,
 } from "~/server/repo/product";
+import { shouldUseSemanticComboboxFallback } from "~/server/semantic/combobox-fallback";
+import {
+  runMutationSideEffects,
+  runMutationSideEffectsForEntities,
+} from "~/server/services/mutation-side-effects";
 import {
   createProductWithFood,
   createProductWriteActions,
@@ -60,6 +67,7 @@ import {
   findOrCreateByUPC as findOrCreateByUPCService,
   updateProductWithSideEffects,
 } from "~/server/services/product-orchestration.service";
+import { semanticProductCandidates } from "~/server/services/semantic-search.service";
 import {
   createDeleteProcedure,
   createEntityCrudWithoutListProcedures,
@@ -138,8 +146,8 @@ const { list: search } = createEntityListProcedure({
     sort: { sortableFields: productSortableFields, defaultSort: "name" },
   },
   repository: {
-    list: async (services, filters, sort, pagination) =>
-      productSearch(
+    list: async (services, filters, sort, pagination) => {
+      const lexical = await productSearch(
         services.db,
         filters.nameFilter,
         filters.manufacturerFilter,
@@ -147,7 +155,42 @@ const { list: search } = createEntityListProcedure({
         filters.categoryFilter,
         sort,
         pagination,
-      ),
+      );
+
+      const nameQuery = filters.nameFilter?.trim() ?? "";
+      const shouldUseSemantic = shouldUseSemanticComboboxFallback({
+        lexicalCount: lexical.data.length,
+        query: nameQuery,
+        hasStructuredFilters: Boolean(
+          filters.manufacturerFilter ||
+            filters.upcFilter ||
+            filters.categoryFilter,
+        ),
+      });
+      if (!shouldUseSemantic) return lexical;
+
+      const semantic = await semanticProductCandidates(
+        services.db,
+        nameQuery,
+        5,
+      );
+      const semanticIds = semantic
+        .filter((candidate) => candidate.similarity >= 0.75)
+        .map((candidate) => productId.parse(candidate.item.id))
+        .filter((id) => !lexical.data.some((item) => item.id === id));
+      const semanticItems = await getProductPickerItemsByIds(
+        services.db,
+        semanticIds,
+      );
+
+      return {
+        data: [...lexical.data, ...semanticItems].slice(0, pagination.pageSize),
+        count: Math.max(
+          lexical.count,
+          lexical.data.length + semanticItems.length,
+        ),
+      };
+    },
   },
   entityName: "product",
 });
@@ -233,7 +276,7 @@ const quickCreate = protectedProcedure
   .input(productQuickCreatePayload)
   .output(productTopLevelOut)
   .mutation(async ({ ctx, input }) => {
-    return await quickCreateProduct(
+    const product = await quickCreateProduct(
       ctx.db,
       {
         name: input.name,
@@ -246,6 +289,12 @@ const quickCreate = protectedProcedure
       },
       ctx.actorContext,
     );
+    await runMutationSideEffects(ctx.db, {
+      action: "created",
+      entity: { entityType: "product", entityId: product.id },
+      source: "product.quickCreate",
+    });
+    return product;
   });
 
 // Find or create a product by UPC code
@@ -310,7 +359,7 @@ const getByShortcode = protectedProcedure
 // client to surface/retry, then ONE deduped recompute over the affected recipes.
 type CreateManyResult = {
   created: number;
-  recipesRecomputed: number;
+  sideEffects: { backgroundBatches: BackgroundBatchRef[] };
   failed: { index: number; name: string; error: string }[];
 };
 const createMany = protectedProcedure
@@ -327,6 +376,11 @@ const createMany = protectedProcedure
           item,
           ctx.actorContext,
         );
+        await runMutationSideEffects(ctx.db, {
+          action: "created",
+          entity: { entityType: "product", entityId: product.id },
+          source: "product.createMany",
+        });
         if (product.ingredient?.id) ingredientIds.push(product.ingredient.id);
       },
       {
@@ -341,10 +395,13 @@ const createMany = protectedProcedure
         // since the bulk create links many products whose recipes overlap.
         finalize: async (summary) => ({
           created: summary.succeeded,
-          recipesRecomputed:
-            await ctx.services.recipeCosting.recomputeForIngredients(
-              ingredientIds,
-            ),
+          sideEffects: {
+            backgroundBatches:
+              await ctx.services.recipeCosting.recomputeForIngredients(
+                ingredientIds,
+                { source: "product.createMany" },
+              ),
+          },
           failed,
         }),
       },
@@ -367,6 +424,11 @@ const markUsdaUnavailableMany = protectedProcedure
           { usdaUnavailable: true },
           ctx.actorContext,
         );
+        await runMutationSideEffects(ctx.db, {
+          action: "updated",
+          entity: { entityType: "product", entityId: id },
+          source: "product.markUsdaUnavailableMany",
+        });
       },
       { finalize: (summary) => ({ updated: summary.succeeded }) },
     );
@@ -374,6 +436,14 @@ const markUsdaUnavailableMany = protectedProcedure
 
 const deleteItem = createDeleteProcedure<ProductId>(async (services, ids) => {
   await deleteProducts(services.db, ids, services.actorContext);
+  return await runMutationSideEffectsForEntities(
+    services.db,
+    ids.map((id) => ({
+      action: "deleted" as const,
+      entity: { entityType: "product" as const, entityId: id },
+      source: "product.delete",
+    })),
+  );
 }, productId);
 
 export const productRouter = createTRPCRouter({

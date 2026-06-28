@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { mutationSideEffectsSchema } from "./background-jobs";
 import {
   ingredientId,
   inventoryId,
@@ -140,6 +141,7 @@ export const approveDetectedInventoryItemOut = z.object({
   productId,
   productName: z.string(),
   createdProduct: z.boolean(),
+  sideEffects: mutationSideEffectsSchema,
 });
 
 export type ApproveDetectedInventoryItemInput = z.infer<
@@ -250,3 +252,51 @@ export const categoryAuditSchema = z.object({
 });
 
 export type CategoryAudit = z.infer<typeof categoryAuditSchema>;
+
+export const aiUsageCacheStatus = z.enum(["hit", "miss", "none"]);
+export type AiUsageCacheStatus = z.infer<typeof aiUsageCacheStatus>;
+
+export const aiUsageRecentInput = z.object({
+  limit: z.number().int().min(1).max(200).default(50),
+});
+
+export const aiUsageEntrySchema = z.object({
+  id: z.string(),
+  feature: z.string(),
+  provider: z.string(),
+  model: z.string(),
+  operation: z.string(),
+  inputTokens: z.number().int().nullable(),
+  outputTokens: z.number().int().nullable(),
+  estimatedCost: z.number().nullable(),
+  durationMs: z.number().int(),
+  cacheStatus: aiUsageCacheStatus.nullable(),
+  entityType: z.string().nullable(),
+  entityId: z.string().nullable(),
+  batchId: z.string().nullable(),
+  createdAt: z.coerce.date(),
+});
+
+export const aiUsageRecentOut = z.array(aiUsageEntrySchema);
+export type AiUsageEntry = z.infer<typeof aiUsageEntrySchema>;
+
+export const aiUsageSummaryInput = z.object({
+  days: z.number().int().min(1).max(90).default(7),
+});
+
+export const aiUsageSummaryRowSchema = z.object({
+  day: z.string(),
+  feature: z.string(),
+  provider: z.string(),
+  model: z.string(),
+  operation: z.string(),
+  cacheStatus: aiUsageCacheStatus.nullable(),
+  count: z.number().int(),
+  inputTokens: z.number().int(),
+  outputTokens: z.number().int(),
+  estimatedCost: z.number().nullable(),
+  durationMs: z.number().int(),
+});
+
+export const aiUsageSummaryOut = z.array(aiUsageSummaryRowSchema);
+export type AiUsageSummaryRow = z.infer<typeof aiUsageSummaryRowSchema>;

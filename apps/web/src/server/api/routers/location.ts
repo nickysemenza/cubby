@@ -10,6 +10,7 @@ import { type LocationId, locationId } from "@cubby/schemas/identifiers";
 import {
   infLocation,
   infLocationListOut,
+  infLocationWithSideEffects,
   locationBulkUpdateParentInput,
   locationBulkUpdateParentOut,
   locationChildCountsOut,
@@ -47,7 +48,10 @@ import {
   updateLocation,
   updateLocationAiDescription,
 } from "~/server/repo/location";
-import { describeLocation } from "~/server/services/ai-enrichment.service";
+import {
+  runMutationSideEffects,
+  runMutationSideEffectsForEntities,
+} from "~/server/services/mutation-side-effects";
 import {
   createDeleteProcedure,
   createEntityCrudWithoutListProcedures,
@@ -82,6 +86,8 @@ const { getByID, create, update } = createEntityCrudWithoutListProcedures({
     createInput: locationCreateInput,
     updateInput: locationUpdateData,
     output: infLocation,
+    createOutput: infLocationWithSideEffects,
+    updateOutput: infLocationWithSideEffects,
     idSchema: locationId,
   },
   repository: {
@@ -89,12 +95,19 @@ const { getByID, create, update } = createEntityCrudWithoutListProcedures({
       return await getLocationById(services.db, id);
     },
     create: async (services, data) => {
-      return await createLocation(services.db, data, services.actorContext);
+      const location = await createLocation(
+        services.db,
+        data,
+        services.actorContext,
+      );
+      const backgroundBatches = await runMutationSideEffects(services.db, {
+        action: "created",
+        entity: { entityType: "location", entityId: location.id },
+        source: "location.create",
+      });
+      return { ...location, sideEffects: { backgroundBatches } };
     },
     update: async (services, id: LocationId, data) => {
-      const previousParent = Object.hasOwn(data, "parentId")
-        ? ((await getLocationById(services.db, id)).parent?.id ?? null)
-        : undefined;
       const imagesChanged =
         (data.pendingImageIds?.length ?? 0) > 0 ||
         (data.removeImageIds?.length ?? 0) > 0;
@@ -104,22 +117,21 @@ const { getByID, create, update } = createEntityCrudWithoutListProcedures({
         data,
         services.actorContext,
       );
-      // Re-parenting moves a subtree, changing ancestors' rolled-up totals.
-      if (
-        previousParent !== undefined &&
-        previousParent !== (updated.parent?.id ?? null)
-      ) {
-        await services.services.locationValuation.recompute();
+      const backgroundBatches = await runMutationSideEffects(services.db, {
+        action: "updated",
+        entity: { entityType: "location", entityId: id },
+        source: "location.update",
+      });
+      if (!imagesChanged) {
+        return { ...updated, sideEffects: { backgroundBatches } };
       }
-      if (!imagesChanged) return updated;
 
       if (updated.images.length === 0) {
         await updateLocationAiDescription(services.db, id, null);
-      } else {
-        await describeLocation(services.db, id);
       }
 
-      return await getLocationById(services.db, id);
+      const refreshed = await getLocationById(services.db, id);
+      return { ...refreshed, sideEffects: { backgroundBatches } };
     },
   },
 });
@@ -136,9 +148,18 @@ const makeTree = protectedProcedure
 
 const ensureGlobalUnknown = protectedProcedure
   .output(infLocation)
-  .mutation(async ({ ctx }) =>
-    ensureGlobalUnknownLocation(ctx.db, ctx.actorContext),
-  );
+  .mutation(async ({ ctx }) => {
+    const location = await ensureGlobalUnknownLocation(
+      ctx.db,
+      ctx.actorContext,
+    );
+    await runMutationSideEffects(ctx.db, {
+      action: "updated",
+      entity: { entityType: "location", entityId: location.id },
+      source: "location.ensureGlobalUnknown",
+    });
+    return location;
+  });
 
 // Touch lastBulkInventory timestamp (for Scanner page "Mark Complete" button)
 const touchLastBulkInventory = protectedProcedure
@@ -171,7 +192,14 @@ const bulkUpdateParent = protectedProcedure
       }
     });
 
-    await ctx.services.locationValuation.recompute();
+    await runMutationSideEffectsForEntities(
+      ctx.db,
+      input.ids.map((id) => ({
+        action: "updated" as const,
+        entity: { entityType: "location" as const, entityId: id },
+        source: "location.bulkUpdateParent",
+      })),
+    );
     return { updated: input.ids.length };
   });
 
@@ -202,7 +230,14 @@ const getRecentlyActive = protectedProcedure
 // Delete procedure using standalone factory
 const deleteItem = createDeleteProcedure<LocationId>(async (services, ids) => {
   await deleteLocations(services.db, ids, services.actorContext);
-  await services.services.locationValuation.recompute();
+  return await runMutationSideEffectsForEntities(
+    services.db,
+    ids.map((id) => ({
+      action: "deleted" as const,
+      entity: { entityType: "location" as const, entityId: id },
+      source: "location.delete",
+    })),
+  );
 }, locationId);
 
 // Manual whole-tree recompute of persisted location valuations. Used to populate

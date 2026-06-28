@@ -58,6 +58,7 @@ export function useProblemsData(opts?: {
         productsWithNoImages: fast.data?.productsWithNoImages ?? [],
         locationsWithoutAiDescription:
           fast.data?.locationsWithoutAiDescription ?? [],
+        orphanedEntityEmbeddings: fast.data?.orphanedEntityEmbeddings ?? [],
         ingredientsWithPartialCoverage:
           coverage.data?.ingredientsWithPartialCoverage ?? [],
         productsWithIslandedMappings:

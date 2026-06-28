@@ -5,29 +5,29 @@ import {
   locationDescriptionSchema,
 } from "@cubby/schemas/ai";
 import type { z } from "zod";
-
-// Single source of truth for model-backed feature identity. Bump a feature's
-// promptVersion whenever its instructions materially change.
-export const AI_MODEL = "claude-haiku-4-5";
+import {
+  DEFAULT_CHAT_MODEL,
+  type SupportedChatModel,
+} from "~/server/ai/models";
 
 export interface AiFeature<T> {
   feature: string;
-  model: string;
+  model: SupportedChatModel;
   promptVersion: string;
   schema: z.ZodType<T>;
 }
 
 export const LOCATION_DESCRIPTION_FEATURE = {
   feature: "location-description",
-  model: AI_MODEL,
+  model: DEFAULT_CHAT_MODEL,
   promptVersion: "2026-06-28.1",
   schema: locationDescriptionSchema,
 } satisfies AiFeature<LocationDescription>;
 
 export const LOCATION_INVENTORY_DETECTION_FEATURE = {
   feature: "location-inventory-detection",
-  model: AI_MODEL,
-  promptVersion: "2026-06-28.1",
+  model: DEFAULT_CHAT_MODEL,
+  promptVersion: "2026-06-28.2",
   schema: detectedInventoryAiResultSchema,
 } satisfies AiFeature<DetectedInventoryAiResult>;
 

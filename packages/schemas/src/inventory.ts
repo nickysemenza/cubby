@@ -1,5 +1,6 @@
 import { fdcId, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
+import { mutationSideEffectsSchema } from "./background-jobs";
 import { amount, positiveAmount } from "./codec";
 import { externalIdOut } from "./external-id";
 import { imageOut } from "./image";
@@ -130,14 +131,23 @@ export const inventoryDetailProductOut = z.object({
   unitMappings: z.array(unitMappingOut),
 });
 
-export const inventoryWithLocationAndProductOut = z.object({
+const inventoryWithLocationAndProductFields = {
   ...inventoryEntryFields,
   product: inventoryDetailProductOut,
   location: locationOut,
-});
+};
+
+export const inventoryWithLocationAndProductOut = z.object(
+  inventoryWithLocationAndProductFields,
+);
 export type InventoryWithLocationAndProductOut = z.infer<
   typeof inventoryWithLocationAndProductOut
 >;
+
+export const inventoryWithLocationAndProductAndSideEffectsOut = z.object({
+  ...inventoryWithLocationAndProductFields,
+  sideEffects: mutationSideEffectsSchema,
+});
 
 export const inventoryWithLocationAndProductListOut = z.array(
   inventoryWithLocationAndProductOut,

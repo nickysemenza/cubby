@@ -35,6 +35,7 @@ const PROBLEM_LABELS: Record<
   emptyLocations: (n) => pl(n, "empty location"),
   productsWithNoImages: (n) => pl(n, "missing image"),
   locationsWithoutAiDescription: (n) => pl(n, "missing AI description"),
+  orphanedEntityEmbeddings: (n) => pl(n, "orphaned embedding"),
   productsWithBetterUpcData: (n) => pl(n, "UPC update"),
 };
 

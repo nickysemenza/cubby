@@ -8,12 +8,12 @@
 
 import * as Sentry from "@sentry/cloudflare";
 import { SENTRY_DSN } from "./lib/sentry-dsn";
+import {
+  type BackgroundQueueBatch,
+  processBackgroundQueueMessage,
+} from "./server/background-queue";
 import { setCfEnv } from "./server/cf-env";
 import { withRequestDb, withRequestDbClient } from "./server/db";
-import {
-  RECOMPUTE_MESSAGE_VERSION,
-  type RecomputeQueueBatch,
-} from "./server/queue-recompute";
 import { withTrace } from "./server/tracing";
 
 // Cache the handler module promise so the dynamic import only runs once (on
@@ -133,56 +133,28 @@ const handler = {
     }
   },
 
-  // Recompute-queue consumer. Each message is a bounded chunk of recipe ids
-  // (produced by RecipeCostingService.dispatchRecompute) recomputed in its own
-  // invocation — a fresh CPU/memory budget per chunk, which is the whole point of
-  // moving heavy recompute off the request path. Per-message ack/retry so one bad
-  // chunk doesn't replay the rest; exhausted retries land in the DLQ.
-  async queue(batch: RecomputeQueueBatch, env: Env) {
+  // Background queue consumer. Each message is a small persisted-job wakeup:
+  // the payload lives in Postgres, so retries are inspectable and queue messages
+  // stay bounded. Per-message ack/retry so one bad job doesn't replay the rest.
+  async queue(batch: BackgroundQueueBatch, env: Env) {
     setCfEnv(env);
-    const validMessages: Array<{
-      message: RecomputeQueueBatch["messages"][number];
-      batchId: string | undefined;
-    }> = [];
-    for (const message of batch.messages) {
-      const batchId = message.body.batchId;
-      if (message.body.messageVersion !== RECOMPUTE_MESSAGE_VERSION) {
-        console.warn(
-          `[recompute-queue] dropped stale message version=${String(message.body.messageVersion)} current=${RECOMPUTE_MESSAGE_VERSION}${batchId ? ` batch=${batchId}` : ""} recipe_ids=${(message.body.recipeIds ?? []).length}`,
-        );
-        message.ack();
-        continue;
-      }
-      validMessages.push({ message, batchId });
-    }
-    if (validMessages.length === 0) return;
     // Serial queue work does not need a local pg.Pool. Use one Worker-side
     // client for the whole invocation; Hyperdrive still owns the origin DB pool.
     await withRequestDbClient(env.HYPERDRIVE.connectionString, async () => {
-      const { recomputeRecipeIds } = await import("./server/queue-recompute");
-      for (const { message, batchId } of validMessages) {
+      const { db } = await import("./server/db");
+      for (const message of batch.messages) {
         // Per-message clock: a batch is processed serially in this one
         // invocation, so capture t0 at each message's start (NOT at batch
         // arrival) or `duration_ms` would accumulate across the batch.
         const t0 = performance.now();
         try {
-          await recomputeRecipeIds(message.body);
-          // `batch_elapsed_ms` = wall-clock since the wave was dispatched
-          // (Date.now() across invocations is real time; the per-message
-          // performance.now() can't span the multi-invocation batch). The
-          // largest value across a batch's lines is the total drain time.
-          const startedAtMs = message.body.startedAtMs;
-          const batchElapsed =
-            startedAtMs != null
-              ? ` batch_elapsed_ms=${Date.now() - startedAtMs}`
-              : "";
+          await processBackgroundQueueMessage(db, message);
           console.log(
-            `[recompute-queue] message ack${batchId ? ` batch=${batchId}` : ""} duration_ms=${Math.round(performance.now() - t0)}${batchElapsed}`,
+            `[background-queue] message handled batch=${message.body.batchId} job=${message.body.jobId} kind=${message.body.kind} duration_ms=${Math.round(performance.now() - t0)}`,
           );
-          message.ack();
         } catch (error) {
           console.error(
-            `[recompute-queue] message failed${batchId ? ` batch=${batchId}` : ""} duration_ms=${Math.round(performance.now() - t0)}`,
+            `[background-queue] message failed batch=${message.body.batchId} job=${message.body.jobId} kind=${message.body.kind} duration_ms=${Math.round(performance.now() - t0)}`,
             error,
           );
           Sentry.captureException(error);

@@ -112,9 +112,7 @@ export const syncInventoryValuationsForProduct = async (
 };
 
 /**
- * How many active inventory entries a product has — equals how many valuations
- * `syncInventoryValuationsForProduct` resynced on a price change. Used by the
- * product update proc to report `inventoryValuationsUpdated` in its side-effects.
+ * How many active inventory entries a product has.
  */
 export const countActiveInventoryForProduct = async (
   db: Database,

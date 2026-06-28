@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { getErrorMessage } from "~/lib/error-utils";
+import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { useTRPC } from "~/trpc/react";
 import { LocationForm } from "./location-form";
 
@@ -29,7 +30,11 @@ export const CreateChildLocationDialog: FC<CreateChildLocationDialogProps> = ({
 
   const createMutation = useActionMutation({
     mutationFn: api.location.create.mutationOptions,
-    success: (newLocation) => `Created "${newLocation.name}"`,
+    success: (newLocation) =>
+      savedWithBackgroundWork(
+        newLocation.sideEffects,
+        `Created "${newLocation.name}"`,
+      ),
     onSuccess: (newLocation) => {
       onOpenChange(false);
       onSuccess(newLocation);

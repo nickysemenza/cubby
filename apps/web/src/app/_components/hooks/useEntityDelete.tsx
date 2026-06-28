@@ -1,3 +1,4 @@
+import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
 import type { QueryKey } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -7,6 +8,9 @@ import { toast } from "sonner";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { Button } from "~/components/ui/button";
 import { invalidateTRPCQueries } from "~/lib/query-keys";
+import { savedWithBackgroundWork } from "~/lib/recompute-summary";
+
+const emptySideEffects: MutationSideEffects = { backgroundBatches: [] };
 
 interface UseEntityDeleteOptions {
   /** Entity ID */
@@ -17,7 +21,7 @@ interface UseEntityDeleteOptions {
   entityLabel: string;
   /** tRPC delete mutation options factory */
   mutationOptions: (callbacks: {
-    onSuccess: () => void;
+    onSuccess: (data: { sideEffects?: MutationSideEffects }) => void;
     onError: (err: { message?: string }) => void;
   }) => unknown;
   /** Query keys to invalidate on success */
@@ -56,8 +60,13 @@ export function useEntityDelete({
 
   const deleteMutation = useMutation(
     mutationOptions({
-      onSuccess: () => {
-        toast.success(`${entityLabel} deleted`);
+      onSuccess: (data) => {
+        toast.success(
+          savedWithBackgroundWork(
+            data.sideEffects ?? emptySideEffects,
+            `${entityLabel} deleted`,
+          ),
+        );
         invalidateTRPCQueries(queryClient, invalidateKeys);
         void navigate({ to: redirectTo });
       },

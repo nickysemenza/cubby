@@ -1,5 +1,11 @@
 import { chat } from "@tanstack/ai";
+import {
+  COOKBOOK_ESCALATION_MODEL,
+  DEFAULT_CHAT_MODEL,
+} from "~/server/ai/models";
+import { aiGatewayUsageMiddleware } from "~/server/clients/ai-gateway-usage";
 import { getAnthropicClient } from "~/server/clients/anthropic";
+import type { Database } from "~/server/db";
 
 // Cookbook extraction runs the orchestration loop in the browser (WASM splits
 // the EPUB into chunks, each carrying a ready-to-send LLM request). This proxy
@@ -18,7 +24,6 @@ const MAX_TOKENS = 16_000;
 // an arbitrary model. The two models fail on *different* chunks — the malformed-
 // JSON failure is deterministic per model + chunk content — so escalating a
 // default-model failure to this one recovers it.
-const ESCALATION_MODEL = "claude-sonnet-4-6";
 // Bound each gateway call so a hung request can't pin a concurrency slot forever
 // (the browser orchestrator's retry only fires on rejection, not a hang). Real
 // calls finish in seconds — this is purely a backstop. `chat()` has no abort
@@ -49,7 +54,7 @@ interface CookbookChunkRequest {
   toolName: string;
   /** JSON Schema for the `{ recipes: [...] }` output. */
   toolSchema: Record<string, unknown>;
-  /** Route this chunk to the stronger {@link ESCALATION_MODEL} (set by the
+  /** Route this chunk to the stronger {@link COOKBOOK_ESCALATION_MODEL} (set by the
    * browser only after the default model returned unparseable output). */
   escalate?: boolean;
 }
@@ -66,15 +71,30 @@ type OutputSchema = Parameters<typeof chat>[0]["outputSchema"];
  */
 export async function extractCookbookChunk(
   req: CookbookChunkRequest,
+  opts?: { db?: Database },
 ): Promise<Record<string, unknown>> {
   const t0 = performance.now();
   // Reuse the shared client's adapter (gateway binding in prod / REST in dev).
   // Escalated chunks use the stronger model; the default stays Haiku.
-  const model = req.escalate ? ESCALATION_MODEL : undefined;
+  const model = req.escalate ? COOKBOOK_ESCALATION_MODEL : DEFAULT_CHAT_MODEL;
   const adapter = getAnthropicClient().getTextAdapter(undefined, model);
   const out = await withTimeout(
     chat({
       adapter,
+      middleware: aiGatewayUsageMiddleware(
+        opts?.db
+          ? {
+              db: opts.db,
+              feature: "cookbook-epub-parsing",
+              provider: "anthropic",
+              model,
+              operation: req.escalate
+                ? "extractCookbookChunk.escalated"
+                : "extractCookbookChunk",
+              cacheStatus: "none",
+            }
+          : undefined,
+      ),
       // Cache the large, stable system prompt across a book's chunks.
       systemPrompts: [
         {
@@ -88,7 +108,7 @@ export async function extractCookbookChunk(
     }),
   );
   console.log(
-    `[cookbook-llm] ${model ?? "claude (default)"} ${Math.round(performance.now() - t0)}ms`,
+    `[cookbook-llm] ${model} ${Math.round(performance.now() - t0)}ms`,
   );
   if (out && typeof out === "object" && !Array.isArray(out)) {
     return out as Record<string, unknown>;

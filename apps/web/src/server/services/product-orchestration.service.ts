@@ -6,6 +6,7 @@
  * - Batch UPC image backfill
  */
 
+import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ProductId } from "@cubby/schemas/identifiers";
 import type {
@@ -22,7 +23,6 @@ import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import { runWithConflictRecovery } from "~/server/errors/db-errors";
-import { countActiveInventoryForProduct } from "~/server/repo/inventory/crud";
 import {
   findProductByUPC,
   findProductsWithNoImages,
@@ -30,6 +30,7 @@ import {
 } from "~/server/repo/product";
 import { importImageFromUPC } from "./image-import";
 import type { LocationValuationService } from "./location-valuation.service";
+import { runMutationSideEffects } from "./mutation-side-effects";
 import type { ProductWriteActions } from "./product.service";
 import type { RecipeCostingService } from "./recipe-costing.service";
 
@@ -46,6 +47,11 @@ export async function createProductWithSideEffects(
   actor: ActorContext,
 ): Promise<ProductWithFoodAndSideEffectsOut> {
   const product = await services.product.createProduct(input, actor);
+  const backgroundBatches = await runMutationSideEffects(services.db, {
+    action: "created",
+    entity: { entityType: "product", entityId: product.id },
+    source: "product.create",
+  });
 
   if (input.upc) {
     try {
@@ -61,13 +67,18 @@ export async function createProductWithSideEffects(
   }
 
   const ingredientId = product.ingredient?.id;
-  const recipesRecomputed = ingredientId
-    ? await services.recipeCosting.recomputeForIngredient(ingredientId)
-    : 0;
+  const recipeBatches = ingredientId
+    ? await services.recipeCosting.recomputeForIngredient(ingredientId, {
+        source: "product.create",
+        entity: { entityType: "product", entityId: product.id },
+      })
+    : [];
 
   return {
     ...product,
-    sideEffects: { recipesRecomputed, inventoryValuationsUpdated: 0 },
+    sideEffects: {
+      backgroundBatches: [...backgroundBatches, ...recipeBatches],
+    },
   };
 }
 
@@ -82,28 +93,30 @@ export async function updateProductWithSideEffects(
       ? await services.product.getProductByID(id)
       : null;
   const result = await services.product.updateProduct(id, data, actor);
+  const backgroundBatches = await runMutationSideEffects(services.db, {
+    action: "updated",
+    entity: { entityType: "product", entityId: id },
+    source: "product.update",
+  });
   const ingredientIds = uniq(
     [previous?.ingredient?.id, result.ingredient?.id].filter(
       (ingredientId): ingredientId is NonNullable<typeof ingredientId> =>
         ingredientId != null,
     ),
   );
-  const recipesRecomputed =
+  const recipeBatches =
     ingredientIds.length > 0
-      ? await services.recipeCosting.recomputeForIngredients(ingredientIds)
-      : 0;
-
-  const priceChanged = data.price !== undefined;
-  const inventoryValuationsUpdated = priceChanged
-    ? await countActiveInventoryForProduct(services.db, id)
-    : 0;
-  if (priceChanged) {
-    await services.locationValuation.recompute();
-  }
+      ? await services.recipeCosting.recomputeForIngredients(ingredientIds, {
+          source: "product.update",
+          entity: { entityType: "product", entityId: id },
+        })
+      : [];
 
   return {
     ...result,
-    sideEffects: { recipesRecomputed, inventoryValuationsUpdated },
+    sideEffects: {
+      backgroundBatches: [...backgroundBatches, ...recipeBatches],
+    },
   };
 }
 
@@ -129,8 +142,14 @@ export async function applyUpcDataWithSideEffects(
   }
 
   const priceChanged = data.price !== undefined;
+  let backgroundBatches: BackgroundBatchRef[] = [];
   if (Object.keys(data).length > 0) {
     await services.product.updateProduct(input.id, data, actor);
+    backgroundBatches = await runMutationSideEffects(services.db, {
+      action: "updated",
+      entity: { entityType: "product", entityId: input.id },
+      source: "product.applyUpcData",
+    });
   }
 
   if (current.images.length === 0 && lookup?.imageUrl) {
@@ -148,20 +167,18 @@ export async function applyUpcDataWithSideEffects(
 
   const result = await services.product.getProductByID(input.id);
   const ingredientId = result.ingredient?.id;
-  const recipesRecomputed =
+  const recipeBatches =
     priceChanged && ingredientId
-      ? await services.recipeCosting.recomputeForIngredient(ingredientId)
-      : 0;
-  const inventoryValuationsUpdated = priceChanged
-    ? await countActiveInventoryForProduct(services.db, input.id)
-    : 0;
-  if (priceChanged) {
-    await services.locationValuation.recompute();
-  }
-
+      ? await services.recipeCosting.recomputeForIngredient(ingredientId, {
+          source: "product.applyUpcData",
+          entity: { entityType: "product", entityId: input.id },
+        })
+      : [];
   return {
     ...result,
-    sideEffects: { recipesRecomputed, inventoryValuationsUpdated },
+    sideEffects: {
+      backgroundBatches: [...backgroundBatches, ...recipeBatches],
+    },
   };
 }
 
@@ -183,6 +200,15 @@ export async function findOrCreateByUPC(
     return existing;
   }
 
+  const emitCreated = async (product: ProductTopLevelOut) => {
+    await runMutationSideEffects(db, {
+      action: "created",
+      entity: { entityType: "product", entityId: product.id },
+      source: "product.findOrCreateByUPC",
+    });
+    return product;
+  };
+
   // Cascade create with cross-request race recovery. Each quickCreateProduct is
   // a single product INSERT, so a concurrent creator of the same UPC makes the
   // loser's INSERT throw a (raw) unique violation with nothing committed.
@@ -198,19 +224,21 @@ export async function findOrCreateByUPC(
       });
 
       if (food) {
-        return await quickCreateProduct(
-          db,
-          {
-            name: food.foodInfo.description,
-            manufacturer:
-              food.brandedFoodInfo?.brand_owner ??
-              food.brandedFoodInfo?.brand_name ??
-              UNSPECIFIED_MANUFACTURER,
-            upc,
-            expectedQuantity: null,
-            model: null,
-          },
-          actor,
+        return await emitCreated(
+          await quickCreateProduct(
+            db,
+            {
+              name: food.foodInfo.description,
+              manufacturer:
+                food.brandedFoodInfo?.brand_owner ??
+                food.brandedFoodInfo?.brand_name ??
+                UNSPECIFIED_MANUFACTURER,
+              upc,
+              expectedQuantity: null,
+              model: null,
+            },
+            actor,
+          ),
         );
       }
 
@@ -243,20 +271,22 @@ export async function findOrCreateByUPC(
           }
         }
 
-        return newProduct;
+        return await emitCreated(newProduct);
       }
 
       // 4. Nothing found anywhere - create with defaults
-      return await quickCreateProduct(
-        db,
-        {
-          name: defaultName ?? `Product ${upc}`,
-          manufacturer: UNSPECIFIED_MANUFACTURER,
-          upc,
-          expectedQuantity: null,
-          model: null,
-        },
-        actor,
+      return await emitCreated(
+        await quickCreateProduct(
+          db,
+          {
+            name: defaultName ?? `Product ${upc}`,
+            manufacturer: UNSPECIFIED_MANUFACTURER,
+            upc,
+            expectedQuantity: null,
+            model: null,
+          },
+          actor,
+        ),
       );
     },
     async (error) => {

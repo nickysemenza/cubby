@@ -20,7 +20,7 @@ import {
   ingredientProductMutationInvalidateKeys,
   ingredientRecipeMutationInvalidateKeys,
 } from "~/lib/query-keys";
-import { savedWithRecompute } from "~/lib/recompute-summary";
+import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { useTRPC } from "~/trpc/react";
 import type { EnrichmentEditorHandle } from "./enrichment-editor";
 import { type MergeOption, ReviewCard } from "./review-card";
@@ -97,7 +97,7 @@ export function ReviewQueue({
   });
   const mergeMutation = useActionMutation({
     mutationFn: api.ingredient.merge.mutationOptions,
-    success: (d) => savedWithRecompute(d.sideEffects, "Merged"),
+    success: (d) => savedWithBackgroundWork(d.sideEffects, "Merged"),
     invalidateKeys: ingredientRecipeMutationInvalidateKeys,
     onSuccess: () => markProcessed(mergeSourceRef.current),
     error: (err) => `Merge failed: ${getErrorMessage(err)}`,

@@ -1,0 +1,2 @@
+export const SEMANTIC_MIN_QUERY_LENGTH = 3;
+export const SEMANTIC_BACKFILL_BATCH_SIZE = 32;

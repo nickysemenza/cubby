@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { mutationSideEffectsSchema } from "./background-jobs";
 import { amount, writeAmount } from "./codec";
 import { requiredName } from "./common";
 import {
@@ -140,13 +141,20 @@ export const recipeWithSectionsOut = z.object({
 });
 export type RecipeWithSectionsOut = z.infer<typeof recipeWithSectionsOut>;
 
-export const recipeOut = z.object({
+const recipeOutFields = {
   ...recipeTopLevelFields,
   sections: z.array(recipeSectionOut),
   // Precomputed cost/calorie rollup (null until first computed). Populated by
   // recipe.list; getByID may leave it null (the detail page computes its own).
   totals: recipeTotals.nullish(),
   images: z.array(imageOut),
+};
+
+export const recipeOut = z.object(recipeOutFields);
+
+export const recipeWithSideEffectsOut = z.object({
+  ...recipeOutFields,
+  sideEffects: mutationSideEffectsSchema,
 });
 
 // Full recipe graph without media. Used by costing/sub-recipe closure fetches

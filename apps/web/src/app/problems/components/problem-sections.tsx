@@ -1,5 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { AllProblems } from "@cubby/schemas/problems";
+import type { SearchableEntityRef } from "@cubby/schemas/search";
 import { Link } from "@tanstack/react-router";
 import { groupBy } from "es-toolkit";
 import {
@@ -144,6 +145,65 @@ function UpcApplyAction({ product }: { product: ProductWithBetterUpcData }) {
       {apply.isPending ? "Applying…" : "Apply"}
     </Button>
   );
+}
+
+function OrphanedEmbeddingCleanupFix({
+  id,
+  close,
+}: {
+  id: string;
+  close: () => void;
+}) {
+  const api = useTRPC();
+  const cleanup = useProblemCardMutation({
+    mutationFn: api.problems.cleanupOrphanedEmbeddings.mutationOptions,
+    success: "Cleaned up orphaned embedding",
+    onSuccess: close,
+  });
+  return (
+    <Button
+      size="sm"
+      onClick={() => cleanup.mutate({ ids: [id] })}
+      disabled={cleanup.isPending}
+    >
+      <Wrench className="mr-1 h-3 w-3" />
+      {cleanup.isPending ? "Cleaning…" : "Clean up"}
+    </Button>
+  );
+}
+
+function orphanedEmbeddingRoute(entityRef: SearchableEntityRef) {
+  switch (entityRef.entityType) {
+    case "product":
+      return {
+        to: "/products/$id" as const,
+        params: { id: entityRef.entityId },
+      };
+    case "location":
+      return {
+        to: "/locations/$id" as const,
+        params: { id: entityRef.entityId },
+      };
+    case "ingredient":
+      return {
+        to: "/ingredients/$id" as const,
+        params: { id: entityRef.entityId },
+      };
+    case "recipe":
+      return {
+        to: "/recipes/$id" as const,
+        params: { id: entityRef.entityId },
+      };
+    case "inventory":
+      return {
+        to: "/inventory/$id" as const,
+        params: { id: entityRef.entityId },
+      };
+    default: {
+      const exhaustive: never = entityRef.entityType;
+      return exhaustive;
+    }
+  }
 }
 
 /** Card for the merged "Unit coverage" section — core-4 chips + the inline fix. */
@@ -469,6 +529,28 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
         </Badge>,
       ],
       route: { to: "/locations/$id", params: { id: location.id } },
+    }),
+  }),
+  section({
+    id: "orphaned-embeddings",
+    label: "Embeddings",
+    select: (p) => p.orphanedEntityEmbeddings,
+    icon: Wrench,
+    title: "Orphaned search embeddings",
+    description:
+      "Semantic search rows whose entity no longer exists. These are safe to clean up.",
+    emptyMessage: "No orphaned search embeddings.",
+    renderItem: (embedding) => ({
+      title: `${embedding.entityType} · ${embedding.entityId.slice(0, 8)}`,
+      subtitle: embedding.model,
+      details: [createdAgoDetail(embedding.createdAt)],
+      route: orphanedEmbeddingRoute(embedding),
+      inlineFix: {
+        label: "Clean up",
+        render: (close) => (
+          <OrphanedEmbeddingCleanupFix id={embedding.id} close={close} />
+        ),
+      },
     }),
   }),
   section({

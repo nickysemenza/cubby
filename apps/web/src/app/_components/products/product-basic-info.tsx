@@ -12,7 +12,7 @@ import {
   productMutationInvalidateKeys,
   productValuationMutationInvalidateKeys,
 } from "~/lib/query-keys";
-import { savedWithRecompute } from "~/lib/recompute-summary";
+import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { formatCurrency } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import { EditableCell } from "../data-table/editable-cell";
@@ -38,7 +38,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
   const updateProductMutation = useActionMutation({
     mutationFn: api.product.update.mutationOptions,
     // Surface the eager recompute (dependent recipes / inventory valuations).
-    success: (data) => savedWithRecompute(data.sideEffects),
+    success: (data) => savedWithBackgroundWork(data.sideEffects),
     invalidateKeys: productValuationMutationInvalidateKeys,
     error: (err) => getErrorMessage(err) || "Failed to update product",
   });

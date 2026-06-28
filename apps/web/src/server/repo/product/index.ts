@@ -32,6 +32,7 @@ export {
   getProductByID,
   getProductByShortcode,
   getProductImagesByProductIds,
+  getProductPickerItemsByIds,
   getProductsByShortcodes,
   getProductsForFoodLookup,
   getProductUnitMappingsByProductIds,

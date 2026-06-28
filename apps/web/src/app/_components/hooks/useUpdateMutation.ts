@@ -1,3 +1,4 @@
+import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
 import type { Entity } from "@cubby/schemas/entity";
 import type { QueryKey } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -5,6 +6,9 @@ import { useMemo } from "react";
 import { toast } from "sonner";
 import { entities } from "~/entities/entities";
 import { invalidateTRPCQueries } from "~/lib/query-keys";
+import { savedWithBackgroundWork } from "~/lib/recompute-summary";
+
+const emptySideEffects: MutationSideEffects = { backgroundBatches: [] };
 
 /**
  * Hook for creating memoized update mutations that properly invalidate caches.
@@ -16,7 +20,7 @@ export function useUpdateMutation<TVariables, TData>({
   invalidateKeys,
 }: {
   mutationFn: (callbacks: {
-    onSuccess: () => void;
+    onSuccess: (data: { sideEffects?: MutationSideEffects }) => void;
     onError: (err: { message?: string }) => void;
   }) => unknown;
   entity: Entity;
@@ -28,8 +32,13 @@ export function useUpdateMutation<TVariables, TData>({
   const mutationOptions = useMemo(
     () =>
       mutationFn({
-        onSuccess: () => {
-          toast.success(`${entityLabel} updated`);
+        onSuccess: (data) => {
+          toast.success(
+            savedWithBackgroundWork(
+              data.sideEffects ?? emptySideEffects,
+              `${entityLabel} updated`,
+            ),
+          );
           invalidateTRPCQueries(queryClient, invalidateKeys);
         },
         onError: (err) => {

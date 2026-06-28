@@ -14,8 +14,14 @@ import type {
   DetectedItem,
   LocationDescription,
 } from "@cubby/schemas/ai";
+import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
 import type { ActorContext } from "@cubby/schemas/context";
-import type { IngredientId, LocationId } from "@cubby/schemas/identifiers";
+import {
+  type IngredientId,
+  type LocationId,
+  unsafeProductId,
+} from "@cubby/schemas/identifiers";
+import { type ProductCategory, productCategory } from "@cubby/schemas/product";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
 import { type DataType, dataTypeEnum } from "@cubby/usda-schemas";
@@ -26,6 +32,9 @@ import {
   LOCATION_DESCRIPTION_FEATURE,
   LOCATION_INVENTORY_DETECTION_FEATURE,
 } from "~/server/ai/features";
+import { DEFAULT_CHAT_MODEL } from "~/server/ai/models";
+import { dispatchBackgroundJobs } from "~/server/background-queue";
+import { aiGatewayUsageMiddleware } from "~/server/clients/ai-gateway-usage";
 import { getAnthropicClient } from "~/server/clients/anthropic";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
@@ -33,6 +42,7 @@ import {
   getCachedAiAnalysis,
   upsertAiAnalysis,
 } from "~/server/repo/ai-analysis";
+import { recordAiUsage } from "~/server/repo/ai-usage";
 import { searchIngredientsForMerge } from "~/server/repo/ingredient";
 import {
   createInventoryEntry,
@@ -48,6 +58,8 @@ import {
   getProductByID,
   quickCreateProduct,
 } from "~/server/repo/product";
+import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
+import { semanticProductCandidates } from "~/server/services/semantic-search.service";
 import type { USDAService } from "~/server/services/usda.service";
 
 // Defined by Vite for the Cloudflare build only; guard before reading (mirrors
@@ -57,6 +69,31 @@ const IS_CF_WORKERS =
   typeof __CF_WORKERS__ !== "undefined" && __CF_WORKERS__ === true;
 
 const MAX_ANALYSIS_IMAGES = 5;
+const SEMANTIC_PRODUCT_MATCH_THRESHOLD = 0.86;
+const LOCATION_NO_IMAGES_MESSAGE = "Location has no images to analyze";
+
+export class LocationHasNoImagesToAnalyzeError extends Error {
+  constructor() {
+    super(LOCATION_NO_IMAGES_MESSAGE);
+    this.name = "LocationHasNoImagesToAnalyzeError";
+  }
+}
+
+export function isLocationHasNoImagesToAnalyzeError(
+  error: unknown,
+): error is LocationHasNoImagesToAnalyzeError {
+  return (
+    error instanceof LocationHasNoImagesToAnalyzeError ||
+    (error instanceof Error && error.message === LOCATION_NO_IMAGES_MESSAGE)
+  );
+}
+
+interface DetectedProductMatch {
+  id: ReturnType<typeof unsafeProductId>;
+  name: string;
+  manufacturer: string;
+  category: ProductCategory | null;
+}
 
 function itemProductName(item: DetectedInventoryItem): string {
   if (item.isMisc && !isMiscProduct(item.name)) {
@@ -135,6 +172,33 @@ function detectionCacheMetadata(
   };
 }
 
+async function recordLocationAiUsage(
+  db: Database,
+  input: {
+    feature:
+      | typeof LOCATION_DESCRIPTION_FEATURE
+      | typeof LOCATION_INVENTORY_DETECTION_FEATURE;
+    operation: string;
+    cacheStatus: "hit" | "miss";
+    durationMs: number;
+    locationId: LocationId;
+    batchId?: string;
+  },
+): Promise<void> {
+  await recordAiUsage(db, {
+    feature: input.feature.feature,
+    provider: "anthropic",
+    model: input.feature.model,
+    operation: input.operation,
+    inputTokens: null,
+    outputTokens: null,
+    durationMs: input.durationMs,
+    cacheStatus: input.cacheStatus,
+    entity: { entityType: "location", entityId: input.locationId },
+    batchId: input.batchId,
+  });
+}
+
 // Drive a chat() loop to completion. Tool handlers capture results via closures,
 // so we only watch for run errors here: chat() delivers provider/transport
 // failures as a RUN_ERROR chunk rather than throwing, and an unsurfaced one looks
@@ -161,12 +225,13 @@ async function drainChat(
 export async function describeLocation(
   db: Database,
   locationId: LocationId,
+  opts: { batchId?: string } = {},
 ): Promise<LocationDescription> {
   const location = await getLocationById(db, locationId);
 
   const images = (location.images ?? []).slice(0, MAX_ANALYSIS_IMAGES);
   if (images.length === 0) {
-    throw new Error("Location has no images to analyze");
+    throw new LocationHasNoImagesToAnalyzeError();
   }
 
   const inputFingerprint = buildLocationAnalysisFingerprint(
@@ -188,7 +253,20 @@ export async function describeLocation(
     });
     if (location.aiDescription !== cached.description) {
       await updateLocationAiDescription(db, locationId, cached.description);
+      await runMutationSideEffects(db, {
+        action: "updated",
+        entity: { entityType: "location", entityId: locationId },
+        source: "location-ai.description",
+      });
     }
+    await recordLocationAiUsage(db, {
+      feature: LOCATION_DESCRIPTION_FEATURE,
+      operation: "locationDescription",
+      cacheStatus: "hit",
+      durationMs: 0,
+      locationId,
+      batchId: opts.batchId,
+    });
     return cached;
   }
 
@@ -196,6 +274,15 @@ export async function describeLocation(
   const result = await client.describeLocation(
     images.map((img) => img.url),
     location.name,
+    {
+      db,
+      feature: LOCATION_DESCRIPTION_FEATURE.feature,
+      model: LOCATION_DESCRIPTION_FEATURE.model,
+      operation: "locationDescription",
+      cacheStatus: "miss",
+      entity: { entityType: "location", entityId: locationId },
+      batchId: opts.batchId,
+    },
   );
   await upsertAiAnalysis(db, analysisKey, result);
   console.info("ai.analysis", {
@@ -205,6 +292,11 @@ export async function describeLocation(
   });
 
   await updateLocationAiDescription(db, locationId, result.description);
+  await runMutationSideEffects(db, {
+    action: "updated",
+    entity: { entityType: "location", entityId: locationId },
+    source: "location-ai.description",
+  });
 
   return result;
 }
@@ -237,11 +329,39 @@ async function matchDetectedItems(
       continue;
     }
 
-    const matched = await findProductByNameFuzzyManufacturer(
+    const exactMatched = await findProductByNameFuzzyManufacturer(
       db,
       productName,
       item.manufacturer,
     );
+    let matched: DetectedProductMatch | null = exactMatched
+      ? {
+          id: exactMatched.id,
+          name: exactMatched.name,
+          manufacturer: exactMatched.manufacturer,
+          category: exactMatched.category,
+        }
+      : null;
+    if (!matched) {
+      const [semanticMatch] = await semanticProductCandidatesBestEffort(
+        db,
+        productName,
+      );
+      if (
+        semanticMatch &&
+        semanticMatch.similarity >= SEMANTIC_PRODUCT_MATCH_THRESHOLD &&
+        semanticMatch.item.entityType === "product" &&
+        !existingProductIds.has(unsafeProductId(semanticMatch.item.id))
+      ) {
+        matched = {
+          id: unsafeProductId(semanticMatch.item.id),
+          name: semanticMatch.item.name,
+          manufacturer: semanticMatch.item.subtitle ?? item.manufacturer,
+          category:
+            productCategory.safeParse(semanticMatch.item.typeHint).data ?? null,
+        };
+      }
+    }
     if (matched && existingProductIds.has(matched.id)) continue;
 
     suggestions.push({
@@ -260,6 +380,22 @@ async function matchDetectedItems(
   return suggestions;
 }
 
+async function semanticProductCandidatesBestEffort(
+  db: Database,
+  query: string,
+): ReturnType<typeof semanticProductCandidates> {
+  try {
+    return await semanticProductCandidates(db, query, 3);
+  } catch (error) {
+    console.warn("ai.inventory.semantic-product-match.failed", {
+      query,
+      errorName: error instanceof Error ? error.name : typeof error,
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+    return [];
+  }
+}
+
 /**
  * Detect inventory items from location photos.
  * Returns detected items for user review — does not persist anything.
@@ -267,12 +403,13 @@ async function matchDetectedItems(
 export async function detectInventoryItems(
   db: Database,
   locationId: LocationId,
+  opts: { batchId?: string } = {},
 ): Promise<DetectedInventory> {
   const location = await getLocationById(db, locationId);
 
   const images = (location.images ?? []).slice(0, MAX_ANALYSIS_IMAGES);
   if (images.length === 0) {
-    throw new Error("Location has no images to analyze");
+    throw new LocationHasNoImagesToAnalyzeError();
   }
 
   const inputFingerprint = buildLocationAnalysisFingerprint(
@@ -291,11 +428,28 @@ export async function detectInventoryItems(
 
   if (cached) {
     raw = cached;
+    await recordLocationAiUsage(db, {
+      feature: LOCATION_INVENTORY_DETECTION_FEATURE,
+      operation: "locationInventoryDetection",
+      cacheStatus: "hit",
+      durationMs: 0,
+      locationId,
+      batchId: opts.batchId,
+    });
   } else {
     const client = getAnthropicClient();
     raw = await client.detectInventoryItems(
       images.map((img) => img.url),
       location.name,
+      {
+        db,
+        feature: LOCATION_INVENTORY_DETECTION_FEATURE.feature,
+        model: LOCATION_INVENTORY_DETECTION_FEATURE.model,
+        operation: "locationInventoryDetection",
+        cacheStatus: "miss",
+        entity: { entityType: "location", entityId: locationId },
+        batchId: opts.batchId,
+      },
     );
     await upsertAiAnalysis(db, analysisKey, raw);
   }
@@ -327,6 +481,7 @@ export async function approveDetectedInventoryItem(
   let productId = input.productId ?? null;
   let productNameForToast = productName;
   let createdProduct = false;
+  const backgroundBatches: BackgroundBatchRef[] = [];
 
   if (productId) {
     const product = await getProductByID(db, productId);
@@ -353,6 +508,13 @@ export async function approveDetectedInventoryItem(
       productId = created.id;
       productNameForToast = created.name;
       createdProduct = true;
+      backgroundBatches.push(
+        ...(await runMutationSideEffects(db, {
+          action: "created",
+          entity: { entityType: "product", entityId: created.id },
+          source: "location-ai.inventory.approve",
+        })),
+      );
     }
   }
 
@@ -375,12 +537,20 @@ export async function approveDetectedInventoryItem(
     },
     actor,
   );
+  backgroundBatches.push(
+    ...(await runMutationSideEffects(db, {
+      action: "created",
+      entity: { entityType: "inventory", entityId: createdInventory.id },
+      source: "location-ai.inventory.approve",
+    })),
+  );
 
   return {
     inventoryId: createdInventory.id,
     productId,
     productName: productNameForToast,
     createdProduct,
+    sideEffects: { backgroundBatches },
   };
 }
 
@@ -394,33 +564,27 @@ export async function* backfillLocationDescriptions(
   db: Database,
 ): AsyncGenerator<
   { done: number; total: number },
-  { analyzed: number; total: number }
+  { enqueued: number; total: number; batchId: string }
 > {
   const locations = await findLocationsNeedingAiDescription(db);
-
   const total = locations.length;
-  let done = 0;
-  let analyzed = 0;
-  yield { done, total };
-  for (let i = 0; i < locations.length; i += 10) {
-    const batch = locations.slice(i, i + 10);
-    const results = await Promise.allSettled(
-      batch.map(async (loc) => {
-        await describeLocation(db, loc.id);
-      }),
-    );
-    for (const result of results) {
-      if (result.status === "fulfilled") {
-        analyzed++;
-      } else {
-        console.error("Failed to describe location:", result.reason);
-      }
-    }
-    done += batch.length;
-    yield { done, total };
-  }
-
-  return { analyzed, total };
+  yield { done: 0, total };
+  const dispatched = await dispatchBackgroundJobs(db, {
+    kind: "location-ai.description.refresh",
+    source: "backfill",
+    metadata: { source: "location-ai.description.backfill", total },
+    jobs: locations.map((loc) => ({
+      kind: "location-ai.description.refresh" as const,
+      dedupeKey: `location-ai.description.refresh:${loc.id}`,
+      payload: { locationId: loc.id },
+    })),
+  });
+  yield { done: dispatched.jobIds.length, total };
+  return {
+    enqueued: dispatched.jobIds.length,
+    total,
+    batchId: dispatched.batchId,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -460,7 +624,9 @@ Rules:
  */
 export async function suggestUsdaFood(
   usdaService: USDAService,
+  db: Database,
   ingredientName: string,
+  opts: { ingredientId?: IngredientId } = {},
 ): Promise<UsdaFoodSuggestion> {
   const adapter = getAnthropicClient().getTextAdapter({
     feature: "usda-food-suggest",
@@ -568,6 +734,17 @@ export async function suggestUsdaFood(
 
   const stream = chat({
     adapter,
+    middleware: aiGatewayUsageMiddleware({
+      db,
+      feature: "usda-food-suggest",
+      provider: "anthropic",
+      model: DEFAULT_CHAT_MODEL,
+      operation: "suggestUsdaFood",
+      cacheStatus: "none",
+      entity: opts.ingredientId
+        ? { entityType: "ingredient", entityId: opts.ingredientId }
+        : null,
+    }),
     systemPrompts: [buildUsdaMatchPrompt()],
     messages: [
       {
@@ -614,6 +791,7 @@ interface UsdaFoodBatchSuggestion extends UsdaFoodSuggestion {
  */
 export async function suggestUsdaFoodBatch(
   usdaService: USDAService,
+  db: Database,
   names: string[],
 ): Promise<UsdaFoodBatchSuggestion[]> {
   const capped = names.slice(0, 20);
@@ -621,7 +799,7 @@ export async function suggestUsdaFoodBatch(
   for (let i = 0; i < capped.length; i += 5) {
     const batch = capped.slice(i, i + 5);
     const results = await Promise.allSettled(
-      batch.map((name) => suggestUsdaFood(usdaService, name)),
+      batch.map((name) => suggestUsdaFood(usdaService, db, name)),
     );
     results.forEach((result, j) => {
       const name = batch[j] as string;
@@ -754,6 +932,15 @@ async function suggestIngredientMerge(
 
   const stream = chat({
     adapter,
+    middleware: aiGatewayUsageMiddleware({
+      db,
+      feature: "ingredient-merge",
+      provider: "anthropic",
+      model: DEFAULT_CHAT_MODEL,
+      operation: "suggestIngredientMerge",
+      cacheStatus: "none",
+      entity: { entityType: "ingredient", entityId: source.id },
+    }),
     systemPrompts: [buildMergePrompt()],
     messages: [
       {
@@ -878,7 +1065,9 @@ export async function* precomputeEnrichmentProposals(
       batch.map(async (item): Promise<EnrichmentProposal> => {
         const [usda, merge] = await Promise.all([
           item.wantUsda
-            ? suggestUsdaFood(usdaService, item.name)
+            ? suggestUsdaFood(usdaService, db, item.name, {
+                ingredientId: item.id,
+              })
             : Promise.resolve(skippedUsda),
           item.wantMerge
             ? suggestIngredientMerge(db, { id: item.id, name: item.name })

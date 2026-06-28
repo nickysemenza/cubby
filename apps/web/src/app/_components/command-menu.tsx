@@ -48,6 +48,7 @@ import { desktopLeaves } from "./navigation/nav-items";
 import {
   entityTypeMap,
   getEnrichmentText,
+  getSearchMatchText,
   getSearchResultRoute,
   groupSearchResults,
   rememberSearchResult,
@@ -364,6 +365,7 @@ export function GlobalCommandMenu({
                   <CommandGroup key={group.entityType} heading={group.label}>
                     {group.items.map((item) => {
                       const enrichment = getEnrichmentText(item);
+                      const matchText = getSearchMatchText(item);
 
                       return (
                         <CommandItem
@@ -379,6 +381,14 @@ export function GlobalCommandMenu({
                                 {[item.subtitle, enrichment]
                                   .filter(Boolean)
                                   .join(" · ")}
+                              </div>
+                            )}
+                            {matchText && (
+                              <div
+                                className="truncate text-[11px] text-muted-foreground/80"
+                                title={item.matchReason}
+                              >
+                                {matchText}
                               </div>
                             )}
                           </div>

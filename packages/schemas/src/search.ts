@@ -14,6 +14,14 @@ export const searchableEntities = [
 export const searchableEntitySchema = z.enum(searchableEntities);
 export type SearchableEntity = z.infer<typeof searchableEntitySchema>;
 
+export const searchableEntityRefFields = {
+  entityType: searchableEntitySchema,
+  entityId: z.string(),
+};
+
+export const searchableEntityRefSchema = z.object(searchableEntityRefFields);
+export type SearchableEntityRef = z.infer<typeof searchableEntityRefSchema>;
+
 /** Search type options for filtering (includes "all") */
 export const searchTypeOptions = ["all", ...searchableEntities] as const;
 export const searchTypeSchema = z.enum(searchTypeOptions);
@@ -24,6 +32,15 @@ export const globalSearchInputSchema = z.object({
   limit: z.number().min(1).max(50).default(5),
 });
 
+export const searchMatchKindSchema = z.enum([
+  "exact",
+  "substring",
+  "trigram",
+  "semantic",
+  "hybrid",
+]);
+export type SearchMatchKind = z.infer<typeof searchMatchKindSchema>;
+
 const searchResultBaseFields = {
   id: z.string(),
   name: z.string(),
@@ -31,6 +48,10 @@ const searchResultBaseFields = {
   typeHint: z.string().nullable(),
   imageUrl: z.string().nullable(),
   createdAt: z.coerce.date(),
+  score: z.number().optional(),
+  matchKind: searchMatchKindSchema.optional(),
+  matchReason: z.string().optional(),
+  matchTerms: z.array(z.string()).optional(),
 };
 
 // Per-entity result schemas
@@ -76,6 +97,26 @@ export const searchResultItemSchema = z.discriminatedUnion("entityType", [
 export type SearchResultItem = z.infer<typeof searchResultItemSchema>;
 
 export const globalSearchOut = z.array(searchResultItemSchema);
+
+export const semanticBackfillInputSchema = z.object({
+  entityTypes: z.array(searchableEntitySchema).optional(),
+  limit: z.number().min(1).max(500).default(100),
+});
+
+export const semanticBackfillOutSchema = z.object({
+  scanned: z.number().int().nonnegative(),
+  embedded: z.number().int().nonnegative(),
+  skipped: z.number().int().nonnegative(),
+});
+
+export const searchDebugInputSchema = globalSearchInputSchema;
+export const searchDebugOutSchema = z.object({
+  query: z.string(),
+  lexical: z.array(searchResultItemSchema),
+  semantic: z.array(searchResultItemSchema),
+  results: z.array(searchResultItemSchema),
+});
+export type SearchDebugOut = z.infer<typeof searchDebugOutSchema>;
 
 // Export individual variants for repo type hints
 export type ProductSearchResult = z.infer<typeof productResult>;

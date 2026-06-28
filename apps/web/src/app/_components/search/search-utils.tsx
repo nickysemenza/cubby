@@ -185,3 +185,25 @@ export function getEnrichmentText(item: SearchResultItem): string | null {
     )
     .exhaustive();
 }
+
+const matchKindLabel = {
+  exact: "exact",
+  substring: "contains",
+  trigram: "fuzzy",
+  semantic: "semantic",
+  hybrid: "hybrid",
+} as const satisfies Record<NonNullable<SearchResultItem["matchKind"]>, string>;
+
+export function getSearchMatchText(item: SearchResultItem): string | null {
+  if (!item.matchKind) return null;
+  const parts: string[] = [matchKindLabel[item.matchKind]];
+  if (item.matchTerms?.length) {
+    parts.push(`matched ${item.matchTerms.slice(0, 3).join(", ")}`);
+  } else if (item.matchKind === "semantic") {
+    parts.push("vector similarity");
+  } else if (item.matchReason) {
+    parts.push(item.matchReason);
+  }
+  if (item.score != null) parts.push(`${Math.round(item.score)} pts`);
+  return parts.join(" · ");
+}

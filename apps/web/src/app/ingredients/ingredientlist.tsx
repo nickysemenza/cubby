@@ -34,7 +34,7 @@ import {
   ingredientMutationInvalidateKeys,
   invalidateTRPCQueries,
 } from "~/lib/query-keys";
-import { savedWithRecompute } from "~/lib/recompute-summary";
+import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { useTRPC, useTRPCClient } from "~/trpc/react";
 import {
@@ -318,7 +318,7 @@ export function IngredientList() {
                 ingredientMergeMutationInvalidateKeys,
               );
               toast.success(
-                savedWithRecompute(
+                savedWithBackgroundWork(
                   result.sideEffects,
                   `Merged into ${target.name} (${aliasRows.length} ingredient${aliasRows.length === 1 ? "" : "s"})`,
                 ),

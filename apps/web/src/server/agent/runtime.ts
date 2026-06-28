@@ -5,7 +5,10 @@ import type {
 } from "@cubby/schemas/agent";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { chat, maxIterations } from "@tanstack/ai";
+import { DEFAULT_CHAT_MODEL } from "~/server/ai/models";
+import { aiGatewayUsageMiddleware } from "~/server/clients/ai-gateway-usage";
 import { getAnthropicClient } from "~/server/clients/anthropic";
+import type { Database } from "~/server/db";
 import { createAgentToolset, type ToolCallRecord } from "./mcp-bridge";
 
 const SYSTEM_PROMPT = `You are Cubby's inventory assistant. Cubby is a personal home-inventory app that tracks products, inventory items, locations, recipes, and ingredients.
@@ -105,6 +108,7 @@ export function extractSources(records: ToolCallRecord[]): AgentSource[] {
 export async function* runAgentStream(
   // biome-ignore lint/suspicious/noExplicitAny: server-side tRPC caller
   caller: any,
+  db: Database,
   query: string,
 ): AsyncGenerator<AgentStreamEvent> {
   const adapter = getAnthropicClient().getTextAdapter();
@@ -113,6 +117,14 @@ export async function* runAgentStream(
   try {
     const stream = chat({
       adapter,
+      middleware: aiGatewayUsageMiddleware({
+        db,
+        feature: "agent-ask",
+        provider: "anthropic",
+        model: DEFAULT_CHAT_MODEL,
+        operation: "runAgentStream",
+        cacheStatus: "none",
+      }),
       systemPrompts: [SYSTEM_PROMPT],
       messages: [{ role: "user", content: query }],
       tools: toolset.tools,
@@ -150,13 +162,14 @@ export async function* runAgentStream(
 export async function runAgent(
   // biome-ignore lint/suspicious/noExplicitAny: server-side tRPC caller
   caller: any,
+  db: Database,
   query: string,
 ): Promise<AgentResult> {
   let answer = "";
   let sources: AgentResult["sources"] = [];
   let toolCalls: AgentResult["toolCalls"] = [];
 
-  for await (const event of runAgentStream(caller, query)) {
+  for await (const event of runAgentStream(caller, db, query)) {
     if (event.type === "delta") {
       answer += event.text;
     } else if (event.type === "tool") {

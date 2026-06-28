@@ -3,7 +3,10 @@ import {
   buildLocationAnalysisFingerprint,
   LOCATION_INVENTORY_DETECTION_FEATURE,
 } from "./features";
-import { INVENTORY_DETECTION_EVALS } from "./inventory-detection-evals";
+import {
+  evaluateInventoryDetection,
+  INVENTORY_DETECTION_EVALS,
+} from "./inventory-detection-evals";
 
 describe("AI feature fingerprints", () => {
   it("is stable across image ordering", () => {
@@ -72,5 +75,78 @@ describe("inventory detection eval fixtures", () => {
         "various packaged items",
       ],
     });
+  });
+
+  it("passes the tarp/drop-cloth target fixture with canonical items", () => {
+    const fixture = INVENTORY_DETECTION_EVALS[0]!;
+    const result = evaluateInventoryDetection(fixture, {
+      summary: "Tarps and drop cloths are visible.",
+      items: [
+        {
+          name: "blue tarp",
+          manufacturer: "(unspecified)",
+          estimatedQuantity: 1,
+          unit: "each",
+          category: "supplies",
+          confidence: "medium",
+          evidence: "Blue folded plastic material is visible.",
+          isMisc: false,
+        },
+        {
+          name: "painters drop cloth",
+          manufacturer: "(unspecified)",
+          estimatedQuantity: 1,
+          unit: "each",
+          category: "supplies",
+          confidence: "medium",
+          evidence:
+            "Folded cream fabric is consistent with a painter drop cloth.",
+          isMisc: false,
+        },
+        {
+          name: "plastic drop cloth",
+          manufacturer: "(unspecified)",
+          estimatedQuantity: 1,
+          unit: "each",
+          category: "supplies",
+          confidence: "low",
+          evidence:
+            "Lower packaged plastic sheet is compatible with location context.",
+          isMisc: false,
+        },
+      ],
+    });
+
+    expect(result).toEqual({
+      passed: true,
+      missingExpectedItems: [],
+      presentExcludedItems: [],
+      recognizableMiscItems: [],
+      missingEvidenceItems: [],
+    });
+  });
+
+  it("fails the tarp/drop-cloth fixture on vague excluded items", () => {
+    const fixture = INVENTORY_DETECTION_EVALS[0]!;
+    const result = evaluateInventoryDetection(fixture, {
+      summary: "A crate contains cloths and packages.",
+      items: [
+        {
+          name: "cream cloth items",
+          manufacturer: "(unspecified)",
+          estimatedQuantity: 4,
+          unit: "each",
+          category: "storage",
+          confidence: "low",
+          evidence: "",
+          isMisc: true,
+        },
+      ],
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.missingExpectedItems).toEqual(fixture.expectedItems);
+    expect(result.presentExcludedItems).toContain("cream cloth items");
+    expect(result.missingEvidenceItems).toContain("cream cloth items");
   });
 });

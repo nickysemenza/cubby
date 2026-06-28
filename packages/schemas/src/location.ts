@@ -2,6 +2,7 @@ import { locationTypeValues, productCategoryValues } from "@cubby/shared";
 import { fdcId, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { amount } from "./codec";
+import { mutationSideEffectsSchema } from "./background-jobs";
 import { requiredName } from "./common";
 import {
   inventoryId,
@@ -191,6 +192,10 @@ export const infLocation: z.ZodType<InfLocation> = z.object({
 });
 
 export const infLocationListOut = z.array(infLocation);
+
+export const infLocationWithSideEffects = infLocation.and(
+  z.object({ sideEffects: mutationSideEffectsSchema }),
+);
 
 // Helper to coerce empty strings to null for optional ID fields
 const optionalLocationId = z

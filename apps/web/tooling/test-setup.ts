@@ -13,12 +13,12 @@ import {
   type IntegreSQLDatabaseConfig,
 } from "@devoxa/integresql-client";
 import { pushSchema } from "drizzle-kit/api";
-import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { beforeEach } from "vitest";
 import type { Database } from "../src/server/db/database";
 import * as schema from "../src/server/db/schema";
+import { ensureDbExtensions } from "./db-extensions";
 
 const integreSQL = new IntegreSQLClient({ url: "http://localhost:5000" });
 
@@ -67,9 +67,9 @@ export async function setup() {
     const db = drizzle(pool);
 
     try {
-      // pushSchema doesn't manage extensions; the GIN trigram indexes need
-      // pg_trgm, so create it before pushing (mirrors CI's pre-push step).
-      await db.execute(sql`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
+      // pushSchema doesn't manage extensions; create them before pushing
+      // (mirrors db:push and E2E setup).
+      await ensureDbExtensions(db);
       // `db` and drizzle-kit are typed against different physical copies of
       // drizzle-orm (an @opentelemetry/api peer-dep dupe), so bridge the
       // structurally-identical PgDatabase types. Runtime parity is covered by

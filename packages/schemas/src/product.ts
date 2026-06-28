@@ -20,7 +20,7 @@ import { locationOut, locationType } from "./location";
 import { createPaginatedResponseSchema } from "./pagination";
 import { baseKind } from "./problems";
 import { recipeUsageOut } from "./recipe";
-import { recomputeSummary } from "./recipe-shared";
+import { mutationSideEffectsSchema } from "./background-jobs";
 import {
   unitMappingInput,
   unitMappingOut,
@@ -364,7 +364,7 @@ export const productWithFoodAndSideEffectsOut = z.object({
   inventoryEntry: z.array(productInventoryWithLocationOut),
   food: foodSummary.nullable(),
   recipeUsages: z.array(recipeUsageOut),
-  sideEffects: recomputeSummary,
+  sideEffects: mutationSideEffectsSchema,
 });
 export type ProductWithFoodAndSideEffectsOut = z.infer<
   typeof productWithFoodAndSideEffectsOut
