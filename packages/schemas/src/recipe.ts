@@ -228,6 +228,7 @@ export const recipeSectionInput = z.object({
 // Filters accepted by the recipe list endpoint.
 export const recipeFiltersSchema = z.object({
   nameFilter: z.string().optional(),
+  tagFilters: z.array(z.string()).optional(),
   // Scope the list to one cookbook by FK id (cookbook detail page).
   cookbookId: cookbookId.optional(),
 });

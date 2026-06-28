@@ -261,6 +261,9 @@ export const recipeList = async (
       filters.cookbookId
         ? eq(recipe.cookbookId, filters.cookbookId)
         : undefined,
+      filters.tagFilters && filters.tagFilters.length > 0
+        ? sql`${recipe.tags} && ${filters.tagFilters}`
+        : undefined,
     ],
   );
 
@@ -284,13 +287,20 @@ export const recipeList = async (
       ? [dir(recipe.SourceType), dir(recipe.SourceData)]
       : sort.orderBy === "yield"
         ? [dir(recipe.servings)]
-        : jsonbSortKey
+        : sort.orderBy === "tags"
           ? [
               isAsc
-                ? sql`(${recipe.totals}->>${jsonbSortKey})::numeric asc nulls last`
-                : sql`(${recipe.totals}->>${jsonbSortKey})::numeric desc nulls last`,
+                ? sql`${recipe.tags}[1] asc nulls last`
+                : sql`${recipe.tags}[1] desc nulls last`,
+              sql`${recipe.name} asc`,
             ]
-          : buildOrderBy(recipe, sort, [...getSortableFields("recipe")]);
+          : jsonbSortKey
+            ? [
+                isAsc
+                  ? sql`(${recipe.totals}->>${jsonbSortKey})::numeric asc nulls last`
+                  : sql`(${recipe.totals}->>${jsonbSortKey})::numeric desc nulls last`,
+              ]
+            : buildOrderBy(recipe, sort, [...getSortableFields("recipe")]);
 
   const { take, skip } = buildTakeSkip(pagination);
 

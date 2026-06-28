@@ -71,7 +71,7 @@ export function HeaderFilter<TData>({
       <FilterableCombobox
         items={facetedOptions}
         value={value || null}
-        onValueChange={(v) => v && setValue(v)}
+        onValueChange={(v) => setValue(v ?? "")}
         placeholder={filterConfig.placeholder}
         className={`w-full ${inputClassName}`}
       />

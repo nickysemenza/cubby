@@ -304,13 +304,22 @@ export const locationList = async (
     ],
   );
 
-  // Build order by using central sortableFields config
-  const orderByClause = buildOrderBy(
-    location,
-    sort,
-    [...getSortableFields("location")],
-    groupBy,
-  );
+  // `valuation` is a persisted jsonb rollup; sort by direct value because that
+  // is what the list cell renders in compact mode.
+  const isAsc = sort.direction === "asc";
+  const orderByClause =
+    sort.orderBy === "valuation"
+      ? [
+          isAsc
+            ? sql`(${location.valuation}->>'directValuation')::numeric asc nulls last`
+            : sql`(${location.valuation}->>'directValuation')::numeric desc nulls last`,
+        ]
+      : buildOrderBy(
+          location,
+          sort,
+          [...getSortableFields("location")],
+          groupBy,
+        );
 
   const { take, skip } = buildTakeSkip(pagination);
 

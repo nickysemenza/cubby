@@ -12,6 +12,7 @@ import {
   type ProductListItem,
   type ProductPickerItemOut,
   type ProductTopLevelOut,
+  type ProductUnitMappingQuality,
   productListItemOut,
   productPickerItemOut,
   productTopLevelOut,
@@ -101,6 +102,25 @@ export const mapProductUnitMappings = (
       createdAt: unitMapping.createdAt,
       updatedAt: unitMapping.updatedAt,
     }));
+
+const productUnitMappingQuality = (
+  productData: ProductListDB,
+): ProductUnitMappingQuality => {
+  const activeMappingCount = productData.unitMappings.filter(
+    (unitMapping) => unitMapping.deletedAt === null,
+  ).length;
+  if (activeMappingCount >= 3) return "complete";
+  if (activeMappingCount >= 2) return "good";
+  if (
+    activeMappingCount >= 1 ||
+    productData.price != null ||
+    productData.fdc_id != null ||
+    productData.upc != null
+  ) {
+    return "partial";
+  }
+  return "none";
+};
 
 export const dbProductToTopLevelShape = (
   productData: ProductTopLevelDB,
@@ -225,6 +245,7 @@ export const dbProductToListAPI = (
       productData.id,
       productData.unitMappings,
     ),
+    unitMappingQuality: productUnitMappingQuality(productData),
     inventoryEntry: mapRelation(
       productData.inventoryEntry.filter((entry) =>
         isNotDeleted(entry.location),

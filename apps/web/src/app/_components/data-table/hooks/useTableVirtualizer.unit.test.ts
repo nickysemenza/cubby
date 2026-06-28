@@ -55,6 +55,15 @@ describe("resolveVirtualIndex", () => {
       rowIndex: 2,
     });
   });
+
+  it("maps the trailing index to the infinite-scroll sentinel", () => {
+    expect(resolveVirtualIndex(3, null, true, 3)).toEqual({
+      kind: "sentinel",
+    });
+    expect(resolveVirtualIndex(5, grouped, true, 3)).toEqual({
+      kind: "sentinel",
+    });
+  });
 });
 
 describe("flatRowToVirtualIndex", () => {

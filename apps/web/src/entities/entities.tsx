@@ -86,6 +86,8 @@ export const entities: Record<Entity, EntityDefinition> = {
         "fdc_id",
         "price",
         "notes",
+        "location",
+        "unitMappingQuality",
         // `ingredient` sorts by the linked ingredient's name via a correlated
         // subquery in productList (not a real column).
         "ingredient",
@@ -117,6 +119,7 @@ export const entities: Record<Entity, EntityDefinition> = {
         "caloriesTotal",
         "source",
         "yield",
+        "tags",
       ],
     },
   },
@@ -156,7 +159,13 @@ export const entities: Record<Entity, EntityDefinition> = {
     list: {
       defaultSort: "createdAt",
       standardColumns: [],
-      sortableFields: ["createdAt", "name", "type", "lastBulkInventory"],
+      sortableFields: [
+        "createdAt",
+        "name",
+        "type",
+        "lastBulkInventory",
+        "valuation",
+      ],
     },
   },
   inventory: {
@@ -217,6 +226,11 @@ export const entities: Record<Entity, EntityDefinition> = {
       // no "new" - USDA foods are read-only
     },
     // USDA foods are read-only, no detail/list conventions needed
+    list: {
+      defaultSort: "fdc_id",
+      standardColumns: [],
+      sortableFields: ["fdc_id", "description", "data_type", "linkedProducts"],
+    },
   },
   image: {
     label: "Image",

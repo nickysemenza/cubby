@@ -42,6 +42,8 @@ export function USDAFoodList() {
   const tableState = useTableState({ initialSort: "fdc_id" });
 
   const nameFilter = tableState.getColumnFilter("foodinfo-description");
+  const linkedProductsOnly =
+    tableState.getColumnFilter("linkedProducts") === "linked";
 
   // Query data with params from table state
   const query = useQuery(
@@ -57,6 +59,7 @@ export function USDAFoodList() {
         dataTypeFilter: tableState.getColumnFilter("foodInfo-data_type") as
           | DataType
           | undefined,
+        linkedProductsOnly,
         // Default to the user-facing food types; picking a specific type in the
         // column filter overrides this server-side (dataTypeFilter wins).
         foodsOnly: true,
@@ -223,6 +226,15 @@ export function USDAFoodList() {
     createEntityInlineLinkColumn(columnHelper, "linkedProducts", "product", {
       header: "Linked Products",
       className: "w-48 max-w-48",
+      enableSorting: true,
+      filterConfig: {
+        placeholder: "Filter linked...",
+        filterType: "select",
+        options: [
+          { value: "", label: "All foods" },
+          { value: "linked", label: "Linked products only" },
+        ],
+      },
     }),
   ];
 

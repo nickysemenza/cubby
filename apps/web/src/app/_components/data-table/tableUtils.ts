@@ -18,7 +18,7 @@ export const buildSortParams = (
 
 export const defaultPagination: PaginationParams = {
   pageIndex: 0,
-  pageSize: MAX_PAGE_SIZE,
+  pageSize: Math.min(100, MAX_PAGE_SIZE),
 };
 export const defaultSortState = (initialSort?: string): SortingState => [
   { id: initialSort ?? "createdAt", desc: true },

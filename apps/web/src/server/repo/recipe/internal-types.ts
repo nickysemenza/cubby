@@ -65,6 +65,7 @@ export type ExistingRecipeWithSections = typeof recipe.$inferSelect & {
  */
 export interface RecipeFilters {
   nameFilter?: string;
+  tagFilters?: string[];
   // Scope the list to a single cookbook by FK id. Powers the cookbook detail page.
   cookbookId?: CookbookId;
 }

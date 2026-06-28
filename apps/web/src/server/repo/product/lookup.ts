@@ -53,6 +53,28 @@ export const findProductsByFoodIdentifier = async (
   return res.map(dbProductToTopLevelAPI);
 };
 
+export const getFoodLookupsForLinkedProducts = async (
+  db: Database,
+): Promise<FoodLookupParam[]> => {
+  const rows = await getDb(db).query.product.findMany({
+    where: notDeleted(product),
+    columns: {
+      fdc_id: true,
+      upc: true,
+    },
+  });
+
+  return rows.flatMap((row): FoodLookupParam[] => {
+    if (row.fdc_id != null) {
+      return [{ kind: "fdc" as const, fdc_id: row.fdc_id }];
+    }
+    if (row.upc != null) {
+      return [{ kind: "upc" as const, gtin_upc: row.upc }];
+    }
+    return [];
+  });
+};
+
 /**
  * Run a single-product lookup and transform it to the API shape.
  * Shared by all the findProductBy* functions below: the only thing that varies

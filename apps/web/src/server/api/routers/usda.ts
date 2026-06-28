@@ -41,6 +41,7 @@ const list = protectedProcedure
         input.pagination,
         input.filters.foodsOnly,
         input.filters.dataTypes,
+        input.filters.linkedProductsOnly,
       );
 
       return buildPaginatedResponse(input.pagination, data, count);
@@ -67,6 +68,7 @@ const listSummaries = protectedProcedure
         input.pagination,
         input.filters.foodsOnly,
         input.filters.dataTypes,
+        input.filters.linkedProductsOnly,
       );
 
       return buildPaginatedResponse(input.pagination, data, count);

@@ -28,7 +28,8 @@ export type GroupedItem =
  */
 type ResolvedVirtualIndex =
   | { kind: "header"; title: string; count: number; color: string }
-  | { kind: "row"; rowIndex: number };
+  | { kind: "row"; rowIndex: number }
+  | { kind: "sentinel" };
 
 /**
  * Resolve a virtualizer index to its render target. When `groupedItems` is null
@@ -38,7 +39,13 @@ type ResolvedVirtualIndex =
 export function resolveVirtualIndex(
   index: number,
   groupedItems: GroupedItem[] | null,
+  trailingSentinel = false,
+  rowCount = 0,
 ): ResolvedVirtualIndex {
+  const count = groupedItems ? groupedItems.length : rowCount;
+  if (trailingSentinel && index === count) {
+    return { kind: "sentinel" };
+  }
   if (!groupedItems) {
     return { kind: "row", rowIndex: index };
   }
@@ -71,6 +78,8 @@ interface UseTableVirtualizerArgs {
   rowHeight: number;
   /** Disable measurement/virtualization on mobile (renders a different view). */
   isMobile: boolean;
+  /** Add one virtual trailing row for infinite-scroll loading/status. */
+  trailingSentinel?: boolean;
 }
 
 interface UseTableVirtualizerResult {
@@ -105,6 +114,7 @@ export function useTableVirtualizer({
   groupedItems,
   rowHeight,
   isMobile,
+  trailingSentinel = false,
 }: UseTableVirtualizerArgs): UseTableVirtualizerResult {
   // Ref for virtualization scroll container
   const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -142,7 +152,8 @@ export function useTableVirtualizer({
   }, [isMobile, toolbarHeight]);
 
   // Always virtualize for consistent rendering
-  const virtualizerCount = groupedItems ? groupedItems.length : rowCount;
+  const baseCount = groupedItems ? groupedItems.length : rowCount;
+  const virtualizerCount = baseCount + (trailingSentinel ? 1 : 0);
   // Buffer ~one viewport of rows above/below so a fast fling doesn't outrun the
   // rendered range and flash blank. Rows are cheap to render (profiled), so the
   // extra DOM is affordable; clamped to keep tiny/huge viewports sane.
@@ -151,6 +162,9 @@ export function useTableVirtualizer({
   const rowVirtualizer = useWindowVirtualizer({
     count: virtualizerCount,
     estimateSize: (index) => {
+      if (trailingSentinel && index === baseCount) {
+        return rowHeight;
+      }
       if (groupedItems && groupedItems[index]!.kind === "header") {
         return SECTION_HEADER_HEIGHT;
       }
@@ -170,7 +184,8 @@ export function useTableVirtualizer({
     scrollMargin,
     virtualRows,
     totalSize,
-    resolveIndex: (index) => resolveVirtualIndex(index, groupedItems),
+    resolveIndex: (index) =>
+      resolveVirtualIndex(index, groupedItems, trailingSentinel, rowCount),
     flatRowToVirtualIndex: (rowIndex) =>
       flatRowToVirtualIndex(rowIndex, groupedItems),
     scrollToIndex: (index, options) =>

@@ -48,4 +48,5 @@ export {
   findProductByNameFuzzyManufacturer,
   findProductByUPC,
   findProductsByFoodIdentifier,
+  getFoodLookupsForLinkedProducts,
 } from "./lookup";

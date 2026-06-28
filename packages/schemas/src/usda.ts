@@ -22,6 +22,7 @@ export const usdaListInput = z.object({
     dataTypeFilter: dataTypeEnum.optional(),
     dataTypes: z.array(dataTypeEnum).optional(),
     foodsOnly: z.boolean().optional(),
+    linkedProductsOnly: z.boolean().optional(),
   }),
   ...sortPaginationFields,
 });

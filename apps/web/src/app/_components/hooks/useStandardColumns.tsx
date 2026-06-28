@@ -164,7 +164,12 @@ export function useStandardColumns<TData extends BaseListRow>({
 
     // Append unit mappings column if configured
     if (shouldUseMappings && mappingsMap) {
-      cols.push(createUnitMappingsColumn(columnHelper, mappingsMap));
+      cols.push(
+        createUnitMappingsColumn(columnHelper, mappingsMap, {
+          id: entity === "product" ? "unitMappingQuality" : "unitMappings",
+          enableSorting: entity === "product",
+        }),
+      );
     }
 
     // Append createdAt column

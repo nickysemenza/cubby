@@ -1,5 +1,6 @@
 import type { CookbookId } from "@cubby/schemas/identifiers";
 import type { RecipeListItem } from "@cubby/schemas/recipe";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Scale } from "lucide-react";
@@ -71,15 +72,26 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
   const navigate = useNavigate();
   const columnHelper = createColumnHelper<RecipeListItem>();
   const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("recipe");
+  const { data: tags = [] } = useQuery(api.recipe.getAllTags.queryOptions());
+  const tagOptions = useMemo(
+    () => tags.map((tag) => ({ value: tag, label: tag })),
+    [tags],
+  );
 
   const columns = useMemo(
     () => [
       // Tags column
       columnHelper.accessor("tags", {
+        id: "tags",
         header: "Tags",
-        enableSorting: false,
+        enableSorting: true,
         meta: {
           className: "w-48",
+          filterConfig: {
+            placeholder: "Filter by tag...",
+            filterType: "select" as const,
+            options: [{ value: "", label: "All tags" }, ...tagOptions],
+          },
           mobile: { slot: "subtitle", priority: 10 },
         },
         cell: (info) => {
@@ -230,7 +242,7 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
         },
       }),
     ],
-    [columnHelper],
+    [columnHelper, tagOptions],
   );
 
   const deletableConfig = useDeletableConfig({
@@ -253,6 +265,9 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
     queryOptions: api.recipe.list.queryOptions,
     buildFilters: (ts) => ({
       nameFilter: ts.getColumnFilter("name"),
+      tagFilters: ts.getColumnFilter("tags")
+        ? [ts.getColumnFilter("tags") as string]
+        : undefined,
       // Constant scope when rendered on a cookbook page; merged with the
       // table's own name filter so search-within-a-book still works.
       ...(cookbookIdFilter ? { cookbookId: cookbookIdFilter } : {}),
@@ -262,6 +277,12 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
     filters: [
       { id: "name", placeholder: "Filter by recipe name..." },
       { id: "source", placeholder: "Filter by source..." },
+      {
+        id: "tags",
+        placeholder: "Filter by tag...",
+        filterType: "select",
+        options: [{ value: "", label: "All tags" }, ...tagOptions],
+      },
     ],
     bulkActions: {
       actions: [

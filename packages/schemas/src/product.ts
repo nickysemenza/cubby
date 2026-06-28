@@ -194,6 +194,16 @@ export const productFiltersSchema = z.object({
   categoryFilter: productCategory.optional(),
 });
 
+export const productUnitMappingQuality = z.enum([
+  "none",
+  "partial",
+  "good",
+  "complete",
+]);
+export type ProductUnitMappingQuality = z.infer<
+  typeof productUnitMappingQuality
+>;
+
 // Response schema for product data
 export const productTopLevelOut = z.object({
   id: productId,
@@ -329,6 +339,7 @@ export const productListItemOut = z.object({
   unitMappings: z.array(unitMappingOut),
   ingredient: productIngredientOut.nullable(),
   inventoryEntry: z.array(productListInventoryEntryOut),
+  unitMappingQuality: productUnitMappingQuality,
 });
 export type ProductListItem = z.infer<typeof productListItemOut>;
 

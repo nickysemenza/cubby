@@ -72,6 +72,51 @@ import {
   syncProductUnitMappings,
 } from "./update-helpers";
 
+const productListOrderBy = (sort: SortParams, groupBy?: string) => {
+  const dirSql =
+    sort.direction === "asc" ? "asc nulls last" : "desc nulls last";
+
+  if (sort.orderBy === "location") {
+    return [
+      sql.raw(
+        `(SELECT min(l."name") FROM "InventoryEntry" ie ` +
+          `JOIN "Location" l ON l."id" = ie."locationId" AND l."deletedAt" IS NULL ` +
+          `WHERE ie."productId" = "product"."id" AND ie."deletedAt" IS NULL) ${dirSql}`,
+      ),
+      sql.raw(`"product"."name" asc`),
+    ];
+  }
+
+  if (sort.orderBy === "unitMappingQuality") {
+    return [
+      sql.raw(
+        `(CASE ` +
+          `WHEN (SELECT count(*) FROM "ProductUnitMappings" pum WHERE pum."productId" = "product"."id" AND pum."deletedAt" IS NULL) >= 3 THEN 3 ` +
+          `WHEN (SELECT count(*) FROM "ProductUnitMappings" pum WHERE pum."productId" = "product"."id" AND pum."deletedAt" IS NULL) >= 2 THEN 2 ` +
+          `WHEN (SELECT count(*) FROM "ProductUnitMappings" pum WHERE pum."productId" = "product"."id" AND pum."deletedAt" IS NULL) >= 1 ` +
+          `OR "product"."price" IS NOT NULL OR "product"."fdc_id" IS NOT NULL OR "product"."upc" IS NOT NULL THEN 1 ` +
+          `ELSE 0 END) ${dirSql}`,
+      ),
+      sql.raw(`"product"."name" asc`),
+    ];
+  }
+
+  if (sort.orderBy === "ingredient") {
+    return [
+      sql.raw(
+        `(SELECT i."name" FROM "Ingredient" i WHERE i."id" = "product"."ingredientId") ${dirSql}`,
+      ),
+    ];
+  }
+
+  return buildOrderBy(
+    product,
+    sort,
+    [...getSortableFields("product")],
+    groupBy,
+  );
+};
+
 export const getProductByID = async (db: Database, id: ProductId) => {
   const res = await getDb(db).query.product.findFirst({
     where: and(eq(product.id, id), notDeleted(product)),
@@ -230,23 +275,9 @@ export const productList = async (
     [category !== undefined ? eq(product.category, category) : undefined],
   );
 
-  // Build order by using central sortableFields config. `ingredient` isn't a
-  // column — sort by the linked ingredient's name via a correlated subquery
-  // (groupBy isn't combined with this sort in the UI). It MUST be sql.raw: the
-  // relational query builder (query.product.findMany) rewrites column refs in a
-  // custom orderBy to the root alias ("product"), mangling cross-table refs, so we
-  // hand-qualify "Ingredient" and correlate to "product"."ingredientId". A raw
-  // string is opaque to that rewriter. Everything else uses buildOrderBy.
-  const orderByArray =
-    sort.orderBy === "ingredient"
-      ? [
-          sql.raw(
-            `(SELECT i."name" FROM "Ingredient" i WHERE i."id" = "product"."ingredientId") ${
-              sort.direction === "asc" ? "asc nulls last" : "desc nulls last"
-            }`,
-          ),
-        ]
-      : buildOrderBy(product, sort, [...getSortableFields("product")], groupBy);
+  // Special list sort keys are correlated subqueries because Drizzle's
+  // relational query builder rewrites non-raw column refs to the root alias.
+  const orderByArray = productListOrderBy(sort, groupBy);
 
   const { take, skip } = buildTakeSkip(pagination);
 
@@ -296,19 +327,9 @@ export const productSearch = async (
     [category !== undefined ? eq(product.category, category) : undefined],
   );
 
-  // Same ordering rules as productList (incl. the linked-ingredient subquery),
-  // so picker results match the table's sort. The raw subquery references the
-  // "product" root alias, which holds with no relations selected.
-  const orderByArray =
-    sort.orderBy === "ingredient"
-      ? [
-          sql.raw(
-            `(SELECT i."name" FROM "Ingredient" i WHERE i."id" = "product"."ingredientId") ${
-              sort.direction === "asc" ? "asc nulls last" : "desc nulls last"
-            }`,
-          ),
-        ]
-      : buildOrderBy(product, sort, [...getSortableFields("product")]);
+  // Same ordering rules as productList, so picker results match the table's sort
+  // for any shared query params.
+  const orderByArray = productListOrderBy(sort);
 
   const { take, skip } = buildTakeSkip(pagination);
 

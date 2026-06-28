@@ -1,4 +1,3 @@
-import { MAX_PAGE_SIZE } from "@cubby/schemas/pagination";
 import type { SortingState } from "@tanstack/react-table";
 import { describe, expect, it } from "vitest";
 import {
@@ -67,7 +66,7 @@ describe("defaultPagination", () => {
   it("has correct default values", () => {
     expect(defaultPagination).toEqual({
       pageIndex: 0,
-      pageSize: MAX_PAGE_SIZE,
+      pageSize: 100,
     });
   });
 });

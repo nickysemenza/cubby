@@ -97,8 +97,8 @@ export function LocationList() {
           },
         },
       }),
-      columnHelper.display({
-        id: "inventory_value",
+      columnHelper.accessor((row) => row.valuation?.directValuation ?? null, {
+        id: "valuation",
         header: "Valuation",
         cell: (info) => (
           <InventoryValuationSummary
@@ -252,6 +252,13 @@ export function LocationList() {
     bulkActions,
     extraActions,
     infinite: true,
+    initialColumnVisibility: {
+      image: false,
+      children: false,
+      aiDescription: false,
+      createdAt: false,
+      inventoryEntries: false,
+    },
     groupConfig,
   });
 

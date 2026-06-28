@@ -292,6 +292,8 @@ export function createEntityInlineLinkColumn<
   options?: {
     header?: string;
     className?: string;
+    filterConfig?: FilterConfig;
+    enableSorting?: boolean;
     /** Optional filter to deduplicate items */
     dedupe?: boolean;
     /** Mobile projection metadata override */
@@ -303,11 +305,12 @@ export function createEntityInlineLinkColumn<
     {
       id: String(accessor),
       header: options?.header,
-      enableSorting: false,
+      enableSorting: options?.enableSorting ?? false,
       meta: {
         className: options?.className
           ? `${options.className} overflow-hidden`
           : undefined,
+        filterConfig: options?.filterConfig,
         mobile: options?.mobile,
       },
       cell: (info) => {
@@ -341,6 +344,7 @@ export function createUnitMappingsColumn<T extends { id: string }>(
     id?: string;
     header?: string;
     className?: string;
+    enableSorting?: boolean;
     /** Show compact view (no grid) - defaults to true for table columns */
     compact?: boolean;
   },
@@ -349,6 +353,7 @@ export function createUnitMappingsColumn<T extends { id: string }>(
   return columnHelper.display({
     id: options?.id ?? "unitMappings",
     header: options?.header ?? "Unit Mappings",
+    enableSorting: options?.enableSorting ?? false,
     meta: {
       className:
         options?.className ?? (compact ? "min-w-0 w-32" : "w-96 max-w-96"),
@@ -406,8 +411,10 @@ export function createInventoryEntriesColumn<
     entry: TEntry,
   ) => Extract<InventoryRelatedEntity, { entity: TEntity }>["data"] | undefined,
   options?: {
+    id?: string;
     header?: string;
     className?: string;
+    enableSorting?: boolean;
     /** Layout variant: 'stacked' shows amounts then links, 'inline' shows amount+link per row */
     layout?: "stacked" | "inline";
     /** Mobile projection metadata override */
@@ -417,10 +424,10 @@ export function createInventoryEntriesColumn<
   const layout = options?.layout ?? "inline";
 
   return columnHelper.accessor((row) => row[accessor] as TEntry[], {
-    id: String(accessor),
+    id: options?.id ?? String(accessor),
     header:
       options?.header ?? (entity === "location" ? "Locations" : "Products"),
-    enableSorting: false,
+    enableSorting: options?.enableSorting ?? false,
     meta: {
       className: options?.className ?? "min-w-0 w-40 max-w-56",
       mobile: options?.mobile,

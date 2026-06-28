@@ -25,7 +25,10 @@ import type { Database } from "~/server/db";
 import { db } from "~/server/db";
 import { createAppError, isExpectedTRPCError } from "~/server/errors/app-error";
 import { translateDatabaseError } from "~/server/errors/db-errors";
-import { findProductsByFoodIdentifier } from "~/server/repo/product";
+import {
+  findProductsByFoodIdentifier,
+  getFoodLookupsForLinkedProducts,
+} from "~/server/repo/product";
 import { AvailabilityService } from "~/server/services/availability.service";
 import { IngredientService } from "~/server/services/ingredient.service";
 import { LocationValuationService } from "~/server/services/location-valuation.service";
@@ -60,9 +63,13 @@ export const buildCrudServices = (
     env.UPC_LOOKUP_API_KEY,
     { fetcher: getBindingFetcher("UPC_LOOKUP") },
   );
-  const usdaService = new USDAService(usdaClient, async (lookup) => {
-    return await findProductsByFoodIdentifier(db, lookup);
-  });
+  const usdaService = new USDAService(
+    usdaClient,
+    async (lookup) => {
+      return await findProductsByFoodIdentifier(db, lookup);
+    },
+    async () => await getFoodLookupsForLinkedProducts(db),
+  );
   const ingredient = new IngredientService(db, usdaClient);
   const services = {
     product: createProductService(db, usdaClient),

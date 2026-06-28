@@ -3,7 +3,7 @@ import { FilterableCombobox } from "~/components/ui/combobox";
 import { cn } from "~/lib/utils";
 
 /** Page-size options offered across the data-table chrome. */
-const PAGE_SIZES = [10, 50, 100, 1000];
+const PAGE_SIZES = [25, 50, 100, 250, 500];
 
 /**
  * Compact rows-per-page selector. Shared by the sticky toolbar (top) and the

@@ -12,7 +12,6 @@ import { createColumnHelper } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
 import { entities } from "~/entities/entities";
-import { useIsMobile } from "~/hooks/useMobile";
 import type { QueryTiming } from "~/lib/query-timing";
 import { BulkActionBar } from "../data-table/BulkActionBar";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
@@ -160,14 +159,10 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
 }: UseEntityListOptions<TData, TFilters>): UseEntityListReturn<TData> {
   const [grouped, setGrouped] = useState(false);
 
-  // Viewport-aware data mode: mobile uses infinite scroll-to-load; desktop uses
-  // server-backed pagination (the footer page controls drive one page at a
-  // time). Previously `infinite` applied to both viewports, so desktop eagerly
-  // pulled EVERY page up front to back its client pagination. `useIsMobile` is
-  // false on SSR/first paint, so desktop is correct immediately and mobile
-  // upgrades to infinite after hydration.
-  const isMobile = useIsMobile();
-  const useInfiniteMode = infinite && isMobile;
+  // Server-backed infinite mode accumulates pages on both desktop and mobile.
+  // The table still virtualizes the accumulated rows, so desktop does not need
+  // the old sticky pager or a 500-row first page to feel continuous.
+  const useInfiniteMode = infinite;
 
   const onGroupedChange = useCallback((value: boolean) => {
     setGrouped(value);

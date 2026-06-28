@@ -264,10 +264,44 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
 
   // Keyboard navigation: focused row index (desktop only)
   const [focusedRowIndex, setFocusedRowIndex] = useState<number | null>(null);
+  const desktopInfiniteObserverRef = useRef<IntersectionObserver | null>(null);
 
-  // `infiniteScroll` is now only supplied on mobile (useEntityList picks
-  // server-backed pagination on desktop), so the desktop eager-fetch-all-pages
-  // loop is gone — mobile scroll-to-load lives in MobileListScreen.
+  const fetchNextPage = infiniteScroll?.fetchNextPage;
+  const hasNextPage = infiniteScroll?.hasNextPage ?? false;
+  const isFetchingNextPage = infiniteScroll?.isFetchingNextPage ?? false;
+  const hasDesktopInfiniteSentinel =
+    !isMobile && !!infiniteScroll && (hasNextPage || isFetchingNextPage);
+
+  const handleDesktopInfiniteIntersect = useCallback(
+    (entries: IntersectionObserverEntry[]) => {
+      if (entries[0]?.isIntersecting && hasNextPage && !isFetchingNextPage) {
+        fetchNextPage?.();
+      }
+    },
+    [fetchNextPage, hasNextPage, isFetchingNextPage],
+  );
+
+  const setDesktopInfiniteSentinel = useCallback(
+    (sentinel: HTMLDivElement | null) => {
+      desktopInfiniteObserverRef.current?.disconnect();
+      desktopInfiniteObserverRef.current = null;
+      if (isMobile || !infiniteScroll || !sentinel) return;
+
+      const observer = new IntersectionObserver(
+        handleDesktopInfiniteIntersect,
+        {
+          rootMargin: "600px",
+        },
+      );
+      observer.observe(sentinel);
+      desktopInfiniteObserverRef.current = observer;
+    },
+    [isMobile, infiniteScroll, handleDesktopInfiniteIntersect],
+  );
+
+  useEffect(() => {
+    return () => desktopInfiniteObserverRef.current?.disconnect();
+  }, []);
 
   const { rows } = table.getRowModel();
 
@@ -291,6 +325,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     groupedItems,
     rowHeight: dConfig.rowHeight,
     isMobile,
+    trailingSentinel: hasDesktopInfiniteSentinel,
   });
 
   // Save scroll position on unmount for navigate-back restoration. The page is
@@ -329,10 +364,10 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
   }, [pathname, rows.length, isMobile]);
 
   const styles = {
-    table: "text-xs leading-tight border-collapse border-spacing-0",
+    table: "border-separate border-spacing-0 text-xs leading-tight",
     header:
-      "h-8 px-2 py-1 text-2xs font-mono font-semibold uppercase tracking-wider text-slate border-b-[3px] border-b-foreground",
-    filterRow: "h-7 px-2 py-0.5 border-b border-border" /* tight */,
+      "h-8 bg-card px-2 py-1 text-2xs font-mono font-semibold uppercase tracking-wider text-slate border-b-[3px] border-b-foreground",
+    filterRow: "h-7 bg-card px-2 py-0.5 border-b border-border" /* tight */,
     cell: cn(
       dConfig.cellClass,
       "overflow-hidden",
@@ -405,18 +440,31 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     }
 
     // Always use virtualized rendering for consistent behavior
+    const topSpacerHeight =
+      virtualRows.length > 0 ? virtualRows[0]!.start - scrollMargin : 0;
+    const bottomSpacerHeight =
+      virtualRows.length > 0
+        ? Math.max(
+            0,
+            totalSize - (virtualRows[virtualRows.length - 1]?.end ?? 0),
+          )
+        : 0;
+    const bottomSpacerStyle = infiniteScroll
+      ? undefined
+      : ghostRowsStyle(dConfig.rowHeight);
+
     return (
       <>
         {/* Top padding row for scroll position. Window-virtualizer offsets are
             measured from the document top, so subtract the table's scrollMargin
             to get the gap within the table body. */}
-        {virtualRows.length > 0 && virtualRows[0]!.start - scrollMargin > 0 && (
+        {topSpacerHeight > 0 && (
           <tr>
             <td
               colSpan={colSpan}
               className="border-0 p-0"
               style={{
-                height: `${virtualRows[0]!.start - scrollMargin}px`,
+                height: `${topSpacerHeight}px`,
                 ...ghostRowsStyle(dConfig.rowHeight),
               }}
             />
@@ -426,6 +474,23 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
         {/* Render only visible rows (with optional group headers) */}
         {virtualRows.map((virtualRow) => {
           const item = resolveIndex(virtualRow.index);
+          if (item.kind === "sentinel") {
+            return (
+              <TableRow
+                key="infinite-sentinel"
+                className="border-border border-b bg-background"
+                style={{ height: `${virtualRow.size}px` }}
+              >
+                <TableCell
+                  colSpan={colSpan}
+                  className="text-center text-muted-foreground text-xs"
+                >
+                  <div ref={setDesktopInfiniteSentinel} className="h-px" />
+                  {isFetchingNextPage ? "Loading more..." : null}
+                </TableCell>
+              </TableRow>
+            );
+          }
           if (item.kind === "header") {
             return (
               <TableRow
@@ -464,14 +529,14 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
         })}
 
         {/* Bottom padding row for remaining scroll space */}
-        {virtualRows.length > 0 && (
+        {bottomSpacerHeight > 0 && (
           <tr>
             <td
               colSpan={colSpan}
               className="border-0 p-0"
               style={{
-                height: `${totalSize - (virtualRows[virtualRows.length - 1]?.end ?? 0)}px`,
-                ...ghostRowsStyle(dConfig.rowHeight),
+                height: `${bottomSpacerHeight}px`,
+                ...bottomSpacerStyle,
               }}
             />
           </tr>
@@ -499,7 +564,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
               filters reset, the bulk-action bar, and a page-size control. */}
           <div
             ref={toolbarRef}
-            className="sticky top-[51px] z-30 border-border border-b bg-background"
+            className="sticky top-[51px] z-40 border-border border-b bg-background"
           >
             <DataTableToolbar
               table={table}
@@ -523,7 +588,9 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                       )}
                     </Button>
                   )}
-                  <RowsPerPageSelect table={table} className="h-7 w-16" />
+                  {!infiniteScroll && (
+                    <RowsPerPageSelect table={table} className="h-7 w-16" />
+                  )}
                 </div>
               }
               actions={actions}
@@ -585,7 +652,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
               containerClassName="overflow-visible"
             >
               <TableHeader
-                className="sticky z-20 bg-card [&_tr]:border-b-0"
+                className="sticky z-30 bg-card shadow-[0_1px_0_var(--border)] [&_th]:bg-card [&_tr]:border-b-0"
                 style={{ top: "var(--table-header-top)" }}
               >
                 {table.getHeaderGroups().map((headerGroup) => {
@@ -735,6 +802,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
               <TableBody>{renderTableBody()}</TableBody>
               {/* Footer aggregation row — only when data is loaded */}
               {rows.length > 0 &&
+                !infiniteScroll &&
                 (() => {
                   const footerGroups = table.getFooterGroups();
                   const hasFooter = footerGroups.some((fg) =>
@@ -796,7 +864,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
 
       {/* Desktop: persistent pagination/status bar pinned to the viewport
           bottom (page-size + page nav stay reachable without scrolling). */}
-      {!isMobile && (
+      {!isMobile && !infiniteScroll && (
         <div className="sticky bottom-0 z-30 border-[var(--border)] border-t bg-background px-2 py-2">
           <DataTablePagination table={table} timing={timing} />
         </div>

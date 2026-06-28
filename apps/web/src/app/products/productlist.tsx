@@ -242,7 +242,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
         "inventoryEntry",
         "location",
         (e) => e.location,
-        {},
+        { id: "location", enableSorting: true },
       ),
     ],
     [columnHelper],
