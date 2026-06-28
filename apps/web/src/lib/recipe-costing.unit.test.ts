@@ -376,6 +376,46 @@ describe("calculateTotals with sub-recipes", () => {
     expect(result.totalIngredients).toBe(2);
   });
 
+  it("marks a partial sub-recipe row missing while preserving numeric totals", () => {
+    const tomato = ingredientFromMappings(
+      "tomato",
+      "tomato",
+      [
+        { a: { value: 1, unit: "cup" }, b: { value: 100, unit: "gram" } },
+        { a: { value: 100, unit: "g" }, b: { value: 50, unit: "kcal" } },
+      ],
+      { "208": 50 },
+    );
+    const sauce = makeSubRecipe(
+      "sauce",
+      "tomato sauce",
+      { value: 4, unit: "cup" },
+      [makeEntry("tomato", "tomato", [{ value: 4, unit: "cup" }])],
+    );
+    const row = makeSubRecipeEntry(sauce, [{ value: 2, unit: "cup" }]);
+
+    const costing = costRecipe([row], { tomato }, { sauce });
+
+    expect(costing.totals.price).toBe(0);
+    expect(costing.totals.weight).toBeCloseTo(200, 1);
+    expect(costing.totals.nutrients["208"]).toBeCloseTo(100, 1);
+    expect(costing.totals.missingByType).toEqual({
+      price: ["sub-recipe"],
+      weight: [],
+      nutrients: [],
+    });
+    expect(costing.rows[0]?.totalsMissing).toEqual({
+      price: true,
+      weight: false,
+      nutrients: false,
+    });
+    expect(costing.totals.diagnostics[0]?.missing).toEqual({
+      price: true,
+      weight: false,
+      nutrients: false,
+    });
+  });
+
   it("guards against cycles (A → B → A) without hanging", () => {
     const recipeA = makeSubRecipe("recA", "A", { value: 1, unit: "batch" }, []);
     const recipeB = makeSubRecipe("recB", "B", { value: 1, unit: "batch" }, [

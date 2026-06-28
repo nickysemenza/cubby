@@ -14,7 +14,7 @@ import {
 } from "~/lib/recipe-costing";
 
 // Shared fixture builders for the recipe-costing test suites
-// (recipe-costing.unit.test.ts and recipe-costing-gaps.unit.test.ts).
+// (recipe-costing.unit.test.ts and recipe-totals-gaps.unit.test.ts).
 //
 // Almost every field on IngredientWithFoodOut / SectionIngredientOut / RecipeOut
 // is irrelevant scaffolding for these tests. These builders state the defaults

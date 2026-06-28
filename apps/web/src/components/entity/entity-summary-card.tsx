@@ -175,7 +175,7 @@ const formatRecipeSummary = (data: RecipeSummaryData): SummaryItem[] => {
 };
 
 // The per-ingredient "missing data" breakdown moved into the recipe view's
-// "N block costing" coverage popover (RecipeCostingCoverage), which carries the
+// "N block totals" coverage popover (RecipeCostingCoverage), which carries the
 // same names plus the highest-leverage fix + a deep-link — so the summary card
 // stays a clean four-stat grid.
 

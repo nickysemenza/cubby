@@ -25,11 +25,11 @@ import {
   computeRecipeCosting,
   flattenSections,
 } from "~/lib/recipe-costing";
-import { deriveCostingGaps } from "~/lib/recipe-costing-gaps";
+import { deriveRecipeTotalsGaps } from "~/lib/recipe-totals-gaps";
 import { AuditLogList } from "../audit-log/audit-log-list";
 import EntityImageList from "../EntityImageList";
 import { useRecipeCostingData } from "../hooks/useRecipeCostingData";
-import { CostingCoverageButton } from "./RecipeCostingCoverage";
+import { RecipeTotalsCoverageButton } from "./RecipeCostingCoverage";
 import { RecipeMagazineView } from "./RecipeMagazineView";
 import { RecipePrepSheetView } from "./RecipePrepSheetView";
 import {
@@ -172,12 +172,12 @@ const RecipeDetailInner: React.FC<{
   const totals = costing?.totals ?? null;
   const ingredientDataItems = costing?.rows ?? [];
 
-  // Prioritized mapping suggestions for every ingredient this recipe can't
-  // fully cost (no product, missing USDA link, missing price/weight mapping).
+  // Prioritized suggestions for every row blocking complete totals: ingredient
+  // enrichment plus sub-recipe amount/yield/child-total fixes.
   // One source of truth — the coverage popover and the weight-scale popover below
   // both read from this, so they never disagree.
-  const costingGaps = useMemo(
-    () => (costing && ingMap ? deriveCostingGaps(costing, ingMap) : []),
+  const totalsGaps = useMemo(
+    () => (costing && ingMap ? deriveRecipeTotalsGaps(costing, ingMap) : []),
     [costing, ingMap],
   );
 
@@ -185,14 +185,18 @@ const RecipeDetailInner: React.FC<{
   // line can't reach grams, deep-linked to where the mapping is added.
   const missingWeightLinks = useMemo<MissingWeightLink[]>(
     () =>
-      costingGaps
-        .filter((gap) => gap.missing.weight)
-        .map((gap) => ({
-          ingredientId: gap.ingredientId,
-          name: gap.name,
-          productId: gap.productId,
-        })),
-    [costingGaps],
+      totalsGaps.flatMap((gap) =>
+        gap.source === "ingredient" && gap.missing.weight
+          ? [
+              {
+                ingredientId: gap.ingredientId,
+                name: gap.name,
+                productId: gap.productId,
+              },
+            ]
+          : [],
+      ),
+    [totalsGaps],
   );
 
   // Export format: spec ⇒ the "nested" markdown flavor; everything else uses the
@@ -213,9 +217,12 @@ const RecipeDetailInner: React.FC<{
           <RecipeTagList tags={recipe.tags} />
         )}
         <Row align="center" wrap gap="sm" className="ml-auto">
-          {/* "Why isn't this costed?" — one compact popover on every view, so the
+          {/* "Why aren't these totals complete?" — one compact popover on every view, so the
               affordance is always one click away without the bulky inline card. */}
-          <CostingCoverageButton gaps={costingGaps} />
+          <RecipeTotalsCoverageButton
+            gaps={totalsGaps}
+            currentRecipeId={recipe.id}
+          />
           <RecipeScaleControl
             recipe={recipe}
             totals={totals}

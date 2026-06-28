@@ -4,53 +4,84 @@ import type { RecipeCosting } from "~/lib/recipe-costing";
 import { wasm } from "~/lib/wasm";
 
 /**
- * The single highest-leverage fix we suggest for an uncosted ingredient.
+ * The single highest-leverage fix we suggest for an ingredient whose totals are
+ * incomplete.
  *
  * Ordering reflects leverage: linking a product (and a USDA food) unlocks the
  * most at once, so it ranks above adding individual mappings. The two price
  * variants are unit-aware — a per-each price costs a *count* line ("2 zucchini")
  * directly, but can't reach a *weight/volume* line ("1 tsp cumin"), which needs
- * a purchase mapping that bridges weight↔money (e.g. "4 oz = $5.99").
+ * a purchase mapping that bridges weight<->money (e.g. "4 oz = $5.99").
  */
-export type CostingGapKind =
-  | "no-product" // ingredient has no product → link one
-  | "link-usda" // product(s) exist but none USDA-linked, and weight is missing
-  | "set-per-item-price" // count line, no per-each price yet
-  | "add-purchase-mapping" // weight/volume line, no money path → package mapping
-  | "add-weight-mapping" // has price but can't reach grams
-  | "add-volume-mapping"; // costed & weighable, but an applicable volume is unreachable
+export type IngredientTotalsGapKind =
+  | "no-product"
+  | "link-usda"
+  | "set-per-item-price"
+  | "add-purchase-mapping"
+  | "add-weight-mapping"
+  | "add-volume-mapping";
+
+export type RecipeTotalsGapKind =
+  | IngredientTotalsGapKind
+  | "set-subrecipe-amount"
+  | "set-subrecipe-yield"
+  | "fix-subrecipe-totals";
 
 /** What kind of measurement the recipe line uses, for tailoring price copy. */
 export type LineKind = "count" | "weight" | "volume";
 
-export interface CostingGap {
-  ingredientId: string;
-  name: string;
-  /** Single-product → deep-link target; null routes to the ingredient hub. */
-  productId: string | null;
-  /** The recipe line's primary unit (drives the example in the suggestion). */
-  lineUnit: string | null;
-  lineKind: LineKind;
-  /** Which measures the engine couldn't resolve for this ingredient. */
-  missing: {
-    price: boolean;
-    weight: boolean;
-    nutrients: boolean;
-    volume: boolean;
-  };
-  /** The prioritized fix to suggest. */
-  kind: CostingGapKind;
-}
+type MissingTotals = {
+  price: boolean;
+  weight: boolean;
+  nutrients: boolean;
+  volume: boolean;
+};
+
+export type RecipeTotalsGap =
+  | {
+      source: "ingredient";
+      ingredientId: string;
+      name: string;
+      /** Single-product -> deep-link target; null routes to the ingredient hub. */
+      productId: string | null;
+      /** The recipe line's primary unit (drives the example in the suggestion). */
+      lineUnit: string | null;
+      lineKind: LineKind;
+      /** Which totals measures are incomplete for this ingredient. */
+      missing: MissingTotals;
+      /** The prioritized fix to suggest. */
+      kind: IngredientTotalsGapKind;
+    }
+  | {
+      source: "recipe";
+      /** The parent section-ingredient row id. */
+      rowId: string;
+      /** The sub-recipe being referenced. */
+      recipeId: string;
+      name: string;
+      lineUnit: string | null;
+      lineKind: LineKind;
+      /** Which totals measures are incomplete for this sub-recipe row. */
+      missing: MissingTotals;
+      /** The prioritized fix to suggest. */
+      kind:
+        | "set-subrecipe-amount"
+        | "set-subrecipe-yield"
+        | "fix-subrecipe-totals";
+    };
 
 // Priority rank for sorting — lower sorts first (highest leverage on top).
-const KIND_RANK: Record<CostingGapKind, number> = {
+const KIND_RANK: Record<RecipeTotalsGapKind, number> = {
   "no-product": 0,
+  "set-subrecipe-amount": 0,
+  "set-subrecipe-yield": 0,
+  "fix-subrecipe-totals": 1,
   "link-usda": 1,
   "set-per-item-price": 2,
   "add-purchase-mapping": 2,
   "add-weight-mapping": 3,
-  // Volume is never a costing blocker (the per-recipe path never emits it); it
-  // only surfaces in the global workbench, so its sort rank is nominal.
+  // Volume is never a recipe-totals blocker; it only surfaces in the global
+  // workbench, so its sort rank is nominal.
   "add-volume-mapping": 4,
 };
 
@@ -66,7 +97,7 @@ const classifyLine = (unit: string | null): LineKind => {
     if (k === "weight") return "weight";
     if (k === "volume") return "volume";
   } catch {
-    // Unknown unit → treat as a count (the common "2 eggs" / "1 zucchini" case).
+    // Unknown unit -> treat as a count (the common "2 eggs" / "1 zucchini" case).
   }
   return "count";
 };
@@ -77,34 +108,24 @@ interface GapAccumulator {
   lineUnit: string | null;
   lineKind: LineKind;
   products: IngredientWithFoodLeanOut["product"];
-  // `volume` is always false on the recipe path — volume isn't a costing blocker
-  // for a specific line; it's a global-workbench-only signal (classifyIngredientFix).
-  missing: {
-    price: boolean;
-    weight: boolean;
-    nutrients: boolean;
-    volume: boolean;
-  };
+  // `volume` is always false on the recipe path — volume isn't a totals blocker
+  // for a specific line; it's a global-workbench-only signal.
+  missing: MissingTotals;
 }
 
 /**
  * The shared classifier inputs — just the signals the fix decision needs, so the
- * per-recipe path (deriveCostingGaps) and the global workbench path
+ * per-recipe path (deriveRecipeTotalsGaps) and the global workbench path
  * (classifyIngredientFix) share one body. `GapAccumulator` is a structural
  * supertype, so it passes straight through.
  */
 interface FixInputs {
   products: IngredientWithFoodLeanOut["product"];
-  missing: {
-    price: boolean;
-    weight: boolean;
-    nutrients: boolean;
-    volume: boolean;
-  };
+  missing: MissingTotals;
   lineKind: LineKind;
 }
 
-const classifyKind = (acc: FixInputs): CostingGapKind | "done" => {
+const classifyKind = (acc: FixInputs): IngredientTotalsGapKind | "done" => {
   if (acc.products.length === 0) return "no-product";
 
   // A product is USDA-associated if it carries (or intends to carry) food data:
@@ -114,13 +135,13 @@ const classifyKind = (acc: FixInputs): CostingGapKind | "done" => {
   );
   const hasPrice = acc.products.some((p) => p.price != null);
 
-  // Weight missing with no USDA link → linking adds portion (+ nutrient)
+  // Weight missing with no USDA link -> linking adds portion (+ nutrient)
   // conversions out of the box, the single biggest win.
   if (acc.missing.weight && !usdaLinked) return "link-usda";
 
   if (acc.missing.price) {
     // A per-each price can't cost a weight/volume line; it needs a purchase
-    // mapping that bridges weight↔money. Same when a count line already has a
+    // mapping that bridges weight<->money. Same when a count line already has a
     // price but still can't resolve (unit mismatch) — a bridging mapping helps.
     if (acc.lineKind === "weight" || acc.lineKind === "volume") {
       return "add-purchase-mapping";
@@ -128,10 +149,10 @@ const classifyKind = (acc: FixInputs): CostingGapKind | "done" => {
     return hasPrice ? "add-purchase-mapping" : "set-per-item-price";
   }
 
-  // Price resolved. Name the *actually*-missing measure rather than assuming
+  // Price resolved. Name the actually-missing measure rather than assuming
   // weight: a direct weight mapping when weight is unreachable, else a volume
   // mapping when an applicable volume is missing. Nothing measurable left (only
-  // nutrients, or volume that's N/A) → "done": no user-actionable costing fix.
+  // nutrients, or volume that's N/A) -> "done": no user-actionable totals fix.
   if (acc.missing.weight) return "add-weight-mapping";
   if (acc.missing.volume) return "add-volume-mapping";
   return "done";
@@ -154,7 +175,7 @@ export const classifyIngredientFix = (input: {
   /** Kinds graded against (gradedKinds) — an N/A volume is excluded here. */
   applicable: readonly BaseKind[];
   sampleLineKind: LineKind;
-}): CostingGapKind | "done" => {
+}): IngredientTotalsGapKind | "done" => {
   if (input.products.length === 0) return "no-product";
   if (input.coverage.tier === "complete") return "done";
 
@@ -175,70 +196,89 @@ export const classifyIngredientFix = (input: {
 };
 
 /**
- * Derive the prioritized list of mapping suggestions for a recipe's uncosted
- * ingredients. Walks the engine's per-row results once (the reliable id-bearing
- * signal — same source as the old weight-only `missingWeightLinks`), dedupes by
- * ingredient, and classifies each into its single highest-leverage fix.
+ * Derive the prioritized list of fixes for a recipe's incomplete totals. Walks
+ * the engine's per-row results once (the reliable id-bearing signal), dedupes
+ * ingredient rows by ingredient, and keeps sub-recipe rows as their own blockers
+ * because their fixes live on recipes rather than products/ingredients.
  *
- * Only ingredients missing a price OR a weight are returned (the costing-
- * relevant gaps); a nutrient-only miss on an already-linked product isn't user-
- * actionable here, so it's skipped. Sub-recipe rows are a different problem and
- * are ignored, as are unmeasured lines (to-taste seasoning, garnish, …) that
- * carry no amount — no mapping can cost a quantity that was never given.
+ * Ingredient rows only return price/weight blockers; a nutrient-only miss on an
+ * already-linked product isn't user-actionable here. Sub-recipe rows do return
+ * nutrient-only misses because the child recipe's own totals popover can explain
+ * the underlying ingredient fixes.
  */
-export const deriveCostingGaps = (
+export const deriveRecipeTotalsGaps = (
   costing: RecipeCosting,
   ingMap: Record<string, IngredientWithFoodLeanOut>,
-): CostingGap[] => {
-  const byId = new Map<string, GapAccumulator>();
+): RecipeTotalsGap[] => {
+  const byIngredientId = new Map<string, GapAccumulator>();
+  const recipeGaps: RecipeTotalsGap[] = [];
 
   for (const row of costing.rows) {
-    if (row.type !== "ingredient") continue;
-    // Skip unmeasured lines (salt "to taste", a garnish — no amount at all). No
-    // mapping can cost a quantity that was never given, so suggesting one is just
-    // noise; the engine already treats these as estimates.
+    const missing = {
+      price: row.totalsMissing.price,
+      weight: row.totalsMissing.weight,
+      nutrients: row.totalsMissing.nutrients,
+      volume: false,
+    };
+
+    if (row.type === "recipe") {
+      if (!missing.price && !missing.weight && !missing.nutrients) continue;
+      const lineUnit = row.amounts[0]?.unit ?? null;
+      const kind =
+        row.amounts.length === 0
+          ? "set-subrecipe-amount"
+          : !row.recipe.yield
+            ? "set-subrecipe-yield"
+            : "fix-subrecipe-totals";
+      recipeGaps.push({
+        source: "recipe",
+        rowId: row.id,
+        recipeId: row.recipe.id,
+        name: row.recipe.name,
+        lineUnit,
+        lineKind: classifyLine(lineUnit),
+        missing,
+        kind,
+      });
+      continue;
+    }
+
+    // Skip unmeasured ingredient lines (salt "to taste", garnish, etc.). No
+    // mapping can cost a quantity that was never given, so suggesting one is
+    // noise; the engine may already apply an estimate for recognized usages.
     if (row.amounts.length === 0) continue;
-    const pi = row.priceInfo;
-    const priceMissing = !pi || pi.price.isErr();
-    const weightMissing = !pi || pi.gram.isErr();
-    const nutrientMissing = !pi || pi.nutrient.isErr();
-    if (!priceMissing && !weightMissing) continue; // costed & weighable → fine
+    if (!missing.price && !missing.weight) continue;
 
     const id = row.ingredient.id;
-    const existing = byId.get(id);
+    const existing = byIngredientId.get(id);
     if (existing) {
       // Same ingredient on multiple lines: a gap in any line is a gap overall.
-      existing.missing.price ||= priceMissing;
-      existing.missing.weight ||= weightMissing;
-      existing.missing.nutrients ||= nutrientMissing;
-      // volume stays false — not a recipe-costing concern (see GapAccumulator).
+      existing.missing.price ||= missing.price;
+      existing.missing.weight ||= missing.weight;
+      existing.missing.nutrients ||= missing.nutrients;
       continue;
     }
 
     const products = ingMap[id]?.product ?? [];
     const lineUnit = row.amounts[0]?.unit ?? null;
-    byId.set(id, {
+    byIngredientId.set(id, {
       name: row.ingredient.name,
       productId: products.length === 1 ? products[0]!.id : null,
       lineUnit,
       lineKind: classifyLine(lineUnit),
       products,
-      missing: {
-        price: priceMissing,
-        weight: weightMissing,
-        nutrients: nutrientMissing,
-        volume: false,
-      },
+      missing,
     });
   }
 
-  const gaps: CostingGap[] = [];
-  for (const [ingredientId, acc] of byId) {
+  const gaps: RecipeTotalsGap[] = [...recipeGaps];
+  for (const [ingredientId, acc] of byIngredientId) {
     const kind = classifyKind(acc);
     // Rows here are pre-filtered to a missing price or weight, so classifyKind
-    // never returns "done"/"add-volume-mapping"; the guard just satisfies the type.
+    // never returns "done"/"add-volume-mapping"; the guard just satisfies types.
     if (kind === "done" || kind === "add-volume-mapping") continue;
     gaps.push({
+      source: "ingredient",
       ingredientId,
       name: acc.name,
       productId: acc.productId,

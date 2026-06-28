@@ -15,13 +15,17 @@ import {
   lb,
   makeEntry,
   makeProduct,
+  makeSubRecipe,
+  makeSubRecipeEntry,
   type Product,
 } from "~/lib/recipe-costing.fixtures";
 import {
-  type CostingGap,
   classifyIngredientFix,
-  deriveCostingGaps,
-} from "~/lib/recipe-costing-gaps";
+  deriveRecipeTotalsGaps,
+  type RecipeTotalsGap,
+} from "~/lib/recipe-totals-gaps";
+
+type IngredientTotalsGap = Extract<RecipeTotalsGap, { source: "ingredient" }>;
 
 // One product, given fixed id "prod-p" so single-product cases can assert it.
 const prod = (opts?: Parameters<typeof makeProduct>[1]): Product =>
@@ -40,8 +44,8 @@ interface Case {
   // Subset asserted via toMatchObject (so `missing` may be partial too);
   // null = no gap expected.
   expected:
-    | (Partial<Omit<CostingGap, "missing">> & {
-        missing?: Partial<CostingGap["missing"]>;
+    | (Partial<Omit<IngredientTotalsGap, "missing">> & {
+        missing?: Partial<IngredientTotalsGap["missing"]>;
       })
     | null;
 }
@@ -138,12 +142,12 @@ const CASES: Case[] = [
   },
 ];
 
-describe("deriveCostingGaps — classification", () => {
+describe("deriveRecipeTotalsGaps — classification", () => {
   it.each(CASES)("$name", ({ ingredient, line, products, expected }) => {
     const rows = [makeEntry("ing", ingredient, line)];
     const ingMap = { ing: ingredientWith("ing", ingredient, products) };
 
-    const gaps = deriveCostingGaps(costRecipe(rows, ingMap), ingMap);
+    const gaps = deriveRecipeTotalsGaps(costRecipe(rows, ingMap), ingMap);
 
     if (expected === null) {
       expect(gaps).toHaveLength(0);
@@ -155,7 +159,7 @@ describe("deriveCostingGaps — classification", () => {
 });
 
 // ─── Aggregation across rows (not a per-line classification) ──────────────────
-describe("deriveCostingGaps — multi-row", () => {
+describe("deriveRecipeTotalsGaps — multi-row", () => {
   it("same ingredient on two lines → one deduped gap", () => {
     const rows = [
       makeEntry("h", "salt", [cups(1)]),
@@ -163,10 +167,10 @@ describe("deriveCostingGaps — multi-row", () => {
     ];
     const ingMap = { h: ingredientWith("h", "salt", []) };
 
-    const gaps = deriveCostingGaps(costRecipe(rows, ingMap), ingMap);
+    const gaps = deriveRecipeTotalsGaps(costRecipe(rows, ingMap), ingMap);
 
     expect(gaps).toHaveLength(1);
-    expect(gaps[0]?.ingredientId).toBe("h");
+    expect(gaps[0]).toMatchObject({ source: "ingredient", ingredientId: "h" });
   });
 
   it("gaps sort by leverage; fully-costed lines drop out", () => {
@@ -188,12 +192,87 @@ describe("deriveCostingGaps — multi-row", () => {
       a: ingredientWith("a", "flour", []),
     };
 
-    const gaps = deriveCostingGaps(costRecipe(rows, ingMap), ingMap);
+    const gaps = deriveRecipeTotalsGaps(costRecipe(rows, ingMap), ingMap);
 
     expect(gaps.map((x) => x.kind)).toEqual([
       "no-product",
       "add-weight-mapping",
     ]);
+  });
+});
+
+describe("deriveRecipeTotalsGaps — sub-recipes", () => {
+  it("amount-less sub-recipe → set sub-recipe amount", () => {
+    const sauce = makeSubRecipe(
+      "sauce",
+      "tomato sauce",
+      { value: 4, unit: "cup" },
+      [],
+    );
+    const rows = [makeSubRecipeEntry(sauce, [])];
+
+    const gaps = deriveRecipeTotalsGaps(costRecipe(rows, {}, { sauce }), {});
+
+    expect(gaps).toHaveLength(1);
+    expect(gaps[0]).toMatchObject({
+      source: "recipe",
+      recipeId: "sauce",
+      name: "tomato sauce",
+      kind: "set-subrecipe-amount",
+      missing: { price: true, weight: true, nutrients: true },
+    });
+  });
+
+  it("yield-less sub-recipe → set sub-recipe yield", () => {
+    const tomato = ingredientWith("tomato", "tomato", []);
+    const sauce = makeSubRecipe("sauce", "tomato sauce", null, [
+      makeEntry("tomato", "tomato", [cups(1)]),
+    ]);
+    const rows = [makeSubRecipeEntry(sauce, [cups(2)])];
+
+    const gaps = deriveRecipeTotalsGaps(
+      costRecipe(rows, { tomato }, { sauce }),
+      { tomato },
+    );
+
+    expect(gaps).toHaveLength(1);
+    expect(gaps[0]).toMatchObject({
+      source: "recipe",
+      recipeId: "sauce",
+      kind: "set-subrecipe-yield",
+      missing: { price: true, weight: true, nutrients: true },
+    });
+  });
+
+  it("incomplete child totals → fix sub-recipe totals", () => {
+    const tomato = ingredientWith("tomato", "tomato", [
+      prod({
+        mappings: [
+          { a: cups(1), b: g(100) },
+          { a: g(100), b: { value: 50, unit: "kcal" } },
+        ],
+      }),
+    ]);
+    const sauce = makeSubRecipe(
+      "sauce",
+      "tomato sauce",
+      { value: 4, unit: "cup" },
+      [makeEntry("tomato", "tomato", [cups(4)])],
+    );
+    const rows = [makeSubRecipeEntry(sauce, [cups(2)])];
+
+    const gaps = deriveRecipeTotalsGaps(
+      costRecipe(rows, { tomato }, { sauce }),
+      { tomato },
+    );
+
+    expect(gaps).toHaveLength(1);
+    expect(gaps[0]).toMatchObject({
+      source: "recipe",
+      recipeId: "sauce",
+      kind: "fix-subrecipe-totals",
+      missing: { price: true, weight: false, nutrients: false },
+    });
   });
 });
 

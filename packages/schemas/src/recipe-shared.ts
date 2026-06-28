@@ -124,6 +124,12 @@ const nutrientDiagnostic = z.discriminatedUnion("ok", [
 ]);
 export type NutrientDiagnosticOut = z.infer<typeof nutrientDiagnostic>;
 
+const rowMissing = z.object({
+  price: z.boolean(),
+  weight: z.boolean(),
+  nutrients: z.boolean(),
+});
+
 /** One hop of an explained unit-graph conversion (normalized nodes). */
 export const conversionStep = z.object({
   from_unit: z.string(),
@@ -147,6 +153,7 @@ export const rowDiagnostic = z.object({
   price: measureDiagnostic,
   gram: measureDiagnostic,
   nutrient: nutrientDiagnostic,
+  missing: rowMissing,
   /** Unit-graph routes per measure (explain endpoint only; null = no path). */
   paths: z
     .object({

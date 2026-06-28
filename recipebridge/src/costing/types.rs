@@ -197,6 +197,15 @@ pub struct WRowPaths {
     pub calories: Option<Vec<WConversionStep>>,
 }
 
+/// Per-row totals completeness. A measure can carry a numeric value and still be
+/// incomplete when it comes from a sub-recipe whose own totals are partial.
+#[derive(Tsify, Serialize, Deserialize, Clone, Copy, Debug, Default)]
+pub struct WRowMissing {
+    pub price: bool,
+    pub weight: bool,
+    pub nutrients: bool,
+}
+
 /// Per-row costing trace + resolved measures, in input order. The diagnostic
 /// fields serialize to the zod `rowDiagnostic` shape; `own_gram`/`estimated`
 /// are the extra per-row data the table view consumes (display trio = the
@@ -219,6 +228,10 @@ pub struct WRowResult {
     pub price: WMeasureResult,
     pub gram: WMeasureResult,
     pub nutrients: WNutrientsResult,
+    /// Completeness flags for totals coverage. This is stricter than the
+    /// measure result: a sub-recipe can resolve to a numeric partial total while
+    /// still being missing price/weight/nutrients internally.
+    pub missing: WRowMissing,
     /// The row's own-amount gram weight, pre-estimate — baker's percentage
     /// parity with the old `createIngredientData` trio. None when the row has
     /// no own amount or no weight path.

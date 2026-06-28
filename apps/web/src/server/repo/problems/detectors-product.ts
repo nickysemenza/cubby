@@ -134,7 +134,7 @@ export const findOrphanedProducts = async (
 // Find products with no conversion/price coverage at all. A product is covered
 // if it has a manual unit mapping OR a price (synthesizes a `1 each = $price`
 // edge) OR a USDA link (fdc_id/upc synthesizes portion/serving/nutrient
-// edges). Mirrors the costing-gap classifier in lib/recipe-costing-gaps.ts.
+// edges). Mirrors the totals-gap classifier in lib/recipe-totals-gaps.ts.
 // Excludes misc products since they don't need pricing.
 export const findProductsWithoutMappings = async (
   db: Database,

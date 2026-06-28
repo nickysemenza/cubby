@@ -357,6 +357,75 @@ fn rolls_sub_recipe_totals_into_parent_scaled_by_yield() {
 }
 
 #[test]
+fn partial_sub_recipe_totals_still_contribute_but_mark_parent_missing() {
+    let tomato = ingredient(
+        "tomato",
+        vec![
+            mapping((1.0, "cup"), (100.0, "gram")),
+            mapping((100.0, "g"), (50.0, "kcal")),
+        ],
+    );
+    let sauce = WCostingRecipe {
+        id: "sauce".to_string(),
+        recipe_yield: Some(amount(4.0, "cup")),
+        rows: vec![row("tomato", "tomato", Some((4.0, "cup")), None, None)],
+    };
+
+    let r = cost(
+        vec![sub_recipe_row("sauce", (2.0, "cup"))],
+        vec![tomato],
+        vec![sauce],
+    );
+
+    assert_eq!(r.price, 0.0);
+    assert_close(r.weight, 200.0, 0.05, "weight");
+    assert_close(nutrient(&r, "208"), 100.0, 0.05, "kcal");
+    assert_eq!(r.missing_by_type.price, vec!["sub-recipe"]);
+    assert!(r.missing_by_type.weight.is_empty());
+    assert!(r.missing_by_type.nutrients.is_empty());
+    assert!(r.rows[0].missing.price);
+    assert!(!r.rows[0].missing.weight);
+    assert!(!r.rows[0].missing.nutrients);
+}
+
+#[test]
+fn partial_sub_recipe_missing_flags_propagate_through_nested_recipes() {
+    let tomato = ingredient(
+        "tomato",
+        vec![
+            mapping((1.0, "cup"), (100.0, "gram")),
+            mapping((100.0, "g"), (50.0, "kcal")),
+        ],
+    );
+    let sauce = WCostingRecipe {
+        id: "sauce".to_string(),
+        recipe_yield: Some(amount(4.0, "cup")),
+        rows: vec![row("tomato", "tomato", Some((4.0, "cup")), None, None)],
+    };
+    let composed = WCostingRecipe {
+        id: "composed".to_string(),
+        recipe_yield: Some(amount(1.0, "batch")),
+        rows: vec![sub_recipe_row("sauce", (2.0, "cup"))],
+    };
+
+    let r = cost(
+        vec![sub_recipe_row("composed", (1.0, "batch"))],
+        vec![tomato],
+        vec![sauce, composed],
+    );
+
+    assert_eq!(r.price, 0.0);
+    assert_close(r.weight, 200.0, 0.05, "weight");
+    assert_close(nutrient(&r, "208"), 100.0, 0.05, "kcal");
+    assert_eq!(r.missing_by_type.price, vec!["sub-recipe"]);
+    assert!(r.missing_by_type.weight.is_empty());
+    assert!(r.missing_by_type.nutrients.is_empty());
+    assert!(r.rows[0].missing.price);
+    assert!(!r.rows[0].missing.weight);
+    assert!(!r.rows[0].missing.nutrients);
+}
+
+#[test]
 fn diamond_sub_recipe_dependencies_resolve_consistently() {
     // root uses the same yielded sub twice (memoized after the first
     // encounter) — both rows must contribute identical, correct values.
@@ -470,10 +539,13 @@ fn sub_recipe_referenced_both_inside_and_outside_a_cycle() {
     // Direct S row resolves to $2 / 200 g — the cache value is correct.
     assert_measure_close(&r.rows[0].price, 2.0, 0.005, "direct S price");
     // Both branches contribute $2 / 200 g (S directly + T→U→S), so the cycle is
-    // broken cleanly and S is identical across the clean/tainted boundary.
+    // broken cleanly and S is identical across the clean/tainted boundary. The
+    // cyclic branch still marks the parent row incomplete: it contributed the
+    // non-cyclic numeric portion, but part of its child graph failed.
     assert_close(r.price, 4.0, 0.005, "total price");
     assert_close(r.weight, 400.0, 0.05, "total weight");
-    assert!(r.missing_by_type.price.is_empty());
+    assert_eq!(r.missing_by_type.price, vec!["sub-recipe"]);
+    assert_eq!(r.missing_by_type.weight, vec!["sub-recipe"]);
 }
 
 #[test]

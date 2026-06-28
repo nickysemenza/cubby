@@ -113,6 +113,12 @@ export type IngredientPriceInfo = {
 
 export type IngredientDataItem = CostingRow & {
   priceInfo: IngredientPriceInfo | undefined;
+  /** Strict row-level totals coverage; can be missing even with numeric partials. */
+  totalsMissing: {
+    price: boolean;
+    weight: boolean;
+    nutrients: boolean;
+  };
 };
 
 /**
@@ -259,6 +265,7 @@ const toRowDiagnostic = (r: WRowResult): RowDiagnostic => ({
         nutrientCount: r.nutrients.entries.length,
       }
     : { ok: false, error: r.nutrients.error },
+  missing: r.missing,
   ...(r.paths
     ? {
         paths: {
@@ -306,6 +313,11 @@ const reshape = (w: WRecipeCosting, rows: CostingRow[]): RecipeCosting => {
           price: measureToResult(r.price),
           gram: measureToResult(r.gram),
           nutrient: nutrientsToResult(r.nutrients),
+        },
+        totalsMissing: r?.missing ?? {
+          price: true,
+          weight: true,
+          nutrients: true,
         },
       };
     }),

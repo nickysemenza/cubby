@@ -12,7 +12,7 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "~/components/ui/popover";
-import type { CostingGap, LineKind } from "~/lib/recipe-costing-gaps";
+import type { LineKind, RecipeTotalsGap } from "~/lib/recipe-totals-gaps";
 import { cn } from "~/lib/utils";
 
 /** Example package mapping to show, matched to how the recipe line measures. */
@@ -24,7 +24,7 @@ const purchaseExample = (lineKind: LineKind): string =>
  * add; `cta` is the link label. USDA is preferred wherever it applies (it adds
  * portions + nutrition at once); the price variants are unit-aware.
  */
-const suggestionFor = (gap: CostingGap): { lead: string; cta: string } =>
+const suggestionFor = (gap: RecipeTotalsGap): { lead: string; cta: string } =>
   match(gap)
     .with({ kind: "no-product" }, () => ({
       lead: "No product linked. Link one (with a USDA food) to cost it.",
@@ -51,14 +51,29 @@ const suggestionFor = (gap: CostingGap): { lead: string; cta: string } =>
     }))
     .with({ kind: "add-volume-mapping" }, () => ({
       // The per-recipe path never emits this (volume isn't a costing blocker); the
-      // arm exists only to keep the match exhaustive over the shared CostingGapKind.
+      // arm exists only to keep the match exhaustive over the shared totals kind.
       lead: "Add a volume mapping (e.g. 1 cup = 240 ml) — or link a USDA food for portions.",
       cta: "Add mapping",
+    }))
+    .with({ kind: "set-subrecipe-amount" }, () => ({
+      lead: "Set how much of this sub-recipe is used so it can be scaled into these totals.",
+      cta: "Edit recipe",
+    }))
+    .with({ kind: "set-subrecipe-yield" }, () => ({
+      lead: "Set the sub-recipe yield so this recipe can scale its totals.",
+      cta: "Set yield",
+    }))
+    .with({ kind: "fix-subrecipe-totals" }, () => ({
+      lead: "This sub-recipe has incomplete totals. Open it to fix the underlying ingredients.",
+      cta: "Open recipe",
     }))
     .exhaustive();
 
 /** The measures the engine couldn't resolve, as small chips. */
-const MISSING_CHIPS: { key: keyof CostingGap["missing"]; label: string }[] = [
+const MISSING_CHIPS: {
+  key: keyof RecipeTotalsGap["missing"];
+  label: string;
+}[] = [
   { key: "price", label: "price" },
   { key: "weight", label: "weight" },
   { key: "nutrients", label: "nutrition" },
@@ -70,7 +85,53 @@ const MISSING_CHIPS: { key: keyof CostingGap["missing"]; label: string }[] = [
  * fix, and a deep-link to that ingredient's row in the enrichment workbench —
  * the one place all ingredient enrichment now happens.
  */
-function CostingGapList({ gaps }: { gaps: CostingGap[] }) {
+function TotalsGapAction({
+  gap,
+  currentRecipeId,
+  cta,
+}: {
+  gap: RecipeTotalsGap;
+  currentRecipeId: string;
+  cta: string;
+}) {
+  if (gap.source === "ingredient") {
+    return (
+      <Link
+        to="/ingredients/workbench"
+        search={{ focus: gap.ingredientId }}
+        className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+      >
+        {cta}
+        <ArrowRight className="ml-1 h-3 w-3" />
+      </Link>
+    );
+  }
+
+  const edit =
+    gap.kind === "set-subrecipe-amount" || gap.kind === "set-subrecipe-yield";
+  return (
+    <Link
+      to="/recipes/$id"
+      params={{
+        id:
+          gap.kind === "set-subrecipe-amount" ? currentRecipeId : gap.recipeId,
+      }}
+      search={{ edit: edit ? true : undefined }}
+      className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+    >
+      {cta}
+      <ArrowRight className="ml-1 h-3 w-3" />
+    </Link>
+  );
+}
+
+function TotalsGapList({
+  gaps,
+  currentRecipeId,
+}: {
+  gaps: RecipeTotalsGap[];
+  currentRecipeId: string;
+}) {
   return (
     <ul className="divide-y divide-border/60">
       {gaps.map((gap) => {
@@ -83,7 +144,7 @@ function CostingGapList({ gaps }: { gaps: CostingGap[] }) {
             justify="between"
             wrap
             gap="sm"
-            key={gap.ingredientId}
+            key={gap.source === "ingredient" ? gap.ingredientId : gap.rowId}
             className="py-2"
           >
             <div className="min-w-0 flex-1">
@@ -103,14 +164,11 @@ function CostingGapList({ gaps }: { gaps: CostingGap[] }) {
                 {lead}
               </Description>
             </div>
-            <Link
-              to="/ingredients/workbench"
-              search={{ focus: gap.ingredientId }}
-              className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-            >
-              {cta}
-              <ArrowRight className="ml-1 h-3 w-3" />
-            </Link>
+            <TotalsGapAction
+              gap={gap}
+              currentRecipeId={currentRecipeId}
+              cta={cta}
+            />
           </Row>
         );
       })}
@@ -119,12 +177,18 @@ function CostingGapList({ gaps }: { gaps: CostingGap[] }) {
 }
 
 /**
- * The gap list as a compact, view-independent affordance — a "N block costing"
+ * The gap list as a compact, view-independent affordance — a "N block totals"
  * button that opens the list in a popover. Shown on every recipe view (the bulky
- * inline card was retired), so "why isn't this fully costed?" is always one
+ * inline card was retired), so "why aren't these totals complete?" is always one
  * click away without taking over the layout.
  */
-export function CostingCoverageButton({ gaps }: { gaps: CostingGap[] }) {
+export function RecipeTotalsCoverageButton({
+  gaps,
+  currentRecipeId,
+}: {
+  gaps: RecipeTotalsGap[];
+  currentRecipeId: string;
+}) {
   if (gaps.length === 0) return null;
 
   // Roll the per-measure gaps up into category counts for the popover header —
@@ -142,11 +206,11 @@ export function CostingCoverageButton({ gaps }: { gaps: CostingGap[] }) {
         )}
       >
         <TriangleAlert className="h-3.5 w-3.5" />
-        {gaps.length} block costing
+        {gaps.length} block totals
       </PopoverTrigger>
       <PopoverContent align="end" className="w-96">
         <PopoverHeader>
-          <PopoverTitle>Why isn&apos;t this fully costed?</PopoverTitle>
+          <PopoverTitle>Why aren&apos;t these totals complete?</PopoverTitle>
           <Row align="center" wrap gap="sm" className="pt-1">
             {counts.map((c) => (
               <span
@@ -159,7 +223,7 @@ export function CostingCoverageButton({ gaps }: { gaps: CostingGap[] }) {
             ))}
           </Row>
         </PopoverHeader>
-        <CostingGapList gaps={gaps} />
+        <TotalsGapList gaps={gaps} currentRecipeId={currentRecipeId} />
       </PopoverContent>
     </Popover>
   );

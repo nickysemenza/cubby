@@ -14,7 +14,7 @@ import type {
 } from "@cubby/schemas/product";
 import type { z } from "zod";
 import { conversionCoverage, gradedKinds } from "~/lib/conversion-coverage";
-import { classifyIngredientFix } from "~/lib/recipe-costing-gaps";
+import { classifyIngredientFix } from "~/lib/recipe-totals-gaps";
 import { getIngredientMappings } from "~/lib/unit-mapping-utils";
 // Extended schemas that include food data
 import type { Database } from "~/server/db";

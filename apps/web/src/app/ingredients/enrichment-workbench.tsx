@@ -49,7 +49,7 @@ import { type Suggestion, WorkbenchRow } from "./workbench-row";
 type FilterKey = "all" | "no-product" | "partial" | "no-usda";
 
 /**
- * Dense bulk-enrichment table for ingredients that can't be fully costed yet —
+ * Dense bulk-enrichment table for ingredients with incomplete totals data —
  * the bare ones EPUB imports leave behind (no product) plus those with a product
  * whose conversion graph is still incomplete. Each row shows its coverage and the
  * single recommended fix, and expands inline to link a USDA food, set a price,
