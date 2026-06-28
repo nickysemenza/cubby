@@ -17,7 +17,7 @@ import {
   scrapeRecipeMcpOut,
 } from "@cubby/schemas/mcp";
 import type { RecipeUsage } from "@cubby/schemas/recipe";
-import { recipeFiltersSchema, recipeMcpOut } from "@cubby/schemas/recipe";
+import { recipeListFilterFields, recipeMcpOut } from "@cubby/schemas/recipe";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { groupBy } from "es-toolkit";
 import { z } from "zod";
@@ -44,7 +44,7 @@ export function registerRecipeTools(server: McpServer) {
     description:
       "List recipes by name. Returns id, name, shortcode, yield, servings, tags.",
     router: "recipe",
-    filtersSchema: recipeFiltersSchema.pick({ nameFilter: true }),
+    filterFields: recipeListFilterFields,
     outputSchema: recipeMcpListOut,
     slim: slimRecipe,
     sort: { orderBy: "name" },

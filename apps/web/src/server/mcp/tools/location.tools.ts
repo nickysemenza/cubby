@@ -1,5 +1,5 @@
 import {
-  locationFiltersSchema,
+  locationFilterFields,
   locationMcpListOut,
   locationMcpOut,
   mcpLocationCreateInput,
@@ -25,7 +25,7 @@ export function registerLocationTools(server: McpServer) {
     description:
       "List all locations with optional name filter. Use to resolve location names to IDs.",
     router: "location",
-    filtersSchema: locationFiltersSchema,
+    filterFields: locationFilterFields,
     outputSchema: locationMcpListOut,
     slim: slimLocation,
     sort: { orderBy: "name", direction: "asc" },

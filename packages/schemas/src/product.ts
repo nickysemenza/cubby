@@ -187,12 +187,14 @@ export const productMarkUsdaUnavailableManyInput = z.object({
 
 // Filters accepted by the product list endpoint. Canonical shape shared by the
 // tRPC router (and available to any other list caller).
-export const productFiltersSchema = z.object({
+export const productFilterFields = {
   nameFilter: z.string().optional().describe("Filter by product name"),
   manufacturerFilter: z.string().optional().describe("Filter by manufacturer"),
   upcFilter: z.string().optional().describe("Filter by UPC code"),
   categoryFilter: productCategory.optional().describe("Filter by category"),
-});
+};
+
+export const productFiltersSchema = z.object(productFilterFields);
 
 export const productSortableFields = [
   "createdAt",
@@ -428,47 +430,83 @@ export type ProductQuickCreatePayload = z.infer<
   typeof productQuickCreatePayload
 >;
 
-export const mcpProductCreateInput = productCreateInput.omit({
-  pendingImageIds: true,
-  externalIds: true,
-  fdc_id: true,
-  category: true,
-  model: true,
-  notes: true,
+export const mcpProductCreateInput = z.object({
+  name: requiredName("Product name")
+    .describe("Product name")
+    .meta({ mock: "commerce.productName" }),
+  upc: upc.nullable(),
+  manufacturer: z
+    .string()
+    .describe("Manufacturer or 'generic'")
+    .meta({ mock: "company.name" }),
+  ingredientId: ingredientId
+    .nullable()
+    .describe(
+      "Link this product to an ingredient (its id) so recipes using that ingredient can cost from this product.",
+    ),
+  price: z
+    .number()
+    .positive()
+    .nullable()
+    .optional()
+    .describe("price per each ($), source of truth"),
+  unitMappings: z
+    .array(unitMappingInput)
+    .default([])
+    .describe(
+      'Conversion/price edges, e.g. 8 oz = $10 → [{ a: { value: 8, unit: "oz" }, b: { value: 10, unit: "dollar" } }]. For a weight-measured ingredient an oz/g → dollar edge is the cost basis.',
+    ),
+  usdaUnavailable: z
+    .boolean()
+    .nullable()
+    .optional()
+    .describe("no USDA food exists — expect manual weight/volume/calories"),
 });
 
-export const mcpProductUpdateInput = productUpdateData.omit({
-  unitMappings: true,
-  pendingImageIds: true,
-  removeImageIds: true,
+export const mcpProductUpdateInput = z.object({
+  name: requiredName("Product name")
+    .describe("Product name")
+    .meta({ mock: "commerce.productName" })
+    .optional(),
+  upc: upc.nullable().optional(),
+  fdc_id: fdcId.nullable().optional(),
+  manufacturer: z
+    .string()
+    .describe("Manufacturer or 'generic'")
+    .meta({ mock: "company.name" })
+    .optional(),
+  model: z.string().nullish(),
+  notes: z.string().nullish(),
+  expectedQuantity: z.number().int().positive().nullable().optional(),
+  category: productCategory.nullable().optional(),
+  ingredientId: ingredientId.nullable().optional(),
+  price: z.number().positive().nullable().optional(),
+  usdaUnavailable: z.boolean().nullable().optional(),
 });
+
+const productMcpUnitMappingFields = {
+  a: amount,
+  b: amount,
+  source: z.string().nullable(),
+};
 
 /** Slim MCP projection of a product list/detail row. */
-export const productMcpOut = productListItemOut
-  .pick({
-    id: true,
-    name: true,
-    shortcode: true,
-    manufacturer: true,
-    upc: true,
-    category: true,
-    price: true,
-    expectedQuantity: true,
-    fdc_id: true,
-    usdaUnavailable: true,
-    externalIds: true,
-  })
-  .extend({
-    usdaFdcId: z.number().nullable(),
-    ingredientId: z.string().nullable(),
-    unitMappings: z.array(
-      z.object({
-        a: amount,
-        b: amount,
-        source: z.string().nullable(),
-      }),
-    ),
-  });
+export const productMcpOut = z.object({
+  id: productId,
+  name: z.string(),
+  shortcode: productShortcode,
+  manufacturer: z.string(),
+  upc: upc.nullable(),
+  category: productCategory.nullable(),
+  price: z.number().nullable(),
+  expectedQuantity: z.number().int().positive().nullable(),
+  fdc_id: fdcId.nullable(),
+  usdaUnavailable: z.boolean().nullable(),
+  externalIds: z.array(externalIdOut),
+  usdaFdcId: z.number().nullable(),
+  ingredientId: z.string().nullable(),
+  unitMappings: z.array(z.object(productMcpUnitMappingFields)),
+});
 export type ProductMcpOut = z.infer<typeof productMcpOut>;
 
 export const productMcpListOut = createPaginatedResponseSchema(productMcpOut);

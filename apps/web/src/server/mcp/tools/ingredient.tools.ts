@@ -1,5 +1,5 @@
 import {
-  ingredientFiltersSchema,
+  ingredientFilterFields,
   ingredientMcpListOut,
   ingredientMcpOut,
   ingredientMergeBatchInput,
@@ -38,7 +38,7 @@ export function registerIngredientTools(server: McpServer) {
     description:
       "Search ingredients by name. Returns id, name, aliases, linked products, and recipe count.",
     router: "ingredient",
-    filtersSchema: ingredientFiltersSchema,
+    filterFields: ingredientFilterFields,
     outputSchema: ingredientMcpListOut,
     slim: slimIngredient,
     sort: { orderBy: "name" },

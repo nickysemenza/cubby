@@ -1,7 +1,7 @@
 import {
   mcpProductCreateInput,
   mcpProductUpdateInput,
-  productFiltersSchema,
+  productFilterFields,
   productMcpListOut,
   productMcpOut,
 } from "@cubby/schemas/product";
@@ -36,7 +36,7 @@ export function registerProductTools(server: McpServer) {
     name: "search_products",
     description: "Search products by name, manufacturer, UPC, or category.",
     router: "product",
-    filtersSchema: productFiltersSchema,
+    filterFields: productFilterFields,
     outputSchema: productMcpListOut,
     slim: slimProduct,
     sort: { orderBy: "name" },

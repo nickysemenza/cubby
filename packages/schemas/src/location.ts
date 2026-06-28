@@ -23,13 +23,15 @@ export type LocationType = z.infer<typeof locationType>;
 export { locationTypeValues } from "@cubby/shared";
 
 // Filters accepted by the location list endpoint.
-export const locationFiltersSchema = z.object({
+export const locationFilterFields = {
   nameFilter: z
     .string()
     .optional()
     .describe("Filter by location name (substring)"),
   itemTypeFilter: locationType.optional(),
-});
+};
+
+export const locationFiltersSchema = z.object(locationFilterFields);
 
 export const locationSortableFields = [
   "createdAt",
@@ -248,8 +250,12 @@ export const locationIdsInput = z.object({
 export type LocationCreateInput = z.infer<typeof locationCreateInput>;
 export type LocationUpdateInput = z.infer<typeof locationUpdateInput>;
 
-export const mcpLocationCreateInput = locationCreateInput.omit({
-  pendingImageIds: true,
+export const mcpLocationCreateInput = z.object({
+  name: requiredName("Location name").describe("name of location"),
+  type: locationType,
+  parentId: optionalLocationId.describe(
+    "Parent location id — nest this location under another (omit/null for a top-level location).",
+  ),
 });
 export const mcpLocationUpdateInput = locationUpdateData;
 

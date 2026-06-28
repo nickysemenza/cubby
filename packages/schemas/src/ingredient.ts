@@ -30,7 +30,7 @@ export const ingredientBase = ingredientFields;
  * `search_ingredients` tool exactly; the MCP tool has its own explicit field
  * roster with matching names and descriptions.
  */
-export const ingredientFiltersSchema = z.object({
+export const ingredientFilterFields = {
   nameFilter: z
     .string()
     .optional()
@@ -40,7 +40,9 @@ export const ingredientFiltersSchema = z.object({
     .optional()
     .default(false)
     .describe("Only return ingredients with no linked products"),
-});
+};
+
+export const ingredientFiltersSchema = z.object(ingredientFilterFields);
 export type IngredientFilters = z.infer<typeof ingredientFiltersSchema>;
 
 export const ingredientSortableFields = [
@@ -288,19 +290,28 @@ export const ingredientResolvableNamesInput = z.object({
   names: z.array(z.string().min(1)),
 });
 
-export const mcpIngredientCreateInput = ingredientCreateInput.omit({
-  naKinds: true,
+export const mcpIngredientCreateInput = z.object({
+  name: requiredName("Ingredient name")
+    .describe("Ingredient name")
+    .meta({ mock: "food.ingredient" }),
+  aliases: ingredientBaseFields.aliases.default([]),
 });
 export const mcpIngredientUpdateInput = ingredientUpdateData;
 
+const ingredientMcpProductRefFields = {
+  id: z.string(),
+  name: z.string(),
+};
+
 /** Slim MCP projection of an ingredient list/detail row. */
-export const ingredientMcpOut = ingredientListItemOut
-  .pick({ id: true, name: true, aliases: true })
-  .extend({
-    products: z.array(z.object({ id: z.string(), name: z.string() })),
-    recipeCount: z.number().int().nonnegative(),
-    usdaFdcId: z.number().nullable(),
-  });
+export const ingredientMcpOut = z.object({
+  id: ingredientId,
+  name: z.string(),
+  aliases: z.array(z.string()),
+  products: z.array(z.object(ingredientMcpProductRefFields)),
+  recipeCount: z.number().int().nonnegative(),
+  usdaFdcId: z.number().nullable(),
+});
 export type IngredientMcpOut = z.infer<typeof ingredientMcpOut>;
 
 export const ingredientMcpListOut =

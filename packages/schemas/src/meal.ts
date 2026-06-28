@@ -85,10 +85,12 @@ export const mealRecipeIdInput = z.object({
   id: mealRecipeId,
 });
 
-export const mealFiltersSchema = z.object({
+export const mealFilterFields = {
   from: mealDate.optional().describe("Only meals on or after this day"),
   to: mealDate.optional().describe("Only meals on or before this day"),
-});
+};
+
+export const mealFiltersSchema = z.object(mealFilterFields);
 export type MealFilters = z.infer<typeof mealFiltersSchema>;
 
 export const mcpMealCreateInput = mealCreateInput;
@@ -144,20 +146,23 @@ export const mealOut = z.object({
 });
 export type MealOut = z.infer<typeof mealOut>;
 
+const mealMcpRecipeFields = {
+  id: mealRecipeId,
+  recipeId,
+  name: z.string().nullable(),
+  scale: mealScale,
+  scaledTotals: scaledTotals.nullable(),
+};
+
 /** Slim MCP projection of a meal row. */
-export const mealMcpOut = mealOut
-  .pick({ id: true, date: true, name: true, sortOrder: true, totals: true })
-  .extend({
-    recipes: z.array(
-      z.object({
-        id: mealRecipeId,
-        recipeId,
-        name: z.string().nullable(),
-        scale: mealScale,
-        scaledTotals: scaledTotals.nullable(),
-      }),
-    ),
-  });
+export const mealMcpOut = z.object({
+  id: mealId,
+  date: mealDate,
+  name: z.string().nullable(),
+  sortOrder: z.number().int().nullable(),
+  totals: mealTotals,
+  recipes: z.array(z.object(mealMcpRecipeFields)),
+});
 export type MealMcpOut = z.infer<typeof mealMcpOut>;
 
 export const mealMcpListOut = createPaginatedResponseSchema(mealMcpOut);

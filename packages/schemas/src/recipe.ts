@@ -242,12 +242,18 @@ export const recipeSectionInput = z.object({
 // Descriptions live at the field level here (rather than on the shared building
 // blocks, which are also reused by the output/form layers) so they reliably
 // Filters accepted by the recipe list endpoint.
-export const recipeFiltersSchema = z.object({
+export const recipeFilterFields = {
   nameFilter: z.string().optional(),
   tagFilters: z.array(z.string()).optional(),
-  // Scope the list to one cookbook by FK id (cookbook detail page).
   cookbookId: cookbookId.optional(),
-});
+};
+
+export const recipeFiltersSchema = z.object(recipeFilterFields);
+
+/** MCP list_recipes filters — name substring only. */
+export const recipeListFilterFields = {
+  nameFilter: recipeFilterFields.nameFilter,
+};
 
 // Descriptions surface to MCP clients through the explicit `mcpRecipe*Shape`
 // exports below; keep create-required fields and update-optional fields separate.
@@ -335,12 +341,54 @@ export const recipeIdInput = z.object({
 export type RecipeCreateInput = z.infer<typeof recipeCreateInput>;
 export type RecipeUpdateInput = z.infer<typeof recipeUpdateInput>;
 
-export const mcpRecipeCreateInput = recipeCreateInput.omit({
-  pendingImageIds: true,
+export const mcpRecipeCreateInput = z.object({
+  name: requiredName("Recipe name").describe("Recipe name"),
+  meta: recipeMeta.describe("Source metadata, e.g. { url } of the web source"),
+  yield: recipeYieldSchema
+    .nullable()
+    .optional()
+    .describe('What the recipe produces, e.g. { value: 2, unit: "loaves" }'),
+  servings: recipeServings
+    .nullable()
+    .optional()
+    .describe("Number of servings (positive integer)"),
+  tags: recipeTags.nullable().optional().describe("Free-form tags"),
+  notes: recipeNotes
+    .nullable()
+    .optional()
+    .describe("Freeform markdown headnote/intro plus tips"),
+  sections: z
+    .array(recipeSectionInput)
+    .describe(
+      "Recipe sections, each with ingredients (by ingredient/recipe id) and instructions",
+    ),
 });
 
-export const mcpRecipeUpdateInput = recipeUpdateData.extend({
+export const mcpRecipeUpdateInput = z.object({
   id: recipeId.describe("Recipe ID"),
+  name: requiredName("Recipe name").describe("Recipe name").optional(),
+  meta: recipeMeta
+    .describe("Source metadata, e.g. { url } of the web source")
+    .optional(),
+  yield: recipeYieldSchema
+    .nullable()
+    .optional()
+    .describe('What the recipe produces, e.g. { value: 2, unit: "loaves" }'),
+  servings: recipeServings
+    .nullable()
+    .optional()
+    .describe("Number of servings (positive integer)"),
+  tags: recipeTags.nullable().optional().describe("Free-form tags"),
+  notes: recipeNotes
+    .nullable()
+    .optional()
+    .describe("Freeform markdown headnote/intro plus tips"),
+  sections: z
+    .array(recipeSectionInput)
+    .optional()
+    .describe(
+      "Recipe sections, each with ingredients (by ingredient/recipe id) and instructions",
+    ),
 });
 
 /** Slim MCP projection of a recipe list row. */
@@ -364,14 +412,20 @@ export const recipeUsageMcpOut = z.object({
   modifier: z.string().nullable(),
 });
 
+const recipeWithUsagesMcpFields = {
+  id: recipeId,
+  name: z.string(),
+  yield: recipeYieldSchema.nullish(),
+  servings: recipeServings.nullish(),
+  tags: recipeTags.nullish(),
+  shortcode: normalizedRecipeShortcode.nullish(),
+  usages: z.array(recipeUsageMcpOut),
+};
+
 export const recipesUsingIngredientOut = z.object({
   ingredientId: ingredientId,
   count: z.number().int().nonnegative(),
-  recipes: z.array(
-    recipeMcpOut.extend({
-      usages: z.array(recipeUsageMcpOut),
-    }),
-  ),
+  recipes: z.array(z.object(recipeWithUsagesMcpFields)),
 });
 
 export const recipeIdOut = z.object({ id: recipeId });

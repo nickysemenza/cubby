@@ -3,7 +3,7 @@ import {
   mcpMealCreateInput,
   mcpMealUpdateInput,
   mealDate,
-  mealFiltersSchema,
+  mealFilterFields,
   mealMcpItemsOut,
   mealMcpListOut,
   mealMcpOut,
@@ -36,7 +36,7 @@ export function registerMealTools(server: McpServer) {
     description:
       "List meals (planned eating occasions), most recent first, optionally bounded by a date range.",
     router: "meal",
-    filtersSchema: mealFiltersSchema,
+    filterFields: mealFilterFields,
     outputSchema: mealMcpListOut,
     slim: slimMeal,
     sort: { orderBy: "date", direction: "desc" },

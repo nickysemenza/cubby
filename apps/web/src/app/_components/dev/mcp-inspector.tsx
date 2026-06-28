@@ -82,12 +82,12 @@ function SchemaPanel({
 }) {
   return (
     <Card>
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-2">
         <CardTitle className="text-sm">{title}</CardTitle>
       </CardHeader>
       <CardContent>
         {schema ? (
-          <pre className="max-h-[420px] overflow-auto rounded-md bg-muted p-3 text-xs leading-relaxed">
+          <pre className="max-h-[420px] overflow-auto rounded-md bg-muted p-2 text-xs leading-relaxed">
             {JSON.stringify(schema, null, 2)}
           </pre>
         ) : (
@@ -139,7 +139,7 @@ export function McpInspector() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <pre className="whitespace-pre-wrap rounded-md bg-muted p-3 text-xs leading-relaxed">
+            <pre className="whitespace-pre-wrap rounded-md bg-muted p-2 text-xs leading-relaxed">
               {data.instructions}
             </pre>
           </CardContent>
@@ -152,7 +152,7 @@ export function McpInspector() {
             <CardTitle>Tools</CardTitle>
             <CardDescription>{tools.length} registered tools</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-2">
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -164,7 +164,7 @@ export function McpInspector() {
                   key={tool.name}
                   type="button"
                   onClick={() => setSelectedName(tool.name)}
-                  className={`block w-full rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-muted ${
+                  className={`block w-full rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-muted ${
                     selected?.name === tool.name ? "bg-muted font-medium" : ""
                   }`}
                 >
@@ -184,13 +184,13 @@ export function McpInspector() {
                   <CardDescription>{selected.description}</CardDescription>
                 ) : null}
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="space-y-2">
                 <AnnotationBadges tool={selected} />
                 {selected.inputSchema && schemaHasMock(selected.inputSchema) ? (
                   <Badge variant="destructive">Contains mock metadata</Badge>
                 ) : null}
                 {selected.annotations ? (
-                  <pre className="rounded-md bg-muted p-3 text-xs leading-relaxed">
+                  <pre className="rounded-md bg-muted p-2 text-xs leading-relaxed">
                     {JSON.stringify(selected.annotations, null, 2)}
                   </pre>
                 ) : null}

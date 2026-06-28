@@ -1,7 +1,7 @@
 import {
   bulkMovePayload,
   inventoryDuplicateFindOut,
-  inventoryFiltersSchema,
+  inventoryFilterFields,
   inventoryMcpBulkMoveOut,
   inventoryMcpListOut,
   inventoryMcpOut,
@@ -28,7 +28,7 @@ export function registerInventoryTools(server: McpServer) {
     name: "list_inventory",
     description: "List inventory entries with optional filters.",
     router: "inventory",
-    filtersSchema: inventoryFiltersSchema,
+    filterFields: inventoryFilterFields,
     outputSchema: inventoryMcpListOut,
     slim: slimInventory,
     sort: { orderBy: "createdAt", direction: "desc" },

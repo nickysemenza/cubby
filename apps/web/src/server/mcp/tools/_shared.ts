@@ -595,14 +595,14 @@ export function listHandler(
     orderBy: string;
     direction?: "asc" | "desc";
     buildFilters?: (params: Row) => Record<string, unknown>;
-    filtersSchema?: z.ZodObject<z.ZodRawShape>;
+    filterFields?: Record<string, z.ZodType>;
     defaultPageSize?: number;
   },
 ) {
   const resolveFilters =
     config.buildFilters ??
-    (config.filtersSchema
-      ? (params: Row) => pickSchemaFilters(params, config.filtersSchema!)
+    (config.filterFields
+      ? (params: Row) => pickSchemaFilters(params, config.filterFields!)
       : () => ({}));
 
   return async (params: Record<string, unknown>, extra: ToolExtra) => {
@@ -624,13 +624,13 @@ export function listHandler(
   };
 }
 
-/** Pick filter fields present in params using a filters schema's shape keys. */
+/** Pick filter fields present in params using a filter field map's keys. */
 export function pickSchemaFilters(
   params: Row,
-  filtersSchema: z.ZodObject<z.ZodRawShape>,
+  filterFields: Record<string, z.ZodType>,
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
-  for (const key of Object.keys(filtersSchema.shape)) {
+  for (const key of Object.keys(filterFields)) {
     if (params[key] !== undefined) {
       out[key] = params[key];
     }
@@ -649,7 +649,7 @@ type EntityListToolConfig = {
   name: string;
   description: string;
   router: string;
-  filtersSchema: z.ZodObject<z.ZodRawShape>;
+  filterFields: Record<string, z.ZodType>;
   outputSchema: z.ZodType;
   slim: Slim;
   sort: { orderBy: string; direction?: "asc" | "desc" };
@@ -667,7 +667,7 @@ export function registerEntityListTool(
   registerMcpTool(server, {
     name: config.name,
     description: config.description,
-    inputSchema: mcpListInputShape(config.filtersSchema, {
+    inputSchema: mcpListInputShape(config.filterFields, {
       defaultPageSize,
       maxPageSize: config.maxPageSize,
     }),
@@ -676,7 +676,7 @@ export function registerEntityListTool(
     handler: listHandler(config.router, config.slim, {
       orderBy: config.sort.orderBy,
       direction: config.sort.direction,
-      filtersSchema: config.buildFilters ? undefined : config.filtersSchema,
+      filterFields: config.buildFilters ? undefined : config.filterFields,
       buildFilters: config.buildFilters,
       defaultPageSize,
     }),

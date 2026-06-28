@@ -22,7 +22,7 @@ import { unitMappingOut } from "./unitmapping";
 export { positiveAmount } from "./codec";
 
 // Filters accepted by the inventory list endpoint.
-export const inventoryFiltersSchema = z.object({
+export const inventoryFilterFields = {
   productNameFilter: z
     .string()
     .optional()
@@ -34,7 +34,9 @@ export const inventoryFiltersSchema = z.object({
   locationIdFilter: locationId
     .optional()
     .describe("Filter by exact location ID"),
-});
+};
+
+export const inventoryFiltersSchema = z.object(inventoryFilterFields);
 
 export const inventorySortableFields = [
   "createdAt",
@@ -212,17 +214,26 @@ export const inventoryLocationIdsInput = z.object({
   locationIds: z.array(locationId),
 });
 
+const inventoryMcpProductFields = {
+  id: productId,
+  name: z.string(),
+  manufacturer: z.string(),
+  shortcode: productShortcode,
+};
+
+const inventoryMcpLocationFields = {
+  id: locationId,
+  name: z.string(),
+};
+
 /** Slim MCP projection of an inventory list/detail row. */
-export const inventoryMcpOut = inventoryListItemOut
-  .pick({ id: true, amount: true, valuation: true })
-  .extend({
-    product: inventoryListProductOut
-      .pick({ id: true, name: true, manufacturer: true, shortcode: true })
-      .nullable(),
-    location: inventoryListLocationOut
-      .pick({ id: true, name: true })
-      .nullable(),
-  });
+export const inventoryMcpOut = z.object({
+  id: inventoryId,
+  amount,
+  valuation: z.number().nullable(),
+  product: z.object(inventoryMcpProductFields).nullable(),
+  location: z.object(inventoryMcpLocationFields).nullable(),
+});
 export type InventoryMcpOut = z.infer<typeof inventoryMcpOut>;
 
 export const inventoryMcpListOut =

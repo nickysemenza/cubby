@@ -66,11 +66,11 @@ export function mcpPageSizeParam(opts?: {
 
 /** Spread into MCP list tool input schemas: filter fields + pagination. */
 export function mcpListInputShape(
-  filtersSchema: z.ZodObject<z.ZodRawShape>,
+  filterFields: Record<string, z.ZodType>,
   opts?: { defaultPageSize?: number; maxPageSize?: number },
 ) {
   return {
-    ...filtersSchema.shape,
+    ...filterFields,
     pageIndex: mcpPaginationParams.pageIndex,
     pageSize: mcpPageSizeParam({
       defaultPageSize: opts?.defaultPageSize,
