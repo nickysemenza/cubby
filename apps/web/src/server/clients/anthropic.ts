@@ -9,8 +9,8 @@ import {
   type CategorySuggestion,
   categoryAuditSchema,
   categorySuggestionSchema,
-  type DetectedInventory,
-  detectedInventorySchema,
+  type DetectedInventoryAiResult,
+  detectedInventoryAiResultSchema,
   type LocationDescription,
   type LocationTypeSuggestion,
   locationDescriptionSchema,
@@ -27,14 +27,15 @@ import {
 } from "@cubby/schemas/product";
 import { chat, type ImagePart } from "@tanstack/ai";
 import type { AnthropicImageMetadata } from "@tanstack/ai-anthropic";
+import { AI_MODEL } from "~/server/ai/features";
 import {
   type GatewayMetadata,
   gatewayAdapterConfig,
 } from "~/server/clients/gateway-config";
 
 // Single source of truth for the model so both gateway-config branches stay in
-// sync on a bump (mirrors `MODEL` in `./openai`).
-const MODEL = "claude-haiku-4-5";
+// sync on a bump.
+const MODEL = AI_MODEL;
 
 // Category descriptions for the LLM to understand what each category means
 // Using `satisfies` to ensure all categories have descriptions (build fails if one is missing)
@@ -242,8 +243,7 @@ Determine the appropriate type for this location and explain your reasoning.`,
   async detectInventoryItems(
     imageUrls: string[],
     locationName: string,
-    existingItems: string[],
-  ): Promise<DetectedInventory> {
+  ): Promise<DetectedInventoryAiResult> {
     const adapter = this.getAdapter();
 
     const imageParts: ImagePart<AnthropicImageMetadata>[] = imageUrls.map(
@@ -253,21 +253,27 @@ Determine the appropriate type for this location and explain your reasoning.`,
       }),
     );
 
-    const existingItemsList =
-      existingItems.length > 0
-        ? `\n\nItems already tracked at this location (avoid duplicates):\n${existingItems.map((i) => `- ${i}`).join("\n")}`
-        : "";
-
     return chat({
       adapter,
       systemPrompts: [
-        `You are a visual inventory assistant. Identify distinct products and items visible in the photos. For each item:
-- "name": the product name WITHOUT the brand (e.g., "packing tape roll", "digital scale", "tape dispenser")
-- "manufacturer": the brand/manufacturer if visible, or "(unspecified)" if not identifiable
-- Estimate quantity visible
-- Suggest an appropriate unit (e.g., "each", "box", "bag", "can", "bottle")
-- For items you can't clearly identify, use the "misc:" prefix in name (e.g., "misc:unidentified cables")
-- Only list items you can reasonably identify from the photos`,
+        `You are a visual inventory assistant. Identify distinct user-trackable inventory items visible in the photos.
+
+Return canonical product names, not visual-only descriptions:
+- Good: "blue tarp", "painters drop cloth", "plastic drop cloth", "packing tape roll"
+- Bad: "small blue plastic bag", "cream cloth items", "various packaged items"
+
+Use the location name as a strong hint when it agrees with what is visible. If a folded or partially hidden item is ambiguous but the location name clearly labels the bin contents, return the likely inventory item with medium or low confidence and explain the evidence.
+
+For each item:
+- "name": product name without brand; include "misc:" only for unidentified or intentionally low-detail placeholders
+- "manufacturer": visible brand/manufacturer, or "(unspecified)"
+- "estimatedQuantity": quantity visible; use 1 for a single folded/rolled item
+- "unit": usually "each" for household/shop items
+- "category": one of the product categories, or null if unclear
+- "evidence": one short sentence explaining the visual/location-name evidence
+- "isMisc": true only for unidentified groups or low-detail bulk placeholders
+
+Do not list the storage crate/bin/drawer itself. Do not list vague clutter, packaging, or bags unless they are the actual item being inventoried. Recognizable items like tarps, drop cloths, tools, containers, supplies, and named packaged goods are not misc.`,
       ],
       messages: [
         {
@@ -276,12 +282,12 @@ Determine the appropriate type for this location and explain your reasoning.`,
             ...imageParts,
             {
               type: "text",
-              content: `Identify inventory items in this location: "${locationName}"${existingItemsList}`,
+              content: `Identify inventory items in this location: "${locationName}"`,
             },
           ],
         },
       ],
-      outputSchema: detectedInventorySchema,
+      outputSchema: detectedInventoryAiResultSchema,
     });
   }
   async identifyProduct(imageUrls: string[]): Promise<ProductIdentification> {

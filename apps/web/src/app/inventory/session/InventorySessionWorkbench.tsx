@@ -1,13 +1,14 @@
 import type { DetectedItem } from "@cubby/schemas/ai";
 import type { Amount } from "@cubby/schemas/codec";
-import { type LocationId, locationId } from "@cubby/schemas/identifiers";
+import {
+  type LocationId,
+  locationId,
+  unsafeProductId,
+} from "@cubby/schemas/identifiers";
 import type { AllowedImageType } from "@cubby/schemas/image";
 import type { InventoryWithLocationAndProductOut } from "@cubby/schemas/inventory";
 import type { InfLocation } from "@cubby/schemas/location";
-import {
-  extractShortcodeFromScan,
-  UNSPECIFIED_MANUFACTURER,
-} from "@cubby/shared";
+import { extractShortcodeFromScan } from "@cubby/shared";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -29,6 +30,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
+import { DialogCompatibleCombobox } from "~/app/_components/combobox/combobox-dialog";
+import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { WithProductSearch } from "~/app/_components/combobox/with-search-hook";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import {
@@ -50,6 +53,7 @@ import {
 } from "~/app/_components/locations/location-breadcrumb";
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { LocationTreeRow } from "~/app/_components/locations/location-tree-row";
+import { useProductSearch } from "~/app/_components/products/use-product-search";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -1589,6 +1593,12 @@ function SessionCaptureActions({ location }: { location: SessionLocation }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [scanner, setScanner] = useState<"barcode" | null>(null);
   const [suggestions, setSuggestions] = useState<DetectedItem[]>([]);
+  const [suggestionProductOverrides, setSuggestionProductOverrides] = useState<
+    Record<number, ComboboxItem | null>
+  >({});
+  const [detectionCacheStatus, setDetectionCacheStatus] = useState<
+    "hit" | "miss" | null
+  >(null);
 
   const invalidateSession = () => {
     invalidateTRPCQueries(queryClient, inventoryMutationInvalidateKeys);
@@ -1608,14 +1618,31 @@ function SessionCaptureActions({ location }: { location: SessionLocation }) {
   );
   const detectItems = useMutation(
     api.ai.detectInventoryItems.mutationOptions({
-      onSuccess: (data) => setSuggestions(data.items),
+      onSuccess: (data) => {
+        setSuggestions(data.items);
+        setDetectionCacheStatus(data.cache.status);
+        setSuggestionProductOverrides(
+          Object.fromEntries(
+            data.items.map((item, index) => [
+              index,
+              item.matchedProduct
+                ? { id: item.matchedProduct.id, name: item.matchedProduct.name }
+                : null,
+            ]),
+          ),
+        );
+      },
       onError: (error) => toast.error(getErrorMessage(error)),
     }),
   );
-  const quickCreateProduct = useMutation(
-    api.product.quickCreate.mutationOptions({
-      onSuccess: () =>
-        invalidateTRPCQueries(queryClient, productLookupMutationInvalidateKeys),
+  const approveDetectedItem = useMutation(
+    api.ai.approveDetectedInventoryItem.mutationOptions({
+      onSuccess: (data) => {
+        invalidateSession();
+        toast.success(
+          `${data.createdProduct ? "Created and added" : "Added"} ${data.productName}.`,
+        );
+      },
     }),
   );
   const createInventory = useMutation(
@@ -1649,22 +1676,32 @@ function SessionCaptureActions({ location }: { location: SessionLocation }) {
     }
   };
 
+  const removeSuggestion = (index: number) => {
+    setSuggestions((prev) => prev.filter((_, i) => i !== index));
+    setSuggestionProductOverrides((prev) =>
+      Object.fromEntries(
+        Object.entries(prev).flatMap(([key, value]) => {
+          const oldIndex = Number(key);
+          if (oldIndex === index) return [];
+          return [[oldIndex > index ? oldIndex - 1 : oldIndex, value]];
+        }),
+      ),
+    );
+  };
+
   const addSuggestion = async (item: DetectedItem, index: number) => {
-    const name = item.name.startsWith("misc:")
-      ? item.name
-      : `misc: ${item.name}`;
+    const { matchedProduct: _matchedProduct, ...detectedItem } = item;
+    const override = suggestionProductOverrides[index];
+    const productId = override
+      ? unsafeProductId(override.id)
+      : (item.matchedProduct?.id ?? undefined);
     try {
-      const product = await quickCreateProduct.mutateAsync({
-        name,
-        manufacturer: item.manufacturer || UNSPECIFIED_MANUFACTURER,
-      });
-      await createInventory.mutateAsync({
-        productId: product.id,
+      await approveDetectedItem.mutateAsync({
         locationId: location.id,
-        amount: { value: item.estimatedQuantity, unit: item.unit },
+        item: detectedItem,
+        productId,
       });
-      setSuggestions((prev) => prev.filter((_, i) => i !== index));
-      toast.success(`Added ${name}.`);
+      removeSuggestion(index);
     } catch (error) {
       toast.error(`Could not add suggestion: ${getErrorMessage(error)}`);
     }
@@ -1732,12 +1769,16 @@ function SessionCaptureActions({ location }: { location: SessionLocation }) {
           </div>
           {suggestions.length > 0 && (
             <Stack gap="sm">
-              <Description>AI suggestions</Description>
+              <Description>
+                AI suggestions
+                {detectionCacheStatus ? ` · cache ${detectionCacheStatus}` : ""}
+              </Description>
               {suggestions.map((item, index) => (
                 <Row
                   key={`${item.name}-${index}`}
-                  align="center"
+                  align="start"
                   gap="sm"
+                  wrap
                   className="border border-[var(--border)] p-2"
                 >
                   <div className="min-w-0 flex-1">
@@ -1746,13 +1787,29 @@ function SessionCaptureActions({ location }: { location: SessionLocation }) {
                     </div>
                     <Description size="xs">
                       {item.estimatedQuantity} {item.unit} · {item.confidence}
+                      {item.category ? ` · ${item.category}` : ""}
+                      {item.isMisc ? " · misc" : ""}
                     </Description>
+                    <Description size="xs">{item.evidence}</Description>
+                  </div>
+                  <div className="min-w-48 flex-1">
+                    <SuggestionProductOverride
+                      item={item}
+                      value={suggestionProductOverrides[index] ?? null}
+                      onChange={(value) =>
+                        setSuggestionProductOverrides((prev) => ({
+                          ...prev,
+                          [index]: value,
+                        }))
+                      }
+                    />
                   </div>
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
                     onClick={() => addSuggestion(item, index)}
+                    disabled={approveDetectedItem.isPending}
                   >
                     <Check className="h-4 w-4" />
                     Approve
@@ -1761,11 +1818,7 @@ function SessionCaptureActions({ location }: { location: SessionLocation }) {
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={() =>
-                      setSuggestions((prev) =>
-                        prev.filter((_, i) => i !== index),
-                      )
-                    }
+                    onClick={() => removeSuggestion(index)}
                   >
                     <X className="h-4 w-4" />
                     Reject
@@ -1799,6 +1852,33 @@ function SessionCaptureActions({ location }: { location: SessionLocation }) {
         </SheetContent>
       </Sheet>
     </Card>
+  );
+}
+
+function SuggestionProductOverride({
+  item,
+  value,
+  onChange,
+}: {
+  item: DetectedItem;
+  value: ComboboxItem | null;
+  onChange: (value: ComboboxItem | null) => void;
+}) {
+  const { items, onSearchChange, isLoading } = useProductSearch();
+
+  useEffect(() => {
+    onSearchChange(item.name);
+  }, [item.name, onSearchChange]);
+
+  return (
+    <DialogCompatibleCombobox
+      label="product"
+      items={items}
+      onSearchChange={onSearchChange}
+      isLoading={isLoading}
+      value={value}
+      setValue={onChange}
+    />
   );
 }
 

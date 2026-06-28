@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { ingredientId, locationId } from "./identifiers";
+import {
+  ingredientId,
+  inventoryId,
+  locationId,
+  productId,
+} from "./identifiers";
 import { locationType } from "./location";
 import { productCategory } from "./product";
 import { foodSummaryWithLinkedProducts } from "./usda";
@@ -52,21 +57,97 @@ export const locationDescriptionSchema = z.object({
 });
 export type LocationDescription = z.infer<typeof locationDescriptionSchema>;
 
-// Detected inventory item from photo analysis
-export const detectedItemSchema = z.object({
+export const aiAnalysisEntityType = z.enum([
+  "location",
+  "product",
+  "recipe",
+  "global",
+]);
+export type AiAnalysisEntityType = z.infer<typeof aiAnalysisEntityType>;
+
+export const aiCacheStatus = z.enum(["hit", "miss"]);
+export type AiCacheStatus = z.infer<typeof aiCacheStatus>;
+
+export const aiCacheMetadataSchema = z.object({
+  status: aiCacheStatus,
+  feature: z.string(),
+  model: z.string(),
+  promptVersion: z.string(),
+  inputFingerprint: z.string(),
+});
+export type AiCacheMetadata = z.infer<typeof aiCacheMetadataSchema>;
+
+const detectedInventoryItemFields = {
   name: z.string(),
   manufacturer: z.string(),
-  estimatedQuantity: z.number().positive(),
+  // Anthropic structured output rejects JSON Schema's `exclusiveMinimum`, which
+  // Zod emits for `.positive()`. Keep this as a plain number for provider schema
+  // compatibility; the approval path clamps invalid model output before writing
+  // inventory.
+  estimatedQuantity: z.number(),
   unit: z.string(),
+  category: productCategory.nullable(),
   confidence: confidence,
+  evidence: z.string(),
+  isMisc: z.boolean(),
+};
+
+// Raw detected inventory item from photo analysis.
+// This is the model-owned shape before app-side product matching.
+export const detectedInventoryItemSchema = z.object(
+  detectedInventoryItemFields,
+);
+export type DetectedInventoryItem = z.infer<typeof detectedInventoryItemSchema>;
+
+export const detectedProductMatchSchema = z.object({
+  id: productId,
+  name: z.string(),
+  manufacturer: z.string(),
+  category: productCategory.nullable(),
+});
+export type DetectedProductMatch = z.infer<typeof detectedProductMatchSchema>;
+
+// Reviewable inventory suggestion returned to the UI after app-side matching.
+export const detectedItemSchema = z.object({
+  ...detectedInventoryItemFields,
+  matchedProduct: detectedProductMatchSchema.nullable(),
 });
 export type DetectedItem = z.infer<typeof detectedItemSchema>;
+
+export const detectedInventoryAiResultSchema = z.object({
+  items: z.array(detectedInventoryItemSchema),
+  summary: z.string(),
+});
+export type DetectedInventoryAiResult = z.infer<
+  typeof detectedInventoryAiResultSchema
+>;
 
 export const detectedInventorySchema = z.object({
   items: z.array(detectedItemSchema),
   summary: z.string(),
+  cache: aiCacheMetadataSchema,
 });
 export type DetectedInventory = z.infer<typeof detectedInventorySchema>;
+
+export const approveDetectedInventoryItemInput = z.object({
+  locationId,
+  item: detectedInventoryItemSchema,
+  productId: productId.nullable().optional(),
+});
+
+export const approveDetectedInventoryItemOut = z.object({
+  inventoryId,
+  productId,
+  productName: z.string(),
+  createdProduct: z.boolean(),
+});
+
+export type ApproveDetectedInventoryItemInput = z.infer<
+  typeof approveDetectedInventoryItemInput
+>;
+export type ApproveDetectedInventoryItemOut = z.infer<
+  typeof approveDetectedInventoryItemOut
+>;
 
 // Product identification from photo analysis
 export const productIdentificationSchema = z.object({

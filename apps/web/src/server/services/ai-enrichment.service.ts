@@ -4,21 +4,50 @@
  * Handles multi-step orchestration: fetching images, calling Anthropic, persisting results.
  */
 
-import type { Confidence, LocationDescription } from "@cubby/schemas/ai";
+import type {
+  ApproveDetectedInventoryItemInput,
+  ApproveDetectedInventoryItemOut,
+  Confidence,
+  DetectedInventory,
+  DetectedInventoryAiResult,
+  DetectedInventoryItem,
+  DetectedItem,
+  LocationDescription,
+} from "@cubby/schemas/ai";
+import type { ActorContext } from "@cubby/schemas/context";
 import type { IngredientId, LocationId } from "@cubby/schemas/identifiers";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
+import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
 import { type DataType, dataTypeEnum } from "@cubby/usda-schemas";
 import { chat, maxIterations, toolDefinition } from "@tanstack/ai";
 import type { BulkProgressEvent } from "~/lib/bulk-progress";
+import {
+  buildLocationAnalysisFingerprint,
+  LOCATION_DESCRIPTION_FEATURE,
+  LOCATION_INVENTORY_DETECTION_FEATURE,
+} from "~/server/ai/features";
 import { getAnthropicClient } from "~/server/clients/anthropic";
 import type { Database } from "~/server/db";
+import { createAppError } from "~/server/errors/app-error";
+import {
+  getCachedAiAnalysis,
+  upsertAiAnalysis,
+} from "~/server/repo/ai-analysis";
 import { searchIngredientsForMerge } from "~/server/repo/ingredient";
-import { getInventoryByLocationIds } from "~/server/repo/inventory";
+import {
+  createInventoryEntry,
+  getInventoryByLocationIds,
+} from "~/server/repo/inventory";
 import {
   findLocationsNeedingAiDescription,
   getLocationById,
   updateLocationAiDescription,
 } from "~/server/repo/location";
+import {
+  findProductByNameFuzzyManufacturer,
+  getProductByID,
+  quickCreateProduct,
+} from "~/server/repo/product";
 import type { USDAService } from "~/server/services/usda.service";
 
 // Defined by Vite for the Cloudflare build only; guard before reading (mirrors
@@ -26,6 +55,85 @@ import type { USDAService } from "~/server/services/usda.service";
 declare const __CF_WORKERS__: boolean | undefined;
 const IS_CF_WORKERS =
   typeof __CF_WORKERS__ !== "undefined" && __CF_WORKERS__ === true;
+
+const MAX_ANALYSIS_IMAGES = 5;
+
+function itemProductName(item: DetectedInventoryItem): string {
+  if (item.isMisc && !isMiscProduct(item.name)) {
+    return `misc: ${item.name}`;
+  }
+  return item.name;
+}
+
+function normalizedProductName(name: string): string {
+  return getMiscDisplayName(name).trim().toLowerCase();
+}
+
+const INVENTORY_NAME_STOPWORDS = new Set([
+  "a",
+  "an",
+  "and",
+  "for",
+  "general",
+  "purpose",
+  "the",
+]);
+
+function inventoryNameTokens(name: string): Set<string> {
+  const normalized = normalizedProductName(name)
+    .replace(/[^a-z0-9]+/g, " ")
+    .split(" ")
+    .map((token) => token.trim())
+    .filter((token) => token.length > 1 && !INVENTORY_NAME_STOPWORDS.has(token))
+    .map((token) =>
+      token.endsWith("s") && token.length > 3 ? token.slice(0, -1) : token,
+    );
+  return new Set(normalized);
+}
+
+export function isDetectedItemCoveredByInventoryName(
+  detectedName: string,
+  inventoryName: string,
+): boolean {
+  const detectedTokens = inventoryNameTokens(detectedName);
+  const inventoryTokens = inventoryNameTokens(inventoryName);
+
+  if (detectedTokens.size < 2 || inventoryTokens.size < 2) return false;
+
+  let shared = 0;
+  for (const token of detectedTokens) {
+    if (inventoryTokens.has(token)) shared++;
+  }
+
+  return shared === detectedTokens.size;
+}
+
+function cacheMetadata(
+  status: "hit" | "miss",
+  feature: typeof LOCATION_DESCRIPTION_FEATURE,
+  inputFingerprint: string,
+) {
+  return {
+    status,
+    feature: feature.feature,
+    model: feature.model,
+    promptVersion: feature.promptVersion,
+    inputFingerprint,
+  };
+}
+
+function detectionCacheMetadata(
+  status: "hit" | "miss",
+  inputFingerprint: string,
+) {
+  return {
+    status,
+    feature: LOCATION_INVENTORY_DETECTION_FEATURE.feature,
+    model: LOCATION_INVENTORY_DETECTION_FEATURE.model,
+    promptVersion: LOCATION_INVENTORY_DETECTION_FEATURE.promptVersion,
+    inputFingerprint,
+  };
+}
 
 // Drive a chat() loop to completion. Tool handlers capture results via closures,
 // so we only watch for run errors here: chat() delivers provider/transport
@@ -56,20 +164,100 @@ export async function describeLocation(
 ): Promise<LocationDescription> {
   const location = await getLocationById(db, locationId);
 
-  const imageUrls = location.images?.map((img) => img.url) ?? [];
-  if (imageUrls.length === 0) {
+  const images = (location.images ?? []).slice(0, MAX_ANALYSIS_IMAGES);
+  if (images.length === 0) {
     throw new Error("Location has no images to analyze");
+  }
+
+  const inputFingerprint = buildLocationAnalysisFingerprint(
+    LOCATION_DESCRIPTION_FEATURE,
+    { locationName: location.name, images },
+  );
+  const analysisKey = {
+    entityType: "location" as const,
+    entityId: locationId,
+    feature: LOCATION_DESCRIPTION_FEATURE,
+    inputFingerprint,
+  };
+  const cached = await getCachedAiAnalysis(db, analysisKey);
+  if (cached) {
+    console.info("ai.analysis", {
+      ...cacheMetadata("hit", LOCATION_DESCRIPTION_FEATURE, inputFingerprint),
+      entityType: "location",
+      entityId: locationId,
+    });
+    if (location.aiDescription !== cached.description) {
+      await updateLocationAiDescription(db, locationId, cached.description);
+    }
+    return cached;
   }
 
   const client = getAnthropicClient();
   const result = await client.describeLocation(
-    imageUrls.slice(0, 5),
+    images.map((img) => img.url),
     location.name,
   );
+  await upsertAiAnalysis(db, analysisKey, result);
+  console.info("ai.analysis", {
+    ...cacheMetadata("miss", LOCATION_DESCRIPTION_FEATURE, inputFingerprint),
+    entityType: "location",
+    entityId: locationId,
+  });
 
   await updateLocationAiDescription(db, locationId, result.description);
 
   return result;
+}
+
+async function matchDetectedItems(
+  db: Database,
+  locationId: LocationId,
+  items: DetectedInventoryItem[],
+): Promise<DetectedItem[]> {
+  const existingInventory = await getInventoryByLocationIds(db, [locationId]);
+  const existingProductIds = new Set(
+    existingInventory.map((entry) => entry.product.id),
+  );
+  const existingNames = new Set(
+    existingInventory.map((entry) => normalizedProductName(entry.product.name)),
+  );
+  const existingInventoryNames = existingInventory.map(
+    (entry) => entry.product.name,
+  );
+
+  const suggestions: DetectedItem[] = [];
+  for (const item of items) {
+    const productName = itemProductName(item);
+    if (existingNames.has(normalizedProductName(productName))) continue;
+    if (
+      existingInventoryNames.some((existingName) =>
+        isDetectedItemCoveredByInventoryName(productName, existingName),
+      )
+    ) {
+      continue;
+    }
+
+    const matched = await findProductByNameFuzzyManufacturer(
+      db,
+      productName,
+      item.manufacturer,
+    );
+    if (matched && existingProductIds.has(matched.id)) continue;
+
+    suggestions.push({
+      ...item,
+      name: productName,
+      matchedProduct: matched
+        ? {
+            id: matched.id,
+            name: matched.name,
+            manufacturer: matched.manufacturer,
+            category: matched.category,
+          }
+        : null,
+    });
+  }
+  return suggestions;
 }
 
 /**
@@ -79,26 +267,121 @@ export async function describeLocation(
 export async function detectInventoryItems(
   db: Database,
   locationId: LocationId,
-) {
+): Promise<DetectedInventory> {
   const location = await getLocationById(db, locationId);
 
-  const imageUrls = location.images?.map((img) => img.url) ?? [];
-  if (imageUrls.length === 0) {
+  const images = (location.images ?? []).slice(0, MAX_ANALYSIS_IMAGES);
+  if (images.length === 0) {
     throw new Error("Location has no images to analyze");
   }
 
-  // Get existing inventory item names to avoid duplicates
-  const existingInventory = await getInventoryByLocationIds(db, [locationId]);
-  const existingItemNames = existingInventory.map(
-    (entry) => entry.product.name,
+  const inputFingerprint = buildLocationAnalysisFingerprint(
+    LOCATION_INVENTORY_DETECTION_FEATURE,
+    { locationName: location.name, images },
+  );
+  const analysisKey = {
+    entityType: "location" as const,
+    entityId: locationId,
+    feature: LOCATION_INVENTORY_DETECTION_FEATURE,
+    inputFingerprint,
+  };
+  const cached = await getCachedAiAnalysis(db, analysisKey);
+  const cacheStatus = cached ? "hit" : "miss";
+  let raw: DetectedInventoryAiResult;
+
+  if (cached) {
+    raw = cached;
+  } else {
+    const client = getAnthropicClient();
+    raw = await client.detectInventoryItems(
+      images.map((img) => img.url),
+      location.name,
+    );
+    await upsertAiAnalysis(db, analysisKey, raw);
+  }
+
+  const cache = detectionCacheMetadata(cacheStatus, inputFingerprint);
+  console.info("ai.analysis", {
+    ...cache,
+    entityType: "location",
+    entityId: locationId,
+  });
+
+  return {
+    ...raw,
+    items: await matchDetectedItems(db, locationId, raw.items),
+    cache,
+  };
+}
+
+export async function approveDetectedInventoryItem(
+  db: Database,
+  input: ApproveDetectedInventoryItemInput,
+  actor: ActorContext,
+): Promise<ApproveDetectedInventoryItemOut> {
+  const productName = itemProductName(input.item);
+  const existingInventory = await getInventoryByLocationIds(db, [
+    input.locationId,
+  ]);
+
+  let productId = input.productId ?? null;
+  let productNameForToast = productName;
+  let createdProduct = false;
+
+  if (productId) {
+    const product = await getProductByID(db, productId);
+    productNameForToast = product.name;
+  } else {
+    const matched = await findProductByNameFuzzyManufacturer(
+      db,
+      productName,
+      input.item.manufacturer,
+    );
+    if (matched) {
+      productId = matched.id;
+      productNameForToast = matched.name;
+    } else {
+      const created = await quickCreateProduct(
+        db,
+        {
+          name: productName,
+          manufacturer: input.item.manufacturer,
+          category: input.item.category,
+        },
+        actor,
+      );
+      productId = created.id;
+      productNameForToast = created.name;
+      createdProduct = true;
+    }
+  }
+
+  if (existingInventory.some((entry) => entry.product.id === productId)) {
+    throw createAppError(
+      "DUPLICATE_RECORD",
+      `${productNameForToast} is already inventoried at this location.`,
+    );
+  }
+
+  const createdInventory = await createInventoryEntry(
+    db,
+    {
+      productId,
+      locationId: input.locationId,
+      amount: {
+        value: Math.max(input.item.estimatedQuantity, 1),
+        unit: input.item.unit,
+      },
+    },
+    actor,
   );
 
-  const client = getAnthropicClient();
-  return client.detectInventoryItems(
-    imageUrls.slice(0, 5),
-    location.name,
-    existingItemNames,
-  );
+  return {
+    inventoryId: createdInventory.id,
+    productId,
+    productName: productNameForToast,
+    createdProduct,
+  };
 }
 
 /**
@@ -113,7 +396,6 @@ export async function* backfillLocationDescriptions(
   { done: number; total: number },
   { analyzed: number; total: number }
 > {
-  const client = getAnthropicClient();
   const locations = await findLocationsNeedingAiDescription(db);
 
   const total = locations.length;
@@ -124,11 +406,7 @@ export async function* backfillLocationDescriptions(
     const batch = locations.slice(i, i + 10);
     const results = await Promise.allSettled(
       batch.map(async (loc) => {
-        const result = await client.describeLocation(
-          loc.imageUrls.slice(0, 5),
-          loc.name,
-        );
-        await updateLocationAiDescription(db, loc.id, result.description);
+        await describeLocation(db, loc.id);
       }),
     );
     for (const result of results) {

@@ -85,6 +85,15 @@ const SPECS: EndpointSpec[] = [
     run: (c, i) => c.ai.identifyProduct.mutate(i as { imageUrls: string[] }),
   },
   {
+    key: "detectInventoryItems",
+    label: "ai.detectInventoryItems",
+    description:
+      "Vision — cached structured location inventory detection with product matching",
+    defaultInput: { locationId: "replace-with-location-uuid" },
+    run: (c, i) =>
+      c.ai.detectInventoryItems.mutate(i as { locationId: string }),
+  },
+  {
     key: "agentAsk",
     label: "agent.ask",
     description: "Agentic MCP loop (non-streaming) over your data",

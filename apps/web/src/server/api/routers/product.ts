@@ -242,6 +242,7 @@ const quickCreate = protectedProcedure
         expectedQuantity: input.expectedQuantity ?? null,
         model: input.model ?? null,
         price: input.price ?? null,
+        category: input.category ?? null,
       },
       ctx.actorContext,
     );

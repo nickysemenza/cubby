@@ -1,3 +1,4 @@
+import type { AiAnalysisEntityType } from "@cubby/schemas/ai";
 import type { AuditEntityType } from "@cubby/schemas/audit";
 import type { Amount } from "@cubby/schemas/codec";
 import type {
@@ -863,6 +864,41 @@ export const recipeImageRelations = relations(recipeImage, ({ one }) => ({
     references: [image.id],
   }),
 }));
+
+// AI Analysis table — general cache for entity-bound AI outputs.
+export const aiAnalysis = pgTable(
+  "AiAnalysis",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    entityType: text("entityType").notNull().$type<AiAnalysisEntityType>(),
+    entityId: uuid("entityId"),
+    feature: text("feature").notNull(),
+    model: text("model").notNull(),
+    promptVersion: text("promptVersion").notNull(),
+    inputFingerprint: text("inputFingerprint").notNull(),
+    result: jsonb("result").notNull().$type<unknown>(),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt", { mode: "date" })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    deletedAt: timestamp("deletedAt", { mode: "date" }),
+  },
+  (table) => [
+    uniqueIndex("AiAnalysis_active_key")
+      .on(
+        table.entityType,
+        table.entityId,
+        table.feature,
+        table.model,
+        table.promptVersion,
+        table.inputFingerprint,
+      )
+      .where(sql`${table.deletedAt} IS NULL`),
+    index("AiAnalysis_entity_idx").on(table.entityType, table.entityId),
+    index("AiAnalysis_feature_idx").on(table.feature),
+  ],
+);
 
 // Audit Log table
 export const auditLog = pgTable(

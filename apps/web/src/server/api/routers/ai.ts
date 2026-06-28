@@ -1,5 +1,7 @@
 import {
   aiLocationIdInput,
+  approveDetectedInventoryItemInput,
+  approveDetectedInventoryItemOut,
   categoryAuditSchema,
   categorySuggestionInput,
   categorySuggestionSchema,
@@ -27,6 +29,7 @@ import {
 import { getLocationNames } from "~/server/repo/location/crud";
 import { getProductSummaryForAudit } from "~/server/repo/product";
 import {
+  approveDetectedInventoryItem,
   backfillLocationDescriptions,
   describeLocation,
   detectInventoryItems,
@@ -73,6 +76,18 @@ export const aiRouter = createTRPCRouter({
     .output(detectedInventorySchema)
     .mutation(async ({ ctx, input }) => {
       return detectInventoryItems(ctx.db, input.locationId);
+    }),
+  approveDetectedInventoryItem: protectedProcedure
+    .input(approveDetectedInventoryItemInput)
+    .output(approveDetectedInventoryItemOut)
+    .mutation(async ({ ctx, input }) => {
+      const result = await approveDetectedInventoryItem(
+        ctx.db,
+        input,
+        ctx.actorContext,
+      );
+      await ctx.services.locationValuation.recompute();
+      return result;
     }),
   backfillLocationDescriptions: protectedProcedure.mutation(async function* ({
     ctx,
