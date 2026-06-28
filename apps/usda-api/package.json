@@ -41,7 +41,7 @@
     "@ts-rest/core": "3.53.0-rc.1",
     "@ts-rest/open-api": "3.53.0-rc.1",
     "better-sqlite3": "^12.11.1",
-    "csv-parse": "^6.1.0",
+    "csv-parse": "^7.0.0",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.12.27",
     "p-map": "^7.0.3",
