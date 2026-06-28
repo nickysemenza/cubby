@@ -16,9 +16,9 @@ import type {
   RecipeOut,
   RecipeUpdateInput,
 } from "@cubby/schemas/recipe";
+import { recipeSortableFields } from "@cubby/schemas/recipe";
 import { type AnyColumn, and, eq, inArray, type SQL, sql } from "drizzle-orm";
 import { countBy } from "es-toolkit";
-import { getSortableFields } from "~/entities/entities";
 import { recipeOutSignature } from "~/lib/recipe-signature";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -300,7 +300,7 @@ export const recipeList = async (
                   ? sql`(${recipe.totals}->>${jsonbSortKey})::numeric asc nulls last`
                   : sql`(${recipe.totals}->>${jsonbSortKey})::numeric desc nulls last`,
               ]
-            : buildOrderBy(recipe, sort, [...getSortableFields("recipe")]);
+            : buildOrderBy(recipe, sort, [...recipeSortableFields]);
 
   const { take, skip } = buildTakeSkip(pagination);
 

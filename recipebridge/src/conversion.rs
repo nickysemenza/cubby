@@ -329,7 +329,9 @@ pub fn amount_kind(amount: WAmount) -> Result<WAmountKind, String> {
 /// - "4 lb = $5 @ costco" (with source)
 #[wasm_bindgen]
 pub fn parse_unit_mapping(input: String) -> Result<WUnitMapping, String> {
-    Ok(parse_unit_mapping_internal(&input)?.into())
+    Ok(parse_unit_mapping_internal(&input)
+        .map_err(|error| error.to_string())?
+        .into())
 }
 
 // ---------------------------------------------------------------------------

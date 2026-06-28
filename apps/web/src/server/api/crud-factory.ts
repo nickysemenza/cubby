@@ -1,29 +1,15 @@
 import { IDInput } from "@cubby/schemas/common";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { Entity } from "@cubby/schemas/entity";
-import type {
-  IngredientId,
-  ProductId,
-  UserId,
-} from "@cubby/schemas/identifiers";
-import type {
-  IngredientListItem,
-  IngredientWithFoodOut,
-} from "@cubby/schemas/ingredient";
+import type { UserId } from "@cubby/schemas/identifiers";
 import {
   buildPaginatedResponse,
   createPaginatedResponseSchemaWithContext,
+  createSortPaginationFields,
   type PaginationParams,
   type SortParams,
   sortPaginationFields,
 } from "@cubby/schemas/pagination";
-import type {
-  ProductCategory,
-  ProductCreateInput,
-  ProductListItem,
-  ProductUpdateInput,
-  ProductWithFoodOut,
-} from "@cubby/schemas/product";
 import { type ZodSchema, z } from "zod";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { USDAClient } from "~/server/clients/usda";
@@ -31,47 +17,6 @@ import type { Database } from "~/server/db";
 import type { LocationValuationService } from "~/server/services/location-valuation.service";
 import type { RecipeCostingService } from "~/server/services/recipe-costing.service";
 import { protectedProcedure } from "./trpc";
-
-interface ProductCrudService {
-  getProductByID(id: ProductId): Promise<ProductWithFoodOut>;
-  productList(
-    nameFilter: string | undefined,
-    manufacturerFilter: string | undefined,
-    upcFilter: string | undefined,
-    categoryFilter: ProductCategory | undefined,
-    sort: SortParams,
-    pagination: PaginationParams,
-    groupBy?: string,
-  ): Promise<{ data: ProductListItem[]; count: number }>;
-  createProduct(
-    data: ProductCreateInput,
-    actor: ActorContext,
-  ): Promise<ProductWithFoodOut>;
-  updateProduct(
-    id: ProductId,
-    data: ProductUpdateInput["data"],
-    actor: ActorContext,
-  ): Promise<ProductWithFoodOut>;
-}
-
-interface IngredientCrudService {
-  getIngredientByID(id: IngredientId): Promise<IngredientWithFoodOut>;
-  ingredientList(
-    nameFilter: string | undefined,
-    sort: SortParams,
-    pagination: PaginationParams,
-    missingProductsOnly?: boolean,
-  ): Promise<{ data: IngredientListItem[]; count: number }>;
-  createIngredient(
-    data: unknown,
-    actor: ActorContext,
-  ): Promise<IngredientWithFoodOut>;
-  updateIngredient(
-    id: IngredientId,
-    data: unknown,
-    actor: ActorContext,
-  ): Promise<IngredientWithFoodOut>;
-}
 
 // Common input schema for update operations
 const updateInputSchema = <T extends ZodSchema>(dataSchema: T) =>
@@ -88,8 +33,6 @@ export interface CrudServices {
   db: Database;
   actorContext: ActorContext | null;
   services: {
-    product: ProductCrudService;
-    ingredient: IngredientCrudService;
     recipeCosting: RecipeCostingService;
     locationValuation: LocationValuationService;
   };
@@ -196,6 +139,11 @@ export function createEntityListProcedure<TOutput, TFilters>({
   schemas: {
     output: ZodSchema<TOutput>;
     filters: ZodSchema<TFilters>;
+    sort?: {
+      sortableFields: readonly [string, ...string[]];
+      defaultSort: string;
+      groupableFields?: readonly [string, ...string[]];
+    };
   };
   repository: {
     list: (
@@ -209,11 +157,19 @@ export function createEntityListProcedure<TOutput, TFilters>({
   /** Entity type for enhanced error messages */
   entityName: Entity;
 }) {
+  const sortFields = schemas.sort
+    ? createSortPaginationFields({
+        sortableFields: schemas.sort.sortableFields,
+        defaultSort: schemas.sort.defaultSort,
+        groupableFields: schemas.sort.groupableFields,
+      })
+    : sortPaginationFields;
+
   const list = protectedProcedure
     .input(
       z.object({
         filters: schemas.filters,
-        ...sortPaginationFields,
+        ...sortFields,
       }),
     )
     .output(
@@ -322,6 +278,11 @@ export function createEntityCrudProcedures<
     createOutput?: ZodSchema<TCreateOutput>;
     updateOutput?: ZodSchema<TUpdateOutput>;
     filters: ZodSchema<TFilters>;
+    sort?: {
+      sortableFields: readonly [string, ...string[]];
+      defaultSort: string;
+      groupableFields?: readonly [string, ...string[]];
+    };
     idSchema?: z.ZodType<unknown>;
   };
   repository: {
@@ -350,6 +311,7 @@ export function createEntityCrudProcedures<
     schemas: {
       output: (schemas.listOutput ?? schemas.output) as ZodSchema<TListOutput>,
       filters: schemas.filters,
+      sort: schemas.sort,
     },
     repository: {
       list: repository.list,

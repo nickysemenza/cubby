@@ -1,4 +1,7 @@
-import type { FoodSummaryEnrichment } from "@cubby/schemas/usda";
+import type {
+  FoodSummaryEnrichment,
+  USDAFoodSortField,
+} from "@cubby/schemas/usda";
 import {
   type DataType,
   dataTypeEnum,
@@ -44,15 +47,19 @@ export function USDAFoodList() {
   const nameFilter = tableState.getColumnFilter("foodinfo-description");
   const linkedProductsOnly =
     tableState.getColumnFilter("linkedProducts") === "linked";
+  const sortParams = nameFilter
+    ? ({ orderBy: "relevance", direction: "asc" } as const)
+    : (tableState.getSortParams() as {
+        orderBy: USDAFoodSortField;
+        direction: "asc" | "desc";
+      });
 
   // Query data with params from table state
   const query = useQuery(
     api.usda.listSummaries.queryOptions({
       // While searching by name, rank by FTS relevance (best match first) like
       // the picker; otherwise honor the column sort.
-      sort: nameFilter
-        ? { orderBy: "relevance", direction: "asc" }
-        : tableState.getSortParams(),
+      sort: sortParams,
       pagination: tableState.pagination,
       filters: {
         nameFilter,

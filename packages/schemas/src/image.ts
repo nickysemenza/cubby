@@ -2,8 +2,8 @@ import { z } from "zod";
 import { entityImage } from "./entity";
 import { id } from "./identifiers";
 import {
+  createSortPaginationFields,
   createPaginatedResponseSchema,
-  sortPaginationFields,
 } from "./pagination";
 
 // Image status values - single source of truth for both Zod and Drizzle
@@ -12,6 +12,16 @@ export const imageStatusValues = ["PENDING", "UPLOADED", "FAILED"] as const;
 // Image status enum
 export const ImageStatus = z.enum(imageStatusValues);
 export type ImageStatus = z.infer<typeof ImageStatus>;
+
+export const imageSortableFields = [
+  "createdAt",
+  "updatedAt",
+  "filename",
+  "size",
+  "status",
+] as const;
+
+export type ImageSortField = (typeof imageSortableFields)[number];
 
 // Allowed image content types for upload validation
 export const ALLOWED_IMAGE_TYPES = [
@@ -62,7 +72,10 @@ export const imageListFiltersSchema = z.object({
   filters: z.object({
     searchFilter: z.string().optional(),
   }),
-  ...sortPaginationFields,
+  ...createSortPaginationFields({
+    sortableFields: imageSortableFields,
+    defaultSort: "createdAt",
+  }),
 });
 
 // Schema for importing an image from a URL
@@ -132,7 +145,7 @@ export const importImageFromUrlResponseSchema = z.object({
 
 // Response schema for culling pending images
 export const cullPendingImagesResponseSchema = z.object({
-  count: z.int(),
+  count: z.int().nonnegative(),
   deletedIds: z.array(id),
   deletedKeys: z.array(z.string()),
 });

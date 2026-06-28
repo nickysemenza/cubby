@@ -26,8 +26,6 @@ const DEFAULT_HIDDEN_COLUMN_IDS = new Set([
 
 interface MobileCellMeta {
   mobile?: MobileColumnMeta;
-  mobileCategory?: "hero" | "compact" | "medium" | "wide";
-  mobileHidden?: boolean;
 }
 
 interface SlotValue {
@@ -56,19 +54,12 @@ function hasRenderableContent(content: ReactNode): boolean {
 }
 
 function resolveSlot(colId: string, meta?: MobileCellMeta): MobileSlot {
-  if (meta?.mobileHidden) return "hidden";
   if (meta?.mobile?.slot) return meta.mobile.slot;
   if (DEFAULT_HIDDEN_COLUMN_IDS.has(colId)) return "hidden";
   if (colId === "image") return "image";
   if (colId === "actions") return "actions";
   if (colId === "name" || colId === "filename") return "title";
 
-  if (meta?.mobileCategory === "compact" || meta?.mobileCategory === "medium") {
-    return "subtitle";
-  }
-  if (meta?.mobileCategory === "wide" || meta?.mobileCategory === "hero") {
-    return "meta";
-  }
   return "meta";
 }
 

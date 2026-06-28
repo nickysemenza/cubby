@@ -6,13 +6,13 @@ import type {
   MealOut,
   MealRecipeInput,
 } from "@cubby/schemas/meal";
+import { mealSortableFields } from "@cubby/schemas/meal";
 import {
   buildTakeSkip,
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
 import { and, eq, gte, inArray, lte } from "drizzle-orm";
-import { getSortableFields } from "~/entities/entities";
 import type { Database } from "~/server/db";
 import { meal, mealRecipe } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -73,7 +73,7 @@ export const mealList = async (
   sort: SortParams,
   pagination: PaginationParams,
 ): Promise<{ data: MealOut[]; count: number }> => {
-  const orderByArray = buildOrderBy(meal, sort, [...getSortableFields("meal")]);
+  const orderByArray = buildOrderBy(meal, sort, [...mealSortableFields]);
   const { take, skip } = buildTakeSkip(pagination);
 
   const whereCondition = and(

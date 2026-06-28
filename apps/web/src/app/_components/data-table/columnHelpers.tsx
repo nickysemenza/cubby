@@ -67,12 +67,7 @@ export interface MobileColumnMeta {
 // Extend TanStack Table's meta type to include our custom properties
 declare module "@tanstack/react-table" {
   interface ColumnMeta<TData, TValue> {
-    /** New mobile projection metadata (preferred) */
     mobile?: MobileColumnMeta;
-    /** @deprecated Use `mobile.slot` instead */
-    mobileCategory?: "hero" | "compact" | "medium" | "wide";
-    /** @deprecated Use `mobile: { slot: "hidden" }` instead */
-    mobileHidden?: boolean;
     className?: string;
     /** Right-align + tabular figures for numeric/quantity columns. */
     numeric?: boolean;
@@ -578,7 +573,6 @@ export function createTextColumn<
     header?: string;
     placeholder?: string;
     className?: string;
-    mobileCategory?: "hero" | "compact" | "medium" | "wide";
     mobile?: MobileColumnMeta;
     filterConfig?: FilterConfig;
     /** Enable inline editing */
@@ -592,7 +586,6 @@ export function createTextColumn<
     header: options?.header,
     meta: {
       className: options?.className,
-      mobileCategory: options?.mobileCategory,
       mobile: options?.mobile,
       filterConfig: options?.filterConfig,
     },
@@ -719,7 +712,6 @@ export function createSingleEntityInlineLinkColumn<
     header?: string;
     className?: string;
     compact?: boolean;
-    mobileCategory?: "hero" | "compact" | "medium" | "wide";
     mobile?: MobileColumnMeta;
     filterConfig?: FilterConfig;
     enableSorting?: boolean;
@@ -739,7 +731,6 @@ export function createSingleEntityInlineLinkColumn<
       enableSorting: options?.enableSorting ?? false,
       meta: {
         className: options?.className,
-        mobileCategory: options?.mobileCategory,
         mobile: options?.mobile,
         filterConfig: options?.filterConfig,
       },

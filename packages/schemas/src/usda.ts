@@ -10,11 +10,21 @@ import {
 } from "@cubby/usda-schemas";
 import { z } from "zod";
 import {
+  createSortPaginationFields,
   createPaginatedResponseSchema,
-  sortPaginationFields,
 } from "./pagination";
 import { productTopLevelOut } from "./product";
 import { unitMappingWithMetadata } from "./unitmapping";
+
+export const usdaFoodSortableFields = [
+  "fdc_id",
+  "description",
+  "data_type",
+  "relevance",
+  "linkedProducts",
+] as const;
+
+export type USDAFoodSortField = (typeof usdaFoodSortableFields)[number];
 
 export const usdaListInput = z.object({
   filters: z.object({
@@ -24,17 +34,20 @@ export const usdaListInput = z.object({
     foodsOnly: z.boolean().optional(),
     linkedProductsOnly: z.boolean().optional(),
   }),
-  ...sortPaginationFields,
+  ...createSortPaginationFields({
+    sortableFields: usdaFoodSortableFields,
+    defaultSort: "fdc_id",
+  }),
 });
 
 export const usdaFoodLookupInput = foodLookupParam;
 
 export const usdaFoodIdInput = z.object({
-  id: z.number(),
+  id: z.number().int().positive(),
 });
 
 export const usdaFoodEnrichmentsInput = z.object({
-  fdcIds: z.array(z.number()).max(1000),
+  fdcIds: z.array(z.number().int().positive()).max(1000),
 });
 
 export const foodSummaryEnrichment = z.object({

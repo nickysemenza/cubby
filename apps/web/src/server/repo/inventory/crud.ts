@@ -5,13 +5,13 @@ import type {
   LocationId,
   ProductId,
 } from "@cubby/schemas/identifiers";
+import { inventorySortableFields } from "@cubby/schemas/inventory";
 import {
   buildTakeSkip,
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
-import { and, count, eq, inArray, not, sql } from "drizzle-orm";
-import { getSortableFields } from "~/entities/entities";
+import { and, asc, count, desc, eq, inArray, not, sql } from "drizzle-orm";
 import { computeInventoryValuation } from "~/lib/price-mapping-utils";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { inventoryEntry, location, product } from "~/server/db/schema";
@@ -226,107 +226,87 @@ export const getInventoryCountsByLocations = async (
   return countMap;
 };
 
+const inventoryListOrderBy = (sort: SortParams) => {
+  const direction = sort.direction === "asc" ? asc : desc;
+  if (sort.orderBy === "name" || sort.orderBy === "product") {
+    return [direction(product.name), desc(inventoryEntry.createdAt)];
+  }
+  if (sort.orderBy === "location") {
+    return [direction(location.name), desc(inventoryEntry.createdAt)];
+  }
+  return buildOrderBy(inventoryEntry, sort, [...inventorySortableFields]);
+};
+
 export const inventoryentryList = async (
   db: Database,
   filters: InventoryFilters,
   sort: SortParams,
   pagination: PaginationParams,
 ) => {
-  // Build order by using central sortableFields config
-  const orderByArray = buildOrderBy(inventoryEntry, sort, [
-    ...getSortableFields("inventory"),
-  ]);
   const { take, skip } = buildTakeSkip(pagination);
 
-  // Determine if we need joins (name filters require joining related tables)
-  const needsJoins = filters.productNameFilter || filters.locationNameFilter;
+  const whereCondition = buildSearchConditions(
+    inventoryEntry,
+    [
+      { column: product.name, term: filters.productNameFilter },
+      { column: location.name, term: filters.locationNameFilter },
+    ],
+    [
+      filters.locationIdFilter
+        ? eq(inventoryEntry.locationId, filters.locationIdFilter)
+        : undefined,
+    ],
+  );
 
-  if (needsJoins) {
-    // Build conditions for join-based query
-    const whereCondition = buildSearchConditions(
-      inventoryEntry,
-      [
-        { column: product.name, term: filters.productNameFilter },
-        { column: location.name, term: filters.locationNameFilter },
-      ],
-      [
-        filters.locationIdFilter
-          ? eq(inventoryEntry.locationId, filters.locationIdFilter)
-          : undefined,
-      ],
-    );
+  const baseQuery = getDb(db)
+    .select({ inventoryEntry })
+    .from(inventoryEntry)
+    .innerJoin(
+      product,
+      and(eq(inventoryEntry.productId, product.id), notDeleted(product)),
+    )
+    .innerJoin(
+      location,
+      and(eq(inventoryEntry.locationId, location.id), notDeleted(location)),
+    )
+    .where(whereCondition);
 
-    // Query with joins for name filtering
-    const [results, [countResult]] = await Promise.all([
-      getDb(db)
-        .select({ inventoryEntry })
-        .from(inventoryEntry)
-        .innerJoin(
-          product,
-          and(eq(inventoryEntry.productId, product.id), notDeleted(product)),
-        )
-        .innerJoin(
-          location,
-          and(eq(inventoryEntry.locationId, location.id), notDeleted(location)),
-        )
-        .where(whereCondition)
-        .orderBy(...orderByArray)
-        .limit(take)
-        .offset(skip),
-      getDb(db)
-        .select({ count: count() })
-        .from(inventoryEntry)
-        .innerJoin(
-          product,
-          and(eq(inventoryEntry.productId, product.id), notDeleted(product)),
-        )
-        .innerJoin(
-          location,
-          and(eq(inventoryEntry.locationId, location.id), notDeleted(location)),
-        )
-        .where(whereCondition),
-    ]);
-
-    // Fetch row-display data with relations in a single batched query (avoids N+1)
-    const ids = results.map((row) => row.inventoryEntry.id);
-    const listResults =
-      ids.length > 0
-        ? await getDb(db).query.inventoryEntry.findMany({
-            where: inArray(inventoryEntry.id, ids),
-            ...relations.inventory.list,
-          })
-        : [];
-
-    // Preserve original order from the filtered query
-    const resultsById = new Map(listResults.map((r) => [r.id, r]));
-    const inventoryEntries = ids
-      .map((id) => resultsById.get(id))
-      .filter((r) => r !== undefined)
-      .map((r) => dbInventoryEntryToListAPI(r));
-    return { data: inventoryEntries, count: countResult?.count ?? 0 };
-  }
-
-  // Simple path: no name filters, use relational query
-  const whereClause = filters.locationIdFilter
-    ? and(
-        eq(inventoryEntry.locationId, filters.locationIdFilter),
-        notDeleted(inventoryEntry),
+  const [results, [countResult]] = await Promise.all([
+    baseQuery
+      .orderBy(...inventoryListOrderBy(sort))
+      .limit(take)
+      .offset(skip),
+    getDb(db)
+      .select({ count: count() })
+      .from(inventoryEntry)
+      .innerJoin(
+        product,
+        and(eq(inventoryEntry.productId, product.id), notDeleted(product)),
       )
-    : notDeleted(inventoryEntry);
-
-  const [results, totalCount] = await Promise.all([
-    getDb(db).query.inventoryEntry.findMany({
-      where: whereClause,
-      ...relations.inventory.list,
-      orderBy: orderByArray,
-      limit: take,
-      offset: skip,
-    }),
-    countWhere(db, inventoryEntry, whereClause),
+      .innerJoin(
+        location,
+        and(eq(inventoryEntry.locationId, location.id), notDeleted(location)),
+      )
+      .where(whereCondition),
   ]);
 
-  const inventoryEntries = results.map((r) => dbInventoryEntryToListAPI(r));
-  return { data: inventoryEntries, count: totalCount };
+  // Fetch row-display data with relations in a single batched query (avoids N+1)
+  const ids = results.map((row) => row.inventoryEntry.id);
+  const listResults =
+    ids.length > 0
+      ? await getDb(db).query.inventoryEntry.findMany({
+          where: inArray(inventoryEntry.id, ids),
+          ...relations.inventory.list,
+        })
+      : [];
+
+  // Preserve original order from the paged query.
+  const resultsById = new Map(listResults.map((r) => [r.id, r]));
+  const inventoryEntries = ids
+    .map((id) => resultsById.get(id))
+    .filter((r) => r !== undefined)
+    .map((r) => dbInventoryEntryToListAPI(r));
+  return { data: inventoryEntries, count: countResult?.count ?? 0 };
 };
 
 export const updateInventoryEntry = async (

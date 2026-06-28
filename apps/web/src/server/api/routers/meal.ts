@@ -17,6 +17,7 @@ import {
   mealListOut,
   mealOut,
   mealRecipeIdInput,
+  mealSortableFields,
   mealUpdateData,
   mealUpdateRecipeInput,
   type ShoppingListContribution,
@@ -46,6 +47,7 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
     updateInput: mealUpdateData,
     output: mealOut,
     filters: mealFiltersSchema,
+    sort: { sortableFields: mealSortableFields, defaultSort: "date" },
     idSchema: mealId,
   },
   repository: {

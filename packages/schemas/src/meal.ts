@@ -10,6 +10,10 @@ import {
 
 export { mealDate, mealDateRange, mealScale } from "./meal-shared";
 
+export const mealSortableFields = ["date", "createdAt"] as const;
+
+export type MealSortField = (typeof mealSortableFields)[number];
+
 /**
  * Meal-planning schemas. A `meal` is a planned eating occasion on a calendar day
  * that groups one or more recipes (`mealRecipe`), each at a numeric `scale`

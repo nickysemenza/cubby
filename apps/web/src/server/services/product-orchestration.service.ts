@@ -30,12 +30,12 @@ import {
 } from "~/server/repo/product";
 import { importImageFromUPC } from "./image-import";
 import type { LocationValuationService } from "./location-valuation.service";
-import type { ProductService } from "./product.service";
+import type { ProductWriteActions } from "./product.service";
 import type { RecipeCostingService } from "./recipe-costing.service";
 
 interface ProductWriteServices {
   db: Database;
-  product: ProductService;
+  product: ProductWriteActions;
   recipeCosting: RecipeCostingService;
   locationValuation: LocationValuationService;
 }

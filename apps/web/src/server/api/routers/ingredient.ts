@@ -24,6 +24,7 @@ import {
   ingredientRecipeUsagesOut,
   ingredientResolvableNamesInput,
   ingredientResolveOrCreateOut,
+  ingredientSortableFields,
   ingredientUpdateData,
   ingredientUpdateInput,
   ingredientWithFoodAndSideEffectsOut,
@@ -37,6 +38,7 @@ import {
   getRecipeUsagesForIngredient,
   resolveOrCreateIngredients,
 } from "~/server/repo/ingredient";
+import { IngredientService } from "~/server/services/ingredient.service";
 import {
   createDeleteProcedure,
   createEntityCrudWithoutListProcedures,
@@ -51,10 +53,20 @@ import { createTRPCRouter, protectedProcedure } from "../trpc";
 // ingredientWithFoodOut. Split into the two sub-factories so each surface carries
 // its own output schema. (update is customized below.)
 const { list } = createEntityListProcedure({
-  schemas: { output: ingredientListItemOut, filters: ingredientFiltersSchema },
+  schemas: {
+    output: ingredientListItemOut,
+    filters: ingredientFiltersSchema,
+    sort: {
+      sortableFields: ingredientSortableFields,
+      defaultSort: "createdAt",
+    },
+  },
   repository: {
     list: async (services, filters, sort, pagination) => {
-      return await services.services.ingredient.ingredientList(
+      return await new IngredientService(
+        services.db,
+        services.usdaClient,
+      ).ingredientList(
         filters.nameFilter,
         sort,
         pagination,
@@ -74,20 +86,22 @@ const { getByID, create } = createEntityCrudWithoutListProcedures({
   },
   repository: {
     getByID: async (services, id: IngredientId) => {
-      return await services.services.ingredient.getIngredientByID(id);
+      return await new IngredientService(
+        services.db,
+        services.usdaClient,
+      ).getIngredientByID(id);
     },
     create: async (services, data) => {
-      return await services.services.ingredient.createIngredient(
-        data,
-        services.actorContext,
-      );
+      return await new IngredientService(
+        services.db,
+        services.usdaClient,
+      ).createIngredient(data, services.actorContext);
     },
     update: async (services, id: IngredientId, data) => {
-      return await services.services.ingredient.updateIngredient(
-        id,
-        data,
-        services.actorContext,
-      );
+      return await new IngredientService(
+        services.db,
+        services.usdaClient,
+      ).updateIngredient(id, data, services.actorContext);
     },
   },
 });

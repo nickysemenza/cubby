@@ -7,6 +7,7 @@
  */
 
 import type { IngredientId } from "@cubby/schemas/identifiers";
+import { ingredientSortableFields } from "@cubby/schemas/ingredient";
 import {
   buildTakeSkip,
   type PaginationParams,
@@ -14,7 +15,6 @@ import {
 } from "@cubby/schemas/pagination";
 import type { RecipeRef } from "@cubby/schemas/recipe";
 import { and, count, eq, inArray, isNull, ne, sql } from "drizzle-orm";
-import { getSortableFields } from "~/entities/entities";
 import type { Database } from "~/server/db";
 import {
   ingredient,
@@ -320,7 +320,7 @@ export const ingredientList = async (
                 `WHERE p."ingredientId" = "ingredient"."id" AND p."deletedAt" IS NULL) ${dirSql}`,
             ),
           ]
-        : buildOrderBy(ingredient, sort, [...getSortableFields("ingredient")]);
+        : buildOrderBy(ingredient, sort, [...ingredientSortableFields]);
 
   const { take, skip } = buildTakeSkip(pagination);
 

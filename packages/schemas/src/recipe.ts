@@ -21,6 +21,18 @@ import {
 
 export * from "./recipe-shared";
 
+export const recipeSortableFields = [
+  "createdAt",
+  "name",
+  "costTotal",
+  "caloriesTotal",
+  "source",
+  "yield",
+  "tags",
+] as const;
+
+export type RecipeSortField = (typeof recipeSortableFields)[number];
+
 // The section-ingredient's ingredient carries its aliases so the editor can tell
 // real parser drift from a re-parse that just hit one of this ingredient's
 // aliases (e.g. "large eggs" → the "large brown eggs" ingredient that aliases it).
@@ -153,12 +165,12 @@ export type RecipeOut = z.infer<typeof recipeOut>;
 export const recipeTagsOut = z.array(z.string());
 
 export const recipeRecomputeAllOut = z.object({
-  processed: z.number().int(),
+  processed: z.number().int().nonnegative(),
 });
 
 export const recipeDryRunRecomputeTotalsOut = z.object({
-  wouldChange: z.number().int(),
-  total: z.number().int(),
+  wouldChange: z.number().int().nonnegative(),
+  total: z.number().int().nonnegative(),
 });
 
 // A cookbook as seen on the browse index: the `Cookbook` row plus how many
