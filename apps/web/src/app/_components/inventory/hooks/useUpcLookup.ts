@@ -4,21 +4,13 @@
  * Used by: Quick-Capture, Bulk-Edit, and Scanner functionality
  */
 
+import { upc as upcSchema } from "@cubby/usda-schemas";
 import { useMutation } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { toast } from "sonner";
 import { getErrorMessage } from "~/lib/error-utils";
 import { useTRPC } from "~/trpc/react";
 import { useProductLookupInvalidation } from "./useInventoryMutation";
-
-/**
- * Check if input looks like a UPC barcode (8-14 digits only).
- * Supports UPC-A (12), UPC-E (8), EAN-13 (13), and EAN-8 (8) formats.
- */
-function isUpcInput(input: string): boolean {
-  const trimmed = input.trim();
-  return /^\d{8,14}$/.test(trimmed);
-}
 
 interface UseUpcLookupOptions {
   /** Called when a product is successfully found or created */
@@ -54,9 +46,9 @@ export function useUpcLookup(options: UseUpcLookupOptions = {}) {
 
   const lookupUpc = useCallback(
     async (upc: string) => {
-      const trimmedUpc = upc.trim();
+      const parsedUpc = upcSchema.safeParse(upc);
 
-      if (!isUpcInput(trimmedUpc)) {
+      if (!parsedUpc.success) {
         const error = "Invalid UPC format";
         options.onError?.(error);
         toast.error(error);
@@ -65,7 +57,7 @@ export function useUpcLookup(options: UseUpcLookupOptions = {}) {
 
       try {
         const product = await findOrCreateByUPCMutation.mutateAsync({
-          upc: trimmedUpc,
+          upc: parsedUpc.data,
         });
         options.onSuccess?.(product);
         return product;

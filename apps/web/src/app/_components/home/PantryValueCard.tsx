@@ -1,4 +1,4 @@
-import type { InfLocation } from "@cubby/schemas/location-responses";
+import type { InfLocation } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
 import { Wallet } from "lucide-react";
 import { useMemo } from "react";

@@ -2,20 +2,11 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import type { QueryTiming } from "~/lib/query-timing";
 import type { TableStateReturn } from "../data-table/useTableState";
-
-// Response shape from list queries
-interface ListQueryResponse<TData> {
-  items: TData[];
-  meta: { pageIndex: number; pageSize: number; totalCount: number };
-}
-
-type TRPCQueryOptionsFn<TFilters> = (params: {
-  sort: { orderBy: string; direction: "asc" | "desc" };
-  pagination: { pageIndex: number; pageSize: number };
-  filters: TFilters;
-  groupBy?: string;
-  // biome-ignore lint/suspicious/noExplicitAny: intentional
-}) => any;
+import {
+  type ListQueryResponse,
+  type TRPCQueryOptionsFn,
+  usePaginatedTableCore,
+} from "./usePaginatedTableCore";
 
 interface UseInfiniteTableListOptions<TFilters> {
   queryOptions: TRPCQueryOptionsFn<TFilters>;
@@ -61,21 +52,31 @@ export function useInfiniteTableList<TFilters, TData = unknown>({
   groupBy,
   enabled = true,
 }: UseInfiniteTableListOptions<TFilters>): UseInfiniteTableListReturn<TData> {
-  const filters = useMemo(
-    () => buildFilters(tableState),
-    [buildFilters, tableState],
-  );
+  const { filters, sortParams, pagination } = usePaginatedTableCore({
+    queryOptions,
+    buildFilters,
+    tableState,
+    groupBy,
+  });
 
-  const sortParams = useMemo(() => tableState.getSortParams(), [tableState]);
-
-  const { pagination } = tableState;
-
-  // Get the base query options for page 0 to extract queryKey and queryFn shape
-  const baseOptions = useMemo(
-    () =>
-      queryOptions({
+  const infiniteQueryKey = useMemo(
+    () => [
+      ...queryOptions({
         sort: sortParams,
         pagination: { pageIndex: 0, pageSize: pagination.pageSize },
+        filters,
+        ...(groupBy && { groupBy }),
+      }).queryKey,
+      "__infinite__",
+    ],
+    [queryOptions, sortParams, pagination.pageSize, filters, groupBy],
+  );
+
+  const pageOptions = useMemo(
+    () => (pageParam: number) =>
+      queryOptions({
+        sort: sortParams,
+        pagination: { pageIndex: pageParam, pageSize: pagination.pageSize },
         filters,
         ...(groupBy && { groupBy }),
       }),
@@ -93,18 +94,12 @@ export function useInfiniteTableList<TFilters, TData = unknown>({
     refetch,
   } = useInfiniteQuery({
     enabled,
-    queryKey: [...baseOptions.queryKey, "__infinite__"],
+    queryKey: infiniteQueryKey,
     queryFn: async ({ pageParam }: { pageParam: number }) => {
-      // Build query options for the requested page
-      const pageOptions = queryOptions({
-        sort: sortParams,
-        pagination: { pageIndex: pageParam, pageSize: pagination.pageSize },
-        filters,
-        ...(groupBy && { groupBy }),
-      });
+      const options = pageOptions(pageParam);
       // Call the queryFn from tRPC options
-      return (await pageOptions.queryFn({
-        queryKey: pageOptions.queryKey,
+      return (await options.queryFn({
+        queryKey: options.queryKey,
       })) as ListQueryResponse<TData>;
     },
     initialPageParam: 0,

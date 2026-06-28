@@ -21,7 +21,7 @@ import {
 } from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
-import { EntityPillLink } from "../_components/EntityPill";
+import { EntityInlineLink } from "../_components/EntityInlineLink";
 
 // Format a ratio compactly: a few significant figures, no trailing noise.
 const fmtRatio = (n: number): string =>
@@ -135,7 +135,7 @@ export function EquivalencesReport() {
                       rowSpan={group.length}
                       className="border-b align-top"
                     >
-                      <EntityPillLink
+                      <EntityInlineLink
                         entity="ingredient"
                         data={{ id: c.ingredientId, name: c.ingredientName }}
                       />
@@ -175,7 +175,7 @@ export function EquivalencesReport() {
                           key={`${ex.recipeId} ${i}`}
                           className="flex flex-wrap items-baseline gap-x-2 text-muted-foreground/70"
                         >
-                          <EntityPillLink
+                          <EntityInlineLink
                             entity="recipe"
                             data={{ id: ex.recipeId, name: ex.recipeName }}
                             compact

@@ -14,5 +14,3 @@ export const tableSearchFields = {
   page: z.coerce.number().int().positive().optional().catch(undefined),
   pageSize: z.coerce.number().int().positive().optional().catch(undefined),
 };
-
-export const tableSearchSchema = z.object(tableSearchFields);

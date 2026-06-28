@@ -32,8 +32,10 @@
     "test:run": "vitest run"
   },
   "dependencies": {
+    "@cubby/usda-schemas": "workspace:*",
     "@cubby/worker-tracing": "workspace:*",
     "@hono/zod-openapi": "^1.2.1",
+    "@hono/zod-validator": "^0.8.0",
     "@modelcontextprotocol/sdk": "^1.28.0",
     "@scalar/hono-api-reference": "^0.10.0",
     "@sentry/cloudflare": "^10.60.0",

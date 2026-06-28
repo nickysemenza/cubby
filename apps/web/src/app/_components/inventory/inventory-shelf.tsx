@@ -1,4 +1,4 @@
-import type { inventoryListItemOut } from "@cubby/schemas/inventory-responses";
+import type { inventoryListItemOut } from "@cubby/schemas/inventory";
 import type { z } from "zod";
 import { formatCurrency } from "~/lib/utils";
 import { ShelfCard, ShelfEmpty, ShelfGrid } from "../data-table/shelf";

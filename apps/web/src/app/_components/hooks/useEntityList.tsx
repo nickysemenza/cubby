@@ -1,5 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
-import type { UnitMapping } from "@cubby/schemas/unitmapping-responses";
+import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { QueryKey } from "@tanstack/react-query";
 import type {
   ColumnDef,

@@ -1,4 +1,4 @@
-import type { ImageOut } from "@cubby/schemas/image-responses";
+import type { ImageOut } from "@cubby/schemas/image";
 import { createContext, type ReactNode, useContext } from "react";
 import { useChunkedRecordQuery } from "~/app/_components/hooks/useChunkedRecordQuery";
 import { useTRPC } from "~/trpc/react";
@@ -14,12 +14,13 @@ function useProductImageSummaries(productIds: readonly string[]) {
     ids: productIds,
     empty: EMPTY_PRODUCT_IMAGE_MAP,
     queryOptions: (chunkIds) =>
-      api.product.imageSummaries.queryOptions(
-        { ids: chunkIds },
+      api.product.summaries.queryOptions(
+        { ids: chunkIds, include: ["images"] },
         {
           enabled: chunkIds.length > 0,
           staleTime: 5 * 60 * 1000,
           gcTime: 30 * 60 * 1000,
+          select: (data) => data.images ?? EMPTY_PRODUCT_IMAGE_MAP,
         },
       ),
   });

@@ -1,7 +1,4 @@
-import type {
-  RecipeOut,
-  SectionIngredientOut,
-} from "@cubby/schemas/recipe-responses";
+import type { RecipeOut, SectionIngredientOut } from "@cubby/schemas/recipe";
 import { match } from "ts-pattern";
 import type { CalculateTotalsResult } from "~/lib/recipe-costing";
 

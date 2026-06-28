@@ -1,5 +1,5 @@
 import type { LocationId } from "@cubby/schemas/identifiers";
-import type { inventoryListItemOut } from "@cubby/schemas/inventory-responses";
+import type { inventoryListItemOut } from "@cubby/schemas/inventory";
 import type { Row } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import { ArrowRightLeft, ImageIcon, Trash } from "lucide-react";
@@ -10,7 +10,7 @@ import { inventoryMutationInvalidateKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 import {
   createEditableAmountColumn,
-  createSingleEntityPillColumn,
+  createSingleEntityInlineLinkColumn,
 } from "../data-table/columnHelpers";
 import { ShelfTableToggle, type ShelfView } from "../data-table/shelf";
 import RTable from "../data-table/Table";
@@ -43,7 +43,7 @@ export function LocationInventoryTable({
   const [unitMappingProductIds, setUnitMappingProductIds] = useState<string[]>(
     [],
   );
-  const unitMappingSummaries = useProductUnitMappingSummaries(
+  const unitMappingsByProductId = useProductUnitMappingSummaries(
     unitMappingProductIds,
   );
   const updateMutation = useUpdateMutation({
@@ -123,7 +123,7 @@ export function LocationInventoryTable({
         ),
       }),
 
-      createSingleEntityPillColumn(columnHelper, "product", "product", {
+      createSingleEntityInlineLinkColumn(columnHelper, "product", "product", {
         header: "Product",
         className: "min-w-0 w-64",
       }),
@@ -135,7 +135,7 @@ export function LocationInventoryTable({
             data: { amount: newAmount },
           });
         },
-        getUnitMappings: (row) => unitMappingSummaries[row.product.id] ?? [],
+        getUnitMappings: (row) => unitMappingsByProductId[row.product.id] ?? [],
       }),
     ],
     extraActions: (item) => (

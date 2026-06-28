@@ -1,5 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
-import type { UnitMapping } from "@cubby/schemas/unitmapping-responses";
+import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { ColumnDef, ColumnHelper } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { useMemo, useRef } from "react";

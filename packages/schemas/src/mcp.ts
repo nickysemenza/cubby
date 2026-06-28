@@ -9,7 +9,7 @@ import {
 } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { amount } from "./codec";
-import { externalIdOut } from "./external-id-responses";
+import { externalIdOut } from "./external-id";
 import {
   ingredientId,
   inventoryId,
@@ -22,20 +22,54 @@ import {
   recipeId,
   recipeShortcode,
 } from "./identifiers";
-import { locationType } from "./location";
+import {
+  mcpIngredientCreateInputShape,
+  mcpIngredientSearchInputShape,
+  mcpIngredientUpdateInputShape,
+} from "./ingredient";
+import {
+  locationType,
+  mcpLocationCreateInputShape,
+  mcpLocationUpdateInputShape,
+} from "./location";
+import {
+  mcpMealAddRecipeInputShape,
+  mcpMealCreateInputShape,
+  mcpMealUpdateInputShape,
+} from "./meal";
 import { mealDate, mealScale } from "./meal-shared";
-import { mealTotals, scaledTotals } from "./meal-responses";
-import { productCategory } from "./product";
+import { mealTotals, scaledTotals } from "./meal";
+import {
+  mcpProductCreateInputShape,
+  mcpProductUpdateInputShape,
+  productCategory,
+} from "./product";
+import { mcpRecipeCreateInputShape, mcpRecipeUpdateInputShape } from "./recipe";
 import { recipeServings, recipeTags, recipeYieldSchema } from "./recipe-shared";
+import { type McpUnitMappingInput, mcpUnitMappingInput } from "./unitmapping";
+
+export {
+  type McpUnitMappingInput,
+  mcpIngredientCreateInputShape,
+  mcpIngredientSearchInputShape,
+  mcpIngredientUpdateInputShape,
+  mcpLocationCreateInputShape,
+  mcpLocationUpdateInputShape,
+  mcpMealAddRecipeInputShape,
+  mcpMealCreateInputShape,
+  mcpMealUpdateInputShape,
+  mcpProductCreateInputShape,
+  mcpProductUpdateInputShape,
+  mcpRecipeCreateInputShape,
+  mcpRecipeUpdateInputShape,
+  mcpUnitMappingInput,
+};
 
 export const mcpLocationOut = z.object({
   id: locationId,
   name: z.string(),
   shortcode: locationShortcode,
   type: locationType,
-  // Hierarchy as pointers, not nested objects. get_location / list_locations
-  // both already carry parent + immediate children on the row, so these are
-  // reachable in the same call; id+name is enough to navigate.
   parentName: z.string().nullable(),
   parentId: locationId.nullable(),
   children: z.array(z.object({ id: locationId, name: z.string() })),
@@ -84,9 +118,6 @@ export const mcpProductOut = z.object({
   fdc_id: fdcId.nullable(),
   usdaUnavailable: z.boolean().nullable(),
   externalIds: z.array(externalIdOut),
-  // USDA linkage is resolved at query time (explicit fdc_id, else UPC
-  // auto-match) and surfaced as `food`; a non-null `usdaFdcId` is the
-  // canonical linked signal, including UPC-only matches.
   usdaFdcId: z.number().nullable(),
   ingredientId: ingredientId.nullable(),
   unitMappings: z.array(mcpProductUnitMappingOut),
@@ -99,7 +130,6 @@ export const mcpRecipeOut = z.object({
   yield: recipeYieldSchema.nullish(),
   servings: recipeServings.nullish(),
   tags: recipeTags.nullish(),
-  // recipeTopLevel does not model shortcode; recipe rows still carry it.
   shortcode: recipeShortcode.nullish(),
 });
 export type McpRecipeOut = z.infer<typeof mcpRecipeOut>;
@@ -116,7 +146,6 @@ export const mcpIngredientOut = z.object({
   aliases: z.array(z.string()),
   products: z.array(mcpIngredientProductOut),
   recipeCount: z.number().int().nonnegative(),
-  // Pointer to the ingredient's own USDA food link; reach it via get_usda_food.
   usdaFdcId: z.number().nullable(),
 });
 export type McpIngredientOut = z.infer<typeof mcpIngredientOut>;
@@ -155,8 +184,6 @@ export const mcpUsdaFoodOut = z.object({
   gtin_upc: upc.nullable(),
   ndb_number: ndb.nullable(),
   ingredients: z.string().nullable(),
-  // Branded serving + portion table + named nutrient summary are not reachable
-  // through a separate MCP portion/nutrient decode tool.
   serving: mcpBrandedServingOut.nullable(),
   nutrientsPer100: nutrientsPer100.nullable(),
   nutrientSummary: z.array(nutrientSummary),

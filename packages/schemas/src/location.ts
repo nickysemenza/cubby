@@ -1,8 +1,17 @@
-import { locationTypeValues } from "@cubby/shared";
+import { locationTypeValues, productCategoryValues } from "@cubby/shared";
+import { fdcId, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
+import { amount } from "./codec";
 import { requiredName } from "./common";
-import { locationId, locationShortcode } from "./identifiers";
-import { imageOut } from "./image-responses";
+import {
+  inventoryId,
+  locationId,
+  locationShortcode,
+  normalizedLocationShortcode,
+  productId,
+  productShortcode,
+} from "./identifiers";
+import { imageOut } from "./image";
 
 export const locationType = z
   .enum(locationTypeValues)
@@ -57,10 +66,121 @@ export const locationOut = z.object({
 
 export type LocationOut = z.infer<typeof locationOut>;
 
-export type {
-  LocationListItemOut,
-  LocationListRefOut,
-} from "./location-responses";
+const locationResponseFields = {
+  id: locationId,
+  shortcode: locationShortcode,
+  name: z.string().describe("name of location"),
+  type: locationType,
+  lastBulkInventory: z.date().nullable(),
+  aiDescription: z.string().nullable(),
+  images: z.array(imageOut),
+  // Persisted valuation rollup; null until first recompute.
+  valuation: locationValuation.nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+};
+
+export const locationListRefOut = z.object({
+  id: locationId,
+  shortcode: locationShortcode,
+  name: z.string(),
+  type: locationType,
+});
+export type LocationListRefOut = z.infer<typeof locationListRefOut>;
+
+const locationProductCategory = z.enum(productCategoryValues);
+
+const locationInventoryProductOut = z.object({
+  id: productId,
+  shortcode: productShortcode,
+  name: z.string(),
+  upc: upc.nullable(),
+  fdc_id: fdcId.nullable(),
+  manufacturer: z.string(),
+  model: z.string().nullish(),
+  notes: z.string().nullish(),
+  expectedQuantity: z.number().int().positive().nullable(),
+  category: locationProductCategory.nullable(),
+  price: z.number().nullable(),
+  usdaUnavailable: z.boolean().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
+
+const locationInventoryWithProductOut = z.object({
+  id: inventoryId,
+  amount,
+  valuation: z.number().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+  product: locationInventoryProductOut,
+});
+
+export const locationListItemOut = z.object({
+  ...locationResponseFields,
+  children: z.array(locationListRefOut),
+  parent: locationListRefOut.nullable(),
+  inventoryEntries: z.array(locationInventoryWithProductOut),
+});
+export type LocationListItemOut = z.infer<typeof locationListItemOut>;
+
+export const locationWithParentNameOut = z.object({
+  ...locationResponseFields,
+  parentName: z.string().nullable(),
+});
+export type LocationWithParentNameOut = z.infer<
+  typeof locationWithParentNameOut
+>;
+
+export const locationTypeCountsOut = z.record(locationType, z.number());
+
+export const touchLastBulkInventoryOut = z.object({
+  success: z.boolean(),
+});
+
+export const locationsWithParentNameOut = z.array(locationWithParentNameOut);
+
+export const recentlyActiveLocationsOut = z.array(locationOut);
+
+export const recomputeLocationValuationsOut = z.object({
+  updated: z.number(),
+});
+
+export const locationChildCountsOut = z.record(z.string(), z.number());
+
+/** Minimal inventory item info for tree display */
+const inventoryItemForTree = z.object({
+  id: inventoryId,
+  amount,
+  productName: z.string(),
+  productId,
+});
+export type InventoryItemForTree = z.infer<typeof inventoryItemForTree>;
+
+export type InfLocation = LocationOut & {
+  children?: InfLocation[];
+  parent?: InfLocation;
+  /** Number of direct child locations */
+  childCount?: number;
+  /** Number of inventory items directly at this location */
+  directItemCount?: number;
+  /** Number of inventory items at this location and all descendants */
+  totalItemCount?: number;
+  /** Inventory items at this location (for expanded tree view) */
+  inventoryItems?: InventoryItemForTree[];
+};
+
+export const infLocation: z.ZodType<InfLocation> = z.object({
+  ...locationResponseFields,
+  children: z.lazy(() => infLocation.array()).optional(),
+  parent: z.lazy(() => infLocation.optional()),
+  childCount: z.number().optional(),
+  directItemCount: z.number().optional(),
+  totalItemCount: z.number().optional(),
+  inventoryItems: z.array(inventoryItemForTree).optional(),
+});
+
+export const infLocationListOut = z.array(infLocation);
 
 // Helper to coerce empty strings to null for optional ID fields
 const optionalLocationId = z
@@ -100,11 +220,11 @@ export const locationIdInput = z.object({
 });
 
 export const locationShortcodesInput = z.object({
-  shortcodes: z.array(z.string()),
+  shortcodes: z.array(normalizedLocationShortcode),
 });
 
 export const locationShortcodeInput = z.object({
-  shortcode: z.string(),
+  shortcode: normalizedLocationShortcode,
 });
 
 export const recentlyActiveLocationsInput = z

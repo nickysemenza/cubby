@@ -13,15 +13,15 @@ import type {
   WRowResult,
 } from "@cubby/recipebridge";
 import type { Amount } from "@cubby/schemas/codec";
-import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient-responses";
-import type { ProductWithMappingsAndFoodOut } from "@cubby/schemas/product-responses";
+import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient";
+import type { ProductWithMappingsAndFoodOut } from "@cubby/schemas/product";
 import type {
   RecipeGraphOut,
   RecipeOut,
   SectionIngredientOut,
-} from "@cubby/schemas/recipe-responses";
+} from "@cubby/schemas/recipe";
 import type { RowDiagnosticOut } from "@cubby/schemas/recipe-shared";
-import type { UnitMapping } from "@cubby/schemas/unitmapping-responses";
+import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import {
   getNutrientUnitString,
   type NutrientKey,

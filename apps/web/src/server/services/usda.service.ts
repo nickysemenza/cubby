@@ -9,6 +9,7 @@ import type {
   FoodLookupParam,
   FoodSummary,
 } from "@cubby/usda-schemas";
+import { uniq } from "es-toolkit";
 import { unitMappingsFromFood } from "~/lib/unit-mapping-utils";
 import { TraceNames, withTrace } from "~/server/tracing";
 import type { USDAClient } from "../clients/usda";
@@ -103,7 +104,7 @@ export class USDAService {
   async getFoodEnrichmentsByID(
     fdcIds: number[],
   ): Promise<Record<string, FoodSummaryEnrichment>> {
-    const uniqueIds = [...new Set(fdcIds)];
+    const uniqueIds = uniq(fdcIds);
     const entries = await Promise.all(
       uniqueIds.map(async (fdcId) => {
         const food = await this.usdaClient.getFoodSummaryByID(fdcId);

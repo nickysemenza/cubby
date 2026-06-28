@@ -12,12 +12,10 @@ import {
 } from "@cubby/schemas/pagination";
 import type {
   RecipeCreateInput,
-  RecipeUpdateInput,
-} from "@cubby/schemas/recipe";
-import type {
   RecipeGraphOut,
   RecipeOut,
-} from "@cubby/schemas/recipe-responses";
+  RecipeUpdateInput,
+} from "@cubby/schemas/recipe";
 import { type AnyColumn, and, eq, inArray, type SQL, sql } from "drizzle-orm";
 import { countBy } from "es-toolkit";
 import { getSortableFields } from "~/entities/entities";
@@ -49,7 +47,7 @@ import {
   notDeleted,
   relations,
   unwrapDb,
-  updateAndReturn,
+  updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { generateUniqueRecipeShortcode } from "~/server/repo/shortcode-utils";
@@ -422,7 +420,7 @@ const upsertRecipeMatching = async (
   // Update an already-matched recipe: refresh provenance + replace sections.
   const updateMatched = (existingId: RecipeId): Promise<{ id: RecipeId }> =>
     withTransaction(db, async (tx) => {
-      const updatedRecipe = await updateAndReturn(
+      const updatedRecipe = await updateLiveAndReturn(
         tx,
         recipe,
         {
@@ -446,7 +444,7 @@ const upsertRecipeMatching = async (
           ...(input.tags !== undefined ? { tags: input.tags } : {}),
           updatedAt: new Date(),
         },
-        eq(recipe.id, existingId),
+        existingId,
       );
       await replaceRecipeSections(tx, updatedRecipe.id, input.sections);
       return { id: updatedRecipe.id };
@@ -650,7 +648,10 @@ export const deleteRecipes = async (
 
     // Get all sections for these recipes
     const sections = await tx.query.recipeSection.findMany({
-      where: inArray(recipeSection.recipeId, ids),
+      where: and(
+        inArray(recipeSection.recipeId, ids),
+        notDeleted(recipeSection),
+      ),
       columns: { id: true, recipeId: true },
     });
 
@@ -658,14 +659,17 @@ export const deleteRecipes = async (
 
     // Get counts of cascaded items (per recipe) for the audit trail.
     const cascadedImages = await tx.query.recipeImage.findMany({
-      where: inArray(recipeImage.recipeId, ids),
+      where: and(inArray(recipeImage.recipeId, ids), notDeleted(recipeImage)),
       columns: { recipeId: true },
     });
 
     let cascadedIngredients: Array<{ recipeSectionId: string }> = [];
     if (sectionIds.length > 0) {
       cascadedIngredients = await tx.query.recipeSectionIngredient.findMany({
-        where: inArray(recipeSectionIngredient.recipeSectionId, sectionIds),
+        where: and(
+          inArray(recipeSectionIngredient.recipeSectionId, sectionIds),
+          notDeleted(recipeSectionIngredient),
+        ),
         columns: { recipeSectionId: true },
       });
     }
@@ -686,26 +690,33 @@ export const deleteRecipes = async (
       await tx
         .update(recipeSectionIngredient)
         .set({ deletedAt: now })
-        .where(inArray(recipeSectionIngredient.recipeSectionId, sectionIds));
+        .where(
+          and(
+            inArray(recipeSectionIngredient.recipeSectionId, sectionIds),
+            notDeleted(recipeSectionIngredient),
+          ),
+        );
     }
 
     // Soft delete recipe sections
     await tx
       .update(recipeSection)
       .set({ deletedAt: now })
-      .where(inArray(recipeSection.recipeId, ids));
+      .where(
+        and(inArray(recipeSection.recipeId, ids), notDeleted(recipeSection)),
+      );
 
     // Soft delete recipe images
     await tx
       .update(recipeImage)
       .set({ deletedAt: now })
-      .where(inArray(recipeImage.recipeId, ids));
+      .where(and(inArray(recipeImage.recipeId, ids), notDeleted(recipeImage)));
 
     // Soft delete recipes
     await tx
       .update(recipe)
       .set({ deletedAt: now })
-      .where(inArray(recipe.id, ids));
+      .where(and(inArray(recipe.id, ids), notDeleted(recipe)));
 
     const auditEntries = buildCascadeAuditEntries("recipe", ids, {
       cascadedSections: sectionsByRecipe,

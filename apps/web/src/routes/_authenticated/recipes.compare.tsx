@@ -1,4 +1,4 @@
-import type { RecipeOut } from "@cubby/schemas/recipe-responses";
+import type { RecipeOut } from "@cubby/schemas/recipe";
 import { useQueries } from "@tanstack/react-query";
 import {
   createFileRoute,

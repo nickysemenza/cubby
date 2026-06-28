@@ -3,8 +3,8 @@ import type {
   InventoryUpdateInput,
   inventoryCreatePayloadData,
   inventoryUpdatePayloadData,
+  inventoryWithLocationAndProductOut,
 } from "@cubby/schemas/inventory";
-import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/inventory-responses";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { FC } from "react";
 import { useForm } from "react-hook-form";

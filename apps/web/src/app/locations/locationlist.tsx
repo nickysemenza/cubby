@@ -1,5 +1,7 @@
-import type { LocationType } from "@cubby/schemas/location";
-import type { LocationListItemOut } from "@cubby/schemas/location-responses";
+import type {
+  LocationListItemOut,
+  LocationType,
+} from "@cubby/schemas/location";
 import { getLocationTypeColor } from "@cubby/shared";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
@@ -11,12 +13,12 @@ import { locationMutationInvalidateKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 import {
   createCreatedAtColumn,
-  createEntityPillColumn,
+  createEntityInlineLinkColumn,
   createFilterableSelectColumn,
   createImageColumn,
   createInventoryEntriesColumn,
   createNameColumn,
-  createSingleEntityPillColumn,
+  createSingleEntityInlineLinkColumn,
   createTextColumn,
   createTimestampColumn,
 } from "../_components/data-table/columnHelpers";
@@ -27,7 +29,7 @@ import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { InventoryValuationSummary } from "../_components/locations/inventory-valuation-summary";
-import { LocationTypeBadge } from "../_components/locations/LocationTypeBadge";
+import { LocationTypeLabel } from "../_components/locations/LocationTypeLabel";
 import { locationTypeOptionsWithTheme } from "../_components/locations/location-icons";
 import { typeSupportsQrCode } from "../_components/locations/location-type-theme";
 
@@ -72,11 +74,11 @@ export function LocationList() {
           },
         },
       }),
-      createEntityPillColumn(columnHelper, "children", "location", {
+      createEntityInlineLinkColumn(columnHelper, "children", "location", {
         className: "w-40",
         mobile: { slot: "meta", priority: 55 },
       }),
-      createSingleEntityPillColumn(columnHelper, "parent", "location", {
+      createSingleEntityInlineLinkColumn(columnHelper, "parent", "location", {
         className: "w-36",
         mobile: { slot: "subtitle", priority: 20 },
       }),
@@ -84,7 +86,7 @@ export function LocationList() {
         className: "w-32",
         placeholder: "Filter by type...",
         selectOptions: locationTypeOptionsWithTheme,
-        renderCell: (type) => <LocationTypeBadge type={type} />,
+        renderCell: (type) => <LocationTypeLabel type={type} />,
         mobile: { slot: "subtitle", priority: 15 },
         editable: {
           onSave: async (newType, location) => {

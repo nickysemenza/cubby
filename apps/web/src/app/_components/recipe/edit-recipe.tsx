@@ -1,5 +1,4 @@
-import type { RecipeUpdateInput } from "@cubby/schemas/recipe";
-import type { RecipeOut } from "@cubby/schemas/recipe-responses";
+import type { RecipeOut, RecipeUpdateInput } from "@cubby/schemas/recipe";
 import { toast } from "sonner";
 import { recipeAllMutationInvalidateKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";

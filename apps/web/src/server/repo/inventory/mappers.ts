@@ -2,7 +2,7 @@ import { unsafeLocationShortcode } from "@cubby/schemas/identifiers";
 import type {
   inventoryListItemOut,
   inventoryWithLocationAndProductOut,
-} from "@cubby/schemas/inventory-responses";
+} from "@cubby/schemas/inventory";
 import { locationType } from "@cubby/schemas/location";
 import type { z } from "zod";
 import { parseWithContext } from "~/lib/zod-utils";

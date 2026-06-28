@@ -3,12 +3,13 @@ import type {
   AggregatedNeed,
   IngredientAvailability,
   RecipeAvailability,
-} from "@cubby/schemas/availability-responses";
+} from "@cubby/schemas/availability";
 import type { Amount } from "@cubby/schemas/codec";
 import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
-import type { IngredientWithFoodOut } from "@cubby/schemas/ingredient-responses";
-import type { SectionIngredientOut } from "@cubby/schemas/recipe-responses";
+import type { IngredientWithFoodOut } from "@cubby/schemas/ingredient";
+import type { SectionIngredientOut } from "@cubby/schemas/recipe";
 import { uniq } from "es-toolkit";
+import pMap from "p-map";
 import {
   evaluateAvailability,
   toWAmount,
@@ -20,7 +21,7 @@ import { getInventoryForProducts } from "~/server/repo/inventory";
 import { getRecipeByID } from "~/server/repo/recipe";
 import type { IngredientService } from "./ingredient.service";
 
-// Output types live in @cubby/schemas/availability-responses (single source of
+// Output types live in @cubby/schemas/availability (single source of
 // truth, shared with the suggestions router's .output()).
 
 /**
@@ -61,8 +62,10 @@ export class AvailabilityService {
         )
         .map((si) => si.ingredient.id),
     );
-    const ingredientEntries = await Promise.all(
-      directIds.map((id) => this.ingredientService.getIngredientByID(id)),
+    const ingredientEntries = await pMap(
+      directIds,
+      (id) => this.ingredientService.getIngredientByID(id),
+      { concurrency: 8 },
     );
     const ingMap = new Map<IngredientId, IngredientWithFoodOut>(
       ingredientEntries.map((ing) => [ing.id, ing]),
@@ -223,10 +226,10 @@ export class AvailabilityService {
     const distinctIngredientIds = uniq(
       contributions.map((c) => c.ingredientId),
     );
-    const ingredientEntries = await Promise.all(
-      distinctIngredientIds.map((id) =>
-        this.ingredientService.getIngredientByID(id),
-      ),
+    const ingredientEntries = await pMap(
+      distinctIngredientIds,
+      (id) => this.ingredientService.getIngredientByID(id),
+      { concurrency: 8 },
     );
     const ingMap = new Map<IngredientId, IngredientWithFoodOut>(
       ingredientEntries.map((ing) => [ing.id, ing]),

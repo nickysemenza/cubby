@@ -1,17 +1,31 @@
 import { productCategoryValues, UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import { fdcId, upc } from "@cubby/usda-schemas";
+import { fdcId, foodSummary, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
+import { amount } from "./codec";
 import { requiredName } from "./common";
 import { externalIdInput } from "./external-id";
-import { externalIdOut } from "./external-id-responses";
+import { externalIdOut } from "./external-id";
 import {
   ingredientId,
+  normalizedProductShortcode,
   type IngredientId,
+  inventoryId,
+  locationId,
+  locationShortcode,
   productId,
   productShortcode,
 } from "./identifiers";
-import { imageOut } from "./image-responses";
-import { mcpUnitMappingInput, unitMappingInput } from "./unitmapping";
+import { imageOut } from "./image";
+import { locationOut, locationType } from "./location";
+import { baseKind } from "./problems";
+import { recipeUsageOut } from "./recipe";
+import { recomputeSummary } from "./recipe-shared";
+import {
+  mcpUnitMappingInput,
+  unitMappingInput,
+  unitMappingOut,
+  unitMappingWithMetadata,
+} from "./unitmapping";
 
 // Product category enum for filtering/organization
 export const productCategory = z
@@ -155,11 +169,11 @@ export const productFindOrCreateByUPCInput = z.object({
 });
 
 export const productShortcodesInput = z.object({
-  shortcodes: z.array(z.string()),
+  shortcodes: z.array(normalizedProductShortcode),
 });
 
 export const productShortcodeInput = z.object({
-  shortcode: z.string(),
+  shortcode: normalizedProductShortcode,
 });
 
 export const productCreateManyInput = z
@@ -220,6 +234,173 @@ export const productTopLevelOut = z.object({
 export type ProductTopLevelOut = z.infer<typeof productTopLevelOut>;
 export type ProductCreateInput = z.infer<typeof productCreateInput>;
 export type ProductUpdateInput = z.infer<typeof productUpdateInput>;
+
+const productTopLevelResponseFields = {
+  id: productId,
+  shortcode: productShortcode,
+  name: z.string(),
+  upc: upc.nullable(),
+  fdc_id: fdcId.nullable(),
+  manufacturer: z.string(),
+  model: z.string().nullish(),
+  notes: z.string().nullish(),
+  expectedQuantity: z.number().int().positive().nullable(),
+  category: productCategory.nullable(),
+  images: z.array(imageOut),
+  externalIds: z.array(externalIdOut),
+  price: z.number().nullable(),
+  usdaUnavailable: z.boolean().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+};
+
+const productIngredientOut = z.object({
+  id: ingredientId,
+  name: z.string().meta({ mock: "food.ingredient" }),
+  aliases: z.array(z.string()),
+  naKinds: z.array(baseKind),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
+
+const productInventoryResponseFields = {
+  id: inventoryId,
+  amount,
+  valuation: z.number().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+};
+
+const productInventoryListLocationOut = z.object({
+  id: locationId,
+  shortcode: locationShortcode,
+  name: z.string(),
+  type: locationType,
+});
+
+const productInventoryWithLocationOut = z.object({
+  ...productInventoryResponseFields,
+  location: locationOut,
+});
+
+export const productWithMappingsOut = z.object({
+  ...productTopLevelResponseFields,
+  unitMappings: z.array(unitMappingOut),
+});
+export type ProductWithMappingsOut = z.infer<typeof productWithMappingsOut>;
+
+export const productWithMappingsAndFoodOut = z.object({
+  ...productTopLevelResponseFields,
+  unitMappings: z.array(unitMappingOut),
+  food: foodSummary.nullable(),
+});
+export type ProductWithMappingsAndFoodOut = z.infer<
+  typeof productWithMappingsAndFoodOut
+>;
+
+export const productPickerItemOut = z.object({
+  id: productId,
+  shortcode: productShortcode,
+  name: z.string(),
+  manufacturer: z.string(),
+});
+export type ProductPickerItemOut = z.infer<typeof productPickerItemOut>;
+
+export const productWithIngredientAndInventoryAndMappingsOut = z.object({
+  ...productTopLevelResponseFields,
+  ingredient: productIngredientOut.nullable(),
+  unitMappings: z.array(unitMappingOut),
+  inventoryEntry: z.array(productInventoryWithLocationOut),
+});
+
+export const productListInventoryEntryOut = z.object({
+  id: inventoryId,
+  amount,
+  valuation: z.number().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+  location: productInventoryListLocationOut,
+});
+
+// Product list rows stay list-shaped. USDA summaries and recipe usages hydrate
+// through separate/detail paths so list paint is not blocked by ancillary data.
+export const productListItemOut = z.object({
+  ...productTopLevelResponseFields,
+  unitMappings: z.array(unitMappingOut),
+  ingredient: productIngredientOut.nullable(),
+  inventoryEntry: z.array(productListInventoryEntryOut),
+});
+export type ProductListItem = z.infer<typeof productListItemOut>;
+
+// Enriched product shape for detail/create/update responses. recipeUsages is
+// required here because this schema represents a fully hydrated product detail
+// response, not list rows or lazy-loaded recipe usage data.
+export const productWithFoodOut = z.object({
+  ...productTopLevelResponseFields,
+  ingredient: productIngredientOut.nullable(),
+  unitMappings: z.array(unitMappingOut),
+  inventoryEntry: z.array(productInventoryWithLocationOut),
+  food: foodSummary.nullable(),
+  recipeUsages: z.array(recipeUsageOut),
+});
+export type ProductWithFoodOut = z.infer<typeof productWithFoodOut>;
+
+export const productWithFoodAndSideEffectsOut = z.object({
+  ...productTopLevelResponseFields,
+  ingredient: productIngredientOut.nullable(),
+  unitMappings: z.array(unitMappingOut),
+  inventoryEntry: z.array(productInventoryWithLocationOut),
+  food: foodSummary.nullable(),
+  recipeUsages: z.array(recipeUsageOut),
+  sideEffects: recomputeSummary,
+});
+export type ProductWithFoodAndSideEffectsOut = z.infer<
+  typeof productWithFoodAndSideEffectsOut
+>;
+
+export const productFoodSummariesOut = z.record(
+  z.string(),
+  foodSummary.nullable(),
+);
+
+export const productImageSummariesOut = z.record(z.string(), z.array(imageOut));
+
+export const productUnitMappingSummariesOut = z.record(
+  z.string(),
+  z.array(unitMappingWithMetadata),
+);
+
+export const productSummaryInclude = z.enum(["food", "images", "unitMappings"]);
+export type ProductSummaryInclude = z.infer<typeof productSummaryInclude>;
+
+export const productSummariesInput = z.object({
+  ids: z.array(productId).max(500),
+  include: z.array(productSummaryInclude).min(1),
+});
+export type ProductSummariesInput = z.infer<typeof productSummariesInput>;
+
+export const productSummariesOut = z.object({
+  food: productFoodSummariesOut.optional(),
+  images: productImageSummariesOut.optional(),
+  unitMappings: productUnitMappingSummariesOut.optional(),
+});
+export type ProductSummariesOut = z.infer<typeof productSummariesOut>;
+
+export const productShortcodeListOut = z.array(productTopLevelOut);
+
+export const productCategoryDistributionOut = z.array(
+  z.object({
+    category: productCategory.nullable(),
+    productCount: z.number(),
+    locations: z.array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        count: z.number(),
+      }),
+    ),
+  }),
+);
 
 // Quick create schema - minimal required fields for rapid entry
 // Used for quick inventory capture workflow

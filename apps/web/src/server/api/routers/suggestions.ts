@@ -9,11 +9,12 @@
 import {
   recipeAvailabilityListOut,
   recipeAvailabilityOut,
-} from "@cubby/schemas/availability-responses";
+} from "@cubby/schemas/availability";
 import {
   makeableRecipesInput,
   recipeAvailabilityInput,
 } from "@cubby/schemas/suggestions";
+import pMap from "p-map";
 import { recipeList } from "~/server/repo/recipe";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
@@ -44,8 +45,10 @@ const getMakeable = protectedProcedure
       { pageIndex: 0, pageSize: CANDIDATE_CAP },
     );
 
-    const availabilities = await Promise.all(
-      recipes.map((r) => ctx.services.availability.getRecipeAvailability(r.id)),
+    const availabilities = await pMap(
+      recipes,
+      (r) => ctx.services.availability.getRecipeAvailability(r.id),
+      { concurrency: 8 },
     );
 
     return availabilities

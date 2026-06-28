@@ -12,15 +12,10 @@ export async function storeImage(
   imageUrl: string,
   env: Env,
 ): Promise<string | null> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
-
   try {
     const response = await fetch(imageUrl, {
-      signal: controller.signal,
+      signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-
-    clearTimeout(timeoutId);
 
     if (!response.ok) {
       console.error(`Failed to fetch image: ${response.status}`);
@@ -37,8 +32,10 @@ export async function storeImage(
 
     return key;
   } catch (error) {
-    clearTimeout(timeoutId);
-    if (error instanceof Error && error.name === "AbortError") {
+    if (
+      error instanceof Error &&
+      (error.name === "AbortError" || error.name === "TimeoutError")
+    ) {
       console.error("Image fetch timeout");
     } else {
       console.error("Image storage error:", error);

@@ -1,11 +1,11 @@
 import type { FC } from "react";
 import { cn } from "~/lib/utils";
 
-interface NoneStateProps {
+interface NoneValueProps {
   className?: string;
 }
 
-export const NoneState: FC<NoneStateProps> = ({ className }) => {
+export const NoneValue: FC<NoneValueProps> = ({ className }) => {
   return (
     <span
       className={cn("select-none text-2xs text-muted-foreground/30", className)}

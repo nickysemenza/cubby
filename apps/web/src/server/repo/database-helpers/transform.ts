@@ -4,7 +4,7 @@
  */
 
 import { amount } from "@cubby/schemas/codec";
-import type { ImageOut } from "@cubby/schemas/image-responses";
+import type { ImageOut } from "@cubby/schemas/image";
 import type { z } from "zod";
 import { parseWithContext } from "~/lib/zod-utils";
 import { isNotDeleted } from "./query";

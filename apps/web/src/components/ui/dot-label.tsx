@@ -2,8 +2,7 @@ import type { ReactNode } from "react";
 import { cn } from "~/lib/utils";
 
 /**
- * A taxonomy label rendered as a small colored dot + plain text (2026-06-12
- * pill diet). Replaces bordered category/location-type pills so dense lists
+ * A taxonomy label rendered as a small colored dot + plain text. Dense lists
  * read as text with a quiet color cue rather than a wall of chips. Inherits
  * font size from its context (table cell density, detail fact sheet, etc.).
  */

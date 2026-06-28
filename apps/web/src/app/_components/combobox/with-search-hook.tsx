@@ -1,4 +1,4 @@
-import type { IngredientWithRecipesAndProductOut } from "@cubby/schemas/ingredient-responses";
+import type { IngredientWithRecipesAndProductOut } from "@cubby/schemas/ingredient";
 import type { LocationOut } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";

@@ -1,20 +1,25 @@
 import type { IngredientOut } from "@cubby/schemas/ingredient";
 import type { LocationOut } from "@cubby/schemas/location";
-import type {
-  McpIngredientOut,
-  McpInventoryLocationOut,
-  McpInventoryOut,
-  McpInventoryProductOut,
-  McpLocationOut,
-  McpMealOut,
-  McpProductOut,
-  McpProductUnitMappingOut,
-  McpRecipeOut,
-  McpUsdaFoodOut,
-} from "@cubby/schemas/mcp-responses";
-import type { MealOut } from "@cubby/schemas/meal-responses";
+import {
+  type McpIngredientOut,
+  type McpInventoryLocationOut,
+  type McpInventoryOut,
+  type McpInventoryProductOut,
+  type McpProductOut,
+  type McpProductUnitMappingOut,
+  type McpRecipeOut,
+  type McpUsdaFoodOut,
+  mcpIngredientOut,
+  mcpInventoryOut,
+  mcpLocationOut,
+  mcpMealOut,
+  mcpProductOut,
+  mcpRecipeOut,
+  mcpUsdaFoodOut,
+} from "@cubby/schemas/mcp";
+import type { MealOut } from "@cubby/schemas/meal";
 import type { ProductTopLevelOut } from "@cubby/schemas/product";
-import type { RecipeTopLevel } from "@cubby/schemas/recipe-responses";
+import type { RecipeTopLevel } from "@cubby/schemas/recipe";
 import type { mcpUnitMappingInput } from "@cubby/schemas/unitmapping";
 import type { foodSummary } from "@cubby/usda-schemas";
 import { TRPCError } from "@trpc/server";
@@ -119,7 +124,7 @@ export function notionUnavailable() {
 // Slim output projections
 //
 // Each read tool returns a compact projection of a router's rich output. The
-// shapes are named schema exports from `@cubby/schemas/mcp-responses`, so the
+// shapes are named schema exports from `@cubby/schemas/mcp`, so the
 // MCP tool surface no longer hand-rolls response contracts in the app. The
 // functions below only map list- or detail-shaped router rows onto those
 // contracts. Return types are annotated with the schema-inferred exports so
@@ -128,11 +133,25 @@ export function notionUnavailable() {
 // which carry different extra fields — hence the permissive row input types.
 // ---------------------------------------------------------------------------
 
+export type Row = Record<string, unknown>;
+// Each slim projection takes a loose `Row` and casts once to its typed row shape
+// internally (the router results are dynamically shaped via a string routerName),
+// then pins its OUTPUT to the canonical schema via a `z.infer<typeof slim*Out>`
+// return annotation.
+type Slim = (row: Row) => unknown;
+const slimSchemas = new WeakMap<Slim, z.ZodType>();
+const identity: Slim = (row) => row;
+
+function defineSlim<T>(schema: z.ZodType<T>, slim: (row: Row) => T) {
+  slimSchemas.set(slim as Slim, schema);
+  return slim;
+}
+
 type LocationRow = LocationOut & {
   parent?: Pick<LocationOut, "id" | "name"> | null;
   children?: Array<Pick<LocationOut, "id" | "name">>;
 };
-export function slimLocation(locRow: Row): McpLocationOut {
+export const slimLocation = defineSlim(mcpLocationOut, (locRow: Row) => {
   const loc = locRow as LocationRow;
   return {
     id: loc.id,
@@ -143,13 +162,13 @@ export function slimLocation(locRow: Row): McpLocationOut {
     parentId: loc.parent?.id ?? null,
     children: (loc.children ?? []).map((c) => ({ id: c.id, name: c.name })),
   };
-}
+});
 
 type InventoryRow = Pick<McpInventoryOut, "id" | "amount" | "valuation"> & {
   product?: McpInventoryProductOut | null;
   location?: McpInventoryLocationOut | null;
 };
-export function slimInventory(entryRow: Row): McpInventoryOut {
+export const slimInventory = defineSlim(mcpInventoryOut, (entryRow: Row) => {
   const entry = entryRow as InventoryRow;
   return {
     id: entry.id,
@@ -167,7 +186,7 @@ export function slimInventory(entryRow: Row): McpInventoryOut {
       ? { id: entry.location.id, name: entry.location.name }
       : null,
   };
-}
+});
 
 type ProductRow = ProductTopLevelOut & {
   food?: { fdc_id?: number | null } | null;
@@ -175,7 +194,7 @@ type ProductRow = ProductTopLevelOut & {
   ingredientId?: McpProductOut["ingredientId"];
   unitMappings?: McpProductUnitMappingOut[];
 };
-export function slimProduct(pRow: Row): McpProductOut {
+export const slimProduct = defineSlim(mcpProductOut, (pRow: Row) => {
   const p = pRow as ProductRow;
   return {
     id: p.id,
@@ -197,12 +216,12 @@ export function slimProduct(pRow: Row): McpProductOut {
       source: m.source ?? null,
     })),
   };
-}
+});
 
 type RecipeRow = RecipeTopLevel & {
   shortcode?: McpRecipeOut["shortcode"];
 };
-export function slimRecipe(rRow: Row): McpRecipeOut {
+export const slimRecipe = defineSlim(mcpRecipeOut, (rRow: Row) => {
   const r = rRow as RecipeRow;
   return {
     id: r.id,
@@ -212,14 +231,14 @@ export function slimRecipe(rRow: Row): McpRecipeOut {
     servings: r.servings,
     tags: r.tags,
   };
-}
+});
 
 type IngredientRow = IngredientOut & {
   product?: McpIngredientOut["products"];
   appearsInRecipes?: unknown[];
   food?: { fdc_id?: number | null } | null;
 };
-export function slimIngredient(iRow: Row): McpIngredientOut {
+export const slimIngredient = defineSlim(mcpIngredientOut, (iRow: Row) => {
   const i = iRow as IngredientRow;
   return {
     id: i.id,
@@ -229,11 +248,11 @@ export function slimIngredient(iRow: Row): McpIngredientOut {
     recipeCount: (i.appearsInRecipes ?? []).length,
     usdaFdcId: i.food?.fdc_id ?? null,
   };
-}
+});
 
 /** Strip a meal to its essentials and summarize each planned recipe. The per-recipe
  * `id` is the mealRecipe id — pass it to update_meal_recipe / remove_meal_recipe. */
-export function slimMeal(mRow: Row): McpMealOut {
+export const slimMeal = defineSlim(mcpMealOut, (mRow: Row) => {
   const m = mRow as MealOut;
   return {
     id: m.id,
@@ -249,14 +268,14 @@ export function slimMeal(mRow: Row): McpMealOut {
       scaledTotals: mr.scaledTotals,
     })),
   };
-}
+});
 
 type UsdaFoodRow = z.infer<typeof foodSummary> & {
   linkedProducts?: McpUsdaFoodOut["linkedProducts"];
 };
 /** Project a USDA food: description/link keys, full nutrition (per-100 + named
  * summary), the portion table, and branded serving info. */
-export function slimUsdaFood(fRow: Row): McpUsdaFoodOut {
+export const slimUsdaFood = defineSlim(mcpUsdaFoodOut, (fRow: Row) => {
   const f = fRow as UsdaFoodRow;
   return {
     fdc_id: f.fdc_id,
@@ -276,7 +295,7 @@ export function slimUsdaFood(fRow: Row): McpUsdaFoodOut {
       name: p.name,
     })),
   };
-}
+});
 
 // ---------------------------------------------------------------------------
 // CRUD tool-handler factories
@@ -287,23 +306,63 @@ export function slimUsdaFood(fRow: Row): McpUsdaFoodOut {
 // description, and input schema.
 // ---------------------------------------------------------------------------
 
-export type Row = Record<string, unknown>;
-// Each slim projection takes a loose `Row` and casts once to its typed row shape
-// internally (the router results are dynamically shaped via a string routerName),
-// then pins its OUTPUT to the canonical schema via a `z.infer<typeof slim*Out>`
-// return annotation.
-type Slim = (row: Row) => unknown;
-const identity: Slim = (row) => row;
+function isSchema(value: unknown): value is z.ZodType {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "safeParse" in value &&
+    typeof (value as { safeParse?: unknown }).safeParse === "function"
+  );
+}
+
+function parseResponse(schema: z.ZodType | undefined, value: unknown) {
+  return schema ? schema.parse(value) : value;
+}
 
 /** The success tail every create/action tool shares: cast the tRPC result to a
  * Row and slim it into a JSON response. Mirrors the get/update/list factories. */
-export function respond(result: unknown, slim: Slim = identity) {
-  return json(slim(result as Row));
+export function respond<T>(
+  schema: z.ZodType<T>,
+  result: unknown,
+  slim?: (row: Row) => T,
+): ReturnType<typeof json>;
+export function respond(result: unknown, slim?: Slim): ReturnType<typeof json>;
+export function respond(
+  first: unknown,
+  second?: unknown,
+  third?: Slim,
+): ReturnType<typeof json> {
+  const schema = isSchema(first) ? first : undefined;
+  const result = schema ? second : first;
+  const slim = schema ? (third ?? identity) : ((second as Slim) ?? identity);
+  return json(
+    parseResponse(schema ?? slimSchemas.get(slim), slim(result as Row)),
+  );
 }
 
 /** Like {@link respond} for tools that return an array of rows. */
-export function respondList(result: unknown, slim: Slim = identity) {
-  return json((result as Row[]).map(slim));
+export function respondList<T>(
+  schema: z.ZodType<T>,
+  result: unknown,
+  slim?: (row: Row) => T,
+): ReturnType<typeof json>;
+export function respondList(
+  result: unknown,
+  slim?: Slim,
+): ReturnType<typeof json>;
+export function respondList(
+  first: unknown,
+  second?: unknown,
+  third?: Slim,
+): ReturnType<typeof json> {
+  const schema = isSchema(first) ? first : undefined;
+  const result = schema ? second : first;
+  const slim = schema ? (third ?? identity) : ((second as Slim) ?? identity);
+  return json(
+    z
+      .array(schema ?? slimSchemas.get(slim) ?? z.unknown())
+      .parse((result as Row[]).map(slim)),
+  );
 }
 
 /** Schema for a single `{ id }` input field. */
@@ -318,7 +377,7 @@ export function getByIdHandler(routerName: string, slim: Slim = identity) {
     const result = await getCaller(extra)[routerName].getByID({
       id: params.id,
     });
-    return json(slim(result as Row));
+    return respond(result, slim);
   });
 }
 
@@ -337,7 +396,7 @@ export function updateHandler(routerName: string, slim: Slim = identity) {
     const { id, ...rest } = params;
     const data = omitBy(rest, (v) => v === undefined);
     const result = await getCaller(extra)[routerName].update({ id, data });
-    return json(slim(result as Row));
+    return respond(result, slim);
   });
 }
 
@@ -361,9 +420,12 @@ export function listHandler(
         pageSize: (params.pageSize as number) ?? config.defaultPageSize ?? 50,
       },
     });
+    const schema = slimSchemas.get(slim);
     return json({
       meta: result.meta,
-      items: (result.items as Row[]).map(slim),
+      items: z
+        .array(schema ?? z.unknown())
+        .parse((result.items as Row[]).map(slim)),
     });
   });
 }

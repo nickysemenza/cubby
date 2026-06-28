@@ -1,11 +1,11 @@
 import type {
   RecipeCreateInput,
   RecipeIngredientInput,
+  RecipeOut,
   RecipeUpdateInput,
   recipeInstructionInput,
   recipeSectionInput,
 } from "@cubby/schemas/recipe";
-import type { RecipeOut } from "@cubby/schemas/recipe-responses";
 import { match, P } from "ts-pattern";
 import type { z } from "zod";
 import {

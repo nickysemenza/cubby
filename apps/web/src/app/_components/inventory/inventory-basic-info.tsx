@@ -1,9 +1,9 @@
-import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/inventory-responses";
+import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/inventory";
 import type { FC } from "react";
 import type { z } from "zod";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { MutedBox } from "~/components/layout/muted-box";
-import { EntityPillLink } from "../EntityPill";
+import { EntityInlineLink } from "../EntityInlineLink";
 import { UnitMappingGraph } from "../units/unit-mapping-graph";
 import { showAmountAndPrice } from "./format-amount";
 
@@ -28,11 +28,13 @@ export const InventoryBasicInfo: FC<InventoryBasicInfoProps> = ({
     },
     {
       label: "Location",
-      value: <EntityPillLink entity="location" data={inventoryitem.location} />,
+      value: (
+        <EntityInlineLink entity="location" data={inventoryitem.location} />
+      ),
     },
     {
       label: "Product",
-      value: <EntityPillLink entity="product" data={inventoryitem.product} />,
+      value: <EntityInlineLink entity="product" data={inventoryitem.product} />,
     },
   ];
 

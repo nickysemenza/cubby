@@ -27,42 +27,6 @@ function Card({
   );
 }
 
-/**
- * A clickable, radio-style card for "pick one of these" surfaces (e.g. choosing
- * a location to move items into). Selected = primary hairline border +
- * elevation; unselected = a thin inner ring. The border width is reserved on
- * both states (transparent when unselected) so selecting never shifts layout.
- */
-function SelectableCard({
-  className,
-  selected = false,
-  size = "default",
-  ...props
-}: React.ComponentProps<"button"> & {
-  selected?: boolean;
-  size?: "default" | "sm";
-}) {
-  return (
-    <button
-      type="button"
-      role="radio"
-      aria-checked={selected}
-      data-slot="card"
-      data-size={size}
-      data-selected={selected}
-      className={cn(
-        "bg-card text-card-foreground group/card ease-cozy flex w-full flex-col gap-1 overflow-hidden rounded-none px-4 py-3 text-left text-xs/relaxed transition-colors outline-none",
-        "focus-visible:ring-ring/40 focus-visible:ring-2",
-        selected
-          ? "border-primary bg-[var(--row-selected)] border"
-          : "hover:border-foreground/40 border border-[var(--border)]",
-        className,
-      )}
-      {...props}
-    />
-  );
-}
-
 function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -157,5 +121,4 @@ export {
   CardAction,
   CardDescription,
   CardContent,
-  SelectableCard,
 };

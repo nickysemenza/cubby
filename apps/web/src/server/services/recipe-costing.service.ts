@@ -10,8 +10,8 @@
  */
 
 import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
-import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient-responses";
-import type { RecipeGraphOut } from "@cubby/schemas/recipe-responses";
+import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient";
+import type { RecipeGraphOut } from "@cubby/schemas/recipe";
 import type {
   RecipeCostingExplain,
   RecipeMacroColumn,

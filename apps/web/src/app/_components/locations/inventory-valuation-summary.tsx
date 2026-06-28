@@ -1,5 +1,6 @@
 import type { LocationId } from "@cubby/schemas/identifiers";
 import type { LocationValuation } from "@cubby/schemas/location";
+import { MAX_PAGE_SIZE } from "@cubby/schemas/pagination";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { Row, Stack } from "~/components/layout";
@@ -46,8 +47,7 @@ export function InventoryValuationSummary({
   const enabled = !hasPersisted && !items && !!locationId;
   const baseOptions = api.inventory.list.queryOptions({
     sort: { orderBy: "createdAt", direction: "desc" },
-    // Fetch generously to cover typical cases; server supports pagination
-    pagination: { pageIndex: 0, pageSize: 1000 },
+    pagination: { pageIndex: 0, pageSize: MAX_PAGE_SIZE },
     filters: {
       locationIdFilter: locationId,
     },

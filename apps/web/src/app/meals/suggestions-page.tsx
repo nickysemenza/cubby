@@ -1,4 +1,4 @@
-import type { RecipeAvailability } from "@cubby/schemas/availability-responses";
+import type { RecipeAvailability } from "@cubby/schemas/availability";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";

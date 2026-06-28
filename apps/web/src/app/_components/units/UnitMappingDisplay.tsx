@@ -1,4 +1,4 @@
-import type { UnitMapping } from "@cubby/schemas/unitmapping-responses";
+import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { Stack } from "~/components/layout";
 import type { BaseKind } from "~/lib/conversion-coverage";
 import { ConversionCapabilities } from "./ConversionCapabilities";

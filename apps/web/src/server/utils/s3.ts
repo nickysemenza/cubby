@@ -222,18 +222,9 @@ export const fetchAndStoreImage = async (
   filenamePrefix: string,
 ): Promise<FetchAndStoreResult | null> => {
   try {
-    // Fetch the image with timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(
-      () => controller.abort(),
-      IMAGE_FETCH_TIMEOUT_MS,
-    );
-
     const response = await fetch(sourceUrl, {
-      signal: controller.signal,
+      signal: AbortSignal.timeout(IMAGE_FETCH_TIMEOUT_MS),
     });
-
-    clearTimeout(timeoutId);
 
     if (!response.ok) {
       console.error(

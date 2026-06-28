@@ -1,4 +1,4 @@
-import type { ProductListItem } from "@cubby/schemas/product-responses";
+import type { ProductListItem } from "@cubby/schemas/product";
 import { formatCategoryLabel, getCategoryColor } from "@cubby/shared";
 import { Link } from "@tanstack/react-router";
 import type { ColumnFiltersState } from "@tanstack/react-table";
@@ -6,7 +6,6 @@ import { createColumnHelper } from "@tanstack/react-table";
 import { Package, Printer } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { NoneState } from "~/app/_components/NoneState";
 import {
   ProductFoodSummariesProvider,
   useHydratedProductFood,
@@ -14,6 +13,7 @@ import {
 } from "~/app/_components/products/product-food-summaries";
 import { Row } from "~/components/layout";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
+import { NoneValue } from "~/components/ui/none-value";
 import {
   Tooltip,
   TooltipContent,
@@ -27,7 +27,7 @@ import {
   createExternalLinkColumn,
   createFilterableSelectColumn,
   createInventoryEntriesColumn,
-  createSingleEntityPillColumn,
+  createSingleEntityInlineLinkColumn,
   createTextColumn,
 } from "../_components/data-table/columnHelpers";
 import {
@@ -36,12 +36,12 @@ import {
 } from "../_components/data-table/shelf";
 import RTable from "../_components/data-table/Table";
 import type { GroupConfig } from "../_components/data-table/useGroupedList";
-import { EntityPillLink } from "../_components/EntityPill";
+import { EntityInlineLink } from "../_components/EntityInlineLink";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
-import { CategoryBadge } from "../_components/products/CategoryBadge";
+import { CategoryLabel } from "../_components/products/CategoryLabel";
 import { productCategoryOptionsWithTheme } from "../_components/products/product-category-icons";
 import { ProductShelf } from "../_components/products/product-shelf";
 
@@ -54,9 +54,9 @@ interface ProductListProps {
 function ProductFoodCell({ product }: { product: ProductListItem }) {
   const food = useHydratedProductFood(product);
   return food ? (
-    <EntityPillLink entity="usda-food" data={food} compact />
+    <EntityInlineLink entity="usda-food" data={food} compact />
   ) : (
-    <NoneState />
+    <NoneValue />
   );
 }
 
@@ -121,7 +121,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
           { value: "", label: "All categories" },
           ...productCategoryOptionsWithTheme,
         ],
-        renderCell: (cat) => <CategoryBadge category={cat} />,
+        renderCell: (cat) => <CategoryLabel category={cat} />,
         // Mobile lists group by category (section headers), so the category
         // chip is redundant per-row — prefer manufacturer as the subtitle.
         mobile: { slot: "subtitle", priority: 30 },
@@ -134,12 +134,17 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
           },
         },
       }),
-      createSingleEntityPillColumn(columnHelper, "ingredient", "ingredient", {
-        header: "Ingredient",
-        className: "w-32",
-        mobile: { slot: "meta", priority: 45 },
-        enableSorting: true,
-      }),
+      createSingleEntityInlineLinkColumn(
+        columnHelper,
+        "ingredient",
+        "ingredient",
+        {
+          header: "Ingredient",
+          className: "w-32",
+          mobile: { slot: "meta", priority: 45 },
+          enableSorting: true,
+        },
+      ),
       createTextColumn(columnHelper, "manufacturer", {
         className: "min-w-0 w-40 truncate",
         mobile: { slot: "subtitle", priority: 20 },

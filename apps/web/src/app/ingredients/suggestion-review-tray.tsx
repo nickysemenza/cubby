@@ -1,4 +1,4 @@
-import type { EnrichmentRow } from "@cubby/schemas/ingredient-responses";
+import type { EnrichmentRow } from "@cubby/schemas/ingredient";
 import { X } from "lucide-react";
 import { confidenceColor } from "~/app/_components/ai/ai-suggest";
 import { Row, Stack } from "~/components/layout";

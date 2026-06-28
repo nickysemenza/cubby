@@ -11,7 +11,6 @@ import { partition } from "es-toolkit";
 import { ExternalLink, Hammer, ListTodo, ShoppingCart } from "lucide-react";
 import { useMemo } from "react";
 import RTable from "~/app/_components/data-table/Table";
-import { NoneState } from "~/app/_components/NoneState";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Description } from "~/components/ui/description";
@@ -21,6 +20,7 @@ import {
   EmptyIcon,
   EmptyTitle,
 } from "~/components/ui/empty";
+import { NoneValue } from "~/components/ui/none-value";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn, formatCurrency } from "~/lib/utils";
 import type {
@@ -325,7 +325,7 @@ const projectColumns = [
     cell: ({ row }) => (
       <Row align="center" gap="sm">
         <StatusIcon status={row.original.status} />
-        <span>{row.original.status ?? <NoneState />}</span>
+        <span>{row.original.status ?? <NoneValue />}</span>
       </Row>
     ),
     enableSorting: true,

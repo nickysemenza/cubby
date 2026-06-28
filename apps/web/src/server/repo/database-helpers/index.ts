@@ -14,6 +14,7 @@ export {
   findOrCreate,
   insertAndReturn,
   updateAndReturn,
+  updateLiveAndReturn,
 } from "./crud";
 // Query helpers
 export {

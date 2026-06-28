@@ -1,4 +1,4 @@
-import type { inventoryListItemOut } from "@cubby/schemas/inventory-responses";
+import type { inventoryListItemOut } from "@cubby/schemas/inventory";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { createColumnHelper, type Row } from "@tanstack/react-table";
 import { ArrowRightLeft, ImageIcon, Trash } from "lucide-react";
@@ -13,14 +13,14 @@ import { useTRPC } from "~/trpc/react";
 import {
   createCreatedAtColumn,
   createCurrencyColumn,
-  createSingleEntityPillColumn,
+  createSingleEntityInlineLinkColumn,
 } from "../_components/data-table/columnHelpers";
 import {
   ShelfTableToggle,
   type ShelfView,
 } from "../_components/data-table/shelf";
 import RTable from "../_components/data-table/Table";
-import { EntityPillLink } from "../_components/EntityPill";
+import { EntityInlineLink } from "../_components/EntityInlineLink";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
@@ -185,7 +185,7 @@ export function InventoryItemList() {
           return (
             <div className="flex items-center gap-2">
               <Stack gap="xs" className="min-w-0 flex-1">
-                <EntityPillLink entity="product" data={product} compact />
+                <EntityInlineLink entity="product" data={product} compact />
                 {upc && (
                   <div className="text-muted-foreground text-xs">
                     <TableLink
@@ -202,7 +202,7 @@ export function InventoryItemList() {
           );
         },
       }),
-      createSingleEntityPillColumn(columnHelper, "location", "location", {
+      createSingleEntityInlineLinkColumn(columnHelper, "location", "location", {
         className: "min-w-0 w-40 max-w-56",
         mobile: { slot: "subtitle", priority: 20 },
         filterConfig: { placeholder: "Filter location..." },

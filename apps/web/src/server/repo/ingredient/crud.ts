@@ -7,10 +7,10 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { IngredientId } from "@cubby/schemas/identifiers";
 import type {
+  IngredientWithRecipesAndProductOut,
   ingredientCreateInput,
   ingredientUpdateData,
 } from "@cubby/schemas/ingredient";
-import type { IngredientWithRecipesAndProductOut } from "@cubby/schemas/ingredient-responses";
 import { and, eq } from "drizzle-orm";
 import type { z } from "zod";
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -25,6 +25,7 @@ import {
   relations,
   unwrapDb,
   updateAndReturn,
+  updateLiveAndReturn,
 } from "~/server/repo/database-helpers";
 import { buildIngredientWhere } from "./internal-types";
 import { dbIngredientToAPI } from "./mappers";
@@ -83,15 +84,10 @@ export const updateIngredient = async (
 ): Promise<IngredientWithRecipesAndProductOut> => {
   // Capture before state for audit logging
   const beforeState = await getDb(db).query.ingredient.findFirst({
-    where: eq(ingredient.id, id),
+    where: and(eq(ingredient.id, id), notDeleted(ingredient)),
   });
 
-  const updated = await updateAndReturn(
-    db,
-    ingredient,
-    data,
-    eq(ingredient.id, id),
-  );
+  const updated = await updateLiveAndReturn(db, ingredient, data, id);
 
   // Log audit entry with changes
   if (beforeState) {
@@ -158,7 +154,7 @@ export const findOrCreateIngredient = async (
       name: name,
       aliases: [...entry.aliases, ...aliasesToAdd],
     },
-    eq(ingredient.id, entry.id),
+    and(eq(ingredient.id, entry.id), notDeleted(ingredient)),
   );
 };
 

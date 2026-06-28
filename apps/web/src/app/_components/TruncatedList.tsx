@@ -1,11 +1,11 @@
 import type { ReactNode } from "react";
 import { Badge } from "~/components/ui/badge";
+import { NoneValue } from "~/components/ui/none-value";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "~/components/ui/popover";
-import { NoneState } from "./NoneState";
 
 interface TruncatedListProps<T> {
   items: T[];
@@ -38,7 +38,7 @@ export function TruncatedList<T>({
   direction = "horizontal",
 }: TruncatedListProps<T>) {
   if (!items || items.length === 0) {
-    return <NoneState />;
+    return <NoneValue />;
   }
 
   const shouldTruncate = maxItems !== undefined && items.length > maxItems;

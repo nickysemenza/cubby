@@ -8,26 +8,24 @@
 
 import { type LocationId, locationId } from "@cubby/schemas/identifiers";
 import {
+  infLocation,
+  infLocationListOut,
+  locationChildCountsOut,
   locationCreateInput,
   locationFiltersSchema,
   locationIdInput,
   locationIdsInput,
+  locationListItemOut,
   locationShortcodeInput,
   locationShortcodesInput,
-  locationUpdateData,
-  recentlyActiveLocationsInput,
-} from "@cubby/schemas/location";
-import {
-  infLocation,
-  infLocationListOut,
-  locationChildCountsOut,
-  locationListItemOut,
   locationsWithParentNameOut,
   locationTypeCountsOut,
+  locationUpdateData,
+  recentlyActiveLocationsInput,
   recentlyActiveLocationsOut,
   recomputeLocationValuationsOut,
   touchLastBulkInventoryOut,
-} from "@cubby/schemas/location-responses";
+} from "@cubby/schemas/location";
 import {
   buildLocationTree,
   buildLocationTypeCount,
@@ -85,6 +83,9 @@ const { getByID, create, update } = createEntityCrudWithoutListProcedures({
       return await createLocation(services.db, data, services.actorContext);
     },
     update: async (services, id: LocationId, data) => {
+      const previousParent = Object.hasOwn(data, "parentId")
+        ? ((await getLocationById(services.db, id)).parent?.id ?? null)
+        : undefined;
       const updated = await updateLocation(
         services.db,
         id,
@@ -92,7 +93,12 @@ const { getByID, create, update } = createEntityCrudWithoutListProcedures({
         services.actorContext,
       );
       // Re-parenting moves a subtree, changing ancestors' rolled-up totals.
-      await services.services.locationValuation.recompute();
+      if (
+        previousParent !== undefined &&
+        previousParent !== (updated.parent?.id ?? null)
+      ) {
+        await services.services.locationValuation.recompute();
+      }
       return updated;
     },
   },

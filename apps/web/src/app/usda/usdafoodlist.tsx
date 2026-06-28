@@ -9,18 +9,18 @@ import { createColumnHelper } from "@tanstack/react-table";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
+import { NoneValue } from "~/components/ui/none-value";
 import { USDA_KINDS } from "~/lib/conversion-coverage";
 import type { QueryTiming } from "~/lib/query-timing";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
 import { nutrientCount } from "~/lib/usda-food-stats";
 import type { Flatten } from "~/misc/array-helpers";
 import { useTRPC } from "~/trpc/react";
-import { createEntityPillColumn } from "../_components/data-table/columnHelpers";
+import { createEntityInlineLinkColumn } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
 import { useTableConfig } from "../_components/data-table/useTableConfig";
 import { useTableState } from "../_components/data-table/useTableState";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
-import { NoneState } from "../_components/NoneState";
 import { TableLink } from "../_components/table/TableLink";
 import { UnitMappingDisplay } from "../_components/units/UnitMappingDisplay";
 import { CoreNutrientCoverage } from "../_components/usda/core-nutrient-coverage";
@@ -157,12 +157,12 @@ export function USDAFoodList() {
       meta: { className: "w-56" },
       cell: (info) => {
         const brandedFood = info.getValue();
-        if (!brandedFood) return <NoneState />;
+        if (!brandedFood) return <NoneValue />;
 
         return (
           <div className="flex flex-col space-y-1">
             <div className="text-sm">
-              {brandedFood.brand_owner || <NoneState />}
+              {brandedFood.brand_owner || <NoneValue />}
             </div>
             {brandedFood.branded_food_category && (
               <Description as="div" size="xs" className="truncate">
@@ -191,7 +191,7 @@ export function USDAFoodList() {
       cell: (info) => {
         const nutritionInfo = info.getValue();
         const total = nutrientCount(nutritionInfo.nutrientsPer100);
-        if (total === 0) return <NoneState />;
+        if (total === 0) return <NoneValue />;
         return (
           <Stack gap="sm" className="w-48">
             <CoreNutrientCoverage nutrients={nutritionInfo.nutrientsPer100} />
@@ -207,7 +207,7 @@ export function USDAFoodList() {
       meta: { className: "w-48" },
       cell: (info) => {
         const inferredUnitMappings = info.getValue();
-        if (inferredUnitMappings.length === 0) return <NoneState />;
+        if (inferredUnitMappings.length === 0) return <NoneValue />;
 
         return (
           <div className="w-full">
@@ -220,7 +220,7 @@ export function USDAFoodList() {
         );
       },
     }),
-    createEntityPillColumn(columnHelper, "linkedProducts", "product", {
+    createEntityInlineLinkColumn(columnHelper, "linkedProducts", "product", {
       header: "Linked Products",
       className: "w-48 max-w-48",
     }),

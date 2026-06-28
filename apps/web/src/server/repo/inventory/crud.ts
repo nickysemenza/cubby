@@ -29,10 +29,11 @@ import {
   countWhere,
   getDb,
   insertAndReturn,
+  lockAndValidateForDelete,
   notDeleted,
   relations,
   unwrapDb,
-  updateAndReturn,
+  updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { assertLiveTargets } from "./helpers";
@@ -342,7 +343,7 @@ export const updateInventoryEntry = async (
 
   // Fetch current state for audit logging and valuation computation
   const before = await getDb(db).query.inventoryEntry.findFirst({
-    where: eq(inventoryEntry.id, id),
+    where: and(eq(inventoryEntry.id, id), notDeleted(inventoryEntry)),
   });
 
   // Recompute valuation if amount or productId changed
@@ -374,11 +375,11 @@ export const updateInventoryEntry = async (
     valuation,
   });
 
-  const updated = await updateAndReturn(
+  const updated = await updateLiveAndReturn(
     db,
     inventoryEntry,
     updateValues,
-    eq(inventoryEntry.id, id),
+    id,
   );
 
   // Log audit entry with changes
@@ -525,11 +526,12 @@ export const deleteInventoryEntries = async (
 
   // Perform soft delete and audit logging in a transaction for atomicity
   await withTransaction(db, async (tx) => {
+    await lockAndValidateForDelete(tx, inventoryEntry, ids, "Inventory");
     const now = new Date();
     await tx
       .update(inventoryEntry)
       .set({ deletedAt: now })
-      .where(inArray(inventoryEntry.id, ids));
+      .where(and(inArray(inventoryEntry.id, ids), notDeleted(inventoryEntry)));
 
     // Log audit entries in batch
     await logAuditEntries(

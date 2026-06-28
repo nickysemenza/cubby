@@ -14,6 +14,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
+import { NoneValue } from "~/components/ui/none-value";
 import {
   Tooltip,
   TooltipContent,
@@ -22,11 +23,10 @@ import {
 import { entities } from "~/entities/entities";
 import type { EntityDetailRoute } from "~/entities/types";
 import { cn, formatCurrency } from "~/lib/utils";
-import { EntityPillLink } from "../EntityPill";
-import { EntityPillLinkList } from "../EntityPillLinkList";
+import { EntityInlineLink } from "../EntityInlineLink";
+import { EntityInlineLinkList } from "../EntityInlineLinkList";
 import { HoverableTimestamp } from "../HoverableTimestamp";
 import { tryFormatAmount } from "../inventory/format-amount";
-import { NoneState } from "../NoneState";
 import { TruncatedList } from "../TruncatedList";
 import { ImageThumbnail } from "../table/ImageThumbnail";
 import { TableLink } from "../table/TableLink";
@@ -216,7 +216,7 @@ export function createCreatedAtColumn<T extends BaseRow>(
     },
     cell: (info) => {
       const value = info.getValue();
-      return value ? <HoverableTimestamp timestamp={value} /> : <NoneState />;
+      return value ? <HoverableTimestamp timestamp={value} /> : <NoneValue />;
     },
   });
 }
@@ -279,9 +279,9 @@ type EntityColumnData =
     };
 
 /**
- * Creates a column that displays a list of related entities as pill links.
+ * Creates a column that displays a list of related entities as inline links.
  */
-export function createEntityPillColumn<
+export function createEntityInlineLinkColumn<
   T extends Record<string, unknown>,
   K extends keyof T,
   TEntity extends EntityColumnData["entity"],
@@ -316,7 +316,7 @@ export function createEntityPillColumn<
           items = uniqBy(items, (item) => item.id);
         }
         return (
-          <EntityPillLinkList
+          <EntityInlineLinkList
             entity={entity}
             items={items as never}
             maxItems={1}
@@ -408,7 +408,7 @@ export function createInventoryEntriesColumn<
   options?: {
     header?: string;
     className?: string;
-    /** Layout variant: 'stacked' shows amounts then pills, 'inline' shows amount+pill per row */
+    /** Layout variant: 'stacked' shows amounts then links, 'inline' shows amount+link per row */
     layout?: "stacked" | "inline";
     /** Mobile projection metadata override */
     mobile?: MobileColumnMeta;
@@ -428,7 +428,7 @@ export function createInventoryEntriesColumn<
     cell: (info) => {
       const entries = info.getValue() ?? [];
       if (entries.length === 0) {
-        return <NoneState />;
+        return <NoneValue />;
       }
 
       if (layout === "inline") {
@@ -442,7 +442,11 @@ export function createInventoryEntriesColumn<
                 {tryFormatAmount(entry.amount)}
               </span>
               <span className="text-muted-foreground/50">@</span>
-              <EntityPillLink entity={entity} data={related as never} compact />
+              <EntityInlineLink
+                entity={entity}
+                data={related as never}
+                compact
+              />
             </span>
           );
         };
@@ -469,7 +473,7 @@ export function createInventoryEntriesColumn<
               <div key={entry.id}>{tryFormatAmount(entry.amount)}</div>
             ))}
           </Stack>
-          <EntityPillLinkList
+          <EntityInlineLinkList
             entity={entity}
             items={relatedEntities as never}
             compact
@@ -596,12 +600,12 @@ export function createTextColumn<
               options.editable!.onSave(newVal, info.row.original)
             }
             config={{ type: "text", placeholder: options?.placeholder }}
-            renderValue={(v) => (v ? v : <NoneState />)}
+            renderValue={(v) => (v ? v : <NoneValue />)}
           />
         );
       }
 
-      return value ?? <NoneState />;
+      return value ?? <NoneValue />;
     },
   });
 }
@@ -662,14 +666,14 @@ export function createCurrencyColumn<
               v !== null ? (
                 <span className="text-positive">{formatCurrency(v)}</span>
               ) : (
-                <NoneState />
+                <NoneValue />
               )
             }
           />
         );
       }
 
-      if (val === null || val === undefined) return <NoneState />;
+      if (val === null || val === undefined) return <NoneValue />;
       return <span className="text-positive">{formatCurrency(val)}</span>;
     },
   });
@@ -693,10 +697,10 @@ type SingleEntityColumnData =
     };
 
 /**
- * Creates a column that displays a single related entity as a pill link.
- * Shows NoneState when the entity is null/undefined.
+ * Creates a column that displays a single related entity as an inline link.
+ * Shows NoneValue when the entity is null/undefined.
  */
-export function createSingleEntityPillColumn<
+export function createSingleEntityInlineLinkColumn<
   T extends Record<string, unknown>,
   K extends keyof T,
   TEntity extends SingleEntityColumnData["entity"],
@@ -734,9 +738,9 @@ export function createSingleEntityPillColumn<
       },
       cell: (info) => {
         const item = info.getValue();
-        if (!item) return <NoneState />;
+        if (!item) return <NoneValue />;
         return (
-          <EntityPillLink
+          <EntityInlineLink
             entity={entity}
             data={item as never}
             compact={compact}
@@ -809,7 +813,7 @@ export function createFilterableSelectColumn<
 
 /**
  * Creates a column that displays a value as a link to an external/internal page.
- * Shows NoneState when the value is null/undefined.
+ * Shows NoneValue when the value is null/undefined.
  * Optionally supports inline editing when `editable` option is provided.
  */
 export function createExternalLinkColumn<
@@ -861,7 +865,7 @@ export function createExternalLinkColumn<
               config={{ type: "text" }}
               renderValue={(v) => {
                 if (v === null || v === undefined || v === "") {
-                  return <NoneState />;
+                  return <NoneValue />;
                 }
                 return (
                   <TableLink
@@ -877,7 +881,7 @@ export function createExternalLinkColumn<
           );
         }
 
-        if (value === null || value === undefined) return <NoneState />;
+        if (value === null || value === undefined) return <NoneValue />;
         return (
           <TableLink
             to={linkTo as "/usda/upc/$code"}
@@ -909,7 +913,7 @@ export function createTimestampColumn<
     mobile?: MobileColumnMeta;
   },
 ) {
-  const fallback = options?.fallback ?? <NoneState />;
+  const fallback = options?.fallback ?? <NoneValue />;
 
   return columnHelper.accessor((row) => row[accessor] as string | Date | null, {
     id: String(accessor),

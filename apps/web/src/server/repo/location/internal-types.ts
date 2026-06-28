@@ -3,7 +3,7 @@
  * Types used across location modules.
  */
 
-import type { InventoryItemForTree } from "@cubby/schemas/location-responses";
+import type { InventoryItemForTree } from "@cubby/schemas/location";
 import type {
   image,
   inventoryEntry,

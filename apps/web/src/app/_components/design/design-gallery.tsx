@@ -1,4 +1,4 @@
-import { manualUnitMapping } from "@cubby/schemas/unitmapping-responses";
+import { manualUnitMapping } from "@cubby/schemas/unitmapping";
 import { locationTypeValues, productCategoryValues } from "@cubby/shared";
 import { buildNutrients } from "@cubby/usda-schemas";
 import {
@@ -13,8 +13,7 @@ import {
 import { type ReactNode, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
-import { DotLabel } from "~/app/_components/DotLabel";
-import { EntityPillLink } from "~/app/_components/EntityPill";
+import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import {
   type IngredientPreview,
   type LocationPreview,
@@ -29,10 +28,9 @@ import {
 } from "~/app/_components/EntityPreviewContent";
 import { HoverableTimestamp } from "~/app/_components/HoverableTimestamp";
 import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
-import { LocationTypeBadge } from "~/app/_components/locations/LocationTypeBadge";
-import { NoneState } from "~/app/_components/NoneState";
+import { LocationTypeLabel } from "~/app/_components/locations/LocationTypeLabel";
 import { ManifestCard } from "~/app/_components/preview/manifest-card";
-import { CategoryBadge } from "~/app/_components/products/CategoryBadge";
+import { CategoryLabel } from "~/app/_components/products/CategoryLabel";
 import {
   DistributionGlyph,
   StripPlotCell,
@@ -74,13 +72,7 @@ import {
   BreadcrumbSeparator,
 } from "~/components/ui/breadcrumb";
 import { Button } from "~/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  SelectableCard,
-} from "~/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
 import {
   Collapsible,
@@ -97,6 +89,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "~/components/ui/dialog";
+import { DotLabel } from "~/components/ui/dot-label";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -118,6 +111,7 @@ import { InkStamp } from "~/components/ui/ink-stamp";
 import { Input } from "~/components/ui/input";
 import { Kbd, KbdGroup } from "~/components/ui/kbd";
 import { Label } from "~/components/ui/label";
+import { NoneValue } from "~/components/ui/none-value";
 import {
   Popover,
   PopoverContent,
@@ -820,7 +814,7 @@ export function DesignGallery() {
 
       <GallerySection
         title="Badges & labels"
-        source="badge · DotLabel · EntityPillLink"
+        source="badge · DotLabel · EntityInlineLink"
       >
         <div className="space-y-3">
           <Row label="Badge">
@@ -832,20 +826,20 @@ export function DesignGallery() {
           </Row>
           <Row label="Categories">
             {productCategoryValues.map((c) => (
-              <CategoryBadge key={c} category={c} />
+              <CategoryLabel key={c} category={c} />
             ))}
           </Row>
           <Row label="Location types">
             {locationTypeValues.slice(0, 7).map((t) => (
-              <LocationTypeBadge key={t} type={t} />
+              <LocationTypeLabel key={t} type={t} />
             ))}
           </Row>
           <Row label="Entity links">
-            <EntityPillLink
+            <EntityInlineLink
               entity="ingredient"
               data={{ id: "1", name: "almond butter" }}
             />
-            <EntityPillLink
+            <EntityInlineLink
               entity="product"
               data={{
                 id: "1",
@@ -853,15 +847,15 @@ export function DesignGallery() {
                 manufacturer: "Everlast",
               }}
             />
-            <EntityPillLink
+            <EntityInlineLink
               entity="recipe"
               data={{ id: "1", name: "Za'atar" }}
             />
-            <EntityPillLink
+            <EntityInlineLink
               entity="location"
               data={{ id: "1", name: "Chrome Wire Shelf", type: "shelf" }}
             />
-            <EntityPillLink
+            <EntityInlineLink
               entity="usda-food"
               data={{
                 foodInfo: { description: "Almonds, raw" },
@@ -959,20 +953,6 @@ export function DesignGallery() {
             </p>
           </DashboardCard>
         </div>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <SelectableCard selected>
-            <span className="font-medium text-sm">Selectable — selected</span>
-            <span className="text-muted-foreground text-xs">
-              Ultramarine border + tint
-            </span>
-          </SelectableCard>
-          <SelectableCard>
-            <span className="font-medium text-sm">Selectable — idle</span>
-            <span className="text-muted-foreground text-xs">
-              Hairline border
-            </span>
-          </SelectableCard>
-        </div>
       </GallerySection>
 
       <GallerySection title="Table" source="components/ui/table">
@@ -989,7 +969,7 @@ export function DesignGallery() {
               <TableRow>
                 <TableCell className="font-medium">almond milk</TableCell>
                 <TableCell>
-                  <CategoryBadge category="food" />
+                  <CategoryLabel category="food" />
                 </TableCell>
                 <TableCell className="text-right font-mono tabular-nums">
                   $5.42
@@ -998,7 +978,7 @@ export function DesignGallery() {
               <TableRow data-state="selected">
                 <TableCell className="font-medium">rolled oats</TableCell>
                 <TableCell>
-                  <CategoryBadge category="food" />
+                  <CategoryLabel category="food" />
                 </TableCell>
                 <TableCell className="text-right font-mono tabular-nums">
                   $9.41
@@ -1007,7 +987,7 @@ export function DesignGallery() {
               <TableRow>
                 <TableCell className="font-medium">Festool pad</TableCell>
                 <TableCell>
-                  <CategoryBadge category="tools" />
+                  <CategoryLabel category="tools" />
                 </TableCell>
                 <TableCell className="text-right font-mono tabular-nums">
                   $39.99
@@ -1192,7 +1172,7 @@ export function DesignGallery() {
               <p className="mb-1 font-mono text-3xs text-muted-foreground uppercase tracking-wider">
                 Empty value
               </p>
-              <NoneState />
+              <NoneValue />
             </div>
           </div>
         </div>

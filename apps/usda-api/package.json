@@ -34,6 +34,7 @@
     "@cubby/usda-contract": "workspace:*",
     "@cubby/usda-schemas": "workspace:*",
     "@cubby/worker-tracing": "workspace:*",
+    "@hono/zod-validator": "^0.8.0",
     "@openapi-contrib/json-schema-to-openapi-schema": "^4.3.1",
     "@scalar/hono-api-reference": "^0.10.0",
     "@sentry/cloudflare": "^10.60.0",

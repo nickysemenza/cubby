@@ -148,8 +148,13 @@ describe("product router", () => {
     expect(listResult.items).toHaveLength(1);
     expect("food" in listResult.items[0]!).toBe(false);
 
-    const hydrated = await caller.foodSummaries({ ids: [createdProduct.id] });
-    expect(hydrated).toHaveProperty(createdProduct.id);
+    const hydrated = await caller.summaries({
+      ids: [createdProduct.id],
+      include: ["food"],
+    });
+    expect(hydrated.food).toHaveProperty(createdProduct.id);
+    expect(hydrated.images).toBeUndefined();
+    expect(hydrated.unitMappings).toBeUndefined();
   });
 
   it("returns recipe usages on detail responses for linked ingredients", async () => {

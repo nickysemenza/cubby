@@ -16,18 +16,13 @@ const TIMEOUT_MS = 5000;
 export async function lookupUPCitemdb(
   upc: string,
 ): Promise<ExternalLookupResult> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
-
   try {
     const response = await fetch(`${UPCITEMDB_API_URL}?upc=${upc}`, {
       headers: {
         Accept: "application/json",
       },
-      signal: controller.signal,
+      signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-
-    clearTimeout(timeoutId);
 
     if (!response.ok) {
       // 404 = definitively absent; anything else (429/5xx) = transient.
@@ -81,8 +76,10 @@ export async function lookupUPCitemdb(
       },
     };
   } catch (error) {
-    clearTimeout(timeoutId);
-    if (error instanceof Error && error.name === "AbortError") {
+    if (
+      error instanceof Error &&
+      (error.name === "AbortError" || error.name === "TimeoutError")
+    ) {
       console.error("UPCitemdb API timeout");
     } else {
       console.error("UPCitemdb API error:", error);

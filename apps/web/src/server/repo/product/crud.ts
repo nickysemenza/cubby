@@ -5,12 +5,13 @@
 
 import type { ActorContext } from "@cubby/schemas/context";
 import type { IngredientId, ProductId } from "@cubby/schemas/identifiers";
-import type { ImageOut } from "@cubby/schemas/image-responses";
+import type { ImageOut } from "@cubby/schemas/image";
 import {
   buildTakeSkip,
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
+import type { ProductPickerItemOut } from "@cubby/schemas/product";
 import {
   hasFoodIndicators,
   type ProductCategory,
@@ -18,11 +19,10 @@ import {
   type ProductTopLevelOut,
   type ProductUpdateInput,
 } from "@cubby/schemas/product";
-import type { ProductPickerItemOut } from "@cubby/schemas/product-responses";
-import type { UnitMapping } from "@cubby/schemas/unitmapping-responses";
+import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { countBy } from "es-toolkit";
+import { countBy, uniq } from "es-toolkit";
 import { getSortableFields } from "~/entities/entities";
 import type { Database } from "~/server/db";
 import {
@@ -52,7 +52,7 @@ import {
   lockAndValidateForDelete,
   notDeleted,
   relations,
-  updateAndReturn,
+  updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
@@ -104,7 +104,7 @@ export const getProductImagesByProductIds = async (
   db: Database,
   ids: ProductId[],
 ): Promise<Record<string, ImageOut[]>> => {
-  const uniqueIds = [...new Set(ids)];
+  const uniqueIds = uniq(ids);
   const result: Record<string, ImageOut[]> = Object.fromEntries(
     uniqueIds.map((id) => [id, []]),
   );
@@ -136,7 +136,7 @@ export const getProductUnitMappingsByProductIds = async (
   db: Database,
   ids: ProductId[],
 ): Promise<Record<string, UnitMapping[]>> => {
-  const uniqueIds = [...new Set(ids)];
+  const uniqueIds = uniq(ids);
   const result: Record<string, UnitMapping[]> = Object.fromEntries(
     uniqueIds.map((id) => [id, []]),
   );
@@ -530,7 +530,7 @@ export const updateProduct = async (
   return await withTransaction(db, async (tx) => {
     // Fetch current state for audit logging
     const beforeProduct = await tx.query.product.findFirst({
-      where: eq(product.id, id),
+      where: and(eq(product.id, id), notDeleted(product)),
     });
 
     if (!beforeProduct) {
@@ -571,12 +571,7 @@ export const updateProduct = async (
     }
 
     // Update the product (updateAndReturn handles empty values gracefully)
-    const updated = await updateAndReturn(
-      tx,
-      product,
-      updateData,
-      eq(product.id, id),
-    );
+    const updated = await updateLiveAndReturn(tx, product, updateData, id);
 
     // When price changes, resync the dependent inventory valuations (amount × price).
     if (data.price !== undefined) {
@@ -736,17 +731,26 @@ export const deleteProducts = async (
 
     // Get counts of cascaded items (per product) for the audit trail.
     const cascadedMappings = await tx.query.productUnitMappings.findMany({
-      where: inArray(productUnitMappings.productId, ids),
+      where: and(
+        inArray(productUnitMappings.productId, ids),
+        notDeleted(productUnitMappings),
+      ),
       columns: { productId: true },
     });
 
     const cascadedImages = await tx.query.productImage.findMany({
-      where: inArray(productImage.productId, ids),
+      where: and(
+        inArray(productImage.productId, ids),
+        notDeleted(productImage),
+      ),
       columns: { productId: true },
     });
 
     const cascadedExternalIds = await tx.query.productExternalId.findMany({
-      where: inArray(productExternalId.productId, ids),
+      where: and(
+        inArray(productExternalId.productId, ids),
+        notDeleted(productExternalId),
+      ),
       columns: { productId: true },
     });
 
@@ -754,25 +758,37 @@ export const deleteProducts = async (
     await tx
       .update(productUnitMappings)
       .set({ deletedAt: now })
-      .where(inArray(productUnitMappings.productId, ids));
+      .where(
+        and(
+          inArray(productUnitMappings.productId, ids),
+          notDeleted(productUnitMappings),
+        ),
+      );
 
     // Soft delete external IDs
     await tx
       .update(productExternalId)
       .set({ deletedAt: now })
-      .where(inArray(productExternalId.productId, ids));
+      .where(
+        and(
+          inArray(productExternalId.productId, ids),
+          notDeleted(productExternalId),
+        ),
+      );
 
     // Soft delete product images
     await tx
       .update(productImage)
       .set({ deletedAt: now })
-      .where(inArray(productImage.productId, ids));
+      .where(
+        and(inArray(productImage.productId, ids), notDeleted(productImage)),
+      );
 
     // Soft delete products
     await tx
       .update(product)
       .set({ deletedAt: now })
-      .where(inArray(product.id, ids));
+      .where(and(inArray(product.id, ids), notDeleted(product)));
 
     const auditEntries = buildCascadeAuditEntries("product", ids, {
       cascadedUnitMappings: countBy(cascadedMappings, (m) => m.productId),

@@ -1,5 +1,4 @@
-import type { LocationType } from "@cubby/schemas/location";
-import type { InfLocation } from "@cubby/schemas/location-responses";
+import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { Calendar, LayoutGrid, List } from "lucide-react";
@@ -12,7 +11,7 @@ import { Button } from "~/components/ui/button";
 import { useTRPC } from "~/trpc/react";
 import type { InventoryItem } from "./calculate-inventory-valuation";
 import { InventoryValuationSummary } from "./inventory-valuation-summary";
-import { LocationTypeBadge } from "./LocationTypeBadge";
+import { LocationTypeLabel } from "./LocationTypeLabel";
 import { getLocationIcon, getLocationTypeGroup } from "./location-type-theme";
 
 interface LocationCardGridProps {
@@ -151,7 +150,7 @@ export function LocationCardGrid({
             {types.map(({ type, locations: typeLocations }) => (
               <div key={type} className="mb-6 last:mb-0">
                 <div className="mb-4">
-                  <LocationTypeBadge type={type} />
+                  <LocationTypeLabel type={type} />
                 </div>
                 <Grid cols="cards3">
                   {typeLocations.map((loc) => renderCard(loc, false))}
@@ -227,7 +226,7 @@ function LocationCard({
 
       {/* Stats row: counts */}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground text-xs">
-        {showTypeBadge && <LocationTypeBadge type={location.type} />}
+        {showTypeBadge && <LocationTypeLabel type={location.type} />}
         <EntityStat
           entity="location"
           count={childCount}

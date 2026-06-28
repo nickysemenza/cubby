@@ -25,7 +25,6 @@ interface MobileListScreenProps<TItem> {
   bulkActionBar?: ReactNode;
   isLoading?: boolean;
   error?: unknown;
-  renderMobileCard?: (row: Row<TItem>, defaultContent: ReactNode) => ReactNode;
   infiniteScroll?: InfiniteScrollControls;
   refreshControls?: MobileRefreshControls;
   /** Group configuration — when provided, shows a toggle button */
@@ -46,7 +45,6 @@ export function MobileListScreen<TItem>({
   bulkActionBar,
   isLoading = false,
   error,
-  renderMobileCard,
   infiniteScroll,
   refreshControls,
   groupConfig,
@@ -103,7 +101,6 @@ export function MobileListScreen<TItem>({
             <MobileCardView
               table={table}
               entity={entity}
-              renderMobileCard={renderMobileCard}
               infiniteScroll={infiniteScroll}
               groupConfig={groupConfig}
               grouped={grouped}

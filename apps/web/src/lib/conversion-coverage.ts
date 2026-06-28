@@ -1,5 +1,5 @@
 import { baseKind } from "@cubby/schemas/problems";
-import type { UnitMapping } from "@cubby/schemas/unitmapping-responses";
+import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { safeConvertAmount } from "~/lib/recipe-costing";
 
 /**

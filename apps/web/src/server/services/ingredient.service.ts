@@ -1,19 +1,17 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { IngredientId } from "@cubby/schemas/identifiers";
 import type {
-  ingredientCreateInput,
-  ingredientUpdateData,
-} from "@cubby/schemas/ingredient";
-import type {
   EnrichmentRow,
   IngredientWithFoodLeanOut,
   IngredientWithFoodOut,
-} from "@cubby/schemas/ingredient-responses";
+  ingredientCreateInput,
+  ingredientUpdateData,
+} from "@cubby/schemas/ingredient";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type {
   ProductWithMappingsOut as ProductWithMappings,
   ProductWithMappingsAndFoodOut,
-} from "@cubby/schemas/product-responses";
+} from "@cubby/schemas/product";
 import type { z } from "zod";
 import { conversionCoverage, gradedKinds } from "~/lib/conversion-coverage";
 import { classifyIngredientFix } from "~/lib/recipe-costing-gaps";

@@ -1,5 +1,7 @@
-import type { ProductCreateInput } from "@cubby/schemas/product";
-import type { ProductWithFoodOut } from "@cubby/schemas/product-responses";
+import type {
+  ProductCreateInput,
+  ProductWithFoodOut,
+} from "@cubby/schemas/product";
 import { uniq } from "es-toolkit";
 import { Apple, ChefHat, Info, Scale } from "lucide-react";
 import type { FC } from "react";

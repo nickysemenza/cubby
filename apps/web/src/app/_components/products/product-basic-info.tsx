@@ -1,4 +1,4 @@
-import type { ProductWithFoodOut } from "@cubby/schemas/product-responses";
+import type { ProductWithFoodOut } from "@cubby/schemas/product";
 import { Link } from "@tanstack/react-router";
 import { Package } from "lucide-react";
 import type { FC } from "react";
@@ -6,6 +6,7 @@ import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+import { NoneValue } from "~/components/ui/none-value";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
   productMutationInvalidateKeys,
@@ -15,12 +16,11 @@ import { savedWithRecompute } from "~/lib/recompute-summary";
 import { formatCurrency } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import { EditableCell } from "../data-table/editable-cell";
-import { EntityPillLink } from "../EntityPill";
-import { EntityPillLinkList } from "../EntityPillLinkList";
+import { EntityInlineLink } from "../EntityInlineLink";
+import { EntityInlineLinkList } from "../EntityInlineLinkList";
 import { useEntityDelete } from "../hooks/useEntityDelete";
-import { NoneState } from "../NoneState";
 import { PrintLabelButton } from "../print-label-button";
-import { CategoryBadge } from "./CategoryBadge";
+import { CategoryLabel } from "./CategoryLabel";
 import { productCategoryOptionsWithTheme } from "./product-category-icons";
 
 interface ProductBasicInfoProps {
@@ -81,7 +81,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
             });
           }}
           config={{ type: "currency" }}
-          renderValue={(v) => (v !== null ? formatCurrency(v) : <NoneState />)}
+          renderValue={(v) => (v !== null ? formatCurrency(v) : <NoneValue />)}
         />
       ),
     },
@@ -101,7 +101,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
             options: productCategoryOptionsWithTheme,
             placeholder: "Select category...",
           }}
-          renderValue={(cat) => <CategoryBadge category={cat} />}
+          renderValue={(cat) => <CategoryLabel category={cat} />}
         />
       ),
     },
@@ -132,7 +132,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
     {
       label: "Ingredient",
       value: product.ingredient ? (
-        <EntityPillLink
+        <EntityInlineLink
           entity="ingredient"
           data={{
             name: product.ingredient.name,
@@ -144,7 +144,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
     {
       label: "USDA Food",
       value: product.food ? (
-        <EntityPillLink entity="usda-food" data={product.food} />
+        <EntityInlineLink entity="usda-food" data={product.food} />
       ) : undefined,
     },
     ...(product.externalIds && product.externalIds.length > 0
@@ -181,7 +181,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
       value:
         product.inventoryEntry && product.inventoryEntry.length > 0 ? (
           <Row gap="xs" wrap className="mt-1">
-            <EntityPillLinkList
+            <EntityInlineLinkList
               entity="location"
               items={product.inventoryEntry.map((entry) => ({
                 id: entry.location.id,

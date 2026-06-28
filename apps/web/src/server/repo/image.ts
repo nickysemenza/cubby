@@ -11,8 +11,10 @@
  * Storage/network orchestration lives in image-storage.service.ts.
  */
 
-import type { InitiateUploadWithoutEntityInput } from "@cubby/schemas/image";
-import type { ImageWithEntity } from "@cubby/schemas/image-responses";
+import type {
+  ImageWithEntity,
+  InitiateUploadWithoutEntityInput,
+} from "@cubby/schemas/image";
 import { and, eq, inArray, lt } from "drizzle-orm";
 import { getSortableFields } from "~/entities/entities";
 import type { Database } from "~/server/db";

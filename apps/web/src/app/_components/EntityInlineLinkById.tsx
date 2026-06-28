@@ -5,18 +5,18 @@ import { useMemo } from "react";
 import { Spinner } from "~/components/ui/spinner";
 import { entityQueryOptions } from "~/entities/entity-query";
 import { useTRPC } from "~/trpc/react";
-import { EntityPillLink } from "./EntityPill";
+import { EntityInlineLink } from "./EntityInlineLink";
 
-// Entity types this pill resolves to a name via getByID. Inventory & cookbook
-// are intentionally excluded — they render as plain links below, not fetched.
-const PILL_FETCHABLE = [
+// Entity types this inline link resolves to a name via getByID. Inventory &
+// cookbook are intentionally excluded — they render as plain links below.
+const INLINE_LINK_FETCHABLE = [
   "product",
   "location",
   "recipe",
   "ingredient",
 ] as const satisfies readonly Entity[];
 
-interface EntityPillByIdProps {
+interface EntityInlineLinkByIdProps {
   entityType: AuditEntityType;
   entityId: string;
   /** Compact mode: truncates long names with max-width */
@@ -24,21 +24,21 @@ interface EntityPillByIdProps {
 }
 
 /**
- * A "smart" pill component that fetches entity data by ID and renders the appropriate pill.
- * Uses React Query caching so multiple pills with the same ID won't cause duplicate fetches.
+ * A "smart" inline link that fetches entity data by ID and renders the appropriate link.
+ * Uses React Query caching so multiple links with the same ID won't cause duplicate fetches.
  */
-export function EntityPillById({
+export function EntityInlineLinkById({
   entityType,
   entityId,
   compact,
-}: EntityPillByIdProps) {
+}: EntityInlineLinkByIdProps) {
   const trpc = useTRPC();
 
   // Resolve the name via the shared entity→getByID mapping for the fetchable
-  // pill types; everything else (inventory, cookbook, or an out-of-union runtime
+  // inline-link types; everything else (inventory, cookbook, or an out-of-union runtime
   // entityType from a legacy audit row) gets a skipped query so useQuery never
   // receives a non-object arg — v5 throws "only the Object form is allowed".
-  const isFetchable = (PILL_FETCHABLE as readonly string[]).includes(
+  const isFetchable = (INLINE_LINK_FETCHABLE as readonly string[]).includes(
     entityType,
   );
   const queryOptions = useMemo(
@@ -81,7 +81,7 @@ export function EntityPillById({
 
   if (query.data) {
     return (
-      <EntityPillLink
+      <EntityInlineLink
         entity={entityType as "product" | "location" | "recipe" | "ingredient"}
         data={query.data as never}
         compact={compact}

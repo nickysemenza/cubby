@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { cookbookId, recipeId } from "./identifiers";
-import { cookbookSummary } from "./recipe-responses";
+import { cookbookSummary } from "./recipe";
 
 // The raw "import recipe" carrier: a recipe from any import source (EPUB cookbook
 // via food-cli/WASM, the URL scraper, Notion) before it's parsed and resolved

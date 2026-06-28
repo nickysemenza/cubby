@@ -22,7 +22,7 @@ import {
 import { USDA_KINDS } from "~/lib/conversion-coverage";
 import { unitMappingsFromFood } from "~/lib/unit-mapping-utils";
 import { type DetailSection, DetailSections } from "../data-table/detail-page";
-import { EntityPillLinkList } from "../EntityPillLinkList";
+import { EntityInlineLinkList } from "../EntityInlineLinkList";
 import { NutrientsSummary } from "../units/NutrientsSummary";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import { NutritionInfoTable } from "./nutrition";
@@ -149,7 +149,7 @@ export const USDAFoodDetail: React.FC<{
           No associated products found
         </div>
       ) : (
-        <EntityPillLinkList entity="product" items={linkedProducts} />
+        <EntityInlineLinkList entity="product" items={linkedProducts} />
       )}
     </div>
   );

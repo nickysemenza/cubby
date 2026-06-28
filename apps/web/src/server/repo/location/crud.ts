@@ -6,10 +6,10 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { LocationId } from "@cubby/schemas/identifiers";
 import type {
+  InfLocation,
   LocationCreateInput,
   LocationUpdateInput,
 } from "@cubby/schemas/location";
-import type { InfLocation } from "@cubby/schemas/location-responses";
 import {
   buildTakeSkip,
   type PaginationParams,
@@ -46,7 +46,7 @@ import {
   notDeleted,
   relations,
   unwrapDb,
-  updateAndReturn,
+  updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { generateUniqueLocationShortcode } from "~/server/repo/shortcode-utils";
@@ -150,7 +150,7 @@ export const updateLocation = async (
 
   // Fetch current state for audit logging
   const before = await getDb(db).query.location.findFirst({
-    where: eq(location.id, id),
+    where: and(eq(location.id, id), notDeleted(location)),
   });
 
   return await withTransaction(db, async (tx) => {
@@ -162,12 +162,7 @@ export const updateLocation = async (
     });
 
     // Update the location (updateAndReturn handles empty values gracefully)
-    const updated = await updateAndReturn(
-      tx,
-      location,
-      updateValues,
-      eq(location.id, id),
-    );
+    const updated = await updateLiveAndReturn(tx, location, updateValues, id);
 
     // Add new images using shared helper
     if (data.pendingImageIds && data.pendingImageIds.length > 0) {
@@ -262,7 +257,10 @@ export const deleteLocations = async (
 
     // Get counts of cascaded images (per location) for the audit trail.
     const cascadedImages = await tx.query.locationImage.findMany({
-      where: inArray(locationImage.locationId, ids),
+      where: and(
+        inArray(locationImage.locationId, ids),
+        notDeleted(locationImage),
+      ),
       columns: { locationId: true },
     });
 
@@ -270,13 +268,15 @@ export const deleteLocations = async (
     await tx
       .update(locationImage)
       .set({ deletedAt: now })
-      .where(inArray(locationImage.locationId, ids));
+      .where(
+        and(inArray(locationImage.locationId, ids), notDeleted(locationImage)),
+      );
 
     // Soft delete locations
     await tx
       .update(location)
       .set({ deletedAt: now })
-      .where(inArray(location.id, ids));
+      .where(and(inArray(location.id, ids), notDeleted(location)));
 
     const auditEntries = buildCascadeAuditEntries("location", ids, {
       cascadedImages: countBy(cascadedImages, (i) => i.locationId),
@@ -336,7 +336,7 @@ export const updateLocationAiDescription = async (
   id: LocationId,
   aiDescription: string,
 ) => {
-  await updateAndReturn(db, location, { aiDescription }, eq(location.id, id));
+  await updateLiveAndReturn(db, location, { aiDescription }, id);
 };
 
 /**

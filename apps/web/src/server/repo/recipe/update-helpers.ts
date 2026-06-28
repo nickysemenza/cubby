@@ -15,7 +15,6 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { z } from "zod";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
-  image,
   ingredient,
   recipe,
   recipeImage,
@@ -24,8 +23,10 @@ import {
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
+  associatePendingImages,
   findOrCreate,
   insertAndReturn,
+  notDeleted,
   unwrapDb,
 } from "~/server/repo/database-helpers";
 
@@ -204,7 +205,10 @@ export async function updateRecipeBasicProperties(
     updateData.notes = updates.notes;
   }
 
-  await tx.update(recipe).set(updateData).where(eq(recipe.id, recipeId));
+  await tx
+    .update(recipe)
+    .set(updateData)
+    .where(and(eq(recipe.id, recipeId), notDeleted(recipe)));
 }
 
 /**
@@ -217,16 +221,13 @@ export async function updateRecipeImages(
 ): Promise<void> {
   // Add new images if provided
   if (updates.pendingImageIds && updates.pendingImageIds.length > 0) {
-    await tx.insert(recipeImage).values(
-      updates.pendingImageIds.map((imageId) => ({
-        recipeId,
-        imageId,
-      })),
+    await associatePendingImages(
+      tx,
+      recipeImage,
+      "recipeId",
+      recipeId,
+      updates.pendingImageIds,
     );
-    await tx
-      .update(image)
-      .set({ status: "UPLOADED" })
-      .where(inArray(image.id, updates.pendingImageIds));
   }
 
   // Remove images if requested

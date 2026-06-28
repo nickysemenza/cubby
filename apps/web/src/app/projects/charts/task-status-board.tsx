@@ -1,7 +1,7 @@
 import { sum } from "es-toolkit";
 import { ListChecks } from "lucide-react";
 import { useMemo } from "react";
-import { NoneState } from "~/app/_components/NoneState";
+import { NoneValue } from "~/components/ui/none-value";
 import { getStatusChartColor } from "~/lib/status-colors";
 import type { NotionProject, NotionTask } from "~/server/clients/notion";
 import { ChartEmpty } from "./chart-empty";
@@ -116,7 +116,7 @@ export function TaskStatusBoard({
                         {count}
                       </span>
                     ) : (
-                      <NoneState />
+                      <NoneValue />
                     )}
                   </td>
                 );

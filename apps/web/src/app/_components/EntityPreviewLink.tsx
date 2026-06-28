@@ -18,7 +18,7 @@ import {
 
 // A link to a recipe/ingredient detail page that, on hover/focus, opens a
 // compact preview hovercard (lazily fetched). The shared core behind both the
-// dense recipe views (plain-text children) and EntityPillLink (icon+name
+// dense recipe views (plain-text children) and EntityInlineLink (icon+name
 // children) — one place owns "link + preview" for these two entity types.
 //
 // On touch (iOS, the PWA target) there's no hover; the link tap navigates, so
@@ -27,7 +27,7 @@ import {
 /**
  * Plain-text link styling for the dense recipe views (prep/matrix/nested-spec):
  * a dotted underline that turns solid + primary on hover. Mirrors the
- * EntityPillLink underline treatment so links read consistently app-wide.
+ * EntityInlineLink underline treatment so links read consistently app-wide.
  */
 export const dottedEntityLink =
   "underline decoration-border/70 decoration-dotted underline-offset-2 transition-colors hover:text-primary hover:decoration-primary hover:decoration-solid";

@@ -1,4 +1,4 @@
-import { recipeAvailabilityOut } from "@cubby/schemas/availability-responses";
+import { recipeAvailabilityOut } from "@cubby/schemas/availability";
 import type { Amount } from "@cubby/schemas/codec";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";

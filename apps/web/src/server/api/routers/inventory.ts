@@ -10,19 +10,17 @@ import { type InventoryId, inventoryId } from "@cubby/schemas/identifiers";
 import {
   bulkMovePayload,
   inventoryBulkOperationPayload,
+  inventoryCountsByLocationOut,
   inventoryCreatePayloadData,
+  inventoryDuplicateUniqueProductsOut,
   inventoryFiltersSchema,
   inventoryFindDuplicatesInput,
+  inventoryListItemOut,
   inventoryLocationIdsInput,
   inventoryUpdatePayloadData,
-} from "@cubby/schemas/inventory";
-import {
-  inventoryCountsByLocationOut,
-  inventoryDuplicateUniqueProductsOut,
-  inventoryListItemOut,
   inventoryWithLocationAndProductListOut,
   inventoryWithLocationAndProductOut,
-} from "@cubby/schemas/inventory-responses";
+} from "@cubby/schemas/inventory";
 import { createAppError } from "~/server/errors/app-error";
 import {
   bulkMoveInventoryEntries,

@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { zValidator } from "@hono/zod-validator";
 import {
   batchLookupBody,
   fdcIdParam,
@@ -10,25 +11,29 @@ import type { USDADataSource } from "../data/types.js";
 export function createFoodRoutes(dataSource: USDADataSource) {
   const app = new Hono();
 
-  app.get("/api/foods/:fdc_id", async (c) => {
-    const params = fdcIdParam.safeParse({ fdc_id: c.req.param("fdc_id") });
-    if (!params.success) {
+  app.get(
+    "/api/foods/:fdc_id",
+    zValidator("param", fdcIdParam, (result, c) => {
+      if (result.success) return;
       return c.json({ error: "Invalid FDC ID" }, 400);
-    }
+    }),
+    async (c) => {
+      const params = c.req.valid("param");
 
-    const completeFood = await dataSource.getFoodById(params.data.fdc_id);
-    if (!completeFood) {
-      return c.json(
-        {
-          error: "Food not found",
-          message: `No food found with FDC ID ${params.data.fdc_id}`,
-        },
-        404,
-      );
-    }
+      const completeFood = await dataSource.getFoodById(params.fdc_id);
+      if (!completeFood) {
+        return c.json(
+          {
+            error: "Food not found",
+            message: `No food found with FDC ID ${params.fdc_id}`,
+          },
+          404,
+        );
+      }
 
-    return c.json(completeFood, 200);
-  });
+      return c.json(completeFood, 200);
+    },
+  );
 
   app.post("/api/foods/search", async (c) => {
     const body = await c.req.json().catch(() => undefined);

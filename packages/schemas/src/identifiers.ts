@@ -26,6 +26,11 @@ export {
   productShortcode,
   recipeShortcode,
 } from "@cubby/shared";
+import {
+  locationShortcode,
+  productShortcode,
+  recipeShortcode,
+} from "@cubby/shared";
 export type { LocationShortcode, ProductShortcode, RecipeShortcode };
 
 // Type exports
@@ -38,6 +43,19 @@ export type InventoryId = z.infer<typeof inventoryId>;
 export type CookbookId = z.infer<typeof cookbookId>;
 export type MealId = z.infer<typeof mealId>;
 export type MealRecipeId = z.infer<typeof mealRecipeId>;
+
+export const normalizedLocationShortcode = z
+  .string()
+  .transform((value) => value.trim().toUpperCase())
+  .pipe(locationShortcode);
+export const normalizedProductShortcode = z
+  .string()
+  .transform((value) => value.trim().toUpperCase())
+  .pipe(productShortcode);
+export const normalizedRecipeShortcode = z
+  .string()
+  .transform((value) => value.trim().toUpperCase())
+  .pipe(recipeShortcode);
 
 // Helper functions for unsafe casts (use only when you're certain the value is valid).
 // Useful in tests and when working with external/untyped strings you know are valid.

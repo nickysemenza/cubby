@@ -12,9 +12,10 @@ import type {
   ProductCreateInput,
   ProductTopLevelOut,
   ProductUpdateInput,
+  ProductWithFoodAndSideEffectsOut,
 } from "@cubby/schemas/product";
-import type { ProductWithFoodAndSideEffectsOut } from "@cubby/schemas/product-responses";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
+import { uniq } from "es-toolkit";
 import { getErrorMessage } from "~/lib/error-utils";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
@@ -76,11 +77,21 @@ export async function updateProductWithSideEffects(
   data: ProductUpdateInput["data"],
   actor: ActorContext,
 ): Promise<ProductWithFoodAndSideEffectsOut> {
+  const previous =
+    data.ingredientId !== undefined
+      ? await services.product.getProductByID(id)
+      : null;
   const result = await services.product.updateProduct(id, data, actor);
-  const ingredientId = result.ingredient?.id;
-  const recipesRecomputed = ingredientId
-    ? await services.recipeCosting.recomputeForIngredient(ingredientId)
-    : 0;
+  const ingredientIds = uniq(
+    [previous?.ingredient?.id, result.ingredient?.id].filter(
+      (ingredientId): ingredientId is NonNullable<typeof ingredientId> =>
+        ingredientId != null,
+    ),
+  );
+  const recipesRecomputed =
+    ingredientIds.length > 0
+      ? await services.recipeCosting.recomputeForIngredients(ingredientIds)
+      : 0;
 
   const priceChanged = data.price !== undefined;
   const inventoryValuationsUpdated = priceChanged

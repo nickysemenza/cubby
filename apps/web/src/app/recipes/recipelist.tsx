@@ -1,10 +1,11 @@
 import type { CookbookId } from "@cubby/schemas/identifiers";
-import type { RecipeListItem } from "@cubby/schemas/recipe-responses";
+import type { RecipeListItem } from "@cubby/schemas/recipe";
 import { useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Scale } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
 import { Stack } from "~/components/layout";
+import { NoneValue } from "~/components/ui/none-value";
 import { Skeleton } from "~/components/ui/skeleton";
 import { formatCurrencyRange, formatNumberRange } from "~/lib/format-range";
 import { recipeMutationInvalidateKeys } from "~/lib/query-keys";
@@ -13,7 +14,6 @@ import RTable from "../_components/data-table/Table";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
-import { NoneState } from "../_components/NoneState";
 import {
   RecipeSourceLink,
   sourceLabel,
@@ -84,7 +84,7 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
         },
         cell: (info) => {
           const tags = info.getValue();
-          if (!tags?.length) return <NoneState />;
+          if (!tags?.length) return <NoneValue />;
           return (
             <TruncatedList
               items={tags}
@@ -111,7 +111,7 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
           const recipe = info.row.original;
           if (recipe.yield) return formatYield(recipe.yield);
           if (recipe.servings) return `${recipe.servings} servings`;
-          return <NoneState />;
+          return <NoneValue />;
         },
       }),
       // Total cost — read from the server-persisted rollup (recipe.totals).
@@ -130,7 +130,7 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
           const recipe = info.row.original;
           const totals = recipe.totals;
           if (!totals) return <Skeleton className="h-4 w-12" />;
-          if (!totals.costTotal) return <NoneState />;
+          if (!totals.costTotal) return <NoneValue />;
           const perItem = getServingBasis(recipe);
           return (
             <Stack gap="xs">
@@ -172,7 +172,7 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
           const recipe = info.row.original;
           const totals = recipe.totals;
           if (!totals) return <Skeleton className="h-4 w-12" />;
-          if (!totals.caloriesTotal) return <NoneState />;
+          if (!totals.caloriesTotal) return <NoneValue />;
           const perItem = getServingBasis(recipe);
           return (
             <Stack gap="xs">
@@ -219,7 +219,7 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
         },
         cell: (info) => {
           const source = info.getValue();
-          if (!sourceLabel(source)) return <NoneState />;
+          if (!sourceLabel(source)) return <NoneValue />;
           return (
             <RecipeSourceLink
               source={source}

@@ -1,5 +1,5 @@
 import type { Confidence } from "@cubby/schemas/ai";
-import type { EnrichmentRow } from "@cubby/schemas/ingredient-responses";
+import type { EnrichmentRow } from "@cubby/schemas/ingredient";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { useQuery } from "@tanstack/react-query";
 import { Check, ChevronDown, ChevronRight, GitMerge } from "lucide-react";

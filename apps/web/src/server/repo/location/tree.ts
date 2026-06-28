@@ -4,11 +4,11 @@
  */
 
 import type { LocationId } from "@cubby/schemas/identifiers";
-import { locationType } from "@cubby/schemas/location";
 import type {
   InfLocation,
   InventoryItemForTree,
-} from "@cubby/schemas/location-responses";
+} from "@cubby/schemas/location";
+import { locationType } from "@cubby/schemas/location";
 import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import {

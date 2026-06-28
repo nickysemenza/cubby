@@ -53,12 +53,6 @@ interface MobileCardViewProps<TItem> {
   table: ITable<TItem>;
   /** Entity type for navigation - when provided, cards show a view button */
   entity?: Entity;
-  /**
-   * Custom render function for mobile cards.
-   * Receives the row and the default card content, allowing full customization.
-   * Useful for tables with inline editing or special mobile UX.
-   */
-  renderMobileCard?: (row: Row<TItem>, defaultContent: ReactNode) => ReactNode;
   /** Infinite scroll controls — when provided, auto-loads more at bottom */
   infiniteScroll?: InfiniteScrollControls;
   /** Group configuration for section headers */
@@ -72,7 +66,6 @@ interface MobileCardViewProps<TItem> {
 export function MobileCardView<TItem>({
   table,
   entity,
-  renderMobileCard,
   infiniteScroll,
   groupConfig,
   grouped = false,
@@ -213,18 +206,6 @@ export function MobileCardView<TItem>({
         />
       </div>
     ) : undefined;
-
-    // Default content (just debug if enabled, otherwise nothing)
-    const defaultContent = debugContent ?? null;
-
-    // Allow custom rendering for special cases (e.g., inline editing)
-    if (renderMobileCard) {
-      return (
-        <VirtualRow key={row.id} vi={vi} virtualizer={virtualizer}>
-          {renderMobileCard(row, defaultContent)}
-        </VirtualRow>
-      );
-    }
 
     // Default compact row with right-aligned values
     const card = (

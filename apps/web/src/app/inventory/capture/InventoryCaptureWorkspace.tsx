@@ -10,13 +10,6 @@ import BulkInventoryForm from "../bulk-edit/bulk-inventory-form";
 import BulkMoveForm from "../bulk-move/bulk-move-form";
 import QuickCaptureForm from "../quick-capture/quick-capture-form";
 
-export type InventoryCaptureMode =
-  | "quick"
-  | "photo"
-  | "inline"
-  | "bulk-edit"
-  | "bulk-move";
-
 type InventoryCaptureWorkspaceProps =
   | {
       mode: "quick";
