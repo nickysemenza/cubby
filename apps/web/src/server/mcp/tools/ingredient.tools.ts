@@ -26,6 +26,7 @@ import {
   registerMcpTool,
   registerRouterTool,
   slimIngredient,
+  structuredSuccessWithError,
   WRITE_CLOSED,
   WRITE_DESTRUCTIVE_CLOSED,
   withIdInput,
@@ -127,11 +128,14 @@ export function registerIngredientTools(server: McpServer) {
           results.push({ target, ok: false, error: formatToolError(error) });
         }
       }
-      return {
+      const payload = {
         merged: results.filter((r) => r.ok).length,
         total: results.length,
         results,
       };
+      return payload.merged === 0
+        ? structuredSuccessWithError(payload, ingredientMergeBatchOut)
+        : payload;
     },
   });
 

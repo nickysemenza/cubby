@@ -79,6 +79,7 @@ type McpServerInternals = {
   _registeredTools: Record<string, SdkRegisteredTool>;
 };
 
+/** Reads McpServer._registeredTools — private SDK field; covered by listMcpToolCatalog tests. */
 function getRegisteredTools(
   server: McpServer,
 ): Record<string, SdkRegisteredTool> {
@@ -165,6 +166,14 @@ export function structuredSuccess(
   };
 }
 
+/** Like structuredSuccess but marks the MCP envelope as isError (e.g. total batch failure). */
+export function structuredSuccessWithError(
+  data: unknown,
+  outputSchema: z.ZodType,
+): CallToolResult {
+  return { ...structuredSuccess(data, outputSchema), isError: true };
+}
+
 export function structuredError(text: string) {
   return {
     content: [{ type: "text" as const, text }],
@@ -191,6 +200,7 @@ function safeToJsonSchema(
 
 /** Install a ListTools handler that strips mock metadata from advertised schemas. */
 export function installMockStrippedListToolsHandler(server: McpServer) {
+  // server.server is the underlying SDK Server — private but stable for ListTools override.
   const registeredTools = getRegisteredTools(server);
 
   server.server.setRequestHandler(ListToolsRequestSchema, () => ({
@@ -221,11 +231,17 @@ export function installMockStrippedListToolsHandler(server: McpServer) {
 }
 
 function isCallToolResult(value: unknown): value is CallToolResult {
-  return (
-    !!value &&
-    typeof value === "object" &&
-    "content" in value &&
-    Array.isArray((value as CallToolResult).content)
+  if (!value || typeof value !== "object" || !("content" in value)) {
+    return false;
+  }
+  const content = (value as CallToolResult).content;
+  if (!Array.isArray(content)) return false;
+  return content.every(
+    (item) =>
+      !!item &&
+      typeof item === "object" &&
+      "type" in item &&
+      typeof (item as { type: unknown }).type === "string",
   );
 }
 
