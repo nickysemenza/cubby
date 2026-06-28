@@ -27,13 +27,6 @@ export const quickActions: QuickAction[] = [
     keywords: ["barcode", "scan", "inventory", "add", "garage", "audit"],
   },
   {
-    id: "scanner",
-    name: "Scan Inventory",
-    path: "/inventory/session",
-    icon: ScanBarcode,
-    keywords: ["barcode", "scan", "camera", "bin"],
-  },
-  {
     id: "add-product",
     name: "Add Product",
     path: "/products/new",

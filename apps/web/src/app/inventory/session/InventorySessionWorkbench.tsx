@@ -619,7 +619,7 @@ function ParentPicker({
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               placeholder="Search location tree..."
-              className="pl-9"
+              className="pl-9" /* tight: clears absolute search icon */
             />
           </div>
         </CardHeader>
@@ -645,7 +645,7 @@ function ParentPicker({
                     onSelect(location.id);
                   }
                 }}
-                className="w-full border-[var(--border)] border-b bg-card py-2 pr-3 text-left transition-colors last:border-b-0 hover:bg-muted"
+                className="w-full border-[var(--border)] border-b bg-card py-2 pr-3 text-left transition-colors last:border-b-0 hover:bg-muted" /* tight: compact tree picker row */
               >
                 <LocationTreeRow
                   location={location}
@@ -753,7 +753,7 @@ function LocationWorkbenchSidebar({
         {visible.map((location) => {
           const items = inventoryByLocation.get(location.id) ?? [];
           const confirmed = items.filter((item) =>
-            confirmedIds.has(item.id),
+            confirmedIds.has(confirmationKey("inventory", item.id)),
           ).length;
           return (
             <button
@@ -761,7 +761,7 @@ function LocationWorkbenchSidebar({
               type="button"
               onClick={() => onSelect(location.id)}
               className={cn(
-                "w-full border-[var(--border)] border-b py-1.5 pr-2 text-left transition-colors hover:bg-muted",
+                "w-full border-[var(--border)] border-b py-1.5 pr-2 text-left transition-colors hover:bg-muted" /* tight: compact session tree row */,
                 currentId === location.id && "bg-primary/5",
               )}
             >
@@ -1193,11 +1193,13 @@ function ExpectedItemReviewRow({
   return (
     <div
       className={cn(
-        "border border-[var(--border)] border-l-4 border-l-warning/60 bg-background p-3",
+        "border border-[var(--border)] border-l-4 border-l-warning/60 bg-background p-3" /* tight: dense expected product row */,
         confirmed && "border-positive/40 bg-positive/5",
       )}
     >
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+      <div
+        className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center" /* tight: dense expected product row */
+      >
         <Row align="center" gap="sm" className="min-w-0">
           <div className="relative shrink-0">
             <Image
@@ -1319,11 +1321,13 @@ function ExpectedLocationReviewRow({
   return (
     <div
       className={cn(
-        "border border-[var(--border)] border-l-4 border-l-primary/60 bg-primary/5 p-3",
+        "border border-[var(--border)] border-l-4 border-l-primary/60 bg-primary/5 p-3" /* tight: dense expected location row */,
         confirmed && "border-positive/40 bg-positive/5",
       )}
     >
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-center">
+      <div
+        className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-center" /* tight: dense expected location row */
+      >
         <Row align="center" gap="sm" className="min-w-0">
           <div className="relative flex h-14 w-14 shrink-0 items-center justify-center border border-primary/30 bg-primary/10 text-primary">
             {location.images[0]?.url ? (
@@ -1449,7 +1453,7 @@ function UnknownTray({
                   <div
                     key={location.id}
                     className={cn(
-                      "min-h-16 border border-[var(--border)] border-l-4 border-l-primary/60 bg-primary/5 p-3",
+                      "min-h-16 border border-[var(--border)] border-l-4 border-l-primary/60 bg-primary/5 p-3" /* tight: dense unknown location row */,
                       disabled && "opacity-50",
                     )}
                   >
@@ -1515,7 +1519,7 @@ function UnknownTray({
                 <div
                   key={item.id}
                   className={cn(
-                    "min-h-16 border border-[var(--border)] border-l-4 border-l-warning/60 bg-background p-3",
+                    "min-h-16 border border-[var(--border)] border-l-4 border-l-warning/60 bg-background p-3" /* tight: dense unknown product row */,
                     disabled && "opacity-50",
                   )}
                 >
@@ -1833,7 +1837,7 @@ function ManualAdd({ locationId }: { locationId: LocationId }) {
           }),
         )(event);
       }}
-      className="border border-[var(--border)] p-3"
+      className="border border-[var(--border)] p-3" /* tight: dense manual add panel */
     >
       <div className="min-w-0">
         <WithProductSearch>
@@ -1866,7 +1870,7 @@ function ManualAdd({ locationId }: { locationId: LocationId }) {
         />
         <Button
           type="submit"
-          className="min-h-10 shrink-0 self-end px-3 sm:min-h-12 sm:px-4"
+          className="min-h-10 shrink-0 self-end px-3 sm:min-h-12 sm:px-4" /* tight: mobile manual add button */
           disabled={createInventory.isPending}
         >
           <Plus className="h-4 w-4" />
@@ -1963,7 +1967,7 @@ function QrJumpButton({
           <Button
             type="submit"
             variant="outline"
-            className="min-h-9 px-3 text-xs"
+            className="min-h-9 px-3 text-xs" /* tight: desktop jump form */
             disabled={isResolving || manualValue.trim().length === 0}
           >
             Jump

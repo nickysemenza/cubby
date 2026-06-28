@@ -117,17 +117,31 @@ export function MoveInventoryDialog({
 
     setError(null);
 
-    for (const [sourceLocationId, sourceItems] of sourceGroups) {
-      const moveItems: BulkMoveItem[] = sourceItems.map((item) => ({
-        inventoryEntryId: item.id,
-        quantity: item.amount,
-      }));
+    let completedGroups = 0;
+    try {
+      for (const [sourceLocationId, sourceItems] of sourceGroups) {
+        const moveItems: BulkMoveItem[] = sourceItems.map((item) => ({
+          inventoryEntryId: item.id,
+          quantity: item.amount,
+        }));
 
-      await bulkMoveMutation.mutateAsync({
-        sourceLocationId,
-        targetLocationId,
-        items: moveItems,
-      });
+        await bulkMoveMutation.mutateAsync({
+          sourceLocationId,
+          targetLocationId,
+          items: moveItems,
+        });
+        completedGroups += 1;
+      }
+    } catch (error) {
+      invalidateInventory();
+      setError(
+        completedGroups > 0
+          ? `Moved items from ${completedGroups} of ${sourceGroups.size} source locations before the move failed. The list has been refreshed.`
+          : error instanceof Error
+            ? error.message
+            : "Failed to move items",
+      );
+      return;
     }
 
     toast.success(

@@ -67,8 +67,10 @@ export function LocationTreeRow({
       </div>
       {leading}
       {icon ?? <LocationIcon type={location.type} size={16} />}
-      <div className="min-w-0 flex-1 space-y-0.5">
-        <div className="flex min-w-0 items-baseline gap-1.5">
+      <div className="min-w-0 flex-1 space-y-0.5" /* tight: compact tree row */>
+        <div
+          className="flex min-w-0 items-baseline gap-1.5" /* tight: compact tree row */
+        >
           <span
             data-slot="tree-row-title"
             className={cn(

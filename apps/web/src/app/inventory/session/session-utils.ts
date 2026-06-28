@@ -28,10 +28,6 @@ export function confirmationKey(
   return `${type}:${id}`;
 }
 
-export function isAuditableLocation(type: LocationType): boolean {
-  return type.length > 0;
-}
-
 export function isGlobalUnknownLocation(location: InfLocation): boolean {
   return location.name === "Unknown" && !location.parent;
 }
@@ -149,20 +145,18 @@ export function flattenAuditableLocations(
 
   const visit = (node: InfLocation, path: string[], depth: number) => {
     const nextPath = [...path, node.name];
-    if (isAuditableLocation(node.type)) {
-      out.push({
-        id: node.id,
-        name: node.name,
-        type: node.type,
-        shortcode: node.shortcode,
-        lastBulkInventory: node.lastBulkInventory,
-        aiDescription: node.aiDescription,
-        imageCount: node.images?.length ?? 0,
-        path: nextPath,
-        depth,
-        location: node,
-      });
-    }
+    out.push({
+      id: node.id,
+      name: node.name,
+      type: node.type,
+      shortcode: node.shortcode,
+      lastBulkInventory: node.lastBulkInventory,
+      aiDescription: node.aiDescription,
+      imageCount: node.images?.length ?? 0,
+      path: nextPath,
+      depth,
+      location: node,
+    });
 
     for (const child of node.children ?? []) {
       visit(child, nextPath, depth + 1);

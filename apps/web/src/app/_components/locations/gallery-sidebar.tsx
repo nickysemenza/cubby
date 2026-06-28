@@ -308,7 +308,7 @@ function SidebarTreeNode({
         tabIndex={0}
         onKeyDown={handleKeyDown}
         className={cn(
-          "group relative cursor-pointer border-[var(--border)] border-b py-3 pr-3 text-sm",
+          "group relative cursor-pointer border-[var(--border)] border-b py-3 pr-3 text-sm" /* tight: compact gallery tree row */,
           "transition-colors duration-150 ease-out",
           !isActive && "hover:bg-muted",
           isActive && "bg-primary/5 text-primary",

@@ -30,6 +30,7 @@ import {
   touchLastBulkInventoryOut,
 } from "@cubby/schemas/location";
 import { createAppError } from "~/server/errors/app-error";
+import { withTransaction } from "~/server/repo/database-helpers";
 import {
   buildLocationTree,
   buildLocationTypeCount,
@@ -155,18 +156,20 @@ const bulkUpdateParent = protectedProcedure
     if (input.parentId && input.ids.includes(input.parentId)) {
       throw createAppError(
         "CONSTRAINT_VIOLATION",
-        "Cannot move a location under itself or another selected location.",
+        "Cannot move a location under itself.",
       );
     }
 
-    for (const id of input.ids) {
-      await updateLocation(
-        ctx.db,
-        id,
-        { parentId: input.parentId },
-        ctx.actorContext,
-      );
-    }
+    await withTransaction(ctx.db, async (tx) => {
+      for (const id of input.ids) {
+        await updateLocation(
+          tx,
+          id,
+          { parentId: input.parentId },
+          ctx.actorContext,
+        );
+      }
+    });
 
     await ctx.services.locationValuation.recompute();
     return { updated: input.ids.length };

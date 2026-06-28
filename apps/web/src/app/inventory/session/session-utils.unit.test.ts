@@ -13,7 +13,6 @@ import {
   getDirectChildLocations,
   getSessionRootCandidates,
   getUnknownChildLocations,
-  isAuditableLocation,
   isDescendantLocation,
 } from "./session-utils";
 
@@ -39,15 +38,7 @@ function loc(
 }
 
 describe("inventory session utils", () => {
-  it("treats precise storage nodes as auditable", () => {
-    expect(isAuditableLocation("room")).toBe(true);
-    expect(isAuditableLocation("area")).toBe(true);
-    expect(isAuditableLocation("shelf")).toBe(true);
-    expect(isAuditableLocation("tote-bin")).toBe(true);
-    expect(isAuditableLocation("drawer")).toBe(true);
-  });
-
-  it("flattens auditable descendants at any depth", () => {
+  it("flattens every descendant at any depth", () => {
     const bin = loc(
       "00000000-0000-4000-8000-000000000004",
       "Bin A",
