@@ -22,7 +22,6 @@ import { Route as AuthenticatedMcpRouteImport } from './routes/_authenticated/mc
 import { Route as AuthenticatedLabelsRouteImport } from './routes/_authenticated/labels'
 import { Route as AuthenticatedInsightsRouteImport } from './routes/_authenticated/insights'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
-import { Route as AuthenticatedCaptureRouteImport } from './routes/_authenticated/capture'
 import { Route as AuthenticatedAskRouteImport } from './routes/_authenticated/ask'
 import { Route as AuthenticatedAiSmokeTestRouteImport } from './routes/_authenticated/ai-smoke-test'
 import { Route as AuthenticatedActivityRouteImport } from './routes/_authenticated/activity'
@@ -58,7 +57,7 @@ import { Route as AuthenticatedMealsIdRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedLocationsValidateRouteImport } from './routes/_authenticated/locations.validate'
 import { Route as AuthenticatedLocationsNewRouteImport } from './routes/_authenticated/locations.new'
 import { Route as AuthenticatedLocationsIdRouteImport } from './routes/_authenticated/locations.$id'
-import { Route as AuthenticatedInventoryQuickCaptureRouteImport } from './routes/_authenticated/inventory.quick-capture'
+import { Route as AuthenticatedInventorySessionRouteImport } from './routes/_authenticated/inventory.session'
 import { Route as AuthenticatedInventoryNewRouteImport } from './routes/_authenticated/inventory.new'
 import { Route as AuthenticatedInventoryBulkMoveRouteImport } from './routes/_authenticated/inventory.bulk-move'
 import { Route as AuthenticatedInventoryBulkEditRouteImport } from './routes/_authenticated/inventory.bulk-edit'
@@ -136,11 +135,6 @@ const AuthenticatedInsightsRoute = AuthenticatedInsightsRouteImport.update({
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedCaptureRoute = AuthenticatedCaptureRouteImport.update({
-  id: '/capture',
-  path: '/capture',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedAskRoute = AuthenticatedAskRouteImport.update({
@@ -338,10 +332,10 @@ const AuthenticatedLocationsIdRoute =
     path: '/locations/$id',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedInventoryQuickCaptureRoute =
-  AuthenticatedInventoryQuickCaptureRouteImport.update({
-    id: '/inventory/quick-capture',
-    path: '/inventory/quick-capture',
+const AuthenticatedInventorySessionRoute =
+  AuthenticatedInventorySessionRouteImport.update({
+    id: '/inventory/session',
+    path: '/inventory/session',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedInventoryNewRoute =
@@ -436,7 +430,6 @@ export interface FileRoutesByFullPath {
   '/activity': typeof AuthenticatedActivityRoute
   '/ai-smoke-test': typeof AuthenticatedAiSmokeTestRoute
   '/ask': typeof AuthenticatedAskRoute
-  '/capture': typeof AuthenticatedCaptureRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/insights': typeof AuthenticatedInsightsRoute
   '/labels': typeof AuthenticatedLabelsRoute
@@ -457,7 +450,7 @@ export interface FileRoutesByFullPath {
   '/inventory/bulk-edit': typeof AuthenticatedInventoryBulkEditRoute
   '/inventory/bulk-move': typeof AuthenticatedInventoryBulkMoveRoute
   '/inventory/new': typeof AuthenticatedInventoryNewRoute
-  '/inventory/quick-capture': typeof AuthenticatedInventoryQuickCaptureRoute
+  '/inventory/session': typeof AuthenticatedInventorySessionRoute
   '/locations/$id': typeof AuthenticatedLocationsIdRoute
   '/locations/new': typeof AuthenticatedLocationsNewRoute
   '/locations/validate': typeof AuthenticatedLocationsValidateRoute
@@ -501,7 +494,6 @@ export interface FileRoutesByTo {
   '/activity': typeof AuthenticatedActivityRoute
   '/ai-smoke-test': typeof AuthenticatedAiSmokeTestRoute
   '/ask': typeof AuthenticatedAskRoute
-  '/capture': typeof AuthenticatedCaptureRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/insights': typeof AuthenticatedInsightsRoute
   '/labels': typeof AuthenticatedLabelsRoute
@@ -522,7 +514,7 @@ export interface FileRoutesByTo {
   '/inventory/bulk-edit': typeof AuthenticatedInventoryBulkEditRoute
   '/inventory/bulk-move': typeof AuthenticatedInventoryBulkMoveRoute
   '/inventory/new': typeof AuthenticatedInventoryNewRoute
-  '/inventory/quick-capture': typeof AuthenticatedInventoryQuickCaptureRoute
+  '/inventory/session': typeof AuthenticatedInventorySessionRoute
   '/locations/$id': typeof AuthenticatedLocationsIdRoute
   '/locations/new': typeof AuthenticatedLocationsNewRoute
   '/locations/validate': typeof AuthenticatedLocationsValidateRoute
@@ -568,7 +560,6 @@ export interface FileRoutesById {
   '/_authenticated/activity': typeof AuthenticatedActivityRoute
   '/_authenticated/ai-smoke-test': typeof AuthenticatedAiSmokeTestRoute
   '/_authenticated/ask': typeof AuthenticatedAskRoute
-  '/_authenticated/capture': typeof AuthenticatedCaptureRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/insights': typeof AuthenticatedInsightsRoute
   '/_authenticated/labels': typeof AuthenticatedLabelsRoute
@@ -589,7 +580,7 @@ export interface FileRoutesById {
   '/_authenticated/inventory/bulk-edit': typeof AuthenticatedInventoryBulkEditRoute
   '/_authenticated/inventory/bulk-move': typeof AuthenticatedInventoryBulkMoveRoute
   '/_authenticated/inventory/new': typeof AuthenticatedInventoryNewRoute
-  '/_authenticated/inventory/quick-capture': typeof AuthenticatedInventoryQuickCaptureRoute
+  '/_authenticated/inventory/session': typeof AuthenticatedInventorySessionRoute
   '/_authenticated/locations/$id': typeof AuthenticatedLocationsIdRoute
   '/_authenticated/locations/new': typeof AuthenticatedLocationsNewRoute
   '/_authenticated/locations/validate': typeof AuthenticatedLocationsValidateRoute
@@ -635,7 +626,6 @@ export interface FileRouteTypes {
     | '/activity'
     | '/ai-smoke-test'
     | '/ask'
-    | '/capture'
     | '/dashboard'
     | '/insights'
     | '/labels'
@@ -656,7 +646,7 @@ export interface FileRouteTypes {
     | '/inventory/bulk-edit'
     | '/inventory/bulk-move'
     | '/inventory/new'
-    | '/inventory/quick-capture'
+    | '/inventory/session'
     | '/locations/$id'
     | '/locations/new'
     | '/locations/validate'
@@ -700,7 +690,6 @@ export interface FileRouteTypes {
     | '/activity'
     | '/ai-smoke-test'
     | '/ask'
-    | '/capture'
     | '/dashboard'
     | '/insights'
     | '/labels'
@@ -721,7 +710,7 @@ export interface FileRouteTypes {
     | '/inventory/bulk-edit'
     | '/inventory/bulk-move'
     | '/inventory/new'
-    | '/inventory/quick-capture'
+    | '/inventory/session'
     | '/locations/$id'
     | '/locations/new'
     | '/locations/validate'
@@ -766,7 +755,6 @@ export interface FileRouteTypes {
     | '/_authenticated/activity'
     | '/_authenticated/ai-smoke-test'
     | '/_authenticated/ask'
-    | '/_authenticated/capture'
     | '/_authenticated/dashboard'
     | '/_authenticated/insights'
     | '/_authenticated/labels'
@@ -787,7 +775,7 @@ export interface FileRouteTypes {
     | '/_authenticated/inventory/bulk-edit'
     | '/_authenticated/inventory/bulk-move'
     | '/_authenticated/inventory/new'
-    | '/_authenticated/inventory/quick-capture'
+    | '/_authenticated/inventory/session'
     | '/_authenticated/locations/$id'
     | '/_authenticated/locations/new'
     | '/_authenticated/locations/validate'
@@ -927,13 +915,6 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/capture': {
-      id: '/_authenticated/capture'
-      path: '/capture'
-      fullPath: '/capture'
-      preLoaderRoute: typeof AuthenticatedCaptureRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/ask': {
@@ -1181,11 +1162,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedLocationsIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/inventory/quick-capture': {
-      id: '/_authenticated/inventory/quick-capture'
-      path: '/inventory/quick-capture'
-      fullPath: '/inventory/quick-capture'
-      preLoaderRoute: typeof AuthenticatedInventoryQuickCaptureRouteImport
+    '/_authenticated/inventory/session': {
+      id: '/_authenticated/inventory/session'
+      path: '/inventory/session'
+      fullPath: '/inventory/session'
+      preLoaderRoute: typeof AuthenticatedInventorySessionRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/inventory/new': {
@@ -1294,7 +1275,6 @@ interface AuthenticatedRouteChildren {
   AuthenticatedActivityRoute: typeof AuthenticatedActivityRoute
   AuthenticatedAiSmokeTestRoute: typeof AuthenticatedAiSmokeTestRoute
   AuthenticatedAskRoute: typeof AuthenticatedAskRoute
-  AuthenticatedCaptureRoute: typeof AuthenticatedCaptureRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedInsightsRoute: typeof AuthenticatedInsightsRoute
   AuthenticatedLabelsRoute: typeof AuthenticatedLabelsRoute
@@ -1313,7 +1293,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedInventoryBulkEditRoute: typeof AuthenticatedInventoryBulkEditRoute
   AuthenticatedInventoryBulkMoveRoute: typeof AuthenticatedInventoryBulkMoveRoute
   AuthenticatedInventoryNewRoute: typeof AuthenticatedInventoryNewRoute
-  AuthenticatedInventoryQuickCaptureRoute: typeof AuthenticatedInventoryQuickCaptureRoute
+  AuthenticatedInventorySessionRoute: typeof AuthenticatedInventorySessionRoute
   AuthenticatedLocationsIdRoute: typeof AuthenticatedLocationsIdRoute
   AuthenticatedLocationsNewRoute: typeof AuthenticatedLocationsNewRoute
   AuthenticatedLocationsValidateRoute: typeof AuthenticatedLocationsValidateRoute
@@ -1352,7 +1332,6 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedActivityRoute: AuthenticatedActivityRoute,
   AuthenticatedAiSmokeTestRoute: AuthenticatedAiSmokeTestRoute,
   AuthenticatedAskRoute: AuthenticatedAskRoute,
-  AuthenticatedCaptureRoute: AuthenticatedCaptureRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedInsightsRoute: AuthenticatedInsightsRoute,
   AuthenticatedLabelsRoute: AuthenticatedLabelsRoute,
@@ -1373,8 +1352,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedInventoryBulkEditRoute: AuthenticatedInventoryBulkEditRoute,
   AuthenticatedInventoryBulkMoveRoute: AuthenticatedInventoryBulkMoveRoute,
   AuthenticatedInventoryNewRoute: AuthenticatedInventoryNewRoute,
-  AuthenticatedInventoryQuickCaptureRoute:
-    AuthenticatedInventoryQuickCaptureRoute,
+  AuthenticatedInventorySessionRoute: AuthenticatedInventorySessionRoute,
   AuthenticatedLocationsIdRoute: AuthenticatedLocationsIdRoute,
   AuthenticatedLocationsNewRoute: AuthenticatedLocationsNewRoute,
   AuthenticatedLocationsValidateRoute: AuthenticatedLocationsValidateRoute,

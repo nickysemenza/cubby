@@ -127,6 +127,34 @@ export const createLocation = async (
   return getLocationById(db, newLocation.id);
 };
 
+export const ensureGlobalUnknownLocation = async (
+  db: Database,
+  actor: ActorContext,
+) => {
+  const existing = await getDb(db).query.location.findFirst({
+    where: and(
+      eq(location.name, "Unknown"),
+      isNull(location.parentId),
+      notDeleted(location),
+    ),
+    columns: { id: true },
+  });
+
+  if (existing) {
+    return getLocationById(db, existing.id);
+  }
+
+  return createLocation(
+    db,
+    {
+      name: "Unknown",
+      type: "area",
+      parentId: null,
+    },
+    actor,
+  );
+};
+
 // Update an existing location
 export const updateLocation = async (
   db: Database,
@@ -338,7 +366,7 @@ export const locationList = async (
 export const updateLocationAiDescription = async (
   db: Database,
   id: LocationId,
-  aiDescription: string,
+  aiDescription: string | null,
 ) => {
   await updateLiveAndReturn(db, location, { aiDescription }, id);
 };

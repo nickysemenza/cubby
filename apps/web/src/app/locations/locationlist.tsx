@@ -183,14 +183,11 @@ export function LocationList() {
       <>
         <DropdownMenuItem
           render={
-            <Link
-              to="/inventory/quick-capture"
-              search={{ locationId: row.id }}
-            />
+            <Link to="/inventory/session" search={{ parentId: row.id }} />
           }
         >
           <ScanBarcode className="mr-2 h-4 w-4" />
-          Quick Capture Here
+          Inventory Session
         </DropdownMenuItem>
         {row.shortcode && typeSupportsQrCode(row.type) && (
           <DropdownMenuItem

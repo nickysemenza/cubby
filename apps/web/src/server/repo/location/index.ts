@@ -22,6 +22,7 @@
 export {
   createLocation,
   deleteLocations,
+  ensureGlobalUnknownLocation,
   findLocationsNeedingAiDescription,
   getChildCountsByLocationIds,
   getLocationById,

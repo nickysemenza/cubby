@@ -203,12 +203,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
             <Button onClick={onEdit}>Edit</Button>
             <Button
               variant="outline"
-              render={
-                <Link
-                  to="/inventory/quick-capture"
-                  search={{ productId: product.id }}
-                />
-              }
+              render={<Link to="/inventory/session" />}
               nativeButton={false}
             >
               <Package className="mr-2 h-4 w-4" />

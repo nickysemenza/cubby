@@ -8,7 +8,6 @@ import {
   Bot,
   Boxes,
   CalendarRange,
-  Camera,
   ChefHat,
   Database,
   FileText,
@@ -137,10 +136,9 @@ export const desktopNav: NavNode[] = [
     label: "More",
     icon: MoreHorizontal,
     children: [
-      { to: "/capture", label: "Capture", icon: Camera },
       {
-        to: "/inventory/quick-capture",
-        label: "Scan UPC",
+        to: "/inventory/session",
+        label: "Inventory Session",
         icon: ScanBarcode,
       },
       { to: "/labels", label: "Labels", icon: QrCode },
@@ -180,9 +178,8 @@ export const desktopLeaves: NavItem[] = desktopNav.flatMap((node) =>
 /** Mobile bottom tabs (primary). `scan`/`search` are mobile-only shortcuts. */
 export const bottomNavItems: NavItem[] = [
   {
-    to: "/inventory/quick-capture",
-    search: { scanner: true },
-    label: "Scan UPC",
+    to: "/inventory/session",
+    label: "Session",
     icon: ScanBarcode,
   },
   inventory,

@@ -80,13 +80,13 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
               variant="outline"
               render={
                 <Link
-                  to="/inventory/quick-capture"
-                  search={{ locationId: location.id }}
+                  to="/inventory/session"
+                  search={{ parentId: location.id }}
                 />
               }
               nativeButton={false}
             >
-              Quick Capture Here
+              Inventory Session
             </Button>
             <Button
               variant="outline"

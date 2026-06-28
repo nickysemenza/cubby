@@ -120,7 +120,7 @@ export function getOptionalRecipeId(
 
 /**
  * Schema for a single inventory item with product, location, and amount.
- * Used in forms where each item has its own location (e.g., quick-capture-form).
+ * Used in forms where each item has its own location.
  */
 export const inventoryItemWithLocationFields = z.object({
   product: requiredProductField,

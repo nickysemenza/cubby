@@ -29,6 +29,7 @@ export function editableDetailSection<TEditData, TEntity>({
     title,
     icon,
     fullWidth,
+    overflowVisible: editMode.isEditing,
     content: editMode.isEditing ? (
       <Form
         mode="edit"

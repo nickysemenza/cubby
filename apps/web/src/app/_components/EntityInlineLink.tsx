@@ -1,6 +1,7 @@
 import type { LocationType } from "@cubby/schemas/location";
 import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
 import type { DataType } from "@cubby/usda-schemas";
+import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { match } from "ts-pattern";
 import { EntityIcon } from "~/entities/entities";
@@ -29,6 +30,7 @@ type EntityInlineLinkProps = {
       entity: "location";
       data: MinimalEntityData & { type?: LocationType };
     }
+  | { entity: "inventory"; data: MinimalEntityData }
   | {
       entity: "usda-food";
       data: {
@@ -151,6 +153,21 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         </EntityPreviewLink>
       );
     })
+    .with({ entity: "inventory" }, ({ data }) => (
+      <Link
+        to="/inventory/$id"
+        params={{ id: data.id }}
+        target={openInNewTab ? "_blank" : undefined}
+        rel={openInNewTab ? "noopener noreferrer" : undefined}
+        className={linkClass}
+      >
+        <EntityLinkBody
+          icon={<EntityIcon entity="inventory" size={12} colored />}
+          name={data.name}
+          compact={compact}
+        />
+      </Link>
+    ))
     .with({ entity: "usda-food" }, ({ data }) => {
       const text = data.foodInfo.description || "Unnamed Food";
       const dataType = data.foodInfo.data_type;

@@ -1,11 +1,16 @@
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { Check, ChevronsUpDown } from "lucide-react";
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 import type { ComboboxItem } from "./combobox-types";
+
+type PopupStyle = React.CSSProperties & {
+  "--combobox-list-max-height": string;
+};
 
 /**
  * DialogCompatibleCombobox
@@ -29,6 +34,8 @@ import type { ComboboxItem } from "./combobox-types";
  *
  * This implementation:
  *    - Uses native DOM elements instead of Radix UI components
+ *    - Portals the popup with fixed viewport positioning so card/table overflow
+ *      cannot clip it
  *    - Manages its own focus state with refs
  *    - Has higher z-index (200) to appear above dialogs
  *    - Prevents event propagation to parent dialogs
@@ -82,9 +89,54 @@ export function DialogCompatibleCombobox<TId extends string = string>({
   const [debouncedInput] = useDebouncedValue(inputValue, { wait: 300 });
   const listboxId = React.useId();
 
-  // Use a ref to store the dialog and input elements
+  // Use refs to store the trigger, popup, and input elements
   const containerRef = React.useRef<HTMLDivElement>(null);
+  const popupRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
+  const [portalRoot, setPortalRoot] = React.useState<HTMLElement | null>(null);
+  const [popupStyle, setPopupStyle] = React.useState<PopupStyle | null>(null);
+
+  const updatePopupPosition = React.useCallback(() => {
+    const trigger = containerRef.current;
+    if (!trigger) return;
+
+    const rect = trigger.getBoundingClientRect();
+    const viewportPadding = 16;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const maxViewportWidth = viewportWidth - viewportPadding * 2;
+    const triggerWidth = Math.max(rect.width, 200);
+    const widePanel = wide && viewportWidth >= 640;
+    const preferredWidth = widePanel
+      ? Math.max(triggerWidth, 480)
+      : triggerWidth;
+    const maxWidth = widePanel ? 520 : 400;
+    const width = Math.min(preferredWidth, maxWidth, maxViewportWidth);
+    const left = Math.min(
+      Math.max(rect.left, viewportPadding),
+      viewportWidth - width - viewportPadding,
+    );
+
+    const gap = 4;
+    const spaceBelow = viewportHeight - rect.bottom - viewportPadding - gap;
+    const spaceAbove = rect.top - viewportPadding - gap;
+    const openUp = spaceBelow < 180 && spaceAbove > spaceBelow;
+    const availableHeight = Math.max(
+      120,
+      Math.min(wide ? 460 : 340, openUp ? spaceAbove : spaceBelow),
+    );
+
+    setPopupStyle({
+      position: "fixed",
+      left,
+      width,
+      zIndex: 200,
+      ...(openUp
+        ? { bottom: viewportHeight - rect.top + gap }
+        : { top: rect.bottom + gap }),
+      "--combobox-list-max-height": `${Math.max(80, availableHeight - 44)}px`,
+    });
+  }, [wide]);
 
   // Notify parent when search changes
   React.useEffect(() => {
@@ -100,11 +152,29 @@ export function DialogCompatibleCombobox<TId extends string = string>({
   // of flashing "No items found".
   const changeOpen = React.useCallback(
     (next: boolean) => {
+      if (next) updatePopupPosition();
       setOpen(next);
       onOpenChange?.(next);
     },
-    [onOpenChange],
+    [onOpenChange, updatePopupPosition],
   );
+
+  React.useEffect(() => {
+    setPortalRoot(document.body);
+  }, []);
+
+  React.useEffect(() => {
+    if (!open) return;
+
+    updatePopupPosition();
+    window.addEventListener("resize", updatePopupPosition);
+    window.addEventListener("scroll", updatePopupPosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updatePopupPosition);
+      window.removeEventListener("scroll", updatePopupPosition, true);
+    };
+  }, [open, updatePopupPosition]);
 
   // Focus the input when the dropdown is opened
   React.useEffect(() => {
@@ -119,9 +189,11 @@ export function DialogCompatibleCombobox<TId extends string = string>({
   // Handle click outside to close dropdown
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
       if (
         containerRef.current &&
-        !containerRef.current.contains(event.target as Node) &&
+        !containerRef.current.contains(target) &&
+        !popupRef.current?.contains(target) &&
         open
       ) {
         changeOpen(false);
@@ -143,6 +215,113 @@ export function DialogCompatibleCombobox<TId extends string = string>({
       changeOpen(false);
     }
   };
+
+  const popup =
+    open && popupStyle ? (
+      <div
+        ref={popupRef}
+        style={popupStyle}
+        className={cn(
+          "fade-in-0 zoom-in-95 z-[200] animate-in rounded-md border bg-popover shadow-md",
+        )}
+      >
+        <Row align="center" gap="sm" className="h-9 border-b px-2">
+          <input
+            ref={inputRef}
+            className="flex h-10 w-full rounded-md bg-transparent py-2 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-50"
+            placeholder={`Search ${label}...`}
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={(e) => {
+              // Don't let events bubble up to dialog
+              e.stopPropagation();
+            }}
+          />
+        </Row>
+
+        <div
+          id={listboxId}
+          role="listbox"
+          className="max-h-[var(--combobox-list-max-height)] overflow-y-auto"
+        >
+          {isLoading ? (
+            <SimpleLoading />
+          ) : items.length === 0 ? (
+            <div className="px-2 py-6 text-left text-sm">
+              No {label} found.
+              {onCreateNew && inputValue.trim() !== "" && (
+                <Button
+                  variant="outline"
+                  type="button" // Explicitly mark as a button type to prevent form submission
+                  className="mt-2 w-full justify-start text-left"
+                  onClick={async (e) => {
+                    // Prevent form submission
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    const newItem = await onCreateNew(inputValue);
+                    setValue(newItem);
+                    changeOpen(false);
+                    setInputValue("");
+                  }}
+                >
+                  <span className="truncate">
+                    Create new {label}: {inputValue}
+                  </span>
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="overflow-hidden p-1">
+              {items.map((result) => (
+                <Button
+                  key={result.id}
+                  variant="ghost"
+                  type="button" // Explicitly mark as a button type to prevent form submission
+                  className={cn(
+                    "relative flex w-full cursor-default justify-start rounded-sm px-2 py-2 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground",
+                    renderItem
+                      ? "h-auto items-start whitespace-normal py-2"
+                      : "items-center",
+                    value?.id === result.id &&
+                      "bg-accent text-accent-foreground",
+                  )}
+                  onClick={(e) => {
+                    // Prevent form submission
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    if (result.id === value?.id) {
+                      setValue(null);
+                    } else {
+                      setValue(result);
+                    }
+                    changeOpen(false);
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4 flex-shrink-0",
+                      renderItem &&
+                        "mt-0.5" /* tight: check icon optical-align */,
+                      value?.id === result.id ? "opacity-100" : "opacity-0",
+                    )}
+                  />
+                  {renderItem ? (
+                    <span className="min-w-0 flex-1">{renderItem(result)}</span>
+                  ) : (
+                    <span className="flex-1 truncate">{result.name}</span>
+                  )}
+                  {result.icon && (
+                    <span className="ml-1 shrink-0">{result.icon}</span>
+                  )}
+                </Button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    ) : null;
 
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: Container handles keyboard events for combobox dropdown
@@ -171,117 +350,7 @@ export function DialogCompatibleCombobox<TId extends string = string>({
         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
       </Button>
 
-      {open && (
-        <div
-          className={cn(
-            "fade-in-0 zoom-in-95 absolute z-[200] mt-1 w-full min-w-[200px] animate-in rounded-md border bg-popover shadow-md",
-            wide
-              ? "max-w-[400px] sm:w-[480px] sm:max-w-[520px]"
-              : "max-w-[400px]",
-          )}
-        >
-          <Row align="center" gap="sm" className="h-9 border-b px-2">
-            <input
-              ref={inputRef}
-              className="flex h-10 w-full rounded-md bg-transparent py-2 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-50"
-              placeholder={`Search ${label}...`}
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={(e) => {
-                // Don't let events bubble up to dialog
-                e.stopPropagation();
-              }}
-            />
-          </Row>
-
-          <div
-            id={listboxId}
-            role="listbox"
-            className={cn(
-              "overflow-y-auto",
-              wide ? "max-h-[420px]" : "max-h-[300px]",
-            )}
-          >
-            {isLoading ? (
-              <SimpleLoading />
-            ) : items.length === 0 ? (
-              <div className="px-2 py-6 text-left text-sm">
-                No {label} found.
-                {onCreateNew && inputValue.trim() !== "" && (
-                  <Button
-                    variant="outline"
-                    type="button" // Explicitly mark as a button type to prevent form submission
-                    className="mt-2 w-full justify-start text-left"
-                    onClick={async (e) => {
-                      // Prevent form submission
-                      e.preventDefault();
-                      e.stopPropagation();
-
-                      const newItem = await onCreateNew(inputValue);
-                      setValue(newItem);
-                      changeOpen(false);
-                      setInputValue("");
-                    }}
-                  >
-                    <span className="truncate">
-                      Create new {label}: {inputValue}
-                    </span>
-                  </Button>
-                )}
-              </div>
-            ) : (
-              <div className="overflow-hidden p-1">
-                {items.map((result) => (
-                  <Button
-                    key={result.id}
-                    variant="ghost"
-                    type="button" // Explicitly mark as a button type to prevent form submission
-                    className={cn(
-                      "relative flex w-full cursor-default justify-start rounded-sm px-2 py-2 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground",
-                      renderItem
-                        ? "h-auto items-start whitespace-normal py-2"
-                        : "items-center",
-                      value?.id === result.id &&
-                        "bg-accent text-accent-foreground",
-                    )}
-                    onClick={(e) => {
-                      // Prevent form submission
-                      e.preventDefault();
-                      e.stopPropagation();
-
-                      if (result.id === value?.id) {
-                        setValue(null);
-                      } else {
-                        setValue(result);
-                      }
-                      changeOpen(false);
-                    }}
-                  >
-                    <Check
-                      className={cn(
-                        "mr-2 h-4 w-4 flex-shrink-0",
-                        renderItem &&
-                          "mt-0.5" /* tight: check icon optical-align */,
-                        value?.id === result.id ? "opacity-100" : "opacity-0",
-                      )}
-                    />
-                    {renderItem ? (
-                      <span className="min-w-0 flex-1">
-                        {renderItem(result)}
-                      </span>
-                    ) : (
-                      <span className="flex-1 truncate">{result.name}</span>
-                    )}
-                    {result.icon && (
-                      <span className="ml-1 shrink-0">{result.icon}</span>
-                    )}
-                  </Button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {portalRoot && popup ? createPortal(popup, portalRoot) : popup}
     </div>
   );
 }

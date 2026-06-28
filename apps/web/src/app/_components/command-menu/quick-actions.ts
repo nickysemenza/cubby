@@ -21,17 +21,17 @@ export interface QuickAction {
 export const quickActions: QuickAction[] = [
   {
     id: "add-inventory",
-    name: "Add Inventory",
-    path: "/inventory/quick-capture",
+    name: "Inventory Session",
+    path: "/inventory/session",
     icon: ScanBarcode,
-    keywords: ["barcode", "scan", "inventory", "add", "fast", "capture"],
+    keywords: ["barcode", "scan", "inventory", "add", "garage", "audit"],
   },
   {
     id: "scanner",
-    name: "Scanner Mode",
-    path: "/inventory/quick-capture?scanner=true",
+    name: "Scan Inventory",
+    path: "/inventory/session",
     icon: ScanBarcode,
-    keywords: ["barcode", "scan", "camera"],
+    keywords: ["barcode", "scan", "camera", "bin"],
   },
   {
     id: "add-product",

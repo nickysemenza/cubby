@@ -17,6 +17,8 @@ export interface DetailSection {
   icon: React.ElementType;
   /** Span both grid columns on desktop — for wide content like multi-column tables. */
   fullWidth?: boolean;
+  /** Let inline popovers/comboboxes escape the ruled section card. */
+  overflowVisible?: boolean;
 }
 
 /** A single section card. `index` only drives the staggered entrance animation. */
@@ -33,6 +35,7 @@ function SectionCard({
         "transition-all duration-200 ease-cozy",
         "md:hover:-translate-y-0.5 md:hover:shadow-[var(--shadow-chunky-sm)]",
         "fade-in slide-in-from-bottom-2 animate-in",
+        section.overflowVisible && "overflow-visible",
       )}
       style={{
         animationDelay: `${index * 75}ms`,
