@@ -17,7 +17,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
-  ChevronsRight,
+  Package,
   PackagePlus,
   Plus,
   QrCode,
@@ -48,12 +48,12 @@ import {
   LocationBreadcrumb,
   locationToSegments,
 } from "~/app/_components/locations/location-breadcrumb";
+import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { LocationTreeRow } from "~/app/_components/locations/location-tree-row";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { Checkbox } from "~/components/ui/checkbox";
 import { Description } from "~/components/ui/description";
 import { Image } from "~/components/ui/image";
 import { Input } from "~/components/ui/input";
@@ -75,7 +75,6 @@ import {
 import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import {
-  buildBulkMovePayloadItems,
   confirmationKey,
   findLocationInTree,
   flattenAllLocations,
@@ -89,6 +88,20 @@ import {
 } from "./session-utils";
 
 type InventoryItem = InventoryWithLocationAndProductOut;
+
+type ExpectedPhotoTarget =
+  | {
+      kind: "product";
+      id: InventoryItem["product"]["id"];
+      name: string;
+      existingImageId?: string;
+    }
+  | {
+      kind: "location";
+      id: InfLocation["id"];
+      name: string;
+      existingImageId?: string;
+    };
 
 interface UndoAction {
   id: string;
@@ -339,29 +352,6 @@ export function InventorySessionWorkbench({
     toast.success(success);
   };
 
-  const moveItemsToUnknown = async (items: InventoryItem[]) => {
-    if (!currentLocation || !unknownLocation || items.length === 0) return;
-    await bulkMove.mutateAsync({
-      sourceLocationId: currentLocation.id,
-      targetLocationId: unknownLocation.id,
-      items: buildBulkMovePayloadItems(items),
-    });
-    pushUndo({
-      id: crypto.randomUUID(),
-      label: `Move ${items.length} item${items.length === 1 ? "" : "s"} back to ${currentLocation.name}`,
-      run: async () => {
-        await bulkMove.mutateAsync({
-          sourceLocationId: unknownLocation.id,
-          targetLocationId: currentLocation.id,
-          items: buildBulkMovePayloadItems(items),
-        });
-      },
-    });
-    toast.success(
-      `Moved ${items.length} item${items.length === 1 ? "" : "s"} to Unknown.`,
-    );
-  };
-
   const moveToUnknown = async (item: InventoryItem) => {
     if (!currentLocation || !unknownLocation) return;
     await moveItem({
@@ -489,7 +479,7 @@ export function InventorySessionWorkbench({
         <UndoBar action={undoStack[0]!} onUndo={runUndo} />
       )}
 
-      <div className="grid min-h-[calc(100dvh-10rem)] min-w-0 gap-4 lg:grid-cols-[20rem_minmax(0,1fr)]">
+      <div className="grid min-h-[calc(100dvh-10rem)] min-w-0 gap-4 lg:grid-cols-[20rem_minmax(0,1fr)] lg:items-start">
         <LocationWorkbenchSidebar
           parent={parent}
           locations={sessionLocations}
@@ -525,7 +515,6 @@ export function InventorySessionWorkbench({
             onMoveLocationMissing={moveLocationToUnknown}
             onPullUnknown={pullFromUnknown}
             onPullUnknownLocation={pullLocationFromUnknown}
-            onBulkMoveMissing={moveItemsToUnknown}
             onQuantityChange={handleQuantityChange}
             onPrevious={() => setCurrentIndex((idx) => Math.max(0, idx - 1))}
             onNext={() =>
@@ -735,8 +724,8 @@ function LocationWorkbenchSidebar({
   const completed = locations.filter((loc) => loc.lastBulkInventory).length;
 
   return (
-    <Card className="hidden overflow-hidden lg:block">
-      <CardHeader className="border-b p-4">
+    <Card className="hidden overflow-hidden lg:sticky lg:top-20 lg:flex lg:h-[calc(100dvh-6rem)] lg:flex-col">
+      <CardHeader className="shrink-0 border-b p-4">
         <Row align="center" justify="between" gap="sm">
           <div className="min-w-0">
             <CardTitle>{parent.name}</CardTitle>
@@ -760,7 +749,7 @@ function LocationWorkbenchSidebar({
           ))}
         </Row>
       </CardHeader>
-      <CardContent className="max-h-[70dvh] overflow-auto p-0">
+      <CardContent className="min-h-0 flex-1 overflow-auto p-0">
         {visible.map((location) => {
           const items = inventoryByLocation.get(location.id) ?? [];
           const confirmed = items.filter((item) =>
@@ -819,7 +808,6 @@ function LocationReviewPane({
   onMoveLocationMissing,
   onPullUnknown,
   onPullUnknownLocation,
-  onBulkMoveMissing,
   onQuantityChange,
   onPrevious,
   onNext,
@@ -843,7 +831,6 @@ function LocationReviewPane({
   onMoveLocationMissing: (location: InfLocation) => void;
   onPullUnknown: (item: InventoryItem) => void;
   onPullUnknownLocation: (location: InfLocation) => void;
-  onBulkMoveMissing: (items: InventoryItem[]) => void;
   onQuantityChange: (item: InventoryItem, amount: Amount) => void;
   onPrevious: () => void;
   onNext: () => void;
@@ -853,39 +840,115 @@ function LocationReviewPane({
   canNext: boolean;
   unknownReady: boolean;
 }) {
+  const api = useTRPC();
+  const queryClient = useQueryClient();
   const locationNoun = locationTypeNoun(location.type);
+  const locationImages = location.location.images;
   const breadcrumbSegments = sessionBreadcrumbSegments(parent, location.id);
   const isSessionRoot = location.id === parent.id;
-  const activeLocationId = location.id;
-  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(
-    () => new Set(),
+  const expectedPhotoInputRef = useRef<HTMLInputElement>(null);
+  const expectedPhotoTargetRef = useRef<ExpectedPhotoTarget | null>(null);
+  const [expectedPhotoTarget, setExpectedPhotoTarget] =
+    useState<ExpectedPhotoTarget | null>(null);
+  const uploadExpectedImage = useMutation(
+    api.image.uploadImage.mutationOptions(),
   );
-  const selectedItems = items.filter((item) => selectedItemIds.has(item.id));
+  const updateExpectedProduct = useMutation(
+    api.product.update.mutationOptions(),
+  );
+  const updateExpectedLocation = useMutation(
+    api.location.update.mutationOptions(),
+  );
+  const expectedPhotoPending =
+    uploadExpectedImage.isPending ||
+    updateExpectedProduct.isPending ||
+    updateExpectedLocation.isPending;
 
-  useEffect(() => {
-    if (!activeLocationId) return;
-    setSelectedItemIds(new Set());
-  }, [activeLocationId]);
-
-  const toggleSelectedItem = (itemId: string, selected: boolean) => {
-    setSelectedItemIds((prev) => {
-      const next = new Set(prev);
-      if (selected) {
-        next.add(itemId);
-      } else {
-        next.delete(itemId);
-      }
-      return next;
-    });
+  const invalidateExpectedPhotoQueries = () => {
+    invalidateTRPCQueries(queryClient, inventoryMutationInvalidateKeys);
+    invalidateTRPCQueries(queryClient, locationMutationInvalidateKeys);
+    invalidateTRPCQueries(queryClient, productLookupMutationInvalidateKeys);
   };
 
-  const handleBulkMoveMissing = () => {
-    onBulkMoveMissing(selectedItems);
-    setSelectedItemIds(new Set());
+  const openExpectedPhotoPicker = (target: ExpectedPhotoTarget) => {
+    expectedPhotoTargetRef.current = target;
+    setExpectedPhotoTarget(target);
+    expectedPhotoInputRef.current?.click();
+  };
+
+  const handleExpectedPhoto = async (file: File) => {
+    const target = expectedPhotoTargetRef.current;
+    if (!target) return;
+
+    try {
+      const init = await uploadExpectedImage.mutateAsync({
+        filename: file.name,
+        contentType: file.type as AllowedImageType,
+        size: file.size,
+        entityType: target.kind === "product" ? "PRODUCT" : "LOCATION",
+      });
+      const put = await fetch(init.uploadUrl, {
+        method: "PUT",
+        body: file,
+        headers: { "Content-Type": file.type },
+      });
+      if (!put.ok) throw new Error("Image upload failed");
+
+      const imageData = {
+        pendingImageIds: [init.imageId],
+        removeImageIds: target.existingImageId
+          ? [target.existingImageId]
+          : undefined,
+      };
+
+      if (target.kind === "product") {
+        await updateExpectedProduct.mutateAsync({
+          id: target.id,
+          data: imageData,
+        });
+      } else {
+        await updateExpectedLocation.mutateAsync({
+          id: target.id,
+          data: imageData,
+        });
+      }
+
+      invalidateExpectedPhotoQueries();
+      toast.success(
+        `${target.existingImageId ? "Replaced" : "Added"} photo for ${target.name}.`,
+      );
+    } catch (error) {
+      toast.error(`Photo failed: ${getErrorMessage(error)}`);
+    } finally {
+      expectedPhotoTargetRef.current = null;
+      setExpectedPhotoTarget(null);
+    }
   };
 
   return (
     <Stack gap="md" className="min-w-0">
+      <input
+        ref={expectedPhotoInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        aria-label={
+          expectedPhotoTarget
+            ? `Upload photo for ${expectedPhotoTarget.name}`
+            : "Upload expected content photo"
+        }
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) {
+            void handleExpectedPhoto(file);
+          } else {
+            expectedPhotoTargetRef.current = null;
+            setExpectedPhotoTarget(null);
+          }
+          event.target.value = "";
+        }}
+      />
       <div className="sticky top-0 z-20 border-b bg-background/95 py-2 backdrop-blur md:static md:border-b-0 md:bg-transparent md:py-0">
         <Row align="center" justify="between" gap="sm">
           <Button
@@ -937,36 +1000,63 @@ function LocationReviewPane({
       </div>
 
       <Card>
-        <CardContent className="p-4">
-          <Stack gap="sm">
-            {location.location.images.length > 0 && (
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                {location.location.images.slice(0, 4).map((image) => (
-                  <Image
-                    key={image.id}
-                    src={image.url}
-                    alt={`${location.name} photo`}
-                    displayWidth={220}
-                    className="aspect-[4/3] h-24 shrink-0 border border-[var(--border)] object-cover md:h-32"
-                  />
-                ))}
+        <CardContent className="p-4 lg:p-6">
+          <div
+            className={cn(
+              "grid gap-4 lg:items-start",
+              locationImages.length > 0
+                ? "lg:grid-cols-[minmax(220px,320px)_minmax(0,1fr)_auto]"
+                : "lg:grid-cols-[minmax(0,1fr)_auto]",
+            )}
+          >
+            {locationImages.length > 0 && (
+              <div className="min-w-0">
+                <Image
+                  src={locationImages[0]?.url}
+                  alt={`${location.name} photo`}
+                  displayWidth={360}
+                  className="aspect-[4/3] w-full border border-[var(--border)] object-cover"
+                />
+                {locationImages.length > 1 && (
+                  <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+                    {locationImages.slice(1, 5).map((image) => (
+                      <Image
+                        key={image.id}
+                        src={image.url}
+                        alt={`${location.name} photo`}
+                        displayWidth={96}
+                        className="h-14 w-20 shrink-0 border border-[var(--border)] object-cover"
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             )}
-            <Row align="center" justify="between" wrap gap="sm">
+            <Stack gap="sm" className="min-w-0">
+              {location.aiDescription ? (
+                <Description className="max-w-5xl text-base leading-relaxed">
+                  {location.aiDescription}
+                </Description>
+              ) : (
+                <Description>
+                  No AI description yet. Add a photo to compute one.
+                </Description>
+              )}
+              <Row gap="sm" wrap>
+                <Badge variant="outline">{location.imageCount} photos</Badge>
+                <Badge
+                  variant={location.lastBulkInventory ? "secondary" : "outline"}
+                >
+                  {location.lastBulkInventory
+                    ? "complete before"
+                    : "not audited"}
+                </Badge>
+              </Row>
+            </Stack>
+            <div className="flex justify-start lg:justify-end">
               <QrJumpButton parent={parent} onJump={onJumpByScan} manualEntry />
-            </Row>
-            {location.aiDescription && (
-              <Description>{location.aiDescription}</Description>
-            )}
-            <Row gap="sm" wrap>
-              <Badge variant="outline">{location.imageCount} photos</Badge>
-              <Badge
-                variant={location.lastBulkInventory ? "secondary" : "outline"}
-              >
-                {location.lastBulkInventory ? "complete before" : "not audited"}
-              </Badge>
-            </Row>
-          </Stack>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -974,21 +1064,7 @@ function LocationReviewPane({
 
       <Card>
         <CardHeader className="p-4 pb-2">
-          <Row align="center" justify="between" gap="sm">
-            <CardTitle>Expected contents</CardTitle>
-            {selectedItems.length > 0 && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="hidden lg:inline-flex"
-                onClick={handleBulkMoveMissing}
-              >
-                <ChevronsRight className="h-4 w-4" />
-                Move {selectedItems.length} to Unknown
-              </Button>
-            )}
-          </Row>
+          <CardTitle>Expected contents</CardTitle>
         </CardHeader>
         <CardContent className="p-4 pt-0">
           {items.length === 0 && childLocations.length === 0 ? (
@@ -1006,6 +1082,15 @@ function LocationReviewPane({
                   )}
                   onConfirm={() => onConfirmLocation(child.id)}
                   onMissing={() => onMoveLocationMissing(child)}
+                  onPhoto={() =>
+                    openExpectedPhotoPicker({
+                      kind: "location",
+                      id: child.id,
+                      name: child.name,
+                      existingImageId: child.images[0]?.id,
+                    })
+                  }
+                  photoPending={expectedPhotoPending}
                 />
               ))}
               {items.map((item) => (
@@ -1015,13 +1100,18 @@ function LocationReviewPane({
                   confirmed={confirmedIds.has(
                     confirmationKey("inventory", item.id),
                   )}
-                  selected={selectedItemIds.has(item.id)}
-                  onSelectedChange={(selected) =>
-                    toggleSelectedItem(item.id, selected)
-                  }
                   onConfirm={() => onConfirm(item.id)}
                   onMissing={() => onMoveMissing(item)}
                   onQuantityChange={(amount) => onQuantityChange(item, amount)}
+                  onPhoto={() =>
+                    openExpectedPhotoPicker({
+                      kind: "product",
+                      id: item.product.id,
+                      name: item.product.name,
+                      existingImageId: item.product.images[0]?.id,
+                    })
+                  }
+                  photoPending={expectedPhotoPending}
                 />
               ))}
             </Stack>
@@ -1077,19 +1167,19 @@ function LocationReviewPane({
 function ExpectedItemReviewRow({
   item,
   confirmed,
-  selected,
-  onSelectedChange,
   onConfirm,
   onMissing,
   onQuantityChange,
+  onPhoto,
+  photoPending,
 }: {
   item: InventoryItem;
   confirmed: boolean;
-  selected: boolean;
-  onSelectedChange: (selected: boolean) => void;
   onConfirm: () => void;
   onMissing: () => void;
   onQuantityChange: (amount: Amount) => void;
+  onPhoto: () => void;
+  photoPending: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const form = useForm<{ amount: Amount }>({
@@ -1103,52 +1193,52 @@ function ExpectedItemReviewRow({
   return (
     <div
       className={cn(
-        "border border-[var(--border)] bg-background p-4",
+        "border border-[var(--border)] border-l-4 border-l-warning/60 bg-background p-3",
         confirmed && "border-positive/40 bg-positive/5",
       )}
     >
-      <Stack gap="sm">
-        <Row align="start" justify="between" gap="sm">
-          <Row align="start" gap="sm" className="min-w-0 flex-1">
-            <Checkbox
-              checked={selected}
-              onCheckedChange={(checked) => onSelectedChange(checked === true)}
-              className="mt-5 hidden lg:flex"
-              aria-label={`Select ${item.product.name}`}
-            />
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+        <Row align="center" gap="sm" className="min-w-0">
+          <div className="relative shrink-0">
             <Image
               src={item.product.images[0]?.url}
               alt={item.product.name}
               displayWidth={96}
-              className="h-16 w-16 shrink-0 border border-[var(--border)] object-cover"
+              className="h-14 w-14 border border-[var(--border)] object-cover"
             />
-            <div className="min-w-0 space-y-1">
-              <EntityInlineLink entity="product" data={item.product} compact />
-              <Row gap="sm" wrap>
-                <Description size="xs">
-                  {tryFormatAmount(item.amount)}
-                </Description>
-                <EntityInlineLink
-                  entity="inventory"
-                  data={{ id: item.id, name: "Inventory entry" }}
-                  compact
-                />
-              </Row>
-            </div>
+            <span className="absolute -right-1 -bottom-1 flex h-6 w-6 items-center justify-center border border-warning/40 bg-warning/15 text-warning">
+              <Package className="h-3.5 w-3.5" />
+            </span>
+          </div>
+          <Row align="center" gap="xs" wrap className="min-w-0 flex-1">
+            <Badge variant="warning">
+              <Package className="h-3 w-3" />
+              Product
+            </Badge>
+            <EntityInlineLink entity="product" data={item.product} compact />
+            <Description as="span" size="xs">
+              {tryFormatAmount(item.amount)}
+            </Description>
+            <EntityInlineLink
+              entity="inventory"
+              data={{ id: item.id, name: "Inventory entry" }}
+              compact
+            />
+            {confirmed && <Badge variant="secondary">confirmed</Badge>}
           </Row>
-          {confirmed && <Badge variant="secondary">confirmed</Badge>}
         </Row>
         {editing ? (
-          <Stack gap="sm">
+          <Stack gap="sm" className="lg:col-span-2">
             <AmountFieldGroup
               form={form}
               valuePath="amount.value"
               unitPath="amount.unit"
+              compact
             />
             <Row gap="sm">
               <Button
                 type="button"
-                className="min-h-12 flex-1"
+                className="min-h-12 flex-1 lg:flex-none"
                 onClick={() => {
                   onQuantityChange(form.getValues("amount"));
                   setEditing(false);
@@ -1167,11 +1257,29 @@ function ExpectedItemReviewRow({
             </Row>
           </Stack>
         ) : (
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-[1fr_1fr_auto]">
+          <div className="grid grid-cols-2 gap-2 lg:w-[28rem] lg:grid-cols-[auto_auto_1fr_1fr]">
             <Button
               type="button"
               variant="outline"
-              className="min-h-12 border-positive/40 bg-positive/10 text-positive text-sm hover:bg-positive/20 hover:text-positive"
+              className="min-h-12 text-sm lg:min-h-10"
+              onClick={onPhoto}
+              disabled={photoPending}
+            >
+              {photoPending ? <Spinner /> : <Camera className="h-4 w-4" />}
+              Photo
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-12 lg:min-h-10"
+              onClick={() => setEditing(true)}
+            >
+              Qty
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-12 border-positive/40 bg-positive/10 text-positive text-sm hover:bg-positive/20 hover:text-positive lg:min-h-10"
               onClick={onConfirm}
             >
               <Check className="h-4 w-4" />
@@ -1180,23 +1288,15 @@ function ExpectedItemReviewRow({
             <Button
               type="button"
               variant="destructive"
-              className="min-h-12 text-sm"
+              className="min-h-12 text-sm lg:min-h-10"
               onClick={onMissing}
             >
               <X className="h-4 w-4" />
               No
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="col-span-2 min-h-12 md:col-span-1"
-              onClick={() => setEditing(true)}
-            >
-              Qty
-            </Button>
           </div>
         )}
-      </Stack>
+      </div>
     </div>
   );
 }
@@ -1206,56 +1306,76 @@ function ExpectedLocationReviewRow({
   confirmed,
   onConfirm,
   onMissing,
+  onPhoto,
+  photoPending,
 }: {
   location: InfLocation;
   confirmed: boolean;
   onConfirm: () => void;
   onMissing: () => void;
+  onPhoto: () => void;
+  photoPending: boolean;
 }) {
-  const ancestors = ancestorSegments(location);
-
   return (
     <div
       className={cn(
-        "border border-[var(--border)] bg-background p-4",
+        "border border-[var(--border)] border-l-4 border-l-primary/60 bg-primary/5 p-3",
         confirmed && "border-positive/40 bg-positive/5",
       )}
     >
-      <Stack gap="sm">
-        <Row align="start" justify="between" gap="sm">
-          <Row align="start" gap="sm" className="min-w-0 flex-1">
-            <Image
-              src={location.images[0]?.url}
-              alt={location.name}
-              displayWidth={96}
-              className="h-16 w-16 shrink-0 border border-[var(--border)] object-cover"
-            />
-            <div className="min-w-0 space-y-1">
-              <EntityInlineLink
-                entity="location"
-                data={{
-                  id: location.id,
-                  name: location.name,
-                  type: location.type,
-                }}
-                compact
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-center">
+        <Row align="center" gap="sm" className="min-w-0">
+          <div className="relative flex h-14 w-14 shrink-0 items-center justify-center border border-primary/30 bg-primary/10 text-primary">
+            {location.images[0]?.url ? (
+              <Image
+                src={location.images[0].url}
+                alt={location.name}
+                displayWidth={96}
+                className="h-full w-full object-cover"
               />
-              {ancestors.length > 0 && (
-                <LocationBreadcrumb segments={ancestors} compact />
-              )}
-              <Description size="xs">
-                {location.children?.length ?? 0} child locations ·{" "}
-                {location.totalItemCount ?? 0} tracked items
-              </Description>
-            </div>
+            ) : (
+              <LocationIcon type={location.type} size={22} />
+            )}
+            <span className="absolute -right-1 -bottom-1 flex h-6 w-6 items-center justify-center border border-primary/40 bg-background text-primary">
+              <LocationIcon type={location.type} size={14} />
+            </span>
+          </div>
+          <Row align="center" gap="xs" wrap className="min-w-0 flex-1">
+            <Badge variant="default">
+              <LocationIcon type={location.type} size={12} />
+              Location
+            </Badge>
+            <EntityInlineLink
+              entity="location"
+              data={{
+                id: location.id,
+                name: location.name,
+                type: location.type,
+              }}
+              compact
+            />
+            <Description as="span" size="xs">
+              {location.children?.length ?? 0} child locations ·{" "}
+              {location.totalItemCount ?? 0} tracked items
+            </Description>
+            {confirmed && <Badge variant="secondary">confirmed</Badge>}
           </Row>
-          {confirmed && <Badge variant="secondary">confirmed</Badge>}
         </Row>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <Button
             type="button"
             variant="outline"
-            className="min-h-12 border-positive/40 bg-positive/10 text-positive text-sm hover:bg-positive/20 hover:text-positive"
+            className="min-h-12 text-sm lg:min-h-10"
+            onClick={onPhoto}
+            disabled={photoPending}
+          >
+            {photoPending ? <Spinner /> : <Camera className="h-4 w-4" />}
+            Photo
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-12 border-positive/40 bg-positive/10 text-positive text-sm hover:bg-positive/20 hover:text-positive lg:min-h-10"
             onClick={onConfirm}
           >
             <Check className="h-4 w-4" />
@@ -1264,14 +1384,14 @@ function ExpectedLocationReviewRow({
           <Button
             type="button"
             variant="destructive"
-            className="min-h-12 text-sm"
+            className="min-h-12 text-sm lg:min-h-10"
             onClick={onMissing}
           >
             <X className="h-4 w-4" />
             No
           </Button>
         </div>
-      </Stack>
+      </div>
     </div>
   );
 }
@@ -1329,28 +1449,43 @@ function UnknownTray({
                   <div
                     key={location.id}
                     className={cn(
-                      "min-h-16 border border-[var(--border)] bg-background p-4",
+                      "min-h-16 border border-[var(--border)] border-l-4 border-l-primary/60 bg-primary/5 p-3",
                       disabled && "opacity-50",
                     )}
                   >
                     <Row align="center" justify="between" gap="sm">
                       <Row align="center" gap="sm" className="min-w-0 flex-1">
-                        <Image
-                          src={location.images[0]?.url}
-                          alt={location.name}
-                          displayWidth={80}
-                          className="h-12 w-12 shrink-0 border border-[var(--border)] object-cover"
-                        />
+                        <div className="relative flex h-12 w-12 shrink-0 items-center justify-center border border-primary/30 bg-primary/10 text-primary">
+                          {location.images[0]?.url ? (
+                            <Image
+                              src={location.images[0].url}
+                              alt={location.name}
+                              displayWidth={80}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <LocationIcon type={location.type} size={20} />
+                          )}
+                          <span className="absolute -right-1 -bottom-1 flex h-5 w-5 items-center justify-center border border-primary/40 bg-background text-primary">
+                            <LocationIcon type={location.type} size={12} />
+                          </span>
+                        </div>
                         <div className="min-w-0 space-y-1">
-                          <EntityInlineLink
-                            entity="location"
-                            data={{
-                              id: location.id,
-                              name: location.name,
-                              type: location.type,
-                            }}
-                            compact
-                          />
+                          <Row align="center" gap="xs" wrap>
+                            <Badge variant="default">
+                              <LocationIcon type={location.type} size={12} />
+                              Location
+                            </Badge>
+                            <EntityInlineLink
+                              entity="location"
+                              data={{
+                                id: location.id,
+                                name: location.name,
+                                type: location.type,
+                              }}
+                              compact
+                            />
+                          </Row>
                           {ancestors.length > 0 && (
                             <LocationBreadcrumb segments={ancestors} compact />
                           )}
@@ -1380,24 +1515,35 @@ function UnknownTray({
                 <div
                   key={item.id}
                   className={cn(
-                    "min-h-16 border border-[var(--border)] bg-background p-4",
+                    "min-h-16 border border-[var(--border)] border-l-4 border-l-warning/60 bg-background p-3",
                     disabled && "opacity-50",
                   )}
                 >
                   <Row align="center" justify="between" gap="sm">
                     <Row align="center" gap="sm" className="min-w-0 flex-1">
-                      <Image
-                        src={item.product.images[0]?.url}
-                        alt={item.product.name}
-                        displayWidth={80}
-                        className="h-12 w-12 shrink-0 border border-[var(--border)] object-cover"
-                      />
-                      <div className="min-w-0 space-y-1">
-                        <EntityInlineLink
-                          entity="product"
-                          data={item.product}
-                          compact
+                      <div className="relative shrink-0">
+                        <Image
+                          src={item.product.images[0]?.url}
+                          alt={item.product.name}
+                          displayWidth={80}
+                          className="h-12 w-12 border border-[var(--border)] object-cover"
                         />
+                        <span className="absolute -right-1 -bottom-1 flex h-5 w-5 items-center justify-center border border-warning/40 bg-warning/15 text-warning">
+                          <Package className="h-3 w-3" />
+                        </span>
+                      </div>
+                      <div className="min-w-0 space-y-1">
+                        <Row align="center" gap="xs" wrap>
+                          <Badge variant="warning">
+                            <Package className="h-3 w-3" />
+                            Product
+                          </Badge>
+                          <EntityInlineLink
+                            entity="product"
+                            data={item.product}
+                            compact
+                          />
+                        </Row>
                         <Row gap="sm" wrap>
                           <Description size="xs">
                             {tryFormatAmount(item.amount)}
@@ -1533,51 +1679,53 @@ function SessionCaptureActions({ location }: { location: SessionLocation }) {
 
   return (
     <Card className="overflow-visible">
-      <CardContent className="p-4">
+      <CardContent className="p-4 lg:p-6">
         <Stack gap="sm">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="hidden"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) void handleFile(file);
-              event.target.value = "";
-            }}
-          />
-          <div className="grid grid-cols-3 gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              className="min-h-12"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Camera className="h-4 w-4" />
-              Photo
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="min-h-12"
-              onClick={() => setScanner("barcode")}
-            >
-              <Barcode className="h-4 w-4" />
-              Barcode
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="min-h-12"
-              onClick={() => detectItems.mutate({ locationId: location.id })}
-              disabled={detectItems.isPending || location.imageCount === 0}
-            >
-              {detectItems.isPending ? <Spinner /> : <PackagePlus />}
-              Detect
-            </Button>
+          <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_18rem] 2xl:items-start">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void handleFile(file);
+                event.target.value = "";
+              }}
+            />
+            <ManualAdd locationId={location.id} />
+            <div className="grid grid-cols-3 gap-2 2xl:grid-cols-1">
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-12"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Camera className="h-4 w-4" />
+                Photo
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-12"
+                onClick={() => setScanner("barcode")}
+              >
+                <Barcode className="h-4 w-4" />
+                Barcode
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-12"
+                onClick={() => detectItems.mutate({ locationId: location.id })}
+                disabled={detectItems.isPending || location.imageCount === 0}
+              >
+                {detectItems.isPending ? <Spinner /> : <PackagePlus />}
+                Detect
+              </Button>
+            </div>
           </div>
-          <ManualAdd locationId={location.id} />
           {suggestions.length > 0 && (
             <Stack gap="sm">
               <Description>AI suggestions</Description>
@@ -1685,31 +1833,37 @@ function ManualAdd({ locationId }: { locationId: LocationId }) {
           }),
         )(event);
       }}
-      className="border border-[var(--border)] p-2"
+      className="border border-[var(--border)] p-3"
     >
-      <WithProductSearch>
-        {({ items, onSearchChange, isLoading, onCreateNew, onOpenChange }) => (
-          <ComboboxField
-            form={form}
-            name="product"
-            label="Manual add"
-            items={items}
-            onSearchChange={onSearchChange}
-            isLoading={isLoading}
-            onCreateNew={onCreateNew}
-            onOpenChange={onOpenChange}
-          />
-        )}
-      </WithProductSearch>
-      <div className="flex min-w-0 items-end gap-2">
-        <div className="min-w-0 flex-1 basis-0 sm:max-w-96">
-          <AmountFieldGroup
-            form={form}
-            valuePath="amount.value"
-            unitPath="amount.unit"
-            compact
-          />
-        </div>
+      <div className="min-w-0">
+        <WithProductSearch>
+          {({
+            items,
+            onSearchChange,
+            isLoading,
+            onCreateNew,
+            onOpenChange,
+          }) => (
+            <ComboboxField
+              form={form}
+              name="product"
+              label="Manual add"
+              items={items}
+              onSearchChange={onSearchChange}
+              isLoading={isLoading}
+              onCreateNew={onCreateNew}
+              onOpenChange={onOpenChange}
+            />
+          )}
+        </WithProductSearch>
+      </div>
+      <div className="grid min-w-0 items-end gap-2 lg:grid-cols-[minmax(0,1fr)_auto]">
+        <AmountFieldGroup
+          form={form}
+          valuePath="amount.value"
+          unitPath="amount.unit"
+          compact
+        />
         <Button
           type="submit"
           className="min-h-10 shrink-0 self-end px-3 sm:min-h-12 sm:px-4"

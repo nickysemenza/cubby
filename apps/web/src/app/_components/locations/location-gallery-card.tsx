@@ -62,7 +62,8 @@ export const LocationGalleryCard = function LocationGalleryCard({
     return Array.from(productMap.values());
   }, [inventoryItems]);
 
-  const hasLocationImages = location.images.length > 0;
+  const primaryLocationImage = location.images[0];
+  const extraLocationImages = location.images.slice(1, 4);
 
   return (
     <div
@@ -79,49 +80,63 @@ export const LocationGalleryCard = function LocationGalleryCard({
         className,
       )}
     >
-      {/* Header — name owns its own line so it isn't crushed by the value;
-          the colored type icon already conveys location type (no badge). */}
       <div className="border-b px-2 py-2">
-        <Row align="center" gap="sm">
-          <LocationIcon
-            type={location.type}
-            colored
-            className="h-3.5 w-3.5 shrink-0"
-          />
-          <Link
-            to="/locations/$id"
-            params={{ id: location.id }}
-            className="min-w-0 flex-1 truncate font-medium text-xs hover:text-primary hover:underline"
-          >
-            {location.name}
-          </Link>
-        </Row>
-        {inventoryItems.length > 0 && (
-          <div className="mt-1 flex justify-end">
-            <InventoryValuationSummary
-              items={inventoryItems}
-              variant="compact"
-            />
-          </div>
-        )}
-      </div>
-
-      {/* Location Images Strip */}
-      {hasLocationImages && (
-        <Row gap="xs" className="overflow-x-auto border-b bg-muted/20 p-2">
-          {location.images.map((image) => (
+        <Row align="center" gap="sm" className="min-w-0">
+          {primaryLocationImage ? (
             <ImageWithPreview
-              key={image.id}
-              src={image.url}
+              src={primaryLocationImage.url}
               alt={`${location.name} photo`}
               to="/images/$id"
-              params={{ id: image.id }}
+              params={{ id: primaryLocationImage.id }}
               size={40}
               previewSize={240}
             />
-          ))}
+          ) : (
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center border bg-muted/40">
+              <LocationIcon type={location.type} colored size={18} />
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <Row align="center" gap="xs" wrap className="min-w-0">
+              <LocationIcon
+                type={location.type}
+                colored
+                className="h-3.5 w-3.5 shrink-0"
+              />
+              <Link
+                to="/locations/$id"
+                params={{ id: location.id }}
+                className="min-w-0 truncate font-medium text-xs hover:text-primary hover:underline"
+              >
+                {location.name}
+              </Link>
+              {inventoryItems.length > 0 && (
+                <InventoryValuationSummary
+                  items={inventoryItems}
+                  variant="compact"
+                  hidePricingStatus
+                  className="shrink-0 font-mono text-2xs text-muted-foreground tabular-nums"
+                />
+              )}
+            </Row>
+          </div>
+          {extraLocationImages.length > 0 && (
+            <Row gap="xs" className="hidden shrink-0 sm:flex">
+              {extraLocationImages.map((image) => (
+                <ImageWithPreview
+                  key={image.id}
+                  src={image.url}
+                  alt={`${location.name} photo`}
+                  to="/images/$id"
+                  params={{ id: image.id }}
+                  size={28}
+                  previewSize={240}
+                />
+              ))}
+            </Row>
+          )}
         </Row>
-      )}
+      </div>
 
       {/* Products Section */}
       <div className="p-2">
