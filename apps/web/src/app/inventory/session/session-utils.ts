@@ -15,7 +15,7 @@ export interface SessionLocation {
   location: InfLocation;
 }
 
-export interface PickerTreeRow {
+interface PickerTreeRow {
   location: InfLocation;
   depth: number;
   hasCandidateChildren: boolean;
@@ -28,11 +28,11 @@ export function confirmationKey(
   return `${type}:${id}`;
 }
 
-export function isGlobalUnknownLocation(location: InfLocation): boolean {
+function isGlobalUnknownLocation(location: InfLocation): boolean {
   return location.name === "Unknown" && !location.parent;
 }
 
-export function hasSessionContent(location: InfLocation): boolean {
+function hasSessionContent(location: InfLocation): boolean {
   return (
     (location.children?.length ?? 0) > 0 ||
     (location.directItemCount ?? 0) > 0 ||
@@ -203,8 +203,4 @@ export function buildBulkMovePayloadItems<
     inventoryEntryId: item.id,
     quantity: item.amount,
   }));
-}
-
-export function formatSessionPath(path: string[]): string {
-  return path.join(" / ");
 }
