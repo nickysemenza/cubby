@@ -216,6 +216,7 @@ function LivePanels({
   naKinds,
   onToggleNa,
   naDisabled,
+  className,
 }: {
   row: EnrichmentRow;
   previewMappings: UnitMapping[];
@@ -224,9 +225,10 @@ function LivePanels({
   naKinds: BaseKind[];
   onToggleNa: (kind: BaseKind) => void;
   naDisabled: boolean;
+  className?: string;
 }) {
   return (
-    <Stack className="shrink-0 lg:w-72">
+    <Stack className={cn("shrink-0 lg:w-72", className)}>
       {(linkedFoods.length > 0 || currentMappings.length > 0) && (
         <Stack
           gap="xs"
@@ -282,6 +284,8 @@ export interface EnrichmentEditorHandle {
   save: () => void;
 }
 
+type EnrichmentEditorLayout = "side" | "compact";
+
 /** Slot API: the surface supplies chrome; the editor owns the editing body. */
 interface EnrichmentEditorSlots {
   /** Above the body (Browse: nothing; Queue: AI confidence + position). */
@@ -311,6 +315,7 @@ export function EnrichmentEditor({
   onSaved,
   onUnitChange,
   slots,
+  layout = "side",
   ref,
 }: {
   row: EnrichmentRow;
@@ -320,6 +325,7 @@ export function EnrichmentEditor({
   onSaved?: () => void;
   onUnitChange?: (unit: string) => void;
   slots: EnrichmentEditorSlots;
+  layout?: EnrichmentEditorLayout;
   ref?: Ref<EnrichmentEditorHandle>;
 }) {
   const api = useTRPC();
@@ -443,73 +449,91 @@ export function EnrichmentEditor({
         }
       : { title: "Add conversions", detail: "— optional, e.g. 1 cup = 240 g" };
 
+  const editorFields = (
+    <>
+      {slots.header}
+
+      {product != null && !gaps.isComplete && gaps.missingKinds.length > 0 && (
+        <p className="text-xs">
+          <span className="font-medium text-warning">Still missing:</span>{" "}
+          {gaps.missingKinds.join(", ")}
+        </p>
+      )}
+
+      {!gaps.usdaLinked && (
+        <Stack gap="xs">
+          <p className="font-medium text-xs">
+            Link a USDA food{" "}
+            <span className="font-normal text-muted-foreground">
+              — fills weight, volume &amp; calories
+            </span>
+          </p>
+          {slots.usdaPicker({ food, setFood })}
+        </Stack>
+      )}
+
+      {gaps.priceIslanded && (
+        <p className="rounded-md border bg-warning/10 px-2 py-2 text-warning text-xs">
+          Already priced, but “{gaps.islandedUnit}” isn’t linked to a weight —
+          so the price can’t be reached from a recipe measure. Connect it below
+          (e.g. 1 {gaps.islandedUnit} = N&nbsp;g) instead of adding a new price.
+        </p>
+      )}
+
+      {gaps.moneyMissing && !gaps.priceIslanded && (
+        <PriceField
+          qty={priceQty}
+          unit={priceUnit}
+          dollars={price}
+          onQty={setPriceQty}
+          onUnit={setPriceUnit}
+          onDollars={setPrice}
+        />
+      )}
+
+      <ConversionRowsField
+        rows={convRows}
+        hint={convHint}
+        onPatch={patchConvRow}
+        onAdd={addConvRow}
+        onRemove={removeConvRow}
+      />
+
+      {slots.actions({ save, isPending })}
+    </>
+  );
+
+  const livePanels = (
+    <LivePanels
+      row={row}
+      previewMappings={previewMappings}
+      currentMappings={gaps.currentMappings}
+      linkedFoods={gaps.linkedFoods}
+      naKinds={naKinds}
+      onToggleNa={toggleNaKind}
+      naDisabled={updateIngredient.isPending}
+      className={layout === "compact" ? "w-full lg:w-auto" : undefined}
+    />
+  );
+
+  if (layout === "compact") {
+    return (
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-start">
+        <Stack className="min-w-0">
+          {editorFields}
+          {slots.footer}
+        </Stack>
+        <div className="min-w-0">{livePanels}</div>
+      </div>
+    );
+  }
+
   return (
     <Stack>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-        <Stack className="min-w-0 flex-1">
-          {slots.header}
+        <Stack className="min-w-0 flex-1">{editorFields}</Stack>
 
-          {product != null &&
-            !gaps.isComplete &&
-            gaps.missingKinds.length > 0 && (
-              <p className="text-xs">
-                <span className="font-medium text-warning">Still missing:</span>{" "}
-                {gaps.missingKinds.join(", ")}
-              </p>
-            )}
-
-          {!gaps.usdaLinked && (
-            <Stack gap="xs">
-              <p className="font-medium text-xs">
-                Link a USDA food{" "}
-                <span className="font-normal text-muted-foreground">
-                  — fills weight, volume &amp; calories
-                </span>
-              </p>
-              {slots.usdaPicker({ food, setFood })}
-            </Stack>
-          )}
-
-          {gaps.priceIslanded && (
-            <p className="rounded-md border bg-warning/10 px-2 py-2 text-warning text-xs">
-              Already priced, but “{gaps.islandedUnit}” isn’t linked to a weight
-              — so the price can’t be reached from a recipe measure. Connect it
-              below (e.g. 1 {gaps.islandedUnit} = N&nbsp;g) instead of adding a
-              new price.
-            </p>
-          )}
-
-          {gaps.moneyMissing && !gaps.priceIslanded && (
-            <PriceField
-              qty={priceQty}
-              unit={priceUnit}
-              dollars={price}
-              onQty={setPriceQty}
-              onUnit={setPriceUnit}
-              onDollars={setPrice}
-            />
-          )}
-
-          <ConversionRowsField
-            rows={convRows}
-            hint={convHint}
-            onPatch={patchConvRow}
-            onAdd={addConvRow}
-            onRemove={removeConvRow}
-          />
-
-          {slots.actions({ save, isPending })}
-        </Stack>
-
-        <LivePanels
-          row={row}
-          previewMappings={previewMappings}
-          currentMappings={gaps.currentMappings}
-          linkedFoods={gaps.linkedFoods}
-          naKinds={naKinds}
-          onToggleNa={toggleNaKind}
-          naDisabled={updateIngredient.isPending}
-        />
+        {livePanels}
       </div>
 
       {slots.footer}

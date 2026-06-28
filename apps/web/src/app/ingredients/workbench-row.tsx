@@ -227,6 +227,7 @@ function WorkbenchEditor({
       row={row}
       initialFood={initialFood}
       onSaved={onDone}
+      layout="compact"
       slots={{
         usdaPicker: ({ food, setFood }) => (
           <>
