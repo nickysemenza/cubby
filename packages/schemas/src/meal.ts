@@ -3,6 +3,10 @@ import { ingredientAvailabilityStatus } from "./availability";
 import { ingredientId, mealId, mealRecipeId, recipeId } from "./identifiers";
 import { mealDate, mealScale } from "./meal-shared";
 import {
+  createItemsResponseSchema,
+  createPaginatedResponseSchema,
+} from "./pagination";
+import {
   costCalorieTotals,
   recipeTotals,
   recipeYieldSchema,
@@ -82,35 +86,14 @@ export const mealRecipeIdInput = z.object({
 });
 
 export const mealFiltersSchema = z.object({
-  from: mealDate.optional(),
-  to: mealDate.optional(),
+  from: mealDate.optional().describe("Only meals on or after this day"),
+  to: mealDate.optional().describe("Only meals on or before this day"),
 });
 export type MealFilters = z.infer<typeof mealFiltersSchema>;
 
-export const mcpMealCreateInputShape = {
-  date: mealDate,
-  name: z.string().nullable().optional(),
-  sortOrder: z.number().int().nullable().optional(),
-  recipes: z.array(mealRecipeInput).optional(),
-};
-
-export const mcpMealUpdateInputShape = {
-  date: mealDate.optional(),
-  name: z.string().nullable().optional(),
-  sortOrder: z.number().int().nullable().optional(),
-};
-
-export const mcpMealAddRecipeInputShape = {
-  mealId: mealId.describe("Meal ID"),
-  recipeId: recipeId.describe("Recipe ID to plan into the meal"),
-  scale: mealScale.default(1).describe("Scale multiplier (1 = as written)"),
-  sortOrder: z
-    .number()
-    .int()
-    .nullable()
-    .optional()
-    .describe("Sort order within the meal"),
-};
+export const mcpMealCreateInput = mealCreateInput;
+export const mcpMealUpdateInput = mealUpdateData;
+export const mcpMealAddRecipeInput = mealAddRecipeInput;
 
 /** Cost/calorie totals scaled by a meal-recipe's multiplier. */
 export const scaledTotals = costCalorieTotals;
@@ -160,6 +143,25 @@ export const mealOut = z.object({
   updatedAt: z.date(),
 });
 export type MealOut = z.infer<typeof mealOut>;
+
+/** Slim MCP projection of a meal row. */
+export const mealMcpOut = mealOut
+  .pick({ id: true, date: true, name: true, sortOrder: true, totals: true })
+  .extend({
+    recipes: z.array(
+      z.object({
+        id: mealRecipeId,
+        recipeId,
+        name: z.string().nullable(),
+        scale: mealScale,
+        scaledTotals: scaledTotals.nullable(),
+      }),
+    ),
+  });
+export type MealMcpOut = z.infer<typeof mealMcpOut>;
+
+export const mealMcpListOut = createPaginatedResponseSchema(mealMcpOut);
+export const mealMcpItemsOut = createItemsResponseSchema(mealMcpOut);
 
 export const mealListOut = z.array(mealOut);
 

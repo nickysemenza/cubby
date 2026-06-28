@@ -19,6 +19,7 @@ import {
   MoreHorizontal,
   Package,
   Palette,
+  Plug,
   QrCode,
   ScanBarcode,
   Search,
@@ -166,6 +167,7 @@ export const desktopNav: NavNode[] = [
       { to: "/projects", label: "Projects", icon: Hammer },
       { to: "/design", label: "Design", icon: Palette },
       { to: "/ai-smoke-test", label: "AI smoke test", icon: Sparkles },
+      { to: "/mcp", label: "MCP tools", icon: Plug },
     ],
   },
 ];

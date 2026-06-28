@@ -10,6 +10,10 @@ import {
 } from "./identifiers";
 import { imageOut } from "./image";
 import {
+  createItemsResponseSchema,
+  createPaginatedResponseSchema,
+} from "./pagination";
+import {
   recipeMeta,
   recipeNotes,
   recipeServings,
@@ -331,55 +335,52 @@ export const recipeIdInput = z.object({
 export type RecipeCreateInput = z.infer<typeof recipeCreateInput>;
 export type RecipeUpdateInput = z.infer<typeof recipeUpdateInput>;
 
-export const mcpRecipeCreateInputShape = {
-  name: requiredName("Recipe name").describe("Recipe name"),
-  meta: recipeMeta.describe("Source metadata, e.g. { url } of the web source"),
-  yield: recipeYieldSchema
-    .nullable()
-    .optional()
-    .describe('What the recipe produces, e.g. { value: 2, unit: "loaves" }'),
-  servings: recipeServings
-    .nullable()
-    .optional()
-    .describe("Number of servings (positive integer)"),
-  tags: recipeTags.nullable().optional().describe("Free-form tags"),
-  notes: recipeNotes
-    .nullable()
-    .optional()
-    .describe("Freeform markdown headnote/intro plus tips"),
-  sections: z
-    .array(recipeSectionInput)
-    .describe(
-      "Recipe sections, each with ingredients (by ingredient/recipe id) and instructions",
-    ),
-  pendingImageIds: z.array(z.uuid()).optional(),
-};
+export const mcpRecipeCreateInput = recipeCreateInput.omit({
+  pendingImageIds: true,
+});
 
-export const mcpRecipeUpdateInputShape = {
+export const mcpRecipeUpdateInput = recipeUpdateData.extend({
   id: recipeId.describe("Recipe ID"),
-  name: requiredName("Recipe name").describe("Recipe name").optional(),
-  meta: recipeMeta
-    .describe("Source metadata, e.g. { url } of the web source")
-    .optional(),
-  yield: recipeYieldSchema
-    .nullable()
-    .optional()
-    .describe('What the recipe produces, e.g. { value: 2, unit: "loaves" }'),
-  servings: recipeServings
-    .nullable()
-    .optional()
-    .describe("Number of servings (positive integer)"),
-  tags: recipeTags.nullable().optional().describe("Free-form tags"),
-  notes: recipeNotes
-    .nullable()
-    .optional()
-    .describe("Freeform markdown headnote/intro plus tips"),
-  sections: z
-    .array(recipeSectionInput)
-    .optional()
-    .describe(
-      "Recipe sections, each with ingredients (by ingredient/recipe id) and instructions",
-    ),
-  pendingImageIds: z.array(z.uuid()).optional(),
-  removeImageIds: z.array(z.uuid()).optional(),
-};
+});
+
+/** Slim MCP projection of a recipe list row. */
+export const recipeMcpOut = z.object({
+  id: recipeId,
+  name: z.string(),
+  yield: recipeYieldSchema.nullish(),
+  servings: recipeServings.nullish(),
+  tags: recipeTags.nullish(),
+  shortcode: normalizedRecipeShortcode.nullish(),
+});
+export type RecipeMcpOut = z.infer<typeof recipeMcpOut>;
+
+export const recipeMcpListOut = createPaginatedResponseSchema(recipeMcpOut);
+
+export const recipeUsageMcpOut = z.object({
+  lineId: z.uuid(),
+  sectionName: z.string().nullable(),
+  amounts: z.array(amount),
+  rawLine: z.string().nullable(),
+  modifier: z.string().nullable(),
+});
+
+export const recipesUsingIngredientOut = z.object({
+  ingredientId: ingredientId,
+  count: z.number().int().nonnegative(),
+  recipes: z.array(
+    recipeMcpOut.extend({
+      usages: z.array(recipeUsageMcpOut),
+    }),
+  ),
+});
+
+export const recipeIdOut = z.object({ id: recipeId });
+
+export const recipeTagsListOut = createItemsResponseSchema(z.string());
+
+export const cookbookSummariesMcpOut =
+  createItemsResponseSchema(cookbookSummary);
+
+export const recipeRecomputeMcpOut = z.object({
+  processed: z.number().int().nonnegative(),
+});

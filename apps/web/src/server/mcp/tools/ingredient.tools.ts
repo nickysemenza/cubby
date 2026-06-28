@@ -1,134 +1,114 @@
-import type { MergeSummaryOut } from "@cubby/schemas/ingredient";
 import {
-  mcpIngredientCreateInputShape,
-  mcpIngredientSearchInputShape,
-  mcpIngredientUpdateInputShape,
+  ingredientFiltersSchema,
+  ingredientMcpListOut,
+  ingredientMcpOut,
+  ingredientMergeBatchInput,
+  ingredientMergeBatchOut,
+  ingredientRawLinesBatchOut,
+  ingredientResolvableNamesInput,
+  ingredientResolveOrCreateResponseOut,
+  type MergeSummaryOut,
+  mcpIngredientCreateInput,
+  mcpIngredientUpdateInput,
 } from "@cubby/schemas/ingredient";
-import { mcpPaginationParams } from "@cubby/schemas/pagination";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { groupBy } from "es-toolkit";
 import { z } from "zod";
 import {
-  deleteHandler,
   formatToolError,
-  getByIdHandler,
   getCaller,
-  idParam,
-  idsParam,
-  json,
-  listHandler,
-  respond,
+  READ_ONLY_CLOSED,
+  registerEntityCreateTool,
+  registerEntityDeleteTool,
+  registerEntityGetTool,
+  registerEntityListTool,
+  registerEntityUpdateTool,
+  registerMcpTool,
+  registerRouterTool,
   slimIngredient,
-  updateHandler,
-  withErrorHandling,
+  WRITE_CLOSED,
+  WRITE_DESTRUCTIVE_CLOSED,
+  withIdInput,
 } from "./_shared";
 
 export function registerIngredientTools(server: McpServer) {
-  server.tool(
-    "search_ingredients",
-    "Search ingredients by name. Returns id, name, aliases, linked products, and recipe count.",
-    {
-      ...mcpIngredientSearchInputShape,
-      ...mcpPaginationParams,
-    },
-    listHandler("ingredient", slimIngredient, {
-      orderBy: "name",
-      buildFilters: (p) => ({
-        nameFilter: p.nameFilter,
-        missingProductsOnly: p.missingProductsOnly,
-      }),
-    }),
-  );
+  registerEntityListTool(server, {
+    name: "search_ingredients",
+    description:
+      "Search ingredients by name. Returns id, name, aliases, linked products, and recipe count.",
+    router: "ingredient",
+    filtersSchema: ingredientFiltersSchema,
+    outputSchema: ingredientMcpListOut,
+    slim: slimIngredient,
+    sort: { orderBy: "name" },
+    annotations: READ_ONLY_CLOSED,
+  });
 
-  server.tool(
-    "get_ingredient",
-    "Get a single ingredient by ID, including linked products and recipes it appears in.",
-    { id: idParam("Ingredient") },
-    getByIdHandler("ingredient", slimIngredient),
-  );
+  registerEntityGetTool(server, {
+    name: "get_ingredient",
+    description:
+      "Get a single ingredient by ID, including linked products and recipes it appears in.",
+    router: "ingredient",
+    idLabel: "Ingredient",
+    outputSchema: ingredientMcpOut,
+    slim: slimIngredient,
+    annotations: READ_ONLY_CLOSED,
+  });
 
-  server.tool(
-    "create_ingredient",
-    "Create a new ingredient. Use search_ingredients first to avoid duplicates.",
-    {
-      ...mcpIngredientCreateInputShape,
-    },
-    withErrorHandling(async (params, extra) => {
-      const caller = getCaller(extra);
-      const result = await caller.ingredient.create({
+  registerEntityCreateTool(server, {
+    name: "create_ingredient",
+    description:
+      "Create a new ingredient. Use search_ingredients first to avoid duplicates.",
+    inputSchema: mcpIngredientCreateInput.shape,
+    outputSchema: ingredientMcpOut,
+    slim: slimIngredient,
+    annotations: WRITE_CLOSED,
+    create: (caller, params) =>
+      caller.ingredient.create({
         name: params.name,
         aliases: params.aliases ?? [],
-      });
-      return respond(result, slimIngredient);
-    }),
-  );
+      }),
+  });
 
-  server.tool(
-    "resolve_ingredients",
-    "Batch-resolve a list of ingredient names to IDs in one call: each name is matched to an existing ingredient (case-insensitive, including aliases) or created if missing. Returns one entry per name with `matched`/`created` flags and the resolved id. Use this instead of calling search_ingredients then create_ingredient one name at a time.",
-    {
-      names: z
-        .array(z.string().min(1))
-        .describe(
-          "Ingredient names to resolve or create, e.g. ['jasmine rice', 'scallion', 'soy sauce']",
-        ),
-    },
-    withErrorHandling(async (params, extra) => {
-      const caller = getCaller(extra);
-      const result = await caller.ingredient.resolveOrCreate({
-        names: params.names,
-      });
-      return json(result);
-    }),
-  );
+  registerRouterTool(server, {
+    name: "resolve_ingredients",
+    description:
+      "Batch-resolve a list of ingredient names to IDs in one call: each name is matched to an existing ingredient (case-insensitive, including aliases) or created if missing.",
+    inputSchema: ingredientResolvableNamesInput.shape,
+    outputSchema: ingredientResolveOrCreateResponseOut,
+    annotations: WRITE_CLOSED,
+    call: (caller, params) =>
+      caller.ingredient
+        .resolveOrCreate({ names: params.names })
+        .then((results: unknown) => ({
+          results,
+        })),
+  });
 
-  server.tool(
-    "update_ingredient",
-    "Update an ingredient's name or aliases.",
-    {
-      id: idParam("Ingredient"),
-      ...mcpIngredientUpdateInputShape,
-    },
-    updateHandler("ingredient", slimIngredient),
-  );
+  registerEntityUpdateTool(server, {
+    name: "update_ingredient",
+    description: "Update an ingredient's name or aliases.",
+    inputSchema: withIdInput("Ingredient", mcpIngredientUpdateInput.shape),
+    outputSchema: ingredientMcpOut,
+    slim: slimIngredient,
+    router: "ingredient",
+    annotations: WRITE_CLOSED,
+  });
 
-  server.tool(
-    "merge_ingredients",
-    "Merge one or more clusters of duplicate ingredients in a single call — the bulk way to clean up a dedup sweep without one tool call per cluster. Each cluster folds its `aliases` into `target`: the target absorbs their names/aliases, and their recipe lines + products (USDA links, prices, unit mappings) re-point onto it; the alias ingredients are then deleted. Clusters merge independently and IN SEQUENCE — one failure is reported in that cluster's result and does NOT abort the rest. A cluster fails LOUD (no silent no-op) if the target/alias is itself in the other side, or any alias id doesn't resolve to a live ingredient. Each successful cluster returns a `summary` ({ aliasesAdded, recipesMoved, productsMoved, deletedIds }). Recompute of the affected recipes is queued off the request path, so even a target used in 100+ recipes merges fast. Set `dryRun` to validate + count every cluster without writing. Pass a single-element array to merge just one cluster.",
-    {
-      merges: z
-        .array(
-          z.object({
-            target: idParam("Ingredient").describe(
-              "ID of the ingredient to keep",
-            ),
-            aliases: z
-              .array(idParam("Ingredient"))
-              .min(1)
-              .describe("IDs of duplicate ingredients to fold into the target"),
-          }),
-        )
-        .min(1)
-        .describe("One entry per duplicate cluster to merge"),
-      dryRun: z
-        .boolean()
-        .optional()
-        .describe(
-          "Validate ids and report what each cluster WOULD change, without writing.",
-        ),
-    },
-    withErrorHandling(async (params, extra) => {
+  registerMcpTool(server, {
+    name: "merge_ingredients",
+    description:
+      "Merge one or more clusters of duplicate ingredients in a single call.",
+    inputSchema: ingredientMergeBatchInput.shape,
+    outputSchema: ingredientMergeBatchOut,
+    annotations: WRITE_DESTRUCTIVE_CLOSED,
+    handler: async (params, extra) => {
       const caller = getCaller(extra);
       const merges = params.merges as Array<{
         target: string;
         aliases: string[];
       }>;
       const dryRun = params.dryRun as boolean | undefined;
-      // Merge each cluster IN SEQUENCE: a merge re-points its aliases' recipe
-      // lines/products onto the target and queues the target's recipes for
-      // recompute, so running clusters concurrently could race on a shared
-      // product/recipe. Capture per-cluster success/failure — a bad target in one
-      // cluster must not sink the batch (partial-result contract).
       const results: Array<{
         target: string;
         ok: boolean;
@@ -147,34 +127,36 @@ export function registerIngredientTools(server: McpServer) {
           results.push({ target, ok: false, error: formatToolError(error) });
         }
       }
-      const merged = results.filter((r) => r.ok).length;
-      const payload = { merged, total: results.length, results };
-      // Partial success stays a success — the per-cluster `ok` flags carry the
-      // detail. But if EVERY cluster failed, flag the envelope `isError` too so a
-      // client that only checks the top-level flag still detects total failure.
-      return merged === 0
-        ? { ...json(payload), isError: true as const }
-        : json(payload);
-    }),
-  );
+      return {
+        merged: results.filter((r) => r.ok).length,
+        total: results.length,
+        results,
+      };
+    },
+  });
 
-  server.tool(
-    "delete_ingredients",
-    "Soft-delete ingredients by IDs. Fails if an ingredient is used in recipes or linked to products.",
-    { ids: idsParam("ingredient") },
-    deleteHandler("ingredient"),
-  );
+  registerEntityDeleteTool(server, {
+    name: "delete_ingredients",
+    description:
+      "Soft-delete ingredients by IDs. Fails if an ingredient is used in recipes or linked to products.",
+    router: "ingredient",
+    entityLabel: "ingredient",
+    annotations: WRITE_DESTRUCTIVE_CLOSED,
+  });
 
-  server.tool(
-    "get_ingredient_raw_lines",
-    "Bulk parser-triage dump: for each ingredient id, the original `rawLine` (plus parsed `modifier`/`amounts`) of every recipe line currently linked to it, with the owning recipe. The signal for spotting junk/mis-parsed ingredients — instruction fragments ('Arrange the vegetables'), quantity stubs ('plus 2 tsp salt'), bare modifiers ('medium') — that the importer created as ingredients. Get many ids' source lines in ONE call instead of paging find_recipes_using_ingredient per id. Returns one entry per ingredient with its `lines`.",
-    {
+  registerMcpTool(server, {
+    name: "get_ingredient_raw_lines",
+    description:
+      "Bulk parser-triage dump: for each ingredient id, the original rawLine of every recipe line currently linked to it.",
+    inputSchema: {
       ids: z
         .array(z.string())
         .min(1)
         .describe("Ingredient IDs to dump raw lines for"),
     },
-    withErrorHandling(async (params, extra) => {
+    outputSchema: ingredientRawLinesBatchOut,
+    annotations: READ_ONLY_CLOSED,
+    handler: async (params, extra) => {
       const caller = getCaller(extra);
       const rows = (await caller.ingredient.rawLines({
         ids: params.ids,
@@ -204,7 +186,7 @@ export function registerIngredientTools(server: McpServer) {
           })),
         }),
       );
-      return json({ count: ingredients.length, ingredients });
-    }),
-  );
+      return { count: ingredients.length, ingredients };
+    },
+  });
 }

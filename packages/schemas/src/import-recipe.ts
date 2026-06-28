@@ -188,3 +188,43 @@ export const chunkRequestInput = z.object({
 });
 
 export const chunkResponseOut = z.record(z.string(), z.unknown());
+
+/** MCP input for create_recipe_from_text — raw lines, no pre-resolved ingredient IDs. */
+export const mcpRecipeCreateFromTextSection = z.object({
+  name: z
+    .string()
+    .optional()
+    .describe("Section name, e.g. 'Sauce' (omit for a single unnamed section)"),
+  ingredients: z
+    .array(z.string())
+    .describe(
+      "Raw ingredient lines, e.g. '1 cup jasmine rice' — NOT ingredient IDs",
+    ),
+  instructions: z
+    .array(z.string())
+    .default([])
+    .describe("Instruction step lines, one string per step"),
+});
+
+export const mcpRecipeCreateFromTextInput = z.object({
+  name: z.string().min(1).describe("Recipe name"),
+  servings: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe("Number of servings"),
+  yield: z
+    .string()
+    .optional()
+    .describe(
+      "Freeform yield, e.g. '2 loaves' or 'Makes 12 pancakes' (parsed server-side)",
+    ),
+  notes: z.string().optional().describe("Headnote / notes markdown"),
+  sections: z
+    .array(mcpRecipeCreateFromTextSection)
+    .min(1)
+    .describe(
+      "Recipe sections; each holds raw ingredient lines and instruction steps",
+    ),
+});

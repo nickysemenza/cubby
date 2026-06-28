@@ -17,11 +17,11 @@ import {
 } from "./identifiers";
 import { imageOut } from "./image";
 import { locationOut, locationType } from "./location";
+import { createPaginatedResponseSchema } from "./pagination";
 import { baseKind } from "./problems";
 import { recipeUsageOut } from "./recipe";
 import { recomputeSummary } from "./recipe-shared";
 import {
-  mcpUnitMappingInput,
   unitMappingInput,
   unitMappingOut,
   unitMappingWithMetadata,
@@ -188,10 +188,10 @@ export const productMarkUsdaUnavailableManyInput = z.object({
 // Filters accepted by the product list endpoint. Canonical shape shared by the
 // tRPC router (and available to any other list caller).
 export const productFiltersSchema = z.object({
-  nameFilter: z.string().optional(),
-  manufacturerFilter: z.string().optional(),
-  upcFilter: z.string().optional(),
-  categoryFilter: productCategory.optional(),
+  nameFilter: z.string().optional().describe("Filter by product name"),
+  manufacturerFilter: z.string().optional().describe("Filter by manufacturer"),
+  upcFilter: z.string().optional().describe("Filter by UPC code"),
+  categoryFilter: productCategory.optional().describe("Filter by category"),
 });
 
 export const productSortableFields = [
@@ -424,53 +424,51 @@ export const productQuickCreatePayload = z.object({
   price: z.number().positive().nullable().optional(),
 });
 
-export const mcpProductCreateInputShape = {
-  name: requiredName("Product name")
-    .describe("Product name")
-    .meta({ mock: "commerce.productName" }),
-  manufacturer: z
-    .string()
-    .describe("Manufacturer or 'generic'")
-    .meta({ mock: "company.name" })
-    .optional(),
-  upc: upc.nullable().optional(),
-  price: z
-    .number()
-    .positive()
-    .nullable()
-    .optional()
-    .describe("price per each ($), source of truth"),
-  expectedQuantity: z
-    .number()
-    .int()
-    .positive()
-    .nullable()
-    .optional()
-    .describe("null means unlimited, 1 for unique items"),
-  ingredientId: ingredientId
-    .nullable()
-    .optional()
-    .describe(
-      "Link this product to an ingredient (its id) so recipes using that ingredient can cost from this product.",
-    ),
-  unitMappings: z.array(mcpUnitMappingInput).optional(),
-};
+export type ProductQuickCreatePayload = z.infer<
+  typeof productQuickCreatePayload
+>;
 
-export const mcpProductUpdateInputShape = {
-  name: requiredName("Product name")
-    .describe("Product name")
-    .meta({ mock: "commerce.productName" })
-    .optional(),
-  manufacturer: z
-    .string()
-    .describe("Manufacturer or 'generic'")
-    .meta({ mock: "company.name" })
-    .optional(),
-  upc: upc.nullable().optional(),
-  fdc_id: fdcId.nullable().optional(),
-  usdaUnavailable: z.boolean().nullable().optional(),
-  price: z.number().positive().nullable().optional(),
-  category: productCategory.nullable().optional(),
-  notes: z.string().nullish(),
-  externalIds: z.array(externalIdInput).optional(),
-};
+export const mcpProductCreateInput = productCreateInput.omit({
+  pendingImageIds: true,
+  externalIds: true,
+  fdc_id: true,
+  category: true,
+  model: true,
+  notes: true,
+});
+
+export const mcpProductUpdateInput = productUpdateData.omit({
+  unitMappings: true,
+  pendingImageIds: true,
+  removeImageIds: true,
+});
+
+/** Slim MCP projection of a product list/detail row. */
+export const productMcpOut = productListItemOut
+  .pick({
+    id: true,
+    name: true,
+    shortcode: true,
+    manufacturer: true,
+    upc: true,
+    category: true,
+    price: true,
+    expectedQuantity: true,
+    fdc_id: true,
+    usdaUnavailable: true,
+    externalIds: true,
+  })
+  .extend({
+    usdaFdcId: z.number().nullable(),
+    ingredientId: z.string().nullable(),
+    unitMappings: z.array(
+      z.object({
+        a: amount,
+        b: amount,
+        source: z.string().nullable(),
+      }),
+    ),
+  });
+export type ProductMcpOut = z.infer<typeof productMcpOut>;
+
+export const productMcpListOut = createPaginatedResponseSchema(productMcpOut);

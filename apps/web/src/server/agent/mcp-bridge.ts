@@ -98,14 +98,23 @@ export async function createAgentToolset(
             arguments: args,
           });
           ok = res.isError !== true;
-          text = (res.content as Array<{ type: string; text?: string }>)
-            .filter((c) => c.type === "text" && typeof c.text === "string")
-            .map((c) => c.text)
-            .join("\n");
-          try {
-            parsed = JSON.parse(text);
-          } catch {
-            parsed = text;
+          if (
+            ok &&
+            res.structuredContent !== undefined &&
+            res.structuredContent !== null
+          ) {
+            parsed = res.structuredContent;
+            text = JSON.stringify(parsed, null, 2);
+          } else {
+            text = (res.content as Array<{ type: string; text?: string }>)
+              .filter((c) => c.type === "text" && typeof c.text === "string")
+              .map((c) => c.text)
+              .join("\n");
+            try {
+              parsed = JSON.parse(text);
+            } catch {
+              parsed = text;
+            }
           }
         } catch (error) {
           ok = false;

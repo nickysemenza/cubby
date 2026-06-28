@@ -48,6 +48,37 @@ export const mcpPaginationParams = {
     .describe("Items per page (default 50, max 100)"),
 };
 
+/** Configurable pageSize field for MCP list tools (locations use max 200). */
+export function mcpPageSizeParam(opts?: {
+  defaultPageSize?: number;
+  max?: number;
+}) {
+  const max = opts?.max ?? 100;
+  const def = opts?.defaultPageSize ?? 50;
+  return z
+    .number()
+    .int()
+    .min(1)
+    .max(max)
+    .optional()
+    .describe(`Items per page (default ${def}, max ${max})`);
+}
+
+/** Spread into MCP list tool input schemas: filter fields + pagination. */
+export function mcpListInputShape(
+  filtersSchema: z.ZodObject<z.ZodRawShape>,
+  opts?: { defaultPageSize?: number; maxPageSize?: number },
+) {
+  return {
+    ...filtersSchema.shape,
+    pageIndex: mcpPaginationParams.pageIndex,
+    pageSize: mcpPageSizeParam({
+      defaultPageSize: opts?.defaultPageSize,
+      max: opts?.maxPageSize,
+    }),
+  };
+}
+
 export const sortPaginationFields = {
   sort: sortParams
     .optional()
@@ -113,6 +144,15 @@ export function createPaginatedResponseSchema<Entry extends z.ZodTypeAny>(
       pageSize: z.number().int().positive().max(MAX_PAGE_SIZE),
       totalCount: z.number().int().nonnegative(),
     }),
+    items: z.array(entrySchema),
+  });
+}
+
+/** Bulk tool result envelope: `{ items: T[] }` (replaces bare array roots). */
+export function createItemsResponseSchema<Entry extends z.ZodTypeAny>(
+  entrySchema: Entry,
+) {
+  return z.object({
     items: z.array(entrySchema),
   });
 }

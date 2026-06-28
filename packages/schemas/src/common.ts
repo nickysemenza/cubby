@@ -34,6 +34,12 @@ export const IDInput = z
   })
   .describe("input for retrieving by ID");
 
+/** Delete-tool output: count of rows soft-deleted. */
+export const deletedCountOut = z.object({
+  deleted: z.number().int().nonnegative(),
+});
+export type DeletedCountOut = z.infer<typeof deletedCountOut>;
+
 // Base entity schema with common fields
 export const baseEntitySchema = z.object({
   id: id,

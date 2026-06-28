@@ -12,6 +12,7 @@ import {
   productShortcode,
 } from "./identifiers";
 import { imageOut } from "./image";
+import { createPaginatedResponseSchema } from "./pagination";
 
 export const locationType = z
   .enum(locationTypeValues)
@@ -23,7 +24,10 @@ export { locationTypeValues } from "@cubby/shared";
 
 // Filters accepted by the location list endpoint.
 export const locationFiltersSchema = z.object({
-  nameFilter: z.string().optional(),
+  nameFilter: z
+    .string()
+    .optional()
+    .describe("Filter by location name (substring)"),
   itemTypeFilter: locationType.optional(),
 });
 
@@ -244,18 +248,21 @@ export const locationIdsInput = z.object({
 export type LocationCreateInput = z.infer<typeof locationCreateInput>;
 export type LocationUpdateInput = z.infer<typeof locationUpdateInput>;
 
-export const mcpLocationCreateInputShape = {
-  name: requiredName("Location name").describe("name of location"),
-  type: locationType.optional(),
-  parentId: optionalLocationId
-    .optional()
-    .describe(
-      "Parent location id — nest this location under another (omit/null for a top-level location).",
-    ),
-};
+export const mcpLocationCreateInput = locationCreateInput.omit({
+  pendingImageIds: true,
+});
+export const mcpLocationUpdateInput = locationUpdateData;
 
-export const mcpLocationUpdateInputShape = {
-  name: requiredName("Location name").describe("name of location").optional(),
-  type: locationType.optional(),
-  parentId: optionalLocationId.optional(),
-};
+/** Slim MCP projection of a location row (list or detail). */
+export const locationMcpOut = z.object({
+  id: locationId,
+  name: z.string(),
+  shortcode: locationShortcode,
+  type: locationType,
+  parentName: z.string().nullable(),
+  parentId: locationId.nullable(),
+  children: z.array(z.object({ id: locationId, name: z.string() })),
+});
+export type LocationMcpOut = z.infer<typeof locationMcpOut>;
+
+export const locationMcpListOut = createPaginatedResponseSchema(locationMcpOut);
