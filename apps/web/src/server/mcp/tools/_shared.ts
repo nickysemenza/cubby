@@ -51,12 +51,12 @@ type ToolExtra = { authInfo?: { extra?: Record<string, unknown> } };
 
 type ZodSchemaLike = z.ZodType | Record<string, z.ZodType>;
 
-export type McpToolHandler = (
+type McpToolHandler = (
   params: Record<string, unknown>,
   extra: ToolExtra,
 ) => Promise<unknown | CallToolResult>;
 
-export type RegisterMcpToolConfig = {
+type RegisterMcpToolConfig = {
   name: string;
   description: string;
   title?: string;
@@ -155,7 +155,7 @@ export const WRITE_DESTRUCTIVE_CLOSED: ToolAnnotations = {
   openWorldHint: false,
 };
 
-export function structuredSuccess(
+function structuredSuccess(
   data: unknown,
   outputSchema: z.ZodType,
 ): CallToolResult {
@@ -291,30 +291,6 @@ export function formatToolError(error: unknown): string {
   return String(error);
 }
 
-/** @deprecated Use structuredSuccess via registerMcpTool */
-export function json(data: unknown) {
-  return {
-    structuredContent: data,
-    content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
-  };
-}
-
-/** @deprecated Use structuredError via registerMcpTool */
-export function jsonError(text: string) {
-  return structuredError(text);
-}
-
-/** Wrap a legacy handler — prefer registerMcpTool instead. */
-export function withErrorHandling(fn: McpToolHandler) {
-  return async (params: Record<string, unknown>, extra: ToolExtra) => {
-    try {
-      return await fn(params, extra);
-    } catch (error) {
-      return structuredError(formatToolError(error));
-    }
-  };
-}
-
 export function toUnitMappingInput(m: z.infer<typeof mcpUnitMappingInput>) {
   return { a: m.a, b: m.b, source: m.source ?? null };
 }
@@ -340,7 +316,7 @@ export function notionUnavailable() {
 // Slim output projections
 // ---------------------------------------------------------------------------
 
-export type Row = Record<string, unknown>;
+type Row = Record<string, unknown>;
 type Slim = (row: Row) => unknown;
 const slimSchemas = new WeakMap<Slim, z.ZodType>();
 const identity: Slim = (row) => row;
@@ -559,10 +535,10 @@ function isSchema(value: unknown): value is z.ZodType {
 }
 
 export const idParam = (label: string) => z.string().describe(`${label} ID`);
-export const idsParam = (label: string) =>
+const idsParam = (label: string) =>
   z.array(z.string()).describe(`Array of ${label} IDs to delete`);
 
-export function getByIdHandler(routerName: string, slim: Slim = identity) {
+function getByIdHandler(routerName: string, slim: Slim = identity) {
   return async (params: Record<string, unknown>, extra: ToolExtra) => {
     const result = await getCaller(extra)[routerName].getByID({
       id: params.id,
@@ -571,7 +547,7 @@ export function getByIdHandler(routerName: string, slim: Slim = identity) {
   };
 }
 
-export function deleteHandler(routerName: string) {
+function deleteHandler(routerName: string) {
   return async (params: Record<string, unknown>, extra: ToolExtra) => {
     const ids = params.ids as string[];
     await getCaller(extra)[routerName].delete({ ids });
@@ -579,7 +555,7 @@ export function deleteHandler(routerName: string) {
   };
 }
 
-export function updateHandler(routerName: string, slim: Slim = identity) {
+function updateHandler(routerName: string, slim: Slim = identity) {
   return async (params: Record<string, unknown>, extra: ToolExtra) => {
     const { id, ...rest } = params;
     const data = omitBy(rest, (v) => v === undefined);
@@ -588,7 +564,7 @@ export function updateHandler(routerName: string, slim: Slim = identity) {
   };
 }
 
-export function listHandler(
+function listHandler(
   routerName: string,
   slim: Slim,
   config: {
@@ -625,7 +601,7 @@ export function listHandler(
 }
 
 /** Pick filter fields present in params using a filter field map's keys. */
-export function pickSchemaFilters(
+function pickSchemaFilters(
   params: Row,
   filterFields: Record<string, z.ZodType>,
 ): Record<string, unknown> {

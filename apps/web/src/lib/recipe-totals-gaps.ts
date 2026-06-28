@@ -21,7 +21,7 @@ export type IngredientTotalsGapKind =
   | "add-weight-mapping"
   | "add-volume-mapping";
 
-export type RecipeTotalsGapKind =
+type RecipeTotalsGapKind =
   | IngredientTotalsGapKind
   | "set-subrecipe-amount"
   | "set-subrecipe-yield"
