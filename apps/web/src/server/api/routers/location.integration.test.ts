@@ -62,6 +62,39 @@ describe("location router", () => {
     expect(retrievedParent.children?.[0]?.name).toEqual(childLocation.name);
   });
 
+  it("should bulk move selected locations under a new parent", async () => {
+    const caller = createTestCaller(locationRouter, ctx.db);
+
+    const garage = await caller.create(makeLocationInput({ name: "Garage" }));
+    const shelf = await caller.create(makeLocationInput({ name: "Shelf" }));
+    const tote = await caller.create(
+      makeLocationInput({ name: "Tote", type: "crate" }),
+    );
+    const binA = await caller.create(
+      makeLocationInput({ name: "Bin A", type: "crate", parentId: garage.id }),
+    );
+    const binB = await caller.create(
+      makeLocationInput({ name: "Bin B", type: "crate", parentId: garage.id }),
+    );
+
+    await expect(
+      caller.bulkUpdateParent({
+        ids: [binA.id, shelf.id],
+        parentId: shelf.id,
+      }),
+    ).rejects.toThrow("Cannot move a location under itself");
+
+    await expect(
+      caller.bulkUpdateParent({
+        ids: [binA.id, binB.id],
+        parentId: tote.id,
+      }),
+    ).resolves.toEqual({ updated: 2 });
+
+    expect((await caller.getByID({ id: binA.id })).parent?.id).toEqual(tote.id);
+    expect((await caller.getByID({ id: binB.id })).parent?.id).toEqual(tote.id);
+  });
+
   it("should list locations with filtering", async () => {
     // Create a test caller for the location router
     const caller = createTestCaller(locationRouter, ctx.db);

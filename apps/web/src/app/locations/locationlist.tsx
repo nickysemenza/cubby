@@ -5,8 +5,8 @@ import type {
 import { getLocationTypeColor } from "@cubby/shared";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
-import { Printer, ScanBarcode } from "lucide-react";
-import { useCallback, useMemo } from "react";
+import { FolderInput, Printer, ScanBarcode } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { locationMutationInvalidateKeys } from "~/lib/query-keys";
@@ -28,6 +28,7 @@ import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
+import { BulkReparentLocationsDialog } from "../_components/locations/bulk-reparent-locations-dialog";
 import { InventoryValuationSummary } from "../_components/locations/inventory-valuation-summary";
 import { LocationTypeLabel } from "../_components/locations/LocationTypeLabel";
 import { locationTypeOptionsWithTheme } from "../_components/locations/location-icons";
@@ -41,6 +42,9 @@ export function LocationList() {
     [],
   );
   const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("location");
+  const [reparentLocations, setReparentLocations] = useState<
+    LocationListItemOut[]
+  >([]);
 
   // Mutation for inline editing (name, type)
   const updateLocationMutation = useUpdateMutation({
@@ -172,6 +176,18 @@ export function LocationList() {
             return { success: true };
           },
         },
+        {
+          id: "move-parent",
+          label: "Move under...",
+          icon: <FolderInput className="h-4 w-4" />,
+          minSelection: 1,
+          onExecute: async (
+            rows: import("@tanstack/react-table").Row<LocationListItemOut>[],
+          ) => {
+            setReparentLocations(rows.map((r) => r.original));
+            return { success: true };
+          },
+        },
       ],
       clearSelectionOnComplete: false,
     }),
@@ -279,6 +295,17 @@ export function LocationList() {
       />
       <PreviewSheet />
       {deleteDialog}
+      <BulkReparentLocationsDialog
+        open={reparentLocations.length > 0}
+        onOpenChange={(open) => {
+          if (!open) setReparentLocations([]);
+        }}
+        locations={reparentLocations}
+        onSuccess={() => {
+          setReparentLocations([]);
+          table.resetRowSelection();
+        }}
+      />
     </>
   );
 }

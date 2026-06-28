@@ -15,6 +15,12 @@ export interface SessionLocation {
   location: InfLocation;
 }
 
+export interface PickerTreeRow {
+  location: InfLocation;
+  depth: number;
+  hasCandidateChildren: boolean;
+}
+
 export function confirmationKey(
   type: "inventory" | "location",
   id: string,
@@ -56,6 +62,74 @@ export function getSessionRootCandidates(
 
       return a.name.localeCompare(b.name);
     });
+}
+
+function sortedLocations(locations: InfLocation[]): InfLocation[] {
+  return [...locations].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function hasCandidateDescendant(
+  location: InfLocation,
+  candidateIds: Set<string>,
+): boolean {
+  return (location.children ?? []).some(
+    (child) =>
+      candidateIds.has(child.id) || hasCandidateDescendant(child, candidateIds),
+  );
+}
+
+function matchesPickerSearch(
+  location: InfLocation,
+  path: string[],
+  searchTerm: string,
+): boolean {
+  if (!searchTerm) return true;
+  const haystack = [...path, location.type].join(" ").toLocaleLowerCase();
+  return haystack.includes(searchTerm.toLocaleLowerCase());
+}
+
+export function flattenPickerTree(
+  roots: InfLocation[],
+  candidateIds: Set<string>,
+  {
+    expandedIds = new Set<string>(),
+    searchTerm = "",
+  }: { expandedIds?: Set<string>; searchTerm?: string } = {},
+): PickerTreeRow[] {
+  const rows: PickerTreeRow[] = [];
+  const normalizedSearch = searchTerm.trim().toLocaleLowerCase();
+
+  const visit = (
+    location: InfLocation,
+    depth: number,
+    path: string[],
+  ): PickerTreeRow[] => {
+    const isCandidate = candidateIds.has(location.id);
+    const nextPath = [...path, location.name];
+    const hasCandidateChildren = hasCandidateDescendant(location, candidateIds);
+    const searching = normalizedSearch.length > 0;
+    const shouldTraverseChildren =
+      searching || !isCandidate || expandedIds.has(location.id);
+
+    const childRows = shouldTraverseChildren
+      ? sortedLocations(location.children ?? []).flatMap((child) =>
+          visit(child, depth + 1, nextPath),
+        )
+      : [];
+
+    if (!isCandidate) return childRows;
+
+    const matches = matchesPickerSearch(location, nextPath, normalizedSearch);
+    if (searching && !matches && childRows.length === 0) return [];
+
+    return [{ location, depth, hasCandidateChildren }, ...childRows];
+  };
+
+  for (const root of sortedLocations(roots)) {
+    rows.push(...visit(root, 0, []));
+  }
+
+  return rows;
 }
 
 export function getDirectChildLocations(location: InfLocation): InfLocation[] {

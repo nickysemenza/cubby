@@ -10,6 +10,8 @@ import { type LocationId, locationId } from "@cubby/schemas/identifiers";
 import {
   infLocation,
   infLocationListOut,
+  locationBulkUpdateParentInput,
+  locationBulkUpdateParentOut,
   locationChildCountsOut,
   locationCreateInput,
   locationFiltersSchema,
@@ -27,6 +29,7 @@ import {
   recomputeLocationValuationsOut,
   touchLastBulkInventoryOut,
 } from "@cubby/schemas/location";
+import { createAppError } from "~/server/errors/app-error";
 import {
   buildLocationTree,
   buildLocationTypeCount,
@@ -145,6 +148,30 @@ const touchLastBulkInventory = protectedProcedure
     return { success: true };
   });
 
+const bulkUpdateParent = protectedProcedure
+  .input(locationBulkUpdateParentInput)
+  .output(locationBulkUpdateParentOut)
+  .mutation(async ({ ctx, input }) => {
+    if (input.parentId && input.ids.includes(input.parentId)) {
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "Cannot move a location under itself or another selected location.",
+      );
+    }
+
+    for (const id of input.ids) {
+      await updateLocation(
+        ctx.db,
+        id,
+        { parentId: input.parentId },
+        ctx.actorContext,
+      );
+    }
+
+    await ctx.services.locationValuation.recompute();
+    return { updated: input.ids.length };
+  });
+
 // Batch lookup: multiple locations by shortcode (e.g. for label printing)
 const getByShortcodes = protectedProcedure
   .input(locationShortcodesInput)
@@ -208,4 +235,5 @@ export const locationRouter = createTRPCRouter({
   recomputeValuations,
   delete: deleteItem,
   touchLastBulkInventory,
+  bulkUpdateParent,
 });

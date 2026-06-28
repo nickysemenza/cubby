@@ -1,9 +1,8 @@
 import type { inventoryListItemOut } from "@cubby/schemas/inventory";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { createColumnHelper, type Row } from "@tanstack/react-table";
 import { ArrowRightLeft, ImageIcon, Trash } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
-import { toast } from "sonner";
 import type { z } from "zod";
 import type { SwipeAction } from "~/components/entity/swipe-row";
 import { Row as FlexRow, Stack } from "~/components/layout";
@@ -53,7 +52,6 @@ function InventoryProductImageCell({ productId }: { productId: string }) {
 
 export function InventoryItemList() {
   const api = useTRPC();
-  const navigate = useNavigate();
   const columnHelper = createColumnHelper<InventoryListItem>();
   const { onRowClick, onRowHover, PreviewSheet } =
     useEntityPreview("inventory");
@@ -82,32 +80,18 @@ export function InventoryItemList() {
     invalidateKeys: inventoryMutationInvalidateKeys,
   });
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: navigate is stable
   const bulkActions = useMemo(
     () => ({
       actions: [
         {
           id: "move",
-          label: "Move",
+          label: "Move to...",
           icon: <ArrowRightLeft className="h-4 w-4" />,
           minSelection: 1,
           onExecute: async (
             rows: import("@tanstack/react-table").Row<InventoryListItem>[],
           ) => {
-            const items = rows.map((r) => r.original);
-            const locationIds = new Set(items.map((i) => i.location.id));
-
-            if (locationIds.size === 1) {
-              // All from same location — use dialog
-              setBulkMoveItems(items);
-            } else {
-              // Multiple source locations — redirect to bulk move page
-              toast.info(
-                "Items from multiple locations selected — opening bulk move page",
-              );
-              navigate({ to: "/inventory/bulk-move" });
-            }
-
+            setBulkMoveItems(rows.map((r) => r.original));
             return { success: true };
           },
         },
@@ -306,7 +290,10 @@ export function InventoryItemList() {
             if (!open) setBulkMoveItems([]);
           }}
           items={bulkMoveItems}
-          onSuccess={() => setBulkMoveItems([])}
+          onSuccess={() => {
+            setBulkMoveItems([]);
+            table.resetRowSelection();
+          }}
         />
       )}
     </ProductImageSummariesProvider>

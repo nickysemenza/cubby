@@ -225,6 +225,15 @@ export const locationUpdateInput = z.object({
   data: locationUpdateData,
 });
 
+export const locationBulkUpdateParentInput = z.object({
+  ids: z.array(locationId).min(1),
+  parentId: optionalLocationId,
+});
+
+export const locationBulkUpdateParentOut = z.object({
+  updated: z.number().int().nonnegative(),
+});
+
 export const locationIdInput = z.object({
   id: locationId,
 });
@@ -249,6 +258,9 @@ export const locationIdsInput = z.object({
 
 export type LocationCreateInput = z.infer<typeof locationCreateInput>;
 export type LocationUpdateInput = z.infer<typeof locationUpdateInput>;
+export type LocationBulkUpdateParentInput = z.infer<
+  typeof locationBulkUpdateParentInput
+>;
 
 export const mcpLocationCreateInput = z.object({
   name: requiredName("Location name").describe("name of location"),

@@ -58,8 +58,6 @@ export function MoveInventoryDialog({
   sourceLocationId: sourceLocationIdProp,
   onSuccess,
 }: MoveInventoryDialogProps) {
-  const sourceLocationId =
-    sourceLocationIdProp ?? (items[0] ? items[0].location.id : undefined);
   const api = useTRPC();
   const invalidateInventory = useInventoryInvalidation();
   const [error, setError] = useState<string | null>(null);
@@ -73,15 +71,6 @@ export function MoveInventoryDialog({
 
   const bulkMoveMutation = useMutation(
     api.inventory.bulkMove.mutationOptions({
-      onSuccess: () => {
-        toast.success(
-          `Successfully moved ${items.length} item${items.length !== 1 ? "s" : ""}`,
-        );
-        invalidateInventory();
-        form.reset();
-        onSuccess();
-        onOpenChange(false);
-      },
       onError: (err) => {
         setError(err.message || "Failed to move items");
       },
@@ -96,28 +85,58 @@ export function MoveInventoryDialog({
       return;
     }
 
-    if (!sourceLocationId) {
+    const targetLocationId = getOptionalLocationId(values.targetLocation);
+    if (!targetLocationId) {
+      setError("Please select a target location");
+      return;
+    }
+
+    const sourceGroups = new Map<LocationId, InventoryItem[]>();
+    for (const item of items) {
+      const sourceLocationId = sourceLocationIdProp ?? item.location.id;
+      if (!sourceLocationId) {
+        setError("No source location available");
+        return;
+      }
+      const group = sourceGroups.get(sourceLocationId) ?? [];
+      group.push(item);
+      sourceGroups.set(sourceLocationId, group);
+    }
+
+    if (sourceGroups.size === 0) {
       setError("No source location available");
       return;
     }
 
-    if (values.targetLocation.id === sourceLocationId) {
-      setError("Target location must be different from source location");
+    if (sourceGroups.has(targetLocationId)) {
+      setError(
+        "Target location must be different from every selected item's current location",
+      );
       return;
     }
 
     setError(null);
 
-    const moveItems: BulkMoveItem[] = items.map((item) => ({
-      inventoryEntryId: item.id,
-      quantity: item.amount,
-    }));
+    for (const [sourceLocationId, sourceItems] of sourceGroups) {
+      const moveItems: BulkMoveItem[] = sourceItems.map((item) => ({
+        inventoryEntryId: item.id,
+        quantity: item.amount,
+      }));
 
-    await bulkMoveMutation.mutateAsync({
-      sourceLocationId: sourceLocationId!,
-      targetLocationId: getOptionalLocationId(values.targetLocation)!,
-      items: moveItems,
-    });
+      await bulkMoveMutation.mutateAsync({
+        sourceLocationId,
+        targetLocationId,
+        items: moveItems,
+      });
+    }
+
+    toast.success(
+      `Successfully moved ${items.length} item${items.length !== 1 ? "s" : ""}`,
+    );
+    invalidateInventory();
+    form.reset();
+    onSuccess();
+    onOpenChange(false);
   };
 
   const handleOpenChange = (newOpen: boolean) => {

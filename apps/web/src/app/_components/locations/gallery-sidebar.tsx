@@ -6,12 +6,11 @@ import {
   PanelLeftClose,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Row, Stack } from "~/components/layout";
+import { Row } from "~/components/layout";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { ImageWithPreview } from "~/components/ui/image-with-preview";
-import { EntityIcon } from "~/entities/entities";
 import { cn } from "~/lib/utils";
-import { LocationIcon } from "./location-icons";
+import { LocationTreeRow } from "./location-tree-row";
 
 /** Build a map of location id -> parent id by traversing the tree */
 function buildParentMap(
@@ -181,7 +180,7 @@ export function GallerySidebar({
 
       {/* Tree */}
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <Stack gap="xs" className="p-2">
+        <div>
           {locations.map((location) => (
             <SidebarTreeNode
               key={location.id}
@@ -197,7 +196,7 @@ export function GallerySidebar({
               activeItemRef={activeItemRef}
             />
           ))}
-        </Stack>
+        </div>
       </div>
     </div>
   );
@@ -232,11 +231,8 @@ function SidebarTreeNode({
   const isExpanded = expandedNodes.has(location.id);
   const isActive = activeLocationId === location.id;
   const isSearchMatch = searchMatchingIds.has(location.id);
-  const indent = level * 12;
   const isFaded = fadedIds.has(location.id);
 
-  // Get first image for thumbnail
-  const thumbnail = location.images[0];
   const itemCount = location.directItemCount ?? 0;
 
   const handleExpandClick = (e: React.MouseEvent) => {
@@ -268,117 +264,59 @@ function SidebarTreeNode({
       {/* Non-semantic role="button" wrapper on purpose: the row is clickable
           but contains a nested <button> for expand/collapse, so it can't be a
           real <button> (no nested interactive controls). */}
-      <Row
+      <LocationTreeRow
         ref={isActive ? activeItemRef : undefined}
-        align="center"
-        gap="sm"
+        location={location}
+        depth={level}
+        primaryMeta={location.type.replaceAll("-", " ")}
+        leading={
+          <button
+            type="button"
+            onClick={handleExpandClick}
+            className={cn(
+              "flex h-5 w-5 items-center justify-center rounded transition-transform duration-150 hover:bg-muted-foreground/20",
+              !hasChildren && "invisible",
+              isExpanded && "rotate-0",
+            )}
+          >
+            {hasChildren && (
+              <ChevronRight
+                className={cn(
+                  "h-3.5 w-3.5 transition-transform duration-150",
+                  isExpanded && "rotate-90",
+                )}
+              />
+            )}
+          </button>
+        }
+        trailing={
+          (location.totalItemCount ?? 0) > 0 && (
+            <Badge variant={isActive ? "secondary" : "outline"}>
+              {hasChildren ? (
+                <>
+                  <span>{itemCount}</span>
+                  <span className="opacity-50">/</span>
+                  <span className="opacity-50">{location.totalItemCount}</span>
+                </>
+              ) : (
+                <span>{itemCount}</span>
+              )}
+            </Badge>
+          )
+        }
         role="button"
         tabIndex={0}
         onKeyDown={handleKeyDown}
         className={cn(
-          "group relative cursor-pointer rounded-lg px-2 py-2 text-sm",
-          "transition-all duration-150 ease-out",
-          !isActive && "hover:bg-accent/50",
-          isActive && [
-            "bg-primary/15 text-primary",
-            "ring-1 ring-primary/30 ring-inset",
-            "before:absolute before:top-1/2 before:left-0 before:h-4 before:w-1 before:-translate-y-1/2 before:rounded-r-full before:bg-primary before:transition-all before:duration-150",
-          ],
-          isSearchMatch &&
-            !isActive &&
-            "bg-accent/30 ring-1 ring-accent/50 ring-inset",
+          "group relative cursor-pointer border-[var(--border)] border-b py-3 pr-3 text-sm",
+          "transition-colors duration-150 ease-out",
+          !isActive && "hover:bg-muted",
+          isActive && "bg-primary/5 text-primary",
+          isSearchMatch && !isActive && "bg-accent/30",
           isFaded && "opacity-40",
         )}
-        style={{ paddingLeft: `${8 + indent}px` }}
         onClick={handleLocationClick}
-      >
-        {/* Expand/Collapse Icon */}
-        <button
-          type="button"
-          onClick={handleExpandClick}
-          className={cn(
-            "flex h-5 w-5 items-center justify-center rounded transition-transform duration-150 hover:bg-muted-foreground/20",
-            !hasChildren && "invisible",
-            isExpanded && "rotate-0",
-          )}
-        >
-          {hasChildren && (
-            <ChevronRight
-              className={cn(
-                "h-3.5 w-3.5 transition-transform duration-150",
-                isExpanded && "rotate-90",
-              )}
-            />
-          )}
-        </button>
-
-        {/* Thumbnail or Location Icon */}
-        {thumbnail ? (
-          <ImageWithPreview
-            src={thumbnail.url}
-            alt={location.name}
-            size={28}
-            previewSize={192}
-            className={cn(
-              "rounded-md transition-all duration-150",
-              isActive
-                ? "border-primary/30 bg-primary/10"
-                : "border-border/50 bg-muted/50 group-hover:border-border",
-            )}
-          />
-        ) : (
-          <div
-            className={cn(
-              "relative flex h-7 w-7 flex-shrink-0 items-center justify-center overflow-hidden rounded-md border transition-all duration-150",
-              isActive
-                ? "border-primary/30 bg-primary/10"
-                : "border-border/50 bg-muted/50 group-hover:border-border",
-            )}
-          >
-            <LocationIcon
-              type={location.type}
-              className={cn(
-                "h-3.5 w-3.5 transition-colors",
-                isActive ? "text-primary" : "text-muted-foreground",
-              )}
-            />
-          </div>
-        )}
-
-        {/* Location Name */}
-        <span
-          className={cn(
-            "flex-1 truncate font-medium transition-colors",
-            isActive ? "text-primary" : "text-foreground/80",
-          )}
-        >
-          {location.name}
-        </span>
-
-        {/* Item Count Badge */}
-        {(location.totalItemCount ?? 0) > 0 && (
-          <Row
-            align="center"
-            gap="xs"
-            className={cn(
-              "rounded-full px-2 py-1 font-medium text-2xs transition-colors",
-              isActive
-                ? "bg-primary/20 text-primary"
-                : "bg-muted text-muted-foreground group-hover:bg-muted/80",
-            )}
-          >
-            <EntityIcon entity="inventory" className="h-2.5 w-2.5" />
-            {hasChildren ? (
-              <>
-                <span>{itemCount}</span>
-                <span className="opacity-50">/ {location.totalItemCount}</span>
-              </>
-            ) : (
-              <span>{itemCount}</span>
-            )}
-          </Row>
-        )}
-      </Row>
+      />
 
       {/* Children with animation */}
       {hasChildren && (

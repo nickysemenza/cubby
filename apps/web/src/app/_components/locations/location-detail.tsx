@@ -26,10 +26,10 @@ import {
 import { invalidateTRPCQueries } from "~/lib/query-keys";
 import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
-import { InventoryCaptureWorkspace } from "../../inventory/capture/InventoryCaptureWorkspace";
 import { type DetailSection, DetailSections } from "../data-table/detail-page";
 import { editableDetailSection } from "../data-table/editable-detail-section";
 import { useEntityDetail } from "../hooks/useEntityDetail";
+import { QuickInventoryAdd } from "../inventory/quick-inventory-add";
 import { AiDescriptionSection } from "./ai-description-section";
 import { CreateChildLocationDialog } from "./create-child-location-dialog";
 import { InventoryValuationSummary } from "./inventory-valuation-summary";
@@ -178,8 +178,7 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
       content: (
         <Stack gap="sm">
           <Stack gap="sm">
-            <InventoryCaptureWorkspace
-              mode="inline"
+            <QuickInventoryAdd
               locationId={location.id}
               onSuccess={() => undefined}
             />

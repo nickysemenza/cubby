@@ -48,7 +48,7 @@ import {
   LocationBreadcrumb,
   locationToSegments,
 } from "~/app/_components/locations/location-breadcrumb";
-import { LocationIcon } from "~/app/_components/locations/location-icons";
+import { LocationTreeRow } from "~/app/_components/locations/location-tree-row";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -80,6 +80,7 @@ import {
   findLocationInTree,
   flattenAllLocations,
   flattenAuditableLocations,
+  flattenPickerTree,
   getDirectChildLocations,
   getSessionRootCandidates,
   getUnknownChildLocations,
@@ -135,6 +136,28 @@ function sentenceCase(value: string): string {
 
 function ancestorSegments(location: InfLocation) {
   return locationToSegments(location).slice(0, -1);
+}
+
+function locationPathFromRoot(
+  root: InfLocation,
+  locationId: string,
+): InfLocation[] {
+  if (root.id === locationId) return [root];
+
+  for (const child of root.children ?? []) {
+    const childPath = locationPathFromRoot(child, locationId);
+    if (childPath.length > 0) return [root, ...childPath];
+  }
+
+  return [];
+}
+
+function sessionBreadcrumbSegments(parent: InfLocation, locationId: string) {
+  return locationPathFromRoot(parent, locationId).map((location) => ({
+    id: location.id,
+    name: location.name,
+    type: location.type,
+  }));
 }
 
 function pluralize(count: number, singular: string): string {
@@ -537,12 +560,50 @@ function ParentPicker({
   initialParentId?: LocationId;
   onSelect: (locationId: LocationId) => void;
 }) {
-  const candidateIds = new Set(
-    getSessionRootCandidates(flattenAllLocations(locations)).map(
-      (location) => location.id,
-    ),
+  const candidateIds = useMemo(
+    () =>
+      new Set(
+        getSessionRootCandidates(flattenAllLocations(locations)).map(
+          (location) => location.id,
+        ),
+      ),
+    [locations],
   );
-  const candidates = flattenPickerTree(locations, candidateIds);
+  const defaultExpandedIds = useMemo(
+    () =>
+      new Set(
+        locations
+          .filter((location) => candidateIds.has(location.id))
+          .map((location) => location.id),
+      ),
+    [candidateIds, locations],
+  );
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(
+    () => defaultExpandedIds,
+  );
+  const [searchTerm, setSearchTerm] = useState("");
+
+  useEffect(() => {
+    setExpandedIds(defaultExpandedIds);
+  }, [defaultExpandedIds]);
+
+  const candidates = flattenPickerTree(locations, candidateIds, {
+    expandedIds,
+    searchTerm,
+  });
+  const searching = searchTerm.trim().length > 0;
+
+  const toggleExpanded = (locationId: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(locationId)) {
+        next.delete(locationId);
+      } else {
+        next.add(locationId);
+      }
+      return next;
+    });
+  };
 
   return (
     <Stack gap="md" className="min-w-0">
@@ -563,29 +624,75 @@ function ParentPicker({
             Start at any location with contents. The session includes that
             location and all nested descendants.
           </Description>
+          <div className="relative pt-2">
+            <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Search location tree..."
+              className="pl-9"
+            />
+          </div>
         </CardHeader>
         <CardContent className="p-0">
-          {candidates.map(({ location, depth }) => {
+          {candidates.length === 0 ? (
+            <Description className="p-4">
+              No matching session roots.
+            </Description>
+          ) : null}
+          {candidates.map(({ location, depth, hasCandidateChildren }) => {
             const sessionCount = flattenAuditableLocations(location).length;
+            const expanded = expandedIds.has(location.id) || searching;
             return (
-              <button
+              // biome-ignore lint/a11y/useSemanticElements: This row contains a separate expand button, so it cannot be a native button.
+              <div
                 key={location.id}
-                type="button"
+                role="button"
+                tabIndex={0}
                 onClick={() => onSelect(location.id)}
-                className="w-full border-[var(--border)] border-b bg-card py-3 pr-4 text-left transition-colors last:border-b-0 hover:bg-muted"
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onSelect(location.id);
+                  }
+                }}
+                className="w-full border-[var(--border)] border-b bg-card py-2 pr-3 text-left transition-colors last:border-b-0 hover:bg-muted"
               >
-                <LocationTreeRowContent
+                <LocationTreeRow
                   location={location}
                   depth={depth}
+                  compact
                   primaryMeta={locationTypeNoun(location.type)}
                   secondaryMeta={`${pluralize(sessionCount, "location")} in session · ${pluralize(location.totalItemCount ?? 0, "tracked item")}`}
+                  leading={
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        toggleExpanded(location.id);
+                      }}
+                      className={cn(
+                        "flex h-5 w-5 items-center justify-center transition-transform",
+                        !hasCandidateChildren && "invisible",
+                        expanded && "rotate-90",
+                      )}
+                      aria-label={
+                        expanded
+                          ? `Collapse ${location.name}`
+                          : `Expand ${location.name}`
+                      }
+                      disabled={!hasCandidateChildren || searching}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  }
                   trailing={
                     <Badge variant="outline">
-                      {location.children?.length ?? 0} child
+                      {formatChildCount(location.children?.length ?? 0)}
                     </Badge>
                   }
                 />
-              </button>
+              </div>
             );
           })}
         </CardContent>
@@ -594,71 +701,8 @@ function ParentPicker({
   );
 }
 
-function flattenPickerTree(
-  roots: InfLocation[],
-  candidateIds: Set<string>,
-): Array<{ location: InfLocation; depth: number }> {
-  const rows: Array<{ location: InfLocation; depth: number }> = [];
-
-  const visit = (location: InfLocation, depth: number) => {
-    if (candidateIds.has(location.id)) rows.push({ location, depth });
-    for (const child of [...(location.children ?? [])].sort((a, b) =>
-      a.name.localeCompare(b.name),
-    )) {
-      visit(child, depth + 1);
-    }
-  };
-
-  for (const root of [...roots].sort((a, b) => a.name.localeCompare(b.name))) {
-    visit(root, 0);
-  }
-
-  return rows;
-}
-
-function LocationTreeRowContent({
-  location,
-  depth,
-  primaryMeta,
-  secondaryMeta,
-  trailing,
-}: {
-  location: Pick<InfLocation, "name" | "type">;
-  depth: number;
-  primaryMeta?: string;
-  secondaryMeta?: string;
-  trailing?: React.ReactNode;
-}) {
-  return (
-    <Row align="center" gap="sm" className="min-w-0">
-      <div
-        className="flex shrink-0 items-center"
-        style={{ width: `${Math.max(depth, 0) * 1.25 + 1.25}rem` }}
-        aria-hidden="true"
-      >
-        {depth > 0 && (
-          <div className="ml-auto h-8 w-4 border-[var(--border)] border-b border-l" />
-        )}
-      </div>
-      <LocationIcon type={location.type} size={16} />
-      <div className="min-w-0 flex-1 space-y-0.5">
-        <div className="flex min-w-0 items-baseline gap-1.5">
-          <span className="truncate font-medium text-sm">{location.name}</span>
-          {primaryMeta && (
-            <Description as="span" size="2xs" className="shrink-0">
-              · {primaryMeta}
-            </Description>
-          )}
-        </div>
-        {secondaryMeta && (
-          <Description size="xs" className="truncate">
-            {secondaryMeta}
-          </Description>
-        )}
-      </div>
-      {trailing}
-    </Row>
-  );
+function formatChildCount(count: number) {
+  return count === 1 ? "1 child" : `${count} children`;
 }
 
 function LocationWorkbenchSidebar({
@@ -728,15 +772,20 @@ function LocationWorkbenchSidebar({
               type="button"
               onClick={() => onSelect(location.id)}
               className={cn(
-                "w-full border-[var(--border)] border-b py-3 pr-3 text-left transition-colors hover:bg-muted",
+                "w-full border-[var(--border)] border-b py-1.5 pr-2 text-left transition-colors hover:bg-muted",
                 currentId === location.id && "bg-primary/5",
               )}
             >
-              <LocationTreeRowContent
+              <LocationTreeRow
                 location={location}
                 depth={location.depth}
+                compact
                 primaryMeta={locationTypeNoun(location.type)}
-                secondaryMeta={`${pluralize(items.length, "tracked item")}`}
+                secondaryMeta={
+                  items.length > 0
+                    ? pluralize(items.length, "tracked item")
+                    : undefined
+                }
                 trailing={
                   <Badge
                     variant={
@@ -805,7 +854,8 @@ function LocationReviewPane({
   unknownReady: boolean;
 }) {
   const locationNoun = locationTypeNoun(location.type);
-  const ancestors = ancestorSegments(location.location);
+  const breadcrumbSegments = sessionBreadcrumbSegments(parent, location.id);
+  const isSessionRoot = location.id === parent.id;
   const activeLocationId = location.id;
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(
     () => new Set(),
@@ -855,14 +905,19 @@ function LocationReviewPane({
             <h2 className="truncate font-heading font-semibold text-xl">
               {location.name}
             </h2>
-            {ancestors.length > 0 ? (
+            <Badge variant="outline" className="mt-1 md:hidden">
+              Session: {parent.name} subtree
+            </Badge>
+            {breadcrumbSegments.length > 0 ? (
               <LocationBreadcrumb
-                segments={ancestors}
+                segments={breadcrumbSegments}
+                showHome
                 linkable
                 compact
+                activeHighlight
                 className="mx-auto mt-1 max-w-full justify-center text-xs md:mx-0 md:justify-start"
               />
-            ) : position.total > 1 ? (
+            ) : isSessionRoot && position.total > 1 ? (
               <Description size="2xs" className="mt-1">
                 Session root · includes descendants
               </Description>
@@ -898,9 +953,6 @@ function LocationReviewPane({
               </div>
             )}
             <Row align="center" justify="between" wrap gap="sm">
-              {ancestors.length > 0 && (
-                <LocationBreadcrumb segments={ancestors} linkable compact />
-              )}
               <QrJumpButton parent={parent} onJump={onJumpByScan} manualEntry />
             </Row>
             {location.aiDescription && (

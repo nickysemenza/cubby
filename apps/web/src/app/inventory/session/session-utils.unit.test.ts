@@ -9,6 +9,7 @@ import {
   confirmationKey,
   findLocationInTree,
   flattenAuditableLocations,
+  flattenPickerTree,
   getDirectChildLocations,
   getSessionRootCandidates,
   getUnknownChildLocations,
@@ -145,6 +146,45 @@ describe("inventory session utils", () => {
         (item) => item.name,
       ),
     ).toEqual(["Garage", "Tote"]);
+  });
+
+  it("flattens picker roots with expansion and search", () => {
+    const crate = {
+      ...loc("00000000-0000-4000-8000-000000000053", "Paint Crate", "crate"),
+      directItemCount: 1,
+      totalItemCount: 1,
+    };
+    const shelf = {
+      ...loc("00000000-0000-4000-8000-000000000052", "Paint Shelf", "shelf", [
+        crate,
+      ]),
+      totalItemCount: 1,
+    };
+    const garage = {
+      ...loc("00000000-0000-4000-8000-000000000051", "Garage", "room", [shelf]),
+      totalItemCount: 1,
+    };
+    const candidateIds = new Set(
+      getSessionRootCandidates([garage, shelf, crate]).map((item) => item.id),
+    );
+
+    expect(
+      flattenPickerTree([garage], candidateIds, {
+        expandedIds: new Set([garage.id]),
+      }).map((row) => row.location.name),
+    ).toEqual(["Garage", "Paint Shelf"]);
+
+    expect(
+      flattenPickerTree([garage], candidateIds, {
+        expandedIds: new Set(),
+      }).map((row) => row.location.name),
+    ).toEqual(["Garage"]);
+
+    expect(
+      flattenPickerTree([garage], candidateIds, {
+        searchTerm: "crate",
+      }).map((row) => row.location.name),
+    ).toEqual(["Garage", "Paint Shelf", "Paint Crate"]);
   });
 
   it("extracts direct child and unknown child locations", () => {
