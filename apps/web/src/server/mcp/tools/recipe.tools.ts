@@ -1,104 +1,71 @@
-import { mcpPaginationParams } from "@cubby/schemas/pagination";
-import type { RecipeUsage } from "@cubby/schemas/recipe";
 import {
-  mcpRecipeCreateInputShape,
-  mcpRecipeUpdateInputShape,
-} from "@cubby/schemas/recipe";
+  mcpRecipeCreateFromTextInput,
+  scrapeRecipeInput,
+} from "@cubby/schemas/import-recipe";
+import {
+  cookbookSummariesMcpOut,
+  mcpRecipeCreateInput,
+  mcpRecipeUpdateInput,
+  recipeAvailabilityMcpOut,
+  recipeCostingExplainMcpOut,
+  recipeDetailMcpOut,
+  recipeIdOut,
+  recipeMcpListOut,
+  recipeRecomputeMcpOut,
+  recipesUsingIngredientOut,
+  recipeTagsListOut,
+  scrapeRecipeMcpOut,
+} from "@cubby/schemas/mcp";
+import type { RecipeUsage } from "@cubby/schemas/recipe";
+import { recipeListFilterFields, recipeMcpOut } from "@cubby/schemas/recipe";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { groupBy, omitBy } from "es-toolkit";
+import { groupBy } from "es-toolkit";
 import { z } from "zod";
 import {
-  deleteHandler,
-  getByIdHandler,
   getCaller,
   idParam,
-  idsParam,
-  json,
-  listHandler,
-  respond,
+  READ_ONLY_CLOSED,
+  READ_ONLY_OPEN,
+  registerEntityCreateTool,
+  registerEntityDeleteTool,
+  registerEntityGetTool,
+  registerEntityListTool,
+  registerEntityUpdateTool,
+  registerMcpTool,
+  registerRouterTool,
   slimRecipe,
-  withErrorHandling,
+  WRITE_CLOSED,
+  WRITE_DESTRUCTIVE_CLOSED,
 } from "./_shared";
 
-// Raw-text recipe input: ingredient/instruction lines as plain strings (no
-// pre-resolved IDs). The server WASM-parses each ingredient line and
-// find-or-creates ingredients — the same pipeline as URL/Notion import. Maps
-// onto the `ImportRecipe` carrier consumed by `recipe.insertImport`.
-const createRecipeFromTextInputShape = {
-  name: z.string().min(1).describe("Recipe name"),
-  servings: z
-    .number()
-    .int()
-    .positive()
-    .optional()
-    .describe("Number of servings"),
-  yield: z
-    .string()
-    .optional()
-    .describe(
-      "Freeform yield, e.g. '2 loaves' or 'Makes 12 pancakes' (parsed server-side)",
-    ),
-  notes: z.string().optional().describe("Headnote / notes markdown"),
-  sections: z
-    .array(
-      z.object({
-        name: z
-          .string()
-          .optional()
-          .describe(
-            "Section name, e.g. 'Sauce' (omit for a single unnamed section)",
-          ),
-        ingredients: z
-          .array(z.string())
-          .describe(
-            "Raw ingredient lines, e.g. '1 cup jasmine rice' — NOT ingredient IDs",
-          ),
-        instructions: z
-          .array(z.string())
-          .default([])
-          .describe("Instruction step lines, one string per step"),
-      }),
-    )
-    .min(1)
-    .describe(
-      "Recipe sections; each holds raw ingredient lines and instruction steps",
-    ),
-};
-
-const createRecipeFromTextInput = z.object(createRecipeFromTextInputShape);
-
 export function registerRecipeTools(server: McpServer) {
-  // -------------------------------------------------------------------------
-  // Recipe tools (read-only)
-  // -------------------------------------------------------------------------
+  registerEntityListTool(server, {
+    name: "list_recipes",
+    description:
+      "List recipes by name. Returns id, name, shortcode, yield, servings, tags.",
+    router: "recipe",
+    filterFields: recipeListFilterFields,
+    outputSchema: recipeMcpListOut,
+    slim: slimRecipe,
+    sort: { orderBy: "name" },
+    annotations: READ_ONLY_CLOSED,
+  });
 
-  server.tool(
-    "list_recipes",
-    "List recipes by name. Returns id, name, shortcode, yield, servings, tags.",
-    {
-      nameFilter: z
-        .string()
-        .optional()
-        .describe("Filter by recipe name (substring)"),
-      ...mcpPaginationParams,
-    },
-    listHandler("recipe", slimRecipe, {
-      orderBy: "name",
-      buildFilters: (p) => ({ nameFilter: p.nameFilter }),
-    }),
-  );
+  registerEntityGetTool(server, {
+    name: "get_recipe",
+    description:
+      "Get a recipe by ID, including sections, ingredients, and instructions.",
+    router: "recipe",
+    idLabel: "Recipe",
+    outputSchema: recipeDetailMcpOut,
+    annotations: READ_ONLY_CLOSED,
+  });
 
-  server.tool(
-    "get_recipe",
-    "Get a recipe by ID, including sections, ingredients, and instructions.",
-    { id: idParam("Recipe") },
-    getByIdHandler("recipe"),
-  );
-
-  server.tool(
-    "find_cookable_recipes",
-    "Rank recipes by how well current inventory covers their ingredients — answers 'what can I make right now?'. Each result includes a coverage ratio (0..1) and the list of missing ingredients.",
-    {
+  registerRouterTool(server, {
+    name: "find_cookable_recipes",
+    description:
+      "Rank recipes by how well current inventory covers their ingredients.",
+    inputSchema: {
       minCoverage: z
         .number()
         .min(0)
@@ -113,26 +80,26 @@ export function registerRecipeTools(server: McpServer) {
         .optional()
         .describe("Max recipes to return (default 24, max 100)"),
     },
-    withErrorHandling(async (params, extra) => {
-      const caller = getCaller(extra);
-      const result = await caller.suggestions.getMakeable({
+    outputSchema: recipeAvailabilityMcpOut,
+    annotations: READ_ONLY_CLOSED,
+    call: async (caller, params) => {
+      const recipes = await caller.suggestions.getMakeable({
         minCoverage: params.minCoverage,
         limit: params.limit,
       });
-      return json(result);
-    }),
-  );
+      return { recipes };
+    },
+  });
 
-  server.tool(
-    "find_recipes_using_ingredient",
-    "Reverse lookup: given an ingredient ID, return every recipe that uses it. The efficient answer to 'which recipes call for this ingredient?' — don't enumerate list_recipes. Get the ID from search_ingredients. Each recipe appears once (a recipe using the ingredient in multiple sections gets multiple `usages`); each usage carries `lineId` (the RecipeSectionIngredient id — the stable handle for re-pointing or fixing one line), `rawLine`/`modifier`/`amounts` (parser-triage signal), and `sectionName`. The top-level `ingredientId` echoes the queried ingredient (the current link for every line).",
-    { id: idParam("Ingredient") },
-    withErrorHandling(async (params, extra) => {
+  registerMcpTool(server, {
+    name: "find_recipes_using_ingredient",
+    description:
+      "Reverse lookup: given an ingredient ID, return every recipe that uses it.",
+    inputSchema: { id: idParam("Ingredient") },
+    outputSchema: recipesUsingIngredientOut,
+    annotations: READ_ONLY_CLOSED,
+    handler: async (params, extra) => {
       const caller = getCaller(extra);
-      // ingredient.recipeUsages returns one row per RecipeSectionIngredient, so a
-      // recipe repeats once per section that uses the ingredient. Collapse to one
-      // entry per recipe (slimmed) with its per-section usage contexts. Each usage
-      // keeps its RSI `lineId` so a caller can re-point or triage that exact line.
       const usages = (await caller.ingredient.recipeUsages({
         id: params.id,
       })) as RecipeUsage[];
@@ -148,47 +115,44 @@ export function registerRecipeTools(server: McpServer) {
           })),
         }),
       );
-      return json({ ingredientId: params.id, count: recipes.length, recipes });
-    }),
-  );
+      return { ingredientId: params.id, count: recipes.length, recipes };
+    },
+  });
 
-  // -------------------------------------------------------------------------
-  // Recipe tools (write)
-  // -------------------------------------------------------------------------
+  registerRouterTool(server, {
+    name: "scrape_recipe",
+    description:
+      "Parse a recipe from a URL into structured form WITHOUT saving it.",
+    inputSchema: { url: scrapeRecipeInput },
+    outputSchema: scrapeRecipeMcpOut,
+    annotations: READ_ONLY_OPEN,
+    call: (caller, params) => caller.recipe.scrape(params.url),
+  });
 
-  server.tool(
-    "scrape_recipe",
-    "Parse a recipe from a URL into structured form WITHOUT saving it. Returns the parsed recipe — use import_recipe to also save it.",
-    { url: z.string().url().describe("Recipe page URL") },
-    withErrorHandling(async (params, extra) => {
-      const caller = getCaller(extra);
-      const result = await caller.recipe.scrape(params.url);
-      return json(result);
-    }),
-  );
-
-  server.tool(
-    "import_recipe",
-    "Scrape a recipe from a URL and save it in one step. Returns the new recipe's id.",
-    { url: z.string().url().describe("Recipe page URL") },
-    withErrorHandling(async (params, extra) => {
-      const caller = getCaller(extra);
+  registerRouterTool(server, {
+    name: "import_recipe",
+    description:
+      "Scrape a recipe from a URL and save it in one step. Returns the new recipe's id.",
+    inputSchema: { url: scrapeRecipeInput },
+    outputSchema: recipeIdOut,
+    annotations: WRITE_CLOSED,
+    call: async (caller, params) => {
       const imported = await caller.recipe.scrape(params.url);
       const result = await caller.recipe.insertImport(imported);
-      return json({ id: result.id });
-    }),
-  );
+      return { id: result.id };
+    },
+  });
 
-  server.tool(
-    "create_recipe_from_text",
-    "Create a recipe from raw text lines WITHOUT pre-resolving ingredient IDs. Pass ingredient and instruction lines as plain strings; the server parses each ingredient line (quantity/unit/name) and find-or-creates ingredients automatically. Mirrors the app's 'from text' / Notion import. Prefer this over resolve_ingredients + create_recipe when building a recipe from a prep sheet or pasted text. Returns the new recipe's id.",
-    createRecipeFromTextInputShape,
-    withErrorHandling(async (params, extra) => {
+  registerMcpTool(server, {
+    name: "create_recipe_from_text",
+    description:
+      "Create a recipe from raw text lines WITHOUT pre-resolving ingredient IDs.",
+    inputSchema: mcpRecipeCreateFromTextInput.shape,
+    outputSchema: recipeIdOut,
+    annotations: WRITE_CLOSED,
+    handler: async (params, extra) => {
       const caller = getCaller(extra);
-      const input = createRecipeFromTextInput.parse(params);
-      // Build the ImportRecipe carrier. `meta.recipe_yield` is re-parsed and
-      // top-level `servings` wins over the yield-derived count (see
-      // normalizeImportRecipe); `meta.description` flows into composed notes.
+      const input = mcpRecipeCreateFromTextInput.parse(params);
       const importRecipe = {
         meta: {
           title: input.name,
@@ -204,84 +168,78 @@ export function registerRecipeTools(server: McpServer) {
         ...(input.servings != null ? { servings: input.servings } : {}),
       };
       const result = await caller.recipe.insertImport(importRecipe);
-      return json({ id: result.id });
-    }),
-  );
-
-  server.tool(
-    "create_recipe",
-    "Create a recipe from structured input (sections with ingredient IDs and instructions). Use search_ingredients to resolve ingredient IDs first.",
-    mcpRecipeCreateInputShape,
-    withErrorHandling(async (params, extra) => {
-      const caller = getCaller(extra);
-      const result = await caller.recipe.create(params);
-      return respond(result, slimRecipe);
-    }),
-  );
-
-  server.tool(
-    "update_recipe",
-    "Update a recipe's fields. Only provided fields are changed.",
-    {
-      ...mcpRecipeUpdateInputShape,
+      return { id: result.id };
     },
-    withErrorHandling(async (params, extra) => {
-      const caller = getCaller(extra);
-      const { id, ...rest } = params;
-      const data = omitBy(rest, (v) => v === undefined);
-      const result = await caller.recipe.update({ id, data });
-      return respond(result, slimRecipe);
-    }),
-  );
+  });
 
-  server.tool(
-    "delete_recipe",
-    "Soft-delete recipes by IDs.",
-    { ids: idsParam("recipe") },
-    deleteHandler("recipe"),
-  );
+  registerEntityCreateTool(server, {
+    name: "create_recipe",
+    description:
+      "Create a recipe from structured input (sections with ingredient IDs and instructions).",
+    inputSchema: mcpRecipeCreateInput,
+    outputSchema: recipeMcpOut,
+    slim: slimRecipe,
+    annotations: WRITE_CLOSED,
+    create: (caller, params) => caller.recipe.create(params),
+  });
 
-  server.tool(
-    "list_cookbooks",
-    "List cookbooks (recipe sources) with the number of recipes from each.",
-    {},
-    withErrorHandling(async (_params, extra) => {
-      const caller = getCaller(extra);
+  registerEntityUpdateTool(server, {
+    name: "update_recipe",
+    description: "Update a recipe's fields. Only provided fields are changed.",
+    inputSchema: mcpRecipeUpdateInput,
+    outputSchema: recipeMcpOut,
+    slim: slimRecipe,
+    router: "recipe",
+    annotations: WRITE_CLOSED,
+  });
+
+  registerEntityDeleteTool(server, {
+    name: "delete_recipe",
+    description: "Soft-delete recipes by IDs.",
+    router: "recipe",
+    entityLabel: "recipe",
+    annotations: WRITE_DESTRUCTIVE_CLOSED,
+  });
+
+  registerRouterTool(server, {
+    name: "list_cookbooks",
+    description:
+      "List cookbooks (recipe sources) with the number of recipes from each.",
+    outputSchema: cookbookSummariesMcpOut,
+    annotations: READ_ONLY_CLOSED,
+    call: async (caller) => {
       const result = await caller.recipe.listCookbooks();
-      return json(result);
-    }),
-  );
+      return { items: result };
+    },
+  });
 
-  server.tool(
-    "get_recipe_tags",
-    "List all distinct recipe tags in use.",
-    {},
-    withErrorHandling(async (_params, extra) => {
-      const caller = getCaller(extra);
+  registerRouterTool(server, {
+    name: "get_recipe_tags",
+    description: "List all distinct recipe tags in use.",
+    outputSchema: recipeTagsListOut,
+    annotations: READ_ONLY_CLOSED,
+    call: async (caller) => {
       const result = await caller.recipe.getAllTags();
-      return json(result);
-    }),
-  );
+      return { items: result };
+    },
+  });
 
-  server.tool(
-    "recompute_recipe_totals",
-    "Recompute every recipe's persisted cost/calorie totals (one-shot backfill / recovery, e.g. after the USDA backend was unavailable). Use explain_recipe_costing first to diagnose WHY a total looks wrong.",
-    {},
-    withErrorHandling(async (_params, extra) => {
-      const caller = getCaller(extra);
-      const result = await caller.recipe.recomputeAll();
-      return json(result);
-    }),
-  );
+  registerRouterTool(server, {
+    name: "recompute_recipe_totals",
+    description:
+      "Recompute every recipe's persisted cost/calorie totals (one-shot backfill / recovery).",
+    outputSchema: recipeRecomputeMcpOut,
+    annotations: WRITE_CLOSED,
+    call: (caller) => caller.recipe.recomputeAll(),
+  });
 
-  server.tool(
-    "explain_recipe_costing",
-    "Explain a recipe's cost/calorie totals: persisted state (totals, computed-at, stale?), a fresh compute with per-ingredient diagnostics (usage classification, fired consumption rule, exact per-measure errors, unit-graph conversion paths), named USDA misses, and persisted-vs-computed drift. Read-only. Pair with recompute_recipe_totals to heal.",
-    { id: z.string().describe("Recipe ID") },
-    withErrorHandling(async (params, extra) => {
-      const caller = getCaller(extra);
-      const result = await caller.recipe.explainCosting({ id: params.id });
-      return json(result);
-    }),
-  );
+  registerRouterTool(server, {
+    name: "explain_recipe_costing",
+    description:
+      "Explain a recipe's cost/calorie totals with per-ingredient diagnostics.",
+    inputSchema: { id: z.string().describe("Recipe ID") },
+    outputSchema: recipeCostingExplainMcpOut,
+    annotations: READ_ONLY_CLOSED,
+    call: (caller, params) => caller.recipe.explainCosting({ id: params.id }),
+  });
 }

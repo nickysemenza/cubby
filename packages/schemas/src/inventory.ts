@@ -13,16 +13,30 @@ import {
 import { locationOut, locationType } from "./location";
 import { productCategory } from "./product";
 import { duplicateUniqueProductSchema } from "./problems";
+import {
+  createItemsResponseSchema,
+  createPaginatedResponseSchema,
+} from "./pagination";
 import { unitMappingOut } from "./unitmapping";
 
 export { positiveAmount } from "./codec";
 
 // Filters accepted by the inventory list endpoint.
-export const inventoryFiltersSchema = z.object({
-  productNameFilter: z.string().optional(),
-  locationNameFilter: z.string().optional(),
-  locationIdFilter: locationId.optional(),
-});
+export const inventoryFilterFields = {
+  productNameFilter: z
+    .string()
+    .optional()
+    .describe("Filter by product name (substring)"),
+  locationNameFilter: z
+    .string()
+    .optional()
+    .describe("Filter by location name (substring)"),
+  locationIdFilter: locationId
+    .optional()
+    .describe("Filter by exact location ID"),
+};
+
+export const inventoryFiltersSchema = z.object(inventoryFilterFields);
 
 export const inventorySortableFields = [
   "createdAt",
@@ -38,8 +52,11 @@ export type InventorySortField = (typeof inventorySortableFields)[number];
 export const inventoryEntryFields = {
   id: inventoryId,
   // inventory entries do not have a name, just ID
-  amount: amount,
-  valuation: z.number().nullable(), // Precomputed: amount.value * product.price
+  amount: amount.describe("Quantity on hand"),
+  valuation: z
+    .number()
+    .nullable()
+    .describe("Precomputed value: amount × product price"),
   createdAt: z.date(),
   updatedAt: z.date(),
 };
@@ -196,3 +213,36 @@ export const inventoryFindDuplicatesInput = z.object({
 export const inventoryLocationIdsInput = z.object({
   locationIds: z.array(locationId),
 });
+
+const inventoryMcpProductFields = {
+  id: productId,
+  name: z.string(),
+  manufacturer: z.string(),
+  shortcode: productShortcode,
+};
+
+const inventoryMcpLocationFields = {
+  id: locationId,
+  name: z.string(),
+};
+
+/** Slim MCP projection of an inventory list/detail row. */
+export const inventoryMcpOut = z.object({
+  id: inventoryId,
+  amount,
+  valuation: z.number().nullable(),
+  product: z.object(inventoryMcpProductFields).nullable(),
+  location: z.object(inventoryMcpLocationFields).nullable(),
+});
+export type InventoryMcpOut = z.infer<typeof inventoryMcpOut>;
+
+export const inventoryMcpListOut =
+  createPaginatedResponseSchema(inventoryMcpOut);
+export const inventoryMcpBulkMoveOut =
+  createItemsResponseSchema(inventoryMcpOut);
+export const inventoryDuplicateFindOut = createItemsResponseSchema(
+  duplicateUniqueProductSchema,
+);
+
+export const inventoryCreateInput = inventoryCreatePayloadData;
+export const inventoryUpdatePayload = inventoryUpdatePayloadData;

@@ -1,8 +1,9 @@
-import { mcpPaginationParams } from "@cubby/schemas/pagination";
 import {
-  mcpProductCreateInputShape,
-  mcpProductUpdateInputShape,
-  productCategory,
+  mcpProductCreateInput,
+  mcpProductUpdateInput,
+  productFilterFields,
+  productMcpListOut,
+  productMcpOut,
 } from "@cubby/schemas/product";
 import { mcpUnitMappingInput } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
@@ -10,59 +11,57 @@ import { upc } from "@cubby/usda-schemas";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
-  deleteHandler,
-  getByIdHandler,
   getCaller,
   idParam,
-  idsParam,
-  listHandler,
+  READ_ONLY_CLOSED,
+  registerEntityDeleteTool,
+  registerEntityGetTool,
+  registerEntityListTool,
+  registerEntityUpdateTool,
+  registerMcpTool,
   respond,
   slimProduct,
   toUnitMappingInput,
-  updateHandler,
-  withErrorHandling,
+  WRITE_CLOSED,
+  WRITE_DESTRUCTIVE_CLOSED,
+  withIdInput,
 } from "./_shared";
 
+const productCreateMcpInput = mcpProductCreateInput.extend({
+  unitMappings: z.array(mcpUnitMappingInput).optional(),
+}).shape;
+
 export function registerProductTools(server: McpServer) {
-  server.tool(
-    "search_products",
-    "Search products by name, manufacturer, UPC, or category.",
-    {
-      name: z.string().optional().describe("Filter by product name"),
-      manufacturer: z.string().optional().describe("Filter by manufacturer"),
-      upc: z.string().optional().describe("Filter by UPC code"),
-      category: productCategory.optional().describe("Filter by category"),
-      ...mcpPaginationParams,
-    },
-    listHandler("product", slimProduct, {
-      orderBy: "name",
-      buildFilters: (p) => ({
-        nameFilter: p.name,
-        manufacturerFilter: p.manufacturer,
-        upcFilter: p.upc,
-        categoryFilter: p.category,
-      }),
-    }),
-  );
+  registerEntityListTool(server, {
+    name: "search_products",
+    description: "Search products by name, manufacturer, UPC, or category.",
+    router: "product",
+    filterFields: productFilterFields,
+    outputSchema: productMcpListOut,
+    slim: slimProduct,
+    sort: { orderBy: "name" },
+    annotations: READ_ONLY_CLOSED,
+  });
 
-  server.tool(
-    "get_product",
-    "Get a product by ID.",
-    { id: idParam("Product") },
-    getByIdHandler("product", slimProduct),
-  );
+  registerEntityGetTool(server, {
+    name: "get_product",
+    description: "Get a product by ID.",
+    router: "product",
+    idLabel: "Product",
+    outputSchema: productMcpOut,
+    slim: slimProduct,
+    annotations: READ_ONLY_CLOSED,
+  });
 
-  server.tool(
-    "create_product",
-    'Create a new product. Use for items not found via search_products. Pass ingredientId to link it to an ingredient and/or unitMappings (e.g. "8 oz = $10") so recipes can cost it; useful for specialty items with no USDA match.',
-    {
-      ...mcpProductCreateInputShape,
-    },
-    withErrorHandling(async (params, extra) => {
+  registerMcpTool(server, {
+    name: "create_product",
+    description:
+      'Create a new product. Use for items not found via search_products. Pass ingredientId to link it to an ingredient and/or unitMappings (e.g. "8 oz = $10") so recipes can cost it; useful for specialty items with no USDA match.',
+    inputSchema: productCreateMcpInput,
+    outputSchema: productMcpOut,
+    annotations: WRITE_CLOSED,
+    handler: async (params, extra) => {
       const caller = getCaller(extra);
-      // The quick path (name/price/upc only) preserves the original behavior.
-      // Linking an ingredient or attaching mappings needs the full create input,
-      // which quickCreate doesn't accept; route through product.create instead.
       const unitMappings = (
         (params.unitMappings as Array<z.infer<typeof mcpUnitMappingInput>>) ??
         []
@@ -89,24 +88,25 @@ export function registerProductTools(server: McpServer) {
         unitMappings,
       });
       return respond(result, slimProduct);
-    }),
-  );
-
-  server.tool(
-    "update_product",
-    "Update a product's fields. To set fdc_id, get the id from find_usda_food/search_usda_foods first. externalIds replaces the full set when provided.",
-    {
-      id: idParam("Product"),
-      // unitMappings are managed by update_product_unit_mappings, not here.
-      ...mcpProductUpdateInputShape,
     },
-    updateHandler("product", slimProduct),
-  );
+  });
 
-  server.tool(
-    "update_product_unit_mappings",
-    'Replace the unit mappings on a product (conversion/price edges like "8 oz = $10"). Pass the COMPLETE desired set; existing mappings not in the list are removed. Money unit is "dollar"; nutrient edges (b unit "kcal", "g protein") also work.',
-    {
+  registerEntityUpdateTool(server, {
+    name: "update_product",
+    description:
+      "Update a product's fields. To set fdc_id, get the id from find_usda_food/search_usda_foods first. externalIds replaces the full set when provided.",
+    inputSchema: withIdInput("Product", mcpProductUpdateInput.shape),
+    outputSchema: productMcpOut,
+    slim: slimProduct,
+    router: "product",
+    annotations: WRITE_CLOSED,
+  });
+
+  registerMcpTool(server, {
+    name: "update_product_unit_mappings",
+    description:
+      'Replace the unit mappings on a product (conversion/price edges like "8 oz = $10"). Pass the COMPLETE desired set; existing mappings not in the list are removed. Money unit is "dollar"; nutrient edges (b unit "kcal", "g protein") also work.',
+    inputSchema: {
       id: idParam("Product"),
       unitMappings: z
         .array(mcpUnitMappingInput)
@@ -114,7 +114,9 @@ export function registerProductTools(server: McpServer) {
           'The complete set of mappings to keep, e.g. [{ a: { value: 8, unit: "oz" }, b: { value: 10, unit: "dollar" } }]. An empty array clears all mappings.',
         ),
     },
-    withErrorHandling(async (params, extra) => {
+    outputSchema: productMcpOut,
+    annotations: WRITE_CLOSED,
+    handler: async (params, extra) => {
       const caller = getCaller(extra);
       const unitMappings = (
         params.unitMappings as Array<z.infer<typeof mcpUnitMappingInput>>
@@ -124,33 +126,38 @@ export function registerProductTools(server: McpServer) {
         data: { unitMappings },
       });
       return respond(result, slimProduct);
-    }),
-  );
+    },
+  });
 
-  server.tool(
-    "delete_products",
-    "Soft-delete products by IDs. Fails if products have inventory entries.",
-    { ids: idsParam("product") },
-    deleteHandler("product"),
-  );
+  registerEntityDeleteTool(server, {
+    name: "delete_products",
+    description:
+      "Soft-delete products by IDs. Fails if products have inventory entries.",
+    router: "product",
+    entityLabel: "product",
+    annotations: WRITE_DESTRUCTIVE_CLOSED,
+  });
 
-  server.tool(
-    "find_product_by_upc",
-    "Find or create a product by UPC barcode. Checks local DB, then USDA, then UPC lookup service.",
-    {
+  registerMcpTool(server, {
+    name: "find_product_by_upc",
+    description:
+      "Find or create a product by UPC barcode. Checks local DB, then USDA, then UPC lookup service.",
+    inputSchema: {
       upc,
       defaultName: z
         .string()
         .optional()
         .describe("Fallback name if not found in any database"),
     },
-    withErrorHandling(async (params, extra) => {
+    outputSchema: productMcpOut,
+    annotations: WRITE_CLOSED,
+    handler: async (params, extra) => {
       const caller = getCaller(extra);
       const result = await caller.product.findOrCreateByUPC({
         upc: params.upc,
         defaultName: params.defaultName,
       });
       return respond(result, slimProduct);
-    }),
-  );
+    },
+  });
 }

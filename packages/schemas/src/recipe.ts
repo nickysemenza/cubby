@@ -10,6 +10,10 @@ import {
 } from "./identifiers";
 import { imageOut } from "./image";
 import {
+  createItemsResponseSchema,
+  createPaginatedResponseSchema,
+} from "./pagination";
+import {
   recipeMeta,
   recipeNotes,
   recipeServings,
@@ -238,12 +242,18 @@ export const recipeSectionInput = z.object({
 // Descriptions live at the field level here (rather than on the shared building
 // blocks, which are also reused by the output/form layers) so they reliably
 // Filters accepted by the recipe list endpoint.
-export const recipeFiltersSchema = z.object({
+export const recipeFilterFields = {
   nameFilter: z.string().optional(),
   tagFilters: z.array(z.string()).optional(),
-  // Scope the list to one cookbook by FK id (cookbook detail page).
   cookbookId: cookbookId.optional(),
-});
+};
+
+export const recipeFiltersSchema = z.object(recipeFilterFields);
+
+/** MCP list_recipes filters — name substring only. */
+export const recipeListFilterFields = {
+  nameFilter: recipeFilterFields.nameFilter,
+};
 
 // Descriptions surface to MCP clients through the explicit `mcpRecipe*Shape`
 // exports below; keep create-required fields and update-optional fields separate.
@@ -331,7 +341,7 @@ export const recipeIdInput = z.object({
 export type RecipeCreateInput = z.infer<typeof recipeCreateInput>;
 export type RecipeUpdateInput = z.infer<typeof recipeUpdateInput>;
 
-export const mcpRecipeCreateInputShape = {
+export const mcpRecipeCreateInput = z.object({
   name: requiredName("Recipe name").describe("Recipe name"),
   meta: recipeMeta.describe("Source metadata, e.g. { url } of the web source"),
   yield: recipeYieldSchema
@@ -352,10 +362,9 @@ export const mcpRecipeCreateInputShape = {
     .describe(
       "Recipe sections, each with ingredients (by ingredient/recipe id) and instructions",
     ),
-  pendingImageIds: z.array(z.uuid()).optional(),
-};
+});
 
-export const mcpRecipeUpdateInputShape = {
+export const mcpRecipeUpdateInput = z.object({
   id: recipeId.describe("Recipe ID"),
   name: requiredName("Recipe name").describe("Recipe name").optional(),
   meta: recipeMeta
@@ -380,6 +389,52 @@ export const mcpRecipeUpdateInputShape = {
     .describe(
       "Recipe sections, each with ingredients (by ingredient/recipe id) and instructions",
     ),
-  pendingImageIds: z.array(z.uuid()).optional(),
-  removeImageIds: z.array(z.uuid()).optional(),
+});
+
+/** Slim MCP projection of a recipe list row. */
+export const recipeMcpOut = z.object({
+  id: recipeId,
+  name: z.string(),
+  yield: recipeYieldSchema.nullish(),
+  servings: recipeServings.nullish(),
+  tags: recipeTags.nullish(),
+  shortcode: normalizedRecipeShortcode.nullish(),
+});
+export type RecipeMcpOut = z.infer<typeof recipeMcpOut>;
+
+export const recipeMcpListOut = createPaginatedResponseSchema(recipeMcpOut);
+
+export const recipeUsageMcpOut = z.object({
+  lineId: z.uuid(),
+  sectionName: z.string().nullable(),
+  amounts: z.array(amount),
+  rawLine: z.string().nullable(),
+  modifier: z.string().nullable(),
+});
+
+const recipeWithUsagesMcpFields = {
+  id: recipeId,
+  name: z.string(),
+  yield: recipeYieldSchema.nullish(),
+  servings: recipeServings.nullish(),
+  tags: recipeTags.nullish(),
+  shortcode: normalizedRecipeShortcode.nullish(),
+  usages: z.array(recipeUsageMcpOut),
 };
+
+export const recipesUsingIngredientOut = z.object({
+  ingredientId: ingredientId,
+  count: z.number().int().nonnegative(),
+  recipes: z.array(z.object(recipeWithUsagesMcpFields)),
+});
+
+export const recipeIdOut = z.object({ id: recipeId });
+
+export const recipeTagsListOut = createItemsResponseSchema(z.string());
+
+export const cookbookSummariesMcpOut =
+  createItemsResponseSchema(cookbookSummary);
+
+export const recipeRecomputeMcpOut = z.object({
+  processed: z.number().int().nonnegative(),
+});

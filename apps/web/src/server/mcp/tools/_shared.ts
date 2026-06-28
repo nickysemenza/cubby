@@ -1,27 +1,37 @@
-import type { IngredientOut } from "@cubby/schemas/ingredient";
-import type { LocationOut } from "@cubby/schemas/location";
+import { deletedCountOut } from "@cubby/schemas/common";
 import {
-  type McpIngredientOut,
-  type McpInventoryLocationOut,
-  type McpInventoryOut,
-  type McpInventoryProductOut,
-  type McpProductOut,
-  type McpProductUnitMappingOut,
-  type McpRecipeOut,
-  type McpUsdaFoodOut,
-  mcpIngredientOut,
-  mcpInventoryOut,
-  mcpLocationOut,
-  mcpMealOut,
-  mcpProductOut,
-  mcpRecipeOut,
-  mcpUsdaFoodOut,
-} from "@cubby/schemas/mcp";
-import type { MealOut } from "@cubby/schemas/meal";
-import type { ProductTopLevelOut } from "@cubby/schemas/product";
-import type { RecipeTopLevel } from "@cubby/schemas/recipe";
+  type IngredientMcpOut,
+  type IngredientOut,
+  ingredientMcpOut,
+} from "@cubby/schemas/ingredient";
+import {
+  type InventoryMcpOut,
+  inventoryMcpOut,
+} from "@cubby/schemas/inventory";
+import { type LocationOut, locationMcpOut } from "@cubby/schemas/location";
+import { type McpUsdaFoodOut, mcpUsdaFoodOut } from "@cubby/schemas/mcp";
+import { type MealOut, mealMcpOut } from "@cubby/schemas/meal";
+import { mcpListInputShape } from "@cubby/schemas/pagination";
+import {
+  type ProductMcpOut,
+  type ProductTopLevelOut,
+  productMcpOut,
+} from "@cubby/schemas/product";
+import {
+  type RecipeMcpOut,
+  type RecipeTopLevel,
+  recipeMcpOut,
+} from "@cubby/schemas/recipe";
 import type { mcpUnitMappingInput } from "@cubby/schemas/unitmapping";
 import type { foodSummary } from "@cubby/usda-schemas";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { normalizeObjectSchema } from "@modelcontextprotocol/sdk/server/zod-compat.js";
+import { toJsonSchemaCompat } from "@modelcontextprotocol/sdk/server/zod-json-schema-compat.js";
+import type {
+  CallToolResult,
+  ToolAnnotations,
+} from "@modelcontextprotocol/sdk/types.js";
+import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { TRPCError } from "@trpc/server";
 import { omitBy } from "es-toolkit";
 import { z } from "zod";
@@ -30,46 +40,246 @@ import { z } from "zod";
  * Shared MCP tool-handler scaffolding.
  *
  * Houses the cross-family primitives the per-entity `*.tools.ts` files build on:
- * the tRPC caller accessor, the error wrapper, JSON response helpers, the slim
- * output projections, and the CRUD handler factories. `server.ts` keeps only the
- * server lifecycle + tool registration wiring.
+ * the tRPC caller accessor, registerMcpTool, error wrapper, structured response
+ * helpers, the slim output projections, and the CRUD handler factories.
  */
 
 // biome-ignore lint/suspicious/noExplicitAny: server-side tRPC caller type
 type Caller = any;
 
-export function getCaller(extra: {
-  authInfo?: { extra?: Record<string, unknown> };
-}): Caller {
-  return extra.authInfo?.extra?.caller;
+type ToolExtra = { authInfo?: { extra?: Record<string, unknown> } };
+
+type ZodSchemaLike = z.ZodType | Record<string, z.ZodType>;
+
+type McpToolHandler = (
+  params: Record<string, unknown>,
+  extra: ToolExtra,
+) => Promise<unknown | CallToolResult>;
+
+type RegisterMcpToolConfig = {
+  name: string;
+  description: string;
+  title?: string;
+  inputSchema?: ZodSchemaLike;
+  outputSchema: z.ZodType;
+  annotations: ToolAnnotations;
+  handler: McpToolHandler;
+};
+
+type SdkRegisteredTool = {
+  title?: string;
+  description?: string;
+  inputSchema?: z.ZodType;
+  outputSchema?: z.ZodType;
+  annotations?: ToolAnnotations;
+  enabled: boolean;
+};
+
+type McpServerInternals = {
+  _registeredTools: Record<string, SdkRegisteredTool>;
+};
+
+/** Reads McpServer._registeredTools — private SDK field; covered by listMcpToolCatalog tests. */
+function getRegisteredTools(
+  server: McpServer,
+): Record<string, SdkRegisteredTool> {
+  return (server as unknown as McpServerInternals)._registeredTools;
 }
 
-/** Wrap a tool handler with error handling that returns tRPC/Zod error details */
-export function withErrorHandling(
-  fn: (
-    params: Record<string, unknown>,
-    extra: { authInfo?: { extra?: Record<string, unknown> } },
-  ) => Promise<{ content: { type: "text"; text: string }[] }>,
-) {
-  return async (
-    params: Record<string, unknown>,
-    extra: { authInfo?: { extra?: Record<string, unknown> } },
-  ) => {
-    try {
-      return await fn(params, extra);
-    } catch (error) {
-      return jsonError(formatToolError(error));
+const EMPTY_OBJECT_JSON_SCHEMA = { type: "object", properties: {} };
+
+/** Recursively delete `mock` keys from JSON Schema objects exposed to MCP clients. */
+export function stripMockFromJsonSchema(
+  schema: Record<string, unknown>,
+): Record<string, unknown> {
+  if (Array.isArray(schema)) {
+    return schema.map((item) =>
+      item && typeof item === "object" && !Array.isArray(item)
+        ? stripMockFromJsonSchema(item as Record<string, unknown>)
+        : item,
+    ) as unknown as Record<string, unknown>;
+  }
+
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(schema)) {
+    if (key === "mock") continue;
+    if (value && typeof value === "object") {
+      result[key] = Array.isArray(value)
+        ? value.map((item) =>
+            item && typeof item === "object" && !Array.isArray(item)
+              ? stripMockFromJsonSchema(item as Record<string, unknown>)
+              : item,
+          )
+        : stripMockFromJsonSchema(value as Record<string, unknown>);
+    } else {
+      result[key] = value;
     }
+  }
+  return result;
+}
+
+/** @internal Test helper for asserting SDK registration metadata. */
+export function getRegisteredTool(
+  server: McpServer,
+  name: string,
+): SdkRegisteredTool | undefined {
+  return getRegisteredTools(server)[name];
+}
+
+/** Explicit annotation bundles — each tool must reference one at registration time. */
+export const READ_ONLY_CLOSED: ToolAnnotations = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false,
+};
+
+export const READ_ONLY_OPEN: ToolAnnotations = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: true,
+};
+
+export const WRITE_CLOSED: ToolAnnotations = {
+  readOnlyHint: false,
+  destructiveHint: false,
+  idempotentHint: false,
+  openWorldHint: false,
+};
+
+export const WRITE_DESTRUCTIVE_CLOSED: ToolAnnotations = {
+  readOnlyHint: false,
+  destructiveHint: true,
+  idempotentHint: false,
+  openWorldHint: false,
+};
+
+function structuredSuccess(
+  data: unknown,
+  outputSchema: z.ZodType,
+): CallToolResult {
+  const parsed = outputSchema.parse(data);
+  return {
+    structuredContent: parsed as Record<string, unknown>,
+    content: [{ type: "text", text: JSON.stringify(parsed, null, 2) }],
   };
 }
 
-/**
- * Render an error thrown by a tool handler into a single message string.
- *
- * `createAppError` returns a `TRPCError` carrying `{ code, message, cause:
- * { reason } }`, so an AppError's `code` (and its `reason`, when present) is
- * surfaced to the MCP client — e.g. `NOT_FOUND: Recipe not found (recipeMissing)`.
- */
+/** Like structuredSuccess but marks the MCP envelope as isError (e.g. total batch failure). */
+export function structuredSuccessWithError(
+  data: unknown,
+  outputSchema: z.ZodType,
+): CallToolResult {
+  return { ...structuredSuccess(data, outputSchema), isError: true };
+}
+
+export function structuredError(text: string) {
+  return {
+    content: [{ type: "text" as const, text }],
+    isError: true as const,
+  };
+}
+
+function safeToJsonSchema(
+  obj: ReturnType<typeof normalizeObjectSchema>,
+  pipeStrategy: "input" | "output",
+) {
+  if (!obj) return EMPTY_OBJECT_JSON_SCHEMA;
+  try {
+    return stripMockFromJsonSchema(
+      toJsonSchemaCompat(obj, {
+        strictUnions: true,
+        pipeStrategy,
+      }) as Record<string, unknown>,
+    );
+  } catch {
+    return { type: "object", additionalProperties: true };
+  }
+}
+
+/** Install a ListTools handler that strips mock metadata from advertised schemas. */
+export function installMockStrippedListToolsHandler(server: McpServer) {
+  // server.server is the underlying SDK Server — private but stable for ListTools override.
+  const registeredTools = getRegisteredTools(server);
+
+  server.server.setRequestHandler(ListToolsRequestSchema, () => ({
+    tools: Object.entries(registeredTools)
+      .filter(([, tool]) => tool.enabled)
+      .map(([name, tool]) => {
+        const definition: Record<string, unknown> = {
+          name,
+          title: tool.title,
+          description: tool.description,
+          inputSchema: safeToJsonSchema(
+            tool.inputSchema
+              ? normalizeObjectSchema(tool.inputSchema)
+              : undefined,
+            "input",
+          ),
+          annotations: tool.annotations,
+        };
+        if (tool.outputSchema) {
+          definition.outputSchema = safeToJsonSchema(
+            normalizeObjectSchema(tool.outputSchema),
+            "output",
+          );
+        }
+        return definition;
+      }),
+  }));
+}
+
+function isCallToolResult(value: unknown): value is CallToolResult {
+  if (!value || typeof value !== "object" || !("content" in value)) {
+    return false;
+  }
+  const content = (value as CallToolResult).content;
+  if (!Array.isArray(content)) return false;
+  return content.every(
+    (item) =>
+      !!item &&
+      typeof item === "object" &&
+      "type" in item &&
+      typeof (item as { type: unknown }).type === "string",
+  );
+}
+
+export function registerMcpTool(
+  server: McpServer,
+  config: RegisterMcpToolConfig,
+) {
+  server.registerTool(
+    config.name,
+    {
+      title: config.title,
+      description: config.description,
+      inputSchema: config.inputSchema,
+      outputSchema: config.outputSchema,
+      annotations: config.annotations,
+    },
+    async (params: Record<string, unknown>, extra: ToolExtra) => {
+      try {
+        const result = await config.handler(
+          (params ?? {}) as Record<string, unknown>,
+          extra as ToolExtra,
+        );
+        if (isCallToolResult(result)) {
+          return result;
+        }
+        return structuredSuccess(result, config.outputSchema);
+      } catch (error) {
+        return structuredError(formatToolError(error));
+      }
+    },
+  );
+}
+
+export function getCaller(extra: ToolExtra): Caller {
+  return extra.authInfo?.extra?.caller;
+}
+
+/** Render an error thrown by a tool handler into a single message string. */
 export function formatToolError(error: unknown): string {
   if (error instanceof TRPCError) {
     const reason = (error.cause as { reason?: string })?.reason;
@@ -81,33 +291,15 @@ export function formatToolError(error: unknown): string {
   return String(error);
 }
 
-/** JSON response helper — pretty-printed for readability in MCP clients */
-export function json(data: unknown) {
-  return {
-    content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
-  };
-}
-
-/** Error response helper — the `isError` counterpart to {@link json}. */
-export function jsonError(text: string) {
-  return {
-    content: [{ type: "text" as const, text }],
-    isError: true,
-  };
-}
-
-/** Normalize an MCP unit mapping to the productCreateInput shape (source: string|null). */
 export function toUnitMappingInput(m: z.infer<typeof mcpUnitMappingInput>) {
   return { a: m.a, b: m.b, source: m.source ?? null };
 }
 
-/** Case-insensitive substring match for nullable string fields */
 export function matchesFilter(value: string | null, filter: unknown): boolean {
   if (typeof filter !== "string") return true;
   return value?.toLowerCase().includes(filter.toLowerCase()) ?? false;
 }
 
-/** Case-insensitive substring match against a string array */
 export function matchesArrayFilter(values: string[], filter: unknown): boolean {
   if (typeof filter !== "string") return true;
   const lower = filter.toLowerCase();
@@ -115,29 +307,16 @@ export function matchesArrayFilter(values: string[], filter: unknown): boolean {
 }
 
 export function notionUnavailable() {
-  return jsonError(
+  return structuredError(
     "Notion integration is not configured. Set the NOTION_API_KEY environment variable.",
   );
 }
 
 // ---------------------------------------------------------------------------
 // Slim output projections
-//
-// Each read tool returns a compact projection of a router's rich output. The
-// shapes are named schema exports from `@cubby/schemas/mcp`, so the
-// MCP tool surface no longer hand-rolls response contracts in the app. The
-// functions below only map list- or detail-shaped router rows onto those
-// contracts. Return types are annotated with the schema-inferred exports so
-// a canonical field rename/removal surfaces here
-// at typecheck. The same projection runs over both list rows and detail rows,
-// which carry different extra fields — hence the permissive row input types.
 // ---------------------------------------------------------------------------
 
-export type Row = Record<string, unknown>;
-// Each slim projection takes a loose `Row` and casts once to its typed row shape
-// internally (the router results are dynamically shaped via a string routerName),
-// then pins its OUTPUT to the canonical schema via a `z.infer<typeof slim*Out>`
-// return annotation.
+type Row = Record<string, unknown>;
 type Slim = (row: Row) => unknown;
 const slimSchemas = new WeakMap<Slim, z.ZodType>();
 const identity: Slim = (row) => row;
@@ -151,7 +330,7 @@ type LocationRow = LocationOut & {
   parent?: Pick<LocationOut, "id" | "name"> | null;
   children?: Array<Pick<LocationOut, "id" | "name">>;
 };
-export const slimLocation = defineSlim(mcpLocationOut, (locRow: Row) => {
+export const slimLocation = defineSlim(locationMcpOut, (locRow: Row) => {
   const loc = locRow as LocationRow;
   return {
     id: loc.id,
@@ -164,11 +343,16 @@ export const slimLocation = defineSlim(mcpLocationOut, (locRow: Row) => {
   };
 });
 
-type InventoryRow = Pick<McpInventoryOut, "id" | "amount" | "valuation"> & {
-  product?: McpInventoryProductOut | null;
-  location?: McpInventoryLocationOut | null;
+type InventoryRow = Pick<InventoryMcpOut, "id" | "amount" | "valuation"> & {
+  product?: {
+    id: string;
+    name: string;
+    manufacturer: string;
+    shortcode: string | null;
+  } | null;
+  location?: { id: string; name: string } | null;
 };
-export const slimInventory = defineSlim(mcpInventoryOut, (entryRow: Row) => {
+export const slimInventory = defineSlim(inventoryMcpOut, (entryRow: Row) => {
   const entry = entryRow as InventoryRow;
   return {
     id: entry.id,
@@ -190,11 +374,15 @@ export const slimInventory = defineSlim(mcpInventoryOut, (entryRow: Row) => {
 
 type ProductRow = ProductTopLevelOut & {
   food?: { fdc_id?: number | null } | null;
-  ingredient?: { id?: McpProductOut["ingredientId"] } | null;
-  ingredientId?: McpProductOut["ingredientId"];
-  unitMappings?: McpProductUnitMappingOut[];
+  ingredient?: { id?: ProductMcpOut["ingredientId"] } | null;
+  ingredientId?: ProductMcpOut["ingredientId"];
+  unitMappings?: Array<{
+    a: ProductMcpOut["unitMappings"][number]["a"];
+    b: ProductMcpOut["unitMappings"][number]["b"];
+    source: string | null;
+  }>;
 };
-export const slimProduct = defineSlim(mcpProductOut, (pRow: Row) => {
+export const slimProduct = defineSlim(productMcpOut, (pRow: Row) => {
   const p = pRow as ProductRow;
   return {
     id: p.id,
@@ -219,9 +407,9 @@ export const slimProduct = defineSlim(mcpProductOut, (pRow: Row) => {
 });
 
 type RecipeRow = RecipeTopLevel & {
-  shortcode?: McpRecipeOut["shortcode"];
+  shortcode?: RecipeMcpOut["shortcode"];
 };
-export const slimRecipe = defineSlim(mcpRecipeOut, (rRow: Row) => {
+export const slimRecipe = defineSlim(recipeMcpOut, (rRow: Row) => {
   const r = rRow as RecipeRow;
   return {
     id: r.id,
@@ -234,25 +422,26 @@ export const slimRecipe = defineSlim(mcpRecipeOut, (rRow: Row) => {
 });
 
 type IngredientRow = IngredientOut & {
-  product?: McpIngredientOut["products"];
+  product?: IngredientMcpOut["products"];
   appearsInRecipes?: unknown[];
   food?: { fdc_id?: number | null } | null;
 };
-export const slimIngredient = defineSlim(mcpIngredientOut, (iRow: Row) => {
+export const slimIngredient = defineSlim(ingredientMcpOut, (iRow: Row) => {
   const i = iRow as IngredientRow;
   return {
     id: i.id,
     name: i.name,
     aliases: i.aliases,
-    products: (i.product ?? []).map((p) => ({ id: p.id, name: p.name })),
+    products: (i.product ?? []).map((p: { id: string; name: string }) => ({
+      id: p.id,
+      name: p.name,
+    })),
     recipeCount: (i.appearsInRecipes ?? []).length,
     usdaFdcId: i.food?.fdc_id ?? null,
   };
 });
 
-/** Strip a meal to its essentials and summarize each planned recipe. The per-recipe
- * `id` is the mealRecipe id — pass it to update_meal_recipe / remove_meal_recipe. */
-export const slimMeal = defineSlim(mcpMealOut, (mRow: Row) => {
+export const slimMeal = defineSlim(mealMcpOut, (mRow: Row) => {
   const m = mRow as MealOut;
   return {
     id: m.id,
@@ -273,8 +462,6 @@ export const slimMeal = defineSlim(mcpMealOut, (mRow: Row) => {
 type UsdaFoodRow = z.infer<typeof foodSummary> & {
   linkedProducts?: McpUsdaFoodOut["linkedProducts"];
 };
-/** Project a USDA food: description/link keys, full nutrition (per-100 + named
- * summary), the portion table, and branded serving info. */
 export const slimUsdaFood = defineSlim(mcpUsdaFoodOut, (fRow: Row) => {
   const f = fRow as UsdaFoodRow;
   return {
@@ -297,14 +484,46 @@ export const slimUsdaFood = defineSlim(mcpUsdaFoodOut, (fRow: Row) => {
   };
 });
 
-// ---------------------------------------------------------------------------
-// CRUD tool-handler factories
-//
-// Most entity tools share the same get-by-id / list / update / delete shapes,
-// differing only in which router they call and how rows are slimmed. These
-// factories capture that body so each server.tool() carries just its name,
-// description, and input schema.
-// ---------------------------------------------------------------------------
+function parseResponse(schema: z.ZodType | undefined, value: unknown) {
+  return schema ? schema.parse(value) : value;
+}
+
+export function respond<T>(
+  schema: z.ZodType<T>,
+  result: unknown,
+  slim?: (row: Row) => T,
+): T;
+export function respond(result: unknown, slim?: Slim): unknown;
+export function respond(
+  first: unknown,
+  second?: unknown,
+  third?: Slim,
+): unknown {
+  const schema = isSchema(first) ? first : undefined;
+  const result = schema ? second : first;
+  const slim = schema ? (third ?? identity) : ((second as Slim) ?? identity);
+  return parseResponse(schema ?? slimSchemas.get(slim), slim(result as Row));
+}
+
+export function respondList<T>(
+  schema: z.ZodType<T>,
+  result: unknown,
+  slim?: (row: Row) => T,
+): { items: T[] };
+export function respondList(result: unknown, slim?: Slim): { items: unknown[] };
+export function respondList(
+  first: unknown,
+  second?: unknown,
+  third?: Slim,
+): { items: unknown[] } {
+  const schema = isSchema(first) ? first : undefined;
+  const result = schema ? second : first;
+  const slim = schema ? (third ?? identity) : ((second as Slim) ?? identity);
+  const entrySchema = schema ?? slimSchemas.get(slim) ?? z.unknown();
+  return {
+    items: z.array(entrySchema).parse((result as Row[]).map(slim)),
+  };
+}
 
 function isSchema(value: unknown): value is z.ZodType {
   return (
@@ -315,105 +534,56 @@ function isSchema(value: unknown): value is z.ZodType {
   );
 }
 
-function parseResponse(schema: z.ZodType | undefined, value: unknown) {
-  return schema ? schema.parse(value) : value;
-}
-
-/** The success tail every create/action tool shares: cast the tRPC result to a
- * Row and slim it into a JSON response. Mirrors the get/update/list factories. */
-export function respond<T>(
-  schema: z.ZodType<T>,
-  result: unknown,
-  slim?: (row: Row) => T,
-): ReturnType<typeof json>;
-export function respond(result: unknown, slim?: Slim): ReturnType<typeof json>;
-export function respond(
-  first: unknown,
-  second?: unknown,
-  third?: Slim,
-): ReturnType<typeof json> {
-  const schema = isSchema(first) ? first : undefined;
-  const result = schema ? second : first;
-  const slim = schema ? (third ?? identity) : ((second as Slim) ?? identity);
-  return json(
-    parseResponse(schema ?? slimSchemas.get(slim), slim(result as Row)),
-  );
-}
-
-/** Like {@link respond} for tools that return an array of rows. */
-export function respondList<T>(
-  schema: z.ZodType<T>,
-  result: unknown,
-  slim?: (row: Row) => T,
-): ReturnType<typeof json>;
-export function respondList(
-  result: unknown,
-  slim?: Slim,
-): ReturnType<typeof json>;
-export function respondList(
-  first: unknown,
-  second?: unknown,
-  third?: Slim,
-): ReturnType<typeof json> {
-  const schema = isSchema(first) ? first : undefined;
-  const result = schema ? second : first;
-  const slim = schema ? (third ?? identity) : ((second as Slim) ?? identity);
-  return json(
-    z
-      .array(schema ?? slimSchemas.get(slim) ?? z.unknown())
-      .parse((result as Row[]).map(slim)),
-  );
-}
-
-/** Schema for a single `{ id }` input field. */
 export const idParam = (label: string) => z.string().describe(`${label} ID`);
-/** Schema for a `{ ids }` input field on delete tools. */
-export const idsParam = (label: string) =>
+const idsParam = (label: string) =>
   z.array(z.string()).describe(`Array of ${label} IDs to delete`);
 
-/** Handler for `get_*` tools: fetch one row by id, then slim it. */
-export function getByIdHandler(routerName: string, slim: Slim = identity) {
-  return withErrorHandling(async (params, extra) => {
+function getByIdHandler(routerName: string, slim: Slim = identity) {
+  return async (params: Record<string, unknown>, extra: ToolExtra) => {
     const result = await getCaller(extra)[routerName].getByID({
       id: params.id,
     });
     return respond(result, slim);
-  });
+  };
 }
 
-/** Handler for `delete_*` tools: soft-delete by ids, report the count. */
-export function deleteHandler(routerName: string) {
-  return withErrorHandling(async (params, extra) => {
+function deleteHandler(routerName: string) {
+  return async (params: Record<string, unknown>, extra: ToolExtra) => {
     const ids = params.ids as string[];
     await getCaller(extra)[routerName].delete({ ids });
-    return json({ deleted: ids.length });
-  });
+    return { deleted: ids.length };
+  };
 }
 
-/** Handler for `update_*` tools: drop undefined fields, update, then slim. */
-export function updateHandler(routerName: string, slim: Slim = identity) {
-  return withErrorHandling(async (params, extra) => {
+function updateHandler(routerName: string, slim: Slim = identity) {
+  return async (params: Record<string, unknown>, extra: ToolExtra) => {
     const { id, ...rest } = params;
     const data = omitBy(rest, (v) => v === undefined);
     const result = await getCaller(extra)[routerName].update({ id, data });
     return respond(result, slim);
-  });
+  };
 }
 
-/** Handler for paginated `list_*`/`search_*` tools returning `{ meta, items }`. */
-export function listHandler(
+function listHandler(
   routerName: string,
   slim: Slim,
   config: {
     orderBy: string;
     direction?: "asc" | "desc";
-    buildFilters: (params: Row) => Record<string, unknown>;
+    buildFilters?: (params: Row) => Record<string, unknown>;
+    filterFields?: Record<string, z.ZodType>;
     defaultPageSize?: number;
   },
 ) {
-  return withErrorHandling(async (params, extra) => {
+  const resolveFilters =
+    config.buildFilters ??
+    (config.filterFields
+      ? (params: Row) => pickSchemaFilters(params, config.filterFields!)
+      : () => ({}));
+
+  return async (params: Record<string, unknown>, extra: ToolExtra) => {
     const result = await getCaller(extra)[routerName].list({
-      filters: config.buildFilters(params),
+      filters: resolveFilters(params),
       sort: { orderBy: config.orderBy, direction: config.direction ?? "asc" },
       pagination: {
         pageIndex: (params.pageIndex as number) ?? 0,
@@ -421,11 +591,184 @@ export function listHandler(
       },
     });
     const schema = slimSchemas.get(slim);
-    return json({
+    return {
       meta: result.meta,
       items: z
         .array(schema ?? z.unknown())
         .parse((result.items as Row[]).map(slim)),
-    });
+    };
+  };
+}
+
+/** Pick filter fields present in params using a filter field map's keys. */
+function pickSchemaFilters(
+  params: Row,
+  filterFields: Record<string, z.ZodType>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const key of Object.keys(filterFields)) {
+    if (params[key] !== undefined) {
+      out[key] = params[key];
+    }
+  }
+  return out;
+}
+
+export function withIdInput(
+  idLabel: string,
+  dataShape: Record<string, z.ZodType>,
+) {
+  return { id: idParam(idLabel), ...dataShape };
+}
+
+type EntityListToolConfig = {
+  name: string;
+  description: string;
+  router: string;
+  filterFields: Record<string, z.ZodType>;
+  outputSchema: z.ZodType;
+  slim: Slim;
+  sort: { orderBy: string; direction?: "asc" | "desc" };
+  annotations: ToolAnnotations;
+  defaultPageSize?: number;
+  maxPageSize?: number;
+  buildFilters?: (params: Row) => Record<string, unknown>;
+};
+
+export function registerEntityListTool(
+  server: McpServer,
+  config: EntityListToolConfig,
+) {
+  const defaultPageSize = config.defaultPageSize ?? 50;
+  registerMcpTool(server, {
+    name: config.name,
+    description: config.description,
+    inputSchema: mcpListInputShape(config.filterFields, {
+      defaultPageSize,
+      maxPageSize: config.maxPageSize,
+    }),
+    outputSchema: config.outputSchema,
+    annotations: config.annotations,
+    handler: listHandler(config.router, config.slim, {
+      orderBy: config.sort.orderBy,
+      direction: config.sort.direction,
+      filterFields: config.buildFilters ? undefined : config.filterFields,
+      buildFilters: config.buildFilters,
+      defaultPageSize,
+    }),
+  });
+}
+
+export function registerEntityGetTool(
+  server: McpServer,
+  config: {
+    name: string;
+    description: string;
+    router: string;
+    idLabel: string;
+    outputSchema: z.ZodType;
+    slim?: Slim;
+    annotations: ToolAnnotations;
+  },
+) {
+  registerMcpTool(server, {
+    name: config.name,
+    description: config.description,
+    inputSchema: { id: idParam(config.idLabel) },
+    outputSchema: config.outputSchema,
+    annotations: config.annotations,
+    handler: getByIdHandler(config.router, config.slim ?? identity),
+  });
+}
+
+export function registerEntityDeleteTool(
+  server: McpServer,
+  config: {
+    name: string;
+    description: string;
+    router: string;
+    entityLabel: string;
+    annotations: ToolAnnotations;
+  },
+) {
+  registerMcpTool(server, {
+    name: config.name,
+    description: config.description,
+    inputSchema: { ids: idsParam(config.entityLabel) },
+    outputSchema: deletedCountOut,
+    annotations: config.annotations,
+    handler: deleteHandler(config.router),
+  });
+}
+
+export function registerEntityUpdateTool(
+  server: McpServer,
+  config: {
+    name: string;
+    description: string;
+    router: string;
+    inputSchema: ZodSchemaLike;
+    outputSchema: z.ZodType;
+    slim: Slim;
+    annotations: ToolAnnotations;
+  },
+) {
+  registerMcpTool(server, {
+    name: config.name,
+    description: config.description,
+    inputSchema: config.inputSchema,
+    outputSchema: config.outputSchema,
+    annotations: config.annotations,
+    handler: updateHandler(config.router, config.slim),
+  });
+}
+
+export function registerEntityCreateTool(
+  server: McpServer,
+  config: {
+    name: string;
+    description: string;
+    inputSchema: ZodSchemaLike;
+    outputSchema: z.ZodType;
+    slim: Slim;
+    annotations: ToolAnnotations;
+    create: (
+      caller: Caller,
+      params: Record<string, unknown>,
+    ) => Promise<unknown>;
+  },
+) {
+  registerMcpTool(server, {
+    name: config.name,
+    description: config.description,
+    inputSchema: config.inputSchema,
+    outputSchema: config.outputSchema,
+    annotations: config.annotations,
+    handler: async (params, extra) => {
+      const result = await config.create(getCaller(extra), params);
+      return respond(result, config.slim);
+    },
+  });
+}
+
+/** Register a tool that calls a tRPC procedure and returns the result as-is. */
+export function registerRouterTool(
+  server: McpServer,
+  config: {
+    name: string;
+    description: string;
+    inputSchema?: ZodSchemaLike;
+    outputSchema: z.ZodType;
+    annotations: ToolAnnotations;
+    call: (caller: Caller, params: Record<string, unknown>) => Promise<unknown>;
+  },
+) {
+  registerMcpTool(server, {
+    name: config.name,
+    description: config.description,
+    inputSchema: config.inputSchema ?? {},
+    outputSchema: config.outputSchema,
+    annotations: config.annotations,
+    handler: async (params, extra) => config.call(getCaller(extra), params),
   });
 }

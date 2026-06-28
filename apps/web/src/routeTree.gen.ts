@@ -18,6 +18,7 @@ import { Route as ApiMcpRouteImport } from './routes/api/mcp'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedProblemsRouteImport } from './routes/_authenticated/problems'
 import { Route as AuthenticatedPantryViewRouteImport } from './routes/_authenticated/pantry-view'
+import { Route as AuthenticatedMcpRouteImport } from './routes/_authenticated/mcp'
 import { Route as AuthenticatedLabelsRouteImport } from './routes/_authenticated/labels'
 import { Route as AuthenticatedInsightsRouteImport } from './routes/_authenticated/insights'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
@@ -115,6 +116,11 @@ const AuthenticatedProblemsRoute = AuthenticatedProblemsRouteImport.update({
 const AuthenticatedPantryViewRoute = AuthenticatedPantryViewRouteImport.update({
   id: '/pantry-view',
   path: '/pantry-view',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedMcpRoute = AuthenticatedMcpRouteImport.update({
+  id: '/mcp',
+  path: '/mcp',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedLabelsRoute = AuthenticatedLabelsRouteImport.update({
@@ -434,6 +440,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/insights': typeof AuthenticatedInsightsRoute
   '/labels': typeof AuthenticatedLabelsRoute
+  '/mcp': typeof AuthenticatedMcpRoute
   '/pantry-view': typeof AuthenticatedPantryViewRoute
   '/problems': typeof AuthenticatedProblemsRoute
   '/settings': typeof AuthenticatedSettingsRoute
@@ -498,6 +505,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/insights': typeof AuthenticatedInsightsRoute
   '/labels': typeof AuthenticatedLabelsRoute
+  '/mcp': typeof AuthenticatedMcpRoute
   '/pantry-view': typeof AuthenticatedPantryViewRoute
   '/problems': typeof AuthenticatedProblemsRoute
   '/settings': typeof AuthenticatedSettingsRoute
@@ -564,6 +572,7 @@ export interface FileRoutesById {
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/insights': typeof AuthenticatedInsightsRoute
   '/_authenticated/labels': typeof AuthenticatedLabelsRoute
+  '/_authenticated/mcp': typeof AuthenticatedMcpRoute
   '/_authenticated/pantry-view': typeof AuthenticatedPantryViewRoute
   '/_authenticated/problems': typeof AuthenticatedProblemsRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
@@ -630,6 +639,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/insights'
     | '/labels'
+    | '/mcp'
     | '/pantry-view'
     | '/problems'
     | '/settings'
@@ -694,6 +704,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/insights'
     | '/labels'
+    | '/mcp'
     | '/pantry-view'
     | '/problems'
     | '/settings'
@@ -759,6 +770,7 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard'
     | '/_authenticated/insights'
     | '/_authenticated/labels'
+    | '/_authenticated/mcp'
     | '/_authenticated/pantry-view'
     | '/_authenticated/problems'
     | '/_authenticated/settings'
@@ -887,6 +899,13 @@ declare module '@tanstack/react-router' {
       path: '/pantry-view'
       fullPath: '/pantry-view'
       preLoaderRoute: typeof AuthenticatedPantryViewRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/mcp': {
+      id: '/_authenticated/mcp'
+      path: '/mcp'
+      fullPath: '/mcp'
+      preLoaderRoute: typeof AuthenticatedMcpRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/labels': {
@@ -1279,6 +1298,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedInsightsRoute: typeof AuthenticatedInsightsRoute
   AuthenticatedLabelsRoute: typeof AuthenticatedLabelsRoute
+  AuthenticatedMcpRoute: typeof AuthenticatedMcpRoute
   AuthenticatedPantryViewRoute: typeof AuthenticatedPantryViewRoute
   AuthenticatedProblemsRoute: typeof AuthenticatedProblemsRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
@@ -1336,6 +1356,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedInsightsRoute: AuthenticatedInsightsRoute,
   AuthenticatedLabelsRoute: AuthenticatedLabelsRoute,
+  AuthenticatedMcpRoute: AuthenticatedMcpRoute,
   AuthenticatedPantryViewRoute: AuthenticatedPantryViewRoute,
   AuthenticatedProblemsRoute: AuthenticatedProblemsRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,

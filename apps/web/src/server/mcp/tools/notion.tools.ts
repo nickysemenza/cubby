@@ -1,12 +1,19 @@
+import { notionListEnvelope } from "@cubby/schemas/mcp";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
+  notionProjectContentOut,
+  notionProjectSchema,
+  notionPurchaseSchema,
+  notionTaskSchema,
+} from "~/server/clients/notion";
+import {
   getCaller,
-  json,
   matchesArrayFilter,
   matchesFilter,
   notionUnavailable,
-  withErrorHandling,
+  READ_ONLY_OPEN,
+  registerMcpTool,
 } from "./_shared";
 
 const notionLimit = z
@@ -17,11 +24,16 @@ const notionLimit = z
   .optional()
   .describe("Max results to return (default 50, max 200)");
 
+const notionProjectsOut = notionListEnvelope(notionProjectSchema);
+const notionTasksOut = notionListEnvelope(notionTaskSchema);
+const notionPurchasesOut = notionListEnvelope(notionPurchaseSchema);
+
 export function registerNotionTools(server: McpServer) {
-  server.tool(
-    "list_projects",
-    "List Notion projects with optional filters. Returns project name, status, kind, location, cost estimate, dates, and Notion URL.",
-    {
+  registerMcpTool(server, {
+    name: "list_projects",
+    description:
+      "List Notion projects with optional filters. Returns project name, status, kind, location, cost estimate, dates, and Notion URL.",
+    inputSchema: {
       status: z.string().optional().describe("Filter by status (substring)"),
       kind: z.string().optional().describe("Filter by kind (substring)"),
       location: z
@@ -34,12 +46,14 @@ export function registerNotionTools(server: McpServer) {
         .describe("Filter by project name (substring)"),
       limit: notionLimit,
     },
-    withErrorHandling(async (params, extra) => {
+    outputSchema: notionProjectsOut,
+    annotations: READ_ONLY_OPEN,
+    handler: async (params, extra) => {
       const caller = getCaller(extra);
       const dashboard = await caller.notion.dashboard();
       if (!dashboard) return notionUnavailable();
 
-      const filtered = dashboard.projects
+      const items = dashboard.projects
         .filter(
           (p: Record<string, unknown>) =>
             matchesFilter(p.status as string | null, params.status) &&
@@ -47,16 +61,17 @@ export function registerNotionTools(server: McpServer) {
             matchesArrayFilter(p.location as string[], params.location) &&
             matchesFilter(p.name as string | null, params.name),
         )
-        .slice(0, params.limit ?? 50);
+        .slice(0, (params.limit as number | undefined) ?? 50);
 
-      return json({ count: filtered.length, projects: filtered });
-    }),
-  );
+      return { count: items.length, items };
+    },
+  });
 
-  server.tool(
-    "list_tasks",
-    "List Notion tasks with optional filters. Returns task name, status, due date, category, project name, and Notion URL.",
-    {
+  registerMcpTool(server, {
+    name: "list_tasks",
+    description:
+      "List Notion tasks with optional filters. Returns task name, status, due date, category, project name, and Notion URL.",
+    inputSchema: {
       status: z.string().optional().describe("Filter by status (substring)"),
       projectName: z
         .string()
@@ -69,12 +84,14 @@ export function registerNotionTools(server: McpServer) {
       name: z.string().optional().describe("Filter by task name (substring)"),
       limit: notionLimit,
     },
-    withErrorHandling(async (params, extra) => {
+    outputSchema: notionTasksOut,
+    annotations: READ_ONLY_OPEN,
+    handler: async (params, extra) => {
       const caller = getCaller(extra);
       const dashboard = await caller.notion.dashboard();
       if (!dashboard) return notionUnavailable();
 
-      const filtered = dashboard.tasks
+      const items = dashboard.tasks
         .filter(
           (t: Record<string, unknown>) =>
             matchesFilter(t.status as string | null, params.status) &&
@@ -82,16 +99,17 @@ export function registerNotionTools(server: McpServer) {
             matchesFilter(t.category as string | null, params.category) &&
             matchesFilter(t.name as string | null, params.name),
         )
-        .slice(0, params.limit ?? 50);
+        .slice(0, (params.limit as number | undefined) ?? 50);
 
-      return json({ count: filtered.length, tasks: filtered });
-    }),
-  );
+      return { count: items.length, items };
+    },
+  });
 
-  server.tool(
-    "list_purchases",
-    "List Notion purchases with optional filters. Returns purchase name, cost, date, category, purchaser, project name, and Notion URL.",
-    {
+  registerMcpTool(server, {
+    name: "list_purchases",
+    description:
+      "List Notion purchases with optional filters. Returns purchase name, cost, date, category, purchaser, project name, and Notion URL.",
+    inputSchema: {
       category: z
         .string()
         .optional()
@@ -110,12 +128,14 @@ export function registerNotionTools(server: McpServer) {
         .describe("Filter by purchase name (substring)"),
       limit: notionLimit,
     },
-    withErrorHandling(async (params, extra) => {
+    outputSchema: notionPurchasesOut,
+    annotations: READ_ONLY_OPEN,
+    handler: async (params, extra) => {
       const caller = getCaller(extra);
       const dashboard = await caller.notion.dashboard();
       if (!dashboard) return notionUnavailable();
 
-      const filtered = dashboard.purchases
+      const items = dashboard.purchases
         .filter(
           (p: Record<string, unknown>) =>
             matchesFilter(p.category as string | null, params.category) &&
@@ -123,27 +143,30 @@ export function registerNotionTools(server: McpServer) {
             matchesFilter(p.purchaser as string | null, params.purchaser) &&
             matchesFilter(p.name as string | null, params.name),
         )
-        .slice(0, params.limit ?? 50);
+        .slice(0, (params.limit as number | undefined) ?? 50);
 
-      return json({ count: filtered.length, purchases: filtered });
-    }),
-  );
+      return { count: items.length, items };
+    },
+  });
 
-  server.tool(
-    "get_project_content",
-    "Fetch the page content of a Notion project by its page ID. Returns structured blocks (paragraphs, headings, lists, images, etc.).",
-    {
+  registerMcpTool(server, {
+    name: "get_project_content",
+    description:
+      "Fetch the page content of a Notion project by its page ID. Returns structured blocks.",
+    inputSchema: {
       pageId: z
         .string()
         .describe("Notion page ID (from list_projects results)"),
     },
-    withErrorHandling(async (params, extra) => {
+    outputSchema: notionProjectContentOut,
+    annotations: READ_ONLY_OPEN,
+    handler: async (params, extra) => {
       const caller = getCaller(extra);
       const content = await caller.notion.projectContent({
-        pageId: params.pageId,
+        pageId: params.pageId as string,
       });
       if (content === null) return notionUnavailable();
-      return json(content);
-    }),
-  );
+      return content;
+    },
+  });
 }

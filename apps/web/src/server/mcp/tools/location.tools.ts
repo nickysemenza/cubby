@@ -1,98 +1,81 @@
 import {
-  mcpLocationCreateInputShape,
-  mcpLocationUpdateInputShape,
+  locationFilterFields,
+  locationMcpListOut,
+  locationMcpOut,
+  mcpLocationCreateInput,
+  mcpLocationUpdateInput,
 } from "@cubby/schemas/location";
-import { mcpPaginationParams } from "@cubby/schemas/pagination";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
 import {
-  deleteHandler,
-  getByIdHandler,
-  getCaller,
-  idParam,
-  idsParam,
-  json,
-  type Row,
-  respond,
+  READ_ONLY_CLOSED,
+  registerEntityCreateTool,
+  registerEntityDeleteTool,
+  registerEntityGetTool,
+  registerEntityListTool,
+  registerEntityUpdateTool,
   slimLocation,
-  updateHandler,
-  withErrorHandling,
+  WRITE_CLOSED,
+  WRITE_DESTRUCTIVE_CLOSED,
+  withIdInput,
 } from "./_shared";
 
 export function registerLocationTools(server: McpServer) {
-  server.tool(
-    "list_locations",
-    "List all locations with optional name filter. Use to resolve location names to IDs.",
-    {
-      nameFilter: z.string().optional().describe("Filter by location name"),
-      // Locations intentionally diverge: only nameFilter is exposed (not
-      // itemTypeFilter) and the page size is capped higher (200) since the
-      // location tree is small and usually wanted whole. Each row carries its
-      // parent + children pointers, so the hierarchy is navigable from here.
-      pageIndex: mcpPaginationParams.pageIndex,
-      pageSize: z
-        .number()
-        .int()
-        .min(1)
-        .max(200)
-        .optional()
-        .describe("Items per page (default 200, max 200)"),
-    },
-    withErrorHandling(async (params, extra) => {
-      const caller = getCaller(extra);
-      const result = await caller.location.list({
-        filters: { nameFilter: params.nameFilter },
-        sort: { orderBy: "name", direction: "asc" },
-        pagination: {
-          pageIndex: params.pageIndex ?? 0,
-          pageSize: params.pageSize ?? 200,
-        },
-      });
-      return json({
-        totalCount: result.meta.totalCount,
-        locations: result.items.map((l: Row) => slimLocation(l)),
-      });
-    }),
-  );
+  registerEntityListTool(server, {
+    name: "list_locations",
+    description:
+      "List all locations with optional name filter. Use to resolve location names to IDs.",
+    router: "location",
+    filterFields: locationFilterFields,
+    outputSchema: locationMcpListOut,
+    slim: slimLocation,
+    sort: { orderBy: "name", direction: "asc" },
+    defaultPageSize: 200,
+    maxPageSize: 200,
+    annotations: READ_ONLY_CLOSED,
+  });
 
-  server.tool(
-    "get_location",
-    "Get a location by ID, including parent info.",
-    { id: idParam("Location") },
-    getByIdHandler("location", slimLocation),
-  );
+  registerEntityGetTool(server, {
+    name: "get_location",
+    description: "Get a location by ID, including parent info.",
+    router: "location",
+    idLabel: "Location",
+    outputSchema: locationMcpOut,
+    slim: slimLocation,
+    annotations: READ_ONLY_CLOSED,
+  });
 
-  server.tool(
-    "create_location",
-    "Create a new location. Use list_locations to find a parent location ID.",
-    {
-      ...mcpLocationCreateInputShape,
-    },
-    withErrorHandling(async (params, extra) => {
-      const caller = getCaller(extra);
-      const result = await caller.location.create({
+  registerEntityCreateTool(server, {
+    name: "create_location",
+    description:
+      "Create a new location. Use list_locations to find a parent location ID.",
+    inputSchema: mcpLocationCreateInput.shape,
+    outputSchema: locationMcpOut,
+    slim: slimLocation,
+    annotations: WRITE_CLOSED,
+    create: (caller, params) =>
+      caller.location.create({
         name: params.name,
         type: params.type,
         parentId: params.parentId,
-      });
-      return respond(result, slimLocation);
-    }),
-  );
+      }),
+  });
 
-  server.tool(
-    "update_location",
-    "Update a location's name, type, or parent.",
-    {
-      id: idParam("Location"),
-      ...mcpLocationUpdateInputShape,
-    },
-    updateHandler("location", slimLocation),
-  );
+  registerEntityUpdateTool(server, {
+    name: "update_location",
+    description: "Update a location's name, type, or parent.",
+    inputSchema: withIdInput("Location", mcpLocationUpdateInput.shape),
+    outputSchema: locationMcpOut,
+    slim: slimLocation,
+    router: "location",
+    annotations: WRITE_CLOSED,
+  });
 
-  server.tool(
-    "delete_locations",
-    "Soft-delete locations by IDs. Fails if locations have inventory entries.",
-    { ids: idsParam("location") },
-    deleteHandler("location"),
-  );
+  registerEntityDeleteTool(server, {
+    name: "delete_locations",
+    description:
+      "Soft-delete locations by IDs. Fails if locations have inventory entries.",
+    router: "location",
+    entityLabel: "location",
+    annotations: WRITE_DESTRUCTIVE_CLOSED,
+  });
 }

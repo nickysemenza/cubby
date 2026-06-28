@@ -2,6 +2,7 @@ import { z } from "zod";
 import { amount } from "./codec";
 import { requiredName } from "./common";
 import { id, ingredientId, recipeId } from "./identifiers";
+import { createPaginatedResponseSchema } from "./pagination";
 import {
   productWithMappingsAndFoodOut,
   productWithMappingsOut,
@@ -13,8 +14,11 @@ import { recomputeSummary } from "./recipe-shared";
 export const ingredientBaseFields = {
   // `mock` is a faker dot-path consumed by the test mock generator
   // (apps/web .../test/mock-schema.ts); it is plain metadata, faker-free here.
-  name: z.string().meta({ mock: "food.ingredient" }),
-  aliases: z.array(z.string()),
+  name: z
+    .string()
+    .meta({ mock: "food.ingredient" })
+    .describe("Ingredient name"),
+  aliases: z.array(z.string()).describe("Alternate names for this ingredient"),
 };
 
 export const ingredientFields = z.object(ingredientBaseFields);
@@ -26,7 +30,7 @@ export const ingredientBase = ingredientFields;
  * `search_ingredients` tool exactly; the MCP tool has its own explicit field
  * roster with matching names and descriptions.
  */
-export const ingredientFiltersSchema = z.object({
+export const ingredientFilterFields = {
   nameFilter: z
     .string()
     .optional()
@@ -36,7 +40,9 @@ export const ingredientFiltersSchema = z.object({
     .optional()
     .default(false)
     .describe("Only return ingredients with no linked products"),
-});
+};
+
+export const ingredientFiltersSchema = z.object(ingredientFilterFields);
 export type IngredientFilters = z.infer<typeof ingredientFiltersSchema>;
 
 export const ingredientSortableFields = [
@@ -48,17 +54,6 @@ export const ingredientSortableFields = [
 
 export type IngredientSortField = (typeof ingredientSortableFields)[number];
 
-export const mcpIngredientSearchInputShape = {
-  nameFilter: z
-    .string()
-    .optional()
-    .describe("Filter by ingredient name (substring)"),
-  missingProductsOnly: z
-    .boolean()
-    .optional()
-    .default(false)
-    .describe("Only return ingredients with no linked products"),
-};
 export const ingredientOutFields = {
   id: ingredientId,
   ...ingredientBaseFields,
@@ -234,17 +229,22 @@ export const ingredientWithFoodLeanListOut = z.array(ingredientWithFoodLeanOut);
  * reads) with a non-empty constraint; keep the mock hint for test fixtures.
  */
 export const ingredientCreateInput = z.object({
-  name: requiredName("Ingredient name").meta({ mock: "food.ingredient" }),
-  aliases: z.array(z.string()),
+  name: requiredName("Ingredient name")
+    .describe("Ingredient name")
+    .meta({ mock: "food.ingredient" }),
+  aliases: ingredientBaseFields.aliases.default([]),
   naKinds: z.array(baseKind).optional().default([]),
 });
 export type IngredientCreateInput = z.infer<typeof ingredientCreateInput>;
 
 export const ingredientUpdateData = z.object({
   name: requiredName("Ingredient name")
+    .describe("New name")
     .meta({ mock: "food.ingredient" })
     .optional(),
-  aliases: z.array(z.string()).optional(),
+  aliases: ingredientBaseFields.aliases
+    .optional()
+    .describe("New aliases (replaces existing list)"),
   naKinds: z.array(baseKind).optional(),
 });
 
@@ -290,15 +290,88 @@ export const ingredientResolvableNamesInput = z.object({
   names: z.array(z.string().min(1)),
 });
 
-export const mcpIngredientCreateInputShape = {
-  name: z.string().describe("Ingredient name"),
-  aliases: z
-    .array(z.string())
-    .optional()
-    .describe("Alternate names for this ingredient"),
+export const mcpIngredientCreateInput = z.object({
+  name: requiredName("Ingredient name")
+    .describe("Ingredient name")
+    .meta({ mock: "food.ingredient" }),
+  aliases: ingredientBaseFields.aliases.default([]),
+});
+export const mcpIngredientUpdateInput = ingredientUpdateData;
+
+const ingredientMcpProductRefFields = {
+  id: z.string(),
+  name: z.string(),
 };
 
-export const mcpIngredientUpdateInputShape = {
-  name: z.string().optional().describe("New name"),
-  aliases: z.array(z.string()).optional().describe("New aliases (replaces)"),
-};
+/** Slim MCP projection of an ingredient list/detail row. */
+export const ingredientMcpOut = z.object({
+  id: ingredientId,
+  name: z.string(),
+  aliases: z.array(z.string()),
+  products: z.array(z.object(ingredientMcpProductRefFields)),
+  recipeCount: z.number().int().nonnegative(),
+  usdaFdcId: z.number().nullable(),
+});
+export type IngredientMcpOut = z.infer<typeof ingredientMcpOut>;
+
+export const ingredientMcpListOut =
+  createPaginatedResponseSchema(ingredientMcpOut);
+
+export const ingredientResolveOrCreateResponseOut = z.object({
+  results: ingredientResolveOrCreateOut,
+});
+
+export const ingredientMergeBatchInput = z.object({
+  merges: z
+    .array(
+      z.object({
+        target: ingredientId.describe("ID of the ingredient to keep"),
+        aliases: z
+          .array(ingredientId)
+          .min(1)
+          .describe("IDs of duplicate ingredients to fold into the target"),
+      }),
+    )
+    .min(1)
+    .describe("One entry per duplicate cluster to merge"),
+  dryRun: z
+    .boolean()
+    .optional()
+    .describe(
+      "Validate ids and report what each cluster WOULD change, without writing.",
+    ),
+});
+
+export const ingredientMergeBatchOut = z.object({
+  merged: z.number().int().nonnegative(),
+  total: z.number().int().nonnegative(),
+  results: z.array(
+    z.object({
+      target: ingredientId,
+      ok: z.boolean(),
+      summary: mergeSummary.optional(),
+      error: z.string().optional(),
+    }),
+  ),
+});
+
+export const ingredientRawLineMcpOut = z.object({
+  lineId: id,
+  rawLine: z.string().nullable(),
+  modifier: z.string().nullable(),
+  amounts: z.array(amount),
+  recipeId,
+  recipeName: z.string(),
+  sectionName: z.string().nullable(),
+});
+
+export const ingredientRawLinesBatchOut = z.object({
+  count: z.number().int().nonnegative(),
+  ingredients: z.array(
+    z.object({
+      ingredientId: ingredientId,
+      lineCount: z.number().int().nonnegative(),
+      lines: z.array(ingredientRawLineMcpOut),
+    }),
+  ),
+});
