@@ -24,22 +24,27 @@ export const inventoryFiltersSchema = z.object({
   locationIdFilter: locationId.optional(),
 });
 
-export const inventoryEntryOut = z.object({
+export const inventorySortableFields = [
+  "createdAt",
+  "name",
+  "product",
+  "location",
+  "amount",
+  "valuation",
+] as const;
+
+export type InventorySortField = (typeof inventorySortableFields)[number];
+
+export const inventoryEntryFields = {
   id: inventoryId,
   // inventory entries do not have a name, just ID
   amount: amount,
   valuation: z.number().nullable(), // Precomputed: amount.value * product.price
   createdAt: z.date(),
   updatedAt: z.date(),
-});
-
-const inventoryEntryResponseFields = {
-  id: inventoryId,
-  amount,
-  valuation: z.number().nullable(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
 };
+
+export const inventoryEntryOut = z.object(inventoryEntryFields);
 
 const productInventoryEmbedFields = {
   id: productId,
@@ -48,8 +53,8 @@ const productInventoryEmbedFields = {
   upc: upc.nullable(),
   fdc_id: fdcId.nullable(),
   manufacturer: z.string(),
-  model: z.string().nullish(),
-  notes: z.string().nullish(),
+  model: z.string().nullable(),
+  notes: z.string().nullable(),
   expectedQuantity: z.number().int().positive().nullable(),
   category: productCategory.nullable(),
   price: z.number().nullable(),
@@ -62,12 +67,12 @@ export const productInventoryEmbedOut = z.object(productInventoryEmbedFields);
 export type ProductInventoryEmbedOut = z.infer<typeof productInventoryEmbedOut>;
 
 export const inventoryWithProductOut = z.object({
-  ...inventoryEntryResponseFields,
+  ...inventoryEntryFields,
   product: productInventoryEmbedOut,
 });
 
 export const inventoryWithLocationOut = z.object({
-  ...inventoryEntryResponseFields,
+  ...inventoryEntryFields,
   location: locationOut,
 });
 
@@ -80,7 +85,7 @@ export const inventoryListProductOut = z.object({
   fdc_id: fdcId.nullable(),
   category: productCategory.nullable(),
   expectedQuantity: z.number().int().positive().nullable(),
-  model: z.string().nullish(),
+  model: z.string().nullable(),
   price: z.number().nullable(),
   usdaUnavailable: z.boolean().nullable(),
 });
@@ -95,7 +100,7 @@ export const inventoryListLocationOut = z.object({
 export type InventoryListLocationOut = z.infer<typeof inventoryListLocationOut>;
 
 export const inventoryListItemOut = z.object({
-  ...inventoryEntryResponseFields,
+  ...inventoryEntryFields,
   product: inventoryListProductOut,
   location: inventoryListLocationOut,
 });
@@ -109,7 +114,7 @@ export const inventoryDetailProductOut = z.object({
 });
 
 export const inventoryWithLocationAndProductOut = z.object({
-  ...inventoryEntryResponseFields,
+  ...inventoryEntryFields,
   product: inventoryDetailProductOut,
   location: locationOut,
 });
@@ -125,7 +130,10 @@ export const inventoryDuplicateUniqueProductsOut = z.array(
   duplicateUniqueProductSchema,
 );
 
-export const inventoryCountsByLocationOut = z.record(z.string(), z.number());
+export const inventoryCountsByLocationOut = z.record(
+  z.string(),
+  z.number().int().nonnegative(),
+);
 
 export const inventoryUpdatePayloadData = z.object({
   amount: positiveAmount.optional(),

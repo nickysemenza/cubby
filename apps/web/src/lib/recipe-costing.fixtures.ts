@@ -57,6 +57,7 @@ export const makeProduct = (
   manufacturer: "",
   category: null,
   model: null,
+  notes: null,
   expectedQuantity: null,
   price: opts.price ?? null,
   usdaUnavailable: null,

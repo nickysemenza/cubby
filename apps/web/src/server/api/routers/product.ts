@@ -25,6 +25,7 @@ import {
   productShortcodeInput,
   productShortcodeListOut,
   productShortcodesInput,
+  productSortableFields,
   productSummariesInput,
   productSummariesOut,
   productTopLevelOut,
@@ -41,9 +42,17 @@ import {
   getCategoryDistribution,
   getProductByShortcode,
   getProductsByShortcodes,
+  productList as productListRepo,
   productSearch,
   quickCreateProduct,
 } from "~/server/repo/product";
+import {
+  createProductWithFood,
+  createProductWriteActions,
+  getProductSummaries,
+  getProductWithFood,
+  updateProductWithFood,
+} from "~/server/services/product.service";
 import {
   applyUpcDataWithSideEffects,
   backfillUPCImages as backfillUPCImagesService,
@@ -64,10 +73,12 @@ const { list } = createEntityListProcedure({
   schemas: {
     output: productListItemOut,
     filters: productFiltersSchema,
+    sort: { sortableFields: productSortableFields, defaultSort: "createdAt" },
   },
   repository: {
     list: async (services, filters, sort, pagination, groupBy) => {
-      return await services.services.product.productList(
+      return await productListRepo(
+        services.db,
         filters.nameFilter,
         filters.manufacturerFilter,
         filters.upcFilter,
@@ -94,16 +105,20 @@ const { getByID } = createEntityCrudWithoutListProcedures({
   },
   repository: {
     getByID: async (services, id: ProductId) => {
-      return await services.services.product.getProductByID(id);
+      return await getProductWithFood(services.db, services.usdaClient, id);
     },
     create: async (services, data) => {
-      return await services.services.product.createProduct(
+      return await createProductWithFood(
+        services.db,
+        services.usdaClient,
         data,
         services.actorContext,
       );
     },
     update: async (services, id: ProductId, data) => {
-      return await services.services.product.updateProduct(
+      return await updateProductWithFood(
+        services.db,
+        services.usdaClient,
         id,
         data,
         services.actorContext,
@@ -120,6 +135,7 @@ const { list: search } = createEntityListProcedure({
   schemas: {
     output: productPickerItemOut,
     filters: productFiltersSchema,
+    sort: { sortableFields: productSortableFields, defaultSort: "name" },
   },
   repository: {
     list: async (services, filters, sort, pagination) =>
@@ -147,7 +163,7 @@ const create = protectedProcedure
     return await createProductWithSideEffects(
       {
         db: ctx.db,
-        product: ctx.services.product,
+        product: createProductWriteActions(ctx.db, ctx.usdaClient),
         recipeCosting: ctx.services.recipeCosting,
         locationValuation: ctx.services.locationValuation,
         upcLookupClient: ctx.upcLookupClient,
@@ -167,7 +183,7 @@ const update = protectedProcedure
     return await updateProductWithSideEffects(
       {
         db: ctx.db,
-        product: ctx.services.product,
+        product: createProductWriteActions(ctx.db, ctx.usdaClient),
         recipeCosting: ctx.services.recipeCosting,
         locationValuation: ctx.services.locationValuation,
       },
@@ -190,7 +206,7 @@ const applyUpcData = protectedProcedure
     return await applyUpcDataWithSideEffects(
       {
         db: ctx.db,
-        product: ctx.services.product,
+        product: createProductWriteActions(ctx.db, ctx.usdaClient),
         recipeCosting: ctx.services.recipeCosting,
         locationValuation: ctx.services.locationValuation,
         upcLookupClient: ctx.upcLookupClient,
@@ -204,7 +220,9 @@ const summaries = protectedProcedure
   .input(productSummariesInput)
   .output(productSummariesOut)
   .query(async ({ ctx, input }) => {
-    return await ctx.services.product.getSummariesByProductIds(
+    return await getProductSummaries(
+      ctx.db,
+      ctx.usdaClient,
       input.ids,
       input.include,
     );
@@ -302,7 +320,9 @@ const createMany = protectedProcedure
     yield* streamItems<(typeof input)[number], never, CreateManyResult>(
       input,
       async (item) => {
-        const product = await ctx.services.product.createProduct(
+        const product = await createProductWithFood(
+          ctx.db,
+          ctx.usdaClient,
           item,
           ctx.actorContext,
         );
@@ -339,7 +359,9 @@ const markUsdaUnavailableMany = protectedProcedure
     yield* streamItems<(typeof input.ids)[number], never, { updated: number }>(
       input.ids,
       async (id) => {
-        await ctx.services.product.updateProduct(
+        await updateProductWithFood(
+          ctx.db,
+          ctx.usdaClient,
           id,
           { usdaUnavailable: true },
           ctx.actorContext,

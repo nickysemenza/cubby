@@ -1,8 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ProductId } from "@cubby/schemas/identifiers";
-import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type {
-  ProductCategory,
   ProductCreateInput,
   ProductSummariesInput,
   ProductSummariesOut,
@@ -21,26 +19,12 @@ import {
   getProductImagesByProductIds,
   getProductsForFoodLookup,
   getProductUnitMappingsByProductIds,
-  productList as productListRepo,
   updateProduct as updateProductRepo,
 } from "../repo/product";
 import { batchEnrichWithFood } from "./usda-helpers";
 
-export interface ProductService {
+export type ProductWriteActions = {
   getProductByID(id: ProductId): Promise<ProductWithFoodOut>;
-  productList(
-    nameFilter: string | undefined,
-    manufacturerFilter: string | undefined,
-    upcFilter: string | undefined,
-    categoryFilter: ProductCategory | undefined,
-    sort: SortParams,
-    pagination: PaginationParams,
-    groupBy?: string,
-  ): ReturnType<typeof productListRepo>;
-  getSummariesByProductIds(
-    ids: ProductId[],
-    include: ProductSummariesInput["include"],
-  ): Promise<ProductSummariesOut>;
   createProduct(
     data: ProductCreateInput,
     actor: ActorContext,
@@ -50,9 +34,9 @@ export interface ProductService {
     data: ProductUpdateInput["data"],
     actor: ActorContext,
   ): Promise<ProductWithFoodOut>;
-}
+};
 
-const getProductWithFood = async (
+export const getProductWithFood = async (
   db: Database,
   usdaClient: USDAClient,
   id: ProductId,
@@ -100,7 +84,7 @@ const getProductFoodSummaries = async (
   return result;
 };
 
-const getProductSummaries = async (
+export const getProductSummaries = async (
   db: Database,
   usdaClient: USDAClient,
   ids: ProductId[],
@@ -130,44 +114,40 @@ const getProductSummaries = async (
   return summaries;
 };
 
-export const createProductService = (
+export const createProductWithFood = async (
   db: Database,
   usdaClient: USDAClient,
-): ProductService => ({
+  data: ProductCreateInput,
+  actor: ActorContext,
+): Promise<ProductWithFoodOut> => {
+  const product = await createProductRepo(db, data, actor);
+  // Dependent recipes are recomputed eagerly at the router (the single `create`
+  // proc per product, `createMany` once over the deduped union) — covers UI +
+  // MCP. No mark-stale; there is no drain anymore.
+  return await getProductWithFood(db, usdaClient, product.id);
+};
+
+export const updateProductWithFood = async (
+  db: Database,
+  usdaClient: USDAClient,
+  id: ProductId,
+  data: ProductUpdateInput["data"],
+  actor: ActorContext,
+): Promise<ProductWithFoodOut> => {
+  await updateProductRepo(db, id, data, actor);
+  // Eager recompute of dependent recipes (and inventory valuations) happens at
+  // the router layer (covers UI + MCP callers) — see the product router's
+  // update proc.
+  return await getProductWithFood(db, usdaClient, id);
+};
+
+export const createProductWriteActions = (
+  db: Database,
+  usdaClient: USDAClient,
+): ProductWriteActions => ({
   getProductByID: (id) => getProductWithFood(db, usdaClient, id),
-  productList: (
-    nameFilter,
-    manufacturerFilter,
-    upcFilter,
-    categoryFilter,
-    sort,
-    pagination,
-    groupBy,
-  ) =>
-    productListRepo(
-      db,
-      nameFilter,
-      manufacturerFilter,
-      upcFilter,
-      categoryFilter,
-      sort,
-      pagination,
-      groupBy,
-    ),
-  getSummariesByProductIds: (ids, include) =>
-    getProductSummaries(db, usdaClient, ids, include),
-  createProduct: async (data, actor) => {
-    const product = await createProductRepo(db, data, actor);
-    // Dependent recipes are recomputed eagerly at the router (the single `create`
-    // proc per product, `createMany` once over the deduped union) — covers UI +
-    // MCP. No mark-stale; there is no drain anymore.
-    return await getProductWithFood(db, usdaClient, product.id);
-  },
-  updateProduct: async (id, data, actor) => {
-    await updateProductRepo(db, id, data, actor);
-    // Eager recompute of dependent recipes (and inventory valuations) happens at
-    // the router layer (covers UI + MCP callers) — see the product router's
-    // update proc.
-    return await getProductWithFood(db, usdaClient, id);
-  },
+  createProduct: (data, actor) =>
+    createProductWithFood(db, usdaClient, data, actor),
+  updateProduct: (id, data, actor) =>
+    updateProductWithFood(db, usdaClient, id, data, actor),
 });

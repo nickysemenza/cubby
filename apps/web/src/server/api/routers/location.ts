@@ -18,6 +18,7 @@ import {
   locationListItemOut,
   locationShortcodeInput,
   locationShortcodesInput,
+  locationSortableFields,
   locationsWithParentNameOut,
   locationTypeCountsOut,
   locationUpdateData,
@@ -52,6 +53,7 @@ const { list } = createEntityListProcedure({
   schemas: {
     output: locationListItemOut,
     filters: locationFiltersSchema,
+    sort: { sortableFields: locationSortableFields, defaultSort: "createdAt" },
   },
   repository: {
     list: async (services, filters, sort, pagination, groupBy) => {

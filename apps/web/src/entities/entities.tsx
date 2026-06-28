@@ -1,3 +1,11 @@
+import { imageSortableFields } from "@cubby/schemas/image";
+import { ingredientSortableFields } from "@cubby/schemas/ingredient";
+import { inventorySortableFields } from "@cubby/schemas/inventory";
+import { locationSortableFields } from "@cubby/schemas/location";
+import { mealSortableFields } from "@cubby/schemas/meal";
+import { productSortableFields } from "@cubby/schemas/product";
+import { recipeSortableFields } from "@cubby/schemas/recipe";
+import { usdaFoodSortableFields } from "@cubby/schemas/usda";
 import {
   Apple,
   Barcode,
@@ -55,7 +63,7 @@ export const entities: Record<Entity, EntityDefinition> = {
       standardColumns: [],
       // appearsInRecipes/product are computed (recipe + product counts), sorted
       // via correlated subqueries in ingredientList (not real columns).
-      sortableFields: ["createdAt", "name", "appearsInRecipes", "product"],
+      sortableFields: ingredientSortableFields,
     },
   },
   product: {
@@ -76,22 +84,9 @@ export const entities: Record<Entity, EntityDefinition> = {
       hasUnitMappings: true,
       defaultSort: "createdAt",
       standardColumns: ["image", "name", "createdAt"],
-      sortableFields: [
-        "createdAt",
-        "name",
-        "manufacturer",
-        "model",
-        "upc",
-        "category",
-        "fdc_id",
-        "price",
-        "notes",
-        "location",
-        "unitMappingQuality",
-        // `ingredient` sorts by the linked ingredient's name via a correlated
-        // subquery in productList (not a real column).
-        "ingredient",
-      ],
+      // `ingredient`, `location`, and `unitMappingQuality` are computed sorts
+      // handled explicitly by productList, not physical product columns.
+      sortableFields: productSortableFields,
     },
   },
   recipe: {
@@ -112,15 +107,7 @@ export const entities: Record<Entity, EntityDefinition> = {
       // costTotal/caloriesTotal live in the `totals` jsonb (not real columns);
       // recipeList sorts them via a jsonb expression. `source` (SourceType+SourceData)
       // and `yield` (→ servings) are also special-cased there. See recipe/crud.recipeList.
-      sortableFields: [
-        "createdAt",
-        "name",
-        "costTotal",
-        "caloriesTotal",
-        "source",
-        "yield",
-        "tags",
-      ],
+      sortableFields: recipeSortableFields,
     },
   },
   cookbook: {
@@ -159,13 +146,7 @@ export const entities: Record<Entity, EntityDefinition> = {
     list: {
       defaultSort: "createdAt",
       standardColumns: [],
-      sortableFields: [
-        "createdAt",
-        "name",
-        "type",
-        "lastBulkInventory",
-        "valuation",
-      ],
+      sortableFields: locationSortableFields,
     },
   },
   inventory: {
@@ -185,7 +166,7 @@ export const entities: Record<Entity, EntityDefinition> = {
     list: {
       defaultSort: "createdAt",
       standardColumns: [],
-      sortableFields: ["createdAt", "amount", "valuation"],
+      sortableFields: inventorySortableFields,
     },
   },
   meal: {
@@ -207,7 +188,7 @@ export const entities: Record<Entity, EntityDefinition> = {
     list: {
       defaultSort: "date",
       standardColumns: [],
-      sortableFields: ["date", "createdAt"],
+      sortableFields: mealSortableFields,
     },
   },
   "usda-food": {
@@ -229,7 +210,7 @@ export const entities: Record<Entity, EntityDefinition> = {
     list: {
       defaultSort: "fdc_id",
       standardColumns: [],
-      sortableFields: ["fdc_id", "description", "data_type", "linkedProducts"],
+      sortableFields: usdaFoodSortableFields,
     },
   },
   image: {
@@ -252,7 +233,7 @@ export const entities: Record<Entity, EntityDefinition> = {
     list: {
       defaultSort: "createdAt",
       standardColumns: ["createdAt"],
-      sortableFields: ["createdAt", "updatedAt", "filename", "size", "status"],
+      sortableFields: imageSortableFields,
     },
   },
 };

@@ -15,8 +15,8 @@ import type {
   ImageWithEntity,
   InitiateUploadWithoutEntityInput,
 } from "@cubby/schemas/image";
+import { imageSortableFields } from "@cubby/schemas/image";
 import { and, eq, inArray, lt } from "drizzle-orm";
-import { getSortableFields } from "~/entities/entities";
 import type { Database } from "~/server/db";
 import {
   image,
@@ -231,9 +231,7 @@ export const imageList = async (
     whereConditions.length > 0 ? and(...whereConditions) : undefined;
 
   // Build orderBy using central sortableFields config
-  const orderByClause = buildOrderBy(image, sort, [
-    ...getSortableFields("image"),
-  ]);
+  const orderByClause = buildOrderBy(image, sort, [...imageSortableFields]);
 
   // Calculate skip/take values from pagination parameters
   const take = pagination.pageSize;

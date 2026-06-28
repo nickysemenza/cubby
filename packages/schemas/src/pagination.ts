@@ -7,9 +7,23 @@ const sortParams = z.object({
   direction: z.enum(["asc", "desc"]).default("asc"),
 });
 
+type NonEmptyStringArray = readonly [string, ...string[]];
+
+export const createSortParamsSchema = <
+  TFields extends NonEmptyStringArray,
+  TDefault extends TFields[number],
+>(
+  fields: TFields,
+  defaultOrderBy: TDefault,
+) =>
+  z.object({
+    orderBy: z.enum(fields).default(defaultOrderBy),
+    direction: z.enum(["asc", "desc"]).default("asc"),
+  });
+
 const paginationParams = z.object({
-  pageIndex: z.number().min(0).default(0),
-  pageSize: z.number().min(1).max(MAX_PAGE_SIZE).default(10),
+  pageIndex: z.number().int().min(0).default(0),
+  pageSize: z.number().int().min(1).max(MAX_PAGE_SIZE).default(10),
 });
 
 /**
@@ -44,6 +58,25 @@ export const sortPaginationFields = {
   groupBy: z.string().optional(),
 };
 
+export const createSortPaginationFields = <
+  TFields extends NonEmptyStringArray,
+  TDefault extends TFields[number],
+>(opts: {
+  sortableFields: TFields;
+  defaultSort: TDefault;
+  groupableFields?: TFields;
+}) => ({
+  sort: createSortParamsSchema(opts.sortableFields, opts.defaultSort)
+    .optional()
+    .default({ orderBy: opts.defaultSort, direction: "desc" }),
+  pagination: paginationParams
+    .optional()
+    .default({ pageIndex: 0, pageSize: 10 }),
+  groupBy: opts.groupableFields
+    ? z.enum(opts.groupableFields).optional()
+    : z.enum(opts.sortableFields).optional(),
+});
+
 export const sortPaginationCombo = z.object(sortPaginationFields);
 
 export const buildTakeSkip = (pagination: PaginationParams) => {
@@ -76,9 +109,9 @@ export function createPaginatedResponseSchema<Entry extends z.ZodTypeAny>(
 ) {
   return z.object({
     meta: z.object({
-      pageIndex: z.number(),
-      pageSize: z.number(),
-      totalCount: z.number(),
+      pageIndex: z.number().int().nonnegative(),
+      pageSize: z.number().int().positive().max(MAX_PAGE_SIZE),
+      totalCount: z.number().int().nonnegative(),
     }),
     items: z.array(entrySchema),
   });
@@ -93,9 +126,9 @@ export function createPaginatedResponseSchemaWithContext<
 >(entrySchema: Entry, entityName: string) {
   return z.object({
     meta: z.object({
-      pageIndex: z.number(),
-      pageSize: z.number(),
-      totalCount: z.number(),
+      pageIndex: z.number().int().nonnegative(),
+      pageSize: z.number().int().positive().max(MAX_PAGE_SIZE),
+      totalCount: z.number().int().nonnegative(),
     }),
     items: z.array(z.unknown()).transform((items, ctx) => {
       const results: z.infer<Entry>[] = [];

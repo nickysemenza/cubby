@@ -16,6 +16,7 @@ import {
   recipeListItemOut,
   recipeOut,
   recipeShortcodeInput,
+  recipeSortableFields,
   recipeTagsOut,
   recipeUpdateData,
 } from "@cubby/schemas/recipe";
@@ -40,7 +41,11 @@ import { protectedProcedure } from "../../trpc";
 // Create standardized CRUD procedures using factory
 // List returns the lean summary (no section graph); detail keeps full recipeOut — split the factory so each carries its own output schema.
 const { list } = createEntityListProcedure({
-  schemas: { output: recipeListItemOut, filters: recipeFiltersSchema },
+  schemas: {
+    output: recipeListItemOut,
+    filters: recipeFiltersSchema,
+    sort: { sortableFields: recipeSortableFields, defaultSort: "createdAt" },
+  },
   repository: {
     list: async (services, filters, sort, pagination) => {
       return await recipeList(services.db, filters, sort, pagination);

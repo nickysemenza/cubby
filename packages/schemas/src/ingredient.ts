@@ -10,12 +10,14 @@ import { baseKind } from "./problems";
 import { recipeRefOut, recipeTopLevel, recipeUsageOut } from "./recipe";
 import { recomputeSummary } from "./recipe-shared";
 
-export const ingredientFields = z.object({
+export const ingredientBaseFields = {
   // `mock` is a faker dot-path consumed by the test mock generator
   // (apps/web .../test/mock-schema.ts); it is plain metadata, faker-free here.
   name: z.string().meta({ mock: "food.ingredient" }),
   aliases: z.array(z.string()),
-});
+};
+
+export const ingredientFields = z.object(ingredientBaseFields);
 
 export const ingredientBase = ingredientFields;
 
@@ -37,6 +39,15 @@ export const ingredientFiltersSchema = z.object({
 });
 export type IngredientFilters = z.infer<typeof ingredientFiltersSchema>;
 
+export const ingredientSortableFields = [
+  "createdAt",
+  "name",
+  "appearsInRecipes",
+  "product",
+] as const;
+
+export type IngredientSortField = (typeof ingredientSortableFields)[number];
+
 export const mcpIngredientSearchInputShape = {
   nameFilter: z
     .string()
@@ -48,27 +59,19 @@ export const mcpIngredientSearchInputShape = {
     .default(false)
     .describe("Only return ingredients with no linked products"),
 };
-export const ingredientOut = z.object({
+export const ingredientOutFields = {
   id: ingredientId,
-  name: z.string().meta({ mock: "food.ingredient" }),
-  aliases: z.array(z.string()),
+  ...ingredientBaseFields,
   // Base measurement kinds the user has marked "not applicable" for this
   // ingredient (e.g. volume on a count-only item). The DB column is non-null
   // with an empty-array default, so public read contracts always carry it.
   naKinds: z.array(baseKind),
   createdAt: z.date(),
   updatedAt: z.date(),
-});
-export type IngredientOut = z.infer<typeof ingredientOut>;
-
-const ingredientResponseFields = {
-  id: ingredientId,
-  name: z.string().meta({ mock: "food.ingredient" }),
-  aliases: z.array(z.string()),
-  naKinds: z.array(baseKind),
-  createdAt: z.date(),
-  updatedAt: z.date(),
 };
+
+export const ingredientOut = z.object(ingredientOutFields);
+export type IngredientOut = z.infer<typeof ingredientOut>;
 
 /**
  * Per-cluster change summary returned by an ingredient merge — the serialized
@@ -125,7 +128,7 @@ export const ingredientResolveOrCreateOut = z.array(
 );
 
 export const ingredientWithRecipesAndProductOut = z.object({
-  ...ingredientResponseFields,
+  ...ingredientOutFields,
   recipe: recipeTopLevel.nullable(),
   recipeUsages: z.array(recipeUsageOut),
   appearsInRecipes: z.array(recipeTopLevel),
@@ -136,7 +139,7 @@ export type IngredientWithRecipesAndProductOut = z.infer<
 >;
 
 export const ingredientWithFoodOut = z.object({
-  ...ingredientResponseFields,
+  ...ingredientOutFields,
   recipe: recipeTopLevel.nullable(),
   recipeUsages: z.array(recipeUsageOut),
   appearsInRecipes: z.array(recipeTopLevel),
@@ -145,7 +148,7 @@ export const ingredientWithFoodOut = z.object({
 export type IngredientWithFoodOut = z.infer<typeof ingredientWithFoodOut>;
 
 export const ingredientWithFoodAndSideEffectsOut = z.object({
-  ...ingredientResponseFields,
+  ...ingredientOutFields,
   recipe: recipeTopLevel.nullable(),
   recipeUsages: z.array(recipeUsageOut),
   appearsInRecipes: z.array(recipeTopLevel),
@@ -157,7 +160,7 @@ export type IngredientWithFoodAndSideEffectsOut = z.infer<
 >;
 
 export const ingredientMergeOut = z.object({
-  ...ingredientResponseFields,
+  ...ingredientOutFields,
   recipe: recipeTopLevel.nullable(),
   recipeUsages: z.array(recipeUsageOut),
   appearsInRecipes: z.array(recipeTopLevel),
@@ -170,7 +173,7 @@ export type IngredientMergeOut = z.infer<typeof ingredientMergeOut>;
 // Lean ingredient+food shape: products (with food) without the per-usage recipe
 // bodies that detail responses carry. Used by workbench and costing paths.
 export const ingredientWithFoodLeanOut = z.object({
-  ...ingredientResponseFields,
+  ...ingredientOutFields,
   product: z.array(productWithMappingsAndFoodOut),
 });
 export type IngredientWithFoodLeanOut = z.infer<
@@ -180,7 +183,7 @@ export type IngredientWithFoodLeanOut = z.infer<
 // The ingredient list row: lean ingredient + DB-only products, plus {id,name}
 // refs of recipes it appears in. USDA summaries hydrate separately.
 export const ingredientListItemOut = z.object({
-  ...ingredientResponseFields,
+  ...ingredientOutFields,
   product: z.array(productWithMappingsOut),
   appearsInRecipes: z.array(recipeRefOut),
 });
@@ -198,9 +201,9 @@ export const enrichmentFixKind = z.enum([
 ]);
 
 export const enrichmentRowOut = z.object({
-  ...ingredientResponseFields,
+  ...ingredientOutFields,
   product: z.array(productWithMappingsAndFoodOut),
-  recipeCount: z.number(),
+  recipeCount: z.number().int().nonnegative(),
   // Every live recipe using this ingredient is book-sourced. Computed in SQL.
   cookbookOnly: z.boolean(),
   coverage: z.object({

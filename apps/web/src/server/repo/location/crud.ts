@@ -10,6 +10,7 @@ import type {
   LocationCreateInput,
   LocationUpdateInput,
 } from "@cubby/schemas/location";
+import { locationSortableFields } from "@cubby/schemas/location";
 import {
   buildTakeSkip,
   type PaginationParams,
@@ -17,7 +18,6 @@ import {
 } from "@cubby/schemas/pagination";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { countBy } from "es-toolkit";
-import { getSortableFields } from "~/entities/entities";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   type image,
@@ -314,12 +314,7 @@ export const locationList = async (
             ? sql`(${location.valuation}->>'directValuation')::numeric asc nulls last`
             : sql`(${location.valuation}->>'directValuation')::numeric desc nulls last`,
         ]
-      : buildOrderBy(
-          location,
-          sort,
-          [...getSortableFields("location")],
-          groupBy,
-        );
+      : buildOrderBy(location, sort, [...locationSortableFields], groupBy);
 
   const { take, skip } = buildTakeSkip(pagination);
 

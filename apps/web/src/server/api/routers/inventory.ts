@@ -17,6 +17,7 @@ import {
   inventoryFindDuplicatesInput,
   inventoryListItemOut,
   inventoryLocationIdsInput,
+  inventorySortableFields,
   inventoryUpdatePayloadData,
   inventoryWithLocationAndProductListOut,
   inventoryWithLocationAndProductOut,
@@ -47,6 +48,10 @@ const { list } = createEntityListProcedure({
   schemas: {
     output: inventoryListItemOut,
     filters: inventoryFiltersSchema,
+    sort: {
+      sortableFields: inventorySortableFields,
+      defaultSort: "createdAt",
+    },
   },
   repository: {
     list: async (services, filters, sort, pagination) => {

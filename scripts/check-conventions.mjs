@@ -118,6 +118,11 @@ const SCHEMA_DERIVATION_RE =
 const DIRECT_QUERY_INVALIDATION_RE =
   /\bqueryClient\.(invalidateQueries|cancelQueries)\s*\(/;
 
+const RESPONSE_FIELD_MAP_RE =
+  /\b(?:const|let|var)\s+\w*(?:ResponseFields|responseFields)\b/;
+
+const LOOSE_SORT_PAGINATION_RE = /\.\.\.sortPaginationFields\b/;
+
 // components/ui holds the shadcn-derived primitives whose internal padding (px-3,
 // p-6, ...) IS the design system's defined component spacing — exempt from the
 // app-level {1,2,4,6} scale.
@@ -162,6 +167,14 @@ function isSchemaContractFile(path) {
 
 function isQueryKeyHelperFile(path) {
   return relative(repoRoot, path) === "apps/web/src/lib/query-keys.ts";
+}
+
+function isPaginationHelperFile(path) {
+  return relative(repoRoot, path) === "packages/schemas/src/pagination.ts";
+}
+
+function isCrudFactoryFile(path) {
+  return relative(repoRoot, path) === "apps/web/src/server/api/crud-factory.ts";
 }
 
 /** @typedef {{ file: string, line: number, snippet: string, rule: string }} Violation */
@@ -273,6 +286,38 @@ function scan(files) {
           rule: "direct-query-invalidation",
         });
       }
+
+      // Rule 7: response field maps must be canonical entity field maps, not
+      // duplicated `*ResponseFields` objects beside exported response schemas.
+      if (
+        isSchemaContractFile(file) &&
+        !isCommentLine(line) &&
+        RESPONSE_FIELD_MAP_RE.test(line)
+      ) {
+        violations.push({
+          file,
+          line: i + 1,
+          snippet: line.trim(),
+          rule: "schema-response-field-map",
+        });
+      }
+
+      // Rule 8: entity list schemas should use createSortPaginationFields with
+      // owner-module sort enums; the loose sortPaginationFields fallback is only
+      // allowed in the helper itself and crud-factory compatibility path.
+      if (
+        !isPaginationHelperFile(file) &&
+        !isCrudFactoryFile(file) &&
+        !isCommentLine(line) &&
+        LOOSE_SORT_PAGINATION_RE.test(line)
+      ) {
+        violations.push({
+          file,
+          line: i + 1,
+          snippet: line.trim(),
+          rule: "loose-sort-pagination-fields",
+        });
+      }
     }
   }
 
@@ -306,6 +351,10 @@ const byRule = {
     "Schema contract derivation — use private field maps plus explicit z.object contracts instead of `.extend()`, `.shape`, `.pick()`, `.omit()`, or `.partial()`.",
   "direct-query-invalidation":
     "Direct React Query invalidation — use invalidateTRPCQueries/cancelTRPCQueries/invalidateAllQueries from apps/web/src/lib/query-keys.ts.",
+  "schema-response-field-map":
+    "Duplicated response field map — use canonical owner-module field maps, not *ResponseFields objects.",
+  "loose-sort-pagination-fields":
+    "Loose sort pagination fields — use createSortPaginationFields with owner-module sortable field enums.",
 };
 
 console.error(

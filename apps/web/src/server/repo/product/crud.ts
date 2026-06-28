@@ -18,12 +18,12 @@ import {
   type ProductCreateInput,
   type ProductTopLevelOut,
   type ProductUpdateInput,
+  productSortableFields,
 } from "@cubby/schemas/product";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { countBy, uniq } from "es-toolkit";
-import { getSortableFields } from "~/entities/entities";
 import type { Database } from "~/server/db";
 import {
   image,
@@ -109,12 +109,7 @@ const productListOrderBy = (sort: SortParams, groupBy?: string) => {
     ];
   }
 
-  return buildOrderBy(
-    product,
-    sort,
-    [...getSortableFields("product")],
-    groupBy,
-  );
+  return buildOrderBy(product, sort, [...productSortableFields], groupBy);
 };
 
 export const getProductByID = async (db: Database, id: ProductId) => {

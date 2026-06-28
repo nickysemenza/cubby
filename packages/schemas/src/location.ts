@@ -27,12 +27,22 @@ export const locationFiltersSchema = z.object({
   itemTypeFilter: locationType.optional(),
 });
 
+export const locationSortableFields = [
+  "createdAt",
+  "name",
+  "type",
+  "lastBulkInventory",
+  "valuation",
+] as const;
+
+export type LocationSortField = (typeof locationSortableFields)[number];
+
 // Per-category counts for a location's inventory (matches the client's
 // PricingStatus buckets in calculate-inventory-valuation).
 const pricingCounts = z.object({
-  priced: z.number().int(),
-  missingPricing: z.number().int(),
-  miscNoPrice: z.number().int(),
+  priced: z.number().int().nonnegative(),
+  missingPricing: z.number().int().nonnegative(),
+  miscNoPrice: z.number().int().nonnegative(),
 });
 
 /**
@@ -43,30 +53,14 @@ const pricingCounts = z.object({
 export const locationValuation = z.object({
   directValuation: z.number(),
   totalValuation: z.number(),
-  directItemCount: z.number().int(),
-  totalItemCount: z.number().int(),
+  directItemCount: z.number().int().nonnegative(),
+  totalItemCount: z.number().int().nonnegative(),
   direct: pricingCounts,
   total: pricingCounts,
 });
 export type LocationValuation = z.infer<typeof locationValuation>;
 
-export const locationOut = z.object({
-  id: locationId,
-  shortcode: locationShortcode,
-  name: z.string().describe("name of location"),
-  type: locationType,
-  lastBulkInventory: z.date().nullable(),
-  aiDescription: z.string().nullable(),
-  images: z.array(imageOut),
-  // Persisted valuation rollup; null until first recompute.
-  valuation: locationValuation.nullable(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
-});
-
-export type LocationOut = z.infer<typeof locationOut>;
-
-const locationResponseFields = {
+export const locationOutFields = {
   id: locationId,
   shortcode: locationShortcode,
   name: z.string().describe("name of location"),
@@ -79,6 +73,10 @@ const locationResponseFields = {
   createdAt: z.date(),
   updatedAt: z.date(),
 };
+
+export const locationOut = z.object(locationOutFields);
+
+export type LocationOut = z.infer<typeof locationOut>;
 
 export const locationListRefOut = z.object({
   id: locationId,
@@ -97,8 +95,8 @@ const locationInventoryProductOut = z.object({
   upc: upc.nullable(),
   fdc_id: fdcId.nullable(),
   manufacturer: z.string(),
-  model: z.string().nullish(),
-  notes: z.string().nullish(),
+  model: z.string().nullable(),
+  notes: z.string().nullable(),
   expectedQuantity: z.number().int().positive().nullable(),
   category: locationProductCategory.nullable(),
   price: z.number().nullable(),
@@ -117,7 +115,7 @@ const locationInventoryWithProductOut = z.object({
 });
 
 export const locationListItemOut = z.object({
-  ...locationResponseFields,
+  ...locationOutFields,
   children: z.array(locationListRefOut),
   parent: locationListRefOut.nullable(),
   inventoryEntries: z.array(locationInventoryWithProductOut),
@@ -125,14 +123,17 @@ export const locationListItemOut = z.object({
 export type LocationListItemOut = z.infer<typeof locationListItemOut>;
 
 export const locationWithParentNameOut = z.object({
-  ...locationResponseFields,
+  ...locationOutFields,
   parentName: z.string().nullable(),
 });
 export type LocationWithParentNameOut = z.infer<
   typeof locationWithParentNameOut
 >;
 
-export const locationTypeCountsOut = z.record(locationType, z.number());
+export const locationTypeCountsOut = z.record(
+  locationType,
+  z.number().int().nonnegative(),
+);
 
 export const touchLastBulkInventoryOut = z.object({
   success: z.boolean(),
@@ -143,10 +144,13 @@ export const locationsWithParentNameOut = z.array(locationWithParentNameOut);
 export const recentlyActiveLocationsOut = z.array(locationOut);
 
 export const recomputeLocationValuationsOut = z.object({
-  updated: z.number(),
+  updated: z.number().int().nonnegative(),
 });
 
-export const locationChildCountsOut = z.record(z.string(), z.number());
+export const locationChildCountsOut = z.record(
+  z.string(),
+  z.number().int().nonnegative(),
+);
 
 /** Minimal inventory item info for tree display */
 const inventoryItemForTree = z.object({
@@ -171,12 +175,12 @@ export type InfLocation = LocationOut & {
 };
 
 export const infLocation: z.ZodType<InfLocation> = z.object({
-  ...locationResponseFields,
+  ...locationOutFields,
   children: z.lazy(() => infLocation.array()).optional(),
   parent: z.lazy(() => infLocation.optional()),
-  childCount: z.number().optional(),
-  directItemCount: z.number().optional(),
-  totalItemCount: z.number().optional(),
+  childCount: z.number().int().nonnegative().optional(),
+  directItemCount: z.number().int().nonnegative().optional(),
+  totalItemCount: z.number().int().nonnegative().optional(),
   inventoryItems: z.array(inventoryItemForTree).optional(),
 });
 
@@ -229,7 +233,7 @@ export const locationShortcodeInput = z.object({
 
 export const recentlyActiveLocationsInput = z
   .object({
-    limit: z.number().min(1).max(10).default(5),
+    limit: z.number().int().min(1).max(10).default(5),
   })
   .optional();
 
