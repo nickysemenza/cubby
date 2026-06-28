@@ -39,10 +39,10 @@ export const quickActions: QuickAction[] = [
   { entity: "location" },
   { entity: "recipe" },
   {
-    label: "Add Inventory",
-    href: "/inventory/quick-capture",
+    label: "Inventory Session",
+    href: "/inventory/session",
     icon: ScanBarcode,
-    description: "Scan or batch entry",
+    description: "Review bins and add items",
   },
 ];
 

@@ -514,7 +514,7 @@ export function SideBySideFields({
       <div className={narrowFirst ? "w-16 shrink-0" : "flex-1"}>
         {Array.isArray(children) ? children[0] : children}
       </div>
-      <div className="flex-1">
+      <div className="min-w-0 flex-1">
         {Array.isArray(children) && children.length > 1 ? children[1] : null}
       </div>
     </div>

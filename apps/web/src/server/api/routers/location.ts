@@ -10,6 +10,8 @@ import { type LocationId, locationId } from "@cubby/schemas/identifiers";
 import {
   infLocation,
   infLocationListOut,
+  locationBulkUpdateParentInput,
+  locationBulkUpdateParentOut,
   locationChildCountsOut,
   locationCreateInput,
   locationFiltersSchema,
@@ -27,11 +29,14 @@ import {
   recomputeLocationValuationsOut,
   touchLastBulkInventoryOut,
 } from "@cubby/schemas/location";
+import { createAppError } from "~/server/errors/app-error";
+import { withTransaction } from "~/server/repo/database-helpers";
 import {
   buildLocationTree,
   buildLocationTypeCount,
   createLocation,
   deleteLocations,
+  ensureGlobalUnknownLocation,
   getChildCountsByLocationIds,
   getLocationById,
   getLocationByShortcode,
@@ -40,7 +45,9 @@ import {
   locationList,
   touchLastBulkInventory as touchLastBulkInventoryRepo,
   updateLocation,
+  updateLocationAiDescription,
 } from "~/server/repo/location";
+import { describeLocation } from "~/server/services/ai-enrichment.service";
 import {
   createDeleteProcedure,
   createEntityCrudWithoutListProcedures,
@@ -88,6 +95,9 @@ const { getByID, create, update } = createEntityCrudWithoutListProcedures({
       const previousParent = Object.hasOwn(data, "parentId")
         ? ((await getLocationById(services.db, id)).parent?.id ?? null)
         : undefined;
+      const imagesChanged =
+        (data.pendingImageIds?.length ?? 0) > 0 ||
+        (data.removeImageIds?.length ?? 0) > 0;
       const updated = await updateLocation(
         services.db,
         id,
@@ -101,7 +111,15 @@ const { getByID, create, update } = createEntityCrudWithoutListProcedures({
       ) {
         await services.services.locationValuation.recompute();
       }
-      return updated;
+      if (!imagesChanged) return updated;
+
+      if (updated.images.length === 0) {
+        await updateLocationAiDescription(services.db, id, null);
+      } else {
+        await describeLocation(services.db, id);
+      }
+
+      return await getLocationById(services.db, id);
     },
   },
 });
@@ -116,6 +134,12 @@ const makeTree = protectedProcedure
   .output(infLocationListOut)
   .query(async ({ ctx }) => await buildLocationTree(ctx.db));
 
+const ensureGlobalUnknown = protectedProcedure
+  .output(infLocation)
+  .mutation(async ({ ctx }) =>
+    ensureGlobalUnknownLocation(ctx.db, ctx.actorContext),
+  );
+
 // Touch lastBulkInventory timestamp (for Scanner page "Mark Complete" button)
 const touchLastBulkInventory = protectedProcedure
   .input(locationIdInput)
@@ -123,6 +147,32 @@ const touchLastBulkInventory = protectedProcedure
   .mutation(async ({ ctx, input }) => {
     await touchLastBulkInventoryRepo(ctx.db, input.id);
     return { success: true };
+  });
+
+const bulkUpdateParent = protectedProcedure
+  .input(locationBulkUpdateParentInput)
+  .output(locationBulkUpdateParentOut)
+  .mutation(async ({ ctx, input }) => {
+    if (input.parentId && input.ids.includes(input.parentId)) {
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "Cannot move a location under itself.",
+      );
+    }
+
+    await withTransaction(ctx.db, async (tx) => {
+      for (const id of input.ids) {
+        await updateLocation(
+          tx,
+          id,
+          { parentId: input.parentId },
+          ctx.actorContext,
+        );
+      }
+    });
+
+    await ctx.services.locationValuation.recompute();
+    return { updated: input.ids.length };
   });
 
 // Batch lookup: multiple locations by shortcode (e.g. for label printing)
@@ -182,9 +232,11 @@ export const locationRouter = createTRPCRouter({
   getLocationTypesCount,
   getChildCountsByLocations,
   makeTree,
+  ensureGlobalUnknown,
   create,
   update,
   recomputeValuations,
   delete: deleteItem,
   touchLastBulkInventory,
+  bulkUpdateParent,
 });

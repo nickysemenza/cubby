@@ -281,14 +281,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   const extraActions = useCallback(
     (row: ProductListItem) => (
       <>
-        <DropdownMenuItem
-          render={
-            <Link
-              to="/inventory/quick-capture"
-              search={{ productId: row.id }}
-            />
-          }
-        >
+        <DropdownMenuItem render={<Link to="/inventory/session" />}>
           <Package className="mr-2 h-4 w-4" />
           Add to Inventory
         </DropdownMenuItem>

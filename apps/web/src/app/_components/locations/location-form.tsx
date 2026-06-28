@@ -152,7 +152,7 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
       onCancel={onCancel}
       submitButtonText={buttonText}
     >
-      <Card>
+      <Card className="overflow-visible">
         <CardContent className="space-y-2 px-4 py-1">
           <SideBySideFields>
             <UnifiedTextField

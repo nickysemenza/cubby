@@ -11,10 +11,10 @@ import {
 export function InventoryActions() {
   return (
     <>
-      <Link to="/inventory/quick-capture">
+      <Link to="/inventory/session">
         <Button variant="default" size="default" className="gap-1 text-xs">
           <ScanBarcode className="h-3.5 w-3.5" />
-          Add Inventory
+          Inventory Session
         </Button>
       </Link>
       <DropdownMenu>

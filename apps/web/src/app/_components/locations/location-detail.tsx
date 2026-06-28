@@ -11,7 +11,6 @@ import {
   Plus,
   Printer,
   ScanBarcode,
-  Sparkles,
 } from "lucide-react";
 import { type FC, useState } from "react";
 import { toast } from "sonner";
@@ -27,13 +26,12 @@ import {
 import { invalidateTRPCQueries } from "~/lib/query-keys";
 import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
-import { InventoryCaptureWorkspace } from "../../inventory/capture/InventoryCaptureWorkspace";
 import { type DetailSection, DetailSections } from "../data-table/detail-page";
 import { editableDetailSection } from "../data-table/editable-detail-section";
 import { useEntityDetail } from "../hooks/useEntityDetail";
+import { QuickInventoryAdd } from "../inventory/quick-inventory-add";
 import { AiDescriptionSection } from "./ai-description-section";
 import { CreateChildLocationDialog } from "./create-child-location-dialog";
-import { DetectItemsDialog } from "./detect-items-dialog";
 import { InventoryValuationSummary } from "./inventory-valuation-summary";
 import { LocationBasicInfo } from "./location-basic-info";
 import { LocationBreadcrumb } from "./location-breadcrumb";
@@ -51,7 +49,6 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [createChildOpen, setCreateChildOpen] = useState(false);
-  const [detectItemsOpen, setDetectItemsOpen] = useState(false);
 
   const { commonSections, editMode } = useEntityDetail<
     InfLocation,
@@ -181,27 +178,18 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
       content: (
         <Stack gap="sm">
           <Stack gap="sm">
-            <InventoryCaptureWorkspace
-              mode="inline"
+            <QuickInventoryAdd
               locationId={location.id}
               onSuccess={() => undefined}
             />
             <Row gap="sm">
-              <Button
-                variant="outline"
-                onClick={() => setDetectItemsOpen(true)}
-                disabled={(location.images ?? []).length === 0}
-              >
-                <Sparkles className="mr-2 h-4 w-4" />
-                Detect Items
-              </Button>
               <Link
-                to="/inventory/quick-capture"
-                search={{ locationId: location.id, scanner: true }}
+                to="/inventory/session"
+                search={{ parentId: location.id }}
                 className={cn(buttonVariants({ variant: "outline" }))}
               >
                 <ScanBarcode className="mr-2 h-4 w-4" />
-                Scan Items
+                Inventory Session
               </Link>
             </Row>
           </Stack>
@@ -240,12 +228,6 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
             api.location.getByID.queryKey({ id: location.id }),
           ]);
         }}
-      />
-      <DetectItemsDialog
-        open={detectItemsOpen}
-        onOpenChange={setDetectItemsOpen}
-        locationId={location.id}
-        locationName={location.name}
       />
     </>
   );

@@ -25,7 +25,7 @@
       "purpose": "maskable"
     }
   ],
-  "start_url": "/inventory/quick-capture?scanner=true",
+  "start_url": "/inventory/session",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",

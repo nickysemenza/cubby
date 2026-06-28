@@ -1,7 +1,8 @@
 import { locationId } from "@cubby/schemas/identifiers";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
-import { InventoryCaptureWorkspace } from "~/app/inventory/capture/InventoryCaptureWorkspace";
+import BulkMoveForm from "~/app/inventory/bulk-move/bulk-move-form";
+import { Page } from "~/components/page/Page";
 
 const searchSchema = z.object({
   sourceLocationId: locationId.optional().catch(undefined),
@@ -19,9 +20,14 @@ function BulkInventoryMovePage() {
   const { sourceLocationId } = Route.useSearch();
 
   return (
-    <InventoryCaptureWorkspace
-      mode="bulk-move"
-      initialSourceLocationId={sourceLocationId}
-    />
+    <Page
+      variant="list"
+      title="Bulk move inventory"
+      eyebrow="Inventory"
+      compact
+      decoration="none"
+    >
+      <BulkMoveForm initialSourceLocationId={sourceLocationId} />
+    </Page>
   );
 }

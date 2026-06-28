@@ -10,7 +10,7 @@ import type {
 } from "@cubby/schemas/location";
 import { locationType } from "@cubby/schemas/location";
 import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
-import type { Database } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   type image,
   inventoryEntry,
@@ -19,7 +19,12 @@ import {
   product,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
-import { getDb, notDeleted, relations } from "~/server/repo/database-helpers";
+import {
+  getDb,
+  notDeleted,
+  relations,
+  unwrapDb,
+} from "~/server/repo/database-helpers";
 
 import { buildLocationWithChildren } from "./helpers";
 import type { LocationWithParentChild } from "./internal-types";
@@ -228,7 +233,7 @@ export const touchLastBulkInventory = async (
  * @returns true if the change would create a cycle, false if safe
  */
 export const wouldCreateParentCycle = async (
-  db: Database,
+  db: Database | DrizzleTransaction,
   locationId: LocationId,
   newParentId: LocationId,
 ): Promise<boolean> => {
@@ -244,7 +249,7 @@ export const wouldCreateParentCycle = async (
       return true; // Found a cycle
     }
     const parentLocation: { parentId: LocationId | null } | undefined =
-      await getDb(db).query.location.findFirst({
+      await unwrapDb(db).query.location.findFirst({
         where: eq(location.id, currentId),
         columns: { parentId: true },
       });

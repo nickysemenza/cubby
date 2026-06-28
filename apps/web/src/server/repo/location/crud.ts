@@ -63,10 +63,10 @@ import { wouldCreateParentCycle } from "./tree";
 // walks off the end of a non-existent chain and reports "no cycle", orphaning
 // the row in the tree.
 const assertParentLocationExists = async (
-  db: Database,
+  db: Database | DrizzleTransaction,
   parentId: LocationId,
 ): Promise<void> => {
-  const parent = await getDb(db).query.location.findFirst({
+  const parent = await unwrapDb(db).query.location.findFirst({
     where: and(eq(location.id, parentId), notDeleted(location)),
     columns: { id: true },
   });
@@ -127,9 +127,48 @@ export const createLocation = async (
   return getLocationById(db, newLocation.id);
 };
 
+export const ensureGlobalUnknownLocation = async (
+  db: Database,
+  actor: ActorContext,
+) => {
+  const findUnknown = () =>
+    getDb(db).query.location.findFirst({
+      where: and(
+        eq(location.name, "Unknown"),
+        isNull(location.parentId),
+        notDeleted(location),
+      ),
+      columns: { id: true },
+    });
+
+  const existing = await findUnknown();
+
+  if (existing) {
+    return getLocationById(db, existing.id);
+  }
+
+  try {
+    return await createLocation(
+      db,
+      {
+        name: "Unknown",
+        type: "area",
+        parentId: null,
+      },
+      actor,
+    );
+  } catch (error) {
+    // Location_name_key prevents duplicate active names; if another request won
+    // the create race, reuse that row instead of surfacing a transient conflict.
+    const raced = await findUnknown();
+    if (raced) return getLocationById(db, raced.id);
+    throw error;
+  }
+};
+
 // Update an existing location
 export const updateLocation = async (
-  db: Database,
+  db: Database | DrizzleTransaction,
   id: LocationId,
   data: LocationUpdateInput["data"],
   actor: ActorContext,
@@ -149,11 +188,11 @@ export const updateLocation = async (
   }
 
   // Fetch current state for audit logging
-  const before = await getDb(db).query.location.findFirst({
+  const before = await unwrapDb(db).query.location.findFirst({
     where: and(eq(location.id, id), notDeleted(location)),
   });
 
-  return await withTransaction(db, async (tx) => {
+  const runUpdate = async (tx: DrizzleTransaction) => {
     // Build update values using helper to filter undefined
     const updateValues = buildPartialUpdateValues({
       name: data.name,
@@ -205,7 +244,11 @@ export const updateLocation = async (
     }
 
     return getLocationById(tx, updated.id);
-  });
+  };
+
+  return "rollback" in db
+    ? await runUpdate(db)
+    : await withTransaction(db, runUpdate);
 };
 
 /**
@@ -338,7 +381,7 @@ export const locationList = async (
 export const updateLocationAiDescription = async (
   db: Database,
   id: LocationId,
-  aiDescription: string,
+  aiDescription: string | null,
 ) => {
   await updateLiveAndReturn(db, location, { aiDescription }, id);
 };

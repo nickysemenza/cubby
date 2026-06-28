@@ -38,7 +38,9 @@ export function AmountFieldGroup<
     <SideBySideFields
       narrowFirst={compact}
       className={cn(
-        compact ? "w-full min-w-0 space-x-2" : "min-w-[13rem] space-x-2",
+        compact
+          ? "w-full min-w-0 flex-row space-x-2 space-y-0"
+          : "min-w-[13rem] space-x-2",
       )}
     >
       <NullableNumericField
