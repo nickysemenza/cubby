@@ -231,7 +231,9 @@ jobs:
         shard: [1, 2]
     services:
       postgres:
-        image: postgres
+        # pgvector image: integration/E2E setup runs `CREATE EXTENSION vector`
+        # (semantic search), which plain postgres lacks. pg17 + pgvector.
+        image: pgvector/pgvector:pg17
         env:
           POSTGRES_USER: postgres
           POSTGRES_DB: cubby
@@ -407,7 +409,9 @@ jobs:
       # matches the cache step's `~/.cache/ms-playwright` (action-expanded).
     services:
       postgres:
-        image: postgres
+        # pgvector image: integration/E2E setup runs `CREATE EXTENSION vector`
+        # (semantic search), which plain postgres lacks. pg17 + pgvector.
+        image: pgvector/pgvector:pg17
         env:
           POSTGRES_USER: postgres
           POSTGRES_DB: cubby
