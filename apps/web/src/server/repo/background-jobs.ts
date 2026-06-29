@@ -8,7 +8,7 @@ import type {
   BackgroundJobStatus,
   BackgroundJobSummary,
 } from "@cubby/schemas/background-jobs";
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { backgroundBatch, backgroundJob } from "~/server/db/schema";
 import {
@@ -231,7 +231,7 @@ export async function findQueuedBackgroundJobs(
   const rows = await getDb(db).query.backgroundJob.findMany({
     where: and(
       eq(backgroundJob.status, "queued"),
-      isNull(backgroundJob.deletedAt),
+      notDeleted(backgroundJob),
       kindFilter,
     ),
     orderBy: backgroundJob.createdAt,
@@ -260,7 +260,7 @@ export async function markBackgroundJobRunning(
         and(
           eq(backgroundJob.id, jobId),
           inArray(backgroundJob.status, ["queued", "pending"]),
-          isNull(backgroundJob.deletedAt),
+          notDeleted(backgroundJob),
         ),
       )
       .returning();
@@ -304,7 +304,7 @@ export async function failOrRetryBackgroundJob(
         maxAttempts: backgroundJob.maxAttempts,
       })
       .from(backgroundJob)
-      .where(and(eq(backgroundJob.id, jobId), isNull(backgroundJob.deletedAt)))
+      .where(and(eq(backgroundJob.id, jobId), notDeleted(backgroundJob)))
       .limit(1);
     if (!job) return "failed";
 
@@ -338,7 +338,7 @@ export async function cancelQueuedJobsForBatch(
         and(
           eq(backgroundJob.batchId, batchId),
           inArray(backgroundJob.status, ["queued", "pending"]),
-          isNull(backgroundJob.deletedAt),
+          notDeleted(backgroundJob),
         ),
       );
     await recalculateBackgroundBatchSummaryTx(tx, batchId);
@@ -364,7 +364,7 @@ export async function retryFailedJobsForBatch(
         and(
           eq(backgroundJob.batchId, batchId),
           eq(backgroundJob.status, "failed"),
-          isNull(backgroundJob.deletedAt),
+          notDeleted(backgroundJob),
         ),
       );
     await recalculateBackgroundBatchSummaryTx(tx, batchId);
@@ -374,8 +374,8 @@ export async function retryFailedJobsForBatch(
 export async function retryBackgroundJob(
   db: Database,
   jobId: string,
-): Promise<void> {
-  await withTransaction(db, async (tx) => {
+): Promise<string | null> {
+  return await withTransaction(db, async (tx) => {
     const [row] = await tx
       .update(backgroundJob)
       .set({
@@ -390,11 +390,12 @@ export async function retryBackgroundJob(
         and(
           eq(backgroundJob.id, jobId),
           eq(backgroundJob.status, "failed"),
-          isNull(backgroundJob.deletedAt),
+          notDeleted(backgroundJob),
         ),
       )
       .returning({ batchId: backgroundJob.batchId });
     if (row) await recalculateBackgroundBatchSummaryTx(tx, row.batchId);
+    return row?.batchId ?? null;
   });
 }
 

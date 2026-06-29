@@ -191,6 +191,39 @@ export async function drainQueuedBackgroundJobs(
   return { processed };
 }
 
+/**
+ * Re-dispatch a batch's currently-"queued" jobs after a manual retry. Retrying
+ * only resets DB status; without this, in production the CF queue consumer never
+ * receives a wakeup and the jobs sit idle. Mirrors the dispatch tail: queue in
+ * prod, drain inline in dev (re-running on "retry" until terminal).
+ */
+export async function redispatchQueuedBatchJobs(
+  db: Database,
+  batchId: string,
+): Promise<void> {
+  const detail = await getBackgroundBatchDetail(db, batchId);
+  if (!detail) return;
+  const queuedJobIds = detail.jobs
+    .filter((job) => job.status === "queued")
+    .map((job) => job.id);
+  if (queuedJobIds.length === 0) return;
+
+  const queue = getBackgroundQueue();
+  if (queue) {
+    await setBackgroundBatchProcessor(db, batchId, "queue");
+    await sendBackgroundMessages(queue, batchId, detail.kind, queuedJobIds);
+    return;
+  }
+
+  await setBackgroundBatchProcessor(db, batchId, "inline");
+  for (const jobId of queuedJobIds) {
+    let outcome = await processBackgroundJob(db, jobId);
+    while (outcome === "retry") {
+      outcome = await processBackgroundJob(db, jobId);
+    }
+  }
+}
+
 export async function dispatchLocationValuationRecompute(
   db: Database,
   reason: string,

@@ -7,7 +7,10 @@ import {
   backgroundDrainOutSchema,
   backgroundJobIdInputSchema,
 } from "@cubby/schemas/background-jobs";
-import { drainQueuedBackgroundJobs } from "~/server/background-queue";
+import {
+  drainQueuedBackgroundJobs,
+  redispatchQueuedBatchJobs,
+} from "~/server/background-queue";
 import { createAppError } from "~/server/errors/app-error";
 import {
   cancelQueuedJobsForBatch,
@@ -42,12 +45,16 @@ export const backgroundJobsRouter = createTRPCRouter({
     .input(backgroundBatchIdInputSchema)
     .mutation(async ({ ctx, input }) => {
       await retryFailedJobsForBatch(ctx.db, input.batchId);
+      // Retry only resets DB status; re-dispatch so the prod queue consumer
+      // (or dev inline drain) actually picks the jobs back up.
+      await redispatchQueuedBatchJobs(ctx.db, input.batchId);
       return { ok: true };
     }),
   retryJob: protectedProcedure
     .input(backgroundJobIdInputSchema)
     .mutation(async ({ ctx, input }) => {
-      await retryBackgroundJob(ctx.db, input.jobId);
+      const batchId = await retryBackgroundJob(ctx.db, input.jobId);
+      if (batchId) await redispatchQueuedBatchJobs(ctx.db, batchId);
       return { ok: true };
     }),
   cancelBatch: protectedProcedure

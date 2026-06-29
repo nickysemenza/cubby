@@ -1620,17 +1620,36 @@ function SessionCaptureActions({ location }: { location: SessionLocation }) {
     "hit" | "miss" | null
   >(null);
 
-  const invalidateSession = () => {
-    invalidateTRPCQueries(queryClient, inventoryMutationInvalidateKeys);
-    invalidateTRPCQueries(queryClient, locationMutationInvalidateKeys);
-    invalidateTRPCQueries(queryClient, productLookupMutationInvalidateKeys);
+  // Distinct from the outer session invalidator: this one also refreshes the
+  // product-lookup caches and, given a mutation result, polls its background
+  // work (e.g. the AI description enqueued by attaching a photo) so the UI
+  // self-heals once it drains.
+  const invalidateCapture = (result?: unknown) => {
+    const keys = [
+      ...inventoryMutationInvalidateKeys,
+      ...locationMutationInvalidateKeys,
+      ...productLookupMutationInvalidateKeys,
+    ];
+    invalidateTRPCQueries(queryClient, keys);
+    void watchBatchesAndInvalidate({
+      queryClient,
+      result,
+      invalidateKeys: keys,
+      fetchBatchStatus: (batchId) =>
+        queryClient
+          .fetchQuery({
+            ...api.backgroundJobs.getBatch.queryOptions({ batchId }),
+            staleTime: 0,
+          })
+          .then((batch) => batch.status),
+    });
   };
 
   const uploadImage = useMutation(api.image.uploadImage.mutationOptions());
   const updateLocation = useMutation(
     api.location.update.mutationOptions({
-      onSuccess: () => {
-        invalidateSession();
+      onSuccess: (data) => {
+        invalidateCapture(data);
         toast.success("Photo attached and description updated.");
       },
       onError: (error) => toast.error(getErrorMessage(error)),
@@ -1658,7 +1677,7 @@ function SessionCaptureActions({ location }: { location: SessionLocation }) {
   const approveDetectedItem = useMutation(
     api.ai.approveDetectedInventoryItem.mutationOptions({
       onSuccess: (data) => {
-        invalidateSession();
+        invalidateCapture(data);
         toast.success(
           savedWithBackgroundWork(
             data.sideEffects,
@@ -1670,7 +1689,7 @@ function SessionCaptureActions({ location }: { location: SessionLocation }) {
   );
   const createInventory = useMutation(
     api.inventory.create.mutationOptions({
-      onSuccess: invalidateSession,
+      onSuccess: invalidateCapture,
       onError: (error) => toast.error(getErrorMessage(error)),
     }),
   );
