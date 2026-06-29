@@ -1,5 +1,6 @@
 export {
   SHORTCODE_CHARS,
+  SHORTCODE_PREFIX,
   SHORTCODE_RE,
   locationShortcode,
   productShortcode,

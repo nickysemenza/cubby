@@ -21,6 +21,7 @@ import { Route as AuthenticatedPantryViewRouteImport } from './routes/_authentic
 import { Route as AuthenticatedMcpRouteImport } from './routes/_authenticated/mcp'
 import { Route as AuthenticatedLabelsRouteImport } from './routes/_authenticated/labels'
 import { Route as AuthenticatedInsightsRouteImport } from './routes/_authenticated/insights'
+import { Route as AuthenticatedEntitiesRouteImport } from './routes/_authenticated/entities'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedBackgroundJobsRouteImport } from './routes/_authenticated/background-jobs'
 import { Route as AuthenticatedAskRouteImport } from './routes/_authenticated/ask'
@@ -133,6 +134,11 @@ const AuthenticatedLabelsRoute = AuthenticatedLabelsRouteImport.update({
 const AuthenticatedInsightsRoute = AuthenticatedInsightsRouteImport.update({
   id: '/insights',
   path: '/insights',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedEntitiesRoute = AuthenticatedEntitiesRouteImport.update({
+  id: '/entities',
+  path: '/entities',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
@@ -453,6 +459,7 @@ export interface FileRoutesByFullPath {
   '/ask': typeof AuthenticatedAskRoute
   '/background-jobs': typeof AuthenticatedBackgroundJobsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/entities': typeof AuthenticatedEntitiesRoute
   '/insights': typeof AuthenticatedInsightsRoute
   '/labels': typeof AuthenticatedLabelsRoute
   '/mcp': typeof AuthenticatedMcpRoute
@@ -520,6 +527,7 @@ export interface FileRoutesByTo {
   '/ask': typeof AuthenticatedAskRoute
   '/background-jobs': typeof AuthenticatedBackgroundJobsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/entities': typeof AuthenticatedEntitiesRoute
   '/insights': typeof AuthenticatedInsightsRoute
   '/labels': typeof AuthenticatedLabelsRoute
   '/mcp': typeof AuthenticatedMcpRoute
@@ -589,6 +597,7 @@ export interface FileRoutesById {
   '/_authenticated/ask': typeof AuthenticatedAskRoute
   '/_authenticated/background-jobs': typeof AuthenticatedBackgroundJobsRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/entities': typeof AuthenticatedEntitiesRoute
   '/_authenticated/insights': typeof AuthenticatedInsightsRoute
   '/_authenticated/labels': typeof AuthenticatedLabelsRoute
   '/_authenticated/mcp': typeof AuthenticatedMcpRoute
@@ -658,6 +667,7 @@ export interface FileRouteTypes {
     | '/ask'
     | '/background-jobs'
     | '/dashboard'
+    | '/entities'
     | '/insights'
     | '/labels'
     | '/mcp'
@@ -725,6 +735,7 @@ export interface FileRouteTypes {
     | '/ask'
     | '/background-jobs'
     | '/dashboard'
+    | '/entities'
     | '/insights'
     | '/labels'
     | '/mcp'
@@ -793,6 +804,7 @@ export interface FileRouteTypes {
     | '/_authenticated/ask'
     | '/_authenticated/background-jobs'
     | '/_authenticated/dashboard'
+    | '/_authenticated/entities'
     | '/_authenticated/insights'
     | '/_authenticated/labels'
     | '/_authenticated/mcp'
@@ -946,6 +958,13 @@ declare module '@tanstack/react-router' {
       path: '/insights'
       fullPath: '/insights'
       preLoaderRoute: typeof AuthenticatedInsightsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/entities': {
+      id: '/_authenticated/entities'
+      path: '/entities'
+      fullPath: '/entities'
+      preLoaderRoute: typeof AuthenticatedEntitiesRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/dashboard': {
@@ -1337,6 +1356,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedAskRoute: typeof AuthenticatedAskRoute
   AuthenticatedBackgroundJobsRoute: typeof AuthenticatedBackgroundJobsRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedEntitiesRoute: typeof AuthenticatedEntitiesRoute
   AuthenticatedInsightsRoute: typeof AuthenticatedInsightsRoute
   AuthenticatedLabelsRoute: typeof AuthenticatedLabelsRoute
   AuthenticatedMcpRoute: typeof AuthenticatedMcpRoute
@@ -1397,6 +1417,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAskRoute: AuthenticatedAskRoute,
   AuthenticatedBackgroundJobsRoute: AuthenticatedBackgroundJobsRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedEntitiesRoute: AuthenticatedEntitiesRoute,
   AuthenticatedInsightsRoute: AuthenticatedInsightsRoute,
   AuthenticatedLabelsRoute: AuthenticatedLabelsRoute,
   AuthenticatedMcpRoute: AuthenticatedMcpRoute,

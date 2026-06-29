@@ -6,36 +6,55 @@ export const SHORTCODE_CHARS = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 
 const shortcodePattern = `[${SHORTCODE_CHARS}]{4}`;
 
+/**
+ * Per-entity shortcode prefixes — the single source of truth for the "X-" stamp.
+ * Everything below (the validators, the all-prefix regex, the parser map, and
+ * the generators) derives from this, so a prefix is defined exactly once.
+ */
+export const SHORTCODE_PREFIX = {
+  location: "L-",
+  product: "P-",
+  recipe: "R-",
+} as const;
+export type ShortcodeType = keyof typeof SHORTCODE_PREFIX;
+
+const prefixLetters = Object.values(SHORTCODE_PREFIX)
+  .map((p) => p.charAt(0))
+  .join("");
+const shortcodeRegex = (type: ShortcodeType) =>
+  new RegExp(`^${SHORTCODE_PREFIX[type]}${shortcodePattern}$`);
+
 /** Regex matching any valid shortcode (L-XXXX, P-XXXX, R-XXXX) */
-export const SHORTCODE_RE = new RegExp(`^([LPR])-${shortcodePattern}$`);
+export const SHORTCODE_RE = new RegExp(
+  `^([${prefixLetters}])-${shortcodePattern}$`,
+);
 
 // Zod schemas with brand types for compile-time safety
 export const locationShortcode = z
   .string()
-  .regex(new RegExp(`^L-${shortcodePattern}$`), "Invalid location shortcode")
+  .regex(shortcodeRegex("location"), "Invalid location shortcode")
   .brand("LocationShortcode");
 
 export const productShortcode = z
   .string()
-  .regex(new RegExp(`^P-${shortcodePattern}$`), "Invalid product shortcode")
+  .regex(shortcodeRegex("product"), "Invalid product shortcode")
   .brand("ProductShortcode");
 
 export const recipeShortcode = z
   .string()
-  .regex(new RegExp(`^R-${shortcodePattern}$`), "Invalid recipe shortcode")
+  .regex(shortcodeRegex("recipe"), "Invalid recipe shortcode")
   .brand("RecipeShortcode");
 
 export type LocationShortcode = z.infer<typeof locationShortcode>;
 export type ProductShortcode = z.infer<typeof productShortcode>;
 export type RecipeShortcode = z.infer<typeof recipeShortcode>;
 
-type ShortcodeType = "location" | "product" | "recipe";
-
-const PREFIX_MAP: Record<string, ShortcodeType> = {
-  L: "location",
-  P: "product",
-  R: "recipe",
-};
+const PREFIX_MAP: Record<string, ShortcodeType> = Object.fromEntries(
+  (Object.keys(SHORTCODE_PREFIX) as ShortcodeType[]).map((type) => [
+    SHORTCODE_PREFIX[type].charAt(0),
+    type,
+  ]),
+);
 
 const shortcodeId = customAlphabet(SHORTCODE_CHARS, 4);
 
@@ -46,17 +65,17 @@ export function generateShortcodeId(): string {
 
 /** Generate a location shortcode (L-XXXX format). */
 export function generateLocationShortcode(): string {
-  return `L-${generateShortcodeId()}`;
+  return `${SHORTCODE_PREFIX.location}${generateShortcodeId()}`;
 }
 
 /** Generate a product shortcode (P-XXXX format). */
 export function generateProductShortcode(): string {
-  return `P-${generateShortcodeId()}`;
+  return `${SHORTCODE_PREFIX.product}${generateShortcodeId()}`;
 }
 
 /** Generate a recipe shortcode (R-XXXX format). */
 export function generateRecipeShortcode(): string {
-  return `R-${generateShortcodeId()}`;
+  return `${SHORTCODE_PREFIX.recipe}${generateShortcodeId()}`;
 }
 
 /**

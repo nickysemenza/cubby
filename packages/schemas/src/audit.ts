@@ -1,20 +1,15 @@
 import { z } from "zod";
 import { auditSourceSchema } from "./context";
 import { entitySchema } from "./entity";
+import { auditableEntities } from "./entity-manifest";
 
 /**
  * Audit log schemas and types.
- * Auditable entities are a subset of all entities (excludes usda-food, image).
+ * Auditable entities are a subset of all entities (excludes usda-food, image) —
+ * the set is the source-of-truth `auditableEntities` projection of the entity
+ * manifest (kept in sync by entity-manifest.unit.test.ts).
  */
-export const auditEntitySchema = entitySchema.extract([
-  "product",
-  "location",
-  "inventory",
-  "recipe",
-  "cookbook",
-  "ingredient",
-  "meal",
-]);
+export const auditEntitySchema = entitySchema.extract([...auditableEntities]);
 export type AuditEntityType = z.infer<typeof auditEntitySchema>;
 
 export const auditLogListInput = z.object({
