@@ -4,6 +4,7 @@ import type {
   SearchDebugOut,
   SearchResultItem,
 } from "@cubby/schemas/search";
+import { getErrorMessage } from "~/lib/error-utils";
 import { dispatchBackgroundJobs } from "~/server/background-queue";
 import type { Database } from "~/server/db";
 import {
@@ -86,7 +87,7 @@ async function semanticSearchCandidates(
       query,
       entityTypes: entityTypes ?? null,
       errorName: error instanceof Error ? error.name : typeof error,
-      message: error instanceof Error ? error.message : "Unknown error",
+      message: getErrorMessage(error),
     });
     return [];
   }
@@ -100,9 +101,22 @@ export async function hybridGlobalSearch(
   return withTrace(
     TraceNames.service("semanticSearch", "global"),
     async (span) => {
-      const lexical = await globalSearch(db, query, limit);
-      const semantic = await semanticSearchCandidates(db, query, limit);
-      const results = mergeHybridSearchResults(query, lexical, semantic, limit);
+      // Independent I/O — run the lexical DB fan-out and the semantic
+      // (embed + vector) path concurrently.
+      const [lexical, semantic] = await Promise.all([
+        globalSearch(db, query, limit),
+        semanticSearchCandidates(db, query, limit),
+      ]);
+      // Keep unified score ranking, but cap the merged list generously (room for
+      // ~`limit` of each entity type) so a low-scoring category isn't crowded out
+      // of a flat result list by one dominant type.
+      const mergedLimit = limit * ALL_SEARCHABLE_ENTITIES.length;
+      const results = mergeHybridSearchResults(
+        query,
+        lexical,
+        semantic,
+        mergedLimit,
+      );
       span.setAttributes({
         "search.lexical_count": lexical.length,
         "search.semantic_count": semantic.length,

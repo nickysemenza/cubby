@@ -69,6 +69,7 @@ import {
   SheetTitle,
 } from "~/components/ui/sheet";
 import { Spinner } from "~/components/ui/spinner";
+import { watchBatchesAndInvalidate } from "~/lib/background-batch-polling";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
   invalidateTRPCQueries,
@@ -276,10 +277,28 @@ export function InventorySessionWorkbench({
     ? (inventoryByLocation.get(unknownLocation.id) ?? [])
     : [];
 
-  const invalidateSession = useCallback(() => {
-    invalidateTRPCQueries(queryClient, inventoryMutationInvalidateKeys);
-    invalidateTRPCQueries(queryClient, locationMutationInvalidateKeys);
-  }, [queryClient]);
+  const invalidateSession = useCallback(
+    (result?: unknown) => {
+      const keys = [
+        ...inventoryMutationInvalidateKeys,
+        ...locationMutationInvalidateKeys,
+      ];
+      invalidateTRPCQueries(queryClient, keys);
+      void watchBatchesAndInvalidate({
+        queryClient,
+        result,
+        invalidateKeys: keys,
+        fetchBatchStatus: (batchId) =>
+          queryClient
+            .fetchQuery({
+              ...api.backgroundJobs.getBatch.queryOptions({ batchId }),
+              staleTime: 0,
+            })
+            .then((batch) => batch.status),
+      });
+    },
+    [queryClient, api],
+  );
 
   const bulkMove = useMutation(
     api.inventory.bulkMove.mutationOptions({

@@ -150,9 +150,9 @@ export default function BulkInventoryForm({
   // Bulk process mutation
   const bulkProcessMutation = useMutation(
     api.inventory.bulkProcess.mutationOptions({
-      onSuccess: () => {
+      onSuccess: (data) => {
         refetchInventoryItems();
-        invalidateInventory();
+        invalidateInventory(data);
       },
     }),
   );

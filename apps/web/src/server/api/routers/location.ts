@@ -121,6 +121,7 @@ const { getByID, create, update } = createEntityCrudWithoutListProcedures({
         action: "updated",
         entity: { entityType: "location", entityId: id },
         source: "location.update",
+        locationImagesChanged: imagesChanged,
       });
       if (!imagesChanged) {
         return { ...updated, sideEffects: { backgroundBatches } };

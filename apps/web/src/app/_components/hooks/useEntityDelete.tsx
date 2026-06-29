@@ -7,8 +7,10 @@ import { type FC, useCallback, useState } from "react";
 import { toast } from "sonner";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { Button } from "~/components/ui/button";
+import { watchBatchesAndInvalidate } from "~/lib/background-batch-polling";
 import { invalidateTRPCQueries } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
+import { useTRPC } from "~/trpc/react";
 
 const emptySideEffects: MutationSideEffects = { backgroundBatches: [] };
 
@@ -55,6 +57,7 @@ export function useEntityDelete({
   redirectTo,
 }: UseEntityDeleteOptions): UseEntityDeleteReturn {
   const queryClient = useQueryClient();
+  const api = useTRPC();
   const navigate = useNavigate();
   const [showDialog, setShowDialog] = useState(false);
 
@@ -68,6 +71,20 @@ export function useEntityDelete({
           ),
         );
         invalidateTRPCQueries(queryClient, invalidateKeys);
+        // Re-invalidate once queued background work (e.g. location valuation)
+        // drains so the list reflects recomputed values without a reload.
+        void watchBatchesAndInvalidate({
+          queryClient,
+          result: data,
+          invalidateKeys,
+          fetchBatchStatus: (batchId) =>
+            queryClient
+              .fetchQuery({
+                ...api.backgroundJobs.getBatch.queryOptions({ batchId }),
+                staleTime: 0,
+              })
+              .then((batch) => batch.status),
+        });
         void navigate({ to: redirectTo });
       },
       onError: (err) => {

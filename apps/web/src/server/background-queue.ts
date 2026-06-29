@@ -4,7 +4,6 @@ import {
   type BackgroundJobKind,
   backgroundJobPayloadSchema,
 } from "@cubby/schemas/background-jobs";
-import type { EntityRef } from "@cubby/schemas/entity";
 import { unsafeLocationId, unsafeRecipeId } from "@cubby/schemas/identifiers";
 import { getBackgroundQueue } from "~/server/cf-env";
 import type { Database } from "~/server/db";
@@ -123,7 +122,13 @@ export async function dispatchBackgroundJobs(
 
   await setBackgroundBatchProcessor(db, result.batchId, "inline");
   for (const jobId of result.jobIds) {
-    await processBackgroundJob(db, jobId);
+    // Mirror the queue consumer's retry handling: a "retry" outcome resets the
+    // job to "queued" (attempts++), so re-run inline until terminal. Terminates
+    // because failOrRetryBackgroundJob returns "failed" once attempts hit max.
+    let outcome = await processBackgroundJob(db, jobId);
+    while (outcome === "retry") {
+      outcome = await processBackgroundJob(db, jobId);
+    }
   }
 
   return {
@@ -189,16 +194,18 @@ export async function drainQueuedBackgroundJobs(
 export async function dispatchLocationValuationRecompute(
   db: Database,
   reason: string,
-  entity?: EntityRef,
 ): Promise<DispatchBackgroundJobsResult> {
   return await dispatchBackgroundJobs(db, {
     kind: "location-valuation.recompute",
     source: "mutation",
-    metadata: { source: reason, reason, entity },
+    metadata: { source: reason, reason },
     jobs: [
       {
         kind: "location-valuation.recompute",
-        dedupeKey: `location-valuation.recompute:${crypto.randomUUID()}`,
+        // Valuation is a whole-tree recompute, so one job per mutation wave is
+        // enough. A stable dedupeKey collapses duplicates within a batch instead
+        // of fanning out N recomputes (callers enqueue this at most once/wave).
+        dedupeKey: "location-valuation.recompute",
         payload: { reason },
       },
     ],

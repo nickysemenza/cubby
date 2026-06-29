@@ -19,7 +19,10 @@ import {
   listBackgroundBatches,
 } from "../repo/background-jobs";
 import { getSemanticEmbeddingConfig } from "../semantic/config";
-import { runMutationSideEffects } from "./mutation-side-effects";
+import {
+  runMutationSideEffects,
+  runMutationSideEffectsForEntities,
+} from "./mutation-side-effects";
 import { cleanupOrphanedEntityEmbeddings } from "./problems.service";
 
 describe("mutation side effects integration", () => {
@@ -78,7 +81,7 @@ describe("mutation side effects integration", () => {
     );
   });
 
-  it("location update enqueues AI refresh jobs", async () => {
+  it("location update with image changes enqueues AI refresh jobs", async () => {
     const location = await createLocation(
       ctx.db,
       makeLocationInput({ name: "Manifest AI bin" }),
@@ -89,6 +92,7 @@ describe("mutation side effects integration", () => {
       action: "updated",
       entity: { entityType: "location", entityId: location.id },
       source: "test.location.update",
+      locationImagesChanged: true,
     });
 
     const batches = await listBackgroundBatches(ctx.db, 20);
@@ -105,6 +109,80 @@ describe("mutation side effects integration", () => {
         "location-ai.inventory.refresh",
       ]),
     );
+  });
+
+  it("location update without image changes skips AI refresh jobs", async () => {
+    const location = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Manifest rename bin" }),
+      ctx.actor,
+    );
+
+    // A rename (no image change) must not fire vision analysis — the analysis
+    // fingerprint includes the name, so it would otherwise be a paid cache miss.
+    await runMutationSideEffects(ctx.db, {
+      action: "updated",
+      entity: { entityType: "location", entityId: location.id },
+      source: "test.location.rename",
+    });
+
+    const batches = await listBackgroundBatches(ctx.db, 20);
+    const matchingKinds = batches
+      .filter(
+        (batch) =>
+          (batch.metadata as { source?: string } | null)?.source ===
+          "test.location.rename",
+      )
+      .map((batch) => batch.kind);
+    expect(matchingKinds).not.toContain("location-ai.description.refresh");
+    expect(matchingKinds).not.toContain("location-ai.inventory.refresh");
+  });
+
+  it("bulk inventory wave enqueues exactly one valuation recompute", async () => {
+    const location = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Manifest valuation bin" }),
+      ctx.actor,
+    );
+    // Distinct products — (productId, locationId) is unique on InventoryEntry.
+    const entries = [];
+    for (const n of [1, 2, 3]) {
+      const product = await createProduct(
+        ctx.db,
+        makeProductInput({ name: `Manifest valuation product ${n}` }),
+        ctx.actor,
+      );
+      entries.push(
+        await createInventoryEntry(
+          ctx.db,
+          {
+            productId: product.id,
+            locationId: location.id,
+            amount: { value: n, unit: "each" },
+          },
+          ctx.actor,
+        ),
+      );
+    }
+
+    await runMutationSideEffectsForEntities(
+      ctx.db,
+      entries.map((entry) => ({
+        action: "updated" as const,
+        entity: { entityType: "inventory" as const, entityId: entry.id },
+        source: "test.inventory.bulk",
+      })),
+    );
+
+    const batches = await listBackgroundBatches(ctx.db, 50);
+    const valuationBatches = batches.filter(
+      (batch) =>
+        batch.kind === "location-valuation.recompute" &&
+        (batch.metadata as { source?: string } | null)?.source ===
+          "test.inventory.bulk",
+    );
+    // Whole-tree valuation must collapse to a single job, not one per entity.
+    expect(valuationBatches).toHaveLength(1);
   });
 
   it("delete events soft-delete direct entity embeddings", async () => {

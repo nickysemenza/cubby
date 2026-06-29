@@ -42,6 +42,9 @@ export const mutationSideEffectEventSchema = z.object({
   action: z.enum(["created", "updated", "deleted"]),
   entity: mutationEntityRefSchema,
   source: z.string().min(1),
+  // Gates the location AI refresh: vision analysis only re-runs when images
+  // actually changed (see enqueueLocationAiRefresh). Absent ⇒ no AI refresh.
+  locationImagesChanged: z.boolean().optional(),
 });
 
 export type MutationSideEffectEvent = z.infer<
@@ -162,6 +165,10 @@ async function enqueueLocationAiRefresh(
 ): Promise<BackgroundBatchRef[]> {
   if (ctx.event.entity.entityType !== "location") return [];
   if (ctx.event.source.startsWith("location-ai.")) return [];
+  // The analysis fingerprint includes the location name, so a rename would force
+  // a cache miss and fire two Anthropic vision calls (description + inventory
+  // detection) for no benefit. Only refresh when images actually changed.
+  if (!ctx.event.locationImagesChanged) return [];
   const locationIdValue = ctx.event.entity.entityId;
   const batches: BackgroundBatchRef[] = [];
   for (const kind of [
@@ -189,29 +196,18 @@ async function enqueueLocationAiRefresh(
   return batches;
 }
 
-async function enqueueLocationValuationRefresh(
-  ctx: HandlerContext,
-): Promise<BackgroundBatchRef[]> {
-  const dispatched = await dispatchLocationValuationRecompute(
-    ctx.db,
-    ctx.event.source,
-    ctx.event.entity,
-  );
-  return [dispatched.batch];
-}
-
 // These side effects are intentionally coarse. Cubby data changes are low-volume,
-// and background jobs are idempotent: embeddings skip unchanged text by hash, AI
-// analyses skip unchanged fingerprints, and duplicate valuation jobs are acceptable
-// at the current scale. Prefer obvious coverage over fragile changed-field detection.
+// and background jobs are idempotent: embeddings skip unchanged text by hash and
+// AI analyses skip unchanged fingerprints. Prefer obvious coverage over fragile
+// changed-field detection.
+//
+// Location valuation is NOT a per-entity handler here: it is a whole-tree
+// recompute, so it is enqueued once per mutation wave (see needsValuationRecompute
+// + the run* functions) rather than per affected entity.
 export const mutationSideEffectManifest = {
   product: {
     onCreate: [refreshOwnEmbedding, refreshInventoryEmbeddingsForProduct],
-    onUpdate: [
-      refreshOwnEmbedding,
-      refreshInventoryEmbeddingsForProduct,
-      enqueueLocationValuationRefresh,
-    ],
+    onUpdate: [refreshOwnEmbedding, refreshInventoryEmbeddingsForProduct],
     onDelete: [softDeleteOwnEmbedding],
   },
   location: {
@@ -220,9 +216,8 @@ export const mutationSideEffectManifest = {
       refreshOwnEmbedding,
       refreshInventoryEmbeddingsForLocation,
       enqueueLocationAiRefresh,
-      enqueueLocationValuationRefresh,
     ],
-    onDelete: [softDeleteOwnEmbedding, enqueueLocationValuationRefresh],
+    onDelete: [softDeleteOwnEmbedding],
   },
   ingredient: {
     onCreate: [refreshOwnEmbedding],
@@ -235,9 +230,9 @@ export const mutationSideEffectManifest = {
     onDelete: [softDeleteOwnEmbedding],
   },
   inventory: {
-    onCreate: [refreshOwnEmbedding, enqueueLocationValuationRefresh],
-    onUpdate: [refreshOwnEmbedding, enqueueLocationValuationRefresh],
-    onDelete: [softDeleteOwnEmbedding, enqueueLocationValuationRefresh],
+    onCreate: [refreshOwnEmbedding],
+    onUpdate: [refreshOwnEmbedding],
+    onDelete: [softDeleteOwnEmbedding],
   },
   image: {
     onCreate: [],
@@ -245,6 +240,22 @@ export const mutationSideEffectManifest = {
     onDelete: [],
   },
 } satisfies MutationSideEffectManifest;
+
+// Whole-tree location valuation must run whenever inventory changes, a product's
+// price/details change, or a location is changed/removed. Matches the entity/action
+// combos that previously each enqueued a valuation refresh.
+function needsValuationRecompute(event: MutationSideEffectEvent): boolean {
+  switch (event.entity.entityType) {
+    case "inventory":
+      return true;
+    case "product":
+      return event.action === "updated";
+    case "location":
+      return event.action === "updated" || event.action === "deleted";
+    default:
+      return false;
+  }
+}
 
 const handlersFor = (
   event: MutationSideEffectEvent,
@@ -260,15 +271,30 @@ const handlersFor = (
   return manifest[key];
 };
 
+async function runManifestHandlers(
+  db: Database,
+  event: MutationSideEffectEvent,
+): Promise<BackgroundBatchRef[]> {
+  const handlers = handlersFor(event);
+  const batches: BackgroundBatchRef[] = [];
+  for (const handler of handlers) {
+    batches.push(...(await handler({ db, event })));
+  }
+  return batches;
+}
+
 export async function runMutationSideEffects(
   db: Database,
   event: MutationSideEffectEvent,
 ): Promise<BackgroundBatchRef[]> {
   const parsed = mutationSideEffectEventSchema.parse(event);
-  const handlers = handlersFor(parsed);
-  const batches: BackgroundBatchRef[] = [];
-  for (const handler of handlers) {
-    batches.push(...(await handler({ db, event: parsed })));
+  const batches = await runManifestHandlers(db, parsed);
+  if (needsValuationRecompute(parsed)) {
+    const dispatched = await dispatchLocationValuationRecompute(
+      db,
+      parsed.source,
+    );
+    batches.push(dispatched.batch);
   }
   return batches;
 }
@@ -277,9 +303,21 @@ export async function runMutationSideEffectsForEntities(
   db: Database,
   events: MutationSideEffectEvent[],
 ): Promise<BackgroundBatchRef[]> {
+  const parsed = events.map((event) =>
+    mutationSideEffectEventSchema.parse(event),
+  );
   const batches: BackgroundBatchRef[] = [];
-  for (const event of events) {
-    batches.push(...(await runMutationSideEffects(db, event)));
+  for (const event of parsed) {
+    batches.push(...(await runManifestHandlers(db, event)));
+  }
+  // Valuation is whole-tree, so a bulk wave needs exactly one recompute, not one
+  // per entity (the previous per-entity fan-out ran N whole-tree recomputes).
+  if (parsed.some(needsValuationRecompute)) {
+    const dispatched = await dispatchLocationValuationRecompute(
+      db,
+      parsed[0]?.source ?? "mutation.bulk",
+    );
+    batches.push(dispatched.batch);
   }
   return batches;
 }

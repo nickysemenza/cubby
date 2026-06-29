@@ -1,4 +1,5 @@
 import type { SearchMatchKind, SearchResultItem } from "@cubby/schemas/search";
+import { uniq } from "es-toolkit";
 
 export type RankedSearchResult = SearchResultItem & {
   score: number;
@@ -232,9 +233,7 @@ export function mergeHybridSearchResults(
         existing.matchKind === "exact"
           ? existing.matchReason
           : `${existing.matchReason}; ${rankedSemantic.matchReason}`,
-      matchTerms: [
-        ...new Set([...existing.matchTerms, ...rankedSemantic.matchTerms]),
-      ],
+      matchTerms: uniq([...existing.matchTerms, ...rankedSemantic.matchTerms]),
     });
   }
 

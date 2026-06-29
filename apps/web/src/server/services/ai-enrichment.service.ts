@@ -27,6 +27,7 @@ import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
 import { type DataType, dataTypeEnum } from "@cubby/usda-schemas";
 import { chat, maxIterations, toolDefinition } from "@tanstack/ai";
 import type { BulkProgressEvent } from "~/lib/bulk-progress";
+import { getErrorMessage } from "~/lib/error-utils";
 import {
   buildLocationAnalysisFingerprint,
   LOCATION_DESCRIPTION_FEATURE,
@@ -390,7 +391,7 @@ async function semanticProductCandidatesBestEffort(
     console.warn("ai.inventory.semantic-product-match.failed", {
       query,
       errorName: error instanceof Error ? error.name : typeof error,
-      message: error instanceof Error ? error.message : "Unknown error",
+      message: getErrorMessage(error),
     });
     return [];
   }

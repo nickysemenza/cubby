@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { watchBatchesAndInvalidate } from "~/lib/background-batch-polling";
 import {
   invalidateTRPCQueries,
   inventoryMutationInvalidateKeys,
@@ -6,11 +7,31 @@ import {
 } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 
+/**
+ * Returns a callback that invalidates inventory queries and — given the mutation
+ * result — re-invalidates once its background work (whole-tree location
+ * valuation) drains. Pass the mutation `data` so the poller can watch the batch;
+ * called with no args it just invalidates immediately. Safe to pass directly as a
+ * React Query `onSuccess` (it receives `data` as its first argument).
+ */
 export function useInventoryInvalidation() {
   const queryClient = useQueryClient();
+  const api = useTRPC();
 
-  return () => {
+  return (result?: unknown) => {
     invalidateTRPCQueries(queryClient, inventoryMutationInvalidateKeys);
+    void watchBatchesAndInvalidate({
+      queryClient,
+      result,
+      invalidateKeys: inventoryMutationInvalidateKeys,
+      fetchBatchStatus: (batchId) =>
+        queryClient
+          .fetchQuery({
+            ...api.backgroundJobs.getBatch.queryOptions({ batchId }),
+            staleTime: 0,
+          })
+          .then((batch) => batch.status),
+    });
   };
 }
 
@@ -26,8 +47,8 @@ export function useCreateInventoryMutation({
 
   return useMutation(
     api.inventory.create.mutationOptions({
-      onSuccess: () => {
-        invalidateInventory();
+      onSuccess: (data) => {
+        invalidateInventory(data);
         onSuccess?.();
       },
       onError,

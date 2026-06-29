@@ -14,8 +14,8 @@ import type {
   SearchableEntity,
   SearchableEntityRef,
 } from "@cubby/schemas/search";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
-import { uniqBy } from "es-toolkit";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import { uniq, uniqBy } from "es-toolkit";
 import type { Database } from "~/server/db";
 import {
   entityEmbedding,
@@ -121,7 +121,7 @@ export async function upsertEntityEmbedding(
       eq(entityEmbedding.provider, input.config.provider),
       eq(entityEmbedding.model, input.config.model),
       eq(entityEmbedding.dimensions, input.config.dimensions),
-      isNull(entityEmbedding.deletedAt),
+      notDeleted(entityEmbedding),
     ),
     columns: { id: true, embeddingHash: true },
   });
@@ -169,7 +169,7 @@ export async function softDeleteEntityEmbeddings(
         and(
           eq(entityEmbedding.entityType, ref.entityType),
           eq(entityEmbedding.entityId, ref.entityId),
-          isNull(entityEmbedding.deletedAt),
+          notDeleted(entityEmbedding),
         ),
       )
       .returning({ id: entityEmbedding.id });
@@ -186,9 +186,7 @@ export async function softDeleteEntityEmbeddingRows(
   const rows = await getDb(db)
     .update(entityEmbedding)
     .set({ deletedAt: new Date() })
-    .where(
-      and(inArray(entityEmbedding.id, ids), isNull(entityEmbedding.deletedAt)),
-    )
+    .where(and(inArray(entityEmbedding.id, ids), notDeleted(entityEmbedding)))
     .returning({ id: entityEmbedding.id });
   return rows.length;
 }
@@ -276,7 +274,7 @@ export async function findOrphanedEntityEmbeddings(
   db: Database,
 ): Promise<OrphanedEntityEmbedding[]> {
   const rows = await getDb(db).query.entityEmbedding.findMany({
-    where: isNull(entityEmbedding.deletedAt),
+    where: notDeleted(entityEmbedding),
     columns: {
       id: true,
       entityType: true,
@@ -294,7 +292,7 @@ export async function findOrphanedEntityEmbeddings(
 
   const liveByType = new Map<SearchableEntity, Set<string>>();
   for (const [type, ids] of byType.entries()) {
-    const uniqueIds = [...new Set(ids)];
+    const uniqueIds = uniq(ids);
     if (uniqueIds.length === 0) continue;
     switch (type) {
       case "product": {
@@ -631,16 +629,25 @@ export async function getEmbeddingTextsForEntityTypes(
   return limit == null ? rows : rows.slice(0, limit);
 }
 
+// When a limit is requested, scan a bounded window instead of the whole catalog.
+// Overscan so a fresh-heavy prefix doesn't starve the batch; the backfill action
+// is re-runnable to catch any stale rows beyond the window.
+const STALE_SCAN_OVERSCAN = 4;
+
 export async function getStaleEmbeddingTextsForEntityTypes(
   db: Database,
   entityTypes: SearchableEntity[],
   config: SemanticEmbeddingConfig,
   limit?: number,
 ): Promise<SearchableEntityText[]> {
-  const rows = await getEmbeddingTextsForEntityTypes(db, entityTypes);
+  const rows = await getEmbeddingTextsForEntityTypes(
+    db,
+    entityTypes,
+    limit == null ? undefined : limit * STALE_SCAN_OVERSCAN,
+  );
   if (rows.length === 0) return [];
 
-  const ids = [...new Set(rows.map((row) => row.entityId))];
+  const ids = uniq(rows.map((row) => row.entityId));
   const existingRows = await getDb(db).query.entityEmbedding.findMany({
     where: and(
       inArray(entityEmbedding.entityType, entityTypes),
@@ -648,7 +655,7 @@ export async function getStaleEmbeddingTextsForEntityTypes(
       eq(entityEmbedding.provider, config.provider),
       eq(entityEmbedding.model, config.model),
       eq(entityEmbedding.dimensions, config.dimensions),
-      isNull(entityEmbedding.deletedAt),
+      notDeleted(entityEmbedding),
     ),
     columns: {
       entityType: true,

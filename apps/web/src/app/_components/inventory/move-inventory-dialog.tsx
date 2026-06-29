@@ -118,6 +118,9 @@ export function MoveInventoryDialog({
     setError(null);
 
     let completedGroups = 0;
+    let lastResult:
+      | Awaited<ReturnType<typeof bulkMoveMutation.mutateAsync>>
+      | undefined;
     try {
       for (const [sourceLocationId, sourceItems] of sourceGroups) {
         const moveItems: BulkMoveItem[] = sourceItems.map((item) => ({
@@ -125,7 +128,7 @@ export function MoveInventoryDialog({
           quantity: item.amount,
         }));
 
-        await bulkMoveMutation.mutateAsync({
+        lastResult = await bulkMoveMutation.mutateAsync({
           sourceLocationId,
           targetLocationId,
           items: moveItems,
@@ -147,7 +150,7 @@ export function MoveInventoryDialog({
     toast.success(
       `Successfully moved ${items.length} item${items.length !== 1 ? "s" : ""}`,
     );
-    invalidateInventory();
+    invalidateInventory(lastResult);
     form.reset();
     onSuccess();
     onOpenChange(false);

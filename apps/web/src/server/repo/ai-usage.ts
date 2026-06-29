@@ -95,12 +95,14 @@ export async function summarizeAiUsage(db: Database, days: number) {
       operation: aiUsage.operation,
       cacheStatus: aiUsage.cacheStatus,
       count: sql<number>`count(*)::int`,
-      inputTokens: sql<number>`coalesce(sum(${aiUsage.inputTokens}), 0)::int`,
-      outputTokens: sql<number>`coalesce(sum(${aiUsage.outputTokens}), 0)::int`,
+      // bigint to avoid int4 overflow on cumulative token/duration sums; the pg
+      // driver returns bigint as a string, so these are Number()-coerced below.
+      inputTokens: sql<string>`coalesce(sum(${aiUsage.inputTokens}), 0)::bigint`,
+      outputTokens: sql<string>`coalesce(sum(${aiUsage.outputTokens}), 0)::bigint`,
       estimatedCost: sql<number | null>`sum(${aiUsage.estimatedCost})`,
-      unpricedInputTokens: sql<number>`coalesce(sum(case when ${aiUsage.estimatedCost} is null then ${aiUsage.inputTokens} else 0 end), 0)::int`,
-      unpricedOutputTokens: sql<number>`coalesce(sum(case when ${aiUsage.estimatedCost} is null then ${aiUsage.outputTokens} else 0 end), 0)::int`,
-      durationMs: sql<number>`coalesce(sum(${aiUsage.durationMs}), 0)::int`,
+      unpricedInputTokens: sql<string>`coalesce(sum(case when ${aiUsage.estimatedCost} is null then ${aiUsage.inputTokens} else 0 end), 0)::bigint`,
+      unpricedOutputTokens: sql<string>`coalesce(sum(case when ${aiUsage.estimatedCost} is null then ${aiUsage.outputTokens} else 0 end), 0)::bigint`,
+      durationMs: sql<string>`coalesce(sum(${aiUsage.durationMs}), 0)::bigint`,
     })
     .from(aiUsage)
     .where(
@@ -116,21 +118,33 @@ export async function summarizeAiUsage(db: Database, days: number) {
     )
     .orderBy(sql`${usageDayGroup} DESC`, aiUsage.feature, aiUsage.model);
 
-  return rows.map(({ unpricedInputTokens, unpricedOutputTokens, ...row }) => {
-    const computedUnstoredCost = estimateAiUsageCostUsd(
-      row.provider,
-      row.model,
-      {
-        inputTokens: unpricedInputTokens,
-        outputTokens: unpricedOutputTokens,
-      },
-    );
-    return {
-      ...row,
-      estimatedCost:
-        row.estimatedCost == null
-          ? computedUnstoredCost
-          : row.estimatedCost + (computedUnstoredCost ?? 0),
-    };
-  });
+  return rows.map(
+    ({
+      unpricedInputTokens,
+      unpricedOutputTokens,
+      inputTokens,
+      outputTokens,
+      durationMs,
+      ...row
+    }) => {
+      const computedUnstoredCost = estimateAiUsageCostUsd(
+        row.provider,
+        row.model,
+        {
+          inputTokens: Number(unpricedInputTokens),
+          outputTokens: Number(unpricedOutputTokens),
+        },
+      );
+      return {
+        ...row,
+        inputTokens: Number(inputTokens),
+        outputTokens: Number(outputTokens),
+        durationMs: Number(durationMs),
+        estimatedCost:
+          row.estimatedCost == null
+            ? computedUnstoredCost
+            : row.estimatedCost + (computedUnstoredCost ?? 0),
+      };
+    },
+  );
 }

@@ -195,9 +195,9 @@ export default function BulkMoveForm({
   // Bulk move mutation
   const bulkMoveMutation = useMutation(
     api.inventory.bulkMove.mutationOptions({
-      onSuccess: () => {
+      onSuccess: (data) => {
         refetchInventoryItems();
-        invalidateInventory();
+        invalidateInventory(data);
       },
     }),
   );
