@@ -1,4 +1,8 @@
 import type { Entity } from "@cubby/schemas/entity";
+import {
+  type CountableEntity,
+  countableEntities,
+} from "@cubby/schemas/entity-manifest";
 import { countProblems } from "@cubby/schemas/problems";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -158,15 +162,15 @@ export default function EntityCount() {
   });
   const counts = countsQuery.data;
 
-  // Cards in display order, each paired with its total from the single result.
+  // One card per countable entity (manifest-driven, so meal/cookbook and any
+  // future entity appear automatically) plus the USDA total. usda-food has no
+  // local table, so its count comes from the separate `usdaFoods` field.
   const cards: { entity: Entity; count: number | undefined }[] = [
-    { entity: "location", count: counts?.locations },
-    { entity: "product", count: counts?.products },
-    { entity: "inventory", count: counts?.inventory },
-    { entity: "recipe", count: counts?.recipes },
-    { entity: "ingredient", count: counts?.ingredients },
-    { entity: "image", count: counts?.images },
-    { entity: "usda-food", count: counts?.usdaFoods },
+    ...countableEntities.map((entity: CountableEntity) => ({
+      entity,
+      count: counts?.[entity],
+    })),
+    { entity: "usda-food" as Entity, count: counts?.usdaFoods },
   ];
 
   // While auth is still resolving the query is disabled (isLoading false), so
@@ -175,7 +179,7 @@ export default function EntityCount() {
   const isLoading = !isAuthenticated || countsQuery.isLoading;
 
   return (
-    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-8">
+    <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-5">
       {cards.map(({ entity, count }) => (
         <StatCard
           key={entity}

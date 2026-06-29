@@ -24,10 +24,10 @@ function EntityCounts() {
   if (!isAuthenticated || isLoading || !counts) return null;
 
   const parts = [
-    `${counts.products} products`,
-    `${counts.locations} locations`,
-    `${counts.recipes} recipes`,
-    `${counts.ingredients} ingredients`,
+    `${counts.product} products`,
+    `${counts.location} locations`,
+    `${counts.recipe} recipes`,
+    `${counts.ingredient} ingredients`,
   ];
 
   return <span>{parts.join(" · ")}</span>;
