@@ -11,7 +11,7 @@ import {
   updateAndReturn,
 } from "~/server/repo/database-helpers";
 
-export interface AiAnalysisKey<T> {
+interface AiAnalysisKey<T> {
   entityType: AiAnalysisEntityType;
   entityId: string | null;
   feature: AiFeature<T>;

@@ -7,7 +7,7 @@ import type { Database } from "~/server/db";
 import { aiUsage } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 
-export type RecordAiUsageInput = SupportedAiModelRef & {
+type RecordAiUsageInput = SupportedAiModelRef & {
   feature: string;
   operation: string;
   inputTokens?: number | null;

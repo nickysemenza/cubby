@@ -47,9 +47,7 @@ export const mutationSideEffectEventSchema = z.object({
   locationImagesChanged: z.boolean().optional(),
 });
 
-export type MutationSideEffectEvent = z.infer<
-  typeof mutationSideEffectEventSchema
->;
+type MutationSideEffectEvent = z.infer<typeof mutationSideEffectEventSchema>;
 type MutationEntityType = MutationSideEffectEvent["entity"]["entityType"];
 type MutationAction = MutationSideEffectEvent["action"];
 

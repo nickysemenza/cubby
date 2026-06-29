@@ -20,6 +20,7 @@ import {
   inventorySortableFields,
   inventoryUpdatePayloadData,
   inventoryWithLocationAndProductAndSideEffectsOut,
+  inventoryWithLocationAndProductListAndSideEffectsOut,
   inventoryWithLocationAndProductListOut,
   inventoryWithLocationAndProductOut,
 } from "@cubby/schemas/inventory";
@@ -146,7 +147,7 @@ const deleteItem = createDeleteProcedure<InventoryId>(async (services, ids) => {
 // Bulk process inventory entries (creates and updates in one call)
 const bulkProcess = protectedProcedure
   .input(inventoryBulkOperationPayload)
-  .output(inventoryWithLocationAndProductListOut)
+  .output(inventoryWithLocationAndProductListAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
     const result = await bulkProcessInventoryEntries(
       ctx.db,
@@ -159,7 +160,7 @@ const bulkProcess = protectedProcedure
       })),
       ctx.actorContext,
     );
-    await runMutationSideEffectsForEntities(
+    const backgroundBatches = await runMutationSideEffectsForEntities(
       ctx.db,
       result.map((entry) => ({
         action: "updated" as const,
@@ -167,20 +168,20 @@ const bulkProcess = protectedProcedure
         source: "inventory.bulkProcess",
       })),
     );
-    return result;
+    return { items: result, sideEffects: { backgroundBatches } };
   });
 
 // Bulk move inventory entries between locations
 const bulkMove = protectedProcedure
   .input(bulkMovePayload)
-  .output(inventoryWithLocationAndProductListOut)
+  .output(inventoryWithLocationAndProductListAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
     const result = await bulkMoveInventoryEntries(
       ctx.db,
       input,
       ctx.actorContext,
     );
-    await runMutationSideEffectsForEntities(
+    const backgroundBatches = await runMutationSideEffectsForEntities(
       ctx.db,
       result.map((entry) => ({
         action: "updated" as const,
@@ -188,7 +189,7 @@ const bulkMove = protectedProcedure
         source: "inventory.bulkMove",
       })),
     );
-    return result;
+    return { items: result, sideEffects: { backgroundBatches } };
   });
 
 // Find products with expectedQuantity=1 in multiple locations

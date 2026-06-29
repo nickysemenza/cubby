@@ -1,5 +1,4 @@
 import type { Amount } from "@cubby/schemas/codec";
-import type { SearchableEntity } from "@cubby/schemas/search";
 import { z } from "zod";
 
 const nullableText = z.string().nullish();
@@ -35,7 +34,7 @@ const listField = (
 const joinFields = (parts: Array<string | null | undefined>): string =>
   parts.flatMap((part) => (part ? [part] : [])).join("\n");
 
-export const productSearchTextInputSchema = z.object({
+const productSearchTextInputSchema = z.object({
   name: z.string(),
   manufacturer: nullableText,
   category: nullableText,
@@ -44,9 +43,7 @@ export const productSearchTextInputSchema = z.object({
   notes: nullableText,
   aliases: nullableTextList,
 });
-export type ProductSearchTextInput = z.infer<
-  typeof productSearchTextInputSchema
->;
+type ProductSearchTextInput = z.infer<typeof productSearchTextInputSchema>;
 
 export function buildProductEmbeddingText(product: ProductSearchTextInput) {
   const parsed = productSearchTextInputSchema.parse(product);
@@ -61,16 +58,14 @@ export function buildProductEmbeddingText(product: ProductSearchTextInput) {
   ]);
 }
 
-export const locationSearchTextInputSchema = z.object({
+const locationSearchTextInputSchema = z.object({
   name: z.string(),
   type: nullableText,
   parentPath: nullableText,
   aiDescription: nullableText,
   aliases: nullableTextList,
 });
-export type LocationSearchTextInput = z.infer<
-  typeof locationSearchTextInputSchema
->;
+type LocationSearchTextInput = z.infer<typeof locationSearchTextInputSchema>;
 
 export function buildLocationEmbeddingText(location: LocationSearchTextInput) {
   const parsed = locationSearchTextInputSchema.parse(location);
@@ -83,11 +78,11 @@ export function buildLocationEmbeddingText(location: LocationSearchTextInput) {
   ]);
 }
 
-export const ingredientSearchTextInputSchema = z.object({
+const ingredientSearchTextInputSchema = z.object({
   name: z.string(),
   aliases: nullableTextList,
 });
-export type IngredientSearchTextInput = z.infer<
+type IngredientSearchTextInput = z.infer<
   typeof ingredientSearchTextInputSchema
 >;
 
@@ -101,13 +96,13 @@ export function buildIngredientEmbeddingText(
   ]);
 }
 
-export const recipeSearchTextInputSchema = z.object({
+const recipeSearchTextInputSchema = z.object({
   name: z.string(),
   tags: nullableTextList,
   notes: nullableText,
   ingredientNames: nullableTextList,
 });
-export type RecipeSearchTextInput = z.infer<typeof recipeSearchTextInputSchema>;
+type RecipeSearchTextInput = z.infer<typeof recipeSearchTextInputSchema>;
 
 export function buildRecipeEmbeddingText(recipe: RecipeSearchTextInput) {
   const parsed = recipeSearchTextInputSchema.parse(recipe);
@@ -119,14 +114,12 @@ export function buildRecipeEmbeddingText(recipe: RecipeSearchTextInput) {
   ]);
 }
 
-export const inventorySearchTextInputSchema = z.object({
+const inventorySearchTextInputSchema = z.object({
   productText: z.string(),
   locationPath: nullableText,
   amount: z.custom<Amount>().nullable().optional(),
 });
-export type InventorySearchTextInput = z.infer<
-  typeof inventorySearchTextInputSchema
->;
+type InventorySearchTextInput = z.infer<typeof inventorySearchTextInputSchema>;
 
 const amountToText = (amount: Amount | null | undefined): string | null => {
   if (!amount) return null;
@@ -144,19 +137,4 @@ export function buildInventoryEmbeddingText(entry: InventorySearchTextInput) {
 
 export function normalizeSearchText(text: string): string {
   return text.trim().replace(/\s+/g, " ").toLowerCase();
-}
-
-export function searchEntityLabel(entityType: SearchableEntity): string {
-  switch (entityType) {
-    case "product":
-      return "Product";
-    case "location":
-      return "Location";
-    case "ingredient":
-      return "Ingredient";
-    case "recipe":
-      return "Recipe";
-    case "inventory":
-      return "Inventory";
-  }
 }

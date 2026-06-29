@@ -42,7 +42,6 @@ import { wasm } from "~/lib/wasm";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { USDAClient } from "~/server/clients/usda";
 import { type Database, withConnection } from "~/server/db";
-import type { OrphanedEntityEmbedding } from "~/server/repo/entity-embedding";
 import {
   findOrphanedEntityEmbeddings,
   softDeleteEntityEmbeddingRows,
@@ -443,8 +442,6 @@ export const cleanupOrphanedEntityEmbeddings = async (
   );
   return { found: orphaned.length, deleted };
 };
-
-export type { OrphanedEntityEmbedding };
 
 // USDA-coverage group — both sections share one product scan + USDA enrichment.
 export const findCoverageProblems = (

@@ -25,7 +25,7 @@ export interface CreateBackgroundJobInput {
   maxAttempts?: number;
 }
 
-export interface CreateBackgroundBatchInput {
+interface CreateBackgroundBatchInput {
   kind: BackgroundJobKind;
   source: BackgroundBatchSource;
   metadata?: unknown;

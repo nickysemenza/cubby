@@ -44,19 +44,19 @@ import {
   normalizeSearchText,
 } from "~/server/semantic/text";
 
-export interface EntityEmbeddingCandidate {
+interface EntityEmbeddingCandidate {
   entityType: SearchableEntity;
   entityId: string;
   similarity: number;
 }
 
-export interface SearchableEntityText {
+interface SearchableEntityText {
   entityType: SearchableEntity;
   entityId: string;
   embeddingText: string;
 }
 
-export interface OrphanedEntityEmbedding {
+interface OrphanedEntityEmbedding {
   id: string;
   entityType: SearchableEntity;
   entityId: string;
@@ -444,7 +444,7 @@ export async function findSemanticEntityCandidates(
   }));
 }
 
-export async function getProductEmbeddingTexts(
+async function getProductEmbeddingTexts(
   db: Database,
   limit?: number,
 ): Promise<SearchableEntityText[]> {
@@ -469,7 +469,7 @@ export async function getProductEmbeddingTexts(
   }));
 }
 
-export async function getLocationEmbeddingTexts(
+async function getLocationEmbeddingTexts(
   db: Database,
   limit?: number,
 ): Promise<SearchableEntityText[]> {
@@ -491,7 +491,7 @@ export async function getLocationEmbeddingTexts(
   }));
 }
 
-export async function getIngredientEmbeddingTexts(
+async function getIngredientEmbeddingTexts(
   db: Database,
   limit?: number,
 ): Promise<SearchableEntityText[]> {
@@ -511,7 +511,7 @@ export async function getIngredientEmbeddingTexts(
   }));
 }
 
-export async function getRecipeEmbeddingTexts(
+async function getRecipeEmbeddingTexts(
   db: Database,
   limit?: number,
 ): Promise<SearchableEntityText[]> {
@@ -548,7 +548,7 @@ export async function getRecipeEmbeddingTexts(
   }));
 }
 
-export async function getInventoryEmbeddingTexts(
+async function getInventoryEmbeddingTexts(
   db: Database,
   limit?: number,
 ): Promise<SearchableEntityText[]> {

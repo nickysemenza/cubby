@@ -1,7 +1,7 @@
 import type { SearchMatchKind, SearchResultItem } from "@cubby/schemas/search";
 import { uniq } from "es-toolkit";
 
-export type RankedSearchResult = SearchResultItem & {
+type RankedSearchResult = SearchResultItem & {
   score: number;
   matchKind: SearchMatchKind;
   matchReason: string;
@@ -99,7 +99,7 @@ function itemSearchTokens(item: SearchResultItem): string[] {
   );
 }
 
-export function explainVisibleTermMatches(
+function explainVisibleTermMatches(
   query: string,
   item: SearchResultItem,
 ): string[] {

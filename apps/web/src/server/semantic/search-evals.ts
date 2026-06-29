@@ -1,4 +1,4 @@
-export interface SemanticSearchEval {
+interface SemanticSearchEval {
   query: string;
   expectedTopName: string;
   entityType: "product" | "location" | "ingredient" | "recipe" | "inventory";

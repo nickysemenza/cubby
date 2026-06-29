@@ -73,7 +73,7 @@ const MAX_ANALYSIS_IMAGES = 5;
 const SEMANTIC_PRODUCT_MATCH_THRESHOLD = 0.86;
 const LOCATION_NO_IMAGES_MESSAGE = "Location has no images to analyze";
 
-export class LocationHasNoImagesToAnalyzeError extends Error {
+class LocationHasNoImagesToAnalyzeError extends Error {
   constructor() {
     super(LOCATION_NO_IMAGES_MESSAGE);
     this.name = "LocationHasNoImagesToAnalyzeError";

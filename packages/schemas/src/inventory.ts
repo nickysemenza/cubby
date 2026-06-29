@@ -153,6 +153,11 @@ export const inventoryWithLocationAndProductListOut = z.array(
   inventoryWithLocationAndProductOut,
 );
 
+export const inventoryWithLocationAndProductListAndSideEffectsOut = z.object({
+  items: inventoryWithLocationAndProductListOut,
+  sideEffects: mutationSideEffectsSchema,
+});
+
 export const inventoryDuplicateUniqueProductsOut = z.array(
   duplicateUniqueProductSchema,
 );

@@ -1,14 +1,14 @@
 import type { DetectedInventoryAiResult } from "@cubby/schemas/ai";
 import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
 
-export interface InventoryDetectionEval {
+interface InventoryDetectionEval {
   name: string;
   locationName: string;
   expectedItems: string[];
   excludedItems: string[];
 }
 
-export interface InventoryDetectionEvalResult {
+interface InventoryDetectionEvalResult {
   passed: boolean;
   missingExpectedItems: string[];
   presentExcludedItems: string[];

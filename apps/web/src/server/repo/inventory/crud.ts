@@ -26,7 +26,6 @@ import {
   buildOrderBy,
   buildPartialUpdateValues,
   buildSearchConditions,
-  countWhere,
   getDb,
   insertAndReturn,
   lockAndValidateForDelete,
@@ -110,19 +109,6 @@ export const syncInventoryValuationsForProduct = async (
 
   return updated;
 };
-
-/**
- * How many active inventory entries a product has.
- */
-export const countActiveInventoryForProduct = async (
-  db: Database,
-  productId: ProductId,
-): Promise<number> =>
-  countWhere(
-    db,
-    inventoryEntry,
-    and(eq(inventoryEntry.productId, productId), notDeleted(inventoryEntry)),
-  );
 
 /**
  * Check if a product with expectedQuantity=1 already exists in a different location.

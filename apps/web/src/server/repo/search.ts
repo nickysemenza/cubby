@@ -228,7 +228,7 @@ export async function globalSearch(
   return [...products, ...recipes, ...ingredients, ...locations, ...inventory];
 }
 
-export interface SearchEntityRef {
+interface SearchEntityRef {
   entityType: SearchableEntity;
   entityId: string;
 }

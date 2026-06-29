@@ -27,8 +27,8 @@ interface EmbeddingAiModelConfig extends BaseAiModelConfig {
 
 type AiModelConfig = ChatAiModelConfig | EmbeddingAiModelConfig;
 
-export const aiProvider = z.enum(["anthropic", "openai"]);
-export type AiProvider = z.infer<typeof aiProvider>;
+const aiProvider = z.enum(["anthropic", "openai"]);
+type AiProvider = z.infer<typeof aiProvider>;
 
 export const supportedChatModel = z.enum([
   "claude-haiku-4-5",
@@ -93,7 +93,7 @@ function finiteTokenCount(value: number | null | undefined): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
-export function isSupportedAiModel(model: string): model is SupportedAiModel {
+function isSupportedAiModel(model: string): model is SupportedAiModel {
   return supportedAiModel.safeParse(model).success;
 }
 

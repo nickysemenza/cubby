@@ -286,7 +286,7 @@ describe("inventory router", () => {
     )!;
 
     // Perform bulk operation (update existing + create new entries)
-    const bulkResult = await caller.bulkProcess({
+    const { items: bulkResult } = await caller.bulkProcess({
       locationId: locationId,
       items: [
         {
@@ -393,9 +393,9 @@ describe("inventory router", () => {
         ],
       });
 
-      expect(result).toHaveLength(1);
-      expect(result[0]!.location.id).toEqual(targetLocation.id);
-      expect(result[0]!.amount.value).toEqual(10);
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0]!.location.id).toEqual(targetLocation.id);
+      expect(result.items[0]!.amount.value).toEqual(10);
 
       // Verify source location is empty
       const sourceEntries = await caller.list(
@@ -438,9 +438,9 @@ describe("inventory router", () => {
         ],
       });
 
-      expect(result).toHaveLength(1);
-      expect(result[0]!.amount.value).toEqual(3);
-      expect(result[0]!.location.id).toEqual(targetLocation.id);
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0]!.amount.value).toEqual(3);
+      expect(result.items[0]!.location.id).toEqual(targetLocation.id);
 
       // Verify source still has 7
       const sourceEntry = await caller.getByID({ id: entryId });
@@ -503,9 +503,9 @@ describe("inventory router", () => {
         ],
       });
 
-      expect(result).toHaveLength(1);
-      expect(result[0]!.id).toEqual(targetEntry.id); // Same entry updated
-      expect(result[0]!.amount.value).toEqual(8); // 3 + 5 = 8
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0]!.id).toEqual(targetEntry.id); // Same entry updated
+      expect(result.items[0]!.amount.value).toEqual(8); // 3 + 5 = 8
     });
 
     it("should throw error when source and target are the same", async () => {

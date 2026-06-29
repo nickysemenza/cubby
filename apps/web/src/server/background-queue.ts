@@ -36,7 +36,7 @@ import {
 } from "./services/ai-enrichment.service";
 import { LocationValuationService } from "./services/location-valuation.service";
 
-export const BACKGROUND_MESSAGE_VERSION = 1;
+const BACKGROUND_MESSAGE_VERSION = 1;
 
 export interface BackgroundQueueMessage {
   messageVersion: number;
@@ -70,7 +70,7 @@ interface DispatchBackgroundJobsInput {
   jobs: CreateBackgroundJobInput[];
 }
 
-export interface DispatchBackgroundJobsResult {
+interface DispatchBackgroundJobsResult {
   batchId: string;
   jobIds: string[];
   batch: BackgroundBatchRef;
@@ -212,7 +212,7 @@ export async function dispatchLocationValuationRecompute(
   });
 }
 
-export async function processBackgroundJob(
+async function processBackgroundJob(
   db: Database,
   jobId: string,
 ): Promise<"succeeded" | "skipped" | "retry" | "failed"> {
