@@ -170,23 +170,20 @@ export const usdaFoodSuggestionInput = z.object({
   ingredientName: z.string().min(1),
 });
 
-export const usdaFoodSuggestionOut = z.object({
+const usdaFoodSuggestionFields = {
   food: foodSummaryWithLinkedProducts.nullable(),
   confidence,
   reasoning: z.string(),
-});
+};
+
+export const usdaFoodSuggestionOut = z.object(usdaFoodSuggestionFields);
 
 export const usdaFoodSuggestionBatchInput = z.object({
   ingredientNames: z.array(z.string().min(1)).min(1).max(20),
 });
 
 export const usdaFoodSuggestionBatchOut = z.array(
-  z.object({
-    food: foodSummaryWithLinkedProducts.nullable(),
-    confidence,
-    reasoning: z.string(),
-    name: z.string(),
-  }),
+  z.object({ ...usdaFoodSuggestionFields, name: z.string() }),
 );
 
 export const ingredientMergeSuggestionItem = z.object({
@@ -260,17 +257,22 @@ export const aiUsageRecentInput = z.object({
   limit: z.number().int().min(1).max(200).default(50),
 });
 
-export const aiUsageEntrySchema = z.object({
-  id: z.string(),
+// Grouping dimensions shared by per-row usage entries and rolled-up summaries.
+const aiUsageGroupFields = {
   feature: z.string(),
   provider: z.string(),
   model: z.string(),
   operation: z.string(),
+  cacheStatus: aiUsageCacheStatus.nullable(),
+};
+
+export const aiUsageEntrySchema = z.object({
+  id: z.string(),
+  ...aiUsageGroupFields,
   inputTokens: z.number().int().nullable(),
   outputTokens: z.number().int().nullable(),
   estimatedCost: z.number().nullable(),
   durationMs: z.number().int(),
-  cacheStatus: aiUsageCacheStatus.nullable(),
   entityType: z.string().nullable(),
   entityId: z.string().nullable(),
   batchId: z.string().nullable(),
@@ -286,11 +288,7 @@ export const aiUsageSummaryInput = z.object({
 
 export const aiUsageSummaryRowSchema = z.object({
   day: z.string(),
-  feature: z.string(),
-  provider: z.string(),
-  model: z.string(),
-  operation: z.string(),
-  cacheStatus: aiUsageCacheStatus.nullable(),
+  ...aiUsageGroupFields,
   count: z.number().int(),
   inputTokens: z.number().int(),
   outputTokens: z.number().int(),
