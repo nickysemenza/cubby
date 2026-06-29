@@ -7,6 +7,7 @@ import {
   countableEntities,
   entityDescriptor,
   entityManifest,
+  entityReferences,
   imageEntities,
 } from "./entity-manifest";
 
@@ -36,6 +37,16 @@ describe("entity manifest", () => {
       for (const ref of entityManifest[entity].references) {
         expect(entitySchema.options).toContain(ref);
       }
+    }
+  });
+
+  it("an entity references `image` iff it is image-bearing", () => {
+    // Guards the reference graph against missing image edges (product/recipe/
+    // location reach image through join tables, not a direct FK column).
+    for (const entity of allEntities) {
+      expect(entityReferences(entity).includes("image")).toBe(
+        entityManifest[entity].hasImages,
+      );
     }
   });
 

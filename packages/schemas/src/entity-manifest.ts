@@ -31,7 +31,12 @@ export const entityDescriptor = z.object({
   countable: z.boolean(),
   /** Non-default count filter, beyond `notDeleted`. */
   countFilter: z.enum(["recipeIdNull"]).optional(),
-  /** Entities this one points AT via a foreign key (directed reference graph). */
+  /**
+   * Entities this one points AT in the reference graph — via a direct FK column
+   * OR a join table (e.g. recipe→ingredient through recipeSectionIngredient,
+   * product→image through productImage). Every image-bearing entity references
+   * `image`.
+   */
   references: z.array(entitySchema).readonly(),
   /** CRUD operations exposed over MCP. */
   mcp: z.array(mcpOp).readonly(),
@@ -51,7 +56,7 @@ export const entityManifest = {
     auditable: true,
     hasImages: true,
     countable: true,
-    references: ["ingredient"],
+    references: ["ingredient", "image"],
     mcp: ALL_MCP,
     routerStyle: "crud-factory",
   },
@@ -63,7 +68,7 @@ export const entityManifest = {
     auditable: true,
     hasImages: true,
     countable: true,
-    references: ["cookbook"],
+    references: ["cookbook", "ingredient", "image"],
     mcp: ALL_MCP,
     routerStyle: "custom",
   },
@@ -102,7 +107,7 @@ export const entityManifest = {
     auditable: true,
     hasImages: true,
     countable: true,
-    references: ["location"],
+    references: ["location", "image"],
     mcp: ALL_MCP,
     routerStyle: "crud-factory",
   },
@@ -160,6 +165,13 @@ export type EntityManifest = typeof entityManifest;
 
 /** All entities, in manifest declaration order. */
 export const allEntities = Object.keys(entityManifest) as Entity[];
+
+/**
+ * Outgoing reference edges of an entity, widened from the `as const` manifest
+ * tuple to `readonly Entity[]` (so `.includes(someEntity)` typechecks).
+ */
+export const entityReferences = (e: Entity): readonly Entity[] =>
+  entityManifest[e].references;
 
 // ---------------------------------------------------------------------------
 // Derived projections — the meta-lists that previously lived as hand-maintained
