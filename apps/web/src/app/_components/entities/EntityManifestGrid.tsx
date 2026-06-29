@@ -92,6 +92,15 @@ const GROUPS: Group[] = [
         cell: ({ d }) =>
           d.idBrand ? <span className={mono}>{d.idBrand}</span> : dash,
       },
+      {
+        label: "Shortcode",
+        cell: ({ d }) =>
+          d.shortcodePrefix ? (
+            <span className={mono}>{d.shortcodePrefix}…</span>
+          ) : (
+            dash
+          ),
+      },
       { label: "Soft delete", cell: ({ d }) => <Bool value={d.softDelete} /> },
       { label: "Auditable", cell: ({ d }) => <Bool value={d.auditable} /> },
     ],

@@ -21,6 +21,8 @@ export const entityDescriptor = z.object({
   dbTable: z.string().nullable(),
   /** Branded id type name, for display; null where ids are unbranded/external. */
   idBrand: z.string().nullable(),
+  /** Human-readable shortcode prefix (e.g. "P-"), if the entity has shortcodes. */
+  shortcodePrefix: z.string().optional(),
   /** Has a `deletedAt` soft-delete column. */
   softDelete: z.boolean(),
   /** Writes rows to the audit log (drives the audit entity union). */
@@ -53,6 +55,7 @@ export const entityManifest = {
     name: "product",
     dbTable: "Product",
     idBrand: "ProductId",
+    shortcodePrefix: "P-",
     softDelete: true,
     auditable: true,
     hasImages: true,
@@ -65,11 +68,14 @@ export const entityManifest = {
     name: "recipe",
     dbTable: "Recipe",
     idBrand: "RecipeId",
+    shortcodePrefix: "R-",
     softDelete: true,
     auditable: true,
     hasImages: true,
     countable: true,
-    references: ["cookbook", "ingredient", "image"],
+    // recipe→recipe: a recipe can use another recipe as a sub-recipe ingredient
+    // (the sub-recipe dependency the costing/availability engines cascade through).
+    references: ["cookbook", "ingredient", "image", "recipe"],
     mcp: ALL_MCP,
     routerStyle: "custom",
   },
@@ -104,6 +110,7 @@ export const entityManifest = {
     name: "location",
     dbTable: "Location",
     idBrand: "LocationId",
+    shortcodePrefix: "L-",
     softDelete: true,
     auditable: true,
     hasImages: true,
