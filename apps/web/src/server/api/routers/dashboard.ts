@@ -1,5 +1,5 @@
 import { dashboardCountsOut } from "@cubby/schemas/dashboard";
-import { getDashboardEntityCounts } from "~/server/repo/dashboard";
+import { getEntityCounts } from "~/server/repo/dashboard";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 /**
@@ -14,7 +14,7 @@ const counts = protectedProcedure
   .output(dashboardCountsOut)
   .query(async ({ ctx }) => {
     const [entityCounts, usdaCounts] = await Promise.all([
-      getDashboardEntityCounts(ctx.db),
+      getEntityCounts(ctx.db),
       // The USDA total is ancillary on most pages (footer/home card). Keep the
       // local entity totals usable when the bound worker is unavailable in dev,
       // CI, or a transient deploy window.
