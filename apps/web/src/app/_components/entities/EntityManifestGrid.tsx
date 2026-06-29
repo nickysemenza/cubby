@@ -215,8 +215,9 @@ export function EntityManifestGrid() {
 
   const countOf = (entity: Entity): number | undefined => {
     if (!counts) return undefined;
+    // usda-food is the only key mismatch (counts.usdaFoods); every other
+    // countable entity is keyed by its own name.
     if (entity === "usda-food") return counts.usdaFoods;
-    if (entity === "image") return counts.image;
     return entityManifest[entity].countable
       ? counts[entity as keyof typeof counts]
       : undefined;
