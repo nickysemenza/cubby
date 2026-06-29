@@ -13,7 +13,6 @@ interface ViewSwitcherProps<T extends string> {
   value: T;
   onValueChange: (value: T) => void;
   className?: string;
-  size?: "sm" | "default" | "lg";
   /** Accessible label for the switcher group. */
   ariaLabel?: string;
 }
@@ -29,7 +28,6 @@ export function ViewSwitcher<T extends string>({
   value,
   onValueChange,
   className,
-  size = "sm",
   ariaLabel = "Switch view",
 }: ViewSwitcherProps<T>) {
   return (
@@ -37,7 +35,7 @@ export function ViewSwitcher<T extends string>({
       aria-label={ariaLabel}
       className={cn("w-fit", className)}
       variant="outline"
-      size={size}
+      size="sm"
       value={[value]}
       onValueChange={(values: string[]) => {
         const next = values[0] as T | undefined;

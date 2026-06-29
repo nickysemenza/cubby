@@ -14,22 +14,11 @@ import { cn } from "~/lib/utils";
 const surfaceVariants = cva("rounded-none", {
   variants: {
     variant: {
-      /** A plain ruled region — paper fill + hairline border. */
-      panel: "bg-card text-card-foreground border border-[var(--border)]",
       /** The detail "spec plate" placard — subtly inset tone. */
       specPlate: "bg-muted/40 border border-[var(--border)]",
-      /** An image / media frame — clips its contents. */
-      figure: "bg-muted border border-[var(--border)] overflow-hidden",
-      /** A floating overlay (popover / menu) — the one surface that lifts. */
-      overlay: "bg-popover text-popover-foreground border border-[var(--border)] shadow-md",
-      /** A list row — divider underneath, hover affordance. */
-      mobileRow:
-        "bg-card border-b border-[var(--border)] hover:bg-muted/50 transition-colors",
-      /** A standalone mobile card — bordered tile. */
-      mobileCard: "bg-card border border-[var(--border)]",
     },
   },
-  defaultVariants: { variant: "panel" },
+  defaultVariants: { variant: "specPlate" },
 });
 
 export interface SurfaceProps
