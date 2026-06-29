@@ -40,10 +40,13 @@ import {
 import { computeRecipeUsages, dbRecipeToTopLevelShape } from "../recipe";
 
 type IngredientSelect = typeof ingredient.$inferSelect;
+type ProductSelect = Omit<typeof product.$inferSelect, "aliases"> & {
+  aliases?: string[];
+};
 
 export type IngredientDeepDB = typeof ingredient.$inferSelect & {
   product: Array<
-    typeof product.$inferSelect & {
+    ProductSelect & {
       unitMappings: Array<typeof productUnitMappings.$inferSelect>;
       externalIds: Array<typeof productExternalId.$inferSelect>;
       images: Array<{
@@ -82,7 +85,7 @@ export const mapIngredientProducts = (
 /** Product relation for the lean costing/getManyByIDs fetch: unit mappings only. */
 type IngredientLeanDB = typeof ingredient.$inferSelect & {
   product: Array<
-    typeof product.$inferSelect & {
+    ProductSelect & {
       unitMappings: Array<typeof productUnitMappings.$inferSelect>;
     }
   >;

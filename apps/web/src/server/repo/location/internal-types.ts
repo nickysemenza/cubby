@@ -11,12 +11,19 @@ import type {
   product,
 } from "~/server/db/schema";
 
-export type LocationListDB = typeof location.$inferSelect & {
-  parent: typeof location.$inferSelect | null;
-  children: Array<typeof location.$inferSelect>;
+type LocationSelect = Omit<typeof location.$inferSelect, "aliases"> & {
+  aliases?: string[];
+};
+type ProductSelect = Omit<typeof product.$inferSelect, "aliases"> & {
+  aliases?: string[];
+};
+
+export type LocationListDB = LocationSelect & {
+  parent: LocationSelect | null;
+  children: Array<LocationSelect>;
   inventoryEntries: Array<
     typeof inventoryEntry.$inferSelect & {
-      product: typeof product.$inferSelect;
+      product: ProductSelect;
     }
   >;
   images: Array<{
@@ -29,7 +36,7 @@ export type LocationListDB = typeof location.$inferSelect & {
  * Helper type for recursive location queries.
  * Supports building hierarchical location trees.
  */
-export type LocationWithParentChild = typeof location.$inferSelect & {
+export type LocationWithParentChild = LocationSelect & {
   children?: LocationWithParentChild[];
   parent?: LocationWithParentChild | null;
   images?: Array<{

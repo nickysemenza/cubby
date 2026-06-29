@@ -28,6 +28,7 @@ import { searchColumns } from "./search-columns";
 import {
   entityTypeMap,
   getEnrichmentText,
+  getSearchMatchText,
   getSearchResultEntity,
   getSearchResultRoute,
   groupSearchResults,
@@ -334,6 +335,7 @@ function MobileSearchResults({
             )}
             {group.items.map((item) => {
               const enrichment = getEnrichmentText(item);
+              const matchText = getSearchMatchText(item);
 
               return (
                 <MobileCard
@@ -342,7 +344,9 @@ function MobileSearchResults({
                   title={item.name}
                   subtitle={item.subtitle}
                   imageSlot={<SearchResultMedia item={item} variant="mobile" />}
-                  rightValues={enrichment ? [enrichment] : []}
+                  rightValues={[enrichment, matchText].filter(
+                    (value): value is string => Boolean(value),
+                  )}
                   entity={getSearchResultEntity(item)}
                   onClick={() => {
                     rememberSearchResult(item);

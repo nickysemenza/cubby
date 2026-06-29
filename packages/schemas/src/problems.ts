@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { amount } from "./codec";
 import { ingredientId, recipeId } from "./identifiers";
+import { searchableEntityRefFields } from "./search";
 
 // The four base measurement kinds a product's conversion graph can reach. The
 // single source for the BaseKind union: the costing lib (conversion-coverage)
@@ -123,6 +124,13 @@ export const locationWithoutAiDescriptionSchema = z.object({
   imageCount: z.number(),
 });
 
+export const orphanedEntityEmbeddingSchema = z.object({
+  id: z.string(),
+  ...searchableEntityRefFields,
+  model: z.string(),
+  createdAt: z.date(),
+});
+
 export const staleIngredientParseSchema = z.object({
   recipeSectionIngredientId: z.string(),
   recipeId,
@@ -171,6 +179,7 @@ const problemsFastShape = {
   emptyLocations: z.array(emptyLocationSchema),
   productsWithNoImages: z.array(productWithNoImagesSchema),
   locationsWithoutAiDescription: z.array(locationWithoutAiDescriptionSchema),
+  orphanedEntityEmbeddings: z.array(orphanedEntityEmbeddingSchema),
 };
 
 // DB-only detectors — cheap, no WASM/network.
@@ -316,6 +325,17 @@ export const dryRunReparseOut = z.object({
 export const dryRunPruneAliasesOut = z.object({
   wouldPrune: z.number().int(),
   ingredients: z.number().int(),
+});
+
+export const cleanupOrphanedEntityEmbeddingsInput = z
+  .object({
+    ids: z.array(z.string()).optional(),
+  })
+  .optional();
+
+export const cleanupOrphanedEntityEmbeddingsOut = z.object({
+  found: z.number().int().nonnegative(),
+  deleted: z.number().int().nonnegative(),
 });
 
 export const recipeUsageByProductInput = z.object({

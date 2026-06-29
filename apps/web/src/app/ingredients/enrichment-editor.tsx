@@ -25,7 +25,7 @@ import {
   ingredientAllMutationInvalidateKeys,
   productMutationInvalidateKeys,
 } from "~/lib/query-keys";
-import { savedWithRecompute } from "~/lib/recompute-summary";
+import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import {
@@ -370,7 +370,8 @@ export function EnrichmentEditor({
 
   const createProduct = useActionMutation({
     mutationFn: api.product.create.mutationOptions,
-    success: (d) => savedWithRecompute(d.sideEffects, `Enriched ${d.name}`),
+    success: (d) =>
+      savedWithBackgroundWork(d.sideEffects, `Enriched ${d.name}`),
     invalidateKeys: [
       ...ingredientAllMutationInvalidateKeys,
       ...productMutationInvalidateKeys,
@@ -380,7 +381,7 @@ export function EnrichmentEditor({
   });
   const updateProduct = useActionMutation({
     mutationFn: api.product.update.mutationOptions,
-    success: (d) => savedWithRecompute(d.sideEffects, `Updated ${d.name}`),
+    success: (d) => savedWithBackgroundWork(d.sideEffects, `Updated ${d.name}`),
     invalidateKeys: [
       ...ingredientAllMutationInvalidateKeys,
       ...productMutationInvalidateKeys,

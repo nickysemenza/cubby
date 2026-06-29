@@ -8,10 +8,10 @@ import {
 } from "@devoxa/integresql-client";
 import { chromium, type FullConfig } from "@playwright/test";
 import { pushSchema } from "drizzle-kit/api";
-import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import * as schema from "../../src/server/db/schema";
+import { ensureDbExtensions } from "../../tooling/db-extensions";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -61,9 +61,9 @@ async function globalSetup(config: FullConfig): Promise<void> {
     console.log("[E2E Setup] Pushing schema to template database...");
     const pool = new Pool({ connectionString: connectionUrl });
     const db = drizzle(pool);
-    // pushSchema doesn't manage extensions; pg_trgm is needed for the GIN
-    // trigram indexes, so create it before pushing.
-    await db.execute(sql`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
+    // pushSchema doesn't manage extensions; create them before pushing
+    // (mirrors db:push and integration setup).
+    await ensureDbExtensions(db);
     // See test-setup.ts: bridge the duplicated drizzle-orm PgDatabase types.
     const { apply } = await pushSchema(
       schema,

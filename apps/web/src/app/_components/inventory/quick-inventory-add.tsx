@@ -9,6 +9,7 @@
  * to create mode, expanding product fields inline using the Collapsible component.
  */
 
+import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
 import { amount } from "@cubby/schemas/codec";
 import type { LocationId } from "@cubby/schemas/identifiers";
 import { productCategory } from "@cubby/schemas/product";
@@ -39,6 +40,7 @@ import { Collapsible, CollapsibleContent } from "~/components/ui/collapsible";
 import { Spinner } from "~/components/ui/spinner";
 import { useImageState } from "~/hooks/useImageState";
 import { getErrorMessage } from "~/lib/error-utils";
+import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import type { ComboboxItem } from "../combobox/combobox-types";
@@ -171,13 +173,24 @@ export function QuickInventoryAdd({
 
       // Step 2: Create the inventory entry
       try {
-        await inventoryCreateMutation.mutateAsync({
+        const inventory = await inventoryCreateMutation.mutateAsync({
           productId: newProduct.id,
           locationId,
           amount: values.amount,
         });
 
-        toast.success(`Created "${newProduct.name}" and added to inventory`);
+        const sideEffects: MutationSideEffects = {
+          backgroundBatches: [
+            ...newProduct.sideEffects.backgroundBatches,
+            ...inventory.sideEffects.backgroundBatches,
+          ],
+        };
+        toast.success(
+          savedWithBackgroundWork(
+            sideEffects,
+            `Created "${newProduct.name}" and added to inventory`,
+          ),
+        );
         switchToSelectMode();
         onSuccess();
       } catch (inventoryErr) {

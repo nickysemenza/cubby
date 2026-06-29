@@ -2,7 +2,11 @@ import type { RecipeId } from "@cubby/schemas/identifiers";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { setCfEnv } from "~/server/cf-env";
-import { RECOMPUTE_INLINE_MAX } from "~/server/queue-recompute";
+import { RECOMPUTE_CHUNK_SIZE } from "~/server/queue-recompute";
+import {
+  getBackgroundBatchDetail,
+  listBackgroundBatches,
+} from "~/server/repo/background-jobs";
 import { createProduct, updateProduct } from "~/server/repo/product";
 import {
   createRecipe,
@@ -355,22 +359,24 @@ describe("RecipeCostingService", () => {
     });
   });
 
-  describe("dispatchRecompute threshold", () => {
-    // Install a fake RECOMPUTE_QUEUE binding (the repo has no real one in tests).
-    // Returns the captured chunks + a reset to clear the module-level cfEnv so the
-    // queue doesn't leak into other tests (which expect the inline/no-binding path).
+  describe("dispatchRecompute", () => {
+    // Install a fake BACKGROUND_QUEUE binding (the repo has no real one in tests).
+    // Returns captured wakeup messages + a reset to clear the module-level cfEnv
+    // so the queue doesn't leak into tests expecting inline/no-binding behavior.
     const installFakeQueue = () => {
-      const sent: RecipeId[][] = [];
+      const sent: Array<{ batchId: string; jobId: string }> = [];
       setCfEnv({
-        RECOMPUTE_QUEUE: {
-          send: async (m: { recipeIds: RecipeId[] }) => {
-            sent.push(m.recipeIds);
+        BACKGROUND_QUEUE: {
+          send: async (m: { batchId: string; jobId: string }) => {
+            sent.push({ batchId: m.batchId, jobId: m.jobId });
           },
           sendBatch: async (
-            messages: Iterable<{ body: { recipeIds: RecipeId[] } }>,
+            messages: Iterable<{
+              body: { batchId: string; jobId: string };
+            }>,
           ) => {
             for (const { body } of messages) {
-              sent.push(body.recipeIds);
+              sent.push({ batchId: body.batchId, jobId: body.jobId });
             }
           },
         },
@@ -378,41 +384,66 @@ describe("RecipeCostingService", () => {
       return { sent, reset: () => setCfEnv(undefined as unknown as Env) };
     };
 
-    it("recomputes inline at/below the threshold even when a queue is bound", async () => {
+    it("persists and processes jobs inline when no queue is bound", async () => {
+      const ids: RecipeId[] = [];
+      for (let i = 0; i < 3; i++) {
+        ids.push((await seedPricedRecipe(`Inline ${i}`)).id as RecipeId);
+      }
+      const returnedBatches = await service().dispatchRecompute(ids);
+      expect(returnedBatches).toHaveLength(1);
+      const [batch] = await listBackgroundBatches(ctx.db, 1);
+      expect(returnedBatches[0]?.id).toBe(batch?.id);
+      expect(batch?.kind).toBe("recipe-totals.recompute");
+      expect(batch?.processor).toBe("inline");
+      expect(batch?.status).toBe("succeeded");
+      expect(batch?.totalJobs).toBe(1);
+      for (const id of ids) {
+        const state = await getRecipeTotalsState(ctx.db, id);
+        expect(state?.totalsComputedAt).not.toBeNull();
+      }
+    });
+
+    it("queues persisted jobs when a queue is bound", async () => {
       const { sent, reset } = installFakeQueue();
       try {
         const ids: RecipeId[] = [];
-        for (let i = 0; i < RECOMPUTE_INLINE_MAX; i++) {
-          ids.push((await seedPricedRecipe(`Inline ${i}`)).id as RecipeId);
+        for (let i = 0; i < 3; i++) {
+          ids.push((await seedPricedRecipe(`Queued ${i}`)).id as RecipeId);
         }
-        const n = await service().dispatchRecompute(ids);
-        // No message queued; recipes recomputed in-process (totals stamped fresh).
-        expect(sent).toHaveLength(0);
-        expect(n).toBeGreaterThanOrEqual(ids.length);
+        const returnedBatches = await service().dispatchRecompute(ids);
+        expect(returnedBatches).toHaveLength(1);
+        expect(sent).toHaveLength(1);
+        expect(returnedBatches[0]?.id).toBe(sent[0]!.batchId);
+        const batch = await getBackgroundBatchDetail(ctx.db, sent[0]!.batchId);
+        expect(batch?.processor).toBe("queue");
+        expect(batch?.jobs).toHaveLength(1);
+        expect(batch?.jobs[0]?.payload).toEqual({ recipeIds: ids });
+        // Every id was persisted in a job and rows were marked stale, not
+        // recomputed on the request path.
         for (const id of ids) {
           const state = await getRecipeTotalsState(ctx.db, id);
-          expect(state?.totalsComputedAt).not.toBeNull();
+          expect(state?.totalsComputedAt).toBeNull();
         }
       } finally {
         reset();
       }
     });
 
-    it("queues above the threshold, marking recipes stale instead of recomputing", async () => {
+    it("chunks large recompute sets", async () => {
       const { sent, reset } = installFakeQueue();
       try {
         const ids: RecipeId[] = [];
-        for (let i = 0; i <= RECOMPUTE_INLINE_MAX; i++) {
-          ids.push((await seedPricedRecipe(`Queued ${i}`)).id as RecipeId);
+        for (let i = 0; i <= RECOMPUTE_CHUNK_SIZE; i++) {
+          ids.push(
+            (await seedPricedRecipe(`Queued chunk ${i}`)).id as RecipeId,
+          );
         }
-        const n = await service().dispatchRecompute(ids);
-        expect(n).toEqual(ids.length);
-        // Every id was sent (chunked) and the rows were marked stale, NOT recomputed.
-        expect([...sent.flat()].sort()).toEqual([...ids].sort());
-        for (const id of ids) {
-          const state = await getRecipeTotalsState(ctx.db, id);
-          expect(state?.totalsComputedAt).toBeNull();
-        }
+        const returnedBatches = await service().dispatchRecompute(ids);
+        expect(returnedBatches).toHaveLength(1);
+        expect(sent).toHaveLength(2);
+        const batch = await getBackgroundBatchDetail(ctx.db, sent[0]!.batchId);
+        expect(batch?.processor).toBe("queue");
+        expect(batch?.jobs).toHaveLength(2);
       } finally {
         reset();
       }

@@ -1,5 +1,3 @@
-import type { IngredientWithRecipesAndProductOut } from "@cubby/schemas/ingredient";
-import type { LocationOut } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
@@ -9,6 +7,7 @@ import {
   locationMutationInvalidateKeys,
   productMutationInvalidateKeys,
 } from "~/lib/query-keys";
+import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { useTRPC } from "~/trpc/react";
 import {
   buildIngredientComboboxItem,
@@ -69,8 +68,11 @@ export function WithIngredientSearch({ children }: WithEntitySearchProps) {
 
   const createMutation = useActionMutation({
     mutationFn: api.ingredient.create.mutationOptions,
-    success: (newIngredient: IngredientWithRecipesAndProductOut) =>
-      `Added ${newIngredient.name} to your pantry.`,
+    success: (newIngredient) =>
+      savedWithBackgroundWork(
+        newIngredient.sideEffects,
+        `Added ${newIngredient.name} to your pantry`,
+      ),
     invalidateKeys: ingredientMutationInvalidateKeys,
     onSuccess: (newIngredient) =>
       resolveWithEntity(buildIngredientComboboxItem(newIngredient)),
@@ -123,8 +125,11 @@ export function WithLocationSearch({ children }: WithEntitySearchProps) {
 
   const createMutation = useActionMutation({
     mutationFn: api.location.create.mutationOptions,
-    success: (newLocation: LocationOut) =>
-      `Made a place for ${newLocation.name}.`,
+    success: (newLocation) =>
+      savedWithBackgroundWork(
+        newLocation.sideEffects,
+        `Made a place for ${newLocation.name}`,
+      ),
     invalidateKeys: locationMutationInvalidateKeys,
     onSuccess: (newLocation) =>
       resolveWithEntity(buildLocationComboboxItem(newLocation)),
@@ -180,7 +185,11 @@ export function WithProductSearch({ children }: WithEntitySearchProps) {
 
   const createMutation = useActionMutation({
     mutationFn: api.product.create.mutationOptions,
-    success: (newProduct) => `Added ${newProduct.name} to your shelves.`,
+    success: (newProduct) =>
+      savedWithBackgroundWork(
+        newProduct.sideEffects,
+        `Added ${newProduct.name} to your shelves`,
+      ),
     invalidateKeys: productMutationInvalidateKeys,
     onSuccess: (newProduct) =>
       resolveWithEntity(buildProductComboboxItem(newProduct)),

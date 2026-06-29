@@ -135,9 +135,9 @@ describe("location deletion", () => {
 
       // Deleting the parent succeeds: children are orphaned (parentId -> null)
       // and become top-level locations rather than blocking the delete.
-      await expect(
-        caller.delete({ ids: [parentLocation.id] }),
-      ).resolves.toBeUndefined();
+      // (Delete returns a side-effects payload — a whole-tree valuation recompute
+      // is enqueued; the meaningful assertions are the orphaning checks below.)
+      await caller.delete({ ids: [parentLocation.id] });
 
       // Parent is gone from the list
       const locations = await caller.list(listParams({ pageSize: 100 }));

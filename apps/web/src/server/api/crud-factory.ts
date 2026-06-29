@@ -1,3 +1,7 @@
+import {
+  type BackgroundBatchRef,
+  mutationSideEffectsSchema,
+} from "@cubby/schemas/background-jobs";
 import { IDInput } from "@cubby/schemas/common";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { Entity } from "@cubby/schemas/entity";
@@ -55,17 +59,21 @@ interface ProtectedCrudServices extends CrudServices {
 
 // Reusable procedure builders
 const createDeleteProcedure = <TId extends string = string>(
-  deleteFn: (ctx: ProtectedCrudServices, ids: TId[]) => Promise<void>,
+  deleteFn: (
+    ctx: ProtectedCrudServices,
+    ids: TId[],
+  ) => Promise<BackgroundBatchRef[] | undefined>,
   idSchema?: z.ZodType<unknown>,
 ) =>
   protectedProcedure
     .input(z.object({ ids: z.array(idSchema ?? z.string()).max(500) }))
-    .output(z.void())
+    .output(z.object({ sideEffects: mutationSideEffectsSchema }))
     .mutation(async ({ ctx, input }) => {
       const ids = input.ids.map((id) =>
         idSchema ? (idSchema.parse(id) as TId) : (id as TId),
       );
-      await deleteFn(ctx, ids);
+      const backgroundBatches = (await deleteFn(ctx, ids)) ?? [];
+      return { sideEffects: { backgroundBatches } };
     });
 
 const createGetByIdProcedure = <T, TId extends string = string>(

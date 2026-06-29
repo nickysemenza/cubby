@@ -1,5 +1,7 @@
 import type { RecipeId } from "@cubby/schemas/identifiers";
 import {
+  cleanupOrphanedEntityEmbeddingsInput,
+  cleanupOrphanedEntityEmbeddingsOut,
   deleteUnusedIngredientsInput,
   deleteUnusedIngredientsOut,
   dryRunPruneAliasesOut,
@@ -15,6 +17,7 @@ import {
 import { streamProgress } from "~/lib/bulk-progress";
 import { recipeUsageCountsByProduct } from "~/server/repo/problems";
 import {
+  cleanupOrphanedEntityEmbeddings,
   deleteUnusedIngredients,
   dryRunPruneAliases,
   dryRunReparse,
@@ -70,7 +73,9 @@ const reparseStale = protectedProcedure.mutation(async function* ({ ctx }) {
   yield* streamProgress(reparseStaleIngredientParses(ctx.db), async (r) => {
     // After the parses land, recompute the affected recipes' totals — off the
     // request path when the set is large (a sweep can touch many recipes).
-    await ctx.services.recipeCosting.dispatchRecompute(r.recipesAffected);
+    await ctx.services.recipeCosting.dispatchRecompute(r.recipesAffected, {
+      source: "problems.resolveUnparsedRecipeLine",
+    });
     return { updated: r.updated, recipesAffected: r.recipesAffected.length };
   });
 });
@@ -96,7 +101,9 @@ const reparseStaleSync = protectedProcedure
         break;
       }
     }
-    await ctx.services.recipeCosting.dispatchRecompute(result.recipesAffected);
+    await ctx.services.recipeCosting.dispatchRecompute(result.recipesAffected, {
+      source: "problems.resolveIncorrectIngredientClassifications",
+    });
     return {
       updated: result.updated,
       recipesAffected: result.recipesAffected.length,
@@ -149,6 +156,13 @@ const deleteUnused = protectedProcedure
     );
   });
 
+const cleanupOrphanedEmbeddings = protectedProcedure
+  .input(cleanupOrphanedEntityEmbeddingsInput)
+  .output(cleanupOrphanedEntityEmbeddingsOut)
+  .mutation(async ({ ctx, input }) => {
+    return await cleanupOrphanedEntityEmbeddings(ctx.db, input?.ids);
+  });
+
 export const problemsRouter = createTRPCRouter({
   getFast,
   getCoverage,
@@ -161,4 +175,5 @@ export const problemsRouter = createTRPCRouter({
   pruneAllUnusedAliasesStream,
   recipeUsageByProduct,
   deleteUnused,
+  cleanupOrphanedEmbeddings,
 });

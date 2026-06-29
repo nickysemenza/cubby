@@ -9,15 +9,22 @@ import type {
   productUnitMappings,
 } from "~/server/db/schema";
 
+type ProductSelect = Omit<typeof product.$inferSelect, "aliases"> & {
+  aliases?: string[];
+};
+type LocationSelect = Omit<typeof location.$inferSelect, "aliases"> & {
+  aliases?: string[];
+};
+
 export type InventoryEntryDeepDB = typeof inventoryEntry.$inferSelect & {
-  product: typeof product.$inferSelect & {
+  product: ProductSelect & {
     unitMappings: Array<typeof productUnitMappings.$inferSelect>;
     externalIds: Array<typeof productExternalId.$inferSelect>;
     images: Array<{
       image: typeof image.$inferSelect;
     }>;
   };
-  location: typeof location.$inferSelect & {
+  location: LocationSelect & {
     images: Array<{
       image: typeof image.$inferSelect;
     }>;
@@ -25,8 +32,8 @@ export type InventoryEntryDeepDB = typeof inventoryEntry.$inferSelect & {
 };
 
 export type InventoryEntryListDB = typeof inventoryEntry.$inferSelect & {
-  product: typeof product.$inferSelect;
-  location: typeof location.$inferSelect;
+  product: ProductSelect;
+  location: LocationSelect;
 };
 
 export interface UpdateInventoryEntryData {

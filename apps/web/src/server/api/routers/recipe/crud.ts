@@ -19,6 +19,7 @@ import {
   recipeSortableFields,
   recipeTagsOut,
   recipeUpdateData,
+  recipeWithSideEffectsOut,
 } from "@cubby/schemas/recipe";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -31,6 +32,10 @@ import {
   recipeList,
   updateRecipe,
 } from "~/server/repo/recipe";
+import {
+  runMutationSideEffects,
+  runMutationSideEffectsForEntities,
+} from "~/server/services/mutation-side-effects";
 import {
   createDeleteProcedure,
   createEntityCrudWithoutListProcedures,
@@ -59,6 +64,8 @@ const { getByID, create, update } = createEntityCrudWithoutListProcedures({
     createInput: recipeCreateInput,
     updateInput: recipeUpdateData,
     output: recipeOut,
+    createOutput: recipeWithSideEffectsOut,
+    updateOutput: recipeWithSideEffectsOut,
     idSchema: recipeId,
   },
   repository: {
@@ -75,12 +82,27 @@ const { getByID, create, update } = createEntityCrudWithoutListProcedures({
         data,
         services.actorContext,
       );
-      // One new recipe — under the queue threshold, so this recomputes inline
-      // (instant totals) + nulls any parents.
-      await services.services.recipeCosting.dispatchRecompute([
-        created.id as RecipeId,
-      ]);
-      return created;
+      // Persist recompute work through the background dispatcher. In dev this
+      // still drains inline, but the operation is visible on Background Jobs.
+      const recipeBatches =
+        await services.services.recipeCosting.dispatchRecompute(
+          [created.id as RecipeId],
+          {
+            source: "recipe.create",
+            entity: { entityType: "recipe", entityId: created.id },
+          },
+        );
+      const backgroundBatches = await runMutationSideEffects(services.db, {
+        action: "created",
+        entity: { entityType: "recipe", entityId: created.id },
+        source: "recipe.create",
+      });
+      return {
+        ...created,
+        sideEffects: {
+          backgroundBatches: [...recipeBatches, ...backgroundBatches],
+        },
+      };
     },
     update: async (services, id: RecipeId, data) => {
       const updated = await updateRecipe(
@@ -89,8 +111,22 @@ const { getByID, create, update } = createEntityCrudWithoutListProcedures({
         data,
         services.actorContext,
       );
-      await services.services.recipeCosting.dispatchRecompute([id]);
-      return updated;
+      const recipeBatches =
+        await services.services.recipeCosting.dispatchRecompute([id], {
+          source: "recipe.update",
+          entity: { entityType: "recipe", entityId: id },
+        });
+      const backgroundBatches = await runMutationSideEffects(services.db, {
+        action: "updated",
+        entity: { entityType: "recipe", entityId: id },
+        source: "recipe.update",
+      });
+      return {
+        ...updated,
+        sideEffects: {
+          backgroundBatches: [...recipeBatches, ...backgroundBatches],
+        },
+      };
     },
   },
 });
@@ -116,6 +152,14 @@ const getManyByIDs = protectedProcedure
 // Delete procedure using standalone factory
 const deleteItem = createDeleteProcedure<RecipeId>(async (services, ids) => {
   await deleteRecipes(services.db, ids, services.actorContext);
+  return await runMutationSideEffectsForEntities(
+    services.db,
+    ids.map((id) => ({
+      action: "deleted" as const,
+      entity: { entityType: "recipe" as const, entityId: id },
+      source: "recipe.delete",
+    })),
+  );
 }, recipeId);
 
 const getAllTagsEndpoint = protectedProcedure

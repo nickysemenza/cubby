@@ -1,10 +1,16 @@
+import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
 import type { Entity } from "@cubby/schemas/entity";
 import type { QueryKey } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { toast } from "sonner";
 import { entities } from "~/entities/entities";
+import { watchBatchesAndInvalidate } from "~/lib/background-batch-polling";
 import { invalidateTRPCQueries } from "~/lib/query-keys";
+import { savedWithBackgroundWork } from "~/lib/recompute-summary";
+import { useTRPC } from "~/trpc/react";
+
+const emptySideEffects: MutationSideEffects = { backgroundBatches: [] };
 
 /**
  * Hook for creating memoized update mutations that properly invalidate caches.
@@ -16,21 +22,41 @@ export function useUpdateMutation<TVariables, TData>({
   invalidateKeys,
 }: {
   mutationFn: (callbacks: {
-    onSuccess: () => void;
+    onSuccess: (data: { sideEffects?: MutationSideEffects }) => void;
     onError: (err: { message?: string }) => void;
   }) => unknown;
   entity: Entity;
   invalidateKeys: readonly QueryKey[];
 }) {
   const queryClient = useQueryClient();
+  const api = useTRPC();
   const entityLabel = entities[entity].label;
 
   const mutationOptions = useMemo(
     () =>
       mutationFn({
-        onSuccess: () => {
-          toast.success(`${entityLabel} updated`);
+        onSuccess: (data) => {
+          toast.success(
+            savedWithBackgroundWork(
+              data.sideEffects ?? emptySideEffects,
+              `${entityLabel} updated`,
+            ),
+          );
           invalidateTRPCQueries(queryClient, invalidateKeys);
+          // Re-invalidate once queued background work (totals, valuation, AI)
+          // drains, so the UI reflects the recomputed values without a reload.
+          void watchBatchesAndInvalidate({
+            queryClient,
+            result: data,
+            invalidateKeys,
+            fetchBatchStatus: (batchId) =>
+              queryClient
+                .fetchQuery({
+                  ...api.backgroundJobs.getBatch.queryOptions({ batchId }),
+                  staleTime: 0,
+                })
+                .then((batch) => batch.status),
+          });
         },
         onError: (err) => {
           toast.error(
@@ -38,7 +64,7 @@ export function useUpdateMutation<TVariables, TData>({
           );
         },
       }),
-    [mutationFn, entityLabel, invalidateKeys, queryClient],
+    [mutationFn, entityLabel, invalidateKeys, queryClient, api],
   );
 
   return useMutation<TData, Error, TVariables>(

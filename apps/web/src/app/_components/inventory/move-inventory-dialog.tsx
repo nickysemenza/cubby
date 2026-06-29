@@ -118,6 +118,9 @@ export function MoveInventoryDialog({
     setError(null);
 
     let completedGroups = 0;
+    const results: Array<
+      Awaited<ReturnType<typeof bulkMoveMutation.mutateAsync>>
+    > = [];
     try {
       for (const [sourceLocationId, sourceItems] of sourceGroups) {
         const moveItems: BulkMoveItem[] = sourceItems.map((item) => ({
@@ -125,11 +128,13 @@ export function MoveInventoryDialog({
           quantity: item.amount,
         }));
 
-        await bulkMoveMutation.mutateAsync({
-          sourceLocationId,
-          targetLocationId,
-          items: moveItems,
-        });
+        results.push(
+          await bulkMoveMutation.mutateAsync({
+            sourceLocationId,
+            targetLocationId,
+            items: moveItems,
+          }),
+        );
         completedGroups += 1;
       }
     } catch (error) {
@@ -147,7 +152,14 @@ export function MoveInventoryDialog({
     toast.success(
       `Successfully moved ${items.length} item${items.length !== 1 ? "s" : ""}`,
     );
-    invalidateInventory();
+    // Poll every group's queued valuation work, not just the last group's.
+    invalidateInventory({
+      sideEffects: {
+        backgroundBatches: results.flatMap(
+          (r) => r.sideEffects.backgroundBatches,
+        ),
+      },
+    });
     form.reset();
     onSuccess();
     onOpenChange(false);

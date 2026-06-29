@@ -9,8 +9,8 @@ import {
   type CategorySuggestion,
   categoryAuditSchema,
   categorySuggestionSchema,
-  type DetectedInventory,
-  detectedInventorySchema,
+  type DetectedInventoryAiResult,
+  detectedInventoryAiResultSchema,
   type LocationDescription,
   type LocationTypeSuggestion,
   locationDescriptionSchema,
@@ -28,13 +28,48 @@ import {
 import { chat, type ImagePart } from "@tanstack/ai";
 import type { AnthropicImageMetadata } from "@tanstack/ai-anthropic";
 import {
+  DEFAULT_CHAT_MODEL,
+  type SupportedChatModel,
+} from "~/server/ai/models";
+import {
+  type AiGatewayUsageContext,
+  aiGatewayUsageMiddleware,
+} from "~/server/clients/ai-gateway-usage";
+import {
   type GatewayMetadata,
   gatewayAdapterConfig,
 } from "~/server/clients/gateway-config";
 
-// Single source of truth for the model so both gateway-config branches stay in
-// sync on a bump (mirrors `MODEL` in `./openai`).
-const MODEL = "claude-haiku-4-5";
+type AnthropicUsageContext = Omit<
+  AiGatewayUsageContext,
+  "provider" | "model"
+> & {
+  model?: SupportedChatModel;
+};
+
+function anthropicUsage(
+  usage: AnthropicUsageContext | undefined,
+): AiGatewayUsageContext | undefined {
+  if (!usage) return undefined;
+  return {
+    ...usage,
+    provider: "anthropic",
+    model: usage.model ?? DEFAULT_CHAT_MODEL,
+  };
+}
+
+function anthropicUsageWithDefaults(
+  usage: AnthropicUsageContext | undefined,
+  defaults: Pick<AnthropicUsageContext, "feature" | "operation">,
+): AiGatewayUsageContext | undefined {
+  if (!usage) return undefined;
+  return anthropicUsage({
+    ...usage,
+    feature: usage.feature ?? defaults.feature,
+    operation: usage.operation ?? defaults.operation,
+    cacheStatus: usage.cacheStatus ?? "none",
+  });
+}
 
 // Category descriptions for the LLM to understand what each category means
 // Using `satisfies` to ensure all categories have descriptions (build fails if one is missing)
@@ -144,7 +179,7 @@ class AnthropicClient {
   // Construction is cheap.
   private getAdapter(
     metadata?: GatewayMetadata,
-    model: Parameters<typeof createAnthropicChat>[0] = MODEL,
+    model: SupportedChatModel = DEFAULT_CHAT_MODEL,
   ) {
     return createAnthropicChat(model, gatewayAdapterConfig({ metadata }));
   }
@@ -156,21 +191,25 @@ class AnthropicClient {
    * AI Gateway dashboard for per-feature filtering. `model` overrides the default
    * (Haiku) — used by the cookbook proxy to escalate a failing chunk to Sonnet.
    */
-  getTextAdapter(
-    metadata?: GatewayMetadata,
-    model?: Parameters<typeof createAnthropicChat>[0],
-  ) {
+  getTextAdapter(metadata?: GatewayMetadata, model?: SupportedChatModel) {
     return this.getAdapter(metadata, model);
   }
 
   async suggestCategory(
     productName: string,
     manufacturer: string,
+    usage?: AnthropicUsageContext,
   ): Promise<CategorySuggestion> {
     const adapter = this.getAdapter();
 
     return chat({
       adapter,
+      middleware: aiGatewayUsageMiddleware(
+        anthropicUsageWithDefaults(usage, {
+          feature: "product-category-suggestion",
+          operation: "suggestCategory",
+        }),
+      ),
       systemPrompts: [buildCategorySystemPrompt()],
       messages: [
         {
@@ -187,11 +226,18 @@ Categorize this product and explain your reasoning.`,
 
   async suggestLocationType(
     locationName: string,
+    usage?: AnthropicUsageContext,
   ): Promise<LocationTypeSuggestion> {
     const adapter = this.getAdapter();
 
     return chat({
       adapter,
+      middleware: aiGatewayUsageMiddleware(
+        anthropicUsageWithDefaults(usage, {
+          feature: "location-type-suggestion",
+          operation: "suggestLocationType",
+        }),
+      ),
       systemPrompts: [buildLocationTypeSystemPrompt()],
       messages: [
         {
@@ -208,6 +254,7 @@ Determine the appropriate type for this location and explain your reasoning.`,
   async describeLocation(
     imageUrls: string[],
     locationName: string,
+    usage?: AnthropicUsageContext,
   ): Promise<LocationDescription> {
     const adapter = this.getAdapter();
 
@@ -220,6 +267,12 @@ Determine the appropriate type for this location and explain your reasoning.`,
 
     return chat({
       adapter,
+      middleware: aiGatewayUsageMiddleware(
+        anthropicUsageWithDefaults(usage, {
+          feature: "location-description",
+          operation: "locationDescription",
+        }),
+      ),
       systemPrompts: [
         "You are a visual inventory assistant. Describe what you see stored in this location. Be concise (2-4 sentences). Identify specific items, brands, and quantities where visible. Don't speculate about items you can't clearly see.",
       ],
@@ -242,8 +295,8 @@ Determine the appropriate type for this location and explain your reasoning.`,
   async detectInventoryItems(
     imageUrls: string[],
     locationName: string,
-    existingItems: string[],
-  ): Promise<DetectedInventory> {
+    usage?: AnthropicUsageContext,
+  ): Promise<DetectedInventoryAiResult> {
     const adapter = this.getAdapter();
 
     const imageParts: ImagePart<AnthropicImageMetadata>[] = imageUrls.map(
@@ -253,21 +306,35 @@ Determine the appropriate type for this location and explain your reasoning.`,
       }),
     );
 
-    const existingItemsList =
-      existingItems.length > 0
-        ? `\n\nItems already tracked at this location (avoid duplicates):\n${existingItems.map((i) => `- ${i}`).join("\n")}`
-        : "";
-
     return chat({
       adapter,
+      middleware: aiGatewayUsageMiddleware(
+        anthropicUsageWithDefaults(usage, {
+          feature: "location-inventory-detection",
+          operation: "locationInventoryDetection",
+        }),
+      ),
       systemPrompts: [
-        `You are a visual inventory assistant. Identify distinct products and items visible in the photos. For each item:
-- "name": the product name WITHOUT the brand (e.g., "packing tape roll", "digital scale", "tape dispenser")
-- "manufacturer": the brand/manufacturer if visible, or "(unspecified)" if not identifiable
-- Estimate quantity visible
-- Suggest an appropriate unit (e.g., "each", "box", "bag", "can", "bottle")
-- For items you can't clearly identify, use the "misc:" prefix in name (e.g., "misc:unidentified cables")
-- Only list items you can reasonably identify from the photos`,
+        `You are a visual inventory assistant. Identify distinct user-trackable inventory items visible in the photos.
+
+Return canonical product names, not visual-only descriptions:
+- Good: "blue tarp", "painters drop cloth", "plastic drop cloth", "packing tape roll"
+- Bad: "small blue plastic bag", "cream cloth items", "various packaged items"
+
+Use the location name as a strong hint when it agrees with what is visible. If a folded or partially hidden item is ambiguous but the location name clearly labels the bin contents, return the likely inventory item with medium or low confidence and explain the evidence.
+
+For tarp/drop-cloth/storage-cloth bins, split recognizable material types into separate inventory items when the photo/context supports them. Prefer names like "blue tarp", "painters drop cloth", and "plastic drop cloth" over vague labels like "cloth items", "blue plastic bag", or "packaged items".
+
+For each item:
+- "name": product name without brand; include "misc:" only for unidentified or intentionally low-detail placeholders
+- "manufacturer": visible brand/manufacturer, or "(unspecified)"
+- "estimatedQuantity": quantity visible; use 1 for a single folded/rolled item
+- "unit": usually "each" for household/shop items
+- "category": one of the product categories, or null if unclear
+- "evidence": one short sentence explaining the visual/location-name evidence
+- "isMisc": true only for unidentified groups or low-detail bulk placeholders
+
+Do not list the storage crate/bin/drawer itself. Do not list vague clutter, packaging, or bags unless they are the actual item being inventoried. Recognizable items like tarps, drop cloths, tools, containers, supplies, and named packaged goods are not misc. Never return "misc:" for a recognizable tarp or drop cloth.`,
       ],
       messages: [
         {
@@ -276,15 +343,18 @@ Determine the appropriate type for this location and explain your reasoning.`,
             ...imageParts,
             {
               type: "text",
-              content: `Identify inventory items in this location: "${locationName}"${existingItemsList}`,
+              content: `Identify inventory items in this location: "${locationName}"`,
             },
           ],
         },
       ],
-      outputSchema: detectedInventorySchema,
+      outputSchema: detectedInventoryAiResultSchema,
     });
   }
-  async identifyProduct(imageUrls: string[]): Promise<ProductIdentification> {
+  async identifyProduct(
+    imageUrls: string[],
+    usage?: AnthropicUsageContext,
+  ): Promise<ProductIdentification> {
     const adapter = this.getAdapter();
 
     const imageParts: ImagePart<AnthropicImageMetadata>[] = imageUrls.map(
@@ -296,6 +366,12 @@ Determine the appropriate type for this location and explain your reasoning.`,
 
     return chat({
       adapter,
+      middleware: aiGatewayUsageMiddleware(
+        anthropicUsageWithDefaults(usage, {
+          feature: "product-identification",
+          operation: "identifyProduct",
+        }),
+      ),
       systemPrompts: [buildProductIdentificationSystemPrompt()],
       messages: [
         {
@@ -321,6 +397,7 @@ Determine the appropriate type for this location and explain your reasoning.`,
       category: string | null;
     }>,
     existingCategories: Record<string, string>,
+    usage?: AnthropicUsageContext,
   ): Promise<CategoryAudit> {
     const adapter = this.getAdapter();
 
@@ -337,6 +414,12 @@ Determine the appropriate type for this location and explain your reasoning.`,
 
     return chat({
       adapter,
+      middleware: aiGatewayUsageMiddleware(
+        anthropicUsageWithDefaults(usage, {
+          feature: "category-audit",
+          operation: "auditCategories",
+        }),
+      ),
       systemPrompts: [
         `You are a product catalog analyst. Given a list of products and the current category definitions, identify gaps — clusters of products that would benefit from a new category.
 
@@ -363,6 +446,7 @@ Rules:
   async parseSearchQuery(
     query: string,
     locationNames: string[],
+    usage?: AnthropicUsageContext,
   ): Promise<ParsedSearch> {
     const adapter = this.getAdapter();
 
@@ -373,6 +457,12 @@ Rules:
 
     return chat({
       adapter,
+      middleware: aiGatewayUsageMiddleware(
+        anthropicUsageWithDefaults(usage, {
+          feature: "search-query-parse",
+          operation: "parseSearchQuery",
+        }),
+      ),
       systemPrompts: [
         `You are an inventory search assistant. Parse natural language queries into structured search filters.
 

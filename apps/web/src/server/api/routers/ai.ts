@@ -1,5 +1,11 @@
 import {
   aiLocationIdInput,
+  aiUsageRecentInput,
+  aiUsageRecentOut,
+  aiUsageSummaryInput,
+  aiUsageSummaryOut,
+  approveDetectedInventoryItemInput,
+  approveDetectedInventoryItemOut,
   categoryAuditSchema,
   categorySuggestionInput,
   categorySuggestionSchema,
@@ -24,9 +30,11 @@ import {
   CATEGORY_DESCRIPTIONS,
   getAnthropicClient,
 } from "~/server/clients/anthropic";
+import { listRecentAiUsage, summarizeAiUsage } from "~/server/repo/ai-usage";
 import { getLocationNames } from "~/server/repo/location/crud";
 import { getProductSummaryForAudit } from "~/server/repo/product";
 import {
+  approveDetectedInventoryItem,
   backfillLocationDescriptions,
   describeLocation,
   detectInventoryItems,
@@ -43,9 +51,14 @@ import { createTRPCRouter, protectedProcedure } from "../trpc";
 const suggestCategory = protectedProcedure
   .input(categorySuggestionInput)
   .output(categorySuggestionSchema)
-  .query(async ({ input }) => {
+  .query(async ({ ctx, input }) => {
     const client = getAnthropicClient();
-    return client.suggestCategory(input.productName, input.manufacturer);
+    return client.suggestCategory(input.productName, input.manufacturer, {
+      db: ctx.db,
+      feature: "product-category-suggestion",
+      operation: "suggestCategory",
+      cacheStatus: "none",
+    });
   });
 
 /**
@@ -54,9 +67,14 @@ const suggestCategory = protectedProcedure
 const suggestLocationType = protectedProcedure
   .input(locationTypeSuggestionInput)
   .output(locationTypeSuggestionSchema)
-  .query(async ({ input }) => {
+  .query(async ({ ctx, input }) => {
     const client = getAnthropicClient();
-    return client.suggestLocationType(input.locationName);
+    return client.suggestLocationType(input.locationName, {
+      db: ctx.db,
+      feature: "location-type-suggestion",
+      operation: "suggestLocationType",
+      cacheStatus: "none",
+    });
   });
 
 export const aiRouter = createTRPCRouter({
@@ -74,6 +92,16 @@ export const aiRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       return detectInventoryItems(ctx.db, input.locationId);
     }),
+  approveDetectedInventoryItem: protectedProcedure
+    .input(approveDetectedInventoryItemInput)
+    .output(approveDetectedInventoryItemOut)
+    .mutation(async ({ ctx, input }) => {
+      return await approveDetectedInventoryItem(
+        ctx.db,
+        input,
+        ctx.actorContext,
+      );
+    }),
   backfillLocationDescriptions: protectedProcedure.mutation(async function* ({
     ctx,
   }) {
@@ -82,9 +110,14 @@ export const aiRouter = createTRPCRouter({
   identifyProduct: protectedProcedure
     .input(productIdentificationInput)
     .output(productIdentificationSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const client = getAnthropicClient();
-      return client.identifyProduct(input.imageUrls);
+      return client.identifyProduct(input.imageUrls, {
+        db: ctx.db,
+        feature: "product-identification",
+        operation: "identifyProduct",
+        cacheStatus: "none",
+      });
     }),
   // Agentic USDA matcher: the model searches USDA itself, then picks the best
   // food for a stub ingredient. Returns the full chosen food (or null).
@@ -92,7 +125,7 @@ export const aiRouter = createTRPCRouter({
     .input(usdaFoodSuggestionInput)
     .output(usdaFoodSuggestionOut)
     .mutation(async ({ ctx, input }) => {
-      return suggestUsdaFood(ctx.usdaService, input.ingredientName);
+      return suggestUsdaFood(ctx.usdaService, ctx.db, input.ingredientName);
     }),
   // Batch USDA matcher for the workbench's "Suggest USDA for selected" action.
   // Read-only: returns one suggestion per name for review; links nothing.
@@ -100,7 +133,11 @@ export const aiRouter = createTRPCRouter({
     .input(usdaFoodSuggestionBatchInput)
     .output(usdaFoodSuggestionBatchOut)
     .mutation(async ({ ctx, input }) => {
-      return suggestUsdaFoodBatch(ctx.usdaService, input.ingredientNames);
+      return suggestUsdaFoodBatch(
+        ctx.usdaService,
+        ctx.db,
+        input.ingredientNames,
+      );
     }),
   // Batch AI merge suggester for the workbench's "Suggest merges" action. Tool-
   // calling agent searches existing ingredients; read-only, the user confirms.
@@ -129,13 +166,35 @@ export const aiRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const client = getAnthropicClient();
       const locationNames = await getLocationNames(ctx.db);
-      return client.parseSearchQuery(input.query, locationNames);
+      return client.parseSearchQuery(input.query, locationNames, {
+        db: ctx.db,
+        feature: "search-query-parse",
+        operation: "parseSearchQuery",
+        cacheStatus: "none",
+      });
     }),
   auditCategories: protectedProcedure
     .output(categoryAuditSchema)
     .mutation(async ({ ctx }) => {
       const client = getAnthropicClient();
       const products = await getProductSummaryForAudit(ctx.db);
-      return client.auditCategories(products, CATEGORY_DESCRIPTIONS);
+      return client.auditCategories(products, CATEGORY_DESCRIPTIONS, {
+        db: ctx.db,
+        feature: "category-audit",
+        operation: "auditCategories",
+        cacheStatus: "none",
+      });
+    }),
+  usageRecent: protectedProcedure
+    .input(aiUsageRecentInput)
+    .output(aiUsageRecentOut)
+    .query(async ({ ctx, input }) => {
+      return await listRecentAiUsage(ctx.db, input.limit);
+    }),
+  usageSummary: protectedProcedure
+    .input(aiUsageSummaryInput)
+    .output(aiUsageSummaryOut)
+    .query(async ({ ctx, input }) => {
+      return await summarizeAiUsage(ctx.db, input.days);
     }),
 });

@@ -9,6 +9,8 @@
  * `drainStale` recomputes them, driven by the client while the app is open.
  */
 
+import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
+import type { EntityRef } from "@cubby/schemas/entity";
 import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
 import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient";
 import type { RecipeGraphOut } from "@cubby/schemas/recipe";
@@ -22,7 +24,7 @@ import {
   recipeTotalsFieldNames,
 } from "@cubby/schemas/recipe-shared";
 import { getNutrientValueByKey } from "@cubby/usda-schemas";
-import { chunk, keyBy, uniq } from "es-toolkit";
+import { keyBy, uniq } from "es-toolkit";
 import {
   type CalculateTotalsResult,
   type CostingRow,
@@ -35,15 +37,10 @@ import {
   collectSubRecipeIds,
   getRecipeIngredientName,
 } from "~/lib/recipe-graph";
-import { getRecomputeQueue } from "~/server/cf-env";
+import { dispatchBackgroundJobs } from "~/server/background-queue";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
-import {
-  RECOMPUTE_CHUNK_SIZE,
-  RECOMPUTE_INLINE_MAX,
-  RECOMPUTE_MESSAGE_VERSION,
-  type RecomputeMessage,
-} from "~/server/queue-recompute";
+import { RECOMPUTE_CHUNK_SIZE } from "~/server/queue-recompute";
 import { getRecipesByIDs } from "~/server/repo/recipe/crud";
 import {
   findParentRecipeIdsBatch,
@@ -116,8 +113,10 @@ const totalsDiffer = (
 };
 
 type CascadeMode = "inline" | "queue";
-
-const newRecomputeBatchId = (): string => crypto.randomUUID();
+interface RecipeRecomputeDispatchMetadata {
+  source?: string;
+  entity?: EntityRef;
+}
 
 const batchLog = (batchId?: string): string =>
   batchId ? ` batch=${batchId}` : "";
@@ -377,7 +376,6 @@ export class RecipeCostingService {
   async recomputeQueued(
     recipeIds: RecipeId[],
     batchId?: string,
-    startedAtMs?: number,
   ): Promise<number> {
     return this.tracedRecompute(
       "recompute",
@@ -399,22 +397,12 @@ export class RecipeCostingService {
         // future/oversized/replayed message ever carries more, re-split instead of
         // overrunning the CPU/mem budget (the original bug class).
         if (staleRecipeIds.length > RECOMPUTE_CHUNK_SIZE) {
-          await this.enqueueTargetedChunks(
-            staleRecipeIds,
-            batchId,
-            startedAtMs,
-          );
+          await this.enqueueTargetedChunks(staleRecipeIds, batchId);
           return 0;
         }
         const visited = new Set<RecipeId>();
         const before = visited.size;
-        await this.recomputeTree(
-          staleRecipeIds,
-          visited,
-          "queue",
-          batchId,
-          startedAtMs,
-        );
+        await this.recomputeTree(staleRecipeIds, visited, "queue", batchId);
         return visited.size - before;
       },
     );
@@ -437,7 +425,6 @@ export class RecipeCostingService {
     visited: Set<RecipeId> = new Set(),
     cascadeMode: CascadeMode = "inline",
     batchId?: string,
-    startedAtMs?: number,
   ): Promise<void> {
     const todo = recipeIds.filter((id) => !visited.has(id));
     if (todo.length === 0) return;
@@ -484,7 +471,7 @@ export class RecipeCostingService {
     const parentIds = [...changedParents].filter((id) => !visited.has(id));
     if (parentIds.length > 0) {
       if (cascadeMode === "queue") {
-        await this.enqueueParentCascade(parentIds, batchId, startedAtMs);
+        await this.enqueueParentCascade(parentIds, batchId);
       } else {
         await this.recomputeTree(parentIds, visited, cascadeMode);
       }
@@ -494,7 +481,6 @@ export class RecipeCostingService {
   private async enqueueParentCascade(
     parentIds: RecipeId[],
     batchId?: string,
-    startedAtMs?: number,
   ): Promise<void> {
     // Only enqueue parents that actually transitioned fresh→stale. A parent
     // already stale (in the initial dispatch set, or staled by a sibling chunk)
@@ -506,51 +492,57 @@ export class RecipeCostingService {
       parentIds,
     );
     if (transitioned.length === 0) return;
-    await this.enqueueTargetedChunks(transitioned, batchId, startedAtMs);
+    const batch = await this.enqueueTargetedChunks(transitioned, batchId);
     console.log(
-      `[recompute-timing] queued${batchLog(batchId)} ${transitioned.length} changed parent recipe(s) for follow-up recompute`,
+      `[recompute-timing] queued${batchLog(batch.id)} ${transitioned.length} changed parent recipe(s) for follow-up recompute`,
     );
   }
 
   private async enqueueTargetedChunks(
     recipeIds: RecipeId[],
-    batchId = newRecomputeBatchId(),
-    startedAtMs = Date.now(),
-  ): Promise<void> {
-    const queue = getRecomputeQueue();
-    if (!queue) {
-      await this.recomputeTree(recipeIds, new Set(), "inline");
-      return;
-    }
-    const messages: RecomputeMessage[] = [];
+    batchId?: string,
+    metadata: RecipeRecomputeDispatchMetadata = {},
+  ): Promise<BackgroundBatchRef> {
+    const jobs = [];
     for (let i = 0; i < recipeIds.length; i += RECOMPUTE_CHUNK_SIZE) {
-      messages.push({
-        messageVersion: RECOMPUTE_MESSAGE_VERSION,
-        recipeIds: recipeIds.slice(i, i + RECOMPUTE_CHUNK_SIZE),
-        batchId,
-        startedAtMs,
+      const chunkIds = recipeIds.slice(i, i + RECOMPUTE_CHUNK_SIZE);
+      jobs.push({
+        kind: "recipe-totals.recompute" as const,
+        dedupeKey: `recipe-totals.recompute:${chunkIds.join(",")}`,
+        payload: { recipeIds: chunkIds },
       });
     }
-    // One sendBatch round-trip per ≤100 messages instead of N serial sends — the
-    // dispatch runs in the request path, so this shortens product.update and lands
-    // the whole wave in the queue at once. (CF caps a sendBatch at 100 / 256KB.)
-    for (const group of chunk(messages, 100)) {
-      await queue.sendBatch(group.map((body) => ({ body })));
-    }
+    const dispatched = await dispatchBackgroundJobs(this.db, {
+      kind: "recipe-totals.recompute",
+      source: "mutation",
+      batchId,
+      metadata: {
+        source: metadata.source ?? "recipe-costing.dispatch",
+        recipeCount: recipeIds.length,
+        ...metadata,
+      },
+      jobs,
+    });
     console.log(
-      `[recompute-queue] enqueued targeted chunks batch=${batchId} recipes=${recipeIds.length} chunks=${messages.length}`,
+      `[recompute-queue] enqueued targeted chunks batch=${dispatched.batchId} recipes=${recipeIds.length} chunks=${jobs.length}`,
     );
+    return dispatched.batch;
   }
 
   /**
    * Recompute every recipe whose cost depends on an ingredient — its product's
    * price/USDA-link changed, the ingredient was edited, or a merge repointed rows
-   * onto it. Routes through {@link dispatchRecompute}, so a handful of affected
-   * recipes recompute inline (instant) while a popular ingredient's large set
-   * defers to the queue. Returns the count recomputed (inline) or queued.
+   * onto it. Routes through {@link dispatchRecompute}, so all mutation-triggered
+   * recomputes are persisted as background jobs. Dev drains those jobs inline;
+   * production sends them through the queue. Returns the count dispatched.
    */
-  async recomputeForIngredient(ingredientId: IngredientId): Promise<number> {
-    return this.recomputeForIngredients([ingredientId]);
+  async recomputeForIngredient(
+    ingredientId: IngredientId,
+    metadata: RecipeRecomputeDispatchMetadata = {
+      entity: { entityType: "ingredient", entityId: ingredientId },
+    },
+  ): Promise<BackgroundBatchRef[]> {
+    return this.recomputeForIngredients([ingredientId], metadata);
   }
 
   /**
@@ -560,13 +552,13 @@ export class RecipeCostingService {
    */
   async recomputeForIngredients(
     ingredientIds: IngredientId[],
-  ): Promise<number> {
-    if (ingredientIds.length === 0) return 0;
+    metadata: RecipeRecomputeDispatchMetadata = {},
+  ): Promise<BackgroundBatchRef[]> {
+    if (ingredientIds.length === 0) return [];
     const uniqueIngredientIds = uniq(ingredientIds);
-    return this.tracedRecompute(
-      "recomputeForIngredient",
-      { "ingredient.count": uniqueIngredientIds.length },
-      async () => {
+    return await withTrace(
+      TraceNames.service("recipeCosting", "dispatchForIngredient"),
+      async (span) => {
         const recipeIds = uniq(
           (
             await Promise.all(
@@ -576,40 +568,38 @@ export class RecipeCostingService {
             )
           ).flat(),
         );
-        return await this.dispatchRecompute(recipeIds);
+        span.setAttributes({
+          "ingredient.count": uniqueIngredientIds.length,
+          "recipe.dispatched": recipeIds.length,
+        });
+        return await this.dispatchRecompute(recipeIds, metadata);
       },
     );
   }
 
   /**
-   * The single entry for recompute triggered by a request-path mutation. A small
-   * set ({@link RECOMPUTE_INLINE_MAX} or fewer) recomputes inline — instant
-   * totals, no budget risk. Every dispatch first marks the affected recipes
-   * stale; a failed inline recompute therefore leaves a visible maintenance gap
-   * instead of a fresh-looking wrong total. A larger set, in production (the
-   * `RECOMPUTE_QUEUE` binding present), is fanned into bounded chunks (one
-   * message each), so each chunk drains in its own invocation with a fresh
-   * CPU/memory budget. On the dev Node server (no binding) everything recomputes
-   * inline. Returns the count recomputed (inline) or queued.
+   * The single entry for recompute triggered by a request-path mutation. Every
+   * dispatch first marks the affected recipes stale, then persists bounded
+   * background jobs for operations visibility. In production, the queue binding
+   * drains each chunk in its own invocation with a fresh CPU/memory budget. On
+   * the dev Node server (no binding), the same DB jobs process inline, so local
+   * behavior is synchronous but still inspectable. Returns the count dispatched.
    */
-  async dispatchRecompute(recipeIds: RecipeId[]): Promise<number> {
+  async dispatchRecompute(
+    recipeIds: RecipeId[],
+    metadata: RecipeRecomputeDispatchMetadata = {},
+  ): Promise<BackgroundBatchRef[]> {
     const ids = uniq(recipeIds);
-    if (ids.length === 0) return 0;
+    if (ids.length === 0) return [];
     // Correctness floor for both inline and deferred paths: callers may have
     // already committed the triggering write, so stamp stale before any work
     // that can fail independently.
     await markRecipesStale(this.db, ids);
-    const queue = getRecomputeQueue();
-    if (!queue || ids.length <= RECOMPUTE_INLINE_MAX) {
-      return await this.recompute(ids);
-    }
-    const startedAtMs = Date.now();
-    const batchId = newRecomputeBatchId();
-    await this.enqueueTargetedChunks(ids, batchId, startedAtMs);
+    const batch = await this.enqueueTargetedChunks(ids, undefined, metadata);
     console.log(
-      `[recompute-dispatch] batch=${batchId} affected=${ids.length} chunk_size=${RECOMPUTE_CHUNK_SIZE} mode=targeted`,
+      `[recompute-dispatch] batch=${batch.id} affected=${ids.length} chunk_size=${RECOMPUTE_CHUNK_SIZE} mode=targeted`,
     );
-    return ids.length;
+    return [batch];
   }
 
   /**

@@ -1,4 +1,12 @@
+import type { AiAnalysisEntityType } from "@cubby/schemas/ai";
 import type { AuditEntityType } from "@cubby/schemas/audit";
+import type {
+  BackgroundBatchProcessor,
+  BackgroundBatchSource,
+  BackgroundBatchStatus,
+  BackgroundJobKind,
+  BackgroundJobStatus,
+} from "@cubby/schemas/background-jobs";
 import type { Amount } from "@cubby/schemas/codec";
 import type {
   CookbookId,
@@ -21,9 +29,11 @@ import {
   type RecipeYield,
   recipeSourceValues,
 } from "@cubby/schemas/recipe-shared";
+import type { SearchableEntity } from "@cubby/schemas/search";
 import { relations, sql } from "drizzle-orm";
 import {
   boolean,
+  customType,
   date,
   index,
   integer,
@@ -49,12 +59,72 @@ import {
 export type { Amount };
 export type Instruction = { text: string };
 
+const pgVector = customType<{
+  data: number[];
+  driverData: string;
+}>({
+  dataType() {
+    return "vector";
+  },
+  toDriver(value) {
+    return JSON.stringify(value);
+  },
+  fromDriver(value) {
+    return value
+      .slice(1, -1)
+      .split(",")
+      .filter(Boolean)
+      .map((v) => Number.parseFloat(v));
+  },
+});
+
 // Re-export Better-Auth tables for use throughout the app
 export { user, session, account, verification, apikey, passkey };
 
 // Enums - values derived from Zod schemas
 export const recipeSourceEnum = pgEnum("RecipeSource", recipeSourceValues);
 export const imageStatusEnum = pgEnum("ImageStatus", imageStatusValues);
+
+export const backgroundJobKindEnum = pgEnum("BackgroundJobKind", [
+  "recipe-totals.recompute",
+  "entity-embedding.refresh",
+  "location-ai.description.refresh",
+  "location-ai.inventory.refresh",
+  "location-valuation.recompute",
+]);
+
+export const backgroundBatchStatusEnum = pgEnum("BackgroundBatchStatus", [
+  "queued",
+  "running",
+  "succeeded",
+  "partial",
+  "failed",
+  "cancelled",
+]);
+
+export const backgroundJobStatusEnum = pgEnum("BackgroundJobStatus", [
+  "pending",
+  "queued",
+  "running",
+  "succeeded",
+  "skipped",
+  "failed",
+  "cancelled",
+]);
+
+export const backgroundBatchSourceEnum = pgEnum("BackgroundBatchSource", [
+  "ui",
+  "mutation",
+  "backfill",
+  "maintenance",
+  "queue",
+  "dev-inline",
+]);
+
+export const backgroundBatchProcessorEnum = pgEnum("BackgroundBatchProcessor", [
+  "queue",
+  "inline",
+]);
 
 // Recipe table
 export const recipe = pgTable(
@@ -388,6 +458,7 @@ export const product = pgTable(
       .$type<ProductId>(),
     shortcode: text("shortcode").notNull(), // Human-readable ID (P-XXXX format)
     name: text("name").notNull(),
+    aliases: text("aliases").array().notNull().default(sql`'{}'::text[]`),
     manufacturer: text("manufacturer").notNull(),
     upc: text("upc"),
     // Explicit USDA link by FoodData Central id (the universal PK across all food
@@ -433,6 +504,7 @@ export const product = pgTable(
     index("Product_name_idx").on(table.name),
     // GIN indexes for full-text search
     index("Product_name_gin_idx").using("gin", sql`${table.name} gin_trgm_ops`),
+    index("Product_aliases_gin_idx").using("gin", table.aliases),
     index("Product_manufacturer_gin_idx").using(
       "gin",
       sql`${table.manufacturer} gin_trgm_ops`,
@@ -507,6 +579,7 @@ export const location = pgTable(
       .$type<LocationId>(),
     shortcode: text("shortcode").notNull(), // Human-readable ID (L-XXXX format)
     name: text("name").notNull(),
+    aliases: text("aliases").array().notNull().default(sql`'{}'::text[]`),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updatedAt", { mode: "date" })
       .notNull()
@@ -541,6 +614,7 @@ export const location = pgTable(
       "gin",
       sql`${table.name} gin_trgm_ops`,
     ),
+    index("Location_aliases_gin_idx").using("gin", table.aliases),
     index("Location_type_name_idx").on(table.type, table.name),
     // Partial indexes for soft delete queries
     index("Location_name_active_idx")
@@ -549,6 +623,46 @@ export const location = pgTable(
     index("Location_type_active_idx")
       .on(table.type)
       .where(sql`${table.deletedAt} IS NULL`),
+  ],
+);
+
+// EntityEmbedding table - persistent semantic index rows for searchable entities.
+export const entityEmbedding = pgTable(
+  "EntityEmbedding",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    entityType: text("entityType").notNull().$type<SearchableEntity>(),
+    entityId: uuid("entityId").notNull(),
+    embeddingText: text("embeddingText").notNull(),
+    embeddingHash: text("embeddingHash").notNull(),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    dimensions: integer("dimensions").notNull(),
+    embedding: pgVector("embedding").notNull(),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt", { mode: "date" })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    deletedAt: timestamp("deletedAt", { mode: "date" }),
+  },
+  (table) => [
+    uniqueIndex("EntityEmbedding_entity_model_key")
+      .on(
+        table.entityType,
+        table.entityId,
+        table.provider,
+        table.model,
+        table.dimensions,
+      )
+      .where(sql`${table.deletedAt} IS NULL`),
+    index("EntityEmbedding_entity_idx").on(table.entityType, table.entityId),
+    index("EntityEmbedding_model_idx").on(
+      table.provider,
+      table.model,
+      table.dimensions,
+    ),
+    index("EntityEmbedding_hash_idx").on(table.embeddingHash),
   ],
 );
 
@@ -863,6 +977,158 @@ export const recipeImageRelations = relations(recipeImage, ({ one }) => ({
     references: [image.id],
   }),
 }));
+
+// AI Analysis table — general cache for entity-bound AI outputs.
+export const aiAnalysis = pgTable(
+  "AiAnalysis",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    entityType: text("entityType").notNull().$type<AiAnalysisEntityType>(),
+    entityId: uuid("entityId"),
+    feature: text("feature").notNull(),
+    model: text("model").notNull(),
+    promptVersion: text("promptVersion").notNull(),
+    inputFingerprint: text("inputFingerprint").notNull(),
+    result: jsonb("result").notNull().$type<unknown>(),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt", { mode: "date" })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    deletedAt: timestamp("deletedAt", { mode: "date" }),
+  },
+  (table) => [
+    uniqueIndex("AiAnalysis_active_key")
+      .on(
+        table.entityType,
+        table.entityId,
+        table.feature,
+        table.model,
+        table.promptVersion,
+        table.inputFingerprint,
+      )
+      .where(sql`${table.deletedAt} IS NULL`),
+    index("AiAnalysis_entity_idx").on(table.entityType, table.entityId),
+    index("AiAnalysis_feature_idx").on(table.feature),
+  ],
+);
+
+// AI usage table — lightweight app-side observability for AI Gateway/provider calls.
+export const aiUsage = pgTable(
+  "AiUsage",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    feature: text("feature").notNull(),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    operation: text("operation").notNull(),
+    inputTokens: integer("inputTokens"),
+    outputTokens: integer("outputTokens"),
+    estimatedCost: real("estimatedCost"),
+    durationMs: integer("durationMs").notNull(),
+    cacheStatus: text("cacheStatus").$type<"hit" | "miss" | "none">(),
+    entityType: text("entityType"),
+    entityId: uuid("entityId"),
+    batchId: uuid("batchId"),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+    deletedAt: timestamp("deletedAt", { mode: "date" }),
+  },
+  (table) => [
+    index("AiUsage_feature_createdAt_idx").on(
+      table.feature,
+      table.createdAt.desc(),
+    ),
+    index("AiUsage_model_createdAt_idx").on(
+      table.model,
+      table.createdAt.desc(),
+    ),
+    index("AiUsage_entity_idx").on(table.entityType, table.entityId),
+    index("AiUsage_batch_idx").on(table.batchId),
+  ],
+);
+
+export const backgroundBatch = pgTable(
+  "BackgroundBatch",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    kind: backgroundJobKindEnum("kind").notNull().$type<BackgroundJobKind>(),
+    source: backgroundBatchSourceEnum("source")
+      .notNull()
+      .$type<BackgroundBatchSource>(),
+    processor: backgroundBatchProcessorEnum("processor")
+      .notNull()
+      .default("inline")
+      .$type<BackgroundBatchProcessor>(),
+    status: backgroundBatchStatusEnum("status")
+      .notNull()
+      .default("queued")
+      .$type<BackgroundBatchStatus>(),
+    totalJobs: integer("totalJobs").notNull().default(0),
+    queuedJobs: integer("queuedJobs").notNull().default(0),
+    runningJobs: integer("runningJobs").notNull().default(0),
+    succeededJobs: integer("succeededJobs").notNull().default(0),
+    failedJobs: integer("failedJobs").notNull().default(0),
+    skippedJobs: integer("skippedJobs").notNull().default(0),
+    cancelledJobs: integer("cancelledJobs").notNull().default(0),
+    firstEnqueuedAt: timestamp("firstEnqueuedAt", { mode: "date" }),
+    lastEnqueuedAt: timestamp("lastEnqueuedAt", { mode: "date" }),
+    firstJobStartedAt: timestamp("firstJobStartedAt", { mode: "date" }),
+    lastJobFinishedAt: timestamp("lastJobFinishedAt", { mode: "date" }),
+    processingDurationMs: integer("processingDurationMs"),
+    wallDurationMs: integer("wallDurationMs"),
+    activeDurationMs: integer("activeDurationMs").notNull().default(0),
+    metadata: jsonb("metadata").$type<unknown>(),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt", { mode: "date" })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    deletedAt: timestamp("deletedAt", { mode: "date" }),
+  },
+  (table) => [
+    index("BackgroundBatch_status_idx").on(table.status),
+    index("BackgroundBatch_kind_idx").on(table.kind),
+    index("BackgroundBatch_createdAt_idx").on(table.createdAt.desc()),
+  ],
+);
+
+export const backgroundJob = pgTable(
+  "BackgroundJob",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    batchId: uuid("batchId")
+      .notNull()
+      .references(() => backgroundBatch.id),
+    kind: backgroundJobKindEnum("kind").notNull().$type<BackgroundJobKind>(),
+    dedupeKey: text("dedupeKey").notNull(),
+    payload: jsonb("payload").notNull().$type<unknown>(),
+    status: backgroundJobStatusEnum("status")
+      .notNull()
+      .default("pending")
+      .$type<BackgroundJobStatus>(),
+    attempts: integer("attempts").notNull().default(0),
+    maxAttempts: integer("maxAttempts").notNull().default(3),
+    queuedAt: timestamp("queuedAt", { mode: "date" }),
+    startedAt: timestamp("startedAt", { mode: "date" }),
+    finishedAt: timestamp("finishedAt", { mode: "date" }),
+    durationMs: integer("durationMs"),
+    lastError: text("lastError"),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt", { mode: "date" })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    deletedAt: timestamp("deletedAt", { mode: "date" }),
+  },
+  (table) => [
+    index("BackgroundJob_batch_idx").on(table.batchId),
+    index("BackgroundJob_status_idx").on(table.status),
+    index("BackgroundJob_kind_idx").on(table.kind),
+    uniqueIndex("BackgroundJob_batch_dedupe_key")
+      .on(table.batchId, table.dedupeKey)
+      .where(sql`${table.deletedAt} IS NULL`),
+  ],
+);
 
 // Audit Log table
 export const auditLog = pgTable(

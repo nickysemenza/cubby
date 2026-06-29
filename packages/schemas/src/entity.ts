@@ -21,3 +21,11 @@ export const entitySchema = z.enum([
   "image",
 ]);
 export type Entity = z.infer<typeof entitySchema>;
+
+export const entityRefFields = {
+  entityType: entitySchema,
+  entityId: z.string(),
+};
+
+export const entityRefSchema = z.object(entityRefFields);
+export type EntityRef = z.infer<typeof entityRefSchema>;

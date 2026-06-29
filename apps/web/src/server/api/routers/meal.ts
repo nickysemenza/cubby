@@ -70,6 +70,7 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
 
 const deleteItem = createDeleteProcedure<MealId>(async (services, ids) => {
   await deleteMeals(services.db, ids, services.actorContext);
+  return undefined;
 }, mealId);
 
 const getByDateRange = protectedProcedure

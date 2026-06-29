@@ -47,18 +47,6 @@ export const recipeTotalsFieldNames = Object.keys(
   recipeTotalsFields,
 ) as (keyof RecipeTotals)[];
 
-/**
- * What an edit recomputed downstream, returned on a product/ingredient/recipe
- * mutation so the client can confirm "recomputed N recipes, Y valuations" — one
- * shared shape so the message can't drift per call site. Eager: the work happens
- * in the same request, not deferred to the Problems-page drain.
- */
-export const recomputeSummary = z.object({
-  recipesRecomputed: z.number().int().nonnegative(),
-  inventoryValuationsUpdated: z.number().int().nonnegative(),
-});
-export type RecomputeSummary = z.infer<typeof recomputeSummary>;
-
 // The cost/calorie head of recipeTotals — the subset meal scaling carries. One
 // source so the meal schemas can't drift from recipeTotals' field names or the
 // optional upper-bound convention.

@@ -22,7 +22,7 @@ import {
 } from "@cubby/schemas/product";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { countBy, uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
 import {
@@ -47,6 +47,7 @@ import {
   buildSearchConditions,
   countWhere,
   executeListQueryWithCount,
+  formatSearchTerm,
   getDb,
   insertAndReturn,
   lockAndValidateForDelete,
@@ -312,14 +313,17 @@ export const productSearch = async (
   sort: SortParams,
   pagination: PaginationParams,
 ): Promise<{ data: ProductPickerItemOut[]; count: number }> => {
-  const whereClause = buildSearchConditions(
-    product,
-    [
-      { column: product.name, term: name },
-      { column: product.manufacturer, term: manufacturer },
-      { column: product.upc, term: upc },
-    ],
-    [category !== undefined ? eq(product.category, category) : undefined],
+  const whereClause = and(
+    notDeleted(product),
+    name !== undefined && name.trim() !== ""
+      ? or(
+          formatSearchTerm(product.name, name),
+          sql`EXISTS (SELECT 1 FROM unnest(${product.aliases}) AS alias WHERE alias ILIKE ${`%${name}%`})`,
+        )
+      : undefined,
+    formatSearchTerm(product.manufacturer, manufacturer),
+    formatSearchTerm(product.upc, upc),
+    category !== undefined ? eq(product.category, category) : undefined,
   );
 
   // Same ordering rules as productList, so picker results match the table's sort
@@ -343,6 +347,29 @@ export const productSearch = async (
   const data = results.map(dbProductToPickerItemAPI);
 
   return { data, count };
+};
+
+export const getProductPickerItemsByIds = async (
+  db: Database,
+  ids: ProductId[],
+): Promise<ProductPickerItemOut[]> => {
+  if (ids.length === 0) return [];
+  const rows = await getDb(db).query.product.findMany({
+    where: and(sql`${product.id} = ANY(${ids})`, notDeleted(product)),
+    columns: {
+      id: true,
+      shortcode: true,
+      name: true,
+      manufacturer: true,
+    },
+  });
+  const byId = new Map(
+    rows.map((row) => [row.id, dbProductToPickerItemAPI(row)]),
+  );
+  return ids.flatMap((id) => {
+    const item = byId.get(id);
+    return item ? [item] : [];
+  });
 };
 
 /**

@@ -1,0 +1,347 @@
+import type { AiUsageEntry, AiUsageSummaryRow } from "@cubby/schemas/ai";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
+import { useMemo, useState } from "react";
+import { EntityInlineLinkById } from "~/app/_components/EntityInlineLinkById";
+import { Grid, Row, Stack } from "~/components/layout";
+import { Button } from "~/components/ui/button";
+import { Spinner } from "~/components/ui/spinner";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table";
+import { useTRPC } from "~/trpc/react";
+
+const supportedEntityTypes = [
+  "product",
+  "location",
+  "recipe",
+  "ingredient",
+  "inventory",
+] as const;
+
+const numberFormatter = new Intl.NumberFormat("en-US");
+const usdFormatter = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  minimumFractionDigits: 4,
+  maximumFractionDigits: 6,
+});
+
+type SupportedEntityType = (typeof supportedEntityTypes)[number];
+
+interface UsageTotals {
+  calls: number;
+  inputTokens: number;
+  outputTokens: number;
+  knownCost: number;
+  unpricedCalls: number;
+  durationMs: number;
+}
+
+function isSupportedEntityType(
+  value: string | null,
+): value is SupportedEntityType {
+  return supportedEntityTypes.includes(value as SupportedEntityType);
+}
+
+function formatTokens(value: number | null | undefined): string {
+  return numberFormatter.format(value ?? 0);
+}
+
+function formatUsd(value: number | null | undefined): string {
+  return value == null ? "unpriced" : usdFormatter.format(value);
+}
+
+function formatMs(value: number): string {
+  if (value < 1000) return `${value}ms`;
+  return `${(value / 1000).toFixed(1)}s`;
+}
+
+function usageTotals(rows: AiUsageSummaryRow[]): UsageTotals {
+  return rows.reduce<UsageTotals>(
+    (totals, row) => ({
+      calls: totals.calls + row.count,
+      inputTokens: totals.inputTokens + row.inputTokens,
+      outputTokens: totals.outputTokens + row.outputTokens,
+      knownCost: totals.knownCost + (row.estimatedCost ?? 0),
+      unpricedCalls:
+        totals.unpricedCalls + (row.estimatedCost == null ? row.count : 0),
+      durationMs: totals.durationMs + row.durationMs,
+    }),
+    {
+      calls: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      knownCost: 0,
+      unpricedCalls: 0,
+      durationMs: 0,
+    },
+  );
+}
+
+function UsageMetric({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string;
+  detail?: string;
+}) {
+  return (
+    <div className="border border-border bg-card p-4">
+      <div className="font-mono text-muted-foreground text-xs uppercase tracking-wide">
+        {label}
+      </div>
+      <div className="mt-1 font-semibold text-2xl">{value}</div>
+      {detail ? (
+        <div className="text-muted-foreground text-xs">{detail}</div>
+      ) : null}
+    </div>
+  );
+}
+
+function UsageEntityLink({
+  row,
+}: {
+  row: Pick<AiUsageEntry, "entityType" | "entityId">;
+}) {
+  if (!row.entityType || !row.entityId) {
+    return <span className="text-muted-foreground">-</span>;
+  }
+  if (!isSupportedEntityType(row.entityType)) {
+    return <span className="text-muted-foreground">{row.entityType}</span>;
+  }
+
+  return (
+    <EntityInlineLinkById
+      entityType={row.entityType}
+      entityId={row.entityId}
+      compact
+    />
+  );
+}
+
+function BatchLink({ batchId }: { batchId: string | null }) {
+  if (!batchId) return <span className="text-muted-foreground">-</span>;
+  return (
+    <Link
+      to="/background-jobs"
+      search={{ batchId }}
+      className="font-mono text-xs underline decoration-border decoration-dotted underline-offset-2 hover:decoration-primary"
+    >
+      {batchId.slice(0, 8)}
+    </Link>
+  );
+}
+
+function CostCell({ value }: { value: number | null }) {
+  return (
+    <span className={value == null ? "text-muted-foreground" : undefined}>
+      {formatUsd(value)}
+    </span>
+  );
+}
+
+export function AiUsagePage() {
+  const api = useTRPC();
+  const [days, setDays] = useState(7);
+  const [recentLimit, setRecentLimit] = useState(50);
+  const summaryQuery = useQuery(api.ai.usageSummary.queryOptions({ days }));
+  const recentQuery = useQuery(
+    api.ai.usageRecent.queryOptions({ limit: recentLimit }),
+  );
+  const totals = useMemo(
+    () => usageTotals(summaryQuery.data ?? []),
+    [summaryQuery.data],
+  );
+
+  return (
+    <Stack gap="md">
+      <Row justify="between" align="center" gap="sm" wrap>
+        <Row gap="sm" wrap>
+          {[7, 30, 90].map((value) => (
+            <Button
+              key={value}
+              type="button"
+              variant={days === value ? "secondary" : "outline"}
+              onClick={() => setDays(value)}
+            >
+              {value}d
+            </Button>
+          ))}
+        </Row>
+        <Row gap="sm" align="center" wrap>
+          <span className="text-muted-foreground text-sm">Recent calls</span>
+          {[25, 50, 100, 200].map((value) => (
+            <Button
+              key={value}
+              type="button"
+              variant={recentLimit === value ? "secondary" : "outline"}
+              onClick={() => setRecentLimit(value)}
+            >
+              {value}
+            </Button>
+          ))}
+        </Row>
+      </Row>
+
+      <Grid cols="summary">
+        <UsageMetric label="Calls" value={formatTokens(totals.calls)} />
+        <UsageMetric
+          label="Tokens"
+          value={formatTokens(totals.inputTokens + totals.outputTokens)}
+          detail={`${formatTokens(totals.inputTokens)} in / ${formatTokens(
+            totals.outputTokens,
+          )} out`}
+        />
+        <UsageMetric
+          label="USD cost"
+          value={formatUsd(totals.knownCost)}
+          detail={
+            totals.unpricedCalls > 0
+              ? `${formatTokens(totals.unpricedCalls)} calls unpriced`
+              : "all calls priced"
+          }
+        />
+        <UsageMetric
+          label="Provider time"
+          value={formatMs(totals.durationMs)}
+        />
+      </Grid>
+
+      <section className="border border-border bg-card p-4">
+        <h2 className="mb-2 font-mono font-semibold text-muted-foreground text-xs uppercase tracking-wide">
+          Usage by feature / model / day
+        </h2>
+        <Table className="table-auto">
+          <TableHeader>
+            <TableRow>
+              <TableHead>Day</TableHead>
+              <TableHead>Feature</TableHead>
+              <TableHead>Provider</TableHead>
+              <TableHead>Model</TableHead>
+              <TableHead>Operation</TableHead>
+              <TableHead>Cache</TableHead>
+              <TableHead>Calls</TableHead>
+              <TableHead>Input</TableHead>
+              <TableHead>Output</TableHead>
+              <TableHead>Cost</TableHead>
+              <TableHead>Duration</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {summaryQuery.data?.map((row) => (
+              <TableRow
+                key={`${row.day}:${row.feature}:${row.provider}:${row.model}:${row.operation}:${row.cacheStatus ?? ""}`}
+              >
+                <TableCell>{row.day}</TableCell>
+                <TableCell className="whitespace-normal">
+                  {row.feature}
+                </TableCell>
+                <TableCell>{row.provider}</TableCell>
+                <TableCell className="whitespace-normal">{row.model}</TableCell>
+                <TableCell className="whitespace-normal">
+                  {row.operation}
+                </TableCell>
+                <TableCell>{row.cacheStatus ?? "-"}</TableCell>
+                <TableCell>{formatTokens(row.count)}</TableCell>
+                <TableCell>{formatTokens(row.inputTokens)}</TableCell>
+                <TableCell>{formatTokens(row.outputTokens)}</TableCell>
+                <TableCell>
+                  <CostCell value={row.estimatedCost} />
+                </TableCell>
+                <TableCell>{formatMs(row.durationMs)}</TableCell>
+              </TableRow>
+            ))}
+            {summaryQuery.isLoading ? (
+              <TableRow>
+                <TableCell colSpan={11}>
+                  <Spinner />
+                </TableCell>
+              </TableRow>
+            ) : null}
+            {!summaryQuery.isLoading && summaryQuery.data?.length === 0 ? (
+              <TableRow>
+                <TableCell className="text-muted-foreground" colSpan={11}>
+                  No AI usage recorded
+                </TableCell>
+              </TableRow>
+            ) : null}
+          </TableBody>
+        </Table>
+      </section>
+
+      <section className="border border-border bg-card p-4">
+        <h2 className="mb-2 font-mono font-semibold text-muted-foreground text-xs uppercase tracking-wide">
+          Recent calls
+        </h2>
+        <Table className="table-auto">
+          <TableHeader>
+            <TableRow>
+              <TableHead>Created</TableHead>
+              <TableHead>Feature</TableHead>
+              <TableHead>Provider / model</TableHead>
+              <TableHead>Operation</TableHead>
+              <TableHead>Cache</TableHead>
+              <TableHead>Entity</TableHead>
+              <TableHead>Batch</TableHead>
+              <TableHead>Input</TableHead>
+              <TableHead>Output</TableHead>
+              <TableHead>Cost</TableHead>
+              <TableHead>Duration</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {recentQuery.data?.map((row) => (
+              <TableRow key={row.id}>
+                <TableCell>{row.createdAt.toLocaleString()}</TableCell>
+                <TableCell className="whitespace-normal">
+                  {row.feature}
+                </TableCell>
+                <TableCell className="whitespace-normal">
+                  {row.provider} / {row.model}
+                </TableCell>
+                <TableCell className="whitespace-normal">
+                  {row.operation}
+                </TableCell>
+                <TableCell>{row.cacheStatus ?? "-"}</TableCell>
+                <TableCell>
+                  <UsageEntityLink row={row} />
+                </TableCell>
+                <TableCell>
+                  <BatchLink batchId={row.batchId} />
+                </TableCell>
+                <TableCell>{formatTokens(row.inputTokens)}</TableCell>
+                <TableCell>{formatTokens(row.outputTokens)}</TableCell>
+                <TableCell>
+                  <CostCell value={row.estimatedCost} />
+                </TableCell>
+                <TableCell>{formatMs(row.durationMs)}</TableCell>
+              </TableRow>
+            ))}
+            {recentQuery.isLoading ? (
+              <TableRow>
+                <TableCell colSpan={11}>
+                  <Spinner />
+                </TableCell>
+              </TableRow>
+            ) : null}
+            {!recentQuery.isLoading && recentQuery.data?.length === 0 ? (
+              <TableRow>
+                <TableCell className="text-muted-foreground" colSpan={11}>
+                  No recent calls
+                </TableCell>
+              </TableRow>
+            ) : null}
+          </TableBody>
+        </Table>
+      </section>
+    </Stack>
+  );
+}

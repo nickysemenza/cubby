@@ -42,7 +42,8 @@ type ProductImageRow =
       deletedAt?: Date | null;
     };
 
-type ProductTopLevelDB = typeof product.$inferSelect & {
+type ProductTopLevelDB = Omit<typeof product.$inferSelect, "aliases"> & {
+  aliases?: string[];
   images?: ProductImageRow[] | null;
   externalIds?: Array<typeof productExternalId.$inferSelect> | null;
 };
@@ -155,7 +156,10 @@ export const dbProductToTopLevelAPI = (
 };
 
 const dbProductToPickerItemShape = (
-  productData: typeof product.$inferSelect,
+  productData: Pick<
+    typeof product.$inferSelect,
+    "id" | "shortcode" | "name" | "manufacturer"
+  >,
 ): ProductPickerItemOut => ({
   id: productData.id,
   shortcode: unsafeProductShortcode(productData.shortcode),
@@ -164,7 +168,10 @@ const dbProductToPickerItemShape = (
 });
 
 export const dbProductToPickerItemAPI = (
-  productData: typeof product.$inferSelect,
+  productData: Pick<
+    typeof product.$inferSelect,
+    "id" | "shortcode" | "name" | "manufacturer"
+  >,
 ): ProductPickerItemOut => {
   const result = dbProductToPickerItemShape(productData);
 
@@ -175,7 +182,9 @@ export const dbProductToPickerItemAPI = (
 };
 
 export const dbProductToInventoryEmbedShape = (
-  productData: typeof product.$inferSelect,
+  productData: Omit<typeof product.$inferSelect, "aliases"> & {
+    aliases?: string[];
+  },
 ): ProductInventoryEmbedOut => ({
   id: productData.id,
   shortcode: unsafeProductShortcode(productData.shortcode),
@@ -194,7 +203,9 @@ export const dbProductToInventoryEmbedShape = (
 });
 
 export const dbProductToInventoryListShape = (
-  productData: typeof product.$inferSelect,
+  productData: Omit<typeof product.$inferSelect, "aliases"> & {
+    aliases?: string[];
+  },
 ): InventoryListProductOut => ({
   id: productData.id,
   shortcode: unsafeProductShortcode(productData.shortcode),
@@ -221,7 +232,9 @@ const dbProductIngredientToShape = (
 });
 
 const dbLocationToProductListInventoryShape = (
-  locationData: typeof location.$inferSelect,
+  locationData: Omit<typeof location.$inferSelect, "aliases"> & {
+    aliases?: string[];
+  },
 ) => ({
   id: locationData.id,
   shortcode: unsafeLocationShortcode(locationData.shortcode),

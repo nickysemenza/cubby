@@ -1,5 +1,11 @@
 import { z } from "zod";
-import { ingredientId, locationId } from "./identifiers";
+import { mutationSideEffectsSchema } from "./background-jobs";
+import {
+  ingredientId,
+  inventoryId,
+  locationId,
+  productId,
+} from "./identifiers";
 import { locationType } from "./location";
 import { productCategory } from "./product";
 import { foodSummaryWithLinkedProducts } from "./usda";
@@ -52,21 +58,98 @@ export const locationDescriptionSchema = z.object({
 });
 export type LocationDescription = z.infer<typeof locationDescriptionSchema>;
 
-// Detected inventory item from photo analysis
-export const detectedItemSchema = z.object({
+export const aiAnalysisEntityType = z.enum([
+  "location",
+  "product",
+  "recipe",
+  "global",
+]);
+export type AiAnalysisEntityType = z.infer<typeof aiAnalysisEntityType>;
+
+export const aiCacheStatus = z.enum(["hit", "miss"]);
+export type AiCacheStatus = z.infer<typeof aiCacheStatus>;
+
+export const aiCacheMetadataSchema = z.object({
+  status: aiCacheStatus,
+  feature: z.string(),
+  model: z.string(),
+  promptVersion: z.string(),
+  inputFingerprint: z.string(),
+});
+export type AiCacheMetadata = z.infer<typeof aiCacheMetadataSchema>;
+
+const detectedInventoryItemFields = {
   name: z.string(),
   manufacturer: z.string(),
-  estimatedQuantity: z.number().positive(),
+  // Anthropic structured output rejects JSON Schema's `exclusiveMinimum`, which
+  // Zod emits for `.positive()`. Keep this as a plain number for provider schema
+  // compatibility; the approval path clamps invalid model output before writing
+  // inventory.
+  estimatedQuantity: z.number(),
   unit: z.string(),
+  category: productCategory.nullable(),
   confidence: confidence,
+  evidence: z.string(),
+  isMisc: z.boolean(),
+};
+
+// Raw detected inventory item from photo analysis.
+// This is the model-owned shape before app-side product matching.
+export const detectedInventoryItemSchema = z.object(
+  detectedInventoryItemFields,
+);
+export type DetectedInventoryItem = z.infer<typeof detectedInventoryItemSchema>;
+
+export const detectedProductMatchSchema = z.object({
+  id: productId,
+  name: z.string(),
+  manufacturer: z.string(),
+  category: productCategory.nullable(),
+});
+export type DetectedProductMatch = z.infer<typeof detectedProductMatchSchema>;
+
+// Reviewable inventory suggestion returned to the UI after app-side matching.
+export const detectedItemSchema = z.object({
+  ...detectedInventoryItemFields,
+  matchedProduct: detectedProductMatchSchema.nullable(),
 });
 export type DetectedItem = z.infer<typeof detectedItemSchema>;
+
+export const detectedInventoryAiResultSchema = z.object({
+  items: z.array(detectedInventoryItemSchema),
+  summary: z.string(),
+});
+export type DetectedInventoryAiResult = z.infer<
+  typeof detectedInventoryAiResultSchema
+>;
 
 export const detectedInventorySchema = z.object({
   items: z.array(detectedItemSchema),
   summary: z.string(),
+  cache: aiCacheMetadataSchema,
 });
 export type DetectedInventory = z.infer<typeof detectedInventorySchema>;
+
+export const approveDetectedInventoryItemInput = z.object({
+  locationId,
+  item: detectedInventoryItemSchema,
+  productId: productId.nullable().optional(),
+});
+
+export const approveDetectedInventoryItemOut = z.object({
+  inventoryId,
+  productId,
+  productName: z.string(),
+  createdProduct: z.boolean(),
+  sideEffects: mutationSideEffectsSchema,
+});
+
+export type ApproveDetectedInventoryItemInput = z.infer<
+  typeof approveDetectedInventoryItemInput
+>;
+export type ApproveDetectedInventoryItemOut = z.infer<
+  typeof approveDetectedInventoryItemOut
+>;
 
 // Product identification from photo analysis
 export const productIdentificationSchema = z.object({
@@ -87,23 +170,20 @@ export const usdaFoodSuggestionInput = z.object({
   ingredientName: z.string().min(1),
 });
 
-export const usdaFoodSuggestionOut = z.object({
+const usdaFoodSuggestionFields = {
   food: foodSummaryWithLinkedProducts.nullable(),
   confidence,
   reasoning: z.string(),
-});
+};
+
+export const usdaFoodSuggestionOut = z.object(usdaFoodSuggestionFields);
 
 export const usdaFoodSuggestionBatchInput = z.object({
   ingredientNames: z.array(z.string().min(1)).min(1).max(20),
 });
 
 export const usdaFoodSuggestionBatchOut = z.array(
-  z.object({
-    food: foodSummaryWithLinkedProducts.nullable(),
-    confidence,
-    reasoning: z.string(),
-    name: z.string(),
-  }),
+  z.object({ ...usdaFoodSuggestionFields, name: z.string() }),
 );
 
 export const ingredientMergeSuggestionItem = z.object({
@@ -169,3 +249,52 @@ export const categoryAuditSchema = z.object({
 });
 
 export type CategoryAudit = z.infer<typeof categoryAuditSchema>;
+
+export const aiUsageCacheStatus = z.enum(["hit", "miss", "none"]);
+export type AiUsageCacheStatus = z.infer<typeof aiUsageCacheStatus>;
+
+export const aiUsageRecentInput = z.object({
+  limit: z.number().int().min(1).max(200).default(50),
+});
+
+// Grouping dimensions shared by per-row usage entries and rolled-up summaries.
+const aiUsageGroupFields = {
+  feature: z.string(),
+  provider: z.string(),
+  model: z.string(),
+  operation: z.string(),
+  cacheStatus: aiUsageCacheStatus.nullable(),
+};
+
+export const aiUsageEntrySchema = z.object({
+  id: z.string(),
+  ...aiUsageGroupFields,
+  inputTokens: z.number().int().nullable(),
+  outputTokens: z.number().int().nullable(),
+  estimatedCost: z.number().nullable(),
+  durationMs: z.number().int(),
+  entityType: z.string().nullable(),
+  entityId: z.string().nullable(),
+  batchId: z.string().nullable(),
+  createdAt: z.coerce.date(),
+});
+
+export const aiUsageRecentOut = z.array(aiUsageEntrySchema);
+export type AiUsageEntry = z.infer<typeof aiUsageEntrySchema>;
+
+export const aiUsageSummaryInput = z.object({
+  days: z.number().int().min(1).max(90).default(7),
+});
+
+export const aiUsageSummaryRowSchema = z.object({
+  day: z.string(),
+  ...aiUsageGroupFields,
+  count: z.number().int(),
+  inputTokens: z.number().int(),
+  outputTokens: z.number().int(),
+  estimatedCost: z.number().nullable(),
+  durationMs: z.number().int(),
+});
+
+export const aiUsageSummaryOut = z.array(aiUsageSummaryRowSchema);
+export type AiUsageSummaryRow = z.infer<typeof aiUsageSummaryRowSchema>;

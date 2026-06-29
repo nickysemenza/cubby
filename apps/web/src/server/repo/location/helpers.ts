@@ -28,7 +28,8 @@ import type { LocationListDB, LocationWithParentChild } from "./internal-types";
  * Handles shortcode branding, type parsing, and image extraction.
  */
 export const dbLocationToAPI = (
-  locationData: typeof location.$inferSelect & {
+  locationData: Omit<typeof location.$inferSelect, "aliases"> & {
+    aliases?: string[];
     images?: Array<{
       image: typeof image.$inferSelect;
       deletedAt?: Date | null;
@@ -52,7 +53,9 @@ export const dbLocationToAPI = (
 };
 
 const dbLocationToListRefShape = (
-  locationData: typeof location.$inferSelect,
+  locationData: Omit<typeof location.$inferSelect, "aliases"> & {
+    aliases?: string[];
+  },
 ): LocationListRefOut => ({
   id: locationData.id,
   shortcode: unsafeLocationShortcode(locationData.shortcode),

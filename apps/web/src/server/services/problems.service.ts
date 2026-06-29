@@ -43,6 +43,10 @@ import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { USDAClient } from "~/server/clients/usda";
 import { type Database, withConnection } from "~/server/db";
 import {
+  findOrphanedEntityEmbeddings,
+  softDeleteEntityEmbeddingRows,
+} from "~/server/repo/entity-embedding";
+import {
   deleteIngredients,
   findOrCreateIngredient,
 } from "~/server/repo/ingredient";
@@ -407,6 +411,7 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
         findProductsWithNoImages(scoped, { excludeIngredients: true }),
       locationsWithoutAiDescription: () =>
         findLocationsWithoutAiDescription(scoped),
+      orphanedEntityEmbeddings: () => findOrphanedEntityEmbeddings(scoped),
     }),
   );
   return {
@@ -419,7 +424,23 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     emptyLocations: r.emptyLocations,
     productsWithNoImages: r.productsWithNoImages,
     locationsWithoutAiDescription: r.locationsWithoutAiDescription,
+    orphanedEntityEmbeddings: r.orphanedEntityEmbeddings,
   };
+};
+
+export const cleanupOrphanedEntityEmbeddings = async (
+  db: Database,
+  ids?: string[],
+): Promise<{ found: number; deleted: number }> => {
+  const orphaned = await findOrphanedEntityEmbeddings(db);
+  const targets = ids?.length
+    ? orphaned.filter((row) => ids.includes(row.id))
+    : orphaned;
+  const deleted = await softDeleteEntityEmbeddingRows(
+    db,
+    targets.map((row) => row.id),
+  );
+  return { found: orphaned.length, deleted };
 };
 
 // USDA-coverage group — both sections share one product scan + USDA enrichment.

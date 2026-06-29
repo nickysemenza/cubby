@@ -28,7 +28,7 @@ export const agentRouter = createTRPCRouter({
     .output(agentResultSchema)
     .mutation(async ({ ctx, input }) => {
       const caller = await buildCaller(ctx);
-      return runAgent(caller, input.query);
+      return runAgent(caller, ctx.db, input.query);
     }),
 
   /**
@@ -42,6 +42,6 @@ export const agentRouter = createTRPCRouter({
     .input(agentAskInputSchema)
     .query(async function* ({ ctx, input }) {
       const caller = await buildCaller(ctx);
-      yield* runAgentStream(caller, input.query);
+      yield* runAgentStream(caller, ctx.db, input.query);
     }),
 });

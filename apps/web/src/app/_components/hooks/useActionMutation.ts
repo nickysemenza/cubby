@@ -1,8 +1,11 @@
 import type { QueryKey, UseMutationOptions } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 import { toast } from "sonner";
+import { watchBatchesAndInvalidate } from "~/lib/background-batch-polling";
 import { getErrorMessage } from "~/lib/error-utils";
 import { invalidateTRPCQueries } from "~/lib/query-keys";
+import { useTRPC } from "~/trpc/react";
 
 /** A tRPC `*.mutationOptions` reference, e.g. `api.ingredient.create.mutationOptions`. */
 type MutationOptionsFn = (opts: never) => UseMutationOptions<
@@ -47,8 +50,8 @@ export function useActionMutation<TFn extends MutationOptionsFn>({
   error,
 }: {
   mutationFn: TFn;
-  /** Success toast — a fixed string or one derived from the result. */
-  success: string | ((data: DataOf<TFn>) => string);
+  /** Success toast — a fixed message or one derived from the result. */
+  success: ReactNode | ((data: DataOf<TFn>) => ReactNode);
   /** Entity lists to invalidate. Each is wrapped to match tRPC's nested key structure. */
   invalidateKeys?: readonly QueryKey[];
   /** Side effect after the toast + invalidations (close dialog, resolve, navigate). */
@@ -57,11 +60,25 @@ export function useActionMutation<TFn extends MutationOptionsFn>({
   error?: string | ((err: unknown) => string);
 }) {
   const queryClient = useQueryClient();
+  const api = useTRPC();
 
   const mutationOptions = mutationFn({
     onSuccess: (data: DataOf<TFn>) => {
       toast.success(typeof success === "function" ? success(data) : success);
       invalidateTRPCQueries(queryClient, invalidateKeys);
+      // Re-invalidate once any queued background work the action enqueued drains.
+      void watchBatchesAndInvalidate({
+        queryClient,
+        result: data,
+        invalidateKeys,
+        fetchBatchStatus: (batchId) =>
+          queryClient
+            .fetchQuery({
+              ...api.backgroundJobs.getBatch.queryOptions({ batchId }),
+              staleTime: 0,
+            })
+            .then((batch) => batch.status),
+      });
       onSuccess?.(data);
     },
     onError: (err: unknown) => {

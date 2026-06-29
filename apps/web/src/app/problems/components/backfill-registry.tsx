@@ -35,14 +35,18 @@ export const BACKFILL = {
       message: `Imported ${countLabel(r.imported, "image")} · ${r.found} found, ${r.skipped} skipped.`,
     }),
   }),
-  analyzeDescriptions: def<{ analyzed: number; total: number }>({
+  analyzeDescriptions: def<{
+    enqueued: number;
+    total: number;
+    batchId: string;
+  }>({
     run: (client) => client.ai.backfillLocationDescriptions.mutate(),
     invalidateKeys: (api) => [api.location.list.queryKey()],
     idleLabel: "Analyze all",
-    pendingLabel: "Analyzing…",
+    pendingLabel: "Enqueuing…",
     toastResult: (r) => ({
-      tone: r.analyzed > 0 ? "success" : "info",
-      message: `Analyzed ${r.analyzed} of ${countLabel(r.total, "location")}.`,
+      tone: r.enqueued > 0 ? "success" : "info",
+      message: `Enqueued ${r.enqueued} of ${countLabel(r.total, "location")} for analysis.`,
     }),
   }),
 };

@@ -19,6 +19,8 @@ import {
   inventoryLocationIdsInput,
   inventorySortableFields,
   inventoryUpdatePayloadData,
+  inventoryWithLocationAndProductAndSideEffectsOut,
+  inventoryWithLocationAndProductListAndSideEffectsOut,
   inventoryWithLocationAndProductListOut,
   inventoryWithLocationAndProductOut,
 } from "@cubby/schemas/inventory";
@@ -36,6 +38,10 @@ import {
   updateInventoryEntry,
 } from "~/server/repo/inventory";
 import { findDuplicateUniqueProducts } from "~/server/repo/product";
+import {
+  runMutationSideEffects,
+  runMutationSideEffectsForEntities,
+} from "~/server/services/mutation-side-effects";
 import {
   createDeleteProcedure,
   createEntityCrudWithoutListProcedures,
@@ -66,6 +72,8 @@ const { getByID, create, update } = createEntityCrudWithoutListProcedures({
     createInput: inventoryCreatePayloadData,
     updateInput: inventoryUpdatePayloadData,
     output: inventoryWithLocationAndProductOut,
+    createOutput: inventoryWithLocationAndProductAndSideEffectsOut,
+    updateOutput: inventoryWithLocationAndProductAndSideEffectsOut,
     idSchema: inventoryId,
   },
   repository: {
@@ -99,9 +107,12 @@ const { getByID, create, update } = createEntityCrudWithoutListProcedures({
         data,
         services.actorContext,
       );
-      // Eagerly refresh persisted location valuations (whole-tree).
-      await services.services.locationValuation.recompute();
-      return created;
+      const backgroundBatches = await runMutationSideEffects(services.db, {
+        action: "created",
+        entity: { entityType: "inventory", entityId: created.id },
+        source: "inventory.create",
+      });
+      return { ...created, sideEffects: { backgroundBatches } };
     },
     update: async (services, id: InventoryId, data) => {
       const updated = await updateInventoryEntry(
@@ -110,8 +121,12 @@ const { getByID, create, update } = createEntityCrudWithoutListProcedures({
         data,
         services.actorContext,
       );
-      await services.services.locationValuation.recompute();
-      return updated;
+      const backgroundBatches = await runMutationSideEffects(services.db, {
+        action: "updated",
+        entity: { entityType: "inventory", entityId: id },
+        source: "inventory.update",
+      });
+      return { ...updated, sideEffects: { backgroundBatches } };
     },
   },
 });
@@ -119,13 +134,20 @@ const { getByID, create, update } = createEntityCrudWithoutListProcedures({
 // Delete procedure using standalone factory
 const deleteItem = createDeleteProcedure<InventoryId>(async (services, ids) => {
   await deleteInventoryEntries(services.db, ids, services.actorContext);
-  await services.services.locationValuation.recompute();
+  return await runMutationSideEffectsForEntities(
+    services.db,
+    ids.map((id) => ({
+      action: "deleted" as const,
+      entity: { entityType: "inventory" as const, entityId: id },
+      source: "inventory.delete",
+    })),
+  );
 }, inventoryId);
 
 // Bulk process inventory entries (creates and updates in one call)
 const bulkProcess = protectedProcedure
   .input(inventoryBulkOperationPayload)
-  .output(inventoryWithLocationAndProductListOut)
+  .output(inventoryWithLocationAndProductListAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
     const result = await bulkProcessInventoryEntries(
       ctx.db,
@@ -138,22 +160,36 @@ const bulkProcess = protectedProcedure
       })),
       ctx.actorContext,
     );
-    await ctx.services.locationValuation.recompute();
-    return result;
+    const backgroundBatches = await runMutationSideEffectsForEntities(
+      ctx.db,
+      result.map((entry) => ({
+        action: "updated" as const,
+        entity: { entityType: "inventory" as const, entityId: entry.id },
+        source: "inventory.bulkProcess",
+      })),
+    );
+    return { items: result, sideEffects: { backgroundBatches } };
   });
 
 // Bulk move inventory entries between locations
 const bulkMove = protectedProcedure
   .input(bulkMovePayload)
-  .output(inventoryWithLocationAndProductListOut)
+  .output(inventoryWithLocationAndProductListAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
     const result = await bulkMoveInventoryEntries(
       ctx.db,
       input,
       ctx.actorContext,
     );
-    await ctx.services.locationValuation.recompute();
-    return result;
+    const backgroundBatches = await runMutationSideEffectsForEntities(
+      ctx.db,
+      result.map((entry) => ({
+        action: "updated" as const,
+        entity: { entityType: "inventory" as const, entityId: entry.id },
+        source: "inventory.bulkMove",
+      })),
+    );
+    return { items: result, sideEffects: { backgroundBatches } };
   });
 
 // Find products with expectedQuantity=1 in multiple locations

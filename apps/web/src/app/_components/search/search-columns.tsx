@@ -11,6 +11,7 @@ import {
 } from "../data-table/columnHelpers";
 import {
   getEnrichmentText,
+  getSearchMatchText,
   getSearchResultEntity,
   getSearchResultRoute,
   SearchResultItemIcon,
@@ -105,6 +106,22 @@ export const searchColumns = [
       return enrichment ? (
         <Description as="span" size="xs">
           {enrichment}
+        </Description>
+      ) : (
+        <NoneValue />
+      );
+    },
+  }),
+
+  columnHelper.display({
+    id: "match",
+    header: "Match",
+    meta: { className: "w-40" },
+    cell: ({ row }) => {
+      const matchText = getSearchMatchText(row.original);
+      return matchText ? (
+        <Description as="span" size="xs" title={row.original.matchReason}>
+          {matchText}
         </Description>
       ) : (
         <NoneValue />

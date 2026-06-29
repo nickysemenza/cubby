@@ -1,3 +1,4 @@
+import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
 import type { QueryKey } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -6,7 +7,12 @@ import { type FC, useCallback, useState } from "react";
 import { toast } from "sonner";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { Button } from "~/components/ui/button";
+import { watchBatchesAndInvalidate } from "~/lib/background-batch-polling";
 import { invalidateTRPCQueries } from "~/lib/query-keys";
+import { savedWithBackgroundWork } from "~/lib/recompute-summary";
+import { useTRPC } from "~/trpc/react";
+
+const emptySideEffects: MutationSideEffects = { backgroundBatches: [] };
 
 interface UseEntityDeleteOptions {
   /** Entity ID */
@@ -17,7 +23,7 @@ interface UseEntityDeleteOptions {
   entityLabel: string;
   /** tRPC delete mutation options factory */
   mutationOptions: (callbacks: {
-    onSuccess: () => void;
+    onSuccess: (data: { sideEffects?: MutationSideEffects }) => void;
     onError: (err: { message?: string }) => void;
   }) => unknown;
   /** Query keys to invalidate on success */
@@ -51,14 +57,34 @@ export function useEntityDelete({
   redirectTo,
 }: UseEntityDeleteOptions): UseEntityDeleteReturn {
   const queryClient = useQueryClient();
+  const api = useTRPC();
   const navigate = useNavigate();
   const [showDialog, setShowDialog] = useState(false);
 
   const deleteMutation = useMutation(
     mutationOptions({
-      onSuccess: () => {
-        toast.success(`${entityLabel} deleted`);
+      onSuccess: (data) => {
+        toast.success(
+          savedWithBackgroundWork(
+            data.sideEffects ?? emptySideEffects,
+            `${entityLabel} deleted`,
+          ),
+        );
         invalidateTRPCQueries(queryClient, invalidateKeys);
+        // Re-invalidate once queued background work (e.g. location valuation)
+        // drains so the list reflects recomputed values without a reload.
+        void watchBatchesAndInvalidate({
+          queryClient,
+          result: data,
+          invalidateKeys,
+          fetchBatchStatus: (batchId) =>
+            queryClient
+              .fetchQuery({
+                ...api.backgroundJobs.getBatch.queryOptions({ batchId }),
+                staleTime: 0,
+              })
+              .then((batch) => batch.status),
+        });
         void navigate({ to: redirectTo });
       },
       onError: (err) => {

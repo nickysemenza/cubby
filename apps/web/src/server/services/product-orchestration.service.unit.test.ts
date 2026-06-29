@@ -1,21 +1,31 @@
+import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
 import type { IngredientId, ProductId } from "@cubby/schemas/identifiers";
 import { describe, expect, it, vi } from "vitest";
 import { updateProductWithSideEffects } from "./product-orchestration.service";
 
+vi.mock("./mutation-side-effects", () => ({
+  runMutationSideEffects: vi.fn().mockResolvedValue([]),
+}));
+
 describe("updateProductWithSideEffects", () => {
   it("recomputes recipes for both previous and current ingredients when reassigned", async () => {
-    const productId = "p-1" as ProductId;
+    const productId = "00000000-0000-4000-8000-000000000001" as ProductId;
+    const oldIngredientId =
+      "00000000-0000-4000-8000-000000000002" as IngredientId;
+    const newIngredientId =
+      "00000000-0000-4000-8000-000000000003" as IngredientId;
     const product = {
       getProductByID: vi.fn().mockResolvedValueOnce({
         id: productId,
-        ingredient: { id: "ing-old" },
+        ingredient: { id: oldIngredientId },
       }),
-      updateProduct: vi
-        .fn()
-        .mockResolvedValue({ id: productId, ingredient: { id: "ing-new" } }),
+      updateProduct: vi.fn().mockResolvedValue({
+        id: productId,
+        ingredient: { id: newIngredientId },
+      }),
     };
     const recipeCosting = {
-      recomputeForIngredients: vi.fn().mockResolvedValue(7),
+      recomputeForIngredients: vi.fn().mockResolvedValue([recipeBatch]),
     };
     const locationValuation = {
       recompute: vi.fn(),
@@ -29,17 +39,27 @@ describe("updateProductWithSideEffects", () => {
         locationValuation: locationValuation as never,
       },
       productId,
-      { ingredientId: "ing-new" as IngredientId },
+      { ingredientId: newIngredientId },
       {} as never,
     );
 
     expect(product.getProductByID).toHaveBeenCalledWith(productId);
-    expect(recipeCosting.recomputeForIngredients).toHaveBeenCalledWith([
-      "ing-old",
-      "ing-new",
-    ]);
+    expect(recipeCosting.recomputeForIngredients).toHaveBeenCalledWith(
+      [oldIngredientId, newIngredientId],
+      {
+        source: "product.update",
+        entity: { entityType: "product", entityId: productId },
+      },
+    );
     expect(locationValuation.recompute).not.toHaveBeenCalled();
-    expect(result.sideEffects.recipesRecomputed).toBe(7);
-    expect(result.sideEffects.inventoryValuationsUpdated).toBe(0);
+    expect(result.sideEffects.backgroundBatches).toEqual([recipeBatch]);
   });
 });
+const recipeBatch = {
+  id: "00000000-0000-4000-8000-000000000010",
+  kind: "recipe-totals.recompute",
+  source: "mutation",
+  processor: "inline",
+  status: "succeeded",
+  totalJobs: 1,
+} satisfies BackgroundBatchRef;
