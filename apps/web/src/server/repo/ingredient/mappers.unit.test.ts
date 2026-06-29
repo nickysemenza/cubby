@@ -5,7 +5,6 @@ import {
   unsafeRecipeId,
 } from "@cubby/schemas/identifiers";
 import {
-  ingredientListItemOut,
   ingredientOut,
   ingredientWithRecipesAndProductOut,
 } from "@cubby/schemas/ingredient";
@@ -13,10 +12,8 @@ import { productWithMappingsOut } from "@cubby/schemas/product";
 import { describe, expect, it } from "vitest";
 import {
   dbIngredientToAPI,
-  dbIngredientToListAPI,
   dbIngredientToTopLevelShape,
   type IngredientDeepDB,
-  type IngredientListDB,
   mapIngredientProducts,
   mapIngredientProductsLean,
 } from "./internal-types";
@@ -26,7 +23,6 @@ const INGREDIENT_ID = unsafeIngredientId(
   "223e4567-e89b-12d3-a456-426614174000",
 );
 const RECIPE_ID = unsafeRecipeId("923e4567-e89b-12d3-a456-426614174000");
-const RECIPE_REF_ID = unsafeRecipeId("a23e4567-e89b-12d3-a456-426614174000");
 const IMAGE_ID = "323e4567-e89b-12d3-a456-426614174000";
 const DELETED_IMAGE_ID = "423e4567-e89b-12d3-a456-426614174000";
 const EXTERNAL_ID = "523e4567-e89b-12d3-a456-426614174000";
@@ -227,32 +223,6 @@ describe("ingredient product mappers", () => {
       unitMappings: [{ id: UNIT_MAPPING_ID }],
     });
     expect(productWithMappingsOut.parse(result)).toEqual(result);
-  });
-
-  it("maps ingredient list rows through the canonical list shape", () => {
-    const row = {
-      ...baseIngredient,
-      product: [
-        {
-          ...baseProduct,
-          unitMappings: [activeUnitMapping],
-          externalIds: [],
-          images: [],
-        },
-      ],
-      appearsInRecipes: [{ id: RECIPE_REF_ID, name: "Waffles" }],
-    } satisfies IngredientListDB;
-
-    const result = dbIngredientToListAPI(row);
-
-    expect(result).toMatchObject({
-      id: INGREDIENT_ID,
-      product: [{ id: PRODUCT_ID, unitMappings: [{ id: UNIT_MAPPING_ID }] }],
-      appearsInRecipes: [{ id: RECIPE_REF_ID, name: "Waffles" }],
-    });
-    expect(result).not.toHaveProperty("deletedAt");
-    expect(result).not.toHaveProperty("recipeId");
-    expect(ingredientListItemOut.parse(result)).toEqual(result);
   });
 
   it("maps full ingredient rows without leaking DB-only recipe fields", async () => {

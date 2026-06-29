@@ -6,7 +6,7 @@ import type { RecipeTotals } from "@cubby/schemas/recipe-shared";
  * linear in scale, so this is a plain multiply — no costing recompute. Returns
  * null when the recipe has no totals yet (caller shows "pending", never 0).
  */
-export const scaleTotals = (
+const scaleTotals = (
   totals: RecipeTotals | null | undefined,
   scale: number,
 ): MealRecipeOut["scaledTotals"] => {
@@ -30,7 +30,7 @@ export const scaleTotals = (
  * for recipes without a range, and are only surfaced when at least one recipe
  * actually has an upper bound.
  */
-export const rollupMealTotals = (recipes: MealRecipeOut[]): MealTotals => {
+const rollupMealTotals = (recipes: MealRecipeOut[]): MealTotals => {
   let costTotal = 0;
   let caloriesTotal = 0;
   let costUpper = 0;

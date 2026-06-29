@@ -5,13 +5,10 @@ import {
   unsafeProductId,
   unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
-import {
-  inventoryListItemOut,
-  inventoryWithLocationAndProductOut,
-} from "@cubby/schemas/inventory";
+import { inventoryWithLocationAndProductOut } from "@cubby/schemas/inventory";
 import { describe, expect, it } from "vitest";
-import { dbInventoryEntryToAPI, dbInventoryEntryToListAPI } from "./mappers";
-import type { InventoryEntryDeepDB, InventoryEntryListDB } from "./types";
+import { dbInventoryEntryToAPI } from "./mappers";
+import type { InventoryEntryDeepDB } from "./types";
 
 const INVENTORY_ID = unsafeInventoryId("123e4567-e89b-12d3-a456-426614174000");
 const PRODUCT_ID = unsafeProductId("223e4567-e89b-12d3-a456-426614174000");
@@ -70,44 +67,6 @@ const baseInventoryEntry = {
 };
 
 describe("inventory mappers", () => {
-  it("maps list rows to exact lean response objects", () => {
-    const row = {
-      ...baseInventoryEntry,
-      product: baseProduct,
-      location: baseLocation,
-    } satisfies InventoryEntryListDB;
-
-    const result = dbInventoryEntryToListAPI(row);
-
-    expect(result).toEqual({
-      id: INVENTORY_ID,
-      amount: { value: 2, unit: "each" },
-      valuation: 9,
-      createdAt: CREATED_AT,
-      updatedAt: UPDATED_AT,
-      location: {
-        id: LOCATION_ID,
-        shortcode: unsafeLocationShortcode("L-TEST"),
-        name: "Pantry",
-        type: "room",
-      },
-      product: {
-        id: PRODUCT_ID,
-        shortcode: unsafeProductShortcode("P-TEST"),
-        name: "Flour",
-        manufacturer: "Generic",
-        upc: null,
-        fdc_id: null,
-        category: "food",
-        expectedQuantity: null,
-        model: "5lb",
-        price: 4.5,
-        usdaUnavailable: null,
-      },
-    });
-    expect(inventoryListItemOut.parse(result)).toEqual(result);
-  });
-
   it("maps detail rows to exact response objects and filters soft-deleted relations", () => {
     const row = {
       ...baseInventoryEntry,
