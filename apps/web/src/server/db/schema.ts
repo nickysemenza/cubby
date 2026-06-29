@@ -126,22 +126,29 @@ export const backgroundBatchProcessorEnum = pgEnum("BackgroundBatchProcessor", [
   "inline",
 ]);
 
+// Column-set factories — fresh builders per call (avoid shared-builder state).
+const baseTimestamps = () => ({
+  createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt", { mode: "date" })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+const softDeletedAt = () => ({
+  deletedAt: timestamp("deletedAt", { mode: "date" }),
+});
+const pkUuid = <T extends string = string>() =>
+  uuid("id").primaryKey().default(sql`gen_random_uuid()`).$type<T>();
+
 // Recipe table
 export const recipe = pgTable(
   "Recipe",
   {
-    id: uuid("id")
-      .primaryKey()
-      .default(sql`gen_random_uuid()`)
-      .$type<RecipeId>(),
+    id: pkUuid<RecipeId>(),
     shortcode: text("shortcode"),
     name: text("name").notNull(),
-    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updatedAt", { mode: "date" })
-      .notNull()
-      .defaultNow()
-      .$onUpdate(() => new Date()),
-    deletedAt: timestamp("deletedAt", { mode: "date" }),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
     SourceType: recipeSourceEnum("SourceType"),
     SourceData: text("SourceData"),
     // For Book recipes, the cookbook this came from. Nullable: Website/Other
@@ -217,10 +224,7 @@ export const recipe = pgTable(
 export const cookbook = pgTable(
   "Cookbook",
   {
-    id: uuid("id")
-      .primaryKey()
-      .default(sql`gen_random_uuid()`)
-      .$type<CookbookId>(),
+    id: pkUuid<CookbookId>(),
     name: text("name").notNull(),
     // EPUB OPF <dc:creator> / <dc:subject>; empty arrays when the book has none.
     author: text("author").array().notNull().default(sql`'{}'::text[]`),
@@ -235,12 +239,8 @@ export const cookbook = pgTable(
     importedAt: timestamp("importedAt", { mode: "date" })
       .notNull()
       .defaultNow(),
-    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updatedAt", { mode: "date" })
-      .notNull()
-      .defaultNow()
-      .$onUpdate(() => new Date()),
-    deletedAt: timestamp("deletedAt", { mode: "date" }),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
   },
   (table) => [
     uniqueIndex("Cookbook_name_key")
@@ -259,18 +259,14 @@ export const cookbook = pgTable(
 export const recipeSection = pgTable(
   "RecipeSection",
   {
-    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    id: pkUuid(),
     recipeId: uuid("recipeId")
       .notNull()
       .$type<RecipeId>()
       .references(() => recipe.id),
     name: text("name"),
-    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updatedAt", { mode: "date" })
-      .notNull()
-      .defaultNow()
-      .$onUpdate(() => new Date()),
-    deletedAt: timestamp("deletedAt", { mode: "date" }),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
     instructions: jsonb("instructions")
       .notNull()
       .$type<Instruction[]>()
@@ -290,10 +286,7 @@ export const recipeSection = pgTable(
 export const ingredient = pgTable(
   "Ingredient",
   {
-    id: uuid("id")
-      .primaryKey()
-      .default(sql`gen_random_uuid()`)
-      .$type<IngredientId>(),
+    id: pkUuid<IngredientId>(),
     name: text("name").notNull(),
     aliases: text("aliases").array().notNull().default(sql`'{}'::text[]`),
     // Base measurement kinds the user has marked "not applicable" for this
@@ -307,12 +300,8 @@ export const ingredient = pgTable(
       .notNull()
       .$type<BaseKind[]>()
       .default(sql`'{}'::text[]`),
-    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updatedAt", { mode: "date" })
-      .notNull()
-      .defaultNow()
-      .$onUpdate(() => new Date()),
-    deletedAt: timestamp("deletedAt", { mode: "date" }),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
     recipeId: uuid("recipeId")
       .$type<RecipeId>()
       .references(() => recipe.id),
@@ -348,7 +337,7 @@ export const ingredient = pgTable(
 export const recipeSectionIngredient = pgTable(
   "RecipeSectionIngredient",
   {
-    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    id: pkUuid(),
     recipeSectionId: uuid("recipeSectionId")
       .notNull()
       .references(() => recipeSection.id),
@@ -369,12 +358,8 @@ export const recipeSectionIngredient = pgTable(
     modifier: text("modifier"),
     // Position within the section; see recipeSection.sortOrder for null semantics.
     sortOrder: integer("sortOrder"),
-    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updatedAt", { mode: "date" })
-      .notNull()
-      .defaultNow()
-      .$onUpdate(() => new Date()),
-    deletedAt: timestamp("deletedAt", { mode: "date" }),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
   },
   (table) => [
     index("RecipeSectionIngredient_recipeSectionId_idx").on(
@@ -392,7 +377,7 @@ export const recipeSectionIngredient = pgTable(
 export const meal = pgTable(
   "Meal",
   {
-    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`).$type<MealId>(),
+    id: pkUuid<MealId>(),
     // Calendar day (no time/tz) — planning is day-granular. mode:"string" returns
     // a plain "YYYY-MM-DD"; a `date` read as a JS Date lands at UTC midnight and
     // misfilters by a day in negative-offset timezones. The Postgres column type
@@ -400,12 +385,8 @@ export const meal = pgTable(
     date: date("date", { mode: "string" }).notNull(),
     name: text("name"),
     sortOrder: integer("sortOrder"),
-    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updatedAt", { mode: "date" })
-      .notNull()
-      .defaultNow()
-      .$onUpdate(() => new Date()),
-    deletedAt: timestamp("deletedAt", { mode: "date" }),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
   },
   (table) => [
     // The calendar's range query (date BETWEEN from AND to) is the hot path.
@@ -419,10 +400,7 @@ export const meal = pgTable(
 export const mealRecipe = pgTable(
   "MealRecipe",
   {
-    id: uuid("id")
-      .primaryKey()
-      .default(sql`gen_random_uuid()`)
-      .$type<MealRecipeId>(),
+    id: pkUuid<MealRecipeId>(),
     mealId: uuid("mealId")
       .notNull()
       .$type<MealId>()
@@ -435,12 +413,8 @@ export const mealRecipe = pgTable(
     // linear in this factor, so a meal's rollup is sum(recipe.totals × scale).
     scale: real("scale").notNull().default(1),
     sortOrder: integer("sortOrder"),
-    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updatedAt", { mode: "date" })
-      .notNull()
-      .defaultNow()
-      .$onUpdate(() => new Date()),
-    deletedAt: timestamp("deletedAt", { mode: "date" }),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
   },
   (table) => [
     index("MealRecipe_mealId_idx").on(table.mealId),
@@ -452,10 +426,7 @@ export const mealRecipe = pgTable(
 export const product = pgTable(
   "Product",
   {
-    id: uuid("id")
-      .primaryKey()
-      .default(sql`gen_random_uuid()`)
-      .$type<ProductId>(),
+    id: pkUuid<ProductId>(),
     shortcode: text("shortcode").notNull(), // Human-readable ID (P-XXXX format)
     name: text("name").notNull(),
     aliases: text("aliases").array().notNull().default(sql`'{}'::text[]`),
@@ -469,12 +440,8 @@ export const product = pgTable(
     model: text("model"),
     expectedQuantity: integer("expectedQuantity"),
     notes: text("notes"),
-    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updatedAt", { mode: "date" })
-      .notNull()
-      .defaultNow()
-      .$onUpdate(() => new Date()),
-    deletedAt: timestamp("deletedAt", { mode: "date" }),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
     ingredientId: uuid("ingredientId")
       .$type<IngredientId>()
       .references(() => ingredient.id),
@@ -524,7 +491,7 @@ export const product = pgTable(
 export const productExternalId = pgTable(
   "ProductExternalId",
   {
-    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    id: pkUuid(),
     productId: uuid("productId")
       .notNull()
       .$type<ProductId>()
@@ -532,12 +499,8 @@ export const productExternalId = pgTable(
     source: text("source").notNull(), // e.g. "amazon", "mcmaster", "mouser"
     externalId: text("externalId").notNull(), // The actual identifier (ASIN, part number, etc.)
     url: text("url"), // Optional direct link to the product page
-    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updatedAt", { mode: "date" })
-      .notNull()
-      .defaultNow()
-      .$onUpdate(() => new Date()),
-    deletedAt: timestamp("deletedAt", { mode: "date" }),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
   },
   (table) => [
     index("ProductExternalId_productId_idx").on(table.productId),
@@ -551,7 +514,7 @@ export const productExternalId = pgTable(
 export const productUnitMappings = pgTable(
   "ProductUnitMappings",
   {
-    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    id: pkUuid(),
     productId: uuid("productId")
       .notNull()
       .$type<ProductId>()
@@ -559,12 +522,8 @@ export const productUnitMappings = pgTable(
     a: jsonb("a").notNull().$type<Amount>(),
     b: jsonb("b").notNull().$type<Amount>(),
     source: text("source"),
-    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updatedAt", { mode: "date" })
-      .notNull()
-      .defaultNow()
-      .$onUpdate(() => new Date()),
-    deletedAt: timestamp("deletedAt", { mode: "date" }),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
   },
   (table) => [index("ProductUnitMappings_productId_idx").on(table.productId)],
 );
@@ -573,19 +532,12 @@ export const productUnitMappings = pgTable(
 export const location = pgTable(
   "Location",
   {
-    id: uuid("id")
-      .primaryKey()
-      .default(sql`gen_random_uuid()`)
-      .$type<LocationId>(),
+    id: pkUuid<LocationId>(),
     shortcode: text("shortcode").notNull(), // Human-readable ID (L-XXXX format)
     name: text("name").notNull(),
     aliases: text("aliases").array().notNull().default(sql`'{}'::text[]`),
-    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updatedAt", { mode: "date" })
-      .notNull()
-      .defaultNow()
-      .$onUpdate(() => new Date()),
-    deletedAt: timestamp("deletedAt", { mode: "date" }),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
     lastBulkInventory: timestamp("lastBulkInventory", { mode: "date" }),
     parentId: uuid("parentId").$type<LocationId>(),
     type: text("type").notNull(),
@@ -630,7 +582,7 @@ export const location = pgTable(
 export const entityEmbedding = pgTable(
   "EntityEmbedding",
   {
-    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    id: pkUuid(),
     entityType: text("entityType").notNull().$type<SearchableEntity>(),
     entityId: uuid("entityId").notNull(),
     embeddingText: text("embeddingText").notNull(),
@@ -639,12 +591,8 @@ export const entityEmbedding = pgTable(
     model: text("model").notNull(),
     dimensions: integer("dimensions").notNull(),
     embedding: pgVector("embedding").notNull(),
-    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updatedAt", { mode: "date" })
-      .notNull()
-      .defaultNow()
-      .$onUpdate(() => new Date()),
-    deletedAt: timestamp("deletedAt", { mode: "date" }),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
   },
   (table) => [
     uniqueIndex("EntityEmbedding_entity_model_key")
@@ -670,21 +618,14 @@ export const entityEmbedding = pgTable(
 export const inventoryEntry = pgTable(
   "InventoryEntry",
   {
-    id: uuid("id")
-      .primaryKey()
-      .default(sql`gen_random_uuid()`)
-      .$type<InventoryId>(),
+    id: pkUuid<InventoryId>(),
     productId: uuid("productId")
       .notNull()
       .$type<ProductId>()
       .references(() => product.id),
     amount: jsonb("amount").notNull().$type<Amount>(),
-    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updatedAt", { mode: "date" })
-      .notNull()
-      .defaultNow()
-      .$onUpdate(() => new Date()),
-    deletedAt: timestamp("deletedAt", { mode: "date" }),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
     locationId: uuid("locationId")
       .notNull()
       .$type<LocationId>()
@@ -705,19 +646,15 @@ export const inventoryEntry = pgTable(
 export const image = pgTable(
   "Image",
   {
-    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    id: pkUuid(),
     url: text("url").notNull(),
     key: text("key").notNull(),
     filename: text("filename").notNull(),
     size: integer("size").notNull(),
     contentType: text("contentType").notNull(),
     status: imageStatusEnum("status").notNull().default("PENDING"),
-    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updatedAt", { mode: "date" })
-      .notNull()
-      .defaultNow()
-      .$onUpdate(() => new Date()),
-    deletedAt: timestamp("deletedAt", { mode: "date" }),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
   },
   (table) => [
     uniqueIndex("Image_key_key")
@@ -732,7 +669,7 @@ export const image = pgTable(
 export const productImage = pgTable(
   "ProductImage",
   {
-    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    id: pkUuid(),
     productId: uuid("productId")
       .notNull()
       .$type<ProductId>()
@@ -740,12 +677,8 @@ export const productImage = pgTable(
     imageId: uuid("imageId")
       .notNull()
       .references(() => image.id),
-    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updatedAt", { mode: "date" })
-      .notNull()
-      .defaultNow()
-      .$onUpdate(() => new Date()),
-    deletedAt: timestamp("deletedAt", { mode: "date" }),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
   },
   (table) => [
     uniqueIndex("ProductImage_productId_imageId_key")
@@ -760,7 +693,7 @@ export const productImage = pgTable(
 export const locationImage = pgTable(
   "LocationImage",
   {
-    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    id: pkUuid(),
     locationId: uuid("locationId")
       .notNull()
       .$type<LocationId>()
@@ -768,12 +701,8 @@ export const locationImage = pgTable(
     imageId: uuid("imageId")
       .notNull()
       .references(() => image.id),
-    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updatedAt", { mode: "date" })
-      .notNull()
-      .defaultNow()
-      .$onUpdate(() => new Date()),
-    deletedAt: timestamp("deletedAt", { mode: "date" }),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
   },
   (table) => [
     uniqueIndex("LocationImage_locationId_imageId_key")
@@ -788,7 +717,7 @@ export const locationImage = pgTable(
 export const recipeImage = pgTable(
   "RecipeImage",
   {
-    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    id: pkUuid(),
     recipeId: uuid("recipeId")
       .notNull()
       .$type<RecipeId>()
@@ -796,12 +725,8 @@ export const recipeImage = pgTable(
     imageId: uuid("imageId")
       .notNull()
       .references(() => image.id),
-    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updatedAt", { mode: "date" })
-      .notNull()
-      .defaultNow()
-      .$onUpdate(() => new Date()),
-    deletedAt: timestamp("deletedAt", { mode: "date" }),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
   },
   (table) => [
     uniqueIndex("RecipeImage_recipeId_imageId_key")
@@ -982,7 +907,7 @@ export const recipeImageRelations = relations(recipeImage, ({ one }) => ({
 export const aiAnalysis = pgTable(
   "AiAnalysis",
   {
-    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    id: pkUuid(),
     entityType: text("entityType").notNull().$type<AiAnalysisEntityType>(),
     entityId: uuid("entityId"),
     feature: text("feature").notNull(),
@@ -990,12 +915,8 @@ export const aiAnalysis = pgTable(
     promptVersion: text("promptVersion").notNull(),
     inputFingerprint: text("inputFingerprint").notNull(),
     result: jsonb("result").notNull().$type<unknown>(),
-    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updatedAt", { mode: "date" })
-      .notNull()
-      .defaultNow()
-      .$onUpdate(() => new Date()),
-    deletedAt: timestamp("deletedAt", { mode: "date" }),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
   },
   (table) => [
     uniqueIndex("AiAnalysis_active_key")
@@ -1017,7 +938,7 @@ export const aiAnalysis = pgTable(
 export const aiUsage = pgTable(
   "AiUsage",
   {
-    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    id: pkUuid(),
     feature: text("feature").notNull(),
     provider: text("provider").notNull(),
     model: text("model").notNull(),
@@ -1031,7 +952,7 @@ export const aiUsage = pgTable(
     entityId: uuid("entityId"),
     batchId: uuid("batchId"),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
-    deletedAt: timestamp("deletedAt", { mode: "date" }),
+    ...softDeletedAt(),
   },
   (table) => [
     index("AiUsage_feature_createdAt_idx").on(
@@ -1050,7 +971,7 @@ export const aiUsage = pgTable(
 export const backgroundBatch = pgTable(
   "BackgroundBatch",
   {
-    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    id: pkUuid(),
     kind: backgroundJobKindEnum("kind").notNull().$type<BackgroundJobKind>(),
     source: backgroundBatchSourceEnum("source")
       .notNull()
@@ -1078,12 +999,8 @@ export const backgroundBatch = pgTable(
     wallDurationMs: integer("wallDurationMs"),
     activeDurationMs: integer("activeDurationMs").notNull().default(0),
     metadata: jsonb("metadata").$type<unknown>(),
-    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updatedAt", { mode: "date" })
-      .notNull()
-      .defaultNow()
-      .$onUpdate(() => new Date()),
-    deletedAt: timestamp("deletedAt", { mode: "date" }),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
   },
   (table) => [
     index("BackgroundBatch_status_idx").on(table.status),
@@ -1095,7 +1012,7 @@ export const backgroundBatch = pgTable(
 export const backgroundJob = pgTable(
   "BackgroundJob",
   {
-    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    id: pkUuid(),
     batchId: uuid("batchId")
       .notNull()
       .references(() => backgroundBatch.id),
@@ -1113,12 +1030,8 @@ export const backgroundJob = pgTable(
     finishedAt: timestamp("finishedAt", { mode: "date" }),
     durationMs: integer("durationMs"),
     lastError: text("lastError"),
-    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updatedAt", { mode: "date" })
-      .notNull()
-      .defaultNow()
-      .$onUpdate(() => new Date()),
-    deletedAt: timestamp("deletedAt", { mode: "date" }),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
   },
   (table) => [
     index("BackgroundJob_batch_idx").on(table.batchId),
@@ -1134,7 +1047,7 @@ export const backgroundJob = pgTable(
 export const auditLog = pgTable(
   "AuditLog",
   {
-    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    id: pkUuid(),
     entityType: text("entityType").notNull().$type<AuditEntityType>(),
     entityId: uuid("entityId").notNull(),
     action: text("action").notNull(), // 'create', 'update', 'delete'
@@ -1166,11 +1079,7 @@ export const auditLogRelations = relations(auditLog, ({ one }) => ({
 
 // App Settings table - singleton table for app-wide configuration
 export const appSettings = pgTable("AppSettings", {
-  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  id: pkUuid(),
   metadata: jsonb("metadata").$type<Record<string, unknown>>(),
-  createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
-  updatedAt: timestamp("updatedAt", { mode: "date" })
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date()),
+  ...baseTimestamps(),
 });

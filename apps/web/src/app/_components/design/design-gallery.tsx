@@ -139,7 +139,6 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Textarea } from "~/components/ui/textarea";
 import { TicketDivider } from "~/components/ui/ticket-divider";
-import { Toggle } from "~/components/ui/toggle";
 import {
   Tooltip,
   TooltipContent,
@@ -652,16 +651,7 @@ export function DesignGallery() {
 
       <GallerySection title="Surfaces" source="components/ui/surface">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {(
-            [
-              "panel",
-              "specPlate",
-              "figure",
-              "overlay",
-              "mobileRow",
-              "mobileCard",
-            ] as const
-          ).map((variant) => (
+          {(["specPlate"] as const).map((variant) => (
             <Surface key={variant} variant={variant} className="p-3">
               <TableLabel>{variant}</TableLabel>
             </Surface>
@@ -822,7 +812,6 @@ export function DesignGallery() {
             <Badge variant="secondary">secondary</Badge>
             <Badge variant="outline">outline</Badge>
             <Badge variant="destructive">destructive</Badge>
-            <Badge variant="ghost">ghost</Badge>
           </Row>
           <Row label="Categories">
             {productCategoryValues.map((c) => (
@@ -1250,12 +1239,6 @@ export function DesignGallery() {
         source="components/ui/toggle · view-switcher"
       >
         <div className="space-y-3">
-          <Row label="Toggle">
-            <Toggle defaultPressed>Bold</Toggle>
-            <Toggle variant="outline">Italic</Toggle>
-            <Toggle size="sm">Small</Toggle>
-            <Toggle disabled>Disabled</Toggle>
-          </Row>
           <Row label="View switch">
             <ViewSwitcherDemo />
           </Row>

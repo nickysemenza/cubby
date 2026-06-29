@@ -27,7 +27,7 @@
 import { faker } from "@faker-js/faker";
 import type { z } from "zod";
 
-export interface MockOptions<T> {
+interface MockOptions<T> {
   /** Values to overlay onto the generated object. Objects deep-merge; arrays,
    * dates and primitives replace wholesale. Anything a test asserts on belongs
    * here so it is never random. */

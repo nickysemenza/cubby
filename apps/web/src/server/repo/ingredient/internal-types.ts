@@ -102,7 +102,7 @@ export const dbIngredientToTopLevelShape = (
   updatedAt: ingredientData.updatedAt,
 });
 
-export type IngredientListDB = IngredientSelect & {
+type IngredientListDB = IngredientSelect & {
   product: IngredientDeepDB["product"];
   appearsInRecipes: RecipeRef[] | null;
 };

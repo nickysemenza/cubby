@@ -5,12 +5,12 @@ import { cn } from "~/lib/utils";
 /**
  * Icon-in-a-shape tile — the canonical replacement for the repeated
  * `flex h-N w-N items-center justify-center bg-*` wrapper around a
- * single icon. Pass an entity/custom color via `className` (e.g. an entity's
- * `color.bg`/`color.text`); the `tone` variants cover the common muted/primary
- * cases. Keep it lean — two axes only (size, tone).
+ * single icon. Muted by default; pass an entity/custom color via `className`
+ * (e.g. an entity's `color.bg`/`color.text`) to override. Keep it lean — one
+ * axis only (size).
  */
 const iconTileVariants = cva(
-  "inline-flex shrink-0 items-center justify-center rounded-none [&>svg]:shrink-0",
+  "inline-flex shrink-0 items-center justify-center rounded-none bg-muted text-muted-foreground [&>svg]:shrink-0",
   {
     variants: {
       size: {
@@ -20,12 +20,8 @@ const iconTileVariants = cva(
         md: "size-8 [&>svg]:size-4",
         lg: "size-10 [&>svg]:size-5",
       },
-      tone: {
-        muted: "bg-muted text-muted-foreground",
-        primary: "bg-primary/10 text-primary",
-      },
     },
-    defaultVariants: { size: "md", tone: "muted" },
+    defaultVariants: { size: "md" },
   },
 );
 
@@ -39,13 +35,12 @@ interface IconTileProps
 export const IconTile = ({
   as: Comp = "span",
   size,
-  tone,
   className,
   ref,
   ...props
 }: IconTileProps) => (
   <Comp
-    className={cn(iconTileVariants({ size, tone }), className)}
+    className={cn(iconTileVariants({ size }), className)}
     ref={ref}
     {...props}
   />

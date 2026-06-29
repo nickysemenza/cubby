@@ -1,23 +1,20 @@
-//! Unit-conversion exports: kind conversion, explained paths, graph debugging,
-//! and unit-mapping string parsing.
+//! Unit-conversion exports: kind conversion, explained paths, and island/bridge
+//! detection for the unit-mapping graph.
 
 use std::{
     collections::{HashMap, HashSet},
     str::FromStr,
 };
 
-use ingredient::{
-    unit::{
-        ConversionStep, Measure, MeasureKind, Unit, convert_measure_with_graph_explained,
-        find_connected_components, is_valid, make_graph, print_graph,
-    },
-    unit_mapping::{ParsedUnitMapping, parse_unit_mapping as parse_unit_mapping_internal},
+use ingredient::unit::{
+    ConversionStep, Measure, MeasureKind, Unit, convert_measure_with_graph_explained,
+    find_connected_components, is_valid, make_graph,
 };
 use serde::{Deserialize, Serialize};
 use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
 
-use crate::{WAmount, WUnitMapping, WUnitMappings, from_js, to_js};
+use crate::{WAmount, WUnitMappings, from_js, to_js};
 
 /// One hop of an explained conversion path (mirrors `ConversionStep`). Units are
 /// the normalized graph nodes (cup amounts enter at `tsp`, money at `cent`).
@@ -66,22 +63,6 @@ extern "C" {
 const HAND_AUTHORED_TS: &str = r#"
 type AmountKind = "weight" | "volume" | "money" | "calories" | "time" | "temperature" | "length" | "other" | `nutrient:${string}`;
 "#;
-
-impl From<ParsedUnitMapping> for WUnitMapping {
-    fn from(p: ParsedUnitMapping) -> Self {
-        Self {
-            a: WAmount::from(&p.a),
-            b: WAmount::from(&p.b),
-            source: p.source,
-            source_metadata: None,
-        }
-    }
-}
-
-#[wasm_bindgen]
-pub fn graph_unit_mappings(mappings: WUnitMappings) -> String {
-    print_graph(make_graph(&mappings.to_pairs()))
-}
 
 /// Disconnected components (islands) of a unit-mapping graph: a list of groups,
 /// each a list of unit strings. `transparent` → `type WUnitIslands = string[][]`.
@@ -323,21 +304,10 @@ pub fn amount_kind(amount: WAmount) -> Result<WAmountKind, String> {
     to_js(&kind.to_str(), "amount kind").map(Into::into)
 }
 
-/// Parse a unit mapping string in multiple formats:
-/// - "4 lb = $5" (conversion format)
-/// - "$5/4lb" (price-per format)
-/// - "4 lb = $5 @ costco" (with source)
-#[wasm_bindgen]
-pub fn parse_unit_mapping(input: String) -> Result<WUnitMapping, String> {
-    Ok(parse_unit_mapping_internal(&input)
-        .map_err(|error| error.to_string())?
-        .into())
-}
-
 // ---------------------------------------------------------------------------
 // Golden tests — drift tripwires for the ingredient crate's unit-conversion
-// surface (pinned by exact git rev). `parse_unit_mapping`,
-// `detect_unit_mapping_islands`, and `is_valid_unit` take native types and run
+// surface (pinned by exact git rev). `detect_unit_mapping_islands` and
+// `is_valid_unit` take native types and run
 // directly. `amount_kind` / `conv_amount_*` round-trip through `WAmountKind` (a
 // JsValue extern type) and so can't run natively — instead we pin the upstream
 // engine they wrap (`Measure::kind`, `MeasureKind::from_str`,
@@ -354,6 +324,8 @@ mod tests {
     use std::collections::HashSet;
     use std::str::FromStr;
 
+    use crate::WUnitMapping;
+
     fn amt(value: f64, unit: &str) -> WAmount {
         WAmount {
             unit: unit.to_string(),
@@ -368,20 +340,6 @@ mod tests {
             source: None,
             source_metadata: None,
         }
-    }
-
-    /// The three documented `parse_unit_mapping` input formats normalize to the
-    /// same `a`/`b` amounts (money unit is `$`); only the `@ source` form
-    /// populates `source`.
-    #[rstest]
-    #[case("4 lb = $5", None)]
-    #[case("$5/4lb", None)]
-    #[case("4 lb = $5 @ costco", Some("costco"))]
-    fn parse_unit_mapping_formats(#[case] input: &str, #[case] source: Option<&str>) {
-        let m = parse_unit_mapping(input.to_string()).expect("parses");
-        assert_eq!((m.a.value, m.a.unit.as_str()), (4.0, "lb"));
-        assert_eq!((m.b.value, m.b.unit.as_str()), (5.0, "$"));
-        assert_eq!(m.source.as_deref(), source);
     }
 
     /// A graph whose edges all reach the standard unit graph is one component, so

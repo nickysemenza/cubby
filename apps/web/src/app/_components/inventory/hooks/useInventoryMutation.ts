@@ -1,5 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { watchBatchesAndInvalidate } from "~/lib/background-batch-polling";
+import {
+  makeBatchStatusFetcher,
+  watchBatchesAndInvalidate,
+} from "~/lib/background-batch-polling";
 import {
   invalidateTRPCQueries,
   inventoryMutationInvalidateKeys,
@@ -24,13 +27,7 @@ export function useInventoryInvalidation() {
       queryClient,
       result,
       invalidateKeys: inventoryMutationInvalidateKeys,
-      fetchBatchStatus: (batchId) =>
-        queryClient
-          .fetchQuery({
-            ...api.backgroundJobs.getBatch.queryOptions({ batchId }),
-            staleTime: 0,
-          })
-          .then((batch) => batch.status),
+      fetchBatchStatus: makeBatchStatusFetcher(queryClient, api),
     });
   };
 }

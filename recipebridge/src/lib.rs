@@ -150,8 +150,8 @@ impl From<Measure> for WAmount {
 
 /// A unit-conversion pair, with optional provenance — the single boundary shape
 /// for the TS `UnitMapping`. Stored DB rows and synthesized food/price edges
-/// carry `sourceMetadata`; `parse_unit_mapping` output and the conversion
-/// inputs don't need it (serde ignores it on the way in, skips it when absent).
+/// carry `sourceMetadata`; plain conversion inputs don't need it (serde ignores
+/// it on the way in, skips it when absent).
 #[derive(Tsify, Serialize, Deserialize, Clone)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct WUnitMapping {

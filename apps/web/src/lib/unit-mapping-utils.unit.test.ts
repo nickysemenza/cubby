@@ -4,9 +4,8 @@ import { describe, expect, it } from "vitest";
 import { convertAmountToPrice, safeConvertAmount } from "~/lib/recipe-costing";
 import { getAllUnitMappingsFromProduct } from "./unit-mapping-utils";
 
-// Note: unit-mapping STRING parsing (the "4 lb = $5" formats) is covered by the
-// Rust golden test `parse_unit_mapping_formats` in recipebridge/src/conversion.rs;
-// the dead TS wrapper that duplicated it here was removed.
+// Note: unit-mapping STRING parsing (the "4 lb = $5" formats) lives upstream in
+// the `ingredient` crate; the dead TS wrapper that duplicated it here was removed.
 
 // A branded food whose household serving text parses to a bare count + name
 // (the ProMix shape, fdc 576208: "2 SCOOPS" → 2 ⟨whole⟩, name "SCOOPS").

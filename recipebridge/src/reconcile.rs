@@ -2,7 +2,7 @@
 //! costing engine and the availability evaluator.
 //!
 //! Both engines turn a product into conversion-graph edges the same way
-//! (`pairs_for_product`) and resolve a written amount to a target kind with the
+//! (`product_mapping_pairs`) and resolve a written amount to a target kind with the
 //! same canonical-preference + fallback rule (`canonical_amount` /
 //! `convert_with_fallback`). Owning that here gives the two a single source of
 //! truth for "how an amount becomes grams/cost/nutrients", instead of the
@@ -14,7 +14,12 @@
 
 use ingredient::unit::{Measure, MeasureGraph, MeasureKind, convert_measure_with_graph};
 
-use crate::food_mappings::{WProductInput, product_mapping_pairs};
+/// One product's conversion-graph edges (stored rows + food edges + the
+/// synthesized price edge), as `(Measure, Measure)` pairs ready for `make_graph`.
+/// The single way both engines turn a product into graph edges. Re-exported here
+/// (defined in `food_mappings`) so the reconciliation kernel is the one import
+/// site for the costing engine and availability evaluator.
+pub(crate) use crate::food_mappings::product_mapping_pairs;
 
 // TODO(upstream): `canonical_amount` and `convert_with_fallback` below are fully
 // pure — they operate only on `ingredient::unit` types (Measure/MeasureGraph/
@@ -23,8 +28,15 @@ use crate::food_mappings::{WProductInput, product_mapping_pairs};
 // where native tools could reuse them and they'd be tested next to `Measure`.
 // Deferred: there's no native consumer today, and moving them spans the cubby /
 // ingredient-parser repo boundary (CI builds recipebridge against ingredient-parser
-// `main`, so the upstream change must land first). `pairs_for_product` stays here
-// either way — it's cubby-coupled (products / food mappings).
+// `main`, so the upstream change must land first). `product_mapping_pairs` stays
+// cubby-coupled (products / food mappings) either way.
+
+/// Drop non-finite values before they enter a sum — a NaN/Inf from broken data
+/// poisons every downstream f64 total (recipe price/weight/nutrients, availability
+/// have-totals), with no way to notice in TS. Shared by both engines.
+pub(crate) fn finite(x: f64) -> Option<f64> {
+    x.is_finite().then_some(x)
+}
 
 /// The amount a row's measures resolve from: a mass amount when present (the
 /// stated weight, resolved exactly via the unit engine's mass identity), else
@@ -53,15 +65,6 @@ pub(crate) fn convert_with_fallback(
                 .iter()
                 .find_map(|m| convert_measure_with_graph(m, kind.clone(), graph))
         })
-}
-
-/// One product's conversion-graph edges (stored rows + food edges + the
-/// synthesized price edge), as `(Measure, Measure)` pairs ready for
-/// `make_graph`. The single way both engines turn a product into graph edges —
-/// delegates to `product_mapping_pairs`, which builds pairs without cloning the
-/// stored mapping rows.
-pub(crate) fn pairs_for_product(product: &WProductInput) -> Vec<(Measure, Measure)> {
-    product_mapping_pairs(product)
 }
 
 #[cfg(test)]

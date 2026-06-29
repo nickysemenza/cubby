@@ -2,7 +2,7 @@
 //!
 //! The shared engine behind "what can I make?", the `find_cookable_recipes`
 //! agent tool, and the meal-planning shopping list. Reconciliation runs on the
-//! same kernel the costing engine uses (`reconcile::pairs_for_product` +
+//! same kernel the costing engine uses (`reconcile::product_mapping_pairs` +
 //! `ingredient`'s graph conversion), so the gram-first basis rule has one home
 //! instead of a parallel TS copy.
 //!
@@ -25,7 +25,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::WAmount;
 use crate::food_mappings::WProductInput;
-use crate::reconcile::pairs_for_product;
+use crate::reconcile::{finite, product_mapping_pairs};
 
 /// Tiny tolerance so float rounding doesn't flip an exact match to "short".
 /// Mirrors the TS `COVERAGE_EPSILON`.
@@ -129,12 +129,6 @@ enum Basis {
     Incoherent,
 }
 
-/// Drop non-finite values before they enter a sum — a NaN/Inf from broken data
-/// poisons every downstream total in f64, with no way to notice in TS.
-fn finite(x: f64) -> Option<f64> {
-    x.is_finite().then_some(x)
-}
-
 fn resolve_status(
     need_value: f64,
     have_total: f64,
@@ -177,7 +171,7 @@ fn evaluate_group(group: &WAvailabilityGroup) -> WAvailabilityGroupResult {
     let product_pairs: Vec<Vec<(Measure, Measure)>> = group
         .products
         .iter()
-        .map(|p| pairs_for_product(&p.product))
+        .map(|p| product_mapping_pairs(&p.product))
         .collect();
     let product_graphs: Vec<MeasureGraph> = product_pairs.iter().map(|p| make_graph(p)).collect();
     // Needs may bridge across products, so they resolve on the union of all edges.

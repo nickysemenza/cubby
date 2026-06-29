@@ -5,6 +5,24 @@ import type {
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
 import { invalidateTRPCQueries } from "~/lib/query-keys";
+import type { useTRPC } from "~/trpc/react";
+
+type Api = ReturnType<typeof useTRPC>;
+
+/**
+ * The standard `fetchBatchStatus` poller passed to {@link watchBatchesAndInvalidate}:
+ * a fresh `getBatch` query (staleTime 0) reduced to its status. Shared by every
+ * mutation hook so the closure isn't hand-rolled per call site.
+ */
+export function makeBatchStatusFetcher(queryClient: QueryClient, api: Api) {
+  return (batchId: string): Promise<BackgroundBatchStatus> =>
+    queryClient
+      .fetchQuery({
+        ...api.backgroundJobs.getBatch.queryOptions({ batchId }),
+        staleTime: 0,
+      })
+      .then((batch) => batch.status);
+}
 
 const TERMINAL_STATUSES: ReadonlySet<BackgroundBatchStatus> = new Set([
   "succeeded",

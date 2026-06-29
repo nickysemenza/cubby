@@ -8,7 +8,6 @@ import {
 } from "@cubby/schemas/identifiers";
 import {
   productListItemOut,
-  productPickerItemOut,
   productTopLevelOut,
   productWithIngredientAndInventoryAndMappingsOut,
 } from "@cubby/schemas/product";
@@ -16,7 +15,6 @@ import { describe, expect, it } from "vitest";
 import {
   dbProductToAPI,
   dbProductToListAPI,
-  dbProductToPickerItemAPI,
   dbProductToTopLevelAPI,
 } from "./mappers";
 import type { ProductDeepDB, ProductListDB } from "./types";
@@ -181,20 +179,6 @@ describe("product mappers", () => {
     expect(result.externalIds[0]).not.toHaveProperty("deletedAt");
     expect(result.externalIds[0]).not.toHaveProperty("productId");
     expect(productTopLevelOut.parse(result)).toEqual(result);
-  });
-
-  it("maps picker rows directly without broad product fields", () => {
-    const result = dbProductToPickerItemAPI(baseProduct);
-
-    expect(result).toEqual({
-      id: PRODUCT_ID,
-      shortcode: unsafeProductShortcode("P-TEST"),
-      name: "Flour",
-      manufacturer: "Generic",
-    });
-    expect(result).not.toHaveProperty("price");
-    expect(result).not.toHaveProperty("images");
-    expect(productPickerItemOut.parse(result)).toEqual(result);
   });
 
   it("maps list rows to the list contract without full location payloads", () => {

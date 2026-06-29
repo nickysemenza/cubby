@@ -4,7 +4,7 @@ import type {
   EquivalenceExample,
 } from "@cubby/schemas/equivalences";
 import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
-import { groupBy } from "es-toolkit";
+import { groupBy, median } from "es-toolkit";
 
 // One recipe-ingredient occurrence with its parsed measures. Matches the repo's
 // `getMultiMeasureRecipeIngredients` select; declared here so the pure
@@ -46,15 +46,6 @@ const isHarvestableKind = (kind: string): boolean =>
   kind === "weight" || kind === "volume" || kind.startsWith("other");
 
 const MAX_EXAMPLES = 5;
-
-const median = (nums: number[]): number => {
-  const sorted = [...nums].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  // Guarded by callers (groups are never empty); `!` is safe past the length.
-  return sorted.length % 2 === 0
-    ? (sorted[mid - 1]! + sorted[mid]!) / 2
-    : sorted[mid]!;
-};
 
 // How a measure's dimension is keyed + displayed. Standard kinds (weight/volume)
 // normalize to a canonical unit so their variants merge; everything else is an

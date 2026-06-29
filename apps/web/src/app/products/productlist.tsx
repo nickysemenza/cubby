@@ -3,6 +3,7 @@ import { formatCategoryLabel, getCategoryColor } from "@cubby/shared";
 import { Link } from "@tanstack/react-router";
 import type { ColumnFiltersState } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
+import { uniq } from "es-toolkit";
 import { Package, Printer } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -362,7 +363,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   const items = table.getRowModel().rows.map((r) => r.original);
   const productIds = useMemo(() => data.map((product) => product.id), [data]);
   useEffect(() => {
-    const nextIds = [...new Set(productIds)].sort();
+    const nextIds = uniq(productIds).sort();
     setFoodHydrationIds((currentIds) => {
       if (
         currentIds.length === nextIds.length &&
