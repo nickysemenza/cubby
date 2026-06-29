@@ -2,13 +2,16 @@ import type { QueryKey, UseMutationOptions } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
-import { watchBatchesAndInvalidate } from "~/lib/background-batch-polling";
+import {
+  makeBatchStatusFetcher,
+  watchBatchesAndInvalidate,
+} from "~/lib/background-batch-polling";
 import { getErrorMessage } from "~/lib/error-utils";
 import { invalidateTRPCQueries } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 
 /** A tRPC `*.mutationOptions` reference, e.g. `api.ingredient.create.mutationOptions`. */
-type MutationOptionsFn = (opts: never) => UseMutationOptions<
+export type MutationOptionsFn = (opts: never) => UseMutationOptions<
   // biome-ignore lint/suspicious/noExplicitAny: positions only used as inference anchors
   any,
   // biome-ignore lint/suspicious/noExplicitAny: positions only used as inference anchors
@@ -71,13 +74,7 @@ export function useActionMutation<TFn extends MutationOptionsFn>({
         queryClient,
         result: data,
         invalidateKeys,
-        fetchBatchStatus: (batchId) =>
-          queryClient
-            .fetchQuery({
-              ...api.backgroundJobs.getBatch.queryOptions({ batchId }),
-              staleTime: 0,
-            })
-            .then((batch) => batch.status),
+        fetchBatchStatus: makeBatchStatusFetcher(queryClient, api),
       });
       onSuccess?.(data);
     },

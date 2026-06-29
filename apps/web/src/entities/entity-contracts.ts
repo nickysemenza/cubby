@@ -58,119 +58,72 @@ const skippedDetailQuery = {
 
 const listParams = (params: ListParams) => params as never;
 
+// The 6 core entities share a mechanically-identical contract whose only axes are
+// the router key (== entity key), the invalidation-key list, and (product only) a
+// picker-search query. image / usda-food / cookbook genuinely diverge (different
+// router keys, fdc_id coercion, no detail query) and stay spelled out below.
+type StandardEntity =
+  | "product"
+  | "ingredient"
+  | "inventory"
+  | "location"
+  | "recipe"
+  | "meal";
+
+// Indexing `api[entity]` yields a union of router proxies whose per-proc input
+// types differ, so the method calls aren't callable as a union. The contract
+// already erases those input/output types (QueryFactory takes `never`, returns
+// `unknown`), so we project the router through this minimal structural view.
+type StandardRouter = {
+  list: { queryOptions: (input: never) => unknown };
+  getByID: { queryOptions: (input: never) => unknown };
+  create: { mutationOptions: (input: never) => unknown };
+  update: { mutationOptions: (input: never) => unknown };
+  delete: { mutationOptions: (input: never) => unknown };
+};
+
+function standardContract(
+  entity: StandardEntity,
+  invalidationKeys: readonly QueryKey[],
+  pickerSearch?: EntityQueryContract["pickerSearch"],
+): EntityContract {
+  const router = (api: Api): StandardRouter =>
+    api[entity] as unknown as StandardRouter;
+  return {
+    entity,
+    route: entities[entity].routes,
+    defaultSort: entities[entity].list?.defaultSort ?? "createdAt",
+    sortableFields: entities[entity].list?.sortableFields ?? [],
+    canPreview: true,
+    invalidationKeys,
+    query: {
+      list: (api, params) => router(api).list.queryOptions(listParams(params)),
+      detail: (api, id) => router(api).getByID.queryOptions({ id } as never),
+      ...(pickerSearch ? { pickerSearch } : {}),
+    },
+    mutation: {
+      invalidationKeys,
+      create: (api, input) => router(api).create.mutationOptions(input),
+      update: (api, input) => router(api).update.mutationOptions(input),
+      delete: (api, input) => router(api).delete.mutationOptions(input),
+    },
+  };
+}
+
 const entityContracts = {
-  product: {
-    entity: "product",
-    route: entities.product.routes,
-    defaultSort: entities.product.list?.defaultSort ?? "createdAt",
-    sortableFields: entities.product.list?.sortableFields ?? [],
-    canPreview: true,
-    invalidationKeys: productMutationInvalidateKeys,
-    query: {
-      list: (api, params) => api.product.list.queryOptions(listParams(params)),
-      detail: (api, id) => api.product.getByID.queryOptions({ id }),
-      pickerSearch: (api, params) =>
-        api.product.search.queryOptions(listParams(params)),
-    },
-    mutation: {
-      invalidationKeys: productMutationInvalidateKeys,
-      create: (api, input) => api.product.create.mutationOptions(input),
-      update: (api, input) => api.product.update.mutationOptions(input),
-      delete: (api, input) => api.product.delete.mutationOptions(input),
-    },
-  },
-  ingredient: {
-    entity: "ingredient",
-    route: entities.ingredient.routes,
-    defaultSort: entities.ingredient.list?.defaultSort ?? "createdAt",
-    sortableFields: entities.ingredient.list?.sortableFields ?? [],
-    canPreview: true,
-    invalidationKeys: ingredientAllMutationInvalidateKeys,
-    query: {
-      list: (api, params) =>
-        api.ingredient.list.queryOptions(listParams(params)),
-      detail: (api, id) => api.ingredient.getByID.queryOptions({ id }),
-    },
-    mutation: {
-      invalidationKeys: ingredientAllMutationInvalidateKeys,
-      create: (api, input) => api.ingredient.create.mutationOptions(input),
-      update: (api, input) => api.ingredient.update.mutationOptions(input),
-      delete: (api, input) => api.ingredient.delete.mutationOptions(input),
-    },
-  },
-  inventory: {
-    entity: "inventory",
-    route: entities.inventory.routes,
-    defaultSort: entities.inventory.list?.defaultSort ?? "createdAt",
-    sortableFields: entities.inventory.list?.sortableFields ?? [],
-    canPreview: true,
-    invalidationKeys: inventoryMutationInvalidateKeys,
-    query: {
-      list: (api, params) =>
-        api.inventory.list.queryOptions(listParams(params)),
-      detail: (api, id) => api.inventory.getByID.queryOptions({ id }),
-    },
-    mutation: {
-      invalidationKeys: inventoryMutationInvalidateKeys,
-      create: (api, input) => api.inventory.create.mutationOptions(input),
-      update: (api, input) => api.inventory.update.mutationOptions(input),
-      delete: (api, input) => api.inventory.delete.mutationOptions(input),
-    },
-  },
-  location: {
-    entity: "location",
-    route: entities.location.routes,
-    defaultSort: entities.location.list?.defaultSort ?? "createdAt",
-    sortableFields: entities.location.list?.sortableFields ?? [],
-    canPreview: true,
-    invalidationKeys: locationMutationInvalidateKeys,
-    query: {
-      list: (api, params) => api.location.list.queryOptions(listParams(params)),
-      detail: (api, id) => api.location.getByID.queryOptions({ id }),
-    },
-    mutation: {
-      invalidationKeys: locationMutationInvalidateKeys,
-      create: (api, input) => api.location.create.mutationOptions(input),
-      update: (api, input) => api.location.update.mutationOptions(input),
-      delete: (api, input) => api.location.delete.mutationOptions(input),
-    },
-  },
-  recipe: {
-    entity: "recipe",
-    route: entities.recipe.routes,
-    defaultSort: entities.recipe.list?.defaultSort ?? "createdAt",
-    sortableFields: entities.recipe.list?.sortableFields ?? [],
-    canPreview: true,
-    invalidationKeys: recipeAllMutationInvalidateKeys,
-    query: {
-      list: (api, params) => api.recipe.list.queryOptions(listParams(params)),
-      detail: (api, id) => api.recipe.getByID.queryOptions({ id }),
-    },
-    mutation: {
-      invalidationKeys: recipeAllMutationInvalidateKeys,
-      create: (api, input) => api.recipe.create.mutationOptions(input),
-      update: (api, input) => api.recipe.update.mutationOptions(input),
-      delete: (api, input) => api.recipe.delete.mutationOptions(input),
-    },
-  },
-  meal: {
-    entity: "meal",
-    route: entities.meal.routes,
-    defaultSort: entities.meal.list?.defaultSort ?? "date",
-    sortableFields: entities.meal.list?.sortableFields ?? [],
-    canPreview: true,
-    invalidationKeys: mealMutationInvalidateKeys,
-    query: {
-      list: (api, params) => api.meal.list.queryOptions(listParams(params)),
-      detail: (api, id) => api.meal.getByID.queryOptions({ id }),
-    },
-    mutation: {
-      invalidationKeys: mealMutationInvalidateKeys,
-      create: (api, input) => api.meal.create.mutationOptions(input),
-      update: (api, input) => api.meal.update.mutationOptions(input),
-      delete: (api, input) => api.meal.delete.mutationOptions(input),
-    },
-  },
+  product: standardContract(
+    "product",
+    productMutationInvalidateKeys,
+    (api, params) => api.product.search.queryOptions(listParams(params)),
+  ),
+  ingredient: standardContract(
+    "ingredient",
+    ingredientAllMutationInvalidateKeys,
+  ),
+  inventory: standardContract("inventory", inventoryMutationInvalidateKeys),
+  location: standardContract("location", locationMutationInvalidateKeys),
+  recipe: standardContract("recipe", recipeAllMutationInvalidateKeys),
+  meal: standardContract("meal", mealMutationInvalidateKeys),
   image: {
     entity: "image",
     route: entities.image.routes,

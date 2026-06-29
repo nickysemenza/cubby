@@ -69,7 +69,10 @@ import {
   SheetTitle,
 } from "~/components/ui/sheet";
 import { Spinner } from "~/components/ui/spinner";
-import { watchBatchesAndInvalidate } from "~/lib/background-batch-polling";
+import {
+  makeBatchStatusFetcher,
+  watchBatchesAndInvalidate,
+} from "~/lib/background-batch-polling";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
   invalidateTRPCQueries,
@@ -288,13 +291,7 @@ export function InventorySessionWorkbench({
         queryClient,
         result,
         invalidateKeys: keys,
-        fetchBatchStatus: (batchId) =>
-          queryClient
-            .fetchQuery({
-              ...api.backgroundJobs.getBatch.queryOptions({ batchId }),
-              staleTime: 0,
-            })
-            .then((batch) => batch.status),
+        fetchBatchStatus: makeBatchStatusFetcher(queryClient, api),
       });
     },
     [queryClient, api],
@@ -1635,13 +1632,7 @@ function SessionCaptureActions({ location }: { location: SessionLocation }) {
       queryClient,
       result,
       invalidateKeys: keys,
-      fetchBatchStatus: (batchId) =>
-        queryClient
-          .fetchQuery({
-            ...api.backgroundJobs.getBatch.queryOptions({ batchId }),
-            staleTime: 0,
-          })
-          .then((batch) => batch.status),
+      fetchBatchStatus: makeBatchStatusFetcher(queryClient, api),
     });
   };
 
