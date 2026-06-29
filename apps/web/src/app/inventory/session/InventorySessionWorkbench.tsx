@@ -1057,7 +1057,7 @@ function LocationReviewPane({
           event.target.value = "";
         }}
       />
-      <div className="sticky top-0 z-20 border-b bg-background/95 py-2 backdrop-blur md:static md:border-b-0 md:bg-transparent md:py-0">
+      <div className="sticky top-12 z-20 border-b bg-background/95 py-2 backdrop-blur md:static md:border-b-0 md:bg-transparent md:py-0">
         <Row align="center" justify="between" gap="sm">
           <Button
             type="button"
