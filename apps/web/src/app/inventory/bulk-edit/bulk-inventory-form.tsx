@@ -111,17 +111,32 @@ export default function BulkInventoryForm({
     }
   }, [initialLocationId, locations, form, selectedLocation]);
 
-  // Fetch existing inventory items when location is selected
-  const { data: inventoryItemsData, refetch: refetchInventoryItems } = useQuery(
-    {
-      ...api.inventory.list.queryOptions({
-        sort: { orderBy: "createdAt", direction: "desc" },
-        pagination: { pageIndex: 0, pageSize: 100 },
-        filters: { locationIdFilter: selectedLocation?.id ?? "" },
-      }),
-      enabled: !!selectedLocation,
-    },
-  );
+  // Fetch existing inventory items when location is selected.
+  // pageSize:100 caps how many existing entries we load into the form. Because
+  // bulkProcess deletes-on-omit, any existing entry NOT submitted is removed —
+  // so a truncated or still-loading set is a silent-wipe hazard. We surface
+  // status + totalCount below and refuse to submit when the loaded set can't be
+  // trusted as the complete picture.
+  const BULK_EDIT_PAGE_SIZE = 100;
+  const {
+    data: inventoryItemsData,
+    refetch: refetchInventoryItems,
+    status: inventoryStatus,
+    isFetching: inventoryFetching,
+  } = useQuery({
+    ...api.inventory.list.queryOptions({
+      sort: { orderBy: "createdAt", direction: "desc" },
+      pagination: { pageIndex: 0, pageSize: BULK_EDIT_PAGE_SIZE },
+      filters: { locationIdFilter: selectedLocation?.id ?? "" },
+    }),
+    enabled: !!selectedLocation,
+  });
+
+  // The loaded set is truncated when the location holds more entries than one
+  // page can show — saving would delete every entry past the first page.
+  const loadedCount = inventoryItemsData?.items.length ?? 0;
+  const totalCount = inventoryItemsData?.meta.totalCount ?? 0;
+  const isTruncated = !!selectedLocation && totalCount > loadedCount;
 
   // Load existing inventory items when location changes
   useEffect(() => {
@@ -180,6 +195,23 @@ export default function BulkInventoryForm({
     const location = values.location;
     if (!location) {
       setError("Please select a location");
+      return;
+    }
+    // Safety gate: bulkProcess deletes any existing entry not in this submit.
+    // Refuse if the current inventory snapshot isn't a complete, settled load,
+    // or the save would silently delete entries the user never saw.
+    if (inventoryStatus !== "success" || inventoryFetching) {
+      setError(
+        "Inventory is still loading for this location — wait for it to finish before saving. Saving on a partial load would delete the entries that haven't loaded yet.",
+      );
+      return;
+    }
+    if (isTruncated) {
+      setError(
+        `This location has ${totalCount} entries but only ${loadedCount} are shown here. Saving would permanently remove the ${
+          totalCount - loadedCount
+        } that aren't loaded. Audit this location in the inventory session instead, or split it into smaller locations.`,
+      );
       return;
     }
     setIsSubmitting(true);
@@ -242,6 +274,14 @@ export default function BulkInventoryForm({
           searchType="location"
         />
       </div>
+
+      {selectedLocation && isTruncated && (
+        <div className="mb-4 rounded border-2 border-warning bg-warning/10 p-2 text-warning text-xs">
+          Showing {loadedCount} of {totalCount} entries. Bulk edit can't safely
+          save a partial load (it would delete the {totalCount - loadedCount}{" "}
+          not shown). Use the inventory session to audit this location.
+        </div>
+      )}
 
       {selectedLocation && (
         <>

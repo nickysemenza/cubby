@@ -370,3 +370,4 @@ Framed as **Now / Next / Later** (no dates — it's a personal project). Canonic
 - [docs/todos.md](docs/todos.md) — work list
 - [docs/plans/](docs/plans/) — design docs for in-progress / upcoming features
 - [docs/combobox-consolidation.md](docs/combobox-consolidation.md) — component consolidation notes
+- [docs/inventory-audit.md](docs/inventory-audit.md) — inventory audit/session flow: purpose, current behavior, known gaps, redesign direction

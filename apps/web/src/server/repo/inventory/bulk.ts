@@ -129,12 +129,25 @@ export const bulkProcessInventoryEntries = async (
         (item) => !submittedIds.includes(item.id),
       );
 
-      // Batch delete items that are not in the submitted array
+      // Soft-delete items not in the submitted array. This is a delete-on-omit
+      // reconcile, so it MUST honor the repo-wide soft-delete invariant (set
+      // deletedAt, keep the row + audit trail) — a hard delete here makes an
+      // omitted entry unrecoverable, and "restore is intentionally not
+      // implemented" (CLAUDE.md). NOTE: bulkMoveInventoryEntries' source
+      // collapse below intentionally stays a hard delete — soft-deleting a
+      // fully-moved source would leave a zero-qty ghost that notDeleted() hides
+      // but valuation/duplicate scans resurface.
       if (itemsToDelete.length > 0) {
         const idsToDelete = itemsToDelete.map((item) => item.id);
         await tx
-          .delete(inventoryEntry)
-          .where(inArray(inventoryEntry.id, idsToDelete));
+          .update(inventoryEntry)
+          .set({ deletedAt: new Date() })
+          .where(
+            and(
+              inArray(inventoryEntry.id, idsToDelete),
+              notDeleted(inventoryEntry),
+            ),
+          );
 
         // Batch log delete audit entries
         await logAuditEntries(

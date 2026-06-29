@@ -1,5 +1,8 @@
+import { eq } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { inventoryEntry } from "~/server/db/schema";
+import { getDb } from "~/server/repo/database-helpers";
 import {
   bulkMoveInventoryEntries,
   bulkProcessInventoryEntries,
@@ -124,6 +127,31 @@ describe("inventory soft-delete target guard", () => {
         TEST_ACTOR,
       ),
     ).rejects.toThrow(/does not exist or has been deleted/);
+  });
+
+  // Regression guard: bulkProcess is a delete-on-omit reconcile. An existing
+  // entry not present in the submitted batch must be SOFT-deleted (row retained
+  // with deletedAt), not hard-deleted — otherwise an omitted row is
+  // unrecoverable, violating the repo-wide soft-delete invariant. Previously
+  // this branch issued a raw tx.delete.
+  it("bulkProcessInventoryEntries soft-deletes (not hard-deletes) omitted entries", async () => {
+    const location = await liveLocation();
+    const product = await liveProduct();
+    const entry = await createInventoryEntry(
+      ctx.db,
+      { productId: product.id, locationId: location.id, amount },
+      TEST_ACTOR,
+    );
+
+    // Submit an empty batch: the existing entry is omitted, so it is removed.
+    await bulkProcessInventoryEntries(ctx.db, location.id, [], TEST_ACTOR);
+
+    // The row must still exist with deletedAt set (soft delete), not be gone.
+    const raw = await getDb(ctx.db).query.inventoryEntry.findFirst({
+      where: eq(inventoryEntry.id, entry.id),
+    });
+    expect(raw).toBeDefined();
+    expect(raw?.deletedAt).not.toBeNull();
   });
 
   it("bulkMoveInventoryEntries rejects a soft-deleted target location", async () => {

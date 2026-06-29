@@ -13,6 +13,8 @@ import { Route as DocsRouteImport } from './routes/docs'
 import { Route as DesignRouteImport } from './routes/design'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as DocsIndexRouteImport } from './routes/docs.index'
+import { Route as DocsSectionRouteImport } from './routes/docs.$section'
 import { Route as AuthAuthViewRouteImport } from './routes/auth.$authView'
 import { Route as ApiMcpRouteImport } from './routes/api/mcp'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
@@ -95,6 +97,16 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const DocsIndexRoute = DocsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DocsRoute,
+} as any)
+const DocsSectionRoute = DocsSectionRouteImport.update({
+  id: '/$section',
+  path: '/$section',
+  getParentRoute: () => DocsRoute,
 } as any)
 const AuthAuthViewRoute = AuthAuthViewRouteImport.update({
   id: '/auth/$authView',
@@ -451,7 +463,7 @@ const AuthenticatedRecipesIdExportRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/design': typeof DesignRoute
-  '/docs': typeof DocsRoute
+  '/docs': typeof DocsRouteWithChildren
   '/$shortcode': typeof AuthenticatedShortcodeRoute
   '/activity': typeof AuthenticatedActivityRoute
   '/ai-smoke-test': typeof AuthenticatedAiSmokeTestRoute
@@ -468,6 +480,8 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedSettingsRoute
   '/api/mcp': typeof ApiMcpRoute
   '/auth/$authView': typeof AuthAuthViewRoute
+  '/docs/$section': typeof DocsSectionRoute
+  '/docs/': typeof DocsIndexRoute
   '/account/$accountView': typeof AuthenticatedAccountAccountViewRoute
   '/cookbooks/$cookbookId': typeof AuthenticatedCookbooksCookbookIdRoute
   '/images/$id': typeof AuthenticatedImagesIdRoute
@@ -519,7 +533,6 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/design': typeof DesignRoute
-  '/docs': typeof DocsRoute
   '/$shortcode': typeof AuthenticatedShortcodeRoute
   '/activity': typeof AuthenticatedActivityRoute
   '/ai-smoke-test': typeof AuthenticatedAiSmokeTestRoute
@@ -536,6 +549,8 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthenticatedSettingsRoute
   '/api/mcp': typeof ApiMcpRoute
   '/auth/$authView': typeof AuthAuthViewRoute
+  '/docs/$section': typeof DocsSectionRoute
+  '/docs': typeof DocsIndexRoute
   '/account/$accountView': typeof AuthenticatedAccountAccountViewRoute
   '/cookbooks/$cookbookId': typeof AuthenticatedCookbooksCookbookIdRoute
   '/images/$id': typeof AuthenticatedImagesIdRoute
@@ -589,7 +604,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/design': typeof DesignRoute
-  '/docs': typeof DocsRoute
+  '/docs': typeof DocsRouteWithChildren
   '/_authenticated/$shortcode': typeof AuthenticatedShortcodeRoute
   '/_authenticated/activity': typeof AuthenticatedActivityRoute
   '/_authenticated/ai-smoke-test': typeof AuthenticatedAiSmokeTestRoute
@@ -606,6 +621,8 @@ export interface FileRoutesById {
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/api/mcp': typeof ApiMcpRoute
   '/auth/$authView': typeof AuthAuthViewRoute
+  '/docs/$section': typeof DocsSectionRoute
+  '/docs/': typeof DocsIndexRoute
   '/_authenticated/account/$accountView': typeof AuthenticatedAccountAccountViewRoute
   '/_authenticated/cookbooks/$cookbookId': typeof AuthenticatedCookbooksCookbookIdRoute
   '/_authenticated/images/$id': typeof AuthenticatedImagesIdRoute
@@ -676,6 +693,8 @@ export interface FileRouteTypes {
     | '/settings'
     | '/api/mcp'
     | '/auth/$authView'
+    | '/docs/$section'
+    | '/docs/'
     | '/account/$accountView'
     | '/cookbooks/$cookbookId'
     | '/images/$id'
@@ -727,7 +746,6 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/design'
-    | '/docs'
     | '/$shortcode'
     | '/activity'
     | '/ai-smoke-test'
@@ -744,6 +762,8 @@ export interface FileRouteTypes {
     | '/settings'
     | '/api/mcp'
     | '/auth/$authView'
+    | '/docs/$section'
+    | '/docs'
     | '/account/$accountView'
     | '/cookbooks/$cookbookId'
     | '/images/$id'
@@ -813,6 +833,8 @@ export interface FileRouteTypes {
     | '/_authenticated/settings'
     | '/api/mcp'
     | '/auth/$authView'
+    | '/docs/$section'
+    | '/docs/'
     | '/_authenticated/account/$accountView'
     | '/_authenticated/cookbooks/$cookbookId'
     | '/_authenticated/images/$id'
@@ -866,7 +888,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   DesignRoute: typeof DesignRoute
-  DocsRoute: typeof DocsRoute
+  DocsRoute: typeof DocsRouteWithChildren
   ApiMcpRoute: typeof ApiMcpRoute
   AuthAuthViewRoute: typeof AuthAuthViewRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
@@ -903,6 +925,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/docs/': {
+      id: '/docs/'
+      path: '/'
+      fullPath: '/docs/'
+      preLoaderRoute: typeof DocsIndexRouteImport
+      parentRoute: typeof DocsRoute
+    }
+    '/docs/$section': {
+      id: '/docs/$section'
+      path: '/$section'
+      fullPath: '/docs/$section'
+      preLoaderRoute: typeof DocsSectionRouteImport
+      parentRoute: typeof DocsRoute
     }
     '/auth/$authView': {
       id: '/auth/$authView'
@@ -1477,11 +1513,23 @@ const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
   AuthenticatedRouteChildren,
 )
 
+interface DocsRouteChildren {
+  DocsSectionRoute: typeof DocsSectionRoute
+  DocsIndexRoute: typeof DocsIndexRoute
+}
+
+const DocsRouteChildren: DocsRouteChildren = {
+  DocsSectionRoute: DocsSectionRoute,
+  DocsIndexRoute: DocsIndexRoute,
+}
+
+const DocsRouteWithChildren = DocsRoute._addFileChildren(DocsRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   DesignRoute: DesignRoute,
-  DocsRoute: DocsRoute,
+  DocsRoute: DocsRouteWithChildren,
   ApiMcpRoute: ApiMcpRoute,
   AuthAuthViewRoute: AuthAuthViewRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,

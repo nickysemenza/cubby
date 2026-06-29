@@ -496,6 +496,22 @@ export function InventorySessionWorkbench({
 
   return (
     <Stack gap="md" className="min-w-0 pb-24 md:pb-0">
+      <MobileLocationSwitcher
+        parent={parent}
+        locations={sessionLocations}
+        currentId={currentLocation?.id ?? null}
+        currentIndex={currentIndex}
+        inventoryByLocation={inventoryByLocation}
+        confirmedIds={confirmedIds}
+        onSelect={(id) => jumpToLocation(id)}
+        onScanJump={(id) => {
+          if (!jumpToLocation(id)) {
+            toast.error("That location is not in this session.");
+          }
+        }}
+        parentLocation={parent}
+      />
+
       {undoStack.length > 0 && (
         <UndoBar action={undoStack[0]!} onUndo={runUndo} />
       )}
@@ -715,16 +731,7 @@ function formatChildCount(count: number) {
   return count === 1 ? "1 child" : `${count} children`;
 }
 
-function LocationWorkbenchSidebar({
-  parent,
-  locations,
-  currentId,
-  inventoryByLocation,
-  confirmedIds,
-  onSelect,
-  onScanJump,
-  parentLocation,
-}: {
+type SessionLocationListProps = {
   parent: InfLocation;
   locations: SessionLocation[];
   currentId: LocationId | null;
@@ -733,7 +740,24 @@ function LocationWorkbenchSidebar({
   onSelect: (locationId: LocationId) => void;
   onScanJump: (locationId: string) => void;
   parentLocation: InfLocation;
-}) {
+};
+
+/**
+ * Shared body for the session location navigator: header (title, progress, QR
+ * jump, filter) + scrollable list of locations with confirmed/total badges.
+ * Rendered both in the desktop sidebar Card and inside the mobile bottom Sheet
+ * so there is a single implementation of "what's left / jump to a location".
+ */
+function SessionLocationList({
+  parent,
+  locations,
+  currentId,
+  inventoryByLocation,
+  confirmedIds,
+  onSelect,
+  onScanJump,
+  parentLocation,
+}: SessionLocationListProps) {
   const [filter, setFilter] = useState<"all" | "incomplete" | "empty">("all");
   const visible = locations.filter((location) => {
     if (filter === "incomplete") return !location.lastBulkInventory;
@@ -745,8 +769,8 @@ function LocationWorkbenchSidebar({
   const completed = locations.filter((loc) => loc.lastBulkInventory).length;
 
   return (
-    <Card className="hidden overflow-hidden lg:sticky lg:top-20 lg:flex lg:h-[calc(100dvh-6rem)] lg:flex-col">
-      <CardHeader className="shrink-0 border-b p-4">
+    <>
+      <Stack gap="sm" className="shrink-0 border-b p-4">
         <Row align="center" justify="between" gap="sm">
           <div className="min-w-0">
             <CardTitle>{parent.name}</CardTitle>
@@ -756,7 +780,7 @@ function LocationWorkbenchSidebar({
           </div>
           <QrJumpButton parent={parentLocation} onJump={onScanJump} />
         </Row>
-        <Row gap="sm" wrap className="pt-2">
+        <Row gap="sm" wrap>
           {(["all", "incomplete", "empty"] as const).map((key) => (
             <Button
               key={key}
@@ -769,8 +793,8 @@ function LocationWorkbenchSidebar({
             </Button>
           ))}
         </Row>
-      </CardHeader>
-      <CardContent className="min-h-0 flex-1 overflow-auto p-0">
+      </Stack>
+      <div className="min-h-0 flex-1 overflow-auto">
         {visible.map((location) => {
           const items = inventoryByLocation.get(location.id) ?? [];
           const confirmed = items.filter((item) =>
@@ -809,8 +833,65 @@ function LocationWorkbenchSidebar({
             </button>
           );
         })}
-      </CardContent>
+      </div>
+    </>
+  );
+}
+
+/** Desktop-only sticky sidebar (the mobile equivalent is MobileLocationSwitcher). */
+function LocationWorkbenchSidebar(props: SessionLocationListProps) {
+  return (
+    <Card className="hidden overflow-hidden lg:sticky lg:top-20 lg:flex lg:h-[calc(100dvh-6rem)] lg:flex-col">
+      <SessionLocationList {...props} />
     </Card>
+  );
+}
+
+/**
+ * Mobile (`<lg`) counterpart to the sidebar: a sticky header chip showing
+ * "parent · position · done count" that opens the SessionLocationList in a
+ * bottom Sheet, restoring "what's left / jump to a bin" on the phone.
+ */
+function MobileLocationSwitcher({
+  currentIndex,
+  ...listProps
+}: SessionLocationListProps & { currentIndex: number }) {
+  const [open, setOpen] = useState(false);
+  const { parent, locations, onSelect } = listProps;
+  const completed = locations.filter((loc) => loc.lastBulkInventory).length;
+
+  return (
+    <div className="sticky top-0 z-20 bg-background pb-2 lg:hidden">
+      <Sheet open={open} onOpenChange={setOpen}>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="flex w-full items-center justify-between gap-2 rounded border bg-card px-4 py-2 text-left"
+        >
+          <span className="min-w-0 truncate font-medium text-sm">
+            {parent.name}
+          </span>
+          <span className="shrink-0 font-mono text-2xs text-muted-foreground uppercase tabular-nums">
+            {currentIndex + 1} / {locations.length} · {completed} done
+          </span>
+        </button>
+        <SheetContent side="bottom" className="flex max-h-[80dvh] flex-col p-0">
+          <SheetHeader className="sr-only">
+            <SheetTitle>Session locations</SheetTitle>
+            <SheetDescription>
+              Jump to a location in this audit session
+            </SheetDescription>
+          </SheetHeader>
+          <SessionLocationList
+            {...listProps}
+            onSelect={(id) => {
+              onSelect(id);
+              setOpen(false);
+            }}
+          />
+        </SheetContent>
+      </Sheet>
+    </div>
   );
 }
 
