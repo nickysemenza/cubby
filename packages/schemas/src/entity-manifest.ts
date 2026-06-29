@@ -32,10 +32,11 @@ export const entityDescriptor = z.object({
   /** Non-default count filter, beyond `notDeleted`. */
   countFilter: z.enum(["recipeIdNull"]).optional(),
   /**
-   * Entities this one points AT in the reference graph — via a direct FK column
-   * OR a join table (e.g. recipe→ingredient through recipeSectionIngredient,
-   * product→image through productImage). Every image-bearing entity references
-   * `image`.
+   * Entities this one points AT in the reference graph — via a direct FK column,
+   * a join table (recipe→ingredient through recipeSectionIngredient, product→image
+   * through productImage), or a cross-system id link (product→usda-food through
+   * `fdc_id`, since USDA foods live in a separate worker, not a local FK). Every
+   * image-bearing entity references `image`.
    */
   references: z.array(entitySchema).readonly(),
   /** CRUD operations exposed over MCP. */
@@ -56,7 +57,7 @@ export const entityManifest = {
     auditable: true,
     hasImages: true,
     countable: true,
-    references: ["ingredient", "image"],
+    references: ["ingredient", "image", "usda-food"],
     mcp: ALL_MCP,
     routerStyle: "crud-factory",
   },
