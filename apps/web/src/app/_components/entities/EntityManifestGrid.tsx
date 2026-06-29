@@ -3,6 +3,7 @@ import {
   allEntities,
   type EntityDescriptor,
   entityManifest,
+  entityReferences,
 } from "@cubby/schemas/entity-manifest";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -23,13 +24,11 @@ import { getEntityContract } from "~/entities/entity-contracts";
 import { authClient } from "~/lib/auth-client";
 import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
-
-/** Outgoing reference edges, widened from the `as const` manifest tuple. */
-const refsOf = (e: Entity): readonly Entity[] => entityManifest[e].references;
+import { EntityReferenceGraph } from "./EntityReferenceGraph";
 
 /** Inverse reference edges: who points AT `target`. */
 function referencesInto(target: Entity): Entity[] {
-  return allEntities.filter((e) => refsOf(e).includes(target));
+  return allEntities.filter((e) => entityReferences(e).includes(target));
 }
 
 function Bool({ value }: { value: boolean }) {
@@ -196,52 +195,6 @@ function EntityHeader({ entity }: { entity: Entity }) {
   );
 }
 
-/** entities × entities adjacency: ● where the row entity references the column. */
-function ReferenceMatrix() {
-  return (
-    <Table className="table-auto" containerClassName="w-fit">
-      <TableHeader>
-        <TableRow>
-          <TableHead className="text-left">references ↓ / →</TableHead>
-          {allEntities.map((e) => (
-            <TableHead key={e} className="px-2 text-center font-mono text-2xs">
-              {e}
-            </TableHead>
-          ))}
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {allEntities.map((from) => (
-          <TableRow key={from}>
-            <TableCell className="whitespace-nowrap font-mono text-2xs">
-              {from}
-            </TableCell>
-            {allEntities.map((to) => {
-              const has = refsOf(from).includes(to);
-              const self = from === to;
-              return (
-                <TableCell key={to} className="px-2 text-center">
-                  {has ? (
-                    <span
-                      className={cn(
-                        "inline-block size-2 rounded-full",
-                        self ? "bg-warning" : "bg-foreground",
-                      )}
-                      title={self ? `${from} → self` : `${from} → ${to}`}
-                    />
-                  ) : (
-                    <span className="text-muted-foreground/20">·</span>
-                  )}
-                </TableCell>
-              );
-            })}
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
-  );
-}
-
 export function EntityManifestGrid() {
   const api = useTRPC();
   const session = authClient.useSession();
@@ -269,7 +222,7 @@ export function EntityManifestGrid() {
               setting
             </TableHead>
             {allEntities.map((entity) => (
-              <TableHead key={entity} className="px-3">
+              <TableHead key={entity} className="px-2">
                 <EntityHeader entity={entity} />
               </TableHead>
             ))}
@@ -291,7 +244,7 @@ export function EntityManifestGrid() {
                   {row.label}
                 </TableCell>
                 {allEntities.map((entity) => (
-                  <TableCell key={entity} className="px-3 align-top">
+                  <TableCell key={entity} className="px-2 align-top">
                     {row.cell({
                       entity,
                       d: entityManifest[entity],
@@ -309,7 +262,7 @@ export function EntityManifestGrid() {
         <h2 className="font-mono text-muted-foreground text-xs uppercase tracking-wider">
           Reference graph
         </h2>
-        <ReferenceMatrix />
+        <EntityReferenceGraph />
       </Stack>
     </Stack>
   );
