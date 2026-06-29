@@ -857,7 +857,7 @@ function MobileLocationSwitcher({
   ...listProps
 }: SessionLocationListProps & { currentIndex: number }) {
   const [open, setOpen] = useState(false);
-  const { parent, locations, onSelect } = listProps;
+  const { parent, locations, onSelect, onScanJump } = listProps;
   const completed = locations.filter((loc) => loc.lastBulkInventory).length;
 
   return (
@@ -886,6 +886,12 @@ function MobileLocationSwitcher({
             {...listProps}
             onSelect={(id) => {
               onSelect(id);
+              setOpen(false);
+            }}
+            onScanJump={(id) => {
+              // Scanning a location QR from the sheet jumps behind it; close so
+              // the result (review pane) is visible, matching tap-to-select.
+              onScanJump(id);
               setOpen(false);
             }}
           />
