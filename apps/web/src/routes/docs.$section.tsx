@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { Suspense } from "react";
 import { getDocSection } from "~/app/docs/docs-registry";
+import { Spinner } from "~/components/ui/spinner";
 
 export const Route = createFileRoute("/docs/$section")({
   component: DocsSectionRoute,
@@ -17,5 +19,6 @@ function DocsSectionRoute() {
     );
   }
 
-  return entry.render();
+  // Sections are lazy (see docs-registry) — render under a Suspense boundary.
+  return <Suspense fallback={<Spinner />}>{entry.render()}</Suspense>;
 }

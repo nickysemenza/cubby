@@ -4,31 +4,40 @@ import {
 } from "@cubby/schemas/identifiers";
 import type { infLocation, LocationType } from "@cubby/schemas/location";
 import type { unitMappingWithMetadata } from "@cubby/schemas/unitmapping";
-import { generateLocationShortcode } from "@cubby/shared";
 import { z } from "zod";
 import type { entitySummaryDataSchema } from "~/components/entity/entity-summary-card";
 
-const uuid = () => crypto.randomUUID();
-const now = new Date();
+// Deterministic ids/shortcodes for these static demo fixtures. We must NOT call
+// crypto.randomUUID() / random shortcode generation at module top-level: workerd
+// disallows generating random values in module (global) scope, and this module
+// is evaluated during SSR — which crashed renderToReadableStream. A simple
+// counter keeps the ids stable and unique, which is all the demos need.
+const now = new Date(0);
 const ts = { createdAt: now, updatedAt: now };
+let locationSeq = 0;
 
 // Helper to create a location
 const makeLocation = (
   name: string,
   type: LocationType,
   children?: z.infer<typeof infLocation>[],
-): z.infer<typeof infLocation> => ({
-  id: unsafeLocationId(uuid()),
-  shortcode: unsafeLocationShortcode(generateLocationShortcode()),
-  name,
-  type,
-  lastBulkInventory: null,
-  aiDescription: null,
-  images: [],
-  valuation: null,
-  ...ts,
-  ...(children ? { children } : {}),
-});
+): z.infer<typeof infLocation> => {
+  locationSeq += 1;
+  return {
+    id: unsafeLocationId(`doc-location-${locationSeq}`),
+    shortcode: unsafeLocationShortcode(
+      `L-${String(locationSeq).padStart(4, "0")}`,
+    ),
+    name,
+    type,
+    lastBulkInventory: null,
+    aiDescription: null,
+    images: [],
+    valuation: null,
+    ...ts,
+    ...(children ? { children } : {}),
+  };
+};
 
 // Zod schema for rich text input (raw text + ingredient names for parsing)
 export const richTextInputSchema = z.object({
