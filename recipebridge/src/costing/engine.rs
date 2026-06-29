@@ -40,7 +40,7 @@ use super::types::{
     WRowMissing, WRowPaths, WRowResult,
 };
 use crate::WConversionStep;
-use crate::reconcile::{canonical_amount, convert_with_fallback, pairs_for_product};
+use crate::reconcile::{canonical_amount, convert_with_fallback, finite, product_mapping_pairs};
 
 /// One recipe row paired with its resolved usage and the consumption plan that
 /// usage implies. Built up front (before the two resolution passes) so each
@@ -175,14 +175,6 @@ fn scale_nutrients(r: &NutrientsRes, fraction: f64) -> NutrientsRes {
             .collect()),
         Err(e) => Err(e.clone()),
     }
-}
-
-/// Drop non-finite values before they enter a total — a NaN/Inf from a broken
-/// mapping otherwise poisons the whole recipe's price/weight/nutrient sum, which
-/// then persists into `Recipe.totals` with no way to notice downstream. (Mirrors
-/// the same guard the availability evaluator already applies.)
-fn finite(x: f64) -> Option<f64> {
-    x.is_finite().then_some(x)
 }
 
 /// Running per-nutrient accumulator: lower sum, upper sum, and whether any
@@ -332,7 +324,7 @@ impl<'a> Engine<'a> {
                     // the module doc — multiple priced products on one ingredient
                     // collide on the shared `each` node → arbitrary pick. Dormant
                     // today (no ingredient has 2+ priced products).
-                    let pairs = i.products.iter().flat_map(pairs_for_product).collect();
+                    let pairs = i.products.iter().flat_map(product_mapping_pairs).collect();
                     (i.id.as_str(), IngredientCtx::new(pairs))
                 })
                 .collect(),
