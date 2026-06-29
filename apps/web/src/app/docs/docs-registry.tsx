@@ -12,9 +12,9 @@ import { FeaturesSection } from "./sections/features-section";
  * single entry here. Guides keep the repo markdown as the source of truth
  * (`?raw` import); editing the `.md` updates the page.
  */
-export type DocSectionGroup = "Reference" | "Guides";
+type DocSectionGroup = "Reference" | "Guides";
 
-export interface DocSection {
+interface DocSection {
   slug: string;
   title: string;
   group: DocSectionGroup;
