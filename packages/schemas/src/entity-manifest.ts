@@ -1,3 +1,4 @@
+import { SHORTCODE_PREFIX } from "@cubby/shared";
 import { z } from "zod";
 import { type Entity, entitySchema } from "./entity";
 
@@ -55,7 +56,7 @@ export const entityManifest = {
     name: "product",
     dbTable: "Product",
     idBrand: "ProductId",
-    shortcodePrefix: "P-",
+    shortcodePrefix: SHORTCODE_PREFIX.product,
     softDelete: true,
     auditable: true,
     hasImages: true,
@@ -68,7 +69,7 @@ export const entityManifest = {
     name: "recipe",
     dbTable: "Recipe",
     idBrand: "RecipeId",
-    shortcodePrefix: "R-",
+    shortcodePrefix: SHORTCODE_PREFIX.recipe,
     softDelete: true,
     auditable: true,
     hasImages: true,
@@ -110,7 +111,7 @@ export const entityManifest = {
     name: "location",
     dbTable: "Location",
     idBrand: "LocationId",
-    shortcodePrefix: "L-",
+    shortcodePrefix: SHORTCODE_PREFIX.location,
     softDelete: true,
     auditable: true,
     hasImages: true,
