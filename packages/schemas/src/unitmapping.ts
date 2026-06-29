@@ -100,6 +100,13 @@ export const unitMappingOut = z.object({
 
 export type UnitMapping = z.infer<typeof unitMappingWithMetadata>;
 
+/** Slim MCP projection of a unit-mapping edge (no id/timestamps/sourceMetadata). */
+export const mcpUnitMappingOut = z.object({
+  a: amount,
+  b: amount,
+  source: z.string().nullable(),
+});
+
 /**
  * Build a `UnitMapping` edge with the "manual" provenance stamp — the shape that
  * the enrichment workbench's live preview, design fixtures, and unit tests all

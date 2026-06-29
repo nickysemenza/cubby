@@ -22,6 +22,7 @@ import { baseKind } from "./problems";
 import { recipeUsageOut } from "./recipe";
 import { mutationSideEffectsSchema } from "./background-jobs";
 import {
+  mcpUnitMappingOut,
   unitMappingInput,
   unitMappingOut,
   unitMappingWithMetadata,
@@ -485,12 +486,6 @@ export const mcpProductUpdateInput = z.object({
   usdaUnavailable: z.boolean().nullable().optional(),
 });
 
-const productMcpUnitMappingFields = {
-  a: amount,
-  b: amount,
-  source: z.string().nullable(),
-};
-
 /** Slim MCP projection of a product list/detail row. */
 export const productMcpOut = z.object({
   id: productId,
@@ -506,7 +501,7 @@ export const productMcpOut = z.object({
   externalIds: z.array(externalIdOut),
   usdaFdcId: z.number().nullable(),
   ingredientId: z.string().nullable(),
-  unitMappings: z.array(z.object(productMcpUnitMappingFields)),
+  unitMappings: z.array(mcpUnitMappingOut),
 });
 export type ProductMcpOut = z.infer<typeof productMcpOut>;
 
