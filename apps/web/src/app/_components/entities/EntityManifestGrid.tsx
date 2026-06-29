@@ -179,7 +179,7 @@ function EntityHeader({ entity }: { entity: Entity }) {
   return (
     <Link
       to={def.routes.list}
-      className="flex flex-col items-center gap-1 hover:underline"
+      className="flex flex-col items-start gap-1 hover:underline"
     >
       <span
         className={cn(
