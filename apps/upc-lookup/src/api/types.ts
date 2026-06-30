@@ -36,7 +36,12 @@ export const upcitemdbOfferSchema = z.looseObject({
   domain: z.string().optional(),
   title: z.string(),
   currency: z.string().optional(),
-  list_price: z.string().optional(),
+  // NOTE: `list_price` is intentionally NOT declared. We don't read it (only
+  // `price`), and `z.looseObject` already passes it through into `sourceData`.
+  // Declaring it with a fixed type once silently broke every offer-bearing
+  // lookup — upstream sends a number, the schema required a string, so parse
+  // failed → transient `error` → the UPC was never cached. Leaving it off makes
+  // the schema immune to upstream type changes on fields we don't consume.
   price: z.number(),
   shipping: z.string().optional(),
   condition: z.string().optional(),
