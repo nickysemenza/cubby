@@ -188,7 +188,7 @@ function BatchTable({
             <TableCell>
               <Link
                 to="/background-jobs"
-                search={{ batchId: batch.id }}
+                search={(prev) => ({ ...prev, batchId: batch.id })}
                 className="font-mono text-xs underline decoration-border decoration-dotted underline-offset-2 hover:decoration-primary"
               >
                 {batch.id.slice(0, 8)}
