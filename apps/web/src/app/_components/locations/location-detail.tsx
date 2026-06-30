@@ -189,7 +189,7 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
                 className={cn(buttonVariants({ variant: "outline" }))}
               >
                 <ScanBarcode className="mr-2 h-4 w-4" />
-                Inventory Session
+                Recount
               </Link>
             </Row>
           </Stack>

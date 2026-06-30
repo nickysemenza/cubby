@@ -86,7 +86,7 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
               }
               nativeButton={false}
             >
-              Inventory Session
+              Recount
             </Button>
             <Button
               variant="outline"

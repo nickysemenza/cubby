@@ -203,7 +203,7 @@ export function LocationList() {
           }
         >
           <ScanBarcode className="mr-2 h-4 w-4" />
-          Inventory Session
+          Recount
         </DropdownMenuItem>
         {row.shortcode && typeSupportsQrCode(row.type) && (
           <DropdownMenuItem

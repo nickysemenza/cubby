@@ -140,7 +140,7 @@ export const desktopNav: NavNode[] = [
     children: [
       {
         to: "/inventory/session",
-        label: "Inventory Session",
+        label: "Recount",
         icon: ScanBarcode,
       },
       { to: "/labels", label: "Labels", icon: QrCode },
@@ -184,7 +184,7 @@ export const desktopLeaves: NavItem[] = desktopNav.flatMap((node) =>
 export const bottomNavItems: NavItem[] = [
   {
     to: "/inventory/session",
-    label: "Session",
+    label: "Recount",
     icon: ScanBarcode,
   },
   inventory,
@@ -195,14 +195,25 @@ export const bottomNavItems: NavItem[] = [
 
 const bottomTabTargets = new Set(bottomNavItems.map((item) => item.to));
 
+/** A labeled group of leaves in the mobile "More" sheet. */
+export type NavSection = { title: string; items: NavItem[] };
+
 /**
- * Mobile "More" sheet — Home first (the desktop logo links home, but the mobile
- * bar has no logo, so Home would otherwise be unreachable), then every authed
- * leaf that isn't already a primary tab.
+ * Mobile "More" sheet, sectioned instead of one flat catch-all list. Home leads
+ * (the desktop logo links home, but the mobile bar has no logo). The rest are
+ * DERIVED from the desktop groups — each becomes a titled section minus the
+ * leaves already promoted to a primary bottom tab — so the mobile sheet and the
+ * desktop dropdowns can't drift apart.
  */
-export const moreNavItems: NavItem[] = [
-  home,
-  ...desktopLeaves.filter((leaf) => !bottomTabTargets.has(leaf.to)),
+export const moreNavSections: NavSection[] = [
+  { title: "Home", items: [home] },
+  ...desktopNav
+    .filter(isNavGroup)
+    .map((group) => ({
+      title: group.label,
+      items: group.children.filter((leaf) => !bottomTabTargets.has(leaf.to)),
+    }))
+    .filter((section) => section.items.length > 0),
 ];
 
 /** Signed-out bar / bottom tabs — always flat leaves (no dropdowns). */

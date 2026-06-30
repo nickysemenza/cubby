@@ -14,7 +14,7 @@ export function InventoryActions() {
       <Link to="/inventory/session">
         <Button variant="default" size="default" className="gap-1 text-xs">
           <ScanBarcode className="h-3.5 w-3.5" />
-          Inventory Session
+          Recount
         </Button>
       </Link>
       <DropdownMenu>
@@ -31,7 +31,7 @@ export function InventoryActions() {
         />
         <DropdownMenuContent align="end" className="w-44">
           <DropdownMenuItem render={<Link to="/inventory/bulk-edit" />}>
-            Inventory Audit
+            Bulk Edit
           </DropdownMenuItem>
           <DropdownMenuItem render={<Link to="/inventory/new" />}>
             <Plus className="h-4 w-4" />

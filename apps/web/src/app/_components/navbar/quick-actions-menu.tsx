@@ -39,7 +39,7 @@ export const quickActions: QuickAction[] = [
   { entity: "location" },
   { entity: "recipe" },
   {
-    label: "Inventory Session",
+    label: "Recount",
     href: "/inventory/session",
     icon: ScanBarcode,
     description: "Review bins and add items",
