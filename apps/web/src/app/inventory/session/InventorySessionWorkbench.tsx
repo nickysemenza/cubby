@@ -13,6 +13,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
+  ArrowDownToLine,
   Barcode,
   Camera,
   Check,
@@ -47,10 +48,7 @@ import {
   PersistentScanner,
   QR_CODE_FORMATS,
 } from "~/app/_components/inventory/persistent-scanner";
-import {
-  LocationBreadcrumb,
-  locationToSegments,
-} from "~/app/_components/locations/location-breadcrumb";
+import { LocationBreadcrumb } from "~/app/_components/locations/location-breadcrumb";
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { LocationTreeRow } from "~/app/_components/locations/location-tree-row";
 import { useProductSearch } from "~/app/_components/products/use-product-search";
@@ -154,10 +152,6 @@ function locationTypeNoun(type: string): string {
 
 function sentenceCase(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
-}
-
-function ancestorSegments(location: InfLocation) {
-  return locationToSegments(location).slice(0, -1);
 }
 
 function locationPathFromRoot(
@@ -1170,11 +1164,11 @@ function LocationReviewPane({
 
       <SessionCaptureActions location={location} />
 
-      <Card>
-        <CardHeader className="p-4 pb-2">
+      <Card size="sm">
+        <CardHeader>
           <CardTitle>Expected contents</CardTitle>
         </CardHeader>
-        <CardContent className="p-4 pt-0">
+        <CardContent>
           {items.length === 0 && childLocations.length === 0 ? (
             <Description>
               No tracked contents in this {locationNoun} yet.
@@ -1533,14 +1527,14 @@ function UnknownTray({
   const totalUnknownCount = items.length + locations.length;
 
   return (
-    <Card>
-      <CardHeader className="p-4 pb-2">
+    <Card size="sm">
+      <CardHeader>
         <Row align="center" justify="between">
           <CardTitle>Unknown</CardTitle>
           <Badge variant="outline">{totalUnknownCount}</Badge>
         </Row>
       </CardHeader>
-      <CardContent className="p-4 pt-0">
+      <CardContent>
         <Stack gap="sm">
           <label className="flex min-h-12 items-center gap-2 border border-[var(--border)] px-4">
             <Search className="h-4 w-4 text-muted-foreground" />
@@ -1555,133 +1549,96 @@ function UnknownTray({
             <Description>No Unknown contents match.</Description>
           ) : (
             <Stack gap="sm" className="max-h-80 overflow-auto">
-              {filteredLocations.map((location) => {
-                const ancestors = ancestorSegments(location);
-                return (
-                  <div
-                    key={location.id}
-                    className={cn(
-                      "min-h-16 border border-[var(--border)] border-l-4 border-l-primary/60 bg-primary/5 p-3" /* tight: dense unknown location row */,
-                      disabled && "opacity-50",
-                    )}
-                  >
-                    <Row align="center" justify="between" gap="sm">
-                      <Row align="center" gap="sm" className="min-w-0 flex-1">
-                        <div className="relative flex h-12 w-12 shrink-0 items-center justify-center border border-primary/30 bg-primary/10 text-primary">
-                          {location.images[0]?.url ? (
-                            <Image
-                              src={location.images[0].url}
-                              alt={location.name}
-                              displayWidth={80}
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <LocationIcon type={location.type} size={20} />
-                          )}
-                          <span className="absolute -right-1 -bottom-1 flex h-5 w-5 items-center justify-center border border-primary/40 bg-background text-primary">
-                            <LocationIcon type={location.type} size={12} />
-                          </span>
-                        </div>
-                        <div className="min-w-0 space-y-1">
-                          <Row align="center" gap="xs" wrap>
-                            <Badge variant="default">
-                              <LocationIcon type={location.type} size={12} />
-                              Location
-                            </Badge>
-                            <EntityInlineLink
-                              entity="location"
-                              data={{
-                                id: location.id,
-                                name: location.name,
-                                type: location.type,
-                              }}
-                              compact
-                            />
-                          </Row>
-                          {ancestors.length > 0 && (
-                            <LocationBreadcrumb segments={ancestors} compact />
-                          )}
-                          <Description size="xs">
-                            {location.children?.length ?? 0} child locations ·{" "}
-                            {location.totalItemCount ?? 0} tracked items
-                          </Description>
-                        </div>
-                      </Row>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="shrink-0"
-                        disabled={disabled}
-                        onClick={() => onMoveLocationIn(location)}
-                      >
-                        <span className="max-w-36 truncate">
-                          Move into {currentLocationName}
-                        </span>
-                      </Button>
-                    </Row>
-                  </div>
-                );
-              })}
-              {filtered.map((item) => (
-                <div
-                  key={item.id}
+              {filteredLocations.map((location) => (
+                <Row
+                  key={location.id}
+                  align="center"
+                  gap="sm"
                   className={cn(
-                    "min-h-16 border border-[var(--border)] border-l-4 border-l-warning/60 bg-background p-3" /* tight: dense unknown product row */,
+                    "border border-[var(--border)] border-l-4 border-l-primary/60 bg-primary/5 p-2",
                     disabled && "opacity-50",
                   )}
                 >
-                  <Row align="center" justify="between" gap="sm">
-                    <Row align="center" gap="sm" className="min-w-0 flex-1">
-                      <div className="relative shrink-0">
-                        <Image
-                          src={item.product.images[0]?.url}
-                          alt={item.product.name}
-                          displayWidth={80}
-                          className="h-12 w-12 border border-[var(--border)] object-cover"
-                        />
-                        <span className="absolute -right-1 -bottom-1 flex h-5 w-5 items-center justify-center border border-warning/40 bg-warning/15 text-warning">
-                          <Package className="h-3 w-3" />
-                        </span>
-                      </div>
-                      <div className="min-w-0 space-y-1">
-                        <Row align="center" gap="xs" wrap>
-                          <Badge variant="warning">
-                            <Package className="h-3 w-3" />
-                            Product
-                          </Badge>
-                          <EntityInlineLink
-                            entity="product"
-                            data={item.product}
-                            compact
-                          />
-                        </Row>
-                        <Row gap="sm" wrap>
-                          <Description size="xs">
-                            {tryFormatAmount(item.amount)}
-                          </Description>
-                          <EntityInlineLink
-                            entity="inventory"
-                            data={{ id: item.id, name: "Inventory entry" }}
-                            compact
-                          />
-                        </Row>
-                      </div>
-                    </Row>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="shrink-0"
-                      disabled={disabled}
-                      onClick={() => onMoveIn(item)}
-                    >
-                      <span className="max-w-36 truncate">
-                        Move into {currentLocationName}
-                      </span>
-                    </Button>
-                  </Row>
-                </div>
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center border border-primary/30 bg-primary/10 text-primary">
+                    {location.images[0]?.url ? (
+                      <Image
+                        src={location.images[0].url}
+                        alt={location.name}
+                        displayWidth={72}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <LocationIcon type={location.type} size={18} />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <EntityInlineLink
+                      entity="location"
+                      data={{
+                        id: location.id,
+                        name: location.name,
+                        type: location.type,
+                      }}
+                      compact
+                    />
+                    <Description size="xs">
+                      Location · {location.children?.length ?? 0} children ·{" "}
+                      {location.totalItemCount ?? 0} items
+                    </Description>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-9 w-9 shrink-0"
+                    disabled={disabled}
+                    title={`Move into ${currentLocationName}`}
+                    aria-label={`Move into ${currentLocationName}`}
+                    onClick={() => onMoveLocationIn(location)}
+                  >
+                    <ArrowDownToLine className="h-4 w-4" />
+                  </Button>
+                </Row>
+              ))}
+              {filtered.map((item) => (
+                <Row
+                  key={item.id}
+                  align="center"
+                  gap="sm"
+                  className={cn(
+                    "border border-[var(--border)] border-l-4 border-l-warning/60 bg-background p-2",
+                    disabled && "opacity-50",
+                  )}
+                >
+                  <Image
+                    src={item.product.images[0]?.url}
+                    alt={item.product.name}
+                    displayWidth={72}
+                    className="h-9 w-9 shrink-0 border border-[var(--border)] object-cover"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <EntityInlineLink
+                      entity="product"
+                      data={item.product}
+                      compact
+                    />
+                    <Description size="xs">
+                      Product · {tryFormatAmount(item.amount)}
+                    </Description>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-9 w-9 shrink-0"
+                    disabled={disabled}
+                    title={`Move into ${currentLocationName}`}
+                    aria-label={`Move into ${currentLocationName}`}
+                    onClick={() => onMoveIn(item)}
+                  >
+                    <ArrowDownToLine className="h-4 w-4" />
+                  </Button>
+                </Row>
               ))}
             </Stack>
           )}
