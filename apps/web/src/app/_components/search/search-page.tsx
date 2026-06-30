@@ -108,6 +108,9 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
   };
 
   const handleTypeChange = (nextType: SearchType) => {
+    // No `replace` here: a filter-chip click is a deliberate action, so it
+    // should push history (Back undoes the filter). Still skip the view
+    // transition — the mobile slide on a same-page param change is noise.
     navigate({
       to: "/search",
       search: {
@@ -115,7 +118,6 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
         type: nextType === "all" ? undefined : nextType,
       },
       viewTransition: false,
-      replace: true,
     });
   };
 

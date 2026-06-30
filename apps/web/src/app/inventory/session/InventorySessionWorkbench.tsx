@@ -19,7 +19,6 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
-  Package,
   PackagePlus,
   Plus,
   QrCode,
@@ -563,6 +562,8 @@ export function InventorySessionWorkbench({
             }}
             canPrevious={currentIndex > 0}
             canNext={currentIndex < sessionLocations.length - 1}
+            previousName={sessionLocations[currentIndex - 1]?.name}
+            nextName={sessionLocations[currentIndex + 1]?.name}
             unknownReady={!!unknownLocation}
           />
         )}
@@ -917,6 +918,8 @@ function LocationReviewPane({
   onJumpByScan,
   canPrevious,
   canNext,
+  previousName,
+  nextName,
   unknownReady,
 }: {
   parent: InfLocation;
@@ -940,6 +943,8 @@ function LocationReviewPane({
   onJumpByScan: (locationId: string) => void;
   canPrevious: boolean;
   canNext: boolean;
+  previousName?: string;
+  nextName?: string;
   unknownReady: boolean;
 }) {
   const api = useTRPC();
@@ -1230,38 +1235,52 @@ function LocationReviewPane({
         disabled={!unknownReady}
       />
 
-      <div className="sticky bottom-20 z-20 flex flex-col gap-2 border border-[var(--border)] bg-card p-2 shadow-[var(--shadow-chunky)] md:bottom-4 md:flex-row md:items-center md:justify-between">
-        <Row gap="sm">
-          <Button
-            type="button"
-            variant="outline"
-            className="min-h-12 flex-1 px-4 md:flex-none"
-            onClick={onPrevious}
-            disabled={!canPrevious}
-          >
-            <ChevronLeft className="h-4 w-4" />
-            Previous
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="min-h-12 flex-1 px-4 md:flex-none"
-            onClick={onNext}
-            disabled={!canNext}
-          >
-            Next
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </Row>
+      <Row
+        align="stretch"
+        gap="sm"
+        className="sticky bottom-20 z-20 border border-[var(--border)] bg-card p-2 shadow-[var(--shadow-chunky)] md:bottom-4"
+      >
         <Button
           type="button"
-          className="min-h-12 px-4"
+          variant="outline"
+          className="h-auto min-h-12 max-w-28 flex-col items-start gap-0 py-1"
+          onClick={onPrevious}
+          disabled={!canPrevious}
+          aria-label={previousName ? `Previous: ${previousName}` : "Previous"}
+        >
+          <span className="flex items-center gap-1 font-medium text-xs">
+            <ChevronLeft className="h-3.5 w-3.5" />
+            Prev
+          </span>
+          <span className="w-full truncate text-left text-2xs text-muted-foreground">
+            {canPrevious ? (previousName ?? "—") : "Start"}
+          </span>
+        </Button>
+        <Button
+          type="button"
+          className="min-h-12 flex-1"
           onClick={onMarkComplete}
         >
           <Check className="h-4 w-4" />
           Mark {locationNoun} complete
         </Button>
-      </div>
+        <Button
+          type="button"
+          variant="outline"
+          className="h-auto min-h-12 max-w-28 flex-col items-end gap-0 py-1"
+          onClick={onNext}
+          disabled={!canNext}
+          aria-label={nextName ? `Next: ${nextName}` : "Next"}
+        >
+          <span className="flex items-center gap-1 font-medium text-xs">
+            Next
+            <ChevronRight className="h-3.5 w-3.5" />
+          </span>
+          <span className="w-full truncate text-right text-2xs text-muted-foreground">
+            {canNext ? (nextName ?? "—") : "End"}
+          </span>
+        </Button>
+      </Row>
     </Stack>
   );
 }
@@ -1295,87 +1314,41 @@ function ExpectedItemReviewRow({
   return (
     <div
       className={cn(
-        "border border-[var(--border)] border-l-4 border-l-warning/60 bg-background p-3" /* tight: dense expected product row */,
+        "border border-[var(--border)] border-l-4 border-l-warning/60 bg-background p-2",
         confirmed && "border-positive/40 bg-positive/5",
       )}
     >
-      <div
-        className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center" /* tight: dense expected product row */
-      >
-        <Row align="center" gap="sm" className="min-w-0">
-          <div className="relative shrink-0">
-            <Image
-              src={item.product.images[0]?.url}
-              alt={item.product.name}
-              displayWidth={96}
-              className="h-14 w-14 border border-[var(--border)] object-cover"
-            />
-            <span className="absolute -right-1 -bottom-1 flex h-6 w-6 items-center justify-center border border-warning/40 bg-warning/15 text-warning">
-              <Package className="h-3.5 w-3.5" />
-            </span>
-          </div>
-          <Row align="center" gap="xs" wrap className="min-w-0 flex-1">
-            <Badge variant="warning">
-              <Package className="h-3 w-3" />
-              Product
-            </Badge>
+      <Row align="center" gap="sm">
+        <Image
+          src={item.product.images[0]?.url}
+          alt={item.product.name}
+          displayWidth={128}
+          className="h-16 w-16 shrink-0 border border-[var(--border)] object-cover"
+        />
+        <div className="min-w-0 flex-1">
+          <Row align="center" gap="xs" wrap>
             <EntityInlineLink entity="product" data={item.product} compact />
-            <Description as="span" size="xs">
-              {tryFormatAmount(item.amount)}
-            </Description>
-            <EntityInlineLink
-              entity="inventory"
-              data={{ id: item.id, name: "Inventory entry" }}
-              compact
-            />
             {confirmed && <Badge variant="secondary">confirmed</Badge>}
           </Row>
-        </Row>
-        {editing ? (
-          <Stack gap="sm" className="lg:col-span-2">
-            <AmountFieldGroup
-              form={form}
-              valuePath="amount.value"
-              unitPath="amount.unit"
-              compact
-            />
-            <Row gap="sm">
-              <Button
-                type="button"
-                className="min-h-12 flex-1 lg:flex-none"
-                onClick={() => {
-                  onQuantityChange(form.getValues("amount"));
-                  setEditing(false);
-                }}
-              >
-                Save quantity
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="min-h-12"
-                onClick={() => setEditing(false)}
-              >
-                Cancel
-              </Button>
-            </Row>
-          </Stack>
-        ) : (
-          <div className="grid grid-cols-2 gap-2 lg:w-[28rem] lg:grid-cols-[auto_auto_1fr_1fr]">
+          <Description size="xs">{tryFormatAmount(item.amount)}</Description>
+        </div>
+        {!editing && (
+          <Row gap="xs" className="shrink-0">
             <Button
               type="button"
               variant="outline"
-              className="min-h-12 text-sm lg:min-h-10"
+              className="h-11 w-10 shrink-0"
               onClick={onPhoto}
               disabled={photoPending}
+              aria-label="Add photo"
+              title="Add photo"
             >
               {photoPending ? <Spinner /> : <Camera className="h-4 w-4" />}
-              Photo
             </Button>
             <Button
               type="button"
               variant="outline"
-              className="min-h-12 lg:min-h-10"
+              className="h-11 shrink-0"
               onClick={() => setEditing(true)}
             >
               Qty
@@ -1383,24 +1356,56 @@ function ExpectedItemReviewRow({
             <Button
               type="button"
               variant="outline"
-              className="min-h-12 border-positive/40 bg-positive/10 text-positive text-sm hover:bg-positive/20 hover:text-positive lg:min-h-10"
+              className="h-11 w-10 shrink-0 border-positive/40 bg-positive/10 text-positive hover:bg-positive/20 hover:text-positive"
               onClick={onConfirm}
+              aria-label="Confirm present"
+              title="Confirm present"
             >
               <Check className="h-4 w-4" />
-              Yes
             </Button>
             <Button
               type="button"
               variant="destructive"
-              className="min-h-12 text-sm lg:min-h-10"
+              className="h-11 w-10 shrink-0"
               onClick={onMissing}
+              aria-label="Mark missing"
+              title="Mark missing"
             >
               <X className="h-4 w-4" />
-              No
             </Button>
-          </div>
+          </Row>
         )}
-      </div>
+      </Row>
+      {editing && (
+        <Stack gap="sm" className="mt-2">
+          <AmountFieldGroup
+            form={form}
+            valuePath="amount.value"
+            unitPath="amount.unit"
+            compact
+          />
+          <Row gap="sm">
+            <Button
+              type="button"
+              className="min-h-12 flex-1"
+              onClick={() => {
+                onQuantityChange(form.getValues("amount"));
+                setEditing(false);
+              }}
+            >
+              Save quantity
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-12"
+              onClick={() => setEditing(false)}
+            >
+              Cancel
+            </Button>
+          </Row>
+        </Stack>
+      )}
     </div>
   );
 }
@@ -1423,34 +1428,25 @@ function ExpectedLocationReviewRow({
   return (
     <div
       className={cn(
-        "border border-[var(--border)] border-l-4 border-l-primary/60 bg-primary/5 p-3" /* tight: dense expected location row */,
+        "border border-[var(--border)] border-l-4 border-l-primary/60 bg-primary/5 p-2",
         confirmed && "border-positive/40 bg-positive/5",
       )}
     >
-      <div
-        className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-center" /* tight: dense expected location row */
-      >
-        <Row align="center" gap="sm" className="min-w-0">
-          <div className="relative flex h-14 w-14 shrink-0 items-center justify-center border border-primary/30 bg-primary/10 text-primary">
-            {location.images[0]?.url ? (
-              <Image
-                src={location.images[0].url}
-                alt={location.name}
-                displayWidth={96}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <LocationIcon type={location.type} size={22} />
-            )}
-            <span className="absolute -right-1 -bottom-1 flex h-6 w-6 items-center justify-center border border-primary/40 bg-background text-primary">
-              <LocationIcon type={location.type} size={14} />
-            </span>
-          </div>
-          <Row align="center" gap="xs" wrap className="min-w-0 flex-1">
-            <Badge variant="default">
-              <LocationIcon type={location.type} size={12} />
-              Location
-            </Badge>
+      <Row align="center" gap="sm">
+        <div className="flex h-16 w-16 shrink-0 items-center justify-center border border-primary/30 bg-primary/10 text-primary">
+          {location.images[0]?.url ? (
+            <Image
+              src={location.images[0].url}
+              alt={location.name}
+              displayWidth={128}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <LocationIcon type={location.type} size={26} />
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <Row align="center" gap="xs" wrap>
             <EntityInlineLink
               entity="location"
               data={{
@@ -1460,44 +1456,48 @@ function ExpectedLocationReviewRow({
               }}
               compact
             />
-            <Description as="span" size="xs">
-              {location.children?.length ?? 0} child locations ·{" "}
-              {location.totalItemCount ?? 0} tracked items
-            </Description>
             {confirmed && <Badge variant="secondary">confirmed</Badge>}
           </Row>
-        </Row>
-        <div className="grid grid-cols-3 gap-2">
+          <Description size="xs" className="truncate">
+            {location.children?.length ?? 0} loc ·{" "}
+            {location.totalItemCount ?? 0}{" "}
+            {(location.totalItemCount ?? 0) === 1 ? "item" : "items"}
+          </Description>
+        </div>
+        <Row gap="xs" className="shrink-0">
           <Button
             type="button"
             variant="outline"
-            className="min-h-12 text-sm lg:min-h-10"
+            className="h-11 w-10 shrink-0"
             onClick={onPhoto}
             disabled={photoPending}
+            aria-label="Add photo"
+            title="Add photo"
           >
             {photoPending ? <Spinner /> : <Camera className="h-4 w-4" />}
-            Photo
           </Button>
           <Button
             type="button"
             variant="outline"
-            className="min-h-12 border-positive/40 bg-positive/10 text-positive text-sm hover:bg-positive/20 hover:text-positive lg:min-h-10"
+            className="h-11 w-10 shrink-0 border-positive/40 bg-positive/10 text-positive hover:bg-positive/20 hover:text-positive"
             onClick={onConfirm}
+            aria-label="Confirm present"
+            title="Confirm present"
           >
             <Check className="h-4 w-4" />
-            Yes
           </Button>
           <Button
             type="button"
             variant="destructive"
-            className="min-h-12 text-sm lg:min-h-10"
+            className="h-11 w-10 shrink-0"
             onClick={onMissing}
+            aria-label="Mark missing"
+            title="Mark missing"
           >
             <X className="h-4 w-4" />
-            No
           </Button>
-        </div>
-      </div>
+        </Row>
+      </Row>
     </div>
   );
 }
