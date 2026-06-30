@@ -25,7 +25,7 @@ interface LocationSegment {
  * Convert an InfLocation (with parent chain) to an array of LocationSegments.
  * Returns segments from root to leaf.
  */
-export function locationToSegments(location: InfLocation): LocationSegment[] {
+function locationToSegments(location: InfLocation): LocationSegment[] {
   const segments: LocationSegment[] = [];
 
   // Walk up the parent chain

@@ -22,7 +22,6 @@ import {
   PackagePlus,
   Plus,
   QrCode,
-  RotateCcw,
   Search,
   X,
 } from "lucide-react";
@@ -76,6 +75,7 @@ import {
   inventoryMutationInvalidateKeys,
   locationMutationInvalidateKeys,
   productLookupMutationInvalidateKeys,
+  productMutationInvalidateKeys,
 } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
@@ -113,6 +113,39 @@ interface UndoAction {
   id: string;
   label: string;
   run: () => Promise<void>;
+}
+
+// Per-session-root display progress (confirmed checks + position), persisted to
+// localStorage so it survives a reload or a tree-invalidating mutation. This is
+// UX state ONLY — never a source of truth for a destructive write.
+const AUDIT_SESSION_STORAGE_PREFIX = "cubby:audit-session:";
+
+interface PersistedSessionProgress {
+  confirmedIds: string[];
+  currentIndex: number;
+}
+
+function loadSessionProgress(rootId: string): PersistedSessionProgress | null {
+  try {
+    const raw = localStorage.getItem(
+      `${AUDIT_SESSION_STORAGE_PREFIX}${rootId}`,
+    );
+    return raw ? (JSON.parse(raw) as PersistedSessionProgress) : null;
+  } catch {
+    // localStorage unavailable (SSR / private mode / quota) — start fresh.
+    return null;
+  }
+}
+
+function saveSessionProgress(rootId: string, data: PersistedSessionProgress) {
+  try {
+    localStorage.setItem(
+      `${AUDIT_SESSION_STORAGE_PREFIX}${rootId}`,
+      JSON.stringify(data),
+    );
+  } catch {
+    // best-effort; localStorage may be unavailable.
+  }
 }
 
 const manualAddSchema = z.object({
@@ -220,19 +253,47 @@ export function InventorySessionWorkbench({
   const [confirmedIds, setConfirmedIds] = useState<Set<string>>(
     () => new Set(),
   );
-  const [undoStack, setUndoStack] = useState<UndoAction[]>([]);
 
+  const rootId = parent?.id ?? null;
+
+  // Initialize per session ROOT, keyed on rootId (NOT sessionLocations): a tree
+  // refetch — e.g. the invalidation after editing a location's photo or a
+  // quantity — must not wipe confirmed checks or currentIndex. Prior progress is
+  // rehydrated from localStorage so it also survives a reload.
+  const lastRootId = useRef<string | null>(null);
   useEffect(() => {
-    if (sessionLocations.length === 0) {
+    if (rootId === lastRootId.current) return;
+    lastRootId.current = rootId;
+    if (!rootId || sessionLocations.length === 0) {
       setCurrentIndex(0);
+      setConfirmedIds(new Set());
       return;
     }
+    const restored = loadSessionProgress(rootId);
     const firstIncomplete = sessionLocations.findIndex(
       (loc) => !loc.lastBulkInventory,
     );
-    setCurrentIndex(firstIncomplete >= 0 ? firstIncomplete : 0);
-    setConfirmedIds(new Set());
-  }, [sessionLocations]);
+    setConfirmedIds(new Set(restored?.confirmedIds ?? []));
+    setCurrentIndex(
+      restored
+        ? Math.min(
+            Math.max(restored.currentIndex, 0),
+            sessionLocations.length - 1,
+          )
+        : firstIncomplete >= 0
+          ? firstIncomplete
+          : 0,
+    );
+  }, [rootId, sessionLocations]);
+
+  // Persist progress per root (UX resume only — see the storage-helper note).
+  useEffect(() => {
+    if (!rootId) return;
+    saveSessionProgress(rootId, {
+      confirmedIds: [...confirmedIds],
+      currentIndex,
+    });
+  }, [rootId, confirmedIds, currentIndex]);
 
   const currentLocation = sessionLocations[currentIndex] ?? null;
   const unknownLocation = ensureUnknown.data ?? null;
@@ -321,17 +382,21 @@ export function InventorySessionWorkbench({
     }),
   );
 
-  const pushUndo = (action: UndoAction) =>
-    setUndoStack((prev) => [action, ...prev].slice(0, 5));
-
   const runUndo = async (action: UndoAction) => {
     try {
       await action.run();
-      setUndoStack((prev) => prev.filter((item) => item.id !== action.id));
       toast.success("Undone.");
     } catch (error) {
       toast.error(`Undo failed: ${getErrorMessage(error)}`);
     }
+  };
+
+  // Offer undo via a bottom toast (sonner) with an Undo action, instead of a
+  // top-sticky bar that pushed the review pane down and needed a scroll to reach.
+  const pushUndo = (action: UndoAction) => {
+    toast(action.label, {
+      action: { label: "Undo", onClick: () => void runUndo(action) },
+    });
   };
 
   const moveItem = async ({
@@ -488,7 +553,10 @@ export function InventorySessionWorkbench({
   }
 
   return (
-    <Stack gap="md" className="min-w-0 pb-24 md:pb-0">
+    <Stack
+      gap="md"
+      className="min-w-0 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-0"
+    >
       <MobileLocationSwitcher
         parent={parent}
         locations={sessionLocations}
@@ -504,10 +572,6 @@ export function InventorySessionWorkbench({
         }}
         parentLocation={parent}
       />
-
-      {undoStack.length > 0 && (
-        <UndoBar action={undoStack[0]!} onUndo={runUndo} />
-      )}
 
       <div className="grid min-h-[calc(100dvh-10rem)] min-w-0 gap-4 lg:grid-cols-[20rem_minmax(0,1fr)] lg:items-start">
         <LocationWorkbenchSidebar
@@ -1213,7 +1277,7 @@ function LocationReviewPane({
       <Row
         align="stretch"
         gap="sm"
-        className="sticky bottom-20 z-20 border border-[var(--border)] bg-card p-2 shadow-[var(--shadow-chunky)] md:bottom-4"
+        className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-20 border border-[var(--border)] bg-card p-2 shadow-[var(--shadow-chunky)] md:bottom-4"
       >
         <Button
           type="button"
@@ -1639,6 +1703,10 @@ function SessionCaptureActions({ location }: { location: SessionLocation }) {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [scanner, setScanner] = useState<"barcode" | null>(null);
+  // Dedup: the scanner stays open for a continuous sweep, so the same barcode
+  // held in frame fires onScan repeatedly — ignore re-reads of the same code
+  // within a short window so one item isn't added many times.
+  const lastBarcodeRef = useRef<{ code: string; at: number } | null>(null);
   const [suggestions, setSuggestions] = useState<DetectedItem[]>([]);
   const [suggestionProductOverrides, setSuggestionProductOverrides] = useState<
     Record<number, ComboboxItem | null>
@@ -1896,7 +1964,12 @@ function SessionCaptureActions({ location }: { location: SessionLocation }) {
       </CardContent>
       <Sheet
         open={scanner === "barcode"}
-        onOpenChange={(open) => !open && setScanner(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setScanner(null);
+            lastBarcodeRef.current = null;
+          }
+        }}
       >
         <SheetContent side="bottom" className="p-4" showCloseButton={false}>
           <SheetHeader className="p-0 pb-4">
@@ -1907,8 +1980,11 @@ function SessionCaptureActions({ location }: { location: SessionLocation }) {
           </SheetHeader>
           <PersistentScanner
             onScan={(barcode) => {
+              const now = Date.now();
+              const last = lastBarcodeRef.current;
+              if (last && last.code === barcode && now - last.at < 2500) return;
+              lastBarcodeRef.current = { code: barcode, at: now };
               void handleBarcode(barcode);
-              setScanner(null);
             }}
             enabled={!upcPending && scanner === "barcode"}
             formatsToSupport={BARCODE_FORMATS}
@@ -1968,6 +2044,26 @@ function ManualAdd({ locationId }: { locationId: LocationId }) {
     }),
   );
 
+  // Name-only quick-create for unbarcoded garage items: skip the full ProductForm
+  // (manufacturer required) and use the quickCreate endpoint, which defaults the
+  // manufacturer. The created product is selected straight into the picker.
+  const quickCreateProduct = useMutation(
+    api.product.quickCreate.mutationOptions({
+      onError: (error) => toast.error(getErrorMessage(error)),
+    }),
+  );
+  const handleQuickCreate = useCallback(
+    async (name: string): Promise<ComboboxItem> => {
+      const created = await quickCreateProduct.mutateAsync({ name });
+      invalidateTRPCQueries(queryClient, productMutationInvalidateKeys);
+      return {
+        id: created.id,
+        name: `${created.name} (${created.manufacturer})`,
+      };
+    },
+    [quickCreateProduct, queryClient],
+  );
+
   return (
     <Stack
       as="form"
@@ -1986,13 +2082,7 @@ function ManualAdd({ locationId }: { locationId: LocationId }) {
     >
       <div className="min-w-0">
         <WithProductSearch>
-          {({
-            items,
-            onSearchChange,
-            isLoading,
-            onCreateNew,
-            onOpenChange,
-          }) => (
+          {({ items, onSearchChange, isLoading, onOpenChange }) => (
             <ComboboxField
               form={form}
               name="product"
@@ -2000,7 +2090,7 @@ function ManualAdd({ locationId }: { locationId: LocationId }) {
               items={items}
               onSearchChange={onSearchChange}
               isLoading={isLoading}
-              onCreateNew={onCreateNew}
+              onCreateNew={handleQuickCreate}
               onOpenChange={onOpenChange}
             />
           )}
@@ -2141,36 +2231,31 @@ function QrJumpButton({
             formatsToSupport={QR_CODE_FORMATS}
             scanHintText="Point at location QR code"
           />
+          <form
+            className="mt-4 flex items-center gap-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleLocationInput(manualValue);
+            }}
+          >
+            <Input
+              value={manualValue}
+              onChange={(event) => setManualValue(event.target.value)}
+              placeholder="Can't scan? Shortcode / UUID"
+              className="h-9 flex-1 text-xs"
+              aria-label="Enter location shortcode or UUID"
+            />
+            <Button
+              type="submit"
+              variant="outline"
+              className="min-h-9 px-3 text-xs" /* tight: manual jump fallback */
+              disabled={isResolving || manualValue.trim().length === 0}
+            >
+              Jump
+            </Button>
+          </form>
         </SheetContent>
       </Sheet>
     </div>
-  );
-}
-
-function UndoBar({
-  action,
-  onUndo,
-}: {
-  action: UndoAction;
-  onUndo: (action: UndoAction) => void;
-}) {
-  return (
-    <Row
-      align="center"
-      justify="between"
-      gap="sm"
-      className="sticky top-2 z-30 border border-[var(--border)] bg-card p-2 shadow-[var(--shadow-chunky)]"
-    >
-      <span className="min-w-0 truncate text-sm">{action.label}</span>
-      <Button
-        type="button"
-        variant="outline"
-        className="min-h-12 px-4"
-        onClick={() => onUndo(action)}
-      >
-        <RotateCcw className="h-4 w-4" />
-        Undo
-      </Button>
-    </Row>
   );
 }
