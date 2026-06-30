@@ -35,10 +35,12 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { assertLiveTargets } from "./helpers";
 import { dbInventoryEntryToAPI, dbInventoryEntryToListAPI } from "./mappers";
 import type {
   CreateInventoryEntryData,
+  InventoryEntryDeepDB,
   UpdateInventoryEntryData,
 } from "./types";
 
@@ -151,14 +153,28 @@ export const checkUniqueProductDuplicate = async (
   return null;
 };
 
-export const getInventoryEntryByID = async (db: Database, id: InventoryId) => {
-  const res = await getDb(db).query.inventoryEntry.findFirst({
+const fetchInventoryById = async (
+  db: Database,
+  id: InventoryId,
+): Promise<InventoryEntryDeepDB | undefined> => {
+  const row = await getDb(db).query.inventoryEntry.findFirst({
     where: and(eq(inventoryEntry.id, id), notDeleted(inventoryEntry)),
     ...relations.inventory.full,
   });
-
-  return res ? dbInventoryEntryToAPI(res) : null;
+  return row;
 };
+
+// Read path through the shared reader. The write path stays hand-rolled: create/
+// update recompute valuation from the product price and guard live targets.
+const inventoryReader = createEntityReader({
+  entityName: "inventory",
+  fetchById: fetchInventoryById,
+  fromDB: (_db, row: InventoryEntryDeepDB) => dbInventoryEntryToAPI(row),
+  notFoundReason: "INVENTORY_NOT_FOUND",
+});
+
+export const getInventoryEntryByID = (db: Database, id: InventoryId) =>
+  inventoryReader.getByIDOrNull(db, id);
 
 /** Filters for inventory list queries */
 interface InventoryFilters {

@@ -29,27 +29,34 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { dbMealToAPI } from "./helpers";
 
-export const getMealByID = async (
-  db: Database,
-  id: MealId,
-): Promise<MealOut | null> => {
-  const res = await getDb(db).query.meal.findFirst({
+const fetchMealById = async (db: Database, id: MealId) => {
+  const row = await getDb(db).query.meal.findFirst({
     where: and(eq(meal.id, id), notDeleted(meal)),
     ...relations.meal.full,
   });
-  return res ? dbMealToAPI(res) : null;
+  return row;
 };
 
+// Read path through the shared reader. The write path stays hand-rolled: meal
+// create/update/delete manage mealRecipe children inside a transaction.
+const mealReader = createEntityReader({
+  entityName: "meal",
+  fetchById: fetchMealById,
+  fromDB: (_db, row) => dbMealToAPI(row),
+  notFoundReason: "MEAL_NOT_FOUND",
+});
+
+export const getMealByID = (
+  db: Database,
+  id: MealId,
+): Promise<MealOut | null> => mealReader.getByIDOrNull(db, id);
+
 /** Throws MEAL_NOT_FOUND if the meal is missing — for callers that need a value. */
-const requireMeal = async (db: Database, id: MealId): Promise<MealOut> => {
-  const result = await getMealByID(db, id);
-  if (!result) {
-    throw createAppError("MEAL_NOT_FOUND", `Meal ${id} not found`);
-  }
-  return result;
-};
+const requireMeal = (db: Database, id: MealId): Promise<MealOut> =>
+  mealReader.getByID(db, id);
 
 /** Meals whose date falls within [from, to] (inclusive) — the calendar query. */
 // Bounds are "YYYY-MM-DD" strings compared against the date column (ISO date
