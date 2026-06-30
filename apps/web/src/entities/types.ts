@@ -37,7 +37,7 @@ type EntityNewRoute =
   | "/meals/new";
 
 /** Typed routes for an entity */
-export interface EntityRoutes {
+interface EntityRoutes {
   /** Detail page route (e.g., "/products/$id") */
   detail: EntityDetailRoute;
   /** List page route (e.g., "/products") */

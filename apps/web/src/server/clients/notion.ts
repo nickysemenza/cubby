@@ -104,7 +104,7 @@ export const notionProjectContentOut = z.array(notionBlockSchema).nullable();
 // One row of the Recipes database: the column metadata (the body comes from
 // `getPageContent`). `yieldText`/`servings`/`tags` are read only if those
 // optional columns exist on the data source.
-export const notionRecipeRowSchema = z.object({
+const notionRecipeRowSchema = z.object({
   id: z.string(),
   name: z.string(),
   source: z.string().nullable(),

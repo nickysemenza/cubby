@@ -38,7 +38,7 @@ import { LocationValuationService } from "./services/location-valuation.service"
 
 const BACKGROUND_MESSAGE_VERSION = 1;
 
-export interface BackgroundQueueMessage {
+interface BackgroundQueueMessage {
   messageVersion: number;
   batchId: string;
   jobId: string;

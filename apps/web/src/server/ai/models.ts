@@ -30,13 +30,10 @@ type AiModelConfig = ChatAiModelConfig | EmbeddingAiModelConfig;
 const aiProvider = z.enum(["anthropic", "openai"]);
 type AiProvider = z.infer<typeof aiProvider>;
 
-export const supportedChatModel = z.enum([
-  "claude-haiku-4-5",
-  "claude-sonnet-4-6",
-]);
+const supportedChatModel = z.enum(["claude-haiku-4-5", "claude-sonnet-4-6"]);
 export type SupportedChatModel = z.infer<typeof supportedChatModel>;
 
-export const supportedEmbeddingModel = z.enum(["text-embedding-3-small"]);
+const supportedEmbeddingModel = z.enum(["text-embedding-3-small"]);
 export type SupportedEmbeddingModel = z.infer<typeof supportedEmbeddingModel>;
 
 export const supportedAiModel = z.enum([

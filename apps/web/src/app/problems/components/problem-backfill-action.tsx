@@ -17,7 +17,7 @@ type TRPCApi = ReturnType<typeof useTRPC>;
 type TRPCClient = ReturnType<typeof useTRPCClient>;
 
 /** Result-driven toast: which sonner variant to fire and with what message. */
-export type BackfillToast = { tone: "success" | "info"; message: string };
+type BackfillToast = { tone: "success" | "info"; message: string };
 
 export type BackfillButtonProps<TResult> = {
   /** Opens the streaming backfill mutation, e.g. `(client) => client.problems.reparseStale.mutate()`. */

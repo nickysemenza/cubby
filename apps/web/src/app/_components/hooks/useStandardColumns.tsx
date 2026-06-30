@@ -15,7 +15,7 @@ import {
 import { buildSelectColumn } from "../data-table/row-selection";
 
 /** Filter definition for use in useEntityList options */
-export interface FilterDef {
+interface FilterDef {
   id: string;
   placeholder: string;
   filterType?: "text" | "select";
