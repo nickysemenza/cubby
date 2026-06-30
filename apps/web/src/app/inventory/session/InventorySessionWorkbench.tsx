@@ -12,6 +12,7 @@ import { extractShortcodeFromScan } from "@cubby/shared";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { format } from "date-fns";
 import {
   ArrowDownToLine,
   Barcode,
@@ -38,6 +39,7 @@ import {
   requiredProductField,
 } from "~/app/_components/form-fields";
 import { ComboboxField } from "~/app/_components/form-utils";
+import { formatCompactRelative } from "~/app/_components/HoverableTimestamp";
 import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
 import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
 import { useUpcLookup } from "~/app/_components/inventory/hooks";
@@ -146,6 +148,40 @@ function saveSessionProgress(rootId: string, data: PersistedSessionProgress) {
   } catch {
     // best-effort; localStorage may be unavailable.
   }
+}
+
+/**
+ * Inline recency hint for a location's last audit (`lastBulkInventory`):
+ * `audited 3d` / `never audited`, tinted `warning` once it's gone stale (>30d)
+ * so the oldest bins stand out. Full timestamp on hover via the title attr
+ * (safe inside the list-row button, unlike a Tooltip trigger).
+ */
+function AuditedHint({
+  at,
+  className,
+}: {
+  at: Date | null;
+  className?: string;
+}) {
+  if (!at) {
+    return (
+      <span className={cn("text-muted-foreground/70", className)}>
+        never audited
+      </span>
+    );
+  }
+  const stale = Date.now() - at.getTime() > 30 * 86_400_000;
+  return (
+    <span
+      title={`Last audited ${format(at, "yyyy-MM-dd HH:mm")}`}
+      className={cn(
+        stale ? "text-warning" : "text-muted-foreground/70",
+        className,
+      )}
+    >
+      audited {formatCompactRelative(at)}
+    </span>
+  );
 }
 
 const manualAddSchema = z.object({
@@ -875,9 +911,11 @@ function SessionLocationList({
                 compact
                 primaryMeta={locationTypeNoun(location.type)}
                 secondaryMeta={
-                  items.length > 0
-                    ? pluralize(items.length, "tracked item")
-                    : undefined
+                  <>
+                    {items.length > 0 &&
+                      `${pluralize(items.length, "tracked item")} · `}
+                    <AuditedHint at={location.lastBulkInventory} />
+                  </>
                 }
                 trailing={
                   <Badge
@@ -1125,6 +1163,10 @@ function LocationReviewPane({
           <h2 className="min-w-0 flex-1 truncate font-heading font-semibold text-xl">
             {location.name}
           </h2>
+          <AuditedHint
+            at={location.lastBulkInventory}
+            className="shrink-0 text-2xs"
+          />
           <Description size="xs" className="shrink-0">
             {position.index + 1}/{position.total}
           </Description>
