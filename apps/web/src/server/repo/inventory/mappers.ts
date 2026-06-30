@@ -6,12 +6,14 @@ import type {
 import { locationType } from "@cubby/schemas/location";
 import type { z } from "zod";
 import { parseWithContext } from "~/lib/zod-utils";
-import { parseInventoryAmount } from "~/server/repo/database-helpers";
+import {
+  mapImages,
+  parseInventoryAmount,
+} from "~/server/repo/database-helpers";
 import {
   dbProductToInventoryEmbedShape,
   dbProductToInventoryListShape,
   mapProductExternalIds,
-  mapProductImages,
   mapProductUnitMappings,
 } from "~/server/repo/product/mappers";
 import type { InventoryEntryDeepDB, InventoryEntryListDB } from "./types";
@@ -38,7 +40,7 @@ export const dbInventoryEntryToAPI: (
       shortcode: unsafeLocationShortcode(location.shortcode),
       lastBulkInventory: location.lastBulkInventory,
       aiDescription: location.aiDescription,
-      images: mapProductImages(location.images),
+      images: mapImages(location.images),
       valuation: location.valuation,
       name: location.name,
       type: parseWithContext(locationType, location.type, {
@@ -50,7 +52,7 @@ export const dbInventoryEntryToAPI: (
     },
     product: {
       ...dbProductToInventoryEmbedShape(product),
-      images: mapProductImages(product.images),
+      images: mapImages(product.images),
       externalIds: mapProductExternalIds(product.externalIds),
       unitMappings: mapProductUnitMappings(product.id, product.unitMappings),
     },

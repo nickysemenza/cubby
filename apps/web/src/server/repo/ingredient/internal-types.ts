@@ -31,6 +31,7 @@ import {
   formatSearchTerm,
   mapRelation,
   notDeleted,
+  type RowWithOptionalAliases,
 } from "~/server/repo/database-helpers";
 import {
   dbProductToTopLevelAPI,
@@ -40,9 +41,7 @@ import {
 import { computeRecipeUsages, dbRecipeToTopLevelShape } from "../recipe";
 
 type IngredientSelect = typeof ingredient.$inferSelect;
-type ProductSelect = Omit<typeof product.$inferSelect, "aliases"> & {
-  aliases?: string[];
-};
+type ProductSelect = RowWithOptionalAliases<typeof product.$inferSelect>;
 
 export type IngredientDeepDB = typeof ingredient.$inferSelect & {
   product: Array<
