@@ -70,7 +70,11 @@ describe("bulkProcessInventoryEntries staleness guard", () => {
   it("rejects a commit when an entry was added after loadedAt", async () => {
     const { loc, first } = await seedLocation("Stale");
     // loadedAt = the first entry's DB updatedAt; any later write is strictly newer.
-    const loadedAt = (await readEntry(first.id))?.at ?? new Date();
+    // Throw (don't fall back to `new Date()`) so a missing seed fails loudly
+    // instead of silently making the `>` comparison ambiguous.
+    const loaded = await readEntry(first.id);
+    if (!loaded) throw new Error("seed entry missing");
+    const loadedAt = loaded.at;
 
     // Another surface adds an entry after the snapshot was loaded.
     const sneakedIn = await addEntry(loc.id, "sneaked");
