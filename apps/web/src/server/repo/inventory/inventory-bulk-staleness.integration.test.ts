@@ -74,7 +74,9 @@ describe("bulkProcessInventoryEntries staleness guard", () => {
     // instead of silently making the `>` comparison ambiguous.
     const loaded = await readEntry(first.id);
     if (!loaded) throw new Error("seed entry missing");
-    const loadedAt = loaded.at;
+    // Subtract 1 ms so first.updatedAt > loadedAt is guaranteed even if
+    // sneakedIn gets the same millisecond timestamp as first.
+    const loadedAt = new Date(loaded.at.getTime() - 1);
 
     // Another surface adds an entry after the snapshot was loaded.
     const sneakedIn = await addEntry(loc.id, "sneaked");
