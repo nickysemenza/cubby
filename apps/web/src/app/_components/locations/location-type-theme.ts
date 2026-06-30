@@ -51,7 +51,9 @@ const typeToGroup: Record<LocationType, LocationTypeGroup> = {
   "half-crate": "containers",
   "quarter-crate": "containers",
   "milk-crate": "containers",
-  "tote-bin": "containers",
+  "tote-27gal": "containers",
+  "tote-14gal": "containers",
+  "tote-7gal": "containers",
   bag: "containers",
 };
 
@@ -72,7 +74,9 @@ const locationIcons: Record<LocationType, LucideIcon> = {
   "half-crate": Box,
   "quarter-crate": Box,
   "milk-crate": Box,
-  "tote-bin": Box,
+  "tote-27gal": Box,
+  "tote-14gal": Box,
+  "tote-7gal": Box,
   table: Table2,
   drawer: FileBox,
   cart: ShoppingCart,

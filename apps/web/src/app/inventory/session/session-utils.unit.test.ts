@@ -42,7 +42,7 @@ describe("inventory session utils", () => {
     const bin = loc(
       "00000000-0000-4000-8000-000000000004",
       "Bin A",
-      "tote-bin",
+      "tote-27gal",
     );
     const shelf = loc(
       "00000000-0000-4000-8000-000000000003",
@@ -123,7 +123,7 @@ describe("inventory session utils", () => {
       "shelf",
     );
     const tote = {
-      ...loc("00000000-0000-4000-8000-000000000032", "Tote", "tote-bin"),
+      ...loc("00000000-0000-4000-8000-000000000032", "Tote", "tote-27gal"),
       directItemCount: 2,
       totalItemCount: 2,
     };
