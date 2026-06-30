@@ -12,7 +12,11 @@ import type {
   InventoryWithLocationAndProductOut,
 } from "@cubby/schemas/inventory";
 import type { InfLocation } from "@cubby/schemas/location";
-import { extractShortcodeFromScan } from "@cubby/shared";
+import {
+  extractShortcodeFromScan,
+  getMiscDisplayName,
+  isMiscProduct,
+} from "@cubby/shared";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -26,6 +30,7 @@ import {
   CheckCheck,
   ChevronLeft,
   ChevronRight,
+  ImagePlus,
   Minus,
   PackagePlus,
   Plus,
@@ -1512,6 +1517,10 @@ function ExpectedItemReviewRow({
   const staged = resolution?.kind;
   const amount =
     resolution?.kind === "adjust" ? resolution.amount : item.amount;
+  // Strip the `misc:` prefix off photo-as-identity / misc placeholder products.
+  const displayName = isMiscProduct(item.product.name)
+    ? getMiscDisplayName(item.product.name)
+    : item.product.name;
   // Step by ±1 without rounding, so weight/length amounts keep their precision
   // (2.5 → 3.5, not 4). Floor at 1 — recounting to zero means the item is gone,
   // which is the "Remove" action (soft-delete), not a phantom 0-qty adjust.
@@ -1541,9 +1550,7 @@ function ExpectedItemReviewRow({
         />
         <div className="min-w-0 flex-1">
           <Row align="center" gap="sm">
-            <span className="truncate font-medium text-sm">
-              {item.product.name}
-            </span>
+            <span className="truncate font-medium text-sm">{displayName}</span>
             {staged === "verify" && (
               <Badge variant="secondary">confirmed</Badge>
             )}
@@ -1906,6 +1913,10 @@ function SessionCaptureActions({ location }: { location: SessionLocation }) {
   const [detectionCacheStatus, setDetectionCacheStatus] = useState<
     "hit" | "miss" | null
   >(null);
+  // Photo-as-identity: snap an unlabeled object, then name it.
+  const addPhotoInputRef = useRef<HTMLInputElement>(null);
+  const [pendingPhoto, setPendingPhoto] = useState<File | null>(null);
+  const [photoName, setPhotoName] = useState("");
 
   // Distinct from the outer session invalidator: this one also refreshes the
   // product-lookup caches and, given a mutation result, polls its background
@@ -1974,6 +1985,10 @@ function SessionCaptureActions({ location }: { location: SessionLocation }) {
       onError: (error) => toast.error(getErrorMessage(error)),
     }),
   );
+  const quickCreateProduct = useMutation(
+    api.product.quickCreate.mutationOptions(),
+  );
+  const updateProduct = useMutation(api.product.update.mutationOptions());
   const { lookupUpc, isPending: upcPending } = useUpcLookup();
 
   const handleFile = async (file: File) => {
@@ -2043,6 +2058,54 @@ function SessionCaptureActions({ location }: { location: SessionLocation }) {
     );
   };
 
+  // Photo-as-identity: add an unlabeled object from a photo + a short name as a
+  // lightweight `misc:` product (no schema change — reuses the misc convention):
+  // upload the image → quickCreate the product → attach the image → add one each.
+  const photoIdentityPending =
+    uploadImage.isPending ||
+    quickCreateProduct.isPending ||
+    updateProduct.isPending ||
+    createInventory.isPending;
+
+  const submitPhotoIdentity = async () => {
+    const file = pendingPhoto;
+    const name = photoName.trim();
+    if (!file || !name) return;
+    try {
+      const init = await uploadImage.mutateAsync({
+        filename: file.name,
+        contentType: file.type as AllowedImageType,
+        size: file.size,
+        entityType: "PRODUCT",
+      });
+      const put = await fetch(init.uploadUrl, {
+        method: "PUT",
+        body: file,
+        headers: { "Content-Type": file.type },
+      });
+      if (!put.ok) throw new Error("Image upload failed");
+      const product = await quickCreateProduct.mutateAsync({
+        name: `misc: ${name}`,
+      });
+      await updateProduct.mutateAsync({
+        id: product.id,
+        data: { pendingImageIds: [init.imageId] },
+      });
+      const created = await createInventory.mutateAsync({
+        productId: product.id,
+        locationId: location.id,
+        amount: { value: 1, unit: "each" },
+      });
+      toast.success(
+        savedWithBackgroundWork(created.sideEffects, `Added ${name}`),
+      );
+      setPendingPhoto(null);
+      setPhotoName("");
+    } catch (error) {
+      toast.error(`Add failed: ${getErrorMessage(error)}`);
+    }
+  };
+
   return (
     <Card className="overflow-visible">
       <CardContent className="p-4 lg:p-6">
@@ -2057,6 +2120,21 @@ function SessionCaptureActions({ location }: { location: SessionLocation }) {
               onChange={(event) => {
                 const file = event.target.files?.[0];
                 if (file) void handleFile(file);
+                event.target.value = "";
+              }}
+            />
+            <input
+              ref={addPhotoInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) {
+                  setPendingPhoto(file);
+                  setPhotoName("");
+                }
                 event.target.value = "";
               }}
             />
@@ -2089,6 +2167,16 @@ function SessionCaptureActions({ location }: { location: SessionLocation }) {
               >
                 {detectItems.isPending ? <Spinner /> : <PackagePlus />}
                 Detect
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-12"
+                onClick={() => addPhotoInputRef.current?.click()}
+                title="Add an unlabeled item from a photo"
+              >
+                <ImagePlus className="h-4 w-4" />
+                Photo item
               </Button>
             </div>
           </div>
@@ -2182,6 +2270,52 @@ function SessionCaptureActions({ location }: { location: SessionLocation }) {
             formatsToSupport={BARCODE_FORMATS}
             scanHintText="Point at barcode"
           />
+        </SheetContent>
+      </Sheet>
+      <Sheet
+        open={pendingPhoto !== null}
+        onOpenChange={(open) => {
+          if (!open && !photoIdentityPending) {
+            setPendingPhoto(null);
+            setPhotoName("");
+          }
+        }}
+      >
+        <SheetContent side="bottom" className="p-4" showCloseButton={false}>
+          <SheetHeader className="p-0 pb-4">
+            <SheetTitle>Name this item</SheetTitle>
+            <SheetDescription>
+              Adds one each to {location.name} as a misc item with this photo.
+            </SheetDescription>
+          </SheetHeader>
+          <form
+            className="flex items-center gap-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void submitPhotoIdentity();
+            }}
+          >
+            <Input
+              value={photoName}
+              onChange={(event) => setPhotoName(event.target.value)}
+              placeholder="e.g. blue tarp clamp"
+              // biome-ignore lint/a11y/noAutofocus: focus the only field in a just-opened sheet
+              autoFocus
+              disabled={photoIdentityPending}
+            />
+            <Button
+              type="submit"
+              className="shrink-0"
+              disabled={!photoName.trim() || photoIdentityPending}
+            >
+              {photoIdentityPending ? (
+                <Spinner />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
+              Add
+            </Button>
+          </form>
         </SheetContent>
       </Sheet>
     </Card>
