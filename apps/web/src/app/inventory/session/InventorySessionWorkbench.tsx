@@ -3,6 +3,7 @@ import type { Amount } from "@cubby/schemas/codec";
 import {
   type LocationId,
   locationId,
+  unsafeLocationId,
   unsafeProductId,
 } from "@cubby/schemas/identifiers";
 import type { AllowedImageType } from "@cubby/schemas/image";
@@ -373,6 +374,16 @@ export function InventorySessionWorkbench({
     enabled: locationIds.length > 0,
   });
 
+  // Products flagged as duplicate-unique (expected once, but present in >1
+  // location) — badged inline so a recount can catch the stray copy.
+  const duplicateQuery = useQuery(
+    api.inventory.findDuplicates.queryOptions({}),
+  );
+  const duplicateProductIds = useMemo(
+    () => new Set((duplicateQuery.data ?? []).map((p) => p.id)),
+    [duplicateQuery.data],
+  );
+
   const inventoryByLocation = useMemo(() => {
     const map = new Map<string, InventoryItem[]>();
     for (const item of inventoryQuery.data ?? []) {
@@ -721,6 +732,7 @@ export function InventorySessionWorkbench({
             unknownLocations={unknownChildLocations}
             itemResolutions={itemResolutions}
             confirmedLocationIds={confirmedLocationIds}
+            duplicateProductIds={duplicateProductIds}
             onToggleVerify={toggleVerify}
             onAdjust={stageAdjust}
             onRemove={stageRemove}
@@ -1092,6 +1104,7 @@ function LocationReviewPane({
   unknownLocations,
   itemResolutions,
   confirmedLocationIds,
+  duplicateProductIds,
   onToggleVerify,
   onAdjust,
   onRemove,
@@ -1122,6 +1135,10 @@ function LocationReviewPane({
   unknownLocations: InfLocation[];
   itemResolutions: Map<string, ItemResolution>;
   confirmedLocationIds: Set<string>;
+  // string, not ProductId: brands strip across tRPC outputs (CLAUDE.md), so the
+  // findDuplicates query data's id — and item.product.id it's matched against —
+  // are both plain strings here.
+  duplicateProductIds: Set<string>;
   onToggleVerify: (item: InventoryItem) => void;
   onAdjust: (item: InventoryItem, amount: Amount) => void;
   onRemove: (item: InventoryItem) => void;
@@ -1378,6 +1395,7 @@ function LocationReviewPane({
                   key={item.id}
                   item={item}
                   resolution={itemResolutions.get(item.id)}
+                  isDuplicate={duplicateProductIds.has(item.product.id)}
                   onToggleVerify={() => onToggleVerify(item)}
                   onAdjust={(amount) => onAdjust(item, amount)}
                   onRemove={() => onRemove(item)}
@@ -1479,9 +1497,11 @@ function ExpectedItemReviewRow({
   onRelocate,
   onPhoto,
   photoPending,
+  isDuplicate,
 }: {
   item: InventoryItem;
   resolution: ItemResolution | undefined;
+  isDuplicate: boolean;
   onToggleVerify: () => void;
   onAdjust: (amount: Amount) => void;
   onRemove: () => void;
@@ -1531,6 +1551,7 @@ function ExpectedItemReviewRow({
             {staged === "remove" && (
               <Badge variant="destructive">removing</Badge>
             )}
+            {isDuplicate && <Badge variant="outline">duplicate</Badge>}
           </Row>
           <Row align="center" gap="sm">
             <Description size="xs" className="truncate">
@@ -2301,13 +2322,28 @@ function QrJumpButton({
 }) {
   const api = useTRPC();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [manualValue, setManualValue] = useState("");
   const [isResolving, setIsResolving] = useState(false);
 
-  const jumpToLocation = (targetId: string) => {
+  const jumpToLocation = (targetId: string, label?: string) => {
     if (!isDescendantLocation(parent, targetId)) {
-      toast.error("That location is outside this session.");
+      // Out-of-root scan: not in this session, but offer to audit it directly
+      // (a fresh session rooted there) instead of a dead end.
+      toast(`${label ?? "That location"} is outside this session.`, {
+        action: {
+          label: "Audit it",
+          onClick: () => {
+            setOpen(false);
+            setManualValue("");
+            void navigate({
+              to: "/inventory/session",
+              search: { parentId: unsafeLocationId(targetId) },
+            });
+          },
+        },
+      });
       return false;
     }
     onJump(targetId);
@@ -2347,7 +2383,7 @@ function QrJumpButton({
         toast.error("No location found for that shortcode.");
         return;
       }
-      jumpToLocation(location.id);
+      jumpToLocation(location.id, location.name);
     } catch (error) {
       toast.error(`Location lookup failed: ${getErrorMessage(error)}`);
     } finally {
