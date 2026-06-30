@@ -429,8 +429,8 @@ export function InventorySessionWorkbench({
 
   // Offer undo via a bottom toast (sonner) with an Undo action, instead of a
   // top-sticky bar that pushed the review pane down and needed a scroll to reach.
-  const pushUndo = (action: UndoAction) => {
-    toast(action.label, {
+  const pushUndo = (action: UndoAction, successMessage: string) => {
+    toast.success(successMessage, {
       action: { label: "Undo", onClick: () => void runUndo(action) },
     });
   };
@@ -453,18 +453,20 @@ export function InventorySessionWorkbench({
       targetLocationId,
       items: [{ inventoryEntryId: item.id, quantity: item.amount }],
     });
-    pushUndo({
-      id: crypto.randomUUID(),
-      label: undoLabel,
-      run: async () => {
-        await bulkMove.mutateAsync({
-          sourceLocationId: targetLocationId,
-          targetLocationId: sourceLocationId,
-          items: [{ inventoryEntryId: item.id, quantity: item.amount }],
-        });
+    pushUndo(
+      {
+        id: crypto.randomUUID(),
+        label: undoLabel,
+        run: async () => {
+          await bulkMove.mutateAsync({
+            sourceLocationId: targetLocationId,
+            targetLocationId: sourceLocationId,
+            items: [{ inventoryEntryId: item.id, quantity: item.amount }],
+          });
+        },
       },
-    });
-    toast.success(success);
+      success,
+    );
   };
 
   const moveToUnknown = async (item: InventoryItem) => {
@@ -495,17 +497,19 @@ export function InventorySessionWorkbench({
       id: location.id,
       data: { parentId: unknownLocation.id },
     });
-    pushUndo({
-      id: crypto.randomUUID(),
-      label: `Move ${location.name} back to ${currentLocation.name}`,
-      run: async () => {
-        await updateLocation.mutateAsync({
-          id: location.id,
-          data: { parentId: currentLocation.id },
-        });
+    pushUndo(
+      {
+        id: crypto.randomUUID(),
+        label: `Move ${location.name} back to ${currentLocation.name}`,
+        run: async () => {
+          await updateLocation.mutateAsync({
+            id: location.id,
+            data: { parentId: currentLocation.id },
+          });
+        },
       },
-    });
-    toast.success(`Moved ${location.name} to Unknown.`);
+      `Moved ${location.name} to Unknown.`,
+    );
   };
 
   const pullLocationFromUnknown = async (location: InfLocation) => {
@@ -514,17 +518,19 @@ export function InventorySessionWorkbench({
       id: location.id,
       data: { parentId: currentLocation.id },
     });
-    pushUndo({
-      id: crypto.randomUUID(),
-      label: `Move ${location.name} back to Unknown`,
-      run: async () => {
-        await updateLocation.mutateAsync({
-          id: location.id,
-          data: { parentId: unknownLocation.id },
-        });
+    pushUndo(
+      {
+        id: crypto.randomUUID(),
+        label: `Move ${location.name} back to Unknown`,
+        run: async () => {
+          await updateLocation.mutateAsync({
+            id: location.id,
+            data: { parentId: unknownLocation.id },
+          });
+        },
       },
-    });
-    toast.success(`Moved ${location.name} into ${currentLocation.name}.`);
+      `Moved ${location.name} into ${currentLocation.name}.`,
+    );
   };
 
   const markConfirmed = (itemId: string) => {
@@ -2094,16 +2100,18 @@ function ManualAdd({ locationId }: { locationId: LocationId }) {
       onError: (error) => toast.error(getErrorMessage(error)),
     }),
   );
+  const quickCreateMutateRef = useRef(quickCreateProduct.mutateAsync);
+  quickCreateMutateRef.current = quickCreateProduct.mutateAsync;
   const handleQuickCreate = useCallback(
     async (name: string): Promise<ComboboxItem> => {
-      const created = await quickCreateProduct.mutateAsync({ name });
+      const created = await quickCreateMutateRef.current({ name });
       invalidateTRPCQueries(queryClient, productMutationInvalidateKeys);
       return {
         id: created.id,
         name: `${created.name} (${created.manufacturer})`,
       };
     },
-    [quickCreateProduct, queryClient],
+    [queryClient],
   );
 
   return (
@@ -2273,8 +2281,11 @@ function QrJumpButton({
             formatsToSupport={QR_CODE_FORMATS}
             scanHintText="Point at location QR code"
           />
-          <form
-            className="mt-4 flex items-center gap-2"
+          <Row
+            as="form"
+            align="center"
+            gap="sm"
+            className="mt-4"
             onSubmit={(event) => {
               event.preventDefault();
               void handleLocationInput(manualValue);
@@ -2295,7 +2306,7 @@ function QrJumpButton({
             >
               Jump
             </Button>
-          </form>
+          </Row>
         </SheetContent>
       </Sheet>
     </div>
