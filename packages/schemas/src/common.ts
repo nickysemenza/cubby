@@ -39,11 +39,3 @@ export const deletedCountOut = z.object({
   deleted: z.number().int().nonnegative(),
 });
 export type DeletedCountOut = z.infer<typeof deletedCountOut>;
-
-// Base entity schema with common fields
-export const baseEntitySchema = z.object({
-  id: id,
-  name: z.string(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
-});

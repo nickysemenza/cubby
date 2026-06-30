@@ -1,5 +1,6 @@
 import { fdcId, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
+import { timestampedFields } from "./base-entity";
 import { mutationSideEffectsSchema } from "./background-jobs";
 import { amount, positiveAmount } from "./codec";
 import { externalIdOut } from "./external-id";
@@ -62,8 +63,7 @@ export const inventoryEntryFields = {
     .date()
     .nullable()
     .describe("When last verified in an audit session (null = never)"),
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  ...timestampedFields,
 };
 
 export const inventoryEntryOut = z.object(inventoryEntryFields);
@@ -81,8 +81,7 @@ const productInventoryEmbedFields = {
   category: productCategory.nullable(),
   price: z.number().nullable(),
   usdaUnavailable: z.boolean().nullable(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  ...timestampedFields,
 };
 
 export const productInventoryEmbedOut = z.object(productInventoryEmbedFields);

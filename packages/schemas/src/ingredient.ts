@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { timestampedFields } from "./base-entity";
 import { amount } from "./codec";
 import { requiredName } from "./common";
 import { id, ingredientId, recipeId } from "./identifiers";
@@ -61,8 +62,7 @@ export const ingredientOutFields = {
   // ingredient (e.g. volume on a count-only item). The DB column is non-null
   // with an empty-array default, so public read contracts always carry it.
   naKinds: z.array(baseKind),
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  ...timestampedFields,
 };
 
 export const ingredientOut = z.object(ingredientOutFields);
