@@ -641,7 +641,7 @@ export function InventorySessionWorkbench({
     return false;
   };
 
-  if (treeLoading || ensureUnknown.isPending) {
+  if (treeLoading) {
     return (
       <Row align="center" justify="center" className="min-h-80">
         <Spinner />
