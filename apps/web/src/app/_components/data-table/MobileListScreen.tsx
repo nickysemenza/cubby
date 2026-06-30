@@ -1,8 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
-import type { Table as ITable, Row } from "@tanstack/react-table";
+import type { Table as ITable } from "@tanstack/react-table";
 import { LayoutList, List } from "lucide-react";
 import type { ReactNode } from "react";
-import type { SwipeAction } from "~/components/entity/swipe-row";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { MobileCardSkeletonList } from "~/components/feedback/mobile-card-skeleton";
 import { Button } from "~/components/ui/button";
@@ -33,8 +32,6 @@ interface MobileListScreenProps<TItem> {
   grouped?: boolean;
   /** Toggle grouping on/off (controlled from parent) */
   onGroupedChange?: (value: boolean) => void;
-  /** Swipe-to-reveal actions per row */
-  swipeActions?: (row: Row<TItem>) => SwipeAction[];
 }
 
 export function MobileListScreen<TItem>({
@@ -50,7 +47,6 @@ export function MobileListScreen<TItem>({
   groupConfig,
   grouped = false,
   onGroupedChange,
-  swipeActions,
 }: MobileListScreenProps<TItem>) {
   const groupToggle =
     groupConfig && onGroupedChange ? (
@@ -104,7 +100,6 @@ export function MobileListScreen<TItem>({
               infiniteScroll={infiniteScroll}
               groupConfig={groupConfig}
               grouped={grouped}
-              swipeActions={swipeActions}
             />
           );
           return refreshControls ? (

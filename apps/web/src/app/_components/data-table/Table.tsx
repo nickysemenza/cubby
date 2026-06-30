@@ -24,7 +24,6 @@ import {
   useRef,
   useState,
 } from "react";
-import type { SwipeAction } from "~/components/entity/swipe-row";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Stack } from "~/components/layout";
@@ -96,8 +95,6 @@ interface TTableProps<TItem> {
   timing?: QueryTiming;
   /** Entity type for mobile card navigation - when provided, cards become clickable */
   entity?: Entity;
-  /** Swipe-to-reveal actions per row on the mobile list */
-  swipeActions?: (row: Row<TItem>) => SwipeAction[];
   /** Callback when a row is clicked */
   onRowClick?: (row: Row<TItem>) => void;
   /** Callback when a row is hovered (desktop) — used to prefetch row data */
@@ -238,7 +235,6 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     ariaLabel = "Data Table",
     timing,
     entity,
-    swipeActions,
     onRowClick,
     onRowHover,
     infiniteScroll,
@@ -853,7 +849,6 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
           bulkActionBar={bulkActionBar}
           isLoading={isLoading}
           error={error}
-          swipeActions={swipeActions}
           infiniteScroll={infiniteScroll}
           refreshControls={refreshControls}
           groupConfig={groupConfig}

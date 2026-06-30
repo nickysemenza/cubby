@@ -1,11 +1,10 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { useNavigate } from "@tanstack/react-router";
-import type { Table as ITable, Row } from "@tanstack/react-table";
+import type { Table as ITable } from "@tanstack/react-table";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { Bug } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef } from "react";
 import { MobileCard } from "~/components/entity/mobile-card";
-import { type SwipeAction, SwipeRow } from "~/components/entity/swipe-row";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { EntityIcon } from "~/entities/entities";
@@ -59,8 +58,6 @@ interface MobileCardViewProps<TItem> {
   groupConfig?: GroupConfig<TItem>;
   /** Whether grouping is currently active */
   grouped?: boolean;
-  /** Swipe-to-reveal actions per row (mobile lists, e.g. inventory move/delete) */
-  swipeActions?: (row: Row<TItem>) => SwipeAction[];
 }
 
 export function MobileCardView<TItem>({
@@ -69,7 +66,6 @@ export function MobileCardView<TItem>({
   infiniteScroll,
   groupConfig,
   grouped = false,
-  swipeActions,
 }: MobileCardViewProps<TItem>) {
   const { isDebugEnabled } = useDebug();
   const navigate = useNavigate();
@@ -248,11 +244,7 @@ export function MobileCardView<TItem>({
 
     return (
       <VirtualRow key={row.id} vi={vi} virtualizer={virtualizer}>
-        {swipeActions ? (
-          <SwipeRow actions={swipeActions(row)}>{card}</SwipeRow>
-        ) : (
-          card
-        )}
+        {card}
       </VirtualRow>
     );
   };

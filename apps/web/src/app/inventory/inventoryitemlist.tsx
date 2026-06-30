@@ -1,10 +1,9 @@
 import type { inventoryListItemOut } from "@cubby/schemas/inventory";
 import { Link } from "@tanstack/react-router";
-import { createColumnHelper, type Row } from "@tanstack/react-table";
-import { ArrowRightLeft, ImageIcon, Trash } from "lucide-react";
+import { createColumnHelper } from "@tanstack/react-table";
+import { ArrowRightLeft, ImageIcon } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import type { z } from "zod";
-import type { SwipeAction } from "~/components/entity/swipe-row";
 import { Row as FlexRow, Stack } from "~/components/layout";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { inventoryMutationInvalidateKeys } from "~/lib/query-keys";
@@ -109,7 +108,6 @@ export function InventoryItemList() {
     timing,
     bulkActionBar,
     deleteDialog,
-    requestDelete,
     infiniteScroll,
     refreshControls,
   } = useEntityList({
@@ -209,25 +207,6 @@ export function InventoryItemList() {
   const items = table.getRowModel().rows.map((r) => r.original);
   const productIds = useMemo(() => data.map((item) => item.product.id), [data]);
 
-  // Swipe-to-reveal Move/Delete on mobile rows — same flows as the ⋮ menu
-  // (Move opens the single-item dialog, Delete the optimistic confirm).
-  const swipeActions = useCallback(
-    (row: Row<InventoryListItem>): SwipeAction[] => [
-      {
-        label: "Move",
-        icon: ArrowRightLeft,
-        onAction: () => setMoveTarget(row.original),
-      },
-      {
-        label: "Delete",
-        icon: Trash,
-        tone: "destructive",
-        onAction: () => requestDelete(row.original),
-      },
-    ],
-    [requestDelete],
-  );
-
   return (
     <ProductImageSummariesProvider productIds={productIds}>
       <AiSearchBar table={table} />
@@ -265,7 +244,6 @@ export function InventoryItemList() {
           entity="inventory"
           onRowClick={onRowClick}
           onRowHover={onRowHover}
-          swipeActions={swipeActions}
           bulkActionBar={bulkActionBar}
           infiniteScroll={infiniteScroll}
           refreshControls={refreshControls}

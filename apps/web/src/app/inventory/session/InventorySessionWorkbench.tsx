@@ -30,7 +30,6 @@ import {
   Plus,
   QrCode,
   Search,
-  Trash2,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -60,7 +59,6 @@ import { LocationBreadcrumb } from "~/app/_components/locations/location-breadcr
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { LocationTreeRow } from "~/app/_components/locations/location-tree-row";
 import { useProductSearch } from "~/app/_components/products/use-product-search";
-import { type SwipeAction, SwipeRow } from "~/components/entity/swipe-row";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -1505,67 +1503,52 @@ function ExpectedItemReviewRow({
     onAdjust({ ...amount, value: next });
   };
 
-  // Swipe-left reveals the two destructive/relocate verbs (mobile). Remove is
-  // staged (soft-deleted on Done); Relocate moves the item to Unknown now.
-  const actions: SwipeAction[] = [
-    { label: "Relocate", icon: ArrowRightLeft, onAction: onRelocate },
-    { label: "Remove", icon: Trash2, tone: "destructive", onAction: onRemove },
-  ];
-
   return (
-    <SwipeRow actions={actions} className="border border-[var(--border)]">
-      <Row
-        align="center"
-        gap="sm"
-        className={cn(
-          "border-l-4 border-l-warning/60 bg-background p-2",
-          staged === "verify" && "border-l-positive/60 bg-positive/5",
-          staged === "adjust" && "border-l-primary/60 bg-primary/5",
-          staged === "remove" && "border-l-destructive/60 bg-destructive/5",
-        )}
-      >
-        {/* Tap the row body to confirm present (toggle). Stepper / photo are
-            separate buttons so this stays a valid, large tap target. */}
-        <button
-          type="button"
-          onClick={onToggleVerify}
-          aria-pressed={staged === "verify"}
-          className="flex min-w-0 flex-1 items-center gap-2 text-left"
-        >
-          <Image
-            src={item.product.images[0]?.url}
-            alt={item.product.name}
-            displayWidth={128}
-            className="h-14 w-14 shrink-0 border border-[var(--border)] object-cover"
-          />
-          <span className="min-w-0 flex-1">
-            <span className="flex items-center gap-2">
-              <span className="truncate font-medium text-sm">
-                {item.product.name}
-              </span>
-              {staged === "verify" && (
-                <Badge variant="secondary">confirmed</Badge>
-              )}
-              {staged === "adjust" && <Badge>adjusted</Badge>}
-              {staged === "remove" && (
-                <Badge variant="destructive">removing</Badge>
-              )}
+    <div
+      className={cn(
+        "border border-[var(--border)] border-l-4 border-l-warning/60 bg-background p-2",
+        staged === "verify" && "border-l-positive/60 bg-positive/5",
+        staged === "adjust" && "border-l-primary/60 bg-primary/5",
+        staged === "remove" && "border-l-destructive/60 bg-destructive/5",
+      )}
+    >
+      <Row align="center" gap="sm" className="min-w-0">
+        <Image
+          src={item.product.images[0]?.url}
+          alt={item.product.name}
+          displayWidth={128}
+          className="h-14 w-14 shrink-0 border border-[var(--border)] object-cover"
+        />
+        <div className="min-w-0 flex-1">
+          <Row align="center" gap="sm">
+            <span className="truncate font-medium text-sm">
+              {item.product.name}
             </span>
-            <span className="flex items-center gap-2">
-              <Description size="xs" className="truncate">
-                {tryFormatAmount(amount)}
-              </Description>
-              {item.verifiedAt && (
-                <AuditedHint
-                  at={item.verifiedAt}
-                  label="verified"
-                  className="shrink-0 text-2xs"
-                />
-              )}
-            </span>
-          </span>
-        </button>
-        <div className="flex shrink-0 items-center gap-1">
+            {staged === "verify" && (
+              <Badge variant="secondary">confirmed</Badge>
+            )}
+            {staged === "adjust" && <Badge>adjusted</Badge>}
+            {staged === "remove" && (
+              <Badge variant="destructive">removing</Badge>
+            )}
+          </Row>
+          <Row align="center" gap="sm">
+            <Description size="xs" className="truncate">
+              {tryFormatAmount(amount)}
+            </Description>
+            {item.verifiedAt && (
+              <AuditedHint
+                at={item.verifiedAt}
+                label="verified"
+                className="shrink-0 text-2xs"
+              />
+            )}
+          </Row>
+        </div>
+      </Row>
+      <Row align="center" justify="between" gap="sm" className="mt-2">
+        {/* Stepper. Floor at 1 — recounting to zero is the Remove (No) action. */}
+        <Row align="center" gap="xs" className="shrink-0">
           <Button
             type="button"
             variant="outline"
@@ -1589,6 +1572,18 @@ function ExpectedItemReviewRow({
           >
             <Plus className="h-4 w-4" />
           </Button>
+        </Row>
+        <Row gap="xs" className="shrink-0">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-10 w-10 shrink-0"
+            onClick={onRelocate}
+            aria-label="Relocate to Unknown"
+            title="Relocate to Unknown"
+          >
+            <ArrowRightLeft className="h-4 w-4" />
+          </Button>
           <Button
             type="button"
             variant="outline"
@@ -1596,12 +1591,34 @@ function ExpectedItemReviewRow({
             onClick={onPhoto}
             disabled={photoPending}
             aria-label="Add photo"
+            title="Add photo"
           >
             {photoPending ? <Spinner /> : <Camera className="h-4 w-4" />}
           </Button>
-        </div>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-10 w-10 shrink-0 border-positive/40 bg-positive/10 text-positive hover:bg-positive/20 hover:text-positive"
+            onClick={onToggleVerify}
+            aria-pressed={staged === "verify"}
+            aria-label="Confirm present"
+            title="Confirm present"
+          >
+            <Check className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            className="h-10 w-10 shrink-0"
+            onClick={onRemove}
+            aria-label="Mark removed"
+            title="Mark removed"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </Row>
       </Row>
-    </SwipeRow>
+    </div>
   );
 }
 
