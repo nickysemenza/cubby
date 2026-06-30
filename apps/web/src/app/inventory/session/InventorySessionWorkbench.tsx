@@ -112,8 +112,6 @@ type ExpectedPhotoTarget =
     };
 
 interface UndoAction {
-  id: string;
-  label: string;
   run: () => Promise<void>;
 }
 
@@ -439,13 +437,11 @@ export function InventorySessionWorkbench({
     item,
     sourceLocationId,
     targetLocationId,
-    undoLabel,
     success,
   }: {
     item: InventoryItem;
     sourceLocationId: LocationId;
     targetLocationId: LocationId;
-    undoLabel: string;
     success: string;
   }) => {
     await bulkMove.mutateAsync({
@@ -455,8 +451,6 @@ export function InventorySessionWorkbench({
     });
     pushUndo(
       {
-        id: crypto.randomUUID(),
-        label: undoLabel,
         run: async () => {
           await bulkMove.mutateAsync({
             sourceLocationId: targetLocationId,
@@ -475,7 +469,6 @@ export function InventorySessionWorkbench({
       item,
       sourceLocationId: currentLocation.id,
       targetLocationId: unknownLocation.id,
-      undoLabel: `Move ${item.product.name} back to ${currentLocation.name}`,
       success: `Moved ${item.product.name} to Unknown.`,
     });
   };
@@ -486,7 +479,6 @@ export function InventorySessionWorkbench({
       item,
       sourceLocationId: unknownLocation.id,
       targetLocationId: currentLocation.id,
-      undoLabel: `Move ${item.product.name} back to Unknown`,
       success: `Moved ${item.product.name} into ${currentLocation.name}.`,
     });
   };
@@ -499,8 +491,6 @@ export function InventorySessionWorkbench({
     });
     pushUndo(
       {
-        id: crypto.randomUUID(),
-        label: `Move ${location.name} back to ${currentLocation.name}`,
         run: async () => {
           await updateLocation.mutateAsync({
             id: location.id,
@@ -520,8 +510,6 @@ export function InventorySessionWorkbench({
     });
     pushUndo(
       {
-        id: crypto.randomUUID(),
-        label: `Move ${location.name} back to Unknown`,
         run: async () => {
           await updateLocation.mutateAsync({
             id: location.id,
