@@ -11,33 +11,51 @@ import {
   generateProductShortcode,
   generateRecipeShortcode,
 } from "@cubby/shared";
-import { and, eq } from "drizzle-orm";
+import { type AnyColumn, and, eq, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { location, product, recipe } from "~/server/db/schema";
 
-import { getDb, notDeleted, unwrapDb } from "./database-helpers";
+import { notDeleted, unwrapDb } from "./database-helpers";
 
 const MAX_RETRIES = 10;
 
-type ShortcodeExistsChecker = (code: string) => Promise<boolean>;
+/** A soft-deletable table with a unique shortcode column. */
+type ShortcodeTable = PgTable & {
+  shortcode: AnyColumn;
+  deletedAt: AnyColumn;
+};
+
+/** Whether a (non-deleted) row with this shortcode already exists. */
+const shortcodeExists = async (
+  db: Database | DrizzleTransaction,
+  table: ShortcodeTable,
+  code: string,
+): Promise<boolean> => {
+  const existing = await unwrapDb(db)
+    .select({ one: sql<number>`1` })
+    .from(table)
+    .where(and(eq(table.shortcode, code), notDeleted(table)))
+    .limit(1);
+  return existing.length > 0;
+};
 
 /**
- * Generic unique shortcode generator with collision retry.
+ * Generate a unique shortcode for `table` with collision retry, excluding
+ * soft-deleted rows from the uniqueness check. Accepts a transaction so callers
+ * inside `withTransaction` (e.g. recipe import) stay atomic.
  *
- * @param generateCode - Function that generates a candidate shortcode
- * @param checkExists - Function that checks if the code already exists
- * @param entityName - Name of the entity (for error messages)
- * @returns A unique shortcode that doesn't exist in the database
- * @throws Error if unable to generate unique code after MAX_RETRIES attempts
+ * @throws if no unique code is found after MAX_RETRIES attempts.
  */
 async function generateUniqueShortcode(
+  db: Database | DrizzleTransaction,
+  table: ShortcodeTable,
   generateCode: () => string,
-  checkExists: ShortcodeExistsChecker,
   entityName: string,
 ): Promise<string> {
   for (let i = 0; i < MAX_RETRIES; i++) {
     const code = generateCode();
-    if (!(await checkExists(code))) {
+    if (!(await shortcodeExists(db, table, code))) {
       return code;
     }
   }
@@ -46,65 +64,15 @@ async function generateUniqueShortcode(
   );
 }
 
-/**
- * Generate a unique product shortcode with collision retry.
- * Retries up to 10 times if collision detected.
- * Excludes soft-deleted products from uniqueness check.
- */
-export async function generateUniqueProductShortcode(
-  db: Database,
-): Promise<string> {
-  return generateUniqueShortcode(
-    generateProductShortcode,
-    async (code) => {
-      const existing = await getDb(db).query.product.findFirst({
-        where: and(eq(product.shortcode, code), notDeleted(product)),
-        columns: { id: true },
-      });
-      return !!existing;
-    },
-    "product",
-  );
-}
+export const generateUniqueProductShortcode = (db: Database): Promise<string> =>
+  generateUniqueShortcode(db, product, generateProductShortcode, "product");
 
-/**
- * Generate a unique recipe shortcode with collision retry.
- * Accepts both Database and DrizzleTransaction for use within transactions.
- * Excludes soft-deleted recipes from uniqueness check.
- */
-export async function generateUniqueRecipeShortcode(
+export const generateUniqueRecipeShortcode = (
   db: Database | DrizzleTransaction,
-): Promise<string> {
-  return generateUniqueShortcode(
-    generateRecipeShortcode,
-    async (code) => {
-      const existing = await unwrapDb(db).query.recipe.findFirst({
-        where: and(eq(recipe.shortcode, code), notDeleted(recipe)),
-        columns: { id: true },
-      });
-      return !!existing;
-    },
-    "recipe",
-  );
-}
+): Promise<string> =>
+  generateUniqueShortcode(db, recipe, generateRecipeShortcode, "recipe");
 
-/**
- * Generate a unique location shortcode with collision retry.
- * Retries up to 10 times if collision detected.
- * Excludes soft-deleted locations from uniqueness check.
- */
-export async function generateUniqueLocationShortcode(
+export const generateUniqueLocationShortcode = (
   db: Database,
-): Promise<string> {
-  return generateUniqueShortcode(
-    generateLocationShortcode,
-    async (code) => {
-      const existing = await getDb(db).query.location.findFirst({
-        where: and(eq(location.shortcode, code), notDeleted(location)),
-        columns: { id: true },
-      });
-      return !!existing;
-    },
-    "location",
-  );
-}
+): Promise<string> =>
+  generateUniqueShortcode(db, location, generateLocationShortcode, "location");
