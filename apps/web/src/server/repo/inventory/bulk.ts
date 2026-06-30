@@ -1,13 +1,10 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type {
-  InventoryId,
-  LocationId,
-  ProductId,
-} from "@cubby/schemas/identifiers";
+import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
 import { unsafeInventoryId } from "@cubby/schemas/identifiers";
 import type {
   BulkMovePayload,
   InventoryBulkOperationItem,
+  InventorySessionResolution,
 } from "@cubby/schemas/inventory";
 import { and, eq, inArray } from "drizzle-orm";
 import { uniq } from "es-toolkit";
@@ -571,57 +568,106 @@ export const bulkMoveInventoryEntries = async (
 };
 
 /**
- * Commit an audit-session recount for one location: stamp `verifiedAt = now` on
- * the confirmed entries and `lastBulkInventory = now` on the location. Verify is
- * a pure audit signal (no amount/location change), so the caller can skip the
- * valuation recompute. Qty edits / removes / relocations flow through their own
- * mutations (`update` / `delete` / `bulkMove`).
+ * Commit a location's recount as one atomic diff, then stamp the location's
+ * `lastBulkInventory`. Each resolution is one staged decision about an expected
+ * row: `verify` records `verifiedAt`; `adjust` updates the amount (+ valuation +
+ * `verifiedAt`); `remove` soft-deletes. Verify is a pure audit signal — only
+ * adjust/remove change inventory, so `recomputeNeeded` tells the caller whether
+ * to dispatch a valuation recompute. Relocations flow through `bulkMove`. Ids
+ * that don't live at this location (stale / foreign) are ignored.
  */
-export const completeLocationAudit = async (
+export const reconcileLocationSession = async (
   db: Database,
   locationId: LocationId,
-  verifiedInventoryIds: InventoryId[],
+  resolutions: InventorySessionResolution[],
   actor: ActorContext,
 ) => {
-  const processed = await withTransaction(
+  const { processed, recomputeNeeded } = await withTransaction(
     db,
     async (tx: DrizzleTransaction) => {
       await assertLiveTargets(tx, { locationId });
       const now = new Date();
-      const ids = uniq(verifiedInventoryIds);
+      const ids = uniq(resolutions.map((r) => r.inventoryEntryId));
 
-      let results: InventoryEntryDeepDB[] = [];
-      if (ids.length > 0) {
-        await tx
-          .update(inventoryEntry)
-          .set({ verifiedAt: now })
-          .where(
-            and(
-              inArray(inventoryEntry.id, ids),
-              eq(inventoryEntry.locationId, locationId),
-              notDeleted(inventoryEntry),
-            ),
+      const existing =
+        ids.length > 0
+          ? await tx.query.inventoryEntry.findMany({
+              where: and(
+                inArray(inventoryEntry.id, ids),
+                eq(inventoryEntry.locationId, locationId),
+                notDeleted(inventoryEntry),
+              ),
+              ...relations.inventory.full,
+            })
+          : [];
+      const existingById = new Map(existing.map((e) => [e.id, e]));
+
+      // Prices for adjusted entries' products (to recompute valuation).
+      const adjustProductIds = uniq(
+        resolutions
+          .filter((r) => r.kind === "adjust")
+          .map((r) => existingById.get(r.inventoryEntryId)?.productId)
+          .filter((id): id is ProductId => id != null),
+      );
+      const priceMap = new Map<string, number | null>();
+      if (adjustProductIds.length > 0) {
+        const products = await tx
+          .select({ id: product.id, price: product.price })
+          .from(product)
+          .where(inArray(product.id, adjustProductIds));
+        for (const p of products) priceMap.set(p.id, p.price);
+      }
+
+      const auditEntries: AuditEntryInput[] = [];
+      const resultIds: string[] = [];
+      let recomputeNeeded = false;
+
+      for (const r of resolutions) {
+        const before = existingById.get(r.inventoryEntryId);
+        if (!before) continue;
+
+        if (r.kind === "verify") {
+          await tx
+            .update(inventoryEntry)
+            .set({ verifiedAt: now })
+            .where(eq(inventoryEntry.id, before.id));
+          resultIds.push(before.id);
+          auditEntries.push({
+            entityType: "inventory",
+            entityId: before.id,
+            action: "update",
+          });
+        } else if (r.kind === "adjust") {
+          const valuation = computeInventoryValuation(
+            r.amount.value,
+            priceMap.get(before.productId) ?? null,
           );
-        // Re-fetch the (now-verified) rows — only those that actually live at
-        // this location and aren't deleted are affected.
-        results = await tx.query.inventoryEntry.findMany({
-          where: and(
-            inArray(inventoryEntry.id, ids),
-            eq(inventoryEntry.locationId, locationId),
-            notDeleted(inventoryEntry),
-          ),
-          ...relations.inventory.full,
-        });
-        if (results.length > 0) {
-          await logAuditEntries(
+          const updated = await updateAndReturn(
             tx,
-            actor,
-            results.map((entry) => ({
-              entityType: "inventory" as const,
-              entityId: entry.id,
-              action: "update" as const,
-            })),
+            inventoryEntry,
+            { amount: r.amount, valuation, verifiedAt: now },
+            eq(inventoryEntry.id, before.id),
           );
+          recomputeNeeded = true;
+          resultIds.push(updated.id);
+          const changes = computeChanges(before, updated, ["amount"]);
+          auditEntries.push({
+            entityType: "inventory",
+            entityId: before.id,
+            action: "update",
+            ...(changes ? { changes } : {}),
+          });
+        } else {
+          await tx
+            .update(inventoryEntry)
+            .set({ deletedAt: now })
+            .where(eq(inventoryEntry.id, before.id));
+          recomputeNeeded = true;
+          auditEntries.push({
+            entityType: "inventory",
+            entityId: before.id,
+            action: "delete",
+          });
         }
       }
 
@@ -629,10 +675,14 @@ export const completeLocationAudit = async (
         .update(location)
         .set({ lastBulkInventory: now })
         .where(eq(location.id, locationId));
+      if (auditEntries.length > 0) {
+        await logAuditEntries(tx, actor, auditEntries);
+      }
 
-      return results;
+      const processed = await batchFetchResults(tx, resultIds);
+      return { processed, recomputeNeeded };
     },
   );
 
-  return processed.map(dbInventoryEntryToAPI);
+  return { items: processed.map(dbInventoryEntryToAPI), recomputeNeeded };
 };

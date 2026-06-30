@@ -21,7 +21,7 @@
 export {
   bulkMoveInventoryEntries,
   bulkProcessInventoryEntries,
-  completeLocationAudit,
+  reconcileLocationSession,
 } from "./bulk";
 export {
   checkUniqueProductDuplicate,

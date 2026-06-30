@@ -16,7 +16,6 @@ import {
   locationChildCountsOut,
   locationCreateInput,
   locationFiltersSchema,
-  locationIdInput,
   locationIdsInput,
   locationListItemOut,
   locationShortcodeInput,
@@ -28,7 +27,6 @@ import {
   recentlyActiveLocationsInput,
   recentlyActiveLocationsOut,
   recomputeLocationValuationsOut,
-  touchLastBulkInventoryOut,
 } from "@cubby/schemas/location";
 import { createAppError } from "~/server/errors/app-error";
 import { withTransaction } from "~/server/repo/database-helpers";
@@ -44,7 +42,6 @@ import {
   getLocationsByShortcodes,
   getRecentlyActiveLocations,
   locationList,
-  touchLastBulkInventory as touchLastBulkInventoryRepo,
   updateLocation,
   updateLocationAiDescription,
 } from "~/server/repo/location";
@@ -162,15 +159,6 @@ const ensureGlobalUnknown = protectedProcedure
     return location;
   });
 
-// Touch lastBulkInventory timestamp (for Scanner page "Mark Complete" button)
-const touchLastBulkInventory = protectedProcedure
-  .input(locationIdInput)
-  .output(touchLastBulkInventoryOut)
-  .mutation(async ({ ctx, input }) => {
-    await touchLastBulkInventoryRepo(ctx.db, input.id);
-    return { success: true };
-  });
-
 const bulkUpdateParent = protectedProcedure
   .input(locationBulkUpdateParentInput)
   .output(locationBulkUpdateParentOut)
@@ -273,6 +261,5 @@ export const locationRouter = createTRPCRouter({
   update,
   recomputeValuations,
   delete: deleteItem,
-  touchLastBulkInventory,
   bulkUpdateParent,
 });

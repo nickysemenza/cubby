@@ -197,7 +197,6 @@ describe("location mappers", () => {
         id: INVENTORY_ID,
         amount: { value: 2, unit: "each" },
         valuation: 9,
-        verifiedAt: null,
         createdAt: CREATED_AT,
         updatedAt: UPDATED_AT,
         product: {

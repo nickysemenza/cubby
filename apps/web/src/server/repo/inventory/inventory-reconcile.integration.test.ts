@@ -6,8 +6,8 @@ import { inventoryEntry, location as locationTable } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import {
   bulkMoveInventoryEntries,
-  completeLocationAudit,
   createInventoryEntry,
+  reconcileLocationSession,
 } from "~/server/repo/inventory";
 import { createLocation } from "~/server/repo/location";
 import { createProduct } from "~/server/repo/product";
@@ -16,10 +16,11 @@ import {
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
 
-// Guards for the audit-session commit: completeLocationAudit must durably record
-// `verifiedAt` + stamp the location, without deleting anything; and a plain move
-// must NOT stamp `lastBulkInventory` (only an explicit completion does).
-describe("completeLocationAudit", () => {
+// Guards for the audit-session commit: reconcileLocationSession applies the
+// staged verify/adjust/remove diff durably and stamps the location, without
+// touching anything it wasn't told to; and a plain move must NOT stamp
+// `lastBulkInventory` (only an explicit completion does).
+describe("reconcileLocationSession", () => {
   const ctx = withTestDb();
   const amount = { value: 1, unit: "each" };
 
@@ -51,38 +52,81 @@ describe("completeLocationAudit", () => {
       where: eq(locationTable.id, id),
     });
 
-  it("stamps verifiedAt + lastBulkInventory on a confirm, with no delete", async () => {
+  it("verify stamps verifiedAt + lastBulkInventory, no delete, no recompute", async () => {
     const { loc, entry } = await seedEntry("Shelf");
     expect((await readEntry(entry.id))?.verifiedAt).toBeNull();
 
-    const result = await completeLocationAudit(
+    const { items, recomputeNeeded } = await reconcileLocationSession(
       ctx.db,
       loc.id,
-      [entry.id],
+      [{ kind: "verify", inventoryEntryId: entry.id }],
       TEST_ACTOR,
     );
-    expect(result).toHaveLength(1);
-    expect(result[0]?.verifiedAt).not.toBeNull();
+    expect(items).toHaveLength(1);
+    expect(items[0]?.verifiedAt).not.toBeNull();
+    expect(recomputeNeeded).toBe(false); // pure verify never recomputes
 
     const after = await readEntry(entry.id);
     expect(after?.verifiedAt).not.toBeNull();
-    expect(after?.deletedAt).toBeNull(); // verify never deletes
+    expect(after?.deletedAt).toBeNull();
     expect((await readLocation(loc.id))?.lastBulkInventory).not.toBeNull();
   });
 
-  it("an empty confirm set still stamps the location (nothing verified)", async () => {
+  it("adjust updates amount + verifiedAt and flags recompute", async () => {
+    const { loc, entry } = await seedEntry("Adjust");
+    const { recomputeNeeded } = await reconcileLocationSession(
+      ctx.db,
+      loc.id,
+      [
+        {
+          kind: "adjust",
+          inventoryEntryId: entry.id,
+          amount: { value: 5, unit: "each" },
+        },
+      ],
+      TEST_ACTOR,
+    );
+    expect(recomputeNeeded).toBe(true);
+
+    const after = await readEntry(entry.id);
+    expect(after?.amount).toEqual({ value: 5, unit: "each" });
+    expect(after?.verifiedAt).not.toBeNull();
+  });
+
+  it("remove soft-deletes (row retained with deletedAt) and flags recompute", async () => {
+    const { loc, entry } = await seedEntry("Remove");
+    const { recomputeNeeded } = await reconcileLocationSession(
+      ctx.db,
+      loc.id,
+      [{ kind: "remove", inventoryEntryId: entry.id }],
+      TEST_ACTOR,
+    );
+    expect(recomputeNeeded).toBe(true);
+
+    const after = await readEntry(entry.id);
+    expect(after).toBeDefined(); // soft delete: row kept
+    expect(after?.deletedAt).not.toBeNull();
+  });
+
+  it("an empty commit still stamps the location", async () => {
     const { loc, entry } = await seedEntry("Empty walk");
-    await completeLocationAudit(ctx.db, loc.id, [], TEST_ACTOR);
+    await reconcileLocationSession(ctx.db, loc.id, [], TEST_ACTOR);
     expect((await readEntry(entry.id))?.verifiedAt).toBeNull();
     expect((await readLocation(loc.id))?.lastBulkInventory).not.toBeNull();
   });
 
-  it("ignores ids that don't live at the audited location", async () => {
+  it("ignores resolutions for ids that don't live at the audited location", async () => {
     const a = await seedEntry("Bin A");
     const b = await seedEntry("Bin B");
-    // Audit Bin B but pass Bin A's entry id — it must not be verified.
-    await completeLocationAudit(ctx.db, b.loc.id, [a.entry.id], TEST_ACTOR);
-    expect((await readEntry(a.entry.id))?.verifiedAt).toBeNull();
+    await reconcileLocationSession(
+      ctx.db,
+      b.loc.id,
+      [{ kind: "remove", inventoryEntryId: a.entry.id }],
+      TEST_ACTOR,
+    );
+    const stranger = await readEntry(a.entry.id);
+    expect(stranger?.deletedAt).toBeNull(); // untouched
+    expect(stranger?.verifiedAt).toBeNull();
   });
 
   it("a move no longer stamps lastBulkInventory", async () => {

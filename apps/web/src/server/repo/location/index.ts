@@ -38,11 +38,7 @@ export {
   getRecentlyActiveLocations,
 } from "./lookup";
 // Tree and hierarchy operations
-export {
-  buildLocationTree,
-  buildLocationTypeCount,
-  touchLastBulkInventory,
-} from "./tree";
+export { buildLocationTree, buildLocationTypeCount } from "./tree";
 // Valuation rollup persistence
 export {
   getLocationValuationInputs,
