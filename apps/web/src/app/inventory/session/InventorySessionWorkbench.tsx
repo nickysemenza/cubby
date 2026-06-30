@@ -1056,54 +1056,29 @@ function LocationReviewPane({
           event.target.value = "";
         }}
       />
-      <div className="sticky top-12 z-20 border-b bg-background/95 py-2 backdrop-blur md:static md:border-b-0 md:bg-transparent md:py-0">
-        <Row align="center" justify="between" gap="sm">
-          <Button
-            type="button"
-            variant="outline"
-            className="min-h-12 px-4 lg:hidden"
-            onClick={onPrevious}
-            disabled={!canPrevious}
-            aria-label="Previous location"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <div className="min-w-0 flex-1 text-center md:text-left">
-            <Description size="xs">
-              {position.index + 1} of {position.total} in {parent.name}
-            </Description>
-            <h2 className="truncate font-heading font-semibold text-xl">
-              {location.name}
-            </h2>
-            <Badge variant="outline" className="mt-1 md:hidden">
-              Session: {parent.name} subtree
-            </Badge>
-            {breadcrumbSegments.length > 0 ? (
-              <LocationBreadcrumb
-                segments={breadcrumbSegments}
-                showHome
-                linkable
-                compact
-                activeHighlight
-                className="mx-auto mt-1 max-w-full justify-center text-xs md:mx-0 md:justify-start"
-              />
-            ) : isSessionRoot && position.total > 1 ? (
-              <Description size="2xs" className="mt-1">
-                Session root · includes descendants
-              </Description>
-            ) : null}
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            className="min-h-12 px-4 lg:hidden"
-            onClick={onNext}
-            disabled={!canNext}
-            aria-label="Next location"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+      <div className="sticky top-12 z-20 min-w-0 border-b bg-background/95 py-2 backdrop-blur md:static md:border-b-0 md:bg-transparent md:py-0">
+        <Row align="baseline" gap="sm" className="min-w-0">
+          <h2 className="min-w-0 flex-1 truncate font-heading font-semibold text-xl">
+            {location.name}
+          </h2>
+          <Description size="xs" className="shrink-0">
+            {position.index + 1}/{position.total}
+          </Description>
         </Row>
+        {breadcrumbSegments.length > 0 ? (
+          <LocationBreadcrumb
+            segments={breadcrumbSegments}
+            showHome
+            linkable
+            compact
+            activeHighlight
+            className="mt-1 max-w-full justify-start text-xs"
+          />
+        ) : isSessionRoot && position.total > 1 ? (
+          <Description size="2xs" className="mt-1">
+            Session root · includes descendants
+          </Description>
+        ) : null}
       </div>
 
       <Card>
@@ -1318,20 +1293,22 @@ function ExpectedItemReviewRow({
         confirmed && "border-positive/40 bg-positive/5",
       )}
     >
-      <Row align="center" gap="sm">
-        <Image
-          src={item.product.images[0]?.url}
-          alt={item.product.name}
-          displayWidth={128}
-          className="h-16 w-16 shrink-0 border border-[var(--border)] object-cover"
-        />
-        <div className="min-w-0 flex-1">
-          <Row align="center" gap="xs" wrap>
-            <EntityInlineLink entity="product" data={item.product} compact />
-            {confirmed && <Badge variant="secondary">confirmed</Badge>}
-          </Row>
-          <Description size="xs">{tryFormatAmount(item.amount)}</Description>
-        </div>
+      <Row align="baseline" gap="xs" wrap>
+        <EntityInlineLink entity="product" data={item.product} />
+        {confirmed && <Badge variant="secondary">confirmed</Badge>}
+      </Row>
+      <Row align="center" justify="between" gap="sm" className="mt-2">
+        <Row align="center" gap="sm" className="min-w-0">
+          <Image
+            src={item.product.images[0]?.url}
+            alt={item.product.name}
+            displayWidth={128}
+            className="h-16 w-16 shrink-0 border border-[var(--border)] object-cover"
+          />
+          <Description size="xs" className="truncate">
+            {tryFormatAmount(item.amount)}
+          </Description>
+        </Row>
         {!editing && (
           <Row gap="xs" className="shrink-0">
             <Button
@@ -1432,38 +1409,37 @@ function ExpectedLocationReviewRow({
         confirmed && "border-positive/40 bg-positive/5",
       )}
     >
-      <Row align="center" gap="sm">
-        <div className="flex h-16 w-16 shrink-0 items-center justify-center border border-primary/30 bg-primary/10 text-primary">
-          {location.images[0]?.url ? (
-            <Image
-              src={location.images[0].url}
-              alt={location.name}
-              displayWidth={128}
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <LocationIcon type={location.type} size={26} />
-          )}
-        </div>
-        <div className="min-w-0 flex-1">
-          <Row align="center" gap="xs" wrap>
-            <EntityInlineLink
-              entity="location"
-              data={{
-                id: location.id,
-                name: location.name,
-                type: location.type,
-              }}
-              compact
-            />
-            {confirmed && <Badge variant="secondary">confirmed</Badge>}
-          </Row>
+      <Row align="baseline" gap="xs" wrap>
+        <EntityInlineLink
+          entity="location"
+          data={{
+            id: location.id,
+            name: location.name,
+            type: location.type,
+          }}
+        />
+        {confirmed && <Badge variant="secondary">confirmed</Badge>}
+      </Row>
+      <Row align="center" justify="between" gap="sm" className="mt-2">
+        <Row align="center" gap="sm" className="min-w-0">
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center border border-primary/30 bg-primary/10 text-primary">
+            {location.images[0]?.url ? (
+              <Image
+                src={location.images[0].url}
+                alt={location.name}
+                displayWidth={128}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <LocationIcon type={location.type} size={26} />
+            )}
+          </div>
           <Description size="xs" className="truncate">
             {location.children?.length ?? 0} loc ·{" "}
             {location.totalItemCount ?? 0}{" "}
             {(location.totalItemCount ?? 0) === 1 ? "item" : "items"}
           </Description>
-        </div>
+        </Row>
         <Row gap="xs" className="shrink-0">
           <Button
             type="button"
