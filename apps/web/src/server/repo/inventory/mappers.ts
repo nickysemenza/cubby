@@ -30,6 +30,7 @@ export const dbInventoryEntryToAPI: (
     id: inventoryentry.id,
     amount: parsedAmount,
     valuation: inventoryentry.valuation,
+    verifiedAt: inventoryentry.verifiedAt,
     createdAt: inventoryentry.createdAt,
     updatedAt: inventoryentry.updatedAt,
     location: {
@@ -70,6 +71,7 @@ export const dbInventoryEntryToListAPI: (
     id: inventoryentry.id,
     amount: parsedAmount,
     valuation: inventoryentry.valuation,
+    verifiedAt: inventoryentry.verifiedAt,
     createdAt: inventoryentry.createdAt,
     updatedAt: inventoryentry.updatedAt,
     location: {

@@ -58,6 +58,10 @@ export const inventoryEntryFields = {
     .number()
     .nullable()
     .describe("Precomputed value: amount × product price"),
+  verifiedAt: z
+    .date()
+    .nullable()
+    .describe("When last verified in an audit session (null = never)"),
   createdAt: z.date(),
   updatedAt: z.date(),
 };
@@ -220,6 +224,19 @@ export const bulkMovePayload = z.object({
 });
 
 export type BulkMovePayload = z.infer<typeof bulkMovePayload>;
+
+// Complete a location's audit session: record `verifiedAt = now` on the entries
+// the user confirmed, and stamp the location's `lastBulkInventory`. This is the
+// durable commit of a recount — verify-only for now (qty/remove/relocate still
+// flow through their own mutations).
+export const completeLocationAuditPayload = z.object({
+  locationId: locationId,
+  verifiedInventoryIds: z.array(inventoryId),
+});
+
+export type CompleteLocationAuditPayload = z.infer<
+  typeof completeLocationAuditPayload
+>;
 
 export const inventoryFindDuplicatesInput = z.object({
   excludeLocationId: locationId.optional(),

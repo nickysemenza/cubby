@@ -9,6 +9,7 @@
 import { type InventoryId, inventoryId } from "@cubby/schemas/identifiers";
 import {
   bulkMovePayload,
+  completeLocationAuditPayload,
   inventoryBulkOperationPayload,
   inventoryCountsByLocationOut,
   inventoryCreatePayloadData,
@@ -29,6 +30,7 @@ import {
   bulkMoveInventoryEntries,
   bulkProcessInventoryEntries,
   checkUniqueProductDuplicate,
+  completeLocationAudit,
   createInventoryEntry,
   deleteInventoryEntries,
   getInventoryByLocationIds,
@@ -192,6 +194,21 @@ const bulkMove = protectedProcedure
     return { items: result, sideEffects: { backgroundBatches } };
   });
 
+// Commit an audit-session recount for one location: stamp verifiedAt on the
+// confirmed entries + the location's lastBulkInventory. Verify-only (no data
+// change), so no valuation recompute side-effect is dispatched.
+const completeAudit = protectedProcedure
+  .input(completeLocationAuditPayload)
+  .output(inventoryWithLocationAndProductListOut)
+  .mutation(async ({ ctx, input }) => {
+    return await completeLocationAudit(
+      ctx.db,
+      input.locationId,
+      input.verifiedInventoryIds,
+      ctx.actorContext,
+    );
+  });
+
 // Find products with expectedQuantity=1 in multiple locations
 const findDuplicates = protectedProcedure
   .input(inventoryFindDuplicatesInput)
@@ -235,6 +252,7 @@ export const inventoryRouter = createTRPCRouter({
   delete: deleteItem,
   bulkProcess,
   bulkMove,
+  completeAudit,
   findDuplicates,
   getCountsByLocations,
   getByLocationIds,

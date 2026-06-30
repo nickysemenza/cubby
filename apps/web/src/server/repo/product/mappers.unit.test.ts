@@ -210,6 +210,7 @@ describe("product mappers", () => {
           deletedAt: null,
           locationId: LOCATION_ID,
           valuation: 9,
+          verifiedAt: null,
           location: activeLocation,
         },
         {
@@ -221,6 +222,7 @@ describe("product mappers", () => {
           deletedAt: null,
           locationId: deletedLocation.id,
           valuation: 4.5,
+          verifiedAt: null,
           location: deletedLocation,
         },
       ],
@@ -332,6 +334,7 @@ describe("product mappers", () => {
           deletedAt: null,
           locationId: LOCATION_ID,
           valuation: 9,
+          verifiedAt: null,
           location: {
             ...activeLocation,
             deletedAt: DELETED_AT,

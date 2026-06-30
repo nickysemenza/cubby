@@ -1,5 +1,9 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
+import type {
+  InventoryId,
+  LocationId,
+  ProductId,
+} from "@cubby/schemas/identifiers";
 import { unsafeInventoryId } from "@cubby/schemas/identifiers";
 import type {
   BulkMovePayload,
@@ -556,20 +560,79 @@ export const bulkMoveInventoryEntries = async (
       // Batch re-fetch all results with relations
       const results = await batchFetchResults(tx, resultIds);
 
-      // Update lastBulkInventory for both source and target locations
-      const now = new Date();
-      await tx
-        .update(location)
-        .set({ lastBulkInventory: now })
-        .where(eq(location.id, payload.sourceLocationId));
-      await tx
-        .update(location)
-        .set({ lastBulkInventory: now })
-        .where(eq(location.id, payload.targetLocationId));
-
+      // NOTE: a move no longer stamps `lastBulkInventory` — only an explicit
+      // audit completion (`completeLocationAudit`) marks a location audited, so
+      // relocating one item can't make a bin read "audited" with zero recount.
       return results;
     },
   );
 
   return processedItems.map(dbInventoryEntryToAPI);
+};
+
+/**
+ * Commit an audit-session recount for one location: stamp `verifiedAt = now` on
+ * the confirmed entries and `lastBulkInventory = now` on the location. Verify is
+ * a pure audit signal (no amount/location change), so the caller can skip the
+ * valuation recompute. Qty edits / removes / relocations flow through their own
+ * mutations (`update` / `delete` / `bulkMove`).
+ */
+export const completeLocationAudit = async (
+  db: Database,
+  locationId: LocationId,
+  verifiedInventoryIds: InventoryId[],
+  actor: ActorContext,
+) => {
+  const processed = await withTransaction(
+    db,
+    async (tx: DrizzleTransaction) => {
+      await assertLiveTargets(tx, { locationId });
+      const now = new Date();
+      const ids = uniq(verifiedInventoryIds);
+
+      let results: InventoryEntryDeepDB[] = [];
+      if (ids.length > 0) {
+        await tx
+          .update(inventoryEntry)
+          .set({ verifiedAt: now })
+          .where(
+            and(
+              inArray(inventoryEntry.id, ids),
+              eq(inventoryEntry.locationId, locationId),
+              notDeleted(inventoryEntry),
+            ),
+          );
+        // Re-fetch the (now-verified) rows — only those that actually live at
+        // this location and aren't deleted are affected.
+        results = await tx.query.inventoryEntry.findMany({
+          where: and(
+            inArray(inventoryEntry.id, ids),
+            eq(inventoryEntry.locationId, locationId),
+            notDeleted(inventoryEntry),
+          ),
+          ...relations.inventory.full,
+        });
+        if (results.length > 0) {
+          await logAuditEntries(
+            tx,
+            actor,
+            results.map((entry) => ({
+              entityType: "inventory" as const,
+              entityId: entry.id,
+              action: "update" as const,
+            })),
+          );
+        }
+      }
+
+      await tx
+        .update(location)
+        .set({ lastBulkInventory: now })
+        .where(eq(location.id, locationId));
+
+      return results;
+    },
+  );
+
+  return processed.map(dbInventoryEntryToAPI);
 };

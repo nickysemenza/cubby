@@ -64,6 +64,7 @@ const baseInventoryEntry = {
   deletedAt: DELETED_AT,
   locationId: LOCATION_ID,
   valuation: 9,
+  verifiedAt: null,
 };
 
 describe("inventory mappers", () => {
@@ -145,6 +146,7 @@ describe("inventory mappers", () => {
       id: INVENTORY_ID,
       amount: { value: 2, unit: "each" },
       valuation: 9,
+      verifiedAt: null,
       createdAt: CREATED_AT,
       updatedAt: UPDATED_AT,
       location: {

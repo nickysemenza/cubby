@@ -631,6 +631,9 @@ export const inventoryEntry = pgTable(
       .$type<LocationId>()
       .references(() => location.id),
     valuation: real("valuation"), // Precomputed: amount.value * product.price
+    // Durable record of when this entry was last verified in an audit session
+    // (set on session "Done"). Nullable: null = never verified.
+    verifiedAt: timestamp("verifiedAt", { mode: "date" }),
   },
   (table) => [
     uniqueIndex("InventoryEntry_productId_locationId_key")
