@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Github } from "lucide-react";
+import { GitGraph } from "lucide-react";
 import { Row } from "~/components/layout";
 import { authClient } from "~/lib/auth-client";
 import { formatBuildDate } from "~/lib/utils";
@@ -68,7 +68,7 @@ export function AppFooter() {
             className="text-muted-foreground transition-colors hover:text-foreground"
             aria-label="GitHub repository"
           >
-            <Github className="h-3.5 w-3.5" />
+            <GitGraph className="h-3.5 w-3.5" />
           </a>
         </Row>
       </Row>

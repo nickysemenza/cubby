@@ -105,7 +105,7 @@ export const evaluateAvailability = (
 ): WAvailabilityResult => wasm.evaluate_availability(input);
 
 /** Price, weight, and nutrient results for one ingredient (or sub-recipe). */
-export type IngredientPriceInfo = {
+type IngredientPriceInfo = {
   price: Result<WAmount>;
   gram: Result<WAmount>;
   nutrient: Result<NutrientsPer100>;
@@ -136,7 +136,7 @@ export type IngredientDataItem = CostingRow & {
  * This is the data the per-cell "—" swallows; the debug card and the
  * explain endpoint/MCP tool surface it. JSON-serializable by construction.
  */
-export type RowDiagnostic = RowDiagnosticOut;
+type RowDiagnostic = RowDiagnosticOut;
 
 export type CalculateTotalsResult = {
   price: number;

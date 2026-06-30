@@ -9,7 +9,7 @@
  * so this module stays safe to import in the SSR/CF-worker bundle (via wasm.ts).
  */
 
-export interface WasmStat {
+interface WasmStat {
   executions: number;
   totalMs: number;
   maxMs: number;
@@ -24,24 +24,24 @@ export interface SlowEvent {
   ms: number;
   at: number; // performance.now() when recorded
 }
-export interface RenderStat {
+interface RenderStat {
   count: number;
   totalMs: number;
   maxMs: number;
   lastPhase: string;
 }
-export interface QueryStat {
+interface QueryStat {
   fetches: number;
   totalMs: number;
   maxMs: number;
   fanout: boolean;
 }
-export interface RuntimeStat {
+interface RuntimeStat {
   fps: number;
   longTasks: number;
   heapUsedMB: number | null;
 }
-export interface VitalsStat {
+interface VitalsStat {
   lcp: number | null;
   inp: number | null;
   cls: number | null;

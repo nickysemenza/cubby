@@ -2,7 +2,7 @@ import type { Row } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 
 /** Result of a bulk action execution */
-export interface BulkActionResult {
+interface BulkActionResult {
   success: boolean;
 }
 
