@@ -458,8 +458,8 @@ importers:
         version: 3.25.2(zod@4.4.3)
     devDependencies:
       '@biomejs/biome':
-        specifier: 2.4.1
-        version: 2.4.1
+        specifier: 2.5.1
+        version: 2.5.1
       '@cloudflare/vite-plugin':
         specifier: ^1.42.3
         version: 1.42.3(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.44.1)(tsx@4.22.4)(yaml@2.9.0))(workerd@1.20260625.1)(wrangler@4.105.0(@cloudflare/workers-types@4.20260630.1))

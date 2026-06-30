@@ -128,7 +128,7 @@
     "zod-to-json-schema": "^3.25.2"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.4.1",
+    "@biomejs/biome": "2.5.1",
     "@cloudflare/vite-plugin": "^1.42.3",
     "@devoxa/integresql-client": "^2.1.2",
     "@faker-js/faker": "^10.5.0",
