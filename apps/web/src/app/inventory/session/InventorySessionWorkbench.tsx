@@ -1497,8 +1497,13 @@ function ExpectedItemReviewRow({
   // Step by ±1 without rounding, so weight/length amounts keep their precision
   // (2.5 → 3.5, not 4). Floor at 1 — recounting to zero means the item is gone,
   // which is the "Remove" action (soft-delete), not a phantom 0-qty adjust.
-  const bump = (delta: number) =>
-    onAdjust({ ...amount, value: Math.max(1, amount.value + delta) });
+  const bump = (delta: number) => {
+    const next = Math.max(1, amount.value + delta);
+    // No-op at the floor: don't turn a verified item into an identical "adjust"
+    // (which would drop its confirmed state and force a needless recompute).
+    if (next === amount.value) return;
+    onAdjust({ ...amount, value: next });
+  };
 
   // Swipe-left reveals the two destructive/relocate verbs (mobile). Remove is
   // staged (soft-deleted on Done); Relocate moves the item to Unknown now.
