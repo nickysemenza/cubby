@@ -188,7 +188,7 @@ function BatchTable({
             <TableCell>
               <Link
                 to="/background-jobs"
-                search={{ batchId: batch.id }}
+                search={(prev) => ({ ...prev, batchId: batch.id })}
                 className="font-mono text-xs underline decoration-border decoration-dotted underline-offset-2 hover:decoration-primary"
               >
                 {batch.id.slice(0, 8)}
@@ -576,8 +576,10 @@ function BatchDetail({
 
 export function BackgroundJobsPage({
   selectedBatchId,
+  scopedBatchIds,
 }: {
   selectedBatchId?: string;
+  scopedBatchIds?: string[];
 }) {
   const api = useTRPC();
   const queryClient = useQueryClient();
@@ -620,9 +622,18 @@ export function BackgroundJobsPage({
   const drain = useMutation(
     api.backgroundJobs.drain.mutationOptions({ onSuccess: invalidate }),
   );
+  // Set by the save toast (?batchIds=…) to scope the list to one mutation's
+  // batches. null ⇒ unscoped (show everything).
+  const scopedSet = useMemo(
+    () => (scopedBatchIds?.length ? new Set(scopedBatchIds) : null),
+    [scopedBatchIds],
+  );
   const filteredBatches = useMemo(() => {
     const query = textFilter.trim().toLowerCase();
     return (listQuery.data ?? []).filter((batch) => {
+      if (scopedSet && !scopedSet.has(batch.id)) {
+        return false;
+      }
       if (kindFilter !== ALL_FILTER_VALUE && batch.kind !== kindFilter) {
         return false;
       }
@@ -644,6 +655,7 @@ export function BackgroundJobsPage({
     kindFilter,
     listQuery.data,
     processorFilter,
+    scopedSet,
     sourceFilter,
     statusFilter,
     textFilter,
@@ -721,6 +733,22 @@ export function BackgroundJobsPage({
           ))}
         </select>
       </Row>
+      {scopedSet ? (
+        <Row align="center" gap="sm" className="text-muted-foreground text-sm">
+          <span>
+            Showing {scopedSet.size} background{" "}
+            {scopedSet.size === 1 ? "batch" : "batches"} from your last action.
+          </span>
+          <Link
+            to="/background-jobs"
+            // Clear only the scope filter; keep any open detail panel (batchId).
+            search={(prev) => ({ batchId: prev.batchId })}
+            className="underline decoration-dotted underline-offset-2 hover:decoration-primary"
+          >
+            Clear
+          </Link>
+        </Row>
+      ) : null}
       {listQuery.isLoading ? <Spinner /> : null}
       {listQuery.data ? (
         <BatchTable

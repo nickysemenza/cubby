@@ -2,45 +2,37 @@ import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
-function backgroundWorkLabel(s: MutationSideEffects): string {
+function backgroundWorkVerb(s: MutationSideEffects): string {
   const queued = s.backgroundBatches.some(
     (batch) => batch.processor === "queue",
   );
-  return queued ? "Queued background work" : "Processed background work";
-}
-
-function BatchLink({ batchId }: { batchId: string }) {
-  return (
-    <Link
-      to="/background-jobs"
-      search={{ batchId }}
-      className="underline decoration-border decoration-dotted underline-offset-2 hover:decoration-primary"
-    >
-      {batchId.slice(0, 8)}
-    </Link>
-  );
+  return queued ? "Queued" : "Processed";
 }
 
 /**
  * Human toast payload for a mutation's persisted background side-effects.
- * Detailed counts live on the Background Jobs page; toasts expose the linked
- * batch refs so the user can inspect the actual work.
+ * Detailed counts live on the Background Jobs page; the toast surfaces a single
+ * link that opens that page scoped to exactly this mutation's batches (via the
+ * plural `batchIds` search param) so the user can inspect each one.
  */
 export const savedWithBackgroundWork = (
   s: MutationSideEffects,
   base = "Saved",
 ): ReactNode => {
-  if (s.backgroundBatches.length === 0) return `${base}.`;
+  const batches = s.backgroundBatches;
+  if (batches.length === 0) return `${base}.`;
 
   return (
     <span>
-      {base}. {backgroundWorkLabel(s)}:{" "}
-      {s.backgroundBatches.map((batch, index) => (
-        <span key={batch.id}>
-          {index > 0 ? ", " : ""}
-          <BatchLink batchId={batch.id} />
-        </span>
-      ))}
+      {base}.{" "}
+      <Link
+        to="/background-jobs"
+        search={{ batchIds: batches.map((batch) => batch.id) }}
+        className="underline decoration-border decoration-dotted underline-offset-2 hover:decoration-primary"
+      >
+        {backgroundWorkVerb(s)} {batches.length} background{" "}
+        {batches.length === 1 ? "task" : "tasks"}
+      </Link>
       .
     </span>
   );
