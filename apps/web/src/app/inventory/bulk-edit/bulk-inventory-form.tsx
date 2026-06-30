@@ -31,6 +31,7 @@ import {
 } from "~/app/_components/inventory/hooks";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+import { getErrorMessage } from "~/lib/error-utils";
 import { useTRPC } from "~/trpc/react";
 
 // Schema for a single inventory item using shared field schemas
@@ -123,6 +124,7 @@ export default function BulkInventoryForm({
     refetch: refetchInventoryItems,
     status: inventoryStatus,
     isFetching: inventoryFetching,
+    dataUpdatedAt,
   } = useQuery({
     ...api.inventory.list.queryOptions({
       sort: { orderBy: "createdAt", direction: "desc" },
@@ -242,12 +244,17 @@ export default function BulkInventoryForm({
       await bulkProcessMutation.mutateAsync({
         locationId,
         items: processItems,
+        // Stamp the snapshot's fetch time so the server can reject a stale commit
+        // (something changed at this location since) rather than delete-on-omit.
+        loadedAt: dataUpdatedAt ? new Date(dataUpdatedAt) : undefined,
       });
       toast.success(`Successfully updated inventory for ${location.name}`);
       setIsSubmitting(false);
     } catch (err) {
-      console.error("Error submitting inventory items:", err);
-      setError("Failed to update inventory. Please try again.");
+      // A CONFLICT is the staleness guard firing — refetch so the form shows the
+      // current snapshot, and surface the server's message (not a generic one).
+      refetchInventoryItems();
+      setError(getErrorMessage(err));
       setIsSubmitting(false);
     }
   };

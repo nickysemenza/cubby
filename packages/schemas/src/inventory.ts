@@ -207,6 +207,10 @@ export const inventoryBulkOperationPayload = z.object({
   // All operations for a given location
   locationId: locationId,
   items: z.array(inventoryBulkOperationItem),
+  // When the snapshot was loaded — lets the server reject a stale commit that
+  // would delete-on-omit entries another surface added since. Optional so other
+  // callers (MCP, tests) are unaffected.
+  loadedAt: z.date().optional(),
 });
 
 // Schema for bulk move operations (moving items between locations)

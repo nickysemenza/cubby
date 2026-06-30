@@ -161,6 +161,7 @@ const bulkProcess = protectedProcedure
         amount: item.amount,
       })),
       ctx.actorContext,
+      input.loadedAt,
     );
     const backgroundBatches = await runMutationSideEffectsForEntities(
       ctx.db,

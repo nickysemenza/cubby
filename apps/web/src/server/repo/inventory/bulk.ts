@@ -10,7 +10,7 @@ import type {
   InventoryBulkOperationItem,
   InventorySessionResolution,
 } from "@cubby/schemas/inventory";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, max } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import { match } from "ts-pattern";
 import { computeInventoryValuation } from "~/lib/price-mapping-utils";
@@ -61,6 +61,10 @@ export const bulkProcessInventoryEntries = async (
   locationId: LocationId,
   items: InventoryBulkOperationItem[],
   actor: ActorContext,
+  // When the client passes the time it loaded the snapshot, reject the commit if
+  // anything at the location changed since — this form deletes-on-omit, so a stale
+  // snapshot would silently delete entries another surface added after load.
+  loadedAt?: Date,
 ) => {
   // Transaction boundary: the entire diff (deletes of removed items, creates +
   // updates of submitted items, audit logging, and the location timestamp bump)
@@ -73,6 +77,24 @@ export const bulkProcessInventoryEntries = async (
       // the shelf location once, then batch-validate every submitted product id
       // (the UI filters deleted options, but the tRPC API is callable directly).
       await assertLiveTargets(tx, { locationId });
+
+      // Staleness guard: max(updatedAt) over ALL rows at the location (including
+      // soft-deleted — a delete bumps updatedAt too), so this single scalar
+      // catches an add / edit / delete that landed after the client loaded.
+      if (loadedAt) {
+        const staleRows = await tx
+          .select({ latest: max(inventoryEntry.updatedAt) })
+          .from(inventoryEntry)
+          .where(eq(inventoryEntry.locationId, locationId));
+        const latest = staleRows[0]?.latest ?? null;
+        if (latest && latest > loadedAt) {
+          throw createAppError(
+            "INVENTORY_STALE",
+            "Inventory at this location changed since you loaded it — refresh and try again.",
+          );
+        }
+      }
+
       const submittedProductIds = uniq(
         items.filter((i) => i.productId).map((i) => i.productId as ProductId),
       );
