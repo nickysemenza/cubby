@@ -1,15 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { DocsPage as DocsContent } from "~/app/docs/docs-page";
+import { DocsLayout } from "~/app/docs/docs-layout";
 import { Page } from "~/components/page/Page";
 
 export const Route = createFileRoute("/docs")({
-  component: DocsPage,
+  component: DocsLayoutRoute,
 });
 
-function DocsPage() {
+function DocsLayoutRoute() {
   return (
     <Page variant="list" title="Documentation" compact>
-      <DocsContent />
+      <DocsLayout />
     </Page>
   );
 }
