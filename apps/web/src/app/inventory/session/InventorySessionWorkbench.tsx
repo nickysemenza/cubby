@@ -1028,7 +1028,7 @@ function LocationReviewPane({
   };
 
   return (
-    <Stack gap="md" className="min-w-0">
+    <Stack gap="sm" className="min-w-0">
       <input
         ref={expectedPhotoInputRef}
         type="file"
@@ -1102,7 +1102,7 @@ function LocationReviewPane({
       </div>
 
       <Card>
-        <CardContent className="p-4 lg:p-6">
+        <CardContent className="p-2 lg:p-4">
           <div
             className={cn(
               "grid gap-4 lg:items-start",
