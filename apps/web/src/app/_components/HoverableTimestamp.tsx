@@ -11,7 +11,7 @@ type HoverableTimestampProps = {
 };
 
 /** Compact relative time: `now`, `5m`, `3h`, `2d`, `4w`, `6mo`, `1y`. */
-function formatCompactRelative(date: Date): string {
+export function formatCompactRelative(date: Date): string {
   const seconds = Math.round((Date.now() - date.getTime()) / 1000);
   if (seconds < 45) return "now";
   const minutes = Math.round(seconds / 60);
