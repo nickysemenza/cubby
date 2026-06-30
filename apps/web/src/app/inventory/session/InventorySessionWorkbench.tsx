@@ -1135,6 +1135,9 @@ function LocationReviewPane({
   unknownLocations: InfLocation[];
   itemResolutions: Map<string, ItemResolution>;
   confirmedLocationIds: Set<string>;
+  // string, not ProductId: brands strip across tRPC outputs (CLAUDE.md), so the
+  // findDuplicates query data's id — and item.product.id it's matched against —
+  // are both plain strings here.
   duplicateProductIds: Set<string>;
   onToggleVerify: (item: InventoryItem) => void;
   onAdjust: (item: InventoryItem, amount: Amount) => void;
