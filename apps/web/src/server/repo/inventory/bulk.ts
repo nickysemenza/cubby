@@ -12,6 +12,7 @@ import type {
 } from "@cubby/schemas/inventory";
 import { and, eq, inArray } from "drizzle-orm";
 import { uniq } from "es-toolkit";
+import { match } from "ts-pattern";
 import { computeInventoryValuation } from "~/lib/price-mapping-utils";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { inventoryEntry, location, product } from "~/server/db/schema";
@@ -631,50 +632,56 @@ export const reconcileLocationSession = async (
         const before = existingById.get(r.inventoryEntryId);
         if (!before) continue;
 
-        if (r.kind === "verify") {
-          await tx
-            .update(inventoryEntry)
-            .set({ verifiedAt: now })
-            .where(eq(inventoryEntry.id, before.id));
-          resultIds.push(before.id);
-          auditEntries.push({
-            entityType: "inventory",
-            entityId: before.id,
-            action: "update",
-          });
-        } else if (r.kind === "adjust") {
-          const valuation = computeInventoryValuation(
-            r.amount.value,
-            priceMap.get(before.productId) ?? null,
-          );
-          const updated = await updateAndReturn(
-            tx,
-            inventoryEntry,
-            { amount: r.amount, valuation, verifiedAt: now },
-            eq(inventoryEntry.id, before.id),
-          );
-          recomputeNeeded = true;
-          resultIds.push(updated.id);
-          const changes = computeChanges(before, updated, ["amount"]);
-          auditEntries.push({
-            entityType: "inventory",
-            entityId: before.id,
-            action: "update",
-            ...(changes ? { changes } : {}),
-          });
-        } else {
-          await tx
-            .update(inventoryEntry)
-            .set({ deletedAt: now })
-            .where(eq(inventoryEntry.id, before.id));
-          recomputeNeeded = true;
-          removedIds.push(before.id);
-          auditEntries.push({
-            entityType: "inventory",
-            entityId: before.id,
-            action: "delete",
-          });
-        }
+        // Exhaustive match so a future resolution kind is a compile error, not a
+        // silent fall-through to the (destructive) delete branch.
+        await match(r)
+          .with({ kind: "verify" }, async () => {
+            await tx
+              .update(inventoryEntry)
+              .set({ verifiedAt: now })
+              .where(eq(inventoryEntry.id, before.id));
+            resultIds.push(before.id);
+            auditEntries.push({
+              entityType: "inventory",
+              entityId: before.id,
+              action: "update",
+            });
+          })
+          .with({ kind: "adjust" }, async ({ amount: adjusted }) => {
+            const valuation = computeInventoryValuation(
+              adjusted.value,
+              priceMap.get(before.productId) ?? null,
+            );
+            const updated = await updateAndReturn(
+              tx,
+              inventoryEntry,
+              { amount: adjusted, valuation, verifiedAt: now },
+              eq(inventoryEntry.id, before.id),
+            );
+            recomputeNeeded = true;
+            resultIds.push(updated.id);
+            const changes = computeChanges(before, updated, ["amount"]);
+            auditEntries.push({
+              entityType: "inventory",
+              entityId: before.id,
+              action: "update",
+              ...(changes ? { changes } : {}),
+            });
+          })
+          .with({ kind: "remove" }, async () => {
+            await tx
+              .update(inventoryEntry)
+              .set({ deletedAt: now })
+              .where(eq(inventoryEntry.id, before.id));
+            recomputeNeeded = true;
+            removedIds.push(before.id);
+            auditEntries.push({
+              entityType: "inventory",
+              entityId: before.id,
+              action: "delete",
+            });
+          })
+          .exhaustive();
       }
 
       await tx

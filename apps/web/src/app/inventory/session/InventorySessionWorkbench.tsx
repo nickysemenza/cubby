@@ -36,6 +36,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { match } from "ts-pattern";
 import { z } from "zod";
 import { DialogCompatibleCombobox } from "~/app/_components/combobox/combobox-dialog";
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
@@ -602,17 +603,24 @@ export function InventorySessionWorkbench({
     for (const item of currentItems) {
       const r = itemResolutions.get(item.id);
       if (!r) continue;
-      if (r.kind === "adjust") {
-        resolutions.push({
-          kind: "adjust",
-          inventoryEntryId: item.id,
-          amount: r.amount,
-        });
-      } else if (r.kind === "remove") {
-        resolutions.push({ kind: "remove", inventoryEntryId: item.id });
-      } else {
-        resolutions.push({ kind: "verify", inventoryEntryId: item.id });
-      }
+      // Exhaustive match so a new resolution kind can't silently default to verify.
+      resolutions.push(
+        match(r)
+          .with({ kind: "adjust" }, ({ amount }) => ({
+            kind: "adjust" as const,
+            inventoryEntryId: item.id,
+            amount,
+          }))
+          .with({ kind: "remove" }, () => ({
+            kind: "remove" as const,
+            inventoryEntryId: item.id,
+          }))
+          .with({ kind: "verify" }, () => ({
+            kind: "verify" as const,
+            inventoryEntryId: item.id,
+          }))
+          .exhaustive(),
+      );
     }
     reconcile.mutate({ locationId: currentLocation.id, resolutions });
   };
@@ -1486,13 +1494,11 @@ function ExpectedItemReviewRow({
   const staged = resolution?.kind;
   const amount =
     resolution?.kind === "adjust" ? resolution.amount : item.amount;
-  // Floor at 1 — recounting to zero means the item is gone, which is the
-  // "Remove" action (soft-delete), not an adjust to a phantom 0-qty entry.
+  // Step by ±1 without rounding, so weight/length amounts keep their precision
+  // (2.5 → 3.5, not 4). Floor at 1 — recounting to zero means the item is gone,
+  // which is the "Remove" action (soft-delete), not a phantom 0-qty adjust.
   const bump = (delta: number) =>
-    onAdjust({
-      ...amount,
-      value: Math.max(1, Math.round(amount.value) + delta),
-    });
+    onAdjust({ ...amount, value: Math.max(1, amount.value + delta) });
 
   // Swipe-left reveals the two destructive/relocate verbs (mobile). Remove is
   // staged (soft-deleted on Done); Relocate moves the item to Unknown now.
@@ -1566,7 +1572,7 @@ function ExpectedItemReviewRow({
             <Minus className="h-4 w-4" />
           </Button>
           <span className="w-7 text-center font-mono text-sm tabular-nums">
-            {Math.round(amount.value)}
+            {amount.value}
           </span>
           <Button
             type="button"
