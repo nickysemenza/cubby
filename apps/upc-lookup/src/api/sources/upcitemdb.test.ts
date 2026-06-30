@@ -36,6 +36,49 @@ describe("lookupUPCitemdb status mapping", () => {
     }
   });
 
+  it("parses offers whose list_price is a number (real upstream shape)", async () => {
+    // Regression: upcitemdb sends `list_price` as a number (e.g. 149). The
+    // schema previously required a string, so every offer-bearing response
+    // failed parse → transient `error` → the UPC was cached as neither a
+    // product nor a miss. See types.ts upcitemdbOfferSchema.
+    mockFetch(() =>
+      jsonResponse({
+        code: "OK",
+        total: 1,
+        offset: 0,
+        items: [
+          {
+            ean: "0049206116313",
+            title: "Jackson Steel Wheelbarrow",
+            brand: "Jackson",
+            offers: [
+              {
+                merchant: "Home Depot",
+                title: "Steel Wheelbarrow",
+                list_price: 149,
+                price: 139,
+              },
+              {
+                merchant: "Walmart",
+                title: "Jackson Steel Wheelbarrow",
+                list_price: 254.05,
+                price: 199.99,
+              },
+            ],
+          },
+        ],
+      }),
+    );
+
+    const result = await lookupUPCitemdb("049206116313");
+
+    expect(result.status).toBe("found");
+    if (result.status === "found") {
+      expect(result.data.name).toBe("Jackson Steel Wheelbarrow");
+      expect(result.data.priceDollars).toBeGreaterThan(0);
+    }
+  });
+
   it("returns error (not a miss) on a malformed 200 payload", async () => {
     // Item present but `title` is the wrong type — the schema rejects it, so we
     // must surface a transient error rather than caching the UPC as missing.

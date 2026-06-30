@@ -36,7 +36,11 @@ export const upcitemdbOfferSchema = z.looseObject({
   domain: z.string().optional(),
   title: z.string(),
   currency: z.string().optional(),
-  list_price: z.string().optional(),
+  // Unused by us, but declared so a type change doesn't reject the whole offer.
+  // Upstream sends a number (e.g. 149) but has historically sent strings too —
+  // accept both. A bare `z.string()` here silently broke every offer-bearing
+  // lookup: numeric list_price → parse fail → transient `error` → never cached.
+  list_price: z.union([z.number(), z.string()]).optional(),
   price: z.number(),
   shipping: z.string().optional(),
   condition: z.string().optional(),
