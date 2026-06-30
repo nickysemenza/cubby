@@ -142,10 +142,6 @@ export const locationTypeCountsOut = z.record(
   z.number().int().nonnegative(),
 );
 
-export const touchLastBulkInventoryOut = z.object({
-  success: z.boolean(),
-});
-
 export const locationsWithParentNameOut = z.array(locationWithParentNameOut);
 
 export const recentlyActiveLocationsOut = z.array(locationOut);

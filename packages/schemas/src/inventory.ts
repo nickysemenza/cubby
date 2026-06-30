@@ -58,6 +58,10 @@ export const inventoryEntryFields = {
     .number()
     .nullable()
     .describe("Precomputed value: amount × product price"),
+  verifiedAt: z
+    .date()
+    .nullable()
+    .describe("When last verified in an audit session (null = never)"),
   createdAt: z.date(),
   updatedAt: z.date(),
 };
@@ -220,6 +224,33 @@ export const bulkMovePayload = z.object({
 });
 
 export type BulkMovePayload = z.infer<typeof bulkMovePayload>;
+
+// One staged decision about an expected row, committed atomically on "Done".
+// `verify` = confirmed present as-is; `adjust` = present at a corrected count;
+// `remove` = not here, soft-delete it. (Relocations flow through `bulkMove`.)
+export const inventorySessionResolution = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("verify"), inventoryEntryId: inventoryId }),
+  z.object({
+    kind: z.literal("adjust"),
+    inventoryEntryId: inventoryId,
+    // positiveAmount (not amount): a recount to zero is a Remove, not an
+    // adjust — this keeps the value > 0 invariant every other write enforces.
+    amount: positiveAmount,
+  }),
+  z.object({ kind: z.literal("remove"), inventoryEntryId: inventoryId }),
+]);
+
+export type InventorySessionResolution = z.infer<
+  typeof inventorySessionResolution
+>;
+
+// Commit a location's recount as one atomic diff and stamp `lastBulkInventory`.
+export const reconcileSessionPayload = z.object({
+  locationId: locationId,
+  resolutions: z.array(inventorySessionResolution),
+});
+
+export type ReconcileSessionPayload = z.infer<typeof reconcileSessionPayload>;
 
 export const inventoryFindDuplicatesInput = z.object({
   excludeLocationId: locationId.optional(),

@@ -1,12 +1,18 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
+import type {
+  InventoryId,
+  LocationId,
+  ProductId,
+} from "@cubby/schemas/identifiers";
 import { unsafeInventoryId } from "@cubby/schemas/identifiers";
 import type {
   BulkMovePayload,
   InventoryBulkOperationItem,
+  InventorySessionResolution,
 } from "@cubby/schemas/inventory";
 import { and, eq, inArray } from "drizzle-orm";
 import { uniq } from "es-toolkit";
+import { match } from "ts-pattern";
 import { computeInventoryValuation } from "~/lib/price-mapping-utils";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { inventoryEntry, location, product } from "~/server/db/schema";
@@ -556,20 +562,144 @@ export const bulkMoveInventoryEntries = async (
       // Batch re-fetch all results with relations
       const results = await batchFetchResults(tx, resultIds);
 
-      // Update lastBulkInventory for both source and target locations
-      const now = new Date();
-      await tx
-        .update(location)
-        .set({ lastBulkInventory: now })
-        .where(eq(location.id, payload.sourceLocationId));
-      await tx
-        .update(location)
-        .set({ lastBulkInventory: now })
-        .where(eq(location.id, payload.targetLocationId));
-
+      // NOTE: a move no longer stamps `lastBulkInventory` — only an explicit
+      // audit completion (`completeLocationAudit`) marks a location audited, so
+      // relocating one item can't make a bin read "audited" with zero recount.
       return results;
     },
   );
 
   return processedItems.map(dbInventoryEntryToAPI);
+};
+
+/**
+ * Commit a location's recount as one atomic diff, then stamp the location's
+ * `lastBulkInventory`. Each resolution is one staged decision about an expected
+ * row: `verify` records `verifiedAt`; `adjust` updates the amount (+ valuation +
+ * `verifiedAt`); `remove` soft-deletes. Verify is a pure audit signal — only
+ * adjust/remove change inventory, so `recomputeNeeded` tells the caller whether
+ * to dispatch a valuation recompute. Relocations flow through `bulkMove`. Ids
+ * that don't live at this location (stale / foreign) are ignored.
+ */
+export const reconcileLocationSession = async (
+  db: Database,
+  locationId: LocationId,
+  resolutions: InventorySessionResolution[],
+  actor: ActorContext,
+) => {
+  const { processed, removedIds, recomputeNeeded } = await withTransaction(
+    db,
+    async (tx: DrizzleTransaction) => {
+      await assertLiveTargets(tx, { locationId });
+      const now = new Date();
+      const ids = uniq(resolutions.map((r) => r.inventoryEntryId));
+
+      const existing =
+        ids.length > 0
+          ? await tx.query.inventoryEntry.findMany({
+              where: and(
+                inArray(inventoryEntry.id, ids),
+                eq(inventoryEntry.locationId, locationId),
+                notDeleted(inventoryEntry),
+              ),
+              ...relations.inventory.full,
+            })
+          : [];
+      const existingById = new Map(existing.map((e) => [e.id, e]));
+
+      // Prices for adjusted entries' products (to recompute valuation).
+      const adjustProductIds = uniq(
+        resolutions
+          .filter((r) => r.kind === "adjust")
+          .map((r) => existingById.get(r.inventoryEntryId)?.productId)
+          .filter((id): id is ProductId => id != null),
+      );
+      const priceMap = new Map<string, number | null>();
+      if (adjustProductIds.length > 0) {
+        const products = await tx
+          .select({ id: product.id, price: product.price })
+          .from(product)
+          .where(inArray(product.id, adjustProductIds));
+        for (const p of products) priceMap.set(p.id, p.price);
+      }
+
+      const auditEntries: AuditEntryInput[] = [];
+      const resultIds: string[] = [];
+      const removedIds: InventoryId[] = [];
+      let recomputeNeeded = false;
+
+      for (const r of resolutions) {
+        const before = existingById.get(r.inventoryEntryId);
+        if (!before) continue;
+
+        // Exhaustive match so a future resolution kind is a compile error, not a
+        // silent fall-through to the (destructive) delete branch.
+        await match(r)
+          .with({ kind: "verify" }, async () => {
+            await tx
+              .update(inventoryEntry)
+              .set({ verifiedAt: now })
+              .where(eq(inventoryEntry.id, before.id));
+            resultIds.push(before.id);
+            auditEntries.push({
+              entityType: "inventory",
+              entityId: before.id,
+              action: "update",
+            });
+          })
+          .with({ kind: "adjust" }, async ({ amount: adjusted }) => {
+            const valuation = computeInventoryValuation(
+              adjusted.value,
+              priceMap.get(before.productId) ?? null,
+            );
+            const updated = await updateAndReturn(
+              tx,
+              inventoryEntry,
+              { amount: adjusted, valuation, verifiedAt: now },
+              eq(inventoryEntry.id, before.id),
+            );
+            recomputeNeeded = true;
+            resultIds.push(updated.id);
+            const changes = computeChanges(before, updated, ["amount"]);
+            auditEntries.push({
+              entityType: "inventory",
+              entityId: before.id,
+              action: "update",
+              ...(changes ? { changes } : {}),
+            });
+          })
+          .with({ kind: "remove" }, async () => {
+            await tx
+              .update(inventoryEntry)
+              .set({ deletedAt: now })
+              .where(eq(inventoryEntry.id, before.id));
+            recomputeNeeded = true;
+            removedIds.push(before.id);
+            auditEntries.push({
+              entityType: "inventory",
+              entityId: before.id,
+              action: "delete",
+            });
+          })
+          .exhaustive();
+      }
+
+      await tx
+        .update(location)
+        .set({ lastBulkInventory: now })
+        .where(eq(location.id, locationId));
+      if (auditEntries.length > 0) {
+        await logAuditEntries(tx, actor, auditEntries);
+      }
+
+      const processed = await batchFetchResults(tx, resultIds);
+      return { processed, removedIds, recomputeNeeded };
+    },
+  );
+
+  return {
+    items: processed.map(dbInventoryEntryToAPI),
+    removedIds,
+    recomputeNeeded,
+  };
 };

@@ -18,7 +18,11 @@
 // CRUD operations
 
 // Bulk operations
-export { bulkMoveInventoryEntries, bulkProcessInventoryEntries } from "./bulk";
+export {
+  bulkMoveInventoryEntries,
+  bulkProcessInventoryEntries,
+  reconcileLocationSession,
+} from "./bulk";
 export {
   checkUniqueProductDuplicate,
   createInventoryEntry,

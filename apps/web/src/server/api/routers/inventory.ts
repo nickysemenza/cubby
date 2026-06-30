@@ -23,6 +23,7 @@ import {
   inventoryWithLocationAndProductListAndSideEffectsOut,
   inventoryWithLocationAndProductListOut,
   inventoryWithLocationAndProductOut,
+  reconcileSessionPayload,
 } from "@cubby/schemas/inventory";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -35,6 +36,7 @@ import {
   getInventoryCountsByLocations,
   getInventoryEntryByID,
   inventoryentryList,
+  reconcileLocationSession,
   updateInventoryEntry,
 } from "~/server/repo/inventory";
 import { findDuplicateUniqueProducts } from "~/server/repo/product";
@@ -192,6 +194,39 @@ const bulkMove = protectedProcedure
     return { items: result, sideEffects: { backgroundBatches } };
   });
 
+// Commit an audit-session recount: apply the staged verify/adjust/remove diff +
+// stamp lastBulkInventory. Only dispatch a valuation recompute if something
+// actually changed (adjust/remove) — a pure-verify commit is a free no-op.
+const reconcileSession = protectedProcedure
+  .input(reconcileSessionPayload)
+  .output(inventoryWithLocationAndProductListAndSideEffectsOut)
+  .mutation(async ({ ctx, input }) => {
+    const { items, removedIds, recomputeNeeded } =
+      await reconcileLocationSession(
+        ctx.db,
+        input.locationId,
+        input.resolutions,
+        ctx.actorContext,
+      );
+    // Surviving entries get "updated" side-effects; removed (soft-deleted) ones
+    // get "deleted" so their embedding is cleaned up too (they're not in items).
+    const backgroundBatches = recomputeNeeded
+      ? await runMutationSideEffectsForEntities(ctx.db, [
+          ...items.map((entry) => ({
+            action: "updated" as const,
+            entity: { entityType: "inventory" as const, entityId: entry.id },
+            source: "inventory.reconcileSession",
+          })),
+          ...removedIds.map((id) => ({
+            action: "deleted" as const,
+            entity: { entityType: "inventory" as const, entityId: id },
+            source: "inventory.reconcileSession",
+          })),
+        ])
+      : [];
+    return { items, sideEffects: { backgroundBatches } };
+  });
+
 // Find products with expectedQuantity=1 in multiple locations
 const findDuplicates = protectedProcedure
   .input(inventoryFindDuplicatesInput)
@@ -235,6 +270,7 @@ export const inventoryRouter = createTRPCRouter({
   delete: deleteItem,
   bulkProcess,
   bulkMove,
+  reconcileSession,
   findDuplicates,
   getCountsByLocations,
   getByLocationIds,

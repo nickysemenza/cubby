@@ -18,7 +18,6 @@ import {
   locationImage,
   product,
 } from "~/server/db/schema";
-import { createAppError } from "~/server/errors/app-error";
 import {
   getDb,
   notDeleted,
@@ -203,25 +202,6 @@ export const buildLocationTree = async (db: Database) => {
     return buildLocationWithChildren(x, undefined, false);
   });
   return tree;
-};
-
-/**
- * Update the lastBulkInventory timestamp for a location.
- * Used when completing manual inventory at a location (e.g., from Scanner page).
- */
-export const touchLastBulkInventory = async (
-  db: Database,
-  id: LocationId,
-): Promise<void> => {
-  const result = await getDb(db)
-    .update(location)
-    .set({ lastBulkInventory: new Date() })
-    .where(eq(location.id, id))
-    .returning();
-
-  if (result.length === 0) {
-    throw createAppError("LOCATION_NOT_FOUND", `Location ${id} not found`);
-  }
 };
 
 /**

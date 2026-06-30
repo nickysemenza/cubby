@@ -31,6 +31,7 @@ function makeInventoryItem(params: {
     updatedAt: now,
     amount: { value: 1, unit: "each" },
     valuation: params.valuation,
+    verifiedAt: null,
     location: {
       id: unsafeLocationId("loc-1"),
       shortcode: unsafeLocationShortcode("L-TEST"),

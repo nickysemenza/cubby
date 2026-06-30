@@ -6,7 +6,10 @@ import {
   unsafeProductId,
 } from "@cubby/schemas/identifiers";
 import type { AllowedImageType } from "@cubby/schemas/image";
-import type { InventoryWithLocationAndProductOut } from "@cubby/schemas/inventory";
+import type {
+  InventorySessionResolution,
+  InventoryWithLocationAndProductOut,
+} from "@cubby/schemas/inventory";
 import type { InfLocation } from "@cubby/schemas/location";
 import { extractShortcodeFromScan } from "@cubby/shared";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -15,20 +18,25 @@ import { useNavigate } from "@tanstack/react-router";
 import { format } from "date-fns";
 import {
   ArrowDownToLine,
+  ArrowRightLeft,
   Barcode,
   Camera,
   Check,
+  CheckCheck,
   ChevronLeft,
   ChevronRight,
+  Minus,
   PackagePlus,
   Plus,
   QrCode,
   Search,
+  Trash2,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { match } from "ts-pattern";
 import { z } from "zod";
 import { DialogCompatibleCombobox } from "~/app/_components/combobox/combobox-dialog";
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
@@ -52,6 +60,7 @@ import { LocationBreadcrumb } from "~/app/_components/locations/location-breadcr
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { LocationTreeRow } from "~/app/_components/locations/location-tree-row";
 import { useProductSearch } from "~/app/_components/products/use-product-search";
+import { type SwipeAction, SwipeRow } from "~/components/entity/swipe-row";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -83,7 +92,6 @@ import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import {
-  confirmationKey,
   findLocationInTree,
   flattenAllLocations,
   flattenAuditableLocations,
@@ -120,8 +128,17 @@ interface UndoAction {
 // UX state ONLY — never a source of truth for a destructive write.
 const AUDIT_SESSION_STORAGE_PREFIX = "cubby:audit-session:";
 
+// One staged, uncommitted decision about an expected inventory row. Nothing is
+// written to the DB until "Done" commits the whole resolved set at once.
+type ItemResolution =
+  | { kind: "verify" }
+  | { kind: "adjust"; amount: Amount }
+  | { kind: "remove" };
+
 interface PersistedSessionProgress {
-  confirmedIds: string[];
+  // [inventoryId, resolution] pairs — Map isn't JSON-serializable.
+  itemResolutions: [string, ItemResolution][];
+  confirmedLocationIds: string[];
   currentIndex: number;
 }
 
@@ -157,27 +174,29 @@ function saveSessionProgress(rootId: string, data: PersistedSessionProgress) {
 function AuditedHint({
   at,
   className,
+  label = "audited",
 }: {
   at: Date | null;
   className?: string;
+  label?: string;
 }) {
   if (!at) {
     return (
       <span className={cn("text-muted-foreground/70", className)}>
-        never audited
+        never {label}
       </span>
     );
   }
   const stale = Date.now() - at.getTime() > 30 * 86_400_000;
   return (
     <span
-      title={`Last audited ${format(at, "yyyy-MM-dd HH:mm")}`}
+      title={`Last ${label} ${format(at, "yyyy-MM-dd HH:mm")}`}
       className={cn(
         stale ? "text-warning" : "text-muted-foreground/70",
         className,
       )}
     >
-      audited {formatCompactRelative(at)}
+      {label} {formatCompactRelative(at)}
     </span>
   );
 }
@@ -214,10 +233,6 @@ function parseLocationIdFromInput(raw: string): LocationId | null {
 
 function locationTypeNoun(type: string): string {
   return type.replaceAll("-", " ");
-}
-
-function sentenceCase(value: string): string {
-  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 function locationPathFromRoot(
@@ -284,7 +299,13 @@ export function InventorySessionWorkbench({
   );
 
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [confirmedIds, setConfirmedIds] = useState<Set<string>>(
+  // Staged decisions for expected inventory rows, keyed by (globally-unique)
+  // inventory id — committed atomically on "Done", persisted to localStorage.
+  const [itemResolutions, setItemResolutions] = useState<
+    Map<string, ItemResolution>
+  >(() => new Map());
+  // Child-location acknowledgments (client-only — no DB write on Done).
+  const [confirmedLocationIds, setConfirmedLocationIds] = useState<Set<string>>(
     () => new Set(),
   );
 
@@ -300,14 +321,16 @@ export function InventorySessionWorkbench({
     lastRootId.current = rootId;
     if (!rootId || sessionLocations.length === 0) {
       setCurrentIndex(0);
-      setConfirmedIds(new Set());
+      setItemResolutions(new Map());
+      setConfirmedLocationIds(new Set());
       return;
     }
     const restored = loadSessionProgress(rootId);
     const firstIncomplete = sessionLocations.findIndex(
       (loc) => !loc.lastBulkInventory,
     );
-    setConfirmedIds(new Set(restored?.confirmedIds ?? []));
+    setItemResolutions(new Map(restored?.itemResolutions ?? []));
+    setConfirmedLocationIds(new Set(restored?.confirmedLocationIds ?? []));
     setCurrentIndex(
       restored
         ? Math.min(
@@ -324,10 +347,11 @@ export function InventorySessionWorkbench({
   useEffect(() => {
     if (!rootId) return;
     saveSessionProgress(rootId, {
-      confirmedIds: [...confirmedIds],
+      itemResolutions: [...itemResolutions],
+      confirmedLocationIds: [...confirmedLocationIds],
       currentIndex,
     });
-  }, [rootId, confirmedIds, currentIndex]);
+  }, [rootId, itemResolutions, confirmedLocationIds, currentIndex]);
 
   const currentLocation = sessionLocations[currentIndex] ?? null;
   const unknownLocation = ensureUnknown.data ?? null;
@@ -391,26 +415,29 @@ export function InventorySessionWorkbench({
       onError: (error) => toast.error(getErrorMessage(error)),
     }),
   );
-  const updateInventory = useMutation(
-    api.inventory.update.mutationOptions({
-      onSuccess: invalidateSession,
-      onError: (error) => toast.error(getErrorMessage(error)),
-    }),
-  );
   const updateLocation = useMutation(
     api.location.update.mutationOptions({
       onSuccess: invalidateSession,
       onError: (error) => toast.error(getErrorMessage(error)),
     }),
   );
-  const touchLocation = useMutation(
-    api.location.touchLastBulkInventory.mutationOptions({
-      onSuccess: () => {
-        invalidateSession();
-        const noun = currentLocation
-          ? locationTypeNoun(currentLocation.type)
-          : "location";
-        toast.success(`${sentenceCase(noun)} marked complete.`);
+  // "Done" commits the staged diff for the current bin. On success the committed
+  // resolutions leave the staged map (read from `variables`, so it's never the
+  // stale closure) and we advance to the next bin.
+  const reconcile = useMutation(
+    api.inventory.reconcileSession.mutationOptions({
+      onSuccess: (data, variables) => {
+        invalidateSession(data);
+        setItemResolutions((prev) => {
+          const next = new Map(prev);
+          for (const r of variables.resolutions)
+            next.delete(r.inventoryEntryId);
+          return next;
+        });
+        setCurrentIndex((idx) =>
+          Math.min(sessionLocations.length - 1, idx + 1),
+        );
+        toast.success("Bin recount saved.");
       },
       onError: (error) => toast.error(getErrorMessage(error)),
     }),
@@ -521,15 +548,81 @@ export function InventorySessionWorkbench({
     );
   };
 
-  const markConfirmed = (itemId: string) => {
-    setConfirmedIds((prev) => new Set(prev).add(itemId));
+  const setItemResolution = (id: string, res: ItemResolution | null) =>
+    setItemResolutions((prev) => {
+      const next = new Map(prev);
+      if (res === null) next.delete(id);
+      else next.set(id, res);
+      return next;
+    });
+
+  const confirmLocation = (id: string) =>
+    setConfirmedLocationIds((prev) => new Set(prev).add(id));
+
+  // Staging (no DB write): confirm / adjust / remove. Relocate is the one live
+  // action — it physically moves the item to Unknown now (undoable).
+  const toggleVerify = (item: InventoryItem) =>
+    setItemResolution(
+      item.id,
+      itemResolutions.get(item.id)?.kind === "verify"
+        ? null
+        : { kind: "verify" },
+    );
+  const stageAdjust = (item: InventoryItem, amount: Amount) =>
+    setItemResolution(item.id, { kind: "adjust", amount });
+  const stageRemove = (item: InventoryItem) =>
+    setItemResolution(item.id, { kind: "remove" });
+
+  // Gating: every expected item must have a staged resolution and every child
+  // location must be acknowledged before the bin can be committed.
+  const itemsUnresolvedCount = currentItems.filter(
+    (i) => !itemResolutions.has(i.id),
+  ).length;
+  const locationsUnresolvedCount = currentChildLocations.filter(
+    (l) => !confirmedLocationIds.has(l.id),
+  ).length;
+  const unresolvedCount = itemsUnresolvedCount + locationsUnresolvedCount;
+
+  const yesToAllRemaining = () => {
+    setItemResolutions((prev) => {
+      const next = new Map(prev);
+      for (const i of currentItems)
+        if (!next.has(i.id)) next.set(i.id, { kind: "verify" });
+      return next;
+    });
+    setConfirmedLocationIds((prev) => {
+      const next = new Set(prev);
+      for (const l of currentChildLocations) next.add(l.id);
+      return next;
+    });
   };
 
-  const handleQuantityChange = async (item: InventoryItem, amount: Amount) => {
-    await updateInventory.mutateAsync({
-      id: item.id,
-      data: { amount },
-    });
+  const handleDone = () => {
+    if (!currentLocation) return;
+    const resolutions: InventorySessionResolution[] = [];
+    for (const item of currentItems) {
+      const r = itemResolutions.get(item.id);
+      if (!r) continue;
+      // Exhaustive match so a new resolution kind can't silently default to verify.
+      resolutions.push(
+        match(r)
+          .with({ kind: "adjust" }, ({ amount }) => ({
+            kind: "adjust" as const,
+            inventoryEntryId: item.id,
+            amount,
+          }))
+          .with({ kind: "remove" }, () => ({
+            kind: "remove" as const,
+            inventoryEntryId: item.id,
+          }))
+          .with({ kind: "verify" }, () => ({
+            kind: "verify" as const,
+            inventoryEntryId: item.id,
+          }))
+          .exhaustive(),
+      );
+    }
+    reconcile.mutate({ locationId: currentLocation.id, resolutions });
   };
 
   const selectParent = (locationId: LocationId) => {
@@ -593,7 +686,7 @@ export function InventorySessionWorkbench({
         currentId={currentLocation?.id ?? null}
         currentIndex={currentIndex}
         inventoryByLocation={inventoryByLocation}
-        confirmedIds={confirmedIds}
+        itemResolutions={itemResolutions}
         onSelect={(id) => jumpToLocation(id)}
         onScanJump={(id) => {
           if (!jumpToLocation(id)) {
@@ -609,7 +702,7 @@ export function InventorySessionWorkbench({
           locations={sessionLocations}
           currentId={currentLocation?.id ?? null}
           inventoryByLocation={inventoryByLocation}
-          confirmedIds={confirmedIds}
+          itemResolutions={itemResolutions}
           onSelect={(id) => jumpToLocation(id)}
           onScanJump={(id) => {
             if (!jumpToLocation(id)) {
@@ -628,27 +721,26 @@ export function InventorySessionWorkbench({
             childLocations={currentChildLocations}
             unknownItems={unknownItems}
             unknownLocations={unknownChildLocations}
-            confirmedIds={confirmedIds}
-            onConfirm={(itemId) =>
-              markConfirmed(confirmationKey("inventory", itemId))
-            }
-            onConfirmLocation={(locationId) =>
-              markConfirmed(confirmationKey("location", locationId))
-            }
-            onMoveMissing={moveToUnknown}
+            itemResolutions={itemResolutions}
+            confirmedLocationIds={confirmedLocationIds}
+            onToggleVerify={toggleVerify}
+            onAdjust={stageAdjust}
+            onRemove={stageRemove}
+            onRelocate={moveToUnknown}
+            onConfirmLocation={(locationId) => confirmLocation(locationId)}
             onMoveLocationMissing={moveLocationToUnknown}
             onPullUnknown={pullFromUnknown}
             onPullUnknownLocation={pullLocationFromUnknown}
-            onQuantityChange={handleQuantityChange}
             onPrevious={() => setCurrentIndex((idx) => Math.max(0, idx - 1))}
             onNext={() =>
               setCurrentIndex((idx) =>
                 Math.min(sessionLocations.length - 1, idx + 1),
               )
             }
-            onMarkComplete={() =>
-              touchLocation.mutate({ id: currentLocation.id })
-            }
+            onDone={handleDone}
+            onYesToAll={yesToAllRemaining}
+            unresolvedCount={unresolvedCount}
+            donePending={reconcile.isPending}
             onJumpByScan={(id) => {
               if (!jumpToLocation(id)) {
                 toast.error("That location is not in this session.");
@@ -825,7 +917,7 @@ type SessionLocationListProps = {
   locations: SessionLocation[];
   currentId: LocationId | null;
   inventoryByLocation: Map<string, InventoryItem[]>;
-  confirmedIds: Set<string>;
+  itemResolutions: Map<string, ItemResolution>;
   onSelect: (locationId: LocationId) => void;
   onScanJump: (locationId: string) => void;
   parentLocation: InfLocation;
@@ -842,7 +934,7 @@ function SessionLocationList({
   locations,
   currentId,
   inventoryByLocation,
-  confirmedIds,
+  itemResolutions,
   onSelect,
   onScanJump,
   parentLocation,
@@ -887,7 +979,7 @@ function SessionLocationList({
         {visible.map((location) => {
           const items = inventoryByLocation.get(location.id) ?? [];
           const confirmed = items.filter((item) =>
-            confirmedIds.has(confirmationKey("inventory", item.id)),
+            itemResolutions.has(item.id),
           ).length;
           return (
             <button
@@ -1000,17 +1092,22 @@ function LocationReviewPane({
   childLocations,
   unknownItems,
   unknownLocations,
-  confirmedIds,
-  onConfirm,
+  itemResolutions,
+  confirmedLocationIds,
+  onToggleVerify,
+  onAdjust,
+  onRemove,
+  onRelocate,
   onConfirmLocation,
-  onMoveMissing,
   onMoveLocationMissing,
   onPullUnknown,
   onPullUnknownLocation,
-  onQuantityChange,
   onPrevious,
   onNext,
-  onMarkComplete,
+  onDone,
+  onYesToAll,
+  unresolvedCount,
+  donePending,
   onJumpByScan,
   canPrevious,
   canNext,
@@ -1025,17 +1122,22 @@ function LocationReviewPane({
   childLocations: InfLocation[];
   unknownItems: InventoryItem[];
   unknownLocations: InfLocation[];
-  confirmedIds: Set<string>;
-  onConfirm: (itemId: string) => void;
+  itemResolutions: Map<string, ItemResolution>;
+  confirmedLocationIds: Set<string>;
+  onToggleVerify: (item: InventoryItem) => void;
+  onAdjust: (item: InventoryItem, amount: Amount) => void;
+  onRemove: (item: InventoryItem) => void;
+  onRelocate: (item: InventoryItem) => void;
   onConfirmLocation: (locationId: string) => void;
-  onMoveMissing: (item: InventoryItem) => void;
   onMoveLocationMissing: (location: InfLocation) => void;
   onPullUnknown: (item: InventoryItem) => void;
   onPullUnknownLocation: (location: InfLocation) => void;
-  onQuantityChange: (item: InventoryItem, amount: Amount) => void;
   onPrevious: () => void;
   onNext: () => void;
-  onMarkComplete: () => void;
+  onDone: () => void;
+  onYesToAll: () => void;
+  unresolvedCount: number;
+  donePending: boolean;
   onJumpByScan: (locationId: string) => void;
   canPrevious: boolean;
   canNext: boolean;
@@ -1259,9 +1361,7 @@ function LocationReviewPane({
                 <ExpectedLocationReviewRow
                   key={child.id}
                   location={child}
-                  confirmed={confirmedIds.has(
-                    confirmationKey("location", child.id),
-                  )}
+                  confirmed={confirmedLocationIds.has(child.id)}
                   onConfirm={() => onConfirmLocation(child.id)}
                   onMissing={() => onMoveLocationMissing(child)}
                   onPhoto={() =>
@@ -1279,12 +1379,11 @@ function LocationReviewPane({
                 <ExpectedItemReviewRow
                   key={item.id}
                   item={item}
-                  confirmed={confirmedIds.has(
-                    confirmationKey("inventory", item.id),
-                  )}
-                  onConfirm={() => onConfirm(item.id)}
-                  onMissing={() => onMoveMissing(item)}
-                  onQuantityChange={(amount) => onQuantityChange(item, amount)}
+                  resolution={itemResolutions.get(item.id)}
+                  onToggleVerify={() => onToggleVerify(item)}
+                  onAdjust={(amount) => onAdjust(item, amount)}
+                  onRemove={() => onRemove(item)}
+                  onRelocate={() => onRelocate(item)}
                   onPhoto={() =>
                     openExpectedPhotoPicker({
                       kind: "product",
@@ -1310,180 +1409,199 @@ function LocationReviewPane({
         disabled={!unknownReady}
       />
 
-      <Row
-        align="stretch"
+      <Stack
         gap="sm"
         className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-20 border border-[var(--border)] bg-card p-2 shadow-[var(--shadow-chunky)] md:bottom-4"
       >
-        <Button
-          type="button"
-          variant="outline"
-          className="h-auto min-h-12 max-w-28 flex-col items-start gap-0 py-1"
-          onClick={onPrevious}
-          disabled={!canPrevious}
-          aria-label={previousName ? `Previous: ${previousName}` : "Previous"}
-        >
-          <span className="flex items-center gap-1 font-medium text-xs">
-            <ChevronLeft className="h-3.5 w-3.5" />
-            Prev
-          </span>
-          <span className="w-full truncate text-left text-2xs text-muted-foreground">
-            {canPrevious ? (previousName ?? "—") : "Start"}
-          </span>
-        </Button>
-        <Button
-          type="button"
-          className="min-h-12 flex-1"
-          onClick={onMarkComplete}
-        >
-          <Check className="h-4 w-4" />
-          Mark {locationNoun} complete
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          className="h-auto min-h-12 max-w-28 flex-col items-end gap-0 py-1"
-          onClick={onNext}
-          disabled={!canNext}
-          aria-label={nextName ? `Next: ${nextName}` : "Next"}
-        >
-          <span className="flex items-center gap-1 font-medium text-xs">
-            Next
-            <ChevronRight className="h-3.5 w-3.5" />
-          </span>
-          <span className="w-full truncate text-right text-2xs text-muted-foreground">
-            {canNext ? (nextName ?? "—") : "End"}
-          </span>
-        </Button>
-      </Row>
+        {unresolvedCount > 0 && (
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-12"
+            onClick={onYesToAll}
+          >
+            <CheckCheck className="h-4 w-4" />
+            Yes to all remaining ({unresolvedCount})
+          </Button>
+        )}
+        <Row align="stretch" gap="sm">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-auto min-h-12 max-w-28 flex-col items-start gap-0 py-1"
+            onClick={onPrevious}
+            disabled={!canPrevious}
+            aria-label={previousName ? `Previous: ${previousName}` : "Previous"}
+          >
+            <span className="flex items-center gap-1 font-medium text-xs">
+              <ChevronLeft className="h-3.5 w-3.5" />
+              Prev
+            </span>
+            <span className="w-full truncate text-left text-2xs text-muted-foreground">
+              {canPrevious ? (previousName ?? "—") : "Start"}
+            </span>
+          </Button>
+          <Button
+            type="button"
+            className="min-h-12 flex-1"
+            disabled={unresolvedCount > 0 || donePending}
+            onClick={onDone}
+          >
+            {donePending ? <Spinner /> : <Check className="h-4 w-4" />}
+            {unresolvedCount > 0 ? `${unresolvedCount} left` : "Done"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-auto min-h-12 max-w-28 flex-col items-end gap-0 py-1"
+            onClick={onNext}
+            disabled={!canNext}
+            aria-label={nextName ? `Next: ${nextName}` : "Next"}
+          >
+            <span className="flex items-center gap-1 font-medium text-xs">
+              Next
+              <ChevronRight className="h-3.5 w-3.5" />
+            </span>
+            <span className="w-full truncate text-right text-2xs text-muted-foreground">
+              {canNext ? (nextName ?? "—") : "End"}
+            </span>
+          </Button>
+        </Row>
+      </Stack>
     </Stack>
   );
 }
 
 function ExpectedItemReviewRow({
   item,
-  confirmed,
-  onConfirm,
-  onMissing,
-  onQuantityChange,
+  resolution,
+  onToggleVerify,
+  onAdjust,
+  onRemove,
+  onRelocate,
   onPhoto,
   photoPending,
 }: {
   item: InventoryItem;
-  confirmed: boolean;
-  onConfirm: () => void;
-  onMissing: () => void;
-  onQuantityChange: (amount: Amount) => void;
+  resolution: ItemResolution | undefined;
+  onToggleVerify: () => void;
+  onAdjust: (amount: Amount) => void;
+  onRemove: () => void;
+  onRelocate: () => void;
   onPhoto: () => void;
   photoPending: boolean;
 }) {
-  const [editing, setEditing] = useState(false);
-  const form = useForm<{ amount: Amount }>({
-    defaultValues: { amount: item.amount },
-  });
+  const staged = resolution?.kind;
+  const amount =
+    resolution?.kind === "adjust" ? resolution.amount : item.amount;
+  // Step by ±1 without rounding, so weight/length amounts keep their precision
+  // (2.5 → 3.5, not 4). Floor at 1 — recounting to zero means the item is gone,
+  // which is the "Remove" action (soft-delete), not a phantom 0-qty adjust.
+  const bump = (delta: number) => {
+    const next = Math.max(1, amount.value + delta);
+    // No-op at the floor: don't turn a verified item into an identical "adjust"
+    // (which would drop its confirmed state and force a needless recompute).
+    if (next === amount.value) return;
+    onAdjust({ ...amount, value: next });
+  };
 
-  useEffect(() => {
-    form.reset({ amount: item.amount });
-  }, [form, item.amount]);
+  // Swipe-left reveals the two destructive/relocate verbs (mobile). Remove is
+  // staged (soft-deleted on Done); Relocate moves the item to Unknown now.
+  const actions: SwipeAction[] = [
+    { label: "Relocate", icon: ArrowRightLeft, onAction: onRelocate },
+    { label: "Remove", icon: Trash2, tone: "destructive", onAction: onRemove },
+  ];
 
   return (
-    <div
-      className={cn(
-        "border border-[var(--border)] border-l-4 border-l-warning/60 bg-background p-2",
-        confirmed && "border-positive/40 bg-positive/5",
-      )}
-    >
-      <Row align="baseline" gap="xs" wrap>
-        <EntityInlineLink entity="product" data={item.product} />
-        {confirmed && <Badge variant="secondary">confirmed</Badge>}
-      </Row>
-      <Row align="center" justify="between" gap="sm" className="mt-2">
-        <Row align="center" gap="sm" className="min-w-0">
+    <SwipeRow actions={actions} className="border border-[var(--border)]">
+      <Row
+        align="center"
+        gap="sm"
+        className={cn(
+          "border-l-4 border-l-warning/60 bg-background p-2",
+          staged === "verify" && "border-l-positive/60 bg-positive/5",
+          staged === "adjust" && "border-l-primary/60 bg-primary/5",
+          staged === "remove" && "border-l-destructive/60 bg-destructive/5",
+        )}
+      >
+        {/* Tap the row body to confirm present (toggle). Stepper / photo are
+            separate buttons so this stays a valid, large tap target. */}
+        <button
+          type="button"
+          onClick={onToggleVerify}
+          aria-pressed={staged === "verify"}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        >
           <Image
             src={item.product.images[0]?.url}
             alt={item.product.name}
             displayWidth={128}
-            className="h-16 w-16 shrink-0 border border-[var(--border)] object-cover"
+            className="h-14 w-14 shrink-0 border border-[var(--border)] object-cover"
           />
-          <Description size="xs" className="truncate">
-            {tryFormatAmount(item.amount)}
-          </Description>
-        </Row>
-        {!editing && (
-          <Row gap="xs" className="shrink-0">
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11 w-10 shrink-0"
-              onClick={onPhoto}
-              disabled={photoPending}
-              aria-label="Add photo"
-              title="Add photo"
-            >
-              {photoPending ? <Spinner /> : <Camera className="h-4 w-4" />}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11 shrink-0"
-              onClick={() => setEditing(true)}
-            >
-              Qty
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11 w-10 shrink-0 border-positive/40 bg-positive/10 text-positive hover:bg-positive/20 hover:text-positive"
-              onClick={onConfirm}
-              aria-label="Confirm present"
-              title="Confirm present"
-            >
-              <Check className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              className="h-11 w-10 shrink-0"
-              onClick={onMissing}
-              aria-label="Mark missing"
-              title="Mark missing"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </Row>
-        )}
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-2">
+              <span className="truncate font-medium text-sm">
+                {item.product.name}
+              </span>
+              {staged === "verify" && (
+                <Badge variant="secondary">confirmed</Badge>
+              )}
+              {staged === "adjust" && <Badge>adjusted</Badge>}
+              {staged === "remove" && (
+                <Badge variant="destructive">removing</Badge>
+              )}
+            </span>
+            <span className="flex items-center gap-2">
+              <Description size="xs" className="truncate">
+                {tryFormatAmount(amount)}
+              </Description>
+              {item.verifiedAt && (
+                <AuditedHint
+                  at={item.verifiedAt}
+                  label="verified"
+                  className="shrink-0 text-2xs"
+                />
+              )}
+            </span>
+          </span>
+        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-10 w-10 shrink-0"
+            onClick={() => bump(-1)}
+            disabled={staged === "remove"}
+            aria-label="Decrease quantity"
+          >
+            <Minus className="h-4 w-4" />
+          </Button>
+          <span className="w-7 text-center font-mono text-sm tabular-nums">
+            {amount.value}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-10 w-10 shrink-0"
+            onClick={() => bump(1)}
+            disabled={staged === "remove"}
+            aria-label="Increase quantity"
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-10 w-10 shrink-0"
+            onClick={onPhoto}
+            disabled={photoPending}
+            aria-label="Add photo"
+          >
+            {photoPending ? <Spinner /> : <Camera className="h-4 w-4" />}
+          </Button>
+        </div>
       </Row>
-      {editing && (
-        <Stack gap="sm" className="mt-2">
-          <AmountFieldGroup
-            form={form}
-            valuePath="amount.value"
-            unitPath="amount.unit"
-            compact
-          />
-          <Row gap="sm">
-            <Button
-              type="button"
-              className="min-h-12 flex-1"
-              onClick={() => {
-                onQuantityChange(form.getValues("amount"));
-                setEditing(false);
-              }}
-            >
-              Save quantity
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="min-h-12"
-              onClick={() => setEditing(false)}
-            >
-              Cancel
-            </Button>
-          </Row>
-        </Stack>
-      )}
-    </div>
+    </SwipeRow>
   );
 }
 
