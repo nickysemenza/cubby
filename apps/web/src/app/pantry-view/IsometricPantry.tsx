@@ -707,8 +707,12 @@ function getFurnitureSpec(type: LocationType): FurnitureSpec {
     case "half-crate":
     case "quarter-crate":
     case "milk-crate":
-    case "tote-bin":
+    case "tote-27gal":
       return { w: 1.6, d: 1.6, h: 1.2, zone: "floor", shelfLevels: [0.1] };
+    case "tote-14gal":
+      return { w: 1.3, d: 1.3, h: 1.0, zone: "floor", shelfLevels: [0.1] };
+    case "tote-7gal":
+      return { w: 1.0, d: 1.0, h: 0.8, zone: "floor", shelfLevels: [0.1] };
     case "bag":
       return { w: 1.2, d: 1.0, h: 0.9, zone: "floor", shelfLevels: [0.1] };
     default:
@@ -737,7 +741,9 @@ function getDrawFunction(type: LocationType) {
     case "half-crate":
     case "quarter-crate":
     case "milk-crate":
-    case "tote-bin":
+    case "tote-27gal":
+    case "tote-14gal":
+    case "tote-7gal":
     case "bag":
       return drawBoxContainer;
     default:

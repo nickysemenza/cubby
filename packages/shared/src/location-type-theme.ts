@@ -9,7 +9,9 @@ export const locationTypeValues = [
   "half-crate",
   "quarter-crate",
   "milk-crate",
-  "tote-bin",
+  "tote-27gal",
+  "tote-14gal",
+  "tote-7gal",
   "table",
   "drawer",
   "cart",
@@ -45,7 +47,9 @@ export const locationTypeColors: Record<LocationType, string> = {
   "half-crate": "var(--chart-7)",
   "quarter-crate": "var(--chart-7)",
   "milk-crate": "var(--chart-8)",
-  "tote-bin": "var(--chart-7)",
+  "tote-27gal": "var(--chart-7)",
+  "tote-14gal": "var(--chart-7)",
+  "tote-7gal": "var(--chart-7)",
   bag: "var(--chart-8)",
 };
 

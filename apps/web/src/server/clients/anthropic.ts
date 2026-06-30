@@ -126,7 +126,11 @@ const LOCATION_TYPE_DESCRIPTIONS = {
   "half-crate": "Half-height stackable plastic crates",
   "quarter-crate": "Quarter-height stackable plastic crates",
   "milk-crate": "Standard milk crate size containers",
-  "tote-bin": "Large plastic bins with lids for storage",
+  "tote-27gal":
+    "27-gallon black storage tote with a yellow lid (the large size)",
+  "tote-14gal":
+    "14-gallon black storage tote with a yellow lid (the medium size)",
+  "tote-7gal": "7-gallon black storage tote with a yellow lid (the small size)",
   table: "Work surfaces: workbench, desk, countertop, craft table",
   cart: "Mobile storage with wheels: tool cart, utility cart, rolling cart",
 } satisfies Record<LocationType, string>;

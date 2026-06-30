@@ -244,11 +244,11 @@ function RootComponent() {
       <DebugContextProvider>
         <div className="flex min-h-dvh flex-col">
           <div className="sticky top-0 z-40 border-b-[3px] border-b-foreground bg-card print:hidden">
-            <div className="mx-auto flex h-12 w-full max-w-7xl items-center px-4 md:px-6">
+            <div className="mx-auto flex h-12 w-full max-w-7xl items-center px-2 md:px-6">
               <MainNav className="mx-0" onSearchClick={openCommandMenu} />
             </div>
           </div>
-          <main className="w-full flex-1 px-4 pt-4 pb-20 md:px-6 md:pb-4">
+          <main className="w-full flex-1 px-2 pt-4 pb-20 md:px-6 md:pb-4">
             {/* biome-ignore lint/correctness/useUniqueElementIds: React <Profiler> id, not a DOM id */}
             <PerfProfiler id="route">
               <Outlet />
