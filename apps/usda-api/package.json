@@ -36,7 +36,7 @@
     "@cubby/worker-tracing": "workspace:*",
     "@hono/zod-validator": "^0.8.0",
     "@openapi-contrib/json-schema-to-openapi-schema": "^4.3.4",
-    "@scalar/hono-api-reference": "^0.10.20",
+    "@scalar/hono-api-reference": "^0.11.7",
     "@sentry/cloudflare": "^10.62.0",
     "@ts-rest/core": "3.53.0-rc.1",
     "@ts-rest/open-api": "3.53.0-rc.1",
@@ -44,17 +44,17 @@
     "csv-parse": "^7.0.0",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.12.27",
-    "p-map": "^7.0.3",
+    "p-map": "^7.0.5",
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260628.1",
+    "@cloudflare/workers-types": "^4.20260630.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^26.0.1",
     "@vitest/coverage-v8": "^4.1.9",
     "drizzle-kit": "^0.31.10",
     "tsx": "^4.22.4",
-    "typescript": "^5.9.3",
+    "typescript": "^6.0.3",
     "vitest": "^4.1.9",
     "wrangler": "^4.105.0"
   }
