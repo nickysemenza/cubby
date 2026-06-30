@@ -21,10 +21,10 @@
     "prepare": "husky"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.4.1",
-    "@typescript/native-preview": "7.0.0-dev.20260209.1",
+    "@biomejs/biome": "2.5.1",
+    "@typescript/native-preview": "7.0.0-dev.20260630.1",
     "@vitest/coverage-v8": "^4.1.9",
-    "@vitest/ui": "4.1.6",
+    "@vitest/ui": "4.1.9",
     "husky": "^9.1.7",
     "typescript": "^5.9.3"
   }

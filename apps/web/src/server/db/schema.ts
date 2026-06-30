@@ -79,7 +79,7 @@ const pgVector = customType<{
 });
 
 // Re-export Better-Auth tables for use throughout the app
-export { user, session, account, verification, apikey, passkey };
+export { account, apikey, passkey, session, user, verification };
 
 // Enums - values derived from Zod schemas
 export const recipeSourceEnum = pgEnum("RecipeSource", recipeSourceValues);
