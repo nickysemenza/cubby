@@ -741,7 +741,8 @@ export function BackgroundJobsPage({
           </span>
           <Link
             to="/background-jobs"
-            search={{}}
+            // Clear only the scope filter; keep any open detail panel (batchId).
+            search={(prev) => ({ batchId: prev.batchId })}
             className="underline decoration-dotted underline-offset-2 hover:decoration-primary"
           >
             Clear
