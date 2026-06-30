@@ -1,6 +1,7 @@
 import type { ImageWithEntity } from "@cubby/schemas/image";
 import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
+import prettyBytes from "pretty-bytes";
 import { createImageColumn } from "~/app/_components/data-table/columnHelpers";
 import RTable from "~/app/_components/data-table/Table";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
@@ -8,7 +9,6 @@ import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
 import { ImageStatusBadge } from "~/app/_components/table/StatusBadge";
 import { NoneValue } from "~/components/ui/none-value";
-import { formatBytes } from "~/lib/format";
 import { useTRPC } from "~/trpc/react";
 
 export default function ImageList() {
@@ -73,7 +73,7 @@ export default function ImageList() {
             className: "w-24",
             mobile: { slot: "trailing", priority: 5 },
           },
-          cell: ({ getValue }) => <span>{formatBytes(getValue())}</span>,
+          cell: ({ getValue }) => <span>{prettyBytes(getValue())}</span>,
         }),
         // Status
         columnHelper.accessor("status", {

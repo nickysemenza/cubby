@@ -1,10 +1,10 @@
 import type { inventoryListItemOut } from "@cubby/schemas/inventory";
 import { useMutation } from "@tanstack/react-query";
+import pluralize from "pluralize";
 import { toast } from "sonner";
 import type { z } from "zod";
 import { useInventoryInvalidation } from "~/app/_components/inventory/hooks";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
-import { countLabel, pluralize } from "~/lib/pluralize";
 import { useTRPC } from "~/trpc/react";
 
 type InventoryItem = z.infer<typeof inventoryListItemOut>;
@@ -37,7 +37,9 @@ export function DeleteInventoryDialog({
       // per-item mutateAsync fan-out.
       await deleteMutation.mutateAsync({ ids: items.map((item) => item.id) });
 
-      toast.success(`Successfully deleted ${countLabel(items.length, "item")}`);
+      toast.success(
+        `Successfully deleted ${pluralize("item", items.length, true)}`,
+      );
       onSuccess();
       onOpenChange(false);
     } catch {
@@ -52,7 +54,7 @@ export function DeleteInventoryDialog({
       items={items}
       action="Delete"
       pendingLabel="Deleting..."
-      description={`This action cannot be undone. The following ${pluralize(items.length, "inventory item")} will be permanently deleted.`}
+      description={`This action cannot be undone. The following ${pluralize("inventory item", items.length)} will be permanently deleted.`}
       renderItem={(item) =>
         `${item.product.name} - ${item.amount.value} ${item.amount.unit}`
       }

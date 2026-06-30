@@ -1,5 +1,6 @@
 import type { MaintenanceCounts } from "@cubby/schemas/problems";
 import { useQuery } from "@tanstack/react-query";
+import pluralize from "pluralize";
 import type { ReactNode } from "react";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -11,7 +12,6 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
-import { countLabel } from "~/lib/pluralize";
 import { useTRPC } from "~/trpc/react";
 import { BACKFILL } from "./backfill-registry";
 import { BackfillButton } from "./problem-backfill-action";
@@ -120,7 +120,7 @@ function RecomputeAction() {
         dryRun.data
           ? `${dryRun.data.wouldChange} of ${dryRun.data.total} would change`
           : counts && counts.staleRecipeTotals > 0
-            ? `${countLabel(counts.staleRecipeTotals, "recipe")} pending recompute`
+            ? `${pluralize("recipe", counts.staleRecipeTotals, true)} pending recompute`
             : null
       }
       onDryRun={() => void dryRun.refetch()}
@@ -133,7 +133,7 @@ function RecomputeAction() {
           pendingLabel="Recomputing…"
           toastResult={(r) => ({
             tone: "success",
-            message: `Recomputed ${countLabel(r.processed, "recipe")}.`,
+            message: `Recomputed ${pluralize("recipe", r.processed, true)}.`,
           })}
         />
       }
@@ -169,7 +169,7 @@ function ReparseAction() {
             tone: r.updated > 0 ? "success" : "info",
             message:
               r.updated > 0
-                ? `Re-parsed ${countLabel(r.updated, "line")} across ${countLabel(r.recipesAffected, "recipe")}.`
+                ? `Re-parsed ${pluralize("line", r.updated, true)} across ${pluralize("recipe", r.recipesAffected, true)}.`
                 : "Nothing to re-parse.",
           })}
         />
@@ -191,7 +191,7 @@ function PruneAliasesAction() {
     <MaintenanceDryRunRow
       summary={
         dryRun.data
-          ? `${countLabel(dryRun.data.wouldPrune, "alias", "aliases")} across ${countLabel(dryRun.data.ingredients, "ingredient")}`
+          ? `${pluralize("alias", dryRun.data.wouldPrune, true)} across ${pluralize("ingredient", dryRun.data.ingredients, true)}`
           : null
       }
       onDryRun={() => void dryRun.refetch()}
@@ -206,7 +206,7 @@ function PruneAliasesAction() {
             tone: r.pruned > 0 ? "success" : "info",
             message:
               r.pruned > 0
-                ? `Pruned ${countLabel(r.pruned, "alias", "aliases")}.`
+                ? `Pruned ${pluralize("alias", r.pruned, true)}.`
                 : "No unused aliases to prune.",
           })}
         />

@@ -38,6 +38,7 @@ import {
   Search,
   X,
 } from "lucide-react";
+import pluralize from "pluralize";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -259,10 +260,6 @@ function sessionBreadcrumbSegments(parent: InfLocation, locationId: string) {
     name: location.name,
     type: location.type,
   }));
-}
-
-function pluralize(count: number, singular: string): string {
-  return `${count} ${singular}${count === 1 ? "" : "s"}`;
 }
 
 interface InventorySessionWorkbenchProps {
@@ -885,7 +882,7 @@ function ParentPicker({
                   depth={depth}
                   compact
                   primaryMeta={locationTypeNoun(location.type)}
-                  secondaryMeta={`${pluralize(sessionCount, "location")} in session · ${pluralize(location.totalItemCount ?? 0, "tracked item")}`}
+                  secondaryMeta={`${pluralize("location", sessionCount, true)} in session · ${pluralize("tracked item", location.totalItemCount ?? 0, true)}`}
                   leading={
                     <button
                       type="button"
@@ -1014,7 +1011,7 @@ function SessionLocationList({
                 secondaryMeta={
                   <>
                     {items.length > 0 &&
-                      `${pluralize(items.length, "tracked item")} · `}
+                      `${pluralize("tracked item", items.length, true)} · `}
                     <AuditedHint at={location.lastBulkInventory} />
                   </>
                 }

@@ -1,3 +1,4 @@
+import pluralize from "pluralize";
 import type { ReactNode } from "react";
 import { Button } from "~/components/ui/button";
 import {
@@ -8,7 +9,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import { pluralize } from "~/lib/pluralize";
 
 interface BulkActionDialogProps<T extends { id: string }> {
   open: boolean;
@@ -43,7 +43,7 @@ export function BulkActionDialog<T extends { id: string }>({
   children,
 }: BulkActionDialogProps<T>) {
   const count = items.length;
-  const itemWord = pluralize(count, itemNoun);
+  const itemWord = pluralize(itemNoun, count);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

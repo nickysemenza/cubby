@@ -1,5 +1,6 @@
 import type { ImageWithEntity } from "@cubby/schemas/image";
 import { ImageIcon } from "lucide-react";
+import prettyBytes from "pretty-bytes";
 import { match } from "ts-pattern";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { HoverableTimestamp } from "~/app/_components/HoverableTimestamp";
@@ -8,7 +9,6 @@ import { Row, Stack } from "~/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { Image } from "~/components/ui/image";
-import { formatBytes } from "~/lib/format";
 
 interface ImageDetailProps {
   image: ImageWithEntity;
@@ -112,7 +112,7 @@ export function ImageDetail({ image }: ImageDetailProps) {
           </div>
           <div>
             <span className="text-muted-foreground">Size:</span>{" "}
-            {formatBytes(image.size)}
+            {prettyBytes(image.size)}
           </div>
           <Row align="center" gap="sm">
             <span className="text-muted-foreground">Status:</span>
