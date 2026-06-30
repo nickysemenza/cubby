@@ -18,13 +18,7 @@ export const Route = createFileRoute("/_authenticated/recipes/import-cookbook")(
 function ImportCookbookPage() {
   const { from } = Route.useSearch();
   return (
-    <Page
-      variant="list"
-      title="Import cookbook"
-      entity="recipe"
-      compact
-      decoration="none"
-    >
+    <Page variant="list" title="Import cookbook" compact decoration="none">
       <CookbookImport loadCookbookId={from} />
     </Page>
   );

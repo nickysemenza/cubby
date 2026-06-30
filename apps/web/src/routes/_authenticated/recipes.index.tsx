@@ -11,7 +11,7 @@ export const Route = createFileRoute("/_authenticated/recipes/")({
 
 function RecipesPage() {
   return (
-    <Page variant="list" title="Recipes" entity="recipe" fullWidth>
+    <Page variant="list" title="Recipes" fullWidth>
       <RecipeList
         actions={
           <>

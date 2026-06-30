@@ -52,7 +52,6 @@ function LocationsPage() {
     <Page
       variant="list"
       title="Locations"
-      entity="location"
       actions={<LocationActions />}
       fullWidth
     >

@@ -8,7 +8,7 @@ export const Route = createFileRoute("/_authenticated/ingredients/new")({
 
 function NewIngredientPage() {
   return (
-    <Page variant="list" title="New ingredient" entity="ingredient" compact>
+    <Page variant="list" title="New ingredient" compact>
       <NewEntityPage entity="ingredient" />
     </Page>
   );

@@ -20,7 +20,6 @@ function InventoryPage() {
     <Page
       variant="list"
       title="Inventory"
-      entity="inventory"
       fullWidth
       actions={
         <div className="flex flex-wrap gap-2">
