@@ -21,7 +21,7 @@ export interface QuickAction {
 export const quickActions: QuickAction[] = [
   {
     id: "add-inventory",
-    name: "Inventory Session",
+    name: "Recount",
     path: "/inventory/session",
     icon: ScanBarcode,
     keywords: ["barcode", "scan", "inventory", "add", "garage", "audit"],
@@ -63,7 +63,7 @@ export const quickActions: QuickAction[] = [
   },
   {
     id: "inventory-audit",
-    name: "Inventory Audit",
+    name: "Bulk Edit",
     path: "/inventory/bulk-edit",
     icon: ClipboardCheck,
     keywords: ["audit", "bulk", "edit", "inventory", "review"],

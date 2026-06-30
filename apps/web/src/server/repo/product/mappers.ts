@@ -2,7 +2,6 @@ import {
   unsafeLocationShortcode,
   unsafeProductShortcode,
 } from "@cubby/schemas/identifiers";
-import type { ImageOut } from "@cubby/schemas/image";
 import type {
   InventoryListProductOut,
   ProductInventoryEmbedOut,
@@ -30,8 +29,10 @@ import type {
 } from "~/server/db/schema";
 import {
   isNotDeleted,
+  mapImages,
   mapRelation,
   parseInventoryAmount,
+  type RowWithOptionalAliases,
 } from "~/server/repo/database-helpers";
 import type { ProductDeepDB, ProductListDB } from "./types";
 
@@ -42,33 +43,9 @@ type ProductImageRow =
       deletedAt?: Date | null;
     };
 
-type ProductTopLevelDB = Omit<typeof product.$inferSelect, "aliases"> & {
-  aliases?: string[];
+type ProductTopLevelDB = RowWithOptionalAliases<typeof product.$inferSelect> & {
   images?: ProductImageRow[] | null;
   externalIds?: Array<typeof productExternalId.$inferSelect> | null;
-};
-
-export const mapProductImages = (
-  images: ProductImageRow[] | undefined | null,
-): ImageOut[] => {
-  if (!images) return [];
-
-  return images
-    .flatMap((row) => {
-      const dbImage = "image" in row ? row.image : row;
-      return isNotDeleted(row) && isNotDeleted(dbImage) ? [dbImage] : [];
-    })
-    .map((dbImage) => ({
-      id: dbImage.id,
-      url: dbImage.url,
-      key: dbImage.key,
-      filename: dbImage.filename,
-      size: dbImage.size,
-      contentType: dbImage.contentType,
-      status: dbImage.status,
-      createdAt: dbImage.createdAt,
-      updatedAt: dbImage.updatedAt,
-    }));
 };
 
 export const mapProductExternalIds = (
@@ -138,7 +115,7 @@ export const dbProductToTopLevelShape = (
   category: productData.category,
   price: productData.price,
   usdaUnavailable: productData.usdaUnavailable,
-  images: mapProductImages(productData.images),
+  images: mapImages(productData.images),
   externalIds: mapProductExternalIds(productData.externalIds),
   createdAt: productData.createdAt,
   updatedAt: productData.updatedAt,
@@ -182,9 +159,7 @@ export const dbProductToPickerItemAPI = (
 };
 
 export const dbProductToInventoryEmbedShape = (
-  productData: Omit<typeof product.$inferSelect, "aliases"> & {
-    aliases?: string[];
-  },
+  productData: RowWithOptionalAliases<typeof product.$inferSelect>,
 ): ProductInventoryEmbedOut => ({
   id: productData.id,
   shortcode: unsafeProductShortcode(productData.shortcode),
@@ -203,9 +178,7 @@ export const dbProductToInventoryEmbedShape = (
 });
 
 export const dbProductToInventoryListShape = (
-  productData: Omit<typeof product.$inferSelect, "aliases"> & {
-    aliases?: string[];
-  },
+  productData: RowWithOptionalAliases<typeof product.$inferSelect>,
 ): InventoryListProductOut => ({
   id: productData.id,
   shortcode: unsafeProductShortcode(productData.shortcode),
@@ -232,9 +205,7 @@ const dbProductIngredientToShape = (
 });
 
 const dbLocationToProductListInventoryShape = (
-  locationData: Omit<typeof location.$inferSelect, "aliases"> & {
-    aliases?: string[];
-  },
+  locationData: RowWithOptionalAliases<typeof location.$inferSelect>,
 ) => ({
   id: locationData.id,
   shortcode: unsafeLocationShortcode(locationData.shortcode),
@@ -307,7 +278,7 @@ export const dbProductToAPI = (
     ingredient: ingredient ? dbProductIngredientToShape(ingredient) : null,
     unitMappings: mapProductUnitMappings(productData.id, unitMappings),
     externalIds: mapProductExternalIds(productData.externalIds),
-    images: mapProductImages(images),
+    images: mapImages(images),
     inventoryEntry: mapRelation(inventoryEntry, (entry) => {
       return {
         id: entry.id,
@@ -328,7 +299,7 @@ export const dbProductToAPI = (
           }),
           lastBulkInventory: entry.location.lastBulkInventory,
           aiDescription: entry.location.aiDescription,
-          images: mapProductImages(entry.location.images),
+          images: mapImages(entry.location.images),
           valuation: entry.location.valuation,
           createdAt: entry.location.createdAt,
           updatedAt: entry.location.updatedAt,

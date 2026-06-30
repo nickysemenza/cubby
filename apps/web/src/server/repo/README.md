@@ -160,14 +160,14 @@ DB-to-API transformations often require repetitive patterns. These helpers reduc
 
 ```typescript
 import {
-  extractImagesFromJoinTable,
+  mapImages,
   mapRelation,
 } from "~/server/repo/database-helpers";
 
-// Extract images from join table results
+// Project images from join-table (or bare) rows, dropping soft-deleted
 // Before: const images = product.images?.map((pi) => pi.image) ?? [];
 // After:
-const images = extractImagesFromJoinTable(product.images);
+const images = mapImages(product.images);
 
 // Map relations with null safety
 // Before: const products = Product?.map((p) => transform(p)) ?? [];

@@ -10,44 +10,58 @@ import { parseWithContext } from "~/lib/zod-utils";
 import { isNotDeleted } from "./query";
 
 /**
- * Extract image records from join table results.
- * Common pattern: join tables have { image: typeof image.$inferSelect }
- * Automatically filters out soft-deleted join table records.
+ * A Drizzle `$inferSelect` row with `aliases` widened to optional — the shape a
+ * relation-loaded row takes when `aliases` may be omitted by the query. Replaces
+ * the hand-written `Omit<typeof X.$inferSelect, "aliases"> & { aliases?: string[] }`
+ * repeated across the product/location/ingredient/inventory repos.
  */
-export const extractImagesFromJoinTable = <
-  T extends {
-    image: {
-      id: string;
-      url: string;
-      key: string;
-      filename: string;
-      size: number;
-      contentType: string;
-      status: ImageOut["status"];
-      createdAt: Date;
-      updatedAt: Date;
-      deletedAt?: Date | null;
-    };
-    deletedAt?: Date | null;
-  },
->(
-  joinTableRecords: T[] | undefined | null,
+export type RowWithOptionalAliases<T extends { aliases: string[] }> = Omit<
+  T,
+  "aliases"
+> & { aliases?: string[] };
+
+type ImageRecord = {
+  id: string;
+  url: string;
+  key: string;
+  filename: string;
+  size: number;
+  contentType: string;
+  status: ImageOut["status"];
+  createdAt: Date;
+  updatedAt: Date;
+  deletedAt?: Date | null;
+};
+
+/**
+ * Project image join rows to `ImageOut[]`, dropping soft-deleted rows (on both
+ * the join row and the image itself). Accepts either the bare image record or
+ * the `{ image }` join-table wrapper — the single image-mapping path shared by
+ * every entity (product/location/recipe/inventory).
+ */
+export const mapImages = (
+  rows:
+    | Array<ImageRecord | { image: ImageRecord; deletedAt?: Date | null }>
+    | undefined
+    | null,
 ): ImageOut[] => {
-  return (
-    joinTableRecords
-      ?.filter((record) => isNotDeleted(record) && isNotDeleted(record.image))
-      .map((record) => ({
-        id: record.image.id,
-        url: record.image.url,
-        key: record.image.key,
-        filename: record.image.filename,
-        size: record.image.size,
-        contentType: record.image.contentType,
-        status: record.image.status,
-        createdAt: record.image.createdAt,
-        updatedAt: record.image.updatedAt,
-      })) ?? []
-  );
+  if (!rows) return [];
+  return rows
+    .flatMap((row) => {
+      const dbImage = "image" in row ? row.image : row;
+      return isNotDeleted(row) && isNotDeleted(dbImage) ? [dbImage] : [];
+    })
+    .map((dbImage) => ({
+      id: dbImage.id,
+      url: dbImage.url,
+      key: dbImage.key,
+      filename: dbImage.filename,
+      size: dbImage.size,
+      contentType: dbImage.contentType,
+      status: dbImage.status,
+      createdAt: dbImage.createdAt,
+      updatedAt: dbImage.updatedAt,
+    }));
 };
 
 /**

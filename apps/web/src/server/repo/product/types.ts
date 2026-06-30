@@ -11,13 +11,10 @@ import type {
   productExternalId,
   productUnitMappings,
 } from "~/server/db/schema";
+import type { RowWithOptionalAliases } from "~/server/repo/database-helpers";
 
-type ProductSelect = Omit<typeof product.$inferSelect, "aliases"> & {
-  aliases?: string[];
-};
-type LocationSelect = Omit<typeof location.$inferSelect, "aliases"> & {
-  aliases?: string[];
-};
+type ProductSelect = RowWithOptionalAliases<typeof product.$inferSelect>;
+type LocationSelect = RowWithOptionalAliases<typeof location.$inferSelect>;
 
 /**
  * Type for deeply nested product query results.

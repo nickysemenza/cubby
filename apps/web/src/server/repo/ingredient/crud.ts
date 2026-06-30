@@ -15,8 +15,7 @@ import { and, eq } from "drizzle-orm";
 import type { z } from "zod";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { ingredient } from "~/server/db/schema";
-import { createAppError } from "~/server/errors/app-error";
-import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
+import { logAuditEntry } from "~/server/repo/audit-log";
 import {
   findOrCreate,
   getDb,
@@ -25,23 +24,41 @@ import {
   relations,
   unwrapDb,
   updateAndReturn,
-  updateLiveAndReturn,
 } from "~/server/repo/database-helpers";
-import { buildIngredientWhere } from "./internal-types";
+import { createEntityCrud } from "~/server/repo/entity-crud-factory";
+import { buildIngredientWhere, type IngredientDeepDB } from "./internal-types";
 import { dbIngredientToAPI } from "./mappers";
 
-export const getIngredientByID = async (db: Database, id: IngredientId) => {
-  const ingredientData = await getDb(db).query.ingredient.findFirst({
+// getByID + update run through the shared CRUD factory (the 404, before-state→
+// audit, re-fetch→map orchestration). create/find-or-create stay hand-rolled:
+// they accept the Database | DrizzleTransaction union and own ingredient-specific
+// alias-dedupe / race semantics.
+const fetchIngredientById = async (
+  db: Database,
+  id: IngredientId,
+): Promise<IngredientDeepDB | undefined> => {
+  const row = await getDb(db).query.ingredient.findFirst({
     where: and(eq(ingredient.id, id), notDeleted(ingredient)),
     ...relations.ingredient.full,
   });
-
-  if (!ingredientData) {
-    throw createAppError("INGREDIENT_NOT_FOUND", `Ingredient ${id} not found`);
-  }
-
-  return await dbIngredientToAPI(db, ingredientData);
+  return row;
 };
+
+const ingredientCrud = createEntityCrud({
+  table: ingredient,
+  entity: "ingredient",
+  fetchById: fetchIngredientById,
+  fromDB: (db, row: IngredientDeepDB) => dbIngredientToAPI(db, row),
+  toUpdate: (data: z.infer<typeof ingredientUpdateData>) => data,
+  auditUpdateFields: ["name", "aliases"],
+  notFoundReason: "INGREDIENT_NOT_FOUND",
+});
+
+export const getIngredientByID = (
+  db: Database,
+  id: IngredientId,
+): Promise<IngredientWithRecipesAndProductOut> =>
+  ingredientCrud.getByID(db, id);
 
 export const createIngredient = async (
   db: Database | DrizzleTransaction,
@@ -76,46 +93,13 @@ export const createIngredient = async (
   return await dbIngredientToAPI(db, ingredientData);
 };
 
-export const updateIngredient = async (
+export const updateIngredient = (
   db: Database,
   id: IngredientId,
   data: z.infer<typeof ingredientUpdateData>,
   actor: ActorContext,
-): Promise<IngredientWithRecipesAndProductOut> => {
-  // Capture before state for audit logging
-  const beforeState = await getDb(db).query.ingredient.findFirst({
-    where: and(eq(ingredient.id, id), notDeleted(ingredient)),
-  });
-
-  const updated = await updateLiveAndReturn(db, ingredient, data, id);
-
-  // Log audit entry with changes
-  if (beforeState) {
-    const changes = computeChanges(beforeState, updated, ["name", "aliases"]);
-    if (changes) {
-      await logAuditEntry(db, actor, {
-        entityType: "ingredient",
-        entityId: id,
-        action: "update",
-        changes,
-      });
-    }
-  }
-
-  const ingredientData = await getDb(db).query.ingredient.findFirst({
-    where: eq(ingredient.id, updated.id),
-    ...relations.ingredient.full,
-  });
-
-  if (!ingredientData) {
-    // INTERNAL_SERVER_ERROR (500): the row was just written, so its absence is a
-    // genuine internal fault, not a missing-entity 404. No createAppError reason
-    // maps to 500 here, and matches the sibling pattern in recipe/crud.ts.
-    throw new Error("Failed to fetch updated ingredient");
-  }
-
-  return await dbIngredientToAPI(db, ingredientData);
-};
+): Promise<IngredientWithRecipesAndProductOut> =>
+  ingredientCrud.update(db, id, data, actor);
 
 export const findOrCreateIngredient = async (
   db: Database | DrizzleTransaction,

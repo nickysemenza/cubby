@@ -1,4 +1,4 @@
-import { countLabel } from "~/lib/pluralize";
+import pluralize from "pluralize";
 import type { BackfillButtonProps } from "./problem-backfill-action";
 
 /**
@@ -32,7 +32,7 @@ export const BACKFILL = {
     pendingLabel: "Fetching…",
     toastResult: (r) => ({
       tone: r.imported > 0 ? "success" : "info",
-      message: `Imported ${countLabel(r.imported, "image")} · ${r.found} found, ${r.skipped} skipped.`,
+      message: `Imported ${pluralize("image", r.imported, true)} · ${r.found} found, ${r.skipped} skipped.`,
     }),
   }),
   analyzeDescriptions: def<{
@@ -46,7 +46,7 @@ export const BACKFILL = {
     pendingLabel: "Enqueuing…",
     toastResult: (r) => ({
       tone: r.enqueued > 0 ? "success" : "info",
-      message: `Enqueued ${r.enqueued} of ${countLabel(r.total, "location")} for analysis.`,
+      message: `Enqueued ${r.enqueued} of ${pluralize("location", r.total, true)} for analysis.`,
     }),
   }),
 };

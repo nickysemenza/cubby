@@ -1,6 +1,7 @@
 import { productCategoryValues, UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { fdcId, foodSummary, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
+import { deriveUpdateData, timestampedFields } from "./base-entity";
 import { amount } from "./codec";
 import { requiredName } from "./common";
 import { externalIdInput } from "./external-id";
@@ -10,13 +11,11 @@ import {
   normalizedProductShortcode,
   type IngredientId,
   inventoryId,
-  locationId,
-  locationShortcode,
   productId,
   productShortcode,
 } from "./identifiers";
 import { imageOut } from "./image";
-import { locationOut, locationType } from "./location";
+import { locationListRefOut, locationOut } from "./location";
 import { createPaginatedResponseSchema } from "./pagination";
 import { baseKind } from "./problems";
 import { recipeUsageOut } from "./recipe";
@@ -64,7 +63,7 @@ export const hasFoodIndicators = (product: {
 
 // Input schema for creating products (includes relationships)
 // Note: category is optional in input (defaults to null) but required in output
-export const productCreateInput = z.object({
+const productCreateShape = {
   // Override the output/read `name` (lax for reads) with a non-empty constraint on
   // the create/update boundary; keep the mock hint for test fixtures.
   name: requiredName("Product name")
@@ -114,34 +113,16 @@ export const productCreateInput = z.object({
     .optional()
     .describe("no USDA food exists — expect manual weight/volume/calories"),
   pendingImageIds: z.array(z.uuid()).optional(),
-});
+};
 
-// A partial update must leave omitted fields UNCHANGED. This schema is explicit
-// so create-time defaults never become destructive update defaults for
-// `unitMappings`/`externalIds`.
-export const productUpdateData = z.object({
-  name: requiredName("Product name")
-    .describe("Product name")
-    .meta({ mock: "commerce.productName" })
-    .optional(),
-  upc: upc.nullable().optional(),
-  fdc_id: fdcId.nullable().optional(),
-  manufacturer: z
-    .string()
-    .describe("Manufacturer or 'generic'")
-    .meta({ mock: "company.name" })
-    .optional(),
-  model: z.string().nullish(),
-  notes: z.string().nullish(),
-  expectedQuantity: z.number().int().positive().nullable().optional(),
-  category: productCategory.nullable().optional(),
-  ingredientId: ingredientId.nullable().optional(),
-  price: z.number().positive().nullable().optional(),
-  unitMappings: z.array(unitMappingInput).optional(),
-  externalIds: z.array(externalIdInput).optional(),
-  usdaUnavailable: z.boolean().nullable().optional(),
-  pendingImageIds: z.array(z.uuid()).optional(),
-  removeImageIds: z.array(z.uuid()).optional(),
+export const productCreateInput = z.object(productCreateShape);
+
+// A partial update makes every create field optional and — critically — strips
+// the create-time `.default([])` off `unitMappings`/`externalIds` so omitting
+// them leaves the existing rows UNCHANGED (see deriveUpdateData). `removeImageIds`
+// is update-only.
+export const productUpdateData = deriveUpdateData(productCreateShape, {
+  extend: { removeImageIds: z.array(z.uuid()).optional() },
 });
 
 // Input schema for updating products (matches location/recipe/ingredient pattern)
@@ -259,8 +240,7 @@ const productTopLevelFields = {
   externalIds: z.array(externalIdOut),
   price: z.number().nullable(), // Price per each ($); source of truth (the 1 each -> $X costing edge is synthesized from this at compute time)
   usdaUnavailable: z.boolean().nullable(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  ...timestampedFields,
 };
 
 // Response schema for product data
@@ -275,24 +255,15 @@ const productIngredientOut = z.object({
   name: z.string().meta({ mock: "food.ingredient" }),
   aliases: z.array(z.string()),
   naKinds: z.array(baseKind),
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  ...timestampedFields,
 });
 
 const productInventoryFields = {
   id: inventoryId,
   amount,
   valuation: z.number().nullable(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  ...timestampedFields,
 };
-
-const productInventoryListLocationOut = z.object({
-  id: locationId,
-  shortcode: locationShortcode,
-  name: z.string(),
-  type: locationType,
-});
 
 const productInventoryWithLocationOut = z.object({
   ...productInventoryFields,
@@ -331,7 +302,7 @@ export const productWithIngredientAndInventoryAndMappingsOut = z.object({
 
 export const productListInventoryEntryOut = z.object({
   ...productInventoryFields,
-  location: productInventoryListLocationOut,
+  location: locationListRefOut,
 });
 
 // Product list rows stay list-shaped. USDA summaries and recipe usages hydrate

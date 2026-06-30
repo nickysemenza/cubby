@@ -258,7 +258,7 @@ export function GlobalCommandMenu({
       className="sm:max-w-2xl"
     >
       <CommandInput
-        placeholder="Search products, recipes, locations, projects..."
+        placeholder="Search, jump to a page, or ask Cubby…"
         value={search}
         onValueChange={setSearch}
       />
@@ -613,6 +613,10 @@ export function GlobalCommandMenu({
                     <span>{isDevtoolsVisible ? "Hide" : "Show"} Devtools</span>
                   </CommandItem>
                 </CommandGroup>
+                <div className="px-2 pt-2 pb-1 text-muted-foreground text-xs">
+                  Tip: type a shortcode (P-, L-, R-…) to jump straight to an
+                  item.
+                </div>
               </>
             )}
           </>

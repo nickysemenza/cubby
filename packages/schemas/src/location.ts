@@ -1,6 +1,7 @@
 import { locationTypeValues, productCategoryValues } from "@cubby/shared";
 import { fdcId, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
+import { deriveUpdateData, timestampedFields } from "./base-entity";
 import { amount } from "./codec";
 import { mutationSideEffectsSchema } from "./background-jobs";
 import { requiredName } from "./common";
@@ -77,8 +78,7 @@ export const locationOutFields = {
   images: z.array(imageOut),
   // Persisted valuation rollup; null until first recompute.
   valuation: locationValuation.nullable(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  ...timestampedFields,
 };
 
 export const locationOut = z.object(locationOutFields);
@@ -108,16 +108,14 @@ const locationInventoryProductOut = z.object({
   category: locationProductCategory.nullable(),
   price: z.number().nullable(),
   usdaUnavailable: z.boolean().nullable(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  ...timestampedFields,
 });
 
 const locationInventoryWithProductOut = z.object({
   id: inventoryId,
   amount,
   valuation: z.number().nullable(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
+  ...timestampedFields,
   product: locationInventoryProductOut,
 });
 
@@ -201,7 +199,7 @@ const optionalLocationId = z
   .pipe(locationId.nullable());
 
 // Input schema for creating locations
-export const locationCreateInput = z.object({
+const locationCreateShape = {
   // Override the output/read `name` (which stays lax for reads) with a non-empty
   // constraint on the create/update boundary.
   name: requiredName("Location name").describe("name of location"),
@@ -210,14 +208,14 @@ export const locationCreateInput = z.object({
     "Parent location id — nest this location under another (omit/null for a top-level location).",
   ),
   pendingImageIds: z.array(z.uuid()).optional(),
-});
+};
 
-export const locationUpdateData = z.object({
-  name: requiredName("Location name").describe("name of location").optional(),
-  type: locationType.optional(),
-  parentId: optionalLocationId.optional(),
-  pendingImageIds: z.array(z.uuid()).optional(),
-  removeImageIds: z.array(z.uuid()).optional(),
+export const locationCreateInput = z.object(locationCreateShape);
+
+// Every create field optional; `removeImageIds` is update-only. (The update
+// `parentId` inherits the create field's description — harmless doc, same type.)
+export const locationUpdateData = deriveUpdateData(locationCreateShape, {
+  extend: { removeImageIds: z.array(z.uuid()).optional() },
 });
 
 // Input schema for updating locations

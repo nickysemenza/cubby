@@ -10,13 +10,10 @@ import type {
   location,
   product,
 } from "~/server/db/schema";
+import type { RowWithOptionalAliases } from "~/server/repo/database-helpers";
 
-type LocationSelect = Omit<typeof location.$inferSelect, "aliases"> & {
-  aliases?: string[];
-};
-type ProductSelect = Omit<typeof product.$inferSelect, "aliases"> & {
-  aliases?: string[];
-};
+type LocationSelect = RowWithOptionalAliases<typeof location.$inferSelect>;
+type ProductSelect = RowWithOptionalAliases<typeof product.$inferSelect>;
 
 export type LocationListDB = LocationSelect & {
   parent: LocationSelect | null;

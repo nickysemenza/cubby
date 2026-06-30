@@ -56,6 +56,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import { generateUniqueProductShortcode } from "~/server/repo/shortcode-utils";
 
@@ -65,7 +66,7 @@ import {
   dbProductToPickerItemAPI,
   dbProductToTopLevelAPI,
 } from "./mappers";
-import type { ProductListDB } from "./types";
+import type { ProductDeepDB, ProductListDB } from "./types";
 import {
   assertNoCanonicalPriceMapping,
   syncProductExternalIds,
@@ -113,18 +114,29 @@ const productListOrderBy = (sort: SortParams, groupBy?: string) => {
   return buildOrderBy(product, sort, [...productSortableFields], groupBy);
 };
 
-export const getProductByID = async (db: Database, id: ProductId) => {
-  const res = await getDb(db).query.product.findFirst({
+const fetchProductById = async (
+  db: Database,
+  id: ProductId,
+): Promise<ProductDeepDB | undefined> => {
+  const row = await getDb(db).query.product.findFirst({
     where: and(eq(product.id, id), notDeleted(product)),
     ...relations.product.full,
   });
-
-  if (!res) {
-    throw createAppError("PRODUCT_NOT_FOUND", `Product ${id} not found`);
-  }
-
-  return dbProductToAPI(res);
+  return row;
 };
+
+// Read path through the shared reader (fetch-with-relations → 404 → map). The
+// write path stays hand-rolled below: product create/update/delete carry
+// shortcode, image, unit-mapping, and valuation side-effects.
+const productReader = createEntityReader({
+  entityName: "product",
+  fetchById: fetchProductById,
+  fromDB: (_db, row: ProductDeepDB) => dbProductToAPI(row),
+  notFoundReason: "PRODUCT_NOT_FOUND",
+});
+
+export const getProductByID = (db: Database, id: ProductId) =>
+  productReader.getByID(db, id);
 
 export const getProductsForFoodLookup = async (
   db: Database,

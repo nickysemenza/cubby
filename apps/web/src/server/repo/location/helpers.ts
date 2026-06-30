@@ -14,10 +14,11 @@ import { type LocationOut, locationType } from "@cubby/schemas/location";
 import { parseWithContext } from "~/lib/zod-utils";
 import type { image, location } from "~/server/db/schema";
 import {
-  extractImagesFromJoinTable,
   isNotDeleted,
+  mapImages,
   mapRelation,
   parseInventoryAmount,
+  type RowWithOptionalAliases,
 } from "~/server/repo/database-helpers";
 import { dbProductToInventoryEmbedShape } from "~/server/repo/product/mappers";
 
@@ -28,8 +29,7 @@ import type { LocationListDB, LocationWithParentChild } from "./internal-types";
  * Handles shortcode branding, type parsing, and image extraction.
  */
 export const dbLocationToAPI = (
-  locationData: Omit<typeof location.$inferSelect, "aliases"> & {
-    aliases?: string[];
+  locationData: RowWithOptionalAliases<typeof location.$inferSelect> & {
     images?: Array<{
       image: typeof image.$inferSelect;
       deletedAt?: Date | null;
@@ -46,16 +46,14 @@ export const dbLocationToAPI = (
       entityType: "Location",
       identifier: { id: locationData.id, name: locationData.name },
     }),
-    images: extractImagesFromJoinTable(locationData.images),
+    images: mapImages(locationData.images),
     valuation: locationData.valuation ?? null,
     ...extractDbTimestampsFromDBRec(locationData),
   };
 };
 
 const dbLocationToListRefShape = (
-  locationData: Omit<typeof location.$inferSelect, "aliases"> & {
-    aliases?: string[];
-  },
+  locationData: RowWithOptionalAliases<typeof location.$inferSelect>,
 ): LocationListRefOut => ({
   id: locationData.id,
   shortcode: unsafeLocationShortcode(locationData.shortcode),
@@ -124,7 +122,7 @@ export const buildLocationWithChildren = (
       entityType: "Location",
       identifier: { id: x.id, name: x.name },
     }),
-    images: extractImagesFromJoinTable(x.images),
+    images: mapImages(x.images),
     valuation: x.valuation ?? null,
     children,
     parent:

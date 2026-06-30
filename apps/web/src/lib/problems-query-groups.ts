@@ -1,4 +1,7 @@
-export const PROBLEMS_HOT_PATH_PROCEDURES = [
+// Internal to this module — only `isUnbatchedTRPCPath` is consumed elsewhere
+// (the tRPC split link), so the rest stay un-exported rather than read as dead
+// exports (knip).
+const PROBLEMS_HOT_PATH_PROCEDURES = [
   "getFast",
   "getCoverage",
   "getUpc",
@@ -7,11 +10,11 @@ export const PROBLEMS_HOT_PATH_PROCEDURES = [
 export type ProblemsHotPathProcedure =
   (typeof PROBLEMS_HOT_PATH_PROCEDURES)[number];
 
-export function problemsProcedurePath(procedure: ProblemsHotPathProcedure) {
+function problemsProcedurePath(procedure: ProblemsHotPathProcedure) {
   return `problems.${procedure}` as const;
 }
 
-export const PROBLEMS_UNBATCHED_PATHS = new Set(
+const PROBLEMS_UNBATCHED_PATHS = new Set(
   PROBLEMS_HOT_PATH_PROCEDURES.map(problemsProcedurePath),
 );
 

@@ -17,7 +17,7 @@ import { useNavAuthed } from "~/hooks/useNavAuthed";
 import { cn, formatBuildDate } from "~/lib/utils";
 import {
   bottomNavItems,
-  moreNavItems,
+  moreNavSections,
   publicNavItems,
   useActiveTo,
 } from "./nav-items";
@@ -82,7 +82,9 @@ export function BottomNav() {
   const authed = useNavAuthed();
 
   // Check if any "more" item is active
-  const isMoreActive = moreNavItems.some((item) => item.to === activeTo);
+  const isMoreActive = moreNavSections.some((section) =>
+    section.items.some((item) => item.to === activeTo),
+  );
 
   return (
     <nav
@@ -151,32 +153,39 @@ export function BottomNav() {
                     {isDebugEnabled ? "Disable Debug" : "Enable Debug"}
                   </Button>
 
-                  {/* Nav items */}
-                  {moreNavItems.map((item) => {
-                    const active = item.to === activeTo;
-                    const Icon = item.icon;
+                  {/* Nav items, grouped into labeled sections */}
+                  {moreNavSections.map((section) => (
+                    <div key={section.title} className="flex flex-col gap-1">
+                      <div className="px-2 pt-4 pb-1 font-mono text-2xs text-muted-foreground uppercase tracking-wider">
+                        {section.title}
+                      </div>
+                      {section.items.map((item) => {
+                        const active = item.to === activeTo;
+                        const Icon = item.icon;
 
-                    return (
-                      <SheetClose
-                        key={item.to}
-                        render={
-                          <Link
-                            to={item.to}
-                            className={cn(
-                              "flex min-h-[44px] items-center gap-2 rounded-none px-2 py-2 font-medium text-sm transition-colors hover:bg-muted hover:text-primary",
-                              !active && "text-muted-foreground",
-                              active &&
-                                "border-primary border-l-2 bg-muted text-foreground",
-                            )}
-                            aria-current={active ? "page" : undefined}
-                          />
-                        }
-                      >
-                        <Icon className="h-5 w-5" />
-                        {item.label}
-                      </SheetClose>
-                    );
-                  })}
+                        return (
+                          <SheetClose
+                            key={item.to}
+                            render={
+                              <Link
+                                to={item.to}
+                                className={cn(
+                                  "flex min-h-[44px] items-center gap-2 rounded-none px-2 py-2 font-medium text-sm transition-colors hover:bg-muted hover:text-primary",
+                                  !active && "text-muted-foreground",
+                                  active &&
+                                    "border-primary border-l-2 bg-muted text-foreground",
+                                )}
+                                aria-current={active ? "page" : undefined}
+                              />
+                            }
+                          >
+                            <Icon className="h-5 w-5" />
+                            {item.label}
+                          </SheetClose>
+                        );
+                      })}
+                    </div>
+                  ))}
                   <div className="mt-auto pt-4 text-center text-muted-foreground text-xs">
                     {buildDate} · {__GIT_COMMIT__}
                   </div>

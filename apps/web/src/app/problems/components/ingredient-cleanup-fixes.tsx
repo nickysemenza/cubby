@@ -1,4 +1,5 @@
 import { Trash2 } from "lucide-react";
+import pluralize from "pluralize";
 import { type ReactNode, useState } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
@@ -14,7 +15,6 @@ import {
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
-import { countLabel } from "~/lib/pluralize";
 import {
   ingredientMutationInvalidateKeys,
   productMutationInvalidateKeys,
@@ -150,7 +150,7 @@ export function DeleteAllUnusedButton({
     success: (data) =>
       data.failed.length > 0
         ? `Deleted ${data.deleted}, ${data.failed.length} failed (e.g. ${data.failed[0]?.reason ?? "unknown"})`
-        : `Deleted ${countLabel(data.deleted, "ingredient")}`,
+        : `Deleted ${pluralize("ingredient", data.deleted, true)}`,
     invalidateKeys: [
       ...unusedIngredientCleanupInvalidateKeys,
       ...(alsoDeleteProducts ? productMutationInvalidateKeys : []),
@@ -163,8 +163,8 @@ export function DeleteAllUnusedButton({
       title="Delete all unused ingredients?"
       body={
         alsoDeleteProducts
-          ? `This deletes ${countLabel(ids.length, "ingredient")} and their linked products. Any whose product still has inventory will be skipped.`
-          : `This deletes ${countLabel(ids.length, "ingredient")}.`
+          ? `This deletes ${pluralize("ingredient", ids.length, true)} and their linked products. Any whose product still has inventory will be skipped.`
+          : `This deletes ${pluralize("ingredient", ids.length, true)}.`
       }
       isPending={remove.isPending}
       onConfirm={() =>

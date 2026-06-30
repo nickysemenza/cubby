@@ -30,10 +30,11 @@ export {
 } from "./query";
 // Relation loaders
 export { relations } from "./relations";
+export type { RowWithOptionalAliases } from "./transform";
 // Transform helpers
 export {
   buildPartialUpdateValues,
-  extractImagesFromJoinTable,
+  mapImages,
   mapRelation,
   parseInventoryAmount,
 } from "./transform";
