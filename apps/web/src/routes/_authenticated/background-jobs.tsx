@@ -5,6 +5,10 @@ import { Page } from "~/components/page/Page";
 
 const searchSchema = z.object({
   batchId: z.string().optional(),
+  // Plural scope set by the save toast: the page narrows its batch list to just
+  // these ids so one toast link opens exactly that mutation's batches. `batchId`
+  // (singular) still drives the detail panel.
+  batchIds: z.array(z.string()).optional(),
 });
 
 export const Route = createFileRoute("/_authenticated/background-jobs")({
@@ -14,10 +18,10 @@ export const Route = createFileRoute("/_authenticated/background-jobs")({
 });
 
 function BackgroundJobsRoute() {
-  const { batchId } = Route.useSearch();
+  const { batchId, batchIds } = Route.useSearch();
   return (
     <Page variant="list" title="Background jobs" compact decoration="none">
-      <BackgroundJobsPage selectedBatchId={batchId} />
+      <BackgroundJobsPage selectedBatchId={batchId} scopedBatchIds={batchIds} />
     </Page>
   );
 }
