@@ -1526,28 +1526,14 @@ function UnknownTray({
           ) : (
             <Stack gap="sm" className="max-h-80 overflow-auto">
               {filteredLocations.map((location) => (
-                <Row
+                <div
                   key={location.id}
-                  align="center"
-                  gap="sm"
                   className={cn(
                     "border border-[var(--border)] border-l-4 border-l-primary/60 bg-primary/5 p-2",
                     disabled && "opacity-50",
                   )}
                 >
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center border border-primary/30 bg-primary/10 text-primary">
-                    {location.images[0]?.url ? (
-                      <Image
-                        src={location.images[0].url}
-                        alt={location.name}
-                        displayWidth={72}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <LocationIcon type={location.type} size={18} />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
+                  <Row align="baseline" gap="xs" wrap>
                     <EntityInlineLink
                       entity="location"
                       data={{
@@ -1555,66 +1541,90 @@ function UnknownTray({
                         name: location.name,
                         type: location.type,
                       }}
-                      compact
                     />
-                    <Description size="xs">
-                      Location · {location.children?.length ?? 0} children ·{" "}
-                      {location.totalItemCount ?? 0} items
-                    </Description>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="h-9 w-9 shrink-0"
-                    disabled={disabled}
-                    title={`Move into ${currentLocationName}`}
-                    aria-label={`Move into ${currentLocationName}`}
-                    onClick={() => onMoveLocationIn(location)}
+                  </Row>
+                  <Row
+                    align="center"
+                    justify="between"
+                    gap="sm"
+                    className="mt-2"
                   >
-                    <ArrowDownToLine className="h-4 w-4" />
-                  </Button>
-                </Row>
+                    <Row align="center" gap="sm" className="min-w-0">
+                      <div className="flex h-16 w-16 shrink-0 items-center justify-center border border-primary/30 bg-primary/10 text-primary">
+                        {location.images[0]?.url ? (
+                          <Image
+                            src={location.images[0].url}
+                            alt={location.name}
+                            displayWidth={128}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <LocationIcon type={location.type} size={26} />
+                        )}
+                      </div>
+                      <Description size="xs" className="truncate">
+                        {location.children?.length ?? 0} loc ·{" "}
+                        {location.totalItemCount ?? 0}{" "}
+                        {(location.totalItemCount ?? 0) === 1
+                          ? "item"
+                          : "items"}
+                      </Description>
+                    </Row>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-11 w-10 shrink-0"
+                      disabled={disabled}
+                      title={`Move into ${currentLocationName}`}
+                      aria-label={`Move into ${currentLocationName}`}
+                      onClick={() => onMoveLocationIn(location)}
+                    >
+                      <ArrowDownToLine className="h-4 w-4" />
+                    </Button>
+                  </Row>
+                </div>
               ))}
               {filtered.map((item) => (
-                <Row
+                <div
                   key={item.id}
-                  align="center"
-                  gap="sm"
                   className={cn(
                     "border border-[var(--border)] border-l-4 border-l-warning/60 bg-background p-2",
                     disabled && "opacity-50",
                   )}
                 >
-                  <Image
-                    src={item.product.images[0]?.url}
-                    alt={item.product.name}
-                    displayWidth={72}
-                    className="h-9 w-9 shrink-0 border border-[var(--border)] object-cover"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <EntityInlineLink
-                      entity="product"
-                      data={item.product}
-                      compact
-                    />
-                    <Description size="xs">
-                      Product · {tryFormatAmount(item.amount)}
-                    </Description>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="h-9 w-9 shrink-0"
-                    disabled={disabled}
-                    title={`Move into ${currentLocationName}`}
-                    aria-label={`Move into ${currentLocationName}`}
-                    onClick={() => onMoveIn(item)}
+                  <Row align="baseline" gap="xs" wrap>
+                    <EntityInlineLink entity="product" data={item.product} />
+                  </Row>
+                  <Row
+                    align="center"
+                    justify="between"
+                    gap="sm"
+                    className="mt-2"
                   >
-                    <ArrowDownToLine className="h-4 w-4" />
-                  </Button>
-                </Row>
+                    <Row align="center" gap="sm" className="min-w-0">
+                      <Image
+                        src={item.product.images[0]?.url}
+                        alt={item.product.name}
+                        displayWidth={128}
+                        className="h-16 w-16 shrink-0 border border-[var(--border)] object-cover"
+                      />
+                      <Description size="xs" className="truncate">
+                        {tryFormatAmount(item.amount)}
+                      </Description>
+                    </Row>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-11 w-10 shrink-0"
+                      disabled={disabled}
+                      title={`Move into ${currentLocationName}`}
+                      aria-label={`Move into ${currentLocationName}`}
+                      onClick={() => onMoveIn(item)}
+                    >
+                      <ArrowDownToLine className="h-4 w-4" />
+                    </Button>
+                  </Row>
+                </div>
               ))}
             </Stack>
           )}

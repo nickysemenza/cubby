@@ -9,16 +9,6 @@
       "autoPort": true
     },
     {
-      "name": "web-wt",
-      "runtimeExecutable": "sh",
-      "runtimeArgs": [
-        "-c",
-        "cd /Users/nicky/dev/cubby/.claude/worktrees/toast-batch-link/apps/web && exec pnpm run dev"
-      ],
-      "port": 3000,
-      "autoPort": true
-    },
-    {
       "name": "usda-api",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@cubby/usda-api", "run", "dev"],
