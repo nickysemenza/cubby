@@ -95,13 +95,14 @@ describe("reconcileLocationSession", () => {
 
   it("remove soft-deletes (row retained with deletedAt) and flags recompute", async () => {
     const { loc, entry } = await seedEntry("Remove");
-    const { recomputeNeeded } = await reconcileLocationSession(
+    const { recomputeNeeded, removedIds } = await reconcileLocationSession(
       ctx.db,
       loc.id,
       [{ kind: "remove", inventoryEntryId: entry.id }],
       TEST_ACTOR,
     );
     expect(recomputeNeeded).toBe(true);
+    expect(removedIds).toEqual([entry.id]); // reported for delete side-effects
 
     const after = await readEntry(entry.id);
     expect(after).toBeDefined(); // soft delete: row kept

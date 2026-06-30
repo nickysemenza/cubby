@@ -1486,10 +1486,12 @@ function ExpectedItemReviewRow({
   const staged = resolution?.kind;
   const amount =
     resolution?.kind === "adjust" ? resolution.amount : item.amount;
+  // Floor at 1 — recounting to zero means the item is gone, which is the
+  // "Remove" action (soft-delete), not an adjust to a phantom 0-qty entry.
   const bump = (delta: number) =>
     onAdjust({
       ...amount,
-      value: Math.max(0, Math.round(amount.value) + delta),
+      value: Math.max(1, Math.round(amount.value) + delta),
     });
 
   // Swipe-left reveals the two destructive/relocate verbs (mobile). Remove is

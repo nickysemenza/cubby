@@ -201,21 +201,28 @@ const reconcileSession = protectedProcedure
   .input(reconcileSessionPayload)
   .output(inventoryWithLocationAndProductListAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
-    const { items, recomputeNeeded } = await reconcileLocationSession(
-      ctx.db,
-      input.locationId,
-      input.resolutions,
-      ctx.actorContext,
-    );
+    const { items, removedIds, recomputeNeeded } =
+      await reconcileLocationSession(
+        ctx.db,
+        input.locationId,
+        input.resolutions,
+        ctx.actorContext,
+      );
+    // Surviving entries get "updated" side-effects; removed (soft-deleted) ones
+    // get "deleted" so their embedding is cleaned up too (they're not in items).
     const backgroundBatches = recomputeNeeded
-      ? await runMutationSideEffectsForEntities(
-          ctx.db,
-          items.map((entry) => ({
+      ? await runMutationSideEffectsForEntities(ctx.db, [
+          ...items.map((entry) => ({
             action: "updated" as const,
             entity: { entityType: "inventory" as const, entityId: entry.id },
             source: "inventory.reconcileSession",
           })),
-        )
+          ...removedIds.map((id) => ({
+            action: "deleted" as const,
+            entity: { entityType: "inventory" as const, entityId: id },
+            source: "inventory.reconcileSession",
+          })),
+        ])
       : [];
     return { items, sideEffects: { backgroundBatches } };
   });

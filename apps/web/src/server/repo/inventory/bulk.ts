@@ -1,5 +1,9 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
+import type {
+  InventoryId,
+  LocationId,
+  ProductId,
+} from "@cubby/schemas/identifiers";
 import { unsafeInventoryId } from "@cubby/schemas/identifiers";
 import type {
   BulkMovePayload,
@@ -582,7 +586,7 @@ export const reconcileLocationSession = async (
   resolutions: InventorySessionResolution[],
   actor: ActorContext,
 ) => {
-  const { processed, recomputeNeeded } = await withTransaction(
+  const { processed, removedIds, recomputeNeeded } = await withTransaction(
     db,
     async (tx: DrizzleTransaction) => {
       await assertLiveTargets(tx, { locationId });
@@ -620,6 +624,7 @@ export const reconcileLocationSession = async (
 
       const auditEntries: AuditEntryInput[] = [];
       const resultIds: string[] = [];
+      const removedIds: InventoryId[] = [];
       let recomputeNeeded = false;
 
       for (const r of resolutions) {
@@ -663,6 +668,7 @@ export const reconcileLocationSession = async (
             .set({ deletedAt: now })
             .where(eq(inventoryEntry.id, before.id));
           recomputeNeeded = true;
+          removedIds.push(before.id);
           auditEntries.push({
             entityType: "inventory",
             entityId: before.id,
@@ -680,9 +686,13 @@ export const reconcileLocationSession = async (
       }
 
       const processed = await batchFetchResults(tx, resultIds);
-      return { processed, recomputeNeeded };
+      return { processed, removedIds, recomputeNeeded };
     },
   );
 
-  return { items: processed.map(dbInventoryEntryToAPI), recomputeNeeded };
+  return {
+    items: processed.map(dbInventoryEntryToAPI),
+    removedIds,
+    recomputeNeeded,
+  };
 };

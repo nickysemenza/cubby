@@ -233,7 +233,9 @@ export const inventorySessionResolution = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("adjust"),
     inventoryEntryId: inventoryId,
-    amount,
+    // positiveAmount (not amount): a recount to zero is a Remove, not an
+    // adjust — this keeps the value > 0 invariant every other write enforces.
+    amount: positiveAmount,
   }),
   z.object({ kind: z.literal("remove"), inventoryEntryId: inventoryId }),
 ]);
