@@ -31,5 +31,14 @@
   "orientation": "portrait",
   "theme_color": "#3a3530",
   "background_color": "#FAF8F5",
-  "categories": ["food", "lifestyle", "utilities"]
+  "categories": ["food", "lifestyle", "utilities"],
+  "share_target": {
+    "action": "/recipes/new",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  }
 }

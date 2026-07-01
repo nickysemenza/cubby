@@ -9,7 +9,7 @@ import {
   Plus,
   Trash,
 } from "lucide-react";
-import { type FC, useMemo, useState } from "react";
+import { type FC, useEffect, useMemo, useRef, useState } from "react";
 import { Controller, useFieldArray, useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { Row, Stack } from "~/components/layout";
@@ -28,6 +28,7 @@ import { Card, CardContent } from "~/components/ui/card";
 import { Field, FieldLabel } from "~/components/ui/field";
 import { Textarea } from "~/components/ui/textarea";
 import { useImageState } from "~/hooks/useImageState";
+import { getErrorMessage } from "~/lib/error-utils";
 import { wasm } from "~/lib/wasm";
 import { useTRPC } from "~/trpc/react";
 import {
@@ -135,11 +136,13 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
   // Get the recipe entity in edit mode
   const recipe = mode === "edit" ? props.entity : undefined;
   const initialName = mode === "create" ? props.initialName : undefined;
+  const initialUrl = mode === "create" ? props.initialUrl : undefined;
+  const autoScrape = mode === "create" ? props.autoScrape : false;
 
   // Initialize form with default values or existing recipe data
   const form = useForm<RecipeFormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: recipeToFormValues(recipe, initialName),
+    defaultValues: recipeToFormValues(recipe, initialName, initialUrl),
   });
 
   // Set up field arrays for sections
@@ -237,20 +240,35 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
     );
   };
 
+  // When a scrape can't find a recipe (many sites block bot fetches or hide the
+  // recipe behind JS), point the user at the paste-HTML fallback that exists for
+  // exactly this case — open that panel with the URL still populated so pasting
+  // the page source keeps the recipe's source provenance.
+  const offerHtmlFallback = (message: string) => {
+    toast.error(message, {
+      description: "The site may block scraping. Paste the page HTML instead.",
+      action: {
+        label: "Try Paste HTML",
+        onClick: () => setOpenTool("html"),
+      },
+    });
+  };
+
   // Scrape the URL and populate the form.
   const doScrape = async () => {
     if (!urlValue) return;
     try {
       const result = await scrapeMutation.mutateAsync(urlValue);
       if (!result?.sections.length) {
-        toast.error("No recipe found at that URL.");
+        offerHtmlFallback("No recipe found at that URL.");
         return;
       }
       await applyImportResult(result);
     } catch (error) {
-      // Mutation failures (scrape fetch, ingredient create) are already toasted
-      // by the global MutationCache onError handler; just log for debugging.
+      // Mutation fetch failures also land here (the global MutationCache toasts a
+      // generic error too, but this one carries the actionable fallback).
       console.error("Scrape failed:", error);
+      offerHtmlFallback(`Couldn't scrape that URL: ${getErrorMessage(error)}`);
     }
   };
 
@@ -292,6 +310,18 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
     if (!htmlInput.trim() || !urlValue) return;
     confirmOrRun(() => void doParseHtml());
   };
+
+  // A shared/deep-linked URL (PWA share target or the "Import from URL" entry
+  // point) auto-runs the scrape once on mount so the user lands on a populated
+  // form instead of a blank one they have to re-trigger by hand. The ref guards
+  // against re-firing on re-renders (and React 18 StrictMode's double-mount).
+  const autoScrapeFired = useRef(false);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only — initialUrl/autoScrape are fixed per form instance and doScrape reads the current URL off the form
+  useEffect(() => {
+    if (autoScrapeFired.current || !autoScrape) return;
+    autoScrapeFired.current = true;
+    if (initialUrl) void doScrape();
+  }, []);
 
   // Handle import - auto-creates missing ingredients and populates form
   const handleImportAll = async () => {
