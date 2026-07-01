@@ -25,6 +25,7 @@ import type {
   IngredientUsage,
   RecipeCosting,
 } from "~/lib/recipe-costing";
+import type { RecipeTotalsGap } from "~/lib/recipe-totals-gaps";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { cn } from "~/lib/utils";
 import { renderValueOrMissing } from "~/misc/result";
@@ -36,6 +37,7 @@ import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import { CopyCorpusButton } from "./copy-corpus-button";
 import { EstimateMarker } from "./estimate-marker";
 import { IngredientModifier } from "./IngredientQuantities";
+import { MissingMeasureCell } from "./RecipeCostingCoverage";
 import {
   computeScalingPercentages,
   formatScalingPct,
@@ -83,9 +85,37 @@ export const RecipeIngredientList: React.FC<{
   /** Suppress the built-in Recipe Summary card (the Data view renders it once,
    * above the stacked charts, so the table shouldn't repeat it). */
   hideSummary?: boolean;
-}> = ({ ingredients, ingMap, costing, perServing, hideSummary }) => {
+  /** The prioritized totals gaps (same source as the coverage popover) — makes
+   * each missing Cost/Weight cell a deep-link to its fix. */
+  gaps?: RecipeTotalsGap[];
+  /** Current recipe id, for routing a sub-recipe's "set amount" fix. */
+  recipeId?: string;
+}> = ({
+  ingredients,
+  ingMap,
+  costing,
+  perServing,
+  hideSummary,
+  gaps,
+  recipeId,
+}) => {
   const totals = costing?.totals;
   const estimatedRows = costing?.estimatedRows ?? EMPTY_ESTIMATED;
+
+  // Index gaps for O(1) per-cell lookup: ingredient rows key on ingredientId,
+  // sub-recipe rows key on the section-ingredient rowId (row.id).
+  const gapByKey = useMemo(() => {
+    const m = new Map<string, RecipeTotalsGap>();
+    for (const gap of gaps ?? []) {
+      m.set(gap.source === "ingredient" ? gap.ingredientId : gap.rowId, gap);
+    }
+    return m;
+  }, [gaps]);
+  const gapForRow = (row: CostingRow): RecipeTotalsGap | undefined =>
+    match(row)
+      .with({ type: "ingredient" }, (r) => gapByKey.get(r.ingredient.id))
+      .with({ type: "recipe" }, (r) => gapByKey.get(r.id))
+      .exhaustive();
 
   // Scaling % (Modernist Cuisine's column): baker's percentage with a
   // re-anchorable 100% base instead of flour-only — the same single scaling
@@ -221,12 +251,21 @@ export const RecipeIngredientList: React.FC<{
             </div>
           ) : null,
         cell: (info) => {
-          const measure = info.row.original.priceInfo?.price;
+          const row = info.row.original;
+          const measure = row.priceInfo?.price;
           if (!measure) return null;
           return (
             <span>
-              {renderValueOrMissing(measure, (m) => tryFormatAmount(m))}
-              {estimatedRows.has(info.row.original.id) && measure.isOk() && (
+              {measure.isOk() ? (
+                tryFormatAmount(measure.value)
+              ) : (
+                <MissingMeasureCell
+                  gap={gapForRow(row)}
+                  currentRecipeId={recipeId ?? ""}
+                  reason={`${measure.error}`}
+                />
+              )}
+              {estimatedRows.has(row.id) && measure.isOk() && (
                 <EstimateMarker />
               )}
             </span>
@@ -253,12 +292,21 @@ export const RecipeIngredientList: React.FC<{
             </div>
           ) : null,
         cell: (info) => {
-          const measure = info.row.original.priceInfo?.gram;
+          const row = info.row.original;
+          const measure = row.priceInfo?.gram;
           if (!measure) return null;
           return (
             <span>
-              {renderValueOrMissing(measure, (m) => tryFormatAmount(m))}
-              {estimatedRows.has(info.row.original.id) && measure.isOk() && (
+              {measure.isOk() ? (
+                tryFormatAmount(measure.value)
+              ) : (
+                <MissingMeasureCell
+                  gap={gapForRow(row)}
+                  currentRecipeId={recipeId ?? ""}
+                  reason={`${measure.error}`}
+                />
+              )}
+              {estimatedRows.has(row.id) && measure.isOk() && (
                 <EstimateMarker />
               )}
             </span>

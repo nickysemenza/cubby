@@ -103,12 +103,13 @@ const formatRecipeSummary = (data: RecipeSummaryData): SummaryItem[] => {
   const buildMetric = (
     label: string,
     value: number,
-    missingCount: number,
+    missingNames: string[],
     total: number,
     unit: string,
     prefix = "",
     upper?: number,
   ): SummaryItem => {
+    const missingCount = missingNames.length;
     const successCount = total - missingCount;
     if (successCount === 0) {
       return { label, value: "No data available" };
@@ -116,13 +117,16 @@ const formatRecipeSummary = (data: RecipeSummaryData): SummaryItem[] => {
     const fmt = (n: number) => format(n, unit, prefix);
     const basis = data.perServing;
     const per = basis && perServingRange(value, upper, basis.divisor);
+    const complete = successCount === total;
     return {
       label,
       value: formatNumberRange(value, upper, fmt),
-      caption:
-        successCount === total
-          ? undefined
-          : `${successCount}/${total} ingredients`,
+      caption: complete ? undefined : `${successCount}/${total} ingredients`,
+      // Surface *which* ingredients are missing this measure on hover — the
+      // deep-linkable fixes live in the adjacent coverage popover.
+      captionTitle: complete
+        ? undefined
+        : `Missing: ${missingNames.join(", ")}`,
       subValue:
         basis && per
           ? `${formatNumberRange(per.value, per.upper, fmt)} ${perUnitSuffix(basis.noun)}`
@@ -133,12 +137,12 @@ const formatRecipeSummary = (data: RecipeSummaryData): SummaryItem[] => {
   // The four headline figures, defined once in recipeHeadlineTotals so the table,
   // charts, and magazine kicker agree on which numbers they are.
   const head = recipeHeadlineTotals(data);
-  const nutrientsMissing = data.missingByType.nutrients.length;
+  const nutrientsMissing = data.missingByType.nutrients;
   return [
     buildMetric(
       "Total Cost",
       head.cost,
-      data.missingByType.price.length,
+      data.missingByType.price,
       data.totalIngredients,
       "",
       "$",
@@ -147,7 +151,7 @@ const formatRecipeSummary = (data: RecipeSummaryData): SummaryItem[] => {
     buildMetric(
       "Total Weight",
       head.weight,
-      data.missingByType.weight.length,
+      data.missingByType.weight,
       data.totalIngredients,
       "g",
       "",

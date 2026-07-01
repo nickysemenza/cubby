@@ -80,6 +80,31 @@ const MISSING_CHIPS: {
 ];
 
 /**
+ * The deep-link target that fixes a gap: an ingredient row routes to the
+ * enrichment workbench (focused on that ingredient); a sub-recipe row routes to
+ * the child (or, for a missing amount, the current recipe's editor). Extracted
+ * so the coverage popover *and* the per-row "missing cost" cell in the
+ * ingredient list point at the exact same fix — one source of truth.
+ */
+export function gapFixLinkProps(gap: RecipeTotalsGap, currentRecipeId: string) {
+  if (gap.source === "ingredient") {
+    return {
+      to: "/ingredients/workbench" as const,
+      search: { focus: gap.ingredientId },
+    };
+  }
+  const edit =
+    gap.kind === "set-subrecipe-amount" || gap.kind === "set-subrecipe-yield";
+  return {
+    to: "/recipes/$id" as const,
+    params: {
+      id: gap.kind === "set-subrecipe-amount" ? currentRecipeId : gap.recipeId,
+    },
+    search: { edit: edit ? true : undefined },
+  };
+}
+
+/**
  * The per-ingredient gap list, shared by the inline card and the popover. Each
  * row shows the ingredient, what's missing (per-measure chips), the suggested
  * fix, and a deep-link to that ingredient's row in the enrichment workbench —
@@ -94,29 +119,9 @@ function TotalsGapAction({
   currentRecipeId: string;
   cta: string;
 }) {
-  if (gap.source === "ingredient") {
-    return (
-      <Link
-        to="/ingredients/workbench"
-        search={{ focus: gap.ingredientId }}
-        className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-      >
-        {cta}
-        <ArrowRight className="ml-1 h-3 w-3" />
-      </Link>
-    );
-  }
-
-  const edit =
-    gap.kind === "set-subrecipe-amount" || gap.kind === "set-subrecipe-yield";
   return (
     <Link
-      to="/recipes/$id"
-      params={{
-        id:
-          gap.kind === "set-subrecipe-amount" ? currentRecipeId : gap.recipeId,
-      }}
-      search={{ edit: edit ? true : undefined }}
+      {...gapFixLinkProps(gap, currentRecipeId)}
       className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
     >
       {cta}
@@ -226,5 +231,43 @@ export function RecipeTotalsCoverageButton({
         <TotalsGapList gaps={gaps} currentRecipeId={currentRecipeId} />
       </PopoverContent>
     </Popover>
+  );
+}
+
+/**
+ * The per-row replacement for the inert muted em-dash in the ingredient list's
+ * Cost/Weight cells. When the engine couldn't resolve a measure *and* we have a
+ * prioritized fix for that ingredient, render a warning-toned em-dash that
+ * deep-links straight to the fix (the same target as the coverage popover) —
+ * so a missing cost is tappable on touch, not just a hover `title`. When there's
+ * no actionable gap (e.g. an intentionally unmeasured line), falls back to the
+ * plain muted placeholder.
+ */
+export function MissingMeasureCell({
+  gap,
+  currentRecipeId,
+  reason,
+}: {
+  gap: RecipeTotalsGap | undefined;
+  currentRecipeId: string;
+  /** The engine's error string, surfaced on hover for detail. */
+  reason: string;
+}) {
+  if (!gap) {
+    return (
+      <span className="cursor-default text-muted-foreground/60" title={reason}>
+        —
+      </span>
+    );
+  }
+  const { lead } = suggestionFor(gap);
+  return (
+    <Link
+      {...gapFixLinkProps(gap, currentRecipeId)}
+      title={`${reason} — ${lead}`}
+      className="text-warning underline decoration-dotted underline-offset-2 hover:text-warning/80"
+    >
+      —
+    </Link>
   );
 }
