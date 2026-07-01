@@ -3,15 +3,17 @@ import type { RecipeListItem } from "@cubby/schemas/recipe";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
-import { Scale } from "lucide-react";
+import { RotateCcw, Scale } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
-import { Stack } from "~/components/layout";
+import { Row, Stack } from "~/components/layout";
+import { Button } from "~/components/ui/button";
 import { NoneValue } from "~/components/ui/none-value";
 import { Skeleton } from "~/components/ui/skeleton";
 import { formatCurrencyRange, formatNumberRange } from "~/lib/format-range";
 import { recipeMutationInvalidateKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 import RTable from "../_components/data-table/Table";
+import { useActionMutation } from "../_components/hooks/useActionMutation";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
@@ -55,6 +57,66 @@ const CoverageValue: React.FC<{
     </span>
   );
 };
+
+// How long after a recipe's last edit we still assume the background drain is
+// about to fill its totals. Within this window a null-totals cell shows the
+// animated skeleton (work pending); past it, the recipe is plausibly STUCK (the
+// drain never ran or failed for it) and we surface a manual recompute instead of
+// an infinite skeleton.
+const TOTALS_STALE_AFTER_MS = 5 * 60 * 1000;
+
+/** A recipe with null totals whose last edit is old enough to look stuck. */
+function totalsLookStuck(recipe: RecipeListItem): boolean {
+  return (
+    recipe.totals == null &&
+    Date.now() - recipe.updatedAt.getTime() > TOTALS_STALE_AFTER_MS
+  );
+}
+
+/**
+ * The cell shown when a recipe's totals are null but it's plausibly stuck: a
+ * "not costed" marker plus, on the cost column, a one-click recompute (inline,
+ * request-path — a single recipe is cheap) that fills the totals. Fresh recipes
+ * keep the skeleton; only a stuck one reaches this.
+ */
+function StuckTotalsCell({
+  recipe,
+  withAction,
+}: {
+  recipe: RecipeListItem;
+  /** Render the recompute button (cost column only, so a row shows it once). */
+  withAction: boolean;
+}) {
+  const api = useTRPC();
+  const recompute = useActionMutation({
+    mutationFn: api.recipe.recomputeOne.mutationOptions,
+    success: "Recomputed recipe totals.",
+    invalidateKeys: recipeMutationInvalidateKeys,
+  });
+  const notCosted = (
+    <span className="text-2xs text-muted-foreground italic">not costed</span>
+  );
+  if (!withAction) return notCosted;
+  return (
+    <Row align="center" gap="xs">
+      {notCosted}
+      <Button
+        type="button"
+        variant="outline"
+        size="xs"
+        disabled={recompute.isPending}
+        title="Recompute this recipe's cost & calorie totals"
+        onClick={(e) => {
+          e.stopPropagation();
+          recompute.mutate({ id: recipe.id });
+        }}
+      >
+        <RotateCcw className={recompute.isPending ? "animate-spin" : ""} />
+        Recompute
+      </Button>
+    </Row>
+  );
+}
 
 interface RecipeListProps {
   /** Actions to display in the table toolbar (e.g., "Create New" button) */
@@ -141,7 +203,15 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
         cell: (info) => {
           const recipe = info.row.original;
           const totals = recipe.totals;
-          if (!totals) return <Skeleton className="h-4 w-12" />;
+          // Null totals = not yet computed. Fresh recipe → the drain is about to
+          // fill it (skeleton); plausibly stuck → offer a manual recompute so the
+          // skeleton doesn't animate forever.
+          if (!totals)
+            return totalsLookStuck(recipe) ? (
+              <StuckTotalsCell recipe={recipe} withAction />
+            ) : (
+              <Skeleton className="h-4 w-12" />
+            );
           if (!totals.costTotal) return <NoneValue />;
           const perItem = getServingBasis(recipe);
           return (
@@ -183,7 +253,15 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
         cell: (info) => {
           const recipe = info.row.original;
           const totals = recipe.totals;
-          if (!totals) return <Skeleton className="h-4 w-12" />;
+          // Mirror the cost cell: skeleton while fresh, "not costed" once stuck
+          // (the recompute affordance lives on the cost column so a row shows it
+          // once).
+          if (!totals)
+            return totalsLookStuck(recipe) ? (
+              <StuckTotalsCell recipe={recipe} withAction={false} />
+            ) : (
+              <Skeleton className="h-4 w-12" />
+            );
           if (!totals.caloriesTotal) return <NoneValue />;
           const perItem = getServingBasis(recipe);
           return (
