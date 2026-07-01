@@ -13,8 +13,9 @@ import { useTRPC } from "~/trpc/react";
 import { useProductLookupInvalidation } from "./useInventoryMutation";
 
 interface UseUpcLookupOptions {
-  /** Called when a product is successfully found or created */
-  onSuccess?: (product: { id: string; name: string }) => void;
+  /** Called when a product is successfully found or created. `created` is true
+   * only for a brand-new product (vs a match against an existing one). */
+  onSuccess?: (product: { id: string; name: string }, created: boolean) => void;
   /** Called when UPC lookup fails */
   onError?: (error: string) => void;
 }
@@ -56,11 +57,14 @@ export function useUpcLookup(options: UseUpcLookupOptions = {}) {
       }
 
       try {
-        const product = await findOrCreateByUPCMutation.mutateAsync({
-          upc: parsedUpc.data,
-        });
-        options.onSuccess?.(product);
-        return product;
+        const { product, created } =
+          await findOrCreateByUPCMutation.mutateAsync({
+            upc: parsedUpc.data,
+          });
+        options.onSuccess?.(product, created);
+        // Preserve the historical return shape (the product) plus the new
+        // `created` flag so callers can prompt to link an ingredient.
+        return { ...product, created };
       } catch (err) {
         const errorMessage = getErrorMessage(err);
         options.onError?.(errorMessage);

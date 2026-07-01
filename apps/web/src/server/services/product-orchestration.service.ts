@@ -183,6 +183,17 @@ export async function applyUpcDataWithSideEffects(
 }
 
 /**
+ * The result of a UPC find-or-create. `created` distinguishes a brand-new
+ * product from a match against an existing one — the scan UI uses it to prompt
+ * "link an ingredient?" only for genuinely-new products (a new UPC product
+ * lands with no ingredient link / mappings, invisible to recipe costing).
+ */
+export interface FindOrCreateByUPCResult {
+  product: ProductTopLevelOut;
+  created: boolean;
+}
+
+/**
  * Find or create a product by UPC code.
  * Cascade: local DB → USDA → UPC worker → create with defaults.
  */
@@ -193,20 +204,22 @@ export async function findOrCreateByUPC(
   upc: string,
   defaultName: string | undefined,
   actor: ActorContext,
-): Promise<ProductTopLevelOut> {
+): Promise<FindOrCreateByUPCResult> {
   // 1. Check if product with this UPC already exists
   const existing = await findProductByUPC(db, upc);
   if (existing) {
-    return existing;
+    return { product: existing, created: false };
   }
 
-  const emitCreated = async (product: ProductTopLevelOut) => {
+  const emitCreated = async (
+    product: ProductTopLevelOut,
+  ): Promise<FindOrCreateByUPCResult> => {
     await runMutationSideEffects(db, {
       action: "created",
       entity: { entityType: "product", entityId: product.id },
       source: "product.findOrCreateByUPC",
     });
-    return product;
+    return { product, created: true };
   };
 
   // Cascade create with cross-request race recovery. Each quickCreateProduct is
@@ -292,7 +305,7 @@ export async function findOrCreateByUPC(
     async (error) => {
       const winner = await findProductByUPC(db, upc);
       if (!winner) throw error;
-      return winner;
+      return { product: winner, created: false };
     },
   );
 }

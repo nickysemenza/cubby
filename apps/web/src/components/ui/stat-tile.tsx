@@ -43,7 +43,14 @@ export function StatTile({
         </div>
       )}
       {item?.caption && (
-        <div className="font-mono text-2xs text-muted-foreground">
+        <div
+          className={
+            item.captionTitle
+              ? "cursor-help font-mono text-2xs text-warning decoration-dotted underline underline-offset-2"
+              : "font-mono text-2xs text-muted-foreground"
+          }
+          title={item.captionTitle}
+        >
           {item.caption}
         </div>
       )}

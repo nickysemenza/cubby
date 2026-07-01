@@ -153,11 +153,11 @@ export function registerProductTools(server: McpServer) {
     annotations: WRITE_CLOSED,
     handler: async (params, extra) => {
       const caller = getCaller(extra);
-      const result = await caller.product.findOrCreateByUPC({
+      const { product } = await caller.product.findOrCreateByUPC({
         upc: params.upc,
         defaultName: params.defaultName,
       });
-      return respond(result, slimProduct);
+      return respond(product, slimProduct);
     },
   });
 }

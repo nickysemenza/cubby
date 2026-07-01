@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import {
   BookOpen,
   ClipboardList,
+  Coffee,
   ListChecks,
   Printer,
   Table2,
@@ -19,6 +20,7 @@ import {
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
 import { useDebug } from "~/hooks/useDebug";
+import { useWakeLock } from "~/hooks/useWakeLock";
 import { PerfProfiler } from "~/lib/perf/PerfProfiler";
 import {
   type CostingRow,
@@ -26,6 +28,7 @@ import {
   flattenSections,
 } from "~/lib/recipe-costing";
 import { deriveRecipeTotalsGaps } from "~/lib/recipe-totals-gaps";
+import { cn } from "~/lib/utils";
 import { AuditLogList } from "../audit-log/audit-log-list";
 import EntityImageList from "../EntityImageList";
 import { useRecipeCostingData } from "../hooks/useRecipeCostingData";
@@ -112,6 +115,9 @@ const RecipeDetailInner: React.FC<{
   const [internalView, setInternalView] = useState<RecipeViewMode>("read");
   const [internalScale, setInternalScale] = useState(1);
   const { isDebugEnabled } = useDebug();
+  // Kitchen mode: keep the screen awake while the recipe is propped on the
+  // counter (iOS auto-locks after ~30s mid-cook). Off by default.
+  const wakeLock = useWakeLock();
   const viewMode = controlledView ?? internalView;
   const setViewMode = onViewChange ?? setInternalView;
   const factor = controlledScale ?? internalScale;
@@ -217,6 +223,29 @@ const RecipeDetailInner: React.FC<{
           <RecipeTagList tags={recipe.tags} />
         )}
         <Row align="center" wrap gap="sm" className="ml-auto">
+          {/* Kitchen mode: hold the screen awake while cooking. Feature-detected —
+              hidden on browsers without the Wake Lock API. */}
+          {wakeLock.supported && (
+            <button
+              type="button"
+              onClick={wakeLock.toggle}
+              aria-pressed={wakeLock.enabled}
+              title={
+                wakeLock.enabled
+                  ? "Screen stays awake while cooking — tap to allow sleep"
+                  : "Keep screen awake while cooking"
+              }
+              className={cn(
+                "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs",
+                wakeLock.enabled
+                  ? "border-primary/40 bg-primary/10 text-primary"
+                  : "border-border text-muted-foreground/70 hover:text-foreground",
+              )}
+            >
+              <Coffee className="h-3.5 w-3.5" />
+              {wakeLock.enabled ? "Awake" : "Keep awake"}
+            </button>
+          )}
           {/* "Why aren't these totals complete?" — one compact popover on every view, so the
               affordance is always one click away without the bulky inline card. */}
           <RecipeTotalsCoverageButton
@@ -360,6 +389,8 @@ const RecipeDetailInner: React.FC<{
             costing={costing}
             perServing={getServingBasis(scaledRecipe)}
             hideSummary
+            gaps={totalsGaps}
+            recipeId={recipe.id}
           />
         </Stack>
       )}
