@@ -232,6 +232,102 @@ export type ProblemsCoverage = z.infer<typeof problemsCoverageSchema>;
 export type ProblemsUpc = z.infer<typeof problemsUpcSchema>;
 export type ProblemsCount = z.infer<typeof problemsCountSchema>;
 
+// ---------------------------------------------------------------------------
+// Ignore ("I know, keep it") — a consciously-accepted problem (an intentional
+// duplicate, an orphan you're keeping) should not re-appear on every visit. The
+// user ignores a card; we persist a STABLE key and the detectors exclude it.
+//
+// A key is `${sectionId}:${itemId}` — the Problems-page section id (one per card
+// group, stable + human-meaningful) plus the item's entity id. It's section-
+// scoped so ignoring a product in "Missing images" doesn't also hide it in
+// "Orphaned". `problemSectionArrayKeys` maps each section id to the AllProblems
+// array field(s) it draws from, so the SERVER filter (which sees the raw arrays,
+// not the section registry) and the CLIENT ignore action agree on the key.
+// ---------------------------------------------------------------------------
+
+/** The AllProblems array fields — every detector's output list. */
+export type ProblemArrayKey = Exclude<keyof AllProblems, "totalProblems">;
+
+/**
+ * Section id → the AllProblems array key(s) whose items that section renders.
+ * Mirrors the PROBLEM_SECTIONS registry's `select`s. The one many-to-one case is
+ * `unit-coverage`, which merges three product/ingredient coverage arrays into a
+ * single card group. Anything not listed here is un-ignorable (e.g. locations,
+ * which the section renders through a custom component).
+ */
+export const problemSectionArrayKeys = {
+  duplicates: ["duplicateUniqueProducts"],
+  orphaned: ["orphanedProducts"],
+  "unit-coverage": [
+    "productsWithoutMappings",
+    "ingredientsWithPartialCoverage",
+    "productsWithIslandedMappings",
+  ],
+  "no-product-ingredients": ["ingredientsWithoutProduct"],
+  "unused-with-product": ["unusedIngredientsWithProduct"],
+  "unused-no-product": ["unusedIngredientsWithoutProduct"],
+  images: ["productsWithNoImages"],
+  "ai-descriptions": ["locationsWithoutAiDescription"],
+  "orphaned-embeddings": ["orphanedEntityEmbeddings"],
+  "upc-updates": ["productsWithBetterUpcData"],
+} as const satisfies Record<string, readonly ProblemArrayKey[]>;
+
+export type ProblemSectionId = keyof typeof problemSectionArrayKeys;
+
+/** The persisted ignore key: `${sectionId}:${itemId}`. */
+export const problemIgnoreKey = (sectionId: string, itemId: string): string =>
+  `${sectionId}:${itemId}`;
+
+export const ignoreProblemInput = z.object({
+  sectionId: z.string(),
+  itemId: z.string(),
+});
+export type IgnoreProblemInput = z.infer<typeof ignoreProblemInput>;
+
+export const unignoreProblemInput = z.object({
+  key: z.string(),
+});
+
+export const ignoredProblemOut = z.object({
+  key: z.string(),
+  sectionId: z.string(),
+  itemId: z.string(),
+  createdAt: z.date(),
+});
+export type IgnoredProblemOut = z.infer<typeof ignoredProblemOut>;
+
+export const ignoredProblemsOut = z.array(ignoredProblemOut);
+
+/**
+ * Filter a partial bag of AllProblems arrays (one cost group, or the whole set)
+ * against the ignored-key set. Each section's array key(s) are filtered by
+ * `${sectionId}:${item.id}` membership. Non-array/absent keys pass through
+ * untouched, so a group that only carries some arrays is safe to pass here.
+ */
+export const filterIgnoredFromArrays = <
+  T extends Partial<Record<ProblemArrayKey, Array<{ id: string }>>> &
+    Record<string, unknown>,
+>(
+  bag: T,
+  ignoredKeys: ReadonlySet<string>,
+): T => {
+  if (ignoredKeys.size === 0) return bag;
+  const out = { ...bag } as Record<string, unknown>;
+  for (const [sectionId, arrayKeys] of Object.entries(
+    problemSectionArrayKeys,
+  )) {
+    for (const key of arrayKeys) {
+      const items = bag[key as keyof T];
+      if (!Array.isArray(items)) continue;
+      out[key] = items.filter(
+        (item: { id: string }) =>
+          !ignoredKeys.has(problemIgnoreKey(sectionId, item.id)),
+      );
+    }
+  }
+  return out as T;
+};
+
 // Derive the count payload from the full problems result: every array key
 // becomes its length. The single source of truth for badge/count consumers, so
 // they assemble the five cost-grouped queries and count locally (no re-scan).

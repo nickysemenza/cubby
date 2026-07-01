@@ -13,6 +13,7 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import { useTRPC } from "~/trpc/react";
+import { IgnoredProblemsPanel } from "./components/ignored-problems-panel";
 import { MaintenanceCard } from "./components/maintenance-card";
 import { PROBLEM_SECTIONS } from "./components/problem-sections";
 import { RecipeUsageContext } from "./components/recipe-usage-context";
@@ -131,6 +132,10 @@ export function ProblemsOverview() {
             {section.node(problems)}
           </div>
         ))}
+
+        {/* Consciously-accepted problems the user chose to keep — collapsed
+            un-ignore affordance (self-hides when empty). */}
+        <IgnoredProblemsPanel />
 
         {/* Force-run batch fixes — surfaced here (not just buried in Settings)
             so the "fix it" tools live right next to the issues. Same shared card

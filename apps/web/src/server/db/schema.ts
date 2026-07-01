@@ -1086,3 +1086,24 @@ export const appSettings = pgTable("AppSettings", {
   metadata: jsonb("metadata").$type<Record<string, unknown>>(),
   ...baseTimestamps(),
 });
+
+// IgnoredProblem — a consciously-accepted Problems-page item the user dismissed
+// so it stops re-appearing on every detector run. `key` is `${sectionId}:${itemId}`
+// (see problemIgnoreKey): the Problems-page section id + the item's entity id, so
+// it's section-scoped and stable across re-scans. Purely additive (no FK — the
+// referenced entity can be any type, and an ignore that outlives its entity is
+// harmless: that item simply never re-surfaces). Unignoring hard-deletes the row.
+export const ignoredProblem = pgTable(
+  "IgnoredProblem",
+  {
+    id: pkUuid(),
+    key: text("key").notNull(),
+    sectionId: text("sectionId").notNull(),
+    itemId: text("itemId").notNull(),
+    ...baseTimestamps(),
+  },
+  (table) => [
+    uniqueIndex("IgnoredProblem_key_key").on(table.key),
+    index("IgnoredProblem_createdAt_idx").on(table.createdAt),
+  ],
+);
