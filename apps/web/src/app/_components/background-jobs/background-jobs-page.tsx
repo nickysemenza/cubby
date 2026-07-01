@@ -1,6 +1,7 @@
 import { type AuditEntityType, auditEntitySchema } from "@cubby/schemas/audit";
 import {
   type BackgroundBatchDetail,
+  type BackgroundBatchStatus,
   type BackgroundBatchSummary,
   type BackgroundJobSummary,
   backgroundBatchProcessors,
@@ -43,6 +44,17 @@ type ParsedBackgroundJobPayload = ReturnType<
 >;
 
 const ALL_FILTER_VALUE = "all";
+
+// Poll cadence while a batch is still working. Fast enough that a batch you
+// followed from a toast link visibly progresses; slow enough not to hammer the
+// queue tables.
+const BATCH_POLL_MS = 4000;
+
+// A batch is "live" (worth polling) until it reaches a terminal state. queued and
+// running are in-flight; succeeded/partial/failed/cancelled are settled.
+function isBatchLive(status: BackgroundBatchStatus): boolean {
+  return status === "queued" || status === "running";
+}
 
 function formatMs(value: number | null): string {
   if (value == null) return "";
@@ -588,14 +600,36 @@ export function BackgroundJobsPage({
   const [processorFilter, setProcessorFilter] = useState(ALL_FILTER_VALUE);
   const [statusFilter, setStatusFilter] = useState(ALL_FILTER_VALUE);
   const [textFilter, setTextFilter] = useState("");
-  const listQuery = useQuery(
-    api.backgroundJobs.listBatches.queryOptions({ limit: 25 }),
-  );
+  // Poll while there's live work, then stop. You land here from a toast
+  // `?batchId=` link the instant a batch is enqueued, so without this the status
+  // is frozen at page-load until a manual reload. "Live" = queued or running; once
+  // every relevant batch settles (succeeded/partial/failed/cancelled) polling
+  // turns off (returns false) so a quiet queue isn't refetched forever.
+  const listQuery = useQuery({
+    ...api.backgroundJobs.listBatches.queryOptions({ limit: 25 }),
+    refetchInterval: (query) => {
+      const batches = query.state.data;
+      if (!batches) return false;
+      // Scope the "is anything live?" check to the batches this view cares about
+      // (the scoped set from the action toast, else all) so an unrelated
+      // long-running batch elsewhere doesn't keep this poll hot.
+      const relevant = scopedBatchIds?.length
+        ? batches.filter((b) => scopedBatchIds.includes(b.id))
+        : batches;
+      return relevant.some((b) => isBatchLive(b.status))
+        ? BATCH_POLL_MS
+        : false;
+    },
+  });
   const detailQuery = useQuery({
     ...api.backgroundJobs.getBatch.queryOptions({
       batchId: selectedBatchId ?? "",
     }),
     enabled: Boolean(selectedBatchId),
+    refetchInterval: (query) =>
+      query.state.data && isBatchLive(query.state.data.status)
+        ? BATCH_POLL_MS
+        : false,
   });
 
   const invalidate = async () => {
