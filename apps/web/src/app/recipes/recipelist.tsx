@@ -30,6 +30,7 @@ import {
   perUnitSuffix,
 } from "../_components/recipe/recipe-utils";
 import { TruncatedList } from "../_components/TruncatedList";
+import { totalsLookStuck } from "./recipe-totals-staleness";
 
 /**
  * A computed list-cell value (cost, calories) whose confidence depends on how
@@ -57,21 +58,6 @@ const CoverageValue: React.FC<{
     </span>
   );
 };
-
-// How long after a recipe's last edit we still assume the background drain is
-// about to fill its totals. Within this window a null-totals cell shows the
-// animated skeleton (work pending); past it, the recipe is plausibly STUCK (the
-// drain never ran or failed for it) and we surface a manual recompute instead of
-// an infinite skeleton.
-const TOTALS_STALE_AFTER_MS = 5 * 60 * 1000;
-
-/** A recipe with null totals whose last edit is old enough to look stuck. */
-function totalsLookStuck(recipe: RecipeListItem): boolean {
-  return (
-    recipe.totals == null &&
-    Date.now() - recipe.updatedAt.getTime() > TOTALS_STALE_AFTER_MS
-  );
-}
 
 /**
  * The cell shown when a recipe's totals are null but it's plausibly stuck: a
