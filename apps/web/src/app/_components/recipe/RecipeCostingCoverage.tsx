@@ -86,7 +86,7 @@ const MISSING_CHIPS: {
  * so the coverage popover *and* the per-row "missing cost" cell in the
  * ingredient list point at the exact same fix — one source of truth.
  */
-export function gapFixLinkProps(gap: RecipeTotalsGap, currentRecipeId: string) {
+function gapFixLinkProps(gap: RecipeTotalsGap, currentRecipeId: string) {
   if (gap.source === "ingredient") {
     return {
       to: "/ingredients/workbench" as const,
