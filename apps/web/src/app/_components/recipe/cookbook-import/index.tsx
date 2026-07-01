@@ -393,6 +393,12 @@ export function CookbookImport({
         ...b,
         recipes,
         selected: new Set(recipes.map((_, i) => i)),
+        // `results` and `importProgress` are keyed by recipe INDEX; extraction
+        // repopulates `recipes` from scratch (fresh on the first run, a different
+        // list on a re-extraction retry), so any prior per-index import state now
+        // points at the wrong recipe — clear it.
+        results: new Map<number, ImportResult>(),
+        importProgress: undefined,
         extract: { status: "ready", failedChunks },
       }));
       if (recipes.length === 0) {
