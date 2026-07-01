@@ -1,6 +1,6 @@
 import { parse_scraped_recipe } from "@cubby/recipebridge";
 import { describe, expect, it } from "vitest";
-import { scrapedToImportRecipe } from "./scraper";
+import { assertScrapableUrl, scrapedToImportRecipe } from "./scraper";
 
 // Regression coverage for the section-aware scrape boundary. A live HTTP scrape
 // is intentionally NOT exercised here — the scrape mutation fetches the URL
@@ -101,5 +101,60 @@ describe("parse_scraped_recipe → scrapedToImportRecipe", () => {
     expect(raw.sections).toBeDefined();
     expect(raw.ingredients).toBeUndefined();
     expect(raw.instructions).toBeUndefined();
+  });
+});
+
+// SSRF guard: a shared link / "Import from URL" entry point can auto-fire the
+// server-side scrape fetch on page load, so a crafted URL must not be able to
+// reach internal/metadata addresses. This is a literal-host guard (no DNS
+// rebinding / redirect hardening — see assertScrapableUrl's doc comment).
+describe("assertScrapableUrl", () => {
+  it("allows a normal public https URL", () => {
+    expect(() =>
+      assertScrapableUrl("https://www.seriouseats.com/recipe"),
+    ).not.toThrow();
+    expect(() => assertScrapableUrl("http://example.com/x")).not.toThrow();
+  });
+
+  it("rejects the cloud-metadata address", () => {
+    expect(() =>
+      assertScrapableUrl("http://169.254.169.254/latest/meta-data/"),
+    ).toThrow(/private|internal/i);
+  });
+
+  it("rejects localhost and loopback", () => {
+    expect(() => assertScrapableUrl("http://localhost:8080/")).toThrow(
+      /local/i,
+    );
+    expect(() => assertScrapableUrl("http://127.0.0.1/")).toThrow(
+      /private|internal/i,
+    );
+    expect(() => assertScrapableUrl("http://[::1]/")).toThrow(
+      /private|internal/i,
+    );
+  });
+
+  it("rejects RFC1918 private ranges", () => {
+    for (const host of ["10.0.0.5", "172.16.0.1", "192.168.1.1"]) {
+      expect(() => assertScrapableUrl(`http://${host}/`)).toThrow(
+        /private|internal/i,
+      );
+    }
+  });
+
+  it("rejects *.local and unique-local IPv6", () => {
+    expect(() => assertScrapableUrl("http://my-nas.local/")).toThrow(/local/i);
+    expect(() => assertScrapableUrl("http://[fd00::1]/")).toThrow(
+      /private|internal/i,
+    );
+  });
+
+  it("rejects non-http(s) schemes", () => {
+    expect(() => assertScrapableUrl("file:///etc/passwd")).toThrow(/http/i);
+    expect(() => assertScrapableUrl("gopher://internal/")).toThrow(/http/i);
+  });
+
+  it("rejects a non-URL string", () => {
+    expect(() => assertScrapableUrl("not a url")).toThrow(/valid URL/i);
   });
 });
