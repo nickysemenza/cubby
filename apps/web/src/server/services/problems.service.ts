@@ -19,7 +19,6 @@ import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
 import {
   type AllProblems,
   assembleAllProblems,
-  filterIgnoredFromArrays,
   type IngredientWithPartialCoverage,
   type MaintenanceCounts,
   type ProblemsCoverage,
@@ -56,7 +55,6 @@ import {
   countReparseableLines,
   findDuplicateUniqueProducts,
   findEmptyLocations,
-  findIgnoredProblemKeys,
   findIngredientsWithoutProduct,
   findIngredientsWithUnusedAliases,
   findLinkedProductIds,
@@ -401,7 +399,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
   // traceAllSeq runs them sequentially (each still its own span) — a pg client
   // takes one query at a time, and the per-query cost is ~0, so serializing on
   // one connection beats 8 cold connects. See withConnection in db.ts.
-  // `ignoredKeys` (user-accepted items) rides on the same shared connection.
   const r = await withConnection(db, (scoped) =>
     traceAllSeq({
       duplicateUniqueProducts: () => findDuplicateUniqueProducts(scoped),
@@ -415,26 +412,20 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       locationsWithoutAiDescription: () =>
         findLocationsWithoutAiDescription(scoped),
       orphanedEntityEmbeddings: () => findOrphanedEntityEmbeddings(scoped),
-      ignoredKeys: () => findIgnoredProblemKeys(scoped),
     }),
   );
-  // Exclude user-ignored items so this group (and the badge count derived from
-  // it) never re-surfaces a consciously-accepted problem.
-  return filterIgnoredFromArrays(
-    {
-      duplicateUniqueProducts: r.duplicateUniqueProducts,
-      orphanedProducts: r.orphanedProducts,
-      productsWithoutMappings: r.productsWithoutMappings,
-      ingredientsWithoutProduct: r.ingredientsWithoutProduct,
-      unusedIngredientsWithProduct: r.unusedIngredients.withProduct,
-      unusedIngredientsWithoutProduct: r.unusedIngredients.withoutProduct,
-      emptyLocations: r.emptyLocations,
-      productsWithNoImages: r.productsWithNoImages,
-      locationsWithoutAiDescription: r.locationsWithoutAiDescription,
-      orphanedEntityEmbeddings: r.orphanedEntityEmbeddings,
-    },
-    r.ignoredKeys,
-  );
+  return {
+    duplicateUniqueProducts: r.duplicateUniqueProducts,
+    orphanedProducts: r.orphanedProducts,
+    productsWithoutMappings: r.productsWithoutMappings,
+    ingredientsWithoutProduct: r.ingredientsWithoutProduct,
+    unusedIngredientsWithProduct: r.unusedIngredients.withProduct,
+    unusedIngredientsWithoutProduct: r.unusedIngredients.withoutProduct,
+    emptyLocations: r.emptyLocations,
+    productsWithNoImages: r.productsWithNoImages,
+    locationsWithoutAiDescription: r.locationsWithoutAiDescription,
+    orphanedEntityEmbeddings: r.orphanedEntityEmbeddings,
+  };
 };
 
 export const cleanupOrphanedEntityEmbeddings = async (
@@ -453,16 +444,10 @@ export const cleanupOrphanedEntityEmbeddings = async (
 };
 
 // USDA-coverage group — both sections share one product scan + USDA enrichment.
-export const findCoverageProblems = async (
+export const findCoverageProblems = (
   db: Database,
   usdaClient: USDAClient,
-): Promise<ProblemsCoverage> => {
-  const [problems, ignoredKeys] = await Promise.all([
-    findProductCoverageProblems(db, usdaClient),
-    findIgnoredProblemKeys(db),
-  ]);
-  return filterIgnoredFromArrays(problems, ignoredKeys);
-};
+): Promise<ProblemsCoverage> => findProductCoverageProblems(db, usdaClient);
 
 // UPC-lookup network detector.
 const findProductsWithBetterUpcData = async (
@@ -518,13 +503,12 @@ const findProductsWithBetterUpcData = async (
 export const findUpcProblems = async (
   db: Database,
   upcLookupClient: UPCLookupClient,
-): Promise<ProblemsUpc> => {
-  const [productsWithBetterUpcData, ignoredKeys] = await Promise.all([
-    findProductsWithBetterUpcData(db, upcLookupClient),
-    findIgnoredProblemKeys(db),
-  ]);
-  return filterIgnoredFromArrays({ productsWithBetterUpcData }, ignoredKeys);
-};
+): Promise<ProblemsUpc> => ({
+  productsWithBetterUpcData: await findProductsWithBetterUpcData(
+    db,
+    upcLookupClient,
+  ),
+});
 
 // Combined scan for the badge/homepage/MCP — recomposed from the same groups so
 // there's one definition of each detector's membership. totalProblems is the

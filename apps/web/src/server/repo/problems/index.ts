@@ -47,13 +47,6 @@ export {
   recipeUsageCountsByProduct,
   synthesizeEffectiveMappings,
 } from "./detectors-product";
-// Ignored-problem persistence (user-accepted items excluded from detectors)
-export {
-  findIgnoredProblemKeys,
-  ignoreProblem,
-  listIgnoredProblems,
-  unignoreProblem,
-} from "./ignored";
 // Stale-parse detection + re-parse write path
 export {
   applyReparsedStaleLines,

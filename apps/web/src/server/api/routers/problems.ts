@@ -6,8 +6,6 @@ import {
   deleteUnusedIngredientsOut,
   dryRunPruneAliasesOut,
   dryRunReparseOut,
-  ignoredProblemsOut,
-  ignoreProblemInput,
   maintenanceCountsSchema,
   problemsCoverageSchema,
   problemsFastSchema,
@@ -15,15 +13,9 @@ import {
   recipeUsageByProductInput,
   recipeUsageByProductOut,
   reparseStaleSyncOut,
-  unignoreProblemInput,
 } from "@cubby/schemas/problems";
 import { streamProgress } from "~/lib/bulk-progress";
-import {
-  ignoreProblem,
-  listIgnoredProblems,
-  recipeUsageCountsByProduct,
-  unignoreProblem,
-} from "~/server/repo/problems";
+import { recipeUsageCountsByProduct } from "~/server/repo/problems";
 import {
   cleanupOrphanedEntityEmbeddings,
   deleteUnusedIngredients,
@@ -171,36 +163,10 @@ const cleanupOrphanedEmbeddings = protectedProcedure
     return await cleanupOrphanedEntityEmbeddings(ctx.db, input?.ids);
   });
 
-// Ignore ("keep it") a consciously-accepted problem so it stops re-appearing.
-// Keyed by `${sectionId}:${itemId}`; the detector groups exclude it (and the
-// badge count, which derives from the same cost-grouped queries, updates for
-// free once the problems.* cache invalidates).
-const ignore = protectedProcedure
-  .input(ignoreProblemInput)
-  .mutation(async ({ ctx, input }) => {
-    await ignoreProblem(ctx.db, input.sectionId, input.itemId);
-    return { success: true };
-  });
-
-const unignore = protectedProcedure
-  .input(unignoreProblemInput)
-  .mutation(async ({ ctx, input }) => {
-    await unignoreProblem(ctx.db, input.key);
-    return { success: true };
-  });
-
-// The ignored list for the "Ignored (N)" un-ignore affordance.
-const listIgnored = protectedProcedure
-  .output(ignoredProblemsOut)
-  .query(async ({ ctx }) => listIgnoredProblems(ctx.db));
-
 export const problemsRouter = createTRPCRouter({
   getFast,
   getCoverage,
   getUpc,
-  ignore,
-  unignore,
-  listIgnored,
   getMaintenanceCounts,
   reparseStale,
   reparseStaleSync,

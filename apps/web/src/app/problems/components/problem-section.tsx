@@ -1,10 +1,9 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { Link } from "@tanstack/react-router";
-import { ExternalLink, EyeOff, type LucideIcon, Wrench, X } from "lucide-react";
+import { ExternalLink, type LucideIcon, Wrench, X } from "lucide-react";
 import { type ReactNode, useState } from "react";
-import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
 import { MobileCard } from "~/components/entity/mobile-card";
-import { Grid, Row } from "~/components/layout";
+import { Grid } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
@@ -21,7 +20,6 @@ import {
 } from "~/components/ui/tooltip";
 import { EntityIcon } from "~/entities/entities";
 import type { EntityDetailRoute } from "~/entities/types";
-import { useTRPC } from "~/trpc/react";
 import { useRecipeUsage } from "./recipe-usage-context";
 
 // Cap each section's initial render so one noisy detector (e.g. 50+ unit-coverage
@@ -80,13 +78,6 @@ type ProblemSectionProps<T> = {
   groupBy?: (items: T[]) => { [key: string]: T[] };
   /** Only rendered when items exist */
   headerAction?: ReactNode;
-  /**
-   * The Problems-page section id. When set (and the section is in the ignore
-   * registry), each card grows an "Ignore" affordance that persists a
-   * `${sectionId}:${itemId}` key so the item stops re-surfacing.
-   */
-  sectionId?: string;
-  ignorable?: boolean;
 } & IconProp;
 
 export function ProblemSection<T>({
@@ -99,8 +90,6 @@ export function ProblemSection<T>({
   renderItem,
   groupBy,
   headerAction,
-  sectionId,
-  ignorable,
 }: ProblemSectionProps<T>) {
   const hasItems = items.length > 0;
   const iconColor = hasItems ? "text-destructive" : "text-secondary-foreground";
@@ -167,8 +156,6 @@ export function ProblemSection<T>({
               groupName={isGrouped ? groupName : ""}
               items={groupItems}
               renderItem={renderItem}
-              sectionId={sectionId}
-              ignorable={ignorable}
             />
           ))}
         </div>
@@ -185,14 +172,10 @@ function SectionGroup<T>({
   groupName,
   items,
   renderItem,
-  sectionId,
-  ignorable,
 }: {
   groupName: string;
   items: T[];
   renderItem: (item: T) => RenderedProblemItem;
-  sectionId?: string;
-  ignorable?: boolean;
 }) {
   const [showAll, setShowAll] = useState(false);
   const hidden = items.length - INITIAL_VISIBLE;
@@ -215,8 +198,6 @@ function SectionGroup<T>({
                 rendered.key ?? `${rendered.title}-${rendered.route.params.id}`
               }
               rendered={rendered}
-              sectionId={sectionId}
-              ignorable={ignorable}
             />
           );
         })}
@@ -236,62 +217,10 @@ function SectionGroup<T>({
 }
 
 /**
- * Per-card "Ignore" — persists a `${sectionId}:${itemId}` key so a consciously-
- * accepted problem stops re-surfacing. Owns its own mutation (mounted per card)
- * and always invalidates the `problems.*` path via useProblemCardMutation, so
- * the card drops out of its detector group AND the navbar badge updates. The
- * `problems.listIgnored` query lives under the same prefix, so the "Ignored (N)"
- * affordance refreshes too.
- */
-function IgnoreAction({
-  sectionId,
-  itemId,
-  title,
-}: {
-  sectionId: string;
-  itemId: string;
-  title: string;
-}) {
-  const api = useTRPC();
-  const ignore = useProblemCardMutation({
-    mutationFn: api.problems.ignore.mutationOptions,
-    success: `Ignoring "${title}"`,
-  });
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => ignore.mutate({ sectionId, itemId })}
-            disabled={ignore.isPending}
-          />
-        }
-      >
-        <EyeOff className="mr-1 h-3 w-3" />
-        Ignore
-      </TooltipTrigger>
-      <TooltipContent>
-        Keep this as-is — hide it from future scans
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
-/**
  * One problem card. Holds its own expand state so opening an inline fix on one
  * card doesn't re-render or collapse the others.
  */
-function ProblemCard({
-  rendered,
-  sectionId,
-  ignorable,
-}: {
-  rendered: RenderedProblemItem;
-  sectionId?: string;
-  ignorable?: boolean;
-}) {
+function ProblemCard({ rendered }: { rendered: RenderedProblemItem }) {
   const [open, setOpen] = useState(false);
   const {
     title,
@@ -318,7 +247,7 @@ function ProblemCard({
       imageSlot={imageSlot}
       className="border-l border-l-border p-2"
       actions={
-        <Row gap="tight" wrap>
+        <div className="flex gap-1">
           {inlineFix && (
             <Tooltip>
               <TooltipTrigger
@@ -359,14 +288,7 @@ function ProblemCard({
             </TooltipContent>
           </Tooltip>
           {customActions}
-          {ignorable && sectionId && (
-            <IgnoreAction
-              sectionId={sectionId}
-              itemId={route.params.id}
-              title={title}
-            />
-          )}
-        </Row>
+        </div>
       }
     >
       {details.length > 0 && <div className="space-y-1">{details}</div>}

@@ -1,6 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { AllProblems } from "@cubby/schemas/problems";
-import { problemSectionArrayKeys } from "@cubby/schemas/problems";
 import type { SearchableEntityRef } from "@cubby/schemas/search";
 import { Link } from "@tanstack/react-router";
 import { groupBy } from "es-toolkit";
@@ -78,10 +77,6 @@ function section<T>(config: {
   const iconProp: IconProp = config.entity
     ? { entity: config.entity }
     : { icon: config.icon as LucideIcon };
-  // A section is ignorable iff its id maps to AllProblems array key(s) (the
-  // ignore registry). Sections rendered through a custom component (locations)
-  // or with no stable entity id aren't in the map and get no Ignore affordance.
-  const ignorable = config.id in problemSectionArrayKeys;
   return {
     id: config.id,
     label: config.label,
@@ -97,8 +92,6 @@ function section<T>(config: {
           items={items}
           renderItem={config.renderItem}
           groupBy={config.groupBy}
-          sectionId={config.id}
-          ignorable={ignorable}
           headerAction={
             typeof config.headerAction === "function"
               ? config.headerAction(items)
