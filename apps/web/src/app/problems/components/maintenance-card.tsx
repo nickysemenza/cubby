@@ -1,5 +1,6 @@
 import type { MaintenanceCounts } from "@cubby/schemas/problems";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import pluralize from "pluralize";
 import type { ReactNode } from "react";
 import { Row, Stack } from "~/components/layout";
@@ -99,7 +100,10 @@ function MaintenanceDryRunRow({
 // Recompute's accurate "would change" needs a full compute+diff (~as costly as
 // recomputing), so it's an on-demand dry run rather than an always-on count. The
 // force-recompute button stays — it's the only path that catches logic-change
-// drift the stale flag misses.
+// drift the stale flag misses. It's DURABLE: instead of holding one request open
+// to do the full CPU-heavy pass inline (which dies on navigate-away / PWA
+// background / Worker CPU limit), it enqueues bounded jobs onto the background-jobs
+// queue and links the toast there (mirrors "Analyze descriptions").
 function RecomputeAction() {
   const trpc = useTRPC();
   const dryRun = useQuery({
@@ -126,14 +130,35 @@ function RecomputeAction() {
       onDryRun={() => void dryRun.refetch()}
       dryRunPending={dryRun.isFetching}
       backfill={
-        <BackfillButton<{ processed: number }>
-          run={(client) => client.recipe.recomputeAllStream.mutate()}
+        <BackfillButton<{
+          enqueued: number;
+          total: number;
+          batchId: string | null;
+        }>
+          run={(client) => client.recipe.recomputeAllDurable.mutate()}
           invalidateKeys={(api) => [api.recipe.list.queryKey()]}
           idleLabel="Recompute all"
-          pendingLabel="Recomputing…"
+          pendingLabel="Enqueuing…"
           toastResult={(r) => ({
-            tone: "success",
-            message: `Recomputed ${pluralize("recipe", r.processed, true)}.`,
+            tone: r.enqueued > 0 ? "success" : "info",
+            message:
+              r.enqueued > 0 ? (
+                <span>
+                  Enqueued {pluralize("recipe", r.enqueued, true)} for
+                  recompute.{" "}
+                  {r.batchId ? (
+                    <Link
+                      to="/background-jobs"
+                      search={{ batchId: r.batchId }}
+                      className="underline decoration-border decoration-dotted underline-offset-2 hover:decoration-primary"
+                    >
+                      View progress
+                    </Link>
+                  ) : null}
+                </span>
+              ) : (
+                "Nothing to recompute."
+              ),
           })}
         />
       }
@@ -163,6 +188,7 @@ function ReparseAction() {
         <BackfillButton<{ updated: number; recipesAffected: number }>
           run={(client) => client.problems.reparseStale.mutate()}
           invalidateKeys={(api) => [api.recipe.list.queryKey()]}
+          foreground
           idleLabel="Re-parse all"
           pendingLabel="Re-parsing…"
           toastResult={(r) => ({
@@ -200,6 +226,7 @@ function PruneAliasesAction() {
         <BackfillButton<{ pruned: number }>
           run={(client) => client.problems.pruneAllUnusedAliasesStream.mutate()}
           invalidateKeys={(api) => [api.ingredient.list.queryKey()]}
+          foreground
           idleLabel="Prune all"
           pendingLabel="Pruning…"
           toastResult={(r) => ({

@@ -16,8 +16,12 @@ import { ProblemActionButton } from "./problem-action-button";
 type TRPCApi = ReturnType<typeof useTRPC>;
 type TRPCClient = ReturnType<typeof useTRPCClient>;
 
-/** Result-driven toast: which sonner variant to fire and with what message. */
-type BackfillToast = { tone: "success" | "info"; message: string };
+/**
+ * Result-driven toast: which sonner variant to fire and with what message. The
+ * message is a ReactNode so a durable action can surface a `<Link>` to
+ * `/background-jobs` (like other queued flows), not just plain text.
+ */
+type BackfillToast = { tone: "success" | "info"; message: ReactNode };
 
 export type BackfillButtonProps<TResult> = {
   /** Opens the streaming backfill mutation, e.g. `(client) => client.problems.reparseStale.mutate()`. */
@@ -29,6 +33,14 @@ export type BackfillButtonProps<TResult> = {
   toastResult: (data: TResult) => BackfillToast;
   idleLabel: string;
   pendingLabel: string;
+  /**
+   * True for actions that do all their work inside this single held-open stream
+   * (no durable queue) — so the fragility is visible: while running we render a
+   * "keep this page open" note, because navigating away / backgrounding the PWA /
+   * hitting the Worker CPU limit kills the op with no record. Durable actions
+   * (they enqueue jobs and return a batchId) leave this off.
+   */
+  foreground?: boolean;
 };
 
 /**
@@ -44,6 +56,7 @@ export function BackfillButton<TResult>({
   toastResult,
   idleLabel,
   pendingLabel,
+  foreground,
 }: BackfillButtonProps<TResult>): ReactNode {
   const api = useTRPC();
   const client = useTRPCClient();
@@ -76,6 +89,11 @@ export function BackfillButton<TResult>({
           max={progress?.total ?? 1}
           indeterminate={!progress}
         />
+      )}
+      {running && foreground && (
+        <span className="text-2xs text-warning">
+          Keep this page open — this runs here, not in the background.
+        </span>
       )}
     </Stack>
   );
