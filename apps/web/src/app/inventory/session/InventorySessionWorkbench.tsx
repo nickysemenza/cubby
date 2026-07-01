@@ -3,6 +3,7 @@ import type { Amount } from "@cubby/schemas/codec";
 import {
   type LocationId,
   locationId,
+  type ProductId,
   unsafeLocationId,
   unsafeProductId,
 } from "@cubby/schemas/identifiers";
@@ -46,9 +47,13 @@ import { match } from "ts-pattern";
 import { z } from "zod";
 import { DialogCompatibleCombobox } from "~/app/_components/combobox/combobox-dialog";
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
-import { WithProductSearch } from "~/app/_components/combobox/with-search-hook";
+import {
+  WithIngredientSearch,
+  WithProductSearch,
+} from "~/app/_components/combobox/with-search-hook";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import {
+  getOptionalIngredientId,
   getProductId,
   requiredProductField,
 } from "~/app/_components/form-fields";
@@ -1915,6 +1920,18 @@ function SessionCaptureActions({ location }: { location: SessionLocation }) {
   const [pendingPhoto, setPendingPhoto] = useState<File | null>(null);
   const [photoName, setPhotoName] = useState("");
 
+  // Scan-created product ingredient link: a brand-new UPC product lands with no
+  // ingredient link (invisible to recipe costing), so after a scan *creates* one
+  // we surface a non-blocking follow-up sheet to link an ingredient. The scan/
+  // inventory flow already completed — this never blocks the continuous loop.
+  const [pendingLinkProduct, setPendingLinkProduct] = useState<{
+    id: ProductId;
+    name: string;
+  } | null>(null);
+  const [linkIngredient, setLinkIngredient] = useState<ComboboxItem | null>(
+    null,
+  );
+
   // Distinct from the outer session invalidator: this one also refreshes the
   // product-lookup caches and, given a mutation result, polls its background
   // work (e.g. the AI description enqueued by attaching a photo) so the UI
@@ -2045,14 +2062,41 @@ function SessionCaptureActions({ location }: { location: SessionLocation }) {
   const handleBarcode = async (barcode: string) => {
     const product = await lookupUpc(barcode);
     if (!product) return;
-    const created = await createInventory.mutateAsync({
+    const inventory = await createInventory.mutateAsync({
       productId: product.id,
       locationId: location.id,
       amount: { value: 1, unit: "each" },
     });
     toast.success(
-      savedWithBackgroundWork(created.sideEffects, `Added ${product.name}`),
+      savedWithBackgroundWork(inventory.sideEffects, `Added ${product.name}`),
     );
+    // A brand-new product has no ingredient link yet, so it won't cost in any
+    // recipe until one is added. Surface a non-blocking follow-up sheet — the
+    // add above already succeeded, so this never stalls the continuous scan loop.
+    if (product.created) {
+      setLinkIngredient(null);
+      setPendingLinkProduct({
+        id: product.id,
+        name: product.name,
+      });
+    }
+  };
+
+  const submitIngredientLink = async () => {
+    const target = pendingLinkProduct;
+    const ingredientId = getOptionalIngredientId(linkIngredient);
+    if (!target || !ingredientId) return;
+    try {
+      await updateProduct.mutateAsync({
+        id: target.id,
+        data: { ingredientId },
+      });
+      toast.success(`Linked ${target.name} to ${linkIngredient?.name}`);
+      setPendingLinkProduct(null);
+      setLinkIngredient(null);
+    } catch (error) {
+      toast.error(`Link failed: ${getErrorMessage(error)}`);
+    }
   };
 
   // Photo-as-identity: add an unlabeled object from a photo + a short name as a
@@ -2313,6 +2357,76 @@ function SessionCaptureActions({ location }: { location: SessionLocation }) {
               Add
             </Button>
           </form>
+        </SheetContent>
+      </Sheet>
+
+      {/* Scan-created product → optional ingredient link (non-blocking). */}
+      <Sheet
+        open={pendingLinkProduct !== null}
+        onOpenChange={(open) => {
+          if (!open && !updateProduct.isPending) {
+            setPendingLinkProduct(null);
+            setLinkIngredient(null);
+          }
+        }}
+      >
+        <SheetContent side="bottom" className="p-4" showCloseButton={false}>
+          <SheetHeader className="p-0 pb-4">
+            <SheetTitle>New product added — link an ingredient?</SheetTitle>
+            <SheetDescription>
+              {pendingLinkProduct?.name} is new. Linking an ingredient lets it
+              count toward recipe costing. Skip to keep scanning.
+            </SheetDescription>
+          </SheetHeader>
+          <WithIngredientSearch>
+            {({
+              items,
+              onSearchChange,
+              isLoading,
+              onCreateNew,
+              onOpenChange,
+            }) => (
+              <Row gap="sm" align="center">
+                <div className="min-w-0 flex-1">
+                  <DialogCompatibleCombobox
+                    label="ingredient"
+                    items={items}
+                    onSearchChange={onSearchChange}
+                    isLoading={isLoading}
+                    value={linkIngredient}
+                    setValue={setLinkIngredient}
+                    onCreateNew={onCreateNew}
+                    onOpenChange={onOpenChange}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="shrink-0"
+                  disabled={updateProduct.isPending}
+                  onClick={() => {
+                    setPendingLinkProduct(null);
+                    setLinkIngredient(null);
+                  }}
+                >
+                  Skip
+                </Button>
+                <Button
+                  type="button"
+                  className="shrink-0"
+                  disabled={!linkIngredient || updateProduct.isPending}
+                  onClick={() => void submitIngredientLink()}
+                >
+                  {updateProduct.isPending ? (
+                    <Spinner />
+                  ) : (
+                    <Plus className="h-4 w-4" />
+                  )}
+                  Link
+                </Button>
+              </Row>
+            )}
+          </WithIngredientSearch>
         </SheetContent>
       </Sheet>
     </Card>

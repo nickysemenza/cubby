@@ -19,6 +19,7 @@ import {
   productCreateManyInput,
   productFiltersSchema,
   productFindOrCreateByUPCInput,
+  productFindOrCreateByUPCOut,
   productListItemOut,
   productMarkUsdaUnavailableManyInput,
   productPickerItemOut,
@@ -301,7 +302,7 @@ const quickCreate = protectedProcedure
 // Checks local DB first, then USDA, then UPC worker, then creates with defaults
 const findOrCreateByUPC = protectedProcedure
   .input(productFindOrCreateByUPCInput)
-  .output(productTopLevelOut)
+  .output(productFindOrCreateByUPCOut)
   .mutation(async ({ ctx, input }) => {
     return findOrCreateByUPCService(
       ctx.db,
