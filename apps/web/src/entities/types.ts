@@ -33,8 +33,7 @@ type EntityNewRoute =
   | "/products/new"
   | "/recipes/new"
   | "/locations/new"
-  | "/inventory/new"
-  | "/meals/new";
+  | "/inventory/new";
 
 /** Typed routes for an entity */
 interface EntityRoutes {

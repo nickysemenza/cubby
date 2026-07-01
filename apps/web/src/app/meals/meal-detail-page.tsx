@@ -2,27 +2,37 @@ import type { MealId } from "@cubby/schemas/identifiers";
 import type { MealRecipeOut } from "@cubby/schemas/meal";
 import { MAX_PAGE_SIZE } from "@cubby/schemas/pagination";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
+import { format, parseISO } from "date-fns";
 import { Trash2 } from "lucide-react";
 import { useState } from "react";
+import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { useEntityDelete } from "~/app/_components/hooks/useEntityDelete";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
+import type { DetailHeroStat } from "~/components/layouts/page-hero";
+import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { FilterableCombobox } from "~/components/ui/combobox";
 import { Description } from "~/components/ui/description";
+import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Input } from "~/components/ui/input";
+import { mealMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import { useInvalidateMeals } from "./use-meal-mutations";
 
 export function MealDetailPage({ mealId }: { mealId: MealId }) {
   const api = useTRPC();
-  const navigate = useNavigate();
   const invalidate = useInvalidateMeals();
 
-  const { data: meal, isLoading } = useQuery(
-    api.meal.getByID.queryOptions({ id: mealId }),
-  );
+  const {
+    data: meal,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery(api.meal.getByID.queryOptions({ id: mealId }));
 
   // Recipe picker options.
   const { data: recipeList } = useQuery(
@@ -39,19 +49,69 @@ export function MealDetailPage({ mealId }: { mealId: MealId }) {
   const addRecipe = useMutation(
     api.meal.addRecipe.mutationOptions({ onSuccess: invalidate }),
   );
-  const deleteMeal = useMutation(
-    api.meal.delete.mutationOptions({
-      onSuccess: () => {
-        invalidate();
-        void navigate({ to: "/meals" });
-      },
-    }),
-  );
+
+  // Confirm + toast + optimistic removal, matching every other entity.
+  const mealName = meal?.name
+    ? meal.name
+    : meal
+      ? format(parseISO(meal.date), "EEE, MMM d")
+      : "";
+  const {
+    DeleteDialog,
+    openDeleteDialog,
+    isPending: isDeleting,
+  } = useEntityDelete({
+    id: mealId,
+    name: mealName,
+    entityLabel: "Meal",
+    mutationOptions: api.meal.delete.mutationOptions,
+    invalidateKeys: mealMutationInvalidateKeys,
+    redirectTo: "/meals",
+  });
 
   const [name, setName] = useState<string | null>(null);
 
-  if (isLoading) return <SimpleLoading text="Loading meal..." />;
-  if (!meal) return <Description>Meal not found.</Description>;
+  if (isLoading) {
+    return (
+      <Page variant="list" title="Meal" entity="meal">
+        <SimpleLoading text="Loading meal..." />
+      </Page>
+    );
+  }
+
+  // Distinguish a transient fetch failure from a genuine 404 so a dropped
+  // connection doesn't masquerade as "Meal not found".
+  if (isError) {
+    return (
+      <Page variant="list" title="Meal" entity="meal">
+        <Empty>
+          <EmptyTitle>Couldn't load this meal</EmptyTitle>
+          <EmptyDescription>
+            {error.message || "Something went wrong."}
+          </EmptyDescription>
+          <Button type="button" variant="outline" onClick={() => refetch()}>
+            Retry
+          </Button>
+        </Empty>
+      </Page>
+    );
+  }
+
+  if (!meal) {
+    return (
+      <Page variant="list" title="Meal not found" entity="meal" compact>
+        <Empty>
+          <EmptyTitle>Meal not found</EmptyTitle>
+          <EmptyDescription>
+            This meal is no longer available.{" "}
+            <Link to="/meals" className="underline">
+              Back to meals
+            </Link>
+          </EmptyDescription>
+        </Empty>
+      </Page>
+    );
+  }
 
   const nameValue = name ?? meal.name ?? "";
   const recipeItems = (recipeList?.items ?? []).map((r) => ({
@@ -59,95 +119,102 @@ export function MealDetailPage({ mealId }: { mealId: MealId }) {
     label: r.name,
   }));
 
+  const heroStats: DetailHeroStat[] = [
+    {
+      label: "Cost",
+      value:
+        meal.totals.pending && meal.totals.costTotal === 0
+          ? "—"
+          : `${formatCurrency(meal.totals.costTotal)}${meal.totals.pending ? "+" : ""}`,
+    },
+    { label: "Calories", value: Math.round(meal.totals.caloriesTotal) },
+    { label: "Recipes", value: meal.recipes.length },
+  ];
+
   return (
-    <Stack>
-      <Link
-        to="/meals"
-        className="inline-flex items-center gap-1 text-muted-foreground text-sm hover:underline"
-      >
-        ← Meals
-      </Link>
-      <Row align="end" justify="between" wrap gap="md">
-        <div className="flex flex-col gap-2">
-          <Input
-            value={nameValue}
-            placeholder="Meal name (optional)"
-            className="h-9 w-64 font-medium"
-            onChange={(e) => setName(e.target.value)}
-            onBlur={() => {
-              const next = nameValue.trim() || null;
-              if (next !== (meal.name ?? null)) {
-                updateMeal.mutate({ id: mealId, data: { name: next } });
-              }
-            }}
-          />
-          <input
-            type="date"
-            value={meal.date}
-            className="w-44 rounded-md border bg-input/20 px-2 py-1 text-sm"
-            onChange={(e) => {
-              if (!e.target.value) return;
-              updateMeal.mutate({
-                id: mealId,
-                data: { date: e.target.value },
-              });
-            }}
-          />
-        </div>
-        <div className="text-right">
-          <div className="font-semibold text-lg tabular-nums">
-            {meal.totals.pending && meal.totals.costTotal === 0
-              ? "—"
-              : `${formatCurrency(meal.totals.costTotal)}${meal.totals.pending ? "+" : ""}`}
-          </div>
-          <Description as="div" size="xs">
-            {Math.round(meal.totals.caloriesTotal)} cal
-            {meal.totals.pending ? " (some recipes uncosted)" : ""}
-          </Description>
-        </div>
-      </Row>
-
-      <Stack gap="sm">
-        {meal.recipes.length === 0 ? (
-          <Description>No recipes yet — add one below.</Description>
-        ) : (
-          meal.recipes.map((mr) => (
-            <RecipeRow key={mr.id} mr={mr} onChanged={invalidate} />
-          ))
-        )}
-      </Stack>
-
-      <div className="max-w-sm">
-        <Description as="span" size="xs" className="mb-1 block">
-          Add a recipe
-        </Description>
-        <FilterableCombobox
-          items={recipeItems}
-          value={null}
-          placeholder="Search recipes…"
-          disabled={addRecipe.isPending}
-          onValueChange={(recipeId) => {
-            if (!recipeId) return;
-            // tRPC's input type for a branded-uuid field is plain string.
-            addRecipe.mutate({ mealId, recipeId, scale: 1 });
-          }}
-        />
-      </div>
-
-      <div className="border-t pt-4">
+    <Page
+      variant="detail"
+      entity="meal"
+      title={mealName}
+      rawData={meal}
+      heroStats={heroStats}
+      heroStamp={{
+        label: format(parseISO(meal.date), "EEE, MMM d"),
+        tone: "ink",
+      }}
+      actions={
         <Button
           type="button"
           variant="outline"
           size="sm"
           className="text-destructive"
-          disabled={deleteMeal.isPending}
-          onClick={() => deleteMeal.mutate({ ids: [mealId] })}
+          disabled={isDeleting}
+          onClick={openDeleteDialog}
         >
           <Trash2 className="size-4" />
           Delete meal
         </Button>
-      </div>
-    </Stack>
+      }
+    >
+      <DeleteDialog />
+      <Stack>
+        <Row align="end" wrap gap="md">
+          <Stack gap="sm">
+            <Input
+              value={nameValue}
+              placeholder="Meal name (optional)"
+              className="h-9 w-64 font-medium"
+              onChange={(e) => setName(e.target.value)}
+              onBlur={() => {
+                const next = nameValue.trim() || null;
+                if (next !== (meal.name ?? null)) {
+                  updateMeal.mutate({ id: mealId, data: { name: next } });
+                }
+              }}
+            />
+            <Input
+              type="date"
+              value={meal.date}
+              className="h-8 w-44"
+              onChange={(e) => {
+                if (!e.target.value) return;
+                updateMeal.mutate({
+                  id: mealId,
+                  data: { date: e.target.value },
+                });
+              }}
+            />
+          </Stack>
+        </Row>
+
+        <Stack gap="sm">
+          {meal.recipes.length === 0 ? (
+            <Description>No recipes yet — add one below.</Description>
+          ) : (
+            meal.recipes.map((mr) => (
+              <RecipeRow key={mr.id} mr={mr} onChanged={invalidate} />
+            ))
+          )}
+        </Stack>
+
+        <div className="max-w-sm">
+          <Description as="span" size="xs" className="mb-1 block">
+            Add a recipe
+          </Description>
+          <FilterableCombobox
+            items={recipeItems}
+            value={null}
+            placeholder="Search recipes…"
+            disabled={addRecipe.isPending}
+            onValueChange={(recipeId) => {
+              if (!recipeId) return;
+              // tRPC's input type for a branded-uuid field is plain string.
+              addRecipe.mutate({ mealId, recipeId, scale: 1 });
+            }}
+          />
+        </div>
+      </Stack>
+    </Page>
   );
 }
 
@@ -164,9 +231,11 @@ function RecipeRow({
   const updateRecipe = useMutation(
     api.meal.updateRecipe.mutationOptions({ onSuccess: onChanged }),
   );
-  const removeRecipe = useMutation(
-    api.meal.removeRecipe.mutationOptions({ onSuccess: onChanged }),
-  );
+  const removeRecipe = useActionMutation({
+    mutationFn: api.meal.removeRecipe.mutationOptions,
+    success: `Removed ${mr.recipe.name}`,
+    onSuccess: onChanged,
+  });
 
   const commitScale = () => {
     const next = Number(scale);

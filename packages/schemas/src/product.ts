@@ -246,7 +246,20 @@ const productTopLevelFields = {
 // Response schema for product data
 export const productTopLevelOut = z.object(productTopLevelFields);
 
+/**
+ * find-or-create result: the product plus whether it was newly created (vs a
+ * match against an existing product). The scan UI prompts to link an ingredient
+ * only when `created` — a brand-new UPC product lands with no ingredient link.
+ */
+export const productFindOrCreateByUPCOut = z.object({
+  product: productTopLevelOut,
+  created: z.boolean(),
+});
+
 export type ProductTopLevelOut = z.infer<typeof productTopLevelOut>;
+export type ProductFindOrCreateByUPCOut = z.infer<
+  typeof productFindOrCreateByUPCOut
+>;
 export type ProductCreateInput = z.infer<typeof productCreateInput>;
 export type ProductUpdateInput = z.infer<typeof productUpdateInput>;
 
