@@ -15,6 +15,8 @@ import {
   ingredientIdsInput,
   ingredientListItemOut,
   ingredientMatchesOut,
+  ingredientMergeImpactInput,
+  ingredientMergeImpactOut,
   ingredientMergeInput,
   ingredientMergeOut,
   ingredientNameFilterInput,
@@ -36,6 +38,7 @@ import {
   getIngredientMatches,
   getRawLinesForIngredients,
   getRecipeUsagesForIngredient,
+  mergeImpactForIngredients,
   resolveOrCreateIngredients,
 } from "~/server/repo/ingredient";
 import { IngredientService } from "~/server/services/ingredient.service";
@@ -212,6 +215,16 @@ const merge = protectedProcedure
     };
   });
 
+// Read-only merge preview: per-candidate counts (recipe usages, linked products,
+// aliases) + USDA-linkability, so the merge-confirmation picker can default the
+// keeper to the best candidate and show what each row carries. No writes.
+const mergeImpact = protectedProcedure
+  .input(ingredientMergeImpactInput)
+  .output(ingredientMergeImpactOut)
+  .query(async ({ ctx, input }) => {
+    return await mergeImpactForIngredients(ctx.db, input.ids);
+  });
+
 // The enrichment workbench worklist: recipe-used ingredients that aren't fully
 // costable, with coverage + recommended fix computed server-side.
 const enrichmentWorkbench = protectedProcedure
@@ -315,6 +328,7 @@ const deleteItem = createDeleteProcedure<IngredientId>(
 
 export const ingredientRouter = createTRPCRouter({
   getByName,
+  mergeImpact,
   enrichmentWorkbench,
   recipeUsages,
   rawLines,
