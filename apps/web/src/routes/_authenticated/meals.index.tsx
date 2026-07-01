@@ -25,7 +25,7 @@ function MealsIndexRoute() {
   const normalizedView = routeView === "calendar" ? undefined : routeView;
 
   return (
-    <Page variant="list" title="Meals" entity="meal" fullWidth>
+    <Page variant="list" title="Meals" fullWidth>
       <MealCalendarPage
         view={routeView}
         week={week}

@@ -17,7 +17,6 @@ function CookbooksPage() {
     <Page
       variant="list"
       title="Cookbooks"
-      entity="cookbook"
       actions={
         <Link to="/recipes/import-cookbook">
           <Button variant="outline">

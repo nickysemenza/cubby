@@ -6,6 +6,7 @@ import {
   type DetailHeroStat,
   PageHeader,
 } from "~/components/layouts/page-hero";
+import { useRouteEntity } from "~/hooks/useRouteEntity";
 import { HydrateClient } from "~/trpc/hydrate-client";
 
 interface PageBaseProps {
@@ -60,8 +61,12 @@ type PageProps = PageListProps | PageDetailProps;
  * spec-plate), and a Suspense boundary around the page body.
  */
 export function Page(props: PageProps) {
-  const { title, eyebrow, entity, actions, fullWidth, children } = props;
+  const { title, eyebrow, actions, fullWidth, children } = props;
   const variant = props.variant ?? "list";
+  // List pages can omit `entity` — derive it from the route so the eyebrow/accent
+  // still render. Detail pages always pass it explicitly (TS-required).
+  const autoEntity = useRouteEntity();
+  const entity = props.entity ?? autoEntity;
   // Detail-only spec-plate extras, narrowed off the union.
   const detail = props.variant === "detail" ? props : undefined;
   // List-only header options, narrowed off the union.

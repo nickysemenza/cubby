@@ -8,7 +8,7 @@ export const Route = createFileRoute("/_authenticated/inventory/new")({
 
 function NewInventoryPage() {
   return (
-    <Page variant="list" title="New inventory" entity="inventory" compact>
+    <Page variant="list" title="New inventory" compact>
       <CreateInventoryItem />
     </Page>
   );
