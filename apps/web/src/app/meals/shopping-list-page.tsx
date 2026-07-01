@@ -5,10 +5,13 @@ import { Link } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
 import { sumBy } from "es-toolkit";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { useId, useMemo, useState } from "react";
+import { useCallback, useId, useMemo, useState } from "react";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
+import { Button } from "~/components/ui/button";
+import { Checkbox } from "~/components/ui/checkbox";
 import { Description } from "~/components/ui/description";
+import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Input } from "~/components/ui/input";
 import {
   Table,
@@ -18,6 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import { formatAmount, statusClass, statusLabel } from "./meal-format";
@@ -57,38 +61,60 @@ export function ShoppingListPage({
   const toStr = to ?? defaultRange.to;
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  // Check-off state persists per date-range so a return trip to the store keeps
+  // what you already grabbed. Stored as an array (Sets don't JSON-serialize).
+  const [checkedKeys, setCheckedKeys] = useLocalStorage<string[]>(
+    `cubby:shopping-checked:${fromStr}:${toStr}`,
+    [],
+  );
+  const checked = useMemo(() => new Set(checkedKeys), [checkedKeys]);
+  const toggleChecked = useCallback(
+    (key: string) =>
+      setCheckedKeys((prev) =>
+        prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key],
+      ),
+    [setCheckedKeys],
+  );
   const fromId = useId();
   const toId = useId();
 
-  const { data, isLoading } = useQuery(
+  const { data, isLoading, isError, error, refetch } = useQuery(
     // Date-only "YYYY-MM-DD" bounds — no timezone conversion.
     api.meal.getShoppingList.queryOptions({ from: fromStr, to: toStr }),
   );
 
   // Recompute need/short client-side from per-meal contributions so toggling a
   // meal off is instant (no refetch). `have` is global — never re-summed.
+  // Checked rows sink to the bottom (checked last), then most-short-first.
   const rows = useMemo(() => {
     if (!data) return [];
     return data.items
       .map((item) => {
+        const key = item.ingredientId ?? item.name;
         const need = sumBy(
           item.perMeal.filter((c) => !excluded.has(c.mealId)),
           (c) => c.needValue,
         );
         const have = item.haveValue ?? 0;
         return {
+          key,
           item,
           need,
           shortfall: Math.max(0, need - have),
           status: adjustedStatus(item, need),
+          isChecked: checked.has(key),
         };
       })
       .filter((r) => r.need > EPSILON)
       .sort(
         (a, b) =>
-          b.shortfall - a.shortfall || a.item.name.localeCompare(b.item.name),
+          Number(a.isChecked) - Number(b.isChecked) ||
+          b.shortfall - a.shortfall ||
+          a.item.name.localeCompare(b.item.name),
       );
-  }, [data, excluded]);
+  }, [data, excluded, checked]);
+
+  const remaining = rows.filter((r) => !r.isChecked).length;
 
   const toggle = (set: Set<string>, key: string) => {
     const next = new Set(set);
@@ -132,6 +158,18 @@ export function ShoppingListPage({
 
       {isLoading ? (
         <SimpleLoading text="Adding up what you need..." />
+      ) : isError ? (
+        // Distinct from the empty state — a network failure must never read as
+        // "no meals planned" (that lie is worst mid-shop).
+        <Empty>
+          <EmptyTitle>Couldn't load your shopping list</EmptyTitle>
+          <EmptyDescription>
+            {error.message || "Something went wrong."}
+          </EmptyDescription>
+          <Button type="button" variant="outline" onClick={() => refetch()}>
+            Retry
+          </Button>
+        </Empty>
       ) : !data || data.meals.length === 0 ? (
         <Description>
           No meals planned in this range.{" "}
@@ -166,44 +204,120 @@ export function ShoppingListPage({
           {rows.length === 0 ? (
             <Description>Nothing to buy for the selected meals.</Description>
           ) : (
-            <Table
-              containerClassName="overflow-hidden rounded-lg border border-[var(--border)]"
-              className="table-auto"
-            >
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Ingredient</TableHead>
-                  <TableHead className="text-right">Need</TableHead>
-                  <TableHead className="text-right">Have</TableHead>
-                  <TableHead className="text-right">Short</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map(({ item, need, shortfall, status }) => {
-                  const key = item.ingredientId ?? item.name;
-                  const isOpen = expanded.has(key);
-                  const perMeal = item.perMeal.filter(
-                    (c) => !excluded.has(c.mealId),
-                  );
-                  return (
-                    <RowGroup
-                      key={key}
-                      item={item}
-                      need={need}
-                      shortfall={shortfall}
-                      status={status}
-                      isOpen={isOpen}
-                      perMeal={perMeal}
-                      onToggle={() => setExpanded((s) => toggle(s, key))}
-                    />
-                  );
-                })}
-              </TableBody>
-            </Table>
+            <Stack gap="sm">
+              <Description as="div" size="xs">
+                {remaining} of {rows.length} left
+              </Description>
+
+              {/* Mobile: stacked check-off cards, usable one-handed in a store. */}
+              <Stack gap="sm" className="sm:hidden">
+                {rows.map((r) => (
+                  <ShoppingCard
+                    key={r.key}
+                    row={r}
+                    excluded={excluded}
+                    onToggleCheck={() => toggleChecked(r.key)}
+                  />
+                ))}
+              </Stack>
+
+              {/* Desktop: dense table with expandable per-meal breakdown. */}
+              <Table
+                containerClassName="hidden overflow-hidden rounded-lg border border-[var(--border)] sm:block"
+                className="table-auto"
+              >
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-8" />
+                    <TableHead>Ingredient</TableHead>
+                    <TableHead className="text-right">Need</TableHead>
+                    <TableHead className="text-right">Have</TableHead>
+                    <TableHead className="text-right">Short</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rows.map((r) => {
+                    const isOpen = expanded.has(r.key);
+                    const perMeal = r.item.perMeal.filter(
+                      (c) => !excluded.has(c.mealId),
+                    );
+                    return (
+                      <RowGroup
+                        key={r.key}
+                        item={r.item}
+                        need={r.need}
+                        shortfall={r.shortfall}
+                        status={r.status}
+                        isChecked={r.isChecked}
+                        isOpen={isOpen}
+                        perMeal={perMeal}
+                        onToggleCheck={() => toggleChecked(r.key)}
+                        onToggle={() => setExpanded((s) => toggle(s, r.key))}
+                      />
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </Stack>
           )}
         </>
       )}
     </Stack>
+  );
+}
+
+type ShoppingRow = {
+  key: string;
+  item: ShoppingListItem;
+  need: number;
+  shortfall: number;
+  status: IngredientAvailabilityStatus;
+  isChecked: boolean;
+};
+
+/** Mobile check-off card — big tap target, no expand chrome. */
+function ShoppingCard({
+  row,
+  onToggleCheck,
+}: {
+  row: ShoppingRow;
+  excluded: Set<string>;
+  onToggleCheck: () => void;
+}) {
+  const { item, need, shortfall, status, isChecked } = row;
+  return (
+    <Row
+      as="button"
+      type="button"
+      align="center"
+      gap="sm"
+      onClick={onToggleCheck}
+      className={cn(
+        "w-full rounded-lg border border-[var(--border)] p-4 text-left",
+        isChecked && "opacity-60",
+      )}
+    >
+      <Checkbox checked={isChecked} className="pointer-events-none shrink-0" />
+      <Stack gap="tight" className="min-w-0 flex-1">
+        <span className={cn("font-medium", isChecked && "line-through")}>
+          {item.name}
+        </span>
+        <span className="text-muted-foreground text-xs tabular-nums">
+          Need {formatAmount(need, item.basisUnit)}
+          {item.haveValue != null
+            ? ` · have ${formatAmount(item.haveValue, item.basisUnit)}`
+            : ""}
+        </span>
+      </Stack>
+      <span
+        className={cn(
+          "shrink-0 text-right font-medium text-sm tabular-nums",
+          shortfall > 0 ? statusClass(status) : "text-muted-foreground",
+        )}
+      >
+        {shortfall > 0 ? formatAmount(shortfall, item.basisUnit) : "✓"}
+      </span>
+    </Row>
   );
 }
 
@@ -212,23 +326,32 @@ function RowGroup({
   need,
   shortfall,
   status,
+  isChecked,
   isOpen,
   perMeal,
+  onToggleCheck,
   onToggle,
 }: {
   item: ShoppingListItem;
   need: number;
   shortfall: number;
   status: IngredientAvailabilityStatus;
+  isChecked: boolean;
   isOpen: boolean;
   perMeal: ShoppingListItem["perMeal"];
+  onToggleCheck: () => void;
   onToggle: () => void;
 }) {
   return (
     <>
       {/* Open: drop the parent's bottom border so its meal rows read as one
           cluster; the divider falls below the group's last row instead. */}
-      <TableRow className={cn(isOpen && "border-b-0")}>
+      <TableRow
+        className={cn(isOpen && "border-b-0", isChecked && "opacity-60")}
+      >
+        <TableCell className="pr-0">
+          <Checkbox checked={isChecked} onCheckedChange={onToggleCheck} />
+        </TableCell>
         <TableCell className="whitespace-normal">
           <Row
             as="button"
@@ -243,7 +366,9 @@ function RowGroup({
             ) : (
               <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
             )}
-            <span className="font-medium">{item.name}</span>
+            <span className={cn("font-medium", isChecked && "line-through")}>
+              {item.name}
+            </span>
             <span className={`text-xs ${statusClass(status)}`}>
               · {statusLabel(status)}
             </span>
@@ -275,6 +400,7 @@ function RowGroup({
               i !== perMeal.length - 1 && "border-b-0",
             )}
           >
+            <TableCell className="py-1" />
             <TableCell className="whitespace-normal py-1 pl-6">
               <Link
                 to="/meals/$id"

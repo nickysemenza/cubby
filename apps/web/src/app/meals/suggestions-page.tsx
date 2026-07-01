@@ -8,6 +8,7 @@ import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { StatusText } from "~/components/ui/status-text";
 import { useTRPC } from "~/trpc/react";
+import { AddToMeal } from "./add-to-meal";
 import {
   type MealSuggestionFilter,
   mealSuggestionFilters,
@@ -73,27 +74,37 @@ function RecipeCoverageCard({ recipe }: { recipe: RecipeAvailability }) {
   const ready = recipe.coverage >= 1;
   const pct = Math.round(recipe.coverage * 100);
 
+  // The card body is the recipe link; the footer holds "Add to meal" as a
+  // sibling so planning doesn't hijack card navigation.
   return (
-    <Link
-      to="/recipes/$id"
-      params={{ id: recipe.recipeId }}
-      className="flex flex-col gap-2 rounded-lg border border-[var(--border)] p-4 transition-colors hover:bg-accent"
+    <Stack
+      gap="sm"
+      className="rounded-lg border border-[var(--border)] p-4 transition-colors hover:bg-accent"
     >
-      <Row align="start" justify="between" gap="sm">
-        <span className="font-medium">{recipe.recipeName}</span>
-        <Badge variant={ready ? "default" : "secondary"}>
-          {ready ? "Ready" : `Missing ${recipe.missing.length}`}
-        </Badge>
-      </Row>
-      <Description as="span" size="xs">
-        {recipe.availableIngredients}/{recipe.totalIngredients} ingredients
-        {recipe.totalIngredients > 0 ? ` · ${pct}%` : ""}
-      </Description>
-      {recipe.missing.length > 0 && (
+      <Link
+        to="/recipes/$id"
+        params={{ id: recipe.recipeId }}
+        className="flex flex-col gap-2"
+      >
+        <Row align="start" justify="between" gap="sm">
+          <span className="font-medium">{recipe.recipeName}</span>
+          <Badge variant={ready ? "default" : "secondary"}>
+            {ready ? "Ready" : `Missing ${recipe.missing.length}`}
+          </Badge>
+        </Row>
         <Description as="span" size="xs">
-          Need: {recipe.missing.join(", ")}
+          {recipe.availableIngredients}/{recipe.totalIngredients} ingredients
+          {recipe.totalIngredients > 0 ? ` · ${pct}%` : ""}
         </Description>
-      )}
-    </Link>
+        {recipe.missing.length > 0 && (
+          <Description as="span" size="xs">
+            Need: {recipe.missing.join(", ")}
+          </Description>
+        )}
+      </Link>
+      <Row justify="end">
+        <AddToMeal recipeId={recipe.recipeId} />
+      </Row>
+    </Stack>
   );
 }
