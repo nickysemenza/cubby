@@ -5,6 +5,7 @@ import {
   ChevronDown,
   ChevronRight,
   Import,
+  RotateCcw,
   X,
 } from "lucide-react";
 import { useCallback, useMemo, useRef } from "react";
@@ -148,6 +149,10 @@ export function BookGroupCard({
               Set a book name before importing.
             </p>
           )}
+          <FailedChunksPanel
+            book={book}
+            onRetry={() => handlers.retryExtraction(book.source)}
+          />
           {!ready && book.recipes.length > 0 && (
             <Description size="xs">
               Streaming recipes as the book extracts…
@@ -309,10 +314,59 @@ function ExtractStatus({ book }: { book: Book }) {
     );
   }
   // ready
+  const failed = e.failedChunks.length;
   return (
     <Description as="span" size="xs">
       {book.recipes.length} recipe{book.recipes.length === 1 ? "" : "s"}
-      {e.failedChunks > 0 && ` · ${e.failedChunks} chunk(s) failed`}
+      {failed > 0 && (
+        <span className="text-warning">
+          {" · "}
+          {failed} chunk{failed === 1 ? "" : "s"} failed
+        </span>
+      )}
     </Description>
+  );
+}
+
+// Lists the chunks that failed extraction (both models produced unparseable
+// output, so their recipes were lost) — which source doc + why — instead of an
+// opaque count, with one action to re-run extraction and recover them. Only shown
+// on a ready book that has failures.
+function FailedChunksPanel({
+  book,
+  onRetry,
+}: {
+  book: Book;
+  onRetry: () => void;
+}) {
+  if (book.extract.status !== "ready" || book.extract.failedChunks.length === 0)
+    return null;
+  const failed = book.extract.failedChunks;
+  return (
+    <div className="border border-warning/40 bg-warning/5 p-2">
+      <Row align="center" justify="between" gap="sm">
+        <Row as="span" align="center" gap="xs" className="text-warning text-xs">
+          <AlertCircle className="h-3 w-3" />
+          {failed.length} chunk{failed.length === 1 ? "" : "s"} failed to
+          extract — recipes in {failed.length === 1 ? "it" : "them"} were lost
+        </Row>
+        <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+          <RotateCcw className="mr-1 h-3 w-3" />
+          Retry extraction
+        </Button>
+      </Row>
+      <ul className="mt-2 space-y-1">
+        {failed.map((chunk) => (
+          <li
+            key={chunk.index}
+            className="font-mono text-2xs text-muted-foreground"
+            title={chunk.reason}
+          >
+            #{chunk.index}
+            {chunk.docPath ? ` · ${chunk.docPath}` : ""}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
