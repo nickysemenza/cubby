@@ -1,7 +1,6 @@
 import { unsafeMealId } from "@cubby/schemas/identifiers";
 import { createFileRoute } from "@tanstack/react-router";
 import { MealDetailPage } from "~/app/meals/meal-detail-page";
-import { Page } from "~/components/page/Page";
 
 export const Route = createFileRoute("/_authenticated/meals/$id")({
   // Brand the path param at the boundary so it's a `MealId` throughout.
@@ -15,9 +14,7 @@ export const Route = createFileRoute("/_authenticated/meals/$id")({
 
 function MealDetailRoute() {
   const id = Route.useParams().id;
-  return (
-    <Page variant="list" title="Meal" entity="meal">
-      <MealDetailPage mealId={id} />
-    </Page>
-  );
+  // MealDetailPage renders its own <Page> shell (title/heroStats depend on the
+  // loaded meal), so the route doesn't wrap it.
+  return <MealDetailPage mealId={id} />;
 }

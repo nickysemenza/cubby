@@ -182,7 +182,6 @@ export const entities: Record<Entity, EntityDefinition> = {
     routes: {
       detail: "/meals/$id",
       list: "/meals",
-      new: "/meals/new",
     },
     detail: { commonSections: ["history"] },
     list: {
