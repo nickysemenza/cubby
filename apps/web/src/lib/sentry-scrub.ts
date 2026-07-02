@@ -35,13 +35,24 @@ function redactUrl(url: string): string {
   return scrubbed ? `${path}?${scrubbed}${fragment}` : `${path}${fragment}`;
 }
 
+function safeDecode(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 function redactQueryString(query: string): string {
   return query
     .split("&")
     .map((pair) => {
       const eqIdx = pair.indexOf("=");
       const rawName = eqIdx >= 0 ? pair.slice(0, eqIdx) : pair;
-      const name = decodeURIComponent(rawName).toLowerCase();
+      // A malformed %-sequence in a param name must not throw out of
+      // beforeSend — that would drop the whole event. Sensitive names are
+      // plain ASCII, so the undecoded fallback still matches them.
+      const name = safeDecode(rawName).toLowerCase();
       if (SENSITIVE_QUERY_PARAMS.has(name)) {
         return `${rawName}=${REDACTED}`;
       }

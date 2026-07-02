@@ -32,6 +32,7 @@ import {
   requiredProductField,
 } from "~/app/_components/form-fields";
 import { ComboboxField } from "~/app/_components/form-utils";
+import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
 import { useUpcLookup } from "~/app/_components/inventory/hooks";
 import {
@@ -636,16 +637,14 @@ function ManualAdd({ locationId }: { locationId: LocationId }) {
       amount: { value: 1, unit: "each" },
     },
   });
-  const createInventory = useMutation(
-    api.inventory.create.mutationOptions({
-      onSuccess: (data) => {
-        invalidateTRPCQueries(queryClient, inventoryMutationInvalidateKeys);
-        form.reset({ product: undefined, amount: { value: 1, unit: "each" } });
-        toast.success(savedWithBackgroundWork(data.sideEffects, "Added item"));
-      },
-      onError: (error) => toast.error(getErrorMessage(error)),
-    }),
-  );
+  const createInventory = useActionMutation({
+    mutationFn: api.inventory.create.mutationOptions,
+    success: (data) => savedWithBackgroundWork(data.sideEffects, "Added item"),
+    invalidateKeys: inventoryMutationInvalidateKeys,
+    onSuccess: () => {
+      form.reset({ product: undefined, amount: { value: 1, unit: "each" } });
+    },
+  });
 
   // Name-only quick-create for unbarcoded garage items: skip the full ProductForm
   // (manufacturer required) and use the quickCreate endpoint, which defaults the

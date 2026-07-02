@@ -50,7 +50,7 @@ export function QuickActionsCard() {
           <Button
             variant="outline"
             size="sm"
-            className="w-full justify-start gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
+            className="w-full justify-start gap-2 transition-colors"
           >
             <AlertCircle className="h-4 w-4 shrink-0 text-destructive" />
             <span className="truncate">Problems</span>
