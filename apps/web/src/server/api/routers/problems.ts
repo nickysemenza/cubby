@@ -74,7 +74,7 @@ const reparseStale = protectedProcedure.mutation(async function* ({ ctx }) {
     // After the parses land, recompute the affected recipes' totals — off the
     // request path when the set is large (a sweep can touch many recipes).
     await ctx.services.recipeCosting.dispatchRecompute(r.recipesAffected, {
-      source: "problems.resolveUnparsedRecipeLine",
+      source: "problems.reparseStale",
     });
     return { updated: r.updated, recipesAffected: r.recipesAffected.length };
   });
@@ -102,7 +102,7 @@ const reparseStaleSync = protectedProcedure
       }
     }
     await ctx.services.recipeCosting.dispatchRecompute(result.recipesAffected, {
-      source: "problems.resolveIncorrectIngredientClassifications",
+      source: "problems.reparseStaleSync",
     });
     return {
       updated: result.updated,

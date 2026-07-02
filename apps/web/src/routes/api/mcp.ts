@@ -12,21 +12,18 @@ async function handler({ request }: { request: Request }) {
     );
     const createCaller = createCallerFactory(appRouter);
 
-    // Map Authorization: Bearer → x-api-key for better-auth compatibility
+    // API key is accepted via header ONLY (Authorization: Bearer <apiKey>, or
+    // the x-api-key header directly). A `?key=` query-param path was removed for
+    // security: query strings land in server access logs, browser history, and
+    // Referer headers, and with Sentry `sendDefaultPii: true` the full request
+    // URL (incl. query) is attached to captured events. Since the key is a
+    // permanent, unthrottled credential (see lib/auth.ts apiKey plugin), a single
+    // leaked URL would be a durable full-access credential. Use a header.
     const headers = new Headers(request.headers);
     const authHeader = headers.get("authorization");
     if (authHeader?.startsWith("Bearer ") && !headers.has("x-api-key")) {
       headers.set("x-api-key", authHeader.slice(7));
       headers.delete("authorization");
-    }
-
-    // Fallback: accept the API key as a `?key=` query param. The claude.ai
-    // custom-connector dialog only takes a URL (no header field), so a
-    // single-user instance can paste `…/api/mcp?key=<apiKey>` instead of
-    // standing up an OAuth flow. Header still wins if both are present.
-    if (!headers.has("x-api-key")) {
-      const key = new URL(request.url).searchParams.get("key");
-      if (key) headers.set("x-api-key", key);
     }
 
     const ctx = await createTRPCContext({ headers });

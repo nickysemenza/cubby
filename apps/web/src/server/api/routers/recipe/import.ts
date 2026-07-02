@@ -8,7 +8,7 @@
  * in `../recipe.ts`, so client procedure paths are unchanged.
  */
 
-import type { RecipeId } from "@cubby/schemas/identifiers";
+import { type RecipeId, unsafeRecipeId } from "@cubby/schemas/identifiers";
 import {
   chunkRequestInput,
   chunkResponseOut,
@@ -193,15 +193,17 @@ const importCookbookStream = protectedProcedure
         // affects reference resolution, so deferring to the end is safe.
         finalize: async (summary) => {
           if (insertedIds.length > 0) {
+            // One source label per procedure, passed to both side-effect sinks.
+            const source = "recipe.importCookbookStream";
             await ctx.services.recipeCosting.dispatchRecompute(insertedIds, {
-              source: "recipe.importCookbook",
+              source,
             });
             await runMutationSideEffectsForEntities(
               ctx.db,
               insertedIds.map((id) => ({
                 action: "updated" as const,
                 entity: { entityType: "recipe" as const, entityId: id },
-                source: "recipe.cookbookImport",
+                source,
               })),
             );
           }
@@ -328,7 +330,7 @@ const importNotionSyncStream = protectedProcedure
           ctx.db,
           ctx.actorContext,
         );
-        insertedIds.push(id as RecipeId);
+        insertedIds.push(id);
         return {
           pageId,
           ok: true,
@@ -345,15 +347,17 @@ const importNotionSyncStream = protectedProcedure
         }),
         finalize: async (summary) => {
           if (insertedIds.length > 0) {
+            // One source label per procedure, passed to both side-effect sinks.
+            const source = "recipe.importNotionSyncStream";
             await ctx.services.recipeCosting.dispatchRecompute(insertedIds, {
-              source: "recipe.syncNotionCookbook",
+              source,
             });
             await runMutationSideEffectsForEntities(
               ctx.db,
               insertedIds.map((id) => ({
                 action: "updated" as const,
                 entity: { entityType: "recipe" as const, entityId: id },
-                source: "recipe.notionSync",
+                source,
               })),
             );
           }
@@ -378,7 +382,7 @@ const deleteByCookbook = protectedProcedure
   .mutation(async ({ ctx, input }) => {
     const recipeIds = (
       await getCookbookRecipesForDiff(ctx.db, input.cookbookId)
-    ).map((row) => row.id as RecipeId);
+    ).map((row) => unsafeRecipeId(row.id));
     const result = await deleteRecipesByCookbook(
       ctx.db,
       input.cookbookId,

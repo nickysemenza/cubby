@@ -6,6 +6,7 @@ import { RouteNotFound } from "~/components/route-not-found";
 import { RoutePending } from "~/components/route-pending";
 import { installJsProfiler } from "~/lib/perf/js-self-profile";
 import { SENTRY_DSN } from "~/lib/sentry-dsn";
+import { scrubSentryEvent } from "~/lib/sentry-scrub";
 import * as TanstackQuery from "./integrations/tanstack-query/root-provider";
 
 // Import the generated route tree
@@ -57,6 +58,10 @@ export const getRouter = () => {
     Sentry.init({
       dsn: SENTRY_DSN,
       sendDefaultPii: true,
+      // `sendDefaultPii` attaches the full request URL (incl. query string) to
+      // events. Defensively redact any credential-bearing query param (e.g. a
+      // stale MCP `?key=`) before the event leaves the browser.
+      beforeSend: scrubSentryEvent,
       // Tracing OFF in dev. React 19's dev build emits a `performance.measure`
       // per component render; Sentry's browser tracing turns each into a span and
       // builds the span tree in O(n²) (`addSpanChildren`). On component-heavy

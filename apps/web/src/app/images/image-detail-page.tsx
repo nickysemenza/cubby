@@ -16,7 +16,7 @@ export default function ImageDetailPage({ id }: ImageDetailPageProps) {
     data: imageDetails,
     isLoading,
     error,
-  } = useQuery(api.image.getImageById.queryOptions({ id }));
+  } = useQuery(api.image.getByID.queryOptions({ id }));
 
   if (isLoading) {
     return (

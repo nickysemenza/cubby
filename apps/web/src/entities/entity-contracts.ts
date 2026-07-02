@@ -133,7 +133,7 @@ const entityContracts = {
     invalidationKeys: [queryKeys.image.all],
     query: {
       list: (api, params) => api.image.list.queryOptions(listParams(params)),
-      detail: (api, id) => api.image.getImageById.queryOptions({ id }),
+      detail: (api, id) => api.image.getByID.queryOptions({ id }),
     },
     mutation: {
       invalidationKeys: [queryKeys.image.all],

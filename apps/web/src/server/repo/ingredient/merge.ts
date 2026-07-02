@@ -113,7 +113,7 @@ const recipeIdsUsingIngredients = async (
       eq(recipeSectionIngredient.recipeSectionId, recipeSection.id),
     )
     .where(inArray(recipeSectionIngredient.ingredientId, ingredientIds));
-  return rows.map((r) => r.recipeId as RecipeId);
+  return rows.map((r) => r.recipeId);
 };
 
 /**

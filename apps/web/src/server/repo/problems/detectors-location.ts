@@ -26,7 +26,12 @@ export const findEmptyLocations = async (
   // Alias for checking child locations
   const childLocation = dbClient
     .$with("child_location")
-    .as(dbClient.select({ parentId: location.parentId }).from(location));
+    .as(
+      dbClient
+        .select({ parentId: location.parentId })
+        .from(location)
+        .where(notDeleted(location)),
+    );
 
   const emptyLocations = await dbClient
     .with(childLocation)
@@ -61,7 +66,12 @@ export const findEmptyLocations = async (
           dbClient
             .select({ id: sql`1` })
             .from(inventoryEntry)
-            .where(eq(inventoryEntry.locationId, location.id)),
+            .where(
+              and(
+                eq(inventoryEntry.locationId, location.id),
+                notDeleted(inventoryEntry),
+              ),
+            ),
         ),
         // No child locations (is a leaf node)
         notExists(

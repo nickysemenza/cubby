@@ -44,7 +44,7 @@ import { RECOMPUTE_CHUNK_SIZE } from "~/server/queue-recompute";
 import { getRecipesByIDs } from "~/server/repo/recipe/crud";
 import {
   findParentRecipeIdsBatch,
-  findRecipeIdsUsingIngredient,
+  findRecipeIdsUsingIngredients,
   getRecipeTotalsState,
   markRecipesStale,
   markRecipesStaleReturningTransitioned,
@@ -250,7 +250,7 @@ export class RecipeCostingService {
     for (const r of recipes) {
       const costing = costings.get(r.id);
       if (!costing) continue;
-      result.set(r.id as RecipeId, {
+      result.set(r.id, {
         complete:
           usdaMissesFor(flattenSections(r.sections), ingMap).length === 0,
         totals: toRecipeTotals(costing.totals),
@@ -438,10 +438,10 @@ export class RecipeCostingService {
     const freshOnlyIds: RecipeId[] = [];
     const changedIds: RecipeId[] = [];
     for (const r of recipes) {
-      const computed = totalsMap.get(r.id as RecipeId);
+      const computed = totalsMap.get(r.id);
       if (!computed) continue;
       const { totals: next } = computed;
-      const id = r.id as RecipeId;
+      const id = r.id;
       if (totalsDiffer(r.totals, next)) {
         updates.push({ id, totals: next });
         changedIds.push(id);
@@ -560,13 +560,7 @@ export class RecipeCostingService {
       TraceNames.service("recipeCosting", "dispatchForIngredient"),
       async (span) => {
         const recipeIds = uniq(
-          (
-            await Promise.all(
-              uniqueIngredientIds.map((id) =>
-                findRecipeIdsUsingIngredient(this.db, id),
-              ),
-            )
-          ).flat(),
+          await findRecipeIdsUsingIngredients(this.db, uniqueIngredientIds),
         );
         span.setAttributes({
           "ingredient.count": uniqueIngredientIds.length,
@@ -635,7 +629,7 @@ export class RecipeCostingService {
               const recipes = await getRecipesByIDs(this.db, chunkIds);
               const totalsMap = await this.computeTotals(recipes);
               for (const r of recipes) {
-                const computed = totalsMap.get(r.id as RecipeId);
+                const computed = totalsMap.get(r.id);
                 if (computed && totalsDiffer(r.totals, computed.totals))
                   wouldChange++;
               }

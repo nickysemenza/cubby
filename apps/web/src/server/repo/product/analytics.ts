@@ -3,19 +3,23 @@
  * Category distribution, duplicate detection, and backfill operations.
  */
 
-import type { ProductId } from "@cubby/schemas/identifiers";
+import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
 import type { ProductCategory } from "@cubby/schemas/product";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
-import { product, productImage } from "~/server/db/schema";
+import { inventoryEntry, product, productImage } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
 // Find products with expectedQuantity=1 that appear in multiple locations
-export const findDuplicateUniqueProducts = async (db: Database) => {
+export const findDuplicateUniqueProducts = async (
+  db: Database,
+  { excludeLocationId }: { excludeLocationId?: LocationId } = {},
+) => {
   const duplicates = await getDb(db).query.product.findMany({
     where: and(eq(product.expectedQuantity, 1), notDeleted(product)),
     with: {
       inventoryEntry: {
+        where: notDeleted(inventoryEntry),
         with: {
           location: true,
         },
@@ -23,7 +27,19 @@ export const findDuplicateUniqueProducts = async (db: Database) => {
     },
   });
 
-  return duplicates.filter((prod) => prod.inventoryEntry.length > 1);
+  return duplicates.filter((prod) => {
+    if (prod.inventoryEntry.length <= 1) return false;
+    // Skip duplicates that involve the excluded location entirely.
+    if (
+      excludeLocationId &&
+      prod.inventoryEntry.some(
+        (entry) => entry.location.id === excludeLocationId,
+      )
+    ) {
+      return false;
+    }
+    return true;
+  });
 };
 
 /**
@@ -88,6 +104,7 @@ export const getCategoryDistribution = async (
     },
     with: {
       inventoryEntry: {
+        where: notDeleted(inventoryEntry),
         columns: {},
         with: {
           location: {

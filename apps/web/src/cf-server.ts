@@ -8,6 +8,7 @@
 
 import * as Sentry from "@sentry/cloudflare";
 import { SENTRY_DSN } from "./lib/sentry-dsn";
+import { scrubSentryEvent } from "./lib/sentry-scrub";
 import {
   type BackgroundQueueBatch,
   processBackgroundQueueMessage,
@@ -169,6 +170,10 @@ export default Sentry.withSentry(
   () => ({
     dsn: SENTRY_DSN,
     sendDefaultPii: true,
+    // `sendDefaultPii` attaches the full request URL (incl. query string) to
+    // events. Defensively redact any credential-bearing query param (e.g. a
+    // stale MCP `?key=`) before the event leaves the process.
+    beforeSend: scrubSentryEvent,
     // Mirror the client's prod 10% trace sampling (router.tsx). Head-based
     // sampling decisions propagate client→server via the `sentry-trace` header,
     // so matching the rate keeps front-to-back traces connected without the

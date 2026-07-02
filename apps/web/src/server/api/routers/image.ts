@@ -3,14 +3,14 @@ import {
   cullPendingImagesSchema,
   getImageByIdSchema,
   imageListFiltersSchema,
-  imageListResponseSchema,
+  imageSortableFields,
   imageWithEntitySchema,
   importImageFromUrlResponseSchema,
   importImageFromUrlSchema,
   initiateUploadWithoutEntityResponseSchema,
   initiateUploadWithoutEntitySchema,
 } from "@cubby/schemas/image";
-import { buildPaginatedResponse } from "@cubby/schemas/pagination";
+import { createEntityListProcedure } from "~/server/api/crud-factory";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { createAppError } from "~/server/errors/app-error";
 import { getImageById, imageList } from "~/server/repo/image";
@@ -20,30 +20,28 @@ import {
   initiateImageUploadWithoutEntity,
 } from "~/server/services/image-storage.service";
 
+// List images with standard pagination, sorting, and filtering. Uses the crud
+// factory so the response carries the per-record error-context wrapper every
+// other entity list uses.
+const { list } = createEntityListProcedure({
+  schemas: {
+    output: imageWithEntitySchema,
+    filters: imageListFiltersSchema,
+    sort: {
+      sortableFields: imageSortableFields,
+      defaultSort: "createdAt",
+    },
+  },
+  repository: {
+    list: async (services, filters, sort, pagination) => {
+      return await imageList(services.db, filters.nameFilter, sort, pagination);
+    },
+  },
+  entityName: "image",
+});
+
 export const imageRouter = createTRPCRouter({
-  /**
-   * List all images with standard pagination, sorting, and filtering
-   */
-  list: protectedProcedure
-    .input(imageListFiltersSchema)
-    .output(imageListResponseSchema)
-    .query(async ({ ctx, input }) => {
-      try {
-        const { data, count } = await imageList(
-          ctx.db,
-          input.filters.searchFilter,
-          input.sort,
-          input.pagination,
-        );
-        return buildPaginatedResponse(input.pagination, data, count);
-      } catch (error) {
-        throw createAppError(
-          "IMAGE_LIST_FAILED",
-          "Failed to list images",
-          error,
-        );
-      }
-    }),
+  list,
 
   /**
    * Initiate an image upload
@@ -111,17 +109,17 @@ export const imageRouter = createTRPCRouter({
     }),
 
   /**
-   * Get an image by ID with entity association information
+   * Get an image by ID with entity association information.
+   *
+   * No try/catch wrapper: the repo throws IMAGE_NOT_FOUND (→ tRPC NOT_FOUND, an
+   * expected 4xx) for a stale/deleted id, which should propagate rather than be
+   * rewrapped into a 500 that hits Sentry.
    */
-  getImageById: protectedProcedure
+  getByID: protectedProcedure
     .input(getImageByIdSchema)
     .output(imageWithEntitySchema)
     .query(async ({ ctx, input }) => {
-      try {
-        return await getImageById(ctx.db, input.id);
-      } catch (error) {
-        throw createAppError("IMAGE_GET_FAILED", "Failed to get image", error);
-      }
+      return await getImageById(ctx.db, input.id);
     }),
 
   /**

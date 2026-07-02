@@ -19,13 +19,10 @@ export default function ImageList() {
   const { table, isLoading, error, timing, infiniteScroll, refreshControls } =
     useEntityList({
       entity: "image",
-      queryOptions: (params) =>
-        api.image.list.queryOptions(
-          params as Parameters<typeof api.image.list.queryOptions>[0],
-        ),
+      queryOptions: (params) => api.image.list.queryOptions(params),
       buildFilters: (ts) => ({
-        // Map filename column filter to the API's searchFilter
-        searchFilter: ts.getColumnFilter("filename") ?? undefined,
+        // Map the filename column filter to the API's nameFilter
+        nameFilter: ts.getColumnFilter("filename") ?? undefined,
       }),
       columns: [
         // Filename column (links to detail page)
