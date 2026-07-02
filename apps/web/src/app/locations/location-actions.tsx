@@ -15,7 +15,7 @@ export function LocationActions() {
       <Link to="/locations/new">
         <Button className="gap-1">
           <Plus className="h-4 w-4" />
-          Create New Location
+          New
         </Button>
       </Link>
     </Row>

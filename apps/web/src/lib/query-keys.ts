@@ -90,12 +90,17 @@ export const productMutationInvalidateKeys = [
 export const productRecipeMutationInvalidateKeys = [
   ...productMutationInvalidateKeys,
   queryKeys.recipe.list,
+  // Recipe cost inputs changed → meal cost/calorie rollups (read from
+  // recipe.totals) go stale; meal queries are cheap to blanket-invalidate.
+  queryKeys.meal.all,
 ] as const satisfies readonly QueryKey[];
 
 export const productValuationMutationInvalidateKeys = [
   queryKeys.product.all,
   queryKeys.recipe.list,
   queryKeys.location.all,
+  // Recipe cost inputs changed → refresh meal cost/calorie rollups.
+  queryKeys.meal.all,
 ] as const satisfies readonly QueryKey[];
 
 export const productLookupMutationInvalidateKeys = [
@@ -124,6 +129,8 @@ export const ingredientProductMutationInvalidateKeys = [
 export const ingredientRecipeMutationInvalidateKeys = [
   ...ingredientAllMutationInvalidateKeys,
   queryKeys.recipe.all,
+  // Recipe cost/calorie inputs changed → refresh meal rollups.
+  queryKeys.meal.all,
 ] as const satisfies readonly QueryKey[];
 
 export const ingredientMergeMutationInvalidateKeys = [
@@ -154,6 +161,8 @@ export const recipeCookbookMutationInvalidateKeys = [
 
 export const recipeAllMutationInvalidateKeys = [
   queryKeys.recipe.all,
+  // Recipe totals changed → refresh meal cost/calorie rollups.
+  queryKeys.meal.all,
 ] as const satisfies readonly QueryKey[];
 
 export const problemsMutationInvalidateKeys = [

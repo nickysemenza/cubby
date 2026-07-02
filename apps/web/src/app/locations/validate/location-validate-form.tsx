@@ -23,10 +23,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { getErrorMessage } from "~/lib/error-utils";
-import {
-  invalidateTRPCQueries,
-  locationMutationInvalidateKeys,
-} from "~/lib/query-keys";
+import { invalidateTRPCQueries, queryKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 
 type Phase = "SELECT_LOCATION" | "SCANNING" | "RECONCILIATION";
@@ -192,14 +189,10 @@ export function LocationValidateForm({
   const updateMutation = useMutation(
     api.location.update.mutationOptions({
       onSuccess: () => {
-        invalidateTRPCQueries(queryClient, locationMutationInvalidateKeys);
-        if (parentLocationId) {
-          invalidateTRPCQueries(queryClient, [
-            api.location.getByID.queryKey({
-              id: parentLocationId,
-            }),
-          ]);
-        }
+        // Reparenting changes tree shape (location.makeTree) and valuation
+        // rollups, so invalidate the broad location.all prefix (subsumes list +
+        // makeTree + getByID) rather than just location.list.
+        invalidateTRPCQueries(queryClient, [queryKeys.location.all]);
       },
     }),
   );

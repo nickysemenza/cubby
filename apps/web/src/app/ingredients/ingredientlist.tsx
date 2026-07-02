@@ -397,7 +397,7 @@ export function IngredientList() {
               render={<Link to="/ingredients/new" />}
               nativeButton={false}
             >
-              Create New Ingredient
+              New
             </Button>
           </Row>
         }

@@ -47,7 +47,11 @@ import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 import { DebugDialog } from "./DebugDialog";
 import { DataTablePagination } from "./data-table-pagination";
 import { DataTableToolbar } from "./data-table-toolbar";
-import { EntityEmptyState, hasActiveFilters } from "./entity-empty-states";
+import {
+  EntityEmptyState,
+  FilteredEmptyState,
+  hasActiveFilters,
+} from "./entity-empty-states";
 import { HeaderFilter } from "./HeaderFilter";
 import { useTableVirtualizer } from "./hooks/useTableVirtualizer";
 import { MobileListScreen } from "./MobileListScreen";
@@ -426,9 +430,10 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
           onClearFilters={clearFilters}
         />
       ) : (
-        <EntityEmptyState
-          entity="product"
-          isFiltered={true}
+        // No entity known: render an honest generic empty state with the real
+        // filter flag, rather than masquerading as a filtered product table.
+        <FilteredEmptyState
+          isFiltered={isFiltered}
           onClearFilters={clearFilters}
         />
       );

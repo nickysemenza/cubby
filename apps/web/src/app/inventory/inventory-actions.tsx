@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { EllipsisVertical, Plus, ScanBarcode } from "lucide-react";
+import { EllipsisVertical, Plus } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import {
   DropdownMenu,
@@ -7,14 +7,27 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
+import { actionItems } from "../_components/actions/action-items";
+
+// Contextual inventory actions, sourced from the canonical registry so their
+// labels/paths stay single-sourced with the palette + navbar.
+const byId = (id: string) => {
+  const action = actionItems.find((a) => a.id === id);
+  if (!action) throw new Error(`Unknown action id: ${id}`);
+  return action;
+};
+
+const recount = byId("add-inventory");
+const bulkEdit = byId("inventory-audit");
+const singleItem = byId("single-item");
 
 export function InventoryActions() {
   return (
     <>
-      <Link to="/inventory/session">
+      <Link to={recount.path}>
         <Button variant="default" size="default" className="gap-1 text-xs">
-          <ScanBarcode className="h-3.5 w-3.5" />
-          Recount
+          <recount.icon className="h-3.5 w-3.5" />
+          {recount.name}
         </Button>
       </Link>
       <DropdownMenu>
@@ -30,12 +43,12 @@ export function InventoryActions() {
           }
         />
         <DropdownMenuContent align="end" className="w-44">
-          <DropdownMenuItem render={<Link to="/inventory/bulk-edit" />}>
-            Bulk Edit
+          <DropdownMenuItem render={<Link to={bulkEdit.path} />}>
+            {bulkEdit.name}
           </DropdownMenuItem>
-          <DropdownMenuItem render={<Link to="/inventory/new" />}>
+          <DropdownMenuItem render={<Link to={singleItem.path} />}>
             <Plus className="h-4 w-4" />
-            Single Item
+            {singleItem.name}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
