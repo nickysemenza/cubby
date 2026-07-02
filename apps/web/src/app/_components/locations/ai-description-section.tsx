@@ -1,5 +1,4 @@
 import type { LocationId } from "@cubby/schemas/identifiers";
-import { useQueryClient } from "@tanstack/react-query";
 import { Eye, Sparkles } from "lucide-react";
 import type { FC } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
@@ -7,7 +6,6 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
-import { invalidateTRPCQueries } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 
 interface AiDescriptionSectionProps {
@@ -22,16 +20,11 @@ export const AiDescriptionSection: FC<AiDescriptionSectionProps> = ({
   hasImages,
 }) => {
   const api = useTRPC();
-  const queryClient = useQueryClient();
 
   const describeMutation = useActionMutation({
     mutationFn: api.ai.describeLocation.mutationOptions,
     success: "Description saved.",
-    onSuccess: () => {
-      invalidateTRPCQueries(queryClient, [
-        api.location.getByID.queryKey({ id: locationId }),
-      ]);
-    },
+    invalidateKeys: [api.location.getByID.queryKey({ id: locationId })],
   });
 
   const canAnalyze = hasImages;

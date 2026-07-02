@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import * as d3Hierarchy from "d3-hierarchy";
 import { useCallback, useMemo, useRef, useState } from "react";
+import { ChartTooltip } from "~/app/projects/charts/ChartTooltip";
 import { Row, Stack } from "~/components/layout";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import {
@@ -219,8 +220,8 @@ function HoverTooltip({
   const y = node.y0 + 30;
 
   return (
-    <div
-      className="pointer-events-none absolute z-50 rounded-md bg-popover px-2 py-2 text-sm shadow-lg"
+    <ChartTooltip
+      className="pointer-events-none absolute z-50 px-2"
       style={{ left: x, top: y }}
     >
       <Row align="center" gap="sm" className="font-medium">
@@ -245,6 +246,6 @@ function HoverTooltip({
           return summary ? <div>{summary}</div> : null;
         })()}
       </Stack>
-    </div>
+    </ChartTooltip>
   );
 }

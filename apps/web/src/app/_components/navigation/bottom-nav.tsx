@@ -156,7 +156,7 @@ export function BottomNav() {
                   {/* Nav items, grouped into labeled sections */}
                   {moreNavSections.map((section) => (
                     <div key={section.title} className="flex flex-col gap-1">
-                      <div className="px-2 pt-4 pb-1 font-mono text-2xs text-muted-foreground uppercase tracking-wider">
+                      <div className="eyebrow px-2 pt-4 pb-1">
                         {section.title}
                       </div>
                       {section.items.map((item) => {

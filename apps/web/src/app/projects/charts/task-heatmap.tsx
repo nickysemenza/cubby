@@ -3,6 +3,7 @@ import { CalendarClock } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { NotionTask } from "~/server/clients/notion";
 import { formatDate, StatusIcon } from "../shared";
+import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
 
 export function TaskHeatmap({ tasks }: { tasks: NotionTask[] }) {
@@ -71,13 +72,13 @@ export function TaskHeatmap({ tasks }: { tasks: NotionTask[] }) {
             }
           }}
           tooltip={({ day, value }) => (
-            <div className="rounded-md bg-popover px-4 py-2 text-sm shadow-md ring-1 ring-border">
+            <ChartTooltip>
               <strong>{day}</strong>: {value} task
               {Number(value) !== 1 ? "s" : ""} due
               <div className="text-muted-foreground text-xs">
                 Click to see tasks
               </div>
-            </div>
+            </ChartTooltip>
           )}
           theme={{
             text: { fill: "var(--foreground)" },

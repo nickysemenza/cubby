@@ -9,6 +9,7 @@ import {
   nivoChartTheme,
   normalizeCategoryKey,
 } from "../shared";
+import { ChartTooltip } from "./ChartTooltip";
 
 export function CategoryTrend({ purchases }: { purchases: NotionPurchase[] }) {
   const data = useMemo(() => {
@@ -84,7 +85,7 @@ export function CategoryTrend({ purchases }: { purchases: NotionPurchase[] }) {
         useMesh
         enableSlices="x"
         sliceTooltip={({ slice }) => (
-          <div className="rounded-md bg-popover px-4 py-2 text-sm shadow-md ring-1 ring-border">
+          <ChartTooltip>
             <div className="mb-1 font-medium">
               {slice.points[0]?.data.xFormatted}
             </div>
@@ -100,7 +101,7 @@ export function CategoryTrend({ purchases }: { purchases: NotionPurchase[] }) {
                 </strong>
               </div>
             ))}
-          </div>
+          </ChartTooltip>
         )}
         legends={[
           {

@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
 import type { NotionPurchase } from "~/server/clients/notion";
 import { getCategoryColor } from "../shared";
+import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
 
 type TreeNode = {
@@ -86,7 +87,7 @@ export function CategoryTreemap({
         borderColor="var(--card)"
         nodeOpacity={0.9}
         tooltip={({ node }) => (
-          <div className="rounded-md bg-popover px-4 py-2 text-sm shadow-md ring-1 ring-border">
+          <ChartTooltip>
             <div className="flex items-center gap-2">
               <div
                 className="h-3 w-3 rounded"
@@ -100,7 +101,7 @@ export function CategoryTreemap({
               )}
               {formatCurrency(node.value, 0)}
             </div>
-          </div>
+          </ChartTooltip>
         )}
         theme={{
           labels: {

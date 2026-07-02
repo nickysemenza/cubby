@@ -1,78 +1,11 @@
-import type { LucideIcon } from "lucide-react";
-import {
-  AlertTriangle,
-  ArrowRightLeft,
-  ChefHat,
-  ClipboardCheck,
-  MapPin,
-  Plus,
-  Printer,
-  ScanBarcode,
-} from "lucide-react";
+import { type ActionItem, actionsForSurface } from "../actions/action-items";
 
-export interface QuickAction {
-  id: string;
-  name: string;
-  path: string;
-  icon: LucideIcon;
-  keywords?: string[];
-}
+/**
+ * Command-palette quick actions — the `palette-quick` slice of the canonical
+ * action registry. Kept as a stable exported array so command-menu can dedupe
+ * its "Go to" leaves against these paths without the navbar-only create actions
+ * doubling up.
+ */
+export type QuickAction = ActionItem;
 
-export const quickActions: QuickAction[] = [
-  {
-    id: "add-inventory",
-    name: "Recount",
-    path: "/inventory/session",
-    icon: ScanBarcode,
-    keywords: ["barcode", "scan", "inventory", "add", "garage", "audit"],
-  },
-  {
-    id: "add-product",
-    name: "Add Product",
-    path: "/products/new",
-    icon: Plus,
-    keywords: ["create", "new", "item"],
-  },
-  {
-    id: "add-recipe",
-    name: "Add Recipe",
-    path: "/recipes/new",
-    icon: ChefHat,
-    keywords: ["create", "new", "cooking"],
-  },
-  {
-    id: "add-location",
-    name: "Add Location",
-    path: "/locations/new",
-    icon: MapPin,
-    keywords: ["create", "new", "place", "room"],
-  },
-  {
-    id: "bulk-move",
-    name: "Bulk Move Inventory",
-    path: "/inventory/bulk-move",
-    icon: ArrowRightLeft,
-    keywords: ["move", "transfer", "relocate", "inventory"],
-  },
-  {
-    id: "problems",
-    name: "Problems",
-    path: "/problems",
-    icon: AlertTriangle,
-    keywords: ["issues", "errors", "warnings", "audit"],
-  },
-  {
-    id: "inventory-audit",
-    name: "Bulk Edit",
-    path: "/inventory/bulk-edit",
-    icon: ClipboardCheck,
-    keywords: ["audit", "bulk", "edit", "inventory", "review"],
-  },
-  {
-    id: "print-labels",
-    name: "Print Labels",
-    path: "/labels",
-    icon: Printer,
-    keywords: ["label", "print", "qr", "barcode", "sticker"],
-  },
-];
+export const quickActions: QuickAction[] = actionsForSurface("palette-quick");

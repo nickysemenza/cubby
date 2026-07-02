@@ -85,13 +85,10 @@ const { getByID, create, update } = createEntityCrudWithoutListProcedures({
       // Persist recompute work through the background dispatcher. In dev this
       // still drains inline, but the operation is visible on Background Jobs.
       const recipeBatches =
-        await services.services.recipeCosting.dispatchRecompute(
-          [created.id as RecipeId],
-          {
-            source: "recipe.create",
-            entity: { entityType: "recipe", entityId: created.id },
-          },
-        );
+        await services.services.recipeCosting.dispatchRecompute([created.id], {
+          source: "recipe.create",
+          entity: { entityType: "recipe", entityId: created.id },
+        });
       const backgroundBatches = await runMutationSideEffects(services.db, {
         action: "created",
         entity: { entityType: "recipe", entityId: created.id },

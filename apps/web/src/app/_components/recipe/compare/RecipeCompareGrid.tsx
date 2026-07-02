@@ -119,7 +119,7 @@ const AverageCell: React.FC<{
       </div>
       {hasSpread && (
         <>
-          <div className="font-mono text-[11px] text-muted-foreground tabular-nums leading-tight">
+          <div className="font-mono text-2xs text-muted-foreground tabular-nums leading-tight">
             <div>
               {format.num(stats.min)}–{format.num(stats.max)}
             </div>
@@ -325,7 +325,7 @@ export const RecipeCompareGrid: React.FC<{
                     {c.recipe.name}
                   </Link>
                   {subtitle && (
-                    <div className="truncate text-[11px] text-muted-foreground">
+                    <div className="truncate text-2xs text-muted-foreground">
                       {subtitle}
                     </div>
                   )}
@@ -339,7 +339,7 @@ export const RecipeCompareGrid: React.FC<{
               <div className="min-h-[2.5em] font-medium text-primary leading-tight">
                 Average
               </div>
-              <div className="text-[11px] text-muted-foreground">
+              <div className="text-2xs text-muted-foreground">
                 {compared.length} recipes
               </div>
             </th>

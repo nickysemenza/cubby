@@ -7,7 +7,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { partition } from "es-toolkit";
+import { groupBy, partition, sumBy } from "es-toolkit";
 import { ExternalLink, Hammer, ListTodo, ShoppingCart } from "lucide-react";
 import { useMemo } from "react";
 import RTable from "~/app/_components/data-table/Table";
@@ -404,18 +404,17 @@ export function ProjectTable({
   purchases: NotionPurchase[];
 }) {
   const data = useMemo(() => {
-    const costByProject = new Map<string, number>();
-    for (const p of purchases) {
-      if (!p.projectName || !p.cost) continue;
-      costByProject.set(
-        p.projectName,
-        (costByProject.get(p.projectName) ?? 0) + p.cost,
-      );
-    }
+    const byProject = groupBy(
+      purchases.filter((p) => p.projectName && p.cost),
+      (p) => p.projectName as string,
+    );
 
     return projects.map((p) => ({
       ...p,
-      actualCost: costByProject.get(p.name) ?? 0,
+      actualCost: sumBy(
+        byProject[p.name] ?? [],
+        (purchase) => purchase.cost ?? 0,
+      ),
     }));
   }, [projects, purchases]);
 

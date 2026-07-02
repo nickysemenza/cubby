@@ -15,7 +15,9 @@
 import { Flashlight, FlashlightOff } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Row } from "~/components/layout";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { cn } from "~/lib/utils";
 import { ScannerStatusOverlay } from "./scanner-status-overlay";
 import {
   BARCODE_FORMATS,
@@ -149,7 +151,7 @@ export function PersistentScanner({
         <Button
           variant={torchEnabled ? "default" : "secondary"}
           size="icon"
-          className="absolute top-3 right-3 h-10 w-10 rounded-full shadow-lg"
+          className="absolute top-3 right-3 h-10 w-10 rounded-full ring-1 ring-border"
           onClick={toggleTorch}
           aria-label={
             torchEnabled ? "Turn off flashlight" : "Turn on flashlight"
@@ -166,15 +168,18 @@ export function PersistentScanner({
       {/* Scan hint */}
       {status === "scanning" && (
         <div className="absolute inset-x-0 bottom-3 text-center">
-          <span
-            className={`rounded-full px-2 py-1 text-sm transition-colors duration-150 ${
+          <Badge
+            className={cn(
+              "h-auto border-transparent px-2 py-1 text-sm transition-colors duration-150",
+              // HUD overlay over the live camera feed — deliberate high-contrast
+              // fills, not ledger paper tints.
               scanFlash
                 ? "bg-positive text-primary-foreground"
-                : "bg-black/60 text-white"
-            }`}
+                : "bg-black/60 text-white",
+            )}
           >
             {scanFlash ? "Scanned!" : scanHintText}
-          </span>
+          </Badge>
         </div>
       )}
     </div>

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { partition, sumBy, uniq } from "es-toolkit";
+import { countBy, partition, sumBy, uniq } from "es-toolkit";
 import { Calendar, DollarSign, ExternalLink, Hammer } from "lucide-react";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { Grid, Row, Section, Stack } from "~/components/layout";
@@ -403,12 +403,7 @@ function SummaryCards({
 }
 
 function statusCounts(statuses: (string | null)[]): [string, number][] {
-  const counts = new Map<string, number>();
-  for (const s of statuses) {
-    const key = s ?? "Unknown";
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-  return Array.from(counts.entries());
+  return Object.entries(countBy(statuses, (s) => s ?? "Unknown"));
 }
 
 // -- Project Cards --

@@ -1,9 +1,4 @@
 import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
-import type {
-  IngredientId,
-  LocationId,
-  ProductId,
-} from "@cubby/schemas/identifiers";
 import {
   ingredientId,
   inventoryId,
@@ -133,7 +128,7 @@ async function refreshInventoryEmbeddingsForProduct(
 ): Promise<BackgroundBatchRef[]> {
   if (ctx.event.entity.entityType !== "product") return [];
   const refs = await findInventoryEmbeddingRefsForProducts(ctx.db, [
-    ctx.event.entity.entityId as ProductId,
+    ctx.event.entity.entityId,
   ]);
   return await enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event);
 }
@@ -143,7 +138,7 @@ async function refreshInventoryEmbeddingsForLocation(
 ): Promise<BackgroundBatchRef[]> {
   if (ctx.event.entity.entityType !== "location") return [];
   const refs = await findInventoryEmbeddingRefsForLocations(ctx.db, [
-    ctx.event.entity.entityId as LocationId,
+    ctx.event.entity.entityId,
   ]);
   return await enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event);
 }
@@ -153,7 +148,7 @@ async function refreshRecipeEmbeddingsForIngredient(
 ): Promise<BackgroundBatchRef[]> {
   if (ctx.event.entity.entityType !== "ingredient") return [];
   const refs = await findRecipeEmbeddingRefsForIngredients(ctx.db, [
-    ctx.event.entity.entityId as IngredientId,
+    ctx.event.entity.entityId,
   ]);
   return await enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event);
 }

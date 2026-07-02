@@ -6,6 +6,7 @@ import { formatCurrency } from "~/lib/utils";
 import { sumByKey } from "~/misc/array-helpers";
 import type { NotionProject, NotionPurchase } from "~/server/clients/notion";
 import { nivoBarChrome, nivoChartTheme } from "../shared";
+import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
 
 export function SpendingByProject({
@@ -71,9 +72,9 @@ export function SpendingByProject({
           if (id) navigate({ to: "/projects/$id", params: { id } });
         }}
         tooltip={({ indexValue, value }) => (
-          <div className="rounded-md bg-popover px-4 py-2 text-sm shadow-md ring-1 ring-border">
+          <ChartTooltip>
             <strong>{indexValue}</strong>: {formatCurrency(value, 0)}
-          </div>
+          </ChartTooltip>
         )}
         theme={nivoChartTheme}
       />

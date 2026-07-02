@@ -12,6 +12,7 @@ import {
   Wrench,
 } from "lucide-react";
 import type { ReactNode } from "react";
+import { match } from "ts-pattern";
 import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -173,37 +174,28 @@ function OrphanedEmbeddingCleanupFix({
 }
 
 function orphanedEmbeddingRoute(entityRef: SearchableEntityRef) {
-  switch (entityRef.entityType) {
-    case "product":
-      return {
-        to: "/products/$id" as const,
-        params: { id: entityRef.entityId },
-      };
-    case "location":
-      return {
-        to: "/locations/$id" as const,
-        params: { id: entityRef.entityId },
-      };
-    case "ingredient":
-      return {
-        to: "/ingredients/$id" as const,
-        params: { id: entityRef.entityId },
-      };
-    case "recipe":
-      return {
-        to: "/recipes/$id" as const,
-        params: { id: entityRef.entityId },
-      };
-    case "inventory":
-      return {
-        to: "/inventory/$id" as const,
-        params: { id: entityRef.entityId },
-      };
-    default: {
-      const exhaustive: never = entityRef.entityType;
-      return exhaustive;
-    }
-  }
+  return match(entityRef)
+    .with({ entityType: "product" }, (e) => ({
+      to: "/products/$id" as const,
+      params: { id: e.entityId },
+    }))
+    .with({ entityType: "location" }, (e) => ({
+      to: "/locations/$id" as const,
+      params: { id: e.entityId },
+    }))
+    .with({ entityType: "ingredient" }, (e) => ({
+      to: "/ingredients/$id" as const,
+      params: { id: e.entityId },
+    }))
+    .with({ entityType: "recipe" }, (e) => ({
+      to: "/recipes/$id" as const,
+      params: { id: e.entityId },
+    }))
+    .with({ entityType: "inventory" }, (e) => ({
+      to: "/inventory/$id" as const,
+      params: { id: e.entityId },
+    }))
+    .exhaustive();
 }
 
 /** Card for the merged "Unit coverage" section — core-4 chips + the inline fix. */

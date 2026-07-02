@@ -13,7 +13,7 @@ export { fdcIdFromParam, usdaRouteId };
 /**
  * Map an entity + route id to its tRPC `getByID` queryOptions — the single
  * source for "how do I fetch entity X by id", owning the USDA route-id coercion,
- * the image `getImageById` special case, and non-previewable skips. The result
+ * the image `getByID` special case, and non-previewable skips. The result
  * is a union of queryOptions that useQuery can't narrow, so call sites pass it
  * through `useQuery(opts as ...)`.
  */

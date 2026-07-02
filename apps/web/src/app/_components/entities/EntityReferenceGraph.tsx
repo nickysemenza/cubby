@@ -217,7 +217,7 @@ export function EntityReferenceGraph() {
                 <text
                   y={r + 12}
                   textAnchor="middle"
-                  className="fill-foreground font-mono text-[10px]"
+                  className="fill-foreground font-mono text-2xs"
                 >
                   {node.id}
                 </text>

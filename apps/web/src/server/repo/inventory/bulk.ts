@@ -96,7 +96,7 @@ export const bulkProcessInventoryEntries = async (
       }
 
       const submittedProductIds = uniq(
-        items.filter((i) => i.productId).map((i) => i.productId as ProductId),
+        items.filter((i) => i.productId).map((i) => i.productId),
       );
       if (submittedProductIds.length > 0) {
         const liveProducts = await tx
@@ -131,9 +131,7 @@ export const bulkProcessInventoryEntries = async (
 
       // Pre-fetch all product prices in a single query
       const allProductIds = uniq([
-        ...items
-          .filter((i) => i.productId)
-          .map((i) => i.productId as ProductId),
+        ...items.filter((i) => i.productId).map((i) => i.productId),
         ...existingItems.map((i) => i.productId),
       ]);
       const priceMap = new Map<string, number | null>();
@@ -344,7 +342,10 @@ export const bulkMoveInventoryEntries = async (
 
       // Pre-fetch all source entries in a single query
       const sourceEntries = await tx.query.inventoryEntry.findMany({
-        where: inArray(inventoryEntry.id, sourceIds),
+        where: and(
+          inArray(inventoryEntry.id, sourceIds),
+          notDeleted(inventoryEntry),
+        ),
         ...relations.inventory.full,
       });
       const sourceMap = new Map(sourceEntries.map((e) => [e.id, e]));

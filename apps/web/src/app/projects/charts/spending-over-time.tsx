@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
 import type { NotionPurchase } from "~/server/clients/notion";
 import { nivoChartTheme } from "../shared";
+import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
 
 export function SpendingOverTime({
@@ -71,7 +72,7 @@ export function SpendingOverTime({
         useMesh
         enableSlices="x"
         sliceTooltip={({ slice }) => (
-          <div className="rounded-md bg-popover px-4 py-2 text-sm shadow-md ring-1 ring-border">
+          <ChartTooltip>
             {slice.points.map((point) => (
               <div key={point.id}>
                 <span className="text-muted-foreground">
@@ -81,7 +82,7 @@ export function SpendingOverTime({
                 <strong>{formatCurrency(point.data.y as number, 0)}</strong>
               </div>
             ))}
-          </div>
+          </ChartTooltip>
         )}
         markers={
           costEstimate

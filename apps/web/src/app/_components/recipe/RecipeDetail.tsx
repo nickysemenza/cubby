@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import type React from "react";
 import { lazy, Suspense, useMemo, useState } from "react";
+import { match } from "ts-pattern";
 import { EntitySummaryCard } from "~/components/entity/entity-summary-card";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
@@ -75,24 +76,13 @@ const RECIPE_VIEW_OPTIONS: ViewSwitcherOption<RecipeViewMode>[] = [
  * sub-modes are gone; charts stack inside Data and the grid folds into Prep.)
  */
 export function remapLegacyView(view: string | undefined): RecipeViewMode {
-  switch (view) {
-    case "read":
-    case "spec":
-    case "data":
-    case "prep":
-      return view;
-    case "magazine":
-      return "read";
-    case "table":
-    case "charts":
-      return "data";
-    case "nested":
-      return "spec";
-    case "matrix":
-      return "prep";
-    default:
-      return "read";
-  }
+  return match(view)
+    .with("read", "spec", "data", "prep", (v) => v)
+    .with("magazine", () => "read" as const)
+    .with("table", "charts", () => "data" as const)
+    .with("nested", () => "spec" as const)
+    .with("matrix", () => "prep" as const)
+    .otherwise(() => "read" as const);
 }
 
 const RecipeDetailInner: React.FC<{

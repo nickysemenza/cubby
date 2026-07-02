@@ -27,7 +27,7 @@ import {
   type ProductWithBetterUpcData,
   type ProductWithIslandedMappings,
 } from "@cubby/schemas/problems";
-import { isMiscProduct } from "@cubby/shared";
+import { isMiscProduct, isNonFoodCategory } from "@cubby/shared";
 import { sum, uniq, uniqBy } from "es-toolkit";
 import { env } from "~/env";
 import {
@@ -112,10 +112,13 @@ const findProductCoverageProblems = async (
   // already split into 2+ components: adding the derived edges can only merge
   // components, never split them, so a product connected on its stored mappings
   // can never be islanded. detect_unit_mapping_islands is infallible (never throws).
+  // Non-food (household/garage) products have no food-coverage meaning — exempt
+  // them from both coverage detectors, matching findProductsWithoutMappings.
   const partialCandidates = products.filter(
     (p) =>
       p.ingredientId != null &&
       !isMiscProduct(p.name) &&
+      !isNonFoodCategory(p.category) &&
       (p.price != null ||
         p.fdc_id != null ||
         p.upc != null ||
@@ -125,6 +128,7 @@ const findProductCoverageProblems = async (
     (p) =>
       p.unitMappings.length >= 2 &&
       !isMiscProduct(p.name) &&
+      !isNonFoodCategory(p.category) &&
       wasm.detect_unit_mapping_islands(p.unitMappings).length >= 2,
   );
 

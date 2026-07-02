@@ -42,16 +42,12 @@ function ProblemsStatCard({ enabled }: { enabled: boolean }) {
     <Link to="/problems">
       <Card
         className={cn(
-          "p-2 transition-all duration-150 ease-cozy",
-          "hover:-translate-x-px hover:-translate-y-px",
-          "cursor-pointer border-l-4",
+          "p-2 transition-colors duration-150",
+          "cursor-pointer border-l-4 hover:bg-muted/50",
           alert
-            ? "border-destructive/60 border-l-destructive hover:shadow-[var(--shadow-chunky-destructive-hover)]"
-            : "border-l-positive hover:shadow-[var(--shadow-chunky-lg)]",
+            ? "border-destructive/60 border-l-destructive"
+            : "border-l-positive",
         )}
-        style={
-          alert ? { boxShadow: "var(--shadow-chunky-destructive)" } : undefined
-        }
       >
         <div className="flex flex-col items-start gap-2">
           <IconTile
@@ -96,6 +92,20 @@ function ProblemsStatCard({ enabled }: { enabled: boolean }) {
 const compactFormatter = new Intl.NumberFormat("en", { notation: "compact" });
 const formatCount = (count: number): string => compactFormatter.format(count);
 
+/** Get singular label when count is 1, otherwise use plural label */
+const getCountLabel = (
+  pluralLabel: string,
+  count: number | undefined,
+): string => {
+  if (count === 1) {
+    // Simple singularization: strip trailing 'S' if present
+    // Special cases: Inventory stays Inventory, USDA Foods → USDA Food
+    if (pluralLabel === "Inventory") return "Inventory";
+    if (pluralLabel.endsWith("s")) return pluralLabel.slice(0, -1);
+  }
+  return pluralLabel;
+};
+
 interface StatCardProps {
   entity: Entity;
   count: number | undefined;
@@ -111,18 +121,13 @@ function StatCard({ entity, count, isLoading, isError }: StatCardProps) {
     <Link to={def.routes.list}>
       <Card
         className={cn(
-          "p-2 transition-all duration-150 ease-cozy",
-          "hover:-translate-y-0.5 hover:shadow-[var(--shadow-chunky)]",
-          "cursor-pointer border-l-4",
+          "p-2 transition-colors duration-150",
+          "cursor-pointer border-l-4 hover:bg-muted/50",
           def.color.border,
         )}
       >
         <div className="flex flex-col items-start gap-2">
-          <IconTile
-            size="sm"
-            className={cn(def.color.bg, def.color.text)}
-            style={{ boxShadow: "var(--shadow-inset-gloss)" }}
-          >
+          <IconTile size="sm" className={cn(def.color.bg, def.color.text)}>
             <Icon />
           </IconTile>
           <div className="min-w-0 flex-1">
@@ -137,7 +142,9 @@ function StatCard({ entity, count, isLoading, isError }: StatCardProps) {
                 {formatCount(count ?? 0)}
               </p>
             )}
-            <Eyebrow className="mt-1 truncate">{def.pluralLabel}</Eyebrow>
+            <Eyebrow className="mt-1 truncate">
+              {getCountLabel(def.pluralLabel, count)}
+            </Eyebrow>
           </div>
         </div>
       </Card>

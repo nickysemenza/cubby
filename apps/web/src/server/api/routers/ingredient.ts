@@ -41,7 +41,6 @@ import {
   mergeImpactForIngredients,
   resolveOrCreateIngredients,
 } from "~/server/repo/ingredient";
-import { IngredientService } from "~/server/services/ingredient.service";
 import {
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
@@ -70,10 +69,7 @@ const { list } = createEntityListProcedure({
   },
   repository: {
     list: async (services, filters, sort, pagination) => {
-      return await new IngredientService(
-        services.db,
-        services.usdaClient,
-      ).ingredientList(
+      return await services.services.ingredient.ingredientList(
         filters.nameFilter,
         sort,
         pagination,
@@ -94,16 +90,13 @@ const { getByID, create } = createEntityCrudWithoutListProcedures({
   },
   repository: {
     getByID: async (services, id: IngredientId) => {
-      return await new IngredientService(
-        services.db,
-        services.usdaClient,
-      ).getIngredientByID(id);
+      return await services.services.ingredient.getIngredientByID(id);
     },
     create: async (services, data) => {
-      const ingredient = await new IngredientService(
-        services.db,
-        services.usdaClient,
-      ).createIngredient(data, services.actorContext);
+      const ingredient = await services.services.ingredient.createIngredient(
+        data,
+        services.actorContext,
+      );
       const backgroundBatches = await runMutationSideEffects(services.db, {
         action: "created",
         entity: { entityType: "ingredient", entityId: ingredient.id },
@@ -112,10 +105,11 @@ const { getByID, create } = createEntityCrudWithoutListProcedures({
       return { ...ingredient, sideEffects: { backgroundBatches } };
     },
     update: async (services, id: IngredientId, data) => {
-      return await new IngredientService(
-        services.db,
-        services.usdaClient,
-      ).updateIngredient(id, data, services.actorContext);
+      return await services.services.ingredient.updateIngredient(
+        id,
+        data,
+        services.actorContext,
+      );
     },
   },
 });

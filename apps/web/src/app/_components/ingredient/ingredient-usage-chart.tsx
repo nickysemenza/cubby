@@ -1,6 +1,7 @@
 import type { IngredientUsageRow } from "@cubby/schemas/ingredient-usage";
 import { ResponsiveBar } from "@nivo/bar";
 import { Carrot } from "lucide-react";
+import { ChartTooltip } from "~/app/projects/charts/ChartTooltip";
 import { ChartEmpty } from "~/app/projects/charts/chart-empty";
 import { nivoBarChrome, nivoChartTheme } from "~/lib/nivo-theme";
 
@@ -39,10 +40,10 @@ export function IngredientUsageChart({ rows }: { rows: IngredientUsageRow[] }) {
         enableGridX
         enableGridY={false}
         tooltip={({ value, indexValue }) => (
-          <div className="rounded-md bg-popover px-2 py-2 text-sm shadow-md ring-1 ring-border">
+          <ChartTooltip>
             <strong>{indexValue}</strong> — {value} recipe
             {value === 1 ? "" : "s"}
-          </div>
+          </ChartTooltip>
         )}
         theme={nivoChartTheme}
       />

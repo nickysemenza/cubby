@@ -182,7 +182,7 @@ function NaKindsField({
 }) {
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-1">
-      <span className="text-[10px] text-muted-foreground uppercase tracking-wide">
+      <span className="text-2xs text-muted-foreground uppercase tracking-wide">
         N/A
       </span>
       {BASE_KINDS.map((kind) => {
@@ -195,7 +195,7 @@ function NaKindsField({
             onClick={() => onToggle(kind)}
             aria-pressed={off}
             className={cn(
-              "flex items-center gap-1 text-[11px]",
+              "flex items-center gap-1 text-2xs",
               off ? "text-foreground" : "text-muted-foreground",
             )}
           >

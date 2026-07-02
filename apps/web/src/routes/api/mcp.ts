@@ -22,8 +22,11 @@ async function handler({ request }: { request: Request }) {
 
     // Fallback: accept the API key as a `?key=` query param. The claude.ai
     // custom-connector dialog only takes a URL (no header field), so a
-    // single-user instance can paste `…/api/mcp?key=<apiKey>` instead of
-    // standing up an OAuth flow. Header still wins if both are present.
+    // single-user instance pastes `…/api/mcp?key=<apiKey>` instead of standing
+    // up an OAuth flow. Header still wins if both are present. Accepted
+    // tradeoff: the key rides in a URL (access logs / history); the Sentry
+    // exposure specifically is neutralized by scrubSentryEvent (beforeSend
+    // redacts `key`-family query params on both the browser and Workers SDKs).
     if (!headers.has("x-api-key")) {
       const key = new URL(request.url).searchParams.get("key");
       if (key) headers.set("x-api-key", key);

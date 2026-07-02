@@ -101,8 +101,11 @@ export function EntityEmptyState({
     return <FilteredEmptyState />;
   }
 
-  // Build the "new" action URL from entity basePath
-  const actionHref = `/${entityDef.basePath}/new`;
+  // The create link comes from the typed, optional route registry — not a
+  // string synthesized from basePath. Entities without a "new" route (meal,
+  // cookbook, usda-food, image) degrade to a description-only empty state
+  // instead of rendering a Link to a nonexistent /entity/new (404).
+  const newRoute = entityDef.routes.new;
 
   return (
     <Empty variant="warm" className="relative isolate overflow-hidden py-6">
@@ -113,9 +116,9 @@ export function EntityEmptyState({
       </EmptyMedia>
       <EmptyTitle>{config.title}</EmptyTitle>
       <EmptyDescription>{config.description}</EmptyDescription>
-      {config.actionLabel && (
+      {config.actionLabel && newRoute && (
         <EmptyActions>
-          <Link to={actionHref}>
+          <Link to={newRoute}>
             <Button size="sm">{config.actionLabel}</Button>
           </Link>
         </EmptyActions>
@@ -124,19 +127,29 @@ export function EntityEmptyState({
   );
 }
 
-/** Generic empty state for filtered results */
-function FilteredEmptyState({
+/**
+ * Generic empty state. When `isFiltered`, it reads as "no results, clear the
+ * filters"; otherwise it's an honest "nothing here yet" for a genuinely-empty
+ * table with no entity-specific CTA (the RTable no-entity fallback).
+ */
+export function FilteredEmptyState({
+  isFiltered = true,
   onClearFilters,
 }: {
+  isFiltered?: boolean;
   onClearFilters?: () => void;
 }) {
   return (
     <Empty variant="minimal" className="py-6">
-      <EmptyTitle>Nothing matched</EmptyTitle>
+      <EmptyTitle>
+        {isFiltered ? "Nothing matched" : "Nothing here yet"}
+      </EmptyTitle>
       <EmptyDescription>
-        Try a different search, or clear the filters to see everything.
+        {isFiltered
+          ? "Try a different search, or clear the filters to see everything."
+          : "There's nothing to show yet."}
       </EmptyDescription>
-      {onClearFilters && (
+      {isFiltered && onClearFilters && (
         <EmptyActions>
           <Button size="sm" variant="outline" onClick={onClearFilters}>
             Clear filters

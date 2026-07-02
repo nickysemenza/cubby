@@ -1,5 +1,5 @@
 import type { Amount } from "@cubby/schemas/codec";
-import type { LocationId } from "@cubby/schemas/identifiers";
+import { type LocationId, locationId } from "@cubby/schemas/identifiers";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
 
 export interface SessionLocation {
@@ -203,4 +203,57 @@ export function buildBulkMovePayloadItems<
     inventoryEntryId: item.id,
     quantity: item.amount,
   }));
+}
+
+export function parseLocationIdFromInput(raw: string): LocationId | null {
+  const trimmed = raw.trim();
+  const candidates = [trimmed];
+
+  try {
+    const url = new URL(trimmed);
+    const lastSegment = url.pathname.split("/").filter(Boolean).pop();
+    if (lastSegment) candidates.push(lastSegment);
+  } catch {
+    // Plain shortcode/UUID input is expected most of the time.
+  }
+
+  for (const candidate of candidates) {
+    const parsed = locationId.safeParse(candidate);
+    if (parsed.success) return parsed.data;
+  }
+
+  return null;
+}
+
+export function locationTypeNoun(type: string): string {
+  return type.replaceAll("-", " ");
+}
+
+function locationPathFromRoot(
+  root: InfLocation,
+  locationId: string,
+): InfLocation[] {
+  if (root.id === locationId) return [root];
+
+  for (const child of root.children ?? []) {
+    const childPath = locationPathFromRoot(child, locationId);
+    if (childPath.length > 0) return [root, ...childPath];
+  }
+
+  return [];
+}
+
+export function sessionBreadcrumbSegments(
+  parent: InfLocation,
+  locationId: string,
+) {
+  return locationPathFromRoot(parent, locationId).map((location) => ({
+    id: location.id,
+    name: location.name,
+    type: location.type,
+  }));
+}
+
+export function formatChildCount(count: number) {
+  return count === 1 ? "1 child" : `${count} children`;
 }

@@ -14,6 +14,28 @@ export const productCategoryValues = [
 export type ProductCategory = (typeof productCategoryValues)[number];
 
 /**
+ * The only food category. Everything else (tools, hardware, household, …) is a
+ * non-food household/garage item that has no meaning for recipe costing —
+ * weight/volume/price/calorie unit coverage doesn't apply. A `null`/unset
+ * category is treated as *potentially* food (not excluded) so uncategorized
+ * grocery items keep their coverage grading.
+ */
+export const FOOD_CATEGORY: ProductCategory = "food";
+
+/**
+ * Whether a product's category is a non-food one (garage/household gear). Used
+ * to exempt these products from food-only concerns: the unit-coverage Problems
+ * detectors and the product-detail coverage UI (calories chip, USDA nudge).
+ * A `null`/undefined category is NOT non-food — it stays eligible.
+ *
+ * Single source of truth for the food/non-food split; import this rather than
+ * re-listing categories.
+ */
+export const isNonFoodCategory = (
+  category: ProductCategory | null | undefined,
+): boolean => category != null && category !== FOOD_CATEGORY;
+
+/**
  * Color palette for product categories — Warm-Paper Ledger (2026-06-25).
  * Pulls from the app's retoned categorical chart ramp: a monochrome ink ladder
  * (chart-2..8, dark→light) with the lone ultramarine (chart-1) reserved for the

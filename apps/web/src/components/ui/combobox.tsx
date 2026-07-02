@@ -22,6 +22,13 @@ interface FilterableComboboxProps {
   placeholder?: string;
   className?: string;
   disabled?: boolean;
+  // Server-search mode: when `onSearchChange` is provided, `items` is treated as
+  // the already-filtered result set from the server and local filtering is
+  // skipped. `onOpenChange` lets a deferred-search host gate its query on the
+  // picker's open state; `isLoading` reflects the in-flight search.
+  onSearchChange?: (query: string) => void;
+  onOpenChange?: (open: boolean) => void;
+  isLoading?: boolean;
 }
 
 export function FilterableCombobox({
@@ -31,17 +38,24 @@ export function FilterableCombobox({
   placeholder,
   className,
   disabled,
+  onSearchChange,
+  onOpenChange,
+  isLoading,
 }: FilterableComboboxProps) {
   const [inputValue, setInputValue] = React.useState("");
   const [open, setOpen] = React.useState(false);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
 
-  // Filter items based on input
+  const serverSearch = onSearchChange != null;
+
+  // In server-search mode the server already filtered; otherwise filter the
+  // static items array locally as the user types.
   const filteredItems = React.useMemo(() => {
+    if (serverSearch) return items;
     if (!inputValue) return items;
     const lower = inputValue.toLowerCase();
     return items.filter((item) => item.label.toLowerCase().includes(lower));
-  }, [items, inputValue]);
+  }, [items, inputValue, serverSearch]);
 
   // Get label for current value
   const selectedLabel = items.find((item) => item.value === value)?.label ?? "";
@@ -54,7 +68,10 @@ export function FilterableCombobox({
         setInputValue(""); // Clear filter on selection
       }}
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        onOpenChange?.(nextOpen);
+      }}
       disabled={disabled}
     >
       {/* Polished trigger with proper borders and hover states */}
@@ -82,9 +99,10 @@ export function FilterableCombobox({
           className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
           placeholder={placeholder}
           value={open ? inputValue : selectedLabel}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-            setInputValue(e.target.value)
-          }
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+            setInputValue(e.target.value);
+            onSearchChange?.(e.target.value);
+          }}
         />
         {/* Animated chevron */}
         <ChevronDownIcon
@@ -157,7 +175,7 @@ export function FilterableCombobox({
             </ComboboxPrimitive.List>
             {filteredItems.length === 0 && (
               <div className="py-2 text-center text-muted-foreground text-xs">
-                No results
+                {isLoading ? "Searching…" : "No results"}
               </div>
             )}
           </ComboboxPrimitive.Popup>

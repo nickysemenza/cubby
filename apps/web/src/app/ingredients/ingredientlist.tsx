@@ -2,6 +2,7 @@ import type { IngredientListItem } from "@cubby/schemas/ingredient";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
+import { uniq } from "es-toolkit";
 import { Merge, Scale, Sparkles } from "lucide-react";
 import {
   useCallback,
@@ -343,7 +344,7 @@ export function IngredientList() {
     [data],
   );
   useEffect(() => {
-    const nextIds = [...new Set(productIds)].sort();
+    const nextIds = uniq(productIds).sort();
     setFoodHydrationIds((currentIds) => {
       if (
         currentIds.length === nextIds.length &&
@@ -397,7 +398,7 @@ export function IngredientList() {
               render={<Link to="/ingredients/new" />}
               nativeButton={false}
             >
-              Create New Ingredient
+              New
             </Button>
           </Row>
         }

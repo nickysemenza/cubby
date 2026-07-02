@@ -1,10 +1,6 @@
 import { z } from "zod";
 import { entityImage } from "./entity";
 import { id } from "./identifiers";
-import {
-  createSortPaginationFields,
-  createPaginatedResponseSchema,
-} from "./pagination";
 
 // Image status values - single source of truth for both Zod and Drizzle
 export const imageStatusValues = ["PENDING", "UPLOADED", "FAILED"] as const;
@@ -67,16 +63,13 @@ export const getImageByIdSchema = z.object({
   id: id,
 });
 
-// New schema for standardized list endpoint
-export const imageListFiltersSchema = z.object({
-  filters: z.object({
-    searchFilter: z.string().optional(),
-  }),
-  ...createSortPaginationFields({
-    sortableFields: imageSortableFields,
-    defaultSort: "createdAt",
-  }),
-});
+// Filters accepted by the image list endpoint (filters-only, matching every
+// other *FiltersSchema — the crud factory owns sort/pagination).
+export const imageFilterFields = {
+  nameFilter: z.string().optional().describe("Filter by filename (substring)"),
+};
+
+export const imageListFiltersSchema = z.object(imageFilterFields);
 
 // Schema for importing an image from a URL
 export const importImageFromUrlSchema = z.object({
@@ -129,11 +122,6 @@ export const imageWithEntitySchema = z.object({
 });
 
 export type ImageWithEntity = z.infer<typeof imageWithEntitySchema>;
-
-// New response schema using the standard paginated response format
-export const imageListResponseSchema = createPaginatedResponseSchema(
-  imageWithEntitySchema,
-);
 
 // Response schema for importing an image from a URL
 export const importImageFromUrlResponseSchema = z.object({

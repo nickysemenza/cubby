@@ -32,8 +32,6 @@ function SectionCard({
   return (
     <Card
       className={cn(
-        "transition-all duration-200 ease-cozy",
-        "md:hover:-translate-y-0.5 md:hover:shadow-[var(--shadow-chunky-sm)]",
         "fade-in slide-in-from-bottom-2 animate-in",
         section.overflowVisible && "overflow-visible",
       )}

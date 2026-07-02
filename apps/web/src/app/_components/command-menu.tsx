@@ -22,7 +22,6 @@ import {
 import * as React from "react";
 import { toast } from "sonner";
 import { Row, Stack } from "~/components/layout";
-import { MarkdownText } from "~/components/markdown";
 import {
   CommandDialog,
   CommandEmpty,
@@ -39,6 +38,7 @@ import { useDebug } from "~/hooks/useDebug";
 import { setFlag, useFlag } from "~/lib/flags";
 import { cn, formatCurrency } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
+import { AgentAnswer, AgentSourceContent } from "./agent/AgentAnswer";
 import { quickActions } from "./command-menu/quick-actions";
 import { getRecents, pushRecent } from "./command-menu/recents";
 import { useConversionAnswer } from "./command-menu/use-conversion-answer";
@@ -385,7 +385,7 @@ export function GlobalCommandMenu({
                             )}
                             {matchText && (
                               <div
-                                className="truncate text-[11px] text-muted-foreground/80"
+                                className="truncate text-2xs text-muted-foreground/80"
                                 title={item.matchReason}
                               >
                                 {matchText}
@@ -642,14 +642,10 @@ interface AnswerViewProps {
   ) => void;
 }
 
-/** Turn a tool name like "list_inventory" into "inventory" for status text. */
-function humanizeTool(tool: string): string {
-  return tool.replace(/^(list|get|search|find)_/, "").replace(/_/g, " ");
-}
-
 /**
- * Answer-mode body for the command palette: streams the answer in, shows a
- * "looking up…" status during tool calls, then cited sources on completion.
+ * Answer-mode body for the command palette. Wraps the shared {@link AgentAnswer}
+ * core in cmdk chrome — a "Back to search" `CommandItem`, `CommandGroup`
+ * headings, and `CommandItem` sources for keyboard nav.
  */
 function AnswerView({
   query,
@@ -675,81 +671,57 @@ function AnswerView({
         </CommandItem>
       </CommandGroup>
 
-      {/* Status line while the agent is working and no text is showing yet */}
-      {isStreaming && answer.length === 0 && (
-        <Row
-          align="center"
-          justify="center"
-          gap="sm"
-          className="py-6 text-muted-foreground text-sm"
-        >
-          <Spinner />
-          {toolStatus ? `Looking up ${humanizeTool(toolStatus)}…` : "Thinking…"}
-        </Row>
-      )}
-
-      {/* Answer text — rendered live as deltas stream in */}
-      {answer.length > 0 && (
-        <CommandGroup heading={`Answer · "${query}"`}>
-          <MarkdownText className="px-2 py-2 text-sm leading-relaxed">
-            {answer}
-          </MarkdownText>
-        </CommandGroup>
-      )}
-
-      {/* Sources + tool calls appear once the run completes */}
-      {!isStreaming && sources.length > 0 && (
-        <CommandGroup heading="Sources">
-          {sources.map((source) => (
-            <CommandItem
-              key={`${source.entityType}-${source.id}`}
-              value={`source-${source.entityType}-${source.id}`}
-              onSelect={() =>
-                onSelectSource(source.entityType, source.id, source.name)
-              }
-              className="flex items-center gap-2"
-            >
-              <IconTile size="md" className="rounded bg-muted/50">
-                <EntityIcon
-                  entity={entityTypeMap[source.entityType]}
-                  colored
-                  className="h-4 w-4 shrink-0"
-                />
-              </IconTile>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm">{source.name}</div>
-                {source.detail && (
-                  <div className="truncate text-muted-foreground text-xs">
-                    {source.detail}
-                  </div>
-                )}
-              </div>
-            </CommandItem>
-          ))}
-        </CommandGroup>
-      )}
-
-      {!isStreaming && showToolCalls && toolCalls.length > 0 && (
-        <CommandGroup heading="Tool calls">
-          <Stack gap="xs" className="px-2 py-1">
-            {toolCalls.map((call, i) => (
-              <Row
-                // biome-ignore lint/suspicious/noArrayIndexKey: ordered log, no stable id
-                key={i}
-                align="center"
-                gap="sm"
-                className="font-mono text-muted-foreground text-xs"
-              >
-                <span className={call.ok ? "text-primary" : "text-destructive"}>
-                  {call.ok ? "✓" : "✗"}
-                </span>
-                <span>{call.tool}</span>
-                <span className="ml-auto">{call.durationMs}ms</span>
-              </Row>
-            ))}
-          </Stack>
-        </CommandGroup>
-      )}
+      <AgentAnswer
+        answer={answer}
+        toolStatus={toolStatus}
+        isStreaming={isStreaming}
+        sources={sources}
+        answerWrapper={(children) => (
+          <CommandGroup heading={`Answer · "${query}"`}>
+            {children}
+          </CommandGroup>
+        )}
+        sourcesWrapper={(children) => (
+          <CommandGroup heading="Sources">{children}</CommandGroup>
+        )}
+        renderSource={(source) => (
+          <CommandItem
+            key={`${source.entityType}-${source.id}`}
+            value={`source-${source.entityType}-${source.id}`}
+            onSelect={() =>
+              onSelectSource(source.entityType, source.id, source.name)
+            }
+            className="flex items-center gap-2"
+          >
+            <AgentSourceContent source={source} />
+          </CommandItem>
+        )}
+        toolCalls={
+          showToolCalls && toolCalls.length > 0 ? (
+            <CommandGroup heading="Tool calls">
+              <Stack gap="xs" className="px-2 py-1">
+                {toolCalls.map((call, i) => (
+                  <Row
+                    // biome-ignore lint/suspicious/noArrayIndexKey: ordered log, no stable id
+                    key={i}
+                    align="center"
+                    gap="sm"
+                    className="font-mono text-muted-foreground text-xs"
+                  >
+                    <span
+                      className={call.ok ? "text-primary" : "text-destructive"}
+                    >
+                      {call.ok ? "✓" : "✗"}
+                    </span>
+                    <span>{call.tool}</span>
+                    <span className="ml-auto">{call.durationMs}ms</span>
+                  </Row>
+                ))}
+              </Stack>
+            </CommandGroup>
+          ) : undefined
+        }
+      />
     </>
   );
 }

@@ -188,7 +188,11 @@ export const bottomNavItems: NavItem[] = [
     icon: ScanBarcode,
   },
   inventory,
-  locations,
+  // The phone-first meals→shopping-list loop earns a primary tab over
+  // Locations. Locations stays reachable: moreNavSections is derived from
+  // desktopNav minus bottomTabTargets, so dropping it here re-surfaces it in
+  // the Pantry section of the More sheet automatically.
+  { to: "/meals/shopping-list", label: "Shopping", icon: ShoppingCart },
   recipes,
   { to: "/search", label: "Search", icon: Search },
 ];

@@ -151,7 +151,7 @@ export const selectStaleRecipeIds = async (
         notDeleted(recipe),
       ),
     );
-  return rows.map((r) => r.id as RecipeId);
+  return rows.map((r) => r.id);
 };
 
 /** Persisted totals state for one recipe (explain endpoint). Null = not found. */
@@ -186,18 +186,22 @@ export const selectAllActiveRecipeIds = async (
       .from(recipe)
       .where(notDeleted(recipe));
     span.setAttribute("db.result_count", rows.length);
-    return rows.map((r) => r.id as RecipeId);
+    return rows.map((r) => r.id);
   });
 
 /**
- * Recipes that reference an ingredient (via any section). Used to invalidate when
- * a product's price/USDA link/ingredient changes (a product feeds recipe cost via
- * its linked ingredient).
+ * Recipes that reference ANY of the given ingredients (via any section), as a
+ * flat deduped list. Used to invalidate when a product's price/USDA
+ * link/ingredient changes (a product feeds recipe cost via its linked
+ * ingredient). Batched so `recomputeForIngredients` does one `inArray`
+ * round-trip instead of one query per ingredient; `selectDistinct` dedupes
+ * recipe ids within the query.
  */
-export const findRecipeIdsUsingIngredient = async (
+export const findRecipeIdsUsingIngredients = async (
   db: Database,
-  ingredientId: IngredientId,
+  ingredientIds: IngredientId[],
 ): Promise<RecipeId[]> => {
+  if (ingredientIds.length === 0) return [];
   const rows = await getDb(db)
     .selectDistinct({ recipeId: recipeSection.recipeId })
     .from(recipeSectionIngredient)
@@ -205,7 +209,7 @@ export const findRecipeIdsUsingIngredient = async (
       recipeSection,
       eq(recipeSectionIngredient.recipeSectionId, recipeSection.id),
     )
-    .where(eq(recipeSectionIngredient.ingredientId, ingredientId));
+    .where(inArray(recipeSectionIngredient.ingredientId, ingredientIds));
   return rows.map((r) => r.recipeId);
 };
 
@@ -240,9 +244,9 @@ export const findParentRecipeIdsBatch = async (
     .where(inArray(ingredient.recipeId, subRecipeIds));
   for (const r of rows) {
     if (r.subRecipeId == null) continue; // narrow the nullable FK
-    const sub = r.subRecipeId as RecipeId;
+    const sub = r.subRecipeId;
     const parents = bySubRecipe.get(sub) ?? [];
-    parents.push(r.parentRecipeId as RecipeId);
+    parents.push(r.parentRecipeId);
     bySubRecipe.set(sub, parents);
   }
   return bySubRecipe;

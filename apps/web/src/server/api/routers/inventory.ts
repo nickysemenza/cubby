@@ -232,8 +232,10 @@ const reconcileSession = protectedProcedure
 const findDuplicates = protectedProcedure
   .input(inventoryFindDuplicatesInput)
   .output(inventoryDuplicateUniqueProductsOut)
-  .query(async ({ ctx }) => {
-    const duplicates = await findDuplicateUniqueProducts(ctx.db);
+  .query(async ({ ctx, input }) => {
+    const duplicates = await findDuplicateUniqueProducts(ctx.db, {
+      excludeLocationId: input.excludeLocationId,
+    });
 
     return duplicates.map((product) => ({
       id: product.id,

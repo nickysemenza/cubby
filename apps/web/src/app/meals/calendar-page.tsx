@@ -15,6 +15,12 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import {
+  Empty,
+  EmptyActions,
+  EmptyDescription,
+  EmptyTitle,
+} from "~/components/ui/empty";
+import {
   Table,
   TableBody,
   TableCell,
@@ -78,7 +84,7 @@ export function MealCalendarPage({
       {view === "calendar" ? (
         <CalendarView weekStart={weekStart} onWeekChange={onWeekChange} />
       ) : (
-        <TableView />
+        <TableView onViewChange={onViewChange} />
       )}
     </Stack>
   );
@@ -202,7 +208,11 @@ function CalendarView({
   );
 }
 
-function TableView() {
+function TableView({
+  onViewChange,
+}: {
+  onViewChange: (view: MealCalendarView) => void;
+}) {
   const api = useTRPC();
   const { data, isLoading } = useQuery(
     api.meal.list.queryOptions({
@@ -217,9 +227,23 @@ function TableView() {
   const total = data?.meta.totalCount ?? meals.length;
   if (meals.length === 0) {
     return (
-      <Description>
-        No meals planned yet — switch to the calendar to add one.
-      </Description>
+      <Empty variant="minimal" className="py-6">
+        <EmptyTitle>No meals planned</EmptyTitle>
+        <EmptyDescription>
+          Plan recipes onto your calendar to see costs add up and build a
+          shopping list.
+        </EmptyDescription>
+        <EmptyActions>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => onViewChange("calendar")}
+          >
+            <CalendarDays className="size-4" />
+            Go to calendar
+          </Button>
+        </EmptyActions>
+      </Empty>
     );
   }
 

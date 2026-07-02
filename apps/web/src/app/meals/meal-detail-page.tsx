@@ -1,11 +1,11 @@
 import type { MealId } from "@cubby/schemas/identifiers";
 import type { MealRecipeOut } from "@cubby/schemas/meal";
-import { MAX_PAGE_SIZE } from "@cubby/schemas/pagination";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
 import { Trash2 } from "lucide-react";
 import { useState } from "react";
+import { WithRecipeSearch } from "~/app/_components/combobox/with-search-hook";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useEntityDelete } from "~/app/_components/hooks/useEntityDelete";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
@@ -33,15 +33,6 @@ export function MealDetailPage({ mealId }: { mealId: MealId }) {
     error,
     refetch,
   } = useQuery(api.meal.getByID.queryOptions({ id: mealId }));
-
-  // Recipe picker options.
-  const { data: recipeList } = useQuery(
-    api.recipe.list.queryOptions({
-      filters: {},
-      sort: { orderBy: "name", direction: "asc" },
-      pagination: { pageIndex: 0, pageSize: MAX_PAGE_SIZE },
-    }),
-  );
 
   const updateMeal = useMutation(
     api.meal.update.mutationOptions({ onSuccess: invalidate }),
@@ -114,10 +105,6 @@ export function MealDetailPage({ mealId }: { mealId: MealId }) {
   }
 
   const nameValue = name ?? meal.name ?? "";
-  const recipeItems = (recipeList?.items ?? []).map((r) => ({
-    value: r.id,
-    label: r.name,
-  }));
 
   const heroStats: DetailHeroStat[] = [
     {
@@ -201,17 +188,24 @@ export function MealDetailPage({ mealId }: { mealId: MealId }) {
           <Description as="span" size="xs" className="mb-1 block">
             Add a recipe
           </Description>
-          <FilterableCombobox
-            items={recipeItems}
-            value={null}
-            placeholder="Search recipes…"
-            disabled={addRecipe.isPending}
-            onValueChange={(recipeId) => {
-              if (!recipeId) return;
-              // tRPC's input type for a branded-uuid field is plain string.
-              addRecipe.mutate({ mealId, recipeId, scale: 1 });
-            }}
-          />
+          <WithRecipeSearch>
+            {({ items, onSearchChange, isLoading, onOpenChange }) => (
+              <FilterableCombobox
+                items={items.map((r) => ({ value: r.id, label: r.name }))}
+                value={null}
+                placeholder="Search recipes…"
+                disabled={addRecipe.isPending}
+                onSearchChange={onSearchChange}
+                onOpenChange={onOpenChange}
+                isLoading={isLoading}
+                onValueChange={(recipeId) => {
+                  if (!recipeId) return;
+                  // tRPC's input type for a branded-uuid field is plain string.
+                  addRecipe.mutate({ mealId, recipeId, scale: 1 });
+                }}
+              />
+            )}
+          </WithRecipeSearch>
         </div>
       </Stack>
     </Page>

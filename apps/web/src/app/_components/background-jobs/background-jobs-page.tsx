@@ -19,6 +19,7 @@ import {
 import { Link } from "@tanstack/react-router";
 import { AlertTriangle, RotateCcw, Square, StepForward } from "lucide-react";
 import { useMemo, useState } from "react";
+import { match } from "ts-pattern";
 import { EntityInlineLinkById } from "~/app/_components/EntityInlineLinkById";
 import {
   CopyDebugButton,
@@ -247,27 +248,28 @@ function JobTarget({ job }: { job: BackgroundJobSummary }) {
     return <span className="text-muted-foreground">Unparseable payload</span>;
   }
 
-  switch (parsed.kind) {
-    case "entity-embedding.refresh":
-      return (
-        <EntityInlineLinkById
-          entityType={parsed.payload.entityType}
-          entityId={parsed.payload.entityId}
-          compact
-        />
-      );
-    case "location-ai.description.refresh":
-    case "location-ai.inventory.refresh":
-      return (
+  return match(parsed)
+    .with({ kind: "entity-embedding.refresh" }, (p) => (
+      <EntityInlineLinkById
+        entityType={p.payload.entityType}
+        entityId={p.payload.entityId}
+        compact
+      />
+    ))
+    .with(
+      { kind: "location-ai.description.refresh" },
+      { kind: "location-ai.inventory.refresh" },
+      (p) => (
         <EntityInlineLinkById
           entityType="location"
-          entityId={parsed.payload.locationId}
+          entityId={p.payload.locationId}
           compact
         />
-      );
-    case "recipe-totals.recompute": {
-      const [firstRecipeId] = parsed.payload.recipeIds;
-      if (parsed.payload.recipeIds.length === 1 && firstRecipeId) {
+      ),
+    )
+    .with({ kind: "recipe-totals.recompute" }, (p) => {
+      const [firstRecipeId] = p.payload.recipeIds;
+      if (p.payload.recipeIds.length === 1 && firstRecipeId) {
         return (
           <EntityInlineLinkById
             entityType="recipe"
@@ -276,9 +278,8 @@ function JobTarget({ job }: { job: BackgroundJobSummary }) {
           />
         );
       }
-      const previewRecipeIds = parsed.payload.recipeIds.slice(0, 3);
-      const remaining =
-        parsed.payload.recipeIds.length - previewRecipeIds.length;
+      const previewRecipeIds = p.payload.recipeIds.slice(0, 3);
+      const remaining = p.payload.recipeIds.length - previewRecipeIds.length;
       return (
         <Row gap="sm" wrap>
           {previewRecipeIds.map((recipeId) => (
@@ -294,14 +295,11 @@ function JobTarget({ job }: { job: BackgroundJobSummary }) {
           ) : null}
         </Row>
       );
-    }
-    case "location-valuation.recompute":
-      return <span>All locations</span>;
-    default: {
-      const exhaustive: never = parsed;
-      return exhaustive;
-    }
-  }
+    })
+    .with({ kind: "location-valuation.recompute" }, () => (
+      <span>All locations</span>
+    ))
+    .exhaustive();
 }
 
 function JobPayloadSummary({ job }: { job: BackgroundJobSummary }) {
@@ -309,25 +307,24 @@ function JobPayloadSummary({ job }: { job: BackgroundJobSummary }) {
   if (!parsed)
     return <span className="text-muted-foreground">Invalid JSON</span>;
 
-  switch (parsed.kind) {
-    case "entity-embedding.refresh":
-      return (
-        <span>
-          {parsed.payload.entityType} · {parsed.payload.entityId.slice(0, 8)}
-        </span>
-      );
-    case "location-ai.description.refresh":
-    case "location-ai.inventory.refresh":
-      return <span>location · {parsed.payload.locationId.slice(0, 8)}</span>;
-    case "recipe-totals.recompute":
-      return <span>{parsed.payload.recipeIds.length} recipe ids</span>;
-    case "location-valuation.recompute":
-      return <span>{parsed.payload.reason ?? "no reason"}</span>;
-    default: {
-      const exhaustive: never = parsed;
-      return exhaustive;
-    }
-  }
+  return match(parsed)
+    .with({ kind: "entity-embedding.refresh" }, (p) => (
+      <span>
+        {p.payload.entityType} · {p.payload.entityId.slice(0, 8)}
+      </span>
+    ))
+    .with(
+      { kind: "location-ai.description.refresh" },
+      { kind: "location-ai.inventory.refresh" },
+      (p) => <span>location · {p.payload.locationId.slice(0, 8)}</span>,
+    )
+    .with({ kind: "recipe-totals.recompute" }, (p) => (
+      <span>{p.payload.recipeIds.length} recipe ids</span>
+    ))
+    .with({ kind: "location-valuation.recompute" }, (p) => (
+      <span>{p.payload.reason ?? "no reason"}</span>
+    ))
+    .exhaustive();
 }
 
 function JobStatus({ job }: { job: BackgroundJobSummary }) {
@@ -561,7 +558,7 @@ function BatchDetail({
         <span>Last finished: {formatDate(batch.lastJobFinishedAt)}</span>
       </Row>
       <details>
-        <summary className="cursor-pointer font-mono font-semibold text-muted-foreground text-xs uppercase tracking-wide">
+        <summary className="eyebrow cursor-pointer font-semibold">
           Metadata
         </summary>
         <Stack gap="sm" className="mt-2">
