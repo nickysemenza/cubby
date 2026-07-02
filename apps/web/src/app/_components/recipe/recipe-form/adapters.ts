@@ -28,9 +28,10 @@ const blankAmount = { value: null, unit: "" };
 export const recipeToFormValues = (
   recipe: RecipeOut | undefined,
   initialName?: string,
+  initialUrl?: string,
 ): RecipeFormValues => ({
   name: recipe ? recipe.name : (initialName ?? ""),
-  meta: recipe ? recipe.meta : null,
+  meta: recipe ? recipe.meta : initialUrl ? { url: initialUrl } : null,
   yield: recipe?.yield ?? null,
   servings: recipe?.servings ?? null,
   tags: recipe?.tags ?? [],

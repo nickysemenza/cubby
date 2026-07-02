@@ -139,6 +139,10 @@ interface CreateRecipeFormProps {
   onCancel?: () => void;
   onCreate: (data: RecipeCreateInput) => void;
   initialName?: string;
+  /** Prefill the scrape URL (e.g. from a shared link via the PWA share target). */
+  initialUrl?: string;
+  /** Open the scrape panel and, when a URL is prefilled, run the scrape on mount. */
+  autoScrape?: boolean;
 }
 
 // Props for edit mode

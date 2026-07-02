@@ -4,7 +4,20 @@ import { useTRPC } from "~/trpc/react";
 import { useEntityCreateMode } from "../hooks/useEntityMode";
 import { RecipeForm } from "./recipe-form";
 
-export default function NewRecipeForm() {
+interface NewRecipeFormProps {
+  /** Prefill the scrape URL (e.g. from a shared link via the PWA share target). */
+  initialUrl?: string;
+  /** Prefill the recipe name (e.g. the shared page title). */
+  initialName?: string;
+  /** Open the scrape panel and, when a URL is prefilled, run the scrape on mount. */
+  autoScrape?: boolean;
+}
+
+export default function NewRecipeForm({
+  initialUrl,
+  initialName,
+  autoScrape,
+}: NewRecipeFormProps = {}) {
   const api = useTRPC();
 
   const { error, isPending, handleCreate } = useEntityCreateMode<
@@ -25,6 +38,9 @@ export default function NewRecipeForm() {
       onCreate={handleCreate}
       isPending={isPending}
       error={error}
+      initialName={initialName}
+      initialUrl={initialUrl}
+      autoScrape={autoScrape}
       onCancel={() => window.history.back()}
     />
   );
