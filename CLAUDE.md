@@ -8,6 +8,10 @@ Three layers, one rule: never recompute in a higher layer what a lower one alrea
 - **`recipebridge`** (cubby's WASM crate) — cubby-domain compute (recipe costing, availability evaluation, food-mapping synthesis from products + USDA) plus the WASM boundary (`W*` tsify types, serde-wasm-bindgen marshalling). The single source of truth for those engines, consumed by the browser **and** the server (`*.service.ts`) via WASM. **Do not move these engines into `ingredient-parser`** — they're application domain with no upstream consumer; that's a layering violation, not consolidation. (Pure, generic unit helpers with no cubby coupling are the *only* thing that may migrate down — see the TODO in `recipebridge/src/reconcile.rs`.)
 - **TS (`apps/web`)** — a thin boundary: assemble WASM inputs from the DB / UI, call WASM, reshape outputs into zod / React types. Do **not** reimplement costing, availability, unit conversion, parsing, or formatting in TS — call the WASM. (The old TS `calculateTotals` was deleted when the Rust costing engine landed; don't reintroduce that pattern.)
 
+## Service vs. Direct Repo Boundary
+
+A `*.service.ts` is warranted only when a router needs cross-cutting orchestration a repo can't own (USDA food enrichment via batchEnrichWithFood, WASM costing/availability, or multi-repo transactional side-effects); otherwise router callbacks call repos directly. Product and ingredient have services precisely because they carry USDA enrichment (ingredient.service.ts, product.service.ts); recipe/inventory/location/meal don't, so a service there would be an empty pass-through. This rule keeps the boundary clear: services own domain enrichment, repos own data access and transactions.
+
 ## Cloudflare Workers: clocks & WASM tracing
 
 Two runtime traps that turned a WASM CPU leak into a "slow DB write" misdiagnosis — **distrust per-op timing logs on workerd**:
@@ -31,9 +35,9 @@ Use these instead of inline patterns:
 | `ilike(column, \`%${term}%\`)`                             | `formatSearchTerm(column, term)`                | `~/server/repo/database-helpers`             |
 | `isNull(table.deletedAt)`                                  | `notDeleted(table)`                             | `~/server/repo/database-helpers`             |
 | Manual conditions array + notDeleted + formatSearchTerm    | `buildSearchConditions(table, filters, extras)` | `~/server/repo/database-helpers`             |
-| `ComboboxItem.refine()` for required product               | `requiredProductField`                          | `~/schemas/form-fields`                      |
-| `ComboboxItem.refine()` for required location              | `requiredLocationField`                         | `~/schemas/form-fields`                      |
-| `as ProductId`, `as LocationId`, etc.                      | `unsafeProductId()`, `unsafeLocationId()`, etc. | `~/schemas/identifiers`                      |
+| `ComboboxItem.refine()` for required product               | `requiredProductField`                          | `~/app/_components/form-fields`              |
+| `ComboboxItem.refine()` for required location              | `requiredLocationField`                         | `~/app/_components/form-fields`              |
+| `as ProductId`, `as LocationId`, etc.                      | `unsafeProductId()`, `unsafeLocationId()`, etc. | `@cubby/schemas/identifiers`                 |
 | Inline `["inventoryItem"]` query keys                      | `queryKeys.inventoryItem.list`                  | `~/lib/query-keys`                           |
 | `Array.from(new Set(arr))` or `[...new Set(arr)]`          | `uniq(arr)` / `uniqBy(arr, fn)`                 | `es-toolkit`                                 |
 | Hand-rolled `keyBy`/`groupBy`/`sumBy`/`partition`/`sum`    | the es-toolkit fn of the same name              | `es-toolkit`                                 |
@@ -132,7 +136,7 @@ All major entities (products, recipes, locations, ingredients, inventory) use so
 
 ## Branded IDs
 
-Use branded ID schemas from `~/schemas/identifiers` (e.g., `locationId`, `productId`) instead of plain `z.string()`. This prevents mixing up entity IDs at compile time.
+Use branded ID schemas from `@cubby/schemas/identifiers` (e.g., `locationId`, `productId`) instead of plain `z.string()`. This prevents mixing up entity IDs at compile time.
 
 DB id columns are branded with `.$type<XxxId>()` in `schema.ts` (PKs + FK refs to core entities: recipe, ingredient, product, location, inventory, cookbook, user), so Drizzle queries return branded ids **natively** — no cast needed when reading or writing entity ids. Relation reads inherit column brands, so nested `.id`s are branded too.
 

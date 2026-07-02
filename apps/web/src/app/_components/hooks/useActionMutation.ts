@@ -53,8 +53,12 @@ export function useActionMutation<TFn extends MutationOptionsFn>({
   error,
 }: {
   mutationFn: TFn;
-  /** Success toast — a fixed message or one derived from the result. */
-  success: ReactNode | ((data: DataOf<TFn>) => ReactNode);
+  /**
+   * Success toast — a fixed message or one derived from the result. Omit to skip
+   * the toast entirely (for silent-invalidation or caller-toast flows); the
+   * invalidation, background-batch re-invalidation, and `onSuccess` still run.
+   */
+  success?: ReactNode | ((data: DataOf<TFn>) => ReactNode);
   /** Entity lists to invalidate. Each is wrapped to match tRPC's nested key structure. */
   invalidateKeys?: readonly QueryKey[];
   /** Side effect after the toast + invalidations (close dialog, resolve, navigate). */
@@ -67,7 +71,9 @@ export function useActionMutation<TFn extends MutationOptionsFn>({
 
   const mutationOptions = mutationFn({
     onSuccess: (data: DataOf<TFn>) => {
-      toast.success(typeof success === "function" ? success(data) : success);
+      if (success !== undefined) {
+        toast.success(typeof success === "function" ? success(data) : success);
+      }
       invalidateTRPCQueries(queryClient, invalidateKeys);
       // Re-invalidate once any queued background work the action enqueued drains.
       void watchBatchesAndInvalidate({
