@@ -205,7 +205,7 @@ export function ReviewCard({
   const usdaLinked = hasUsdaLink(row);
 
   return (
-    <div className="rounded-lg border border-[var(--border)] bg-background p-4 shadow-sm">
+    <div className="rounded-lg border border-[var(--border)] bg-background p-4">
       <EnrichmentEditor
         ref={editorRef}
         row={row}

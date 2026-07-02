@@ -168,7 +168,7 @@ export const TagInput: FC<TagInputProps> = ({ value, onChange, className }) => {
 
         {/* Suggestions dropdown */}
         {showSuggestions && suggestions.length > 0 && (
-          <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover p-1 shadow-md">
+          <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover p-1">
             {suggestions.map((suggestion) => {
               const { prefix } = parseTag(suggestion);
               const Icon = getTagIcon(prefix);

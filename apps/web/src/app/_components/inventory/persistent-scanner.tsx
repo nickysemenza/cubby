@@ -151,7 +151,7 @@ export function PersistentScanner({
         <Button
           variant={torchEnabled ? "default" : "secondary"}
           size="icon"
-          className="absolute top-3 right-3 h-10 w-10 rounded-full shadow-lg"
+          className="absolute top-3 right-3 h-10 w-10 rounded-full ring-1 ring-border"
           onClick={toggleTorch}
           aria-label={
             torchEnabled ? "Turn off flashlight" : "Turn on flashlight"

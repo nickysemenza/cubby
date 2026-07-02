@@ -20,6 +20,14 @@
  *     or `.partial()`; use private field maps plus explicit exported schemas.
  *  6. Query invalidation boundaries — app code must use the typed helpers in
  *     apps/web/src/lib/query-keys.ts instead of raw React Query invalidation.
+ *  7. Raw Tailwind shadow utilities (shadow-sm|md|lg|xl|2xl, drop-shadow) in
+ *     apps/web/src tsx — the Warm-Paper Ledger is zero-shadow; separation is a
+ *     border hairline. (Bracket `shadow-[var(--token)]` syntax is NOT matched,
+ *     so surviving flattened tokens don't false-positive.)
+ *  8. bg-gradient-to-* surface washes in apps/web/src tsx — the matte-paper
+ *     system uses flat tones; the audit-log timeline fade connector is exempt.
+ *  9. Arbitrary text-[Npx] font sizes — snap to the sub-xs tokens
+ *     (text-2xs / text-3xs) so the type scale stays closed.
  *
  * Exit 1 + a report on any violation; exit 0 + one-line OK when clean.
  */
@@ -98,6 +106,25 @@ const COLOR_EXCLUDE_BASENAMES = new Set([
 
 const COLOR_RE =
   /\b(text|bg|border|ring|from|to|via|fill|stroke|decoration|outline)-(red|green|amber|yellow|emerald|rose|orange|lime|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink)-[0-9]{2,3}\b/;
+
+// Raw Tailwind box-shadow / drop-shadow utilities. The ledger is zero-shadow:
+// card separation is a `border border-[var(--border)]` hairline, not elevation.
+// Word-boundary + explicit named steps so the legit bracket-arbitrary token
+// syntax `shadow-[var(--token)]` (and bare `shadow`/`shadow-none`) don't match.
+const SHADOW_RE = /\b(shadow-(sm|md|lg|xl|2xl)|drop-shadow)\b/;
+
+// bg-gradient-to-* surface washes fight the matte-paper system — use a flat
+// tone (e.g. bg-muted/30). The one deliberate gradient is the audit-log
+// timeline fade connector, exempted by basename below.
+const GRADIENT_RE = /\bbg-gradient-to-[a-z]/;
+
+// Files allowed a deliberate gradient (the audit-log timeline fade hairline is
+// a fade-out connector, not a surface wash).
+const GRADIENT_EXCLUDE_BASENAMES = new Set(["audit-log-entry.tsx"]);
+
+// Arbitrary text-[Npx] font sizes bypass the closed type scale. The sub-xs
+// steps have tokens: text-[8px]→text-3xs, text-[9/10/11px]→text-2xs.
+const TEXT_PX_RE = /\btext-\[[0-9]+px\]/;
 
 // The old deleted TS costing engine. Test fixtures/helpers legitimately wrap
 // the WASM engine under this name, so exempt test + fixture files.
@@ -318,6 +345,58 @@ function scan(files) {
           rule: "loose-sort-pagination-fields",
         });
       }
+
+      // Rule 9: raw Tailwind shadow utilities (tsx only). Same exemption set as
+      // colors/spacing (UI primitives, design gallery, IsometricPantry canvas).
+      if (
+        isTsx &&
+        !isUiPrimitive(file) &&
+        !COLOR_EXCLUDE_BASENAMES.has(base) &&
+        !isCommentLine(line) &&
+        SHADOW_RE.test(line)
+      ) {
+        violations.push({
+          file,
+          line: i + 1,
+          snippet: line.trim(),
+          rule: "raw-shadow",
+        });
+      }
+
+      // Rule 10: bg-gradient-to-* surface washes (tsx only). Exempts the shared
+      // color/design surfaces plus the audit-log timeline fade connector.
+      if (
+        isTsx &&
+        !isUiPrimitive(file) &&
+        !COLOR_EXCLUDE_BASENAMES.has(base) &&
+        !GRADIENT_EXCLUDE_BASENAMES.has(base) &&
+        !isCommentLine(line) &&
+        GRADIENT_RE.test(line)
+      ) {
+        violations.push({
+          file,
+          line: i + 1,
+          snippet: line.trim(),
+          rule: "surface-gradient",
+        });
+      }
+
+      // Rule 11: arbitrary text-[Npx] sizes (tsx only). Snap to the sub-xs
+      // tokens (text-2xs / text-3xs) so the type scale stays closed.
+      if (
+        isTsx &&
+        !isUiPrimitive(file) &&
+        !COLOR_EXCLUDE_BASENAMES.has(base) &&
+        !isCommentLine(line) &&
+        TEXT_PX_RE.test(line)
+      ) {
+        violations.push({
+          file,
+          line: i + 1,
+          snippet: line.trim(),
+          rule: "arbitrary-text-px",
+        });
+      }
     }
   }
 
@@ -355,6 +434,12 @@ const byRule = {
     "Duplicated response field map — use canonical owner-module field maps, not *ResponseFields objects.",
   "loose-sort-pagination-fields":
     "Loose sort pagination fields — use createSortPaginationFields with owner-module sortable field enums.",
+  "raw-shadow":
+    "Raw Tailwind shadow — the Warm-Paper Ledger is zero-shadow; drop the shadow-*/drop-shadow and let the `border border-[var(--border)]` hairline carry separation.",
+  "surface-gradient":
+    "bg-gradient-to-* surface wash — the matte-paper system is flat; use a solid tone (e.g. bg-muted/30) instead of a gradient.",
+  "arbitrary-text-px":
+    "Arbitrary text-[Npx] size — use the sub-xs tokens (text-[8px]→text-3xs, text-[9/10/11px]→text-2xs) so the type scale stays closed.",
 };
 
 console.error(

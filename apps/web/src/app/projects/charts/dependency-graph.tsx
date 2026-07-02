@@ -254,7 +254,7 @@ function ForceGraph({
         <button
           type="button"
           onClick={resetView}
-          className="absolute top-2 right-2 z-10 flex items-center gap-1 rounded-md bg-background/80 px-2 py-1 text-muted-foreground text-xs shadow-sm ring-1 ring-border hover:bg-background hover:text-foreground"
+          className="absolute top-2 right-2 z-10 flex items-center gap-1 rounded-md bg-background/80 px-2 py-1 text-muted-foreground text-xs ring-1 ring-border hover:bg-background hover:text-foreground"
         >
           <RotateCcw className="h-3 w-3" />
           Reset

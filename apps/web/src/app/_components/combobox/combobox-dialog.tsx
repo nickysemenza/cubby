@@ -222,7 +222,7 @@ export function DialogCompatibleCombobox<TId extends string = string>({
         ref={popupRef}
         style={popupStyle}
         className={cn(
-          "fade-in-0 zoom-in-95 z-[200] animate-in rounded-md border bg-popover shadow-md",
+          "fade-in-0 zoom-in-95 z-[200] animate-in rounded-md border bg-popover",
         )}
       >
         <Row align="center" gap="sm" className="h-9 border-b px-2">

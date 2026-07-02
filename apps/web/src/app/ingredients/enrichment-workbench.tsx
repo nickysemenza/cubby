@@ -504,7 +504,7 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
               align="center"
               wrap
               gap="sm"
-              className="sticky bottom-4 rounded-lg border border-[var(--border)] bg-background/95 px-4 py-2 shadow-sm backdrop-blur"
+              className="sticky bottom-4 rounded-lg border border-[var(--border)] bg-background/95 px-4 py-2 backdrop-blur"
             >
               <span className="font-medium text-sm">
                 {selected.size} selected

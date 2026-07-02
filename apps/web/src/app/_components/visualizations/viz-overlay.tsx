@@ -26,7 +26,7 @@ export function VizTooltip({
     // biome-ignore lint/a11y/noStaticElementInteractions: optional click prevention for selected-item tooltips
     <div
       className={cn(
-        "pointer-events-none absolute top-4 left-4 z-50 rounded-md bg-popover px-4 py-2 text-sm shadow-lg",
+        "pointer-events-none absolute top-4 left-4 z-50 rounded-md bg-popover px-4 py-2 text-sm ring-1 ring-border",
         className,
       )}
       style={style}
