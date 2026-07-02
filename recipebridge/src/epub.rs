@@ -145,14 +145,15 @@ pub fn chunk_epub(bytes: &[u8]) -> Result<WCookbookChunks, String> {
 /// failure, then salvage (empty) if even that won't parse. The decision logic is
 /// the pure, native-shared [`try_extract_chunk`] — only the call primitive (a JS
 /// proxy callback returning a Promise) is wasm-specific.
-/// Returns the chunk's recipes plus whether it was *salvaged* (skipped after both
-/// the default model and escalation failed to parse) — so the driver can report a
-/// skipped count distinct from chunks that legitimately held no recipes.
+/// Returns the chunk's recipes plus, when the chunk was *salvaged* (skipped after
+/// both the default model and escalation failed to parse), the failure reason —
+/// so the driver can report which chunks were lost, distinct from chunks that
+/// legitimately held no recipes. `None` = success (or an empty-but-parseable chunk).
 async fn drive_chunk_wasm(
     doc_path: &str,
     request: &JsValue,
     call_chunk: &js_sys::Function,
-) -> (Vec<ExtractedRecipe>, bool) {
+) -> (Vec<ExtractedRecipe>, Option<String>) {
     // One proxy round-trip for the given model tier. `escalate=false` is the
     // default model; `true` tells the server-owned proxy to use the stronger one.
     let call = |escalate: bool| {
@@ -177,7 +178,7 @@ async fn drive_chunk_wasm(
     };
 
     match try_extract_chunk(doc_path, || call(false)).await {
-        Ok(driven) => (driven.recipes, false),
+        Ok(driven) => (driven.recipes, None),
         // Default model couldn't return parseable output after its retry —
         // escalate this one chunk to the stronger model, then salvage if even
         // that fails. The models' malformed-output failure sets are disjoint, so
@@ -185,13 +186,13 @@ async fn drive_chunk_wasm(
         Err(primary_err) => match try_extract_chunk(doc_path, || call(true)).await {
             Ok(driven) => {
                 tracing::info!("chunk {doc_path} recovered by escalating to the fallback model");
-                (driven.recipes, false)
+                (driven.recipes, None)
             }
             Err(esc_err) => {
-                tracing::warn!(
-                    "chunk {doc_path} unparseable on default ({primary_err}) and escalation ({esc_err}); skipping"
-                );
-                (Vec::new(), true)
+                let reason =
+                    format!("unparseable on default ({primary_err}) and escalation ({esc_err})");
+                tracing::warn!("chunk {doc_path} {reason}; skipping");
+                (Vec::new(), Some(reason))
             }
         },
     }
@@ -249,23 +250,29 @@ pub async fn extract_cookbook(
 
     // Run chunks concurrently (bounded), streaming each completion into a live
     // preview. `buffer_unordered` yields results as they finish; order is
-    // irrelevant since the assembler rebinds recipes to their chunks.
+    // irrelevant since the assembler rebinds recipes to their chunks — so we tag
+    // each chunk with its 0-based position up front to attribute a failure to a
+    // specific chunk regardless of completion order.
     let call_chunk = &call_chunk;
-    let mut stream = stream::iter(prepared.into_iter().map(
-        |(doc_path, epub_chunk, request)| async move {
-            let (recipes, skipped) = drive_chunk_wasm(&doc_path, &request, call_chunk).await;
-            (epub_chunk, recipes, skipped)
+    let mut stream = stream::iter(prepared.into_iter().enumerate().map(
+        |(index, (doc_path, epub_chunk, request))| async move {
+            let (recipes, failure) = drive_chunk_wasm(&doc_path, &request, call_chunk).await;
+            (index, doc_path, epub_chunk, recipes, failure)
         },
     ))
     .buffer_unordered(concurrency.max(1));
 
     let mut per_chunk: Vec<(EpubChunk, Vec<ExtractedRecipe>)> = Vec::with_capacity(total);
-    let mut skipped = 0usize;
+    let mut failed: Vec<WFailedChunk> = Vec::new();
     let mut done = 0usize;
-    while let Some((chunk, recipes, was_skipped)) = stream.next().await {
+    while let Some((index, doc_path, chunk, recipes, failure)) = stream.next().await {
         per_chunk.push((chunk, recipes));
-        if was_skipped {
-            skipped += 1;
+        if let Some(reason) = failure {
+            failed.push(WFailedChunk {
+                index,
+                doc_path,
+                reason,
+            });
         }
         done += 1;
         // Stream a live preview for every chunk but the last; the final assemble
@@ -290,24 +297,45 @@ pub async fn extract_cookbook(
         &JsValue::from_f64(total as f64),
         &recipes_js,
     );
-    // Return recipes + the salvaged-chunk count (distinct from empty chunks) so
-    // the UI can surface "imported N, M chunks skipped". A plain serde struct
-    // (serialized via serde-wasm-bindgen) — `CookbookRecipe` isn't Tsify, so the
-    // `.d.ts` types this `any` (CookbookRecipe isn't Tsify).
+    // Return recipes + the salvaged (failed) chunks so the UI can surface
+    // "imported N, M chunks failed" AND list WHICH chunks were lost (index +
+    // originating doc + reason) for a targeted retry. `skipped` is kept as the
+    // aggregate count (== failed_chunks.len()) so existing callers reading a plain
+    // number don't break. Sorted by index for a stable UI order (the concurrent
+    // stream completes out of order). A plain serde struct (serialized via
+    // serde-wasm-bindgen) — `CookbookRecipe` isn't Tsify, so the `.d.ts` types the
+    // `recipes` field `any`; `failed_chunks` is Tsify, so it's typed.
+    failed.sort_by_key(|f| f.index);
     to_js(
         &ExtractResult {
             recipes: &recipes,
-            skipped,
+            skipped: failed.len(),
+            failed_chunks: &failed,
         },
         "extract result",
     )
 }
 
-/// The `{ recipes, skipped }` object [`extract_cookbook`] returns.
+/// One chunk that failed extraction on both the default and escalation models and
+/// was salvaged (its recipes discarded). Carries enough identity for the UI to
+/// name the loss and offer a retry.
+#[derive(Tsify, Serialize, Deserialize, Clone)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct WFailedChunk {
+    /// 0-based position in the original `chunks` array passed to `extract_cookbook`.
+    pub index: usize,
+    /// Originating spine-document path (e.g. `"OEBPS/text/ch01.xhtml"`).
+    pub doc_path: String,
+    /// Why the chunk was salvaged (both models returned unparseable output).
+    pub reason: String,
+}
+
+/// The `{ recipes, skipped, failed_chunks }` object [`extract_cookbook`] returns.
 #[derive(Serialize)]
 struct ExtractResult<'a> {
     recipes: &'a [recipe_epub::CookbookRecipe],
     skipped: usize,
+    failed_chunks: &'a [WFailedChunk],
 }
 
 /// Read book-level metadata (title / authors / subjects) from an EPUB's OPF.

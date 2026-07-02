@@ -10,11 +10,25 @@ export type ImportResult =
   | { status: "done"; id: string }
   | { status: "error"; message: string };
 
+/**
+ * One chunk that failed extraction — both the default and escalation models
+ * returned unparseable output, so its recipes were salvaged (discarded).
+ * Mirrors the WASM `WFailedChunk` (camelCased at the boundary).
+ */
+export type FailedChunk = {
+  /** 0-based position in the book's chunk array (from `extract_cookbook`). */
+  index: number;
+  /** Originating spine-document path (e.g. "OEBPS/text/ch01.xhtml"). */
+  docPath: string;
+  /** Why the chunk was salvaged (both models produced unparseable output). */
+  reason: string;
+};
+
 /** Where a book is in the in-browser extraction pipeline. */
 export type ExtractPhase =
   | { status: "pending" }
   | { status: "extracting"; done: number; total: number }
-  | { status: "ready"; failedChunks: number }
+  | { status: "ready"; failedChunks: FailedChunk[] }
   | { status: "error"; message: string };
 
 /** One cookbook being reviewed/imported (one dropped .epub, or one JSON source). */
@@ -61,4 +75,6 @@ export type BookHandlers = {
   toggleExpanded: (source: string) => void;
   remove: (source: string) => void;
   import: (source: string) => void | Promise<void>;
+  /** Re-run extraction for this book from its cached EPUB bytes (retry failed chunks). */
+  retryExtraction: (source: string) => void;
 };

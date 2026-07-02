@@ -46,6 +46,8 @@ export const recipeRouter = createTRPCRouter({
   harvestEquivalences: recipeAnalysisProcedures.harvestEquivalences,
   recomputeAll: recipeAnalysisProcedures.recomputeAll,
   recomputeAllStream: recipeAnalysisProcedures.recomputeAllStream,
+  recomputeAllDurable: recipeAnalysisProcedures.recomputeAllDurable,
+  recomputeOne: recipeAnalysisProcedures.recomputeOne,
   dryRunRecomputeTotals: recipeAnalysisProcedures.dryRunRecomputeTotals,
   explainCosting: recipeAnalysisProcedures.explainCosting,
   getIngredientCooccurrence: recipeAnalysisProcedures.getIngredientCooccurrence,

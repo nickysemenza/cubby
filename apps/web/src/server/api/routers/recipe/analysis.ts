@@ -86,6 +86,35 @@ const recomputeAllStream = protectedProcedure.mutation(async function* ({
   );
 });
 
+// DURABLE recompute-all for the maintenance UI: instead of holding this request
+// open to do the whole CPU-heavy pass inline (recomputeAllStream — dies on
+// navigate-away / PWA background / Worker CPU limit with no record), mark every
+// recipe stale and enqueue bounded jobs onto the background-jobs queue, returning
+// the batchId so the toast can link to `/background-jobs`. Mirrors
+// `ai.backfillLocationDescriptions` (the durable template). Streamed only so it
+// reuses the same BackfillButton plumbing; the two `{done,total}` ticks bracket
+// the (fast) enqueue, not the actual recompute (which runs on the queue).
+const recomputeAllDurable = protectedProcedure.mutation(async function* ({
+  ctx,
+}) {
+  yield* streamProgress(
+    ctx.services.recipeCosting.recomputeAllQueued(),
+    (r) => r,
+  );
+});
+
+// Recompute + persist one recipe's totals inline, right now. The manual escape
+// hatch for a recipe stuck with null totals in the list (the background drain
+// never ran or failed for it) — a single recipe is cheap, so it runs on the
+// request path and returns immediately (cascades to parents via `recompute`).
+const recomputeOne = protectedProcedure
+  .input(recipeIdInput)
+  .output(recipeRecomputeAllOut)
+  .mutation(async ({ ctx, input }) => {
+    const processed = await ctx.services.recipeCosting.recompute([input.id]);
+    return { processed };
+  });
+
 // Dry run for the force-recompute: how many recipes' totals would actually
 // change vs persisted, without writing. Read-only but ~as costly as recomputeAll
 // (full engine pass), so the UI triggers it on demand, not on load.
@@ -203,6 +232,8 @@ export const recipeAnalysisProcedures = {
   harvestEquivalences: harvestEquivalencesEndpoint,
   recomputeAll,
   recomputeAllStream,
+  recomputeAllDurable,
+  recomputeOne,
   dryRunRecomputeTotals,
   explainCosting,
   getIngredientCooccurrence: getIngredientCooccurrenceEndpoint,

@@ -691,4 +691,30 @@ export class RecipeCostingService {
     }
     return { processed: total };
   }
+
+  /**
+   * DURABLE recompute-all: mark every active recipe stale and enqueue bounded
+   * `recipe-totals.recompute` jobs onto the background-jobs queue, returning the
+   * batch id — instead of holding a single request open to do the full CPU-heavy
+   * pass inline ({@link recomputeAllStream}). The work then survives a navigate-
+   * away / PWA background / Worker CPU limit: it runs on the queue (or inline in
+   * dev, where there's no binding), and its progress is inspectable on
+   * `/background-jobs`. This is the same queue + dispatch path every mutation-
+   * triggered recompute already uses ({@link dispatchRecompute}); a full recompute
+   * is just the widest possible affected set.
+   */
+  async *recomputeAllQueued(): AsyncGenerator<
+    { done: number; total: number },
+    { enqueued: number; total: number; batchId: string | null }
+  > {
+    const ids = await selectAllActiveRecipeIds(this.db);
+    const total = ids.length;
+    yield { done: 0, total };
+    if (total === 0) return { enqueued: 0, total: 0, batchId: null };
+    const [batch] = await this.dispatchRecompute(ids, {
+      source: "maintenance.recompute-all",
+    });
+    yield { done: total, total };
+    return { enqueued: total, total, batchId: batch?.id ?? null };
+  }
 }

@@ -10,9 +10,12 @@ import {
 } from "@cubby/schemas/import-recipe";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { sum } from "es-toolkit";
-import { useCallback, useEffect, useState } from "react";
+import { AlertTriangle } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
+import { Row } from "~/components/layout/row";
 import { Stack } from "~/components/layout/stack";
 import { Description } from "~/components/ui/description";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -26,8 +29,24 @@ import type {
   Book,
   ChunkRequestInput,
   ExtractPhase,
+  FailedChunk,
   ImportResult,
 } from "./types";
+
+// The `failed_chunks` array from `wasm.extract_cookbook` (WASM `WFailedChunk[]`),
+// camelCased at the boundary (`doc_path` → `docPath`). `extract_cookbook` returns
+// `any` (its `CookbookRecipe`s aren't Tsify), so we validate this shape here.
+const failedChunksSchema = z.array(
+  z
+    .object({
+      index: z.number().int().nonnegative(),
+      doc_path: z.string(),
+      reason: z.string(),
+    })
+    .transform(
+      ({ doc_path, ...rest }): FailedChunk => ({ ...rest, docPath: doc_path }),
+    ),
+);
 
 // Chunks per book extracted concurrently, passed to the Rust driver
 // (`wasm.extract_cookbook`). Matches the native `recipe-epub` extractor's default
@@ -79,6 +98,33 @@ export function CookbookImport({
 
   const [books, setBooks] = useState<Book[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  // Raw EPUB bytes by source, cached so a book can re-run extraction (retry after
+  // failed chunks) without re-dropping the file. Kept in a ref, not state — the
+  // bytes are large and never drive a render. JSON / from-source books have no
+  // entry (they can't fail chunks).
+  const epubBytesRef = useRef<Map<string, Uint8Array>>(new Map());
+
+  // Extraction (minutes of concurrent LLM calls) and import both live entirely in
+  // this component's state — there's no server-side record to resume from. Warn
+  // before an accidental tab close / navigation while either is in flight so those
+  // minutes of work aren't silently lost. Removed the instant nothing is running.
+  const busy = books.some(
+    (b) =>
+      b.extract.status === "pending" ||
+      b.extract.status === "extracting" ||
+      b.importProgress !== undefined,
+  );
+  useEffect(() => {
+    if (!busy) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      // Legacy assignment: some browsers still gate the native prompt on a truthy
+      // returnValue rather than preventDefault alone.
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [busy]);
 
   // Upload raw image bytes through the presigned-R2 flow (mirrors PendingImageUpload):
   // initiate → PUT to the presigned URL → return the new (PENDING) image id.
@@ -134,7 +180,7 @@ export function CookbookImport({
               recipes,
               selected: new Set<number>(),
               results: new Map<number, ImportResult>(),
-              extract: { status: "ready", failedChunks: 0 },
+              extract: { status: "ready", failedChunks: [] },
               expanded: true,
             },
           ],
@@ -313,7 +359,7 @@ export function CookbookImport({
       };
 
       let recipes: ImportRecipe[];
-      let skipped: number;
+      let failedChunks: FailedChunk[];
       try {
         const result = (await wasm.extract_cookbook(
           chunks,
@@ -321,9 +367,19 @@ export function CookbookImport({
           CHUNK_CONCURRENCY,
           callChunk,
           onProgress,
-        )) as { recipes: unknown; skipped: number };
+        )) as { recipes: unknown; skipped: number; failed_chunks?: unknown };
         recipes = importRecipesSchema.parse(result.recipes);
-        skipped = result.skipped;
+        // Prefer the per-chunk failure detail (index + doc + reason). Fall back to
+        // anonymous entries synthesized from the aggregate `skipped` count if an
+        // older WASM artifact predates `failed_chunks` — a stale build degrades to
+        // "N chunk(s) failed" rather than crashing.
+        failedChunks =
+          failedChunksSchema.safeParse(result.failed_chunks).data ??
+          Array.from({ length: result.skipped }, (_, index) => ({
+            index,
+            docPath: "",
+            reason: "Chunk failed to extract",
+          }));
       } catch (error) {
         observer?.disconnect();
         setExtract(source, {
@@ -337,7 +393,13 @@ export function CookbookImport({
         ...b,
         recipes,
         selected: new Set(recipes.map((_, i) => i)),
-        extract: { status: "ready", failedChunks: skipped },
+        // `results` and `importProgress` are keyed by recipe INDEX; extraction
+        // repopulates `recipes` from scratch (fresh on the first run, a different
+        // list on a re-extraction retry), so any prior per-index import state now
+        // points at the wrong recipe — clear it.
+        results: new Map<number, ImportResult>(),
+        importProgress: undefined,
+        extract: { status: "ready", failedChunks },
       }));
       if (recipes.length === 0) {
         toast.warning(`No recipes found in ${deriveBookName(source)}`);
@@ -364,7 +426,7 @@ export function CookbookImport({
         chunks: chunks.length,
         // Includes retries + escalations now (Rust may call back >1× per chunk).
         networkCalls: latencies.length,
-        chunksSkipped: skipped,
+        chunksSkipped: failedChunks.length,
         wallS: +(wallMs / 1000).toFixed(1),
         chunkEpubMs: Math.round(chunkEpubMs),
         avgChunkChars: Math.round(sumSizes / chunks.length),
@@ -422,10 +484,29 @@ export function CookbookImport({
         const file = epubs.find((f) => f.name === book.source);
         if (!file) continue;
         const bytes = new Uint8Array(await file.arrayBuffer());
+        // Cache for a later retry (re-run extraction without re-dropping the file).
+        epubBytesRef.current.set(book.source, bytes);
         await extractBook(book.source, bytes);
       }
     },
     [books, extractBook],
+  );
+
+  // Re-run extraction for one book from its cached EPUB bytes — the retry path for
+  // failed chunks. Re-extracting the whole book is idempotent downstream (import
+  // upserts by (cookbook, title)), so a retry that now parses the previously-failed
+  // chunks simply adds the recovered recipes. No-op if the bytes weren't cached.
+  const retryExtraction = useCallback(
+    (source: string) => {
+      const bytes = epubBytesRef.current.get(source);
+      if (!bytes) {
+        toast.error("Original file unavailable — re-drop the .epub to retry.");
+        return;
+      }
+      setExtract(source, { status: "pending" });
+      void extractBook(source, bytes);
+    },
+    [extractBook, setExtract],
   );
 
   // Power-user path: a flat ImportRecipe[] or a {book,recipes}[] bundle.
@@ -457,7 +538,7 @@ export function CookbookImport({
       recipes,
       selected: new Set(recipes.map((_, i) => i)),
       results: new Map<number, ImportResult>(),
-      extract: { status: "ready" as const, failedChunks: 0 },
+      extract: { status: "ready" as const, failedChunks: [] },
       expanded: true,
     }));
     setBooks((prev) => [
@@ -626,6 +707,7 @@ export function CookbookImport({
     remove: (source: string) =>
       setBooks((prev) => prev.filter((b) => b.source !== source)),
     import: importBook,
+    retryExtraction,
   };
 
   return (
@@ -638,6 +720,18 @@ export function CookbookImport({
           and import.
         </Description>
       </div>
+
+      {busy && (
+        <Row
+          align="center"
+          gap="xs"
+          className="border border-warning/40 bg-warning/5 p-2 text-warning text-xs"
+        >
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          Keep this page open — extraction and import run here, not in the
+          background. Leaving now loses in-progress work.
+        </Row>
+      )}
 
       <CookbookDropzone
         isDragging={isDragging}

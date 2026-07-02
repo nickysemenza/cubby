@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import pluralize from "pluralize";
 import type { BackfillButtonProps } from "./problem-backfill-action";
 
@@ -28,6 +29,9 @@ export const BACKFILL = {
   }>({
     run: (client) => client.product.backfillUPCImages.mutate(),
     invalidateKeys: (api) => [api.product.list.queryKey()],
+    // Runs entirely inside the held-open stream (no durable queue), so warn while
+    // it runs (see BackfillButton `foreground`).
+    foreground: true,
     idleLabel: "Fetch images",
     pendingLabel: "Fetching…",
     toastResult: (r) => ({
@@ -44,9 +48,25 @@ export const BACKFILL = {
     invalidateKeys: (api) => [api.location.list.queryKey()],
     idleLabel: "Analyze all",
     pendingLabel: "Enqueuing…",
+    // Durable: the work runs on the background-jobs queue, so link the toast there.
     toastResult: (r) => ({
       tone: r.enqueued > 0 ? "success" : "info",
-      message: `Enqueued ${r.enqueued} of ${pluralize("location", r.total, true)} for analysis.`,
+      message:
+        r.enqueued > 0 ? (
+          <span>
+            Enqueued {r.enqueued} of {pluralize("location", r.total, true)} for
+            analysis.{" "}
+            <Link
+              to="/background-jobs"
+              search={{ batchId: r.batchId }}
+              className="underline decoration-border decoration-dotted underline-offset-2 hover:decoration-primary"
+            >
+              View progress
+            </Link>
+          </span>
+        ) : (
+          "No locations need analysis."
+        ),
     }),
   }),
 };
