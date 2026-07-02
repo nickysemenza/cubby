@@ -10,6 +10,7 @@ const workbenchSearch = z.object({ focus: z.string().optional() });
 export const Route = createFileRoute("/_authenticated/ingredients/workbench")({
   component: IngredientWorkbenchPage,
   validateSearch: workbenchSearch,
+  head: () => ({ meta: [{ title: "Ingredient Workbench | cubby" }] }),
 });
 
 function IngredientWorkbenchPage() {

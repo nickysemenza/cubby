@@ -299,7 +299,7 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
           return (
             <RecipeSourceLink
               source={source}
-              text="url"
+              text="host"
               onClick={(e) => e.stopPropagation()}
             />
           );

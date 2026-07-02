@@ -139,13 +139,15 @@ function useShortcodeLookups(shortcodes: string[]) {
   }, [shortcodes]);
 
   // Batch fetch: one query per entity type instead of N individual queries
-  const { data: locationData = [], isLoading: locationsLoading } = useQuery(
-    api.location.getByShortcodes.queryOptions({ shortcodes: locationCodes }),
-  );
+  const { data: locationData = [], isLoading: locationsLoading } = useQuery({
+    ...api.location.getByShortcodes.queryOptions({ shortcodes: locationCodes }),
+    enabled: locationCodes.length > 0,
+  });
 
-  const { data: productData = [], isLoading: productsLoading } = useQuery(
-    api.product.getByShortcodes.queryOptions({ shortcodes: productCodes }),
-  );
+  const { data: productData = [], isLoading: productsLoading } = useQuery({
+    ...api.product.getByShortcodes.queryOptions({ shortcodes: productCodes }),
+    enabled: productCodes.length > 0,
+  });
 
   const items: LabelItem[] = useMemo(() => {
     const locs = locationData.map((d) => ({

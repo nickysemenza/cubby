@@ -18,6 +18,7 @@ export const Route = createFileRoute("/_authenticated/problems")({
   },
   pendingComponent: RoutePending,
   component: ProblemsPage,
+  head: () => ({ meta: [{ title: "Problems | cubby" }] }),
 });
 
 function ProblemsPage() {

@@ -31,6 +31,8 @@ export {
   categoryColors,
   getCategoryColor,
   formatCategoryLabel,
+  FOOD_CATEGORY,
+  isNonFoodCategory,
 } from "./category-theme";
 export type { ProductCategory } from "./category-theme";
 

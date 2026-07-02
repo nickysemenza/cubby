@@ -2,6 +2,7 @@ import type {
   ProductCreateInput,
   ProductWithFoodOut,
 } from "@cubby/schemas/product";
+import { isNonFoodCategory } from "@cubby/shared";
 import { uniq } from "es-toolkit";
 import { Apple, ChefHat, Info, Scale } from "lucide-react";
 import type { FC } from "react";
@@ -41,6 +42,8 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
     getMappings: getAllUnitMappingsFromProduct,
   });
 
+  const isNonFood = isNonFoodCategory(product.category);
+
   const sections: DetailSection[] = [
     editableDetailSection({
       title: "Basic Information",
@@ -68,11 +71,33 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       : []),
     // Custom section: Unit Mappings — conversion capabilities + Convert modal
     // above the source-attributed rows table, mirroring the ingredient page.
-    {
-      title: "Unit Mappings",
-      icon: Scale,
-      content: <UnitCoveragePanel mappings={mappings} />,
-    },
+    // Non-food (household/garage) products skip food-coverage grading entirely
+    // (no calories/price chips, no USDA nudge) — and with no mappings at all,
+    // collapse to a minimal note instead of an empty converter surface.
+    ...(isNonFood && mappings.length === 0
+      ? [
+          {
+            title: "Unit Mappings",
+            icon: Scale,
+            content: (
+              <Description>
+                No unit conversions — not needed for non-food items.
+              </Description>
+            ),
+          },
+        ]
+      : [
+          {
+            title: "Unit Mappings",
+            icon: Scale,
+            content: (
+              <UnitCoveragePanel
+                mappings={mappings}
+                showCoverage={!isNonFood}
+              />
+            ),
+          },
+        ]),
     // Custom section: Appears In Recipes — recipes the product's linked ingredient
     // is used in, one row per usage with amount, source line, and parser-drift flag.
     // Full-width so the 5-column table has room (esp. the source line).

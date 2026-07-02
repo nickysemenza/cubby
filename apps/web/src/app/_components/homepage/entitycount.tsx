@@ -92,6 +92,20 @@ function ProblemsStatCard({ enabled }: { enabled: boolean }) {
 const compactFormatter = new Intl.NumberFormat("en", { notation: "compact" });
 const formatCount = (count: number): string => compactFormatter.format(count);
 
+/** Get singular label when count is 1, otherwise use plural label */
+const getCountLabel = (
+  pluralLabel: string,
+  count: number | undefined,
+): string => {
+  if (count === 1) {
+    // Simple singularization: strip trailing 'S' if present
+    // Special cases: Inventory stays Inventory, USDA Foods → USDA Food
+    if (pluralLabel === "Inventory") return "Inventory";
+    if (pluralLabel.endsWith("s")) return pluralLabel.slice(0, -1);
+  }
+  return pluralLabel;
+};
+
 interface StatCardProps {
   entity: Entity;
   count: number | undefined;
@@ -128,7 +142,9 @@ function StatCard({ entity, count, isLoading, isError }: StatCardProps) {
                 {formatCount(count ?? 0)}
               </p>
             )}
-            <Eyebrow className="mt-1 truncate">{def.pluralLabel}</Eyebrow>
+            <Eyebrow className="mt-1 truncate">
+              {getCountLabel(def.pluralLabel, count)}
+            </Eyebrow>
           </div>
         </div>
       </Card>

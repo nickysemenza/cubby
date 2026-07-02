@@ -43,6 +43,7 @@ export function UnitCoveragePanel({
   kinds,
   hideConvertButton = false,
   defaultGraphOpen = false,
+  showCoverage = true,
 }: {
   mappings: UnitMapping[];
   /** Measurement-kind universe to grade against (USDA passes USDA_KINDS). */
@@ -50,6 +51,13 @@ export function UnitCoveragePanel({
   hideConvertButton?: boolean;
   /** Start with the graph expanded (the Convert dialog opts in). */
   defaultGraphOpen?: boolean;
+  /**
+   * Show the food-coverage capabilities block (big-4/calorie chips + tier).
+   * Non-food (household/garage) products pass `false` — food unit coverage
+   * (calories, price) is meaningless for them, so only the raw mappings table
+   * (if any) and the graph render.
+   */
+  showCoverage?: boolean;
 }) {
   const [graphOpen, setGraphOpen] = useState(defaultGraphOpen);
   const [showNutrients, setShowNutrients] = useState(false);
@@ -68,11 +76,13 @@ export function UnitCoveragePanel({
 
   return (
     <Stack gap="sm">
-      <ConversionCapabilities
-        mappings={mappings}
-        kinds={kinds}
-        hideConvertButton={hideConvertButton}
-      />
+      {showCoverage && (
+        <ConversionCapabilities
+          mappings={mappings}
+          kinds={kinds}
+          hideConvertButton={hideConvertButton}
+        />
+      )}
 
       <Collapsible open={graphOpen} onOpenChange={setGraphOpen}>
         <CollapsibleTrigger

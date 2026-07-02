@@ -15,7 +15,7 @@ import type {
   ProductWithBetterUpcData,
   ProductWithoutMappings,
 } from "@cubby/schemas/problems";
-import { isMiscProduct } from "@cubby/shared";
+import { isMiscProduct, isNonFoodCategory } from "@cubby/shared";
 import {
   and,
   eq,
@@ -135,7 +135,8 @@ export const findOrphanedProducts = async (
 // if it has a manual unit mapping OR a price (synthesizes a `1 each = $price`
 // edge) OR a USDA link (fdc_id/upc synthesizes portion/serving/nutrient
 // edges). Mirrors the totals-gap classifier in lib/recipe-totals-gaps.ts.
-// Excludes misc products since they don't need pricing.
+// Excludes misc products (don't need pricing) and non-food (household/garage)
+// products, for which food unit coverage is meaningless.
 export const findProductsWithoutMappings = async (
   db: Database,
 ): Promise<ProductWithoutMappings[]> => {
@@ -149,6 +150,7 @@ export const findProductsWithoutMappings = async (
       createdAt: product.createdAt,
       ingredientId: product.ingredientId,
       usdaUnavailable: product.usdaUnavailable,
+      category: product.category,
     })
     .from(product)
     .where(
@@ -166,10 +168,11 @@ export const findProductsWithoutMappings = async (
       ),
     );
 
-  // Filter out misc products - they don't need pricing
+  // Filter out misc products (no pricing) and non-food products (no food
+  // coverage meaning); category never surfaces in the result shape.
   return productsWithoutMappings
-    .filter((p) => !isMiscProduct(p.name))
-    .map(({ ingredientId, usdaUnavailable, ...rest }) => ({
+    .filter((p) => !isMiscProduct(p.name) && !isNonFoodCategory(p.category))
+    .map(({ ingredientId, usdaUnavailable, category: _category, ...rest }) => ({
       ...rest,
       isIngredient: ingredientId != null,
       usdaUnavailable: usdaUnavailable ?? false,
@@ -310,6 +313,7 @@ export const loadProductsForCoverage = async (db: Database) =>
       price: true,
       usdaUnavailable: true,
       ingredientId: true,
+      category: true,
     },
     with: {
       unitMappings: {
