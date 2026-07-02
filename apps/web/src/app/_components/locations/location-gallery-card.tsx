@@ -76,7 +76,7 @@ export const LocationGalleryCard = function LocationGalleryCard({
         // Faded state for non-matches
         isFaded && "opacity-40",
         // Hover effects
-        !isFaded && "hover:shadow-md hover:shadow-primary/5",
+        !isFaded && "hover:ring-1 hover:ring-primary/40",
         className,
       )}
     >

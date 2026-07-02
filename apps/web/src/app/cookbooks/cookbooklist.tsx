@@ -47,7 +47,7 @@ export function CookbookList() {
               <Link
                 to="/cookbooks/$cookbookId"
                 params={{ cookbookId: id }}
-                className="block rounded-sm border border-[var(--border)] bg-card p-2 transition-all ease-cozy hover:-translate-y-0.5 hover:shadow-[var(--shadow-chunky-sm)]"
+                className="block rounded-sm border border-[var(--border)] bg-card p-2 transition-colors hover:bg-muted/50"
               >
                 {coverUrl ? (
                   <Image

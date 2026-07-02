@@ -32,11 +32,7 @@ export const EntityHero: FC<EntityHeroProps> = ({ images }) => {
 
   return (
     <Card
-      className={cn(
-        "transition-all duration-150",
-        "md:hover:-translate-y-0.5 md:hover:shadow-[var(--shadow-chunky-sm)]",
-        "fade-in slide-in-from-bottom-2 animate-in",
-      )}
+      className={cn("fade-in slide-in-from-bottom-2 animate-in")}
       style={{ animationFillMode: "both" }}
     >
       <CardHeader className="pb-4">

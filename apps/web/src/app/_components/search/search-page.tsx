@@ -160,7 +160,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
               params: { id: conversion.ingredientId },
             });
           }}
-          className="w-full rounded-lg border border-[var(--border)] bg-card px-4 py-4 text-left transition-all ease-cozy hover:-translate-y-0.5 hover:shadow-[var(--shadow-chunky-sm)]"
+          className="w-full rounded-lg border border-[var(--border)] bg-card px-4 py-4 text-left transition-colors hover:bg-muted/50"
         >
           <Equal className="h-4 w-4 shrink-0 text-primary" />
           <span className="truncate font-mono font-semibold text-sm tabular-nums">

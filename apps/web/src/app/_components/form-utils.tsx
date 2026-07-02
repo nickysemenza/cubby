@@ -193,7 +193,7 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
         <div
           className={cn(
             stickyFooter
-              ? "sticky bottom-20 z-20 flex items-center gap-2 rounded-lg border border-[var(--border)] bg-card px-2 py-2 shadow-[var(--shadow-chunky)] md:bottom-4"
+              ? "sticky bottom-20 z-20 flex items-center gap-2 rounded-lg border border-[var(--border)] bg-card px-2 py-2 md:bottom-4"
               : "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
           )}
         >

@@ -135,7 +135,7 @@ export function GallerySidebar({
     return (
       <div
         className={cn(
-          "hidden flex-col border-r bg-gradient-to-b from-muted/50 to-muted/20 transition-all duration-300 md:flex",
+          "hidden flex-col border-r bg-muted/30 transition-all duration-300 md:flex",
           className,
         )}
       >
@@ -155,7 +155,7 @@ export function GallerySidebar({
   return (
     <div
       className={cn(
-        "hidden h-full min-h-0 w-56 flex-col overflow-hidden border-r bg-gradient-to-b from-muted/40 via-muted/20 to-background shadow-sm transition-all duration-300 md:flex lg:w-64",
+        "hidden h-full min-h-0 w-56 flex-col overflow-hidden border-r bg-muted/30 transition-all duration-300 md:flex lg:w-64",
         className,
       )}
     >

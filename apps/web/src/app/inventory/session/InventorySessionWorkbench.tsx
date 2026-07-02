@@ -1434,7 +1434,7 @@ function LocationReviewPane({
 
       <Stack
         gap="sm"
-        className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-20 border border-[var(--border)] bg-card p-2 shadow-[var(--shadow-chunky)] md:bottom-4"
+        className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-20 border border-[var(--border)] bg-card p-2 md:bottom-4"
       >
         {unresolvedCount > 0 && (
           <Button

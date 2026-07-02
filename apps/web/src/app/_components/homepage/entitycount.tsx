@@ -42,16 +42,12 @@ function ProblemsStatCard({ enabled }: { enabled: boolean }) {
     <Link to="/problems">
       <Card
         className={cn(
-          "p-2 transition-all duration-150 ease-cozy",
-          "hover:-translate-x-px hover:-translate-y-px",
-          "cursor-pointer border-l-4",
+          "p-2 transition-colors duration-150",
+          "cursor-pointer border-l-4 hover:bg-muted/50",
           alert
-            ? "border-destructive/60 border-l-destructive hover:shadow-[var(--shadow-chunky-destructive-hover)]"
-            : "border-l-positive hover:shadow-[var(--shadow-chunky-lg)]",
+            ? "border-destructive/60 border-l-destructive"
+            : "border-l-positive",
         )}
-        style={
-          alert ? { boxShadow: "var(--shadow-chunky-destructive)" } : undefined
-        }
       >
         <div className="flex flex-col items-start gap-2">
           <IconTile
@@ -111,18 +107,13 @@ function StatCard({ entity, count, isLoading, isError }: StatCardProps) {
     <Link to={def.routes.list}>
       <Card
         className={cn(
-          "p-2 transition-all duration-150 ease-cozy",
-          "hover:-translate-y-0.5 hover:shadow-[var(--shadow-chunky)]",
-          "cursor-pointer border-l-4",
+          "p-2 transition-colors duration-150",
+          "cursor-pointer border-l-4 hover:bg-muted/50",
           def.color.border,
         )}
       >
         <div className="flex flex-col items-start gap-2">
-          <IconTile
-            size="sm"
-            className={cn(def.color.bg, def.color.text)}
-            style={{ boxShadow: "var(--shadow-inset-gloss)" }}
-          >
+          <IconTile size="sm" className={cn(def.color.bg, def.color.text)}>
             <Icon />
           </IconTile>
           <div className="min-w-0 flex-1">
