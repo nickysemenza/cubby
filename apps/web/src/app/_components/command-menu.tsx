@@ -385,7 +385,7 @@ export function GlobalCommandMenu({
                             )}
                             {matchText && (
                               <div
-                                className="truncate text-[11px] text-muted-foreground/80"
+                                className="truncate text-2xs text-muted-foreground/80"
                                 title={item.matchReason}
                               >
                                 {matchText}

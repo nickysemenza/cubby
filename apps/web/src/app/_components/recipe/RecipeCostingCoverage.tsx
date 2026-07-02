@@ -218,10 +218,7 @@ export function RecipeTotalsCoverageButton({
           <PopoverTitle>Why aren&apos;t these totals complete?</PopoverTitle>
           <Row align="center" wrap gap="sm" className="pt-1">
             {counts.map((c) => (
-              <span
-                key={c.label}
-                className="font-mono text-2xs text-muted-foreground uppercase tracking-wide"
-              >
+              <span key={c.label} className="eyebrow">
                 {c.label}
                 <span className="ml-1 text-warning">{c.n}</span>
               </span>

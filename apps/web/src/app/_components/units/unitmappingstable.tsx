@@ -133,7 +133,9 @@ export const UnitMappingsTable: React.FC<{
 
   if (mappings.length === 0) return null;
 
-  const head = "h-auto p-1 text-2xs uppercase tracking-wide";
+  // TableHead already owns the mono/text-2xs/uppercase/tracking-wider eyebrow
+  // look; this override only tightens the height/padding for the dense table.
+  const head = "h-auto p-1";
   // table-auto: From/To size to content (no overflow into neighbors); Source takes the slack via w-full and truncates the food name.
   const cell = "whitespace-nowrap p-1 align-top";
   return (

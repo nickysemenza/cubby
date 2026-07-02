@@ -561,7 +561,7 @@ function BatchDetail({
         <span>Last finished: {formatDate(batch.lastJobFinishedAt)}</span>
       </Row>
       <details>
-        <summary className="cursor-pointer font-mono font-semibold text-muted-foreground text-xs uppercase tracking-wide">
+        <summary className="eyebrow cursor-pointer font-semibold">
           Metadata
         </summary>
         <Stack gap="sm" className="mt-2">

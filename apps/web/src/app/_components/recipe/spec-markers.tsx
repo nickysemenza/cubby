@@ -21,7 +21,7 @@ export const StepNumberBadge = ({
 }) => (
   <span
     className={cn(
-      "mt-px inline-flex size-[16px] shrink-0 items-center justify-center rounded-full border border-[var(--border)] font-mono text-[9px] text-muted-foreground tabular-nums",
+      "mt-px inline-flex size-[16px] shrink-0 items-center justify-center rounded-full border border-[var(--border)] font-mono text-2xs text-muted-foreground tabular-nums",
       className,
     )}
   >
@@ -33,7 +33,7 @@ export const StepNumberBadge = ({
 export const BasePill = ({ className }: { className?: string }) => (
   <span
     className={cn(
-      "ml-2 rounded-sm bg-primary/10 px-1 py-px align-middle font-mono text-[9px] text-primary uppercase tracking-wide",
+      "ml-2 rounded-sm bg-primary/10 px-1 py-px align-middle font-mono text-2xs text-primary uppercase tracking-wide",
       className,
     )}
   >
@@ -45,7 +45,7 @@ export const BasePill = ({ className }: { className?: string }) => (
 export const NoWeightPill = ({ className }: { className?: string }) => (
   <span
     className={cn(
-      "ml-2 rounded-sm bg-warning/15 px-1 py-px align-middle font-mono text-[9px] text-warning uppercase tracking-wide",
+      "ml-2 rounded-sm bg-warning/15 px-1 py-px align-middle font-mono text-2xs text-warning uppercase tracking-wide",
       className,
     )}
   >
@@ -57,7 +57,7 @@ export const NoWeightPill = ({ className }: { className?: string }) => (
 export const SeeAbovePointer = ({ className }: { className?: string }) => (
   <span
     className={cn(
-      "ml-2 align-middle font-mono text-[10px] text-muted-foreground/60 lowercase",
+      "ml-2 align-middle font-mono text-2xs text-muted-foreground/60 lowercase",
       className,
     )}
   >

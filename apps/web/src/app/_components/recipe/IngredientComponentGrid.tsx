@@ -85,7 +85,7 @@ export function IngredientComponentGrid({
                     </EntityPreviewLink>
                   </div>
                   {makes && (
-                    <div className="font-normal text-[9px] text-muted-foreground/70 normal-case tracking-normal">
+                    <div className="font-normal text-2xs text-muted-foreground/70 normal-case tracking-normal">
                       makes {makes}
                     </div>
                   )}

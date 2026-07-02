@@ -14,6 +14,7 @@ import { useMemo } from "react";
 import { MobileCard } from "~/components/entity/mobile-card";
 import { MobileCardSkeletonList } from "~/components/feedback/mobile-card-skeleton";
 import { Row, Stack } from "~/components/layout";
+import { Badge } from "~/components/ui/badge";
 import { Input } from "~/components/ui/input";
 import { EntityIcon, entities } from "~/entities/entities";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
@@ -304,19 +305,19 @@ function MobileSearchResults({
         {filterOptions.map((opt) => {
           const isActive = filter === opt.value;
           return (
-            <button
+            <Badge
               key={opt.value}
-              type="button"
-              onClick={() => onFilterChange(opt.value)}
-              className={cn(
-                "shrink-0 rounded-full border px-2 py-1 font-medium text-xs transition-colors",
-                isActive
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "border-border bg-background text-muted-foreground",
-              )}
+              variant={isActive ? "default" : "outline"}
+              className="h-auto shrink-0 cursor-pointer px-2 py-1 text-xs"
+              render={
+                <button
+                  type="button"
+                  onClick={() => onFilterChange(opt.value)}
+                />
+              }
             >
               {opt.label}
-            </button>
+            </Badge>
           );
         })}
       </Row>

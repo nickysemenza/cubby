@@ -6,6 +6,7 @@ import { formatCurrency } from "~/lib/utils";
 import { sumByKey } from "~/misc/array-helpers";
 import type { NotionPurchase } from "~/server/clients/notion";
 import { getCategoryColor } from "../shared";
+import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
 
 type DonutDatum = {
@@ -68,11 +69,11 @@ export function PurchaseDonut({
         arcLabelsTextColor="var(--background)"
         enableArcLabels
         tooltip={({ datum }) => (
-          <div className="rounded-md bg-popover px-4 py-2 text-sm shadow-md ring-1 ring-border">
+          <ChartTooltip>
             <span style={{ color: datum.color }}>{datum.label}</span>:{" "}
             <strong>{formatCurrency(datum.value, 0)}</strong> (
             {((datum.value / total) * 100).toFixed(1)}%)
-          </div>
+          </ChartTooltip>
         )}
         layers={[
           "arcs",

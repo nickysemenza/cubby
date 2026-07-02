@@ -8,6 +8,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { useCallback, useId, useMemo, useState } from "react";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Description } from "~/components/ui/description";
@@ -185,18 +186,22 @@ export function ShoppingListPage({
             {data.meals.map((m) => {
               const isOut = excluded.has(m.id);
               return (
-                <button
+                <Badge
                   key={m.id}
-                  type="button"
-                  onClick={() => setExcluded((s) => toggle(s, m.id))}
-                  className={
-                    isOut
-                      ? "rounded-full border border-dashed px-2 py-1 text-muted-foreground text-xs line-through"
-                      : "rounded-full border bg-card px-2 py-1 text-xs"
+                  variant={isOut ? "outline" : "secondary"}
+                  className={cn(
+                    "h-auto cursor-pointer px-2 py-1 text-xs",
+                    isOut && "border-dashed text-muted-foreground line-through",
+                  )}
+                  render={
+                    <button
+                      type="button"
+                      onClick={() => setExcluded((s) => toggle(s, m.id))}
+                    />
                   }
                 >
                   {m.name || "Meal"} · {format(parseISO(m.date), "EEE M/d")}
-                </button>
+                </Badge>
               );
             })}
           </Row>

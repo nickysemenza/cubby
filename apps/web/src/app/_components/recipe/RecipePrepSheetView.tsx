@@ -185,7 +185,7 @@ function Component({
   return (
     <section>
       <Row align="baseline" gap="sm" className="mb-2">
-        <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 font-mono text-[11px] text-primary">
+        <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 font-mono text-2xs text-primary">
           {index + 1}
         </span>
         <h3 className="my-0 font-heading font-medium text-base leading-tight tracking-tight">

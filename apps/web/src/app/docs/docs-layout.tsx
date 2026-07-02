@@ -17,9 +17,7 @@ export function DocsLayout() {
         <Stack gap="md">
           {Object.entries(groups).map(([group, sections]) => (
             <Stack key={group} gap="tight">
-              <div className="px-2 font-mono text-2xs text-muted-foreground uppercase tracking-wide">
-                {group}
-              </div>
+              <div className="eyebrow px-2">{group}</div>
               {sections.map((section) => (
                 <Link
                   key={section.slug}

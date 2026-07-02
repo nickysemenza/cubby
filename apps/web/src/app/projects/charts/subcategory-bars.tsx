@@ -10,6 +10,7 @@ import {
   nivoChartTheme,
   normalizeCategoryKey,
 } from "../shared";
+import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
 
 type BarDatum = {
@@ -94,10 +95,10 @@ export function SubcategoryBars({
         enableGridX
         enableGridY={false}
         tooltip={({ id, value, indexValue, color }) => (
-          <div className="rounded-md bg-popover px-4 py-2 text-sm shadow-md ring-1 ring-border">
+          <ChartTooltip>
             <strong>{indexValue}</strong> — {id}:{" "}
             <span style={{ color }}>{formatCurrency(value, 0)}</span>
-          </div>
+          </ChartTooltip>
         )}
         legends={[
           {

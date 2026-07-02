@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { formatCurrency } from "~/lib/utils";
 import type { NotionPurchase } from "~/server/clients/notion";
 import { formatDate } from "../shared";
+import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
 
 export function SpendingHeatmap({
@@ -76,12 +77,12 @@ export function SpendingHeatmap({
             }
           }}
           tooltip={({ day, value }) => (
-            <div className="rounded-md bg-popover px-4 py-2 text-sm shadow-md ring-1 ring-border">
+            <ChartTooltip>
               <strong>{day}</strong>: {formatCurrency(Number(value), 0)} spent
               <div className="text-muted-foreground text-xs">
                 Click to see items
               </div>
-            </div>
+            </ChartTooltip>
           )}
           theme={{
             text: { fill: "var(--foreground)" },

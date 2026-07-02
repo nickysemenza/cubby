@@ -5,6 +5,7 @@ import { formatCurrency } from "~/lib/utils";
 import { sumByKey } from "~/misc/array-helpers";
 import type { NotionProject, NotionPurchase } from "~/server/clients/notion";
 import { nivoBarChrome, nivoChartTheme } from "../shared";
+import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
 
 type Datum = {
@@ -80,9 +81,9 @@ export function CostVsEstimate({
         enableGridX
         enableGridY={false}
         tooltip={({ id, value, indexValue }) => (
-          <div className="rounded-md bg-popover px-4 py-2 text-sm shadow-md ring-1 ring-border">
+          <ChartTooltip>
             <strong>{indexValue}</strong> — {id}: {formatCurrency(value, 0)}
-          </div>
+          </ChartTooltip>
         )}
         legends={[
           {

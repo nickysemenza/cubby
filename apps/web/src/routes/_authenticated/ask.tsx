@@ -94,11 +94,7 @@ function AskPage() {
 
         {!hasRun && (
           <Stack gap="sm">
-            <Row
-              align="center"
-              gap="snug"
-              className="px-1 font-medium text-muted-foreground text-xs uppercase tracking-wider"
-            >
+            <Row align="center" gap="snug" className="eyebrow px-1">
               <Sparkles className="h-3.5 w-3.5" />
               Try asking
             </Row>
@@ -135,9 +131,7 @@ function AskPage() {
               )}
               sourcesWrapper={(children) => (
                 <Stack gap="xs">
-                  <h2 className="font-medium text-muted-foreground text-xs uppercase tracking-wider">
-                    Sources
-                  </h2>
+                  <h2 className="eyebrow">Sources</h2>
                   <div className="grid gap-1">{children}</div>
                 </Stack>
               )}
@@ -154,7 +148,7 @@ function AskPage() {
               toolCalls={
                 toolCalls.length > 0 ? (
                   <details className="rounded-md border border-border/50 px-2 py-2">
-                    <summary className="cursor-pointer font-medium text-muted-foreground text-xs uppercase tracking-wider">
+                    <summary className="eyebrow cursor-pointer">
                       {toolCalls.length} tool call
                       {toolCalls.length === 1 ? "" : "s"}
                     </summary>

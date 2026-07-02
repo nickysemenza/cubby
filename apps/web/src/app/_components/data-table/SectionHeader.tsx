@@ -1,4 +1,5 @@
 import { Row } from "~/components/layout";
+import { Badge } from "~/components/ui/badge";
 
 interface SectionHeaderProps {
   title: string;
@@ -27,13 +28,12 @@ export function SectionHeader({ title, count, color }: SectionHeaderProps) {
       <span className="font-mono font-semibold text-2xs text-foreground/80 uppercase tracking-wider">
         {title}
       </span>
-      <span
-        className={
-          "rounded-full bg-foreground/10 px-1.5 py-0.5 font-medium font-mono text-2xs text-foreground/50 tabular-nums leading-none" /* tight */
-        }
+      <Badge
+        variant="secondary"
+        className="h-auto px-1.5 py-0.5 font-mono text-foreground/50 tabular-nums leading-none" /* tight */
       >
         {count}
-      </span>
+      </Badge>
     </Row>
   );
 }
