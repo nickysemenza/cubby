@@ -4,12 +4,18 @@ import type {
   ingredientBase,
 } from "@cubby/schemas/ingredient";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useDebouncedValue } from "@tanstack/react-pacer";
+import { useQuery } from "@tanstack/react-query";
 import type { FC } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { type Control, Controller, useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { ArrayFieldManager } from "~/components/forms/array-field-manager";
+import { Row, Stack } from "~/components/layout";
 import { Card, CardContent } from "~/components/ui/card";
+import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
+import { useTRPC } from "~/trpc/react";
+import { EntityInlineLink } from "../EntityInlineLink";
 import {
   buildUpdateObject,
   type CreateModeProps,
@@ -27,6 +33,65 @@ const formSchema = z.object({
 });
 
 type IngredientFormValues = z.infer<typeof formSchema>;
+
+/**
+ * Live duplicate-name check for ingredient CREATE. Watches the name field,
+ * debounces, and surfaces existing ingredients whose name/aliases match — so an
+ * accidental dup is caught before creation (the merge flow exists to clean these
+ * up; this stops them landing in the first place). Non-blocking: it links the
+ * matches so the user can open one instead, but never prevents creating a
+ * genuinely-new ingredient. Reuses `ingredient.list`'s name filter (the same
+ * fuzzy search the pickers use) — no new server surface.
+ */
+function DuplicateNameHint({
+  control,
+}: {
+  control: Control<IngredientFormValues>;
+}) {
+  const api = useTRPC();
+  const name = useWatch({ control, name: "name" });
+  const [debouncedName] = useDebouncedValue(name, { wait: 300 });
+  const trimmed = debouncedName?.trim() ?? "";
+  const enabled = trimmed.length >= 2;
+
+  const { data } = useQuery({
+    ...api.ingredient.list.queryOptions({
+      filters: { nameFilter: trimmed },
+      pagination: { pageIndex: 0, pageSize: 5 },
+    }),
+    enabled,
+  });
+
+  const matches = data?.items ?? [];
+  if (!enabled || matches.length === 0) return null;
+
+  // An exact (case-insensitive) hit is a stronger signal than a substring match.
+  const lower = trimmed.toLowerCase();
+  const exact = matches.some(
+    (m) =>
+      m.name.toLowerCase() === lower ||
+      m.aliases.some((a) => a.toLowerCase() === lower),
+  );
+
+  return (
+    <Stack gap="xs" className="px-4 pb-2">
+      <Description size="xs" className={exact ? "text-warning" : undefined}>
+        {exact
+          ? "An ingredient with this name already exists — did you mean to use it?"
+          : "Similar ingredients already exist. Use one of these instead of creating a duplicate?"}
+      </Description>
+      <Row gap="xs" wrap>
+        {matches.map((m) => (
+          <EntityInlineLink
+            key={m.id}
+            entity="ingredient"
+            data={{ name: m.name, id: m.id }}
+          />
+        ))}
+      </Row>
+    </Stack>
+  );
+}
 
 // Props for create mode
 interface CreateIngredientFormProps
@@ -117,6 +182,7 @@ export const IngredientForm: FC<IngredientFormProps> = (props) => {
             nullable={false}
           />
         </CardContent>
+        {mode === "create" && <DuplicateNameHint control={form.control} />}
       </Card>
 
       <ArrayFieldManager<string, IngredientFormValues>

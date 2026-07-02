@@ -22,6 +22,11 @@ import { EntityIcon } from "~/entities/entities";
 import type { EntityDetailRoute } from "~/entities/types";
 import { useRecipeUsage } from "./recipe-usage-context";
 
+// Cap each section's initial render so one noisy detector (e.g. 50+ unit-coverage
+// items after an import) can't become an unscrollable wall. A "Show all N"
+// expander reveals the rest in place.
+const INITIAL_VISIBLE = 12;
+
 // Type-safe route patterns for entity detail pages
 type RoutePattern = { to: EntityDetailRoute; params: { id: string } };
 
@@ -146,32 +151,68 @@ export function ProblemSection<T>({
       <CardContent>
         <div className="space-y-6">
           {Object.entries(groups).map(([groupName, groupItems]) => (
-            <div key={groupName}>
-              {isGrouped && (
-                <h4 className="mb-2 flex items-center gap-2 font-medium">
-                  {groupName}
-                  <Badge variant="outline">{groupItems.length}</Badge>
-                </h4>
-              )}
-              <Grid cols="cards3">
-                {groupItems.map((item) => {
-                  const rendered = renderItem(item);
-                  return (
-                    <ProblemCard
-                      key={
-                        rendered.key ??
-                        `${rendered.title}-${rendered.route.params.id}`
-                      }
-                      rendered={rendered}
-                    />
-                  );
-                })}
-              </Grid>
-            </div>
+            <SectionGroup
+              key={groupName}
+              groupName={isGrouped ? groupName : ""}
+              items={groupItems}
+              renderItem={renderItem}
+            />
           ))}
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * One group within a section — owns its own "show all" cap so a single noisy
+ * group can't dominate the page, and each group expands independently.
+ */
+function SectionGroup<T>({
+  groupName,
+  items,
+  renderItem,
+}: {
+  groupName: string;
+  items: T[];
+  renderItem: (item: T) => RenderedProblemItem;
+}) {
+  const [showAll, setShowAll] = useState(false);
+  const hidden = items.length - INITIAL_VISIBLE;
+  const visible = showAll ? items : items.slice(0, INITIAL_VISIBLE);
+
+  return (
+    <div>
+      {groupName && (
+        <h4 className="mb-2 flex items-center gap-2 font-medium">
+          {groupName}
+          <Badge variant="outline">{items.length}</Badge>
+        </h4>
+      )}
+      <Grid cols="cards3">
+        {visible.map((item) => {
+          const rendered = renderItem(item);
+          return (
+            <ProblemCard
+              key={
+                rendered.key ?? `${rendered.title}-${rendered.route.params.id}`
+              }
+              rendered={rendered}
+            />
+          );
+        })}
+      </Grid>
+      {!showAll && hidden > 0 && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="mt-2"
+          onClick={() => setShowAll(true)}
+        >
+          Show all {items.length}
+        </Button>
+      )}
+    </div>
   );
 }
 
