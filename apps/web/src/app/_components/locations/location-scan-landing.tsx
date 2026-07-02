@@ -19,6 +19,7 @@ import { Card, CardContent } from "~/components/ui/card";
 import { cn } from "~/lib/utils";
 import { QuickInventoryAdd } from "../inventory/quick-inventory-add";
 import { LocationBreadcrumb } from "./location-breadcrumb";
+import { LocationCardGrid } from "./location-card-grid";
 import { LocationInventoryTable } from "./location-inventory-table";
 
 export function LocationScanLanding({ location }: { location: InfLocation }) {
@@ -80,9 +81,25 @@ export function LocationScanLanding({ location }: { location: InfLocation }) {
           </Link>
         </Row>
 
-        {/* Contents — the "what's in here" answer. */}
+        {/* Locations inside — for a cart/shelf of totes, the child locations
+            ARE the contents, so surface them before direct items. */}
+        {location.children && location.children.length > 0 && (
+          <Stack gap="sm">
+            <h2 className="my-0 font-heading font-semibold text-sm">
+              Locations inside
+            </h2>
+            <LocationCardGrid
+              locations={location.children}
+              showParentPath={false}
+            />
+          </Stack>
+        )}
+
+        {/* Items directly here — the "what's in this exact spot" answer. */}
         <Stack gap="sm">
-          <h2 className="my-0 font-heading font-semibold text-sm">Contents</h2>
+          <h2 className="my-0 font-heading font-semibold text-sm">
+            Items here
+          </h2>
           <LocationInventoryTable key={refreshKey} locationId={location.id} />
         </Stack>
       </Stack>
