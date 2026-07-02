@@ -59,6 +59,7 @@ import {
 } from "~/app/_components/form-fields";
 import { ComboboxField } from "~/app/_components/form-utils";
 import { formatCompactRelative } from "~/app/_components/HoverableTimestamp";
+import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
 import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
 import { useUpcLookup } from "~/app/_components/inventory/hooks";
@@ -408,35 +409,37 @@ export function InventorySessionWorkbench({
     ? (inventoryByLocation.get(unknownLocation.id) ?? [])
     : [];
 
+  const sessionInvalidateKeys = useMemo(
+    () => [
+      ...inventoryMutationInvalidateKeys,
+      ...locationMutationInvalidateKeys,
+    ],
+    [],
+  );
+
+  // reconcile is a documented useActionMutation carve-out (variables-driven
+  // setState in onSuccess), so it keeps this shared invalidator inline.
   const invalidateSession = useCallback(
     (result?: unknown) => {
-      const keys = [
-        ...inventoryMutationInvalidateKeys,
-        ...locationMutationInvalidateKeys,
-      ];
-      invalidateTRPCQueries(queryClient, keys);
+      invalidateTRPCQueries(queryClient, sessionInvalidateKeys);
       void watchBatchesAndInvalidate({
         queryClient,
         result,
-        invalidateKeys: keys,
+        invalidateKeys: sessionInvalidateKeys,
         fetchBatchStatus: makeBatchStatusFetcher(queryClient, api),
       });
     },
-    [queryClient, api],
+    [queryClient, api, sessionInvalidateKeys],
   );
 
-  const bulkMove = useMutation(
-    api.inventory.bulkMove.mutationOptions({
-      onSuccess: invalidateSession,
-      onError: (error) => toast.error(getErrorMessage(error)),
-    }),
-  );
-  const updateLocation = useMutation(
-    api.location.update.mutationOptions({
-      onSuccess: invalidateSession,
-      onError: (error) => toast.error(getErrorMessage(error)),
-    }),
-  );
+  const bulkMove = useActionMutation({
+    mutationFn: api.inventory.bulkMove.mutationOptions,
+    invalidateKeys: sessionInvalidateKeys,
+  });
+  const updateLocation = useActionMutation({
+    mutationFn: api.location.update.mutationOptions,
+    invalidateKeys: sessionInvalidateKeys,
+  });
   // "Done" commits the staged diff for the current bin. On success the committed
   // resolutions leave the staged map (read from `variables`, so it's never the
   // stale closure) and we advance to the next bin.

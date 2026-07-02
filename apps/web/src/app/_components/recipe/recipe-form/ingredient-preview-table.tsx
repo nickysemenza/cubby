@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
 import { AlertCircle, AlertTriangle, Eye, EyeOff, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
-import { toast } from "sonner";
+import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
@@ -100,7 +100,6 @@ export function IngredientPreviewTable({
   ingredientLines,
 }: IngredientPreviewTableProps) {
   const api = useTRPC();
-  const queryClient = useQueryClient();
 
   const {
     parsedIngredients,
@@ -126,15 +125,12 @@ export function IngredientPreviewTable({
   // Whether the optional "Raw" carve column is shown (off by default).
   const [showRaw, setShowRaw] = useState(false);
 
-  const createIngredient = useMutation(
-    api.ingredient.create.mutationOptions({
-      onSuccess: () => {
-        invalidateTRPCQueries(queryClient, [queryKeys.ingredient.getByName]);
-        toast.success("Ingredient added.");
-        setCreateDialogOpen(false);
-      },
-    }),
-  );
+  const createIngredient = useActionMutation({
+    mutationFn: api.ingredient.create.mutationOptions,
+    success: "Ingredient added.",
+    invalidateKeys: [queryKeys.ingredient.getByName],
+    onSuccess: () => setCreateDialogOpen(false),
+  });
 
   const handleCreateIngredient = (name: string) => {
     setSelectedIngredientName(name);

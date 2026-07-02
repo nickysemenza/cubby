@@ -1,4 +1,5 @@
 import { ResponsiveCalendar } from "@nivo/calendar";
+import { groupBy, sumBy } from "es-toolkit";
 import { CalendarDays } from "lucide-react";
 import { useMemo, useState } from "react";
 import { formatCurrency } from "~/lib/utils";
@@ -15,22 +16,23 @@ export function SpendingHeatmap({
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   const { data, from, to, itemsByDay } = useMemo(() => {
-    const byDay = new Map<string, number>();
-    const itemsByDay = new Map<string, NotionPurchase[]>();
-    for (const p of purchases) {
-      if (!p.date || !p.cost) continue;
-      byDay.set(p.date, (byDay.get(p.date) ?? 0) + p.cost);
-      if (!itemsByDay.has(p.date)) itemsByDay.set(p.date, []);
-      itemsByDay.get(p.date)!.push(p);
-    }
+    const itemsByDay = groupBy(
+      purchases.filter((p) => p.date && p.cost),
+      (p) => p.date as string,
+    );
 
-    const data = Array.from(byDay.entries()).map(([day, value]) => ({
+    const data = Object.entries(itemsByDay).map(([day, items]) => ({
       day,
-      value,
+      value: sumBy(items, (p) => p.cost ?? 0),
     }));
 
     if (data.length === 0)
-      return { data: [], from: "", to: "", itemsByDay: new Map() };
+      return {
+        data: [],
+        from: "",
+        to: "",
+        itemsByDay: {} as Record<string, NotionPurchase[]>,
+      };
 
     const dates = data.map((d) => d.day).sort();
     return {
@@ -49,7 +51,7 @@ export function SpendingHeatmap({
     new Date(to).getFullYear() - new Date(from).getFullYear() + 1;
   const chartHeight = Math.max(180, yearSpan * 160);
   const selectedItems: NotionPurchase[] = selectedDay
-    ? (itemsByDay.get(selectedDay) ?? [])
+    ? (itemsByDay[selectedDay] ?? [])
     : [];
 
   return (

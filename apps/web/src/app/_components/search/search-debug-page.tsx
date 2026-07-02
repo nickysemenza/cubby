@@ -8,6 +8,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Search, Send } from "lucide-react";
 import { useState } from "react";
+import { match } from "ts-pattern";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -24,60 +25,51 @@ import {
 import { useTRPC } from "~/trpc/react";
 
 function SearchResultEntityLink({ item }: { item: SearchResultItem }) {
-  switch (item.entityType) {
-    case "product":
-      return (
-        <EntityInlineLink
-          entity="product"
-          data={{
-            id: item.id,
-            name: item.name,
-            manufacturer: item.subtitle ?? undefined,
-          }}
-          compact
-        />
-      );
-    case "location":
-      return (
-        <EntityInlineLink
-          entity="location"
-          data={{
-            id: item.id,
-            name: item.name,
-            type: item.typeHint ? (item.typeHint as LocationType) : undefined,
-          }}
-          compact
-        />
-      );
-    case "recipe":
-      return (
-        <EntityInlineLink
-          entity="recipe"
-          data={{ id: item.id, name: item.name }}
-          compact
-        />
-      );
-    case "ingredient":
-      return (
-        <EntityInlineLink
-          entity="ingredient"
-          data={{ id: item.id, name: item.name }}
-          compact
-        />
-      );
-    case "inventory":
-      return (
-        <EntityInlineLink
-          entity="inventory"
-          data={{ id: item.id, name: item.name }}
-          compact
-        />
-      );
-    default: {
-      const exhaustive: never = item;
-      return exhaustive;
-    }
-  }
+  return match(item)
+    .with({ entityType: "product" }, (i) => (
+      <EntityInlineLink
+        entity="product"
+        data={{
+          id: i.id,
+          name: i.name,
+          manufacturer: i.subtitle ?? undefined,
+        }}
+        compact
+      />
+    ))
+    .with({ entityType: "location" }, (i) => (
+      <EntityInlineLink
+        entity="location"
+        data={{
+          id: i.id,
+          name: i.name,
+          type: i.typeHint ? (i.typeHint as LocationType) : undefined,
+        }}
+        compact
+      />
+    ))
+    .with({ entityType: "recipe" }, (i) => (
+      <EntityInlineLink
+        entity="recipe"
+        data={{ id: i.id, name: i.name }}
+        compact
+      />
+    ))
+    .with({ entityType: "ingredient" }, (i) => (
+      <EntityInlineLink
+        entity="ingredient"
+        data={{ id: i.id, name: i.name }}
+        compact
+      />
+    ))
+    .with({ entityType: "inventory" }, (i) => (
+      <EntityInlineLink
+        entity="inventory"
+        data={{ id: i.id, name: i.name }}
+        compact
+      />
+    ))
+    .exhaustive();
 }
 
 function ResultTable({
