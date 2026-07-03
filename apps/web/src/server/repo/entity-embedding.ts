@@ -15,8 +15,8 @@ import type {
   SearchableEntityRef,
 } from "@cubby/schemas/search";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { uniq, uniqBy } from "es-toolkit";
-import type { Database } from "~/server/db";
+import { uniq } from "es-toolkit";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   entityEmbedding,
   ingredient,
@@ -153,29 +153,30 @@ export async function upsertEntityEmbedding(
   await insertAndReturn(db, entityEmbedding, values);
 }
 
-export async function softDeleteEntityEmbeddings(
-  db: Database,
-  refs: SearchableEntityRef[],
-): Promise<number> {
-  const uniqueRefs = uniqBy(refs, (ref) => `${ref.entityType}:${ref.entityId}`);
-  if (uniqueRefs.length === 0) return 0;
-
-  let deleted = 0;
-  for (const ref of uniqueRefs) {
-    const rows = await getDb(db)
-      .update(entityEmbedding)
-      .set({ deletedAt: new Date() })
-      .where(
-        and(
-          eq(entityEmbedding.entityType, ref.entityType),
-          eq(entityEmbedding.entityId, ref.entityId),
-          notDeleted(entityEmbedding),
-        ),
-      )
-      .returning({ id: entityEmbedding.id });
-    deleted += rows.length;
-  }
-  return deleted;
+/**
+ * Soft-delete the embedding rows owned by the given entities, INSIDE an existing
+ * transaction. This lives at the repo-delete layer (called from each entity's
+ * delete cascade) so EVERY delete caller drops the embedding atomically with the
+ * entity — the mutation-side-effect handler only covered the router path, so a
+ * direct repo delete (e.g. problems.service.deleteUnusedIngredients, which calls
+ * deleteProducts/deleteIngredients without side-effects) orphaned the embedding.
+ */
+export async function softDeleteEntityEmbeddingsTx(
+  tx: DrizzleTransaction,
+  entityType: SearchableEntity,
+  entityIds: string[],
+): Promise<void> {
+  if (entityIds.length === 0) return;
+  await tx
+    .update(entityEmbedding)
+    .set({ deletedAt: new Date() })
+    .where(
+      and(
+        eq(entityEmbedding.entityType, entityType),
+        inArray(entityEmbedding.entityId, entityIds),
+        notDeleted(entityEmbedding),
+      ),
+    );
 }
 
 export async function softDeleteEntityEmbeddingRows(

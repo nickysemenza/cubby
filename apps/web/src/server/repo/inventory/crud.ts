@@ -36,6 +36,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
+import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
 import { assertLiveTargets } from "./helpers";
 import { dbInventoryEntryToAPI, dbInventoryEntryToListAPI } from "./mappers";
 import type {
@@ -512,6 +513,10 @@ export const deleteInventoryEntries = async (
       .update(inventoryEntry)
       .set({ deletedAt: now })
       .where(and(inArray(inventoryEntry.id, ids), notDeleted(inventoryEntry)));
+
+    // Cascade the search embedding so a direct repo delete (no mutation
+    // side-effect) can't leave an orphaned entityEmbedding row.
+    await softDeleteEntityEmbeddingsTx(tx, "inventory", ids);
 
     // Log audit entries in batch
     await logAuditEntries(

@@ -49,6 +49,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
 import { generateUniqueLocationShortcode } from "~/server/repo/shortcode-utils";
 
 import { buildLocationWithChildren, dbLocationToListAPI } from "./helpers";
@@ -320,6 +321,10 @@ export const deleteLocations = async (
       .update(location)
       .set({ deletedAt: now })
       .where(and(inArray(location.id, ids), notDeleted(location)));
+
+    // Cascade the search embedding so a direct repo delete (no mutation
+    // side-effect) can't leave an orphaned entityEmbedding row.
+    await softDeleteEntityEmbeddingsTx(tx, "location", ids);
 
     const auditEntries = buildCascadeAuditEntries("location", ids, {
       cascadedImages: countBy(cascadedImages, (i) => i.locationId),

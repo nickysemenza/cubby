@@ -25,6 +25,7 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
 
 /**
  * Soft delete ingredients by setting deletedAt timestamp.
@@ -102,6 +103,10 @@ export const deleteIngredients = async (
       .update(ingredient)
       .set({ deletedAt: now })
       .where(inArray(ingredient.id, ids));
+
+    // Cascade the search embedding so a direct repo delete (no mutation
+    // side-effect) can't leave an orphaned entityEmbedding row.
+    await softDeleteEntityEmbeddingsTx(tx, "ingredient", ids);
 
     // No cascaded items for ingredients — plain delete audit entries.
     const auditEntries = buildCascadeAuditEntries("ingredient", ids);

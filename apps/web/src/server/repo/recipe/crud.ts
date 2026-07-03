@@ -50,6 +50,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
 import { generateUniqueRecipeShortcode } from "~/server/repo/shortcode-utils";
 import { TraceNames, withTrace } from "~/server/tracing";
 
@@ -727,6 +728,10 @@ export const deleteRecipes = async (
       .update(recipe)
       .set({ deletedAt: now })
       .where(and(inArray(recipe.id, ids), notDeleted(recipe)));
+
+    // Cascade the search embedding so a direct repo delete (no mutation
+    // side-effect) can't leave an orphaned entityEmbedding row.
+    await softDeleteEntityEmbeddingsTx(tx, "recipe", ids);
 
     const auditEntries = buildCascadeAuditEntries("recipe", ids, {
       cascadedSections: sectionsByRecipe,
