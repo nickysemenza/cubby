@@ -1,7 +1,8 @@
-import { eq } from "drizzle-orm";
+import type { SearchableEntity } from "@cubby/schemas/search";
+import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { ingredient } from "~/server/db/schema";
+import { entityEmbedding, ingredient } from "~/server/db/schema";
 import { deleteUnusedIngredients } from "../services/problems.service";
 import { getDb } from "./database-helpers";
 import { findOrCreateIngredient } from "./ingredient";
@@ -93,6 +94,36 @@ describe("findIngredientsWithUnusedAliases", () => {
 describe("deleteUnusedIngredients", () => {
   const ctx = withTestDb();
 
+  // Seed a search-embedding row for an entity (minimal valid vector).
+  const seedEmbedding = async (
+    entityType: SearchableEntity,
+    entityId: string,
+  ) =>
+    getDb(ctx.db)
+      .insert(entityEmbedding)
+      .values({
+        entityType,
+        entityId,
+        embeddingText: `${entityType} ${entityId}`,
+        embeddingHash: `hash-${entityId}`,
+        provider: "test",
+        model: "test",
+        dimensions: 3,
+        embedding: [0, 0, 0],
+      });
+
+  const liveEmbedding = async (
+    entityType: SearchableEntity,
+    entityId: string,
+  ) =>
+    getDb(ctx.db).query.entityEmbedding.findFirst({
+      where: and(
+        eq(entityEmbedding.entityType, entityType),
+        eq(entityEmbedding.entityId, entityId),
+      ),
+      columns: { deletedAt: true },
+    });
+
   it("reports failure (not throw) when a linked product still has inventory", async () => {
     const ing = await findOrCreateIngredient(ctx.db, "stocked ingredient");
     const location = await createLocation(
@@ -160,5 +191,36 @@ describe("deleteUnusedIngredients", () => {
     expect(withProduct.map((i) => i.name)).not.toContain(
       "deletable ingredient",
     );
+  });
+
+  // Regression: deleteUnusedIngredients calls the repo deleteProducts/
+  // deleteIngredients directly, bypassing runMutationSideEffects. The embedding
+  // soft-delete therefore has to live in the repo delete cascade — otherwise
+  // this path orphans the entity's search-embedding row (an entityEmbedding
+  // whose entity no longer exists), which is what the Problems page flags.
+  it("soft-deletes the entity embeddings too (no orphans left behind)", async () => {
+    const ing = await findOrCreateIngredient(ctx.db, "embedded ingredient");
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Embedded", ingredientId: ing.id }),
+      ctx.actor,
+    );
+    await seedEmbedding("ingredient", ing.id);
+    await seedEmbedding("product", product.id);
+
+    const result = await deleteUnusedIngredients(
+      ctx.db,
+      [ing.id],
+      true,
+      ctx.actor,
+    );
+    expect(result.deleted).toBe(1);
+
+    expect(
+      (await liveEmbedding("ingredient", ing.id))?.deletedAt,
+    ).not.toBeNull();
+    expect(
+      (await liveEmbedding("product", product.id))?.deletedAt,
+    ).not.toBeNull();
   });
 });

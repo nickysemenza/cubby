@@ -57,6 +57,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
+import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import { generateUniqueProductShortcode } from "~/server/repo/shortcode-utils";
 
@@ -844,6 +845,10 @@ export const deleteProducts = async (
       .update(product)
       .set({ deletedAt: now })
       .where(and(inArray(product.id, ids), notDeleted(product)));
+
+    // Cascade the search embedding so a direct repo delete (no mutation
+    // side-effect) can't leave an orphaned entityEmbedding row.
+    await softDeleteEntityEmbeddingsTx(tx, "product", ids);
 
     const auditEntries = buildCascadeAuditEntries("product", ids, {
       cascadedUnitMappings: countBy(cascadedMappings, (m) => m.productId),

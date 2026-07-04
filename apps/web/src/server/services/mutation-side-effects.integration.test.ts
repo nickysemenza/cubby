@@ -9,7 +9,7 @@ import {
 } from "~/server/repo/entity-embedding";
 import { createInventoryEntry } from "~/server/repo/inventory";
 import { createLocation } from "~/server/repo/location";
-import { createProduct } from "~/server/repo/product";
+import { createProduct, deleteProducts } from "~/server/repo/product";
 import {
   makeLocationInput,
   makeProductInput,
@@ -185,7 +185,7 @@ describe("mutation side effects integration", () => {
     expect(valuationBatches).toHaveLength(1);
   });
 
-  it("delete events soft-delete direct entity embeddings", async () => {
+  it("repo delete soft-deletes the entity's search embedding", async () => {
     const product = await createProduct(
       ctx.db,
       makeProductInput({ name: "Manifest deleted embedding" }),
@@ -200,11 +200,10 @@ describe("mutation side effects integration", () => {
       embedding: Array.from({ length: config.dimensions }, () => 0),
     });
 
-    await runMutationSideEffects(ctx.db, {
-      action: "deleted",
-      entity: { entityType: "product", entityId: product.id },
-      source: "test.product.delete",
-    });
+    // Embedding cleanup lives in the repo delete cascade (not the mutation
+    // side-effect), so it covers EVERY delete caller — including direct repo
+    // deletes that skip runMutationSideEffects.
+    await deleteProducts(ctx.db, [product.id], ctx.actor);
 
     const deletedAt = await getEntityEmbeddingDeletedAtForRef(ctx.db, {
       entityType: "product",

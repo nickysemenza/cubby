@@ -101,6 +101,10 @@ const { getByID, create, update } = createEntityCrudWithoutListProcedures({
         action: "created",
         entity: { entityType: "location", entityId: location.id },
         source: "location.create",
+        // A location created WITH photos must trigger the AI description /
+        // inventory refresh too — without this it's born with a NULL description
+        // (only location.update was setting the flag).
+        locationImagesChanged: (data.pendingImageIds?.length ?? 0) > 0,
       });
       return { ...location, sideEffects: { backgroundBatches } };
     },

@@ -21,7 +21,6 @@ import {
   findInventoryEmbeddingRefsForLocations,
   findInventoryEmbeddingRefsForProducts,
   findRecipeEmbeddingRefsForIngredients,
-  softDeleteEntityEmbeddings,
 } from "~/server/repo/entity-embedding";
 
 const mutationEntityRefSchema = z.discriminatedUnion("entityType", [
@@ -114,14 +113,12 @@ async function refreshOwnEmbedding(
   return await enqueueEntityEmbeddingRefreshMany(ctx.db, [ref], ctx.event);
 }
 
-async function softDeleteOwnEmbedding(
-  ctx: HandlerContext,
-): Promise<BackgroundBatchRef[]> {
-  const ref = ownEmbeddingRef(ctx.event);
-  if (!ref) return [];
-  await softDeleteEntityEmbeddings(ctx.db, [ref]);
-  return [];
-}
+// NOTE: there is no onDelete embedding handler. Embedding soft-delete is
+// cascaded at the repo delete layer (softDeleteEntityEmbeddingsTx inside each
+// entity's deleteXxx transaction), so it covers ALL delete callers — including
+// direct repo deletes that skip this side-effect pipeline (e.g.
+// problems.service.deleteUnusedIngredients). Re-adding it here would be a
+// redundant higher-layer duplicate.
 
 async function refreshInventoryEmbeddingsForProduct(
   ctx: HandlerContext,
@@ -201,31 +198,34 @@ export const mutationSideEffectManifest = {
   product: {
     onCreate: [refreshOwnEmbedding, refreshInventoryEmbeddingsForProduct],
     onUpdate: [refreshOwnEmbedding, refreshInventoryEmbeddingsForProduct],
-    onDelete: [softDeleteOwnEmbedding],
+    onDelete: [],
   },
   location: {
-    onCreate: [refreshOwnEmbedding],
+    // enqueueLocationAiRefresh also runs onCreate: a location created WITH
+    // photos must generate its description/inventory analysis (gated by
+    // locationImagesChanged), else it's born with a NULL aiDescription.
+    onCreate: [refreshOwnEmbedding, enqueueLocationAiRefresh],
     onUpdate: [
       refreshOwnEmbedding,
       refreshInventoryEmbeddingsForLocation,
       enqueueLocationAiRefresh,
     ],
-    onDelete: [softDeleteOwnEmbedding],
+    onDelete: [],
   },
   ingredient: {
     onCreate: [refreshOwnEmbedding],
     onUpdate: [refreshOwnEmbedding, refreshRecipeEmbeddingsForIngredient],
-    onDelete: [softDeleteOwnEmbedding],
+    onDelete: [],
   },
   recipe: {
     onCreate: [refreshOwnEmbedding],
     onUpdate: [refreshOwnEmbedding],
-    onDelete: [softDeleteOwnEmbedding],
+    onDelete: [],
   },
   inventory: {
     onCreate: [refreshOwnEmbedding],
     onUpdate: [refreshOwnEmbedding],
-    onDelete: [softDeleteOwnEmbedding],
+    onDelete: [],
   },
   image: {
     onCreate: [],
