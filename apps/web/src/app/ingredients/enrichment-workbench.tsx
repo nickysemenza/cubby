@@ -1,5 +1,6 @@
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { Sparkles } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -17,6 +18,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Empty, EmptyDescription } from "~/components/ui/empty";
 import { Progress } from "~/components/ui/progress";
@@ -56,7 +58,13 @@ type FilterKey = "all" | "no-product" | "partial" | "no-usda";
  * and add conversions. Select rows to run AI USDA suggestions and create products
  * in bulk, or mark "no USDA exists" — without the modal-per-ingredient grind.
  */
-export function EnrichmentWorkbench({ focus }: { focus?: string }) {
+export function EnrichmentWorkbench({
+  focus,
+  recipeId,
+}: {
+  focus?: string;
+  recipeId?: string;
+}) {
   const api = useTRPC();
   const [filter, setFilter] = useState<FilterKey>("all");
   const [view, setView] = useState<"browse" | "review">("browse");
@@ -88,8 +96,17 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
   const mergeTargetRef = useRef<string | null>(null);
 
   const { data, isLoading, error } = useQuery(
-    api.ingredient.enrichmentWorkbench.queryOptions(),
+    // Pass no input when unscoped so the query key matches the plain worklist.
+    api.ingredient.enrichmentWorkbench.queryOptions(
+      recipeId ? { recipeId } : undefined,
+    ),
   );
+
+  // Recipe-scoped worklist: fetch the recipe name for the scope banner.
+  const { data: scopeRecipe } = useQuery({
+    ...api.recipe.getByID.queryOptions({ id: recipeId ?? "" }),
+    enabled: !!recipeId,
+  });
 
   const rows = useMemo(() => data ?? [], [data]);
 
@@ -373,6 +390,25 @@ export function EnrichmentWorkbench({ focus }: { focus?: string }) {
 
   return (
     <Stack>
+      {recipeId && (
+        <Row
+          align="center"
+          wrap
+          gap="sm"
+          className="rounded-lg border border-[var(--border)] bg-muted/40 px-4 py-2 text-sm"
+        >
+          <Badge variant="secondary">Scoped</Badge>
+          <span className="text-muted-foreground">
+            {scopeRecipe?.name ?? "this recipe"} + sub-recipes
+          </span>
+          <Link
+            to="/ingredients/workbench"
+            className="ml-auto text-muted-foreground underline underline-offset-2 hover:text-foreground"
+          >
+            Clear
+          </Link>
+        </Row>
+      )}
       <Row align="center" wrap gap="sm">
         {(
           [

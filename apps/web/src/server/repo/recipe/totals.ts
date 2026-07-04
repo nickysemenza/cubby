@@ -251,3 +251,46 @@ export const findParentRecipeIdsBatch = async (
   }
   return bySubRecipe;
 };
+
+/**
+ * Every leaf ingredient id reachable from a recipe's sub-recipe tree — the
+ * recipe's own leaf ingredients plus those of every sub-recipe, transitively.
+ *
+ * A recipe includes another recipe by having an `Ingredient` row with `recipeId`
+ * set (the sub-recipe link); a leaf ingredient has `recipeId IS NULL`. This walks
+ * the closure of recipe ids in one recursive CTE (the `UNION` dedupes, which also
+ * terminates any cycle), then collects the DISTINCT leaf ingredient ids referenced
+ * anywhere in that closure. Used to scope the enrichment workbench to one recipe
+ * (`?recipe=<id>`) without over-fetching full recipe graphs. Soft-deleted
+ * sections / links / ingredients are excluded throughout.
+ */
+export const recipeTreeLeafIngredientIds = async (
+  db: Database,
+  recipeId: RecipeId,
+): Promise<IngredientId[]> => {
+  const res = await getDb(db).execute<{ id: IngredientId }>(sql`
+    WITH RECURSIVE recipe_tree AS (
+      SELECT ${recipeId}::uuid AS "recipeId"
+      UNION
+      SELECT i."recipeId"
+      FROM recipe_tree rt
+      INNER JOIN ${recipeSection} rs
+        ON rs."recipeId" = rt."recipeId" AND rs."deletedAt" IS NULL
+      INNER JOIN ${recipeSectionIngredient} rsi
+        ON rsi."recipeSectionId" = rs.id AND rsi."deletedAt" IS NULL
+      INNER JOIN ${ingredient} i
+        ON i.id = rsi."ingredientId" AND i."deletedAt" IS NULL
+      WHERE i."recipeId" IS NOT NULL
+    )
+    SELECT DISTINCT i.id
+    FROM recipe_tree rt
+    INNER JOIN ${recipeSection} rs
+      ON rs."recipeId" = rt."recipeId" AND rs."deletedAt" IS NULL
+    INNER JOIN ${recipeSectionIngredient} rsi
+      ON rsi."recipeSectionId" = rs.id AND rsi."deletedAt" IS NULL
+    INNER JOIN ${ingredient} i
+      ON i.id = rsi."ingredientId" AND i."deletedAt" IS NULL
+    WHERE i."recipeId" IS NULL
+  `);
+  return res.rows.map((r) => r.id);
+};

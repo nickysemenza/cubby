@@ -226,6 +226,17 @@ export function RecipeTotalsCoverageButton({
           </Row>
         </PopoverHeader>
         <TotalsGapList gaps={gaps} currentRecipeId={currentRecipeId} />
+        <Link
+          to="/ingredients/workbench"
+          search={{ recipe: currentRecipeId }}
+          className={cn(
+            buttonVariants({ variant: "outline", size: "sm" }),
+            "mt-4 w-full justify-center gap-2",
+          )}
+        >
+          Open all in workbench
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
       </PopoverContent>
     </Popover>
   );

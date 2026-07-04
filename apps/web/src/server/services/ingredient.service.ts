@@ -1,5 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { IngredientId } from "@cubby/schemas/identifiers";
+import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
 import type {
   EnrichmentRow,
   IngredientWithFoodLeanOut,
@@ -32,6 +32,7 @@ import {
   updateIngredient as updateIngredientRepo,
 } from "../repo/ingredient";
 import { foodLookupParamFromProduct } from "../repo/product";
+import { recipeTreeLeafIngredientIds } from "../repo/recipe/totals";
 import { TraceNames, withTrace } from "../tracing";
 import { batchEnrichNestedItems, batchEnrichWithFood } from "./usda-helpers";
 
@@ -132,10 +133,20 @@ export class IngredientService {
    * enrichment pass only hits the USDA network for products that matter, then
    * drop the fully-covered rows — the workbench is a list of gaps.
    */
-  async enrichmentWorkbench(): Promise<EnrichmentRow[]> {
+  async enrichmentWorkbench(opts?: {
+    recipeId?: RecipeId;
+  }): Promise<EnrichmentRow[]> {
+    // Optional recipe scope: restrict the worklist to the leaf ingredients of one
+    // recipe's sub-recipe tree, so the (expensive) USDA enrichment + fuzzy-merge
+    // pass below only touches the ingredients that block that recipe's totals.
+    const restrictToIds = opts?.recipeId
+      ? await recipeTreeLeafIngredientIds(this.db, opts.recipeId)
+      : undefined;
     // Lean fetch: recipe-used ingredients + products + recipeCount/cookbookOnly
     // scalars (no per-usage recipe bodies). The footer loads usages on demand.
-    const candidates = await enrichmentWorkbenchIngredientsRepo(this.db);
+    const candidates = await enrichmentWorkbenchIngredientsRepo(this.db, {
+      restrictToIds,
+    });
 
     const enriched = await batchEnrichNestedItems(
       candidates,

@@ -6,7 +6,11 @@
  * See CLAUDE.md "Service Layer Architecture" for details.
  */
 
-import { type IngredientId, ingredientId } from "@cubby/schemas/identifiers";
+import {
+  type IngredientId,
+  ingredientId,
+  recipeId,
+} from "@cubby/schemas/identifiers";
 import {
   enrichmentRowsOut,
   ingredientCreateInput,
@@ -33,6 +37,7 @@ import {
   ingredientWithFoodLeanListOut,
   ingredientWithFoodOut,
 } from "@cubby/schemas/ingredient";
+import { z } from "zod";
 import {
   deleteIngredients,
   getIngredientMatches,
@@ -222,9 +227,12 @@ const mergeImpact = protectedProcedure
 // The enrichment workbench worklist: recipe-used ingredients that aren't fully
 // costable, with coverage + recommended fix computed server-side.
 const enrichmentWorkbench = protectedProcedure
+  .input(z.object({ recipeId: recipeId.optional() }).optional())
   .output(enrichmentRowsOut)
-  .query(async ({ ctx }) => {
-    return await ctx.services.ingredient.enrichmentWorkbench();
+  .query(async ({ ctx, input }) => {
+    return await ctx.services.ingredient.enrichmentWorkbench({
+      recipeId: input?.recipeId,
+    });
   });
 
 // On-demand recipe usages for one ingredient. The workbench's expanded-row footer

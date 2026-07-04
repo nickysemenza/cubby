@@ -265,7 +265,13 @@ export const getIngredientsByIDsLean = async (
  * Postgres). Recipe usages for the expanded-row footer load on demand via
  * {@link getRecipeUsagesForIngredient}.
  */
-export const enrichmentWorkbenchIngredients = async (db: Database) => {
+export const enrichmentWorkbenchIngredients = async (
+  db: Database,
+  opts?: { restrictToIds?: IngredientId[] },
+) => {
+  // Recipe-scoped worklist (?recipe=<id>): an empty set means the recipe tree has
+  // no leaf ingredients — return early rather than emit `IN ()`.
+  if (opts?.restrictToIds && opts.restrictToIds.length === 0) return [];
   // The relational query builder rewrites column refs in a custom orderBy/extras
   // to the root alias, so these correlated subqueries MUST be raw strings
   // hand-qualified to "ingredient"."id" (see ingredientList's orderBy note).
@@ -278,6 +284,11 @@ export const enrichmentWorkbenchIngredients = async (db: Database) => {
       // Skip the long tail of never-used ingredients up front — the workbench is
       // a worklist of recipe-used gaps.
       sql.raw(`${recipeCountSql} > 0`),
+      // Optional recipe scope: restrict to the leaf ingredients of one recipe's
+      // sub-recipe tree (recipeTreeLeafIngredientIds).
+      opts?.restrictToIds
+        ? inArray(ingredient.id, opts.restrictToIds)
+        : undefined,
     ),
     with: {
       product: {
