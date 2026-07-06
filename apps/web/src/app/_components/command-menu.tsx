@@ -85,7 +85,7 @@ export function GlobalCommandMenu({
   const { isDevtoolsVisible, toggleDevtools } = useDebug();
   const perfOverlayOn = useFlag("perfOverlay");
 
-  const { results, filteredActions, isLoading, isEmpty } =
+  const { results, filteredActions, isLoading, isFetching, isEmpty } =
     useGlobalSearch(search);
   const conversion = useConversionAnswer(search);
 
@@ -324,7 +324,8 @@ export function GlobalCommandMenu({
               </CommandGroup>
             )}
 
-            {/* Loading state */}
+            {/* Loading state — first results only; refetches keep the
+                previous list rendered (dimmed) instead of blanking it */}
             {isLoading && (
               <Row align="center" justify="center" className="py-6">
                 <Spinner className="text-muted-foreground" />
@@ -360,7 +361,9 @@ export function GlobalCommandMenu({
 
             {/* Search Results - grouped by entity type with icon placeholders */}
             {hasResults && !isLoading && (
-              <>
+              <div
+                className={cn("transition-opacity", isFetching && "opacity-60")}
+              >
                 {groupedResults.map((group) => (
                   <CommandGroup key={group.entityType} heading={group.label}>
                     {group.items.map((item) => {
@@ -409,7 +412,7 @@ export function GlobalCommandMenu({
                     See all results for "{search}"
                   </CommandItem>
                 </CommandGroup>
-              </>
+              </div>
             )}
 
             {/* Notion results — filtered from cached dashboard data */}

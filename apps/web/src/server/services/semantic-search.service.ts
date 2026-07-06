@@ -93,6 +93,21 @@ async function semanticSearchCandidates(
   }
 }
 
+/**
+ * Lexical-only global search, ranked through the same hybrid merge (with an
+ * empty semantic set) so results score and shape identically to
+ * {@link hybridGlobalSearch}. This is the fast path — no embedding API call.
+ */
+export async function lexicalGlobalSearch(
+  db: Database,
+  query: string,
+  limit: number,
+): Promise<SearchResultItem[]> {
+  const lexical = await globalSearch(db, query, limit);
+  const mergedLimit = limit * ALL_SEARCHABLE_ENTITIES.length;
+  return mergeHybridSearchResults(query, lexical, [], mergedLimit);
+}
+
 export async function hybridGlobalSearch(
   db: Database,
   query: string,

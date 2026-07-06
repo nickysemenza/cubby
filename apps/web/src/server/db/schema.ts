@@ -611,6 +611,14 @@ export const entityEmbedding = pgTable(
       table.dimensions,
     ),
     index("EntityEmbedding_hash_idx").on(table.embeddingHash),
+    // HNSW nearest-neighbor index. The column is untyped `vector` (dimensions
+    // vary per model config row), and pgvector only indexes fixed-dimension
+    // expressions — so index the cast, and findSemanticEntityCandidates must
+    // ORDER BY the same `embedding::vector(N)` cast for the planner to use it.
+    index("EntityEmbedding_embedding_hnsw_idx").using(
+      "hnsw",
+      sql`(${table.embedding}::vector(1536)) vector_cosine_ops`,
+    ),
   ],
 );
 
