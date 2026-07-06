@@ -14,7 +14,7 @@ const SECTION_HEADER_HEIGHT = 28;
  */
 export type GroupedItem =
   | { kind: "header"; title: string; count: number; color: string }
-  | { kind: "row"; rowIndex: number };
+  | { kind: "row"; rowIndex: number; groupRowIndex: number };
 
 /**
  * What `virtualRow.index` points at, given the grouped/flat index space.
@@ -28,7 +28,8 @@ export type GroupedItem =
  */
 type ResolvedVirtualIndex =
   | { kind: "header"; title: string; count: number; color: string }
-  | { kind: "row"; rowIndex: number }
+  /** groupRowIndex present only in grouped mode (position within the group). */
+  | { kind: "row"; rowIndex: number; groupRowIndex?: number }
   | { kind: "sentinel" };
 
 /**

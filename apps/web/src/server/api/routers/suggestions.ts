@@ -41,7 +41,7 @@ const getMakeable = protectedProcedure
     const { data: recipes } = await recipeList(
       ctx.db,
       {},
-      { orderBy: "name", direction: "asc" },
+      [{ orderBy: "name", direction: "asc" }],
       { pageIndex: 0, pageSize: CANDIDATE_CAP },
     );
 

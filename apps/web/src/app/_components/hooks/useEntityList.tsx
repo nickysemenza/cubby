@@ -17,6 +17,7 @@ import { BulkActionBar } from "../data-table/BulkActionBar";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
 import { useBulkActions } from "../data-table/useBulkActions";
 import type { GroupConfig } from "../data-table/useGroupedList";
+import { useTableColumnVisibility } from "../data-table/useTableColumnVisibility";
 import { useTableConfig } from "../data-table/useTableConfig";
 import { useTableState } from "../data-table/useTableState";
 import {
@@ -303,6 +304,11 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     [effectiveEnableRowSelection],
   );
 
+  // Persisted per-entity column visibility (localStorage), layered over the
+  // page's initialColumnVisibility defaults.
+  const { columnVisibility, onColumnVisibilityChange } =
+    useTableColumnVisibility(entity, initialColumnVisibility);
+
   // Configure the table
   // In infinite mode, feed all accumulated rows as a single "page" so TanStack Table
   // doesn't try to paginate server-side.
@@ -319,6 +325,8 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     rowSelection: effectiveRowSelection,
     onRowSelectionChange: effectiveOnRowSelectionChange,
     initialColumnVisibility,
+    columnVisibility,
+    onColumnVisibilityChange,
   });
 
   // Build bulk action bar element if bulk actions configured

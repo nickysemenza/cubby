@@ -40,6 +40,13 @@ interface UseTableConfigOptions<TData, GlobalFilterData = unknown> {
   onRowSelectionChange?: OnChangeFn<RowSelectionState>;
   /** Columns hidden by default (user can toggle via View menu) */
   initialColumnVisibility?: Record<string, boolean>;
+  /**
+   * Controlled column visibility (e.g. the persisted per-entity store from
+   * `useTableColumnVisibility`). When provided together with
+   * `onColumnVisibilityChange`, the internal useState fallback is bypassed.
+   */
+  columnVisibility?: Record<string, boolean>;
+  onColumnVisibilityChange?: OnChangeFn<Record<string, boolean>>;
 }
 
 export function useTableConfig<TData, GlobalFilterData>({
@@ -58,6 +65,8 @@ export function useTableConfig<TData, GlobalFilterData>({
   rowSelection,
   onRowSelectionChange,
   initialColumnVisibility,
+  columnVisibility: controlledVisibility,
+  onColumnVisibilityChange: controlledOnVisibilityChange,
 }: UseTableConfigOptions<TData, GlobalFilterData>): Table<TData> {
   const {
     sorting,
@@ -68,9 +77,12 @@ export function useTableConfig<TData, GlobalFilterData>({
     setPagination,
   } = tableState;
 
-  const [columnVisibility, setColumnVisibility] = useState<
+  const [internalVisibility, setInternalVisibility] = useState<
     Record<string, boolean>
   >(initialColumnVisibility ?? {});
+  const columnVisibility = controlledVisibility ?? internalVisibility;
+  const setColumnVisibility =
+    controlledOnVisibilityChange ?? setInternalVisibility;
 
   // Memoize row models - these are stable functions
   const coreRowModel = useMemo(() => getCoreRowModel<TData>(), []);
@@ -101,6 +113,14 @@ export function useTableConfig<TData, GlobalFilterData>({
       manualSorting,
       manualFiltering,
       manualPagination,
+      // Multi-sort: shift-click stacks columns (isMultiSortEvent default).
+      // sortDescFirst:false preserves the asc-first click cycle on numeric
+      // columns; enableSortingRemoval gives asc → desc → clear (cleared falls
+      // back to the entity default server-side via buildSortsParams).
+      enableMultiSort: true,
+      maxMultiSortColCount: 3,
+      enableSortingRemoval: true,
+      sortDescFirst: false,
       ...(enableSorting !== undefined ? { enableSorting } : {}),
       rowCount: totalCount,
       // Row selection
@@ -131,6 +151,7 @@ export function useTableConfig<TData, GlobalFilterData>({
       columnFilters,
       setColumnFilters,
       columnVisibility,
+      setColumnVisibility,
       pagination,
       setPagination,
       manualSorting,

@@ -1,4 +1,7 @@
-import { buildPaginatedResponse } from "@cubby/schemas/pagination";
+import {
+  buildPaginatedResponse,
+  normalizeSorts,
+} from "@cubby/schemas/pagination";
 import {
   foodSummaryWithLinkedProducts,
   usdaFoodEnrichmentsInput,
@@ -37,7 +40,8 @@ const list = protectedProcedure
       const { data, count } = await ctx.usdaService.listFoods(
         input.filters.nameFilter,
         input.filters.dataTypeFilter,
-        input.sort,
+        // The remote usda-api contract is single-sort; take the primary.
+        normalizeSorts(input.sort)[0]!,
         input.pagination,
         input.filters.foodsOnly,
         input.filters.dataTypes,
@@ -64,7 +68,8 @@ const listSummaries = protectedProcedure
       const { data, count } = await ctx.usdaService.listFoodSummaries(
         input.filters.nameFilter,
         input.filters.dataTypeFilter,
-        input.sort,
+        // The remote usda-api contract is single-sort; take the primary.
+        normalizeSorts(input.sort)[0]!,
         input.pagination,
         input.filters.foodsOnly,
         input.filters.dataTypes,

@@ -92,7 +92,9 @@ export function ImageWithPreview({
       </TooltipTrigger>
       <TooltipContent
         side={previewSide}
-        className="bg-popover border-[var(--border)] overflow-hidden rounded-none border p-0"
+        // max-w-none: the tooltip popup's default max-w-xs (320px) silently
+        // clips any previewSize above 320 — the "weird crop".
+        className="bg-popover max-w-none border-[var(--border)] overflow-hidden rounded-none border p-0"
       >
         <div
           className="relative"

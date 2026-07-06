@@ -358,7 +358,7 @@ export const deleteLocations = async (
 export const locationList = async (
   db: Database,
   filters: LocationFilters,
-  sort: SortParams,
+  sorts: SortParams[],
   pagination: PaginationParams,
   groupBy?: string,
 ) => {
@@ -373,17 +373,24 @@ export const locationList = async (
     ],
   );
 
-  // `valuation` is a persisted jsonb rollup; sort by direct value because that
-  // is what the list cell renders in compact mode.
-  const isAsc = sort.direction === "asc";
-  const orderByClause =
-    sort.orderBy === "valuation"
-      ? [
-          isAsc
-            ? sql`(${location.valuation}->>'directValuation')::numeric asc nulls last`
-            : sql`(${location.valuation}->>'directValuation')::numeric desc nulls last`,
-        ]
-      : buildOrderBy(location, sort, [...locationSortableFields], groupBy);
+  const orderByClause = buildOrderBy(
+    location,
+    sorts,
+    [...locationSortableFields],
+    {
+      groupBy,
+      // `valuation` is a persisted jsonb rollup; sort by direct value because
+      // that is what the list cell renders in compact mode.
+      resolve: (s) =>
+        s.orderBy === "valuation"
+          ? [
+              s.direction === "asc"
+                ? sql`(${location.valuation}->>'directValuation')::numeric asc nulls last`
+                : sql`(${location.valuation}->>'directValuation')::numeric desc nulls last`,
+            ]
+          : null,
+    },
+  );
 
   const { take, skip } = buildTakeSkip(pagination);
 

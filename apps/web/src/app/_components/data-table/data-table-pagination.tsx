@@ -23,7 +23,7 @@ export function DataTablePagination<TData>({
   timing,
 }: DataTablePaginationProps<TData>) {
   return (
-    <div className="flex flex-col space-y-2 px-2 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
+    <div className="flex flex-col space-y-1 px-2 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
       {/* Selected rows info + timing - hidden on mobile to save space */}
       <div className="hidden items-center gap-2 font-mono text-2xs text-muted-foreground uppercase sm:flex">
         <span>
@@ -34,7 +34,7 @@ export function DataTablePagination<TData>({
       </div>
 
       {/* Main pagination controls */}
-      <div className="flex flex-col space-y-2 sm:flex-row sm:items-center sm:space-x-4 sm:space-y-0 lg:space-x-4">
+      <div className="flex flex-col space-y-1 sm:flex-row sm:items-center sm:space-x-4 sm:space-y-0 lg:space-x-4">
         {/* Rows per page - simplified on mobile */}
         <Row
           align="center"
@@ -68,7 +68,7 @@ export function DataTablePagination<TData>({
         <Row align="center" justify="center" gap="xs">
           <Button
             variant="outline"
-            size="icon-lg"
+            size="icon"
             className="hidden lg:flex"
             onClick={() => table.setPageIndex(0)}
             disabled={!table.getCanPreviousPage()}
@@ -78,7 +78,7 @@ export function DataTablePagination<TData>({
           </Button>
           <Button
             variant="outline"
-            size="icon-lg"
+            size="icon"
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
           >
@@ -87,7 +87,7 @@ export function DataTablePagination<TData>({
           </Button>
           <Button
             variant="outline"
-            size="icon-lg"
+            size="icon"
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
           >
@@ -96,7 +96,7 @@ export function DataTablePagination<TData>({
           </Button>
           <Button
             variant="outline"
-            size="icon-lg"
+            size="icon"
             className="hidden lg:flex"
             onClick={() => table.setPageIndex(table.getPageCount() - 1)}
             disabled={!table.getCanNextPage()}

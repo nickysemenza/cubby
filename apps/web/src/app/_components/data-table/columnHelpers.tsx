@@ -71,6 +71,11 @@ declare module "@tanstack/react-table" {
     className?: string;
     /** Right-align + tabular figures for numeric/quantity columns. */
     numeric?: boolean;
+    /**
+     * Mono font for code-like data cells (UPCs, timestamps, ids) without the
+     * numeric right-align. Names/descriptions stay sans for scanability.
+     */
+    mono?: boolean;
     /** Filter configuration for inline header filter */
     filterConfig?: FilterConfig;
   }
@@ -207,6 +212,7 @@ export function createCreatedAtColumn<T extends BaseRow>(
       // Relative timestamps are short ("5 months ago"); without a cap the
       // fixed-layout table hands this column an equal share of leftover width.
       className: "w-32",
+      mono: true,
       mobile: { slot: "hidden" },
     },
     cell: (info) => {
@@ -537,7 +543,10 @@ export function createActionsColumnBase<T>(
       return (
         <DropdownMenu>
           <DropdownMenuTrigger
-            render={<Button variant="ghost" size="icon-lg" />}
+            // icon-sm (24px) + the cell's 4px vertical padding = the 28px
+            // compact row exactly; anything larger stretches every row and
+            // silently defeats the density ladder.
+            render={<Button variant="ghost" size="icon-sm" />}
             onClick={(e) => e.stopPropagation()}
           >
             <MoreHorizontal className="h-4 w-4" />
@@ -624,12 +633,21 @@ export function createCurrencyColumn<
     header?: string;
     className?: string;
     mobile?: MobileColumnMeta;
+    /**
+     * Render 0 as the muted dash instead of "$0.00" (default true — a zero
+     * price/cost in cubby means "unset", not "free"). Pass false for columns
+     * where zero is a real value.
+     */
+    zeroAsEmpty?: boolean;
     /** Enable inline editing */
     editable?: {
       onSave: (newValue: number | null, row: T) => Promise<void>;
     };
   },
 ) {
+  const zeroAsEmpty = options?.zeroAsEmpty ?? true;
+  const isEmpty = (v: number | null | undefined): v is null | undefined | 0 =>
+    v === null || v === undefined || (zeroAsEmpty && v === 0);
   return columnHelper.accessor((row) => row[accessor] as number | null, {
     id: String(accessor),
     header: options?.header,
@@ -663,17 +681,17 @@ export function createCurrencyColumn<
             }
             config={{ type: "currency" }}
             renderValue={(v) =>
-              v !== null ? (
-                <span className="text-positive">{formatCurrency(v)}</span>
-              ) : (
+              isEmpty(v) ? (
                 <NoneValue />
+              ) : (
+                <span className="text-positive">{formatCurrency(v)}</span>
               )
             }
           />
         );
       }
 
-      if (val === null || val === undefined) return <NoneValue />;
+      if (isEmpty(val)) return <NoneValue />;
       return <span className="text-positive">{formatCurrency(val)}</span>;
     },
   });
@@ -845,6 +863,7 @@ export function createExternalLinkColumn<
       header: options?.header,
       meta: {
         className: options?.className,
+        mono: variant === "mono",
         mobile: options?.mobile,
         filterConfig: options?.filterConfig,
       },
@@ -918,6 +937,7 @@ export function createTimestampColumn<
     header: options?.header,
     meta: {
       className: options?.className,
+      mono: true,
       mobile: options?.mobile,
     },
     cell: (info) => {

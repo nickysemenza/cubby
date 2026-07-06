@@ -69,6 +69,10 @@ const scrollPositionCache = new Map<string, number>();
 // and its header, instead of repeating the string across column defs.
 const NUMERIC_CELL = "text-right font-mono tabular-nums";
 
+// Code-like data columns (meta.mono: UPCs, timestamps, ids) go mono without
+// the numeric right-align; name/description columns stay sans.
+const MONO_CELL = "font-mono";
+
 // Sticky top nav height: the h-12 (48px) nav bar + its 3px ink bottom-rule =
 // 51px (see __root.tsx). The sticky toolbar pins flush below it; if these drift
 // apart a sliver of scrolled rows peeks through the seam. Keep `top-[51px]` on
@@ -176,6 +180,7 @@ function DataRowInner<TItem>({
           className={cn(
             cellClassName,
             cell.column.columnDef.meta?.numeric && NUMERIC_CELL,
+            cell.column.columnDef.meta?.mono && MONO_CELL,
             cell.column.columnDef.meta?.className,
           )}
         >
@@ -189,7 +194,7 @@ function DataRowInner<TItem>({
             data={row.original}
             title={`Debug Data - Row ${row.id}`}
             trigger={
-              <Button variant="ghost" size="icon-lg">
+              <Button variant="ghost" size="icon-sm">
                 <Bug className="h-4 w-4" />
                 <span className="sr-only">Debug row data</span>
               </Button>
@@ -197,6 +202,10 @@ function DataRowInner<TItem>({
           />
         </TableCell>
       )}
+      {/* Trailing width-slack spacer: the content block ends at the actions
+          column and the leftover table-fixed surplus reads as page margin,
+          not as an empty column wedged between data and actions. */}
+      <TableCell data-spacer aria-hidden className={cellClassName} />
     </TableRow>
   );
 }
@@ -364,7 +373,8 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
   }, [pathname, rows.length, isMobile]);
 
   const styles = {
-    table: "border-separate border-spacing-0 text-xs leading-tight",
+    table:
+      "table-grid-lines border-separate border-spacing-0 text-sm leading-tight tabular-nums",
     header:
       "h-8 bg-card px-2 py-1 text-2xs font-mono font-semibold uppercase tracking-wider text-slate border-b-[3px] border-b-foreground",
     filterRow: "h-7 bg-card px-2 py-0.5 border-b border-border" /* tight */,
@@ -388,9 +398,9 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
   // counts hidden columns too, so a colSpan built from it exceeds the rendered
   // column count and the browser invents a phantom trailing column that steals
   // table width — the "empty right half" bug under table-fixed. Shared by the
-  // status rows and the virtualizer spacer rows below.
+  // status rows and the virtualizer spacer rows below. +1 for the spacer.
   const colSpan =
-    table.getVisibleLeafColumns().length + (isDebugEnabled ? 1 : 0);
+    table.getVisibleLeafColumns().length + 1 + (isDebugEnabled ? 1 : 0);
 
   // Helper to render status rows (loading, error, empty)
   const renderStatusRow = (content: ReactNode, height = "h-16") => (
@@ -521,7 +531,16 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
               isDebugEnabled={isDebugEnabled}
               onRowClick={onRowClick}
               onRowHover={onRowHover}
-              rowClassName={cn(styles.row, getRowClassName?.(row))}
+              rowClassName={cn(
+                styles.row,
+                // Zebra keyed off the flat row index, not nth-child: the body
+                // is window-virtualized behind a spacer <tr>, so DOM-child
+                // parity shifts as the window scrolls. In grouped mode the
+                // within-group index restarts stripes at each section header.
+                (item.groupRowIndex ?? item.rowIndex) % 2 === 1 &&
+                  "table-row-zebra",
+                getRowClassName?.(row),
+              )}
               cellClassName={styles.cell}
               columnsKey={columnsKey}
               height={`${virtualRow.size}px`}
@@ -547,7 +566,11 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
   };
 
   return (
-    <Stack>
+    // max-w-[90rem]: self-cap at the 2xl page width. Most list pages are
+    // already capped by PageWrapper, but fullWidth hosts (locations' tabbed
+    // page, sized for its gallery view) would otherwise stretch the table to
+    // the viewport and the width-slack spacer into an absurd gutter.
+    <Stack className="max-w-[90rem]">
       {/* Desktop Table View - Unified wrapper. Sets the entity-inked
           --row-accent so hover/selected bars match the section's color. */}
       {!isMobile && (
@@ -596,7 +619,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
               }
               actions={actions}
               bulkActionBar={bulkActionBar}
-              className="px-4 py-2"
+              className="px-4 py-1"
             />
           </div>
 
@@ -706,6 +729,14 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                                     header.getContext(),
                                   )}
                               {sortingArrows}
+                              {/* Sort-stack position (1-based) — only shown
+                                  when 2+ columns are stacked via shift-click */}
+                              {sortDirection &&
+                                table.getState().sorting.length > 1 && (
+                                  <span className="text-3xs text-muted-foreground tabular-nums">
+                                    {header.column.getSortIndex() + 1}
+                                  </span>
+                                )}
                             </>
                           );
 
@@ -732,7 +763,9 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                                   variant="ghost"
                                   size="sm"
                                   className={cn(
-                                    "group h-6 gap-1 px-2 font-semibold text-2xs uppercase tracking-wider hover:bg-muted/60",
+                                    // select-none: shift-click (multi-sort) must
+                                    // not start a text selection
+                                    "group h-6 select-none gap-1 px-2 font-semibold text-2xs uppercase tracking-wider hover:bg-muted/60",
                                     // Mirror the cell's right-align: pull the label
                                     // to the column's right edge for numeric cols,
                                     // else keep the left-edge compensation.
@@ -740,11 +773,10 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                                       ? "-mr-2 justify-end"
                                       : "-ml-2 justify-start",
                                   )}
-                                  onClick={() =>
-                                    header.column.toggleSorting(
-                                      header.column.getIsSorted() === "asc",
-                                    )
-                                  }
+                                  // Canonical TanStack handler: routes
+                                  // shift-click through isMultiSortEvent so
+                                  // stacked sorts work without custom logic.
+                                  onClick={header.column.getToggleSortingHandler()}
                                 >
                                   {titleContent}
                                 </Button>
@@ -761,6 +793,11 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                             Debug
                           </TableHead>
                         )}
+                        <TableHead
+                          data-spacer
+                          aria-hidden
+                          className={styles.header}
+                        />
                       </TableRow>
 
                       {/* Filter Row - only render if any column has filters */}
@@ -794,6 +831,11 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                           {isDebugEnabled && (
                             <TableHead className={cn(styles.filterRow)} />
                           )}
+                          <TableHead
+                            data-spacer
+                            aria-hidden
+                            className={styles.filterRow}
+                          />
                         </TableRow>
                       )}
                     </Fragment>
@@ -811,7 +853,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                   );
                   if (!hasFooter) return null;
                   return (
-                    <TableFooter className="border-t bg-card font-medium text-xs">
+                    <TableFooter className="border-t bg-card font-medium text-sm">
                       {footerGroups.map((footerGroup) => (
                         <TableRow
                           key={footerGroup.id}
@@ -822,7 +864,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                               key={header.id}
                               colSpan={header.colSpan}
                               className={cn(
-                                "px-2 py-2",
+                                "px-2 py-1",
                                 header.column.columnDef.meta?.className,
                               )}
                             >
@@ -834,6 +876,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                                   )}
                             </TableCell>
                           ))}
+                          <TableCell data-spacer aria-hidden />
                         </TableRow>
                       ))}
                     </TableFooter>
@@ -865,7 +908,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
       {/* Desktop: persistent pagination/status bar pinned to the viewport
           bottom (page-size + page nav stay reachable without scrolling). */}
       {!isMobile && !infiniteScroll && (
-        <div className="sticky bottom-0 z-30 border-[var(--border)] border-t bg-background px-2 py-2">
+        <div className="sticky bottom-0 z-30 border-[var(--border)] border-t bg-background px-2 py-1">
           <DataTablePagination table={table} timing={timing} />
         </div>
       )}

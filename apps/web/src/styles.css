@@ -254,6 +254,17 @@
     var(--brand-paper)
   );
 
+  /* Data-table grid: softened hairline for column dividers (full-strength
+     hairline reads too heavy repeated every column) and the zebra tint —
+     mixed toward paper (opaque) so the full-strength paper-alt hover wash
+     still reads clearly on top of striped rows. */
+  --table-grid: color-mix(in oklab, var(--brand-hairline) 60%, transparent);
+  --row-zebra: color-mix(
+    in oklab,
+    var(--brand-paper-alt) 55%,
+    var(--brand-paper)
+  );
+
   /* Extended palette */
   --highlight: var(--brand-ultramarine);
   --plum: var(--brand-aubergine); /* recipe/cookbook accent → aubergine */
@@ -481,6 +492,29 @@
     box-shadow: inset 3px 0 0 var(--row-accent, var(--brand-ultramarine));
   }
 
+  /* Ledger column grid - each cell paints its own right divider (table is
+     border-separate). :not(:last-child) keeps the outer edge on the wrapper
+     border and exempts colSpan status/spacer/sentinel rows automatically. */
+  .table-grid-lines th:not(:last-child),
+  .table-grid-lines td:not(:last-child) {
+    border-right: 1px solid var(--table-grid);
+  }
+
+  /* Zebra stripe - components layer on purpose: hover (same layer, :hover
+     specificity) and selection/custom tints (utilities layer) must win. */
+  .table-row-zebra {
+    background: var(--row-zebra);
+  }
+
+  /* Width-slack spacer cell (trailing): absorbs table-fixed surplus width so
+     the width-specified columns don't balloon. It renders AFTER the actions
+     column — the content block ends with the actions column's own border-right
+     as the terminating ledger rule, and the leftover reads as page margin. */
+  .table-grid-lines th[data-spacer],
+  .table-grid-lines td[data-spacer] {
+    border-right: 0;
+  }
+
   /* Nav link underline - a flat square ultramarine rule (no pill, no glow) */
   .nav-link-animated {
     @apply relative;
@@ -500,7 +534,10 @@
   /* Image thumbnail ring overlay - requires ::after for inset ring */
   .thumbnail-ring::after {
     content: "";
-    @apply absolute inset-0 rounded-lg ring-1 ring-inset ring-black/5 transition-all;
+    /* pointer-events-none: this overlay sits above the thumbnail's tooltip
+       trigger; without it, hover never reaches the trigger and the image
+       hover-preview silently never opens. */
+    @apply pointer-events-none absolute inset-0 rounded-lg ring-1 ring-inset ring-black/5 transition-all;
   }
   .thumbnail-ring:hover::after {
     @apply ring-2 ring-primary/30;

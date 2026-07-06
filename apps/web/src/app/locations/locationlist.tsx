@@ -67,6 +67,10 @@ export function LocationList() {
     () => [
       createImageColumn(columnHelper, { entity: "location" }),
       createNameColumn(columnHelper, "location", "name", {
+        // Auto width (no w-*): locations is a sparse table, so under
+        // table-fixed the name column splits the leftover width with the
+        // slack spacer instead of leaving one oversized empty gutter.
+        className: "min-w-0",
         mobile: { slot: "title", priority: 0 },
         filterConfig: { placeholder: "Filter by location name..." },
         editable: {
@@ -79,14 +83,17 @@ export function LocationList() {
         },
       }),
       createEntityInlineLinkColumn(columnHelper, "children", "location", {
+        header: "Children",
         className: "w-40",
         mobile: { slot: "meta", priority: 55 },
       }),
       createSingleEntityInlineLinkColumn(columnHelper, "parent", "location", {
-        className: "w-36",
+        header: "Parent",
+        className: "w-56",
         mobile: { slot: "subtitle", priority: 20 },
       }),
       createFilterableSelectColumn(columnHelper, "type", {
+        header: "Type",
         className: "w-32",
         placeholder: "Filter by type...",
         selectOptions: locationTypeOptionsWithTheme,
@@ -112,6 +119,7 @@ export function LocationList() {
         ),
         meta: {
           className: "w-[180px]",
+          numeric: true,
           mobile: { slot: "trailing", priority: 10 },
         },
       }),
@@ -266,7 +274,6 @@ export function LocationList() {
     extraActions,
     infinite: true,
     initialColumnVisibility: {
-      image: false,
       children: false,
       aiDescription: false,
       createdAt: false,

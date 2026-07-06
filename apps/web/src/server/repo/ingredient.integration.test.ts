@@ -446,7 +446,7 @@ describe("ingredient", () => {
     const { data } = await ingredientList(
       ctx.db,
       undefined,
-      { orderBy: "name", direction: "asc" },
+      [{ orderBy: "name", direction: "asc" }],
       { pageIndex: 0, pageSize: 50 },
     );
     const flour = data.find((i) => i.id === used.id)!;
