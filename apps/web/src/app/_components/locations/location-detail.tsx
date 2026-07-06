@@ -1,44 +1,19 @@
 import type { InfLocation, LocationUpdateInput } from "@cubby/schemas/location";
-import { useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
-import {
-  ClipboardCheck,
-  DollarSign,
-  Eye,
-  FolderTree,
-  Info,
-  Package,
-  Plus,
-  Printer,
-  ScanBarcode,
-} from "lucide-react";
-import { type FC, useState } from "react";
-import { toast } from "sonner";
-import { Row, Stack } from "~/components/layout";
+import { Eye, Info, Package } from "lucide-react";
+import type { FC } from "react";
 import { Page } from "~/components/page/Page";
-import { Button, buttonVariants } from "~/components/ui/button";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyMedia,
-  EmptyTitle,
-} from "~/components/ui/empty";
-import { invalidateTRPCQueries } from "~/lib/query-keys";
-import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import { type DetailSection, DetailSections } from "../data-table/detail-page";
 import { editableDetailSection } from "../data-table/editable-detail-section";
 import { useEntityDetail } from "../hooks/useEntityDetail";
-import { QuickInventoryAdd } from "../inventory/quick-inventory-add";
 import { AiDescriptionSection } from "./ai-description-section";
-import { CreateChildLocationDialog } from "./create-child-location-dialog";
-import { InventoryValuationSummary } from "./inventory-valuation-summary";
 import { LocationBasicInfo } from "./location-basic-info";
 import { LocationBreadcrumb } from "./location-breadcrumb";
-import { LocationCardGrid } from "./location-card-grid";
+import {
+  LocationContents,
+  LocationContentsValuation,
+} from "./location-contents";
 import { LocationForm } from "./location-form";
-import { LocationInventoryTable } from "./location-inventory-table";
-import { typeSupportsQrCode } from "./location-type-theme";
 
 interface LocationDetailProps {
   location: InfLocation;
@@ -46,9 +21,6 @@ interface LocationDetailProps {
 
 export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
   const api = useTRPC();
-  const queryClient = useQueryClient();
-  const navigate = useNavigate();
-  const [createChildOpen, setCreateChildOpen] = useState(false);
 
   const { commonSections, editMode } = useEntityDetail<
     InfLocation,
@@ -60,6 +32,16 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
   });
 
   const sections: DetailSection[] = [
+    // The page IS this section: sub-locations + items on one surface, with
+    // the valuation rollup in the header. Basic info / AI description /
+    // history are the metadata row below.
+    {
+      title: "Contents",
+      icon: Package,
+      zone: "full",
+      headerAction: <LocationContentsValuation location={location} />,
+      content: <LocationContents location={location} />,
+    },
     editableDetailSection({
       title: "Basic Information",
       icon: Info,
@@ -70,17 +52,6 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
         <LocationBasicInfo location={location} onEdit={editMode.startEditing} />
       ),
     }),
-    // Custom section: Inventory Valuation
-    {
-      title: "Inventory Valuation",
-      icon: DollarSign,
-      content: (
-        <div className="py-1">
-          <InventoryValuationSummary locationId={location.id} variant="full" />
-        </div>
-      ),
-    },
-    // Custom section: AI Description
     {
       title: "AI Description",
       icon: Eye,
@@ -92,145 +63,27 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
         />
       ),
     },
-    // Custom section: Child Locations
-    {
-      title: "Child Locations",
-      icon: FolderTree,
-      zone: "main",
-      content: (
-        <Stack gap="sm">
-          <Row gap="sm">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCreateChildOpen(true)}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add Child
-            </Button>
-            {location.children && location.children.length > 0 && (
-              <>
-                <Link
-                  to="/locations/validate"
-                  search={{ parentId: location.id }}
-                  className={cn(
-                    buttonVariants({ variant: "outline", size: "sm" }),
-                  )}
-                >
-                  <ClipboardCheck className="mr-2 h-4 w-4" />
-                  Validate
-                </Link>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    const children = location.children!;
-                    const eligible = children.filter(
-                      (c) => c.shortcode && typeSupportsQrCode(c.type),
-                    );
-                    const skipped = children.length - eligible.length;
-
-                    if (eligible.length === 0) {
-                      toast.error(
-                        "None of the child locations support QR code labels (rooms and areas are excluded)",
-                      );
-                      return;
-                    }
-
-                    if (skipped > 0) {
-                      toast.info(
-                        `Skipped ${skipped} location${skipped === 1 ? "" : "s"} without QR support (rooms/areas)`,
-                      );
-                    }
-
-                    const codes = eligible.map((c) => c.shortcode).join(",");
-                    void navigate({ to: "/labels", search: { codes } });
-                  }}
-                >
-                  <Printer className="mr-2 h-4 w-4" />
-                  Print Labels
-                </Button>
-              </>
-            )}
-          </Row>
-          {location.children && location.children.length > 0 ? (
-            <LocationCardGrid
-              locations={location.children}
-              showParentPath={false}
-            />
-          ) : (
-            <Empty variant="minimal" className="py-4">
-              <EmptyMedia variant="icon">
-                <FolderTree className="size-4" />
-              </EmptyMedia>
-              <EmptyTitle>No child locations</EmptyTitle>
-              <EmptyDescription>
-                This location has no sub-locations
-              </EmptyDescription>
-            </Empty>
-          )}
-        </Stack>
-      ),
-    },
-    // Custom section: Inventory Items (with interactive refetch)
-    {
-      title: "Inventory Items",
-      icon: Package,
-      zone: "main",
-      content: (
-        <Stack gap="sm">
-          <Stack gap="sm">
-            <QuickInventoryAdd
-              locationId={location.id}
-              onSuccess={() => undefined}
-            />
-            <Row gap="sm">
-              <Link
-                to="/inventory/session"
-                search={{ parentId: location.id }}
-                className={cn(buttonVariants({ variant: "outline" }))}
-              >
-                <ScanBarcode className="mr-2 h-4 w-4" />
-                Recount
-              </Link>
-            </Row>
-          </Stack>
-          <LocationInventoryTable locationId={location.id} />
-        </Stack>
-      ),
-    },
     // Common sections from entity config (History)
     ...commonSections,
   ];
 
   return (
-    <>
-      <Page
-        variant="detail"
-        entity="location"
-        title={location.name}
+    <Page
+      variant="detail"
+      entity="location"
+      title={location.name}
+      rawData={location}
+      heroImages={location.images}
+      heroNo={location.shortcode ?? undefined}
+    >
+      {/* Breadcrumb lives inside Page so it sits within the max-width
+          container (was full-width when the route PageWrapper was dropped). */}
+      <LocationBreadcrumb location={location} linkable />
+      <DetailSections
+        sections={sections}
         rawData={location}
         heroImages={location.images}
-      >
-        {/* Breadcrumb lives inside Page so it sits within the max-width
-            container (was full-width when the route PageWrapper was dropped). */}
-        <LocationBreadcrumb location={location} linkable />
-        <DetailSections
-          sections={sections}
-          rawData={location}
-          heroImages={location.images}
-        />
-      </Page>
-      <CreateChildLocationDialog
-        open={createChildOpen}
-        onOpenChange={setCreateChildOpen}
-        parentLocation={location}
-        onSuccess={() => {
-          invalidateTRPCQueries(queryClient, [
-            api.location.getByID.queryKey({ id: location.id }),
-          ]);
-        }}
       />
-    </>
+    </Page>
   );
 };

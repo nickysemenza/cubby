@@ -1,12 +1,8 @@
-import type { LocationId } from "@cubby/schemas/identifiers";
 import type { LocationValuation } from "@cubby/schemas/location";
-import { MAX_PAGE_SIZE } from "@cubby/schemas/pagination";
-import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { Row, Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { formatCurrency } from "~/lib/utils";
-import { useTRPC } from "~/trpc/react";
 import {
   calculateInventoryValuation,
   formatPricingCountsSummary,
@@ -17,7 +13,6 @@ import {
 type Variant = "compact" | "full";
 
 interface InventoryValuationSummaryProps {
-  locationId?: LocationId;
   items?: InventoryItem[];
   /**
    * Persisted per-location rollup (location.valuation). When provided, the
@@ -33,31 +28,16 @@ interface InventoryValuationSummaryProps {
 }
 
 export function InventoryValuationSummary({
-  locationId,
   items,
   valuation,
   variant = "compact",
   hidePricingStatus = false,
   className,
 }: InventoryValuationSummaryProps) {
-  const api = useTRPC();
-
-  // Persisted-value mode: caller passed the precomputed rollup → never fetch.
+  // Persisted-value mode: caller passed the precomputed rollup → no items scan.
   const hasPersisted = valuation !== undefined;
-  const enabled = !hasPersisted && !items && !!locationId;
-  const baseOptions = api.inventory.list.queryOptions({
-    sort: { orderBy: "createdAt", direction: "desc" },
-    pagination: { pageIndex: 0, pageSize: MAX_PAGE_SIZE },
-    filters: {
-      locationIdFilter: locationId,
-    },
-  });
-  const { data: fetched } = useQuery({ ...baseOptions, enabled });
 
-  const sourceItems = useMemo(
-    () => (items ?? fetched?.items ?? []) as InventoryItem[],
-    [items, fetched],
-  );
+  const sourceItems = useMemo(() => items ?? [], [items]);
 
   // Calculate valuation synchronously (no WASM needed - uses precomputed values)
   const result = useMemo(

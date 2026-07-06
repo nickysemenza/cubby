@@ -17,6 +17,7 @@ import { Page } from "~/components/page/Page";
 import { buttonVariants } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { cn } from "~/lib/utils";
+import { ShelfTableToggle, type ShelfView } from "../data-table/shelf";
 import { QuickInventoryAdd } from "../inventory/quick-inventory-add";
 import { LocationBreadcrumb } from "./location-breadcrumb";
 import { LocationCardGrid } from "./location-card-grid";
@@ -25,6 +26,7 @@ import { LocationInventoryTable } from "./location-inventory-table";
 export function LocationScanLanding({ location }: { location: InfLocation }) {
   // Bump a key to force the inventory list to refetch after a quick add.
   const [refreshKey, setRefreshKey] = useState(0);
+  const [view, setView] = useState<ShelfView>("shelf");
 
   return (
     <Page
@@ -97,10 +99,17 @@ export function LocationScanLanding({ location }: { location: InfLocation }) {
 
         {/* Items directly here — the "what's in this exact spot" answer. */}
         <Stack gap="sm">
-          <h2 className="my-0 font-heading font-semibold text-sm">
-            Items here
-          </h2>
-          <LocationInventoryTable key={refreshKey} locationId={location.id} />
+          <Row align="center" justify="between">
+            <h2 className="my-0 font-heading font-semibold text-sm">
+              Items here
+            </h2>
+            <ShelfTableToggle value={view} onChange={setView} />
+          </Row>
+          <LocationInventoryTable
+            key={refreshKey}
+            locationId={location.id}
+            view={view}
+          />
         </Stack>
       </Stack>
     </Page>

@@ -58,6 +58,7 @@ export function ShelfCard({
   subtitle,
   entity,
   extraCount = 0,
+  badgeSlot,
 }: {
   to: string;
   params: Record<string, string>;
@@ -66,6 +67,8 @@ export function ShelfCard({
   subtitle?: ReactNode;
   entity: Entity;
   extraCount?: number;
+  /** Small overlay chip in the photo's top-left (e.g. a location-type icon). */
+  badgeSlot?: ReactNode;
 }) {
   return (
     <Link
@@ -81,6 +84,11 @@ export function ShelfCard({
           className="absolute inset-0 h-full w-full object-cover"
           fallback={<EntityIcon entity={entity} colored className="h-6 w-6" />}
         />
+        {badgeSlot != null && (
+          <div className="absolute top-1 left-1 rounded bg-black/60 p-1 text-white">
+            {badgeSlot}
+          </div>
+        )}
         {extraCount > 0 && (
           <div className="absolute right-1 bottom-1 rounded bg-black/60 px-1 text-2xs text-white">
             +{extraCount}

@@ -248,7 +248,9 @@ function renderZonedLayout({
  * Lay out the section cards. Mobile is a single source-order stack — the
  * section array order is the author-controlled narrative and stays the mobile
  * order regardless of zones. Desktop uses the zoned layout when any section
- * declares `zone: "main"`, else the legacy equal-column round-robin.
+ * declares an explicit `zone` (a page can be all full+aside, e.g. location's
+ * Contents band over a metadata row); pages that never mention zones keep the
+ * legacy equal-column round-robin exactly.
  */
 function renderSectionLayout({
   sections,
@@ -259,7 +261,7 @@ function renderSectionLayout({
   isMobile: boolean;
   heroImages?: Array<{ id: string; url: string; filename: string }>;
 }): ReactNode {
-  const zoned = sections.some((s) => zoneOf(s) === "main");
+  const zoned = sections.some((s) => s.zone !== undefined);
 
   if (isMobile) {
     return (
