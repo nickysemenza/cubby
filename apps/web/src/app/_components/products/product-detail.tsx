@@ -3,14 +3,16 @@ import type {
   ProductWithFoodOut,
 } from "@cubby/schemas/product";
 import { isNonFoodCategory } from "@cubby/shared";
+import { Link } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
-import { Apple, ChefHat, Info, Scale } from "lucide-react";
+import { Apple, ChefHat, Info, MapPin, Package, Scale } from "lucide-react";
 import type { FC } from "react";
 import { MutedBox } from "~/components/layout/muted-box";
 import { Page } from "~/components/page/Page";
+import { buttonVariants } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
-import { formatCurrency } from "~/lib/utils";
+import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import {
   type DetailHeroStat,
@@ -24,6 +26,7 @@ import { UnitCoveragePanel } from "../units/UnitCoveragePanel";
 import { NutritionInfoTable } from "../usda/nutrition";
 import { ProductBasicInfo } from "./product-basic-info";
 import { ProductForm } from "./product-form";
+import { ProductStockedAt } from "./product-stocked-at";
 
 interface ProductDetailProps {
   product: ProductWithFoodOut;
@@ -55,13 +58,30 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
         <ProductBasicInfo product={product} onEdit={editMode.startEditing} />
       ),
     }),
+    // Custom section: Stocked At — where the product lives, the primary
+    // content of the page (the hero's On hand / Locations stats are the
+    // glanceable summary of this table).
+    {
+      title: "Stocked At",
+      icon: MapPin,
+      zone: "main" as const,
+      headerAction: (
+        <Link
+          to="/inventory/session"
+          className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+        >
+          <Package className="mr-2 h-4 w-4" />
+          Add to Inventory
+        </Link>
+      ),
+      content: <ProductStockedAt product={product} />,
+    },
     // Custom section: Nutrition (only if available)
     ...(product.food?.nutritionInfo
       ? [
           {
             title: "Nutrition Information",
             icon: Apple,
-            zone: "main" as const,
             content: (
               <MutedBox>
                 <NutritionInfoTable n={product.food.nutritionInfo} />
@@ -129,12 +149,11 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
 
   const entries = product.inventoryEntry ?? [];
   const locationCount = uniq(entries.map((e) => e.location.id)).length;
+  // No Price stat here — the editable price field in Basic Information is
+  // the source of truth and sits right in the aside rail.
   const heroStats: DetailHeroStat[] = [
     { label: "On hand", value: entries.length },
     { label: "Locations", value: locationCount },
-    ...(product.price != null
-      ? [{ label: "Price", value: formatCurrency(product.price) }]
-      : []),
   ];
 
   return (

@@ -1,6 +1,5 @@
 import type { ProductWithFoodOut } from "@cubby/schemas/product";
 import { Link } from "@tanstack/react-router";
-import { Package } from "lucide-react";
 import type { FC } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
@@ -17,7 +16,6 @@ import { formatCurrency } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import { EditableCell } from "../data-table/editable-cell";
 import { EntityInlineLink } from "../EntityInlineLink";
-import { EntityInlineLinkList } from "../EntityInlineLinkList";
 import { useEntityDelete } from "../hooks/useEntityDelete";
 import { PrintLabelButton } from "../print-label-button";
 import { CategoryLabel } from "./CategoryLabel";
@@ -176,22 +174,6 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
           },
         ]
       : []),
-    {
-      label: "Inventory Locations",
-      value:
-        product.inventoryEntry && product.inventoryEntry.length > 0 ? (
-          <Row gap="xs" wrap className="mt-1">
-            <EntityInlineLinkList
-              entity="location"
-              items={product.inventoryEntry.map((entry) => ({
-                id: entry.location.id,
-                name: entry.location.name,
-                type: entry.location.type,
-              }))}
-            />
-          </Row>
-        ) : undefined,
-    },
   ];
 
   return (
@@ -199,16 +181,10 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
       <BasicInfo
         fields={fields}
         actions={
+          // Add to Inventory lives on the Stocked At section header now —
+          // this cluster is product-record actions only.
           <Row gap="sm">
             <Button onClick={onEdit}>Edit</Button>
-            <Button
-              variant="outline"
-              render={<Link to="/inventory/session" />}
-              nativeButton={false}
-            >
-              <Package className="mr-2 h-4 w-4" />
-              Add to Inventory
-            </Button>
             <PrintLabelButton shortcode={product.shortcode} />
             <DeleteButton />
           </Row>
