@@ -17,7 +17,7 @@ import JsonRenderer from "../json-renderer";
 // the unified PageHeader. Unmigrated detail pages import it from here.
 export type { DetailHeroStat };
 
-export type DetailZone = "main" | "aside" | "full";
+type DetailZone = "main" | "aside" | "full";
 
 export interface DetailSection {
   title: string;
