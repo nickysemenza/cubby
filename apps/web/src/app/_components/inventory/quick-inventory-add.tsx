@@ -46,6 +46,7 @@ import { useTRPC } from "~/trpc/react";
 import type { ComboboxItem } from "../combobox/combobox-types";
 import { ProductFormFields } from "../products/product-form-fields";
 import { useProductSearch } from "../products/use-product-search";
+import { useUpcAwareCreate } from "../products/use-upc-aware-create";
 import { AmountFieldGroup } from "./amount-field-group";
 import {
   useCreateInventoryMutation,
@@ -232,6 +233,9 @@ export function QuickInventoryAdd({
     },
     [createForm, imageState],
   );
+  // A pasted UPC creates + selects inline (via the lookup cascade) without
+  // switching to the full create form; a plain name still opens create mode.
+  const onCreateNew = useUpcAwareCreate(handleCreateNew);
 
   const switchToSelectMode = useCallback(() => {
     setFieldsExpanded(false);
@@ -255,7 +259,7 @@ export function QuickInventoryAdd({
                   items={productSearch.items}
                   onSearchChange={productSearch.onSearchChange}
                   isLoading={productSearch.isLoading}
-                  onCreateNew={handleCreateNew}
+                  onCreateNew={onCreateNew}
                 />
               </div>
               <Button

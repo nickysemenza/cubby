@@ -3,6 +3,7 @@ import type { AllowedImageType } from "@cubby/schemas/image";
 import type { InfLocation } from "@cubby/schemas/location";
 import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
 import { useMutation } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import {
   ArrowRightLeft,
   Camera,
@@ -10,6 +11,7 @@ import {
   CheckCheck,
   ChevronLeft,
   ChevronRight,
+  FolderInput,
   Minus,
   Plus,
   X,
@@ -37,6 +39,7 @@ import {
 } from "../session-utils";
 import { useSessionMutations } from "../useSessionMutations";
 import { AuditedHint } from "./AuditedHint";
+import { LocationContentsPreview } from "./LocationContentsPreview";
 import { QrJumpButton } from "./QrJumpButton";
 import { SessionCaptureActions } from "./SessionCaptureActions";
 import type {
@@ -54,6 +57,7 @@ export function LocationReviewPane({
   childLocations,
   unknownItems,
   unknownLocations,
+  inventoryByLocation,
   itemResolutions,
   confirmedLocationIds,
   duplicateProductIds,
@@ -61,9 +65,11 @@ export function LocationReviewPane({
   onAdjust,
   onRemove,
   onRelocate,
+  onMoveTo,
   onConfirmLocation,
   onMoveLocationMissing,
   onPullUnknown,
+  onMoveUnknownTo,
   onPullUnknownLocation,
   onPrevious,
   onNext,
@@ -85,6 +91,9 @@ export function LocationReviewPane({
   childLocations: InfLocation[];
   unknownItems: InventoryItem[];
   unknownLocations: InfLocation[];
+  // Direct inventory keyed by location id — powers the child/Unknown-location
+  // contents previews without a second query.
+  inventoryByLocation: Map<string, InventoryItem[]>;
   itemResolutions: Map<string, ItemResolution>;
   confirmedLocationIds: Set<string>;
   // string, not ProductId: brands strip across tRPC outputs (CLAUDE.md), so the
@@ -95,9 +104,11 @@ export function LocationReviewPane({
   onAdjust: (item: InventoryItem, amount: Amount) => void;
   onRemove: (item: InventoryItem) => void;
   onRelocate: (item: InventoryItem) => void;
+  onMoveTo: (item: InventoryItem) => void;
   onConfirmLocation: (locationId: string) => void;
   onMoveLocationMissing: (location: InfLocation) => void;
   onPullUnknown: (item: InventoryItem) => void;
+  onMoveUnknownTo: (item: InventoryItem) => void;
   onPullUnknownLocation: (location: InfLocation) => void;
   onPrevious: () => void;
   onNext: () => void;
@@ -221,7 +232,13 @@ export function LocationReviewPane({
       <div className="sticky top-12 z-20 min-w-0 border-b bg-background/95 py-2 backdrop-blur md:static md:border-b-0 md:bg-transparent md:py-0">
         <Row align="baseline" gap="sm" className="min-w-0">
           <h2 className="min-w-0 flex-1 truncate font-heading font-semibold text-xl">
-            {location.name}
+            <Link
+              to="/locations/$id"
+              params={{ id: location.id }}
+              className="underline decoration-border/70 decoration-dotted underline-offset-4 transition-colors hover:text-primary hover:decoration-primary hover:decoration-solid"
+            >
+              {location.name}
+            </Link>
           </h2>
           <AuditedHint
             at={location.lastBulkInventory}
@@ -325,6 +342,7 @@ export function LocationReviewPane({
                 <ExpectedLocationReviewRow
                   key={child.id}
                   location={child}
+                  previewItems={inventoryByLocation.get(child.id) ?? []}
                   confirmed={confirmedLocationIds.has(child.id)}
                   onConfirm={() => onConfirmLocation(child.id)}
                   onMissing={() => onMoveLocationMissing(child)}
@@ -349,6 +367,7 @@ export function LocationReviewPane({
                   onAdjust={(amount) => onAdjust(item, amount)}
                   onRemove={() => onRemove(item)}
                   onRelocate={() => onRelocate(item)}
+                  onMoveTo={() => onMoveTo(item)}
                   onPhoto={() =>
                     openExpectedPhotoPicker({
                       kind: "product",
@@ -368,8 +387,10 @@ export function LocationReviewPane({
       <UnknownTray
         items={unknownItems}
         locations={unknownLocations}
+        inventoryByLocation={inventoryByLocation}
         currentLocationName={location.name}
         onMoveIn={onPullUnknown}
+        onMoveTo={onMoveUnknownTo}
         onMoveLocationIn={onPullUnknownLocation}
         disabled={!unknownReady}
       />
@@ -444,6 +465,7 @@ function ExpectedItemReviewRow({
   onAdjust,
   onRemove,
   onRelocate,
+  onMoveTo,
   onPhoto,
   photoPending,
   isDuplicate,
@@ -455,6 +477,7 @@ function ExpectedItemReviewRow({
   onAdjust: (amount: Amount) => void;
   onRemove: () => void;
   onRelocate: () => void;
+  onMoveTo: () => void;
   onPhoto: () => void;
   photoPending: boolean;
 }) {
@@ -545,16 +568,26 @@ function ExpectedItemReviewRow({
             <Plus className="h-4 w-4" />
           </Button>
         </Row>
-        <Row gap="xs" className="shrink-0">
+        <Row gap="xs" wrap className="justify-end">
           <Button
             type="button"
             variant="outline"
             className="h-10 w-10 shrink-0"
             onClick={onRelocate}
-            aria-label="Relocate to Unknown"
-            title="Relocate to Unknown"
+            aria-label="Move to Unknown"
+            title="Move to Unknown"
           >
             <ArrowRightLeft className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-10 w-10 shrink-0"
+            onClick={onMoveTo}
+            aria-label="Move to another location"
+            title="Move to another location"
+          >
+            <FolderInput className="h-4 w-4" />
           </Button>
           <Button
             type="button"
@@ -596,6 +629,7 @@ function ExpectedItemReviewRow({
 
 function ExpectedLocationReviewRow({
   location,
+  previewItems,
   confirmed,
   onConfirm,
   onMissing,
@@ -603,6 +637,7 @@ function ExpectedLocationReviewRow({
   photoPending,
 }: {
   location: InfLocation;
+  previewItems: InventoryItem[];
   confirmed: boolean;
   onConfirm: () => void;
   onMissing: () => void;
@@ -681,6 +716,7 @@ function ExpectedLocationReviewRow({
           </Button>
         </Row>
       </Row>
+      <LocationContentsPreview items={previewItems} />
     </div>
   );
 }

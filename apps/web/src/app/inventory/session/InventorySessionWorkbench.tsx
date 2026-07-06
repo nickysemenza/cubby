@@ -4,7 +4,7 @@ import type { InventorySessionResolution } from "@cubby/schemas/inventory";
 import type { InfLocation } from "@cubby/schemas/location";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
@@ -15,6 +15,7 @@ import { Spinner } from "~/components/ui/spinner";
 import { getErrorMessage } from "~/lib/error-utils";
 import { useTRPC } from "~/trpc/react";
 import { LocationReviewPane } from "./_components/LocationReviewPane";
+import { MoveToDialog } from "./_components/MoveToDialog";
 import { ParentPicker } from "./_components/ParentPicker";
 import {
   LocationWorkbenchSidebar,
@@ -95,8 +96,11 @@ export function InventorySessionWorkbench({
   const locationIds = useMemo(() => {
     const ids = sessionLocations.map((loc) => loc.id);
     if (unknownLocation) ids.push(unknownLocation.id);
+    // Also fetch the direct contents of locations parked under Unknown so their
+    // tray rows can show a contents preview (they aren't session descendants).
+    for (const loc of unknownChildLocations) ids.push(loc.id);
     return ids;
-  }, [sessionLocations, unknownLocation]);
+  }, [sessionLocations, unknownLocation, unknownChildLocations]);
 
   const inventoryQuery = useQuery({
     ...api.inventory.getByLocationIds.queryOptions({ locationIds }),
@@ -197,11 +201,25 @@ export function InventorySessionWorkbench({
     targetLocationId: LocationId;
     success: string;
   }) => {
-    await bulkMove.mutateAsync({
+    const result = await bulkMove.mutateAsync({
       sourceLocationId,
       targetLocationId,
       items: [{ inventoryEntryId: item.id, quantity: item.amount }],
     });
+    // If the destination is the bin we're recounting, the item is now
+    // physically here — stage it verified (green) so it doesn't read as
+    // unresolved and block the gate. Read the staged ids off the *result*
+    // entries (a merge into an existing target entry changes the id), and
+    // remember them so undo can un-stage.
+    const stagedIds: string[] = [];
+    if (currentLocation && targetLocationId === currentLocation.id) {
+      for (const moved of result.items) {
+        if (moved.location.id === currentLocation.id) {
+          setItemResolution(moved.id, { kind: "verify" });
+          stagedIds.push(moved.id);
+        }
+      }
+    }
     pushUndo(
       {
         run: async () => {
@@ -210,6 +228,7 @@ export function InventorySessionWorkbench({
             targetLocationId: sourceLocationId,
             items: [{ inventoryEntryId: item.id, quantity: item.amount }],
           });
+          for (const id of stagedIds) setItemResolution(id, null);
         },
       },
       success,
@@ -261,6 +280,9 @@ export function InventorySessionWorkbench({
       id: location.id,
       data: { parentId: currentLocation.id },
     });
+    // The child is now physically under this bin — acknowledge it (green) so the
+    // gate doesn't demand a re-confirm for a location you just placed.
+    confirmLocation(location.id);
     pushUndo(
       {
         run: async () => {
@@ -268,10 +290,37 @@ export function InventorySessionWorkbench({
             id: location.id,
             data: { parentId: unknownLocation.id },
           });
+          setConfirmedLocationIds((prev) => {
+            const next = new Set(prev);
+            next.delete(location.id);
+            return next;
+          });
         },
       },
       `Moved ${location.name} into ${currentLocation.name}.`,
     );
+  };
+
+  // "Move to…" dialog: the item being relocated to an arbitrary location plus
+  // the bin it's leaving (the current bin for expected rows, Unknown for tray
+  // rows). The move itself reuses moveItem, so verify-staging + undo are shared.
+  const [moveTarget, setMoveTarget] = useState<{
+    item: InventoryItem;
+    sourceLocationId: LocationId;
+  } | null>(null);
+
+  const openMoveTo = (item: InventoryItem, sourceLocationId: LocationId) =>
+    setMoveTarget({ item, sourceLocationId });
+
+  const confirmMoveTo = async (targetLocationId: LocationId) => {
+    if (!moveTarget) return;
+    const target = findLocationInTree(tree, targetLocationId);
+    await moveItem({
+      item: moveTarget.item,
+      sourceLocationId: moveTarget.sourceLocationId,
+      targetLocationId,
+      success: `Moved ${moveTarget.item.product.name} to ${target?.name ?? "location"}.`,
+    });
   };
 
   const setItemResolution = (id: string, res: ItemResolution | null) =>
@@ -447,6 +496,7 @@ export function InventorySessionWorkbench({
             childLocations={currentChildLocations}
             unknownItems={unknownItems}
             unknownLocations={unknownChildLocations}
+            inventoryByLocation={inventoryByLocation}
             itemResolutions={itemResolutions}
             confirmedLocationIds={confirmedLocationIds}
             duplicateProductIds={duplicateProductIds}
@@ -454,9 +504,13 @@ export function InventorySessionWorkbench({
             onAdjust={stageAdjust}
             onRemove={stageRemove}
             onRelocate={moveToUnknown}
+            onMoveTo={(item) => openMoveTo(item, currentLocation.id)}
             onConfirmLocation={(locationId) => confirmLocation(locationId)}
             onMoveLocationMissing={moveLocationToUnknown}
             onPullUnknown={pullFromUnknown}
+            onMoveUnknownTo={(item) => {
+              if (unknownLocation) openMoveTo(item, unknownLocation.id);
+            }}
             onPullUnknownLocation={pullLocationFromUnknown}
             onPrevious={() => setCurrentIndex((idx) => Math.max(0, idx - 1))}
             onNext={() =>
@@ -481,6 +535,18 @@ export function InventorySessionWorkbench({
           />
         )}
       </div>
+
+      {moveTarget && (
+        <MoveToDialog
+          open
+          onOpenChange={(next) => {
+            if (!next) setMoveTarget(null);
+          }}
+          title={moveTarget.item.product.name}
+          sourceLocationId={moveTarget.sourceLocationId}
+          onConfirm={confirmMoveTo}
+        />
+      )}
     </Stack>
   );
 }
