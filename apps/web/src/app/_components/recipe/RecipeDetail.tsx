@@ -3,7 +3,9 @@ import { Link } from "@tanstack/react-router";
 import {
   BookOpen,
   ClipboardList,
+  Clock,
   Coffee,
+  ImageIcon,
   ListChecks,
   Printer,
   Table2,
@@ -389,7 +391,7 @@ const RecipeDetailInner: React.FC<{
       {viewMode === "read" && recipeImages.length > 1 && (
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle>More Images</CardTitle>
+            <CardTitle icon={ImageIcon}>More Images</CardTitle>
           </CardHeader>
           <CardContent>
             <EntityImageList images={recipeImages.slice(1)} />
@@ -406,7 +408,7 @@ const RecipeDetailInner: React.FC<{
       {/* History Section */}
       <Card className="print:hidden">
         <CardHeader className="pb-2">
-          <CardTitle>History</CardTitle>
+          <CardTitle icon={Clock}>History</CardTitle>
         </CardHeader>
         <CardContent>
           <AuditLogList

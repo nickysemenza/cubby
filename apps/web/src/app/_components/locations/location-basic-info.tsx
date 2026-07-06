@@ -1,5 +1,4 @@
 import type { InfLocation } from "@cubby/schemas/location";
-import { Link } from "@tanstack/react-router";
 import type { FC } from "react";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row } from "~/components/layout";
@@ -71,35 +70,13 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
           </div>
         }
         actions={
+          // Contents operations (recount, bulk edit) live on the Contents
+          // toolbar now — this cluster is location-record actions only.
           <Row gap="sm" wrap>
             <Button onClick={onEdit}>Edit</Button>
             {typeSupportsQrCode(location.type) && (
               <PrintLabelButton shortcode={location.shortcode} />
             )}
-            <Button
-              variant="outline"
-              render={
-                <Link
-                  to="/inventory/session"
-                  search={{ parentId: location.id }}
-                />
-              }
-              nativeButton={false}
-            >
-              Recount
-            </Button>
-            <Button
-              variant="outline"
-              render={
-                <Link
-                  to="/inventory/bulk-edit"
-                  search={{ locationId: location.id }}
-                />
-              }
-              nativeButton={false}
-            >
-              Bulk Edit Inventory
-            </Button>
             <DeleteButton />
           </Row>
         }

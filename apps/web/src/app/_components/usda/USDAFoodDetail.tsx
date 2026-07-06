@@ -161,15 +161,22 @@ export const USDAFoodDetail: React.FC<{
       icon: Link2,
       content: linkedProductsSection,
     },
-    { title: "Nutrition Information", icon: Apple, content: nutritionSection },
+    {
+      title: "Nutrition Information",
+      icon: Apple,
+      zone: "main",
+      content: nutritionSection,
+    },
     {
       title: "Serving Information",
       icon: UtensilsCrossed,
+      zone: "main",
       content: servingInfoSection,
     },
     {
       title: "Branded Food Ingredients",
       icon: ScrollText,
+      zone: "main",
       content: ingredientsSection,
     },
     { title: "Unit Conversions", icon: Scale, content: unitMappingsSection },

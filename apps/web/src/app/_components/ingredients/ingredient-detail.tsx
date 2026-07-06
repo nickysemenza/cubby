@@ -2,6 +2,7 @@ import type {
   IngredientUpdateInput,
   IngredientWithFoodOut,
 } from "@cubby/schemas/ingredient";
+import { uniqBy } from "es-toolkit";
 import {
   Apple,
   ChefHat,
@@ -10,17 +11,19 @@ import {
   ShoppingCart,
   Sparkles,
 } from "lucide-react";
-import { type FC, useState } from "react";
-import { Stack } from "~/components/layout";
+import { type FC, useCallback, useState } from "react";
 import { MutedBox } from "~/components/layout/muted-box";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { getIngredientMappings } from "~/lib/unit-mapping-utils";
 import { useTRPC } from "~/trpc/react";
-import { type DetailSection, DetailSections } from "../data-table/detail-page";
+import {
+  type DetailHeroStat,
+  type DetailSection,
+  DetailSections,
+} from "../data-table/detail-page";
 import { editableDetailSection } from "../data-table/editable-detail-section";
-import { EntityInlineLinkList } from "../EntityInlineLinkList";
 import { useEntityDetail } from "../hooks/useEntityDetail";
 import { RecipeUsagesTable } from "../recipe/recipe-usages-table";
 import { UnitCoveragePanel } from "../units/UnitCoveragePanel";
@@ -28,6 +31,7 @@ import { NutritionInfoTable } from "../usda/nutrition";
 import { EnrichIngredientDialog } from "./enrich-ingredient-dialog";
 import { IngredientBasicInfo } from "./ingredient-basic-info";
 import { IngredientForm } from "./ingredient-form";
+import { IngredientProductShelf } from "./ingredient-product-shelf";
 
 interface IngredientDetailProps {
   ingredient: IngredientWithFoodOut;
@@ -36,6 +40,7 @@ interface IngredientDetailProps {
 export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
   const api = useTRPC();
   const [isEnriching, setIsEnriching] = useState(false);
+  const startEnriching = useCallback(() => setIsEnriching(true), []);
 
   const { commonSections, editMode, mappings } = useEntityDetail<
     IngredientWithFoodOut,
@@ -79,30 +84,19 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
           },
         ]
       : []),
-    // Custom section: Related Products
+    // Custom section: Related Products — the products realizing this
+    // ingredient, as photo cards (primary content alongside recipe usages).
     {
       title: "Related Products",
       icon: ShoppingCart,
-      content: (
-        <Stack gap="sm">
-          {ingredient.product.length > 0 ? (
-            <EntityInlineLinkList entity="product" items={ingredient.product} />
-          ) : (
-            <Description>
-              No products linked yet — enrich this ingredient to add pricing and
-              nutrition.
-            </Description>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsEnriching(true)}
-          >
-            <Sparkles className="h-4 w-4" />
-            Enrich
-          </Button>
-        </Stack>
+      zone: "main" as const,
+      headerAction: (
+        <Button variant="outline" size="sm" onClick={startEnriching}>
+          <Sparkles className="h-4 w-4" />
+          Enrich
+        </Button>
       ),
+      content: <IngredientProductShelf products={ingredient.product} />,
     },
     // Custom section: Unit Mappings — conversion capabilities + Convert modal
     // above the source-attributed table (table shows which product/food each
@@ -110,6 +104,7 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
     {
       title: "Unit Mappings",
       icon: Scale,
+      zone: "main",
       content: <UnitCoveragePanel mappings={mappings} />,
     },
     // Custom section: Appears In Recipes — one row per usage, with amount,
@@ -118,7 +113,7 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
     {
       title: "Appears In Recipes",
       icon: ChefHat,
-      fullWidth: true,
+      zone: "full",
       content:
         ingredient.recipeUsages.length > 0 ? (
           <RecipeUsagesTable
@@ -134,6 +129,15 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
     ...commonSections,
   ];
 
+  // Payload-derived placard stats — no extra queries.
+  const heroStats: DetailHeroStat[] = [
+    {
+      label: "Recipes",
+      value: uniqBy(ingredient.recipeUsages, (u) => u.recipe.id).length,
+    },
+    { label: "Products", value: ingredient.product.length },
+  ];
+
   return (
     <>
       <Page
@@ -141,6 +145,7 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
         entity="ingredient"
         title={ingredient.name}
         rawData={ingredient}
+        heroStats={heroStats}
       >
         <DetailSections sections={sections} rawData={ingredient} />
       </Page>

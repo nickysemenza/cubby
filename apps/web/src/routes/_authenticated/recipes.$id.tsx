@@ -15,6 +15,7 @@ import RecipeDetail, {
   remapLegacyView,
 } from "~/app/_components/recipe/RecipeDetail";
 import { AddToMeal } from "~/app/meals/add-to-meal";
+import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import { RouteErrorComponent } from "~/components/route-error";
 import { DetailPagePending } from "~/components/route-pending";
@@ -22,6 +23,7 @@ import { Button } from "~/components/ui/button";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 import { recipeMutationInvalidateKeys } from "~/lib/query-keys";
+import { formatCurrency } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 
 const searchSchema = z.object({
@@ -121,6 +123,28 @@ function RecipeDetailPage() {
 
   useDocumentTitle(recipe.name ? `Recipe: ${recipe.name}` : undefined);
 
+  // Placard stats from the persisted totals — zero engine calls. The Data
+  // view's summary card shows live SCALED totals; these are the 1× ledger
+  // numbers, consistent with the recipe list.
+  const totals = recipe.totals;
+  const heroStats: DetailHeroStat[] = [
+    ...(totals
+      ? [
+          {
+            label: "Cost",
+            value:
+              totals.costTotalUpper != null
+                ? `${formatCurrency(totals.costTotal)}–${formatCurrency(totals.costTotalUpper)}`
+                : formatCurrency(totals.costTotal),
+          },
+          { label: "Calories", value: Math.round(totals.caloriesTotal) },
+        ]
+      : []),
+    ...(recipe.servings != null
+      ? [{ label: "Servings", value: recipe.servings }]
+      : []),
+  ];
+
   const startEditing = () => {
     navigate({ to: ".", search: { edit: true } });
   };
@@ -135,6 +159,7 @@ function RecipeDetailPage() {
       entity="recipe"
       title={recipe.name}
       rawData={recipe}
+      heroStats={heroStats.length > 0 ? heroStats : undefined}
       actions={
         !isEditing ? (
           <>

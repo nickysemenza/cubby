@@ -12,7 +12,7 @@ import {
   createEditableAmountColumn,
   createSingleEntityInlineLinkColumn,
 } from "../data-table/columnHelpers";
-import { ShelfTableToggle, type ShelfView } from "../data-table/shelf";
+import type { ShelfView } from "../data-table/shelf";
 import RTable from "../data-table/Table";
 import { useEntityList } from "../hooks/useEntityList";
 import { useUpdateMutation } from "../hooks/useUpdateMutation";
@@ -28,8 +28,22 @@ import { ImageThumbnail } from "../table/ImageThumbnail";
 
 type InventoryItem = z.infer<typeof inventoryListItemOut>;
 
+/**
+ * The location-scoped inventory.list input. Shared with LocationContents so
+ * its header valuation/count reads hit the SAME React Query cache entry as
+ * this table's list — one fetch serves both.
+ */
+export const locationInventoryListInput = (locationId: LocationId) =>
+  ({
+    sort: { orderBy: "createdAt", direction: "desc" },
+    pagination: { pageIndex: 0, pageSize: 100 },
+    filters: { locationIdFilter: locationId },
+  }) as const;
+
 interface LocationInventoryTableProps {
   locationId: LocationId;
+  /** Shelf/table switch — owned by the parent (LocationContents) toolbar. */
+  view: ShelfView;
 }
 
 const sameIds = (a: readonly string[], b: readonly string[]) =>
@@ -37,6 +51,7 @@ const sameIds = (a: readonly string[], b: readonly string[]) =>
 
 export function LocationInventoryTable({
   locationId,
+  view,
 }: LocationInventoryTableProps) {
   const api = useTRPC();
   const columnHelper = createColumnHelper<InventoryItem>();
@@ -51,9 +66,6 @@ export function LocationInventoryTable({
     entity: "inventory",
     invalidateKeys: inventoryMutationInvalidateKeys,
   });
-
-  // Browse as a photo "shelf" by default; the editable table is one toggle away.
-  const [view, setView] = useState<ShelfView>("shelf");
 
   // Dialog states for bulk actions
   const [dialogState, setDialogState] = useState<{
@@ -102,11 +114,7 @@ export function LocationInventoryTable({
   >({
     entity: "inventory",
     queryOptions: () =>
-      api.inventory.list.queryOptions({
-        sort: { orderBy: "createdAt", direction: "desc" },
-        pagination: { pageIndex: 0, pageSize: 100 },
-        filters: { locationIdFilter: locationId },
-      }),
+      api.inventory.list.queryOptions(locationInventoryListInput(locationId)),
     buildFilters: () => ({}),
     filters: [],
     columns: [
@@ -173,12 +181,6 @@ export function LocationInventoryTable({
 
   return (
     <ProductImageSummariesProvider productIds={productIds}>
-      <ShelfTableToggle
-        value={view}
-        onChange={setView}
-        className="mb-4 justify-end"
-      />
-
       {view === "shelf" ? (
         <InventoryShelf items={items} isLoading={isLoading} error={error} />
       ) : (
