@@ -71,6 +71,7 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
           {
             title: "Nutrition Information",
             icon: Apple,
+            zone: "main" as const,
             content: (
               <MutedBox>
                 <NutritionInfoTable n={nutritionInfo} />
@@ -110,6 +111,7 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
     {
       title: "Unit Mappings",
       icon: Scale,
+      zone: "main",
       content: <UnitCoveragePanel mappings={mappings} />,
     },
     // Custom section: Appears In Recipes — one row per usage, with amount,
@@ -118,7 +120,7 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
     {
       title: "Appears In Recipes",
       icon: ChefHat,
-      fullWidth: true,
+      zone: "full",
       content:
         ingredient.recipeUsages.length > 0 ? (
           <RecipeUsagesTable

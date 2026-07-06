@@ -61,6 +61,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
           {
             title: "Nutrition Information",
             icon: Apple,
+            zone: "main" as const,
             content: (
               <MutedBox>
                 <NutritionInfoTable n={product.food.nutritionInfo} />
@@ -79,6 +80,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
           {
             title: "Unit Mappings",
             icon: Scale,
+            zone: "main" as const,
             content: (
               <Description>
                 No unit conversions — not needed for non-food items.
@@ -90,6 +92,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
           {
             title: "Unit Mappings",
             icon: Scale,
+            zone: "main" as const,
             content: (
               <UnitCoveragePanel
                 mappings={mappings}
@@ -106,7 +109,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
           {
             title: "Appears In Recipes",
             icon: ChefHat,
-            fullWidth: true,
+            zone: "full" as const,
             content:
               product.recipeUsages.length > 0 ? (
                 <RecipeUsagesTable

@@ -96,6 +96,7 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
     {
       title: "Child Locations",
       icon: FolderTree,
+      zone: "main",
       content: (
         <Stack gap="sm">
           <Row gap="sm">
@@ -175,6 +176,7 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
     {
       title: "Inventory Items",
       icon: Package,
+      zone: "main",
       content: (
         <Stack gap="sm">
           <Stack gap="sm">

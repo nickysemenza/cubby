@@ -14,11 +14,16 @@ export function editableDetailSection<TEditData, TEntity>({
   title,
   icon,
   fullWidth,
+  zone,
+  headerAction,
   editMode,
   Form,
   entity,
   children,
-}: Pick<DetailSection, "title" | "icon" | "fullWidth"> & {
+}: Pick<
+  DetailSection,
+  "title" | "icon" | "fullWidth" | "zone" | "headerAction"
+> & {
   editMode: UseEditModeReturn<TEditData>;
   Form: ComponentType<EditModeProps<TEditData, TEntity>>;
   entity: TEntity;
@@ -29,6 +34,8 @@ export function editableDetailSection<TEditData, TEntity>({
     title,
     icon,
     fullWidth,
+    zone,
+    headerAction,
     overflowVisible: editMode.isEditing,
     content: editMode.isEditing ? (
       <Form

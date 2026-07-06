@@ -55,6 +55,7 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
     editableDetailSection({
       title: "Inventory Item Details",
       icon: Package,
+      zone: "main",
       editMode,
       Form: InventoryForm,
       entity: inventoryitem,
