@@ -40,6 +40,7 @@ import {
   PersistentScanner,
 } from "~/app/_components/inventory/persistent-scanner";
 import { useProductSearch } from "~/app/_components/products/use-product-search";
+import { useUpcAwareCreate } from "~/app/_components/products/use-upc-aware-create";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
@@ -667,6 +668,9 @@ function ManualAdd({ locationId }: { locationId: LocationId }) {
     },
     [queryClient],
   );
+  // Paste a UPC into "Manual add" to create from the UPC cascade; a plain name
+  // still name-only quick-creates.
+  const onCreateNew = useUpcAwareCreate(handleQuickCreate);
 
   return (
     <Stack
@@ -694,7 +698,7 @@ function ManualAdd({ locationId }: { locationId: LocationId }) {
               items={items}
               onSearchChange={onSearchChange}
               isLoading={isLoading}
-              onCreateNew={handleQuickCreate}
+              onCreateNew={onCreateNew}
               onOpenChange={onOpenChange}
             />
           )}

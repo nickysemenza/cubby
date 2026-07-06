@@ -1,5 +1,5 @@
 import type { InfLocation } from "@cubby/schemas/location";
-import { ArrowDownToLine, Search } from "lucide-react";
+import { ArrowDownToLine, FolderInput, Search } from "lucide-react";
 import { useState } from "react";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
@@ -11,20 +11,25 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { Image } from "~/components/ui/image";
 import { cn } from "~/lib/utils";
+import { LocationContentsPreview } from "./LocationContentsPreview";
 import type { InventoryItem } from "./types";
 
 export function UnknownTray({
   items,
   locations,
+  inventoryByLocation,
   currentLocationName,
   onMoveIn,
+  onMoveTo,
   onMoveLocationIn,
   disabled,
 }: {
   items: InventoryItem[];
   locations: InfLocation[];
+  inventoryByLocation: Map<string, InventoryItem[]>;
   currentLocationName: string;
   onMoveIn: (item: InventoryItem) => void;
+  onMoveTo: (item: InventoryItem) => void;
   onMoveLocationIn: (location: InfLocation) => void;
   disabled: boolean;
 }) {
@@ -117,6 +122,9 @@ export function UnknownTray({
                       <ArrowDownToLine className="h-4 w-4" />
                     </Button>
                   </Row>
+                  <LocationContentsPreview
+                    items={inventoryByLocation.get(location.id) ?? []}
+                  />
                 </div>
               ))}
               {filtered.map((item) => (
@@ -147,17 +155,30 @@ export function UnknownTray({
                         {tryFormatAmount(item.amount)}
                       </Description>
                     </Row>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-11 w-10 shrink-0"
-                      disabled={disabled}
-                      title={`Move into ${currentLocationName}`}
-                      aria-label={`Move into ${currentLocationName}`}
-                      onClick={() => onMoveIn(item)}
-                    >
-                      <ArrowDownToLine className="h-4 w-4" />
-                    </Button>
+                    <Row gap="xs" className="shrink-0">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-11 w-10 shrink-0"
+                        disabled={disabled}
+                        title="Move to another location"
+                        aria-label="Move to another location"
+                        onClick={() => onMoveTo(item)}
+                      >
+                        <FolderInput className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-11 w-10 shrink-0"
+                        disabled={disabled}
+                        title={`Move into ${currentLocationName}`}
+                        aria-label={`Move into ${currentLocationName}`}
+                        onClick={() => onMoveIn(item)}
+                      >
+                        <ArrowDownToLine className="h-4 w-4" />
+                      </Button>
+                    </Row>
                   </Row>
                 </div>
               ))}

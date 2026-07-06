@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { useUpcAwareCreate } from "~/app/_components/products/use-upc-aware-create";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
   ingredientMutationInvalidateKeys,
@@ -196,6 +197,10 @@ export function WithProductSearch({ children }: WithEntitySearchProps) {
     error: (err) => `Failed to create product: ${getErrorMessage(err)}`,
   });
 
+  // A pasted/typed UPC skips the name-only dialog and resolves via the UPC
+  // lookup cascade instead; non-UPC input still opens the create dialog.
+  const onCreateNew = useUpcAwareCreate(openDialog);
+
   return (
     <>
       <CreateProductDialog
@@ -211,7 +216,7 @@ export function WithProductSearch({ children }: WithEntitySearchProps) {
         items: data?.items.map(buildProductComboboxItem) ?? [],
         onSearchChange,
         isLoading,
-        onCreateNew: openDialog,
+        onCreateNew,
         onOpenChange,
       })}
     </>
