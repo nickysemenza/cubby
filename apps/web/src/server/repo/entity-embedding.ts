@@ -406,6 +406,10 @@ export async function findSemanticEntityCandidates(
     const castEmbedding = sql.raw(
       `ee."embedding"::vector(${config.dimensions})`,
     );
+    // Inline the dimensions filter as a literal (config.dimensions is a
+    // trusted registry number) so the planner can prove the partial-index
+    // predicate `dimensions = 1536` and use EntityEmbedding_embedding_hnsw_idx.
+    const dimensionsFilter = sql.raw(`ee."dimensions" = ${config.dimensions}`);
     const result = await getDb(db).execute<{
       entityType: SearchableEntity;
       entityId: string;
@@ -419,7 +423,7 @@ export async function findSemanticEntityCandidates(
       WHERE ee."deletedAt" IS NULL
         AND ee."provider" = ${config.provider}
         AND ee."model" = ${config.model}
-        AND ee."dimensions" = ${config.dimensions}
+        AND ${dimensionsFilter}
         ${typeFilter}
       ORDER BY ${castEmbedding} <=> ${vector}
       LIMIT ${opts.limit}

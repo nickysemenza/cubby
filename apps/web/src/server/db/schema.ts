@@ -612,13 +612,20 @@ export const entityEmbedding = pgTable(
     ),
     index("EntityEmbedding_hash_idx").on(table.embeddingHash),
     // HNSW nearest-neighbor index. The column is untyped `vector` (dimensions
-    // vary per model config row), and pgvector only indexes fixed-dimension
-    // expressions — so index the cast, and findSemanticEntityCandidates must
-    // ORDER BY the same `embedding::vector(N)` cast for the planner to use it.
-    index("EntityEmbedding_embedding_hnsw_idx").using(
-      "hnsw",
-      sql`(${table.embedding}::vector(1536)) vector_cosine_ops`,
-    ),
+    // vary per model config row — prod uses 1536, tests seed 3), and pgvector
+    // only indexes fixed-dimension expressions. So index the cast, and:
+    //   1. findSemanticEntityCandidates must ORDER BY the same
+    //      `embedding::vector(1536)` cast for the planner to use it, and
+    //   2. the index is PARTIAL on `dimensions = 1536` — a non-partial index
+    //      would evaluate `::vector(1536)` on every inserted row and throw
+    //      "expected 1536 dimensions, not 3" on any smaller-dim row (the
+    //      integration tests seed 3-dim vectors). Postgres skips the
+    //      expression for rows failing the predicate, so those inserts pass.
+    //      The query inlines a literal `dimensions = 1536` so the planner can
+    //      prove the predicate and still use the index.
+    index("EntityEmbedding_embedding_hnsw_idx")
+      .using("hnsw", sql`(${table.embedding}::vector(1536)) vector_cosine_ops`)
+      .where(sql`${table.deletedAt} IS NULL AND ${table.dimensions} = 1536`),
   ],
 );
 
