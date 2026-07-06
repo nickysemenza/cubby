@@ -206,11 +206,16 @@ export function InventorySessionWorkbench({
       targetLocationId,
       items: [{ inventoryEntryId: item.id, quantity: item.amount }],
     });
+    // A merge into an existing same-product entry at the target hard-deletes
+    // the source entry, so `item.id` can be stale after the move — the entry
+    // that now holds the moved quantity is the one in `result.items`. Undo
+    // must reverse by that id (moving `item.amount` back is a partial move
+    // out of the merged entry).
+    const movedId = result.items[0]?.id ?? item.id;
     // If the destination is the bin we're recounting, the item is now
     // physically here — stage it verified (green) so it doesn't read as
-    // unresolved and block the gate. Read the staged ids off the *result*
-    // entries (a merge into an existing target entry changes the id), and
-    // remember them so undo can un-stage.
+    // unresolved and block the gate, and remember the ids so undo can
+    // un-stage.
     const stagedIds: string[] = [];
     if (currentLocation && targetLocationId === currentLocation.id) {
       for (const moved of result.items) {
@@ -226,7 +231,7 @@ export function InventorySessionWorkbench({
           await bulkMove.mutateAsync({
             sourceLocationId: targetLocationId,
             targetLocationId: sourceLocationId,
-            items: [{ inventoryEntryId: item.id, quantity: item.amount }],
+            items: [{ inventoryEntryId: movedId, quantity: item.amount }],
           });
           for (const id of stagedIds) setItemResolution(id, null);
         },

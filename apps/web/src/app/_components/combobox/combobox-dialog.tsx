@@ -259,7 +259,17 @@ export function DialogCompatibleCombobox<TId extends string = string>({
                     e.preventDefault();
                     e.stopPropagation();
 
-                    const newItem = await onCreateNew(inputValue);
+                    // A rejected create (e.g. a failed UPC lookup in
+                    // useUpcAwareCreate) keeps the picker open with the term
+                    // intact so the user can retry — the creator owns the
+                    // error toast; selecting nothing here is the whole
+                    // handling.
+                    let newItem: ComboboxItem<TId>;
+                    try {
+                      newItem = await onCreateNew(inputValue);
+                    } catch {
+                      return;
+                    }
                     setValue(newItem);
                     changeOpen(false);
                     setInputValue("");
