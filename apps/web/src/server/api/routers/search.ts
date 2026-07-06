@@ -16,6 +16,7 @@ import {
   debugHybridSearch,
   enqueueEntityEmbeddingBackfill,
   hybridGlobalSearch,
+  lexicalGlobalSearch,
 } from "~/server/services/semantic-search.service";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
@@ -24,7 +25,9 @@ const global = protectedProcedure
   .input(globalSearchInputSchema)
   .output(globalSearchOut)
   .query(async ({ ctx, input }): Promise<SearchResultItem[]> => {
-    return await hybridGlobalSearch(ctx.db, input.query, input.limit);
+    return input.mode === "lexical"
+      ? await lexicalGlobalSearch(ctx.db, input.query, input.limit)
+      : await hybridGlobalSearch(ctx.db, input.query, input.limit);
   });
 
 export const searchRouter = createTRPCRouter({

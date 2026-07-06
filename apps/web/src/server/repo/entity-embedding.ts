@@ -398,6 +398,18 @@ export async function findSemanticEntityCandidates(
           )})`
         : sql``;
     const vector = vectorLiteral(queryEmbedding);
+    // The `embedding::vector(N)` cast must match the expression in
+    // EntityEmbedding_embedding_hnsw_idx exactly, or the planner falls back
+    // to a seq scan (the raw column is untyped `vector`, which pgvector
+    // can't index directly). config.dimensions is a number from
+    // AI_MODEL_REGISTRY, safe to inline raw.
+    const castEmbedding = sql.raw(
+      `ee."embedding"::vector(${config.dimensions})`,
+    );
+    // Inline the dimensions filter as a literal (config.dimensions is a
+    // trusted registry number) so the planner can prove the partial-index
+    // predicate `dimensions = 1536` and use EntityEmbedding_embedding_hnsw_idx.
+    const dimensionsFilter = sql.raw(`ee."dimensions" = ${config.dimensions}`);
     const result = await getDb(db).execute<{
       entityType: SearchableEntity;
       entityId: string;
@@ -406,14 +418,14 @@ export async function findSemanticEntityCandidates(
       SELECT
         ee."entityType" AS "entityType",
         ee."entityId"::text AS "entityId",
-        1 - (ee."embedding" <=> ${vector}) AS "similarity"
+        1 - (${castEmbedding} <=> ${vector}) AS "similarity"
       FROM "EntityEmbedding" ee
       WHERE ee."deletedAt" IS NULL
         AND ee."provider" = ${config.provider}
         AND ee."model" = ${config.model}
-        AND ee."dimensions" = ${config.dimensions}
+        AND ${dimensionsFilter}
         ${typeFilter}
-      ORDER BY ee."embedding" <=> ${vector}
+      ORDER BY ${castEmbedding} <=> ${vector}
       LIMIT ${opts.limit}
     `);
     rows = result.rows as Array<{

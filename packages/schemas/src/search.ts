@@ -30,6 +30,12 @@ export type SearchType = z.infer<typeof searchTypeSchema>;
 export const globalSearchInputSchema = z.object({
   query: z.string().min(1).max(100),
   limit: z.number().min(1).max(50).default(5),
+  /**
+   * "lexical" skips the semantic (embedding + pgvector) path so the fast
+   * ilike results can render immediately; the command palette pairs it with
+   * a second "hybrid" request that merges semantic results when they land.
+   */
+  mode: z.enum(["lexical", "hybrid"]).default("hybrid"),
 });
 
 export const searchMatchKindSchema = z.enum([
