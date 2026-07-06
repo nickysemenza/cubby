@@ -23,9 +23,11 @@ import {
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
+  applyImageOrder,
   associatePendingImages,
   findOrCreate,
   insertAndReturn,
+  nextImageSortOrder,
   notDeleted,
   unwrapDb,
 } from "~/server/repo/database-helpers";
@@ -212,21 +214,23 @@ export async function updateRecipeBasicProperties(
 }
 
 /**
- * Add new images and remove requested images.
+ * Add new images, remove requested images, and apply an explicit display
+ * order (first = cover). Order is applied before the append so new images
+ * always land after the reordered existing set.
  */
 export async function updateRecipeImages(
   tx: DrizzleTransaction,
   recipeId: RecipeId,
   updates: RecipeUpdateInput["data"],
 ): Promise<void> {
-  // Add new images if provided
-  if (updates.pendingImageIds && updates.pendingImageIds.length > 0) {
-    await associatePendingImages(
+  // Reorder existing images if requested
+  if (updates.imageOrder && updates.imageOrder.length > 0) {
+    await applyImageOrder(
       tx,
       recipeImage,
-      "recipeId",
+      recipeImage.recipeId,
       recipeId,
-      updates.pendingImageIds,
+      updates.imageOrder,
     );
   }
 
@@ -240,6 +244,24 @@ export async function updateRecipeImages(
           inArray(recipeImage.imageId, updates.removeImageIds),
         ),
       );
+  }
+
+  // Add new images if provided
+  if (updates.pendingImageIds && updates.pendingImageIds.length > 0) {
+    const startSortOrder = await nextImageSortOrder(
+      tx,
+      recipeImage,
+      recipeImage.recipeId,
+      recipeId,
+    );
+    await associatePendingImages(
+      tx,
+      recipeImage,
+      "recipeId",
+      recipeId,
+      updates.pendingImageIds,
+      startSortOrder,
+    );
   }
 }
 

@@ -43,6 +43,14 @@ const sectionOrder = (t: {
   id: AnyColumn;
 }) => [asc(t.sortOrder), asc(t.createdAt), asc(t.id)];
 
+/**
+ * Display order for entity images (productImage/locationImage/recipeImage):
+ * same shape as sections — explicit sortOrder (first = cover), createdAt/id
+ * tie-break for legacy rows that all sit at the 0 default. Exported for the
+ * few image loads that don't go through these relation presets.
+ */
+export const imageOrder = sectionOrder;
+
 export const relations = {
   ingredient: {
     full: {
@@ -52,6 +60,7 @@ export const relations = {
             unitMappings: true,
             externalIds: true,
             images: {
+              orderBy: imageOrder,
               with: {
                 image: true,
               },
@@ -84,6 +93,7 @@ export const relations = {
             },
             images: {
               where: notDeleted(productImage),
+              orderBy: imageOrder,
               with: {
                 image: true,
               },
@@ -104,6 +114,7 @@ export const relations = {
             location: {
               with: {
                 images: {
+                  orderBy: imageOrder,
                   with: {
                     image: true,
                   },
@@ -113,6 +124,7 @@ export const relations = {
           },
         },
         images: {
+          orderBy: imageOrder,
           with: {
             image: true,
           },
@@ -124,6 +136,7 @@ export const relations = {
         ingredient: true,
         images: {
           where: notDeleted(productImage),
+          orderBy: imageOrder,
           with: {
             image: true,
           },
@@ -164,6 +177,7 @@ export const relations = {
           },
         },
         images: {
+          orderBy: imageOrder,
           with: {
             image: true,
           },
@@ -211,6 +225,7 @@ export const relations = {
           },
         },
         images: {
+          orderBy: imageOrder,
           with: {
             image: true,
           },
@@ -223,6 +238,7 @@ export const relations = {
         children: {
           with: {
             images: {
+              orderBy: imageOrder,
               with: {
                 image: true,
               },
@@ -235,6 +251,7 @@ export const relations = {
           },
         },
         images: {
+          orderBy: imageOrder,
           with: {
             image: true,
           },
@@ -244,6 +261,7 @@ export const relations = {
     withImages: {
       with: {
         images: {
+          orderBy: imageOrder,
           with: {
             image: true,
           },
@@ -265,6 +283,7 @@ export const relations = {
             unitMappings: true,
             externalIds: true,
             images: {
+              orderBy: imageOrder,
               with: {
                 image: true,
               },
@@ -274,6 +293,7 @@ export const relations = {
         location: {
           with: {
             images: {
+              orderBy: imageOrder,
               with: {
                 image: true,
               },

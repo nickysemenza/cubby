@@ -22,7 +22,7 @@ import {
 } from "@cubby/schemas/product";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 import { countBy, uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
 import {
@@ -177,7 +177,10 @@ export const getProductImagesByProductIds = async (
         notDeleted(productImage),
         notDeleted(image),
       ),
-    );
+    )
+    // Display order: sortOrder first (0-default legacy rows tie-break on
+    // createdAt) — images[0] is the cover everywhere.
+    .orderBy(asc(productImage.sortOrder), asc(productImage.createdAt));
 
   for (const row of rows) {
     result[row.productId]?.push(row.image);
@@ -579,6 +582,7 @@ export const updateProduct = async (
     externalIds,
     pendingImageIds,
     removeImageIds,
+    imageOrder,
     ...productData
   } = data;
 
@@ -641,14 +645,25 @@ export const updateProduct = async (
     if (externalIds !== undefined) {
       await syncProductExternalIds(tx, id, externalIds);
     }
-    await syncProductImages(tx, id, pendingImageIds, removeImageIds);
+    await syncProductImages(
+      tx,
+      id,
+      pendingImageIds,
+      removeImageIds,
+      imageOrder,
+    );
 
-    // Fetch all associated images
+    // Fetch all associated images (live only — just-removed ones must not
+    // reappear in the response) in display order.
     const productImages = await tx.query.productImage.findMany({
-      where: eq(productImage.productId, updated.id),
+      where: and(
+        eq(productImage.productId, updated.id),
+        notDeleted(productImage),
+      ),
       with: {
         image: true,
       },
+      orderBy: [asc(productImage.sortOrder), asc(productImage.createdAt)],
     });
 
     // Log audit entry with changes

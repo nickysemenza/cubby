@@ -9,10 +9,12 @@
 export { getDb, unwrapDb, withTransaction } from "./core";
 // CRUD operations
 export {
+  applyImageOrder,
   associatePendingImages,
   batchUpdateWithCaseWhen,
   findOrCreate,
   insertAndReturn,
+  nextImageSortOrder,
   updateAndReturn,
   updateLiveAndReturn,
 } from "./crud";
@@ -29,7 +31,7 @@ export {
   notDeleted,
 } from "./query";
 // Relation loaders
-export { relations } from "./relations";
+export { imageOrder, relations } from "./relations";
 export type { RowWithOptionalAliases } from "./transform";
 // Transform helpers
 export {

@@ -188,16 +188,18 @@ export async function associatePendingImages<T extends PgTable>(
   parentIdField: string,
   parentId: string,
   pendingImageIds: string[],
+  startSortOrder = 0,
 ): Promise<void> {
   if (!pendingImageIds || pendingImageIds.length === 0) {
     return;
   }
 
-  // Create join table records in batch
+  // Create join table records in batch, appending after startSortOrder
   await dbOrTx.insert(joinTable).values(
-    pendingImageIds.map((imageId) => ({
+    pendingImageIds.map((imageId, i) => ({
       [parentIdField]: parentId,
       imageId,
+      sortOrder: startSortOrder + i,
     })) as InferInsertModel<T>[],
   );
 
@@ -206,6 +208,56 @@ export async function associatePendingImages<T extends PgTable>(
     .update(image)
     .set({ status: "UPLOADED" })
     .where(inArray(image.id, pendingImageIds));
+}
+
+/** Shape shared by the productImage/locationImage/recipeImage join tables. */
+type ImageJoinTable = PgTable & {
+  imageId: AnyColumn;
+  sortOrder: AnyColumn;
+  deletedAt: AnyColumn;
+};
+
+/**
+ * Persist an explicit display order for an entity's images: each id in
+ * `orderedImageIds` gets `sortOrder = index` (first = cover). Ids not listed
+ * keep their existing sortOrder.
+ */
+export async function applyImageOrder<T extends ImageJoinTable>(
+  dbOrTx: DrizzleClient | DrizzleTransaction,
+  joinTable: T,
+  parentIdColumn: AnyColumn,
+  parentId: string,
+  orderedImageIds: string[],
+): Promise<void> {
+  for (const [i, imageId] of orderedImageIds.entries()) {
+    await dbOrTx
+      .update(joinTable)
+      .set({ sortOrder: i } as Partial<InferInsertModel<T>>)
+      .where(
+        and(
+          eq(parentIdColumn, parentId),
+          eq(joinTable.imageId, imageId),
+          notDeleted(joinTable),
+        ),
+      );
+  }
+}
+
+/**
+ * Next free sortOrder for an entity's images — used so newly associated
+ * images append after the existing ones instead of colliding at 0.
+ */
+export async function nextImageSortOrder(
+  dbOrTx: DrizzleClient | DrizzleTransaction,
+  joinTable: ImageJoinTable,
+  parentIdColumn: AnyColumn,
+  parentId: string,
+): Promise<number> {
+  const [row] = await dbOrTx
+    .select({ max: sql<number | null>`max(${joinTable.sortOrder})` })
+    .from(joinTable)
+    .where(and(eq(parentIdColumn, parentId), notDeleted(joinTable)));
+  return (row?.max ?? -1) + 1;
 }
 
 /**

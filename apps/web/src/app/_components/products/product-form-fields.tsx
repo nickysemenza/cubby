@@ -70,7 +70,9 @@ function FormSection({
 
 type ImageHandlers = Pick<
   ReturnType<typeof useImageState>,
-  "handlePendingImagesChange" | "handleRemovedImagesChange"
+  | "handlePendingImagesChange"
+  | "handleRemovedImagesChange"
+  | "handleExistingImagesReorder"
 >;
 
 interface ProductFormFieldsProps<TFieldValues extends FieldValues> {
@@ -380,6 +382,7 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
           onImagesChange={imageHandlers.handlePendingImagesChange}
           existingImages={existingImages}
           onExistingImagesRemove={imageHandlers.handleRemovedImagesChange}
+          onExistingImagesReorder={imageHandlers.handleExistingImagesReorder}
         />
 
         {pendingImages.length > 0 && (

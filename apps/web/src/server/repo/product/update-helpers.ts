@@ -17,7 +17,9 @@ import {
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
+  applyImageOrder,
   associatePendingImages,
+  nextImageSortOrder,
   notDeleted,
 } from "~/server/repo/database-helpers";
 
@@ -159,21 +161,24 @@ export async function syncProductExternalIds(
 }
 
 /**
- * Add newly-uploaded images and remove requested ones for a product.
+ * Add newly-uploaded images, remove requested ones, and apply an explicit
+ * display order (first = cover) for a product. Order is applied before the
+ * append so new images always land after the reordered existing set.
  */
 export async function syncProductImages(
   tx: DrizzleTransaction,
   productId: ProductId,
   pendingImageIds: string[] | undefined,
   removeImageIds: string[] | undefined,
+  imageOrder?: string[],
 ): Promise<void> {
-  if (pendingImageIds && pendingImageIds.length > 0) {
-    await associatePendingImages(
+  if (imageOrder && imageOrder.length > 0) {
+    await applyImageOrder(
       tx,
       productImage,
-      "productId",
+      productImage.productId,
       productId,
-      pendingImageIds,
+      imageOrder,
     );
   }
 
@@ -186,5 +191,22 @@ export async function syncProductImages(
           inArray(productImage.imageId, removeImageIds),
         ),
       );
+  }
+
+  if (pendingImageIds && pendingImageIds.length > 0) {
+    const startSortOrder = await nextImageSortOrder(
+      tx,
+      productImage,
+      productImage.productId,
+      productId,
+    );
+    await associatePendingImages(
+      tx,
+      productImage,
+      "productId",
+      productId,
+      pendingImageIds,
+      startSortOrder,
+    );
   }
 }

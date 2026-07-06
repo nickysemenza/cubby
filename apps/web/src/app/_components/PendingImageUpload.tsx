@@ -4,7 +4,7 @@ import {
   type AllowedImageType,
 } from "@cubby/schemas/image";
 import { useMutation } from "@tanstack/react-query";
-import { Camera, Link, X } from "lucide-react";
+import { Camera, ChevronLeft, ChevronRight, Link, Star, X } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Grid } from "~/components/layout";
@@ -30,6 +30,9 @@ interface PendingImageUploadProps {
   onImagesChange?: (images: PendingImage[]) => void;
   existingImages?: PendingImage[]; // Existing images passed from parent component
   onExistingImagesRemove?: (removedImageIds: string[]) => void; // Track removed existing images
+  // Report the full display order of the remaining existing images after a
+  // reorder (first = cover). Reorder controls render only when provided.
+  onExistingImagesReorder?: (orderedImageIds: string[]) => void;
   className?: string;
   // When set, automatically import this URL once (e.g. an image found by the
   // recipe scraper). Re-imports only when the value changes to a new URL.
@@ -41,15 +44,18 @@ export function PendingImageUpload({
   onImagesChange,
   existingImages = EMPTY_IMAGES,
   onExistingImagesRemove,
+  onExistingImagesReorder,
   className = "",
   autoImportUrl,
 }: PendingImageUploadProps) {
   const imageInputId = useId();
   const [uploading, setUploading] = useState(false);
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
-  const [currentExistingImages, setCurrentExistingImages] = useState<
-    PendingImage[]
-  >([]);
+  // Must seed from the prop: the sync guard below also starts at the prop, so
+  // an empty initial value here would never be replaced until the prop's
+  // IDENTITY changes (a refetch) — existing images would render as none.
+  const [currentExistingImages, setCurrentExistingImages] =
+    useState<PendingImage[]>(existingImages);
   const [removedExistingImageIds, setRemovedExistingImageIds] = useState<
     string[]
   >([]);
@@ -61,11 +67,13 @@ export function PendingImageUpload({
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const api = useTRPC();
 
-  // Sync state from prop during render (React recommended pattern)
+  // Sync state from prop during render (React recommended pattern). A new
+  // prop reference means the parent refetched — drop stale local removals too.
   const [prevExistingImages, setPrevExistingImages] = useState(existingImages);
   if (existingImages !== prevExistingImages) {
     setPrevExistingImages(existingImages);
     setCurrentExistingImages(existingImages);
+    setRemovedExistingImageIds([]);
   }
 
   // tRPC mutation for initiating an upload
@@ -309,6 +317,27 @@ export function PendingImageUpload({
     [removedExistingImageIds, currentExistingImages, onExistingImagesRemove],
   );
 
+  // Move an existing image within the display order (first = cover)
+  const moveExistingImage = useCallback(
+    (imageId: string, target: "front" | "left" | "right") => {
+      const idx = currentExistingImages.findIndex((img) => img.id === imageId);
+      if (idx === -1) return;
+      const next = [...currentExistingImages];
+      const [moved] = next.splice(idx, 1);
+      if (!moved) return;
+      const to =
+        target === "front"
+          ? 0
+          : target === "left"
+            ? Math.max(0, idx - 1)
+            : Math.min(next.length, idx + 1);
+      next.splice(to, 0, moved);
+      setCurrentExistingImages(next);
+      onExistingImagesReorder?.(next.map((img) => img.id));
+    },
+    [currentExistingImages, onExistingImagesReorder],
+  );
+
   return (
     <div className={cn("space-y-4", className)}>
       <div className="space-y-2">
@@ -420,7 +449,7 @@ export function PendingImageUpload({
         <div className="space-y-2">
           <Label>Existing images</Label>
           <Grid cols="images" gap="sm">
-            {currentExistingImages.map((image) => (
+            {currentExistingImages.map((image, index) => (
               <div
                 key={image.id}
                 className="relative overflow-hidden rounded-md border"
@@ -439,6 +468,47 @@ export function PendingImageUpload({
                 >
                   <X className="h-4 w-4" />
                 </Button>
+                {onExistingImagesReorder && index === 0 && (
+                  <span className="absolute bottom-1 left-1 rounded-sm bg-background/80 px-1 font-mono text-2xs text-foreground uppercase">
+                    Cover
+                  </span>
+                )}
+                {onExistingImagesReorder && index > 0 && (
+                  <div className="absolute bottom-1 left-1 flex gap-1">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="icon"
+                      className="h-6 w-6 rounded-full p-1"
+                      title="Make cover"
+                      onClick={() => moveExistingImage(image.id, "front")}
+                    >
+                      <Star className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="icon"
+                      className="h-6 w-6 rounded-full p-1"
+                      title="Move earlier"
+                      onClick={() => moveExistingImage(image.id, "left")}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    {index < currentExistingImages.length - 1 && (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="icon"
+                        className="h-6 w-6 rounded-full p-1"
+                        title="Move later"
+                        onClick={() => moveExistingImage(image.id, "right")}
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </Grid>

@@ -64,6 +64,7 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
   const {
     handlePendingImagesChange,
     handleRemovedImagesChange,
+    handleExistingImagesReorder,
     getImageData,
     hasImageChanges,
   } = useImageState();
@@ -183,6 +184,7 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
           mode === "edit" && location?.images ? location.images : []
         }
         onExistingImagesRemove={handleRemovedImagesChange}
+        onExistingImagesReorder={handleExistingImagesReorder}
         className="mt-4"
       />
     </FormWrapper>
