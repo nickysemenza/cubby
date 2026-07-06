@@ -15,7 +15,16 @@ import {
   type SortParams,
 } from "@cubby/schemas/pagination";
 import type { RecipeRef } from "@cubby/schemas/recipe";
-import { and, count, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import {
+  and,
+  count,
+  eq,
+  inArray,
+  isNull,
+  ne,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 import type { Database } from "~/server/db";
 import {
   ingredient,
@@ -375,7 +384,7 @@ export const getIngredientMatches = async (
 export const ingredientList = async (
   db: Database,
   name: string | undefined,
-  sort: SortParams,
+  sorts: SortParams[],
   pagination: PaginationParams,
   missingProductsOnly: boolean = false,
 ) => {
@@ -394,31 +403,38 @@ export const ingredientList = async (
   const whereClause = and(...conditions);
 
   // Build order by. `appearsInRecipes` and `product` are computed counts (not
-  // real columns), so sort them via correlated subqueries. These MUST be written
-  // with sql.raw: the relational query builder (query.ingredient.findMany)
-  // rewrites every column reference in a custom orderBy to the root table's alias
-  // ("ingredient"), which mangles cross-table refs. A raw string is opaque to that
-  // rewriter, so we hand-qualify the inner tables and correlate to "ingredient"."id".
-  // Everything else goes through the generic buildOrderBy.
-  const dirSql =
-    sort.direction === "asc" ? "asc nulls last" : "desc nulls last";
-  const orderByClause =
-    sort.orderBy === "appearsInRecipes"
-      ? [
-          // Shared with global search so the sort key matches the displayed
-          // `appearsInRecipes.length` exactly (live recipes/sections/usages only).
-          sql.raw(
-            `${liveRecipeCountForIngredientSql('"ingredient"."id"')} ${dirSql}`,
-          ),
-        ]
-      : sort.orderBy === "product"
-        ? [
-            sql.raw(
-              `(SELECT count(*) FROM "Product" p ` +
-                `WHERE p."ingredientId" = "ingredient"."id" AND p."deletedAt" IS NULL) ${dirSql}`,
-            ),
-          ]
-        : buildOrderBy(ingredient, sort, [...ingredientSortableFields]);
+  // real columns), so a resolver sorts them via correlated subqueries. These
+  // MUST be written with sql.raw: the relational query builder
+  // (query.ingredient.findMany) rewrites every column reference in a custom
+  // orderBy to the root table's alias ("ingredient"), which mangles
+  // cross-table refs. A raw string is opaque to that rewriter, so we
+  // hand-qualify the inner tables and correlate to "ingredient"."id".
+  // Everything else goes through the generic buildOrderBy column path.
+  const resolveIngredientSort = (s: SortParams): SQL[] | null => {
+    const dirSql = s.direction === "asc" ? "asc nulls last" : "desc nulls last";
+    if (s.orderBy === "appearsInRecipes")
+      return [
+        // Shared with global search so the sort key matches the displayed
+        // `appearsInRecipes.length` exactly (live recipes/sections/usages only).
+        sql.raw(
+          `${liveRecipeCountForIngredientSql('"ingredient"."id"')} ${dirSql}`,
+        ),
+      ];
+    if (s.orderBy === "product")
+      return [
+        sql.raw(
+          `(SELECT count(*) FROM "Product" p ` +
+            `WHERE p."ingredientId" = "ingredient"."id" AND p."deletedAt" IS NULL) ${dirSql}`,
+        ),
+      ];
+    return null;
+  };
+  const orderByClause = buildOrderBy(
+    ingredient,
+    sorts,
+    [...ingredientSortableFields],
+    { resolve: resolveIngredientSort },
+  );
 
   const { take, skip } = buildTakeSkip(pagination);
 

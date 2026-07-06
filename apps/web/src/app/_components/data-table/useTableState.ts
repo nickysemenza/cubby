@@ -15,6 +15,7 @@ import {
 } from "react";
 import {
   buildSortParams,
+  buildSortsParams,
   defaultPagination,
   defaultSortState,
 } from "./tableUtils";
@@ -37,19 +38,29 @@ const SORT_KEY = "sort";
 const PAGE_KEY = "page";
 const SIZE_KEY = "pageSize";
 
-/** `[{ id, desc }]` → `name` / `-name` (dash = descending); undefined if empty. */
+/**
+ * `[{id,desc},...]` → `name,-createdAt` (dash = descending); undefined if
+ * empty. A single sort serializes byte-identically to the pre-multi-sort
+ * format, so old URLs and the defaultSortParam comparison keep working.
+ */
 function sortToParam(sorting: SortingState): string | undefined {
-  const s = sorting[0];
-  if (!s) return undefined;
-  return `${s.desc ? "-" : ""}${s.id}`;
+  if (sorting.length === 0) return undefined;
+  return sorting.map((s) => `${s.desc ? "-" : ""}${s.id}`).join(",");
 }
 
-/** `name` / `-name` → `[{ id, desc }]`; undefined if not a usable string. */
+/** `name,-createdAt` (or legacy single `name`/`-name`) → SortingState. */
 function paramToSort(value: unknown): SortingState | undefined {
   if (typeof value !== "string" || value.length === 0) return undefined;
-  const desc = value.startsWith("-");
-  const id = desc ? value.slice(1) : value;
-  return id ? [{ id, desc }] : undefined;
+  const parsed = value
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .map((t) => ({
+      id: t.startsWith("-") ? t.slice(1) : t,
+      desc: t.startsWith("-"),
+    }))
+    .filter((s) => s.id);
+  return parsed.length ? parsed : undefined;
 }
 
 export interface TableStateReturn {
@@ -68,7 +79,10 @@ export interface TableStateReturn {
     value: PaginationState | ((old: PaginationState) => PaginationState),
   ) => void;
   getColumnFilter: (columnId: string) => string | undefined;
+  /** Primary sort only — single-sort consumers (remote USDA list API). */
   getSortParams: () => SortParams;
+  /** Full shift-click sort stack — the tRPC list input. */
+  getSorts: () => SortParams[];
 }
 
 export function useTableState(
@@ -155,6 +169,10 @@ export function useTableState(
     return buildSortParams(sorting, initialSort);
   }, [sorting, initialSort]);
 
+  const getSorts = useCallback(() => {
+    return buildSortsParams(sorting, initialSort);
+  }, [sorting, initialSort]);
+
   // --- URL write-through (urlSync only) ------------------------------------
   // The default sort is descending on `initialSort` (see defaultSortState), so
   // that value is omitted from the URL to keep it clean. Serialize the
@@ -206,6 +224,7 @@ export function useTableState(
       setPagination,
       getColumnFilter,
       getSortParams,
+      getSorts,
     }),
     [
       sorting,
@@ -216,6 +235,7 @@ export function useTableState(
       setPagination,
       getColumnFilter,
       getSortParams,
+      getSorts,
     ],
   );
 }

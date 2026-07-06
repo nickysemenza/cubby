@@ -108,14 +108,14 @@ export class IngredientService {
 
   async ingredientList(
     nameFilter: string | undefined,
-    sort: SortParams,
+    sorts: SortParams[],
     pagination: PaginationParams,
     missingProductsOnly?: boolean,
   ) {
     const { data: ingredients, count } = await ingredientListRepo(
       this.db,
       nameFilter,
-      sort,
+      sorts,
       pagination,
       missingProductsOnly,
     );

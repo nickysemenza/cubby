@@ -68,7 +68,7 @@ describe("product repository", () => {
       undefined,
       undefined,
       undefined,
-      { orderBy: "name", direction: "asc" },
+      [{ orderBy: "name", direction: "asc" }],
       { pageIndex: 0, pageSize: 2 },
     );
 
@@ -85,7 +85,7 @@ describe("product repository", () => {
       undefined,
       undefined,
       undefined,
-      { orderBy: "name", direction: "asc" },
+      [{ orderBy: "name", direction: "asc" }],
       { pageIndex: 1, pageSize: 2 },
     );
 
@@ -101,7 +101,7 @@ describe("product repository", () => {
       "Manufacturer X",
       undefined,
       undefined,
-      { orderBy: "name", direction: "asc" },
+      [{ orderBy: "name", direction: "asc" }],
       { pageIndex: 0, pageSize: 10 },
     );
 
@@ -110,6 +110,26 @@ describe("product repository", () => {
     expect(filteredList.count).toEqual(2);
     expect(filteredList.data[0]!.manufacturer).toEqual("Manufacturer X");
     expect(filteredList.data[1]!.manufacturer).toEqual("Manufacturer X");
+
+    // Stacked multi-sort: manufacturer asc groups X before Y, name desc
+    // orders within each manufacturer (C before A within X)
+    const stacked = await productList(
+      ctx.db,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      [
+        { orderBy: "manufacturer", direction: "asc" },
+        { orderBy: "name", direction: "desc" },
+      ],
+      { pageIndex: 0, pageSize: 10 },
+    );
+    expect(stacked.data.map((p) => p.name)).toEqual([
+      "Product C",
+      "Product A",
+      "Product B",
+    ]);
   });
 
   it("should update a product", async () => {

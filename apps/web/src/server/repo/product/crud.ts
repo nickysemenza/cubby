@@ -75,7 +75,11 @@ import {
   syncProductUnitMappings,
 } from "./update-helpers";
 
-const productListOrderBy = (sort: SortParams, groupBy?: string) => {
+// Special-case sorts the generic column path can't produce (correlated
+// subqueries / CASE). Clauses only DEFINE the field's order — the old
+// trailing `"product"."name" asc` moved to the single tieBreaker below so a
+// stacked secondary sort isn't swallowed mid-stack.
+const resolveProductSort = (sort: SortParams) => {
   const dirSql =
     sort.direction === "asc" ? "asc nulls last" : "desc nulls last";
 
@@ -86,7 +90,6 @@ const productListOrderBy = (sort: SortParams, groupBy?: string) => {
           `JOIN "Location" l ON l."id" = ie."locationId" AND l."deletedAt" IS NULL ` +
           `WHERE ie."productId" = "product"."id" AND ie."deletedAt" IS NULL) ${dirSql}`,
       ),
-      sql.raw(`"product"."name" asc`),
     ];
   }
 
@@ -100,7 +103,6 @@ const productListOrderBy = (sort: SortParams, groupBy?: string) => {
           `OR "product"."price" IS NOT NULL OR "product"."fdc_id" IS NOT NULL OR "product"."upc" IS NOT NULL THEN 1 ` +
           `ELSE 0 END) ${dirSql}`,
       ),
-      sql.raw(`"product"."name" asc`),
     ];
   }
 
@@ -112,8 +114,15 @@ const productListOrderBy = (sort: SortParams, groupBy?: string) => {
     ];
   }
 
-  return buildOrderBy(product, sort, [...productSortableFields], groupBy);
+  return null;
 };
+
+const productListOrderBy = (sorts: SortParams[], groupBy?: string) =>
+  buildOrderBy(product, sorts, [...productSortableFields], {
+    groupBy,
+    resolve: resolveProductSort,
+    tieBreaker: asc(product.name),
+  });
 
 const fetchProductById = async (
   db: Database,
@@ -272,7 +281,7 @@ export const productList = async (
   manufacturer: string | undefined,
   upc: string | undefined,
   category: ProductCategory | undefined,
-  sort: SortParams,
+  sorts: SortParams[],
   pagination: PaginationParams,
   groupBy?: string,
 ) => {
@@ -289,7 +298,7 @@ export const productList = async (
 
   // Special list sort keys are correlated subqueries because Drizzle's
   // relational query builder rewrites non-raw column refs to the root alias.
-  const orderByArray = productListOrderBy(sort, groupBy);
+  const orderByArray = productListOrderBy(sorts, groupBy);
 
   const { take, skip } = buildTakeSkip(pagination);
 
@@ -326,7 +335,7 @@ export const productSearch = async (
   manufacturer: string | undefined,
   upc: string | undefined,
   category: ProductCategory | undefined,
-  sort: SortParams,
+  sorts: SortParams[],
   pagination: PaginationParams,
 ): Promise<{ data: ProductPickerItemOut[]; count: number }> => {
   const whereClause = and(
@@ -344,7 +353,7 @@ export const productSearch = async (
 
   // Same ordering rules as productList, so picker results match the table's sort
   // for any shared query params.
-  const orderByArray = productListOrderBy(sort);
+  const orderByArray = productListOrderBy(sorts);
 
   const { take, skip } = buildTakeSkip(pagination);
 

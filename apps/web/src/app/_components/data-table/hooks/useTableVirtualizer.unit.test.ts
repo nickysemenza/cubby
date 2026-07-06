@@ -13,10 +13,10 @@ import {
 //   index 4: row 2
 const grouped: GroupedItem[] = [
   { kind: "header", title: "A", count: 2, color: "var(--chart-1)" },
-  { kind: "row", rowIndex: 0 },
-  { kind: "row", rowIndex: 1 },
+  { kind: "row", rowIndex: 0, groupRowIndex: 0 },
+  { kind: "row", rowIndex: 1, groupRowIndex: 1 },
   { kind: "header", title: "B", count: 1, color: "var(--chart-2)" },
-  { kind: "row", rowIndex: 2 },
+  { kind: "row", rowIndex: 2, groupRowIndex: 0 },
 ];
 
 describe("resolveVirtualIndex", () => {
@@ -44,15 +44,19 @@ describe("resolveVirtualIndex", () => {
     expect(resolveVirtualIndex(1, grouped)).toEqual({
       kind: "row",
       rowIndex: 0,
+      groupRowIndex: 0,
     });
     expect(resolveVirtualIndex(2, grouped)).toEqual({
       kind: "row",
       rowIndex: 1,
+      groupRowIndex: 1,
     });
-    // index 4 sits after two headers + two rows, so it's flat row 2
+    // index 4 sits after two headers + two rows, so it's flat row 2 — and the
+    // first row of group "B" (groupRowIndex restarts, which zebra relies on)
     expect(resolveVirtualIndex(4, grouped)).toEqual({
       kind: "row",
       rowIndex: 2,
+      groupRowIndex: 0,
     });
   });
 
@@ -87,7 +91,7 @@ describe("flatRowToVirtualIndex", () => {
   it("round-trips: a flat row maps to a virtual index that resolves back", () => {
     for (const rowIndex of [0, 1, 2]) {
       const virtualIndex = flatRowToVirtualIndex(rowIndex, grouped);
-      expect(resolveVirtualIndex(virtualIndex, grouped)).toEqual({
+      expect(resolveVirtualIndex(virtualIndex, grouped)).toMatchObject({
         kind: "row",
         rowIndex,
       });

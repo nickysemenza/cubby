@@ -227,21 +227,30 @@ export const getInventoryCountsByLocations = async (
   return countMap;
 };
 
-const inventoryListOrderBy = (sort: SortParams) => {
+// Joined-column sorts the generic table-column path can't produce. Clauses
+// only DEFINE the field's order — the createdAt tie-break moved to the single
+// trailing tieBreaker so it can't swallow a stacked secondary sort.
+const resolveInventorySort = (sort: SortParams) => {
   const direction = sort.direction === "asc" ? asc : desc;
   if (sort.orderBy === "name" || sort.orderBy === "product") {
-    return [direction(product.name), desc(inventoryEntry.createdAt)];
+    return [direction(product.name)];
   }
   if (sort.orderBy === "location") {
-    return [direction(location.name), desc(inventoryEntry.createdAt)];
+    return [direction(location.name)];
   }
-  return buildOrderBy(inventoryEntry, sort, [...inventorySortableFields]);
+  return null;
 };
+
+const inventoryListOrderBy = (sorts: SortParams[]) =>
+  buildOrderBy(inventoryEntry, sorts, [...inventorySortableFields], {
+    resolve: resolveInventorySort,
+    tieBreaker: desc(inventoryEntry.createdAt),
+  });
 
 export const inventoryentryList = async (
   db: Database,
   filters: InventoryFilters,
-  sort: SortParams,
+  sorts: SortParams[],
   pagination: PaginationParams,
 ) => {
   const { take, skip } = buildTakeSkip(pagination);
@@ -274,7 +283,7 @@ export const inventoryentryList = async (
 
   const [results, [countResult]] = await Promise.all([
     baseQuery
-      .orderBy(...inventoryListOrderBy(sort))
+      .orderBy(...inventoryListOrderBy(sorts))
       .limit(take)
       .offset(skip),
     getDb(db)

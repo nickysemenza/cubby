@@ -7,6 +7,39 @@ const sortParams = z.object({
   direction: z.enum(["asc", "desc"]).default("asc"),
 });
 
+/** Hard cap on stacked sort columns (client and server both enforce it). */
+export const MAX_SORTS = 3;
+
+/**
+ * List `sort` input: a single `{orderBy, direction}` (the historical shape —
+ * MCP tools and old clients keep sending it) or a shift-click stack of them.
+ * Server code never consumes this union directly — `normalizeSorts` collapses
+ * it once at the tRPC boundary.
+ */
+const sortInput = z.union([
+  sortParams,
+  z.array(sortParams).min(1).max(MAX_SORTS),
+]);
+
+export type SortInput = SortParams | SortParams[];
+
+/**
+ * Single-or-array → non-empty array, deduped by orderBy (first occurrence
+ * wins — a stacked sort repeating a column adds nothing), capped at MAX_SORTS.
+ */
+export const normalizeSorts = (sort: SortInput): SortParams[] => {
+  const arr = Array.isArray(sort) ? sort : [sort];
+  const seen = new Set<string>();
+  const out: SortParams[] = [];
+  for (const s of arr) {
+    if (seen.has(s.orderBy)) continue;
+    seen.add(s.orderBy);
+    out.push(s);
+    if (out.length === MAX_SORTS) break;
+  }
+  return out;
+};
+
 type NonEmptyStringArray = readonly [string, ...string[]];
 
 export const createSortParamsSchema = <
@@ -15,11 +48,13 @@ export const createSortParamsSchema = <
 >(
   fields: TFields,
   defaultOrderBy: TDefault,
-) =>
-  z.object({
+) => {
+  const single = z.object({
     orderBy: z.enum(fields).default(defaultOrderBy),
     direction: z.enum(["asc", "desc"]).default("asc"),
   });
+  return z.union([single, z.array(single).min(1).max(MAX_SORTS)]);
+};
 
 const paginationParams = z.object({
   pageIndex: z.number().int().min(0).default(0),
@@ -80,7 +115,7 @@ export function mcpListInputShape(
 }
 
 export const sortPaginationFields = {
-  sort: sortParams
+  sort: sortInput
     .optional()
     .default({ orderBy: "createdAt", direction: "desc" }),
   pagination: paginationParams

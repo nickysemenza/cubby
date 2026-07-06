@@ -84,42 +84,63 @@ export const countWhere = (
 ): Promise<number> => unwrapDb(db).$count(table, where);
 
 /**
- * Build order by clause from sort parameters.
- * Validates that the requested field is in the allowed list and returns
- * the appropriate asc/desc clause.
+ * Build ORDER BY clauses from a normalized sort stack (see `normalizeSorts`).
  *
- * When `groupBy` is provided and is in `allowedFields`, prepends a primary
- * sort on that column (ASC NULLS LAST) so group members are contiguous.
- * The user's chosen sort becomes the secondary sort within each group.
+ * When `opts.groupBy` is provided and is in `allowedFields`, prepends a primary
+ * sort on that column (ASC NULLS LAST) so group members are contiguous; the
+ * user's sorts order rows within each group.
+ *
+ * `opts.resolve` hosts a repo's special-case sorts (jsonb extractions,
+ * correlated subqueries): it returns the clauses that DEFINE that field's
+ * order, or null to fall through to the generic column path. Cosmetic
+ * tie-breakers must NOT live in a resolver — mid-stack they would swallow any
+ * subsequent user sort; pass them once via `opts.tieBreaker` instead.
  */
 export const buildOrderBy = <T extends PgTable>(
   table: T,
-  sort: SortParams,
+  sorts: SortParams[],
   allowedFields: string[],
-  groupBy?: string,
+  opts?: {
+    groupBy?: string;
+    resolve?: (s: SortParams) => SQL[] | null;
+    tieBreaker?: SQL;
+  },
 ): SQL[] => {
   const clauses: SQL[] = [];
+  const { groupBy, resolve, tieBreaker } = opts ?? {};
 
-  // Prepend group-by column as primary sort (if provided and valid)
-  if (groupBy && allowedFields.includes(groupBy) && groupBy !== sort.orderBy) {
+  // Prepend group-by column as primary sort (if provided, valid, and not
+  // already the user's own sort)
+  if (
+    groupBy &&
+    allowedFields.includes(groupBy) &&
+    !sorts.some((s) => s.orderBy === groupBy)
+  ) {
     const groupColumn = table[groupBy as keyof T] as AnyColumn | undefined;
     if (groupColumn) {
       clauses.push(sql`${groupColumn} asc nulls last`);
     }
   }
 
-  if (!allowedFields.includes(sort.orderBy)) {
-    return clauses;
+  for (const s of sorts) {
+    const special = resolve?.(s);
+    if (special) {
+      clauses.push(...special);
+      continue;
+    }
+    if (!allowedFields.includes(s.orderBy)) continue;
+    const column = table[s.orderBy as keyof T] as AnyColumn | undefined;
+    if (!column) continue;
+    // ASC: nulls at end by default in Postgres
+    // DESC: use NULLS LAST to put nulls at the bottom instead of the top
+    if (s.direction === "asc") {
+      clauses.push(asc(column));
+    } else {
+      clauses.push(sql`${column} desc nulls last`);
+    }
   }
-  const column = table[sort.orderBy as keyof T] as AnyColumn | undefined;
-  if (!column) return clauses;
-  // ASC: nulls at end by default in Postgres
-  // DESC: use NULLS LAST to put nulls at the bottom instead of the top
-  if (sort.direction === "asc") {
-    clauses.push(asc(column));
-  } else {
-    clauses.push(sql`${column} desc nulls last`);
-  }
+
+  if (tieBreaker) clauses.push(tieBreaker);
   return clauses;
 };
 

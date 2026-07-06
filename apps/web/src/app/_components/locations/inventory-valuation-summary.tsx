@@ -2,6 +2,7 @@ import type { LocationValuation } from "@cubby/schemas/location";
 import { useMemo } from "react";
 import { Row, Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
+import { NoneValue } from "~/components/ui/none-value";
 import { formatCurrency } from "~/lib/utils";
 import {
   calculateInventoryValuation,
@@ -56,6 +57,16 @@ export function InventoryValuationSummary({
     : formatPricingStatusSummary(result.pricingStatus);
 
   if (variant === "compact") {
+    // A $0.00 here means "empty" or "nothing priced", never a real value (the
+    // persisted counts can't even distinguish a true zero) — render the muted
+    // dash so real valuations stand out; the pricing note survives as a title.
+    if (totalValuation === 0) {
+      return (
+        <div className={className} title={pricingSummary ?? undefined}>
+          <NoneValue />
+        </div>
+      );
+    }
     return (
       <div className={className}>
         <Description as="div" size="xs">

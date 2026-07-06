@@ -77,10 +77,10 @@ export const getMealsByDateRange = async (
 export const mealList = async (
   db: Database,
   filters: MealFilters,
-  sort: SortParams,
+  sorts: SortParams[],
   pagination: PaginationParams,
 ): Promise<{ data: MealOut[]; count: number }> => {
-  const orderByArray = buildOrderBy(meal, sort, [...mealSortableFields]);
+  const orderByArray = buildOrderBy(meal, sorts, [...mealSortableFields]);
   const { take, skip } = buildTakeSkip(pagination);
 
   const whereCondition = and(

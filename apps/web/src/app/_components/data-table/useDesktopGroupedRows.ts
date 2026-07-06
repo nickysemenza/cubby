@@ -4,7 +4,9 @@ import type { GroupConfig } from "./useGroupedList";
 
 type DesktopGroupItem =
   | { kind: "header"; title: string; count: number; color: string }
-  | { kind: "row"; rowIndex: number };
+  /** groupRowIndex: position within the row's group, so zebra striping can
+   *  restart at each section header instead of running through it. */
+  | { kind: "row"; rowIndex: number; groupRowIndex: number };
 
 /**
  * Detects group boundaries in server-ordered rows and returns an interleaved
@@ -47,7 +49,11 @@ export function useDesktopGroupedRows<TItem>(
         color: groupConfig.colorFn(group.key),
       });
       for (let i = group.startIndex; i < group.startIndex + group.count; i++) {
-        items.push({ kind: "row", rowIndex: i });
+        items.push({
+          kind: "row",
+          rowIndex: i,
+          groupRowIndex: i - group.startIndex,
+        });
       }
     }
 

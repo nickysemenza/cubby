@@ -10,7 +10,8 @@ export interface ListQueryResponse<TData> {
 // tRPC queryOptions carries internal generics that don't map cleanly to a simple
 // function type. The filter generic still keeps callers honest at the boundary.
 export type TRPCQueryOptionsFn<TFilters> = (params: {
-  sort: { orderBy: string; direction: "asc" | "desc" };
+  /** Sort stack (multi-sort); the schema also accepts the legacy single object. */
+  sort: Array<{ orderBy: string; direction: "asc" | "desc" }>;
   pagination: { pageIndex: number; pageSize: number };
   filters: TFilters;
   groupBy?: string;
@@ -35,7 +36,7 @@ export function usePaginatedTableCore<TFilters>({
     [buildFilters, tableState],
   );
 
-  const sortParams = useMemo(() => tableState.getSortParams(), [tableState]);
+  const sortParams = useMemo(() => tableState.getSorts(), [tableState]);
   const { pagination } = tableState;
 
   const queryParams = useMemo(

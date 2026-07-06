@@ -10,6 +10,7 @@ import {
   buildPaginatedResponse,
   createPaginatedResponseSchemaWithContext,
   createSortPaginationFields,
+  normalizeSorts,
   type PaginationParams,
   type SortParams,
   sortPaginationFields,
@@ -161,7 +162,8 @@ export function createEntityListProcedure<TOutput, TFilters>({
     list: (
       ctx: ProtectedCrudServices,
       filters: TFilters,
-      sort: SortParams,
+      /** Normalized (non-empty, deduped, capped) — see normalizeSorts. */
+      sorts: SortParams[],
       pagination: PaginationParams,
       groupBy?: string,
     ) => Promise<{ data: TOutput[]; count: number }>;
@@ -191,7 +193,7 @@ export function createEntityListProcedure<TOutput, TFilters>({
       const { data, count } = await repository.list(
         ctx,
         input.filters,
-        input.sort,
+        normalizeSorts(input.sort),
         input.pagination,
         input.groupBy,
       );
@@ -302,7 +304,8 @@ export function createEntityCrudProcedures<
     list: (
       ctx: ProtectedCrudServices,
       filters: TFilters,
-      sort: SortParams,
+      /** Normalized (non-empty, deduped, capped) — see normalizeSorts. */
+      sorts: SortParams[],
       pagination: PaginationParams,
       groupBy?: string,
     ) => Promise<{ data: TListOutput[]; count: number }>;

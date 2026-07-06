@@ -248,7 +248,7 @@ export const getNotionRecipesForDiff = async (
 export const recipeList = async (
   db: Database,
   filters: RecipeFilters,
-  sort: SortParams,
+  sorts: SortParams[],
   pagination: PaginationParams,
 ) => {
   const dbClient = getDb(db);
@@ -269,39 +269,46 @@ export const recipeList = async (
   );
 
   // Build orderBy using central sortableFields config. Several sortable columns
-  // aren't plain scalar columns, so they're special-cased here:
+  // aren't plain scalar columns, so a resolver special-cases them:
   //  - costTotal/caloriesTotal live in the `totals` jsonb
-  //  - source = SourceType (groups Book/Website/Notion/Other) then SourceData (name/url)
+  //  - source = SourceType (groups Book/Website/Notion/Other) then SourceData
+  //    (name/url) — both columns are components of the field, so they stay
+  //    adjacent at any stack position
   //  - yield = the `servings` integer (yield-only recipes have null servings → last)
-  // everything else goes through the generic buildOrderBy.
-  const isAsc = sort.direction === "asc";
-  const dir = (col: AnyColumn): SQL =>
-    isAsc ? sql`${col} asc nulls last` : sql`${col} desc nulls last`;
-  const jsonbSortKey =
-    sort.orderBy === "costTotal"
-      ? "costTotal"
-      : sort.orderBy === "caloriesTotal"
-        ? "caloriesTotal"
-        : null;
-  const orderByClause =
-    sort.orderBy === "source"
-      ? [dir(recipe.SourceType), dir(recipe.SourceData)]
-      : sort.orderBy === "yield"
-        ? [dir(recipe.servings)]
-        : sort.orderBy === "tags"
-          ? [
-              isAsc
-                ? sql`${recipe.tags}[1] asc nulls last`
-                : sql`${recipe.tags}[1] desc nulls last`,
-              sql`${recipe.name} asc`,
-            ]
-          : jsonbSortKey
-            ? [
-                isAsc
-                  ? sql`(${recipe.totals}->>${jsonbSortKey})::numeric asc nulls last`
-                  : sql`(${recipe.totals}->>${jsonbSortKey})::numeric desc nulls last`,
-              ]
-            : buildOrderBy(recipe, sort, [...recipeSortableFields]);
+  //  - tags = first tag; its old trailing `name asc` was a cosmetic tie-break,
+  //    now the single tieBreaker so it can't swallow a stacked secondary sort
+  // everything else goes through the generic buildOrderBy column path.
+  const resolveRecipeSort = (s: SortParams): SQL[] | null => {
+    const isAsc = s.direction === "asc";
+    const dir = (col: AnyColumn): SQL =>
+      isAsc ? sql`${col} asc nulls last` : sql`${col} desc nulls last`;
+    const jsonbSortKey =
+      s.orderBy === "costTotal"
+        ? "costTotal"
+        : s.orderBy === "caloriesTotal"
+          ? "caloriesTotal"
+          : null;
+    if (s.orderBy === "source")
+      return [dir(recipe.SourceType), dir(recipe.SourceData)];
+    if (s.orderBy === "yield") return [dir(recipe.servings)];
+    if (s.orderBy === "tags")
+      return [
+        isAsc
+          ? sql`${recipe.tags}[1] asc nulls last`
+          : sql`${recipe.tags}[1] desc nulls last`,
+      ];
+    if (jsonbSortKey)
+      return [
+        isAsc
+          ? sql`(${recipe.totals}->>${jsonbSortKey})::numeric asc nulls last`
+          : sql`(${recipe.totals}->>${jsonbSortKey})::numeric desc nulls last`,
+      ];
+    return null;
+  };
+  const orderByClause = buildOrderBy(recipe, sorts, [...recipeSortableFields], {
+    resolve: resolveRecipeSort,
+    tieBreaker: sql`${recipe.name} asc`,
+  });
 
   const { take, skip } = buildTakeSkip(pagination);
 

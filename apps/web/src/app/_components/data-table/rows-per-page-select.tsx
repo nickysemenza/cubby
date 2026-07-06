@@ -26,7 +26,7 @@ export function RowsPerPageSelect<TData>({
       onValueChange={(value) => {
         if (value) table.setPageSize(Number(value));
       }}
-      className={cn("h-8 w-20", className)}
+      className={cn("h-7 w-20", className)}
     />
   );
 }

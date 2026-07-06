@@ -215,7 +215,7 @@ const imageEntityRelations = {
 export const imageList = async (
   db: Database,
   filterText: string | undefined,
-  sort: { orderBy: string; direction: "asc" | "desc" },
+  sorts: Array<{ orderBy: string; direction: "asc" | "desc" }>,
   pagination: { pageIndex: number; pageSize: number },
 ) => {
   const dbClient = getDb(db);
@@ -231,7 +231,7 @@ export const imageList = async (
     whereConditions.length > 0 ? and(...whereConditions) : undefined;
 
   // Build orderBy using central sortableFields config
-  const orderByClause = buildOrderBy(image, sort, [...imageSortableFields]);
+  const orderByClause = buildOrderBy(image, sorts, [...imageSortableFields]);
 
   // Calculate skip/take values from pagination parameters
   const take = pagination.pageSize;
