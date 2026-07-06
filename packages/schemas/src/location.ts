@@ -215,7 +215,13 @@ export const locationCreateInput = z.object(locationCreateShape);
 // Every create field optional; `removeImageIds` is update-only. (The update
 // `parentId` inherits the create field's description — harmless doc, same type.)
 export const locationUpdateData = deriveUpdateData(locationCreateShape, {
-  extend: { removeImageIds: z.array(z.uuid()).optional() },
+  extend: {
+    removeImageIds: z.array(z.uuid()).optional(),
+    imageOrder: z
+      .array(z.uuid())
+      .optional()
+      .describe("existing image ids in display order; first = cover"),
+  },
 });
 
 // Input schema for updating locations

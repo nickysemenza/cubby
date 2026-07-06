@@ -11,7 +11,7 @@ import { match } from "ts-pattern";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import type { Database } from "~/server/db";
 import { product } from "~/server/db/schema";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { getDb, imageOrder, notDeleted } from "~/server/repo/database-helpers";
 import { dbProductToTopLevelAPI } from "./mappers";
 
 /**
@@ -43,6 +43,7 @@ export const findProductsByFoodIdentifier = async (
     with: {
       externalIds: true,
       images: {
+        orderBy: imageOrder,
         with: {
           image: true,
         },
@@ -89,6 +90,7 @@ const findProductToAPI = async (
     with: {
       externalIds: true,
       images: {
+        orderBy: imageOrder,
         with: {
           image: true,
         },

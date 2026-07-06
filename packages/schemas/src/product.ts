@@ -122,7 +122,13 @@ export const productCreateInput = z.object(productCreateShape);
 // them leaves the existing rows UNCHANGED (see deriveUpdateData). `removeImageIds`
 // is update-only.
 export const productUpdateData = deriveUpdateData(productCreateShape, {
-  extend: { removeImageIds: z.array(z.uuid()).optional() },
+  extend: {
+    removeImageIds: z.array(z.uuid()).optional(),
+    imageOrder: z
+      .array(z.uuid())
+      .optional()
+      .describe("existing image ids in display order; first = cover"),
+  },
 });
 
 // Input schema for updating products (matches location/recipe/ingredient pattern)

@@ -695,6 +695,8 @@ export const productImage = pgTable(
     imageId: uuid("imageId")
       .notNull()
       .references(() => image.id),
+    // Display order; 0 default means legacy rows tie-break on createdAt.
+    sortOrder: integer("sortOrder").notNull().default(0),
     ...baseTimestamps(),
     ...softDeletedAt(),
   },
@@ -719,6 +721,7 @@ export const locationImage = pgTable(
     imageId: uuid("imageId")
       .notNull()
       .references(() => image.id),
+    sortOrder: integer("sortOrder").notNull().default(0),
     ...baseTimestamps(),
     ...softDeletedAt(),
   },
@@ -743,6 +746,7 @@ export const recipeImage = pgTable(
     imageId: uuid("imageId")
       .notNull()
       .references(() => image.id),
+    sortOrder: integer("sortOrder").notNull().default(0),
     ...baseTimestamps(),
     ...softDeletedAt(),
   },

@@ -15,6 +15,9 @@ import type { PendingImage } from "~/app/_components/PendingImageUpload";
 export function useImageState() {
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
   const [removedImageIds, setRemovedImageIds] = useState<string[]>([]);
+  // null = untouched; an array is the full display order of the existing
+  // images (first = cover) after the user reordered them.
+  const [imageOrder, setImageOrder] = useState<string[] | null>(null);
 
   const handlePendingImagesChange = (images: PendingImage[]) => {
     setPendingImages(images);
@@ -22,6 +25,10 @@ export function useImageState() {
 
   const handleRemovedImagesChange = (ids: string[]) => {
     setRemovedImageIds(ids);
+  };
+
+  const handleExistingImagesReorder = (orderedIds: string[]) => {
+    setImageOrder(orderedIds);
   };
 
   /**
@@ -41,6 +48,13 @@ export function useImageState() {
       imageData.removeImageIds = removedImageIds;
     }
 
+    // If the user reordered the existing images, persist the new order.
+    // Removed ids may still appear here; the server applies order before the
+    // removal, so they are harmless.
+    if (!isCreate && imageOrder !== null) {
+      imageData.imageOrder = imageOrder;
+    }
+
     return imageData;
   };
 
@@ -48,16 +62,21 @@ export function useImageState() {
    * Check if there are any image changes
    */
   const hasImageChanges = (): boolean => {
-    return pendingImages.length > 0 || removedImageIds.length > 0;
+    return (
+      pendingImages.length > 0 ||
+      removedImageIds.length > 0 ||
+      imageOrder !== null
+    );
   };
 
   /**
-   * Reset all image state (pending uploads and removed IDs).
+   * Reset all image state (pending uploads, removed IDs, reorder).
    * Useful when switching form modes or cancelling.
    */
   const reset = () => {
     setPendingImages([]);
     setRemovedImageIds([]);
+    setImageOrder(null);
   };
 
   return {
@@ -65,6 +84,7 @@ export function useImageState() {
     removedImageIds,
     handlePendingImagesChange,
     handleRemovedImagesChange,
+    handleExistingImagesReorder,
     getImageData,
     hasImageChanges,
     reset,

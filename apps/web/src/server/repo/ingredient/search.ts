@@ -28,6 +28,7 @@ import {
   executeListQueryWithCount,
   formatSearchTerm,
   getDb,
+  imageOrder,
   notDeleted,
   relations,
 } from "~/server/repo/database-helpers";
@@ -295,7 +296,7 @@ export const enrichmentWorkbenchIngredients = async (
         with: {
           unitMappings: true,
           externalIds: true,
-          images: { with: { image: true } },
+          images: { orderBy: imageOrder, with: { image: true } },
         },
       },
     },

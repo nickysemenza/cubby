@@ -315,6 +315,10 @@ export const recipeUpdateData = z.object({
     ),
   pendingImageIds: z.array(z.uuid()).optional(),
   removeImageIds: z.array(z.uuid()).optional(),
+  imageOrder: z
+    .array(z.uuid())
+    .optional()
+    .describe("existing image ids in display order; first = cover"),
 });
 
 export const recipeUpdateInput = z.object({

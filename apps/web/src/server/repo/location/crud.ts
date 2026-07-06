@@ -33,6 +33,7 @@ import {
   logAuditEntry,
 } from "~/server/repo/audit-log";
 import {
+  applyImageOrder,
   assertNoDependents,
   associatePendingImages,
   buildOrderBy,
@@ -43,6 +44,7 @@ import {
   getDb,
   insertAndReturn,
   lockAndValidateForDelete,
+  nextImageSortOrder,
   notDeleted,
   relations,
   unwrapDb,
@@ -204,14 +206,15 @@ export const updateLocation = async (
     // Update the location (updateAndReturn handles empty values gracefully)
     const updated = await updateLiveAndReturn(tx, location, updateValues, id);
 
-    // Add new images using shared helper
-    if (data.pendingImageIds && data.pendingImageIds.length > 0) {
-      await associatePendingImages(
+    // Reorder existing images (first = cover) before appending new ones so
+    // additions always land after the reordered set.
+    if (data.imageOrder && data.imageOrder.length > 0) {
+      await applyImageOrder(
         tx,
         locationImage,
-        "locationId",
+        locationImage.locationId,
         updated.id,
-        data.pendingImageIds,
+        data.imageOrder,
       );
     }
 
@@ -225,6 +228,24 @@ export const updateLocation = async (
             inArray(locationImage.imageId, data.removeImageIds),
           ),
         );
+    }
+
+    // Add new images using shared helper
+    if (data.pendingImageIds && data.pendingImageIds.length > 0) {
+      const startSortOrder = await nextImageSortOrder(
+        tx,
+        locationImage,
+        locationImage.locationId,
+        updated.id,
+      );
+      await associatePendingImages(
+        tx,
+        locationImage,
+        "locationId",
+        updated.id,
+        data.pendingImageIds,
+        startSortOrder,
+      );
     }
 
     // Log audit entry with changes

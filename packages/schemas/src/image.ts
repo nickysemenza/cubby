@@ -39,6 +39,7 @@ export const createInputImages = z.object({
 export const updateInputImages = z.object({
   pendingImageIds: z.array(z.uuid()).optional(),
   removeImageIds: z.array(z.uuid()).optional(),
+  imageOrder: z.array(z.uuid()).optional(),
 });
 
 export type UpdateInputImages = z.infer<typeof updateInputImages>;
