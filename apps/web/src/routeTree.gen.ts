@@ -47,9 +47,7 @@ import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as AuthenticatedUsdaIdRouteImport } from './routes/_authenticated/usda.$id'
 import { Route as AuthenticatedSearchDebugRouteImport } from './routes/_authenticated/search.debug'
 import { Route as AuthenticatedRecipesNewRouteImport } from './routes/_authenticated/recipes.new'
-import { Route as AuthenticatedRecipesImportNotionRouteImport } from './routes/_authenticated/recipes.import-notion'
-import { Route as AuthenticatedRecipesImportCookbookRouteImport } from './routes/_authenticated/recipes.import-cookbook'
-import { Route as AuthenticatedRecipesGraphRouteImport } from './routes/_authenticated/recipes.graph'
+import { Route as AuthenticatedRecipesImportRouteImport } from './routes/_authenticated/recipes.import'
 import { Route as AuthenticatedRecipesCompareRouteImport } from './routes/_authenticated/recipes.compare'
 import { Route as AuthenticatedRecipesIdRouteImport } from './routes/_authenticated/recipes.$id'
 import { Route as AuthenticatedProjectsIdRouteImport } from './routes/_authenticated/projects.$id'
@@ -278,22 +276,10 @@ const AuthenticatedRecipesNewRoute = AuthenticatedRecipesNewRouteImport.update({
   path: '/recipes/new',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedRecipesImportNotionRoute =
-  AuthenticatedRecipesImportNotionRouteImport.update({
-    id: '/recipes/import-notion',
-    path: '/recipes/import-notion',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedRecipesImportCookbookRoute =
-  AuthenticatedRecipesImportCookbookRouteImport.update({
-    id: '/recipes/import-cookbook',
-    path: '/recipes/import-cookbook',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedRecipesGraphRoute =
-  AuthenticatedRecipesGraphRouteImport.update({
-    id: '/recipes/graph',
-    path: '/recipes/graph',
+const AuthenticatedRecipesImportRoute =
+  AuthenticatedRecipesImportRouteImport.update({
+    id: '/recipes/import',
+    path: '/recipes/import',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedRecipesCompareRoute =
@@ -492,9 +478,7 @@ export interface FileRoutesByFullPath {
   '/projects/$id': typeof AuthenticatedProjectsIdRoute
   '/recipes/$id': typeof AuthenticatedRecipesIdRoute
   '/recipes/compare': typeof AuthenticatedRecipesCompareRoute
-  '/recipes/graph': typeof AuthenticatedRecipesGraphRoute
-  '/recipes/import-cookbook': typeof AuthenticatedRecipesImportCookbookRoute
-  '/recipes/import-notion': typeof AuthenticatedRecipesImportNotionRoute
+  '/recipes/import': typeof AuthenticatedRecipesImportRoute
   '/recipes/new': typeof AuthenticatedRecipesNewRoute
   '/search/debug': typeof AuthenticatedSearchDebugRoute
   '/usda/$id': typeof AuthenticatedUsdaIdRoute
@@ -559,9 +543,7 @@ export interface FileRoutesByTo {
   '/projects/$id': typeof AuthenticatedProjectsIdRoute
   '/recipes/$id': typeof AuthenticatedRecipesIdRoute
   '/recipes/compare': typeof AuthenticatedRecipesCompareRoute
-  '/recipes/graph': typeof AuthenticatedRecipesGraphRoute
-  '/recipes/import-cookbook': typeof AuthenticatedRecipesImportCookbookRoute
-  '/recipes/import-notion': typeof AuthenticatedRecipesImportNotionRoute
+  '/recipes/import': typeof AuthenticatedRecipesImportRoute
   '/recipes/new': typeof AuthenticatedRecipesNewRoute
   '/search/debug': typeof AuthenticatedSearchDebugRoute
   '/usda/$id': typeof AuthenticatedUsdaIdRoute
@@ -629,9 +611,7 @@ export interface FileRoutesById {
   '/_authenticated/projects/$id': typeof AuthenticatedProjectsIdRoute
   '/_authenticated/recipes/$id': typeof AuthenticatedRecipesIdRoute
   '/_authenticated/recipes/compare': typeof AuthenticatedRecipesCompareRoute
-  '/_authenticated/recipes/graph': typeof AuthenticatedRecipesGraphRoute
-  '/_authenticated/recipes/import-cookbook': typeof AuthenticatedRecipesImportCookbookRoute
-  '/_authenticated/recipes/import-notion': typeof AuthenticatedRecipesImportNotionRoute
+  '/_authenticated/recipes/import': typeof AuthenticatedRecipesImportRoute
   '/_authenticated/recipes/new': typeof AuthenticatedRecipesNewRoute
   '/_authenticated/search/debug': typeof AuthenticatedSearchDebugRoute
   '/_authenticated/usda/$id': typeof AuthenticatedUsdaIdRoute
@@ -699,9 +679,7 @@ export interface FileRouteTypes {
     | '/projects/$id'
     | '/recipes/$id'
     | '/recipes/compare'
-    | '/recipes/graph'
-    | '/recipes/import-cookbook'
-    | '/recipes/import-notion'
+    | '/recipes/import'
     | '/recipes/new'
     | '/search/debug'
     | '/usda/$id'
@@ -766,9 +744,7 @@ export interface FileRouteTypes {
     | '/projects/$id'
     | '/recipes/$id'
     | '/recipes/compare'
-    | '/recipes/graph'
-    | '/recipes/import-cookbook'
-    | '/recipes/import-notion'
+    | '/recipes/import'
     | '/recipes/new'
     | '/search/debug'
     | '/usda/$id'
@@ -835,9 +811,7 @@ export interface FileRouteTypes {
     | '/_authenticated/projects/$id'
     | '/_authenticated/recipes/$id'
     | '/_authenticated/recipes/compare'
-    | '/_authenticated/recipes/graph'
-    | '/_authenticated/recipes/import-cookbook'
-    | '/_authenticated/recipes/import-notion'
+    | '/_authenticated/recipes/import'
     | '/_authenticated/recipes/new'
     | '/_authenticated/search/debug'
     | '/_authenticated/usda/$id'
@@ -1140,25 +1114,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRecipesNewRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/recipes/import-notion': {
-      id: '/_authenticated/recipes/import-notion'
-      path: '/recipes/import-notion'
-      fullPath: '/recipes/import-notion'
-      preLoaderRoute: typeof AuthenticatedRecipesImportNotionRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/recipes/import-cookbook': {
-      id: '/_authenticated/recipes/import-cookbook'
-      path: '/recipes/import-cookbook'
-      fullPath: '/recipes/import-cookbook'
-      preLoaderRoute: typeof AuthenticatedRecipesImportCookbookRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/recipes/graph': {
-      id: '/_authenticated/recipes/graph'
-      path: '/recipes/graph'
-      fullPath: '/recipes/graph'
-      preLoaderRoute: typeof AuthenticatedRecipesGraphRouteImport
+    '/_authenticated/recipes/import': {
+      id: '/_authenticated/recipes/import'
+      path: '/recipes/import'
+      fullPath: '/recipes/import'
+      preLoaderRoute: typeof AuthenticatedRecipesImportRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/recipes/compare': {
@@ -1383,9 +1343,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedProjectsIdRoute: typeof AuthenticatedProjectsIdRoute
   AuthenticatedRecipesIdRoute: typeof AuthenticatedRecipesIdRoute
   AuthenticatedRecipesCompareRoute: typeof AuthenticatedRecipesCompareRoute
-  AuthenticatedRecipesGraphRoute: typeof AuthenticatedRecipesGraphRoute
-  AuthenticatedRecipesImportCookbookRoute: typeof AuthenticatedRecipesImportCookbookRoute
-  AuthenticatedRecipesImportNotionRoute: typeof AuthenticatedRecipesImportNotionRoute
+  AuthenticatedRecipesImportRoute: typeof AuthenticatedRecipesImportRoute
   AuthenticatedRecipesNewRoute: typeof AuthenticatedRecipesNewRoute
   AuthenticatedSearchDebugRoute: typeof AuthenticatedSearchDebugRoute
   AuthenticatedUsdaIdRoute: typeof AuthenticatedUsdaIdRoute
@@ -1444,10 +1402,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedProjectsIdRoute: AuthenticatedProjectsIdRoute,
   AuthenticatedRecipesIdRoute: AuthenticatedRecipesIdRoute,
   AuthenticatedRecipesCompareRoute: AuthenticatedRecipesCompareRoute,
-  AuthenticatedRecipesGraphRoute: AuthenticatedRecipesGraphRoute,
-  AuthenticatedRecipesImportCookbookRoute:
-    AuthenticatedRecipesImportCookbookRoute,
-  AuthenticatedRecipesImportNotionRoute: AuthenticatedRecipesImportNotionRoute,
+  AuthenticatedRecipesImportRoute: AuthenticatedRecipesImportRoute,
   AuthenticatedRecipesNewRoute: AuthenticatedRecipesNewRoute,
   AuthenticatedSearchDebugRoute: AuthenticatedSearchDebugRoute,
   AuthenticatedUsdaIdRoute: AuthenticatedUsdaIdRoute,
