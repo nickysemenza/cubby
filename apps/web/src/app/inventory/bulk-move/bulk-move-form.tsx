@@ -297,7 +297,6 @@ export default function BulkMoveForm({
             form={form}
             name="targetLocation"
             label="To Location"
-            error={null}
           />
         </div>
       </Row>

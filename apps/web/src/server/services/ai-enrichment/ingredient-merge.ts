@@ -180,7 +180,7 @@ export async function suggestIngredientMergeBatch(
       batch.map((s) => suggestIngredientMerge(db, s)),
     );
     results.forEach((result, j) => {
-      const source = batch[j] as { id: IngredientId; name: string };
+      const source = batch[j]!;
       if (result.status === "fulfilled") {
         out.push({ source, ...result.value });
       } else {

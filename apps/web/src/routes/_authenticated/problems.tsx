@@ -1,4 +1,5 @@
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
+import { useState } from "react";
 import { z } from "zod";
 import { LocationValidateForm } from "~/app/problems/components/location-validate-card";
 import { ProblemsOverview } from "~/app/problems/problems-overview";
@@ -38,33 +39,36 @@ export const Route = createFileRoute("/_authenticated/problems")({
 function ProblemsPage() {
   const { validateParent } = Route.useSearch();
 
+  // Lead with the validate flow only when the page was ENTERED via a deep link.
+  // Captured once in a state initializer: if the param later changes (e.g.
+  // stripSearchParams removing it after the flow finishes), the section order
+  // must not swap — a positional swap would remount both children, discarding
+  // in-progress scan state and refiring all five detector groups.
+  const [leadWithValidate] = useState(() => validateParent != null);
+
   // The validate card is a sibling of <ProblemsOverview />, NOT nested inside
   // it: ProblemsOverview has an isLoading early-return over five detector query
   // groups, and this phone-at-the-shelf workflow must render immediately without
-  // waiting for detectors.
+  // waiting for detectors. Keyed by parent so a NEW deep link (A → B) remounts
+  // the form fresh instead of keeping stale scan state for the old parent.
   const validateCard = (
     <Section
       title="Validate locations"
       description="Scan a location's QR-labeled children to confirm they're all in place, and reassign any that have moved."
     >
-      <LocationValidateForm initialParentId={validateParent} />
+      <LocationValidateForm
+        key={validateParent ?? "manual"}
+        initialParentId={validateParent}
+      />
     </Section>
   );
 
   return (
     <Page variant="list" title="Data Problems">
-      {validateParent ? (
-        // Deep-linked from a location: lead with the validate flow.
-        <Stack gap="lg">
-          {validateCard}
-          <ProblemsOverview />
-        </Stack>
-      ) : (
-        <Stack gap="lg">
-          <ProblemsOverview />
-          {validateCard}
-        </Stack>
-      )}
+      <Stack gap="lg">
+        {leadWithValidate ? validateCard : <ProblemsOverview />}
+        {leadWithValidate ? <ProblemsOverview /> : validateCard}
+      </Stack>
     </Page>
   );
 }

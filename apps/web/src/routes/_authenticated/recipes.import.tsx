@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
 import { z } from "zod";
 import { CookbookImport } from "~/app/_components/recipe/cookbook-import";
 import { NotionImport } from "~/app/_components/recipe/notion-import";
@@ -29,7 +30,17 @@ function ImportPage() {
   // Switching to Notion drops `from` — otherwise the force would pin the
   // cookbook tab and the click would appear to do nothing.
   const activeTab = from ? "cookbook" : tab;
-  const tabs = useTabParam(activeTab, "cookbook", (next) =>
+
+  // NotionImport auto-fetches the whole Notion recipes DB on mount (staleTime
+  // 0), so it must NOT mount while hidden behind the default cookbook tab.
+  // Activate on first visit to the tab, then keep it mounted (sticky) so an
+  // in-flight import survives switching back to the cookbook tab.
+  const [notionActivated, setNotionActivated] = useState(
+    activeTab === "notion",
+  );
+
+  const tabs = useTabParam(activeTab, "cookbook", (next) => {
+    if (next === "notion") setNotionActivated(true);
     navigate({
       to: ".",
       search: (prev) => ({
@@ -37,8 +48,8 @@ function ImportPage() {
         tab: next,
         from: next === "notion" ? undefined : prev.from,
       }),
-    }),
-  );
+    });
+  });
 
   return (
     <Page
@@ -53,14 +64,15 @@ function ImportPage() {
           <TabsTrigger value="cookbook">Cookbook</TabsTrigger>
           <TabsTrigger value="notion">Notion</TabsTrigger>
         </TabsList>
-        {/* Both panels stay mounted (keepMounted): CookbookImport holds minutes
-            of component-local extraction state + a beforeunload guard, so
-            switching tabs must not unmount it. */}
+        {/* Both panels keepMounted: CookbookImport holds minutes of
+            component-local extraction state + a beforeunload guard, so
+            switching tabs must not unmount it. NotionImport additionally
+            renders nothing until first activated (see notionActivated). */}
         <TabsContent value="cookbook" keepMounted>
           <CookbookImport loadCookbookId={from} />
         </TabsContent>
         <TabsContent value="notion" keepMounted>
-          <NotionImport />
+          {notionActivated ? <NotionImport /> : null}
         </TabsContent>
       </Tabs>
     </Page>

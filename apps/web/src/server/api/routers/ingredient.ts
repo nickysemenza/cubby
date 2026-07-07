@@ -43,6 +43,7 @@ import {
   getIngredientMatches,
   getRawLinesForIngredients,
   getRecipeUsagesForIngredient,
+  ingredientList,
   mergeImpactForIngredients,
   resolveOrCreateIngredients,
 } from "~/server/repo/ingredient";
@@ -52,7 +53,6 @@ import {
   getIngredientByID,
   getIngredientByName,
   getIngredientsByIDs,
-  ingredientList,
   mergeIngredients,
   updateIngredient as updateIngredientService,
 } from "~/server/services/ingredient.service";
@@ -83,10 +83,11 @@ const { list } = createEntityListProcedure({
     },
   },
   repository: {
+    // Straight repo call — the list path does no USDA enrichment, so per the
+    // service-boundary rule there's no service layer here.
     list: async (services, filters, sort, pagination) => {
       return await ingredientList(
         services.db,
-        services.usdaClient,
         filters.nameFilter,
         sort,
         pagination,

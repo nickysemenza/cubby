@@ -7,7 +7,6 @@ import type {
   ingredientCreateInput,
   ingredientUpdateData,
 } from "@cubby/schemas/ingredient";
-import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type {
   ProductWithMappingsOut as ProductWithMappings,
   ProductWithMappingsAndFoodOut,
@@ -26,7 +25,6 @@ import {
   getIngredientByID as getIngredientByIDRepo,
   getIngredientByName as getIngredientByNameRepo,
   getIngredientsByIDsLean as getIngredientsByIDsLeanRepo,
-  ingredientList as ingredientListRepo,
   type MergeSummary,
   mergeIngredients as mergeIngredientsRepo,
   updateIngredient as updateIngredientRepo,
@@ -105,25 +103,6 @@ export const getIngredientByName = async (
     ...ingredient,
     product: enrichedProducts,
   };
-};
-
-export const ingredientList = async (
-  db: Database,
-  _usdaClient: USDAClient,
-  nameFilter: string | undefined,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  missingProductsOnly?: boolean,
-) => {
-  const { data: ingredients, count } = await ingredientListRepo(
-    db,
-    nameFilter,
-    sorts,
-    pagination,
-    missingProductsOnly,
-  );
-
-  return { data: ingredients, count };
 };
 
 /**

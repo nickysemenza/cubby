@@ -15,7 +15,7 @@ function RecipesPage() {
       <RecipeList
         actions={
           <>
-            <Link to="/entities">
+            <Link to="/entities" search={{ tab: "recipes" }}>
               <Button variant="outline">
                 <Share2 />
                 Graph

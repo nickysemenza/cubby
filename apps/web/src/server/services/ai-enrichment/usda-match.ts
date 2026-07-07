@@ -225,7 +225,7 @@ export async function suggestUsdaFoodBatch(
       batch.map((name) => suggestUsdaFood(usdaService, db, name)),
     );
     results.forEach((result, j) => {
-      const name = batch[j] as string;
+      const name = batch[j]!;
       if (result.status === "fulfilled") {
         out.push({ name, ...result.value });
       } else {

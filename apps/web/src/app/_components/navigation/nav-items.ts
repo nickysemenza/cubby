@@ -113,7 +113,9 @@ export const desktopNav: NavNode[] = [
   },
   {
     // Data surfaces — the reference/admin tables behind the workflows above.
-    // Pulled out of Pantry/Reports/Dev where they were miscategorized.
+    // Pulled out of Pantry/Dev where they were miscategorized. (The old
+    // Reports group is gone: Insights folded into the home dashboard,
+    // Activity moved to More.)
     label: "Data",
     icon: Database,
     children: [

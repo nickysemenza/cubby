@@ -37,7 +37,7 @@ type DestinationFormValues = z.infer<typeof destinationFormSchema>;
  * Presentational destination field: the location combobox plus the inline
  * StatusText error block. Callers keep their own FormProvider / FormWrapper.
  *
- * Pass `error={null}` when the surrounding surface renders errors elsewhere
+ * Omit `error` when the surrounding surface renders errors elsewhere
  * (e.g. bulk-move's FormWrapper `error` prop).
  */
 export function DestinationLocationField<TFieldValues extends FieldValues>({
@@ -50,7 +50,7 @@ export function DestinationLocationField<TFieldValues extends FieldValues>({
   /** Defaults to `"targetLocation"`. */
   name?: Path<TFieldValues>;
   label: string;
-  error: string | null;
+  error?: string | null;
 }) {
   const fieldName = name ?? ("targetLocation" as Path<TFieldValues>);
   return (
@@ -72,9 +72,9 @@ export function DestinationLocationField<TFieldValues extends FieldValues>({
 
 export interface DestinationMessages {
   /** Shown when no destination is selected. */
-  missingTarget?: string;
+  missingTarget: string;
   /** Shown when the destination matches a source location. */
-  sameAsSource?: string;
+  sameAsSource: string;
 }
 
 export type ResolveDestinationResult =
@@ -83,32 +83,25 @@ export type ResolveDestinationResult =
 
 /**
  * Validates a chosen destination combobox value: it must be non-empty and must
- * differ from every source location. Each caller passes its own `messages` so
- * the exact user-facing copy is preserved.
+ * differ from every source location. `messages` is required (no defaults —
+ * every caller has its own established copy, and unreachable fallback strings
+ * would rot).
  */
 export function resolveDestination(
   target: ComboboxItem | null | undefined,
   sourceLocationIds: LocationId | LocationId[],
-  messages?: DestinationMessages,
+  messages: DestinationMessages,
 ): ResolveDestinationResult {
   const id = getOptionalLocationId(target);
   if (!id) {
-    return {
-      ok: false,
-      error: messages?.missingTarget ?? "Please select a target location",
-    };
+    return { ok: false, error: messages.missingTarget };
   }
 
   const sources = Array.isArray(sourceLocationIds)
     ? sourceLocationIds
     : [sourceLocationIds];
   if (sources.includes(id)) {
-    return {
-      ok: false,
-      error:
-        messages?.sameAsSource ??
-        "Destination must differ from the source location",
-    };
+    return { ok: false, error: messages.sameAsSource };
   }
 
   return { ok: true, id };

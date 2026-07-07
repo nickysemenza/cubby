@@ -1,5 +1,4 @@
-import { unsafeCookbookId } from "@cubby/schemas/identifiers";
-import { useQuery } from "@tanstack/react-query";
+import type { CookbookId } from "@cubby/schemas/identifiers";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { PantryValueCard } from "~/app/_components/home/PantryValueCard";
@@ -8,13 +7,14 @@ import { RecentActivityFeed } from "~/app/_components/home/RecentActivityFeed";
 import EntityCount from "~/app/_components/homepage/entitycount";
 import { IngredientUsagePanel } from "~/app/_components/ingredient/ingredient-usage-panel";
 import { CategoryAudit } from "~/app/_components/insights/category-audit";
+import { CookbookSelect } from "~/app/_components/recipe/cookbook-select";
 import IngredientNetwork from "~/app/_components/visualizations/ingredient-network";
 import LocationSunburst from "~/app/_components/visualizations/location-sunburst";
 import ProductCategoryDonut from "~/app/_components/visualizations/product-category-donut";
-import { Row, Section, Stack } from "~/components/layout";
+import { Section, Stack } from "~/components/layout";
+import { LazyMount } from "~/components/lazy-mount";
 import { Page } from "~/components/page/Page";
 import { authClient } from "~/lib/auth-client";
-import { useTRPC } from "~/trpc/react";
 
 export const Route = createFileRoute("/")({
   // The home dashboard is authenticated-only (the counts/feeds are all
@@ -104,32 +104,44 @@ function Home() {
       </div>
 
       {/* Insights — the visualization sections folded in from the retired
-          /insights page. Each renders lazily via its own query. */}
+          /insights page. All sit below the fold, so each query-backed one is
+          LazyMount-gated: its queries fire only when scrolled near (home is
+          the most-visited route, and the co-occurrence/usage queries are the
+          heaviest reads — don't pay them on every landing). */}
       <Section
         title="Products by Category"
         description="Distribution of products across categories. Click a slice to view products in that category."
       >
-        <ProductCategoryDonut />
+        <LazyMount>
+          <ProductCategoryDonut />
+        </LazyMount>
       </Section>
 
       <Section title="Inventory by Location">
-        <LocationSunburst />
+        <LazyMount>
+          <LocationSunburst />
+        </LazyMount>
       </Section>
 
       <Section
         title="Ingredient Relationships"
         description="Ingredients that appear together in multiple recipes are connected. Larger nodes indicate ingredients used in more recipes."
       >
-        <IngredientNetwork />
+        <LazyMount>
+          <IngredientNetwork />
+        </LazyMount>
       </Section>
 
       <Section
         title="Ingredient Usage"
         description="How many recipes use each ingredient. Scope to a cookbook, and merge near-duplicate names inline."
       >
-        <IngredientUsageSection />
+        <LazyMount>
+          <IngredientUsageSection />
+        </LazyMount>
       </Section>
 
+      {/* CategoryAudit is click-to-run — no query until the button, so no gate. */}
       <Section
         title="Category Audit"
         description="Use AI to analyze your product catalog and suggest new categories that could better organize your inventory."
@@ -141,30 +153,12 @@ function Home() {
 }
 
 function IngredientUsageSection() {
-  const api = useTRPC();
-  const { data: cookbooks } = useQuery(api.recipe.listCookbooks.queryOptions());
-  const [cookbookId, setCookbookId] = useState<string>("");
+  const [cookbookId, setCookbookId] = useState<CookbookId | undefined>();
 
   return (
     <Stack>
-      <Row as="label" align="center" gap="sm" className="w-fit text-sm">
-        <span className="text-muted-foreground">Cookbook</span>
-        <select
-          className="h-8 rounded-md border bg-background px-2 text-sm"
-          value={cookbookId}
-          onChange={(e) => setCookbookId(e.target.value)}
-        >
-          <option value="">All cookbooks</option>
-          {cookbooks?.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.book}
-            </option>
-          ))}
-        </select>
-      </Row>
-      <IngredientUsagePanel
-        cookbookId={cookbookId ? unsafeCookbookId(cookbookId) : undefined}
-      />
+      <CookbookSelect value={cookbookId} onChange={setCookbookId} />
+      <IngredientUsagePanel cookbookId={cookbookId} />
     </Stack>
   );
 }
