@@ -45,28 +45,6 @@ export const richTextInputSchema = z.object({
   ingredientNames: z.array(z.string()),
 });
 
-// DOT diagram for entity relationships
-export const entityRelationshipsDot = `digraph {
-  rankdir=TB;
-  bgcolor="transparent";
-  node [shape=box, style="rounded,filled", fillcolor="#f0f0f0", fontname="system-ui"];
-  edge [fontname="system-ui", fontsize=10];
-
-  Recipe [fillcolor="#fef3c7"];
-  Ingredient [fillcolor="#dbeafe"];
-  Product [fillcolor="#f3e8ff"];
-  Location [fillcolor="#dcfce7"];
-  Inventory [fillcolor="#fce7f3"];
-  USDA [label="USDA Food", fillcolor="#e5e5e5", style="rounded,filled,dashed"];
-
-  Recipe -> Ingredient [label="contains"];
-  Product -> Ingredient [label="fulfills"];
-  Product -> USDA [label="nutrition", style=dashed];
-  Inventory -> Product [label="quantity of"];
-  Inventory -> Location [label="stored in"];
-  Location -> Location [label="nested in", style=dashed];
-}`;
-
 // Sample data for ConversionCapabilities
 export const sampleUnitMappings: z.infer<typeof unitMappingWithMetadata>[] = [
   {

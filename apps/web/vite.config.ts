@@ -102,7 +102,7 @@ export default defineConfig(async () => {
     //   - @base-ui was tried and reverted: its grouped chunk is 243KB (80KB gzip)
     //     but the landing page only uses ~7KB of it, so grouping would drag
     //     lazy-route dialog/sheet code into first paint. Left split on purpose.
-    //   - Lazy-only deps (@nivo, Graphviz, markdown, cmdk) are untouched and stay
+    //   - Lazy-only deps (@nivo, markdown, cmdk) are untouched and stay
     //     code-split, so first paint never pulls them in.
     // Scoped to `client` so it never reshapes the CF Worker SSR bundle (single entry).
     environments: {
