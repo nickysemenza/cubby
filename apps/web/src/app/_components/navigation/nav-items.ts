@@ -13,7 +13,6 @@ import {
   FileText,
   Hammer,
   Home,
-  LayoutDashboard,
   ListChecks,
   MoreHorizontal,
   Network,
@@ -26,7 +25,6 @@ import {
   Settings,
   ShoppingCart,
   Sparkles,
-  TrendingUp,
   Utensils,
   Wrench,
 } from "lucide-react";
@@ -114,14 +112,6 @@ export const desktopNav: NavNode[] = [
     ],
   },
   {
-    label: "Reports",
-    icon: LayoutDashboard,
-    children: [
-      { to: "/insights", label: "Insights", icon: TrendingUp },
-      { to: "/activity", label: "Activity", icon: Activity },
-    ],
-  },
-  {
     // Data surfaces — the reference/admin tables behind the workflows above.
     // Pulled out of Pantry/Reports/Dev where they were miscategorized.
     label: "Data",
@@ -143,6 +133,7 @@ export const desktopNav: NavNode[] = [
         label: "Recount",
         icon: ScanBarcode,
       },
+      { to: "/activity", label: "Activity", icon: Activity },
       { to: "/labels", label: "Labels", icon: QrCode },
       { to: "/ask", label: "Ask AI", icon: Bot },
       { to: "/search", label: "Search", icon: Search },

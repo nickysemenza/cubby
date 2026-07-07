@@ -22,7 +22,6 @@ import { Route as AuthenticatedProblemsRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedPantryViewRouteImport } from './routes/_authenticated/pantry-view'
 import { Route as AuthenticatedMcpRouteImport } from './routes/_authenticated/mcp'
 import { Route as AuthenticatedLabelsRouteImport } from './routes/_authenticated/labels'
-import { Route as AuthenticatedInsightsRouteImport } from './routes/_authenticated/insights'
 import { Route as AuthenticatedEntitiesRouteImport } from './routes/_authenticated/entities'
 import { Route as AuthenticatedBackgroundJobsRouteImport } from './routes/_authenticated/background-jobs'
 import { Route as AuthenticatedAskRouteImport } from './routes/_authenticated/ask'
@@ -56,7 +55,6 @@ import { Route as AuthenticatedProductsIdRouteImport } from './routes/_authentic
 import { Route as AuthenticatedMealsSuggestionsRouteImport } from './routes/_authenticated/meals.suggestions'
 import { Route as AuthenticatedMealsShoppingListRouteImport } from './routes/_authenticated/meals.shopping-list'
 import { Route as AuthenticatedMealsIdRouteImport } from './routes/_authenticated/meals.$id'
-import { Route as AuthenticatedLocationsValidateRouteImport } from './routes/_authenticated/locations.validate'
 import { Route as AuthenticatedLocationsNewRouteImport } from './routes/_authenticated/locations.new'
 import { Route as AuthenticatedLocationsIdRouteImport } from './routes/_authenticated/locations.$id'
 import { Route as AuthenticatedInventorySessionRouteImport } from './routes/_authenticated/inventory.session'
@@ -137,11 +135,6 @@ const AuthenticatedMcpRoute = AuthenticatedMcpRouteImport.update({
 const AuthenticatedLabelsRoute = AuthenticatedLabelsRouteImport.update({
   id: '/labels',
   path: '/labels',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedInsightsRoute = AuthenticatedInsightsRouteImport.update({
-  id: '/insights',
-  path: '/insights',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedEntitiesRoute = AuthenticatedEntitiesRouteImport.update({
@@ -326,12 +319,6 @@ const AuthenticatedMealsIdRoute = AuthenticatedMealsIdRouteImport.update({
   path: '/meals/$id',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedLocationsValidateRoute =
-  AuthenticatedLocationsValidateRouteImport.update({
-    id: '/locations/validate',
-    path: '/locations/validate',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
 const AuthenticatedLocationsNewRoute =
   AuthenticatedLocationsNewRouteImport.update({
     id: '/locations/new',
@@ -445,7 +432,6 @@ export interface FileRoutesByFullPath {
   '/ask': typeof AuthenticatedAskRoute
   '/background-jobs': typeof AuthenticatedBackgroundJobsRoute
   '/entities': typeof AuthenticatedEntitiesRoute
-  '/insights': typeof AuthenticatedInsightsRoute
   '/labels': typeof AuthenticatedLabelsRoute
   '/mcp': typeof AuthenticatedMcpRoute
   '/pantry-view': typeof AuthenticatedPantryViewRoute
@@ -469,7 +455,6 @@ export interface FileRoutesByFullPath {
   '/inventory/session': typeof AuthenticatedInventorySessionRoute
   '/locations/$id': typeof AuthenticatedLocationsIdRoute
   '/locations/new': typeof AuthenticatedLocationsNewRoute
-  '/locations/validate': typeof AuthenticatedLocationsValidateRoute
   '/meals/$id': typeof AuthenticatedMealsIdRoute
   '/meals/shopping-list': typeof AuthenticatedMealsShoppingListRoute
   '/meals/suggestions': typeof AuthenticatedMealsSuggestionsRoute
@@ -510,7 +495,6 @@ export interface FileRoutesByTo {
   '/ask': typeof AuthenticatedAskRoute
   '/background-jobs': typeof AuthenticatedBackgroundJobsRoute
   '/entities': typeof AuthenticatedEntitiesRoute
-  '/insights': typeof AuthenticatedInsightsRoute
   '/labels': typeof AuthenticatedLabelsRoute
   '/mcp': typeof AuthenticatedMcpRoute
   '/pantry-view': typeof AuthenticatedPantryViewRoute
@@ -534,7 +518,6 @@ export interface FileRoutesByTo {
   '/inventory/session': typeof AuthenticatedInventorySessionRoute
   '/locations/$id': typeof AuthenticatedLocationsIdRoute
   '/locations/new': typeof AuthenticatedLocationsNewRoute
-  '/locations/validate': typeof AuthenticatedLocationsValidateRoute
   '/meals/$id': typeof AuthenticatedMealsIdRoute
   '/meals/shopping-list': typeof AuthenticatedMealsShoppingListRoute
   '/meals/suggestions': typeof AuthenticatedMealsSuggestionsRoute
@@ -578,7 +561,6 @@ export interface FileRoutesById {
   '/_authenticated/ask': typeof AuthenticatedAskRoute
   '/_authenticated/background-jobs': typeof AuthenticatedBackgroundJobsRoute
   '/_authenticated/entities': typeof AuthenticatedEntitiesRoute
-  '/_authenticated/insights': typeof AuthenticatedInsightsRoute
   '/_authenticated/labels': typeof AuthenticatedLabelsRoute
   '/_authenticated/mcp': typeof AuthenticatedMcpRoute
   '/_authenticated/pantry-view': typeof AuthenticatedPantryViewRoute
@@ -602,7 +584,6 @@ export interface FileRoutesById {
   '/_authenticated/inventory/session': typeof AuthenticatedInventorySessionRoute
   '/_authenticated/locations/$id': typeof AuthenticatedLocationsIdRoute
   '/_authenticated/locations/new': typeof AuthenticatedLocationsNewRoute
-  '/_authenticated/locations/validate': typeof AuthenticatedLocationsValidateRoute
   '/_authenticated/meals/$id': typeof AuthenticatedMealsIdRoute
   '/_authenticated/meals/shopping-list': typeof AuthenticatedMealsShoppingListRoute
   '/_authenticated/meals/suggestions': typeof AuthenticatedMealsSuggestionsRoute
@@ -646,7 +627,6 @@ export interface FileRouteTypes {
     | '/ask'
     | '/background-jobs'
     | '/entities'
-    | '/insights'
     | '/labels'
     | '/mcp'
     | '/pantry-view'
@@ -670,7 +650,6 @@ export interface FileRouteTypes {
     | '/inventory/session'
     | '/locations/$id'
     | '/locations/new'
-    | '/locations/validate'
     | '/meals/$id'
     | '/meals/shopping-list'
     | '/meals/suggestions'
@@ -711,7 +690,6 @@ export interface FileRouteTypes {
     | '/ask'
     | '/background-jobs'
     | '/entities'
-    | '/insights'
     | '/labels'
     | '/mcp'
     | '/pantry-view'
@@ -735,7 +713,6 @@ export interface FileRouteTypes {
     | '/inventory/session'
     | '/locations/$id'
     | '/locations/new'
-    | '/locations/validate'
     | '/meals/$id'
     | '/meals/shopping-list'
     | '/meals/suggestions'
@@ -778,7 +755,6 @@ export interface FileRouteTypes {
     | '/_authenticated/ask'
     | '/_authenticated/background-jobs'
     | '/_authenticated/entities'
-    | '/_authenticated/insights'
     | '/_authenticated/labels'
     | '/_authenticated/mcp'
     | '/_authenticated/pantry-view'
@@ -802,7 +778,6 @@ export interface FileRouteTypes {
     | '/_authenticated/inventory/session'
     | '/_authenticated/locations/$id'
     | '/_authenticated/locations/new'
-    | '/_authenticated/locations/validate'
     | '/_authenticated/meals/$id'
     | '/_authenticated/meals/shopping-list'
     | '/_authenticated/meals/suggestions'
@@ -937,13 +912,6 @@ declare module '@tanstack/react-router' {
       path: '/labels'
       fullPath: '/labels'
       preLoaderRoute: typeof AuthenticatedLabelsRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/insights': {
-      id: '/_authenticated/insights'
-      path: '/insights'
-      fullPath: '/insights'
-      preLoaderRoute: typeof AuthenticatedInsightsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/entities': {
@@ -1177,13 +1145,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMealsIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/locations/validate': {
-      id: '/_authenticated/locations/validate'
-      path: '/locations/validate'
-      fullPath: '/locations/validate'
-      preLoaderRoute: typeof AuthenticatedLocationsValidateRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
     '/_authenticated/locations/new': {
       id: '/_authenticated/locations/new'
       path: '/locations/new'
@@ -1314,7 +1275,6 @@ interface AuthenticatedRouteChildren {
   AuthenticatedAskRoute: typeof AuthenticatedAskRoute
   AuthenticatedBackgroundJobsRoute: typeof AuthenticatedBackgroundJobsRoute
   AuthenticatedEntitiesRoute: typeof AuthenticatedEntitiesRoute
-  AuthenticatedInsightsRoute: typeof AuthenticatedInsightsRoute
   AuthenticatedLabelsRoute: typeof AuthenticatedLabelsRoute
   AuthenticatedMcpRoute: typeof AuthenticatedMcpRoute
   AuthenticatedPantryViewRoute: typeof AuthenticatedPantryViewRoute
@@ -1334,7 +1294,6 @@ interface AuthenticatedRouteChildren {
   AuthenticatedInventorySessionRoute: typeof AuthenticatedInventorySessionRoute
   AuthenticatedLocationsIdRoute: typeof AuthenticatedLocationsIdRoute
   AuthenticatedLocationsNewRoute: typeof AuthenticatedLocationsNewRoute
-  AuthenticatedLocationsValidateRoute: typeof AuthenticatedLocationsValidateRoute
   AuthenticatedMealsIdRoute: typeof AuthenticatedMealsIdRoute
   AuthenticatedMealsShoppingListRoute: typeof AuthenticatedMealsShoppingListRoute
   AuthenticatedMealsSuggestionsRoute: typeof AuthenticatedMealsSuggestionsRoute
@@ -1371,7 +1330,6 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAskRoute: AuthenticatedAskRoute,
   AuthenticatedBackgroundJobsRoute: AuthenticatedBackgroundJobsRoute,
   AuthenticatedEntitiesRoute: AuthenticatedEntitiesRoute,
-  AuthenticatedInsightsRoute: AuthenticatedInsightsRoute,
   AuthenticatedLabelsRoute: AuthenticatedLabelsRoute,
   AuthenticatedMcpRoute: AuthenticatedMcpRoute,
   AuthenticatedPantryViewRoute: AuthenticatedPantryViewRoute,
@@ -1393,7 +1351,6 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedInventorySessionRoute: AuthenticatedInventorySessionRoute,
   AuthenticatedLocationsIdRoute: AuthenticatedLocationsIdRoute,
   AuthenticatedLocationsNewRoute: AuthenticatedLocationsNewRoute,
-  AuthenticatedLocationsValidateRoute: AuthenticatedLocationsValidateRoute,
   AuthenticatedMealsIdRoute: AuthenticatedMealsIdRoute,
   AuthenticatedMealsShoppingListRoute: AuthenticatedMealsShoppingListRoute,
   AuthenticatedMealsSuggestionsRoute: AuthenticatedMealsSuggestionsRoute,
