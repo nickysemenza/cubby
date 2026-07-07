@@ -33,16 +33,18 @@ import {
 import { listRecentAiUsage, summarizeAiUsage } from "~/server/repo/ai-usage";
 import { getLocationNames } from "~/server/repo/location/crud";
 import { getProductSummaryForAudit } from "~/server/repo/product";
+import { suggestIngredientMergeBatch } from "~/server/services/ai-enrichment/ingredient-merge";
 import {
   approveDetectedInventoryItem,
   backfillLocationDescriptions,
   describeLocation,
   detectInventoryItems,
-  precomputeEnrichmentProposals,
-  suggestIngredientMergeBatch,
+} from "~/server/services/ai-enrichment/location-vision";
+import { precomputeEnrichmentProposals } from "~/server/services/ai-enrichment/proposals";
+import {
   suggestUsdaFood,
   suggestUsdaFoodBatch,
-} from "~/server/services/ai-enrichment.service";
+} from "~/server/services/ai-enrichment/usda-match";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 /**

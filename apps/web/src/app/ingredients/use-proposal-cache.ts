@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import type { EnrichmentProposal } from "~/server/services/ai-enrichment.service";
+import type { EnrichmentProposal } from "~/server/services/ai-enrichment/proposals";
 import { useTRPCClient } from "~/trpc/react";
 
 /** One ingredient to pre-compute proposals for. */
