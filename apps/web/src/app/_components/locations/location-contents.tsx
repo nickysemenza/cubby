@@ -280,8 +280,8 @@ export function LocationContents({ location }: { location: InfLocation }) {
         {hasChildren && (
           <>
             <Link
-              to="/locations/validate"
-              search={{ parentId: location.id }}
+              to="/problems"
+              search={{ validateParent: location.id }}
               className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
             >
               <ClipboardCheck className="mr-2 h-4 w-4" />

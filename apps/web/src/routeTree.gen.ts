@@ -22,9 +22,7 @@ import { Route as AuthenticatedProblemsRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedPantryViewRouteImport } from './routes/_authenticated/pantry-view'
 import { Route as AuthenticatedMcpRouteImport } from './routes/_authenticated/mcp'
 import { Route as AuthenticatedLabelsRouteImport } from './routes/_authenticated/labels'
-import { Route as AuthenticatedInsightsRouteImport } from './routes/_authenticated/insights'
 import { Route as AuthenticatedEntitiesRouteImport } from './routes/_authenticated/entities'
-import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedBackgroundJobsRouteImport } from './routes/_authenticated/background-jobs'
 import { Route as AuthenticatedAskRouteImport } from './routes/_authenticated/ask'
 import { Route as AuthenticatedAiUsageRouteImport } from './routes/_authenticated/ai-usage'
@@ -48,9 +46,7 @@ import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as AuthenticatedUsdaIdRouteImport } from './routes/_authenticated/usda.$id'
 import { Route as AuthenticatedSearchDebugRouteImport } from './routes/_authenticated/search.debug'
 import { Route as AuthenticatedRecipesNewRouteImport } from './routes/_authenticated/recipes.new'
-import { Route as AuthenticatedRecipesImportNotionRouteImport } from './routes/_authenticated/recipes.import-notion'
-import { Route as AuthenticatedRecipesImportCookbookRouteImport } from './routes/_authenticated/recipes.import-cookbook'
-import { Route as AuthenticatedRecipesGraphRouteImport } from './routes/_authenticated/recipes.graph'
+import { Route as AuthenticatedRecipesImportRouteImport } from './routes/_authenticated/recipes.import'
 import { Route as AuthenticatedRecipesCompareRouteImport } from './routes/_authenticated/recipes.compare'
 import { Route as AuthenticatedRecipesIdRouteImport } from './routes/_authenticated/recipes.$id'
 import { Route as AuthenticatedProjectsIdRouteImport } from './routes/_authenticated/projects.$id'
@@ -59,7 +55,6 @@ import { Route as AuthenticatedProductsIdRouteImport } from './routes/_authentic
 import { Route as AuthenticatedMealsSuggestionsRouteImport } from './routes/_authenticated/meals.suggestions'
 import { Route as AuthenticatedMealsShoppingListRouteImport } from './routes/_authenticated/meals.shopping-list'
 import { Route as AuthenticatedMealsIdRouteImport } from './routes/_authenticated/meals.$id'
-import { Route as AuthenticatedLocationsValidateRouteImport } from './routes/_authenticated/locations.validate'
 import { Route as AuthenticatedLocationsNewRouteImport } from './routes/_authenticated/locations.new'
 import { Route as AuthenticatedLocationsIdRouteImport } from './routes/_authenticated/locations.$id'
 import { Route as AuthenticatedInventorySessionRouteImport } from './routes/_authenticated/inventory.session'
@@ -142,19 +137,9 @@ const AuthenticatedLabelsRoute = AuthenticatedLabelsRouteImport.update({
   path: '/labels',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedInsightsRoute = AuthenticatedInsightsRouteImport.update({
-  id: '/insights',
-  path: '/insights',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
 const AuthenticatedEntitiesRoute = AuthenticatedEntitiesRouteImport.update({
   id: '/entities',
   path: '/entities',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedBackgroundJobsRoute =
@@ -284,22 +269,10 @@ const AuthenticatedRecipesNewRoute = AuthenticatedRecipesNewRouteImport.update({
   path: '/recipes/new',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedRecipesImportNotionRoute =
-  AuthenticatedRecipesImportNotionRouteImport.update({
-    id: '/recipes/import-notion',
-    path: '/recipes/import-notion',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedRecipesImportCookbookRoute =
-  AuthenticatedRecipesImportCookbookRouteImport.update({
-    id: '/recipes/import-cookbook',
-    path: '/recipes/import-cookbook',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedRecipesGraphRoute =
-  AuthenticatedRecipesGraphRouteImport.update({
-    id: '/recipes/graph',
-    path: '/recipes/graph',
+const AuthenticatedRecipesImportRoute =
+  AuthenticatedRecipesImportRouteImport.update({
+    id: '/recipes/import',
+    path: '/recipes/import',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedRecipesCompareRoute =
@@ -346,12 +319,6 @@ const AuthenticatedMealsIdRoute = AuthenticatedMealsIdRouteImport.update({
   path: '/meals/$id',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedLocationsValidateRoute =
-  AuthenticatedLocationsValidateRouteImport.update({
-    id: '/locations/validate',
-    path: '/locations/validate',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
 const AuthenticatedLocationsNewRoute =
   AuthenticatedLocationsNewRouteImport.update({
     id: '/locations/new',
@@ -464,9 +431,7 @@ export interface FileRoutesByFullPath {
   '/ai-usage': typeof AuthenticatedAiUsageRoute
   '/ask': typeof AuthenticatedAskRoute
   '/background-jobs': typeof AuthenticatedBackgroundJobsRoute
-  '/dashboard': typeof AuthenticatedDashboardRoute
   '/entities': typeof AuthenticatedEntitiesRoute
-  '/insights': typeof AuthenticatedInsightsRoute
   '/labels': typeof AuthenticatedLabelsRoute
   '/mcp': typeof AuthenticatedMcpRoute
   '/pantry-view': typeof AuthenticatedPantryViewRoute
@@ -490,7 +455,6 @@ export interface FileRoutesByFullPath {
   '/inventory/session': typeof AuthenticatedInventorySessionRoute
   '/locations/$id': typeof AuthenticatedLocationsIdRoute
   '/locations/new': typeof AuthenticatedLocationsNewRoute
-  '/locations/validate': typeof AuthenticatedLocationsValidateRoute
   '/meals/$id': typeof AuthenticatedMealsIdRoute
   '/meals/shopping-list': typeof AuthenticatedMealsShoppingListRoute
   '/meals/suggestions': typeof AuthenticatedMealsSuggestionsRoute
@@ -499,9 +463,7 @@ export interface FileRoutesByFullPath {
   '/projects/$id': typeof AuthenticatedProjectsIdRoute
   '/recipes/$id': typeof AuthenticatedRecipesIdRoute
   '/recipes/compare': typeof AuthenticatedRecipesCompareRoute
-  '/recipes/graph': typeof AuthenticatedRecipesGraphRoute
-  '/recipes/import-cookbook': typeof AuthenticatedRecipesImportCookbookRoute
-  '/recipes/import-notion': typeof AuthenticatedRecipesImportNotionRoute
+  '/recipes/import': typeof AuthenticatedRecipesImportRoute
   '/recipes/new': typeof AuthenticatedRecipesNewRoute
   '/search/debug': typeof AuthenticatedSearchDebugRoute
   '/usda/$id': typeof AuthenticatedUsdaIdRoute
@@ -532,9 +494,7 @@ export interface FileRoutesByTo {
   '/ai-usage': typeof AuthenticatedAiUsageRoute
   '/ask': typeof AuthenticatedAskRoute
   '/background-jobs': typeof AuthenticatedBackgroundJobsRoute
-  '/dashboard': typeof AuthenticatedDashboardRoute
   '/entities': typeof AuthenticatedEntitiesRoute
-  '/insights': typeof AuthenticatedInsightsRoute
   '/labels': typeof AuthenticatedLabelsRoute
   '/mcp': typeof AuthenticatedMcpRoute
   '/pantry-view': typeof AuthenticatedPantryViewRoute
@@ -558,7 +518,6 @@ export interface FileRoutesByTo {
   '/inventory/session': typeof AuthenticatedInventorySessionRoute
   '/locations/$id': typeof AuthenticatedLocationsIdRoute
   '/locations/new': typeof AuthenticatedLocationsNewRoute
-  '/locations/validate': typeof AuthenticatedLocationsValidateRoute
   '/meals/$id': typeof AuthenticatedMealsIdRoute
   '/meals/shopping-list': typeof AuthenticatedMealsShoppingListRoute
   '/meals/suggestions': typeof AuthenticatedMealsSuggestionsRoute
@@ -567,9 +526,7 @@ export interface FileRoutesByTo {
   '/projects/$id': typeof AuthenticatedProjectsIdRoute
   '/recipes/$id': typeof AuthenticatedRecipesIdRoute
   '/recipes/compare': typeof AuthenticatedRecipesCompareRoute
-  '/recipes/graph': typeof AuthenticatedRecipesGraphRoute
-  '/recipes/import-cookbook': typeof AuthenticatedRecipesImportCookbookRoute
-  '/recipes/import-notion': typeof AuthenticatedRecipesImportNotionRoute
+  '/recipes/import': typeof AuthenticatedRecipesImportRoute
   '/recipes/new': typeof AuthenticatedRecipesNewRoute
   '/search/debug': typeof AuthenticatedSearchDebugRoute
   '/usda/$id': typeof AuthenticatedUsdaIdRoute
@@ -603,9 +560,7 @@ export interface FileRoutesById {
   '/_authenticated/ai-usage': typeof AuthenticatedAiUsageRoute
   '/_authenticated/ask': typeof AuthenticatedAskRoute
   '/_authenticated/background-jobs': typeof AuthenticatedBackgroundJobsRoute
-  '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/entities': typeof AuthenticatedEntitiesRoute
-  '/_authenticated/insights': typeof AuthenticatedInsightsRoute
   '/_authenticated/labels': typeof AuthenticatedLabelsRoute
   '/_authenticated/mcp': typeof AuthenticatedMcpRoute
   '/_authenticated/pantry-view': typeof AuthenticatedPantryViewRoute
@@ -629,7 +584,6 @@ export interface FileRoutesById {
   '/_authenticated/inventory/session': typeof AuthenticatedInventorySessionRoute
   '/_authenticated/locations/$id': typeof AuthenticatedLocationsIdRoute
   '/_authenticated/locations/new': typeof AuthenticatedLocationsNewRoute
-  '/_authenticated/locations/validate': typeof AuthenticatedLocationsValidateRoute
   '/_authenticated/meals/$id': typeof AuthenticatedMealsIdRoute
   '/_authenticated/meals/shopping-list': typeof AuthenticatedMealsShoppingListRoute
   '/_authenticated/meals/suggestions': typeof AuthenticatedMealsSuggestionsRoute
@@ -638,9 +592,7 @@ export interface FileRoutesById {
   '/_authenticated/projects/$id': typeof AuthenticatedProjectsIdRoute
   '/_authenticated/recipes/$id': typeof AuthenticatedRecipesIdRoute
   '/_authenticated/recipes/compare': typeof AuthenticatedRecipesCompareRoute
-  '/_authenticated/recipes/graph': typeof AuthenticatedRecipesGraphRoute
-  '/_authenticated/recipes/import-cookbook': typeof AuthenticatedRecipesImportCookbookRoute
-  '/_authenticated/recipes/import-notion': typeof AuthenticatedRecipesImportNotionRoute
+  '/_authenticated/recipes/import': typeof AuthenticatedRecipesImportRoute
   '/_authenticated/recipes/new': typeof AuthenticatedRecipesNewRoute
   '/_authenticated/search/debug': typeof AuthenticatedSearchDebugRoute
   '/_authenticated/usda/$id': typeof AuthenticatedUsdaIdRoute
@@ -674,9 +626,7 @@ export interface FileRouteTypes {
     | '/ai-usage'
     | '/ask'
     | '/background-jobs'
-    | '/dashboard'
     | '/entities'
-    | '/insights'
     | '/labels'
     | '/mcp'
     | '/pantry-view'
@@ -700,7 +650,6 @@ export interface FileRouteTypes {
     | '/inventory/session'
     | '/locations/$id'
     | '/locations/new'
-    | '/locations/validate'
     | '/meals/$id'
     | '/meals/shopping-list'
     | '/meals/suggestions'
@@ -709,9 +658,7 @@ export interface FileRouteTypes {
     | '/projects/$id'
     | '/recipes/$id'
     | '/recipes/compare'
-    | '/recipes/graph'
-    | '/recipes/import-cookbook'
-    | '/recipes/import-notion'
+    | '/recipes/import'
     | '/recipes/new'
     | '/search/debug'
     | '/usda/$id'
@@ -742,9 +689,7 @@ export interface FileRouteTypes {
     | '/ai-usage'
     | '/ask'
     | '/background-jobs'
-    | '/dashboard'
     | '/entities'
-    | '/insights'
     | '/labels'
     | '/mcp'
     | '/pantry-view'
@@ -768,7 +713,6 @@ export interface FileRouteTypes {
     | '/inventory/session'
     | '/locations/$id'
     | '/locations/new'
-    | '/locations/validate'
     | '/meals/$id'
     | '/meals/shopping-list'
     | '/meals/suggestions'
@@ -777,9 +721,7 @@ export interface FileRouteTypes {
     | '/projects/$id'
     | '/recipes/$id'
     | '/recipes/compare'
-    | '/recipes/graph'
-    | '/recipes/import-cookbook'
-    | '/recipes/import-notion'
+    | '/recipes/import'
     | '/recipes/new'
     | '/search/debug'
     | '/usda/$id'
@@ -812,9 +754,7 @@ export interface FileRouteTypes {
     | '/_authenticated/ai-usage'
     | '/_authenticated/ask'
     | '/_authenticated/background-jobs'
-    | '/_authenticated/dashboard'
     | '/_authenticated/entities'
-    | '/_authenticated/insights'
     | '/_authenticated/labels'
     | '/_authenticated/mcp'
     | '/_authenticated/pantry-view'
@@ -838,7 +778,6 @@ export interface FileRouteTypes {
     | '/_authenticated/inventory/session'
     | '/_authenticated/locations/$id'
     | '/_authenticated/locations/new'
-    | '/_authenticated/locations/validate'
     | '/_authenticated/meals/$id'
     | '/_authenticated/meals/shopping-list'
     | '/_authenticated/meals/suggestions'
@@ -847,9 +786,7 @@ export interface FileRouteTypes {
     | '/_authenticated/projects/$id'
     | '/_authenticated/recipes/$id'
     | '/_authenticated/recipes/compare'
-    | '/_authenticated/recipes/graph'
-    | '/_authenticated/recipes/import-cookbook'
-    | '/_authenticated/recipes/import-notion'
+    | '/_authenticated/recipes/import'
     | '/_authenticated/recipes/new'
     | '/_authenticated/search/debug'
     | '/_authenticated/usda/$id'
@@ -977,25 +914,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedLabelsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/insights': {
-      id: '/_authenticated/insights'
-      path: '/insights'
-      fullPath: '/insights'
-      preLoaderRoute: typeof AuthenticatedInsightsRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
     '/_authenticated/entities': {
       id: '/_authenticated/entities'
       path: '/entities'
       fullPath: '/entities'
       preLoaderRoute: typeof AuthenticatedEntitiesRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/dashboard': {
-      id: '/_authenticated/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/background-jobs': {
@@ -1159,25 +1082,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRecipesNewRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/recipes/import-notion': {
-      id: '/_authenticated/recipes/import-notion'
-      path: '/recipes/import-notion'
-      fullPath: '/recipes/import-notion'
-      preLoaderRoute: typeof AuthenticatedRecipesImportNotionRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/recipes/import-cookbook': {
-      id: '/_authenticated/recipes/import-cookbook'
-      path: '/recipes/import-cookbook'
-      fullPath: '/recipes/import-cookbook'
-      preLoaderRoute: typeof AuthenticatedRecipesImportCookbookRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/recipes/graph': {
-      id: '/_authenticated/recipes/graph'
-      path: '/recipes/graph'
-      fullPath: '/recipes/graph'
-      preLoaderRoute: typeof AuthenticatedRecipesGraphRouteImport
+    '/_authenticated/recipes/import': {
+      id: '/_authenticated/recipes/import'
+      path: '/recipes/import'
+      fullPath: '/recipes/import'
+      preLoaderRoute: typeof AuthenticatedRecipesImportRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/recipes/compare': {
@@ -1234,13 +1143,6 @@ declare module '@tanstack/react-router' {
       path: '/meals/$id'
       fullPath: '/meals/$id'
       preLoaderRoute: typeof AuthenticatedMealsIdRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/locations/validate': {
-      id: '/_authenticated/locations/validate'
-      path: '/locations/validate'
-      fullPath: '/locations/validate'
-      preLoaderRoute: typeof AuthenticatedLocationsValidateRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/locations/new': {
@@ -1372,9 +1274,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedAiUsageRoute: typeof AuthenticatedAiUsageRoute
   AuthenticatedAskRoute: typeof AuthenticatedAskRoute
   AuthenticatedBackgroundJobsRoute: typeof AuthenticatedBackgroundJobsRoute
-  AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedEntitiesRoute: typeof AuthenticatedEntitiesRoute
-  AuthenticatedInsightsRoute: typeof AuthenticatedInsightsRoute
   AuthenticatedLabelsRoute: typeof AuthenticatedLabelsRoute
   AuthenticatedMcpRoute: typeof AuthenticatedMcpRoute
   AuthenticatedPantryViewRoute: typeof AuthenticatedPantryViewRoute
@@ -1394,7 +1294,6 @@ interface AuthenticatedRouteChildren {
   AuthenticatedInventorySessionRoute: typeof AuthenticatedInventorySessionRoute
   AuthenticatedLocationsIdRoute: typeof AuthenticatedLocationsIdRoute
   AuthenticatedLocationsNewRoute: typeof AuthenticatedLocationsNewRoute
-  AuthenticatedLocationsValidateRoute: typeof AuthenticatedLocationsValidateRoute
   AuthenticatedMealsIdRoute: typeof AuthenticatedMealsIdRoute
   AuthenticatedMealsShoppingListRoute: typeof AuthenticatedMealsShoppingListRoute
   AuthenticatedMealsSuggestionsRoute: typeof AuthenticatedMealsSuggestionsRoute
@@ -1403,9 +1302,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedProjectsIdRoute: typeof AuthenticatedProjectsIdRoute
   AuthenticatedRecipesIdRoute: typeof AuthenticatedRecipesIdRoute
   AuthenticatedRecipesCompareRoute: typeof AuthenticatedRecipesCompareRoute
-  AuthenticatedRecipesGraphRoute: typeof AuthenticatedRecipesGraphRoute
-  AuthenticatedRecipesImportCookbookRoute: typeof AuthenticatedRecipesImportCookbookRoute
-  AuthenticatedRecipesImportNotionRoute: typeof AuthenticatedRecipesImportNotionRoute
+  AuthenticatedRecipesImportRoute: typeof AuthenticatedRecipesImportRoute
   AuthenticatedRecipesNewRoute: typeof AuthenticatedRecipesNewRoute
   AuthenticatedSearchDebugRoute: typeof AuthenticatedSearchDebugRoute
   AuthenticatedUsdaIdRoute: typeof AuthenticatedUsdaIdRoute
@@ -1432,9 +1329,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAiUsageRoute: AuthenticatedAiUsageRoute,
   AuthenticatedAskRoute: AuthenticatedAskRoute,
   AuthenticatedBackgroundJobsRoute: AuthenticatedBackgroundJobsRoute,
-  AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedEntitiesRoute: AuthenticatedEntitiesRoute,
-  AuthenticatedInsightsRoute: AuthenticatedInsightsRoute,
   AuthenticatedLabelsRoute: AuthenticatedLabelsRoute,
   AuthenticatedMcpRoute: AuthenticatedMcpRoute,
   AuthenticatedPantryViewRoute: AuthenticatedPantryViewRoute,
@@ -1456,7 +1351,6 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedInventorySessionRoute: AuthenticatedInventorySessionRoute,
   AuthenticatedLocationsIdRoute: AuthenticatedLocationsIdRoute,
   AuthenticatedLocationsNewRoute: AuthenticatedLocationsNewRoute,
-  AuthenticatedLocationsValidateRoute: AuthenticatedLocationsValidateRoute,
   AuthenticatedMealsIdRoute: AuthenticatedMealsIdRoute,
   AuthenticatedMealsShoppingListRoute: AuthenticatedMealsShoppingListRoute,
   AuthenticatedMealsSuggestionsRoute: AuthenticatedMealsSuggestionsRoute,
@@ -1465,10 +1359,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedProjectsIdRoute: AuthenticatedProjectsIdRoute,
   AuthenticatedRecipesIdRoute: AuthenticatedRecipesIdRoute,
   AuthenticatedRecipesCompareRoute: AuthenticatedRecipesCompareRoute,
-  AuthenticatedRecipesGraphRoute: AuthenticatedRecipesGraphRoute,
-  AuthenticatedRecipesImportCookbookRoute:
-    AuthenticatedRecipesImportCookbookRoute,
-  AuthenticatedRecipesImportNotionRoute: AuthenticatedRecipesImportNotionRoute,
+  AuthenticatedRecipesImportRoute: AuthenticatedRecipesImportRoute,
   AuthenticatedRecipesNewRoute: AuthenticatedRecipesNewRoute,
   AuthenticatedSearchDebugRoute: AuthenticatedSearchDebugRoute,
   AuthenticatedUsdaIdRoute: AuthenticatedUsdaIdRoute,

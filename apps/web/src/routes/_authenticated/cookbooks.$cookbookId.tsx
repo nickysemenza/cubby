@@ -143,7 +143,7 @@ function CookbookDetailPage() {
               size="sm"
               onClick={() =>
                 navigate({
-                  to: "/recipes/import-cookbook",
+                  to: "/recipes/import",
                   search: { from: cookbookId },
                 })
               }

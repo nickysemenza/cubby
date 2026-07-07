@@ -1,4 +1,3 @@
-import { lazy, Suspense } from "react";
 import { Grid, Row } from "~/components/layout";
 import {
   Card,
@@ -8,9 +7,7 @@ import {
 } from "~/components/ui/card";
 import { entities } from "~/entities/entities";
 import { Prose } from "../_components/Prose";
-import { entityRelationshipsDot } from "../_data/samples";
-
-const Graphviz = lazy(() => import("graphviz-react"));
+import { EntityRelationshipsDiagram } from "./entity-relationships-diagram";
 
 export function ConceptsSection() {
   return (
@@ -97,17 +94,7 @@ export function ConceptsSection() {
       <div className="my-6">
         <div className="mb-2 font-medium">Entity Relationships</div>
         <div className="overflow-hidden rounded-lg border border-[var(--border)] bg-card p-4">
-          <Suspense fallback={<div className="h-75" />}>
-            <Graphviz
-              dot={entityRelationshipsDot}
-              options={{
-                width: "100%",
-                height: 300,
-                fit: true,
-                useWorker: false,
-              }}
-            />
-          </Suspense>
+          <EntityRelationshipsDiagram />
         </div>
       </div>
     </>

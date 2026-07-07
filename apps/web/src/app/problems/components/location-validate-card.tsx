@@ -55,9 +55,7 @@ export function LocationValidateForm({
   const api = useTRPC();
   const queryClient = useQueryClient();
 
-  const [phase, setPhase] = useState<Phase>(
-    initialParentId ? "SELECT_LOCATION" : "SELECT_LOCATION",
-  );
+  const [phase, setPhase] = useState<Phase>("SELECT_LOCATION");
   const [parentLocationId, setParentLocationId] = useState<string | null>(
     initialParentId ?? null,
   );

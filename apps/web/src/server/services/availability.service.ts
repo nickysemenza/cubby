@@ -19,7 +19,8 @@ import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import { getInventoryForProducts } from "~/server/repo/inventory";
 import { getRecipeByID } from "~/server/repo/recipe";
-import type { IngredientService } from "./ingredient.service";
+import type { USDAClient } from "../clients/usda";
+import { getIngredientByID } from "./ingredient.service";
 
 // Output types live in @cubby/schemas/availability (single source of
 // truth, shared with the suggestions router's .output()).
@@ -41,7 +42,7 @@ import type { IngredientService } from "./ingredient.service";
 export class AvailabilityService {
   constructor(
     private db: Database,
-    private ingredientService: IngredientService,
+    private usdaClient: USDAClient,
   ) {}
 
   async getRecipeAvailability(recipeId: RecipeId): Promise<RecipeAvailability> {
@@ -64,7 +65,7 @@ export class AvailabilityService {
     );
     const ingredientEntries = await pMap(
       directIds,
-      (id) => this.ingredientService.getIngredientByID(id),
+      (id) => getIngredientByID(this.db, this.usdaClient, id),
       { concurrency: 8 },
     );
     const ingMap = new Map<IngredientId, IngredientWithFoodOut>(
@@ -228,7 +229,7 @@ export class AvailabilityService {
     );
     const ingredientEntries = await pMap(
       distinctIngredientIds,
-      (id) => this.ingredientService.getIngredientByID(id),
+      (id) => getIngredientByID(this.db, this.usdaClient, id),
       { concurrency: 8 },
     );
     const ingMap = new Map<IngredientId, IngredientWithFoodOut>(

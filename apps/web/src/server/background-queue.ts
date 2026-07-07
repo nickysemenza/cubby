@@ -33,7 +33,7 @@ import {
   describeLocation,
   detectInventoryItems,
   isLocationHasNoImagesToAnalyzeError,
-} from "./services/ai-enrichment.service";
+} from "./services/ai-enrichment/location-vision";
 import { LocationValuationService } from "./services/location-valuation.service";
 
 const BACKGROUND_MESSAGE_VERSION = 1;

@@ -20,7 +20,6 @@ import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import type { AvailabilityService } from "~/server/services/availability.service";
-import type { IngredientService } from "~/server/services/ingredient.service";
 import type { LocationValuationService } from "~/server/services/location-valuation.service";
 import type { RecipeCostingService } from "~/server/services/recipe-costing.service";
 import { protectedProcedure } from "./trpc";
@@ -40,7 +39,6 @@ export interface CrudServices {
   db: Database;
   actorContext: ActorContext | null;
   services: {
-    ingredient: IngredientService;
     availability: AvailabilityService;
     recipeCosting: RecipeCostingService;
     locationValuation: LocationValuationService;

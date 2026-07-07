@@ -35,6 +35,10 @@ import {
   ComboboxFieldWithSearch,
   FormWrapper,
 } from "~/app/_components/form-utils";
+import {
+  DestinationLocationField,
+  resolveDestination,
+} from "~/app/_components/inventory/destination-location-picker";
 import { useInventoryInvalidation } from "~/app/_components/inventory/hooks";
 import { Row, Stack } from "~/components/layout";
 import { MutedBox } from "~/components/layout/muted-box";
@@ -208,12 +212,16 @@ export default function BulkMoveForm({
       setError("Please select a source location");
       return;
     }
-    if (!values.targetLocation) {
-      setError("Please select a target location");
-      return;
-    }
-    if (values.sourceLocation.id === values.targetLocation.id) {
-      setError("Source and target locations must be different");
+    const resolved = resolveDestination(
+      values.targetLocation,
+      getLocationId(values.sourceLocation),
+      {
+        missingTarget: "Please select a target location",
+        sameAsSource: "Source and target locations must be different",
+      },
+    );
+    if (!resolved.ok) {
+      setError(resolved.error);
       return;
     }
     if (selectedItems.length === 0) {
@@ -235,12 +243,12 @@ export default function BulkMoveForm({
 
       await bulkMoveMutation.mutateAsync({
         sourceLocationId: getLocationId(values.sourceLocation),
-        targetLocationId: getLocationId(values.targetLocation),
+        targetLocationId: resolved.id,
         items,
       });
 
       toast.success(
-        `Successfully moved ${selectedItems.length} item(s) to ${values.targetLocation.name}`,
+        `Successfully moved ${selectedItems.length} item(s) to ${values.targetLocation?.name}`,
       );
 
       // Clear selections after successful move
@@ -285,11 +293,10 @@ export default function BulkMoveForm({
         </div>
         <ArrowRight className="mb-2 h-6 w-6 text-muted-foreground" />
         <div className="flex-1">
-          <ComboboxFieldWithSearch
+          <DestinationLocationField
             form={form}
             name="targetLocation"
             label="To Location"
-            searchType="location"
           />
         </div>
       </Row>

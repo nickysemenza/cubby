@@ -17,21 +17,17 @@ import type {
   BulkMoveItem,
   inventoryListItemOut,
 } from "@cubby/schemas/inventory";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
-import { useState } from "react";
-import { FormProvider, useForm } from "react-hook-form";
+import { FormProvider } from "react-hook-form";
 import { toast } from "sonner";
-import { z } from "zod";
+import type { z } from "zod";
 import {
-  getOptionalLocationId,
-  optionalLocationField,
-} from "~/app/_components/form-fields";
-import { ComboboxFieldWithSearch } from "~/app/_components/form-utils";
+  DestinationLocationField,
+  resolveDestination,
+  useDestinationLocationForm,
+} from "~/app/_components/inventory/destination-location-picker";
 import { useInventoryInvalidation } from "~/app/_components/inventory/hooks";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
-import { Stack } from "~/components/layout";
-import { StatusText } from "~/components/ui/status-text";
 import { useTRPC } from "~/trpc/react";
 
 type InventoryItem = z.infer<typeof inventoryListItemOut>;
@@ -45,12 +41,6 @@ interface MoveInventoryDialogProps {
   onSuccess: () => void;
 }
 
-const formSchema = z.object({
-  targetLocation: optionalLocationField,
-});
-
-type FormValues = z.infer<typeof formSchema>;
-
 export function MoveInventoryDialog({
   open,
   onOpenChange,
@@ -60,14 +50,7 @@ export function MoveInventoryDialog({
 }: MoveInventoryDialogProps) {
   const api = useTRPC();
   const invalidateInventory = useInventoryInvalidation();
-  const [error, setError] = useState<string | null>(null);
-
-  const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      targetLocation: null,
-    },
-  });
+  const { form, error, setError, reset } = useDestinationLocationForm();
 
   const bulkMoveMutation = useMutation(
     api.inventory.bulkMove.mutationOptions({
@@ -79,17 +62,6 @@ export function MoveInventoryDialog({
 
   const handleSubmit = async () => {
     const values = form.getValues();
-
-    if (!values.targetLocation) {
-      setError("Please select a target location");
-      return;
-    }
-
-    const targetLocationId = getOptionalLocationId(values.targetLocation);
-    if (!targetLocationId) {
-      setError("Please select a target location");
-      return;
-    }
 
     const sourceGroups = new Map<LocationId, InventoryItem[]>();
     for (const item of items) {
@@ -108,12 +80,20 @@ export function MoveInventoryDialog({
       return;
     }
 
-    if (sourceGroups.has(targetLocationId)) {
-      setError(
-        "Target location must be different from every selected item's current location",
-      );
+    const resolved = resolveDestination(
+      values.targetLocation,
+      [...sourceGroups.keys()],
+      {
+        missingTarget: "Please select a target location",
+        sameAsSource:
+          "Target location must be different from every selected item's current location",
+      },
+    );
+    if (!resolved.ok) {
+      setError(resolved.error);
       return;
     }
+    const targetLocationId = resolved.id;
 
     setError(null);
 
@@ -167,8 +147,7 @@ export function MoveInventoryDialog({
 
   const handleOpenChange = (newOpen: boolean) => {
     if (!newOpen) {
-      form.reset();
-      setError(null);
+      reset();
     }
     onOpenChange(newOpen);
   };
@@ -188,20 +167,12 @@ export function MoveInventoryDialog({
         onSubmit={handleSubmit}
         isPending={bulkMoveMutation.isPending}
       >
-        <Stack gap="md">
-          <ComboboxFieldWithSearch
-            form={form}
-            name="targetLocation"
-            label="Move to Location"
-            searchType="location"
-          />
-
-          {error && (
-            <StatusText as="div" tone="destructive" className="text-sm">
-              {error}
-            </StatusText>
-          )}
-        </Stack>
+        <DestinationLocationField
+          form={form}
+          name="targetLocation"
+          label="Move to Location"
+          error={error}
+        />
       </BulkActionDialog>
     </FormProvider>
   );

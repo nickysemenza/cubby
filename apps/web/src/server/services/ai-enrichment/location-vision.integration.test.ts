@@ -25,7 +25,7 @@ import {
   approveDetectedInventoryItem,
   detectInventoryItems,
   isDetectedItemCoveredByInventoryName,
-} from "./ai-enrichment.service";
+} from "./location-vision";
 
 const detectedItem = {
   name: "blue tarp",

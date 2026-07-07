@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { BookOpen, Link2, NotebookPen, Plus, Share2 } from "lucide-react";
+import { BookOpen, Link2, Plus, Share2 } from "lucide-react";
 import { RecipeList } from "~/app/recipes/recipelist";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
@@ -15,7 +15,7 @@ function RecipesPage() {
       <RecipeList
         actions={
           <>
-            <Link to="/recipes/graph">
+            <Link to="/entities" search={{ tab: "recipes" }}>
               <Button variant="outline">
                 <Share2 />
                 Graph
@@ -27,16 +27,10 @@ function RecipesPage() {
                 Import from URL
               </Button>
             </Link>
-            <Link to="/recipes/import-cookbook">
+            <Link to="/recipes/import">
               <Button variant="outline">
                 <BookOpen />
-                Import cookbook
-              </Button>
-            </Link>
-            <Link to="/recipes/import-notion">
-              <Button variant="outline">
-                <NotebookPen />
-                Import from Notion
+                Import
               </Button>
             </Link>
             <Link to="/recipes/new">
