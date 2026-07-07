@@ -30,7 +30,6 @@ import {
   getFoodLookupsForLinkedProducts,
 } from "~/server/repo/product";
 import { AvailabilityService } from "~/server/services/availability.service";
-import { IngredientService } from "~/server/services/ingredient.service";
 import { LocationValuationService } from "~/server/services/location-valuation.service";
 import { RecipeCostingService } from "~/server/services/recipe-costing.service";
 import { USDAService } from "~/server/services/usda.service";
@@ -69,11 +68,9 @@ export const buildCrudServices = (
     },
     async () => await getFoodLookupsForLinkedProducts(db),
   );
-  const ingredient = new IngredientService(db, usdaClient);
   const services = {
-    ingredient,
-    availability: new AvailabilityService(db, ingredient),
-    recipeCosting: new RecipeCostingService(db, ingredient),
+    availability: new AvailabilityService(db, usdaClient),
+    recipeCosting: new RecipeCostingService(db, usdaClient),
     locationValuation: new LocationValuationService(db),
   };
 

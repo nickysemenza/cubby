@@ -47,6 +47,16 @@ import {
   resolveOrCreateIngredients,
 } from "~/server/repo/ingredient";
 import {
+  createIngredient as createIngredientService,
+  enrichmentWorkbench as enrichmentWorkbenchService,
+  getIngredientByID,
+  getIngredientByName,
+  getIngredientsByIDs,
+  ingredientList,
+  mergeIngredients,
+  updateIngredient as updateIngredientService,
+} from "~/server/services/ingredient.service";
+import {
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
 } from "~/server/services/mutation-side-effects";
@@ -74,7 +84,9 @@ const { list } = createEntityListProcedure({
   },
   repository: {
     list: async (services, filters, sort, pagination) => {
-      return await services.services.ingredient.ingredientList(
+      return await ingredientList(
+        services.db,
+        services.usdaClient,
         filters.nameFilter,
         sort,
         pagination,
@@ -95,10 +107,12 @@ const { getByID, create } = createEntityCrudWithoutListProcedures({
   },
   repository: {
     getByID: async (services, id: IngredientId) => {
-      return await services.services.ingredient.getIngredientByID(id);
+      return await getIngredientByID(services.db, services.usdaClient, id);
     },
     create: async (services, data) => {
-      const ingredient = await services.services.ingredient.createIngredient(
+      const ingredient = await createIngredientService(
+        services.db,
+        services.usdaClient,
         data,
         services.actorContext,
       );
@@ -110,7 +124,9 @@ const { getByID, create } = createEntityCrudWithoutListProcedures({
       return { ...ingredient, sideEffects: { backgroundBatches } };
     },
     update: async (services, id: IngredientId, data) => {
-      return await services.services.ingredient.updateIngredient(
+      return await updateIngredientService(
+        services.db,
+        services.usdaClient,
         id,
         data,
         services.actorContext,
@@ -126,7 +142,9 @@ const update = protectedProcedure
   .input(ingredientUpdateInput)
   .output(ingredientWithFoodAndSideEffectsOut)
   .mutation(async ({ ctx, input }) => {
-    const result = await ctx.services.ingredient.updateIngredient(
+    const result = await updateIngredientService(
+      ctx.db,
+      ctx.usdaClient,
       input.id,
       input.data,
       ctx.actorContext,
@@ -153,14 +171,15 @@ const merge = protectedProcedure
   .input(ingredientMergeInput)
   .output(ingredientMergeOut)
   .mutation(async ({ ctx, input }) => {
-    const { ingredient: merged, summary } =
-      await ctx.services.ingredient.mergeIngredients(
-        input.target,
-        input.aliases,
-        {
-          dryRun: input.dryRun,
-        },
-      );
+    const { ingredient: merged, summary } = await mergeIngredients(
+      ctx.db,
+      ctx.usdaClient,
+      input.target,
+      input.aliases,
+      {
+        dryRun: input.dryRun,
+      },
+    );
     // The merge marked the absorbed recipes stale in-transaction; dispatch their
     // recompute OFF the request path (queue in prod, inline in dev) so a
     // heavily-used target can't overrun the Workers budget and sink the mutation.
@@ -230,7 +249,7 @@ const enrichmentWorkbench = protectedProcedure
   .input(z.object({ recipeId: recipeId.optional() }).optional())
   .output(enrichmentRowsOut)
   .query(async ({ ctx, input }) => {
-    return await ctx.services.ingredient.enrichmentWorkbench({
+    return await enrichmentWorkbenchService(ctx.db, ctx.usdaClient, {
       recipeId: input?.recipeId,
     });
   });
@@ -261,7 +280,7 @@ const getByName = protectedProcedure
   .input(ingredientNameFilterInput)
   .output(ingredientWithFoodOut.nullable())
   .query(async ({ ctx, input }) => {
-    return await ctx.services.ingredient.getIngredientByName(input.nameFilter);
+    return await getIngredientByName(ctx.db, ctx.usdaClient, input.nameFilter);
   });
 
 // Batch name→match lookup in one query. The cookbook importer uses this to show
@@ -309,7 +328,7 @@ const getManyByIDs = protectedProcedure
   // a ~1s over-fetch on a recipe's ingredient set.
   .output(ingredientWithFoodLeanListOut)
   .query(async ({ ctx, input }) => {
-    return await ctx.services.ingredient.getIngredientsByIDs(input.ids);
+    return await getIngredientsByIDs(ctx.db, ctx.usdaClient, input.ids);
   });
 
 // Delete procedure using standalone factory

@@ -44,6 +44,7 @@ import {
   getIngredientUsage,
   getRecipeDependencyGraph,
 } from "~/server/repo/recipe";
+import { getIngredientsByIDs } from "~/server/services/ingredient.service";
 import { protectedProcedure } from "../../trpc";
 
 const getIngredientCooccurrenceEndpoint = protectedProcedure
@@ -173,7 +174,9 @@ const harvestEquivalencesEndpoint = protectedProcedure
 
     // Assemble each candidate ingredient's existing conversion graph (its
     // products' stored mappings + USDA portions/serving/nutrition + price).
-    const ingredients = await ctx.services.ingredient.getIngredientsByIDs(
+    const ingredients = await getIngredientsByIDs(
+      ctx.db,
+      ctx.usdaClient,
       uniq(candidates.map((c) => c.ingredientId)),
     );
     const mappingsById = new Map(

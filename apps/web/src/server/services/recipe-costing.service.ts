@@ -54,7 +54,8 @@ import {
   updateRecipeTotalsBatch,
 } from "~/server/repo/recipe/totals";
 import { TraceNames, withTrace } from "~/server/tracing";
-import type { IngredientService } from "./ingredient.service";
+import type { USDAClient } from "../clients/usda";
+import { getIngredientsByIDs } from "./ingredient.service";
 
 const toRecipeTotals = (t: CalculateTotalsResult): RecipeTotals => {
   // Upper bounds only when the recipe has ranged amounts (additive — absent
@@ -156,7 +157,7 @@ const usdaMissesFor = (
 export class RecipeCostingService {
   constructor(
     private db: Database,
-    private ingredientService: IngredientService,
+    private usdaClient: USDAClient,
   ) {}
 
   /**
@@ -195,8 +196,11 @@ export class RecipeCostingService {
           Object.keys(recipeMap).length,
         );
         span.setAttribute("ingredient.count", ingredientIds.length);
-        const ingredients =
-          await this.ingredientService.getIngredientsByIDs(ingredientIds);
+        const ingredients = await getIngredientsByIDs(
+          this.db,
+          this.usdaClient,
+          ingredientIds,
+        );
         const ingMap = keyBy(ingredients, (i) => i.id);
         return { ingMap, recipeMap };
       },
