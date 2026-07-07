@@ -1,17 +1,13 @@
 import type { InfLocation } from "@cubby/schemas/location";
 import { ArrowDownToLine, FolderInput, Search } from "lucide-react";
 import { useState } from "react";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
-import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
-import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
-import { Image } from "~/components/ui/image";
 import { cn } from "~/lib/utils";
-import { LocationContentsPreview } from "./LocationContentsPreview";
+import { ItemReviewCard, LocationReviewCard } from "./review-rows";
 import type { InventoryItem } from "./types";
 
 export function UnknownTray({
@@ -66,50 +62,15 @@ export function UnknownTray({
           ) : (
             <Stack gap="sm" className="max-h-80 overflow-auto">
               {filteredLocations.map((location) => (
-                <div
+                <LocationReviewCard
                   key={location.id}
+                  location={location}
+                  previewItems={inventoryByLocation.get(location.id) ?? []}
                   className={cn(
-                    "border border-[var(--border)] border-l-4 border-l-primary/60 bg-primary/5 p-2",
+                    "border-l-primary/60 bg-primary/5",
                     disabled && "opacity-50",
                   )}
-                >
-                  <Row align="baseline" gap="xs" wrap>
-                    <EntityInlineLink
-                      entity="location"
-                      data={{
-                        id: location.id,
-                        name: location.name,
-                        type: location.type,
-                      }}
-                    />
-                  </Row>
-                  <Row
-                    align="center"
-                    justify="between"
-                    gap="sm"
-                    className="mt-2"
-                  >
-                    <Row align="center" gap="sm" className="min-w-0">
-                      <div className="flex h-16 w-16 shrink-0 items-center justify-center border border-primary/30 bg-primary/10 text-primary">
-                        {location.images[0]?.url ? (
-                          <Image
-                            src={location.images[0].url}
-                            alt={location.name}
-                            displayWidth={128}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <LocationIcon type={location.type} size={26} />
-                        )}
-                      </div>
-                      <Description size="xs" className="truncate">
-                        {location.children?.length ?? 0} loc ·{" "}
-                        {location.totalItemCount ?? 0}{" "}
-                        {(location.totalItemCount ?? 0) === 1
-                          ? "item"
-                          : "items"}
-                      </Description>
-                    </Row>
+                  actions={
                     <Button
                       type="button"
                       variant="outline"
@@ -121,41 +82,20 @@ export function UnknownTray({
                     >
                       <ArrowDownToLine className="h-4 w-4" />
                     </Button>
-                  </Row>
-                  <LocationContentsPreview
-                    items={inventoryByLocation.get(location.id) ?? []}
-                  />
-                </div>
+                  }
+                />
               ))}
               {filtered.map((item) => (
-                <div
+                <ItemReviewCard
                   key={item.id}
+                  product={item.product}
+                  amount={item.amount}
                   className={cn(
-                    "border border-[var(--border)] border-l-4 border-l-warning/60 bg-background p-2",
+                    "border-l-warning/60 bg-background",
                     disabled && "opacity-50",
                   )}
-                >
-                  <Row align="baseline" gap="xs" wrap>
-                    <EntityInlineLink entity="product" data={item.product} />
-                  </Row>
-                  <Row
-                    align="center"
-                    justify="between"
-                    gap="sm"
-                    className="mt-2"
-                  >
-                    <Row align="center" gap="sm" className="min-w-0">
-                      <Image
-                        src={item.product.images[0]?.url}
-                        alt={item.product.name}
-                        displayWidth={128}
-                        className="h-16 w-16 shrink-0 border border-[var(--border)] object-cover"
-                      />
-                      <Description size="xs" className="truncate">
-                        {tryFormatAmount(item.amount)}
-                      </Description>
-                    </Row>
-                    <Row gap="xs" className="shrink-0">
+                  controls={
+                    <Row gap="xs" className="shrink-0 justify-end">
                       <Button
                         type="button"
                         variant="outline"
@@ -179,8 +119,8 @@ export function UnknownTray({
                         <ArrowDownToLine className="h-4 w-4" />
                       </Button>
                     </Row>
-                  </Row>
-                </div>
+                  }
+                />
               ))}
             </Stack>
           )}

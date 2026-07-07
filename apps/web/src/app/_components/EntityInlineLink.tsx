@@ -19,6 +19,8 @@ type EntityInlineLinkProps = {
   openInNewTab?: boolean;
   /** Compact mode: truncates long names with max-width */
   compact?: boolean;
+  /** Truncate the name to the available flex width (no fixed cap). Parent must be min-w-0. */
+  truncate?: boolean;
 } & (
   | { entity: "ingredient"; data: MinimalEntityData }
   | {
@@ -50,12 +52,14 @@ function EntityLinkBody({
   name,
   metadata,
   compact,
+  truncate,
   trailing,
 }: {
   icon: ReactNode;
   name: string;
   metadata?: string;
   compact?: boolean;
+  truncate?: boolean;
   trailing?: ReactNode;
 }) {
   return (
@@ -65,6 +69,7 @@ function EntityLinkBody({
         className={cn(
           "min-w-0 font-medium underline decoration-border/70 decoration-dotted underline-offset-2 group-hover:decoration-primary group-hover:decoration-solid",
           compact && "max-w-32 truncate",
+          truncate && "truncate",
         )}
       >
         {name}
@@ -80,7 +85,8 @@ function EntityLinkBody({
 }
 
 export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
-  const { openInNewTab, compact } = props;
+  const { openInNewTab, compact, truncate } = props;
+  const wrapperClass = cn(linkClass, truncate && "min-w-0");
 
   return match(props)
     .with({ entity: "ingredient" }, ({ data }) => (
@@ -88,12 +94,13 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         entity="ingredient"
         id={data.id}
         openInNewTab={openInNewTab}
-        className={linkClass}
+        className={wrapperClass}
       >
         <EntityLinkBody
           icon={<EntityIcon entity="ingredient" size={12} colored />}
           name={data.name}
           compact={compact}
+          truncate={truncate}
         />
       </EntityPreviewLink>
     ))
@@ -102,12 +109,13 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         entity="recipe"
         id={data.id}
         openInNewTab={openInNewTab}
-        className={linkClass}
+        className={wrapperClass}
       >
         <EntityLinkBody
           icon={<EntityIcon entity="recipe" size={12} colored />}
           name={data.name}
           compact={compact}
+          truncate={truncate}
         />
       </EntityPreviewLink>
     ))
@@ -116,7 +124,7 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         entity="location"
         id={data.id}
         openInNewTab={openInNewTab}
-        className={linkClass}
+        className={wrapperClass}
       >
         <EntityLinkBody
           icon={
@@ -129,6 +137,7 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
           name={data.name}
           metadata={data.type}
           compact={compact}
+          truncate={truncate}
         />
       </EntityPreviewLink>
     ))
@@ -142,13 +151,14 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
           entity="product"
           id={data.id}
           openInNewTab={openInNewTab}
-          className={linkClass}
+          className={wrapperClass}
         >
           <EntityLinkBody
             icon={<EntityIcon entity="product" size={12} colored />}
             name={displayName}
             metadata={metadata}
             compact={compact}
+            truncate={truncate}
           />
         </EntityPreviewLink>
       );
@@ -159,12 +169,13 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         params={{ id: data.id }}
         target={openInNewTab ? "_blank" : undefined}
         rel={openInNewTab ? "noopener noreferrer" : undefined}
-        className={linkClass}
+        className={wrapperClass}
       >
         <EntityLinkBody
           icon={<EntityIcon entity="inventory" size={12} colored />}
           name={data.name}
           compact={compact}
+          truncate={truncate}
         />
       </Link>
     ))
@@ -189,12 +200,13 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
           entity="usda-food"
           id={usdaRouteId(data.fdc_id)}
           openInNewTab={openInNewTab}
-          className={linkClass}
+          className={wrapperClass}
         >
           <EntityLinkBody
             icon={icon}
             name={text}
             compact={compact}
+            truncate={truncate}
             trailing={
               dataType ? <UsdaDataTypeDot dataType={dataType} /> : undefined
             }

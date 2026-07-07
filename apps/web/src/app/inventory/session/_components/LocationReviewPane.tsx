@@ -1,7 +1,6 @@
 import type { Amount } from "@cubby/schemas/codec";
 import type { AllowedImageType } from "@cubby/schemas/image";
 import type { InfLocation } from "@cubby/schemas/location";
-import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
 import { useMutation } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
@@ -16,12 +15,9 @@ import {
   Plus,
   X,
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 import { toast } from "sonner";
-import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
-import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
 import { LocationBreadcrumb } from "~/app/_components/locations/location-breadcrumb";
-import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -39,8 +35,8 @@ import {
 } from "../session-utils";
 import { useSessionMutations } from "../useSessionMutations";
 import { AuditedHint } from "./AuditedHint";
-import { LocationContentsPreview } from "./LocationContentsPreview";
 import { QrJumpButton } from "./QrJumpButton";
+import { ItemReviewCard, LocationReviewCard } from "./review-rows";
 import { SessionCaptureActions } from "./SessionCaptureActions";
 import type {
   ExpectedPhotoTarget,
@@ -126,7 +122,6 @@ export function LocationReviewPane({
   const api = useTRPC();
   const { invalidate } = useSessionMutations();
   const locationNoun = locationTypeNoun(location.type);
-  const locationImages = location.location.images;
   const breadcrumbSegments = sessionBreadcrumbSegments(parent, location.id);
   const isSessionRoot = location.id === parent.id;
   const expectedPhotoInputRef = useRef<HTMLInputElement>(null);
@@ -230,7 +225,7 @@ export function LocationReviewPane({
         }}
       />
       <div className="sticky top-12 z-20 min-w-0 border-b bg-background/95 py-2 backdrop-blur md:static md:border-b-0 md:bg-transparent md:py-0">
-        <Row align="baseline" gap="sm" className="min-w-0">
+        <Row align="center" gap="sm" className="min-w-0">
           <h2 className="min-w-0 flex-1 truncate font-heading font-semibold text-xl">
             <Link
               to="/locations/$id"
@@ -247,6 +242,9 @@ export function LocationReviewPane({
           <Description size="xs" className="shrink-0">
             {position.index + 1}/{position.total}
           </Description>
+          <div className="hidden shrink-0 md:flex">
+            <QrJumpButton parent={parent} onJump={onJumpByScan} manualEntry />
+          </div>
         </Row>
         {breadcrumbSegments.length > 0 ? (
           <LocationBreadcrumb
@@ -264,66 +262,13 @@ export function LocationReviewPane({
         ) : null}
       </div>
 
-      <Card>
-        <CardContent className="p-2 lg:p-4">
-          <div
-            className={cn(
-              "grid gap-4 lg:items-start",
-              locationImages.length > 0
-                ? "lg:grid-cols-[minmax(220px,320px)_minmax(0,1fr)_auto]"
-                : "lg:grid-cols-[minmax(0,1fr)_auto]",
-            )}
-          >
-            {locationImages.length > 0 && (
-              <div className="min-w-0">
-                <Image
-                  src={locationImages[0]?.url}
-                  alt={`${location.name} photo`}
-                  displayWidth={360}
-                  className="aspect-[4/3] w-full border border-[var(--border)] object-cover"
-                />
-                {locationImages.length > 1 && (
-                  <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
-                    {locationImages.slice(1, 5).map((image) => (
-                      <Image
-                        key={image.id}
-                        src={image.url}
-                        alt={`${location.name} photo`}
-                        displayWidth={96}
-                        className="h-14 w-20 shrink-0 border border-[var(--border)] object-cover"
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-            <Stack gap="sm" className="min-w-0">
-              {location.aiDescription ? (
-                <Description className="max-w-5xl text-base leading-relaxed">
-                  {location.aiDescription}
-                </Description>
-              ) : (
-                <Description>
-                  No AI description yet. Add a photo to compute one.
-                </Description>
-              )}
-              <Row gap="sm" wrap>
-                <Badge variant="outline">{location.imageCount} photos</Badge>
-                <Badge
-                  variant={location.lastBulkInventory ? "secondary" : "outline"}
-                >
-                  {location.lastBulkInventory
-                    ? "complete before"
-                    : "not audited"}
-                </Badge>
-              </Row>
-            </Stack>
-            <div className="flex justify-start lg:justify-end">
-              <QrJumpButton parent={parent} onJump={onJumpByScan} manualEntry />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <LocationContextStrip
+        key={location.id}
+        location={location}
+        qrSlot={
+          <QrJumpButton parent={parent} onJump={onJumpByScan} manualEntry />
+        }
+      />
 
       <SessionCaptureActions location={location} />
 
@@ -395,21 +340,7 @@ export function LocationReviewPane({
         disabled={!unknownReady}
       />
 
-      <Stack
-        gap="sm"
-        className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-20 border border-[var(--border)] bg-card p-2 md:bottom-4"
-      >
-        {unresolvedCount > 0 && (
-          <Button
-            type="button"
-            variant="outline"
-            className="min-h-12"
-            onClick={onYesToAll}
-          >
-            <CheckCheck className="h-4 w-4" />
-            Yes to all remaining ({unresolvedCount})
-          </Button>
-        )}
+      <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-20 border border-[var(--border)] bg-card p-2 md:bottom-4">
         <Row align="stretch" gap="sm">
           <Button
             type="button"
@@ -427,6 +358,21 @@ export function LocationReviewPane({
               {canPrevious ? (previousName ?? "—") : "Start"}
             </span>
           </Button>
+          {unresolvedCount > 0 && (
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-12 shrink-0"
+              onClick={onYesToAll}
+              aria-label={`Yes to all remaining (${unresolvedCount})`}
+            >
+              <CheckCheck className="h-4 w-4" />
+              <span className="hidden whitespace-nowrap sm:inline">
+                Yes to all
+              </span>
+              <span>({unresolvedCount})</span>
+            </Button>
+          )}
           <Button
             type="button"
             className="min-h-12 flex-1"
@@ -453,8 +399,92 @@ export function LocationReviewPane({
             </span>
           </Button>
         </Row>
-      </Stack>
+      </div>
     </Stack>
+  );
+}
+
+// Compact location context: a thumbnail + clamped AI description + badges. The
+// thumbnail and "more" toggle both expand the full description and any extra
+// photos. State is reset per location via a `key` on the call site.
+function LocationContextStrip({
+  location,
+  qrSlot,
+}: {
+  location: SessionLocation;
+  qrSlot: ReactNode;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const images = location.location.images;
+  const hasImages = images.length > 0;
+
+  return (
+    <div className="border border-[var(--border)] p-2">
+      <Row gap="sm" align="start" className="min-w-0">
+        {hasImages && (
+          <button
+            type="button"
+            onClick={() => setExpanded((prev) => !prev)}
+            className="shrink-0"
+            aria-label={expanded ? "Collapse details" : "Expand details"}
+          >
+            <Image
+              src={images[0]?.url}
+              alt={`${location.name} photo`}
+              displayWidth={112}
+              className="h-16 w-24 border border-[var(--border)] object-cover"
+            />
+          </button>
+        )}
+        <Stack gap="xs" className="min-w-0 flex-1">
+          {location.aiDescription ? (
+            <div className="min-w-0">
+              <Description
+                className={cn(
+                  "text-sm leading-relaxed",
+                  !expanded && "line-clamp-2",
+                )}
+              >
+                {location.aiDescription}
+              </Description>
+              <button
+                type="button"
+                onClick={() => setExpanded((prev) => !prev)}
+                className="text-primary text-xs hover:underline"
+              >
+                {expanded ? "Less" : "More"}
+              </button>
+            </div>
+          ) : (
+            <Description size="sm">
+              No AI description yet. Add a photo to compute one.
+            </Description>
+          )}
+          <Row gap="sm" wrap align="center">
+            <Badge variant="outline">{location.imageCount} photos</Badge>
+            <Badge
+              variant={location.lastBulkInventory ? "secondary" : "outline"}
+            >
+              {location.lastBulkInventory ? "complete before" : "not audited"}
+            </Badge>
+          </Row>
+        </Stack>
+      </Row>
+      {expanded && images.length > 1 && (
+        <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+          {images.slice(1, 5).map((image) => (
+            <Image
+              key={image.id}
+              src={image.url}
+              alt={`${location.name} photo`}
+              displayWidth={96}
+              className="h-14 w-20 shrink-0 border border-[var(--border)] object-cover"
+            />
+          ))}
+        </div>
+      )}
+      <div className="mt-2 md:hidden">{qrSlot}</div>
+    </div>
   );
 }
 
@@ -484,10 +514,6 @@ function ExpectedItemReviewRow({
   const staged = resolution?.kind;
   const amount =
     resolution?.kind === "adjust" ? resolution.amount : item.amount;
-  // Strip the `misc:` prefix off photo-as-identity / misc placeholder products.
-  const displayName = isMiscProduct(item.product.name)
-    ? getMiscDisplayName(item.product.name)
-    : item.product.name;
   // Step by ±1 without rounding, so weight/length amounts keep their precision
   // (2.5 → 3.5, not 4). Floor at 1 — recounting to zero means the item is gone,
   // which is the "Remove" action (soft-delete), not a phantom 0-qty adjust.
@@ -500,130 +526,109 @@ function ExpectedItemReviewRow({
   };
 
   return (
-    <div
+    <ItemReviewCard
+      product={item.product}
+      amount={amount}
+      verifiedAt={item.verifiedAt}
       className={cn(
-        "border border-[var(--border)] border-l-4 border-l-warning/60 bg-background p-2",
+        "border-l-warning/60 bg-background",
         staged === "verify" && "border-l-positive/60 bg-positive/5",
         staged === "adjust" && "border-l-primary/60 bg-primary/5",
         staged === "remove" && "border-l-destructive/60 bg-destructive/5",
       )}
-    >
-      <Row align="center" gap="sm" className="min-w-0">
-        <Image
-          src={item.product.images[0]?.url}
-          alt={item.product.name}
-          displayWidth={128}
-          className="h-14 w-14 shrink-0 border border-[var(--border)] object-cover"
-        />
-        <div className="min-w-0 flex-1">
-          <Row align="center" gap="sm">
-            <span className="truncate font-medium text-sm">{displayName}</span>
-            {staged === "verify" && (
-              <Badge variant="secondary">confirmed</Badge>
-            )}
-            {staged === "adjust" && <Badge>adjusted</Badge>}
-            {staged === "remove" && (
-              <Badge variant="destructive">removing</Badge>
-            )}
-            {isDuplicate && <Badge variant="outline">duplicate</Badge>}
+      badges={
+        <>
+          {staged === "verify" && <Badge variant="secondary">confirmed</Badge>}
+          {staged === "adjust" && <Badge>adjusted</Badge>}
+          {staged === "remove" && <Badge variant="destructive">removing</Badge>}
+          {isDuplicate && <Badge variant="outline">duplicate</Badge>}
+        </>
+      }
+      controls={
+        <>
+          {/* Stepper. Floor at 1 — recounting to zero is the Remove (No) action. */}
+          <Row align="center" gap="xs" className="shrink-0">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 w-10 shrink-0"
+              onClick={() => bump(-1)}
+              disabled={staged === "remove"}
+              aria-label="Decrease quantity"
+            >
+              <Minus className="h-4 w-4" />
+            </Button>
+            <span className="w-7 text-center font-mono text-sm tabular-nums">
+              {amount.value}
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 w-10 shrink-0"
+              onClick={() => bump(1)}
+              disabled={staged === "remove"}
+              aria-label="Increase quantity"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
           </Row>
-          <Row align="center" gap="sm">
-            <Description size="xs" className="truncate">
-              {tryFormatAmount(amount)}
-            </Description>
-            {item.verifiedAt && (
-              <AuditedHint
-                at={item.verifiedAt}
-                label="verified"
-                className="shrink-0 text-2xs"
-              />
-            )}
+          <Row gap="xs" wrap className="shrink-0 justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 w-10 shrink-0"
+              onClick={onRelocate}
+              aria-label="Move to Unknown"
+              title="Move to Unknown"
+            >
+              <ArrowRightLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 w-10 shrink-0"
+              onClick={onMoveTo}
+              aria-label="Move to another location"
+              title="Move to another location"
+            >
+              <FolderInput className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 w-10 shrink-0"
+              onClick={onPhoto}
+              disabled={photoPending}
+              aria-label="Add photo"
+              title="Add photo"
+            >
+              {photoPending ? <Spinner /> : <Camera className="h-4 w-4" />}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 w-10 shrink-0 border-positive/40 bg-positive/10 text-positive hover:bg-positive/20 hover:text-positive"
+              onClick={onToggleVerify}
+              aria-pressed={staged === "verify"}
+              aria-label="Confirm present"
+              title="Confirm present"
+            >
+              <Check className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              className="h-11 w-10 shrink-0"
+              onClick={onRemove}
+              aria-label="Mark removed"
+              title="Mark removed"
+            >
+              <X className="h-4 w-4" />
+            </Button>
           </Row>
-        </div>
-      </Row>
-      <Row align="center" justify="between" gap="sm" className="mt-2">
-        {/* Stepper. Floor at 1 — recounting to zero is the Remove (No) action. */}
-        <Row align="center" gap="xs" className="shrink-0">
-          <Button
-            type="button"
-            variant="outline"
-            className="h-10 w-10 shrink-0"
-            onClick={() => bump(-1)}
-            disabled={staged === "remove"}
-            aria-label="Decrease quantity"
-          >
-            <Minus className="h-4 w-4" />
-          </Button>
-          <span className="w-7 text-center font-mono text-sm tabular-nums">
-            {amount.value}
-          </span>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-10 w-10 shrink-0"
-            onClick={() => bump(1)}
-            disabled={staged === "remove"}
-            aria-label="Increase quantity"
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
-        </Row>
-        <Row gap="xs" wrap className="justify-end">
-          <Button
-            type="button"
-            variant="outline"
-            className="h-10 w-10 shrink-0"
-            onClick={onRelocate}
-            aria-label="Move to Unknown"
-            title="Move to Unknown"
-          >
-            <ArrowRightLeft className="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-10 w-10 shrink-0"
-            onClick={onMoveTo}
-            aria-label="Move to another location"
-            title="Move to another location"
-          >
-            <FolderInput className="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-10 w-10 shrink-0"
-            onClick={onPhoto}
-            disabled={photoPending}
-            aria-label="Add photo"
-            title="Add photo"
-          >
-            {photoPending ? <Spinner /> : <Camera className="h-4 w-4" />}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-10 w-10 shrink-0 border-positive/40 bg-positive/10 text-positive hover:bg-positive/20 hover:text-positive"
-            onClick={onToggleVerify}
-            aria-pressed={staged === "verify"}
-            aria-label="Confirm present"
-            title="Confirm present"
-          >
-            <Check className="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            className="h-10 w-10 shrink-0"
-            onClick={onRemove}
-            aria-label="Mark removed"
-            title="Mark removed"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </Row>
-      </Row>
-    </div>
+        </>
+      }
+    />
   );
 }
 
@@ -645,44 +650,16 @@ function ExpectedLocationReviewRow({
   photoPending: boolean;
 }) {
   return (
-    <div
+    <LocationReviewCard
+      location={location}
+      previewItems={previewItems}
       className={cn(
-        "border border-[var(--border)] border-l-4 border-l-primary/60 bg-primary/5 p-2",
+        "border-l-primary/60 bg-primary/5",
         confirmed && "border-positive/40 bg-positive/5",
       )}
-    >
-      <Row align="baseline" gap="xs" wrap>
-        <EntityInlineLink
-          entity="location"
-          data={{
-            id: location.id,
-            name: location.name,
-            type: location.type,
-          }}
-        />
-        {confirmed && <Badge variant="secondary">confirmed</Badge>}
-      </Row>
-      <Row align="center" justify="between" gap="sm" className="mt-2">
-        <Row align="center" gap="sm" className="min-w-0">
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center border border-primary/30 bg-primary/10 text-primary">
-            {location.images[0]?.url ? (
-              <Image
-                src={location.images[0].url}
-                alt={location.name}
-                displayWidth={128}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <LocationIcon type={location.type} size={26} />
-            )}
-          </div>
-          <Description size="xs" className="truncate">
-            {location.children?.length ?? 0} loc ·{" "}
-            {location.totalItemCount ?? 0}{" "}
-            {(location.totalItemCount ?? 0) === 1 ? "item" : "items"}
-          </Description>
-        </Row>
-        <Row gap="xs" className="shrink-0">
+      badge={confirmed && <Badge variant="secondary">confirmed</Badge>}
+      actions={
+        <>
           <Button
             type="button"
             variant="outline"
@@ -714,9 +691,8 @@ function ExpectedLocationReviewRow({
           >
             <X className="h-4 w-4" />
           </Button>
-        </Row>
-      </Row>
-      <LocationContentsPreview items={previewItems} />
-    </div>
+        </>
+      }
+    />
   );
 }

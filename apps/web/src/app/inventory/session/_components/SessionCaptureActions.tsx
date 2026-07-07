@@ -317,42 +317,42 @@ export function SessionCaptureActions({
 
   return (
     <Card className="overflow-visible">
-      <CardContent className="p-4 lg:p-6">
+      <CardContent className="p-2 lg:p-4">
         <Stack gap="sm">
-          <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_18rem] 2xl:items-start">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) void handleFile(file);
-                event.target.value = "";
-              }}
-            />
-            <input
-              ref={addPhotoInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) {
-                  setPendingPhoto(file);
-                  setPhotoName("");
-                }
-                event.target.value = "";
-              }}
-            />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void handleFile(file);
+              event.target.value = "";
+            }}
+          />
+          <input
+            ref={addPhotoInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) {
+                setPendingPhoto(file);
+                setPhotoName("");
+              }
+              event.target.value = "";
+            }}
+          />
+          <Row align="end" gap="sm" wrap className="min-w-0">
             <ManualAdd locationId={location.id} />
-            <div className="grid grid-cols-3 gap-2 2xl:grid-cols-1">
+            <Row gap="sm" wrap className="shrink-0">
               <Button
                 type="button"
                 variant="outline"
-                className="min-h-12"
+                className="min-h-12 md:min-h-10"
                 onClick={() => fileInputRef.current?.click()}
               >
                 <Camera className="h-4 w-4" />
@@ -361,7 +361,7 @@ export function SessionCaptureActions({
               <Button
                 type="button"
                 variant="outline"
-                className="min-h-12"
+                className="min-h-12 md:min-h-10"
                 onClick={() => setScanner("barcode")}
               >
                 <Barcode className="h-4 w-4" />
@@ -370,7 +370,7 @@ export function SessionCaptureActions({
               <Button
                 type="button"
                 variant="outline"
-                className="min-h-12"
+                className="min-h-12 md:min-h-10"
                 onClick={() => detectItems.mutate({ locationId: location.id })}
                 disabled={detectItems.isPending || location.imageCount === 0}
               >
@@ -380,15 +380,15 @@ export function SessionCaptureActions({
               <Button
                 type="button"
                 variant="outline"
-                className="min-h-12"
+                className="min-h-12 md:min-h-10"
                 onClick={() => addPhotoInputRef.current?.click()}
                 title="Add an unlabeled item from a photo"
               >
                 <ImagePlus className="h-4 w-4" />
                 Photo item
               </Button>
-            </div>
-          </div>
+            </Row>
+          </Row>
           {suggestions.length > 0 && (
             <Stack gap="sm">
               <Description>
@@ -673,9 +673,11 @@ function ManualAdd({ locationId }: { locationId: LocationId }) {
   const onCreateNew = useUpcAwareCreate(handleQuickCreate);
 
   return (
-    <Stack
+    <Row
       as="form"
+      align="end"
       gap="sm"
+      wrap
       onSubmit={(event) => {
         event.preventDefault();
         void form.handleSubmit((values) =>
@@ -686,9 +688,9 @@ function ManualAdd({ locationId }: { locationId: LocationId }) {
           }),
         )(event);
       }}
-      className="border border-[var(--border)] p-3" /* tight: dense manual add panel */
+      className="min-w-0 flex-1"
     >
-      <div className="min-w-0">
+      <div className="min-w-56 flex-1">
         <WithProductSearch>
           {({ items, onSearchChange, isLoading, onOpenChange }) => (
             <ComboboxField
@@ -704,23 +706,23 @@ function ManualAdd({ locationId }: { locationId: LocationId }) {
           )}
         </WithProductSearch>
       </div>
-      <div className="grid min-w-0 items-end gap-2 lg:grid-cols-[minmax(0,1fr)_auto]">
+      <div className="w-44 shrink-0">
         <AmountFieldGroup
           form={form}
           valuePath="amount.value"
           unitPath="amount.unit"
           compact
         />
-        <Button
-          type="submit"
-          className="min-h-10 shrink-0 self-end px-3 sm:min-h-12 sm:px-4" /* tight: mobile manual add button */
-          disabled={createInventory.isPending}
-        >
-          <Plus className="h-4 w-4" />
-          <span className="hidden sm:inline">Add item</span>
-          <span className="sm:hidden">Add</span>
-        </Button>
       </div>
-    </Stack>
+      <Button
+        type="submit"
+        className="min-h-12 shrink-0 px-4 md:min-h-10" /* tight: mobile touch target */
+        disabled={createInventory.isPending}
+      >
+        <Plus className="h-4 w-4" />
+        <span className="hidden sm:inline">Add item</span>
+        <span className="sm:hidden">Add</span>
+      </Button>
+    </Row>
   );
 }
