@@ -74,4 +74,4 @@ certificates
 .mcp.json
 lcov.info
 
-.pnpm-store
+.pnpm-store.codex/
