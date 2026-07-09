@@ -131,6 +131,17 @@ export const orphanedEntityEmbeddingSchema = z.object({
   createdAt: z.date(),
 });
 
+// A live parent recipe whose persisted totals are marked fresh
+// (`totalsComputedAt IS NOT NULL`) yet still reference — via a live section →
+// link → sub-recipe ingredient — a soft-deleted sub-recipe. The escaped state
+// the derived-data-on-removal guardrail catches: a removal path that skipped
+// staleness propagation, or a dangling sub-recipe line the recipe still carries.
+// Pure SQL (no WASM), so it rides the fast detector group.
+export const staleParentRecipeSchema = z.object({
+  id: recipeId,
+  name: z.string(),
+});
+
 export const staleIngredientParseSchema = z.object({
   recipeSectionIngredientId: z.string(),
   recipeId,
@@ -180,6 +191,7 @@ const problemsFastShape = {
   productsWithNoImages: z.array(productWithNoImagesSchema),
   locationsWithoutAiDescription: z.array(locationWithoutAiDescriptionSchema),
   orphanedEntityEmbeddings: z.array(orphanedEntityEmbeddingSchema),
+  staleParentRecipes: z.array(staleParentRecipeSchema),
 };
 
 // DB-only detectors — cheap, no WASM/network.
@@ -293,6 +305,7 @@ export type LocationWithoutAiDescription = z.infer<
   typeof locationWithoutAiDescriptionSchema
 >;
 export type StaleIngredientParse = z.infer<typeof staleIngredientParseSchema>;
+export type StaleParentRecipe = z.infer<typeof staleParentRecipeSchema>;
 export type ProductWithBetterUpcData = z.infer<
   typeof productWithBetterUpcDataSchema
 >;

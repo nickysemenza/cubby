@@ -31,6 +31,7 @@ import {
   updateAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding";
 import { assertLiveTargets } from "./helpers";
 import { dbInventoryEntryToAPI } from "./mappers";
 import type { InventoryEntryDeepDB } from "./types";
@@ -174,6 +175,12 @@ export const bulkProcessInventoryEntries = async (
               notDeleted(inventoryEntry),
             ),
           );
+
+        // Cascade the search embedding in-tx: the inventory manifest has
+        // onDelete: [], so this delete-on-omit reconcile is the only cleanup
+        // site — without it a removed entry leaves a live EntityEmbedding
+        // orphan (recall degradation + HNSW bloat). Mirrors deleteInventoryEntries.
+        await softDeleteEntityEmbeddingsTx(tx, "inventory", idsToDelete);
 
         // Batch log delete audit entries
         await logAuditEntries(
@@ -387,6 +394,9 @@ export const bulkMoveInventoryEntries = async (
       // Collect result IDs and audit entries during processing
       const resultIds: string[] = [];
       const auditEntries: AuditEntryInput[] = [];
+      // Source entries hard-deleted by a full move onto an existing target row
+      // (the collapse below). Their embeddings must be cleaned up in-tx too.
+      const hardDeletedSourceIds: InventoryId[] = [];
 
       for (const item of payload.items) {
         const sourceEntry = sourceMap.get(item.inventoryEntryId)!;
@@ -451,6 +461,7 @@ export const bulkMoveInventoryEntries = async (
             await tx
               .delete(inventoryEntry)
               .where(eq(inventoryEntry.id, item.inventoryEntryId));
+            hardDeletedSourceIds.push(item.inventoryEntryId);
 
             auditEntries.push({
               entityType: "inventory",
@@ -576,6 +587,14 @@ export const bulkMoveInventoryEntries = async (
           }
         }
       }
+
+      // Cascade the search embeddings of collapsed source rows. Invariant: the
+      // source row is HARD-deleted (no FK, permanently gone), so we deliberately
+      // soft-delete its embedding via the shared cascade helper rather than add a
+      // hard-delete path — a soft-deleted embedding is excluded from both semantic
+      // search and orphan detection, and reusing one helper keeps every removal
+      // path's embedding cleanup uniform.
+      await softDeleteEntityEmbeddingsTx(tx, "inventory", hardDeletedSourceIds);
 
       // Batch log all audit entries
       if (auditEntries.length > 0) {
@@ -706,6 +725,10 @@ export const reconcileLocationSession = async (
           })
           .exhaustive();
       }
+
+      // Cascade the search embeddings of removed rows in-tx (inventory manifest
+      // has onDelete: [], so this reconcile is the only cleanup site).
+      await softDeleteEntityEmbeddingsTx(tx, "inventory", removedIds);
 
       await tx
         .update(location)

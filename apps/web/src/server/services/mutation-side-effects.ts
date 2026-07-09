@@ -105,12 +105,51 @@ async function enqueueEntityEmbeddingRefreshMany(
   return [dispatched.batch];
 }
 
+// Ref-only variant of each embedding-refresh handler below, factored out so
+// runMutationSideEffectsForEntities can collect refs across an entire bulk
+// wave and issue ONE enqueueEntityEmbeddingRefreshMany call (one transaction)
+// instead of one dispatch per entity — see embeddingRefCollectorByHandler.
+type EmbeddingRefCollector = (
+  ctx: HandlerContext,
+) => Promise<SearchableEntityRef[]>;
+
+const collectOwnEmbeddingRef: EmbeddingRefCollector = async (ctx) => {
+  const ref = ownEmbeddingRef(ctx.event);
+  return ref ? [ref] : [];
+};
+
+const collectInventoryEmbeddingRefsForProduct: EmbeddingRefCollector = async (
+  ctx,
+) => {
+  if (ctx.event.entity.entityType !== "product") return [];
+  return await findInventoryEmbeddingRefsForProducts(ctx.db, [
+    ctx.event.entity.entityId,
+  ]);
+};
+
+const collectInventoryEmbeddingRefsForLocation: EmbeddingRefCollector = async (
+  ctx,
+) => {
+  if (ctx.event.entity.entityType !== "location") return [];
+  return await findInventoryEmbeddingRefsForLocations(ctx.db, [
+    ctx.event.entity.entityId,
+  ]);
+};
+
+const collectRecipeEmbeddingRefsForIngredient: EmbeddingRefCollector = async (
+  ctx,
+) => {
+  if (ctx.event.entity.entityType !== "ingredient") return [];
+  return await findRecipeEmbeddingRefsForIngredients(ctx.db, [
+    ctx.event.entity.entityId,
+  ]);
+};
+
 async function refreshOwnEmbedding(
   ctx: HandlerContext,
 ): Promise<BackgroundBatchRef[]> {
-  const ref = ownEmbeddingRef(ctx.event);
-  if (!ref) return [];
-  return await enqueueEntityEmbeddingRefreshMany(ctx.db, [ref], ctx.event);
+  const refs = await collectOwnEmbeddingRef(ctx);
+  return await enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event);
 }
 
 // NOTE: there is no onDelete embedding handler. Embedding soft-delete is
@@ -123,32 +162,45 @@ async function refreshOwnEmbedding(
 async function refreshInventoryEmbeddingsForProduct(
   ctx: HandlerContext,
 ): Promise<BackgroundBatchRef[]> {
-  if (ctx.event.entity.entityType !== "product") return [];
-  const refs = await findInventoryEmbeddingRefsForProducts(ctx.db, [
-    ctx.event.entity.entityId,
-  ]);
+  const refs = await collectInventoryEmbeddingRefsForProduct(ctx);
   return await enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event);
 }
 
 async function refreshInventoryEmbeddingsForLocation(
   ctx: HandlerContext,
 ): Promise<BackgroundBatchRef[]> {
-  if (ctx.event.entity.entityType !== "location") return [];
-  const refs = await findInventoryEmbeddingRefsForLocations(ctx.db, [
-    ctx.event.entity.entityId,
-  ]);
+  const refs = await collectInventoryEmbeddingRefsForLocation(ctx);
   return await enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event);
 }
 
 async function refreshRecipeEmbeddingsForIngredient(
   ctx: HandlerContext,
 ): Promise<BackgroundBatchRef[]> {
-  if (ctx.event.entity.entityType !== "ingredient") return [];
-  const refs = await findRecipeEmbeddingRefsForIngredients(ctx.db, [
-    ctx.event.entity.entityId,
-  ]);
+  const refs = await collectRecipeEmbeddingRefsForIngredient(ctx);
   return await enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event);
 }
+
+// Maps each embedding-refresh handler to its ref-only collector, so the bulk
+// path (runMutationSideEffectsForEntities) can bypass the handler's own
+// per-event dispatch and instead accumulate refs for one wave-wide dispatch.
+const embeddingRefCollectorByHandler = new Map<
+  MutationSideEffectBatchHandler,
+  EmbeddingRefCollector
+>([
+  [refreshOwnEmbedding, collectOwnEmbeddingRef],
+  [
+    refreshInventoryEmbeddingsForProduct,
+    collectInventoryEmbeddingRefsForProduct,
+  ],
+  [
+    refreshInventoryEmbeddingsForLocation,
+    collectInventoryEmbeddingRefsForLocation,
+  ],
+  [
+    refreshRecipeEmbeddingsForIngredient,
+    collectRecipeEmbeddingRefsForIngredient,
+  ],
+]);
 
 async function enqueueLocationAiRefresh(
   ctx: HandlerContext,
@@ -300,8 +352,29 @@ export async function runMutationSideEffectsForEntities(
     mutationSideEffectEventSchema.parse(event),
   );
   const batches: BackgroundBatchRef[] = [];
+  // Embedding-refresh handlers all funnel into the same job kind, so their
+  // refs are collected across the whole wave and dispatched once below
+  // instead of once per entity (was N transactions for N entities).
+  const waveEmbeddingRefs: SearchableEntityRef[] = [];
   for (const event of parsed) {
-    batches.push(...(await runManifestHandlers(db, event)));
+    for (const handler of handlersFor(event)) {
+      const collector = embeddingRefCollectorByHandler.get(handler);
+      if (collector) {
+        waveEmbeddingRefs.push(...(await collector({ db, event })));
+        continue;
+      }
+      batches.push(...(await handler({ db, event })));
+    }
+  }
+  const firstEvent = parsed[0];
+  if (waveEmbeddingRefs.length > 0 && firstEvent) {
+    batches.push(
+      ...(await enqueueEntityEmbeddingRefreshMany(
+        db,
+        waveEmbeddingRefs,
+        firstEvent,
+      )),
+    );
   }
   // Valuation is whole-tree, so a bulk wave needs exactly one recompute, not one
   // per entity (the previous per-entity fan-out ran N whole-tree recomputes).

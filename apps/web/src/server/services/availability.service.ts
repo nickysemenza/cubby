@@ -6,10 +6,9 @@ import type {
 } from "@cubby/schemas/availability";
 import type { Amount } from "@cubby/schemas/codec";
 import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
-import type { IngredientWithFoodOut } from "@cubby/schemas/ingredient";
+import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient";
 import type { SectionIngredientOut } from "@cubby/schemas/recipe";
 import { uniq } from "es-toolkit";
-import pMap from "p-map";
 import {
   evaluateAvailability,
   toWAmount,
@@ -20,7 +19,7 @@ import { createAppError } from "~/server/errors/app-error";
 import { getInventoryForProducts } from "~/server/repo/inventory";
 import { getRecipeByID } from "~/server/repo/recipe";
 import type { USDAClient } from "../clients/usda";
-import { getIngredientByID } from "./ingredient.service";
+import { getIngredientsByIDs } from "./ingredient.service";
 
 // Output types live in @cubby/schemas/availability (single source of
 // truth, shared with the suggestions router's .output()).
@@ -63,12 +62,12 @@ export class AvailabilityService {
         )
         .map((si) => si.ingredient.id),
     );
-    const ingredientEntries = await pMap(
+    const ingredientEntries = await getIngredientsByIDs(
+      this.db,
+      this.usdaClient,
       directIds,
-      (id) => getIngredientByID(this.db, this.usdaClient, id),
-      { concurrency: 8 },
     );
-    const ingMap = new Map<IngredientId, IngredientWithFoodOut>(
+    const ingMap = new Map<IngredientId, IngredientWithFoodLeanOut>(
       ingredientEntries.map((ing) => [ing.id, ing]),
     );
 
@@ -227,12 +226,12 @@ export class AvailabilityService {
     const distinctIngredientIds = uniq(
       contributions.map((c) => c.ingredientId),
     );
-    const ingredientEntries = await pMap(
+    const ingredientEntries = await getIngredientsByIDs(
+      this.db,
+      this.usdaClient,
       distinctIngredientIds,
-      (id) => getIngredientByID(this.db, this.usdaClient, id),
-      { concurrency: 8 },
     );
-    const ingMap = new Map<IngredientId, IngredientWithFoodOut>(
+    const ingMap = new Map<IngredientId, IngredientWithFoodLeanOut>(
       ingredientEntries.map((ing) => [ing.id, ing]),
     );
     const productIds = uniq(

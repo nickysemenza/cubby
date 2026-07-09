@@ -1,7 +1,6 @@
 import type { CategoryAudit as CategoryAuditResult } from "@cubby/schemas/ai";
-import { useMutation } from "@tanstack/react-query";
 import { Sparkles } from "lucide-react";
-import { toast } from "sonner";
+import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -14,19 +13,14 @@ import {
 } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
-import { getErrorMessage } from "~/lib/error-utils";
 import { useTRPC } from "~/trpc/react";
 
 export function CategoryAudit() {
   const api = useTRPC();
 
-  const auditMutation = useMutation(
-    api.ai.auditCategories.mutationOptions({
-      onError: (error) => {
-        toast.error(getErrorMessage(error));
-      },
-    }),
-  );
+  const auditMutation = useActionMutation({
+    mutationFn: api.ai.auditCategories.mutationOptions,
+  });
 
   const result = auditMutation.data;
 

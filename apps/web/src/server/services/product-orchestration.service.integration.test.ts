@@ -1,0 +1,270 @@
+import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
+import type { UPCLookupResponse } from "@cubby/upc-lookup/schemas";
+import type { FoodSummary } from "@cubby/usda-schemas";
+import { withTestDb } from "tooling/test-setup";
+import { describe, expect, it, vi } from "vitest";
+import type { UPCLookupClient } from "~/server/clients/upc-lookup";
+import type { USDAClient } from "~/server/clients/usda";
+import { quickCreateProduct } from "~/server/repo/product";
+import { LocationValuationService } from "./location-valuation.service";
+import { createProductWriteActions } from "./product.service";
+import {
+  applyUpcDataWithSideEffects,
+  findOrCreateByUPC,
+} from "./product-orchestration.service";
+import { RecipeCostingService } from "./recipe-costing.service";
+
+// Fakes never hit the network — `findFood`/`lookup` are the only methods the
+// cascade calls, so a plain object stands in for the concrete client classes.
+const fakeUsdaClient = (
+  findFood: (...args: unknown[]) => Promise<FoodSummary | null> = async () =>
+    null,
+): USDAClient => ({ findFood: vi.fn(findFood) }) as unknown as USDAClient;
+
+const fakeUpcLookupClient = (
+  lookup: (upc: string) => Promise<UPCLookupResponse | null> = async () => null,
+): UPCLookupClient => ({ lookup: vi.fn(lookup) }) as unknown as UPCLookupClient;
+
+const upcResponse = (
+  overrides: Partial<UPCLookupResponse> = {},
+): UPCLookupResponse => ({
+  upc: "000000000000",
+  name: "Widget Deluxe",
+  manufacturer: "Widget Co",
+  brand: null,
+  category: null,
+  description: null,
+  priceDollars: null,
+  imageUrl: null,
+  source: "upcitemdb",
+  cached: false,
+  ...overrides,
+});
+
+const usdaFood = (overrides: Partial<FoodSummary> = {}): FoodSummary => ({
+  fdc_id: 111111,
+  foodInfo: { data_type: "branded_food", description: "Store Brand Salt" },
+  brandedFoodInfo: {
+    brand_owner: "Acme",
+    brand_name: null,
+    branded_food_category: null,
+    gtin_upc: "022222222222",
+    ingredients: null,
+    serving: {
+      serving_size: null,
+      serving_size_unit: null,
+      household_serving_fulltext: null,
+    },
+  },
+  legacyFoodInfo: null,
+  nutritionInfo: { nutrientSummary: [], nutrientsPer100: {} },
+  portionInfoRaw: [],
+  ...overrides,
+});
+
+describe("findOrCreateByUPC", () => {
+  const ctx = withTestDb();
+
+  it("branch 1: returns the existing product without calling USDA or the UPC worker", async () => {
+    const upc = "011111111111";
+    const existing = await quickCreateProduct(
+      ctx.db,
+      { name: "Existing Widget", upc },
+      ctx.actor,
+    );
+    const usdaClient = fakeUsdaClient();
+    const upcLookupClient = fakeUpcLookupClient();
+
+    const result = await findOrCreateByUPC(
+      ctx.db,
+      usdaClient,
+      upcLookupClient,
+      upc,
+      undefined,
+      ctx.actor,
+    );
+
+    expect(result).toEqual({ product: existing, created: false });
+    expect(usdaClient.findFood).not.toHaveBeenCalled();
+    expect(upcLookupClient.lookup).not.toHaveBeenCalled();
+  });
+
+  it("branch 2: creates from a USDA match when no local product exists", async () => {
+    const upc = "022222222222";
+    const food = usdaFood({ fdc_id: 222222 });
+    const usdaClient = fakeUsdaClient(async () => food);
+    const upcLookupClient = fakeUpcLookupClient();
+
+    const result = await findOrCreateByUPC(
+      ctx.db,
+      usdaClient,
+      upcLookupClient,
+      upc,
+      undefined,
+      ctx.actor,
+    );
+
+    expect(result.created).toBe(true);
+    expect(result.product.name).toBe("Store Brand Salt");
+    expect(result.product.manufacturer).toBe("Acme");
+    expect(result.product.upc).toBe(upc);
+    expect(upcLookupClient.lookup).not.toHaveBeenCalled();
+  });
+
+  it("branch 3: falls back to the UPC worker when USDA has no match", async () => {
+    const upc = "033333333333";
+    const usdaClient = fakeUsdaClient();
+    const upcLookupClient = fakeUpcLookupClient(async () =>
+      upcResponse({
+        upc,
+        name: "Widget Deluxe",
+        manufacturer: "Widget Co",
+        priceDollars: 4.99,
+      }),
+    );
+
+    const result = await findOrCreateByUPC(
+      ctx.db,
+      usdaClient,
+      upcLookupClient,
+      upc,
+      undefined,
+      ctx.actor,
+    );
+
+    expect(result.created).toBe(true);
+    expect(result.product.name).toBe("Widget Deluxe");
+    expect(result.product.manufacturer).toBe("Widget Co");
+    expect(result.product.price).toBe(4.99);
+  });
+
+  it("branch 4: creates a default product when nothing is found anywhere", async () => {
+    const upc = "044444444444";
+    const usdaClient = fakeUsdaClient();
+    const upcLookupClient = fakeUpcLookupClient();
+
+    const result = await findOrCreateByUPC(
+      ctx.db,
+      usdaClient,
+      upcLookupClient,
+      upc,
+      "Fallback Name",
+      ctx.actor,
+    );
+
+    expect(result.created).toBe(true);
+    expect(result.product.name).toBe("Fallback Name");
+    expect(result.product.manufacturer).toBe(UNSPECIFIED_MANUFACTURER);
+    expect(result.product.upc).toBe(upc);
+  });
+
+  it("branch 4: defaults the name to 'Product <upc>' when no defaultName is given", async () => {
+    const upc = "055555555555";
+    const result = await findOrCreateByUPC(
+      ctx.db,
+      fakeUsdaClient(),
+      fakeUpcLookupClient(),
+      upc,
+      undefined,
+      ctx.actor,
+    );
+
+    expect(result.product.name).toBe(`Product ${upc}`);
+  });
+
+  it("resolves a concurrent create race to one winner without throwing", async () => {
+    const upc = "066666666666";
+    const usdaClient = fakeUsdaClient();
+    const upcLookupClient = fakeUpcLookupClient();
+
+    // Two truly-concurrent callers for a brand-new UPC: both pass the initial
+    // findProductByUPC check, then race on the create — runWithConflictRecovery
+    // must convert the loser's unique-violation into a re-SELECT of the
+    // winner instead of surfacing a 500.
+    const [a, b] = await Promise.all([
+      findOrCreateByUPC(
+        ctx.db,
+        usdaClient,
+        upcLookupClient,
+        upc,
+        "Race Product",
+        ctx.actor,
+      ),
+      findOrCreateByUPC(
+        ctx.db,
+        usdaClient,
+        upcLookupClient,
+        upc,
+        "Race Product",
+        ctx.actor,
+      ),
+    ]);
+
+    expect([a.created, b.created].sort()).toEqual([false, true]);
+    expect(a.product.id).toBe(b.product.id);
+  });
+});
+
+describe("applyUpcDataWithSideEffects", () => {
+  const ctx = withTestDb();
+
+  it("backfills manufacturer and price from the UPC worker for a product missing them", async () => {
+    const product = await quickCreateProduct(
+      ctx.db,
+      { name: "Blank Product", manufacturer: UNSPECIFIED_MANUFACTURER },
+      ctx.actor,
+    );
+    const upc = "077777777777";
+    const usdaClient = fakeUsdaClient();
+    const upcLookupClient = fakeUpcLookupClient(async () =>
+      upcResponse({ upc, manufacturer: "Acme Corp", priceDollars: 3.5 }),
+    );
+
+    const services = {
+      db: ctx.db,
+      product: createProductWriteActions(ctx.db, usdaClient),
+      recipeCosting: new RecipeCostingService(ctx.db, usdaClient),
+      locationValuation: new LocationValuationService(ctx.db),
+      upcLookupClient,
+    };
+
+    const result = await applyUpcDataWithSideEffects(
+      services,
+      { id: product.id, upc },
+      ctx.actor,
+    );
+
+    expect(result.manufacturer).toBe("Acme Corp");
+    expect(result.price).toBe(3.5);
+  });
+
+  it("leaves an already-priced, already-branded product untouched", async () => {
+    const product = await quickCreateProduct(
+      ctx.db,
+      { name: "Known Product", manufacturer: "Existing Brand", price: 9.99 },
+      ctx.actor,
+    );
+    const upc = "088888888888";
+    const usdaClient = fakeUsdaClient();
+    const upcLookupClient = fakeUpcLookupClient(async () =>
+      upcResponse({ upc, manufacturer: "Other Brand", priceDollars: 1.11 }),
+    );
+
+    const services = {
+      db: ctx.db,
+      product: createProductWriteActions(ctx.db, usdaClient),
+      recipeCosting: new RecipeCostingService(ctx.db, usdaClient),
+      locationValuation: new LocationValuationService(ctx.db),
+      upcLookupClient,
+    };
+
+    const result = await applyUpcDataWithSideEffects(
+      services,
+      { id: product.id, upc },
+      ctx.actor,
+    );
+
+    expect(result.manufacturer).toBe("Existing Brand");
+    expect(result.price).toBe(9.99);
+  });
+});

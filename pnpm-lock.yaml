@@ -631,6 +631,9 @@ importers:
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
+      vitest:
+        specifier: ^4.1.9
+        version: 4.1.9(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@26.0.1)(@vitest/coverage-v8@4.1.9)(@vitest/ui@4.1.9)(jsdom@29.1.1(@noble/hashes@2.2.0))(msw@2.12.9(@types/node@26.0.1)(typescript@6.0.3))(vite@8.1.1(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.44.1)(tsx@4.22.4)(yaml@2.9.0))
 
 packages:
 

@@ -6,6 +6,7 @@
 //    request's query fan-out runs in parallel instead of serializing.
 // 3. Intercepts console.error to capture real error details for `wrangler tail`.
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import * as Sentry from "@sentry/cloudflare";
 import { SENTRY_DSN } from "./lib/sentry-dsn";
 import { scrubSentryEvent } from "./lib/sentry-scrub";
@@ -29,32 +30,45 @@ const getHandler = () => {
   return handlerPromise;
 };
 
-let lastInterceptedError: {
+interface InterceptedError {
   name: string;
   message: string;
   stack?: string;
   cause?: unknown;
-} | null = null;
+}
+
+// Per-request holder for the console.error-intercepted error, scoped via
+// AsyncLocalStorage — mirrors withRequestDb's per-request pool store in
+// server/db.ts. Workers reuse one isolate across concurrent in-flight
+// requests, so a plain module-level `let` here would let request B's
+// console.error reset/overwrite the value across an await before request A
+// reads it, dropping A's real error or shipping B's as A's.
+const interceptedErrorStore = new AsyncLocalStorage<{
+  error: InterceptedError | null;
+}>();
 
 const _origError = console.error;
 console.error = (...args: unknown[]) => {
-  for (const arg of args) {
-    if (arg instanceof Error) {
-      lastInterceptedError = {
-        name: arg.constructor.name,
-        message: arg.message,
-        stack: arg.stack,
-        cause:
-          arg.cause instanceof Error
-            ? {
-                name: arg.cause.constructor.name,
-                message: arg.cause.message,
-                stack: arg.cause.stack,
-              }
-            : arg.cause
-              ? String(arg.cause)
-              : undefined,
-      };
+  const holder = interceptedErrorStore.getStore();
+  if (holder) {
+    for (const arg of args) {
+      if (arg instanceof Error) {
+        holder.error = {
+          name: arg.constructor.name,
+          message: arg.message,
+          stack: arg.stack,
+          cause:
+            arg.cause instanceof Error
+              ? {
+                  name: arg.cause.constructor.name,
+                  message: arg.cause.message,
+                  stack: arg.cause.stack,
+                }
+              : arg.cause
+                ? String(arg.cause)
+                : undefined,
+        };
+      }
     }
   }
   _origError(...args);
@@ -71,8 +85,6 @@ const handler = {
     // over public URLs when present).
     setCfEnv(env);
 
-    lastInterceptedError = null;
-
     // Entry span at the very top of our handler body. The CF platform's auto
     // root span covers the whole invocation incl. queue/dispatch BEFORE our code
     // runs; this child measures only time inside fetch(). So when a trace shows
@@ -85,39 +97,42 @@ const handler = {
     // ready (the streamed body finishes after, outside the span).
     const url = new URL(request.url);
     try {
-      return await withTrace(
-        "cf.fetch",
-        (span) =>
-          withRequestDb(env.HYPERDRIVE.connectionString, async () => {
-            const { default: handler } = await withTrace(
-              "cf.importHandler",
-              () => getHandler(),
-            );
-            const response = await withTrace("cf.handler", async () =>
-              handler.fetch(request),
-            );
-            span.setAttribute("http.response.status_code", response.status);
-
-            // If Nitro returned a 500 and we intercepted a real error, log the
-            // details so they appear in `wrangler tail` (Nitro's response body
-            // is useless) and report it to Sentry — the handler swallows it into
-            // a 500 body, so withSentry's auto-capture (thrown-error only) never
-            // sees it.
-            if (response.status >= 500 && lastInterceptedError) {
-              console.error(
-                "[cf-server] Unhandled error:",
-                JSON.stringify(lastInterceptedError, null, 2),
+      return await interceptedErrorStore.run({ error: null }, () =>
+        withTrace(
+          "cf.fetch",
+          (span) =>
+            withRequestDb(env.HYPERDRIVE.connectionString, async () => {
+              const { default: handler } = await withTrace(
+                "cf.importHandler",
+                () => getHandler(),
               );
-              const reconstructed = new Error(lastInterceptedError.message);
-              reconstructed.name = lastInterceptedError.name;
-              reconstructed.stack = lastInterceptedError.stack;
-              reconstructed.cause = lastInterceptedError.cause;
-              Sentry.captureException(reconstructed);
-            }
+              const response = await withTrace("cf.handler", async () =>
+                handler.fetch(request),
+              );
+              span.setAttribute("http.response.status_code", response.status);
 
-            return response;
-          }),
-        { "http.request.method": request.method, "url.path": url.pathname },
+              // If Nitro returned a 500 and we intercepted a real error, log the
+              // details so they appear in `wrangler tail` (Nitro's response body
+              // is useless) and report it to Sentry — the handler swallows it into
+              // a 500 body, so withSentry's auto-capture (thrown-error only) never
+              // sees it.
+              const interceptedError = interceptedErrorStore.getStore()?.error;
+              if (response.status >= 500 && interceptedError) {
+                console.error(
+                  "[cf-server] Unhandled error:",
+                  JSON.stringify(interceptedError, null, 2),
+                );
+                const reconstructed = new Error(interceptedError.message);
+                reconstructed.name = interceptedError.name;
+                reconstructed.stack = interceptedError.stack;
+                reconstructed.cause = interceptedError.cause;
+                Sentry.captureException(reconstructed);
+              }
+
+              return response;
+            }),
+          { "http.request.method": request.method, "url.path": url.pathname },
+        ),
       );
     } catch (error) {
       // Report to Sentry before swallowing: we return a generic 500 rather than

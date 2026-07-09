@@ -13,6 +13,9 @@
  *   INGREDIENT  → `detectors-ingredient.ts` (no-product, unused aliases,
  *                                            unused ingredients, alias pruning)
  *   LOCATION    → `detectors-location.ts`   (empty leaves, missing AI description)
+ *   RECIPE      → `detectors-recipe.ts`     (parents referencing a soft-deleted
+ *                                            sub-recipe while marked fresh —
+ *                                            derived-data-on-removal guardrail)
  *   REPARSE     → `reparse.ts`              (stale-parse detection + apply writes)
  *
  * Every problem item type is the canonical Zod-derived shape from
@@ -47,6 +50,11 @@ export {
   recipeUsageCountsByProduct,
   synthesizeEffectiveMappings,
 } from "./detectors-product";
+// Recipe-centric detectors (derived-data-on-removal guardrail)
+export {
+  findParentRecipesWithDeletedSubRecipes,
+  type StaleParentRecipe,
+} from "./detectors-recipe";
 // Stale-parse detection + re-parse write path
 export {
   applyReparsedStaleLines,

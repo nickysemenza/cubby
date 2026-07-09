@@ -198,6 +198,48 @@ async fn drive_chunk_wasm(
     }
 }
 
+/// One raw chunk completion as it comes off `extract_cookbook`'s
+/// `buffer_unordered` stream: original index, doc path, the assembler payload,
+/// and the salvage-failure reason (if any).
+type ChunkCompletion = (
+    usize,
+    String,
+    (EpubChunk, Vec<ExtractedRecipe>),
+    Option<String>,
+);
+
+/// Split a (possibly out-of-order) sequence of chunk completions into the
+/// assembler's per-chunk payload list and the UI's index-sorted failure report.
+/// `T` is whatever payload rides along with a completion — in `extract_cookbook`,
+/// the `(EpubChunk, Vec<ExtractedRecipe>)` pair the assembler needs; `failure` is
+/// `Some(reason)` when a chunk was salvaged (unparseable on both models).
+///
+/// Pure and independent of the `js_sys::Function` callback / `buffer_unordered`
+/// stream, so the index-tagging/failure-attribution/sort logic is unit-testable
+/// without a WASM runtime (see the tests below). Payload order in the returned
+/// `Vec` mirrors completion order — irrelevant to the assembler, since it rebinds
+/// recipes to their chunks (see the `buffer_unordered` note in `extract_cookbook`)
+/// — but failures are always returned sorted by original index for a stable UI
+/// order regardless of completion order.
+fn partition_chunk_completions<T>(
+    completions: impl IntoIterator<Item = (usize, String, T, Option<String>)>,
+) -> (Vec<T>, Vec<WFailedChunk>) {
+    let mut successes = Vec::new();
+    let mut failed = Vec::new();
+    for (index, doc_path, payload, failure) in completions {
+        successes.push(payload);
+        if let Some(reason) = failure {
+            failed.push(WFailedChunk {
+                index,
+                doc_path,
+                reason,
+            });
+        }
+    }
+    failed.sort_by_key(|f| f.index);
+    (successes, failed)
+}
+
 /// Extract every recipe from a chunked EPUB, driving the whole per-chunk loop in
 /// Rust. For each chunk it calls `call_chunk` (the JS proxy that performs the one
 /// authenticated network hop), applies the shared retry → escalate → salvage
@@ -262,23 +304,21 @@ pub async fn extract_cookbook(
     ))
     .buffer_unordered(concurrency.max(1));
 
-    let mut per_chunk: Vec<(EpubChunk, Vec<ExtractedRecipe>)> = Vec::with_capacity(total);
-    let mut failed: Vec<WFailedChunk> = Vec::new();
+    // Accumulate the raw per-chunk completions as they arrive (out of order — see
+    // the `buffer_unordered` note above) and derive both the live-preview payload
+    // and the final result from the same pure `partition_chunk_completions`
+    // helper, so the index-tagging/failure-attribution/sort logic runs through one
+    // code path (independently unit-tested) instead of being duplicated inline.
+    let mut completions: Vec<ChunkCompletion> = Vec::with_capacity(total);
     let mut done = 0usize;
     while let Some((index, doc_path, chunk, recipes, failure)) = stream.next().await {
-        per_chunk.push((chunk, recipes));
-        if let Some(reason) = failure {
-            failed.push(WFailedChunk {
-                index,
-                doc_path,
-                reason,
-            });
-        }
+        completions.push((index, doc_path, (chunk, recipes), failure));
         done += 1;
         // Stream a live preview for every chunk but the last; the final assemble
         // below doubles as the last progress tick (no double assemble at the end).
         if done < total {
-            let partial = assemble_recipes_internal(per_chunk.clone(), links.clone(), &source);
+            let (partial_chunks, _) = partition_chunk_completions(completions.clone());
+            let partial = assemble_recipes_internal(partial_chunks, links.clone(), &source);
             let recipes_js = to_js(&partial, "partial recipes")?;
             let _ = on_progress.call3(
                 &JsValue::NULL,
@@ -289,6 +329,7 @@ pub async fn extract_cookbook(
         }
     }
 
+    let (per_chunk, failed) = partition_chunk_completions(completions);
     let recipes = assemble_recipes_internal(per_chunk, links, &source);
     let recipes_js = to_js(&recipes, "assembled recipes")?;
     let _ = on_progress.call3(
@@ -302,10 +343,10 @@ pub async fn extract_cookbook(
     // originating doc + reason) for a targeted retry. `skipped` is kept as the
     // aggregate count (== failed_chunks.len()) so existing callers reading a plain
     // number don't break. Sorted by index for a stable UI order (the concurrent
-    // stream completes out of order). A plain serde struct (serialized via
-    // serde-wasm-bindgen) — `CookbookRecipe` isn't Tsify, so the `.d.ts` types the
-    // `recipes` field `any`; `failed_chunks` is Tsify, so it's typed.
-    failed.sort_by_key(|f| f.index);
+    // stream completes out of order; `partition_chunk_completions` sorts). A plain
+    // serde struct (serialized via serde-wasm-bindgen) — `CookbookRecipe` isn't
+    // Tsify, so the `.d.ts` types the `recipes` field `any`; `failed_chunks` is
+    // Tsify, so it's typed.
     to_js(
         &ExtractResult {
             recipes: &recipes,
@@ -399,5 +440,91 @@ mod tests {
             hex_sha256(b"abc"),
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
         );
+    }
+
+    /// `buffer_unordered` yields chunk completions in whatever order they
+    /// finish, not original index order — this is the actual completion shape
+    /// `extract_cookbook` streams into `partition_chunk_completions`. All-success
+    /// case: successes carry every payload, no failures reported.
+    #[test]
+    fn partition_handles_out_of_order_completions_all_success() {
+        let completions = vec![
+            (2, "ch3.xhtml".to_string(), "recipes-2", None),
+            (0, "ch1.xhtml".to_string(), "recipes-0", None),
+            (1, "ch2.xhtml".to_string(), "recipes-1", None),
+        ];
+        let (successes, failed) = partition_chunk_completions(completions);
+        assert_eq!(successes, vec!["recipes-2", "recipes-0", "recipes-1"]);
+        assert!(failed.is_empty());
+    }
+
+    /// Every chunk salvaged (unparseable on both models): failures must come
+    /// back sorted by original index — not completion order — with each
+    /// failure's `doc_path`/`reason` attributed to the chunk that produced it.
+    #[test]
+    fn partition_all_fail_sorts_by_original_index_and_attributes_doc_path() {
+        let completions = vec![
+            (
+                3,
+                "ch4.xhtml".to_string(),
+                "payload-3",
+                Some("bad json".to_string()),
+            ),
+            (
+                1,
+                "ch2.xhtml".to_string(),
+                "payload-1",
+                Some("truncated".to_string()),
+            ),
+            (
+                0,
+                "ch1.xhtml".to_string(),
+                "payload-0",
+                Some("empty tool call".to_string()),
+            ),
+        ];
+        let (successes, failed) = partition_chunk_completions(completions);
+        assert_eq!(successes.len(), 3);
+        let indices: Vec<usize> = failed.iter().map(|f| f.index).collect();
+        assert_eq!(indices, vec![0, 1, 3]);
+        assert_eq!(failed[0].doc_path, "ch1.xhtml");
+        assert_eq!(failed[0].reason, "empty tool call");
+        assert_eq!(failed[1].doc_path, "ch2.xhtml");
+        assert_eq!(failed[1].reason, "truncated");
+        assert_eq!(failed[2].doc_path, "ch4.xhtml");
+        assert_eq!(failed[2].reason, "bad json");
+    }
+
+    /// Mixed success/failure arriving scrambled relative to index (a later
+    /// chunk finishing first is exactly what `buffer_unordered` can produce):
+    /// every payload is retained, and only the failed ones are attributed, in
+    /// index order.
+    #[test]
+    fn partition_interleaved_success_and_failure_attributes_correctly() {
+        let completions = vec![
+            (4, "ch5.xhtml".to_string(), "payload-4", None),
+            (
+                1,
+                "ch2.xhtml".to_string(),
+                "payload-1",
+                Some("escalation also failed".to_string()),
+            ),
+            (0, "ch1.xhtml".to_string(), "payload-0", None),
+            (3, "ch4.xhtml".to_string(), "payload-3", None),
+            (
+                2,
+                "ch3.xhtml".to_string(),
+                "payload-2",
+                Some("unparseable".to_string()),
+            ),
+        ];
+        let (successes, failed) = partition_chunk_completions(completions);
+        assert_eq!(successes.len(), 5);
+        let indices: Vec<usize> = failed.iter().map(|f| f.index).collect();
+        assert_eq!(indices, vec![1, 2]);
+        assert_eq!(failed[0].doc_path, "ch2.xhtml");
+        assert_eq!(failed[0].reason, "escalation also failed");
+        assert_eq!(failed[1].doc_path, "ch3.xhtml");
+        assert_eq!(failed[1].reason, "unparseable");
     }
 }

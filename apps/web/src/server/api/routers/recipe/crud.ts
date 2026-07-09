@@ -21,6 +21,7 @@ import {
   recipeUpdateData,
   recipeWithSideEffectsOut,
 } from "@cubby/schemas/recipe";
+import { uniq } from "es-toolkit";
 import { createAppError } from "~/server/errors/app-error";
 import {
   createRecipe,
@@ -32,6 +33,7 @@ import {
   recipeList,
   updateRecipe,
 } from "~/server/repo/recipe";
+import { findParentRecipeIdsBatch } from "~/server/repo/recipe/totals";
 import {
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
@@ -148,8 +150,20 @@ const getManyByIDs = protectedProcedure
 
 // Delete procedure using standalone factory
 const deleteItem = createDeleteProcedure<RecipeId>(async (services, ids) => {
+  // Resolve parent recipes (recipe-as-ingredient) BEFORE deleting: a deleted
+  // sub-recipe's cost is baked into every parent's persisted totals, but the
+  // recipe manifest has onDelete: [] and needsValuationRecompute is false for
+  // recipe, so nothing else marks parents stale. Every other cost-affecting
+  // mutation propagates staleness; delete must too (F2). Resolve first so the
+  // link rows are still live when we walk them.
+  const deletedSet = new Set<RecipeId>(ids);
+  const parentsByRecipe = await findParentRecipeIdsBatch(services.db, ids);
+  const parentIds = uniq(
+    [...parentsByRecipe.values()].flat().filter((id) => !deletedSet.has(id)),
+  );
+
   await deleteRecipes(services.db, ids, services.actorContext);
-  return await runMutationSideEffectsForEntities(
+  const sideEffectBatches = await runMutationSideEffectsForEntities(
     services.db,
     ids.map((id) => ({
       action: "deleted" as const,
@@ -157,6 +171,17 @@ const deleteItem = createDeleteProcedure<RecipeId>(async (services, ids) => {
       source: "recipe.delete",
     })),
   );
+
+  // dispatchRecompute marks parents stale in-tx, then cascades to grandparents —
+  // the same propagation path recipe.update uses.
+  const recomputeBatches =
+    parentIds.length > 0
+      ? await services.services.recipeCosting.dispatchRecompute(parentIds, {
+          source: "recipe.delete",
+        })
+      : [];
+
+  return [...sideEffectBatches, ...recomputeBatches];
 }, recipeId);
 
 const getAllTagsEndpoint = protectedProcedure

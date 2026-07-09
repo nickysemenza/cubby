@@ -546,6 +546,21 @@ export const PROBLEM_SECTIONS: ProblemSectionEntry[] = [
     }),
   }),
   section({
+    id: "stale-parent-recipes",
+    label: "Deleted sub-recipes",
+    select: (p) => p.staleParentRecipes,
+    entity: "recipe",
+    title: "Recipes referencing a deleted sub-recipe",
+    description:
+      "Live recipes whose totals still reference a sub-recipe that was deleted (a removal path that skipped staleness propagation). Open each and remove or replace the dangling sub-recipe line so its cost recomputes cleanly — recompute alone can't drop the stale reference.",
+    emptyMessage: "No recipes reference a deleted sub-recipe.",
+    renderItem: (recipe) => ({
+      title: recipe.name,
+      route: { to: "/recipes/$id", params: { id: recipe.id } },
+      editLabel: "Open recipe",
+    }),
+  }),
+  section({
     id: "upc-updates",
     label: "UPC Updates",
     select: (p) => p.productsWithBetterUpcData ?? [],
