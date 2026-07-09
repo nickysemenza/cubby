@@ -3,13 +3,18 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 import { createTestCaller, createTestTRPCContext } from "~/server/api/trpc";
 import { setCfEnv } from "~/server/cf-env";
+import { upsertCookbook } from "~/server/repo/cookbook";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";
 import {
   findParentRecipesWithDeletedSubRecipes,
   type StaleParentRecipe,
 } from "~/server/repo/problems";
 import { createProduct } from "~/server/repo/product";
-import { createRecipe, deleteRecipes } from "~/server/repo/recipe";
+import {
+  createRecipe,
+  deleteRecipes,
+  upsertCookbookRecipe,
+} from "~/server/repo/recipe";
 import { getRecipeTotalsState } from "~/server/repo/recipe/totals";
 import {
   ingredientRef,
@@ -110,6 +115,75 @@ describe("recipe delete propagates cost staleness to parents", () => {
       (await getRecipeTotalsState(ctx.db, parent))?.totalsComputedAt,
     ).toBeNull();
     // Guardrail detector agrees: no fresh parent left pointing at a deleted sub.
+    expect(await findParentRecipesWithDeletedSubRecipes(ctx.db)).toHaveLength(
+      0,
+    );
+  });
+
+  // deleteByCookbook is a SECOND recipe-delete path (import router) — it must
+  // carry the same parent-staleness propagation as crud.ts's deleteItem, for a
+  // parent in a DIFFERENT (or no) cookbook that uses a deleted book recipe as a
+  // sub-recipe.
+  it("marks the parent stale when its sub-recipe is deleted via deleteByCookbook", async () => {
+    const bookName = "Doomed Book";
+    const { id: cookbookId } = await upsertCookbook(
+      ctx.db,
+      { name: bookName, rawJson: [], sourceLabel: bookName },
+      ctx.actor,
+    );
+
+    const ing = await findOrCreateIngredient(ctx.db, "book flour");
+    const child = await upsertCookbookRecipe(
+      makeRecipeInput({
+        name: "Book Sub Recipe",
+        sections: [
+          {
+            instructions: [{ instruction: "Mix" }],
+            ingredients: [
+              ingredientRef(ing.id, { amounts: [{ value: 1, unit: "cup" }] }),
+            ],
+          },
+        ],
+      }),
+      { id: cookbookId, name: bookName },
+      ctx.db,
+      ctx.actor,
+    );
+    const parent = await createRecipe(
+      ctx.db,
+      makeRecipeInput({
+        name: "Non-Book Parent",
+        sections: [
+          {
+            instructions: [{ instruction: "Use book sub" }],
+            ingredients: [
+              {
+                type: "recipe",
+                recipeId: child.id,
+                ingredientId: null,
+                amounts: [{ value: 1, unit: "each" }],
+              },
+            ],
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+
+    await recompute([parent.id as RecipeId, child.id]);
+    expect(
+      (await getRecipeTotalsState(ctx.db, parent.id as RecipeId))
+        ?.totalsComputedAt,
+    ).not.toBeNull();
+
+    installFakeQueue();
+    const caller = createTestCaller(recipeRouter, ctx.db);
+    await caller.deleteByCookbook({ cookbookId });
+
+    expect(
+      (await getRecipeTotalsState(ctx.db, parent.id as RecipeId))
+        ?.totalsComputedAt,
+    ).toBeNull();
     expect(await findParentRecipesWithDeletedSubRecipes(ctx.db)).toHaveLength(
       0,
     );
