@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/cloudflare";
+import { registerSentryErrorCapture } from "@cubby/worker-tracing";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { setCookie, deleteCookie } from "hono/cookie";
@@ -10,6 +11,7 @@ import {
   adminAuth,
   mcpAuth,
   ADMIN_COOKIE_NAME,
+  secretsMatch,
 } from "./middleware/auth";
 import { lookup } from "./routes/lookup";
 import { search } from "./routes/search";
@@ -20,6 +22,10 @@ import { renderer } from "./renderer";
 import { openApiDocument } from "./openapi";
 
 const app = new Hono<{ Bindings: Env }>();
+
+// Hono catches route throws and returns a 500 without rethrowing, so
+// `Sentry.withSentry`'s throw-only auto-capture below never sees them.
+registerSentryErrorCapture(app, Sentry.captureException);
 
 // Enable CORS for API routes
 app.use("/lookup/*", cors());
@@ -118,7 +124,7 @@ app.post("/admin/login", async (c) => {
   const body = await c.req.parseBody();
   const apiKey = body.apiKey as string;
 
-  if (apiKey !== c.env.API_KEY) {
+  if (!(await secretsMatch(apiKey, c.env.API_KEY))) {
     return c.redirect("/admin/login?error=1");
   }
 
@@ -164,8 +170,10 @@ app.get(
 
 // Error capture into the shared `cubby` Sentry project, tagged `service:upc-lookup`
 // so this worker's exceptions surface at their source instead of as opaque
-// failures on the web side. Errors only — `@cubby/worker-tracing` (OTel) keeps
-// owning spans, so tracesSampleRate is 0 (errors are captured regardless).
+// failures on the web side. `@cubby/worker-tracing` (OTel) keeps owning spans,
+// so tracesSampleRate is 0. `withSentry`'s auto-capture only fires on a throw
+// that escapes `fetch`; the `registerSentryErrorCapture` call above is what
+// actually reports the route-level errors Hono swallows into a 500.
 const handler = { fetch: app.fetch } satisfies ExportedHandler<Env>;
 
 export default Sentry.withSentry(

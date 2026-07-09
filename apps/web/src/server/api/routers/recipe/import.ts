@@ -28,6 +28,7 @@ import {
   scrapeRecipeInput,
   upsertCookbookInput,
 } from "@cubby/schemas/import-recipe";
+import { uniq } from "es-toolkit";
 import {
   type BulkProgressEvent,
   streamItems,
@@ -57,6 +58,7 @@ import {
   upsertImportRecipe,
   upsertNotionRecipeFromImport,
 } from "~/server/repo/recipe";
+import { findParentRecipeIdsBatch } from "~/server/repo/recipe/totals";
 import {
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
@@ -383,6 +385,15 @@ const deleteByCookbook = protectedProcedure
     const recipeIds = (
       await getCookbookRecipesForDiff(ctx.db, input.cookbookId)
     ).map((row) => unsafeRecipeId(row.id));
+    // Same removal-path invariant as crud.ts's deleteItem: a deleted recipe's
+    // cost is baked into every parent's persisted totals, and nothing else
+    // marks parents stale on delete — resolve parents while the link rows are
+    // still live, then recompute the surviving parents after the delete.
+    const deletedSet = new Set<RecipeId>(recipeIds);
+    const parentsByRecipe = await findParentRecipeIdsBatch(ctx.db, recipeIds);
+    const parentIds = uniq(
+      [...parentsByRecipe.values()].flat().filter((id) => !deletedSet.has(id)),
+    );
     const result = await deleteRecipesByCookbook(
       ctx.db,
       input.cookbookId,
@@ -396,6 +407,11 @@ const deleteByCookbook = protectedProcedure
         source: "recipe.deleteByCookbook",
       })),
     );
+    if (parentIds.length > 0) {
+      await ctx.services.recipeCosting.dispatchRecompute(parentIds, {
+        source: "recipe.deleteByCookbook",
+      });
+    }
     return result;
   });
 

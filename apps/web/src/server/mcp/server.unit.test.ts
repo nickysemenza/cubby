@@ -3,7 +3,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createMcpServer,
   listMcpToolCatalog,
@@ -19,6 +19,41 @@ import {
   WRITE_CLOSED,
 } from "./tools/_shared";
 import { registerRecipeTools } from "./tools/recipe.tools";
+
+/**
+ * Call a registered tool through a real client/server InMemoryTransport pair
+ * (mirrors the list_locations test below), injecting a stub tRPC caller via
+ * the same authInfo.extra.caller channel the production auth layer uses.
+ */
+async function callTool(
+  server: McpServer,
+  toolName: string,
+  args: Record<string, unknown>,
+  // biome-ignore lint/suspicious/noExplicitAny: stub tRPC caller for tool tests
+  caller: any,
+) {
+  const [clientTransport, serverTransport] =
+    InMemoryTransport.createLinkedPair();
+  const client = new Client({ name: "test", version: "1.0.0" });
+
+  const originalSend = clientTransport.send.bind(clientTransport);
+  clientTransport.send = (message, options) =>
+    originalSend(message, {
+      ...options,
+      authInfo: { token: "", clientId: "test", scopes: [], extra: { caller } },
+    });
+
+  await Promise.all([
+    server.connect(serverTransport),
+    client.connect(clientTransport),
+  ]);
+
+  try {
+    return await client.callTool({ name: toolName, arguments: args });
+  } finally {
+    await Promise.allSettled([client.close(), server.close()]);
+  }
+}
 
 function schemaHasMockKey(value: unknown): boolean {
   if (!value || typeof value !== "object") return false;
@@ -332,5 +367,171 @@ describe("listMcpToolCatalog", () => {
     } finally {
       await Promise.allSettled([client.close(), server.close()]);
     }
+  });
+});
+
+describe("merge_ingredients partial-success aggregation", () => {
+  const TARGET_A = "11111111-1111-4111-8111-111111111111";
+  const ALIAS_A = "11111111-1111-4111-8111-111111111112";
+  const TARGET_B = "22222222-2222-4222-8222-222222222222";
+  const ALIAS_B = "22222222-2222-4222-8222-222222222223";
+
+  it("reports merged/total/results and leaves isError unset when at least one merge succeeds", async () => {
+    const mergeSummary = {
+      aliasesAdded: ["Cherry"],
+      recipesMoved: 2,
+      productsMoved: 1,
+      deletedIds: [ALIAS_A],
+    };
+    const caller = {
+      ingredient: {
+        merge: vi
+          .fn()
+          .mockResolvedValueOnce({ mergeSummary })
+          .mockRejectedValueOnce(new Error("target not found")),
+      },
+    };
+
+    const result = await callTool(
+      createMcpServer(),
+      "merge_ingredients",
+      {
+        merges: [
+          { target: TARGET_A, aliases: [ALIAS_A] },
+          { target: TARGET_B, aliases: [ALIAS_B] },
+        ],
+      },
+      caller,
+    );
+
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toEqual({
+      merged: 1,
+      total: 2,
+      results: [
+        { target: TARGET_A, ok: true, summary: mergeSummary },
+        { target: TARGET_B, ok: false, error: "target not found" },
+      ],
+    });
+  });
+
+  it("sets isError only when every merge in the batch fails", async () => {
+    const caller = {
+      ingredient: {
+        merge: vi.fn().mockRejectedValue(new Error("boom")),
+      },
+    };
+
+    const result = await callTool(
+      createMcpServer(),
+      "merge_ingredients",
+      {
+        merges: [
+          { target: TARGET_A, aliases: [ALIAS_A] },
+          { target: TARGET_B, aliases: [ALIAS_B] },
+        ],
+      },
+      caller,
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toEqual({
+      merged: 0,
+      total: 2,
+      results: [
+        { target: TARGET_A, ok: false, error: "boom" },
+        { target: TARGET_B, ok: false, error: "boom" },
+      ],
+    });
+  });
+
+  it("does not flag isError on a fully-successful batch", async () => {
+    const mergeSummary = {
+      aliasesAdded: [],
+      recipesMoved: 0,
+      productsMoved: 0,
+      deletedIds: [ALIAS_A],
+    };
+    const caller = {
+      ingredient: {
+        merge: vi.fn().mockResolvedValue({ mergeSummary }),
+      },
+    };
+
+    const result = await callTool(
+      createMcpServer(),
+      "merge_ingredients",
+      { merges: [{ target: TARGET_A, aliases: [ALIAS_A] }] },
+      caller,
+    );
+
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toEqual({
+      merged: 1,
+      total: 1,
+      results: [{ target: TARGET_A, ok: true, summary: mergeSummary }],
+    });
+  });
+});
+
+describe("update_inventory_entry value/unit pairing guard", () => {
+  const ENTRY_ID = "33333333-3333-4333-8333-333333333333";
+
+  it("throws before reaching the router when only value is supplied", async () => {
+    const caller = { inventory: { update: vi.fn() } };
+
+    const result = await callTool(
+      createMcpServer(),
+      "update_inventory_entry",
+      { id: ENTRY_ID, value: 3 },
+      caller,
+    );
+
+    expect(result.isError).toBe(true);
+    expect(caller.inventory.update).not.toHaveBeenCalled();
+    const [content] = result.content as Array<{ type: string; text?: string }>;
+    expect(content?.text).toContain(
+      "Both value and unit must be provided together",
+    );
+  });
+
+  it("throws before reaching the router when only unit is supplied", async () => {
+    const caller = { inventory: { update: vi.fn() } };
+
+    const result = await callTool(
+      createMcpServer(),
+      "update_inventory_entry",
+      { id: ENTRY_ID, unit: "each" },
+      caller,
+    );
+
+    expect(result.isError).toBe(true);
+    expect(caller.inventory.update).not.toHaveBeenCalled();
+  });
+
+  it("passes both through when value and unit are supplied together", async () => {
+    const updated = {
+      id: ENTRY_ID,
+      amount: { value: 3, unit: "each" },
+      valuation: null,
+      product: null,
+      location: null,
+    };
+    const caller = {
+      inventory: { update: vi.fn().mockResolvedValue(updated) },
+    };
+
+    const result = await callTool(
+      createMcpServer(),
+      "update_inventory_entry",
+      { id: ENTRY_ID, value: 3, unit: "each" },
+      caller,
+    );
+
+    expect(result.isError).not.toBe(true);
+    expect(caller.inventory.update).toHaveBeenCalledWith({
+      id: ENTRY_ID,
+      data: { amount: { value: 3, unit: "each" } },
+    });
   });
 });

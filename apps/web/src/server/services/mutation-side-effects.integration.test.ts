@@ -185,6 +185,68 @@ describe("mutation side effects integration", () => {
     expect(valuationBatches).toHaveLength(1);
   });
 
+  it("bulk wave enqueues exactly one entity-embedding batch for N entities", async () => {
+    const location = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Manifest embedding bin" }),
+      ctx.actor,
+    );
+    const entries = [];
+    for (const n of [1, 2, 3]) {
+      const product = await createProduct(
+        ctx.db,
+        makeProductInput({ name: `Manifest embedding product ${n}` }),
+        ctx.actor,
+      );
+      entries.push(
+        await createInventoryEntry(
+          ctx.db,
+          {
+            productId: product.id,
+            locationId: location.id,
+            amount: { value: n, unit: "each" },
+          },
+          ctx.actor,
+        ),
+      );
+    }
+
+    await runMutationSideEffectsForEntities(
+      ctx.db,
+      entries.map((entry) => ({
+        action: "created" as const,
+        entity: { entityType: "inventory" as const, entityId: entry.id },
+        source: "test.embedding.bulk",
+      })),
+    );
+
+    const batches = await listBackgroundBatches(ctx.db, 50);
+    const embeddingBatches = batches.filter(
+      (batch) =>
+        batch.kind === "entity-embedding.refresh" &&
+        (batch.metadata as { source?: string } | null)?.source ===
+          "test.embedding.bulk",
+    );
+    // Three entities whose only handler is refreshOwnEmbedding must collapse
+    // into a single batch (one transaction), not one batch per entity.
+    expect(embeddingBatches).toHaveLength(1);
+    const detail = await getBackgroundBatchDetail(
+      ctx.db,
+      embeddingBatches[0]!.id,
+    );
+    expect(detail?.jobs).toHaveLength(3);
+    expect(detail?.jobs.map((job) => job.payload)).toEqual(
+      expect.arrayContaining(
+        entries.map((entry) =>
+          expect.objectContaining({
+            entityType: "inventory",
+            entityId: entry.id,
+          }),
+        ),
+      ),
+    );
+  });
+
   it("repo delete soft-deletes the entity's search embedding", async () => {
     const product = await createProduct(
       ctx.db,

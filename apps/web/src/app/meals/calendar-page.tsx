@@ -28,6 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import { useHydrated } from "~/hooks/useHydrated";
 import { useTRPC } from "~/trpc/react";
 import { formatMealCost } from "./meal-format";
 import {
@@ -50,7 +51,12 @@ export function MealCalendarPage({
   onViewChange,
   onWeekChange,
 }: MealCalendarPageProps) {
-  const weekStart = parseWeekStart(week);
+  const hydrated = useHydrated();
+  // `week` unset resolves to "current week" via `new Date()`; server (UTC)
+  // and the client's first paint (local tz) can land on different calendar
+  // days. Pin the fallback reference to the epoch until hydrated so SSR and
+  // the initial client render agree, then resolve the real client-local week.
+  const weekStart = parseWeekStart(week, hydrated ? new Date() : new Date(0));
 
   return (
     <Stack>
@@ -119,6 +125,7 @@ function CalendarView({
     }),
   );
 
+  const hydrated = useHydrated();
   const today = new Date();
 
   return (
@@ -165,7 +172,9 @@ function CalendarView({
           {days.map((day) => {
             const dayStr = format(day, "yyyy-MM-dd");
             const dayMeals = (meals ?? []).filter((m) => m.date === dayStr);
-            const isToday = isSameDay(day, today);
+            // Neutral (no highlight) until hydrated so SSR + first paint
+            // agree; the real client-local "today" appears post-hydration.
+            const isToday = hydrated && isSameDay(day, today);
             return (
               <div
                 key={dayStr}

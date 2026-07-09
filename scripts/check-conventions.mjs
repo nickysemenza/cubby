@@ -28,12 +28,18 @@
  *     system uses flat tones; the audit-log timeline fade connector is exempt.
  *  9. Arbitrary text-[Npx] font sizes — snap to the sub-xs tokens
  *     (text-2xs / text-3xs) so the type scale stays closed.
+ * 10. Untested services — every server/services/*.service.ts needs a sibling
+ *     test file (a fixed legacy exemption list may only shrink).
+ * 11. getDb() used outside server/repo/ — the opaque-Database boundary
+ *     (CLAUDE.md "Opaque Database Type") only permits the unwrap in repos.
+ * 12. Dead package.json scripts — a `tsx <path>`/`node <path>` script entry
+ *     whose path doesn't exist on disk.
  *
  * Exit 1 + a report on any violation; exit 0 + one-line OK when clean.
  */
 
 import { execFileSync } from "node:child_process";
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -41,6 +47,7 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const webSrc = join(repoRoot, "apps", "web", "src");
 const upcLookupSrc = join(repoRoot, "apps", "upc-lookup", "src");
 const schemasSrc = join(repoRoot, "packages", "schemas", "src");
+const servicesDir = join(webSrc, "server", "services");
 
 // ---------------------------------------------------------------------------
 // File discovery
@@ -202,6 +209,109 @@ function isPaginationHelperFile(path) {
 
 function isCrudFactoryFile(path) {
   return relative(repoRoot, path) === "apps/web/src/server/api/crud-factory.ts";
+}
+
+// Rule 10: legacy services with no test yet. This list may only SHRINK (a
+// service gaining tests should be removed here, never re-added) — see
+// CLAUDE.md Required Helpers / audit F4-F5 follow-up.
+const SERVICE_TEST_EXEMPTIONS = new Set([
+  "ingredient.service.ts",
+  "product.service.ts",
+  "problems.service.ts",
+  "location-valuation.service.ts",
+]);
+
+/** @returns {Violation[]} */
+function checkServicesHaveTests() {
+  /** @type {Violation[]} */
+  const violations = [];
+  let entries;
+  try {
+    entries = readdirSync(servicesDir);
+  } catch {
+    return violations;
+  }
+  const serviceFiles = entries.filter((f) => f.endsWith(".service.ts"));
+  for (const serviceFile of serviceFiles) {
+    if (SERVICE_TEST_EXEMPTIONS.has(serviceFile)) continue;
+    const stem = serviceFile.slice(0, -".service.ts".length);
+    const hasTest = entries.some(
+      (f) => f !== serviceFile && f.startsWith(`${stem}.`) && f.endsWith(".test.ts"),
+    );
+    if (!hasTest) {
+      violations.push({
+        file: join(servicesDir, serviceFile),
+        line: 1,
+        snippet: serviceFile,
+        rule: "service-needs-test",
+      });
+    }
+  }
+  return violations;
+}
+
+// Rule 11: getDb() unwraps the opaque Database type — CLAUDE.md "Opaque
+// Database Type" restricts that unwrap to server/repo/. No exemptions: the
+// one prior offender (a dev debug route) was fixed by moving the getDb call
+// behind a repo helper.
+const GETDB_RE = /\bgetDb\b/;
+
+function isRepoFile(path) {
+  return relative(repoRoot, path).startsWith("apps/web/src/server/repo/");
+}
+
+// Rule 12: package.json scripts referencing a `tsx <path>`/`node <path>` file
+// that doesn't exist on disk (relative to that package's directory).
+const SCRIPT_TARGET_RE = /\b(?:tsx|node)\s+([^\s"']+\.(?:ts|mjs|js))\b/g;
+
+/** @returns {Violation[]} */
+function checkPackageScriptTargets() {
+  /** @type {Violation[]} */
+  const violations = [];
+  let packageJsonPaths;
+  try {
+    const out = execFileSync("git", ["ls-files", "*package.json"], {
+      cwd: repoRoot,
+      encoding: "utf8",
+    });
+    packageJsonPaths = out
+      .split("\n")
+      .filter(Boolean)
+      .filter((p) => !p.includes("node_modules/"))
+      .map((p) => join(repoRoot, p));
+  } catch {
+    return violations;
+  }
+
+  for (const pkgPath of packageJsonPaths) {
+    let pkg;
+    try {
+      pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
+    } catch {
+      continue;
+    }
+    const scripts = pkg.scripts;
+    if (!scripts || typeof scripts !== "object") continue;
+    const pkgDir = dirname(pkgPath);
+
+    for (const [scriptName, command] of Object.entries(scripts)) {
+      if (typeof command !== "string") continue;
+      for (const match of command.matchAll(SCRIPT_TARGET_RE)) {
+        const targetPath = match[1];
+        if (!targetPath) continue;
+        const resolved = resolve(pkgDir, targetPath);
+        if (!existsSync(resolved)) {
+          violations.push({
+            file: pkgPath,
+            line: 1,
+            snippet: `"${scriptName}": "${command}"`,
+            rule: "script-target-exists",
+          });
+        }
+      }
+    }
+  }
+  return violations;
 }
 
 /** @typedef {{ file: string, line: number, snippet: string, rule: string }} Violation */
@@ -397,6 +507,17 @@ function scan(files) {
           rule: "arbitrary-text-px",
         });
       }
+
+      // Rule 11 (getdb-outside-repo): getDb() unwraps the opaque Database
+      // type; only server/repo/ files may import or call it.
+      if (!isRepoFile(file) && !isCommentLine(line) && GETDB_RE.test(line)) {
+        violations.push({
+          file,
+          line: i + 1,
+          snippet: line.trim(),
+          rule: "getdb-outside-repo",
+        });
+      }
     }
   }
 
@@ -408,7 +529,11 @@ function scan(files) {
 // ---------------------------------------------------------------------------
 
 const files = listFiles();
-const violations = scan(files);
+const violations = [
+  ...scan(files),
+  ...checkServicesHaveTests(),
+  ...checkPackageScriptTargets(),
+];
 
 if (violations.length === 0) {
   console.log(
@@ -440,6 +565,12 @@ const byRule = {
     "bg-gradient-to-* surface wash — the matte-paper system is flat; use a solid tone (e.g. bg-muted/30) instead of a gradient.",
   "arbitrary-text-px":
     "Arbitrary text-[Npx] size — use the sub-xs tokens (text-[8px]→text-3xs, text-[9/10/11px]→text-2xs) so the type scale stays closed.",
+  "service-needs-test":
+    "Untested service — add a sibling *.test.ts for this server/services/*.service.ts (or add it to the shrink-only SERVICE_TEST_EXEMPTIONS list in check-conventions.mjs with a reason).",
+  "getdb-outside-repo":
+    "getDb() used outside server/repo/ — the opaque Database type may only be unwrapped in the repo layer (CLAUDE.md Opaque Database Type); move the query behind a repo helper.",
+  "script-target-exists":
+    "Dead package.json script — the tsx/node target file doesn't exist; delete the script or fix the path.",
 };
 
 console.error(

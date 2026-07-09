@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { count, sql } from "drizzle-orm";
 import { env } from "~/env";
 import { getErrorMessage } from "~/lib/error-utils";
 import { getBindingFetcher } from "~/server/cf-env";
 import { db } from "~/server/db";
-import { product } from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
+import {
+  countProducts as countProductsRepo,
+  pingDb,
+} from "~/server/repo/debug";
 
 export type TimingResult = {
   label: string;
@@ -48,19 +49,13 @@ export const Route = createFileRoute("/api/debug/timing")({
         }
 
         const overallStart = performance.now();
-        const drizzle = getDb(db);
 
         // Run DB queries in parallel to verify they use separate connections
         const dbParallelStart = performance.now();
         const [selectOne, countProducts] = await Promise.all([
-          measure("db: SELECT 1", () =>
-            drizzle.execute(sql`SELECT 1`).then(() => {}),
-          ),
+          measure("db: SELECT 1", () => pingDb(db)),
           measure("db: count products", () =>
-            drizzle
-              .select({ n: count() })
-              .from(product)
-              .then(() => {}),
+            countProductsRepo(db).then(() => {}),
           ),
         ]);
         const dbParallelMs = Math.round(performance.now() - dbParallelStart);

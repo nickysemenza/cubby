@@ -19,7 +19,6 @@
     "db:pull": "drizzle-kit pull",
     "db:rebuild": "pnpm run db:push",
     "db:studio": "drizzle-kit studio",
-    "gen:write-config": "tsx scripts/write-config.ts",
     "regenerate": "pnpm run db:rebuild",
     "knip": "knip",
     "knip:production": "knip --production",

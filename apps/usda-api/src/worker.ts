@@ -1,5 +1,5 @@
 import * as Sentry from "@sentry/cloudflare";
-import { withSpan } from "@cubby/worker-tracing";
+import { registerSentryErrorCapture, withSpan } from "@cubby/worker-tracing";
 import { createUsdaApp } from "./app.js";
 import { createEdgeUsdaDataSource } from "./data/edge.js";
 import type { EdgeBindings } from "./data/cloudflare-types.js";
@@ -8,9 +8,14 @@ let app: ReturnType<typeof createUsdaApp> | undefined;
 
 const handler = {
   fetch(request: Request, env: EdgeBindings, executionContext: unknown) {
-    app ??= createUsdaApp(createEdgeUsdaDataSource(env), {
-      logRequests: true,
-    });
+    if (!app) {
+      app = createUsdaApp(createEdgeUsdaDataSource(env), {
+        logRequests: true,
+      });
+      // Hono catches route throws and returns a 500 without rethrowing, so
+      // `Sentry.withSentry`'s throw-only auto-capture below never sees them.
+      registerSentryErrorCapture(app, Sentry.captureException);
+    }
     // Entry span at the very top of the handler. The CF platform's auto root
     // span covers the whole invocation (incl. queue/transport before our code
     // runs); this child span measures *only* the time inside `app.fetch`. The
@@ -32,9 +37,11 @@ const handler = {
 
 // Error capture into the shared `cubby` Sentry project, tagged `service:usda-api`
 // so this worker's exceptions (CPU/OOM/throws) surface at their source rather
-// than as a downstream JSON-parse error on the web side (see CUBBY-AH). Errors
-// only — `@cubby/worker-tracing` (OTel) keeps owning spans, so tracesSampleRate
-// is 0 (errors are captured regardless of trace sampling).
+// than as a downstream JSON-parse error on the web side (see CUBBY-AH).
+// `@cubby/worker-tracing` (OTel) keeps owning spans, so tracesSampleRate is 0.
+// `withSentry`'s auto-capture only fires on a throw that escapes `fetch`; Hono
+// swallows route throws into a 500 response instead, so the
+// `registerSentryErrorCapture` call above is what actually reports those.
 export default Sentry.withSentry(
   () => ({
     // Public DSN — canonical copy in apps/web/src/lib/sentry-dsn.ts.

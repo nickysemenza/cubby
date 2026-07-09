@@ -10,7 +10,7 @@ Three layers, one rule: never recompute in a higher layer what a lower one alrea
 
 ## Service vs. Direct Repo Boundary
 
-A `*.service.ts` is warranted only when a router needs cross-cutting orchestration a repo can't own (USDA food enrichment via batchEnrichWithFood, WASM costing/availability, or multi-repo transactional side-effects); otherwise router callbacks call repos directly. Product and ingredient have services precisely because they carry USDA enrichment (ingredient.service.ts, product.service.ts); recipe/inventory/location/meal don't, so a service there would be an empty pass-through. This rule keeps the boundary clear: services own domain enrichment, repos own data access and transactions.
+A `*.service.ts` is warranted only when the orchestration is genuinely cross-cutting — USDA food enrichment (ingredient.service.ts, product.service.ts), WASM compute (recipe-costing.service.ts, availability.service.ts), multi-repo transactional side-effects (product-orchestration.service.ts), or a domain rollup a single repo can't own (location-valuation.service.ts, problems.service.ts). Otherwise router callbacks call repos directly. A service that would be an empty pass-through is still wrong — this rule keeps the boundary clear: services own domain enrichment/compute/rollups, repos own data access and transactions.
 
 ## Cloudflare Workers: clocks & WASM tracing
 
@@ -44,6 +44,7 @@ Use these instead of inline patterns:
 | `switch`/`if`-ladder on a discriminated-union tag          | `match(x).with(...).exhaustive()`               | `ts-pattern`                                 |
 | `value === "(unspecified)"`                                | `isUnspecifiedManufacturer(value)`              | `~/lib/manufacturer-utils`                   |
 | Inline `{ a, b, source, sourceMetadata: { type: "manual" } }` edge | `manualUnitMapping(a, b, source?)`      | `@cubby/schemas/unitmapping`                 |
+| `pMap(ids, (id) => getIngredientByID(...))` per-id loops    | `getIngredientsByIDs(db, usdaClient, ids)`      | `~/server/services/ingredient.service`       |
 
 es-toolkit / ts-pattern caveats (don't over-apply): `keyBy` is for `Object.fromEntries(arr.map(...))` (Record→Record). Leave pure `Record<Enum, _>` value/theme lookups, `neverthrow` `.match()`, debounce/throttle (`@tanstack/react-pacer`), and date math (`date-fns`) as they are.
 
@@ -135,6 +136,7 @@ All major entities (products, recipes, locations, ingredients, inventory) use so
 - All deletions are wrapped in transactions and logged to audit trail
 - Safety checks prevent deletion of entities with dependencies (e.g., products with inventory)
 - **Restore functionality is intentionally not implemented** — treat soft deletes as permanent from a user perspective
+- **Removal-path invariant**: every path that removes an entity (single delete, bulk delete/move, reconcile, hard-delete) must clean up its `EntityEmbedding` rows in the same transaction (`softDeleteEntityEmbeddingsTx`), and cost-affecting deletions must propagate staleness to dependents (e.g. deleting a sub-recipe marks/recomputes parent recipes via `dispatchRecompute(parentIds)`). Guarded by `findOrphanedEntityEmbeddings` (repo/entity-embedding.ts, exercised in `embedding-cascade-invariant.integration.test.ts`) and the `findParentRecipesWithDeletedSubRecipes` Problems detector — a new removal path that skips this is a bug, not a carve-out.
 
 ## Branded IDs
 

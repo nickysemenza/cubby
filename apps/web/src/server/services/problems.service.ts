@@ -60,6 +60,7 @@ import {
   findLinkedProductIds,
   findLocationsWithoutAiDescription,
   findOrphanedProducts,
+  findParentRecipesWithDeletedSubRecipes,
   findProductsWithoutMappings,
   findProductsWithUpcGaps,
   findStaleIngredientParses,
@@ -397,9 +398,9 @@ export async function* pruneAllUnusedAliases(
 // DB-only detectors — cheap (no WASM, no network). traceAll keeps a named span
 // per detector for observability.
 export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
-  // All 8 detectors are read-only single SELECTs (~0ms each); the cost is
+  // All 10 detectors are read-only single SELECTs (~0ms each); the cost is
   // connection acquisition. Pin them to ONE shared connection so the fan-out
-  // pays a single `db.acquire` instead of 8 contending for the max:5 pool.
+  // pays a single `db.acquire` instead of 10 contending for the max:5 pool.
   // traceAllSeq runs them sequentially (each still its own span) — a pg client
   // takes one query at a time, and the per-query cost is ~0, so serializing on
   // one connection beats 8 cold connects. See withConnection in db.ts.
@@ -416,6 +417,7 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       locationsWithoutAiDescription: () =>
         findLocationsWithoutAiDescription(scoped),
       orphanedEntityEmbeddings: () => findOrphanedEntityEmbeddings(scoped),
+      staleParentRecipes: () => findParentRecipesWithDeletedSubRecipes(scoped),
     }),
   );
   return {
@@ -429,6 +431,7 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     productsWithNoImages: r.productsWithNoImages,
     locationsWithoutAiDescription: r.locationsWithoutAiDescription,
     orphanedEntityEmbeddings: r.orphanedEntityEmbeddings,
+    staleParentRecipes: r.staleParentRecipes,
   };
 };
 

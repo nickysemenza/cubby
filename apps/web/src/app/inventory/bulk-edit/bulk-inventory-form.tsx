@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Plus, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -140,21 +140,38 @@ export default function BulkInventoryForm({
   const totalCount = inventoryItemsData?.meta.totalCount ?? 0;
   const isTruncated = !!selectedLocation && totalCount > loadedCount;
 
-  // Load existing inventory items when location changes
+  // Seed the items field array once per selectedLocation.id rather than on
+  // every inventoryItemsData identity change — a background refetch (window
+  // refocus, an unrelated valuation job) would otherwise silently wipe
+  // in-progress edits. `seededLocationIdRef` is reset to null after a
+  // successful save so the post-save refetch (which returns real ids for
+  // newly-created items) reseeds once — required so a second save in the
+  // same session updates rather than re-creates those entries.
+  const seededLocationIdRef = useRef<string | null>(null);
+  const selectedLocationId = selectedLocation?.id;
   useEffect(() => {
-    if (selectedLocation && inventoryItemsData?.items) {
+    if (!selectedLocationId) {
+      seededLocationIdRef.current = null;
       form.setValue("items", []);
-      const existingItems: z.infer<typeof inventoryItemSchema>[] =
-        inventoryItemsData.items.map((item) => ({
-          product: buildProductComboboxItem(item.product),
-          amount: item.amount,
-          id: item.id,
-        }));
-      form.setValue("items", existingItems);
-    } else {
-      form.setValue("items", []);
+      return;
     }
-  }, [selectedLocation, inventoryItemsData, form]);
+    if (seededLocationIdRef.current === selectedLocationId) return;
+    if (!inventoryItemsData?.items) {
+      // New location still loading — don't leave the previous location's rows
+      // in the field array meanwhile (submit is already safety-gated on a
+      // settled load; this keeps the visible rows honest too).
+      form.setValue("items", []);
+      return;
+    }
+    seededLocationIdRef.current = selectedLocationId;
+    const existingItems: z.infer<typeof inventoryItemSchema>[] =
+      inventoryItemsData.items.map((item) => ({
+        product: buildProductComboboxItem(item.product),
+        amount: item.amount,
+        id: item.id,
+      }));
+    form.setValue("items", existingItems);
+  }, [selectedLocationId, inventoryItemsData, form]);
 
   // Add a new empty inventory item
   const addInventoryItem = () => {
@@ -168,6 +185,9 @@ export default function BulkInventoryForm({
   const bulkProcessMutation = useMutation(
     api.inventory.bulkProcess.mutationOptions({
       onSuccess: (data) => {
+        // Force the next fetch to reseed the form so newly-created items pick
+        // up their real ids (a same-session re-save otherwise re-creates them).
+        seededLocationIdRef.current = null;
         refetchInventoryItems();
         invalidateInventory(data);
       },

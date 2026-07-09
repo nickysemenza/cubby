@@ -22,7 +22,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -146,24 +146,39 @@ export default function BulkMoveForm({
     },
   );
 
-  // Build move items list when inventory data changes
+  // Seed moveItems once per sourceLocation.id rather than on every
+  // inventoryItemsData identity change — a background refetch would
+  // otherwise silently discard in-progress selections/quantities.
+  // `seededLocationIdRef` is reset to null after a successful move so the
+  // post-move refetch (moved items gone, remainders reduced) reseeds once.
+  const seededLocationIdRef = useRef<string | null>(null);
+  const sourceLocationId = sourceLocation?.id;
   useEffect(() => {
-    if (sourceLocation && inventoryItemsData?.items) {
-      const items: MoveItem[] = inventoryItemsData.items.map(
-        (item: InventoryListItem) => ({
-          inventoryEntryId: item.id,
-          productName: item.product.name,
-          currentQuantity: item.amount.value,
-          moveQuantity: item.amount.value, // Default to full quantity
-          unit: item.amount.unit,
-          selected: false,
-        }),
-      );
-      setMoveItems(items);
-    } else {
+    if (!sourceLocationId) {
+      seededLocationIdRef.current = null;
       setMoveItems([]);
+      return;
     }
-  }, [sourceLocation, inventoryItemsData]);
+    if (seededLocationIdRef.current === sourceLocationId) return;
+    if (!inventoryItemsData?.items) {
+      // New location still loading — don't leave the previous location's rows
+      // selectable meanwhile.
+      setMoveItems([]);
+      return;
+    }
+    seededLocationIdRef.current = sourceLocationId;
+    const items: MoveItem[] = inventoryItemsData.items.map(
+      (item: InventoryListItem) => ({
+        inventoryEntryId: item.id,
+        productName: item.product.name,
+        currentQuantity: item.amount.value,
+        moveQuantity: item.amount.value, // Default to full quantity
+        unit: item.amount.unit,
+        selected: false,
+      }),
+    );
+    setMoveItems(items);
+  }, [sourceLocationId, inventoryItemsData]);
 
   // Toggle item selection
   const toggleItemSelection = (index: number) => {
@@ -200,6 +215,9 @@ export default function BulkMoveForm({
   const bulkMoveMutation = useMutation(
     api.inventory.bulkMove.mutationOptions({
       onSuccess: (data) => {
+        // Force the next fetch to reseed — moved items are gone from the
+        // source location and remainders have reduced quantities.
+        seededLocationIdRef.current = null;
         refetchInventoryItems();
         invalidateInventory(data);
       },

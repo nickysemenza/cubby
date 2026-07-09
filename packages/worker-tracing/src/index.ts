@@ -88,3 +88,38 @@ export async function withSpan<T>(
     }
   });
 }
+
+/** The subset of Hono's `app` surface this helper needs — kept structural
+ * (not imported from `hono`) so this package stays dependency-light. */
+export interface ErrorCapturingApp {
+  onError(
+    handler: (err: Error, c: unknown) => Response | Promise<Response>,
+  ): unknown;
+}
+
+/**
+ * Registers a Hono `onError` handler that reports the error via `capture`
+ * before returning a generic 500.
+ *
+ * Hono catches route throws internally and returns a response *without*
+ * rethrowing — so wrapping `fetch` in `Sentry.withSentry(...)` alone is not
+ * enough: its auto-capture only fires on a throw that escapes `fetch`, which
+ * never happens once Hono has swallowed it. `apps/web/src/cf-server.ts` works
+ * around the equivalent gap (Nitro's handler) by inspecting the response
+ * status after the fact; this is the same fix for a Hono app, factored out so
+ * usda-api and upc-lookup don't each reimplement it.
+ *
+ * Framework-free: takes a plain `capture` callback (pass
+ * `Sentry.captureException`) rather than depending on `@sentry/cloudflare` or
+ * `hono` directly, keeping this package's dependency footprint at zero.
+ */
+export function registerSentryErrorCapture(
+  app: ErrorCapturingApp,
+  capture: (err: unknown) => void,
+  message = "Internal Server Error",
+): void {
+  app.onError((err) => {
+    capture(err);
+    return new Response(message, { status: 500 });
+  });
+}

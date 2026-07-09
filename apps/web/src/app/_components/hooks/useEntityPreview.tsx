@@ -17,6 +17,28 @@ interface UseEntityPreviewOptions {
   idField?: string;
 }
 
+// Module-level so its identity never changes across renders — a component
+// defined inside the hook body would get a fresh identity on every host
+// re-render, forcing React to unmount/remount the Sheet subtree (killing the
+// open/close animation and resetting scroll) even when preview hasn't changed.
+function PreviewSheetView({
+  preview,
+  onClose,
+}: {
+  preview: PreviewState | null;
+  onClose: () => void;
+}) {
+  return (
+    <Sheet open={!!preview} onOpenChange={(open) => !open && onClose()}>
+      <SheetContent side="right" className="!w-1/2 !max-w-none overflow-y-auto">
+        {preview && (
+          <EntityPreviewPanel entityType={preview.entityType} id={preview.id} />
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 /**
  * Hook for adding row-click preview panels to entity lists. Hovering a row
  * prefetches the preview's `getByID` query so the click opens warm.
@@ -83,14 +105,12 @@ export function useEntityPreview(
 
   const closePreview = useCallback(() => setPreview(null), []);
 
-  const PreviewSheet = () => (
-    <Sheet open={!!preview} onOpenChange={(open) => !open && closePreview()}>
-      <SheetContent side="right" className="!w-1/2 !max-w-none overflow-y-auto">
-        {preview && (
-          <EntityPreviewPanel entityType={preview.entityType} id={preview.id} />
-        )}
-      </SheetContent>
-    </Sheet>
+  // Stable identity as long as preview/closePreview haven't changed, so a
+  // host re-render for unrelated reasons (e.g. list background refetch)
+  // doesn't remount the sheet — only an actual preview state change does.
+  const PreviewSheet = useCallback(
+    () => <PreviewSheetView preview={preview} onClose={closePreview} />,
+    [preview, closePreview],
   );
 
   return {

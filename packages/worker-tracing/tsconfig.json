@@ -1,4 +1,10 @@
 {
   "extends": "../tsconfig.package.json",
+  "compilerOptions": {
+    // registerSentryErrorCapture constructs a `Response` (the Workers/Fetch
+    // global) — add DOM just for that; it's a compiler lib, not a package
+    // dependency, so it doesn't affect this package's dependency footprint.
+    "lib": ["ES2022", "DOM"]
+  },
   "include": ["src/**/*"]
 }

@@ -1,8 +1,159 @@
-import { describe, expect, it } from "vitest";
+import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
+import { unsafeInventoryId, unsafeProductId } from "@cubby/schemas/identifiers";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { Database } from "~/server/db";
 import {
   mutationSideEffectEventSchema,
   mutationSideEffectManifest,
 } from "./mutation-side-effects";
+
+const dispatchBackgroundJobsMock = vi.hoisted(() => vi.fn());
+const dispatchLocationValuationRecomputeMock = vi.hoisted(() => vi.fn());
+const findInventoryEmbeddingRefsForProductsMock = vi.hoisted(() => vi.fn());
+const findInventoryEmbeddingRefsForLocationsMock = vi.hoisted(() => vi.fn());
+const findRecipeEmbeddingRefsForIngredientsMock = vi.hoisted(() => vi.fn());
+
+vi.mock("~/server/background-queue", () => ({
+  dispatchBackgroundJobs: dispatchBackgroundJobsMock,
+  dispatchLocationValuationRecompute: dispatchLocationValuationRecomputeMock,
+}));
+
+vi.mock("~/server/repo/entity-embedding", () => ({
+  findInventoryEmbeddingRefsForProducts:
+    findInventoryEmbeddingRefsForProductsMock,
+  findInventoryEmbeddingRefsForLocations:
+    findInventoryEmbeddingRefsForLocationsMock,
+  findRecipeEmbeddingRefsForIngredients:
+    findRecipeEmbeddingRefsForIngredientsMock,
+}));
+
+function fakeBatchRef(overrides: Partial<BackgroundBatchRef> = {}) {
+  return {
+    id: "00000000-0000-4000-8000-000000000010",
+    kind: "entity-embedding.refresh",
+    source: "mutation",
+    processor: "inline",
+    status: "succeeded",
+    totalJobs: 0,
+    ...overrides,
+  } satisfies BackgroundBatchRef;
+}
+
+describe("runMutationSideEffectsForEntities batching", () => {
+  const db = {} as Database;
+
+  afterEach(() => {
+    dispatchBackgroundJobsMock.mockReset();
+    dispatchLocationValuationRecomputeMock.mockReset();
+    findInventoryEmbeddingRefsForProductsMock.mockReset();
+    findInventoryEmbeddingRefsForLocationsMock.mockReset();
+    findRecipeEmbeddingRefsForIngredientsMock.mockReset();
+  });
+
+  it("dispatches one entity-embedding batch per wave, not one per entity", async () => {
+    const { runMutationSideEffectsForEntities } = await import(
+      "./mutation-side-effects"
+    );
+    dispatchBackgroundJobsMock.mockResolvedValue({
+      batchId: "batch-1",
+      jobIds: ["job-1", "job-2", "job-3"],
+      batch: fakeBatchRef({ totalJobs: 3 }),
+    });
+    dispatchLocationValuationRecomputeMock.mockResolvedValue({
+      batchId: "batch-2",
+      jobIds: ["job-4"],
+      batch: fakeBatchRef({
+        kind: "location-valuation.recompute",
+        totalJobs: 1,
+      }),
+    });
+
+    const inventoryIds = [
+      unsafeInventoryId("00000000-0000-4000-8000-000000000001"),
+      unsafeInventoryId("00000000-0000-4000-8000-000000000002"),
+      unsafeInventoryId("00000000-0000-4000-8000-000000000003"),
+    ];
+
+    await runMutationSideEffectsForEntities(
+      db,
+      inventoryIds.map((entityId) => ({
+        action: "created" as const,
+        entity: { entityType: "inventory" as const, entityId },
+        source: "test.bulk",
+      })),
+    );
+
+    // Three entities whose only handler is refreshOwnEmbedding must collapse
+    // into a single dispatchBackgroundJobs call carrying all three jobs,
+    // instead of one call (transaction) per entity.
+    expect(dispatchBackgroundJobsMock).toHaveBeenCalledTimes(1);
+    const [, input] = dispatchBackgroundJobsMock.mock.calls[0] as [
+      Database,
+      { jobs: { dedupeKey: string }[] },
+    ];
+    expect(input.jobs).toHaveLength(3);
+    expect(input.jobs.map((j) => j.dedupeKey).sort()).toEqual(
+      inventoryIds
+        .map((id) => `entity-embedding.refresh:inventory:${id}`)
+        .sort(),
+    );
+  });
+
+  it("dedupes embedding refs collected across different handlers in the same wave", async () => {
+    const { runMutationSideEffectsForEntities } = await import(
+      "./mutation-side-effects"
+    );
+    dispatchBackgroundJobsMock.mockResolvedValue({
+      batchId: "batch-1",
+      jobIds: ["job-1", "job-2"],
+      batch: fakeBatchRef({ totalJobs: 2 }),
+    });
+    dispatchLocationValuationRecomputeMock.mockResolvedValue({
+      batchId: "batch-2",
+      jobIds: ["job-3"],
+      batch: fakeBatchRef({
+        kind: "location-valuation.recompute",
+        totalJobs: 1,
+      }),
+    });
+
+    const productId = unsafeProductId("00000000-0000-4000-8000-000000000004");
+    const inventoryId = unsafeInventoryId(
+      "00000000-0000-4000-8000-000000000005",
+    );
+    // The product's own inventory-refresh handler and a direct inventory
+    // event both surface the same inventory ref — the wave-wide dedupe must
+    // collapse them into a single job, not two.
+    findInventoryEmbeddingRefsForProductsMock.mockResolvedValue([
+      { entityType: "inventory", entityId: inventoryId },
+    ]);
+
+    await runMutationSideEffectsForEntities(db, [
+      {
+        action: "updated",
+        entity: { entityType: "product", entityId: productId },
+        source: "test.bulk",
+      },
+      {
+        action: "updated",
+        entity: { entityType: "inventory", entityId: inventoryId },
+        source: "test.bulk",
+      },
+    ]);
+
+    expect(dispatchBackgroundJobsMock).toHaveBeenCalledTimes(1);
+    const [, input] = dispatchBackgroundJobsMock.mock.calls[0] as [
+      Database,
+      { jobs: { dedupeKey: string }[] },
+    ];
+    expect(input.jobs.map((j) => j.dedupeKey).sort()).toEqual(
+      [
+        `entity-embedding.refresh:product:${productId}`,
+        `entity-embedding.refresh:inventory:${inventoryId}`,
+      ].sort(),
+    );
+  });
+});
 
 describe("mutation side effects manifest", () => {
   it("parses typed mutation entity refs", () => {
