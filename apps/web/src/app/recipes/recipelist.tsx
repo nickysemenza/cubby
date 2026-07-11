@@ -115,12 +115,18 @@ interface RecipeListProps {
   cookbookIdFilter?: CookbookId;
 }
 
+// Stable fallback while getAllTags loads — an inline `= []` default would mint
+// a new reference every render and destabilize the tagOptions/columns memos.
+const NO_TAGS: string[] = [];
+
 export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
   const api = useTRPC();
   const navigate = useNavigate();
   const columnHelper = createColumnHelper<RecipeListItem>();
   const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("recipe");
-  const { data: tags = [] } = useQuery(api.recipe.getAllTags.queryOptions());
+  const { data: tags = NO_TAGS } = useQuery(
+    api.recipe.getAllTags.queryOptions(),
+  );
   const tagOptions = useMemo(
     () => tags.map((tag) => ({ value: tag, label: tag })),
     [tags],

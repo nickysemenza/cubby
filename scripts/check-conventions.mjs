@@ -34,6 +34,11 @@
  *     (CLAUDE.md "Opaque Database Type") only permits the unwrap in repos.
  * 12. Dead package.json scripts — a `tsx <path>`/`node <path>` script entry
  *     whose path doesn't exist on disk.
+ * 13. Unstable hook-destructure defaults — `const { data = [] } = useQuery(...)`
+ *     style inline `[]`/`{}`/`new …` defaults mint a fresh reference every
+ *     render whenever the value is undefined (loading / disabled queries),
+ *     destabilizing downstream memo/effect deps (infinite-render-loop hazard;
+ *     froze the labels page). Use a module-level constant instead.
  *
  * Exit 1 + a report on any violation; exit 0 + one-line OK when clean.
  */
@@ -314,6 +319,16 @@ function checkPackageScriptTargets() {
   return violations;
 }
 
+// Rule 13: inline fresh-object defaults (`= []`, `= {}`, `= new X(...)`) in an
+// object destructure of a hook result. When the underlying value is undefined
+// (query loading/disabled, optional hook data) the default allocates a NEW
+// reference every render, silently destabilizing every memo/effect keyed on it
+// — the labels-page freeze was exactly this. Use a module-level constant
+// (`const NO_ROWS: never[] = []`) as the default instead. Content-level (not
+// per-line) because the destructure regularly spans lines after formatting.
+const UNSTABLE_HOOK_DEFAULT_RE =
+  /const\s*\{[^{}]*?=\s*(?:\[\]|\{\}|new\s+[A-Z][\w.]*\s*\([^)]*\))[^{}]*?\}\s*=\s*use[A-Z]\w*\s*\(/g;
+
 /** @typedef {{ file: string, line: number, snippet: string, rule: string }} Violation */
 
 /** @param {string[]} files @returns {Violation[]} */
@@ -331,6 +346,20 @@ function scan(files) {
       continue;
     }
     const lines = content.split("\n");
+
+    // Rule 13: unstable hook-destructure defaults (content-level — the
+    // destructure can span lines). Tests are exempt like the other rules.
+    if (!isTestOrFixture(file)) {
+      for (const match of content.matchAll(UNSTABLE_HOOK_DEFAULT_RE)) {
+        const line = content.slice(0, match.index).split("\n").length;
+        violations.push({
+          file,
+          line,
+          snippet: match[0].replaceAll(/\s+/g, " ").slice(0, 120),
+          rule: "unstable-hook-default",
+        });
+      }
+    }
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i] ?? "";
@@ -571,6 +600,8 @@ const byRule = {
     "getDb() used outside server/repo/ — the opaque Database type may only be unwrapped in the repo layer (CLAUDE.md Opaque Database Type); move the query behind a repo helper.",
   "script-target-exists":
     "Dead package.json script — the tsx/node target file doesn't exist; delete the script or fix the path.",
+  "unstable-hook-default":
+    "Unstable hook-destructure default — an inline `= []`/`= {}`/`= new …` default on a hook result mints a new reference every render while the value is undefined, destabilizing memo/effect deps (render-loop hazard). Default to a module-level constant instead (see CLAUDE.md React Hooks).",
 };
 
 console.error(

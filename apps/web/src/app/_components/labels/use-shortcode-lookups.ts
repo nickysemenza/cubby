@@ -4,6 +4,11 @@ import { useMemo } from "react";
 import { useTRPC } from "~/trpc/react";
 import type { LabelItem } from "./sheet-layouts";
 
+// Stable fallback for disabled queries: an inline `= []` default creates a new
+// reference every render, which destabilizes the `items` memo and loops the QR
+// effect in useQrUrls (infinite re-render when only one entity type is present).
+const NO_ROWS: never[] = [];
+
 export function useShortcodeLookups(shortcodes: string[]) {
   const api = useTRPC();
 
@@ -20,12 +25,15 @@ export function useShortcodeLookups(shortcodes: string[]) {
   }, [shortcodes]);
 
   // Batch fetch: one query per entity type instead of N individual queries
-  const { data: locationData = [], isLoading: locationsLoading } = useQuery({
-    ...api.location.getByShortcodes.queryOptions({ shortcodes: locationCodes }),
-    enabled: locationCodes.length > 0,
-  });
+  const { data: locationData = NO_ROWS, isLoading: locationsLoading } =
+    useQuery({
+      ...api.location.getByShortcodes.queryOptions({
+        shortcodes: locationCodes,
+      }),
+      enabled: locationCodes.length > 0,
+    });
 
-  const { data: productData = [], isLoading: productsLoading } = useQuery({
+  const { data: productData = NO_ROWS, isLoading: productsLoading } = useQuery({
     ...api.product.getByShortcodes.queryOptions({ shortcodes: productCodes }),
     enabled: productCodes.length > 0,
   });

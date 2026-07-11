@@ -85,6 +85,21 @@ const { table } = useEntityList({
 2. Wrap in `useMemo` with proper dependencies
 3. Extract to a stable reference outside the component
 
+### Stable defaults for hook results (guard-enforced)
+
+Never use an inline fresh-object default when destructuring a hook result — `const { data = [] } = useQuery(...)`. While the value is `undefined` (query **loading or disabled**, e.g. an `enabled: codes.length > 0` query with no codes), the default allocates a **new reference every render**, destabilizing every `useMemo`/`useEffect` keyed on it downstream — if any of those effects set state, that's an infinite render loop (this froze the labels page). It also hides in testing: when both queries have real data, react-query's structural sharing keeps references stable and the loop never starts.
+
+```typescript
+// Bad — new [] reference every render while data is undefined:
+const { data: tags = [] } = useQuery(api.recipe.getAllTags.queryOptions());
+
+// Good — module-level stable constant:
+const NO_TAGS: string[] = [];
+const { data: tags = NO_TAGS } = useQuery(api.recipe.getAllTags.queryOptions());
+```
+
+Enforced by `scripts/check-conventions.mjs` (`unstable-hook-default`, runs in `pnpm check`) for `= []`, `= {}`, and `= new X(...)` defaults on any `use*()` result destructure.
+
 ### `useQueries` must use `combine`
 
 `useQueries` returns a **new array reference on every render**. Deriving values from the raw result array (even inside `useMemo`) creates an unstable dependency chain that causes infinite re-renders when downstream `useEffect`s set state.
