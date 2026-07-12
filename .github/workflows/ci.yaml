@@ -453,17 +453,19 @@ jobs:
       # pushSchema), exactly like test-integration-web above.
       - name: Get Playwright version
         id: playwright-version
-        run: echo "version=$(cd apps/web && npx playwright --version)" >> $GITHUB_OUTPUT
+        working-directory: apps/web
+        run: echo "version=$(pnpm exec playwright --version)" >> "$GITHUB_OUTPUT"
       - name: Cache Playwright browsers
         uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}-chromium-webkit
 
       - name: Install Playwright Browsers (Chromium and WebKit)
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: cd apps/web && npx playwright install chromium webkit
+        # Always reconcile the requested browsers. A cache can be valid for the
+        # Playwright version while predating a newly added browser project.
+        run: cd apps/web && pnpm exec playwright install chromium webkit
       - name: Build web app for E2E
         run: pnpm --filter @cubby/web run build:cf
       - name: Run Playwright tests
