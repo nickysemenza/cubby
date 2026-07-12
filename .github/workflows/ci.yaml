@@ -451,26 +451,22 @@ jobs:
       # nothing reads it. e2e-global-setup.ts provisions its own IntegreSQL
       # template entirely in-process (CREATE EXTENSION pg_trgm + drizzle-kit
       # pushSchema), exactly like test-integration-web above.
-      - name: Get Playwright version
-        id: playwright-version
-        working-directory: apps/web
-        run: echo "version=$(pnpm exec playwright --version)" >> "$GITHUB_OUTPUT"
       - name: Cache Playwright browsers
         uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}-chromium-webkit
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-chromium-webkit
 
       - name: Install Playwright Browsers (Chromium and WebKit)
         # Always reconcile the requested browsers. A cache can be valid for the
         # Playwright version while predating a newly added browser project.
-        run: cd apps/web && pnpm exec playwright install chromium webkit
+        run: pnpm --filter @cubby/web run test:e2e:install
       - name: Build web app for E2E
         run: pnpm --filter @cubby/web run build:cf
       - name: Run Playwright tests
         id: e2e-test
-        run: cd apps/web && npx playwright test --shard=${{ matrix.shard }}/${{ strategy.job-total }}
+        run: pnpm --filter @cubby/web run test:e2e --shard=${{ matrix.shard }}/${{ strategy.job-total }}
       - name: Publish Playwright Results
         if: always()
         uses: dorny/test-reporter@4a2e97665d5fa767581ef38eca97b9694bd4eef4 # v2
