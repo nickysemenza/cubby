@@ -44,7 +44,7 @@ export function FilterableCombobox({
 }: FilterableComboboxProps) {
   const [inputValue, setInputValue] = React.useState("");
   const [open, setOpen] = React.useState(false);
-  const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const anchorRef = React.useRef<HTMLDivElement>(null);
 
   const serverSearch = onSearchChange != null;
 
@@ -74,9 +74,11 @@ export function FilterableCombobox({
       }}
       disabled={disabled}
     >
-      {/* Polished trigger with proper borders and hover states */}
-      <ComboboxPrimitive.Trigger
-        ref={triggerRef}
+      {/* Keep the editable input and popup button as siblings. Nesting the
+          textbox inside a button creates invalid, inaccessible interactive
+          markup. */}
+      <ComboboxPrimitive.InputGroup
+        ref={anchorRef}
         className={cn(
           // Structure
           "flex w-full items-center justify-between gap-1.5 rounded-none border px-2 h-7",
@@ -90,7 +92,7 @@ export function FilterableCombobox({
           // Transitions
           "transition-colors duration-150 outline-none",
           // Disabled
-          "disabled:cursor-not-allowed disabled:opacity-50",
+          "has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50",
           className,
         )}
       >
@@ -104,14 +106,18 @@ export function FilterableCombobox({
             onSearchChange?.(e.target.value);
           }}
         />
-        {/* Animated chevron */}
-        <ChevronDownIcon
-          className={cn(
-            "size-3.5 shrink-0 text-muted-foreground transition-transform duration-150",
-            open && "rotate-180",
-          )}
-        />
-      </ComboboxPrimitive.Trigger>
+        <ComboboxPrimitive.Trigger
+          aria-label={`Open ${placeholder ?? "options"}`}
+          className="-mr-2 flex h-full min-w-7 shrink-0 items-center justify-center"
+        >
+          <ChevronDownIcon
+            className={cn(
+              "size-3.5 text-muted-foreground transition-transform duration-150",
+              open && "rotate-180",
+            )}
+          />
+        </ComboboxPrimitive.Trigger>
+      </ComboboxPrimitive.InputGroup>
 
       {/* Refined popup */}
       <ComboboxPrimitive.Portal>
@@ -119,7 +125,7 @@ export function FilterableCombobox({
           side="bottom"
           sideOffset={4}
           align="start"
-          anchor={triggerRef}
+          anchor={anchorRef}
           className="isolate z-50"
         >
           <ComboboxPrimitive.Popup

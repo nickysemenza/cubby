@@ -23,8 +23,8 @@ import {
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
+import { useTRPC } from "~/integrations/trpc/react";
 import { computeRecipeCosting } from "~/lib/recipe-costing";
-import { useTRPC } from "~/trpc/react";
 
 const searchParamsSchema = z.object({
   ids: z.string().optional().catch(undefined),

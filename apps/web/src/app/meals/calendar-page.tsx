@@ -29,7 +29,7 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { useHydrated } from "~/hooks/useHydrated";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC } from "~/integrations/trpc/react";
 import { formatMealCost } from "./meal-format";
 import {
   formatWeekSearch,

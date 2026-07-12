@@ -14,12 +14,12 @@ import { ComboboxFieldWithSearch } from "~/app/_components/form-utils";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { Stack } from "~/components/layout";
 import { StatusText } from "~/components/ui/status-text";
+import { useTRPC } from "~/integrations/trpc/react";
 import {
   invalidateTRPCQueries,
   locationMutationInvalidateKeys,
   queryKeys,
 } from "~/lib/query-keys";
-import { useTRPC } from "~/trpc/react";
 
 const formSchema = z.object({
   targetParent: requiredLocationField,

@@ -25,9 +25,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { Image } from "~/components/ui/image";
 import { Spinner } from "~/components/ui/spinner";
+import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
-import { useTRPC } from "~/trpc/react";
 import {
   locationTypeNoun,
   type SessionLocation,

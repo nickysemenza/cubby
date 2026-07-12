@@ -1,6 +1,6 @@
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import { toast } from "sonner";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC } from "~/integrations/trpc/react";
 import { useEntityCreateMode } from "../hooks/useEntityMode";
 import { RecipeForm } from "./recipe-form";
 

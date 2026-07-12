@@ -8,7 +8,7 @@ import type { UpcMiss } from "./schema";
 // How long a recorded miss is trusted before the UPC is eligible for one more
 // external try (covers transient upcitemdb failures without re-querying dead
 // UPCs on every scan).
-export const MISS_TTL_DAYS = 30;
+const MISS_TTL_DAYS = 30;
 
 // D1 caps bound parameters per statement; chunk IN-lists well under the limit.
 const IN_CHUNK = 100;

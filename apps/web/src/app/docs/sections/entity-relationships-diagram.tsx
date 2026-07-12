@@ -8,6 +8,8 @@
  *   rank 2: Ingredient, USDA    (fulfilled / enriched leaves)
  */
 
+import { useId } from "react";
+
 const NODE_W = 130;
 const NODE_H = 44;
 
@@ -120,6 +122,7 @@ function EdgeLabel({
 }
 
 export function EntityRelationshipsDiagram() {
+  const arrowId = useId();
   return (
     <svg
       viewBox="0 0 700 300"
@@ -130,7 +133,7 @@ export function EntityRelationshipsDiagram() {
     >
       <defs>
         <marker
-          id="er-arrow"
+          id={arrowId}
           viewBox="0 0 10 10"
           refX={9}
           refY={5}
@@ -153,7 +156,7 @@ export function EntityRelationshipsDiagram() {
           stroke="var(--muted-foreground)"
           strokeWidth={1.5}
           strokeDasharray={edge.dashed ? "4 3" : undefined}
-          markerEnd="url(#er-arrow)"
+          markerEnd={`url(#${arrowId})`}
         />
       ))}
       <path
@@ -162,7 +165,7 @@ export function EntityRelationshipsDiagram() {
         stroke="var(--muted-foreground)"
         strokeWidth={1.5}
         strokeDasharray="4 3"
-        markerEnd="url(#er-arrow)"
+        markerEnd={`url(#${arrowId})`}
       />
 
       {/* Edge labels */}

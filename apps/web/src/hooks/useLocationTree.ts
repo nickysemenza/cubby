@@ -1,6 +1,6 @@
 import { unsafeLocationId } from "@cubby/schemas/identifiers";
 import { useQuery } from "@tanstack/react-query";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC } from "~/integrations/trpc/react";
 
 /**
  * Synthetic id for the virtual root node that tree visualizations prepend above

@@ -72,7 +72,6 @@ export function registerProductTools(server: McpServer) {
           manufacturer: params.manufacturer,
           upc: params.upc,
           price: params.price,
-          expectedQuantity: params.expectedQuantity,
         });
         return respond(result, slimProduct);
       }
@@ -81,8 +80,7 @@ export function registerProductTools(server: McpServer) {
         manufacturer: params.manufacturer ?? UNSPECIFIED_MANUFACTURER,
         upc: (params.upc as string | undefined) ?? null,
         fdc_id: null,
-        expectedQuantity:
-          (params.expectedQuantity as number | undefined) ?? null,
+        expectedQuantity: null,
         ingredientId: (params.ingredientId as string | undefined) ?? null,
         price: (params.price as number | undefined) ?? null,
         unitMappings,

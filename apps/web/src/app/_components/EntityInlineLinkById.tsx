@@ -4,7 +4,7 @@ import { skipToken, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { Spinner } from "~/components/ui/spinner";
 import { entityQueryOptions } from "~/entities/entity-query";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC } from "~/integrations/trpc/react";
 import { EntityInlineLink } from "./EntityInlineLink";
 
 // Entity types this inline link resolves to a name via getByID. Inventory &

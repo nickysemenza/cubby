@@ -1,22 +1,7 @@
 import { agentAskInputSchema, agentResultSchema } from "@cubby/schemas/agent";
 import { runAgent, runAgentStream } from "~/server/agent/runtime";
+import { domainRouter } from "../domain";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
-
-/**
- * Build a tRPC caller for the MCP tools to invoke. This lives in a closure so
- * the `appRouter` reference is cast to `any` at the boundary — `agentRouter`
- * is itself part of `appRouter`, so referencing the typed router here would
- * create a circular type and collapse the whole API to `any`. The procedure's
- * input/output are still pinned by the schemas below, so client types are
- * unaffected. Dynamic import mirrors routes/api/mcp.ts and avoids a static
- * import cycle.
- */
-async function buildCaller(ctx: unknown): Promise<unknown> {
-  const { createCallerFactory } = await import("../trpc");
-  const { appRouter } = await import("../root");
-  // biome-ignore lint/suspicious/noExplicitAny: severs circular type ref (agent is part of appRouter)
-  return createCallerFactory(appRouter as any)(ctx as any);
-}
 
 export const agentRouter = createTRPCRouter({
   /**
@@ -27,7 +12,7 @@ export const agentRouter = createTRPCRouter({
     .input(agentAskInputSchema)
     .output(agentResultSchema)
     .mutation(async ({ ctx, input }) => {
-      const caller = await buildCaller(ctx);
+      const caller = domainRouter.createCaller(ctx);
       return runAgent(caller, ctx.db, input.query);
     }),
 
@@ -41,7 +26,7 @@ export const agentRouter = createTRPCRouter({
   askStream: protectedProcedure
     .input(agentAskInputSchema)
     .query(async function* ({ ctx, input }) {
-      const caller = await buildCaller(ctx);
+      const caller = domainRouter.createCaller(ctx);
       yield* runAgentStream(caller, ctx.db, input.query);
     }),
 });

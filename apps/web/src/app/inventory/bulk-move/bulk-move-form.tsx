@@ -47,7 +47,7 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { EntityIcon } from "~/entities/entities";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC } from "~/integrations/trpc/react";
 
 type InventoryListItem = z.infer<typeof inventoryListItemOut>;
 

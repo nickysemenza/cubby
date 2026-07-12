@@ -9,7 +9,7 @@ import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
 import { ImageStatusBadge } from "~/app/_components/table/StatusBadge";
 import { NoneValue } from "~/components/ui/none-value";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC } from "~/integrations/trpc/react";
 
 export default function ImageList() {
   const api = useTRPC();

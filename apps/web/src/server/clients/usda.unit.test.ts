@@ -116,7 +116,7 @@ describe("USDAClient.findFoodsBatch request-scoped memo", () => {
     // Two POSTs total; the second carried only the unseen fdc lookup.
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const secondBody = JSON.parse(
-      (fetchMock.mock.calls[1]?.[1] as { body: string }).body,
+      (fetchMock.mock.calls[1]![1] as { body: string }).body,
     );
     expect(secondBody.lookups).toEqual([{ kind: "fdc", fdc_id: 2 }]);
   });

@@ -1,6 +1,20 @@
+import {
+  MAX_EXTERNAL_IMAGE_BYTES,
+  assertResponseContentType,
+  fetchExternalResponse,
+  responseBodyWithLimit,
+  sanitizeExternalUrl,
+} from "@cubby/shared/external-fetch";
 import type { Env } from "../types";
 
-const TIMEOUT_MS = 10000;
+const ALLOWED_IMAGE_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+] as const;
 
 /**
  * Download an image from an external URL and store it in R2.
@@ -13,22 +27,29 @@ export async function storeImage(
   env: Env,
 ): Promise<string | null> {
   try {
-    const response = await fetch(imageUrl, {
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
+    const response = await fetchExternalResponse(imageUrl);
 
     if (!response.ok) {
-      console.error(`Failed to fetch image: ${response.status}`);
+      console.error(
+        `Failed to fetch image ${sanitizeExternalUrl(imageUrl)}: ${response.status}`,
+      );
       return null;
     }
 
-    const contentType = response.headers.get("content-type") ?? "image/jpeg";
+    const contentType = assertResponseContentType(
+      response,
+      ALLOWED_IMAGE_TYPES,
+    );
     const ext = getExtensionFromContentType(contentType);
     const key = `images/${upc}.${ext}`;
 
-    await env.IMAGES.put(key, response.body, {
-      httpMetadata: { contentType },
-    });
+    await env.IMAGES.put(
+      key,
+      responseBodyWithLimit(response, MAX_EXTERNAL_IMAGE_BYTES),
+      {
+        httpMetadata: { contentType },
+      },
+    );
 
     return key;
   } catch (error) {
@@ -54,7 +75,19 @@ export async function storeImageBlob(
   env: Env,
 ): Promise<string | null> {
   try {
-    const contentType = file.type || "image/jpeg";
+    if (file.size > MAX_EXTERNAL_IMAGE_BYTES) {
+      throw new Error(`Image exceeds ${MAX_EXTERNAL_IMAGE_BYTES} bytes`);
+    }
+    if (
+      !ALLOWED_IMAGE_TYPES.includes(
+        file.type as (typeof ALLOWED_IMAGE_TYPES)[number],
+      )
+    ) {
+      throw new Error(
+        `Unsupported image content type: ${file.type || "missing"}`,
+      );
+    }
+    const contentType = file.type;
     const ext = getExtensionFromContentType(contentType);
     const key = `images/${upc}.${ext}`;
     await env.IMAGES.put(key, await file.arrayBuffer(), {
@@ -96,5 +129,7 @@ function getExtensionFromContentType(contentType: string): string {
   if (contentType.includes("png")) return "png";
   if (contentType.includes("gif")) return "gif";
   if (contentType.includes("webp")) return "webp";
+  if (contentType.includes("heic")) return "heic";
+  if (contentType.includes("heif")) return "heif";
   return "jpg";
 }

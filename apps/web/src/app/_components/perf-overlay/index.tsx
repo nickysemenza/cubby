@@ -291,9 +291,11 @@ function SlowTab({ snap }: { snap: PerfSnapshot }) {
   return (
     <table className="w-full">
       <tbody>
-        {events.map((e, i) => (
-          // Composite key: `at` alone collides for events in the same tick.
-          <tr key={`${e.at}-${i}`} className="border-border/30 border-t">
+        {events.map((e) => (
+          <tr
+            key={`${e.at}-${e.kind}-${e.label}-${e.ms}`}
+            className="border-border/30 border-t"
+          >
             <td className="py-0.5 pr-1 align-middle" /* tight */>
               <span
                 className="font-semibold text-3xs uppercase"

@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { CheckSquare, Square } from "lucide-react";
 import { Row, Stack } from "~/components/layout";
+import { useTRPC } from "~/integrations/trpc/react";
 import type { NotionBlock } from "~/server/clients/notion";
-import { useTRPC } from "~/trpc/react";
 
 export function NotionPageContent({ pageId }: { pageId: string }) {
   const api = useTRPC();

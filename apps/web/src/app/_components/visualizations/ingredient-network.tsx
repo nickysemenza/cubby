@@ -7,7 +7,7 @@ import { Link } from "@tanstack/react-router";
 import * as d3Force from "d3-force";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC } from "~/integrations/trpc/react";
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 import { VizOverlay, VizTooltip } from "./viz-overlay";
 

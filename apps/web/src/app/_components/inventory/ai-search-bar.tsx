@@ -8,8 +8,8 @@ import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
+import { useTRPCClient } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
-import { useTRPCClient } from "~/trpc/react";
 
 interface AiSearchBarProps<T> {
   table: Table<T>;

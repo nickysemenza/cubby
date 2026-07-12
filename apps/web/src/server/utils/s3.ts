@@ -1,3 +1,12 @@
+import { ALLOWED_IMAGE_TYPES } from "@cubby/schemas/image";
+import {
+  assertResponseContentType,
+  ExternalFetchError,
+  fetchExternalResponse,
+  MAX_EXTERNAL_IMAGE_BYTES,
+  readResponseWithLimit,
+  sanitizeExternalUrl,
+} from "@cubby/shared/external-fetch";
 import { TRPCError } from "@trpc/server";
 import { AwsClient } from "aws4fetch";
 import { env } from "~/env";
@@ -19,65 +28,6 @@ const r2 = new AwsClient({
 const objectUrl = (key: string) =>
   `${env.R2_ENDPOINT}/${env.R2_BUCKET_NAME}/${key}`;
 
-const IMAGE_FETCH_TIMEOUT_MS = 10000;
-
-// Cap external-image downloads so a malicious/oversized remote response can't
-// exhaust the Worker's (~128MB) memory. 50MB is comfortably larger than any real
-// product/recipe image.
-const MAX_IMAGE_BYTES = 50 * 1024 * 1024;
-
-/**
- * Read a fetch Response body into a Buffer while enforcing a hard byte cap.
- *
- * `Content-Length` is checked by the caller as a cheap early-out, but it can be
- * absent or lie, so this streams the body and aborts as soon as the running
- * total exceeds `maxBytes` — we never buffer more than the cap. Throws an
- * `IMAGE_IMPORT_FAILED` AppError on overflow.
- */
-const readBodyWithCap = async (
-  response: Response,
-  maxBytes: number,
-): Promise<Buffer> => {
-  const body = response.body;
-  // No stream available (shouldn't happen for a normal fetch, but guard it):
-  // fall back to buffering, then check the size after the fact.
-  if (!body) {
-    const arrayBuffer = await response.arrayBuffer();
-    if (arrayBuffer.byteLength > maxBytes) {
-      throw createAppError(
-        "IMAGE_IMPORT_FAILED",
-        `Remote image exceeds ${maxBytes} byte cap (${arrayBuffer.byteLength} bytes)`,
-      );
-    }
-    return Buffer.from(arrayBuffer);
-  }
-
-  const reader = body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (!value) continue;
-      total += value.byteLength;
-      if (total > maxBytes) {
-        // Stop pulling more bytes; we've already proven the response is too big.
-        await reader.cancel();
-        throw createAppError(
-          "IMAGE_IMPORT_FAILED",
-          `Remote image exceeds ${maxBytes} byte cap`,
-        );
-      }
-      chunks.push(value);
-    }
-  } finally {
-    reader.releaseLock();
-  }
-
-  return Buffer.concat(chunks);
-};
-
 interface PresignedUrlParams {
   key: string;
   contentType: string;
@@ -87,25 +37,26 @@ interface PresignedUrlParams {
 /**
  * Generate a presigned URL for uploading a file to S3.
  *
- * Signs the URL only (`signQuery`, no signed headers): only `host` lands in
- * `X-Amz-SignedHeaders`, so the client's `Content-Type: file.type` PUT sets the
- * object content-type without a signature mismatch — the same effective result
- * as the old SDK path (which also didn't require the browser to echo a signed
- * content-type). NOTE: content-type is therefore NOT enforced by the signature;
- * R2 accepts a PUT with any content-type. `contentType` is kept only for
- * call-site compatibility (callers + the tRPC input schema still pass it) and no
- * longer influences the signed URL.
+ * Content-Type is a signed header. The browser must echo the validated type from
+ * the initiation request, so the public bucket cannot be used to host arbitrary
+ * active content under a misleading extension.
  */
 export const generatePresignedUploadUrl = async ({
   key,
-  contentType: _contentType,
+  contentType,
   expiresIn = 300, // Default 5 minutes
 }: PresignedUrlParams): Promise<string> => {
   const u = new URL(objectUrl(key));
   u.searchParams.set("X-Amz-Expires", String(expiresIn));
-  const signed = await r2.sign(new Request(u, { method: "PUT" }), {
-    aws: { signQuery: true },
-  });
+  const signed = await r2.sign(
+    new Request(u, {
+      method: "PUT",
+      headers: { "content-type": contentType },
+    }),
+    {
+      aws: { signQuery: true },
+    },
+  );
   return signed.url;
 };
 
@@ -119,6 +70,8 @@ export const contentTypeToExtension = (contentType: string): string => {
     "image/png": "png",
     "image/gif": "gif",
     "image/webp": "webp",
+    "image/heic": "heic",
+    "image/heif": "heif",
   };
   return map[contentType] || "jpg";
 };
@@ -222,44 +175,31 @@ export const fetchAndStoreImage = async (
   filenamePrefix: string,
 ): Promise<FetchAndStoreResult | null> => {
   try {
-    const response = await fetch(sourceUrl, {
-      signal: AbortSignal.timeout(IMAGE_FETCH_TIMEOUT_MS),
-    });
+    const response = await fetchExternalResponse(sourceUrl);
 
     if (!response.ok) {
       console.error(
-        `[fetchAndStoreImage] Failed to fetch image from ${sourceUrl}: ${response.status} ${response.statusText}`,
+        `[fetchAndStoreImage] Failed to fetch image from ${sanitizeExternalUrl(sourceUrl)}: ${response.status} ${response.statusText}`,
       );
       return null;
     }
 
     // Get content type and validate it's an image
-    const contentType = response.headers.get("content-type") || "image/jpeg";
-    if (!contentType.startsWith("image/")) {
-      console.error(
-        `[fetchAndStoreImage] Invalid content type: ${contentType}`,
-      );
-      return null;
-    }
-
-    // Cheap early-out: reject before reading the body if the advertised size
-    // already blows the cap. (Content-Length is advisory — readBodyWithCap below
-    // enforces the real limit while streaming, since the header can be absent or
-    // lie.)
-    const contentLength = Number(response.headers.get("content-length"));
-    if (Number.isFinite(contentLength) && contentLength > MAX_IMAGE_BYTES) {
-      throw createAppError(
-        "IMAGE_IMPORT_FAILED",
-        `Remote image Content-Length ${contentLength} exceeds ${MAX_IMAGE_BYTES} byte cap (${sourceUrl})`,
-      );
-    }
+    const contentType = assertResponseContentType(
+      response,
+      ALLOWED_IMAGE_TYPES,
+    );
 
     // Read the image data, enforcing the byte cap during the stream.
-    const buffer = await readBodyWithCap(response, MAX_IMAGE_BYTES);
+    const buffer = Buffer.from(
+      await readResponseWithLimit(response, MAX_EXTERNAL_IMAGE_BYTES),
+    );
     const size = buffer.length;
 
     if (size === 0) {
-      console.error(`[fetchAndStoreImage] Empty image from ${sourceUrl}`);
+      console.error(
+        `[fetchAndStoreImage] Empty image from ${sanitizeExternalUrl(sourceUrl)}`,
+      );
       return null;
     }
 
@@ -283,9 +223,12 @@ export const fetchAndStoreImage = async (
       size,
     };
   } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
+    if (
+      error instanceof Error &&
+      (error.name === "AbortError" || error.name === "TimeoutError")
+    ) {
       console.error(
-        `[fetchAndStoreImage] Timeout fetching image from ${sourceUrl}`,
+        `[fetchAndStoreImage] Timeout fetching image from ${sanitizeExternalUrl(sourceUrl)}`,
       );
       return null;
     }
@@ -294,6 +237,9 @@ export const fetchAndStoreImage = async (
     // a generic null import failure — createAppError already logged + annotated.
     if (error instanceof TRPCError) {
       throw error;
+    }
+    if (error instanceof ExternalFetchError) {
+      throw createAppError("IMAGE_IMPORT_FAILED", error.message, error);
     }
     console.error(`[fetchAndStoreImage] Error importing image:`, error);
     return null;

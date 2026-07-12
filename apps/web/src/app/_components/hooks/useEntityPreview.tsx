@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { Sheet, SheetContent } from "~/components/ui/sheet";
 import { getEntityContract } from "~/entities/entity-contracts";
 import { entityQueryOptions } from "~/entities/entity-query";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC } from "~/integrations/trpc/react";
 import { EntityPreviewPanel } from "../search/entity-preview-panel";
 
 interface PreviewState {

@@ -31,6 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
   ingredientProductMutationInvalidateKeys,
@@ -38,7 +39,6 @@ import {
 } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
-import { useTRPC } from "~/trpc/react";
 import { ReviewQueue } from "./review-queue";
 import { SuggestionReviewTray } from "./suggestion-review-tray";
 import {

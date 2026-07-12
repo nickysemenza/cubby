@@ -32,7 +32,7 @@ import {
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC } from "~/integrations/trpc/react";
 
 type ExportFormat = "prep" | "nested" | "matrix";
 

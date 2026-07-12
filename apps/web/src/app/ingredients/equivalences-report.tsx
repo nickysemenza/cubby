@@ -19,8 +19,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
+import { useTRPC } from "~/integrations/trpc/react";
 import { cn } from "~/lib/utils";
-import { useTRPC } from "~/trpc/react";
 import { EntityInlineLink } from "../_components/EntityInlineLink";
 
 // Format a ratio compactly: a few significant figures, no trailing noise.
@@ -170,9 +170,9 @@ export function EquivalencesReport() {
                   </TableCell>
                   <TableCell className="whitespace-normal align-top">
                     <Stack as="ul" gap="xs">
-                      {c.examples.map((ex, i) => (
+                      {c.examples.map((ex) => (
                         <li
-                          key={`${ex.recipeId} ${i}`}
+                          key={`${ex.recipeId}-${ex.rawLine ?? ex.recipeName}`}
                           className="flex flex-wrap items-baseline gap-x-2 text-muted-foreground/70"
                         >
                           <EntityInlineLink

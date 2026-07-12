@@ -3,6 +3,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { type Tool, toolDefinition } from "@tanstack/ai";
 import { getErrorMessage } from "~/lib/error-utils";
+import type { DomainCaller } from "~/server/api/domain";
 import { createMcpServer } from "~/server/mcp/server";
 
 /**
@@ -45,8 +46,7 @@ interface AgentToolset {
  * `api/mcp.ts` passes `extra: { caller }` over HTTP.
  */
 export async function createAgentToolset(
-  // biome-ignore lint/suspicious/noExplicitAny: server-side tRPC caller, intentionally loose at the MCP boundary
-  caller: any,
+  caller: DomainCaller,
 ): Promise<AgentToolset> {
   const [clientTransport, serverTransport] =
     InMemoryTransport.createLinkedPair();

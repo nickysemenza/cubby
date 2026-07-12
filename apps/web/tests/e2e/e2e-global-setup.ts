@@ -16,6 +16,10 @@ import { ensureDbExtensions } from "../../tooling/db-extensions";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const authFile = path.join(__dirname, "../../playwright/.auth/user.json");
+const webkitAuthFile = path.join(
+  __dirname,
+  "../../playwright/.auth/user-webkit.json",
+);
 
 const integreSQL = new IntegreSQLClient({ url: "http://localhost:5000" });
 
@@ -222,6 +226,24 @@ async function globalSetup(config: FullConfig): Promise<void> {
   // is already captured — no extra page navigations needed to "establish" it
   // (two goto + networkidle round-trips here were pure overhead every run).
   await context.storageState({ path: authFile });
+  // Better Auth correctly issues __Secure cookies. Chromium treats localhost
+  // as a secure context over HTTP, while WebKit's test runtime does not send
+  // those cookies. Only for the local E2E origin, write a WebKit state with the
+  // same signed cookie values and the transport-only secure flag disabled.
+  const webkitState = JSON.parse(readFileSync(authFile, "utf8")) as {
+    cookies: Array<Record<string, unknown> & { secure: boolean }>;
+    origins: unknown[];
+  };
+  writeFileSync(
+    webkitAuthFile,
+    JSON.stringify({
+      ...webkitState,
+      cookies: webkitState.cookies.map((cookie) => ({
+        ...cookie,
+        secure: false,
+      })),
+    }),
+  );
 
   await browser.close();
 

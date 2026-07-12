@@ -131,7 +131,7 @@ export function IngredientQuantities({
       {quantities.length === 0
         ? (emptyText ?? null)
         : quantities.map((q, index) => (
-            <span key={`${q.text}-${index}`}>
+            <span key={`${q.text}-${q.derived}-${q.estimated}`}>
               {index > 0 && " / "}
               <span
                 className={q.derived ? "text-muted-foreground/70" : undefined}

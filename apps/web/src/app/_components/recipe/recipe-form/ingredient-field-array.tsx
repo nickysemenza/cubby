@@ -360,7 +360,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                   const extraShowUpper = extra.upperValue != null;
                   return (
                     <div
-                      key={`${field.id}-amount-${extraIdx + 1}`}
+                      key={`${field.id}-amount-${extra.value}-${extra.upperValue ?? "point"}-${extra.unit}`}
                       className="mt-1 grid grid-cols-[4.5rem_3.5rem_4rem_minmax(0,1fr)_auto] items-center gap-2"
                     >
                       <AmountInputs

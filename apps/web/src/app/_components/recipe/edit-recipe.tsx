@@ -1,7 +1,7 @@
 import type { RecipeOut, RecipeUpdateInput } from "@cubby/schemas/recipe";
 import { toast } from "sonner";
+import { useTRPC } from "~/integrations/trpc/react";
 import { recipeAllMutationInvalidateKeys } from "~/lib/query-keys";
-import { useTRPC } from "~/trpc/react";
 import { useEditMode } from "../hooks/useEditMode";
 import { RecipeForm } from "./recipe-form";
 

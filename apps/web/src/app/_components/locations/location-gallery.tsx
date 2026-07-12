@@ -20,7 +20,7 @@ import {
   useGalleryViewState,
 } from "~/hooks/useGalleryViewState";
 import { useIsMobile } from "~/hooks/useMobile";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC } from "~/integrations/trpc/react";
 import { useAllInventoryItems } from "../inventory/use-all-inventory-items";
 import { ProductImageSummariesProvider } from "../products/product-image-summaries";
 import { GalleryHeader } from "./gallery-header";

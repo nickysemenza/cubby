@@ -10,7 +10,7 @@ import type {
   SQL,
 } from "drizzle-orm";
 import { and, eq, getTableName, inArray, sql } from "drizzle-orm";
-import type { PgTable } from "drizzle-orm/pg-core";
+import type { PgTable, PgUpdateSetSource } from "drizzle-orm/pg-core";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { image } from "~/server/db/schema";
@@ -124,7 +124,7 @@ export const insertAndReturn = async <T extends PgTable>(
 export const updateAndReturn = async <T extends PgTable>(
   db: Database | DrizzleTransaction,
   table: T,
-  values: Partial<InferInsertModel<T>>,
+  values: PgUpdateSetSource<T>,
   where: SQL | undefined,
 ): Promise<InferSelectModel<T>> => {
   return withTrace(TraceNames.db("update"), async (span) => {
@@ -163,7 +163,7 @@ export const updateLiveAndReturn = async <
 >(
   db: Database | DrizzleTransaction,
   table: T,
-  values: Partial<InferInsertModel<T>>,
+  values: PgUpdateSetSource<T>,
   id: string,
 ): Promise<InferSelectModel<T>> => {
   return updateAndReturn(
@@ -232,7 +232,7 @@ export async function applyImageOrder<T extends ImageJoinTable>(
   for (const [i, imageId] of orderedImageIds.entries()) {
     await dbOrTx
       .update(joinTable)
-      .set({ sortOrder: i } as Partial<InferInsertModel<T>>)
+      .set({ sortOrder: i } as PgUpdateSetSource<T>)
       .where(
         and(
           eq(parentIdColumn, parentId),

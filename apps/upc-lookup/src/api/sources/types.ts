@@ -1,3 +1,4 @@
+import type { ExternalUpcProductSource } from "@cubby/upc-contract";
 import type { ExternalLookupResult } from "../types";
 
 /**
@@ -9,6 +10,6 @@ import type { ExternalLookupResult } from "../types";
  */
 export interface ProductSource {
   /** Stable identifier persisted to the `source` column. */
-  readonly name: string;
+  readonly name: ExternalUpcProductSource;
   lookup(upc: string): Promise<ExternalLookupResult>;
 }

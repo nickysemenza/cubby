@@ -21,9 +21,9 @@ import {
 } from "~/components/ui/table";
 import { entities } from "~/entities/entities";
 import { getEntityContract } from "~/entities/entity-contracts";
+import { useTRPC } from "~/integrations/trpc/react";
 import { authClient } from "~/lib/auth-client";
 import { cn } from "~/lib/utils";
-import { useTRPC } from "~/trpc/react";
 import { EntityReferenceGraph } from "./EntityReferenceGraph";
 
 /** Inverse reference edges: who points AT `target`. */

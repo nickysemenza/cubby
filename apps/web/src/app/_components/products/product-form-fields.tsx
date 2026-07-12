@@ -16,8 +16,8 @@ import { Image } from "~/components/ui/image";
 import { sectionRuleClass } from "~/components/ui/section-rule";
 import { Spinner } from "~/components/ui/spinner";
 import type { useImageState } from "~/hooks/useImageState";
+import { useTRPCClient } from "~/integrations/trpc/react";
 import { cn } from "~/lib/utils";
-import { useTRPCClient } from "~/trpc/react";
 import { UsdaFoodSearchField } from "../combobox/with-usda-food-search";
 import {
   ComboboxFieldWithSearch,

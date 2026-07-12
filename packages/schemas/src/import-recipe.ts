@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_EXTERNAL_HTML_BYTES } from "@cubby/shared";
 import { cookbookId, recipeId } from "./identifiers";
 import { cookbookSummary } from "./recipe";
 
@@ -102,7 +103,7 @@ export const importRecipesSchema = z.array(importRecipeSchema);
 export const scrapeRecipeInput = z.url();
 
 export const parseRecipeHtmlInput = z.object({
-  html: z.string().min(1),
+  html: z.string().min(1).max(MAX_EXTERNAL_HTML_BYTES),
   url: z.url(),
 });
 

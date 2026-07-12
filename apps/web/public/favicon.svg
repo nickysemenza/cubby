@@ -1,4 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>Cubby</title>
   <rect x="2" y="2" width="60" height="60" rx="8" fill="#fcfaf4" stroke="#16170f" stroke-width="3"/>
   <rect x="9" y="10" width="46" height="3" rx="1" fill="#c9c0ae"/>
   <rect x="9" y="30" width="46" height="3" rx="1" fill="#c9c0ae"/>

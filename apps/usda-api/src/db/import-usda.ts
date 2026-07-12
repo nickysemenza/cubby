@@ -6,8 +6,8 @@ import { parse } from "csv-parse";
 import { db, sqlite } from "./client";
 import { rebuildFoodSearchFts } from "./fts";
 import * as schema from "./schema";
-import { sql, type InferInsertModel } from "drizzle-orm";
-import type { SQLiteTable } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
+import type { SQLiteInsertValue, SQLiteTable } from "drizzle-orm/sqlite-core";
 import type {
   MeasureUnitCsvRecord,
   NutrientCsvRecord,
@@ -262,7 +262,7 @@ function createImporter<
 
       const drizzlePrepared = db
         .insert(config.schema)
-        .values(placeholderValues as InferInsertModel<TSchema>)
+        .values(placeholderValues as SQLiteInsertValue<TSchema>)
         .onConflictDoNothing()
         .prepare();
 

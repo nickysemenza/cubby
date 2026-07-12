@@ -4,7 +4,7 @@ import {
   searchResponseSchema,
   type UPCLookupResponse,
   upcLookupResponseSchema,
-} from "@cubby/upc-lookup/schemas";
+} from "@cubby/upc-contract";
 import { chunk } from "es-toolkit";
 import { injectTraceContext, TraceNames, withTrace } from "~/server/tracing";
 

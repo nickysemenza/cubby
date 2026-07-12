@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useUpcAwareCreate } from "~/app/_components/products/use-upc-aware-create";
+import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
   ingredientMutationInvalidateKeys,
@@ -9,7 +10,6 @@ import {
   productMutationInvalidateKeys,
 } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
-import { useTRPC } from "~/trpc/react";
 import {
   buildIngredientComboboxItem,
   buildLocationComboboxItem,

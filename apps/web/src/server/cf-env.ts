@@ -16,18 +16,11 @@ export const setCfEnv = (env: Env): void => {
 /**
  * The background queue producer (`env.BACKGROUND_QUEUE`) on CF Workers, or
  * undefined on the dev Node server (where setCfEnv is never called). The binding
- * has no ambient type in this repo (no @cloudflare/workers-types), so we cast to
- * the minimal producer shape we use. `RECOMPUTE_QUEUE` is kept as a compatibility
- * fallback while old test/env fixtures are migrated.
+ * is generated from wrangler.jsonc; this accessor narrows it to the producer
+ * surface shared by production and tests.
  */
 export const getBackgroundQueue = (): BackgroundQueueProducer | undefined => {
-  const env = cfEnv as
-    | {
-        BACKGROUND_QUEUE?: BackgroundQueueProducer;
-        RECOMPUTE_QUEUE?: BackgroundQueueProducer;
-      }
-    | undefined;
-  return env?.BACKGROUND_QUEUE ?? env?.RECOMPUTE_QUEUE;
+  return cfEnv?.BACKGROUND_QUEUE as BackgroundQueueProducer | undefined;
 };
 
 // Cubby's Cloudflare account + AI Gateway identifiers. Single source of truth

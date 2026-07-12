@@ -25,4 +25,4 @@ function Spinner({ className, size = "default", ...props }: SpinnerProps) {
   );
 }
 
-export { Spinner, type SpinnerSize };
+export { Spinner,  };

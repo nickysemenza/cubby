@@ -11,8 +11,8 @@ import {
 } from "~/components/ui/empty";
 import { Spinner } from "~/components/ui/spinner";
 import { useHydrated } from "~/hooks/useHydrated";
+import { useTRPC } from "~/integrations/trpc/react";
 import { authClient } from "~/lib/auth-client";
-import { useTRPC } from "~/trpc/react";
 import { AuditLogEntryComponent } from "./audit-log-entry";
 
 interface AuditLogListProps {

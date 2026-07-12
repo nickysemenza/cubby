@@ -32,9 +32,9 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "~/components/ui/popover";
+import { useTRPC } from "~/integrations/trpc/react";
 import { invalidateTRPCQueries } from "~/lib/query-keys";
 import { cn, formatCurrency } from "~/lib/utils";
-import { useTRPC } from "~/trpc/react";
 import {
   ShelfCard,
   ShelfEmpty,

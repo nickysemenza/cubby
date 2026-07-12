@@ -9,10 +9,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
+import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { ingredientAllMutationInvalidateKeys } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
-import { useTRPC } from "~/trpc/react";
 
 interface EnrichIngredientDialogProps {
   /** The ingredient to enrich; the dialog is open while this is non-null. */

@@ -28,9 +28,9 @@ import { Card, CardContent } from "~/components/ui/card";
 import { Field, FieldLabel } from "~/components/ui/field";
 import { Textarea } from "~/components/ui/textarea";
 import { useImageState } from "~/hooks/useImageState";
+import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { wasm } from "~/lib/wasm";
-import { useTRPC } from "~/trpc/react";
 import {
   FormWrapper,
   getSubmitButtonText,

@@ -17,10 +17,10 @@ import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMu
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { EntityIcon } from "~/entities/entities";
+import { useTRPC } from "~/integrations/trpc/react";
 import { productRecipeMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import type { ProductWithBetterUpcData } from "~/server/repo/problems";
-import { useTRPC } from "~/trpc/react";
 import { BACKFILL } from "./backfill-registry";
 import { EmptyLocationsList } from "./empty-locations-list";
 import {

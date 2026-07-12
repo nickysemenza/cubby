@@ -80,13 +80,3 @@ export interface FoodPortionCsvRecord extends Record<string, unknown> {
   footnote: string;
   min_year_acquired: string;
 }
-
-// Union type for all CSV records
-export type CsvRecord =
-  | MeasureUnitCsvRecord
-  | NutrientCsvRecord
-  | FoodCsvRecord
-  | SrLegacyFoodCsvRecord
-  | BrandedFoodCsvRecord
-  | FoodNutrientCsvRecord
-  | FoodPortionCsvRecord;

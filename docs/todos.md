@@ -86,6 +86,14 @@ Now that all unit conversions go through WASM with compound unit support:
 - [ ] **Custom unit aliases**: User-defined "1 serving = X g" with automatic nutrient calculation
 - [ ] **Inventory depletion preview**: "If I make this recipe, how much of each nutrient will I have left?"
 
+### USDA edge search parity
+
+- [ ] **Decide whether edge FTS should include brand fields**: the current D1/R2
+  artifact indexes only `description`; the retired SQLite runtime also indexed
+  `short_description`, `brand_name`, and `brand_owner`. Before the next full USDA
+  rebuild, decide whether food-name-focused search is intentional or add those
+  fields to restore brand-search parity.
+
 ---
 
 ## Mobile / PWA

@@ -1,7 +1,7 @@
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC } from "~/integrations/trpc/react";
 import { type QuickAction, quickActions } from "./quick-actions";
 
 const DEBOUNCE_MS = 300;

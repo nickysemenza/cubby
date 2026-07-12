@@ -7,13 +7,13 @@ import { type FC, useCallback, useState } from "react";
 import { toast } from "sonner";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { Button } from "~/components/ui/button";
+import { useTRPC } from "~/integrations/trpc/react";
 import {
   makeBatchStatusFetcher,
   watchBatchesAndInvalidate,
 } from "~/lib/background-batch-polling";
 import { invalidateTRPCQueries } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
-import { useTRPC } from "~/trpc/react";
 
 const emptySideEffects: MutationSideEffects = { backgroundBatches: [] };
 

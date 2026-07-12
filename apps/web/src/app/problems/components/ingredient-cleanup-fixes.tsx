@@ -15,12 +15,12 @@ import {
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
+import { useTRPC } from "~/integrations/trpc/react";
 import {
   ingredientMutationInvalidateKeys,
   productMutationInvalidateKeys,
   unusedIngredientCleanupInvalidateKeys,
 } from "~/lib/query-keys";
-import { useTRPC } from "~/trpc/react";
 
 /**
  * Per-card and bulk cleanup actions for the three ingredient problem sections.

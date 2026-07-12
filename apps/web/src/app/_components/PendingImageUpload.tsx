@@ -12,9 +12,9 @@ import { Button } from "~/components/ui/button";
 import { Image } from "~/components/ui/image";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
+import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
-import { useTRPC } from "~/trpc/react";
 
 export interface PendingImage {
   id: string;

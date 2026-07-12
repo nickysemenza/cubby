@@ -72,11 +72,19 @@ export default defineConfig({
     {
       name: "Authenticated tests",
       testMatch: /\.spec\.ts$/,
-      testIgnore: /unauth\./,
+      testIgnore: /(?:unauth|mobile)\./,
       use: {
         ...devices["Desktop Chrome"],
         // Use prepared better-auth state (saved by globalSetup)
         storageState: "playwright/.auth/user.json",
+      },
+    },
+    {
+      name: "iPhone WebKit smoke",
+      testMatch: /mobile\..*\.spec\.ts/,
+      use: {
+        ...devices["iPhone 13"],
+        storageState: "playwright/.auth/user-webkit.json",
       },
     },
   ],

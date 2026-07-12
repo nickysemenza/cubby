@@ -54,6 +54,7 @@ import {
   SheetTitle,
 } from "~/components/ui/sheet";
 import { Spinner } from "~/components/ui/spinner";
+import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
   invalidateTRPCQueries,
@@ -61,7 +62,6 @@ import {
   productMutationInvalidateKeys,
 } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
-import { useTRPC } from "~/trpc/react";
 import type { SessionLocation } from "../session-utils";
 import { useSessionMutations } from "../useSessionMutations";
 
@@ -397,7 +397,7 @@ export function SessionCaptureActions({
               </Description>
               {suggestions.map((item, index) => (
                 <Row
-                  key={`${item.name}-${index}`}
+                  key={`${item.name}-${item.manufacturer}-${item.estimatedQuantity}-${item.unit}-${item.evidence}`}
                   align="start"
                   gap="sm"
                   wrap
@@ -508,7 +508,6 @@ export function SessionCaptureActions({
               value={photoName}
               onChange={(event) => setPhotoName(event.target.value)}
               placeholder="e.g. blue tarp clamp"
-              // biome-ignore lint/a11y/noAutofocus: focus the only field in a just-opened sheet
               autoFocus
               disabled={photoIdentityPending}
             />

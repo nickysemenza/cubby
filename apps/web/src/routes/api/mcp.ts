@@ -6,11 +6,11 @@ async function handler({ request }: { request: Request }) {
   try {
     const { handleMcpRequest } = await import("~/server/mcp/server");
     const { buildActorContext } = await import("@cubby/schemas/context");
-    const { appRouter } = await import("~/server/api/root");
+    const { domainRouter } = await import("~/server/api/domain");
     const { createCallerFactory, createTRPCContext } = await import(
       "~/server/api/trpc"
     );
-    const createCaller = createCallerFactory(appRouter);
+    const createCaller = createCallerFactory(domainRouter);
 
     // Map Authorization: Bearer → x-api-key for better-auth compatibility
     const headers = new Headers(request.headers);

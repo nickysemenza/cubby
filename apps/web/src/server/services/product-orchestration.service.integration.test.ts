@@ -1,5 +1,5 @@
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import type { UPCLookupResponse } from "@cubby/upc-lookup/schemas";
+import type { UPCLookupResponse } from "@cubby/upc-contract";
 import type { FoodSummary } from "@cubby/usda-schemas";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";

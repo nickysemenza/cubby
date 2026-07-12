@@ -636,3 +636,24 @@
     @apply bg-background;
   }
 }
+@media (pointer: coarse) {
+  :where(
+    [data-slot="button"],
+    [data-slot="input"],
+    [data-slot="tabs-trigger"],
+    [data-slot="select-trigger"],
+    [data-slot="checkbox"],
+    [role="option"],
+    [role="menuitem"]
+  ) {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+
+  :where(
+    [data-slot="table-row"].cursor-pointer,
+    [data-slot="table-row"][role="button"]
+  ) {
+    min-height: 2.75rem;
+  }
+}

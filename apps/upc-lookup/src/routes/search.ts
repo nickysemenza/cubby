@@ -4,7 +4,7 @@ import { clamp } from "es-toolkit";
 import type { Env } from "../types";
 import { createDb, schema } from "../db";
 import { getImageUrl } from "../storage/images";
-import type { SearchResponse } from "../schemas/product";
+import { productSourceSchema, type SearchResponse } from "../schemas/product";
 
 const search = new Hono<{ Bindings: Env }>();
 
@@ -51,7 +51,7 @@ search.get("/", async (c) => {
       description: p.description,
       priceDollars: p.priceDollars,
       imageUrl: p.imageKey ? getImageUrl(p.imageKey, baseUrl) : null,
-      source: p.source,
+      source: productSourceSchema.parse(p.source),
     })),
     total,
   };

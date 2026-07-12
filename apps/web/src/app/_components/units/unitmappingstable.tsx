@@ -10,13 +10,13 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import { useTRPC } from "~/integrations/trpc/react";
 import {
   BASE_KINDS,
   type BaseKind,
   conversionCoverage,
 } from "~/lib/conversion-coverage";
 import { wasm } from "~/lib/wasm";
-import { useTRPC } from "~/trpc/react";
 import { EntityInlineLink } from "../EntityInlineLink";
 import { KindIcon } from "./kind-icon";
 
@@ -148,8 +148,11 @@ export const UnitMappingsTable: React.FC<{
         </TableRow>
       </TableHeader>
       <TableBody>
-        {mappings.map((m, i) => (
-          <TableRow key={`${i}-${m.source}`} className="hover:bg-transparent">
+        {mappings.map((m) => (
+          <TableRow
+            key={`${m.a.value}-${m.a.unit}-${m.b.value}-${m.b.unit}-${m.source}`}
+            className="hover:bg-transparent"
+          >
             <TableCell className={`${cell} pr-4 tabular-nums`}>
               {wasm.format_amount(m.a)}
             </TableCell>

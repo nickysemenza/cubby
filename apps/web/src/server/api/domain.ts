@@ -1,0 +1,44 @@
+import { createTRPCRouter } from "~/server/api/trpc";
+import { aiRouter } from "./routers/ai";
+import { auditLogRouter } from "./routers/audit-log";
+import { backgroundJobsRouter } from "./routers/background-jobs";
+import { dashboardRouter } from "./routers/dashboard";
+import { imageRouter } from "./routers/image";
+import { ingredientRouter } from "./routers/ingredient";
+import { inventoryRouter } from "./routers/inventory";
+import { locationRouter } from "./routers/location";
+import { mcpRouter } from "./routers/mcp";
+import { mealRouter } from "./routers/meal";
+import { notionRouter } from "./routers/notion";
+import { problemsRouter } from "./routers/problems";
+import { productRouter } from "./routers/product";
+import { recipeRouter } from "./routers/recipe";
+import { searchRouter } from "./routers/search";
+import { suggestionsRouter } from "./routers/suggestions";
+import { upcRouter } from "./routers/upc";
+import { usdaRouter } from "./routers/usda";
+
+/** Routers available to internal MCP/agent callers (the agent excludes itself). */
+export const domainRouterRecord = {
+  ai: aiRouter,
+  backgroundJobs: backgroundJobsRouter,
+  dashboard: dashboardRouter,
+  recipe: recipeRouter,
+  ingredient: ingredientRouter,
+  location: locationRouter,
+  product: productRouter,
+  inventory: inventoryRouter,
+  meal: mealRouter,
+  mcp: mcpRouter,
+  notion: notionRouter,
+  usda: usdaRouter,
+  upc: upcRouter,
+  image: imageRouter,
+  problems: problemsRouter,
+  auditLog: auditLogRouter,
+  search: searchRouter,
+  suggestions: suggestionsRouter,
+};
+
+export const domainRouter = createTRPCRouter(domainRouterRecord);
+export type DomainCaller = ReturnType<typeof domainRouter.createCaller>;

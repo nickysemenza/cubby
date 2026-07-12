@@ -5,7 +5,7 @@ import { Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Skeleton } from "~/components/ui/skeleton";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC } from "~/integrations/trpc/react";
 
 export const Route = createFileRoute("/_authenticated/usda/upc/$code")({
   component: USDAUPCLookupPage,

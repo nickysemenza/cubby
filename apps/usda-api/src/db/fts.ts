@@ -2,7 +2,7 @@ import { sqlite } from "./client";
 
 // Create a virtual FTS5 table to accelerate name/description search.
 // We index core text fields that users might search by.
-export function ensureFoodSearchFts(): void {
+function ensureFoodSearchFts(): void {
   // FTS5 is included with modern SQLite builds used by better-sqlite3.
   // Create the virtual table if it doesn't exist.
   sqlite.exec(

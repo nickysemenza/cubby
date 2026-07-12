@@ -15,9 +15,9 @@ import { Skeleton } from "~/components/ui/skeleton";
 import { entities } from "~/entities/entities";
 import { useHydrated } from "~/hooks/useHydrated";
 import { useIdle } from "~/hooks/useIdle";
+import { useTRPC } from "~/integrations/trpc/react";
 import { authClient } from "~/lib/auth-client";
 import { cn } from "~/lib/utils";
-import { useTRPC } from "~/trpc/react";
 
 /**
  * Alert stat — the mockup's red "EXPIRING" block, fed by the data-problems

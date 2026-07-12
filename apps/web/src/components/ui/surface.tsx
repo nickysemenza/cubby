@@ -44,4 +44,4 @@ export const Surface = ({
 );
 Surface.displayName = "Surface";
 
-export { surfaceVariants };
+;

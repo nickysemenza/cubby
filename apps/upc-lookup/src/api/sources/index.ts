@@ -1,3 +1,4 @@
+import { UPC_SOURCE_NAMES } from "@cubby/upc-contract";
 import type { ProductSource } from "./types";
 import { upcitemdb } from "./upcitemdb";
 
@@ -19,14 +20,11 @@ export const SOURCES = [upcitemdb] as const satisfies readonly ProductSource[];
  * Every valid value of the `source` column: the registered source names plus
  * `"manual"` for admin/MCP-created rows that didn't come from a lookup.
  */
-export type SourceName = (typeof SOURCES)[number]["name"] | "manual";
+export type SourceName = (typeof UPC_SOURCE_NAMES)[number];
 
 /**
  * Runtime tuple of valid source values, for building the Zod enum. `"manual"`
  * leads so the tuple is statically non-empty (`[string, ...string[]]`); order
  * is irrelevant to enum membership.
  */
-export const SOURCE_NAMES = ["manual", ...SOURCES.map((s) => s.name)] as [
-  string,
-  ...string[],
-];
+export const SOURCE_NAMES = UPC_SOURCE_NAMES;

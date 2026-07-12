@@ -31,8 +31,8 @@ import {
 } from "~/app/_components/inventory/hooks";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
-import { useTRPC } from "~/trpc/react";
 
 // Schema for a single inventory item using shared field schemas
 const inventoryItemSchema = inventoryItemWithIdFields;

@@ -15,7 +15,7 @@ import {
   useState,
 } from "react";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC } from "~/integrations/trpc/react";
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 import { VizOverlay, VizTooltip } from "./viz-overlay";
 

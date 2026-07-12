@@ -2,7 +2,7 @@ import type { CookbookId } from "@cubby/schemas/identifiers";
 import { unsafeCookbookId } from "@cubby/schemas/identifiers";
 import { useQuery } from "@tanstack/react-query";
 import { Row } from "~/components/layout";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC } from "~/integrations/trpc/react";
 
 interface CookbookSelectProps {
   value: CookbookId | undefined;

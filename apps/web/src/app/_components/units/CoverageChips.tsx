@@ -19,7 +19,7 @@ function chip(key: string, label: string, on: boolean) {
     <Badge
       key={key}
       variant={on ? "secondary" : "outline"}
-      className={on ? undefined : "text-muted-foreground/50"}
+      className={on ? undefined : "text-muted-foreground"}
     >
       {on && <Check className="mr-1 h-3 w-3" />}
       {label}
@@ -59,7 +59,7 @@ export function CoverageChips({
           <Badge
             key={kind}
             variant="outline"
-            className="text-muted-foreground/40 line-through"
+            className="text-muted-foreground line-through"
             title="not applicable"
           >
             {KIND_LABEL[kind]}

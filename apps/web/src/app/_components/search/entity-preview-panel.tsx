@@ -10,7 +10,7 @@ import { SheetHeader, SheetTitle } from "~/components/ui/sheet";
 import { Spinner } from "~/components/ui/spinner";
 import { entities } from "~/entities/entities";
 import { entityQueryOptions, fdcIdFromParam } from "~/entities/entity-query";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC } from "~/integrations/trpc/react";
 import { ImageDetail } from "../images/image-detail";
 import { IngredientDetail } from "../ingredients/ingredient-detail";
 import { InventoryDetail } from "../inventory/inventory-detail";

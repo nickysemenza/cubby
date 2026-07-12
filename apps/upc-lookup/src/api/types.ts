@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { SourceName } from "./sources";
 
 // Common product data extracted from external APIs
-export interface ExternalProductData {
+interface ExternalProductData {
   name: string;
   manufacturer: string | null;
   brand: string | null;
@@ -31,7 +31,7 @@ export type ExternalLookupResult =
 // `looseObject` preserves unknown keys so the full payload is still stored in
 // `sourceData`. Only the fields we actually consume are required; everything
 // else is optional, so a sparse-but-valid item is not rejected.
-export const upcitemdbOfferSchema = z.looseObject({
+const upcitemdbOfferSchema = z.looseObject({
   merchant: z.string().optional(),
   domain: z.string().optional(),
   title: z.string(),
@@ -51,7 +51,7 @@ export const upcitemdbOfferSchema = z.looseObject({
 });
 export type UPCitemdbOffer = z.infer<typeof upcitemdbOfferSchema>;
 
-export const upcitemdbItemSchema = z.looseObject({
+const upcitemdbItemSchema = z.looseObject({
   ean: z.string().optional(),
   title: z.string(),
   description: z.string().optional(),
@@ -69,8 +69,6 @@ export const upcitemdbItemSchema = z.looseObject({
   images: z.array(z.string()).optional(),
   offers: z.array(upcitemdbOfferSchema).optional(),
 });
-export type UPCitemdbItem = z.infer<typeof upcitemdbItemSchema>;
-
 export const upcitemdbResponseSchema = z.looseObject({
   code: z.string().optional(),
   total: z.number().optional(),
@@ -81,4 +79,3 @@ export const upcitemdbResponseSchema = z.looseObject({
   // slipping through as a cached `not_found` miss.
   items: z.array(upcitemdbItemSchema),
 });
-export type UPCitemdbResponse = z.infer<typeof upcitemdbResponseSchema>;

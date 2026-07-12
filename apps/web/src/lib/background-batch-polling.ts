@@ -4,8 +4,8 @@ import type {
 } from "@cubby/schemas/background-jobs";
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
+import type { useTRPC } from "~/integrations/trpc/react";
 import { invalidateTRPCQueries } from "~/lib/query-keys";
-import type { useTRPC } from "~/trpc/react";
 
 type Api = ReturnType<typeof useTRPC>;
 

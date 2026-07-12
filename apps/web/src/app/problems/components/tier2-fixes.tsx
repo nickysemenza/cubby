@@ -1,8 +1,8 @@
 import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMutation";
 import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+import { useTRPC } from "~/integrations/trpc/react";
 import { productMutationInvalidateKeys } from "~/lib/query-keys";
-import { useTRPC } from "~/trpc/react";
 
 /**
  * Small inline fixes for problems whose resolution is a single field or a

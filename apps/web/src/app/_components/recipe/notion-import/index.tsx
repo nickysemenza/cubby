@@ -10,12 +10,16 @@ import { Card, CardContent, CardHeader } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
+import {
+  type RouterOutputs,
+  useTRPC,
+  useTRPCClient,
+} from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
   invalidateTRPCQueries,
   recipeAllMutationInvalidateKeys,
 } from "~/lib/query-keys";
-import { type RouterOutputs, useTRPC, useTRPCClient } from "~/trpc/react";
 import type { ImportResult } from "../cookbook-import/types";
 import { RecipeImportCard } from "../recipe-import-card";
 

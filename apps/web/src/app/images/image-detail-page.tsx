@@ -3,7 +3,7 @@ import { ImageDetail } from "~/app/_components/images/image-detail";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC } from "~/integrations/trpc/react";
 
 interface ImageDetailPageProps {
   id: string;

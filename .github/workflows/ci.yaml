@@ -40,7 +40,7 @@ jobs:
     name: Build WASM
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       # ingredient-parser is tracked via `branch = "main"` (not a pinned rev), so
       # resolve its live HEAD SHA and fold it into the cache key below. The key
       # then changes the instant upstream main moves, forcing a rebuild — without
@@ -48,7 +48,7 @@ jobs:
       - name: Resolve ingredient-parser HEAD
         id: parser
         run: echo "sha=$(git ls-remote https://github.com/nickysemenza/ingredient-parser refs/heads/main | cut -f1)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v5
+      - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         id: wasm-cache
         name: Restore cached WASM pkg
         with:
@@ -59,17 +59,19 @@ jobs:
       # On a cache hit we only re-upload the restored pkg, so skip the Rust
       # toolchain + pnpm setup (nothing to compile). The artifact upload below
       # stays unconditional — downstream jobs need it on a hit too.
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1
         if: steps.wasm-cache.outputs.cache-hit != 'true'
         with:
           cache: true
       - name: Setup pnpm
         if: steps.wasm-cache.outputs.cache-hit != 'true'
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
           version: 10.34.1
       - name: Install wasm-pack
-        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+        uses: taiki-e/install-action@2ca9b94c269419b7b0c711c09d0b21c4e1d51145 # v2
+        with:
+          tool: wasm-pack
         if: steps.wasm-cache.outputs.cache-hit != 'true'
       - name: Build recipebridge WASM
         if: steps.wasm-cache.outputs.cache-hit != 'true'
@@ -77,7 +79,7 @@ jobs:
         env:
           RUSTFLAGS: '--cfg getrandom_backend="wasm_js"'
       - name: Upload WASM pkg artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: wasm-pkg
           path: packages/wasm
@@ -90,8 +92,8 @@ jobs:
     # because it forces a second, instrumented rebuild (~2m) that used to sit on
     # this critical path for no gating benefit — codecov is a soft gate.
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1
         with:
           cache: true
           # recipebridge builds via `--manifest-path recipebridge/Cargo.toml`, so
@@ -120,8 +122,8 @@ jobs:
     # its own instrumented build (separate RUSTFLAGS → can't reuse test-rust's
     # artifacts), which is exactly why it lives off the critical path.
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1
         with:
           cache: true
           components: llvm-tools-preview
@@ -130,11 +132,13 @@ jobs:
           # from test-rust), warmed across runs.
           cache-workspaces: "recipebridge -> target"
       - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@cargo-llvm-cov
+        uses: taiki-e/install-action@2ca9b94c269419b7b0c711c09d0b21c4e1d51145 # v2
+        with:
+          tool: cargo-llvm-cov
       - name: Run recipebridge tests (with coverage)
         run: cargo llvm-cov --manifest-path recipebridge/Cargo.toml --lcov --output-path recipebridge/lcov.info
       - name: Upload coverage
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@f2274c2c340e0c81c8f7dc407b2a477b8935f171 # v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: nickysemenza/cubby
@@ -149,16 +153,12 @@ jobs:
     env:
       NODE_OPTIONS: "--max-old-space-size=4096"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: ./.github/actions/setup-node-with-deps
         with:
           download-wasm: "true"
-      - run: pnpm run format:check
-        name: "check formatting with Biome"
       - run: pnpm run check
-        name: "lint and type check"
-      - run: cd apps/web && npx knip
-        name: "check for unused code with knip"
+        name: "run repository quality gates"
 
   test-unit-web:
     name: Unit Tests - web
@@ -172,7 +172,7 @@ jobs:
     # gate. The test step keeps step-level continue-on-error so coverage still
     # uploads on failure; the final "Fail if tests failed" step then fails honestly.
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: ./.github/actions/setup-node-with-deps
         with:
           download-wasm: "true"
@@ -192,7 +192,7 @@ jobs:
 
       - name: Publish Test Results
         if: always()
-        uses: dorny/test-reporter@v2
+        uses: dorny/test-reporter@4a2e97665d5fa767581ef38eca97b9694bd4eef4 # v2
         with:
           name: Unit Tests - web
           path: apps/web/test-results/vitest-junit.xml
@@ -200,7 +200,7 @@ jobs:
           fail-on-error: false
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@f2274c2c340e0c81c8f7dc407b2a477b8935f171 # v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: nickysemenza/cubby
@@ -258,7 +258,7 @@ jobs:
           PGPASSWORD: password
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: ./.github/actions/setup-node-with-deps
         with:
           download-wasm: "true"
@@ -282,7 +282,7 @@ jobs:
 
       - name: Publish Test Results
         if: always()
-        uses: dorny/test-reporter@v2
+        uses: dorny/test-reporter@4a2e97665d5fa767581ef38eca97b9694bd4eef4 # v2
         with:
           name: Integration Tests - web (shard ${{ matrix.shard }})
           path: apps/web/test-results/vitest-junit.xml
@@ -290,7 +290,7 @@ jobs:
           fail-on-error: false
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@f2274c2c340e0c81c8f7dc407b2a477b8935f171 # v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: nickysemenza/cubby
@@ -322,6 +322,10 @@ jobs:
         package:
           - name: schemas
             path: packages/schemas
+          - name: shared
+            path: packages/shared
+          - name: upc-contract
+            path: packages/upc-contract
           - name: usda-api
             path: apps/usda-api
           - name: usda-contract
@@ -330,9 +334,11 @@ jobs:
             path: packages/usda-schemas
           - name: upc-lookup
             path: apps/upc-lookup
+          - name: worker-tracing
+            path: packages/worker-tracing
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: ./.github/actions/setup-node-with-deps
         with:
           download-wasm: "false"
@@ -349,7 +355,7 @@ jobs:
 
       - name: Publish Test Results
         if: always()
-        uses: dorny/test-reporter@v2
+        uses: dorny/test-reporter@4a2e97665d5fa767581ef38eca97b9694bd4eef4 # v2
         with:
           name: Unit Tests - ${{ matrix.package.name }}
           path: ${{ matrix.package.path }}/test-results/vitest-junit.xml
@@ -357,7 +363,7 @@ jobs:
           fail-on-error: false
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@f2274c2c340e0c81c8f7dc407b2a477b8935f171 # v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: nickysemenza/cubby
@@ -435,7 +441,7 @@ jobs:
           PGPASSWORD: password
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: ./.github/actions/setup-node-with-deps
         with:
           download-wasm: "true"
@@ -449,15 +455,15 @@ jobs:
         id: playwright-version
         run: echo "version=$(cd apps/web && npx playwright --version)" >> $GITHUB_OUTPUT
       - name: Cache Playwright browsers
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
 
-      - name: Install Playwright Browsers (Chromium only)
+      - name: Install Playwright Browsers (Chromium and WebKit)
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: cd apps/web && npx playwright install chromium
+        run: cd apps/web && npx playwright install chromium webkit
       - name: Build web app for E2E
         run: pnpm --filter @cubby/web run build:cf
       - name: Run Playwright tests
@@ -465,13 +471,13 @@ jobs:
         run: cd apps/web && npx playwright test --shard=${{ matrix.shard }}/${{ strategy.job-total }}
       - name: Publish Playwright Results
         if: always()
-        uses: dorny/test-reporter@v2
+        uses: dorny/test-reporter@4a2e97665d5fa767581ef38eca97b9694bd4eef4 # v2
         with:
           name: E2E Tests (shard ${{ matrix.shard }})
           path: apps/web/test-results/junit.xml
           reporter: java-junit
           fail-on-error: false
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         if: failure()
         with:
           name: playwright-report-shard-${{ matrix.shard }}
@@ -528,14 +534,14 @@ jobs:
     env:
       NODE_OPTIONS: "--max-old-space-size=4096"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: ./.github/actions/setup-node-with-deps
         with:
           download-wasm: "true"
-      - name: Build for Cloudflare Workers
-        run: pnpm --filter @cubby/web run build:cf
+      - name: Build all Cloudflare Workers
+        run: pnpm build
       - name: Upload CF build artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: cf-build
           path: apps/web/dist
@@ -555,16 +561,16 @@ jobs:
       name: cloudflare
       url: https://cubby.nickysemenza.com
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - name: Download CF build artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: cf-build
           path: apps/web/dist
       - name: Install wrangler
         run: npm install -g wrangler
       - name: Deploy to Cloudflare Workers
-        uses: cloudflare/wrangler-action@v4
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: 9f10f078d35d86c78dedece2300a6b88
@@ -594,9 +600,9 @@ jobs:
       name: preview
       url: ${{ steps.preview.outputs.url }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - name: Download CF build artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: cf-build
           path: apps/web/dist
@@ -656,7 +662,7 @@ jobs:
     environment:
       name: cloudflare
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: ./.github/actions/setup-node-with-deps
         with:
           # workspace deps must be installed so wrangler's esbuild can resolve the

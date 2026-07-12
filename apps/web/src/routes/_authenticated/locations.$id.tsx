@@ -6,7 +6,7 @@ import { RouteErrorComponent } from "~/components/route-error";
 import { DetailPagePending } from "~/components/route-pending";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC } from "~/integrations/trpc/react";
 
 export const Route = createFileRoute("/_authenticated/locations/$id")({
   ssr: false,

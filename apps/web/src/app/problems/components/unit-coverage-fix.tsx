@@ -7,8 +7,8 @@ import { useProblemCardMutation } from "~/app/_components/hooks/useProblemCardMu
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
+import { type RouterOutputs, useTRPC } from "~/integrations/trpc/react";
 import { productMutationInvalidateKeys } from "~/lib/query-keys";
-import { type RouterOutputs, useTRPC } from "~/trpc/react";
 import type { UnitCoverageItem } from "./unit-coverage-items";
 
 type ProductDetail = NonNullable<RouterOutputs["product"]["getByID"]>;

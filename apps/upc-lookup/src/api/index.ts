@@ -1,8 +1,7 @@
 import type { ExternalLookupResult } from "./types";
 import { SOURCES } from "./sources";
 
-export type { ExternalProductData, ExternalLookupResult } from "./types";
-export { SOURCES, SOURCE_NAMES, type SourceName } from "./sources";
+export type { ExternalLookupResult } from "./types";
 
 /**
  * Look up product data from the external source registry.

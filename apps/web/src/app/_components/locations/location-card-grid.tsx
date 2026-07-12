@@ -8,7 +8,7 @@ import { EntityStat } from "~/components/entity/entity-stat";
 import { MobileCard } from "~/components/entity/mobile-card";
 import { Grid } from "~/components/layout";
 import { Button } from "~/components/ui/button";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC } from "~/integrations/trpc/react";
 import type { InventoryItem } from "./calculate-inventory-valuation";
 import { InventoryValuationSummary } from "./inventory-valuation-summary";
 import { LocationTypeLabel } from "./LocationTypeLabel";

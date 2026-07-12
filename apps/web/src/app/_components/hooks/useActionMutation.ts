@@ -2,13 +2,13 @@ import type { QueryKey, UseMutationOptions } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
+import { useTRPC } from "~/integrations/trpc/react";
 import {
   makeBatchStatusFetcher,
   watchBatchesAndInvalidate,
 } from "~/lib/background-batch-polling";
 import { getErrorMessage } from "~/lib/error-utils";
 import { invalidateTRPCQueries } from "~/lib/query-keys";
-import { useTRPC } from "~/trpc/react";
 
 /** A tRPC `*.mutationOptions` reference, e.g. `api.ingredient.create.mutationOptions`. */
 export type MutationOptionsFn = (opts: never) => UseMutationOptions<

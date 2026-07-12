@@ -12,7 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC } from "~/integrations/trpc/react";
 import { MaintenanceCard } from "./components/maintenance-card";
 import { PROBLEM_SECTIONS } from "./components/problem-sections";
 import { RecipeUsageContext } from "./components/recipe-usage-context";

@@ -1,7 +1,7 @@
 import { useQueries } from "@tanstack/react-query";
 import { sum } from "es-toolkit";
+import { useTRPC } from "~/integrations/trpc/react";
 import type { ProblemsHotPathProcedure } from "~/lib/problems-query-groups";
-import { useTRPC } from "~/trpc/react";
 
 /**
  * Loads the Problems page data as three cost-grouped tRPC queries instead of one

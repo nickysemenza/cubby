@@ -5,9 +5,9 @@ import { useMemo } from "react";
 import { Row } from "~/components/layout";
 import { DashboardCard } from "~/components/layout/dashboard-card";
 import { useHydrated } from "~/hooks/useHydrated";
+import { useTRPC } from "~/integrations/trpc/react";
 import { authClient } from "~/lib/auth-client";
 import { formatCurrency } from "~/lib/utils";
-import { useTRPC } from "~/trpc/react";
 
 const BAR_COLORS = [
   "var(--chart-1)",

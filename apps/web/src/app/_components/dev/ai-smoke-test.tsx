@@ -13,8 +13,8 @@ import {
 import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
+import { useTRPCClient } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
-import { useTRPCClient } from "~/trpc/react";
 
 const MODEL = "claude-haiku-4-5";
 

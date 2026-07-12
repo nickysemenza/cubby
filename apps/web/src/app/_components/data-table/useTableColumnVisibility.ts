@@ -86,7 +86,6 @@ export function useTableColumnVisibility(
   initialRef.current = initial;
 
   const columnVisibility = useMemo(
-    // biome-ignore lint/correctness/useExhaustiveDependencies: initialRef.current is intentionally read via ref; `stored` is the reactive input
     () => ({ ...initialRef.current, ...stored }),
     [stored],
   );
