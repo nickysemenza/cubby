@@ -14,10 +14,10 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
+import { useTRPC, useTRPCClient } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { parseUsdaFoodRef } from "~/lib/parse-usda-food-ref";
 import { type DedupedFood, dedupeUsdaFoodsByUpc } from "~/lib/usda-food-stats";
-import { useTRPC, useTRPCClient } from "~/trpc/react";
 import { confidenceColor } from "../ai/ai-suggest";
 import { UsdaFoodResultRow } from "../usda/usda-food-result-row";
 import { DialogCompatibleCombobox } from "./combobox-dialog";

@@ -13,7 +13,7 @@ import {
 } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC } from "~/integrations/trpc/react";
 
 export function CategoryAudit() {
   const api = useTRPC();

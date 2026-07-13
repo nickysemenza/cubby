@@ -1,4 +1,6 @@
 /// <reference lib="webworker" />
+import { isBypassedPath, isCriticalPrecacheUrl } from "./sw-policy";
+
 /**
  * Cubby service worker (app-shell offline).
  *
@@ -52,24 +54,21 @@ const PRECACHE_URLS = [
 
 // Paths the SW must NEVER intercept — always hit the network directly so auth
 // and data are never served from cache.
-function isBypassed(pathname: string): boolean {
-  return (
-    pathname.startsWith("/api/") ||
-    pathname === "/api" ||
-    pathname.startsWith("/trpc/") ||
-    pathname === "/trpc"
-  );
-}
-
 sw.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
       const cache = await caches.open(CACHE_NAME);
-      // Tolerate individual 404s rather than failing the whole install.
+      const critical = PRECACHE_URLS.filter(isCriticalPrecacheUrl);
+      const optional = PRECACHE_URLS.filter(
+        (url) => !isCriticalPrecacheUrl(url),
+      );
+      // A Worker without its offline page, styles, or WASM is not a viable
+      // offline shell. Fail installation so the previous complete SW remains.
+      await cache.addAll(
+        critical.map((url) => new Request(url, { cache: "reload" })),
+      );
       await Promise.allSettled(
-        PRECACHE_URLS.map((url) =>
-          cache.add(new Request(url, { cache: "reload" })),
-        ),
+        optional.map((url) => cache.add(new Request(url, { cache: "reload" }))),
       );
       await sw.skipWaiting();
     })(),
@@ -96,7 +95,7 @@ sw.addEventListener("fetch", (event) => {
 
   // Only handle same-origin GETs; let everything else hit the network.
   if (request.method !== "GET" || url.origin !== sw.location.origin) return;
-  if (isBypassed(url.pathname)) return;
+  if (isBypassedPath(url.pathname)) return;
 
   // Navigations: network-first, fall back to the precached offline page.
   if (request.mode === "navigate") {

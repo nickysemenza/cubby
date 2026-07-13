@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
+import { useTRPCClient } from "~/integrations/trpc/react";
 import type { EnrichmentProposal } from "~/server/services/ai-enrichment/proposals";
-import { useTRPCClient } from "~/trpc/react";
 
 /** One ingredient to pre-compute proposals for. */
 interface ProposalRequest {

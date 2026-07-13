@@ -2,10 +2,10 @@ import type { QueryKey } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { toast } from "sonner";
+import { useTRPCClient } from "~/integrations/trpc/react";
 import type { BulkProgressEvent } from "~/lib/bulk-progress";
 import { getErrorMessage } from "~/lib/error-utils";
 import { invalidateTRPCQueries } from "~/lib/query-keys";
-import { useTRPCClient } from "~/trpc/react";
 import { useBulkStream } from "./useBulkStream";
 
 type TRPCClient = ReturnType<typeof useTRPCClient>;

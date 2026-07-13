@@ -8,10 +8,10 @@ import { sumBy } from "es-toolkit";
 import { ListChecks } from "lucide-react";
 import type { ReactNode } from "react";
 import { EntityIcon } from "~/entities/entities";
+import { useTRPC } from "~/integrations/trpc/react";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
 import { formatCurrency } from "~/lib/utils";
-import { useTRPC } from "~/trpc/react";
 import { LocationIcon } from "./locations/location-icons";
 import {
   type BodyBlock,

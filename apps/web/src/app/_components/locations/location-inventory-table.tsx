@@ -6,8 +6,8 @@ import { ArrowRightLeft, ImageIcon, Trash } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { z } from "zod";
 import { Button } from "~/components/ui/button";
+import { useTRPC } from "~/integrations/trpc/react";
 import { inventoryMutationInvalidateKeys } from "~/lib/query-keys";
-import { useTRPC } from "~/trpc/react";
 import {
   createEditableAmountColumn,
   createSingleEntityInlineLinkColumn,

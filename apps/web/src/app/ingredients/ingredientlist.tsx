@@ -29,6 +29,7 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { EntityIcon } from "~/entities/entities";
+import { useTRPC, useTRPCClient } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
   ingredientMergeMutationInvalidateKeys,
@@ -37,7 +38,6 @@ import {
 } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
-import { useTRPC, useTRPCClient } from "~/trpc/react";
 import {
   createCreatedAtColumn,
   createImageColumn,

@@ -20,9 +20,9 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
+import { useTRPC } from "~/integrations/trpc/react";
 import { productMutationInvalidateKeys } from "~/lib/query-keys";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
-import { useTRPC } from "~/trpc/react";
 import {
   createCurrencyColumn,
   createExternalLinkColumn,

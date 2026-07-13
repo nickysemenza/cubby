@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { GitGraph } from "lucide-react";
 import { Row } from "~/components/layout";
+import { useTRPC } from "~/integrations/trpc/react";
 import { authClient } from "~/lib/auth-client";
 import { formatBuildDate } from "~/lib/utils";
-import { useTRPC } from "~/trpc/react";
 
 const buildDate = formatBuildDate(__BUILD_DATE__);
 
@@ -52,7 +52,7 @@ export function AppFooter() {
           </span>
         </Row>
         <Row align="center" gap="sm">
-          <span className="hidden text-muted-foreground/60 sm:inline">
+          <span className="hidden text-muted-foreground sm:inline">
             ⌘K to search
           </span>
           <span
@@ -62,7 +62,7 @@ export function AppFooter() {
             ·
           </span>
           <a
-            href="https://github.com/nickysemenza/recipehub"
+            href="https://github.com/nickysemenza/cubby"
             target="_blank"
             rel="noopener noreferrer"
             className="text-muted-foreground transition-colors hover:text-foreground"

@@ -12,7 +12,7 @@ import {
 } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC } from "~/integrations/trpc/react";
 
 type ToolAnnotations = {
   readOnlyHint?: boolean;

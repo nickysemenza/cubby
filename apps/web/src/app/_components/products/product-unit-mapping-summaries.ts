@@ -1,6 +1,6 @@
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { useChunkedRecordQuery } from "~/app/_components/hooks/useChunkedRecordQuery";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC } from "~/integrations/trpc/react";
 
 type ProductUnitMappingMap = Record<string, UnitMapping[]>;
 

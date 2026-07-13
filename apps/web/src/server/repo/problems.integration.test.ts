@@ -1,6 +1,6 @@
 import type { ProductId } from "@cubby/schemas/identifiers";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import type { UPCLookupResponse } from "@cubby/upc-lookup/schemas";
+import type { UPCLookupResponse } from "@cubby/upc-contract";
 import type { FoodSummary } from "@cubby/usda-schemas";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";

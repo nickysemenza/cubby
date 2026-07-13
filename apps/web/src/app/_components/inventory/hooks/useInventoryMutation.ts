@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTRPC } from "~/integrations/trpc/react";
 import {
   makeBatchStatusFetcher,
   watchBatchesAndInvalidate,
@@ -8,7 +9,6 @@ import {
   inventoryMutationInvalidateKeys,
   productLookupMutationInvalidateKeys,
 } from "~/lib/query-keys";
-import { useTRPC } from "~/trpc/react";
 
 /**
  * Returns a callback that invalidates inventory queries and — given the mutation

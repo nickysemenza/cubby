@@ -6,6 +6,7 @@ import type {
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { chat, maxIterations } from "@tanstack/ai";
 import { DEFAULT_CHAT_MODEL } from "~/server/ai/models";
+import type { DomainCaller } from "~/server/api/domain";
 import { aiGatewayUsageMiddleware } from "~/server/clients/ai-gateway-usage";
 import { getAnthropicClient } from "~/server/clients/anthropic";
 import type { Database } from "~/server/db";
@@ -106,8 +107,7 @@ export function extractSources(records: ToolCallRecord[]): AgentSource[] {
  * (a plain `stream: false` would concatenate every segment, narration included).
  */
 export async function* runAgentStream(
-  // biome-ignore lint/suspicious/noExplicitAny: server-side tRPC caller
-  caller: any,
+  caller: DomainCaller,
   db: Database,
   query: string,
 ): AsyncGenerator<AgentStreamEvent> {
@@ -160,8 +160,7 @@ export async function* runAgentStream(
  * each tool call) so the answer is the post-final-tool text.
  */
 export async function runAgent(
-  // biome-ignore lint/suspicious/noExplicitAny: server-side tRPC caller
-  caller: any,
+  caller: DomainCaller,
   db: Database,
   query: string,
 ): Promise<AgentResult> {

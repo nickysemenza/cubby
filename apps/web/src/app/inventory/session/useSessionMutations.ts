@@ -1,5 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
+import { useTRPC } from "~/integrations/trpc/react";
 import {
   makeBatchStatusFetcher,
   watchBatchesAndInvalidate,
@@ -10,7 +11,6 @@ import {
   locationMutationInvalidateKeys,
   productLookupMutationInvalidateKeys,
 } from "~/lib/query-keys";
-import { useTRPC } from "~/trpc/react";
 
 interface SessionInvalidateOptions {
   // Also refresh the product-lookup caches (review/capture panes need this;

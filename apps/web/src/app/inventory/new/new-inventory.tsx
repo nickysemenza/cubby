@@ -4,7 +4,7 @@ import type { z } from "zod";
 import { useEntityCreateMode } from "~/app/_components/hooks/useEntityMode";
 import { useInventoryInvalidation } from "~/app/_components/inventory/hooks";
 import { InventoryForm } from "~/app/_components/inventory/inventory-form";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC } from "~/integrations/trpc/react";
 
 const CreateInventoryItem: FC = () => {
   const api = useTRPC();

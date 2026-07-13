@@ -1,240 +1,43 @@
 import { countsSchema } from "@cubby/usda-contract";
-import {
-  DATA_TYPE_PRIORITY,
-  foodSummary,
-  type FoodLookupParam,
-  type FoodSummary,
-} from "@cubby/usda-schemas";
-import type {
-  D1Database,
-  D1PreparedStatement,
-} from "@cloudflare/workers-types";
+import type { FoodLookupParam, FoodSummary } from "@cubby/usda-schemas";
+import type { D1PreparedStatement } from "@cloudflare/workers-types";
 import { type SpanAttr, withSpan } from "@cubby/worker-tracing";
-import pMap from "p-map";
 import { toFtsQuery } from "../search/fts-query.js";
+import { manifestKey } from "./artifact-layout.js";
 import {
-  assertVersion,
-  indexTableName,
-  manifestKey,
-  normalizeDataType,
-  searchTableName,
-} from "./artifact-layout.js";
+  createFoodBundleLoader,
+  type FoodIndexRow,
+  type HydrateStats,
+} from "./edge-bundle-loader.js";
+import {
+  dataTypePredicate,
+  dataTypePriorityCase,
+  escapeLike,
+  matchQualityCase,
+  sqlDirection,
+  sqlOrderBy,
+} from "./edge-index-query.js";
+import { getActiveVersion } from "./edge-version.js";
 import type { EdgeBindings } from "./cloudflare-types.js";
-import type {
-  Counts,
-  ListFoodsArgs,
-  ListFoodsResult,
-  USDADataSource,
-} from "./types.js";
+import { readFoodCache, writeFoodCache } from "./food-cache.js";
+import type { Counts, ListFoodsResult, USDADataSource } from "./types.js";
+
+export {
+  dataTypePredicate,
+  dataTypePriorityCase,
+  escapeLike,
+  FOOD_DATA_TYPES,
+  matchQualityCase,
+} from "./edge-index-query.js";
+export { normalizeUpc } from "./edge-bundle-loader.js";
 
 const MAX_SQL_VARIABLES = 100;
 const DEFAULT_CONCURRENCY = 50;
 
 type LookupColumn = "gtin_upc" | "ndb_number" | "fdc_id";
 
-/** Aggregated R2/cache stats for one hydration pass, surfaced as span attrs. */
-interface HydrateStats {
-  cacheHits: number;
-  r2Reads: number;
-  bytesRead: number;
-}
-
-interface FoodIndexRow {
-  fdc_id: number;
-  data_type: string;
-  description: string;
-  gtin_upc: string | null;
-  ndb_number: number | null;
-  bundle_key: string;
-  byte_offset: number;
-  byte_length: number;
-}
-
 interface Manifest {
   counts: Counts;
-}
-
-interface VersionTables {
-  version: string;
-  foodIndex: string;
-  foodSearch: string;
-}
-
-let activeVersionCache:
-  | { promise: Promise<VersionTables>; loadedAt: number }
-  | undefined;
-
-function sanitizeVersion(version: string): VersionTables {
-  assertVersion(version);
-  return {
-    version,
-    foodIndex: indexTableName(version),
-    foodSearch: searchTableName(version),
-  };
-}
-
-async function getActiveVersion(db: D1Database): Promise<VersionTables> {
-  const now = Date.now();
-  if (activeVersionCache && now - activeVersionCache.loadedAt < 60_000) {
-    return activeVersionCache.promise;
-  }
-
-  activeVersionCache = {
-    loadedAt: now,
-    promise: db
-      .prepare("SELECT value FROM usda_edge_meta WHERE key = ?")
-      .bind("active_version")
-      .first<{ value: string }>()
-      .then((row) => {
-        if (!row?.value) {
-          throw new Error("No active USDA edge dataset version configured");
-        }
-        return sanitizeVersion(row.value);
-      })
-      .catch((error) => {
-        // Drop the entry so a transient failure isn't cached for the full TTL.
-        activeVersionCache = undefined;
-        throw error;
-      }),
-  };
-
-  return activeVersionCache.promise;
-}
-
-function sqlOrderBy(orderBy: ListFoodsArgs["orderBy"]): string {
-  switch (orderBy) {
-    case "data_type":
-      return "data_type";
-    case "fdc_id":
-      return "fdc_id";
-    default:
-      return "description";
-  }
-}
-
-function sqlDirection(direction: ListFoodsArgs["direction"]): string {
-  return direction === "desc" ? "DESC" : "ASC";
-}
-
-// SQL CASE that maps the `data_type` column to a richness/preference rank
-// (lower = surfaced first), so a name search leads with the most data-complete
-// reference foods (SR Legacy > Survey > Foundation) before sparse branded label
-// data. Only the four food types are spelled out; everything else (the rare,
-// near-empty sampling/research records) falls to the ELSE bucket — so the
-// expression is robust to raw-value spelling quirks in those types. Priorities
-// are bind-safe (integer literals from a trusted constant), data_type is a fixed
-// column name, so this is not a SQL-injection surface.
-export function dataTypePriorityCase(column: string): string {
-  const whens = (
-    [
-      "sr_legacy_food",
-      "survey_fndds_food",
-      "foundation_food",
-      "branded_food",
-    ] as const
-  )
-    .map((dt) => `WHEN '${dt}' THEN ${DATA_TYPE_PRIORITY[dt]}`)
-    .join(" ");
-  return `CASE ${column} ${whens} ELSE 99 END`;
-}
-
-// Backslash-escapes the SQL LIKE metacharacters (`%`, `_`, `\`) in a raw search
-// term so user punctuation can't act as a wildcard in the prefix match below.
-// Pairs with `... LIKE ? ESCAPE '\\'`.
-export function escapeLike(term: string): string {
-  return term.replace(/[\\%_]/g, (ch) => `\\${ch}`);
-}
-
-// SQL CASE that scores how closely a row's description matches the raw search
-// term (lower = surfaced first): exact (case-insensitive) beats prefix beats
-// everything else. This is the "smart" tier that mimics USDA FDC's own search —
-// it floats a literal "VANILLA BEAN" above noisy long descriptions like
-// "VANILLA BEAN COCONUTMILK, VANILLA BEAN" that BM25 over-rewards because the
-// query tokens repeat. Two `?` placeholders: the exact term, then the escaped
-// `term%` prefix pattern. `column` is a fixed column name (not a bind surface).
-export function matchQualityCase(column: string): string {
-  return `CASE WHEN ${column} = ? COLLATE NOCASE THEN 0 WHEN ${column} LIKE ? ESCAPE '\\' THEN 1 ELSE 2 END`;
-}
-
-// The four user-facing food types. The other five (agricultural_acquisition,
-// market_acquisition, sample_food, sub_sample_food, experimental_food) are the
-// Foundation sampling pipeline + research records — provenance, not pickable
-// foods — which USDA FDC itself doesn't surface in food search.
-export const FOOD_DATA_TYPES = [
-  "branded_food",
-  "foundation_food",
-  "sr_legacy_food",
-  "survey_fndds_food",
-] as const;
-
-// Builds the data_type SQL predicate + bind values for a given column.
-// Precedence: an explicit single `dataTypeFilter` wins, then a multi-type
-// `dataTypes` list (comma-joined), then `foodsOnly` (the user-facing food
-// types). Returns empty sql when none apply (all types).
-export function dataTypePredicate(
-  column: string,
-  dataTypeFilter: string | undefined,
-  foodsOnly: boolean | undefined,
-  dataTypes?: string,
-): { sql: string; values: string[] } {
-  if (dataTypeFilter) return { sql: `${column} = ?`, values: [dataTypeFilter] };
-  const multi = (dataTypes ?? "")
-    .split(",")
-    .map((t) => t.trim())
-    .filter(Boolean);
-  if (multi.length > 0) {
-    return {
-      sql: `${column} IN (${multi.map(() => "?").join(", ")})`,
-      values: multi,
-    };
-  }
-  if (foodsOnly) {
-    return {
-      sql: `${column} IN (${FOOD_DATA_TYPES.map(() => "?").join(", ")})`,
-      values: [...FOOD_DATA_TYPES],
-    };
-  }
-  return { sql: "", values: [] };
-}
-
-// The seeded v20260611 artifacts predate build-time normalization and still
-// contain the `market_acquistion` typo in R2 bundles, so this must run at
-// read time until a re-seeded version is activated.
-function normalizeFoodSummaryPayload(payload: unknown): unknown {
-  if (
-    payload &&
-    typeof payload === "object" &&
-    "foodInfo" in payload &&
-    payload.foodInfo &&
-    typeof payload.foodInfo === "object" &&
-    "data_type" in payload.foodInfo &&
-    typeof payload.foodInfo.data_type === "string"
-  ) {
-    payload.foodInfo.data_type = normalizeDataType(payload.foodInfo.data_type);
-  }
-  if (
-    payload &&
-    typeof payload === "object" &&
-    "brandedFoodInfo" in payload &&
-    payload.brandedFoodInfo &&
-    typeof payload.brandedFoodInfo === "object" &&
-    "gtin_upc" in payload.brandedFoodInfo &&
-    typeof payload.brandedFoodInfo.gtin_upc === "string"
-  ) {
-    payload.brandedFoodInfo.gtin_upc = normalizeUpc(
-      payload.brandedFoodInfo.gtin_upc,
-    );
-  }
-  return payload;
-}
-
-// USDA branded UPCs are sometimes stored with leading zeros stripped (e.g. an
-// 11-digit value for a 12-digit UPC-A), which fails the >=12-char schema and
-// 500s response validation. Left-pad short numeric UPCs to 12 — both fixing the
-// crash and matching how products store UPCs for linking. Non-numeric or
-// already-valid values pass through untouched.
-export function normalizeUpc(upc: string): string {
-  return /^\d{1,11}$/.test(upc) ? upc.padStart(12, "0") : upc;
 }
 
 function rowsFromResult<T>(result: { results?: T[]; success: boolean }): T[] {
@@ -244,106 +47,12 @@ function rowsFromResult<T>(result: { results?: T[]; success: boolean }): T[] {
   return result.results ?? [];
 }
 
-// ── Resolved-food cache ──────────────────────────────────────────────────────
-// USDA foods are immutable per (dataset version, fdc_id), so a never-expiring D1
-// cache lets a hot fdc_id skip the R2 range-read + JSON/zod parse on every
-// lookup. cubby only ever resolves a few hundred distinct foods (its products'
-// fdc_ids), so the cache stays tiny; after a warm-up pass a recompute fan-out is
-// pure D1 (two ~0.5ms reads, no R2). Scoped by version so a dataset re-import
-// transparently uses a fresh cache.
-const FOOD_CACHE_TABLE = "food_cache";
-let foodCacheEnsured = false;
-
-async function ensureFoodCacheTable(db: D1Database): Promise<void> {
-  if (foodCacheEnsured) return;
-  await db
-    .prepare(
-      `CREATE TABLE IF NOT EXISTS ${FOOD_CACHE_TABLE} (
-         version TEXT NOT NULL,
-         fdc_id INTEGER NOT NULL,
-         data TEXT NOT NULL,
-         PRIMARY KEY (version, fdc_id)
-       )`,
-    )
-    .run();
-  foodCacheEnsured = true;
-}
-
-/** Parsed foods already cached for this version, keyed by fdc_id. */
-async function readFoodCache(
-  db: D1Database,
-  version: string,
-  fdcIds: number[],
-): Promise<Map<number, FoodSummary>> {
-  const out = new Map<number, FoodSummary>();
-  if (fdcIds.length === 0) return out;
-  try {
-    await ensureFoodCacheTable(db);
-  } catch (err) {
-    console.warn(
-      "[food-cache] table setup failed; continuing without cache",
-      err,
-    );
-    return out;
-  }
-  for (let i = 0; i < fdcIds.length; i += MAX_SQL_VARIABLES - 1) {
-    const chunk = fdcIds.slice(i, i + MAX_SQL_VARIABLES - 1);
-    const placeholders = chunk.map(() => "?").join(", ");
-    try {
-      const res = await db
-        .prepare(
-          `SELECT fdc_id, data FROM ${FOOD_CACHE_TABLE} WHERE version = ? AND fdc_id IN (${placeholders})`,
-        )
-        .bind(version, ...chunk)
-        .all<{ fdc_id: number; data: string }>();
-      for (const row of res.results ?? []) {
-        try {
-          // Validated when written; trust the shape and only guard malformed JSON.
-          out.set(row.fdc_id, JSON.parse(row.data) as FoodSummary);
-        } catch (err) {
-          console.warn(
-            `[food-cache] ignoring unparseable cached food ${row.fdc_id}`,
-            err,
-          );
-        }
-      }
-    } catch (err) {
-      console.warn("[food-cache] read failed; treating cache as a miss", err);
-    }
-  }
-  return out;
-}
-
-/**
- * Persist newly-hydrated foods so future lookups skip R2. `INSERT OR IGNORE` so a
- * cold fan-out where many concurrent requests miss the same food don't conflict.
- */
-async function writeFoodCache(
-  db: D1Database,
-  version: string,
-  foods: FoodSummary[],
-): Promise<void> {
-  if (foods.length === 0) return;
-  try {
-    await ensureFoodCacheTable(db);
-    const stmts = foods.map((food) =>
-      db
-        .prepare(
-          `INSERT OR IGNORE INTO ${FOOD_CACHE_TABLE} (version, fdc_id, data) VALUES (?, ?, ?)`,
-        )
-        .bind(version, food.fdc_id, JSON.stringify(food)),
-    );
-    await db.batch(stmts);
-  } catch (err) {
-    console.warn("[food-cache] write failed; continuing without cache", err);
-  }
-}
-
 export function createEdgeUsdaDataSource(
   env: EdgeBindings,
   options: { r2Concurrency?: number } = {},
 ): USDADataSource {
   const r2Concurrency = options.r2Concurrency ?? DEFAULT_CONCURRENCY;
+  const { hydrate, hydrateRows } = createFoodBundleLoader(env, r2Concurrency);
 
   async function getPointerByFdcId(
     fdcId: number,
@@ -352,158 +61,6 @@ export function createEdgeUsdaDataSource(
     return env.DB.prepare(`SELECT * FROM ${tables.foodIndex} WHERE fdc_id = ?`)
       .bind(fdcId)
       .first<FoodIndexRow>();
-  }
-
-  // USDA bundle bytes are immutable, so the per-food range read is pure static
-  // work that's repeated on every lookup. Cache the hydrated JSON in the
-  // colo-local Cache API keyed on the exact R2 pointer (bundle_key + byte
-  // range): a dataset re-import writes new keys/offsets, so the key naturally
-  // invalidates without a manual purge.
-  async function readBundleText(
-    row: FoodIndexRow,
-    stats?: HydrateStats,
-    options: { skipCacheRead?: boolean } = {},
-  ): Promise<{ text: string; fromCache: boolean } | null> {
-    // `caches.default` is a Cloudflare extension absent from the DOM
-    // CacheStorage type (mirrors the cast in the web USDA client); it's also
-    // absent under Node (unit tests), so guard before use and read R2 directly.
-    const cache =
-      typeof caches !== "undefined"
-        ? (caches as unknown as { default: Cache }).default
-        : null;
-    const cacheKey = new Request(
-      `https://usda-cache/food/${encodeURIComponent(row.bundle_key)}/${row.byte_offset}/${row.byte_length}`,
-    );
-    if (cache && !options.skipCacheRead) {
-      try {
-        const cached = await cache.match(cacheKey);
-        if (cached) {
-          try {
-            const text = await cached.text();
-            if (stats) stats.cacheHits += 1;
-            return { text, fromCache: true };
-          } catch (err) {
-            console.warn(
-              `[bundle-cache] read body failed for ${row.fdc_id}; falling back to R2`,
-              err,
-            );
-          }
-        }
-      } catch (err) {
-        console.warn(
-          `[bundle-cache] read failed for ${row.fdc_id}; falling back to R2`,
-          err,
-        );
-      }
-    }
-
-    const object = await env.USDA_BUNDLES.get(row.bundle_key, {
-      range: {
-        offset: row.byte_offset,
-        length: row.byte_length,
-      },
-    });
-    if (!object) return null;
-
-    const text = await object.text();
-    if (stats) {
-      stats.r2Reads += 1;
-      stats.bytesRead += text.length;
-    }
-    try {
-      await cache?.put(
-        cacheKey,
-        new Response(text, {
-          headers: { "Cache-Control": "public, max-age=31536000, immutable" },
-        }),
-      );
-    } catch (err) {
-      console.warn(
-        `[bundle-cache] write failed for ${row.fdc_id}; continuing without cache`,
-        err,
-      );
-    }
-    return { text, fromCache: false };
-  }
-
-  async function hydrate(
-    row: FoodIndexRow | null,
-    stats?: HydrateStats,
-  ): Promise<FoodSummary | null> {
-    if (!row) return null;
-
-    const bundle = await readBundleText(row, stats);
-    if (bundle === null) return null;
-    const loadFreshAfterCacheFailure = async () => {
-      const fresh = await readBundleText(row, stats, { skipCacheRead: true });
-      if (fresh === null) return null;
-      let freshParsed: FoodSummary;
-      try {
-        freshParsed = foodSummary.parse(
-          normalizeFoodSummaryPayload(JSON.parse(fresh.text)),
-        );
-      } catch (err) {
-        console.warn(`[hydrate] skipping unparseable food ${row.fdc_id}`, err);
-        return null;
-      }
-      if (freshParsed.fdc_id !== row.fdc_id) {
-        throw new Error(
-          `R2 pointer mismatch for ${row.fdc_id}: read ${freshParsed.fdc_id}`,
-        );
-      }
-      return freshParsed;
-    };
-    // A single malformed record must not 500 the whole page: drop it (callers
-    // filter nulls / treat null as not-found). This makes a page slightly
-    // shorter than totalCount (the count is from the index, not hydrated rows) —
-    // an acceptable trade for resilience against bad source data. Pointer
-    // mismatch below still throws: that's index corruption, not data quality.
-    let parsed: FoodSummary;
-    try {
-      parsed = foodSummary.parse(
-        normalizeFoodSummaryPayload(JSON.parse(bundle.text)),
-      );
-    } catch (err) {
-      if (bundle.fromCache) {
-        console.warn(
-          `[hydrate] ignoring unparseable cached food ${row.fdc_id}`,
-          err,
-        );
-        return loadFreshAfterCacheFailure();
-      }
-      console.warn(`[hydrate] skipping unparseable food ${row.fdc_id}`, err);
-      return null;
-    }
-    if (parsed.fdc_id !== row.fdc_id) {
-      if (bundle.fromCache) {
-        console.warn(
-          `[hydrate] ignoring cached pointer mismatch for ${row.fdc_id}: read ${parsed.fdc_id}`,
-        );
-        return loadFreshAfterCacheFailure();
-      }
-      throw new Error(
-        `R2 pointer mismatch for ${row.fdc_id}: read ${parsed.fdc_id}`,
-      );
-    }
-    return parsed;
-  }
-
-  async function hydrateRows(rows: FoodIndexRow[]) {
-    // R2 range-read + JSON/zod parse per row. Traced so a slow lookup shows
-    // whether the time is R2 (cacheMisses/bytesRead) vs the index query above.
-    const stats: HydrateStats = { cacheHits: 0, r2Reads: 0, bytesRead: 0 };
-    return withSpan("usda.hydrateRows", async (span) => {
-      const result = await pMap(rows, (row) => hydrate(row, stats), {
-        concurrency: r2Concurrency,
-      });
-      span.setAttributes({
-        rowCount: rows.length,
-        cacheHits: stats.cacheHits,
-        r2Reads: stats.r2Reads,
-        bytesRead: stats.bytesRead,
-      });
-      return result;
-    });
   }
 
   async function findRowByColumn(

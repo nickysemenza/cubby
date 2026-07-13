@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
 import { useMemo } from "react";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC } from "~/integrations/trpc/react";
 
 /** A matched ingredient (DB row), or `null` when looked up but not found. */
 export type IngredientMatch = {

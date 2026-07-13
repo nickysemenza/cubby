@@ -207,7 +207,8 @@ export const createCallerFactory = t.createCallerFactory;
 export const createTRPCRouter = t.router;
 
 /** Keys whose values must never reach a trace. */
-const SENSITIVE_KEY = /pass|token|secret|cookie|authorization/i;
+const SENSITIVE_KEY =
+  /pass|token|secret|cookie|authorization|api.?key|url|uri/i;
 /** Above this serialized size we record the byte count but not the values. */
 const INPUT_BYTES_CAP = 4096;
 
@@ -217,7 +218,7 @@ const INPUT_BYTES_CAP = 4096;
  * `rpc.input.truncated`), and redacts secret-ish keys — so traces stay lean and
  * never leak credentials.
  */
-const recordInput = (span: AppSpan, input: unknown): void => {
+export const recordInput = (span: AppSpan, input: unknown): void => {
   if (input == null || typeof input !== "object") return;
   let serialized: string;
   try {
@@ -324,7 +325,7 @@ const isAuthed = t.middleware(({ next, ctx }) => {
  * guarantee that a user querying is authorized, but you can still access user session data if they
  * are logged in.
  */
-export const publicProcedure = t.procedure
+const publicProcedure = t.procedure
   .use(dbErrorMiddleware)
   .use(tracingMiddleWare);
 

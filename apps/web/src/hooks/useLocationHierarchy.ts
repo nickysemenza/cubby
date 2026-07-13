@@ -9,7 +9,7 @@ import {
   type PricingStatus,
 } from "~/app/_components/locations/calculate-inventory-valuation";
 import { ROOT_LOCATION_ID } from "~/hooks/useLocationTree";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC } from "~/integrations/trpc/react";
 
 // Persisted location.valuation stores pricing as bare counts; the viz nodes use
 // the richer PricingStatus shape (with item-name lists for tooltips). The names

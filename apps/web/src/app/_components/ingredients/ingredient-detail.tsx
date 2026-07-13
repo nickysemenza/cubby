@@ -16,8 +16,8 @@ import { MutedBox } from "~/components/layout/muted-box";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
+import { useTRPC } from "~/integrations/trpc/react";
 import { getIngredientMappings } from "~/lib/unit-mapping-utils";
-import { useTRPC } from "~/trpc/react";
 import {
   type DetailHeroStat,
   type DetailSection,

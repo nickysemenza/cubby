@@ -1,18 +1,19 @@
-import { upcLookupInput, upcSearchInput } from "@cubby/schemas/upc";
 import {
   searchResponseSchema,
+  upcLookupInput,
   upcLookupResponseSchema,
-} from "@cubby/upc-lookup/schemas";
-import { createTRPCRouter, publicProcedure } from "../trpc";
+  upcSearchInput,
+} from "@cubby/upc-contract";
+import { createTRPCRouter, protectedProcedure } from "../trpc";
 
-const lookup = publicProcedure
+const lookup = protectedProcedure
   .input(upcLookupInput)
   .output(upcLookupResponseSchema.nullable())
   .query(async ({ ctx, input }) => {
     return await ctx.upcLookupClient.lookup(input.upc);
   });
 
-const search = publicProcedure
+const search = protectedProcedure
   .input(upcSearchInput)
   // Search results omit `cached` (not a cache read) — see searchResponseSchema.
   .output(searchResponseSchema)

@@ -165,7 +165,7 @@ Don't brand shortcode columns or `Image` ids — those add insert-side friction 
 
 ## Mobile PWA
 
-**Target: iOS only** — no Android-specific APIs (e.g., `navigator.vibrate` is not available on iOS Safari). For design details, follow the Mobile PWA roadmap pointer in [README.md](README.md).
+**Target: iOS only** — no Android-specific APIs (e.g., `navigator.vibrate` is not available on iOS Safari). The installable app shell and offline fallback are shipped; [the mobile plan](docs/plans/2026-06-02-mobile-web-implementation-plan.md) tracks scanner UX and offline-data work that remains.
 
 ## Colors / Design Tokens
 

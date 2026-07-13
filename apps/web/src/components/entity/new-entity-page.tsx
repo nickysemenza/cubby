@@ -2,7 +2,7 @@ import type { FC } from "react";
 import { IngredientForm } from "~/app/_components/ingredients/ingredient-form";
 import { LocationForm } from "~/app/_components/locations/location-form";
 import { ProductForm } from "~/app/_components/products/product-form";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC } from "~/integrations/trpc/react";
 import { EntityCreateWrapper } from "./entity-create-wrapper";
 
 type NewEntityType = "product" | "ingredient" | "location";

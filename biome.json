@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.5.1/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.3/schema.json",
   "vcs": {
     "enabled": true,
     "clientKind": "git",
@@ -8,7 +8,12 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["apps/**", "packages/**"]
+    "includes": [
+      "apps/**",
+      "packages/**",
+      "!!**/worker-configuration.d.ts",
+      "!!apps/usda-api/src/generated/openapi.json"
+    ]
   },
   "formatter": {
     "enabled": true,
@@ -28,8 +33,12 @@
       "style": {
         "noNonNullAssertion": "off"
       },
+      "performance": {
+        "noJsxPropsBind": "off"
+      },
       "suspicious": {
-        "noExplicitAny": "error"
+        "noExplicitAny": "error",
+        "noLeakedRender": "off"
       }
     }
   },

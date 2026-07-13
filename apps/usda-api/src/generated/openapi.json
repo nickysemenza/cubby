@@ -1,0 +1,1466 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "USDA Food Data Central API",
+    "version": "1.0.0",
+    "description": "USDA FoodData Central search, lookup, nutrition, and portion data used by Cubby."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Current USDA API origin"
+    }
+  ],
+  "paths": {
+    "/counts": {
+      "get": {
+        "operationId": "counts",
+        "summary": "Get database table counts",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "usda_food": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "usda_branded_food": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "usda_nutrient": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "usda_food_nutrient": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "usda_measure_unit": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "usda_food_portion": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "usda_sr_legacy_food": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "usda_food",
+                    "usda_branded_food",
+                    "usda_nutrient",
+                    "usda_food_nutrient",
+                    "usda_measure_unit",
+                    "usda_food_portion",
+                    "usda_sr_legacy_food"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/foods/{fdc_id}": {
+      "get": {
+        "operationId": "getFood",
+        "summary": "Get complete food by FDC ID",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "fdc_id": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991,
+                      "description": "USDA FoodData Central id (universal food primary key)"
+                    },
+                    "brandedFoodInfo": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "brand_owner": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "brand_name": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "branded_food_category": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "gtin_upc": {
+                              "type": "string",
+                              "pattern": "^\\d{8}$|^\\d{12,14}$",
+                              "description": "EAN-8 (8), UPC-A (12), EAN-13 (13), or GTIN-14 (14) barcode"
+                            },
+                            "ingredients": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "serving": {
+                              "type": "object",
+                              "properties": {
+                                "serving_size": {
+                                  "anyOf": [
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "serving_size_unit": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "household_serving_fulltext": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "serving_size",
+                                "serving_size_unit",
+                                "household_serving_fulltext"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "brand_owner",
+                            "brand_name",
+                            "branded_food_category",
+                            "gtin_upc",
+                            "ingredients",
+                            "serving"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "foodInfo": {
+                      "type": "object",
+                      "properties": {
+                        "data_type": {
+                          "type": "string",
+                          "enum": [
+                            "agricultural_acquisition",
+                            "branded_food",
+                            "experimental_food",
+                            "foundation_food",
+                            "market_acquisition",
+                            "sample_food",
+                            "sr_legacy_food",
+                            "sub_sample_food",
+                            "survey_fndds_food"
+                          ]
+                        },
+                        "description": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["data_type", "description"],
+                      "additionalProperties": false,
+                      "description": "usda food table"
+                    },
+                    "legacyFoodInfo": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "ndb_number": {
+                              "type": "number",
+                              "minimum": 1000,
+                              "maximum": 99999,
+                              "description": "USDA NDB number"
+                            }
+                          },
+                          "required": ["ndb_number"],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "nutritionInfo": {
+                      "type": "object",
+                      "properties": {
+                        "nutrientSummary": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "amount": {
+                                "type": "number"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "unit": {
+                                "type": "string",
+                                "enum": [
+                                  "MG_ATE",
+                                  "kJ",
+                                  "MCG_RE",
+                                  "KCAL",
+                                  "SP_GR",
+                                  "PH",
+                                  "UG",
+                                  "MG_GAE",
+                                  "UMOL_TE",
+                                  "G",
+                                  "MG",
+                                  "IU"
+                                ]
+                              }
+                            },
+                            "required": ["amount", "name", "unit"],
+                            "additionalProperties": false,
+                            "description": "usda food_nutrient and nutrient tables"
+                          }
+                        },
+                        "nutrientsPer100": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {
+                            "type": "number"
+                          }
+                        }
+                      },
+                      "required": ["nutrientSummary", "nutrientsPer100"],
+                      "additionalProperties": false
+                    },
+                    "portionInfoRaw": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "amount": {
+                            "type": "number"
+                          },
+                          "modifier": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "gram_weight": {
+                            "type": "number"
+                          }
+                        },
+                        "required": ["amount", "modifier", "gram_weight"],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "fdc_id",
+                    "brandedFoodInfo",
+                    "foodInfo",
+                    "legacyFoodInfo",
+                    "nutritionInfo",
+                    "portionInfoRaw"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["error"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "fdc_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "description": "USDA FoodData Central id (universal food primary key)"
+            }
+          }
+        ]
+      }
+    },
+    "/api/foods/search": {
+      "post": {
+        "operationId": "findByLookup",
+        "summary": "Find complete food by lookup (UPC or NDB) via POST body",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "fdc_id": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991,
+                          "description": "USDA FoodData Central id (universal food primary key)"
+                        },
+                        "brandedFoodInfo": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "brand_owner": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "brand_name": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "branded_food_category": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "gtin_upc": {
+                                  "type": "string",
+                                  "pattern": "^\\d{8}$|^\\d{12,14}$",
+                                  "description": "EAN-8 (8), UPC-A (12), EAN-13 (13), or GTIN-14 (14) barcode"
+                                },
+                                "ingredients": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "serving": {
+                                  "type": "object",
+                                  "properties": {
+                                    "serving_size": {
+                                      "anyOf": [
+                                        {
+                                          "type": "number"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "serving_size_unit": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "household_serving_fulltext": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "serving_size",
+                                    "serving_size_unit",
+                                    "household_serving_fulltext"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "required": [
+                                "brand_owner",
+                                "brand_name",
+                                "branded_food_category",
+                                "gtin_upc",
+                                "ingredients",
+                                "serving"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "foodInfo": {
+                          "type": "object",
+                          "properties": {
+                            "data_type": {
+                              "type": "string",
+                              "enum": [
+                                "agricultural_acquisition",
+                                "branded_food",
+                                "experimental_food",
+                                "foundation_food",
+                                "market_acquisition",
+                                "sample_food",
+                                "sr_legacy_food",
+                                "sub_sample_food",
+                                "survey_fndds_food"
+                              ]
+                            },
+                            "description": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["data_type", "description"],
+                          "additionalProperties": false,
+                          "description": "usda food table"
+                        },
+                        "legacyFoodInfo": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "ndb_number": {
+                                  "type": "number",
+                                  "minimum": 1000,
+                                  "maximum": 99999,
+                                  "description": "USDA NDB number"
+                                }
+                              },
+                              "required": ["ndb_number"],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "nutritionInfo": {
+                          "type": "object",
+                          "properties": {
+                            "nutrientSummary": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "amount": {
+                                    "type": "number"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "unit": {
+                                    "type": "string",
+                                    "enum": [
+                                      "MG_ATE",
+                                      "kJ",
+                                      "MCG_RE",
+                                      "KCAL",
+                                      "SP_GR",
+                                      "PH",
+                                      "UG",
+                                      "MG_GAE",
+                                      "UMOL_TE",
+                                      "G",
+                                      "MG",
+                                      "IU"
+                                    ]
+                                  }
+                                },
+                                "required": ["amount", "name", "unit"],
+                                "additionalProperties": false,
+                                "description": "usda food_nutrient and nutrient tables"
+                              }
+                            },
+                            "nutrientsPer100": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "additionalProperties": {
+                                "type": "number"
+                              }
+                            }
+                          },
+                          "required": ["nutrientSummary", "nutrientsPer100"],
+                          "additionalProperties": false
+                        },
+                        "portionInfoRaw": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "amount": {
+                                "type": "number"
+                              },
+                              "modifier": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "gram_weight": {
+                                "type": "number"
+                              }
+                            },
+                            "required": ["amount", "modifier", "gram_weight"],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "fdc_id",
+                        "brandedFoodInfo",
+                        "foodInfo",
+                        "legacyFoodInfo",
+                        "nutritionInfo",
+                        "portionInfoRaw"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "upc"
+                      },
+                      "gtin_upc": {
+                        "type": "string",
+                        "pattern": "^\\d{8}$|^\\d{12,14}$",
+                        "description": "EAN-8 (8), UPC-A (12), EAN-13 (13), or GTIN-14 (14) barcode"
+                      }
+                    },
+                    "required": ["kind", "gtin_upc"],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "ndb"
+                      },
+                      "ndb_number": {
+                        "type": "number",
+                        "minimum": 1000,
+                        "maximum": 99999,
+                        "description": "USDA NDB number"
+                      }
+                    },
+                    "required": ["kind", "ndb_number"],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "fdc"
+                      },
+                      "fdc_id": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991,
+                        "description": "USDA FoodData Central id (universal food primary key)"
+                      }
+                    },
+                    "required": ["kind", "fdc_id"],
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/foods/search/batch": {
+      "post": {
+        "operationId": "findByLookupBatch",
+        "summary": "Find multiple foods by lookup (UPC or NDB) in batch",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "fdc_id": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "maximum": 9007199254740991,
+                                "description": "USDA FoodData Central id (universal food primary key)"
+                              },
+                              "brandedFoodInfo": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "brand_owner": {
+                                        "anyOf": [
+                                          {
+                                            "type": "string"
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
+                                      },
+                                      "brand_name": {
+                                        "anyOf": [
+                                          {
+                                            "type": "string"
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
+                                      },
+                                      "branded_food_category": {
+                                        "anyOf": [
+                                          {
+                                            "type": "string"
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
+                                      },
+                                      "gtin_upc": {
+                                        "type": "string",
+                                        "pattern": "^\\d{8}$|^\\d{12,14}$",
+                                        "description": "EAN-8 (8), UPC-A (12), EAN-13 (13), or GTIN-14 (14) barcode"
+                                      },
+                                      "ingredients": {
+                                        "anyOf": [
+                                          {
+                                            "type": "string"
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
+                                      },
+                                      "serving": {
+                                        "type": "object",
+                                        "properties": {
+                                          "serving_size": {
+                                            "anyOf": [
+                                              {
+                                                "type": "number"
+                                              },
+                                              {
+                                                "type": "null"
+                                              }
+                                            ]
+                                          },
+                                          "serving_size_unit": {
+                                            "anyOf": [
+                                              {
+                                                "type": "string"
+                                              },
+                                              {
+                                                "type": "null"
+                                              }
+                                            ]
+                                          },
+                                          "household_serving_fulltext": {
+                                            "anyOf": [
+                                              {
+                                                "type": "string"
+                                              },
+                                              {
+                                                "type": "null"
+                                              }
+                                            ]
+                                          }
+                                        },
+                                        "required": [
+                                          "serving_size",
+                                          "serving_size_unit",
+                                          "household_serving_fulltext"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    },
+                                    "required": [
+                                      "brand_owner",
+                                      "brand_name",
+                                      "branded_food_category",
+                                      "gtin_upc",
+                                      "ingredients",
+                                      "serving"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "foodInfo": {
+                                "type": "object",
+                                "properties": {
+                                  "data_type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "agricultural_acquisition",
+                                      "branded_food",
+                                      "experimental_food",
+                                      "foundation_food",
+                                      "market_acquisition",
+                                      "sample_food",
+                                      "sr_legacy_food",
+                                      "sub_sample_food",
+                                      "survey_fndds_food"
+                                    ]
+                                  },
+                                  "description": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["data_type", "description"],
+                                "additionalProperties": false,
+                                "description": "usda food table"
+                              },
+                              "legacyFoodInfo": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "ndb_number": {
+                                        "type": "number",
+                                        "minimum": 1000,
+                                        "maximum": 99999,
+                                        "description": "USDA NDB number"
+                                      }
+                                    },
+                                    "required": ["ndb_number"],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "nutritionInfo": {
+                                "type": "object",
+                                "properties": {
+                                  "nutrientSummary": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "amount": {
+                                          "type": "number"
+                                        },
+                                        "name": {
+                                          "type": "string"
+                                        },
+                                        "unit": {
+                                          "type": "string",
+                                          "enum": [
+                                            "MG_ATE",
+                                            "kJ",
+                                            "MCG_RE",
+                                            "KCAL",
+                                            "SP_GR",
+                                            "PH",
+                                            "UG",
+                                            "MG_GAE",
+                                            "UMOL_TE",
+                                            "G",
+                                            "MG",
+                                            "IU"
+                                          ]
+                                        }
+                                      },
+                                      "required": ["amount", "name", "unit"],
+                                      "additionalProperties": false,
+                                      "description": "usda food_nutrient and nutrient tables"
+                                    }
+                                  },
+                                  "nutrientsPer100": {
+                                    "type": "object",
+                                    "propertyNames": {
+                                      "type": "string"
+                                    },
+                                    "additionalProperties": {
+                                      "type": "number"
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "nutrientSummary",
+                                  "nutrientsPer100"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "portionInfoRaw": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "amount": {
+                                      "type": "number"
+                                    },
+                                    "modifier": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "gram_weight": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "amount",
+                                    "modifier",
+                                    "gram_weight"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              }
+                            },
+                            "required": [
+                              "fdc_id",
+                              "brandedFoodInfo",
+                              "foodInfo",
+                              "legacyFoodInfo",
+                              "nutritionInfo",
+                              "portionInfoRaw"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "required": ["results"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "lookups": {
+                    "maxItems": 1000,
+                    "type": "array",
+                    "items": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "upc"
+                            },
+                            "gtin_upc": {
+                              "type": "string",
+                              "pattern": "^\\d{8}$|^\\d{12,14}$",
+                              "description": "EAN-8 (8), UPC-A (12), EAN-13 (13), or GTIN-14 (14) barcode"
+                            }
+                          },
+                          "required": ["kind", "gtin_upc"],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "ndb"
+                            },
+                            "ndb_number": {
+                              "type": "number",
+                              "minimum": 1000,
+                              "maximum": 99999,
+                              "description": "USDA NDB number"
+                            }
+                          },
+                          "required": ["kind", "ndb_number"],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "fdc"
+                            },
+                            "fdc_id": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991,
+                              "description": "USDA FoodData Central id (universal food primary key)"
+                            }
+                          },
+                          "required": ["kind", "fdc_id"],
+                          "additionalProperties": false
+                        }
+                      ]
+                    }
+                  }
+                },
+                "required": ["lookups"],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/foods": {
+      "get": {
+        "operationId": "listFoods",
+        "summary": "List foods with pagination and filtering",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "fdc_id": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991,
+                            "description": "USDA FoodData Central id (universal food primary key)"
+                          },
+                          "brandedFoodInfo": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "brand_owner": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "brand_name": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "branded_food_category": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "gtin_upc": {
+                                    "type": "string",
+                                    "pattern": "^\\d{8}$|^\\d{12,14}$",
+                                    "description": "EAN-8 (8), UPC-A (12), EAN-13 (13), or GTIN-14 (14) barcode"
+                                  },
+                                  "ingredients": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "serving": {
+                                    "type": "object",
+                                    "properties": {
+                                      "serving_size": {
+                                        "anyOf": [
+                                          {
+                                            "type": "number"
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
+                                      },
+                                      "serving_size_unit": {
+                                        "anyOf": [
+                                          {
+                                            "type": "string"
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
+                                      },
+                                      "household_serving_fulltext": {
+                                        "anyOf": [
+                                          {
+                                            "type": "string"
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "serving_size",
+                                      "serving_size_unit",
+                                      "household_serving_fulltext"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "required": [
+                                  "brand_owner",
+                                  "brand_name",
+                                  "branded_food_category",
+                                  "gtin_upc",
+                                  "ingredients",
+                                  "serving"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "foodInfo": {
+                            "type": "object",
+                            "properties": {
+                              "data_type": {
+                                "type": "string",
+                                "enum": [
+                                  "agricultural_acquisition",
+                                  "branded_food",
+                                  "experimental_food",
+                                  "foundation_food",
+                                  "market_acquisition",
+                                  "sample_food",
+                                  "sr_legacy_food",
+                                  "sub_sample_food",
+                                  "survey_fndds_food"
+                                ]
+                              },
+                              "description": {
+                                "type": "string"
+                              }
+                            },
+                            "required": ["data_type", "description"],
+                            "additionalProperties": false,
+                            "description": "usda food table"
+                          },
+                          "legacyFoodInfo": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "ndb_number": {
+                                    "type": "number",
+                                    "minimum": 1000,
+                                    "maximum": 99999,
+                                    "description": "USDA NDB number"
+                                  }
+                                },
+                                "required": ["ndb_number"],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "nutritionInfo": {
+                            "type": "object",
+                            "properties": {
+                              "nutrientSummary": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "amount": {
+                                      "type": "number"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "unit": {
+                                      "type": "string",
+                                      "enum": [
+                                        "MG_ATE",
+                                        "kJ",
+                                        "MCG_RE",
+                                        "KCAL",
+                                        "SP_GR",
+                                        "PH",
+                                        "UG",
+                                        "MG_GAE",
+                                        "UMOL_TE",
+                                        "G",
+                                        "MG",
+                                        "IU"
+                                      ]
+                                    }
+                                  },
+                                  "required": ["amount", "name", "unit"],
+                                  "additionalProperties": false,
+                                  "description": "usda food_nutrient and nutrient tables"
+                                }
+                              },
+                              "nutrientsPer100": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {
+                                  "type": "number"
+                                }
+                              }
+                            },
+                            "required": ["nutrientSummary", "nutrientsPer100"],
+                            "additionalProperties": false
+                          },
+                          "portionInfoRaw": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "amount": {
+                                  "type": "number"
+                                },
+                                "modifier": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "gram_weight": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": ["amount", "modifier", "gram_weight"],
+                              "additionalProperties": false
+                            }
+                          }
+                        },
+                        "required": [
+                          "fdc_id",
+                          "brandedFoodInfo",
+                          "foodInfo",
+                          "legacyFoodInfo",
+                          "nutritionInfo",
+                          "portionInfoRaw"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "count": {
+                      "type": "number"
+                    }
+                  },
+                  "required": ["data", "count"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "nameFilter",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dataTypeFilter",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "agricultural_acquisition",
+                "branded_food",
+                "experimental_food",
+                "foundation_food",
+                "market_acquisition",
+                "sample_food",
+                "sr_legacy_food",
+                "sub_sample_food",
+                "survey_fndds_food"
+              ]
+            }
+          },
+          {
+            "name": "dataTypes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "foodsOnly",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            }
+          },
+          {
+            "name": "orderBy",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "default": "description",
+              "type": "string",
+              "enum": ["description", "data_type", "fdc_id", "relevance"]
+            }
+          },
+          {
+            "name": "direction",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "default": "asc",
+              "type": "string",
+              "enum": ["asc", "desc"]
+            }
+          },
+          {
+            "name": "pageIndex",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "default": 0,
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "default": 10,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            }
+          }
+        ]
+      }
+    }
+  }
+}

@@ -2,6 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { QueryKey } from "@tanstack/react-query";
 import { skipToken } from "@tanstack/react-query";
 import { entities } from "~/entities/entities";
+import type { useTRPC } from "~/integrations/trpc/react";
 import {
   ingredientAllMutationInvalidateKeys,
   inventoryMutationInvalidateKeys,
@@ -11,7 +12,6 @@ import {
   queryKeys,
   recipeAllMutationInvalidateKeys,
 } from "~/lib/query-keys";
-import type { useTRPC } from "~/trpc/react";
 
 type Api = ReturnType<typeof useTRPC>;
 

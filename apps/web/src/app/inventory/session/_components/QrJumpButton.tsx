@@ -20,8 +20,8 @@ import {
   SheetHeader,
   SheetTitle,
 } from "~/components/ui/sheet";
+import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
-import { useTRPC } from "~/trpc/react";
 import {
   isDescendantLocation,
   parseLocationIdFromInput,

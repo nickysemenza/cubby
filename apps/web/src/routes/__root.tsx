@@ -1,9 +1,7 @@
 // Fontsource variable fonts - loaded via bundler for better performance.
 // Warm-Paper Ledger type system: Space Grotesk (geometric sans) for headings,
 // JetBrains Mono for all data/metrics, Inter for body/UI prose. Fraunces retired.
-import "@fontsource-variable/space-grotesk";
-import "@fontsource-variable/jetbrains-mono";
-import "@fontsource-variable/inter";
+import "../fonts.css";
 
 import { TanStackDevtools } from "@tanstack/react-devtools";
 import type { QueryClient } from "@tanstack/react-query";

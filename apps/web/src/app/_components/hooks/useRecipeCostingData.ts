@@ -4,13 +4,13 @@ import type { RecipeGraphOut, RecipeOut } from "@cubby/schemas/recipe";
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { chunk, keyBy } from "es-toolkit";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTRPC } from "~/integrations/trpc/react";
 import {
   collectIngredientIds,
   collectSubRecipeIds,
   recipeLinkSignature,
 } from "~/lib/recipe-graph";
 import { ID_CHUNK_SIZE } from "~/misc/array-helpers";
-import { useTRPC } from "~/trpc/react";
 
 type TRPC = ReturnType<typeof useTRPC>;
 

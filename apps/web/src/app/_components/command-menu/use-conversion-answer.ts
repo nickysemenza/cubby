@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
+import { useTRPC } from "~/integrations/trpc/react";
 import { getIngredientMappings } from "~/lib/unit-mapping-utils";
 import { wasm } from "~/lib/wasm";
-import { useTRPC } from "~/trpc/react";
 
 // "250 g flour in cups" / "1.5 cups sugar to g" / "2 tbsp butter as oz"
 const CONVERSION_RE =

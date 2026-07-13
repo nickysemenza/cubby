@@ -1,7 +1,6 @@
 // cf https://ui.shadcn.com/docs/components/data-table
 
 import type { Entity } from "@cubby/schemas/entity";
-import { useLocation } from "@tanstack/react-router";
 import {
   flexRender,
   type Table as ITable,
@@ -11,19 +10,10 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
-  Bug,
   LayoutList,
   List,
 } from "lucide-react";
-import {
-  Fragment,
-  memo,
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { Fragment, type ReactNode } from "react";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Stack } from "~/components/layout";
@@ -38,13 +28,10 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { ENTITY_ACCENTS } from "~/entities/entity-accents";
-import { useDebug } from "~/hooks/useDebug";
-import { useHydrated } from "~/hooks/useHydrated";
-import { useIsMobile } from "~/hooks/useMobile";
 import type { QueryTiming } from "~/lib/query-timing";
 import { cn } from "~/lib/utils";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
-import { DebugDialog } from "./DebugDialog";
+import { DesktopDataRow as DataRow } from "./DesktopDataRow";
 import { DataTablePagination } from "./data-table-pagination";
 import { DataTableToolbar } from "./data-table-toolbar";
 import {
@@ -53,25 +40,11 @@ import {
   hasActiveFilters,
 } from "./entity-empty-states";
 import { HeaderFilter } from "./HeaderFilter";
-import { useTableVirtualizer } from "./hooks/useTableVirtualizer";
 import { MobileListScreen } from "./MobileListScreen";
 import { RowsPerPageSelect } from "./rows-per-page-select";
 import { SectionHeader } from "./SectionHeader";
-import { useDesktopGroupedRows } from "./useDesktopGroupedRows";
+import { useDataTableController } from "./useDataTableController";
 import type { GroupConfig } from "./useGroupedList";
-import { densityConfig, useTableDensity } from "./useTableDensity";
-
-// Scroll position cache for navigate-back restoration
-const scrollPositionCache = new Map<string, number>();
-
-// Numeric/quantity columns (meta.numeric) right-align with tabular figures so
-// digits line up like a ledger. Defined once here and applied to both the cell
-// and its header, instead of repeating the string across column defs.
-const NUMERIC_CELL = "text-right font-mono tabular-nums";
-
-// Code-like data columns (meta.mono: UPCs, timestamps, ids) go mono without
-// the numeric right-align; name/description columns stay sans.
-const MONO_CELL = "font-mono";
 
 // Sticky top nav height: the h-12 (48px) nav bar + its 3px ink bottom-rule =
 // 51px (see __root.tsx). The sticky toolbar pins flush below it; if these drift
@@ -137,106 +110,6 @@ interface TTableProps<TItem> {
   verticalAlign?: "top" | "middle";
 }
 
-interface DataRowProps<TItem> {
-  row: Row<TItem>;
-  isSelected: boolean;
-  isFocused: boolean;
-  isDebugEnabled: boolean;
-  onRowClick?: (row: Row<TItem>) => void;
-  onRowHover?: (row: Row<TItem>) => void;
-  rowClassName: string;
-  cellClassName: string;
-  /** Signature of visible column ids — re-render rows when columns toggle/reorder */
-  columnsKey: string;
-  height?: string;
-}
-
-function DataRowInner<TItem>({
-  row,
-  isSelected,
-  isFocused,
-  isDebugEnabled,
-  onRowClick,
-  onRowHover,
-  rowClassName,
-  cellClassName,
-  height,
-}: DataRowProps<TItem>) {
-  return (
-    <TableRow
-      data-state={isSelected && "selected"}
-      className={cn(
-        rowClassName,
-        onRowClick && "cursor-pointer",
-        isFocused && "ring-2 ring-primary/30 ring-inset",
-      )}
-      onClick={onRowClick ? () => onRowClick(row) : undefined}
-      onMouseEnter={onRowHover ? () => onRowHover(row) : undefined}
-      style={height ? { height } : undefined}
-    >
-      {row.getVisibleCells().map((cell) => (
-        <TableCell
-          key={cell.id}
-          className={cn(
-            cellClassName,
-            cell.column.columnDef.meta?.numeric && NUMERIC_CELL,
-            cell.column.columnDef.meta?.mono && MONO_CELL,
-            cell.column.columnDef.meta?.className,
-          )}
-        >
-          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-        </TableCell>
-      ))}
-      {/* Add debug cell when debug mode is enabled */}
-      {isDebugEnabled && (
-        <TableCell className={cn(cellClassName)}>
-          <DebugDialog
-            data={row.original}
-            title={`Debug Data - Row ${row.id}`}
-            trigger={
-              <Button variant="ghost" size="icon-sm">
-                <Bug className="h-4 w-4" />
-                <span className="sr-only">Debug row data</span>
-              </Button>
-            }
-          />
-        </TableCell>
-      )}
-      {/* Trailing width-slack spacer: the content block ends at the actions
-          column and the leftover table-fixed surplus reads as page margin,
-          not as an empty column wedged between data and actions. */}
-      <TableCell data-spacer aria-hidden className={cellClassName} />
-    </TableRow>
-  );
-}
-
-// Skip re-rendering rows that haven't actually changed. The virtualizer
-// re-renders RTable on every scroll frame, so without this, flexRender runs for
-// every visible cell each frame. We compare row.original (TanStack reuses the
-// underlying data object across renders) plus the bits of table/UI state a row
-// reads. NOTE: cells that read table-level state beyond selection/focus/column
-// visibility won't re-render until row.original changes — none do today, so add
-// to this comparator if you introduce one.
-function rowPropsAreEqual<TItem>(
-  prev: DataRowProps<TItem>,
-  next: DataRowProps<TItem>,
-): boolean {
-  return (
-    prev.row.original === next.row.original &&
-    prev.isSelected === next.isSelected &&
-    prev.isFocused === next.isFocused &&
-    prev.isDebugEnabled === next.isDebugEnabled &&
-    prev.onRowClick === next.onRowClick &&
-    prev.onRowHover === next.onRowHover &&
-    prev.rowClassName === next.rowClassName &&
-    prev.cellClassName === next.cellClassName &&
-    prev.columnsKey === next.columnsKey &&
-    prev.height === next.height
-  );
-}
-
-const DataRow = memo(DataRowInner, rowPropsAreEqual) as typeof DataRowInner;
-
 export default function RTable<TItem>(props: TTableProps<TItem>) {
   const {
     table,
@@ -259,148 +132,35 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     verticalAlign = "middle",
   } = props;
 
-  const { isDebugEnabled } = useDebug();
-  const isMobile = useIsMobile();
-  // List queries are non-suspense and pending at SSR (loaders only
-  // `void prefetchQuery`), so SSR always renders the loading row. If the query
-  // resolves before hydration, the first client render would flip to the
-  // empty/data state and mismatch SSR (CUBBY-3J / CUBBY-3). Keep showing the
-  // loading row until hydrated so the first client render matches SSR.
-  const hydrated = useHydrated();
-  const pathname = useLocation({ select: (l) => l.pathname });
-  const { density } = useTableDensity();
-  const dConfig = densityConfig[density];
-
-  // Keyboard navigation: focused row index (desktop only)
-  const [focusedRowIndex, setFocusedRowIndex] = useState<number | null>(null);
-  const desktopInfiniteObserverRef = useRef<IntersectionObserver | null>(null);
-
-  const fetchNextPage = infiniteScroll?.fetchNextPage;
-  const hasNextPage = infiniteScroll?.hasNextPage ?? false;
-  const isFetchingNextPage = infiniteScroll?.isFetchingNextPage ?? false;
-  const hasDesktopInfiniteSentinel =
-    !isMobile && !!infiniteScroll && (hasNextPage || isFetchingNextPage);
-
-  const handleDesktopInfiniteIntersect = useCallback(
-    (entries: IntersectionObserverEntry[]) => {
-      if (entries[0]?.isIntersecting && hasNextPage && !isFetchingNextPage) {
-        fetchNextPage?.();
-      }
-    },
-    [fetchNextPage, hasNextPage, isFetchingNextPage],
-  );
-
-  const setDesktopInfiniteSentinel = useCallback(
-    (sentinel: HTMLDivElement | null) => {
-      desktopInfiniteObserverRef.current?.disconnect();
-      desktopInfiniteObserverRef.current = null;
-      if (isMobile || !infiniteScroll || !sentinel) return;
-
-      const observer = new IntersectionObserver(
-        handleDesktopInfiniteIntersect,
-        {
-          rootMargin: "600px",
-        },
-      );
-      observer.observe(sentinel);
-      desktopInfiniteObserverRef.current = observer;
-    },
-    [isMobile, infiniteScroll, handleDesktopInfiniteIntersect],
-  );
-
-  useEffect(() => {
-    return () => desktopInfiniteObserverRef.current?.disconnect();
-  }, []);
-
-  const { rows } = table.getRowModel();
-
-  // Desktop group detection (server trusts ordering)
-  const groupedItems = useDesktopGroupedRows(rows, groupConfig, grouped);
-
-  // Window virtualization: body/toolbar refs + measurement, the virtualizer
-  // instance, and the grouped-vs-flat index math.
   const {
-    tableContainerRef,
-    toolbarRef,
-    toolbarHeight,
-    scrollMargin,
-    virtualRows,
-    totalSize,
-    resolveIndex,
+    colSpan,
+    columnsKey,
+    dConfig,
     flatRowToVirtualIndex,
-    scrollToIndex,
-  } = useTableVirtualizer({
-    rowCount: rows.length,
-    groupedItems,
-    rowHeight: dConfig.rowHeight,
+    focusedRowIndex,
+    hydrated,
+    isDebugEnabled,
+    isFetchingNextPage,
     isMobile,
-    trailingSentinel: hasDesktopInfiniteSentinel,
+    resolveIndex,
+    rows,
+    scrollMargin,
+    scrollToIndex,
+    setDesktopInfiniteSentinel,
+    setFocusedRowIndex,
+    styles,
+    tableContainerRef,
+    toolbarHeight,
+    toolbarRef,
+    totalSize,
+    virtualRows,
+  } = useDataTableController({
+    table,
+    infiniteScroll,
+    groupConfig,
+    grouped,
+    verticalAlign,
   });
-
-  // Save scroll position on unmount for navigate-back restoration. The page is
-  // the scroller now, so we track window.scrollY rather than a container.
-  const saveScrollPosition = useCallback(() => {
-    if (typeof window !== "undefined" && window.scrollY > 0) {
-      scrollPositionCache.set(pathname, window.scrollY);
-    } else {
-      scrollPositionCache.delete(pathname);
-    }
-  }, [pathname]);
-
-  useEffect(() => {
-    return () => saveScrollPosition();
-  }, [saveScrollPosition]);
-
-  // Restore scroll position when data loads (rows become available)
-  const hasRestoredRef = useRef(false);
-  // Reset the guard when the route changes so restore works again on the next
-  // list (the RTable instance can be reused across list routes). Declared before
-  // the restore effect so the flag is cleared before that effect re-evaluates.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: pathname is the intended trigger; the body only writes a ref so the linter sees it as unused
-  useEffect(() => {
-    hasRestoredRef.current = false;
-  }, [pathname]);
-  useEffect(() => {
-    if (hasRestoredRef.current || isMobile) return;
-    const savedPosition = scrollPositionCache.get(pathname);
-    if (savedPosition && rows.length > 0) {
-      // Use rAF to ensure the virtualizer has measured
-      requestAnimationFrame(() => {
-        window.scrollTo(0, savedPosition);
-      });
-      hasRestoredRef.current = true;
-    }
-  }, [pathname, rows.length, isMobile]);
-
-  const styles = {
-    table:
-      "table-grid-lines border-separate border-spacing-0 text-sm leading-tight tabular-nums",
-    header:
-      "h-8 bg-card px-2 py-1 text-2xs font-mono font-semibold uppercase tracking-wider text-slate border-b-[3px] border-b-foreground",
-    filterRow: "h-7 bg-card px-2 py-0.5 border-b border-border" /* tight */,
-    cell: cn(
-      dConfig.cellClass,
-      "overflow-hidden",
-      verticalAlign === "top" ? "align-top" : "align-middle",
-    ),
-    row: cn(dConfig.rowClass, "table-row-hover border-border border-b"),
-    sortIcon: "h-3 w-3",
-  };
-
-  // Signature of currently-visible columns so memoized rows re-render when the
-  // user toggles or reorders columns (row.original alone wouldn't change).
-  const columnsKey = table
-    .getVisibleLeafColumns()
-    .map((c) => c.id)
-    .join(",");
-
-  // Columns the table actually renders. Use VISIBLE leaves: getAllColumns()
-  // counts hidden columns too, so a colSpan built from it exceeds the rendered
-  // column count and the browser invents a phantom trailing column that steals
-  // table width — the "empty right half" bug under table-fixed. Shared by the
-  // status rows and the virtualizer spacer rows below. +1 for the spacer.
-  const colSpan =
-    table.getVisibleLeafColumns().length + 1 + (isDebugEnabled ? 1 : 0);
 
   // Helper to render status rows (loading, error, empty)
   const renderStatusRow = (content: ReactNode, height = "h-16") => (

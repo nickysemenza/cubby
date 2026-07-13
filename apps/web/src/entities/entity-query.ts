@@ -1,5 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
-import type { useTRPC } from "~/trpc/react";
+import type { useTRPC } from "~/integrations/trpc/react";
 import {
   fdcIdFromParam,
   getEntityContract,

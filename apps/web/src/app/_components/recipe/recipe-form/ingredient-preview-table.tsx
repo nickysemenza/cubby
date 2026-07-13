@@ -21,9 +21,9 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
+import { useTRPC } from "~/integrations/trpc/react";
 import { invalidateTRPCQueries, queryKeys } from "~/lib/query-keys";
 import { cn } from "~/lib/utils";
-import { useTRPC } from "~/trpc/react";
 import { CreateIngredientDialog } from "../../combobox/with-search-hook";
 import { EntityInlineLink } from "../../EntityInlineLink";
 import { formatAmounts } from "../../inventory/format-amount";

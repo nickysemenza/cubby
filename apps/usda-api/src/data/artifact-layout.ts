@@ -4,7 +4,7 @@
 // Keep this module dependency-free so it bundles into the Worker and runs
 // under tsx alike.
 
-export const VERSION_RE = /^v[0-9A-Za-z_]+$/;
+const VERSION_RE = /^v[0-9A-Za-z_]+$/;
 
 export function assertVersion(version: string): void {
   if (!VERSION_RE.test(version)) {
@@ -12,7 +12,7 @@ export function assertVersion(version: string): void {
   }
 }
 
-export const DATA_TYPE_ALIASES: Record<string, string> = {
+const DATA_TYPE_ALIASES: Record<string, string> = {
   market_acquistion: "market_acquisition",
 };
 

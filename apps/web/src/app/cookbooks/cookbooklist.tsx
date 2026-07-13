@@ -4,7 +4,7 @@ import { BookOpen } from "lucide-react";
 import { Empty, EmptyDescription, EmptyIcon } from "~/components/ui/empty";
 import { Image } from "~/components/ui/image";
 import { NoneValue } from "~/components/ui/none-value";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC } from "~/integrations/trpc/react";
 
 /**
  * Browse-by-source index: every cookbook a recipe was imported from, with its

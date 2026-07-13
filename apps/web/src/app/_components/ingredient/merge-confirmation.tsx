@@ -9,8 +9,8 @@ import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { NoneValue } from "~/components/ui/none-value";
 import { EntityIcon } from "~/entities/entities";
+import { useTRPC } from "~/integrations/trpc/react";
 import { cn } from "~/lib/utils";
-import { useTRPC } from "~/trpc/react";
 import { EntityInlineLink } from "../EntityInlineLink";
 
 /** One count chip in a candidate row / the net-effect summary. */

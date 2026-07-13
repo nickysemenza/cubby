@@ -104,7 +104,9 @@ export const getRouter = () => {
       typeof __CF_WORKERS__ !== "undefined" && __CF_WORKERS__ === true;
     if (isCfBuild && "serviceWorker" in navigator) {
       const register = () =>
-        navigator.serviceWorker.register("/sw.js").catch(() => {});
+        navigator.serviceWorker.register("/sw.js").catch((error) => {
+          console.error("[service-worker] registration failed", error);
+        });
       // This module executes during hydration, which can be AFTER `load` has
       // already fired — in which case a `load` listener would never run. So
       // register immediately when the document is already complete.

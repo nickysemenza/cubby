@@ -17,9 +17,9 @@ import { FilterableCombobox } from "~/components/ui/combobox";
 import { Description } from "~/components/ui/description";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Input } from "~/components/ui/input";
+import { useTRPC } from "~/integrations/trpc/react";
 import { mealMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
-import { useTRPC } from "~/trpc/react";
 import { useInvalidateMeals } from "./use-meal-mutations";
 
 export function MealDetailPage({ mealId }: { mealId: MealId }) {

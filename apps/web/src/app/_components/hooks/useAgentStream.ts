@@ -1,7 +1,7 @@
 import type { AgentResult } from "@cubby/schemas/agent";
 import { useCallback, useRef, useState } from "react";
+import { useTRPCClient } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
-import { useTRPCClient } from "~/trpc/react";
 
 interface AgentStreamState {
   /** Live answer text, updated as deltas arrive and finalized on done. */

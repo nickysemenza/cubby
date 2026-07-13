@@ -22,9 +22,9 @@ import { typeSupportsQrCode } from "~/app/_components/locations/location-type-th
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
+import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { invalidateTRPCQueries, queryKeys } from "~/lib/query-keys";
-import { useTRPC } from "~/trpc/react";
 
 type Phase = "SELECT_LOCATION" | "SCANNING" | "RECONCILIATION";
 

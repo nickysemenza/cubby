@@ -22,9 +22,9 @@ import { DetailPagePending } from "~/components/route-pending";
 import { Button } from "~/components/ui/button";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
+import { useTRPC } from "~/integrations/trpc/react";
 import { recipeMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
-import { useTRPC } from "~/trpc/react";
 
 const searchSchema = z.object({
   edit: z.boolean().optional().catch(undefined),

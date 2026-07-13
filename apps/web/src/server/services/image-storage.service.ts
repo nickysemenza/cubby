@@ -1,6 +1,6 @@
 import type { InitiateUploadWithoutEntityInput } from "@cubby/schemas/image";
+import { validateExternalHttpUrl } from "@cubby/shared/external-fetch";
 import type { Database } from "~/server/db";
-import { createAppError } from "~/server/errors/app-error";
 import {
   createPendingImageRecord,
   createUploadedImageRecord,
@@ -17,56 +17,6 @@ import {
   getS3ObjectUrl,
   isOurBucketUrl,
 } from "~/server/utils/s3";
-
-const privateIpv4Ranges = [
-  /^10\./,
-  /^127\./,
-  /^169\.254\./,
-  /^172\.(1[6-9]|2\d|3[01])\./,
-  /^192\.168\./,
-  /^0\./,
-];
-
-function assertSafeExternalImageUrl(sourceUrl: string) {
-  let parsed: URL;
-  try {
-    parsed = new URL(sourceUrl);
-  } catch (error) {
-    throw createAppError("IMAGE_IMPORT_FAILED", "Invalid image URL", error);
-  }
-
-  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-    throw createAppError(
-      "IMAGE_IMPORT_FAILED",
-      "Image imports only support HTTP(S) URLs",
-    );
-  }
-
-  if (parsed.username || parsed.password) {
-    throw createAppError(
-      "IMAGE_IMPORT_FAILED",
-      "Image import URLs cannot include credentials",
-    );
-  }
-
-  const host = parsed.hostname.toLowerCase();
-  const ipv6Host = host.replace(/^\[/, "").replace(/\]$/, "");
-  if (
-    host === "localhost" ||
-    host.endsWith(".localhost") ||
-    ipv6Host === "::1" ||
-    (ipv6Host.includes(":") &&
-      (ipv6Host.startsWith("fc") ||
-        ipv6Host.startsWith("fd") ||
-        ipv6Host.startsWith("fe80"))) ||
-    privateIpv4Ranges.some((range) => range.test(host))
-  ) {
-    throw createAppError(
-      "IMAGE_IMPORT_FAILED",
-      "Image import URL points to a private host",
-    );
-  }
-}
 
 export const initiateImageUploadWithoutEntity = async (
   db: Database,
@@ -115,7 +65,7 @@ export const importImageFromUrl = async (
     }
   }
 
-  assertSafeExternalImageUrl(params.sourceUrl);
+  validateExternalHttpUrl(params.sourceUrl);
 
   const stored = await fetchAndStoreImage(
     params.sourceUrl,
@@ -125,13 +75,21 @@ export const importImageFromUrl = async (
     return null;
   }
 
-  const createdImage = await createUploadedImageRecord(db, {
-    key: stored.key,
-    filename: `${params.filenamePrefix}.${contentTypeToExtension(stored.contentType)}`,
-    size: stored.size,
-    contentType: stored.contentType,
-    url: stored.url,
-  });
+  let createdImage: Awaited<ReturnType<typeof createUploadedImageRecord>>;
+  try {
+    createdImage = await createUploadedImageRecord(db, {
+      key: stored.key,
+      filename: `${params.filenamePrefix}.${contentTypeToExtension(stored.contentType)}`,
+      size: stored.size,
+      contentType: stored.contentType,
+      url: stored.url,
+    });
+  } catch (error) {
+    await deleteS3Object(stored.key).catch((cleanupError) => {
+      console.error("Failed to roll back imported image object:", cleanupError);
+    });
+    throw error;
+  }
 
   return { imageId: createdImage.id, key: stored.key, url: stored.url };
 };

@@ -12,9 +12,9 @@ import {
 } from "~/components/ui/collapsible";
 import { Description } from "~/components/ui/description";
 import { EntityIcon, entities } from "~/entities/entities";
+import type { RouterOutputs } from "~/integrations/trpc/react";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn } from "~/lib/utils";
-import type { RouterOutputs } from "~/trpc/react";
 import { EntityInlineLinkById } from "../EntityInlineLinkById";
 import { HoverableTimestamp } from "../HoverableTimestamp";
 

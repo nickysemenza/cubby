@@ -23,8 +23,8 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
+import { useTRPC } from "~/integrations/trpc/react";
 import { cn } from "~/lib/utils";
-import { useTRPC } from "~/trpc/react";
 import { formatAmount, statusClass, statusLabel } from "./meal-format";
 import { getDefaultShoppingRange } from "./meal-search";
 
@@ -399,7 +399,7 @@ function RowGroup({
       {isOpen &&
         perMeal.map((c, i) => (
           <TableRow
-            key={`${c.mealId}-${c.recipeId}-${i}`}
+            key={`${c.mealId}-${c.recipeId}-${c.needValue}-${c.scale}`}
             className={cn(
               "bg-muted/20 text-muted-foreground text-xs",
               i !== perMeal.length - 1 && "border-b-0",

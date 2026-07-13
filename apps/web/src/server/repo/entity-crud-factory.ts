@@ -29,8 +29,8 @@ import {
   entityManifest,
 } from "@cubby/schemas/entity-manifest";
 import type { AppErrorReason } from "@cubby/shared";
-import type { AnyColumn, InferInsertModel } from "drizzle-orm";
-import type { PgTable } from "drizzle-orm/pg-core";
+import type { AnyColumn } from "drizzle-orm";
+import type { PgTable, PgUpdateSetSource } from "drizzle-orm/pg-core";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
@@ -90,7 +90,7 @@ interface EntityCrudConfig<
   /** Manifest key — drives the auditable / soft-delete behavior. */
   entity: AuditableEntity;
   /** Update payload → column values handed to the UPDATE. */
-  toUpdate: (data: TUpdate) => Partial<InferInsertModel<TTable>>;
+  toUpdate: (data: TUpdate) => PgUpdateSetSource<TTable>;
   /** Columns whose change is recorded in the audit diff. */
   auditUpdateFields: readonly string[];
 }

@@ -59,7 +59,8 @@ It's three things at once: an earnest daily-use home utility, a playground for a
 **Mobile (PWA, iOS)**
 - Installable PWA with splash screens
 - Touch-friendly cards and immersive barcode scanner
-- *Offline support and swipe gestures are planned — see [Roadmap](#-roadmap)*
+- App-shell offline fallback with precached styles, fonts, and recipe WASM
+- *Offline data/mutation sync and swipe gestures remain planned — see [Roadmap](#-roadmap)*
 
 ## 🧱 Tech Stack
 
@@ -89,10 +90,12 @@ It's three things at once: an earnest daily-use home utility, a playground for a
 | Path | Package | Role | Consumed by |
 |---|---|---|---|
 | [packages/wasm](packages/wasm) | `@cubby/recipebridge` | WASM bindings — built from `recipebridge/` Rust source via `pnpm run wasm` | `web` |
+| [packages/upc-contract](packages/upc-contract) | `@cubby/upc-contract` | Shared UPC request/response transport contract | `web`, `upc-lookup`, `schemas` |
 | [packages/usda-contract](packages/usda-contract) | `@cubby/usda-contract` | ts-rest endpoint contract for the USDA API | `web`, `usda-api` |
 | [packages/usda-schemas](packages/usda-schemas) | `@cubby/usda-schemas` | Shared Zod schemas for USDA entities | `web`, `usda-api` |
 | [packages/schemas](packages/schemas) | `@cubby/schemas` | Cross-app Zod schemas | `web` |
-| [packages/shared](packages/shared) | `@cubby/shared` | Shared utilities | `web` |
+| [packages/shared](packages/shared) | `@cubby/shared` | Shared utilities, including guarded external fetches | `web`, `upc-lookup` |
+| [packages/worker-tracing](packages/worker-tracing) | `@cubby/worker-tracing` | Cloudflare Worker tracing/Sentry bootstrap | all three Workers |
 | [recipebridge/](recipebridge) | (Rust source) | Source for the ingredient-parser WASM shim | Built into `packages/wasm` |
 
 ## 🏗️ Architecture
@@ -226,8 +229,9 @@ Claude Code can run parallel sessions, each in its own git worktree under
 
 | Command | What it does |
 |---|---|
-| `pnpm run dev` | Start all dev servers (Node, not Workers) |
-| `pnpm run check` | Root Biome check + recursive typecheck + conventions |
+| `pnpm run dev` | Start the web, UPC, and USDA local services |
+| `pnpm run build` | Build all three production Worker bundles |
+| `pnpm run check` | Biome (zero warnings), both TypeScript engines, Worker/OpenAPI drift, Knip, dedupe, audit policy, and conventions |
 | `pnpm run typecheck` | Recursive package typecheck with `tsgo` (TS 7.0 preview, fast) |
 | `pnpm run typecheck:stable` | Recursive package typecheck with stable TypeScript (fallback) |
 | `pnpm run lint` | Recursive package Biome lint |
@@ -236,7 +240,7 @@ Claude Code can run parallel sessions, each in its own git worktree under
 | `pnpm run test` | Recursive non-watch Vitest unit + integration |
 | `pnpm run test:e2e` | Playwright E2E (uses IntegresQL) |
 | `pnpm --filter @cubby/web run db:push` | Push the web Drizzle schema to the configured Postgres DB |
-| `pnpm --filter @cubby/web run build:cf` | Build for Cloudflare Workers |
+| `pnpm --filter @cubby/web run build:cf` | Build only the main web Worker |
 | `pnpm --filter @cubby/web run preview:cf` | Run the Workers build locally |
 | `pnpm --filter @cubby/web run deploy:cf` | Deploy to Cloudflare Workers |
 | `pnpm run wasm` | Rebuild `@cubby/recipebridge` from Rust source |
@@ -246,6 +250,9 @@ recursive checks/tests. Their D1 databases do not use the web `db:push` workflow
 generate/apply their D1 migrations locally first, run the package checks, then apply
 remote D1 migrations before deploying code that depends on the new schema. Use staged
 expand/migrate/deploy/cleanup changes for incompatible D1 schema changes.
+
+Temporary upstream pins, peer-range exceptions, and transitive deprecation
+rationales are tracked in [docs/dependency-exceptions.md](docs/dependency-exceptions.md).
 
 In dev, `await __jsProfile(5000)` in the browser console captures a CPU flame summary (the hottest main-thread frames over the next N ms) — it catches "every measurement is fast but the page is slow" jank that React's profiler can't see (commit-phase / native / third-party work).
 

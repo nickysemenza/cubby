@@ -10,7 +10,10 @@ import { getProducts } from "../db/products";
 import { getFreshMisses } from "../db/misses";
 import { resolveProduct, resolveProductOutcome } from "../services/products";
 import { getImageUrl } from "../storage/images";
-import { bulkLookupRequestSchema } from "../schemas/product";
+import {
+  bulkLookupRequestSchema,
+  productSourceSchema,
+} from "../schemas/product";
 import type {
   ProductLookupPublicResponse,
   ProductLookupResponse,
@@ -37,7 +40,7 @@ function toResponse(p: Product, baseUrl: string): ProductLookupPublicResponse {
     description: p.description,
     priceDollars: p.priceDollars,
     imageUrl: p.imageKey ? getImageUrl(p.imageKey, baseUrl) : null,
-    source: p.source,
+    source: productSourceSchema.parse(p.source),
   };
 }
 

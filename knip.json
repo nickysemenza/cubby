@@ -1,24 +1,94 @@
 {
-  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
-    "apps/web": {},
+    "apps/web": {
+      "entry": [
+        "src/start.ts!",
+        "src/router.tsx!",
+        "src/routes/**/*.{ts,tsx}!",
+        "src/server.ts!",
+        "src/sw.ts!",
+        "src/styles.css!",
+        "src/lib/recipebridge-cf.ts!",
+        "src/integrations/**/*.{ts,tsx}!",
+        "src/**/*.test.{ts,tsx}!",
+        "tests/**/*.{ts,tsx}!",
+        "scripts/**/*.{ts,mjs}!",
+        "tooling/**/*.{ts,tsx}!",
+        "drizzle.config.ts!",
+        "instrument.server.mjs!"
+      ],
+      "project": ["src/**/*.{ts,tsx}!"],
+      "paths": {
+        "~/*": ["./src/*"],
+        "tooling/*": ["./tooling/*"]
+      },
+      "ignoreBinaries": ["tsgo", "rsvg-convert", "magick"],
+      "ignoreDependencies": [
+        "@fontsource-variable/inter",
+        "@fontsource-variable/jetbrains-mono",
+        "@fontsource-variable/space-grotesk",
+        "@testing-library/.+",
+        "@vitest/.+",
+        "@tailwindcss/postcss",
+        "@tailwindcss/vite",
+        "postcss",
+        "@opentelemetry/.+",
+        "@tanstack/router-plugin",
+        "vite-plugin-wasm",
+        "vite-plugin-top-level-await",
+        "rollup"
+      ],
+      "vitest": { "config": "vitest.config.ts" },
+      "playwright": { "config": "playwright.config.ts" }
+    },
     "apps/upc-lookup": {
-      "entry": "src/**/*.ts",
-      "ignoreDependencies": ["@cubby/.+"]
+      "entry": [
+        "src/index.tsx!",
+        "src/**/*.test.ts!",
+        "vite.config.ts!",
+        "drizzle.config.ts!"
+      ],
+      "project": ["src/**/*.{ts,tsx}!"]
     },
     "apps/usda-api": {
-      "entry": "src/**/*.ts",
-      "ignoreDependencies": ["@cubby/.+"]
+      "entry": [
+        "src/worker.ts!",
+        "src/**/*.test.ts!",
+        "scripts/**/*.ts!",
+        "drizzle.config.ts!"
+      ],
+      "project": ["src/**/*.ts!"]
+    },
+    "packages/schemas": {
+      "entry": ["src/index.ts!", "src/**/*.test.ts!"],
+      "project": ["src/**/*.ts!"]
+    },
+    "packages/shared": {
+      "entry": ["src/index.ts!", "src/**/*.test.ts!"],
+      "project": ["src/**/*.ts!"]
+    },
+    "packages/upc-contract": {
+      "entry": ["src/index.ts!", "src/**/*.test.ts!"],
+      "project": ["src/**/*.ts!"]
     },
     "packages/usda-contract": {
-      "entry": "src/**/*.ts"
+      "entry": ["src/index.ts!", "src/**/*.test.ts!"],
+      "project": ["src/**/*.ts!"]
     },
     "packages/usda-schemas": {
-      "entry": "src/**/*.ts"
+      "entry": ["src/index.ts!", "src/**/*.test.ts!"],
+      "project": ["src/**/*.ts!"]
     },
-    "packages/wasm": {
-      "ignore": ["**/*"]
+    "packages/worker-tracing": {
+      "entry": ["src/index.ts!", "src/**/*.test.ts!"],
+      "project": ["src/**/*.ts!"],
+      "ignoreDependencies": ["cloudflare"]
     }
   },
-  "ignoreWorkspaces": ["packages/wasm"]
+  "ignore": [".claude/workflows/**"],
+  "ignoreDependencies": ["zod"],
+  "ignoreBinaries": ["wasm-pack"],
+  "ignoreWorkspaces": ["packages/wasm"],
+  "tags": ["-lintignore"]
 }

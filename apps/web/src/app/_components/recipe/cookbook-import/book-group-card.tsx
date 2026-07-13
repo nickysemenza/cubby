@@ -17,8 +17,8 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
+import { useTRPC } from "~/integrations/trpc/react";
 import { importRecipeSignature } from "~/lib/recipe-signature";
-import { useTRPC } from "~/trpc/react";
 import {
   RecipeImportCard,
   type RecipeImportStatus,

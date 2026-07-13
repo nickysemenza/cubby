@@ -12,7 +12,7 @@ export const env = createEnv({
     R2_ENDPOINT: z.string().url(),
     R2_BUCKET_NAME: z.string().min(1),
     R2_PUBLIC_URL: z.string().url(),
-    R2_KEY_PREFIX: z.string().min(1).default("recipehub-dev"),
+    R2_KEY_PREFIX: z.string().min(1).default("cubby-dev"),
     USDA_API_URL: z.string().url().default("http://localhost:8080/"),
     UPC_LOOKUP_API_URL: z
       .string()

@@ -10,19 +10,6 @@ import type { Product, NewProduct } from "./schema";
 // D1 caps bound parameters per statement; chunk IN-lists well under the limit.
 const IN_CHUNK = 100;
 
-/** Fields an admin/agent may set when creating or editing a product. */
-export type ProductWriteInput = {
-  name: string;
-  manufacturer?: string | null;
-  brand?: string | null;
-  category?: string | null;
-  description?: string | null;
-  priceDollars?: number | null;
-  imageKey?: string | null;
-  source?: string;
-  sourceData?: string | null;
-};
-
 /** Get a single product by UPC, or undefined if not found. */
 export async function getProduct(
   db: Database,

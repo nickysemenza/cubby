@@ -9,8 +9,8 @@ import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { StatusText } from "~/components/ui/status-text";
+import { useTRPC } from "~/integrations/trpc/react";
 import { formatCurrency } from "~/lib/utils";
-import { useTRPC } from "~/trpc/react";
 import { CopyJsonButton } from "./copy-debug-button";
 
 /**

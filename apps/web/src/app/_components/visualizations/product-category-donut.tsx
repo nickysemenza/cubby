@@ -8,7 +8,7 @@ import {
   getCategoryColor,
 } from "~/app/_components/products/category-theme";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC } from "~/integrations/trpc/react";
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 import { VizTooltip } from "./viz-overlay";
 

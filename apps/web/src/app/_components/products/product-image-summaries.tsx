@@ -1,7 +1,7 @@
 import type { ImageOut } from "@cubby/schemas/image";
 import { createContext, type ReactNode, useContext } from "react";
 import { useChunkedRecordQuery } from "~/app/_components/hooks/useChunkedRecordQuery";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC } from "~/integrations/trpc/react";
 
 type ProductImageMap = Record<string, ImageOut[]>;
 

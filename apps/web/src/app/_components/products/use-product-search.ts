@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC } from "~/integrations/trpc/react";
 import { buildProductComboboxItem } from "../combobox/combobox-builders";
 import type { ComboboxItem } from "../combobox/combobox-types";
 

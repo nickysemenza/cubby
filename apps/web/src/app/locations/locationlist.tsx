@@ -9,8 +9,8 @@ import { FolderInput, Printer, ScanBarcode } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
+import { useTRPC } from "~/integrations/trpc/react";
 import { locationMutationInvalidateKeys } from "~/lib/query-keys";
-import { useTRPC } from "~/trpc/react";
 import {
   createCreatedAtColumn,
   createEntityInlineLinkColumn,

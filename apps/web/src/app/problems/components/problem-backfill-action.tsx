@@ -5,12 +5,12 @@ import { toast } from "sonner";
 import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
 import { Stack } from "~/components/layout";
 import { Progress } from "~/components/ui/progress";
+import { useTRPC, useTRPCClient } from "~/integrations/trpc/react";
 import type { BulkProgressEvent } from "~/lib/bulk-progress";
 import {
   invalidateTRPCQueries,
   problemsMutationInvalidateKeys,
 } from "~/lib/query-keys";
-import { useTRPC, useTRPCClient } from "~/trpc/react";
 import { ProblemActionButton } from "./problem-action-button";
 
 type TRPCApi = ReturnType<typeof useTRPC>;

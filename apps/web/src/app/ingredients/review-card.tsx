@@ -10,9 +10,9 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Kbd, KbdGroup } from "~/components/ui/kbd";
 import { Spinner } from "~/components/ui/spinner";
+import { useTRPC } from "~/integrations/trpc/react";
 import { dedupeUsdaFoodsByUpc } from "~/lib/usda-food-stats";
 import type { EnrichmentProposal } from "~/server/services/ai-enrichment/proposals";
-import { useTRPC } from "~/trpc/react";
 import {
   EnrichmentEditor,
   type EnrichmentEditorHandle,

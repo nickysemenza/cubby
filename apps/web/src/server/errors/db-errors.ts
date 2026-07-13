@@ -58,7 +58,7 @@ function columnsFromDetail(detail?: string): string | null {
 /** Extract the referenced table from an FK detail (`… in table "Ingredient".`). */
 function referencedTableFromDetail(detail?: string): string | null {
   const match = detail?.match(/in table "([^"]+)"/);
-  return match ? prettyTable(match[1]) : null;
+  return match?.[1] ? prettyTable(match[1]) : null;
 }
 
 /**
@@ -73,7 +73,7 @@ export function isUniqueViolation(
   constraint?: string,
 ): boolean {
   const pg = findPgError(error);
-  if (!pg || pg.code !== "23505") return false;
+  if (pg?.code !== "23505") return false;
   return constraint ? pg.constraint === constraint : true;
 }
 

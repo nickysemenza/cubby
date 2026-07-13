@@ -9,7 +9,9 @@ export const meta = {
   ],
 }
 
-const ROOT = '/Users/nicky/dev/cubby'
+// The workflow is launched from the selected repository root. Avoid embedding
+// one developer's checkout so worktrees and other machines resolve correctly.
+const ROOT = process.cwd()
 const DEFAULT_REPORT_PATH = '/tmp/cubby-repo-audit-report.md'
 const REPORT_PATH =
   (typeof args === 'object' && args && args.reportPath) ||

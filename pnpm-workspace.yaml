@@ -3,12 +3,29 @@ packages:
   - packages/*
 
 overrides:
+  effect: ^3.20.0
+  esbuild: ^0.28.1
+  lodash: ^4.18.0
+  next: ^16.2.6
+  postcss: ^8.5.16
+  qs: ^6.15.2
+  rollup: ^4.59.0
+  seroval: ^1.4.1
   vite: ^8.0.0
+  webpack: ^5.104.1
 
 packageExtensions:
   "@hookform/resolvers":
     peerDependencies:
       zod: ^4.0.0
+
+# Upstream peer ranges lag the versions Cubby validates in both TypeScript
+# engines. Keep these exceptions narrow and remove them when Triplit and Sentry
+# publish compatible ranges.
+peerDependencyRules:
+  allowedVersions:
+    "@cloudflare/workers-types": ">=4 <6"
+    typescript: ">=5 <7"
 
 onlyBuiltDependencies:
   - better-sqlite3

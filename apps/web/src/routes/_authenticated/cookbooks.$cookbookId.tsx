@@ -19,13 +19,13 @@ import { Image } from "~/components/ui/image";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 import { useTabParam } from "~/hooks/useTabParam";
+import { useTRPC, useTRPCClient } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
   invalidateTRPCQueries,
   recipeCookbookMutationInvalidateKeys,
   recipeMutationInvalidateKeys,
 } from "~/lib/query-keys";
-import { useTRPC, useTRPCClient } from "~/trpc/react";
 
 const searchSchema = z.object({
   // Active tab, deep-linkable. Default ("recipes") is omitted from the URL.

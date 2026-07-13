@@ -26,13 +26,13 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
+import { useTRPC } from "~/integrations/trpc/react";
 import { formatCurrency } from "~/lib/utils";
 import type {
   NotionProject,
   NotionPurchase,
   NotionTask,
 } from "~/server/clients/notion";
-import { useTRPC } from "~/trpc/react";
 
 import {
   DashboardFilters,

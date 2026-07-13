@@ -15,11 +15,14 @@
 import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
+import { gzipSync } from "node:zlib";
 import { build } from "esbuild";
 
 const CLIENT_DIR = path.resolve("dist/client");
 const SW_ENTRY = path.resolve("src/sw.ts");
 const SW_OUT = path.join(CLIENT_DIR, "sw.js");
+const WASM_GZIP_BUDGET = 1.1 * 1024 * 1024;
+const PRECACHE_GZIP_BUDGET = 1.35 * 1024 * 1024;
 
 // Precache stable app-shell support assets. Runtime JS chunks are intentionally
 // left to normal HTTP/runtime caching so SW install does not fetch every route.
@@ -51,15 +54,31 @@ function shouldPrecache(name) {
 
 const files = await walk(CLIENT_DIR);
 const manifest = [];
+let precacheGzipBytes = 0;
+let wasmGzipBytes = 0;
 for (const file of files) {
   const name = path.basename(file);
   if (!shouldPrecache(name)) continue;
   const buf = await readFile(file);
   const url = `/${path.relative(CLIENT_DIR, file).split(path.sep).join("/")}`;
   const revision = createHash("md5").update(buf).digest("hex").slice(0, 16);
+  const gzipBytes = gzipSync(buf).byteLength;
+  precacheGzipBytes += gzipBytes;
+  if (path.extname(file) === ".wasm") wasmGzipBytes += gzipBytes;
   manifest.push({ url, revision });
 }
 manifest.sort((a, b) => a.url.localeCompare(b.url));
+
+if (wasmGzipBytes > WASM_GZIP_BUDGET) {
+  throw new Error(
+    `WASM gzip budget exceeded: ${wasmGzipBytes} > ${WASM_GZIP_BUDGET}`,
+  );
+}
+if (precacheGzipBytes > PRECACHE_GZIP_BUDGET) {
+  throw new Error(
+    `Precache gzip budget exceeded: ${precacheGzipBytes} > ${PRECACHE_GZIP_BUDGET}`,
+  );
+}
 
 await build({
   entryPoints: [SW_ENTRY],
@@ -73,5 +92,5 @@ await build({
 });
 
 console.log(
-  `[build-sw] wrote dist/client/sw.js — precaching ${manifest.length} assets`,
+  `[build-sw] wrote dist/client/sw.js — precaching ${manifest.length} assets (${precacheGzipBytes} bytes gzip; WASM ${wasmGzipBytes})`,
 );

@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import type { z } from "zod";
 import { useInventoryInvalidation } from "~/app/_components/inventory/hooks";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC } from "~/integrations/trpc/react";
 
 type InventoryItem = z.infer<typeof inventoryListItemOut>;
 

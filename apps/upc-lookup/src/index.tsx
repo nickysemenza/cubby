@@ -73,6 +73,7 @@ app.get("/images/:filename", async (c) => {
   const headers = new Headers();
   object.writeHttpMetadata(headers);
   headers.set("Cache-Control", "public, max-age=31536000, immutable");
+  headers.set("X-Content-Type-Options", "nosniff");
 
   return new Response(object.body, { headers });
 });

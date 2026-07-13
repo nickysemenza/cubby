@@ -24,7 +24,10 @@ import {
 } from "@cubby/schemas/recipe";
 import type { mcpUnitMappingInput } from "@cubby/schemas/unitmapping";
 import type { foodSummary } from "@cubby/usda-schemas";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type {
+  McpServer,
+  ToolCallback,
+} from "@modelcontextprotocol/sdk/server/mcp.js";
 import { normalizeObjectSchema } from "@modelcontextprotocol/sdk/server/zod-compat.js";
 import { toJsonSchemaCompat } from "@modelcontextprotocol/sdk/server/zod-json-schema-compat.js";
 import type {
@@ -35,6 +38,7 @@ import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { TRPCError } from "@trpc/server";
 import { omitBy } from "es-toolkit";
 import { z } from "zod";
+import type { DomainCaller } from "~/server/api/domain";
 
 /**
  * Shared MCP tool-handler scaffolding.
@@ -44,26 +48,30 @@ import { z } from "zod";
  * helpers, the slim output projections, and the CRUD handler factories.
  */
 
-// biome-ignore lint/suspicious/noExplicitAny: server-side tRPC caller type
-type Caller = any;
+type Caller = DomainCaller;
 
 type ToolExtra = { authInfo?: { extra?: Record<string, unknown> } };
 
 type ZodSchemaLike = z.ZodType | Record<string, z.ZodType>;
+type InferSchemaLike<T extends ZodSchemaLike> = T extends z.ZodType
+  ? z.infer<T>
+  : T extends z.core.$ZodShape
+    ? z.infer<z.ZodObject<T>>
+    : Record<string, unknown>;
 
-type McpToolHandler = (
-  params: Record<string, unknown>,
+type McpToolHandler<TInput extends ZodSchemaLike> = (
+  params: InferSchemaLike<TInput>,
   extra: ToolExtra,
 ) => Promise<unknown | CallToolResult>;
 
-type RegisterMcpToolConfig = {
+type RegisterMcpToolConfig<TInput extends ZodSchemaLike> = {
   name: string;
   description: string;
   title?: string;
-  inputSchema?: ZodSchemaLike;
+  inputSchema?: TInput;
   outputSchema: z.ZodType;
   annotations: ToolAnnotations;
-  handler: McpToolHandler;
+  handler: McpToolHandler<TInput>;
 };
 
 type SdkRegisteredTool = {
@@ -245,38 +253,45 @@ function isCallToolResult(value: unknown): value is CallToolResult {
   );
 }
 
-export function registerMcpTool(
+export function registerMcpTool<TInput extends ZodSchemaLike>(
   server: McpServer,
-  config: RegisterMcpToolConfig,
+  config: RegisterMcpToolConfig<TInput>,
 ) {
+  const inputSchema = normalizeObjectSchema(config.inputSchema) ?? z.object({});
+  const callback = async (
+    params: Record<string, unknown>,
+    extra: ToolExtra,
+  ): Promise<CallToolResult> => {
+    try {
+      const result = await config.handler(
+        (params ?? {}) as InferSchemaLike<TInput>,
+        extra as ToolExtra,
+      );
+      if (isCallToolResult(result)) {
+        return result;
+      }
+      return structuredSuccess(result, config.outputSchema);
+    } catch (error) {
+      return structuredError(formatToolError(error));
+    }
+  };
   server.registerTool(
     config.name,
     {
       title: config.title,
       description: config.description,
-      inputSchema: config.inputSchema,
+      inputSchema,
       outputSchema: config.outputSchema,
       annotations: config.annotations,
     },
-    async (params: Record<string, unknown>, extra: ToolExtra) => {
-      try {
-        const result = await config.handler(
-          (params ?? {}) as Record<string, unknown>,
-          extra as ToolExtra,
-        );
-        if (isCallToolResult(result)) {
-          return result;
-        }
-        return structuredSuccess(result, config.outputSchema);
-      } catch (error) {
-        return structuredError(formatToolError(error));
-      }
-    },
+    callback as unknown as ToolCallback<typeof inputSchema>,
   );
 }
 
 export function getCaller(extra: ToolExtra): Caller {
-  return extra.authInfo?.extra?.caller;
+  const caller = extra.authInfo?.extra?.caller;
+  if (!caller) throw new Error("Authenticated tRPC caller is missing");
+  return caller as Caller;
 }
 
 /** Render an error thrown by a tool handler into a single message string. */
@@ -538,9 +553,30 @@ export const idParam = (label: string) => z.string().describe(`${label} ID`);
 const idsParam = (label: string) =>
   z.array(z.string()).describe(`Array of ${label} IDs to delete`);
 
+interface DynamicEntityRouter {
+  getByID(input: { id: unknown }): Promise<unknown>;
+  delete(input: { ids: string[] }): Promise<unknown>;
+  update(input: {
+    id: unknown;
+    data: Record<string, unknown>;
+  }): Promise<unknown>;
+  list(input: Record<string, unknown>): Promise<{
+    meta: unknown;
+    items: unknown[];
+  }>;
+}
+
+function getEntityRouter(
+  caller: Caller,
+  routerName: string,
+): DynamicEntityRouter {
+  const routers = caller as unknown as Record<string, unknown>;
+  return routers[routerName] as DynamicEntityRouter;
+}
+
 function getByIdHandler(routerName: string, slim: Slim = identity) {
   return async (params: Record<string, unknown>, extra: ToolExtra) => {
-    const result = await getCaller(extra)[routerName].getByID({
+    const result = await getEntityRouter(getCaller(extra), routerName).getByID({
       id: params.id,
     });
     return respond(result, slim);
@@ -550,7 +586,7 @@ function getByIdHandler(routerName: string, slim: Slim = identity) {
 function deleteHandler(routerName: string) {
   return async (params: Record<string, unknown>, extra: ToolExtra) => {
     const ids = params.ids as string[];
-    await getCaller(extra)[routerName].delete({ ids });
+    await getEntityRouter(getCaller(extra), routerName).delete({ ids });
     return { deleted: ids.length };
   };
 }
@@ -559,7 +595,10 @@ function updateHandler(routerName: string, slim: Slim = identity) {
   return async (params: Record<string, unknown>, extra: ToolExtra) => {
     const { id, ...rest } = params;
     const data = omitBy(rest, (v) => v === undefined);
-    const result = await getCaller(extra)[routerName].update({ id, data });
+    const result = await getEntityRouter(getCaller(extra), routerName).update({
+      id,
+      data,
+    });
     return respond(result, slim);
   };
 }
@@ -582,7 +621,7 @@ function listHandler(
       : () => ({}));
 
   return async (params: Record<string, unknown>, extra: ToolExtra) => {
-    const result = await getCaller(extra)[routerName].list({
+    const result = await getEntityRouter(getCaller(extra), routerName).list({
       filters: resolveFilters(params),
       sort: { orderBy: config.orderBy, direction: config.direction ?? "asc" },
       pagination: {
@@ -701,13 +740,13 @@ export function registerEntityDeleteTool(
   });
 }
 
-export function registerEntityUpdateTool(
+export function registerEntityUpdateTool<TInput extends ZodSchemaLike>(
   server: McpServer,
   config: {
     name: string;
     description: string;
     router: string;
-    inputSchema: ZodSchemaLike;
+    inputSchema: TInput;
     outputSchema: z.ZodType;
     slim: Slim;
     annotations: ToolAnnotations;
@@ -719,22 +758,26 @@ export function registerEntityUpdateTool(
     inputSchema: config.inputSchema,
     outputSchema: config.outputSchema,
     annotations: config.annotations,
-    handler: updateHandler(config.router, config.slim),
+    handler: async (params, extra) =>
+      updateHandler(config.router, config.slim)(
+        params as Record<string, unknown>,
+        extra,
+      ),
   });
 }
 
-export function registerEntityCreateTool(
+export function registerEntityCreateTool<TInput extends ZodSchemaLike>(
   server: McpServer,
   config: {
     name: string;
     description: string;
-    inputSchema: ZodSchemaLike;
+    inputSchema: TInput;
     outputSchema: z.ZodType;
     slim: Slim;
     annotations: ToolAnnotations;
     create: (
       caller: Caller,
-      params: Record<string, unknown>,
+      params: InferSchemaLike<TInput>,
     ) => Promise<unknown>;
   },
 ) {
@@ -752,21 +795,23 @@ export function registerEntityCreateTool(
 }
 
 /** Register a tool that calls a tRPC procedure and returns the result as-is. */
-export function registerRouterTool(
+export function registerRouterTool<
+  TInput extends ZodSchemaLike = Record<string, never>,
+>(
   server: McpServer,
   config: {
     name: string;
     description: string;
-    inputSchema?: ZodSchemaLike;
+    inputSchema?: TInput;
     outputSchema: z.ZodType;
     annotations: ToolAnnotations;
-    call: (caller: Caller, params: Record<string, unknown>) => Promise<unknown>;
+    call: (caller: Caller, params: InferSchemaLike<TInput>) => Promise<unknown>;
   },
 ) {
   registerMcpTool(server, {
     name: config.name,
     description: config.description,
-    inputSchema: config.inputSchema ?? {},
+    inputSchema: config.inputSchema ?? ({} as TInput),
     outputSchema: config.outputSchema,
     annotations: config.annotations,
     handler: async (params, extra) => config.call(getCaller(extra), params),

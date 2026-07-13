@@ -3,7 +3,7 @@ import { MAX_PAGE_SIZE } from "@cubby/schemas/pagination";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
 import type { z } from "zod";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC } from "~/integrations/trpc/react";
 
 type InventoryItem = z.infer<typeof inventoryListItemOut>;
 

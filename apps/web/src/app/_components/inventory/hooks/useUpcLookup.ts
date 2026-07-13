@@ -8,8 +8,8 @@ import { upc as upcSchema } from "@cubby/usda-schemas";
 import { useMutation } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { toast } from "sonner";
+import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
-import { useTRPC } from "~/trpc/react";
 import { useProductLookupInvalidation } from "./useInventoryMutation";
 
 interface UseUpcLookupOptions {
