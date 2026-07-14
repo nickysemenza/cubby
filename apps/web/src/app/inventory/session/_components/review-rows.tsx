@@ -33,9 +33,7 @@ export function LocationReviewCard({
 }) {
   const itemCount = location.totalItemCount ?? 0;
   return (
-    <div
-      className={cn("border border-[var(--border)] border-l-4 p-2", className)}
-    >
+    <div className={cn("border border-[var(--border)] p-2", className)}>
       <Row align="start" gap="sm" className="min-w-0">
         <div className="flex h-12 w-12 shrink-0 items-center justify-center border border-primary/30 bg-primary/10 text-primary">
           {location.images[0]?.url ? (
@@ -93,9 +91,7 @@ export function ItemReviewCard({
   controls: ReactNode;
 }) {
   return (
-    <div
-      className={cn("border border-[var(--border)] border-l-4 p-2", className)}
-    >
+    <div className={cn("border border-[var(--border)] p-2", className)}>
       <Row align="center" gap="sm" wrap className="min-w-0">
         <Row align="center" gap="sm" className="min-w-56 flex-1">
           <Image

@@ -4,20 +4,6 @@ import type { InfLocation } from "@cubby/schemas/location";
 
 export type InventoryItem = InventoryWithLocationAndProductOut;
 
-export type ExpectedPhotoTarget =
-  | {
-      kind: "product";
-      id: InventoryItem["product"]["id"];
-      name: string;
-      existingImageId?: string;
-    }
-  | {
-      kind: "location";
-      id: InfLocation["id"];
-      name: string;
-      existingImageId?: string;
-    };
-
 export interface UndoAction {
   run: () => Promise<void>;
 }
@@ -27,4 +13,9 @@ export interface UndoAction {
 export type ItemResolution =
   | { kind: "verify" }
   | { kind: "adjust"; amount: Amount }
-  | { kind: "remove" };
+  | { kind: "remove" }
+  | {
+      kind: "relocate";
+      targetLocationId: InfLocation["id"];
+      targetLocationName: string;
+    };

@@ -8,7 +8,7 @@ import { unsafeInventoryId } from "@cubby/schemas/identifiers";
 import type {
   BulkMovePayload,
   InventoryBulkOperationItem,
-  InventorySessionResolution,
+  ReconcileSessionPayload,
 } from "@cubby/schemas/inventory";
 import { and, eq, inArray, max } from "drizzle-orm";
 import { uniq } from "es-toolkit";
@@ -616,54 +616,145 @@ export const bulkMoveInventoryEntries = async (
 
 /**
  * Commit a location's recount as one atomic diff, then stamp the location's
- * `lastBulkInventory`. Each resolution is one staged decision about an expected
- * row: `verify` records `verifiedAt`; `adjust` updates the amount (+ valuation +
- * `verifiedAt`); `remove` soft-deletes. Verify is a pure audit signal — only
- * adjust/remove change inventory, so `recomputeNeeded` tells the caller whether
- * to dispatch a valuation recompute. Relocations flow through `bulkMove`. Ids
- * that don't live at this location (stale / foreign) are ignored.
+ * `lastBulkInventory`. The expected-id set + row snapshot timestamp provide a
+ * lightweight stale-tab guard: if the location changed after the client loaded,
+ * the entire commit is rejected. Each resolution is one staged decision about an
+ * expected row: `verify` records `verifiedAt`; `adjust` updates the amount (+
+ * valuation + `verifiedAt`); `remove` soft-deletes; `relocate` moves the whole
+ * row and merges at the destination when needed.
  */
 export const reconcileLocationSession = async (
   db: Database,
-  locationId: LocationId,
-  resolutions: InventorySessionResolution[],
+  {
+    locationId,
+    expectedInventoryEntryIds,
+    snapshotUpdatedAt,
+    resolutions,
+  }: ReconcileSessionPayload,
   actor: ActorContext,
 ) => {
   const { processed, removedIds, recomputeNeeded } = await withTransaction(
     db,
     async (tx: DrizzleTransaction) => {
       await assertLiveTargets(tx, { locationId });
-      const now = new Date();
-      const ids = uniq(resolutions.map((r) => r.inventoryEntryId));
+      const relocationTargets = uniq(
+        resolutions
+          .filter((resolution) => resolution.kind === "relocate")
+          .map((resolution) => resolution.targetLocationId),
+      );
+      for (const targetLocationId of relocationTargets) {
+        if (targetLocationId === locationId) {
+          throw createAppError(
+            "CONSTRAINT_VIOLATION",
+            "Relocation destination must differ from the audited location",
+          );
+        }
+        await assertLiveTargets(tx, { locationId: targetLocationId });
+      }
 
-      const existing =
-        ids.length > 0
-          ? await tx.query.inventoryEntry.findMany({
-              where: and(
-                inArray(inventoryEntry.id, ids),
-                eq(inventoryEntry.locationId, locationId),
-                notDeleted(inventoryEntry),
-              ),
-              ...relations.inventory.full,
-            })
-          : [];
+      const now = new Date();
+      const expectedIds = uniq(expectedInventoryEntryIds);
+      const resolutionIds = uniq(
+        resolutions.map((resolution) => resolution.inventoryEntryId),
+      );
+
+      // Read the complete live snapshot in the transaction. Id-set equality
+      // catches add/remove/move races; max(updatedAt) catches quantity/product
+      // edits that leave the ids unchanged.
+      const existing = await tx.query.inventoryEntry.findMany({
+        where: and(
+          eq(inventoryEntry.locationId, locationId),
+          notDeleted(inventoryEntry),
+        ),
+        ...relations.inventory.full,
+      });
+      const latestRows = await tx
+        .select({ latest: max(inventoryEntry.updatedAt) })
+        .from(inventoryEntry)
+        .where(
+          and(
+            eq(inventoryEntry.locationId, locationId),
+            notDeleted(inventoryEntry),
+          ),
+        );
+      const latest = latestRows[0]?.latest ?? null;
+      const liveIds = new Set(existing.map((entry) => entry.id));
+      const expectedSet = new Set(expectedIds);
+      const resolutionSet = new Set(resolutionIds);
+      const sameIds =
+        liveIds.size === expectedSet.size &&
+        [...liveIds].every((id) => expectedSet.has(id));
+      const everyExpectedResolved =
+        expectedSet.size === resolutionSet.size &&
+        [...expectedSet].every((id) => resolutionSet.has(id));
+
+      if (
+        !sameIds ||
+        !everyExpectedResolved ||
+        resolutions.length !== resolutionIds.length ||
+        latest?.getTime() !== snapshotUpdatedAt?.getTime()
+      ) {
+        throw createAppError(
+          "INVENTORY_STALE",
+          "Inventory at this location changed during the recount — refresh and review the bin again.",
+        );
+      }
+
       const existingById = new Map(existing.map((e) => [e.id, e]));
 
-      // Prices for adjusted entries' products (to recompute valuation).
-      const adjustProductIds = uniq(
+      // Prices for adjusted/relocated entries' products (valuation can change
+      // when a relocation merges with an existing destination row).
+      const changedProductIds = uniq(
         resolutions
-          .filter((r) => r.kind === "adjust")
+          .filter(
+            (resolution) =>
+              resolution.kind === "adjust" || resolution.kind === "relocate",
+          )
           .map((r) => existingById.get(r.inventoryEntryId)?.productId)
           .filter((id): id is ProductId => id != null),
       );
       const priceMap = new Map<string, number | null>();
-      if (adjustProductIds.length > 0) {
+      if (changedProductIds.length > 0) {
         const products = await tx
           .select({ id: product.id, price: product.price })
           .from(product)
-          .where(inArray(product.id, adjustProductIds));
+          .where(inArray(product.id, changedProductIds));
         for (const p of products) priceMap.set(p.id, p.price);
       }
+
+      const relocationProductIds = uniq(
+        resolutions
+          .filter((resolution) => resolution.kind === "relocate")
+          .map(
+            (resolution) =>
+              existingById.get(resolution.inventoryEntryId)?.productId,
+          )
+          .filter((id): id is ProductId => id != null),
+      );
+      const targetRows =
+        relocationTargets.length > 0 && relocationProductIds.length > 0
+          ? await tx
+              .select({
+                id: inventoryEntry.id,
+                productId: inventoryEntry.productId,
+                locationId: inventoryEntry.locationId,
+                amount: inventoryEntry.amount,
+              })
+              .from(inventoryEntry)
+              .where(
+                and(
+                  inArray(inventoryEntry.locationId, relocationTargets),
+                  inArray(inventoryEntry.productId, relocationProductIds),
+                  notDeleted(inventoryEntry),
+                ),
+              )
+          : [];
+      const targetRowsByLocationProduct = new Map(
+        targetRows.map((entry) => [
+          `${entry.locationId}:${entry.productId}`,
+          entry,
+        ]),
+      );
 
       const auditEntries: AuditEntryInput[] = [];
       const resultIds: string[] = [];
@@ -723,11 +814,88 @@ export const reconcileLocationSession = async (
               action: "delete",
             });
           })
+          .with({ kind: "relocate" }, async ({ targetLocationId }) => {
+            const sourceAmount = parseInventoryAmount(before.amount, before.id);
+            const targetKey = `${targetLocationId}:${before.productId}`;
+            const target = targetRowsByLocationProduct.get(targetKey);
+            const productPrice = priceMap.get(before.productId) ?? null;
+
+            if (target) {
+              const targetAmount = parseInventoryAmount(
+                target.amount,
+                target.id,
+              );
+              const nextAmount = {
+                value: targetAmount.value + sourceAmount.value,
+                unit: sourceAmount.unit,
+              };
+              const updatedTarget = await updateAndReturn(
+                tx,
+                inventoryEntry,
+                {
+                  amount: nextAmount,
+                  valuation: computeInventoryValuation(
+                    nextAmount.value,
+                    productPrice,
+                  ),
+                  verifiedAt: now,
+                },
+                eq(inventoryEntry.id, target.id),
+              );
+              const targetChanges = computeChanges(target, updatedTarget, [
+                "amount",
+              ]);
+              auditEntries.push({
+                entityType: "inventory",
+                entityId: target.id,
+                action: "update",
+                ...(targetChanges ? { changes: targetChanges } : {}),
+              });
+              await tx
+                .delete(inventoryEntry)
+                .where(eq(inventoryEntry.id, before.id));
+              removedIds.push(before.id);
+              auditEntries.push({
+                entityType: "inventory",
+                entityId: before.id,
+                action: "delete",
+              });
+              resultIds.push(updatedTarget.id);
+              targetRowsByLocationProduct.set(targetKey, {
+                id: updatedTarget.id,
+                productId: updatedTarget.productId,
+                locationId: updatedTarget.locationId,
+                amount: updatedTarget.amount,
+              });
+            } else {
+              const updated = await updateAndReturn(
+                tx,
+                inventoryEntry,
+                { locationId: targetLocationId, verifiedAt: now },
+                eq(inventoryEntry.id, before.id),
+              );
+              const changes = computeChanges(before, updated, ["locationId"]);
+              auditEntries.push({
+                entityType: "inventory",
+                entityId: before.id,
+                action: "update",
+                ...(changes ? { changes } : {}),
+              });
+              resultIds.push(updated.id);
+              targetRowsByLocationProduct.set(targetKey, {
+                id: updated.id,
+                productId: updated.productId,
+                locationId: updated.locationId,
+                amount: updated.amount,
+              });
+            }
+            recomputeNeeded = true;
+          })
           .exhaustive();
       }
 
-      // Cascade the search embeddings of removed rows in-tx (inventory manifest
-      // has onDelete: [], so this reconcile is the only cleanup site).
+      // Cascade search embeddings for both soft-deleted rows and source rows
+      // hard-deleted by a merge-at-destination relocation.
       await softDeleteEntityEmbeddingsTx(tx, "inventory", removedIds);
 
       await tx

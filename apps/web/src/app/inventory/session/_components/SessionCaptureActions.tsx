@@ -43,7 +43,6 @@ import { useProductSearch } from "~/app/_components/products/use-product-search"
 import { useUpcAwareCreate } from "~/app/_components/products/use-upc-aware-create";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
-import { Card, CardContent } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import {
@@ -316,36 +315,39 @@ export function SessionCaptureActions({
   };
 
   return (
-    <Card className="overflow-visible">
-      <CardContent className="p-2 lg:p-4">
+    <>
+      <Stack gap="sm">
+        <Description size="xs">
+          Scan, search, or photograph a new item.
+        </Description>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) void handleFile(file);
+            event.target.value = "";
+          }}
+        />
+        <input
+          ref={addPhotoInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) {
+              setPendingPhoto(file);
+              setPhotoName("");
+            }
+            event.target.value = "";
+          }}
+        />
         <Stack gap="sm">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="hidden"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) void handleFile(file);
-              event.target.value = "";
-            }}
-          />
-          <input
-            ref={addPhotoInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="hidden"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) {
-                setPendingPhoto(file);
-                setPhotoName("");
-              }
-              event.target.value = "";
-            }}
-          />
           <Row align="end" gap="sm" wrap className="min-w-0">
             <ManualAdd locationId={location.id} />
             <Row gap="sm" wrap className="shrink-0">
@@ -450,7 +452,7 @@ export function SessionCaptureActions({
             </Stack>
           )}
         </Stack>
-      </CardContent>
+      </Stack>
       <Sheet
         open={scanner === "barcode"}
         onOpenChange={(open) => {
@@ -596,7 +598,7 @@ export function SessionCaptureActions({
           </WithIngredientSearch>
         </SheetContent>
       </Sheet>
-    </Card>
+    </>
   );
 }
 

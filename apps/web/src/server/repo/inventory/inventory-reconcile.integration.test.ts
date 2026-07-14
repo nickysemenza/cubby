@@ -17,9 +17,9 @@ import {
 } from "~/server/repo/repo.fixtures";
 
 // Guards for the audit-session commit: reconcileLocationSession applies the
-// staged verify/adjust/remove diff durably and stamps the location, without
-// touching anything it wasn't told to; and a plain move must NOT stamp
-// `lastBulkInventory` (only an explicit completion does).
+// complete staged diff atomically, rejects stale/partial snapshots, and stamps
+// the location. A plain move must NOT stamp `lastBulkInventory` (only an
+// explicit completion does).
 describe("reconcileLocationSession", () => {
   const ctx = withTestDb();
   const amount = { value: 1, unit: "each" };
@@ -58,8 +58,12 @@ describe("reconcileLocationSession", () => {
 
     const { items, recomputeNeeded } = await reconcileLocationSession(
       ctx.db,
-      loc.id,
-      [{ kind: "verify", inventoryEntryId: entry.id }],
+      {
+        locationId: loc.id,
+        expectedInventoryEntryIds: [entry.id],
+        snapshotUpdatedAt: entry.updatedAt,
+        resolutions: [{ kind: "verify", inventoryEntryId: entry.id }],
+      },
       TEST_ACTOR,
     );
     expect(items).toHaveLength(1);
@@ -76,14 +80,18 @@ describe("reconcileLocationSession", () => {
     const { loc, entry } = await seedEntry("Adjust");
     const { recomputeNeeded } = await reconcileLocationSession(
       ctx.db,
-      loc.id,
-      [
-        {
-          kind: "adjust",
-          inventoryEntryId: entry.id,
-          amount: { value: 5, unit: "each" },
-        },
-      ],
+      {
+        locationId: loc.id,
+        expectedInventoryEntryIds: [entry.id],
+        snapshotUpdatedAt: entry.updatedAt,
+        resolutions: [
+          {
+            kind: "adjust",
+            inventoryEntryId: entry.id,
+            amount: { value: 5, unit: "each" },
+          },
+        ],
+      },
       TEST_ACTOR,
     );
     expect(recomputeNeeded).toBe(true);
@@ -97,8 +105,12 @@ describe("reconcileLocationSession", () => {
     const { loc, entry } = await seedEntry("Remove");
     const { recomputeNeeded, removedIds } = await reconcileLocationSession(
       ctx.db,
-      loc.id,
-      [{ kind: "remove", inventoryEntryId: entry.id }],
+      {
+        locationId: loc.id,
+        expectedInventoryEntryIds: [entry.id],
+        snapshotUpdatedAt: entry.updatedAt,
+        resolutions: [{ kind: "remove", inventoryEntryId: entry.id }],
+      },
       TEST_ACTOR,
     );
     expect(recomputeNeeded).toBe(true);
@@ -109,25 +121,93 @@ describe("reconcileLocationSession", () => {
     expect(after?.deletedAt).not.toBeNull();
   });
 
-  it("an empty commit still stamps the location", async () => {
-    const { loc, entry } = await seedEntry("Empty walk");
-    await reconcileLocationSession(ctx.db, loc.id, [], TEST_ACTOR);
-    expect((await readEntry(entry.id))?.verifiedAt).toBeNull();
+  it("an actually empty location can still be completed", async () => {
+    const loc = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Empty walk" }),
+      TEST_ACTOR,
+    );
+    await reconcileLocationSession(
+      ctx.db,
+      {
+        locationId: loc.id,
+        expectedInventoryEntryIds: [],
+        snapshotUpdatedAt: null,
+        resolutions: [],
+      },
+      TEST_ACTOR,
+    );
     expect((await readLocation(loc.id))?.lastBulkInventory).not.toBeNull();
   });
 
-  it("ignores resolutions for ids that don't live at the audited location", async () => {
+  it("rejects a partial or foreign resolution set", async () => {
     const a = await seedEntry("Bin A");
     const b = await seedEntry("Bin B");
-    await reconcileLocationSession(
+    await expect(
+      reconcileLocationSession(
+        ctx.db,
+        {
+          locationId: b.loc.id,
+          expectedInventoryEntryIds: [b.entry.id],
+          snapshotUpdatedAt: b.entry.updatedAt,
+          resolutions: [{ kind: "remove", inventoryEntryId: a.entry.id }],
+        },
+        TEST_ACTOR,
+      ),
+    ).rejects.toThrow("changed during the recount");
+    const stranger = await readEntry(a.entry.id);
+    expect(stranger?.deletedAt).toBeNull();
+    expect(stranger?.verifiedAt).toBeNull();
+    expect((await readLocation(b.loc.id))?.lastBulkInventory).toBeNull();
+  });
+
+  it("relocates atomically and stamps only the audited source", async () => {
+    const { loc: source, entry } = await seedEntry("Relocate source");
+    const target = await createLocation(
       ctx.db,
-      b.loc.id,
-      [{ kind: "remove", inventoryEntryId: a.entry.id }],
+      makeLocationInput({ name: "Relocate target" }),
       TEST_ACTOR,
     );
-    const stranger = await readEntry(a.entry.id);
-    expect(stranger?.deletedAt).toBeNull(); // untouched
-    expect(stranger?.verifiedAt).toBeNull();
+
+    const { items, recomputeNeeded } = await reconcileLocationSession(
+      ctx.db,
+      {
+        locationId: source.id,
+        expectedInventoryEntryIds: [entry.id],
+        snapshotUpdatedAt: entry.updatedAt,
+        resolutions: [
+          {
+            kind: "relocate",
+            inventoryEntryId: entry.id,
+            targetLocationId: target.id,
+          },
+        ],
+      },
+      TEST_ACTOR,
+    );
+
+    expect(recomputeNeeded).toBe(true);
+    expect(items[0]?.location.id).toBe(target.id);
+    expect((await readLocation(source.id))?.lastBulkInventory).not.toBeNull();
+    expect((await readLocation(target.id))?.lastBulkInventory).toBeNull();
+  });
+
+  it("rejects when a row changed after the client snapshot", async () => {
+    const { loc, entry } = await seedEntry("Stale recount");
+    const snapshotUpdatedAt = new Date(0);
+    await expect(
+      reconcileLocationSession(
+        ctx.db,
+        {
+          locationId: loc.id,
+          expectedInventoryEntryIds: [entry.id],
+          snapshotUpdatedAt,
+          resolutions: [{ kind: "verify", inventoryEntryId: entry.id }],
+        },
+        TEST_ACTOR,
+      ),
+    ).rejects.toThrow("changed during the recount");
+    expect((await readLocation(loc.id))?.lastBulkInventory).toBeNull();
   });
 
   it("a move no longer stamps lastBulkInventory", async () => {

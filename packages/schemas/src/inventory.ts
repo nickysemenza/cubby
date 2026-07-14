@@ -230,7 +230,8 @@ export type BulkMovePayload = z.infer<typeof bulkMovePayload>;
 
 // One staged decision about an expected row, committed atomically on "Done".
 // `verify` = confirmed present as-is; `adjust` = present at a corrected count;
-// `remove` = not here, soft-delete it. (Relocations flow through `bulkMove`.)
+// `remove` = not here, soft-delete it; `relocate` = move the full row to the
+// selected location (merging with an existing same-product row when needed).
 export const inventorySessionResolution = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("verify"), inventoryEntryId: inventoryId }),
   z.object({
@@ -241,6 +242,11 @@ export const inventorySessionResolution = z.discriminatedUnion("kind", [
     amount: positiveAmount,
   }),
   z.object({ kind: z.literal("remove"), inventoryEntryId: inventoryId }),
+  z.object({
+    kind: z.literal("relocate"),
+    inventoryEntryId: inventoryId,
+    targetLocationId: locationId,
+  }),
 ]);
 
 export type InventorySessionResolution = z.infer<
@@ -248,8 +254,13 @@ export type InventorySessionResolution = z.infer<
 >;
 
 // Commit a location's recount as one atomic diff and stamp `lastBulkInventory`.
+// The expected-id set and row snapshot timestamp are a compare-and-swap guard: a bin
+// that changed after the client loaded must be refreshed, never silently marked
+// complete from a stale partial snapshot.
 export const reconcileSessionPayload = z.object({
   locationId: locationId,
+  expectedInventoryEntryIds: z.array(inventoryId),
+  snapshotUpdatedAt: z.date().nullable(),
   resolutions: z.array(inventorySessionResolution),
 });
 

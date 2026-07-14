@@ -3,12 +3,16 @@ import type { LocationId } from "@cubby/schemas/identifiers";
 import type { InventorySessionResolution } from "@cubby/schemas/inventory";
 import type { InfLocation } from "@cubby/schemas/location";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { formatDistanceToNow } from "date-fns";
+import { CheckCircle2, RotateCcw } from "lucide-react";
+import pluralize from "pluralize";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { Row, Stack } from "~/components/layout";
+import { Button, buttonVariants } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
@@ -17,6 +21,7 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { LocationReviewPane } from "./_components/LocationReviewPane";
 import { MoveToDialog } from "./_components/MoveToDialog";
 import { ParentPicker } from "./_components/ParentPicker";
+import { LocationScanButton } from "./_components/QrJumpButton";
 import {
   LocationWorkbenchSidebar,
   MobileLocationSwitcher,
@@ -29,7 +34,6 @@ import type {
 import {
   findLocationInTree,
   flattenAuditableLocations,
-  getDirectChildLocations,
   getUnknownChildLocations,
 } from "./session-utils";
 import { useSessionMutations } from "./useSessionMutations";
@@ -74,12 +78,17 @@ export function InventorySessionWorkbench({
   const rootId = parent?.id ?? null;
 
   const {
+    startedAt,
     currentIndex,
     setCurrentIndex,
     itemResolutions,
     setItemResolutions,
-    confirmedLocationIds,
-    setConfirmedLocationIds,
+    completedLocationIds,
+    summary,
+    resumeCandidate,
+    resumePass,
+    startNewPass,
+    recordLocationComplete,
   } = useSessionProgress(rootId, sessionLocations);
 
   const currentLocation = sessionLocations[currentIndex] ?? null;
@@ -88,9 +97,6 @@ export function InventorySessionWorkbench({
     () => findLocationInTree(tree, unknownLocation?.id) ?? unknownLocation,
     [tree, unknownLocation],
   );
-  const currentChildLocations = currentLocation
-    ? getDirectChildLocations(currentLocation.location)
-    : [];
   const unknownChildLocations = getUnknownChildLocations(unknownTreeLocation);
 
   const locationIds = useMemo(() => {
@@ -164,12 +170,25 @@ export function InventorySessionWorkbench({
             next.delete(r.inventoryEntryId);
           return next;
         });
-        setCurrentIndex((idx) =>
-          Math.min(sessionLocations.length - 1, idx + 1),
-        );
+        recordLocationComplete(variables.locationId, variables.resolutions);
+        const completed = new Set(completedLocationIds);
+        completed.add(variables.locationId);
+        setCurrentIndex((idx) => {
+          const after = sessionLocations.findIndex(
+            (location, index) => index > idx && !completed.has(location.id),
+          );
+          if (after >= 0) return after;
+          const wrapped = sessionLocations.findIndex(
+            (location) => !completed.has(location.id),
+          );
+          return wrapped >= 0 ? wrapped : idx;
+        });
         toast.success("Bin recount saved.");
       },
-      onError: (error) => toast.error(getErrorMessage(error)),
+      onError: (error) => {
+        void inventoryQuery.refetch();
+        toast.error(getErrorMessage(error));
+      },
     }),
   );
 
@@ -213,9 +232,8 @@ export function InventorySessionWorkbench({
     // out of the merged entry).
     const movedId = result.items[0]?.id ?? item.id;
     // If the destination is the bin we're recounting, the item is now
-    // physically here — stage it verified (green) so it doesn't read as
-    // unresolved and block the gate, and remember the ids so undo can
-    // un-stage.
+    // physically here — stage it verified so the local pass summary treats it
+    // as an explicit addition, and remember the ids so undo can un-stage.
     const stagedIds: string[] = [];
     if (currentLocation && targetLocationId === currentLocation.id) {
       for (const moved of result.items) {
@@ -240,13 +258,12 @@ export function InventorySessionWorkbench({
     );
   };
 
-  const moveToUnknown = async (item: InventoryItem) => {
+  const stageMoveToUnknown = (item: InventoryItem) => {
     if (!currentLocation || !unknownLocation) return;
-    await moveItem({
-      item,
-      sourceLocationId: currentLocation.id,
+    setItemResolution(item.id, {
+      kind: "relocate",
       targetLocationId: unknownLocation.id,
-      success: `Moved ${item.product.name} to Unknown.`,
+      targetLocationName: "Unknown",
     });
   };
 
@@ -260,45 +277,18 @@ export function InventorySessionWorkbench({
     });
   };
 
-  const moveLocationToUnknown = async (location: InfLocation) => {
-    if (!currentLocation || !unknownLocation) return;
-    await updateLocation.mutateAsync({
-      id: location.id,
-      data: { parentId: unknownLocation.id },
-    });
-    pushUndo(
-      {
-        run: async () => {
-          await updateLocation.mutateAsync({
-            id: location.id,
-            data: { parentId: currentLocation.id },
-          });
-        },
-      },
-      `Moved ${location.name} to Unknown.`,
-    );
-  };
-
   const pullLocationFromUnknown = async (location: InfLocation) => {
     if (!currentLocation || !unknownLocation) return;
     await updateLocation.mutateAsync({
       id: location.id,
       data: { parentId: currentLocation.id },
     });
-    // The child is now physically under this bin — acknowledge it (green) so the
-    // gate doesn't demand a re-confirm for a location you just placed.
-    confirmLocation(location.id);
     pushUndo(
       {
         run: async () => {
           await updateLocation.mutateAsync({
             id: location.id,
             data: { parentId: unknownLocation.id },
-          });
-          setConfirmedLocationIds((prev) => {
-            const next = new Set(prev);
-            next.delete(location.id);
-            return next;
           });
         },
       },
@@ -312,14 +302,26 @@ export function InventorySessionWorkbench({
   const [moveTarget, setMoveTarget] = useState<{
     item: InventoryItem;
     sourceLocationId: LocationId;
+    commit: "done" | "now";
   } | null>(null);
 
-  const openMoveTo = (item: InventoryItem, sourceLocationId: LocationId) =>
-    setMoveTarget({ item, sourceLocationId });
+  const openMoveTo = (
+    item: InventoryItem,
+    sourceLocationId: LocationId,
+    commit: "done" | "now",
+  ) => setMoveTarget({ item, sourceLocationId, commit });
 
   const confirmMoveTo = async (targetLocationId: LocationId) => {
     if (!moveTarget) return;
     const target = findLocationInTree(tree, targetLocationId);
+    if (moveTarget.commit === "done") {
+      setItemResolution(moveTarget.item.id, {
+        kind: "relocate",
+        targetLocationId,
+        targetLocationName: target?.name ?? "another location",
+      });
+      return;
+    }
     await moveItem({
       item: moveTarget.item,
       sourceLocationId: moveTarget.sourceLocationId,
@@ -336,53 +338,23 @@ export function InventorySessionWorkbench({
       return next;
     });
 
-  const confirmLocation = (id: string) =>
-    setConfirmedLocationIds((prev) => new Set(prev).add(id));
-
-  // Staging (no DB write): confirm / adjust / remove. Relocate is the one live
-  // action — it physically moves the item to Unknown now (undoable).
-  const toggleVerify = (item: InventoryItem) =>
-    setItemResolution(
-      item.id,
-      itemResolutions.get(item.id)?.kind === "verify"
-        ? null
-        : { kind: "verify" },
-    );
+  // Expected-row exceptions are staged. Finish fills untouched rows with
+  // `verify` and applies the complete set atomically; capture/Unknown additions
+  // remain explicit immediate writes.
   const stageAdjust = (item: InventoryItem, amount: Amount) =>
     setItemResolution(item.id, { kind: "adjust", amount });
   const stageRemove = (item: InventoryItem) =>
     setItemResolution(item.id, { kind: "remove" });
 
-  // Gating: every expected item must have a staged resolution and every child
-  // location must be acknowledged before the bin can be committed.
-  const itemsUnresolvedCount = currentItems.filter(
+  const unresolvedCount = currentItems.filter(
     (i) => !itemResolutions.has(i.id),
   ).length;
-  const locationsUnresolvedCount = currentChildLocations.filter(
-    (l) => !confirmedLocationIds.has(l.id),
-  ).length;
-  const unresolvedCount = itemsUnresolvedCount + locationsUnresolvedCount;
-
-  const yesToAllRemaining = () => {
-    setItemResolutions((prev) => {
-      const next = new Map(prev);
-      for (const i of currentItems)
-        if (!next.has(i.id)) next.set(i.id, { kind: "verify" });
-      return next;
-    });
-    setConfirmedLocationIds((prev) => {
-      const next = new Set(prev);
-      for (const l of currentChildLocations) next.add(l.id);
-      return next;
-    });
-  };
 
   const handleDone = () => {
     if (!currentLocation) return;
     const resolutions: InventorySessionResolution[] = [];
     for (const item of currentItems) {
-      const r = itemResolutions.get(item.id);
-      if (!r) continue;
+      const r = itemResolutions.get(item.id) ?? { kind: "verify" as const };
       // Exhaustive match so a new resolution kind can't silently default to verify.
       resolutions.push(
         match(r)
@@ -399,10 +371,24 @@ export function InventorySessionWorkbench({
             kind: "verify" as const,
             inventoryEntryId: item.id,
           }))
+          .with({ kind: "relocate" }, ({ targetLocationId }) => ({
+            kind: "relocate" as const,
+            inventoryEntryId: item.id,
+            targetLocationId,
+          }))
           .exhaustive(),
       );
     }
-    reconcile.mutate({ locationId: currentLocation.id, resolutions });
+    reconcile.mutate({
+      locationId: currentLocation.id,
+      expectedInventoryEntryIds: currentItems.map((item) => item.id),
+      snapshotUpdatedAt: currentItems.reduce<Date | null>(
+        (latest, item) =>
+          latest === null || item.updatedAt > latest ? item.updatedAt : latest,
+        null,
+      ),
+      resolutions,
+    });
   };
 
   const selectParent = (locationId: LocationId) => {
@@ -455,6 +441,43 @@ export function InventorySessionWorkbench({
     );
   }
 
+  if (resumeCandidate) {
+    return (
+      <ResumeSessionPrompt
+        parentName={parent.name}
+        startedAt={resumeCandidate.startedAt}
+        completedCount={resumeCandidate.completedCount}
+        totalCount={sessionLocations.length}
+        onResume={resumePass}
+        onStartNew={startNewPass}
+      />
+    );
+  }
+
+  if (startedAt === null || inventoryQuery.isLoading) {
+    return (
+      <Row align="center" justify="center" className="min-h-80">
+        <Spinner />
+      </Row>
+    );
+  }
+
+  const completedInCurrentTree = sessionLocations.filter((location) =>
+    completedLocationIds.has(location.id),
+  ).length;
+  const passComplete = completedInCurrentTree >= sessionLocations.length;
+  if (passComplete) {
+    return (
+      <SessionComplete
+        parent={parent}
+        startedAt={startedAt}
+        summary={summary}
+        onStartNew={startNewPass}
+        onSelectLocation={selectParent}
+      />
+    );
+  }
+
   return (
     <Stack
       gap="md"
@@ -467,6 +490,7 @@ export function InventorySessionWorkbench({
         currentIndex={currentIndex}
         inventoryByLocation={inventoryByLocation}
         itemResolutions={itemResolutions}
+        completedLocationIds={completedLocationIds}
         onSelect={(id) => jumpToLocation(id)}
         onScanJump={(id) => {
           if (!jumpToLocation(id)) {
@@ -483,6 +507,7 @@ export function InventorySessionWorkbench({
           currentId={currentLocation?.id ?? null}
           inventoryByLocation={inventoryByLocation}
           itemResolutions={itemResolutions}
+          completedLocationIds={completedLocationIds}
           onSelect={(id) => jumpToLocation(id)}
           onScanJump={(id) => {
             if (!jumpToLocation(id)) {
@@ -496,46 +521,25 @@ export function InventorySessionWorkbench({
           <LocationReviewPane
             parent={parent}
             location={currentLocation}
-            position={{ index: currentIndex, total: sessionLocations.length }}
             items={currentItems}
-            childLocations={currentChildLocations}
             unknownItems={unknownItems}
             unknownLocations={unknownChildLocations}
             inventoryByLocation={inventoryByLocation}
             itemResolutions={itemResolutions}
-            confirmedLocationIds={confirmedLocationIds}
             duplicateProductIds={duplicateProductIds}
-            onToggleVerify={toggleVerify}
             onAdjust={stageAdjust}
             onRemove={stageRemove}
-            onRelocate={moveToUnknown}
-            onMoveTo={(item) => openMoveTo(item, currentLocation.id)}
-            onConfirmLocation={(locationId) => confirmLocation(locationId)}
-            onMoveLocationMissing={moveLocationToUnknown}
+            onRelocate={stageMoveToUnknown}
+            onMoveTo={(item) => openMoveTo(item, currentLocation.id, "done")}
             onPullUnknown={pullFromUnknown}
             onMoveUnknownTo={(item) => {
-              if (unknownLocation) openMoveTo(item, unknownLocation.id);
+              if (unknownLocation) openMoveTo(item, unknownLocation.id, "now");
             }}
             onPullUnknownLocation={pullLocationFromUnknown}
-            onPrevious={() => setCurrentIndex((idx) => Math.max(0, idx - 1))}
-            onNext={() =>
-              setCurrentIndex((idx) =>
-                Math.min(sessionLocations.length - 1, idx + 1),
-              )
-            }
             onDone={handleDone}
-            onYesToAll={yesToAllRemaining}
             unresolvedCount={unresolvedCount}
             donePending={reconcile.isPending}
-            onJumpByScan={(id) => {
-              if (!jumpToLocation(id)) {
-                toast.error("That location is not in this session.");
-              }
-            }}
-            canPrevious={currentIndex > 0}
-            canNext={currentIndex < sessionLocations.length - 1}
-            previousName={sessionLocations[currentIndex - 1]?.name}
-            nextName={sessionLocations[currentIndex + 1]?.name}
+            locationCompleted={completedLocationIds.has(currentLocation.id)}
             unknownReady={!!unknownLocation}
           />
         )}
@@ -549,9 +553,132 @@ export function InventorySessionWorkbench({
           }}
           title={moveTarget.item.product.name}
           sourceLocationId={moveTarget.sourceLocationId}
+          commit={moveTarget.commit}
           onConfirm={confirmMoveTo}
         />
       )}
     </Stack>
+  );
+}
+
+function ResumeSessionPrompt({
+  parentName,
+  startedAt,
+  completedCount,
+  totalCount,
+  onResume,
+  onStartNew,
+}: {
+  parentName: string;
+  startedAt: number;
+  completedCount: number;
+  totalCount: number;
+  onResume: () => void;
+  onStartNew: () => void;
+}) {
+  return (
+    <Card className="mx-auto w-full max-w-xl">
+      <CardHeader>
+        <CardTitle>Resume {parentName} recount?</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Stack gap="md">
+          <Description>
+            Started {formatDistanceToNow(startedAt, { addSuffix: true })}. You
+            completed {completedCount} of {totalCount} locations; staged choices
+            are still waiting on this device.
+          </Description>
+          <Row gap="sm" wrap>
+            <Button type="button" className="min-h-12" onClick={onResume}>
+              Resume recount
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-12"
+              onClick={onStartNew}
+            >
+              <RotateCcw />
+              Start new recount
+            </Button>
+          </Row>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SessionComplete({
+  parent,
+  startedAt,
+  summary,
+  onStartNew,
+  onSelectLocation,
+}: {
+  parent: InfLocation;
+  startedAt: number;
+  summary: ReturnType<typeof useSessionProgress>["summary"];
+  onStartNew: () => void;
+  onSelectLocation: (locationId: LocationId) => void;
+}) {
+  const changes = summary.adjusted + summary.relocated + summary.removed;
+  return (
+    <Card className="mx-auto w-full max-w-2xl">
+      <CardHeader>
+        <Row align="center" gap="sm">
+          <CheckCircle2 className="h-6 w-6 text-positive" />
+          <div>
+            <h2>
+              <CardTitle>{parent.name} recount complete</CardTitle>
+            </h2>
+            <Description>
+              Finished a pass started{" "}
+              {formatDistanceToNow(startedAt, {
+                addSuffix: true,
+              })}
+              .
+            </Description>
+          </div>
+        </Row>
+      </CardHeader>
+      <CardContent>
+        <Stack gap="md">
+          <p className="text-sm">
+            {pluralize("location", summary.locations, true)} saved ·{" "}
+            {pluralize("item", summary.verified, true)} confirmed ·{" "}
+            {pluralize("change", changes, true)} ({summary.adjusted} adjusted,{" "}
+            {summary.relocated} relocated, {summary.removed} removed)
+          </p>
+          <Row gap="sm" wrap>
+            <LocationScanButton
+              buttonLabel="Scan another location"
+              sheetDescription="Start a new spot-check at the scanned location."
+              onResolved={(locationId) => {
+                onSelectLocation(locationId);
+                return undefined;
+              }}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-12"
+              onClick={onStartNew}
+            >
+              <RotateCcw />
+              Recount {parent.name} again
+            </Button>
+            <Link
+              to="/inventory"
+              className={buttonVariants({
+                variant: "outline",
+                className: "min-h-12",
+              })}
+            >
+              Back to inventory
+            </Link>
+          </Row>
+        </Stack>
+      </CardContent>
+    </Card>
   );
 }

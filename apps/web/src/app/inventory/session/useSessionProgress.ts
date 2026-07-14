@@ -1,27 +1,54 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ItemResolution } from "./_components/types";
 import type { SessionLocation } from "./session-utils";
 
-// Per-session-root display progress (confirmed checks + position), persisted to
-// localStorage so it survives a reload or a tree-invalidating mutation. This is
-// UX state ONLY — never a source of truth for a destructive write.
 const AUDIT_SESSION_STORAGE_PREFIX = "cubby:audit-session:";
+const SESSION_PROGRESS_VERSION = 3;
+
+export interface SessionSummary {
+  adjusted: number;
+  locations: number;
+  relocated: number;
+  removed: number;
+  verified: number;
+}
 
 interface PersistedSessionProgress {
-  // [inventoryId, resolution] pairs — Map isn't JSON-serializable.
+  version: typeof SESSION_PROGRESS_VERSION;
+  startedAt: number;
   itemResolutions: [string, ItemResolution][];
-  confirmedLocationIds: string[];
+  completedLocationIds: string[];
   currentIndex: number;
+  summary: SessionSummary;
 }
+
+const emptySummary = (): SessionSummary => ({
+  adjusted: 0,
+  locations: 0,
+  relocated: 0,
+  removed: 0,
+  verified: 0,
+});
 
 function loadSessionProgress(rootId: string): PersistedSessionProgress | null {
   try {
     const raw = localStorage.getItem(
       `${AUDIT_SESSION_STORAGE_PREFIX}${rootId}`,
     );
-    return raw ? (JSON.parse(raw) as PersistedSessionProgress) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<PersistedSessionProgress>;
+    if (
+      parsed.version !== SESSION_PROGRESS_VERSION ||
+      typeof parsed.startedAt !== "number" ||
+      !Array.isArray(parsed.itemResolutions) ||
+      !Array.isArray(parsed.completedLocationIds) ||
+      typeof parsed.currentIndex !== "number" ||
+      !parsed.summary
+    ) {
+      return null;
+    }
+    return parsed as PersistedSessionProgress;
   } catch {
-    // localStorage unavailable (SSR / private mode / quota) — start fresh.
     return null;
   }
 }
@@ -33,78 +60,161 @@ function saveSessionProgress(rootId: string, data: PersistedSessionProgress) {
       JSON.stringify(data),
     );
   } catch {
-    // best-effort; localStorage may be unavailable.
+    // Best effort: private mode/quota failures should not block a recount.
   }
 }
 
-/**
- * Owns the per-session-root UX progress state (currentIndex, staged item
- * resolutions, confirmed child-location acknowledgments) plus its localStorage
- * load/save. Rehydrates on root change and persists on every change.
- */
 export function useSessionProgress(
   rootId: string | null,
   sessionLocations: SessionLocation[],
 ) {
+  const [startedAt, setStartedAt] = useState<number | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
-  // Staged decisions for expected inventory rows, keyed by (globally-unique)
-  // inventory id — committed atomically on "Done", persisted to localStorage.
   const [itemResolutions, setItemResolutions] = useState<
     Map<string, ItemResolution>
   >(() => new Map());
-  // Child-location acknowledgments (client-only — no DB write on Done).
-  const [confirmedLocationIds, setConfirmedLocationIds] = useState<Set<string>>(
+  const [completedLocationIds, setCompletedLocationIds] = useState<Set<string>>(
     () => new Set(),
   );
-
-  // Initialize per session ROOT, keyed on rootId (NOT sessionLocations): a tree
-  // refetch — e.g. the invalidation after editing a location's photo or a
-  // quantity — must not wipe confirmed checks or currentIndex. Prior progress is
-  // rehydrated from localStorage so it also survives a reload.
+  const [summary, setSummary] = useState<SessionSummary>(emptySummary);
+  const [resumeCandidate, setResumeCandidate] =
+    useState<PersistedSessionProgress | null>(null);
   const lastRootId = useRef<string | null>(null);
+
+  const applyProgress = useCallback(
+    (progress: PersistedSessionProgress) => {
+      setStartedAt(progress.startedAt);
+      setItemResolutions(new Map(progress.itemResolutions));
+      setCompletedLocationIds(new Set(progress.completedLocationIds));
+      setSummary(progress.summary);
+      setCurrentIndex(
+        Math.min(
+          Math.max(progress.currentIndex, 0),
+          Math.max(sessionLocations.length - 1, 0),
+        ),
+      );
+    },
+    [sessionLocations.length],
+  );
+
+  const startNewPass = useCallback(() => {
+    setResumeCandidate(null);
+    setStartedAt(Date.now());
+    setCurrentIndex(0);
+    setItemResolutions(new Map());
+    setCompletedLocationIds(new Set());
+    setSummary(emptySummary());
+  }, []);
+
+  const resumePass = useCallback(() => {
+    if (!resumeCandidate) return;
+    applyProgress(resumeCandidate);
+    setResumeCandidate(null);
+  }, [applyProgress, resumeCandidate]);
+
+  // A root change is the only initialization boundary. Query/tree refetches
+  // must not wipe the active pass. Incomplete saved work is gated behind an
+  // explicit Resume / Start new choice so stale local state never surprises the
+  // user; a finished pass reopens on its summary screen.
   useEffect(() => {
     if (rootId === lastRootId.current) return;
     lastRootId.current = rootId;
+    setResumeCandidate(null);
+
     if (!rootId || sessionLocations.length === 0) {
+      setStartedAt(null);
       setCurrentIndex(0);
       setItemResolutions(new Map());
-      setConfirmedLocationIds(new Set());
+      setCompletedLocationIds(new Set());
+      setSummary(emptySummary());
       return;
     }
-    const restored = loadSessionProgress(rootId);
-    const firstIncomplete = sessionLocations.findIndex(
-      (loc) => !loc.lastBulkInventory,
-    );
-    setItemResolutions(new Map(restored?.itemResolutions ?? []));
-    setConfirmedLocationIds(new Set(restored?.confirmedLocationIds ?? []));
-    setCurrentIndex(
-      restored
-        ? Math.min(
-            Math.max(restored.currentIndex, 0),
-            sessionLocations.length - 1,
-          )
-        : firstIncomplete >= 0
-          ? firstIncomplete
-          : 0,
-    );
-  }, [rootId, sessionLocations]);
 
-  // Persist progress per root (UX resume only — see the storage-helper note).
+    const restored = loadSessionProgress(rootId);
+    if (!restored) {
+      setStartedAt(Date.now());
+      setCurrentIndex(0);
+      setItemResolutions(new Map());
+      setCompletedLocationIds(new Set());
+      setSummary(emptySummary());
+      return;
+    }
+
+    if (restored.completedLocationIds.length >= sessionLocations.length) {
+      applyProgress(restored);
+    } else {
+      setStartedAt(null);
+      setCurrentIndex(0);
+      setItemResolutions(new Map());
+      setCompletedLocationIds(new Set());
+      setSummary(emptySummary());
+      setResumeCandidate(restored);
+    }
+  }, [applyProgress, rootId, sessionLocations]);
+
   useEffect(() => {
-    if (!rootId) return;
+    if (!rootId || startedAt === null || resumeCandidate) return;
     saveSessionProgress(rootId, {
+      version: SESSION_PROGRESS_VERSION,
+      startedAt,
       itemResolutions: [...itemResolutions],
-      confirmedLocationIds: [...confirmedLocationIds],
+      completedLocationIds: [...completedLocationIds],
       currentIndex,
+      summary,
     });
-  }, [rootId, itemResolutions, confirmedLocationIds, currentIndex]);
+  }, [
+    rootId,
+    startedAt,
+    resumeCandidate,
+    itemResolutions,
+    completedLocationIds,
+    currentIndex,
+    summary,
+  ]);
+
+  const recordLocationComplete = useCallback(
+    (
+      locationId: string,
+      resolutions: ReadonlyArray<{
+        kind: "verify" | "adjust" | "remove" | "relocate";
+      }>,
+    ) => {
+      setCompletedLocationIds((previous) => {
+        if (previous.has(locationId)) return previous;
+        const next = new Set(previous);
+        next.add(locationId);
+        return next;
+      });
+      setSummary((previous) => {
+        const next = { ...previous, locations: previous.locations + 1 };
+        for (const resolution of resolutions) {
+          if (resolution.kind === "verify") next.verified += 1;
+          if (resolution.kind === "adjust") next.adjusted += 1;
+          if (resolution.kind === "remove") next.removed += 1;
+          if (resolution.kind === "relocate") next.relocated += 1;
+        }
+        return next;
+      });
+    },
+    [],
+  );
 
   return {
+    startedAt,
     currentIndex,
     setCurrentIndex,
     itemResolutions,
     setItemResolutions,
-    confirmedLocationIds,
-    setConfirmedLocationIds,
+    completedLocationIds,
+    summary,
+    resumeCandidate: resumeCandidate
+      ? {
+          startedAt: resumeCandidate.startedAt,
+          completedCount: resumeCandidate.completedLocationIds.length,
+        }
+      : null,
+    resumePass,
+    startNewPass,
+    recordLocationComplete,
   };
 }

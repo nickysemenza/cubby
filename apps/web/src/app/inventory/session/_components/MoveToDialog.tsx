@@ -29,6 +29,7 @@ export function MoveToDialog({
   onOpenChange,
   title,
   sourceLocationId,
+  commit,
   onConfirm,
 }: {
   open: boolean;
@@ -37,6 +38,7 @@ export function MoveToDialog({
   title: string;
   /** The item's current location; the destination must differ from it. */
   sourceLocationId: LocationId;
+  commit: "done" | "now";
   onConfirm: (targetLocationId: LocationId) => Promise<void>;
 }) {
   const { form, error, setError, reset } = useDestinationLocationForm();
@@ -82,7 +84,9 @@ export function MoveToDialog({
         <DialogHeader>
           <DialogTitle>Move {title}</DialogTitle>
           <DialogDescription>
-            Pick where this belongs — it moves there now (undo from the toast).
+            {commit === "done"
+              ? "Pick where this belongs. The move will be committed with the rest of this recount."
+              : "Pick where this belongs — it moves there now (undo from the toast)."}
           </DialogDescription>
         </DialogHeader>
         <FormProvider {...form}>
@@ -98,7 +102,7 @@ export function MoveToDialog({
           </Button>
           <Button type="button" onClick={submit} disabled={pending}>
             {pending ? <Spinner /> : null}
-            Move
+            {commit === "done" ? "Stage move" : "Move"}
           </Button>
         </DialogFooter>
       </DialogContent>

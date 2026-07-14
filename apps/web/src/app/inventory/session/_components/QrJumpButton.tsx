@@ -1,4 +1,3 @@
-import { unsafeLocationId } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import { extractShortcodeFromScan } from "@cubby/shared";
 import { useQueryClient } from "@tanstack/react-query";
@@ -27,45 +26,34 @@ import {
   parseLocationIdFromInput,
 } from "../session-utils";
 
-export function QrJumpButton({
-  parent,
-  onJump,
+export function LocationScanButton({
+  onResolved,
+  buttonLabel = "Scan location",
+  sheetDescription = "Open the scanned location's recount.",
   manualEntry = false,
+  variant = "default",
 }: {
-  parent: InfLocation;
-  onJump: (locationId: string) => void;
+  onResolved: (
+    locationId: InfLocation["id"],
+    label?: string,
+  ) => boolean | undefined;
+  buttonLabel?: string;
+  sheetDescription?: string;
   manualEntry?: boolean;
+  variant?: "default" | "outline";
 }) {
   const api = useTRPC();
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [manualValue, setManualValue] = useState("");
   const [isResolving, setIsResolving] = useState(false);
 
-  const jumpToLocation = (targetId: string, label?: string) => {
-    if (!isDescendantLocation(parent, targetId)) {
-      // Out-of-root scan: not in this session, but offer to audit it directly
-      // (a fresh session rooted there) instead of a dead end.
-      toast(`${label ?? "That location"} is outside this session.`, {
-        action: {
-          label: "Audit it",
-          onClick: () => {
-            setOpen(false);
-            setManualValue("");
-            void navigate({
-              to: "/inventory/session",
-              search: { parentId: unsafeLocationId(targetId) },
-            });
-          },
-        },
-      });
-      return false;
+  const finish = (locationId: InfLocation["id"], label?: string) => {
+    const shouldClose = onResolved(locationId, label) !== false;
+    if (shouldClose) {
+      setOpen(false);
+      setManualValue("");
     }
-    onJump(targetId);
-    setOpen(false);
-    setManualValue("");
-    return true;
   };
 
   const handleLocationInput = async (raw: string) => {
@@ -79,7 +67,7 @@ export function QrJumpButton({
         toast.error("Enter a location shortcode or UUID.");
         return;
       }
-      jumpToLocation(id);
+      finish(id);
       return;
     }
 
@@ -99,7 +87,7 @@ export function QrJumpButton({
         toast.error("No location found for that shortcode.");
         return;
       }
-      jumpToLocation(location.id, location.name);
+      finish(location.id, location.name);
     } catch (error) {
       toast.error(`Location lookup failed: ${getErrorMessage(error)}`);
     } finally {
@@ -136,20 +124,18 @@ export function QrJumpButton({
       )}
       <Button
         type="button"
-        variant="outline"
+        variant={variant}
         className="min-h-12 px-4"
         onClick={() => setOpen(true)}
       >
         <QrCode className="h-4 w-4" />
-        Scan location
+        {buttonLabel}
       </Button>
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="bottom" className="p-4" showCloseButton={false}>
           <SheetHeader className="p-0 pb-4">
             <SheetTitle>Scan location QR</SheetTitle>
-            <SheetDescription>
-              Jump to a location in this session.
-            </SheetDescription>
+            <SheetDescription>{sheetDescription}</SheetDescription>
           </SheetHeader>
           <PersistentScanner
             onScan={(value) => void handleLocationInput(value)}
@@ -185,5 +171,43 @@ export function QrJumpButton({
         </SheetContent>
       </Sheet>
     </div>
+  );
+}
+
+export function QrJumpButton({
+  parent,
+  onJump,
+  manualEntry = false,
+}: {
+  parent: InfLocation;
+  onJump: (locationId: string) => void;
+  manualEntry?: boolean;
+}) {
+  const navigate = useNavigate();
+
+  return (
+    <LocationScanButton
+      variant="outline"
+      manualEntry={manualEntry}
+      sheetDescription="Jump within this recount, or switch to the scanned location."
+      onResolved={(targetId, label) => {
+        if (!isDescendantLocation(parent, targetId)) {
+          toast(`${label ?? "That location"} is outside this recount.`, {
+            action: {
+              label: "Switch recount",
+              onClick: () => {
+                void navigate({
+                  to: "/inventory/session",
+                  search: { parentId: targetId },
+                });
+              },
+            },
+          });
+          return false;
+        }
+        onJump(targetId);
+        return true;
+      }}
+    />
   );
 }

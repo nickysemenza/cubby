@@ -103,8 +103,12 @@ describe("inventory removal cascades entity embeddings (no orphans)", () => {
 
     const { removedIds } = await reconcileLocationSession(
       ctx.db,
-      location.id,
-      [{ kind: "remove", inventoryEntryId: entry.id }],
+      {
+        locationId: location.id,
+        expectedInventoryEntryIds: [entry.id],
+        snapshotUpdatedAt: entry.updatedAt,
+        resolutions: [{ kind: "remove", inventoryEntryId: entry.id }],
+      },
       TEST_ACTOR,
     );
     expect(removedIds).toEqual([entry.id]);

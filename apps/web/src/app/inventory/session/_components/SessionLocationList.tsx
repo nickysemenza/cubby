@@ -17,7 +17,6 @@ import {
 } from "~/components/ui/sheet";
 import { cn } from "~/lib/utils";
 import { locationTypeNoun, type SessionLocation } from "../session-utils";
-import { AuditedHint } from "./AuditedHint";
 import { QrJumpButton } from "./QrJumpButton";
 import type { InventoryItem, ItemResolution } from "./types";
 
@@ -27,6 +26,7 @@ type SessionLocationListProps = {
   currentId: LocationId | null;
   inventoryByLocation: Map<string, InventoryItem[]>;
   itemResolutions: Map<string, ItemResolution>;
+  completedLocationIds: Set<string>;
   onSelect: (locationId: LocationId) => void;
   onScanJump: (locationId: string) => void;
   parentLocation: InfLocation;
@@ -34,7 +34,7 @@ type SessionLocationListProps = {
 
 /**
  * Shared body for the session location navigator: header (title, progress, QR
- * jump, filter) + scrollable list of locations with confirmed/total badges.
+ * jump) + an outstanding-first list with confirmed/total badges.
  * Rendered both in the desktop sidebar Card and inside the mobile bottom Sheet
  * so there is a single implementation of "what's left / jump to a location".
  */
@@ -44,19 +44,18 @@ function SessionLocationList({
   currentId,
   inventoryByLocation,
   itemResolutions,
+  completedLocationIds,
   onSelect,
   onScanJump,
   parentLocation,
 }: SessionLocationListProps) {
-  const [filter, setFilter] = useState<"all" | "incomplete" | "empty">("all");
-  const visible = locations.filter((location) => {
-    if (filter === "incomplete") return !location.lastBulkInventory;
-    if (filter === "empty") {
-      return (inventoryByLocation.get(location.id)?.length ?? 0) === 0;
-    }
-    return true;
-  });
-  const completed = locations.filter((loc) => loc.lastBulkInventory).length;
+  const [showCompleted, setShowCompleted] = useState(false);
+  const visible = showCompleted
+    ? locations
+    : locations.filter((location) => !completedLocationIds.has(location.id));
+  const completed = locations.filter((location) =>
+    completedLocationIds.has(location.id),
+  ).length;
 
   return (
     <>
@@ -70,23 +69,22 @@ function SessionLocationList({
           </div>
           <QrJumpButton parent={parentLocation} onJump={onScanJump} />
         </Row>
-        <Row gap="sm" wrap>
-          {(["all", "incomplete", "empty"] as const).map((key) => (
-            <Button
-              key={key}
-              type="button"
-              variant={filter === key ? "default" : "outline"}
-              size="sm"
-              onClick={() => setFilter(key)}
-            >
-              {key}
-            </Button>
-          ))}
-        </Row>
+        {completed > 0 && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="self-start"
+            onClick={() => setShowCompleted((value) => !value)}
+          >
+            {showCompleted ? "Hide completed" : `Show completed (${completed})`}
+          </Button>
+        )}
       </Stack>
       <div className="min-h-0 flex-1 overflow-auto">
         {visible.map((location) => {
           const items = inventoryByLocation.get(location.id) ?? [];
+          const completedThisPass = completedLocationIds.has(location.id);
           const confirmed = items.filter((item) =>
             itemResolutions.has(item.id),
           ).length;
@@ -105,20 +103,12 @@ function SessionLocationList({
                 depth={location.depth}
                 compact
                 primaryMeta={locationTypeNoun(location.type)}
-                secondaryMeta={
-                  <>
-                    {items.length > 0 &&
-                      `${pluralize("tracked item", items.length, true)} · `}
-                    <AuditedHint at={location.lastBulkInventory} />
-                  </>
-                }
+                secondaryMeta={pluralize("tracked item", items.length, true)}
                 trailing={
-                  <Badge
-                    variant={
-                      location.lastBulkInventory ? "secondary" : "outline"
-                    }
-                  >
-                    {confirmed}/{items.length}
+                  <Badge variant={completedThisPass ? "secondary" : "outline"}>
+                    {completedThisPass
+                      ? `${items.length}/${items.length}`
+                      : `${confirmed}/${items.length}`}
                   </Badge>
                 }
               />
@@ -149,8 +139,11 @@ export function MobileLocationSwitcher({
   ...listProps
 }: SessionLocationListProps & { currentIndex: number }) {
   const [open, setOpen] = useState(false);
-  const { parent, locations, onSelect, onScanJump } = listProps;
-  const completed = locations.filter((loc) => loc.lastBulkInventory).length;
+  const { parent, locations, onSelect, onScanJump, completedLocationIds } =
+    listProps;
+  const completed = locations.filter((location) =>
+    completedLocationIds.has(location.id),
+  ).length;
 
   return (
     <div className="sticky top-0 z-20 bg-background pb-2 lg:hidden">
@@ -163,7 +156,7 @@ export function MobileLocationSwitcher({
           <span className="min-w-0 truncate font-medium text-sm">
             {parent.name}
           </span>
-          <span className="shrink-0 font-mono text-2xs text-muted-foreground uppercase tabular-nums">
+          <span className="shrink-0 font-mono text-2xs text-muted-foreground tabular-nums">
             {currentIndex + 1} / {locations.length} · {completed} done
           </span>
         </button>
