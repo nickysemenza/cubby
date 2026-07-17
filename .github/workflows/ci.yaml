@@ -565,13 +565,18 @@ jobs:
         with:
           name: cf-build
           path: apps/web/dist
-      - name: Install wrangler
-        run: npm install -g wrangler
       - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: 9f10f078d35d86c78dedece2300a6b88
+          # Pin to the repo's wrangler (apps/web/package.json — keep in sync).
+          # build:cf dumps the RESOLVED config from that version, and a newer
+          # wrangler can reject resolved-only fields (e.g. 4.112 started
+          # erroring on `legacy_env`, breaking every deploy). The action
+          # installs its own wrangler, so the old global install was both
+          # redundant and unpinned.
+          wranglerVersion: "4.110.0"
           command: deploy --config dist/server/wrangler.json
           workingDirectory: apps/web
 
@@ -605,7 +610,13 @@ jobs:
           name: cf-build
           path: apps/web/dist
       - name: Install wrangler
-        run: npm install -g wrangler
+        # Pin to the repo's wrangler version: build:cf dumps the RESOLVED
+        # config from that version, and a newer global wrangler can reject
+        # resolved-only fields (4.112 started erroring on `legacy_env`,
+        # failing every preview upload).
+        run: |
+          version=$(node -p "require('./apps/web/package.json').devDependencies.wrangler.replace(/^[^0-9]*/, '')")
+          npm install -g "wrangler@${version}"
       - name: Upload preview version
         id: preview
         working-directory: apps/web
