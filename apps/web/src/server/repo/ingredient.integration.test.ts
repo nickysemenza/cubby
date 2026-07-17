@@ -13,7 +13,7 @@ import {
   mergeIngredients,
   resolveOrCreateIngredients,
 } from "./ingredient";
-import { createProduct } from "./product";
+import { createProduct, deleteProducts } from "./product";
 import {
   ingredientRef,
   makeImportRecipe,
@@ -515,5 +515,43 @@ describe("ingredient", () => {
     );
     expect(noneRows.some((i) => i.id === withoutProducts.id)).toBe(true);
     expect(noneRows.some((i) => i.id === withProducts.id)).toBe(false);
+  });
+
+  // Regression: the presence join must carry notDeleted(product) — an
+  // ingredient whose only product is soft-deleted counts as "none", not "has".
+  it("ingredientList: productPresenceFilter treats soft-deleted products as absent", async () => {
+    const orphaned = await createIngredient(
+      ctx.db,
+      { name: "presence-softdel oats", aliases: [] },
+      ctx.actor,
+    );
+    const doomed = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Presence Product Softdel",
+        ingredientId: orphaned.id,
+      }),
+      ctx.actor,
+    );
+    await deleteProducts(ctx.db, [doomed.id], ctx.actor);
+
+    const { data: hasRows } = await ingredientList(
+      ctx.db,
+      undefined,
+      [{ orderBy: "name", direction: "asc" }],
+      { pageIndex: 0, pageSize: 50 },
+      "has",
+    );
+    expect(hasRows.some((i) => i.id === orphaned.id)).toBe(false);
+
+    const { data: noneRows, count: noneCount } = await ingredientList(
+      ctx.db,
+      undefined,
+      [{ orderBy: "name", direction: "asc" }],
+      { pageIndex: 0, pageSize: 50 },
+      "none",
+    );
+    expect(noneRows.some((i) => i.id === orphaned.id)).toBe(true);
+    expect(noneCount).toBe(noneRows.length);
   });
 });

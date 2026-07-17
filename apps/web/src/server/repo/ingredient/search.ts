@@ -468,7 +468,13 @@ export const ingredientList = async (
     const filteredIngredientIds = getDb(db)
       .select({ id: ingredient.id })
       .from(ingredient)
-      .leftJoin(product, eq(product.ingredientId, ingredient.id))
+      // notDeleted in the JOIN condition (not the WHERE): a soft-deleted
+      // product must count as no product at all, so its ingredient still
+      // yields a null-product row for the "none" branch.
+      .leftJoin(
+        product,
+        and(eq(product.ingredientId, ingredient.id), notDeleted(product)),
+      )
       .where(and(whereClause, presenceCondition))
       .groupBy(ingredient.id)
       .as("filtered");
