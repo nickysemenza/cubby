@@ -56,6 +56,7 @@ import { Route as AuthenticatedMealsSuggestionsRouteImport } from './routes/_aut
 import { Route as AuthenticatedMealsShoppingListRouteImport } from './routes/_authenticated/meals.shopping-list'
 import { Route as AuthenticatedMealsIdRouteImport } from './routes/_authenticated/meals.$id'
 import { Route as AuthenticatedLocationsNewRouteImport } from './routes/_authenticated/locations.new'
+import { Route as AuthenticatedLocationsArrangeRouteImport } from './routes/_authenticated/locations.arrange'
 import { Route as AuthenticatedLocationsIdRouteImport } from './routes/_authenticated/locations.$id'
 import { Route as AuthenticatedInventorySessionRouteImport } from './routes/_authenticated/inventory.session'
 import { Route as AuthenticatedInventoryNewRouteImport } from './routes/_authenticated/inventory.new'
@@ -325,6 +326,12 @@ const AuthenticatedLocationsNewRoute =
     path: '/locations/new',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedLocationsArrangeRoute =
+  AuthenticatedLocationsArrangeRouteImport.update({
+    id: '/locations/arrange',
+    path: '/locations/arrange',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedLocationsIdRoute =
   AuthenticatedLocationsIdRouteImport.update({
     id: '/locations/$id',
@@ -454,6 +461,7 @@ export interface FileRoutesByFullPath {
   '/inventory/new': typeof AuthenticatedInventoryNewRoute
   '/inventory/session': typeof AuthenticatedInventorySessionRoute
   '/locations/$id': typeof AuthenticatedLocationsIdRoute
+  '/locations/arrange': typeof AuthenticatedLocationsArrangeRoute
   '/locations/new': typeof AuthenticatedLocationsNewRoute
   '/meals/$id': typeof AuthenticatedMealsIdRoute
   '/meals/shopping-list': typeof AuthenticatedMealsShoppingListRoute
@@ -517,6 +525,7 @@ export interface FileRoutesByTo {
   '/inventory/new': typeof AuthenticatedInventoryNewRoute
   '/inventory/session': typeof AuthenticatedInventorySessionRoute
   '/locations/$id': typeof AuthenticatedLocationsIdRoute
+  '/locations/arrange': typeof AuthenticatedLocationsArrangeRoute
   '/locations/new': typeof AuthenticatedLocationsNewRoute
   '/meals/$id': typeof AuthenticatedMealsIdRoute
   '/meals/shopping-list': typeof AuthenticatedMealsShoppingListRoute
@@ -583,6 +592,7 @@ export interface FileRoutesById {
   '/_authenticated/inventory/new': typeof AuthenticatedInventoryNewRoute
   '/_authenticated/inventory/session': typeof AuthenticatedInventorySessionRoute
   '/_authenticated/locations/$id': typeof AuthenticatedLocationsIdRoute
+  '/_authenticated/locations/arrange': typeof AuthenticatedLocationsArrangeRoute
   '/_authenticated/locations/new': typeof AuthenticatedLocationsNewRoute
   '/_authenticated/meals/$id': typeof AuthenticatedMealsIdRoute
   '/_authenticated/meals/shopping-list': typeof AuthenticatedMealsShoppingListRoute
@@ -649,6 +659,7 @@ export interface FileRouteTypes {
     | '/inventory/new'
     | '/inventory/session'
     | '/locations/$id'
+    | '/locations/arrange'
     | '/locations/new'
     | '/meals/$id'
     | '/meals/shopping-list'
@@ -712,6 +723,7 @@ export interface FileRouteTypes {
     | '/inventory/new'
     | '/inventory/session'
     | '/locations/$id'
+    | '/locations/arrange'
     | '/locations/new'
     | '/meals/$id'
     | '/meals/shopping-list'
@@ -777,6 +789,7 @@ export interface FileRouteTypes {
     | '/_authenticated/inventory/new'
     | '/_authenticated/inventory/session'
     | '/_authenticated/locations/$id'
+    | '/_authenticated/locations/arrange'
     | '/_authenticated/locations/new'
     | '/_authenticated/meals/$id'
     | '/_authenticated/meals/shopping-list'
@@ -1152,6 +1165,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedLocationsNewRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/locations/arrange': {
+      id: '/_authenticated/locations/arrange'
+      path: '/locations/arrange'
+      fullPath: '/locations/arrange'
+      preLoaderRoute: typeof AuthenticatedLocationsArrangeRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/locations/$id': {
       id: '/_authenticated/locations/$id'
       path: '/locations/$id'
@@ -1293,6 +1313,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedInventoryNewRoute: typeof AuthenticatedInventoryNewRoute
   AuthenticatedInventorySessionRoute: typeof AuthenticatedInventorySessionRoute
   AuthenticatedLocationsIdRoute: typeof AuthenticatedLocationsIdRoute
+  AuthenticatedLocationsArrangeRoute: typeof AuthenticatedLocationsArrangeRoute
   AuthenticatedLocationsNewRoute: typeof AuthenticatedLocationsNewRoute
   AuthenticatedMealsIdRoute: typeof AuthenticatedMealsIdRoute
   AuthenticatedMealsShoppingListRoute: typeof AuthenticatedMealsShoppingListRoute
@@ -1350,6 +1371,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedInventoryNewRoute: AuthenticatedInventoryNewRoute,
   AuthenticatedInventorySessionRoute: AuthenticatedInventorySessionRoute,
   AuthenticatedLocationsIdRoute: AuthenticatedLocationsIdRoute,
+  AuthenticatedLocationsArrangeRoute: AuthenticatedLocationsArrangeRoute,
   AuthenticatedLocationsNewRoute: AuthenticatedLocationsNewRoute,
   AuthenticatedMealsIdRoute: AuthenticatedMealsIdRoute,
   AuthenticatedMealsShoppingListRoute: AuthenticatedMealsShoppingListRoute,

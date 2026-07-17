@@ -1,0 +1,138 @@
+import { dropTargetForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+import type { LocationId } from "@cubby/schemas/identifiers";
+import type {
+  InfLocation,
+  InventoryItemForTree,
+} from "@cubby/schemas/location";
+import { HelpCircle, Home } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { LocationIcon } from "~/app/_components/locations/location-icons";
+import { cn } from "~/lib/utils";
+import { ArrangeItemChip } from "./ArrangeItemChip";
+import { ArrangeLocationCard } from "./ArrangeLocationCard";
+import { isValidItemDrop, isValidLocationDrop } from "./arrange-tree-utils";
+import { type ArrangeDropData, asDragData } from "./arrange-types";
+
+interface ArrangeColumnProps {
+  /** The location this column represents (its cards are this location's children). Null = Home / top level. */
+  locationId: LocationId | null;
+  /** Header location, or null for the Home column. */
+  headerLocation: InfLocation | null;
+  /** Child-location cards to render. */
+  nodes: InfLocation[];
+  /** The header location's own inventory items (loose items at this location). */
+  items: InventoryItemForTree[];
+  /** Which child is currently opened as the next column (for active highlight). */
+  activeChildId: LocationId | null;
+  roots: InfLocation[];
+  onOpenChild: (id: LocationId) => void;
+  /** The pinned Unknown staging column (dashed styling). */
+  pinned?: boolean;
+}
+
+/**
+ * One Miller column. The whole body is a drop target for the column's location
+ * (drop = move into it); child-location cards nested inside are their own
+ * innermost drop targets (drop = move into that child).
+ */
+export function ArrangeColumn({
+  locationId,
+  headerLocation,
+  nodes,
+  items,
+  activeChildId,
+  roots,
+  onOpenChild,
+  pinned = false,
+}: ArrangeColumnProps) {
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [isOver, setIsOver] = useState(false);
+
+  useEffect(() => {
+    const element = bodyRef.current;
+    if (!element) return;
+    return dropTargetForElements({
+      element,
+      getData: (): ArrangeDropData & Record<string, unknown> => ({
+        arrangeTarget: true,
+        locationId,
+      }),
+      canDrop: ({ source }) => {
+        const drag = asDragData(source.data);
+        if (!drag) return false;
+        if (drag.arrangeDrag === "location")
+          return isValidLocationDrop(roots, drag.locationId, locationId);
+        return (
+          locationId !== null &&
+          isValidItemDrop(drag.sourceLocationId, locationId)
+        );
+      },
+      onDragEnter: () => setIsOver(true),
+      onDragLeave: () => setIsOver(false),
+      onDrop: () => setIsOver(false),
+    });
+  }, [locationId, roots]);
+
+  const isEmpty = nodes.length === 0 && items.length === 0;
+
+  return (
+    <div
+      className={cn(
+        "flex w-60 shrink-0 flex-col rounded-lg border",
+        pinned
+          ? "border-[var(--border-strong)] border-dashed"
+          : "border-[var(--border)]",
+      )}
+    >
+      <div className="flex items-center gap-2 border-[var(--border)] border-b px-2 py-2">
+        {pinned ? (
+          <HelpCircle className="size-4 shrink-0 text-muted-foreground" />
+        ) : headerLocation ? (
+          <LocationIcon type={headerLocation.type} size={16} />
+        ) : (
+          <Home className="size-4 shrink-0 text-muted-foreground" />
+        )}
+        <span className="min-w-0 flex-1 truncate font-medium text-sm">
+          {headerLocation?.name ?? "Home"}
+        </span>
+        <span className="shrink-0 text-muted-foreground text-xs tabular-nums">
+          {nodes.length + items.length}
+        </span>
+      </div>
+
+      <div
+        ref={bodyRef}
+        className={cn(
+          "flex max-h-[calc(100dvh-14rem)] flex-1 flex-col gap-1 overflow-y-auto p-2" /* tight: dense card list */,
+          isOver && "bg-primary/10",
+        )}
+      >
+        {nodes.map((child) => (
+          <ArrangeLocationCard
+            key={child.id}
+            node={child}
+            roots={roots}
+            active={child.id === activeChildId}
+            onOpen={() => onOpenChild(child.id)}
+          />
+        ))}
+        {items.map((item) =>
+          locationId ? (
+            <ArrangeItemChip
+              key={item.id}
+              item={item}
+              sourceLocationId={locationId}
+            />
+          ) : null,
+        )}
+        {isEmpty && (
+          <p className="px-1 py-2 text-muted-foreground text-xs">
+            {pinned
+              ? "Drop anything here to stage it, then open another column and drag it back out."
+              : "Nothing here"}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
