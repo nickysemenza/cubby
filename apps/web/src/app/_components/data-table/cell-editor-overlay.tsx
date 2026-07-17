@@ -124,7 +124,7 @@ export function CellEditorOverlay({
     <div
       ref={overlayRef}
       style={style}
-      className="w-max rounded-md border bg-popover px-2 py-1 shadow-md"
+      className="w-max rounded-md border bg-popover px-2 py-1"
       onClick={(e) => e.stopPropagation()}
       onKeyDown={(e) => {
         // Editor keys must not reach the table container's row-nav handler
