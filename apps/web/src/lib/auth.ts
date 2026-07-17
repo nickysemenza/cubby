@@ -66,6 +66,15 @@ export const auth = betterAuth({
     tanstackStartCookies(), // Must be last
   ],
   advanced: {
+    // E2E only: the CF build runs with NODE_ENV=production, so better-auth
+    // defaults to Secure `__Secure-`-prefixed cookies — which Playwright's
+    // Linux WebKit refuses to store/replay over http://localhost (cookie-prefix
+    // rule; macOS WebKit and Chromium are lenient, so this only ever failed in
+    // CI). e2e-global-setup passes INSECURE_AUTH_COOKIES=true via wrangler
+    // --var; never set in real deploys.
+    ...(env.INSECURE_AUTH_COOKIES === "true"
+      ? { useSecureCookies: false }
+      : {}),
     // Cloudflare Workers (prod + preview deploys) puts the real client IP in
     // `cf-connecting-ip`; without this Better Auth can't determine the IP and
     // skips rate limiting (logging a warning on every auth request). x-forwarded-for

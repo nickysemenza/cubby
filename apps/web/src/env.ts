@@ -26,6 +26,9 @@ export const env = createEnv({
     COOKIE_DOMAIN: z.string().min(1).optional(),
     // Personal instance: signup is closed unless this is explicitly "true".
     ALLOW_SIGNUP: z.enum(["true", "false"]).default("false"),
+    // E2E-only (wrangler --var in e2e-global-setup): serve plain (non-Secure,
+    // unprefixed) auth cookies so WebKit accepts them over http. See auth.ts.
+    INSECURE_AUTH_COOKIES: z.enum(["true", "false"]).default("false"),
     AI_GATEWAY_API_KEY: z.string().min(1).optional(),
     NOTION_API_KEY: z.string().min(1).optional(),
     PORT: z.coerce.number().int().positive().optional(),
@@ -54,6 +57,7 @@ export const env = createEnv({
     BETTER_AUTH_URL: process.env.BETTER_AUTH_URL,
     COOKIE_DOMAIN: process.env.COOKIE_DOMAIN,
     ALLOW_SIGNUP: process.env.ALLOW_SIGNUP,
+    INSECURE_AUTH_COOKIES: process.env.INSECURE_AUTH_COOKIES,
     AI_GATEWAY_API_KEY: process.env.AI_GATEWAY_API_KEY,
     NOTION_API_KEY: process.env.NOTION_API_KEY,
     PORT: process.env.PORT,
