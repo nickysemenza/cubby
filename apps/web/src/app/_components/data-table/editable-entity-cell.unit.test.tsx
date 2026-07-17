@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 // Mock WASM module - can't load binary in jsdom. editable-entity-cell.tsx
@@ -64,6 +70,15 @@ const enterEditMode = () => {
 
 const openCombobox = () => {
   fireEvent.click(screen.getByRole("combobox"));
+};
+
+/** Click a row inside the portaled dropdown. Scoped to the popup because the
+ * display trigger stays mounted during editing (overlay model) and can match
+ * the same accessible name. */
+const clickDropdownItem = (name: string) => {
+  const popup = document.querySelector("[data-combobox-popup]");
+  if (!(popup instanceof HTMLElement)) throw new Error("dropdown not open");
+  fireEvent.click(within(popup).getByRole("button", { name }));
 };
 
 describe("EditableEntityCell", () => {
@@ -192,7 +207,7 @@ describe("EditableEntityCell", () => {
     enterEditMode();
     openCombobox();
     // Clicking the already-selected item toggles selection to null.
-    fireEvent.click(screen.getByRole("button", { name: "Pantry" }));
+    clickDropdownItem("Pantry");
 
     const checkButton = getCheckButton();
     expect(checkButton).toBeDefined();
@@ -222,7 +237,7 @@ describe("EditableEntityCell", () => {
 
     enterEditMode();
     openCombobox();
-    fireEvent.click(screen.getByRole("button", { name: "Pantry" }));
+    clickDropdownItem("Pantry");
 
     const checkButton = getCheckButton();
     expect(checkButton).toBeDefined();

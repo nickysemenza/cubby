@@ -21,8 +21,12 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { useTRPC } from "~/integrations/trpc/react";
-import { productMutationInvalidateKeys } from "~/lib/query-keys";
+import {
+  inventoryMutationInvalidateKeys,
+  productMutationInvalidateKeys,
+} from "~/lib/query-keys";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
+import { WithLocationSearch } from "../_components/combobox/with-search-hook";
 import {
   createCurrencyColumn,
   createExternalLinkColumn,
@@ -43,6 +47,7 @@ import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
+import { useCreateInventoryMutation } from "../_components/inventory/hooks";
 import { InventoryEntriesQuickEditDialog } from "../_components/inventory/inventory-entries-quick-edit-dialog";
 import { CategoryLabel } from "../_components/products/CategoryLabel";
 import { productCategoryOptionsWithTheme } from "../_components/products/product-category-icons";
@@ -94,6 +99,15 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
     entity: "product",
     invalidateKeys: productMutationInvalidateKeys,
   });
+
+  // Inline edit + create for the Locations column (move an entry's location,
+  // or create a new inventory entry from an empty cell).
+  const updateInventoryMutation = useUpdateMutation({
+    mutationFn: api.inventory.update.mutationOptions,
+    entity: "inventory",
+    invalidateKeys: inventoryMutationInvalidateKeys,
+  });
+  const createInventoryMutation = useCreateInventoryMutation();
 
   // Inline name editing on the hook-prepended name column. Stable reference
   // required (feeds the columns memo); the mutation's mutateAsync is stable.
@@ -148,9 +162,10 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   );
 
   // Memoize columns to prevent recreating on every render
-  // Note: updateProductMutation is NOT in dependencies because useMutation returns a new object every render
-  // The closure captures it correctly, and we only need to recreate if columnHelper changes
-  // biome-ignore lint/correctness/useExhaustiveDependencies: updateProductMutation changes every render but is functionally stable
+  // Note: updateProductMutation/updateInventoryMutation/createInventoryMutation
+  // are NOT in dependencies because useMutation returns a new object every render.
+  // The closures capture them correctly, and we only need to recreate if columnHelper changes.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mutations change every render but are functionally stable
   const columns = useMemo(
     () => [
       // Custom columns (image, name prepended; unitMappings, createdAt appended by hook)
@@ -296,6 +311,22 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
             placeholder: "Filter locations...",
             filterType: "select",
             options: presenceFilterOptions("inventory"),
+          },
+          inlineEdit: {
+            SearchProvider: WithLocationSearch,
+            onMoveEntry: async (entry, locationId) => {
+              await updateInventoryMutation.mutateAsync({
+                id: entry.id,
+                data: { locationId },
+              });
+            },
+            onCreateEntry: async (product, locationId) => {
+              await createInventoryMutation.mutateAsync({
+                productId: product.id,
+                locationId,
+                amount: { value: 1, unit: "each" },
+              });
+            },
           },
         },
       ),

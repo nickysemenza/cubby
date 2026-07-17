@@ -452,3 +452,127 @@ describe("EditableCell component", () => {
     expect(parentClick).not.toHaveBeenCalled();
   });
 });
+
+describe("overlay behavior", () => {
+  it("renders the editor into document.body via portal while keeping the display trigger mounted in place", async () => {
+    const { container } = render(
+      <EditableCell
+        value="Test Value"
+        onSave={vi.fn()}
+        config={{ type: "text" }}
+        renderValue={(v) => <span>{v}</span>}
+      />,
+    );
+
+    const trigger = screen.getByRole("button");
+    fireEvent.click(trigger);
+
+    const input = await screen.findByRole("textbox");
+
+    // The trigger stays exactly where it was rendered (it's the overlay's
+    // positioning anchor); the editor is portaled straight onto body.
+    expect(container.contains(trigger)).toBe(true);
+    expect(container.contains(input)).toBe(false);
+    expect(document.body.contains(input)).toBe(true);
+  });
+
+  it("cancels edit mode on Escape without calling onSave", async () => {
+    const onSave = vi.fn();
+    render(
+      <EditableCell
+        value="Test Value"
+        onSave={onSave}
+        config={{ type: "text" }}
+        renderValue={(v) => <span>{v}</span>}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button"));
+    const input = await screen.findByRole("textbox");
+
+    fireEvent.keyDown(input, { key: "Escape" });
+
+    await waitFor(() => {
+      expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    });
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("cancels on an outside mousedown, but not on a mousedown inside the editor overlay", async () => {
+    render(
+      <EditableCell
+        value="Test Value"
+        onSave={vi.fn()}
+        config={{ type: "text" }}
+        renderValue={(v) => <span>{v}</span>}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button"));
+    const input = await screen.findByRole("textbox");
+
+    // Inside the overlay: stays open.
+    fireEvent.mouseDown(input);
+    expect(screen.getByRole("textbox")).toBeInTheDocument();
+
+    // Outside: closes it.
+    fireEvent.mouseDown(document.body);
+    await waitFor(() => {
+      expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    });
+  });
+
+  it("does not cancel on a mousedown inside a [data-combobox-popup] element", async () => {
+    render(
+      <EditableCell
+        value="Test Value"
+        onSave={vi.fn()}
+        config={{ type: "text" }}
+        renderValue={(v) => <span>{v}</span>}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button"));
+    await screen.findByRole("textbox");
+
+    // Simulates a combobox dropdown's own body-level portal — the overlay
+    // treats it as "inside" even though it's DOM-siblings, not a descendant.
+    const popup = document.createElement("div");
+    popup.setAttribute("data-combobox-popup", "");
+    document.body.appendChild(popup);
+
+    fireEvent.mouseDown(popup);
+    expect(screen.getByRole("textbox")).toBeInTheDocument();
+
+    popup.remove();
+  });
+
+  it("stops Enter inside the editor from reaching an ancestor's onKeyDown, while typing still works", async () => {
+    const wrapperKeyDown = vi.fn();
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(
+      // biome-ignore lint/a11y/noStaticElementInteractions: test only
+      <div onKeyDown={wrapperKeyDown}>
+        <EditableCell
+          value="Test Value"
+          onSave={onSave}
+          config={{ type: "text" }}
+          renderValue={(v) => <span>{v}</span>}
+        />
+      </div>,
+    );
+
+    fireEvent.click(screen.getByRole("button"));
+    const input = await screen.findByRole("textbox");
+
+    fireEvent.change(input, { target: { value: "New Value" } });
+    expect(input).toHaveValue("New Value");
+
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith("New Value");
+    });
+    expect(wrapperKeyDown).not.toHaveBeenCalled();
+  });
+});

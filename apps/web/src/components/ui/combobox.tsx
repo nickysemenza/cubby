@@ -126,7 +126,12 @@ export function FilterableCombobox({
           sideOffset={4}
           align="start"
           anchor={anchorRef}
-          className="isolate z-50"
+          // Marks the portaled dropdown so cell-editor-overlay's click-outside
+          // check (DOM containment) doesn't treat clicks in here as "outside".
+          data-combobox-popup=""
+          // z-[200] (was z-50): must paint above CellEditorOverlay (z-100),
+          // matching DialogCompatibleCombobox's dropdown layer.
+          className="isolate z-[200]"
         >
           <ComboboxPrimitive.Popup
             className={cn(

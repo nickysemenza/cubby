@@ -221,6 +221,9 @@ export function DialogCompatibleCombobox<TId extends string = string>({
       <div
         ref={popupRef}
         style={popupStyle}
+        // Marks the portaled dropdown so cell-editor-overlay's click-outside
+        // check (DOM containment) doesn't treat clicks in here as "outside".
+        data-combobox-popup=""
         className={cn(
           "fade-in-0 zoom-in-95 z-[200] animate-in rounded-md border bg-popover",
         )}

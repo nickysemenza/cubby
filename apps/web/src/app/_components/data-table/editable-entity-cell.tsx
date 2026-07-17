@@ -4,12 +4,16 @@ import { Check, Pencil, X } from "lucide-react";
 import type React from "react";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
+import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { getErrorMessage } from "~/lib/error-utils";
 import { DialogCompatibleCombobox } from "../combobox/combobox-dialog";
 import type { ComboboxItem } from "../combobox/combobox-types";
 import type { WithEntitySearchProps } from "../combobox/with-search-hook";
-import { useOptimisticDisplayValue } from "./editable-cell";
+import type { CellClipboardSpec } from "./cell-clipboard";
+import { CellEditTrigger } from "./cell-edit-trigger";
+import { CellEditorOverlay } from "./cell-editor-overlay";
+import { useCellEditState, useOptimisticDisplayValue } from "./editable-cell";
 
 const itemIdEquals = <TId extends string>(
   a: ComboboxItem<TId> | null,
@@ -30,13 +34,23 @@ export interface EditableEntityCellProps<TId extends string> {
   /** Hide rows from the dropdown (e.g. a location can't be its own parent). */
   filterItems?: (item: ComboboxItem<TId>) => boolean;
   renderValue: (value: ComboboxItem<TId> | null) => React.ReactNode;
+  /**
+   * Display-mode shape. "wrap" (default): the whole rendered value is the
+   * edit trigger. "pencil": the rendered value stays outside the trigger
+   * (so links inside it remain navigable — interactive-inside-interactive is
+   * invalid) and a small always-faint pencil button is the trigger and
+   * clipboard target.
+   */
+  trigger?: "wrap" | "pencil";
+  /** Enable cmd-C / cmd-V on the focused trigger. */
+  clipboard?: CellClipboardSpec;
 }
 
 /**
  * Editable cell for a single related entity, backed by an async entity search.
  * Sibling of `EditableCell` (which only supports static option lists) — same
- * pencil / Check / X / optimistic-display semantics, but the editor is a
- * `DialogCompatibleCombobox` fed by a `With*Search` render-prop provider.
+ * trigger / overlay / Check/X / optimistic-display semantics, but the editor
+ * is a `DialogCompatibleCombobox` fed by a `With*Search` render-prop provider.
  */
 export function EditableEntityCell<TId extends string>({
   value,
@@ -46,15 +60,22 @@ export function EditableEntityCell<TId extends string>({
   clearable,
   filterItems,
   renderValue,
+  trigger = "wrap",
+  clipboard,
 }: EditableEntityCellProps<TId>) {
-  const [isEditing, setIsEditing] = useState(false);
   const { displayValue, setOptimisticValue } = useOptimisticDisplayValue(
     value,
     itemIdEquals,
   );
+  const edit = useCellEditState(clipboard, (saved) =>
+    setOptimisticValue(saved as ComboboxItem<TId> | null),
+  );
 
-  if (isEditing) {
-    return (
+  const editor = edit.isEditing && (
+    <CellEditorOverlay
+      anchorEl={edit.triggerRef.current}
+      onRequestCancel={edit.cancel}
+    >
       <EditableEntityEditor
         value={value}
         onSave={onSave}
@@ -62,27 +83,45 @@ export function EditableEntityCell<TId extends string>({
         label={label}
         clearable={clearable}
         filterItems={filterItems}
-        onCancel={() => setIsEditing(false)}
+        onCancel={edit.cancel}
         onCommit={(nextValue) => {
           setOptimisticValue(nextValue);
-          setIsEditing(false);
+          edit.cancel();
         }}
       />
+    </CellEditorOverlay>
+  );
+
+  if (trigger === "pencil") {
+    return (
+      <Row align="center" gap="xs" className="group/pencil min-w-0">
+        <span className="min-w-0 truncate">{renderValue(displayValue)}</span>
+        <CellEditTrigger
+          ref={edit.triggerRef}
+          onStartEdit={() => edit.setIsEditing(true)}
+          clipboard={edit.clipboard}
+          hidePencilIcon
+          aria-label={`Edit ${label}`}
+          className="shrink-0 p-1 opacity-40 pointer-coarse:opacity-100 transition-opacity focus-visible:opacity-100 group-hover/pencil:opacity-100"
+        >
+          <Pencil className="h-3 w-3 text-muted-foreground" />
+        </CellEditTrigger>
+        {editor}
+      </Row>
     );
   }
 
   return (
-    <button
-      type="button"
-      className="group inline-flex items-center gap-1 rounded px-2 py-1 text-left hover:bg-muted"
-      onClick={(e) => {
-        e.stopPropagation();
-        setIsEditing(true);
-      }}
-    >
-      {renderValue(displayValue)}
-      <Pencil className="ml-1 h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-    </button>
+    <>
+      <CellEditTrigger
+        ref={edit.triggerRef}
+        onStartEdit={() => edit.setIsEditing(true)}
+        clipboard={edit.clipboard}
+      >
+        {renderValue(displayValue)}
+      </CellEditTrigger>
+      {editor}
+    </>
   );
 }
 
@@ -127,17 +166,7 @@ function EditableEntityEditor<TId extends string>({
   }, [selected, value, clearable, onSave, onCancel, onCommit]);
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: stop propagation for row click; Escape cancels edit mode
-    <div
-      className="inline-flex items-center gap-1"
-      onClick={(e) => e.stopPropagation()}
-      onKeyDown={(e) => {
-        // The combobox stops propagation of its own keys (and closes its
-        // dropdown on Escape itself), so this only fires with focus on the
-        // Check/X buttons — matching the other editors' Escape-to-cancel.
-        if (e.key === "Escape") onCancel();
-      }}
-    >
+    <div className="inline-flex w-full items-center gap-1">
       <SearchProvider>
         {({ items, onSearchChange, isLoading, onCreateNew, onOpenChange }) => (
           <DialogCompatibleCombobox
