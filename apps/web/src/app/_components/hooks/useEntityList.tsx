@@ -11,6 +11,7 @@ import type {
 import { createColumnHelper } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { entities } from "~/entities/entities";
 import type { QueryTiming } from "~/lib/query-timing";
 import { BulkActionBar } from "../data-table/BulkActionBar";
@@ -371,10 +372,18 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
       table.setRowSelection(
         Object.fromEntries(allRows.map((row) => [row.id, true])),
       );
+      // loadAllPages is bounded (its safety cap); if the filtered set is
+      // larger, surface that the selection is partial rather than letting a
+      // bulk action silently miss rows.
+      if (allRows.length < totalCount) {
+        toast.warning(
+          `Selected the first ${allRows.length.toLocaleString()} of ${totalCount.toLocaleString()} — too many to select at once. Narrow the filters to cover the rest.`,
+        );
+      }
     } finally {
       setIsSelectingAll(false);
     }
-  }, [useInfiniteMode, infiniteResult.infiniteScroll, table]);
+  }, [useInfiniteMode, infiniteResult.infiniteScroll, table, totalCount]);
 
   // Build bulk action bar element if bulk actions configured
   const bulkActionBar = useMemo(
