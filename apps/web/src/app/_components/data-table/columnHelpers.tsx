@@ -1122,6 +1122,8 @@ export function createEditableAmountColumn<T extends Record<string, unknown>>(
     getUnitMappings?: (row: T) => UnitMapping[];
     /** Mobile projection metadata override */
     mobile?: MobileColumnMeta;
+    /** Wrap the display-mode content (e.g. keep a detail-page link). */
+    renderDisplay?: (content: ReactNode, row: T) => ReactNode;
   },
 ) {
   return columnHelper.accessor((row) => row[accessor] as Amount, {
@@ -1142,6 +1144,11 @@ export function createEditableAmountColumn<T extends Record<string, unknown>>(
           amount={amount}
           unitMappings={unitMappings}
           onSave={(newAmount) => options.onSave(newAmount, row)}
+          renderDisplay={
+            options.renderDisplay
+              ? (content) => options.renderDisplay!(content, row)
+              : undefined
+          }
         />
       );
     },

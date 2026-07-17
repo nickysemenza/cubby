@@ -1,4 +1,5 @@
 import type { inventoryListItemOut } from "@cubby/schemas/inventory";
+import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { ArrowRightLeft, ImageIcon } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
@@ -138,6 +139,13 @@ export function InventoryItemList() {
             data: { amount: newAmount },
           });
         },
+        // Keep the pre-editable click-through to the entry's detail page
+        // (same link-in-display pattern as createNameColumn's editable).
+        renderDisplay: (content, row) => (
+          <Link to="/inventory/$id" params={{ id: row.id }}>
+            {content}
+          </Link>
+        ),
       }),
       createCurrencyColumn(columnHelper, "valuation", {
         header: "Valuation",

@@ -523,6 +523,11 @@ interface EditableAmountCellProps {
    */
   unitMappings?: UnitMapping[];
   onSave: (newAmount: Amount) => Promise<void>;
+  /**
+   * Wrap the display-mode content (e.g. in a detail-page link, mirroring
+   * createNameColumn's editable renderValue). Edit mode is unaffected.
+   */
+  renderDisplay?: (content: React.ReactNode) => React.ReactNode;
 }
 
 /**
@@ -534,6 +539,7 @@ export function EditableAmountCell({
   amount,
   unitMappings,
   onSave,
+  renderDisplay,
 }: EditableAmountCellProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editingValue, setEditingValue] = useState(amount.value);
@@ -655,9 +661,11 @@ export function EditableAmountCell({
         startEditing();
       }}
     >
-      {unitMappings === undefined
-        ? tryFormatAmount(displayAmount)
-        : showAmountAndPrice(displayAmount, unitMappings)}
+      {(renderDisplay ?? ((content: React.ReactNode) => content))(
+        unitMappings === undefined
+          ? tryFormatAmount(displayAmount)
+          : showAmountAndPrice(displayAmount, unitMappings),
+      )}
       <Pencil className="ml-1 h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
     </button>
   );
