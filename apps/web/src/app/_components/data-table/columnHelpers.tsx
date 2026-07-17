@@ -171,6 +171,15 @@ export interface MobileColumnMeta {
   slot?: MobileSlot;
   /** Lower values are rendered first within a slot */
   priority?: number;
+  /**
+   * The rendered cell contains an interactive control (e.g. an
+   * `EditableEntityCell`/`EditableCell` edit-trigger or a quick-edit pencil
+   * button). When set, and the cell lands in the mobile card's meta/trailing
+   * right-values bucket, the card skips the truncating `text-2xs` wrapper so
+   * the control isn't clipped or cramped below a usable tap target. Set this
+   * on columns whose cell renders an editor — don't rely on DOM sniffing.
+   */
+  interactive?: boolean;
 }
 
 // Extend TanStack Table's meta type to include our custom properties
@@ -656,7 +665,12 @@ export function createActionsColumnBase<T>(
             <MoreHorizontal className="h-4 w-4" />
             <span className="sr-only">Open menu</span>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
+          {/* The mobile card's row is a click-through to the detail page —
+              without this, an item click (React's synthetic events bubble
+              through the portal's React-tree parent, not just the real DOM)
+              falls through to the row's onClick and navigates away instead
+              of running the action. */}
+          <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
             {linkProps && (
               <DropdownMenuItem
                 render={<Link to={linkProps.to} params={linkProps.params} />}

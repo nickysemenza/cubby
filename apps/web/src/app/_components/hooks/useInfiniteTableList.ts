@@ -1,5 +1,5 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import type { QueryTiming } from "~/lib/query-timing";
 import type { TableStateReturn } from "../data-table/useTableState";
 import {
@@ -19,10 +19,17 @@ interface UseInfiniteTableListOptions<TFilters> {
   enabled?: boolean;
 }
 
-export interface InfiniteScrollControls {
+export interface InfiniteScrollControls<TData = unknown> {
   fetchNextPage: () => void;
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
+  /**
+   * Fetch every remaining page (up to `cap` accumulated rows) so all matching
+   * rows are in memory, resolving with the full flattened set. Used by "select
+   * all N matching": callers select from the RETURNED items, not the table's
+   * row model, which hasn't re-rendered with the new pages yet.
+   */
+  loadAllPages: (cap?: number) => Promise<TData[]>;
 }
 
 interface UseInfiniteTableListReturn<TData = unknown> {
@@ -34,7 +41,7 @@ interface UseInfiniteTableListReturn<TData = unknown> {
   error: Error | null;
   tableState: TableStateReturn;
   timing: QueryTiming;
-  infiniteScroll: InfiniteScrollControls;
+  infiniteScroll: InfiniteScrollControls<TData>;
   refreshControls: {
     onRefresh: () => Promise<void>;
     isRefreshing: boolean;
@@ -118,7 +125,12 @@ export function useInfiniteTableList<TFilters, TData = unknown>({
       | undefined;
     isLoading: boolean;
     error: Error | null;
-    fetchNextPage: () => void;
+    // useInfiniteQuery's fetchNextPage resolves with the updated observer
+    // result (has .hasNextPage / .data) — awaited by loadAllPages below.
+    fetchNextPage: () => Promise<{
+      hasNextPage?: boolean;
+      data?: { pages: ListQueryResponse<TData>[] };
+    }>;
     hasNextPage: boolean;
     isFetchingNextPage: boolean;
     isRefetching: boolean;
@@ -136,6 +148,24 @@ export function useInfiniteTableList<TFilters, TData = unknown>({
   const totalCount = infiniteData?.pages[0]?.meta?.totalCount ?? 0;
   const sums = infiniteData?.pages.at(-1)?.meta?.sums;
 
+  // Pull every remaining page into memory (bounded), awaiting each fetch's
+  // resolved result so we know when the set is complete.
+  const loadAllPages = useCallback(
+    async (cap = 3000): Promise<TData[]> => {
+      let result = await fetchNextPage();
+      const flat = (r: typeof result) =>
+        r.data?.pages.flatMap((p) => p.items) ?? [];
+      // Guard against an unbounded loop if the server keeps claiming more.
+      let guard = 0;
+      while (result.hasNextPage && flat(result).length < cap && guard < 100) {
+        guard += 1;
+        result = await fetchNextPage();
+      }
+      return flat(result);
+    },
+    [fetchNextPage],
+  );
+
   return {
     data,
     totalCount,
@@ -149,6 +179,7 @@ export function useInfiniteTableList<TFilters, TData = unknown>({
       fetchNextPage,
       hasNextPage: hasNextPage ?? false,
       isFetchingNextPage,
+      loadAllPages,
     },
     refreshControls: {
       onRefresh: async () => {

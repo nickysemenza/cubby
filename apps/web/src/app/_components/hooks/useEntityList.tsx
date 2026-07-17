@@ -17,6 +17,7 @@ import { BulkActionBar } from "../data-table/BulkActionBar";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
 import { useBulkActions } from "../data-table/useBulkActions";
 import type { GroupConfig } from "../data-table/useGroupedList";
+import { useTableColumnSizing } from "../data-table/useTableColumnSizing";
 import { useTableColumnVisibility } from "../data-table/useTableColumnVisibility";
 import { useTableConfig } from "../data-table/useTableConfig";
 import { useTableState } from "../data-table/useTableState";
@@ -327,6 +328,11 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   const { columnVisibility, onColumnVisibilityChange } =
     useTableColumnVisibility(entity, initialColumnVisibility);
 
+  // Persisted per-entity column widths (localStorage). Only user-resized
+  // columns are stored; the rest keep their code-defined width classes.
+  const { columnSizing, setColumnSize, resetColumnSize } =
+    useTableColumnSizing(entity);
+
   // Configure the table
   // In infinite mode, feed all accumulated rows as a single "page" so TanStack Table
   // doesn't try to paginate server-side.
@@ -346,7 +352,29 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     columnVisibility,
     onColumnVisibilityChange,
     serverTotals,
+    columnSizing,
+    setColumnSize,
+    resetColumnSize,
   });
+
+  // "Select all N matching": pull every remaining page into memory (bulk
+  // actions need full rows, not ids), then select all. Infinite mode only.
+  const [isSelectingAll, setIsSelectingAll] = useState(false);
+  const handleSelectAllMatching = useCallback(async () => {
+    if (!useInfiniteMode) return;
+    setIsSelectingAll(true);
+    try {
+      // Select from the RETURNED items, not table.getRowModel(): the table
+      // still holds the pre-load rows until React re-renders, so a
+      // toggleAllRowsSelected here would only select the previously-loaded set.
+      const allRows = await infiniteResult.infiniteScroll.loadAllPages();
+      table.setRowSelection(
+        Object.fromEntries(allRows.map((row) => [row.id, true])),
+      );
+    } finally {
+      setIsSelectingAll(false);
+    }
+  }, [useInfiniteMode, infiniteResult.infiniteScroll, table]);
 
   // Build bulk action bar element if bulk actions configured
   const bulkActionBar = useMemo(
@@ -362,9 +390,28 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
           onClearSelection={bulkActionsState.clearSelection}
           isExecuting={bulkActionsState.isExecuting}
           currentAction={bulkActionsState.currentAction}
+          selectAllMatching={
+            useInfiniteMode
+              ? {
+                  totalCount,
+                  loadedCount: data.length,
+                  onSelectAll: handleSelectAllMatching,
+                  isSelectingAll,
+                }
+              : undefined
+          }
         />
       ) : null,
-    [bulkActionsState, effectiveBulkActions, table],
+    [
+      bulkActionsState,
+      effectiveBulkActions,
+      table,
+      useInfiniteMode,
+      totalCount,
+      data.length,
+      handleSelectAllMatching,
+      isSelectingAll,
+    ],
   );
 
   return {

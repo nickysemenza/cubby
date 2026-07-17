@@ -53,9 +53,13 @@ interface UseTableConfigOptions<TData, GlobalFilterData = unknown> {
    * renderers via table meta — client rows only cover loaded pages.
    */
   serverTotals?: ServerTotals;
+  /** Persisted per-entity column widths (from useTableColumnSizing). */
+  columnSizing?: Record<string, number>;
+  setColumnSize?: (columnId: string, width: number) => void;
+  resetColumnSize?: (columnId: string) => void;
 }
 
-export interface ServerTotals {
+interface ServerTotals {
   /** Total rows matching the current filters (not just loaded pages). */
   totalCount: number;
   /** Column sums over the full filtered set, keyed by column id. */
@@ -67,6 +71,11 @@ declare module "@tanstack/react-table" {
   // module augmentation to merge; it's structurally unused here.
   interface TableMeta<TData extends RowData> {
     serverTotals?: ServerTotals;
+    /** User-resized column pixel widths, by column id (persisted per entity). */
+    columnSizing?: Record<string, number>;
+    /** Persist a resized column width (double-click a handle to reset). */
+    setColumnSize?: (columnId: string, width: number) => void;
+    resetColumnSize?: (columnId: string) => void;
     _tData?: TData;
   }
 }
@@ -90,6 +99,9 @@ export function useTableConfig<TData, GlobalFilterData>({
   columnVisibility: controlledVisibility,
   onColumnVisibilityChange: controlledOnVisibilityChange,
   serverTotals,
+  columnSizing,
+  setColumnSize,
+  resetColumnSize,
 }: UseTableConfigOptions<TData, GlobalFilterData>): Table<TData> {
   const {
     sorting,
@@ -146,7 +158,12 @@ export function useTableConfig<TData, GlobalFilterData>({
       sortDescFirst: false,
       ...(enableSorting !== undefined ? { enableSorting } : {}),
       rowCount: totalCount,
-      ...(serverTotals ? { meta: { serverTotals } } : {}),
+      meta: {
+        ...(serverTotals ? { serverTotals } : {}),
+        ...(columnSizing ? { columnSizing } : {}),
+        ...(setColumnSize ? { setColumnSize } : {}),
+        ...(resetColumnSize ? { resetColumnSize } : {}),
+      },
       // Row selection
       ...(getRowId ? { getRowId } : {}),
       ...(enableRowSelection !== undefined ? { enableRowSelection } : {}),
@@ -184,6 +201,9 @@ export function useTableConfig<TData, GlobalFilterData>({
       enableSorting,
       totalCount,
       serverTotals,
+      columnSizing,
+      setColumnSize,
+      resetColumnSize,
       getRowId,
       enableRowSelection,
       rowSelection,

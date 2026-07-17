@@ -4,7 +4,7 @@ import { Link } from "@tanstack/react-router";
 import type { ColumnFiltersState } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import { uniq } from "es-toolkit";
-import { Package, Printer } from "lucide-react";
+import { Package, Pencil, Printer } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -197,7 +197,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
         {
           header: "Ingredient",
           className: "w-32",
-          mobile: { slot: "meta", priority: 45 },
+          mobile: { slot: "meta", priority: 45, interactive: true },
           enableSorting: true,
           filterConfig: {
             placeholder: "Filter ingredient...",
@@ -231,6 +231,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
       createExternalLinkColumn(columnHelper, "upc", "/usda/upc/$code", {
         header: "UPC",
         className: "w-32",
+        mobile: { interactive: true },
         filterConfig: { placeholder: "Filter UPC..." },
         editable: {
           onSave: async (newValue, product) => {
@@ -279,7 +280,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
       }),
       createCurrencyColumn(columnHelper, "price", {
         header: "Price",
-        mobile: { slot: "trailing", priority: 10 },
+        mobile: { slot: "trailing", priority: 10, interactive: true },
         editable: {
           onSave: async (newPrice, product) => {
             await updateProductMutation.mutateAsync({
@@ -306,6 +307,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
         {
           id: "location",
           enableSorting: true,
+          mobile: { slot: "meta", priority: 40, interactive: true },
           onQuickEdit: (product) => setQuickEditProductId(product.id),
           filterConfig: {
             placeholder: "Filter locations...",
@@ -369,6 +371,10 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   const extraActions = useCallback(
     (row: ProductListItem) => (
       <>
+        <DropdownMenuItem onClick={() => setQuickEditProductId(row.id)}>
+          <Pencil className="mr-2 h-4 w-4" />
+          Edit locations
+        </DropdownMenuItem>
         <DropdownMenuItem render={<Link to="/inventory/session" />}>
           <Package className="mr-2 h-4 w-4" />
           Add to Inventory
