@@ -12,6 +12,7 @@ import { ingredientSortableFields } from "@cubby/schemas/ingredient";
 import {
   buildTakeSkip,
   type PaginationParams,
+  type PresenceFilter,
   type SortParams,
 } from "@cubby/schemas/pagination";
 import type { RecipeRef } from "@cubby/schemas/recipe";
@@ -20,6 +21,7 @@ import {
   count,
   eq,
   inArray,
+  isNotNull,
   isNull,
   ne,
   type SQL,
@@ -386,7 +388,7 @@ export const ingredientList = async (
   name: string | undefined,
   sorts: SortParams[],
   pagination: PaginationParams,
-  missingProductsOnly: boolean = false,
+  productPresenceFilter?: PresenceFilter,
 ) => {
   // Always filter out deleted items and recipe ingredients
   const conditions = [isNull(ingredient.recipeId), notDeleted(ingredient)];
@@ -399,7 +401,8 @@ export const ingredientList = async (
     }
   }
 
-  // For missing products filter, we need to use a left join and check for null
+  // For the product-presence filter, we need to use a left join and check for
+  // null/non-null product ids.
   const whereClause = and(...conditions);
 
   // Build order by. `appearsInRecipes` and `product` are computed counts (not
@@ -451,13 +454,22 @@ export const ingredientList = async (
     },
   } as const;
 
-  if (missingProductsOnly) {
-    // Use a subquery to find ingredients with no products
-    const ingredientsWithNoProducts = getDb(db)
+  if (productPresenceFilter) {
+    // Left join + null-check on the product side finds ingredients with
+    // ("has") or without ("none") at least one linked product. groupBy
+    // dedupes ingredients that fan out over multiple joined product rows, so
+    // the same subquery is reused for both the id filter and the count
+    // (a plain count() over the ungrouped join would over-count "has" rows).
+    const presenceCondition =
+      productPresenceFilter === "none"
+        ? isNull(product.id)
+        : isNotNull(product.id);
+
+    const filteredIngredientIds = getDb(db)
       .select({ id: ingredient.id })
       .from(ingredient)
       .leftJoin(product, eq(product.ingredientId, ingredient.id))
-      .where(and(whereClause, isNull(product.id)))
+      .where(and(whereClause, presenceCondition))
       .groupBy(ingredient.id)
       .as("filtered");
 
@@ -467,8 +479,8 @@ export const ingredientList = async (
           where: inArray(
             ingredient.id,
             getDb(db)
-              .select({ id: ingredientsWithNoProducts.id })
-              .from(ingredientsWithNoProducts),
+              .select({ id: filteredIngredientIds.id })
+              .from(filteredIngredientIds),
           ),
           ...leanRelations,
           orderBy: orderByClause,
@@ -477,27 +489,24 @@ export const ingredientList = async (
         }),
         getDb(db)
           .select({ count: count() })
-          .from(ingredient)
-          .leftJoin(product, eq(product.ingredientId, ingredient.id))
-          .where(and(whereClause, isNull(product.id)))
+          .from(filteredIngredientIds)
           .then((rows) => rows[0]?.count ?? 0),
       );
 
     return { data: results.map(dbIngredientToListAPI), count: totalCount };
-  } else {
-    // Normal query without missing products filter
-    const { data: results, count: totalCount } =
-      await executeListQueryWithCount(
-        getDb(db).query.ingredient.findMany({
-          where: whereClause,
-          ...leanRelations,
-          orderBy: orderByClause,
-          limit: take,
-          offset: skip,
-        }),
-        countWhere(db, ingredient, whereClause),
-      );
-
-    return { data: results.map(dbIngredientToListAPI), count: totalCount };
   }
+
+  // Normal query without a product-presence filter
+  const { data: results, count: totalCount } = await executeListQueryWithCount(
+    getDb(db).query.ingredient.findMany({
+      where: whereClause,
+      ...leanRelations,
+      orderBy: orderByClause,
+      limit: take,
+      offset: skip,
+    }),
+    countWhere(db, ingredient, whereClause),
+  );
+
+  return { data: results.map(dbIngredientToListAPI), count: totalCount };
 };

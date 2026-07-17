@@ -3,7 +3,7 @@ import { timestampedFields } from "./base-entity";
 import { amount } from "./codec";
 import { requiredName } from "./common";
 import { id, ingredientId, recipeId } from "./identifiers";
-import { createPaginatedResponseSchema } from "./pagination";
+import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
 import {
   productWithMappingsAndFoodOut,
   productWithMappingsOut,
@@ -36,11 +36,7 @@ export const ingredientFilterFields = {
     .string()
     .optional()
     .describe("Filter by ingredient name (substring)"),
-  missingProductsOnly: z
-    .boolean()
-    .optional()
-    .default(false)
-    .describe("Only return ingredients with no linked products"),
+  productPresenceFilter: presenceFilter,
 };
 
 export const ingredientFiltersSchema = z.object(ingredientFilterFields);

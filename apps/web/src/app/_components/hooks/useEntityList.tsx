@@ -78,6 +78,15 @@ interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
    * tables (few columns) so the name doesn't balloon under the fixed layout.
    */
   nameClassName?: string;
+  /**
+   * Enable inline editing on the standard name column (entities whose name
+   * column is hook-prepended, e.g. products/recipes). MUST be referentially
+   * stable — wrap in useMemo/useCallback at the page, or the columns memo
+   * churns every render.
+   */
+  nameEditable?: {
+    onSave: (newValue: string, row: TData) => Promise<void>;
+  };
   /** Group configuration — enables group toggle and server-side group ordering */
   groupConfig?: GroupConfig<TData>;
   /** Enable delete functionality - adds row menu item, bulk action, and dialog */
@@ -156,6 +165,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   infinite = false,
   initialColumnVisibility,
   nameClassName,
+  nameEditable,
   groupConfig,
 }: UseEntityListOptions<TData, TFilters>): UseEntityListReturn<TData> {
   const [grouped, setGrouped] = useState(false);
@@ -296,6 +306,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     mappingsMap: effectiveMappingsMap,
     hasUnitMappings,
     nameClassName,
+    nameEditable,
   });
 
   // Memoize getRowId to prevent recreating on every render

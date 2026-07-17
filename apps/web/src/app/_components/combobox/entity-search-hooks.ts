@@ -46,23 +46,26 @@ export function useEntitySearch() {
  * - Search query state
  * - Dialog open/close state
  * - Promise-based dialog resolution for combobox integration
+ *
+ * Generic over the branded entity id so created items keep their branding
+ * end-to-end (picker → onSave).
  */
-export function useEntitySearchWithDialog() {
+export function useEntitySearchWithDialog<TId extends string = string>() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [pendingName, setPendingName] = useState("");
   const [pendingResolve, setPendingResolve] = useState<
-    ((item: ComboboxItem) => void) | null
+    ((item: ComboboxItem<TId>) => void) | null
   >(null);
 
   const onSearchChange = useCallback((query: string) => {
     setSearchQuery(query);
   }, []);
 
-  const openDialog = useCallback((name: string): Promise<ComboboxItem> => {
+  const openDialog = useCallback((name: string): Promise<ComboboxItem<TId>> => {
     setPendingName(name);
     setIsDialogOpen(true);
-    return new Promise<ComboboxItem>((resolve) => {
+    return new Promise<ComboboxItem<TId>>((resolve) => {
       setPendingResolve(() => resolve);
     });
   }, []);
@@ -73,7 +76,7 @@ export function useEntitySearchWithDialog() {
   }, []);
 
   const resolveWithEntity = useCallback(
-    (item: ComboboxItem) => {
+    (item: ComboboxItem<TId>) => {
       setIsDialogOpen(false);
       if (pendingResolve) {
         pendingResolve(item);

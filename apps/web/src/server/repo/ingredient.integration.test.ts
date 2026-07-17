@@ -458,4 +458,62 @@ describe("ingredient", () => {
     expect(flour).not.toHaveProperty("recipeUsages");
     expect(flour.appearsInRecipes[0]).not.toHaveProperty("sections");
   });
+
+  // Regression: `productPresenceFilter` replaced the old boolean
+  // `missingProductsOnly` param — "has" and "none" must partition ingredients
+  // by whether they have at least one linked product, and the count returned
+  // alongside the page must match (a plain leftJoin+count() over-counts "has"
+  // once an ingredient has more than one product; the fix groups by ingredient
+  // id before counting).
+  it("ingredientList: productPresenceFilter partitions has/none and reports an accurate count", async () => {
+    const withProducts = await createIngredient(
+      ctx.db,
+      { name: "presence-has flour", aliases: [] },
+      ctx.actor,
+    );
+    const withoutProducts = await createIngredient(
+      ctx.db,
+      { name: "presence-none sugar", aliases: [] },
+      ctx.actor,
+    );
+    // Two live products on the same ingredient - the case that would trip up
+    // an ungrouped count() on the "has" branch.
+    await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Presence Product A",
+        ingredientId: withProducts.id,
+      }),
+      ctx.actor,
+    );
+    await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Presence Product B",
+        ingredientId: withProducts.id,
+      }),
+      ctx.actor,
+    );
+
+    const { data: hasRows, count: hasCount } = await ingredientList(
+      ctx.db,
+      undefined,
+      [{ orderBy: "name", direction: "asc" }],
+      { pageIndex: 0, pageSize: 50 },
+      "has",
+    );
+    expect(hasRows.some((i) => i.id === withProducts.id)).toBe(true);
+    expect(hasRows.some((i) => i.id === withoutProducts.id)).toBe(false);
+    expect(hasCount).toBe(hasRows.length);
+
+    const { data: noneRows } = await ingredientList(
+      ctx.db,
+      undefined,
+      [{ orderBy: "name", direction: "asc" }],
+      { pageIndex: 0, pageSize: 50 },
+      "none",
+    );
+    expect(noneRows.some((i) => i.id === withoutProducts.id)).toBe(true);
+    expect(noneRows.some((i) => i.id === withProducts.id)).toBe(false);
+  });
 });

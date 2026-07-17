@@ -12,11 +12,13 @@ import { Skeleton } from "~/components/ui/skeleton";
 import { useTRPC } from "~/integrations/trpc/react";
 import { formatCurrencyRange, formatNumberRange } from "~/lib/format-range";
 import { recipeMutationInvalidateKeys } from "~/lib/query-keys";
+import { EditableCell } from "../_components/data-table/editable-cell";
 import RTable from "../_components/data-table/Table";
 import { useActionMutation } from "../_components/hooks/useActionMutation";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
+import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import {
   RecipeSourceLink,
   sourceLabel,
@@ -132,6 +134,32 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
     [tags],
   );
 
+  // Mutation for inline editing (name, servings).
+  const updateRecipeMutation = useUpdateMutation({
+    mutationFn: api.recipe.update.mutationOptions,
+    entity: "recipe",
+    invalidateKeys: recipeMutationInvalidateKeys,
+  });
+
+  // Inline name editing on the hook-prepended name column. Stable reference
+  // required (feeds the columns memo); the mutation's mutateAsync is stable.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: updateRecipeMutation changes every render but is functionally stable
+  const nameEditable = useMemo(
+    () => ({
+      onSave: async (newName: string, recipe: RecipeListItem) => {
+        await updateRecipeMutation.mutateAsync({
+          id: recipe.id,
+          data: { name: newName },
+        });
+      },
+    }),
+    [],
+  );
+
+  // Memoize columns; updateRecipeMutation is NOT in dependencies because
+  // useMutation returns a new object every render, but the closure captures
+  // it correctly — see productlist.tsx for the same pattern.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: updateRecipeMutation changes every render but is functionally stable
   const columns = useMemo(
     () => [
       // Tags column
@@ -175,9 +203,28 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
         },
         cell: (info) => {
           const recipe = info.row.original;
+          // A structured yield ("2 loaves") is authoritative and owned by the
+          // detail page's yield editor — read-only here. Only recipes with no
+          // structured yield fall back to the plain servings count, which is
+          // safe to edit inline.
           if (recipe.yield) return formatYield(recipe.yield);
-          if (recipe.servings) return `${recipe.servings} servings`;
-          return <NoneValue />;
+          return (
+            <EditableCell<number>
+              value={recipe.servings ?? null}
+              config={{ type: "number" }}
+              renderValue={(servings) =>
+                servings ? `${servings} servings` : <NoneValue />
+              }
+              onSave={async (newValue) => {
+                await updateRecipeMutation.mutateAsync({
+                  id: recipe.id,
+                  data: {
+                    servings: newValue === null ? null : Math.round(newValue),
+                  },
+                });
+              }}
+            />
+          );
         },
       }),
       // Total cost — read from the server-persisted rollup (recipe.totals).
@@ -371,6 +418,7 @@ export function RecipeList({ actions, cookbookIdFilter }: RecipeListProps) {
       clearSelectionOnComplete: false, // Don't clear selection after navigating
     },
     deletable: deletableConfig,
+    nameEditable,
     infinite: true,
   });
 

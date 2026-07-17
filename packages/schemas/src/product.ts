@@ -16,7 +16,7 @@ import {
 } from "./identifiers";
 import { imageOut } from "./image";
 import { locationListRefOut, locationOut } from "./location";
-import { createPaginatedResponseSchema } from "./pagination";
+import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
 import { baseKind } from "./problems";
 import { recipeUsageOut } from "./recipe";
 import { mutationSideEffectsSchema } from "./background-jobs";
@@ -180,6 +180,8 @@ export const productFilterFields = {
   manufacturerFilter: z.string().optional().describe("Filter by manufacturer"),
   upcFilter: z.string().optional().describe("Filter by UPC code"),
   categoryFilter: productCategory.optional().describe("Filter by category"),
+  inventoryPresenceFilter: presenceFilter,
+  ingredientPresenceFilter: presenceFilter,
 };
 
 export const productFiltersSchema = z.object(productFilterFields);

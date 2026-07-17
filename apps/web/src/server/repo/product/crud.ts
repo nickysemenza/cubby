@@ -9,6 +9,7 @@ import type { ImageOut } from "@cubby/schemas/image";
 import {
   buildTakeSkip,
   type PaginationParams,
+  type PresenceFilter,
   type SortParams,
 } from "@cubby/schemas/pagination";
 import type { ProductPickerItemOut } from "@cubby/schemas/product";
@@ -22,7 +23,17 @@ import {
 } from "@cubby/schemas/product";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  notInArray,
+  or,
+  sql,
+} from "drizzle-orm";
 import { countBy, uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
 import {
@@ -284,7 +295,27 @@ export const productList = async (
   sorts: SortParams[],
   pagination: PaginationParams,
   groupBy?: string,
+  inventoryPresenceFilter?: PresenceFilter,
+  ingredientPresenceFilter?: PresenceFilter,
 ) => {
+  const dbClient = getDb(db);
+
+  // Product ids with at least one live (non-deleted) inventory entry —
+  // soft-deleted entries don't count. Deliberately an UNCORRELATED subquery
+  // (only references inventoryEntry columns, no back-reference to
+  // product.id): the data query below runs through Drizzle's relational
+  // query builder, which aliases the root table to "product", while the
+  // count query (`countWhere`) runs a plain, unaliased `$count`. A
+  // correlated EXISTS referencing `product.id` from inside the subquery
+  // resolves against different table names in each context (and breaks the
+  // RQB data query, which only sees the "product" alias) — inArray/notInArray
+  // sidestep that because `product.id` is referenced at the WHERE's top
+  // level, where both query builders rewrite it correctly.
+  const productIdsWithLiveInventory = dbClient
+    .select({ productId: inventoryEntry.productId })
+    .from(inventoryEntry)
+    .where(notDeleted(inventoryEntry));
+
   // Build where conditions - always filter out deleted items
   const whereClause = buildSearchConditions(
     product,
@@ -293,7 +324,21 @@ export const productList = async (
       { column: product.manufacturer, term: manufacturer },
       { column: product.upc, term: upc },
     ],
-    [category !== undefined ? eq(product.category, category) : undefined],
+    [
+      category !== undefined ? eq(product.category, category) : undefined,
+      ingredientPresenceFilter === "none"
+        ? isNull(product.ingredientId)
+        : undefined,
+      ingredientPresenceFilter === "has"
+        ? isNotNull(product.ingredientId)
+        : undefined,
+      inventoryPresenceFilter === "none"
+        ? notInArray(product.id, productIdsWithLiveInventory)
+        : undefined,
+      inventoryPresenceFilter === "has"
+        ? inArray(product.id, productIdsWithLiveInventory)
+        : undefined,
+    ],
   );
 
   // Special list sort keys are correlated subqueries because Drizzle's

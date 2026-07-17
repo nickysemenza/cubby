@@ -91,7 +91,7 @@ const { list } = createEntityListProcedure({
         filters.nameFilter,
         sort,
         pagination,
-        filters.missingProductsOnly,
+        filters.productPresenceFilter,
       );
     },
   },

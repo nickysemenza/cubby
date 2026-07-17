@@ -13,7 +13,10 @@ import {
 } from "~/components/ui/combobox";
 import { Input } from "~/components/ui/input";
 import { getErrorMessage } from "~/lib/error-utils";
-import { showAmountAndPrice } from "../inventory/format-amount";
+import {
+  showAmountAndPrice,
+  tryFormatAmount,
+} from "../inventory/format-amount";
 
 /** Re-export for convenience */
 export type { FilterableComboboxItem };
@@ -183,16 +186,28 @@ export function EditableCell<T>({
   );
 }
 
-function useOptimisticDisplayValue<T>(value: T | null) {
+const referenceEquals = <T,>(a: T | null, b: T | null) => a === b;
+
+/**
+ * Optimistic display value for editable cells: after a successful save the new
+ * value shows immediately, then hands back to the prop once react-query's
+ * refetch catches up. `isEqual` must be referentially stable (module-level) —
+ * pass one for object values (e.g. compare by id), where the default
+ * reference equality would never release the optimistic value.
+ */
+export function useOptimisticDisplayValue<T>(
+  value: T | null,
+  isEqual: (a: T | null, b: T | null) => boolean = referenceEquals,
+) {
   const [optimisticValue, setOptimisticValue] = useState<T | null | undefined>(
     undefined,
   );
 
   useEffect(() => {
-    if (optimisticValue !== undefined && value === optimisticValue) {
+    if (optimisticValue !== undefined && isEqual(value, optimisticValue)) {
       setOptimisticValue(undefined);
     }
-  }, [value, optimisticValue]);
+  }, [value, optimisticValue, isEqual]);
 
   return {
     displayValue: optimisticValue !== undefined ? optimisticValue : value,
@@ -500,14 +515,20 @@ function EditableSelectEditor({
 
 interface EditableAmountCellProps {
   amount: Amount;
+  /**
+   * Omit entirely for an amount-only display (no price line). An ARRAY (even
+   * empty) opts into the price display — showAmountAndPrice treats undefined
+   * as "mappings still loading", so hosts that load mappings async must pass
+   * `?? []`.
+   */
   unitMappings?: UnitMapping[];
   onSave: (newAmount: Amount) => Promise<void>;
 }
 
 /**
  * Editable cell for inventory amounts (value + unit).
- * Shows formatted amount with price in display mode.
- * Shows two inputs (value, unit) in edit mode.
+ * Shows formatted amount (with price when unitMappings is provided) in
+ * display mode. Shows two inputs (value, unit) in edit mode.
  */
 export function EditableAmountCell({
   amount,
@@ -634,7 +655,9 @@ export function EditableAmountCell({
         startEditing();
       }}
     >
-      {showAmountAndPrice(displayAmount, unitMappings)}
+      {unitMappings === undefined
+        ? tryFormatAmount(displayAmount)
+        : showAmountAndPrice(displayAmount, unitMappings)}
       <Pencil className="ml-1 h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
     </button>
   );

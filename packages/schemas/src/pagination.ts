@@ -56,6 +56,15 @@ export const createSortParamsSchema = <
   return z.union([single, z.array(single).min(1).max(MAX_SORTS)]);
 };
 
+/**
+ * Relation-presence filter for list endpoints: "has" keeps rows with the
+ * relation, "none" keeps rows without it, unset means any. Sorting keeps the
+ * NULLS-LAST-both-directions convention, so this filter (surfaced as a header
+ * select on relation columns) is the way to find empty-relation rows.
+ */
+export const presenceFilter = z.enum(["has", "none"]).optional();
+export type PresenceFilter = z.infer<typeof presenceFilter>;
+
 const paginationParams = z.object({
   pageIndex: z.number().int().min(0).default(0),
   pageSize: z.number().int().min(1).max(MAX_PAGE_SIZE).default(10),

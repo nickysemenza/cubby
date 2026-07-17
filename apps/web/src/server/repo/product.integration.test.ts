@@ -1,6 +1,8 @@
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { createIngredient } from "./ingredient";
+import { createInventoryEntry, deleteInventoryEntries } from "./inventory";
+import { createLocation } from "./location";
 import {
   createProduct,
   findProductByNameFuzzyManufacturer,
@@ -8,7 +10,7 @@ import {
   productList,
   updateProduct,
 } from "./product";
-import { makeProductInput } from "./repo.fixtures";
+import { makeLocationInput, makeProductInput } from "./repo.fixtures";
 
 describe("product repository", () => {
   const ctx = withTestDb();
@@ -266,6 +268,174 @@ describe("product repository", () => {
 
     // Verify the ingredient association was removed
     expect(updatedProduct.ingredient).toBeNull();
+  });
+
+  describe("presence filters", () => {
+    it("inventoryPresenceFilter: none returns only products with no live inventory entry", async () => {
+      const location = await createLocation(
+        ctx.db,
+        makeLocationInput({ name: "Presence Filter Location" }),
+        ctx.actor,
+      );
+
+      const stocked = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Stocked Product", upc: "700000000001" }),
+        ctx.actor,
+      );
+      const empty = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Empty Product", upc: "700000000002" }),
+        ctx.actor,
+      );
+
+      await createInventoryEntry(
+        ctx.db,
+        {
+          productId: stocked.id,
+          locationId: location.id,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      );
+
+      const noneFiltered = await productList(
+        ctx.db,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        [{ orderBy: "name", direction: "asc" }],
+        { pageIndex: 0, pageSize: 10 },
+        undefined,
+        "none",
+      );
+      expect(noneFiltered.data.map((p) => p.id)).toContain(empty.id);
+      expect(noneFiltered.data.map((p) => p.id)).not.toContain(stocked.id);
+
+      const hasFiltered = await productList(
+        ctx.db,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        [{ orderBy: "name", direction: "asc" }],
+        { pageIndex: 0, pageSize: 10 },
+        undefined,
+        "has",
+      );
+      expect(hasFiltered.data.map((p) => p.id)).toContain(stocked.id);
+      expect(hasFiltered.data.map((p) => p.id)).not.toContain(empty.id);
+    });
+
+    it("inventoryPresenceFilter: none counts a soft-deleted-only inventory entry as none", async () => {
+      const location = await createLocation(
+        ctx.db,
+        makeLocationInput({ name: "Soft Delete Location" }),
+        ctx.actor,
+      );
+
+      const softDeletedOnly = await createProduct(
+        ctx.db,
+        makeProductInput({
+          name: "Soft Deleted Inventory Product",
+          upc: "700000000003",
+        }),
+        ctx.actor,
+      );
+
+      const entry = await createInventoryEntry(
+        ctx.db,
+        {
+          productId: softDeletedOnly.id,
+          locationId: location.id,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      );
+      await deleteInventoryEntries(ctx.db, [entry.id], ctx.actor);
+
+      const noneFiltered = await productList(
+        ctx.db,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        [{ orderBy: "name", direction: "asc" }],
+        { pageIndex: 0, pageSize: 10 },
+        undefined,
+        "none",
+      );
+      expect(noneFiltered.data.map((p) => p.id)).toContain(softDeletedOnly.id);
+
+      const hasFiltered = await productList(
+        ctx.db,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        [{ orderBy: "name", direction: "asc" }],
+        { pageIndex: 0, pageSize: 10 },
+        undefined,
+        "has",
+      );
+      expect(hasFiltered.data.map((p) => p.id)).not.toContain(
+        softDeletedOnly.id,
+      );
+    });
+
+    it("ingredientPresenceFilter: has/none partitions products by ingredient link", async () => {
+      const ingredient = await createIngredient(
+        ctx.db,
+        { name: "Presence Filter Ingredient", aliases: ["pfi"] },
+        ctx.actor,
+      );
+
+      const linked = await createProduct(
+        ctx.db,
+        makeProductInput({
+          name: "Linked Product",
+          upc: "700000000004",
+          ingredientId: ingredient.id,
+        }),
+        ctx.actor,
+      );
+      const unlinked = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Unlinked Product", upc: "700000000005" }),
+        ctx.actor,
+      );
+
+      const noneFiltered = await productList(
+        ctx.db,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        [{ orderBy: "name", direction: "asc" }],
+        { pageIndex: 0, pageSize: 10 },
+        undefined,
+        undefined,
+        "none",
+      );
+      expect(noneFiltered.data.map((p) => p.id)).toContain(unlinked.id);
+      expect(noneFiltered.data.map((p) => p.id)).not.toContain(linked.id);
+
+      const hasFiltered = await productList(
+        ctx.db,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        [{ orderBy: "name", direction: "asc" }],
+        { pageIndex: 0, pageSize: 10 },
+        undefined,
+        undefined,
+        "has",
+      );
+      expect(hasFiltered.data.map((p) => p.id)).toContain(linked.id);
+      expect(hasFiltered.data.map((p) => p.id)).not.toContain(unlinked.id);
+    });
   });
 
   describe("findProductByNameFuzzyManufacturer", () => {

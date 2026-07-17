@@ -4,14 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { uniq } from "es-toolkit";
 import { Merge, Scale, Sparkles } from "lucide-react";
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { MergeConfirmation } from "~/app/_components/ingredient/merge-confirmation";
 import {
@@ -21,7 +14,6 @@ import {
 } from "~/app/_components/products/product-food-summaries";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
-import { Checkbox } from "~/components/ui/checkbox";
 import { NoneValue } from "~/components/ui/none-value";
 import {
   Tooltip,
@@ -42,6 +34,7 @@ import {
   createCreatedAtColumn,
   createImageColumn,
   createNameColumn,
+  presenceFilterOptions,
 } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
 import { EntityInlineLink } from "../_components/EntityInlineLink";
@@ -131,7 +124,6 @@ function RecipeUsageCell({ ingredient }: { ingredient: IngredientListItem }) {
 }
 
 export function IngredientList() {
-  const missingProductsId = useId();
   const api = useTRPC();
   const trpcClient = useTRPCClient();
   const queryClient = useQueryClient();
@@ -153,11 +145,6 @@ export function IngredientList() {
     invalidateKeys: ingredientMutationInvalidateKeys,
   });
 
-  // Global filter for missing products
-  const [globalFilter, setGlobalFilter] = useState({
-    missingProductsOnly: false,
-  });
-
   // Which selected ingredient to keep when merging. A ref (not state) so the
   // bulk-action onExecute reads the latest choice without a stale closure.
   const mergeTargetRef = useRef<string | null>(null);
@@ -165,7 +152,7 @@ export function IngredientList() {
   // Count of stub ingredients (no products) to surface the enrichment entry point.
   const { data: stubData } = useQuery(
     api.ingredient.list.queryOptions({
-      filters: { missingProductsOnly: true },
+      filters: { productPresenceFilter: "none" },
       pagination: { pageIndex: 0, pageSize: 1 },
     }),
   );
@@ -248,6 +235,11 @@ export function IngredientList() {
         meta: {
           className: "w-72 overflow-hidden",
           mobile: { slot: "subtitle", priority: 10 },
+          filterConfig: {
+            placeholder: "Filter product...",
+            filterType: "select",
+            options: presenceFilterOptions("product"),
+          },
         },
         cell: (info) => <ProductPillsCell products={info.getValue() ?? []} />,
       }),
@@ -270,13 +262,14 @@ export function IngredientList() {
     queryOptions: api.ingredient.list.queryOptions,
     buildFilters: (ts) => ({
       nameFilter: ts.getColumnFilter("name"),
-      missingProductsOnly: globalFilter.missingProductsOnly,
+      productPresenceFilter: ts.getColumnFilter("product") as
+        | "has"
+        | "none"
+        | undefined,
     }),
     getMappings: getIngredientListMappings,
     columns,
     filters: [{ id: "name", placeholder: "Filter by ingredient name..." }],
-    globalFilter,
-    onGlobalFilterChange: setGlobalFilter as (value: unknown) => void,
     bulkActions: {
       actions: [
         {
@@ -400,23 +393,6 @@ export function IngredientList() {
             >
               New
             </Button>
-          </Row>
-        }
-        additionalToolbarContent={
-          <Row align="center" gap="sm">
-            <Checkbox
-              id={missingProductsId}
-              checked={table.getState().globalFilter.missingProductsOnly}
-              onCheckedChange={(checked) =>
-                table.setGlobalFilter({ missingProductsOnly: checked })
-              }
-            />
-            <label
-              htmlFor={missingProductsId}
-              className="font-medium text-sm leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-            >
-              Missing Products Only
-            </label>
           </Row>
         }
       />

@@ -659,7 +659,7 @@ function ManualAdd({ locationId }: { locationId: LocationId }) {
   const quickCreateMutateRef = useRef(quickCreateProduct.mutateAsync);
   quickCreateMutateRef.current = quickCreateProduct.mutateAsync;
   const handleQuickCreate = useCallback(
-    async (name: string): Promise<ComboboxItem> => {
+    async (name: string): Promise<ComboboxItem<ProductId>> => {
       const created = await quickCreateMutateRef.current({ name });
       invalidateTRPCQueries(queryClient, productMutationInvalidateKeys);
       return {

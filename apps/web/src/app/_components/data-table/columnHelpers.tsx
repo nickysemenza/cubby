@@ -1,12 +1,18 @@
 import type { Amount } from "@cubby/schemas/codec";
 import type { Entity } from "@cubby/schemas/entity";
+import type {
+  IngredientId,
+  LocationId,
+  ProductId,
+  RecipeId,
+} from "@cubby/schemas/identifiers";
 import type { LocationType } from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
 import type { CellContext, ColumnHelper } from "@tanstack/react-table";
 import { uniqBy } from "es-toolkit";
-import { Eye, ImageIcon, MoreHorizontal } from "lucide-react";
+import { Eye, ImageIcon, MoreHorizontal, Pencil } from "lucide-react";
 import type { ReactNode } from "react";
-import { Stack } from "~/components/layout";
+import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import {
   DropdownMenu,
@@ -23,6 +29,19 @@ import {
 import { entities } from "~/entities/entities";
 import type { EntityDetailRoute } from "~/entities/types";
 import { cn, formatCurrency } from "~/lib/utils";
+import {
+  buildIngredientComboboxItem,
+  buildLocationComboboxItem,
+  buildProductComboboxItem,
+  buildRecipeComboboxItem,
+} from "../combobox/combobox-builders";
+import type { ComboboxItem } from "../combobox/combobox-types";
+import {
+  WithIngredientSearch,
+  WithLocationSearch,
+  WithProductSearch,
+  WithRecipeSearch,
+} from "../combobox/with-search-hook";
 import { EntityInlineLink } from "../EntityInlineLink";
 import { EntityInlineLinkList } from "../EntityInlineLinkList";
 import { HoverableTimestamp } from "../HoverableTimestamp";
@@ -36,6 +55,7 @@ import {
   EditableCell,
   type FilterableComboboxItem,
 } from "./editable-cell";
+import { EditableEntityCell } from "./editable-entity-cell";
 
 /** Configuration for inline column header filters */
 export interface FilterConfig {
@@ -47,6 +67,18 @@ export interface FilterConfig {
   // current page — meaningless (and misleading) on server-paginated tables.
   // Opt in only for tables that load their full dataset client-side.
   facetCount?: boolean;
+}
+
+/**
+ * Options for a relation-presence header filter: pages map the selected value
+ * ("has" | "none") to the entity's `*PresenceFilter` field, resolved server-side
+ * as an exists / is-null condition. Clearing the filter means "any".
+ */
+export function presenceFilterOptions(label: string): FilterableComboboxItem[] {
+  return [
+    { value: "has", label: `Has ${label}` },
+    { value: "none", label: "(none)" },
+  ];
 }
 
 export type MobileSlot =
@@ -420,6 +452,16 @@ export function createInventoryEntriesColumn<
     layout?: "stacked" | "inline";
     /** Mobile projection metadata override */
     mobile?: MobileColumnMeta;
+    /** Filter configuration for inline header filter (e.g. presence filter) */
+    filterConfig?: FilterConfig;
+    /**
+     * When set, rows with entries get a hover-revealed pencil that opens a
+     * quick-edit surface (e.g. the per-entry inventory dialog). A pencil
+     * affordance rather than a whole-cell click target: the entry links inside
+     * the cell must stay navigable, and interactive-inside-interactive nesting
+     * is invalid.
+     */
+    onQuickEdit?: (row: T) => void;
   },
 ) {
   const layout = options?.layout ?? "inline";
@@ -432,12 +474,28 @@ export function createInventoryEntriesColumn<
     meta: {
       className: options?.className ?? "min-w-0 w-40 max-w-56",
       mobile: options?.mobile,
+      filterConfig: options?.filterConfig,
     },
     cell: (info) => {
       const entries = info.getValue() ?? [];
       if (entries.length === 0) {
         return <NoneValue />;
       }
+
+      const quickEditButton = options?.onQuickEdit ? (
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-5 w-5 shrink-0 opacity-0 transition-opacity group-hover/quickedit:opacity-100"
+          aria-label="Quick edit"
+          onClick={(e) => {
+            e.stopPropagation();
+            options.onQuickEdit?.(info.row.original);
+          }}
+        >
+          <Pencil className="h-3 w-3 text-muted-foreground" />
+        </Button>
+      ) : null;
 
       if (layout === "inline") {
         // Compact inline with truncation: show first entry + "+N more"
@@ -459,7 +517,7 @@ export function createInventoryEntriesColumn<
           );
         };
 
-        return (
+        const list = (
           <TruncatedList
             items={entries}
             maxItems={1}
@@ -467,6 +525,14 @@ export function createInventoryEntriesColumn<
             renderItem={(entry) => renderEntry(entry)}
             renderOverflowItem={(entry) => renderEntry(entry)}
           />
+        );
+
+        if (!quickEditButton) return list;
+        return (
+          <Row align="center" gap="xs" className="group/quickedit">
+            {list}
+            {quickEditButton}
+          </Row>
         );
       }
 
@@ -584,12 +650,17 @@ export function createTextColumn<
     className?: string;
     mobile?: MobileColumnMeta;
     filterConfig?: FilterConfig;
+    /** Override the default display (e.g. muted/truncated notes). */
+    renderValue?: (value: string | null) => ReactNode;
     /** Enable inline editing */
     editable?: {
       onSave: (newValue: string | null, row: T) => Promise<void>;
     };
   },
 ) {
+  const renderValue =
+    options?.renderValue ?? ((v: string | null) => (v ? v : <NoneValue />));
+
   return columnHelper.accessor((row) => row[accessor] as string | null, {
     id: String(accessor),
     header: options?.header,
@@ -609,12 +680,12 @@ export function createTextColumn<
               options.editable!.onSave(newVal, info.row.original)
             }
             config={{ type: "text", placeholder: options?.placeholder }}
-            renderValue={(v) => (v ? v : <NoneValue />)}
+            renderValue={renderValue}
           />
         );
       }
 
-      return value ?? <NoneValue />;
+      return renderValue(value);
     },
   });
 }
@@ -714,9 +785,50 @@ type SingleEntityColumnData =
       data: { fdc_id: number; description: string } | null;
     };
 
+// Branded id per pickable relation entity (usda-food has no picker).
+type SingleEntityIdMap = {
+  ingredient: IngredientId;
+  product: ProductId;
+  recipe: RecipeId;
+  location: LocationId;
+};
+
+// entity → async search provider + row-summary → ComboboxItem builder, for the
+// inline entity editor. The `as never` on SearchProvider erases the per-entity
+// branding so the values coexist in one record; call sites re-narrow via
+// SingleEntityIdMap.
+const entityPickers = {
+  ingredient: {
+    SearchProvider: WithIngredientSearch as never,
+    buildItem: buildIngredientComboboxItem as never,
+  },
+  product: {
+    SearchProvider: WithProductSearch as never,
+    buildItem: buildProductComboboxItem as never,
+  },
+  recipe: {
+    SearchProvider: WithRecipeSearch as never,
+    buildItem: buildRecipeComboboxItem as never,
+  },
+  location: {
+    SearchProvider: WithLocationSearch as never,
+    buildItem: buildLocationComboboxItem as never,
+  },
+} satisfies Record<keyof SingleEntityIdMap, unknown>;
+
+interface SingleEntityEditableConfig<T, TId extends string> {
+  onSave: (newId: TId | null, row: T) => Promise<void>;
+  /** Allow saving null (clear the relation). */
+  clearable?: boolean;
+  /** Hide rows from the dropdown (e.g. a location can't be its own parent). */
+  filterItems?: (item: ComboboxItem<TId>, row: T) => boolean;
+}
+
 /**
  * Creates a column that displays a single related entity as an inline link.
  * Shows NoneValue when the entity is null/undefined.
+ * Optionally supports inline editing (async entity picker) via `editable` —
+ * available for every entity except `usda-food` (no generic picker).
  */
 export function createSingleEntityInlineLinkColumn<
   T extends Record<string, unknown>,
@@ -733,6 +845,9 @@ export function createSingleEntityInlineLinkColumn<
     mobile?: MobileColumnMeta;
     filterConfig?: FilterConfig;
     enableSorting?: boolean;
+    editable?: TEntity extends keyof SingleEntityIdMap
+      ? SingleEntityEditableConfig<T, SingleEntityIdMap[TEntity]>
+      : never;
   },
 ) {
   const compact = options?.compact ?? true;
@@ -754,6 +869,51 @@ export function createSingleEntityInlineLinkColumn<
       },
       cell: (info) => {
         const item = info.getValue();
+        const editable = options?.editable as
+          | SingleEntityEditableConfig<T, string>
+          | undefined;
+
+        if (editable && entity !== "usda-food") {
+          const picker = entityPickers[entity as keyof SingleEntityIdMap];
+          const buildItem = picker.buildItem as (
+            data: NonNullable<typeof item>,
+          ) => ComboboxItem;
+          const row = info.row.original;
+          const current = item ? buildItem(item) : null;
+          return (
+            <EditableEntityCell
+              value={current}
+              label={entity}
+              clearable={editable.clearable}
+              filterItems={
+                editable.filterItems
+                  ? (ci) => editable.filterItems!(ci, row)
+                  : undefined
+              }
+              onSave={(newId) => editable.onSave(newId, row)}
+              SearchProvider={picker.SearchProvider}
+              renderValue={(v) => {
+                if (!v) return <NoneValue />;
+                // Keep the real inline link while the display matches the row
+                // data; a transient optimistic value renders as plain text
+                // until the invalidated query restores the relation summary.
+                // ("id" in item is a type guard only — usda-food, the one
+                // id-less member, can't reach the editable branch.)
+                if (item && "id" in item && v.id === item.id) {
+                  return (
+                    <EntityInlineLink
+                      entity={entity}
+                      data={item as never}
+                      compact={compact}
+                    />
+                  );
+                }
+                return <span className="truncate">{v.name}</span>;
+              }}
+            />
+          );
+        }
+
         if (!item) return <NoneValue />;
         return (
           <EntityInlineLink
@@ -960,6 +1120,8 @@ export function createEditableAmountColumn<T extends Record<string, unknown>>(
     onSave: (newAmount: Amount, row: T) => Promise<void>;
     /** Get unit mappings for price display (optional) */
     getUnitMappings?: (row: T) => UnitMapping[];
+    /** Mobile projection metadata override */
+    mobile?: MobileColumnMeta;
   },
 ) {
   return columnHelper.accessor((row) => row[accessor] as Amount, {
@@ -968,6 +1130,7 @@ export function createEditableAmountColumn<T extends Record<string, unknown>>(
     meta: {
       numeric: true,
       className: cn("w-40", options.className),
+      mobile: options.mobile,
     },
     cell: (info) => {
       const amount = info.getValue();
