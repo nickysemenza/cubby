@@ -1,11 +1,17 @@
 import { Link } from "@tanstack/react-router";
-import { Plus, Tags } from "lucide-react";
+import { LayoutDashboard, Plus, Tags } from "lucide-react";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 
 export function LocationActions() {
   return (
     <Row align="center" gap="sm">
+      <Link to="/locations/arrange">
+        <Button variant="outline" className="gap-1">
+          <LayoutDashboard className="h-4 w-4" />
+          Arrange
+        </Button>
+      </Link>
       <Link to="/labels">
         <Button variant="outline" className="gap-1">
           <Tags className="h-4 w-4" />
