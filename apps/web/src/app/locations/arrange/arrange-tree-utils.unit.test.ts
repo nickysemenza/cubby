@@ -17,6 +17,7 @@ import {
   isValidItemDrop,
   isValidLocationDrop,
   parentIdOf,
+  pathToNode,
 } from "./arrange-tree-utils";
 
 // Minimal fixture factories. The pure fns only read id/name/parent/children/
@@ -71,6 +72,24 @@ describe("findNode / parentIdOf", () => {
     expect(parentIdOf(t, L("bin1"))).toBe(L("shelfA"));
     expect(parentIdOf(t, L("shelfA"))).toBe(L("garage"));
     expect(parentIdOf(t, L("garage"))).toBeNull();
+  });
+});
+
+describe("pathToNode", () => {
+  it("returns the full root→node path for a top-level node", () => {
+    expect(pathToNode(buildTree(), L("garage"))).toEqual([L("garage")]);
+  });
+  it("returns the full chain for a deeply nested node (drill fix)", () => {
+    // bin1 is a grandchild of garage — the path must include the intermediate
+    // ancestor, not skip it.
+    expect(pathToNode(buildTree(), L("bin1"))).toEqual([
+      L("garage"),
+      L("shelfA"),
+      L("bin1"),
+    ]);
+  });
+  it("returns [] for a missing node", () => {
+    expect(pathToNode(buildTree(), L("nope"))).toEqual([]);
   });
 });
 

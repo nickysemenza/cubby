@@ -70,6 +70,28 @@ export function parentIdOf(
 }
 
 /**
+ * Full path of location ids from a top-level root down to (and including) `id`,
+ * or `[]` if `id` isn't in the forest. Unlike appending to a zoom path, this
+ * works for a node at ANY depth — so drilling into a grandchild resolves the
+ * complete ancestor chain instead of skipping intermediate levels.
+ */
+export function pathToNode(roots: InfLocation[], id: LocationId): LocationId[] {
+  const walk = (
+    nodes: InfLocation[],
+    trail: LocationId[],
+  ): LocationId[] | null => {
+    for (const node of nodes) {
+      const next = [...trail, node.id];
+      if (node.id === id) return next;
+      const found = walk(node.children ?? [], next);
+      if (found) return found;
+    }
+    return null;
+  };
+  return walk(roots, []) ?? [];
+}
+
+/**
  * True when `candidateId` is `rootId` itself or lives anywhere in its subtree.
  * This is the cycle guard for reparenting: you may not drop a location onto
  * itself or any of its own descendants.

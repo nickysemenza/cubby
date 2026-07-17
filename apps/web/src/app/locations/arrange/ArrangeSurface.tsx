@@ -11,6 +11,7 @@ import {
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
 import { useTRPC } from "~/integrations/trpc/react";
+import { invalidateTRPCQueries } from "~/lib/query-keys";
 import { ArrangeBoard } from "./ArrangeBoard";
 import { ArrangeTree } from "./ArrangeTree";
 import { findUnknownRoot } from "./arrange-tree-utils";
@@ -70,9 +71,7 @@ export function ArrangeSurface({ view, onViewChange }: ArrangeSurfaceProps) {
     ensuredRef.current = true;
     ensureUnknown.mutate(undefined, {
       onSuccess: () =>
-        queryClient.invalidateQueries({
-          queryKey: api.location.makeTree.queryKey(),
-        }),
+        invalidateTRPCQueries(queryClient, [api.location.makeTree.queryKey()]),
     });
   }, [unknownRoot, ensureUnknown, queryClient, api]);
 

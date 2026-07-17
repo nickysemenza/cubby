@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { useTRPC } from "~/integrations/trpc/react";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
+  cancelTRPCQueries,
   invalidateTRPCQueries,
   inventoryMutationInvalidateKeys,
 } from "~/lib/query-keys";
@@ -41,7 +42,7 @@ export function useArrangeMutations() {
     mutationFn: reparentBase.mutationFn,
     onMutate: async (vars): Promise<OptimisticContext> => {
       const dragId = vars.ids[0];
-      await queryClient.cancelQueries({ queryKey: treeKey });
+      await cancelTRPCQueries(queryClient, [treeKey]);
       const prev = queryClient.getQueryData<InfLocation[]>(treeKey);
       if (prev && dragId) {
         queryClient.setQueryData(
@@ -69,7 +70,7 @@ export function useArrangeMutations() {
     mutationFn: moveBase.mutationFn,
     onMutate: async (vars): Promise<OptimisticContext> => {
       const first = vars.items[0];
-      await queryClient.cancelQueries({ queryKey: treeKey });
+      await cancelTRPCQueries(queryClient, [treeKey]);
       const prev = queryClient.getQueryData<InfLocation[]>(treeKey);
       if (prev && first) {
         queryClient.setQueryData(

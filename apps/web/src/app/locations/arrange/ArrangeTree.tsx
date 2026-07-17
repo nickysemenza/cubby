@@ -12,6 +12,7 @@ import {
   childrenOf,
   isValidItemDrop,
   isValidLocationDrop,
+  pathToNode,
 } from "./arrange-tree-utils";
 import { type ArrangeDropData, asDragData } from "./arrange-types";
 import { UnknownDock } from "./UnknownDock";
@@ -56,13 +57,12 @@ export function ArrangeTree({ roots, depth, unknownRoot }: ArrangeTreeProps) {
   ).filter((n) => !unknownRoot || n.id !== unknownRoot.id);
   const zoomItems = zoomRoot?.inventoryItems ?? [];
 
+  // Zoom to the clicked node's FULL root→node path. The drill button and the
+  // spring-load-on-hover both fire at any rendered depth (grandchildren render
+  // before the collapse cap), so appending the id would skip intermediate
+  // ancestors and break zoom resolution — resolve the whole chain instead.
   function handleDrill(id: LocationId) {
-    setZoom((prev) => {
-      const idx = prev.indexOf(id);
-      // Already on the path (or is the current zoom root) → truncate to it.
-      if (idx >= 0) return prev.slice(0, idx + 1);
-      return [...prev, id];
-    });
+    setZoom(pathToNode(roots, id));
   }
 
   return (
