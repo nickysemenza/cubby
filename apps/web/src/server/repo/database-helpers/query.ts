@@ -133,6 +133,10 @@ export const buildOrderBy = <T extends PgTable>(
     if (!column) continue;
     // ASC: nulls at end by default in Postgres
     // DESC: use NULLS LAST to put nulls at the bottom instead of the top
+    // NULLS LAST in BOTH directions is the house convention (per-column
+    // resolvers follow it too) — empties never surface via sort direction;
+    // the relation presence ("has"/"none") filters are the way to find them.
+    // Revisited and kept 2026-07.
     if (s.direction === "asc") {
       clauses.push(asc(column));
     } else {

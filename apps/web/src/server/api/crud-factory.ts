@@ -164,7 +164,12 @@ export function createEntityListProcedure<TOutput, TFilters>({
       sorts: SortParams[],
       pagination: PaginationParams,
       groupBy?: string,
-    ) => Promise<{ data: TOutput[]; count: number }>;
+    ) => Promise<{
+      data: TOutput[];
+      count: number;
+      /** Optional full-filtered-set column aggregates (footer totals). */
+      sums?: Record<string, number>;
+    }>;
   };
   /** Entity type for enhanced error messages */
   entityName: Entity;
@@ -188,14 +193,14 @@ export function createEntityListProcedure<TOutput, TFilters>({
       createPaginatedResponseSchemaWithContext(schemas.output, entityName),
     )
     .query(async ({ ctx, input }) => {
-      const { data, count } = await repository.list(
+      const { data, count, sums } = await repository.list(
         ctx,
         input.filters,
         normalizeSorts(input.sort),
         input.pagination,
         input.groupBy,
       );
-      return buildPaginatedResponse(input.pagination, data, count);
+      return buildPaginatedResponse(input.pagination, data, count, sums);
     });
 
   return { list };

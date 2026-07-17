@@ -95,6 +95,8 @@ const { list } = createEntityListProcedure({
         sort,
         pagination,
         groupBy,
+        filters.inventoryPresenceFilter,
+        filters.ingredientPresenceFilter,
       );
     },
   },

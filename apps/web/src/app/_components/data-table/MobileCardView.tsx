@@ -220,6 +220,7 @@ export function MobileCardView<TItem>({
           ))
         }
         rightValues={model.rightValues}
+        rightValueInteractive={model.rightValueInteractive}
         selectable={
           isSelectable
             ? {

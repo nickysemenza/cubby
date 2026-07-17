@@ -11,6 +11,7 @@ import { inventoryMutationInvalidateKeys } from "~/lib/query-keys";
 import {
   createCreatedAtColumn,
   createCurrencyColumn,
+  createEditableAmountColumn,
   createSingleEntityInlineLinkColumn,
 } from "../_components/data-table/columnHelpers";
 import {
@@ -22,8 +23,8 @@ import { EntityInlineLink } from "../_components/EntityInlineLink";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
+import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { AiSearchBar } from "../_components/inventory/ai-search-bar";
-import { tryFormatAmount } from "../_components/inventory/format-amount";
 import { InventoryShelf } from "../_components/inventory/inventory-shelf";
 import { MoveInventoryDialog } from "../_components/inventory/move-inventory-dialog";
 import type { InventoryItem } from "../_components/locations/calculate-inventory-valuation";
@@ -51,11 +52,20 @@ function InventoryProductImageCell({ productId }: { productId: string }) {
 
 export function InventoryItemList() {
   const api = useTRPC();
-  const columnHelper = createColumnHelper<InventoryListItem>();
+  const columnHelper = useMemo(
+    () => createColumnHelper<InventoryListItem>(),
+    [],
+  );
   const { onRowClick, onRowHover, PreviewSheet } =
     useEntityPreview("inventory");
   const [moveTarget, setMoveTarget] = useState<InventoryListItem | null>(null);
   const [bulkMoveItems, setBulkMoveItems] = useState<InventoryListItem[]>([]);
+
+  const updateMutation = useUpdateMutation({
+    mutationFn: api.inventory.update.mutationOptions,
+    entity: "inventory",
+    invalidateKeys: inventoryMutationInvalidateKeys,
+  });
 
   const extraActions = useCallback(
     (row: InventoryListItem) => (
@@ -100,25 +110,13 @@ export function InventoryItemList() {
     [],
   );
 
-  const {
-    table,
-    data,
-    isLoading,
-    error,
-    timing,
-    bulkActionBar,
-    deleteDialog,
-    infiniteScroll,
-    refreshControls,
-  } = useEntityList({
-    entity: "inventory",
-    queryOptions: api.inventory.list.queryOptions,
-    buildFilters: (ts) => ({
-      productNameFilter: ts.getColumnFilter("product"),
-      locationNameFilter: ts.getColumnFilter("location"),
-    }),
-    // Inventory has custom columns (product image, amount instead of name)
-    columns: [
+  // Memoize columns to prevent recreating on every render.
+  // updateMutation is NOT in the dependency array because useMutation returns
+  // a new object every render — the closure captures mutateAsync correctly,
+  // and it's functionally stable across renders.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: updateMutation changes every render but is functionally stable
+  const columns = useMemo(
+    () => [
       columnHelper.accessor((row) => row.product.id, {
         id: "image",
         header: () => <ImageIcon className="h-3 w-3 text-muted-foreground" />,
@@ -131,24 +129,23 @@ export function InventoryItemList() {
           <InventoryProductImageCell productId={info.getValue()} />
         ),
       }),
-      columnHelper.accessor("amount", {
+      createEditableAmountColumn(columnHelper, "amount", {
         header: "Qty",
-        meta: {
-          numeric: true,
-          className: "w-36",
-          mobile: { slot: "trailing", priority: 10 },
+        className: "w-36",
+        mobile: { slot: "trailing", priority: 10 },
+        onSave: async (newAmount, row) => {
+          await updateMutation.mutateAsync({
+            id: row.id,
+            data: { amount: newAmount },
+          });
         },
-        cell: (info) => {
-          return (
-            <Link
-              className="block max-w-64"
-              to="/inventory/$id"
-              params={{ id: info.row.original.id }}
-            >
-              {tryFormatAmount(info.getValue())}
-            </Link>
-          );
-        },
+        // Keep the pre-editable click-through to the entry's detail page
+        // (same link-in-display pattern as createNameColumn's editable).
+        renderDisplay: (content, row) => (
+          <Link to="/inventory/$id" params={{ id: row.id }}>
+            {content}
+          </Link>
+        ),
       }),
       createCurrencyColumn(columnHelper, "valuation", {
         header: "Valuation",
@@ -188,9 +185,42 @@ export function InventoryItemList() {
         className: "min-w-0 w-40 max-w-56",
         mobile: { slot: "subtitle", priority: 20 },
         filterConfig: { placeholder: "Filter location..." },
+        editable: {
+          // Not clearable, so newLocationId is never actually null — the
+          // fallback only satisfies inventory.update's optional (non-nullable)
+          // locationId field.
+          onSave: async (newLocationId, row) => {
+            await updateMutation.mutateAsync({
+              id: row.id,
+              data: { locationId: newLocationId ?? undefined },
+            });
+          },
+        },
       }),
       createCreatedAtColumn(columnHelper),
     ],
+    [columnHelper],
+  );
+
+  const {
+    table,
+    data,
+    isLoading,
+    error,
+    timing,
+    bulkActionBar,
+    deleteDialog,
+    infiniteScroll,
+    refreshControls,
+  } = useEntityList({
+    entity: "inventory",
+    queryOptions: api.inventory.list.queryOptions,
+    buildFilters: (ts) => ({
+      productNameFilter: ts.getColumnFilter("product"),
+      locationNameFilter: ts.getColumnFilter("location"),
+    }),
+    // Inventory has custom columns (product image, amount instead of name)
+    columns,
     filters: ["product", "location"],
     deletable: deletableConfig,
     extraActions,

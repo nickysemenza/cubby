@@ -3,7 +3,11 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { location } from "~/server/db/schema";
 import { getDb } from "./database-helpers";
-import { findOrCreateLocationByName } from "./location";
+import {
+  createLocation,
+  findOrCreateLocationByName,
+  locationList,
+} from "./location";
 
 describe("findOrCreateLocationByName", () => {
   const ctx = withTestDb();
@@ -76,5 +80,38 @@ describe("findOrCreateLocationByName", () => {
       .from(location)
       .where(eq(location.name, name));
     expect(countRow!.count).toEqual(1);
+  });
+});
+
+describe("locationList parentPresenceFilter", () => {
+  const ctx = withTestDb();
+
+  it("filters to root locations with 'none' and to children with 'has'", async () => {
+    const root = await createLocation(
+      ctx.db,
+      { name: "Kitchen", type: "room", parentId: null },
+      ctx.actor,
+    );
+    const child = await createLocation(
+      ctx.db,
+      { name: "Pantry Shelf", type: "shelf", parentId: root.id },
+      ctx.actor,
+    );
+
+    const rootsOnly = await locationList(
+      ctx.db,
+      { parentPresenceFilter: "none" },
+      [],
+      { pageIndex: 0, pageSize: 10 },
+    );
+    expect(rootsOnly.data.map((l) => l.id)).toEqual([root.id]);
+
+    const childrenOnly = await locationList(
+      ctx.db,
+      { parentPresenceFilter: "has" },
+      [],
+      { pageIndex: 0, pageSize: 10 },
+    );
+    expect(childrenOnly.data.map((l) => l.id)).toEqual([child.id]);
   });
 });

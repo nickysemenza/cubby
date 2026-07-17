@@ -11,12 +11,14 @@ import type {
 import { createColumnHelper } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { entities } from "~/entities/entities";
 import type { QueryTiming } from "~/lib/query-timing";
 import { BulkActionBar } from "../data-table/BulkActionBar";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
 import { useBulkActions } from "../data-table/useBulkActions";
 import type { GroupConfig } from "../data-table/useGroupedList";
+import { useTableColumnSizing } from "../data-table/useTableColumnSizing";
 import { useTableColumnVisibility } from "../data-table/useTableColumnVisibility";
 import { useTableConfig } from "../data-table/useTableConfig";
 import { useTableState } from "../data-table/useTableState";
@@ -78,6 +80,15 @@ interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
    * tables (few columns) so the name doesn't balloon under the fixed layout.
    */
   nameClassName?: string;
+  /**
+   * Enable inline editing on the standard name column (entities whose name
+   * column is hook-prepended, e.g. products/recipes). MUST be referentially
+   * stable — wrap in useMemo/useCallback at the page, or the columns memo
+   * churns every render.
+   */
+  nameEditable?: {
+    onSave: (newValue: string, row: TData) => Promise<void>;
+  };
   /** Group configuration — enables group toggle and server-side group ordering */
   groupConfig?: GroupConfig<TData>;
   /** Enable delete functionality - adds row menu item, bulk action, and dialog */
@@ -156,6 +167,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   infinite = false,
   initialColumnVisibility,
   nameClassName,
+  nameEditable,
   groupConfig,
 }: UseEntityListOptions<TData, TFilters>): UseEntityListReturn<TData> {
   const [grouped, setGrouped] = useState(false);
@@ -269,8 +281,15 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     enabled: !useInfiniteMode,
   });
 
-  const { data, totalCount, isLoading, error, timing, refreshControls } =
+  const { data, totalCount, sums, isLoading, error, timing, refreshControls } =
     useInfiniteMode ? infiniteResult : paginatedResult;
+
+  // Full-filtered-set totals for footer renderers — client rows only cover
+  // the loaded pages, so footers must not sum/count them.
+  const serverTotals = useMemo(
+    () => ({ totalCount, sums }),
+    [totalCount, sums],
+  );
 
   // Load unit mappings synchronously if getMappings is provided
   const mappingsMap = useMemo(() => {
@@ -296,6 +315,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     mappingsMap: effectiveMappingsMap,
     hasUnitMappings,
     nameClassName,
+    nameEditable,
   });
 
   // Memoize getRowId to prevent recreating on every render
@@ -308,6 +328,11 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   // page's initialColumnVisibility defaults.
   const { columnVisibility, onColumnVisibilityChange } =
     useTableColumnVisibility(entity, initialColumnVisibility);
+
+  // Persisted per-entity column widths (localStorage). Only user-resized
+  // columns are stored; the rest keep their code-defined width classes.
+  const { columnSizing, setColumnSize, resetColumnSize } =
+    useTableColumnSizing(entity);
 
   // Configure the table
   // In infinite mode, feed all accumulated rows as a single "page" so TanStack Table
@@ -327,7 +352,38 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     initialColumnVisibility,
     columnVisibility,
     onColumnVisibilityChange,
+    serverTotals,
+    columnSizing,
+    setColumnSize,
+    resetColumnSize,
   });
+
+  // "Select all N matching": pull every remaining page into memory (bulk
+  // actions need full rows, not ids), then select all. Infinite mode only.
+  const [isSelectingAll, setIsSelectingAll] = useState(false);
+  const handleSelectAllMatching = useCallback(async () => {
+    if (!useInfiniteMode) return;
+    setIsSelectingAll(true);
+    try {
+      // Select from the RETURNED items, not table.getRowModel(): the table
+      // still holds the pre-load rows until React re-renders, so a
+      // toggleAllRowsSelected here would only select the previously-loaded set.
+      const allRows = await infiniteResult.infiniteScroll.loadAllPages();
+      table.setRowSelection(
+        Object.fromEntries(allRows.map((row) => [row.id, true])),
+      );
+      // loadAllPages is bounded (its safety cap); if the filtered set is
+      // larger, surface that the selection is partial rather than letting a
+      // bulk action silently miss rows.
+      if (allRows.length < totalCount) {
+        toast.warning(
+          `Selected the first ${allRows.length.toLocaleString()} of ${totalCount.toLocaleString()} — too many to select at once. Narrow the filters to cover the rest.`,
+        );
+      }
+    } finally {
+      setIsSelectingAll(false);
+    }
+  }, [useInfiniteMode, infiniteResult.infiniteScroll, table, totalCount]);
 
   // Build bulk action bar element if bulk actions configured
   const bulkActionBar = useMemo(
@@ -343,9 +399,28 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
           onClearSelection={bulkActionsState.clearSelection}
           isExecuting={bulkActionsState.isExecuting}
           currentAction={bulkActionsState.currentAction}
+          selectAllMatching={
+            useInfiniteMode
+              ? {
+                  totalCount,
+                  loadedCount: data.length,
+                  onSelectAll: handleSelectAllMatching,
+                  isSelectingAll,
+                }
+              : undefined
+          }
         />
       ) : null,
-    [bulkActionsState, effectiveBulkActions, table],
+    [
+      bulkActionsState,
+      effectiveBulkActions,
+      table,
+      useInfiniteMode,
+      totalCount,
+      data.length,
+      handleSelectAllMatching,
+      isSelectingAll,
+    ],
   );
 
   return {

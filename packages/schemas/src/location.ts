@@ -14,7 +14,7 @@ import {
   productShortcode,
 } from "./identifiers";
 import { imageOut } from "./image";
-import { createPaginatedResponseSchema } from "./pagination";
+import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
 
 export const locationType = z
   .enum(locationTypeValues)
@@ -31,6 +31,7 @@ export const locationFilterFields = {
     .optional()
     .describe("Filter by location name (substring)"),
   itemTypeFilter: locationType.optional(),
+  parentPresenceFilter: presenceFilter,
 };
 
 export const locationFiltersSchema = z.object(locationFilterFields);

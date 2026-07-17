@@ -11,7 +11,7 @@
 
 import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
 import { amount } from "@cubby/schemas/codec";
-import type { LocationId } from "@cubby/schemas/identifiers";
+import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
 import { productCategory } from "@cubby/schemas/product";
 import { unitMappingInput } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
@@ -212,7 +212,7 @@ export function QuickInventoryAdd({
 
   // Switch to create mode with initial product name from search text
   const handleCreateNew = useCallback(
-    (name: string): Promise<ComboboxItem> => {
+    (name: string): Promise<ComboboxItem<ProductId>> => {
       createForm.reset({
         name,
         manufacturer: UNSPECIFIED_MANUFACTURER,
@@ -229,7 +229,7 @@ export function QuickInventoryAdd({
       imageState.reset();
       setMode("create");
       // Return a never-resolving promise — the combobox will unmount before it matters
-      return new Promise<ComboboxItem>(() => {});
+      return new Promise<ComboboxItem<ProductId>>(() => {});
     },
     [createForm, imageState],
   );

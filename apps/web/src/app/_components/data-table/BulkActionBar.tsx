@@ -24,6 +24,20 @@ interface BulkActionBarProps<TData> {
   onClearSelection: () => void;
   isExecuting: boolean;
   currentAction: BulkAction<TData> | null;
+  /**
+   * "Select all N matching" affordance. Shown when every loaded row is
+   * selected but the filtered set has more on the server. Present only in
+   * infinite mode where more pages can be pulled in.
+   */
+  selectAllMatching?: {
+    /** Total rows matching the current filters (server count). */
+    totalCount: number;
+    /** Rows currently in memory (all selected when this shows). */
+    loadedCount: number;
+    /** Load every remaining page, then select all. */
+    onSelectAll: () => Promise<void>;
+    isSelectingAll: boolean;
+  };
 }
 
 /**
@@ -38,12 +52,20 @@ export function BulkActionBar<TData>({
   onClearSelection,
   isExecuting,
   currentAction,
+  selectAllMatching,
 }: BulkActionBarProps<TData>) {
   const [confirmAction, setConfirmAction] = useState<BulkAction<TData> | null>(
     null,
   );
 
   if (selectedCount === 0) return null;
+
+  // Offer "select all N" only once every loaded row is selected and the
+  // server has more matching rows than are in memory.
+  const showSelectAll =
+    selectAllMatching != null &&
+    selectedCount >= selectAllMatching.loadedCount &&
+    selectAllMatching.loadedCount < selectAllMatching.totalCount;
 
   const handleActionClick = (action: BulkAction<TData>) => {
     if (action.requiresConfirmation) {
@@ -80,6 +102,21 @@ export function BulkActionBar<TData>({
         className="rounded-md bg-primary/10 px-4 py-2"
       >
         <span className="font-medium text-sm">{selectedCount} selected</span>
+
+        {showSelectAll && selectAllMatching && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-primary"
+            onClick={() => void selectAllMatching.onSelectAll()}
+            disabled={isExecuting || selectAllMatching.isSelectingAll}
+          >
+            {selectAllMatching.isSelectingAll && (
+              <Spinner className="mr-1 h-3 w-3" />
+            )}
+            Select all {selectAllMatching.totalCount}
+          </Button>
+        )}
 
         <LayoutRow align="center" gap="xs">
           {actions.map((action) => (

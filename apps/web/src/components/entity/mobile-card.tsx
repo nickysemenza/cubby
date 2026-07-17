@@ -44,6 +44,46 @@ interface MobileCardProps {
   variant?: "card" | "row";
   /** Right-aligned values for compact row variant (max 2 lines) */
   rightValues?: ReactNode[];
+  /**
+   * Parallel array to `rightValues` — `rightValueInteractive[i] === true`
+   * skips the truncating `text-2xs` wrapper for `rightValues[i]` so an
+   * interactive control inside it (e.g. an edit-trigger pencil) isn't
+   * clipped/cramped below a usable tap target. Omit for plain text values.
+   */
+  rightValueInteractive?: boolean[];
+}
+
+/**
+ * A single right-aligned value in the compact row variant's second line.
+ * Plain values get the dense, truncating mono-2xs treatment; `interactive`
+ * values (an editable cell's edit-trigger, a quick-edit pencil, …) render
+ * without truncation/overflow-hidden so their tap targets stay intact.
+ */
+function RightValueSlot({
+  node,
+  interactive,
+}: {
+  node: ReactNode;
+  interactive?: boolean;
+}) {
+  if (interactive) {
+    // Bounded (overflow-hidden + max-w) so this slot can't bleed into its
+    // sibling, but no forced `[&_*]:truncate`/`whitespace-nowrap` — those
+    // clipped the trailing edit-trigger pencil below a usable tap target.
+    // The cell's own markup already nests a `min-w-0 truncate` text span next
+    // to a `shrink-0` pencil, so bounding just the outer box lets flexbox
+    // shrink the text and keep the pencil at full size.
+    return (
+      <span className="flex min-w-0 max-w-32 items-center overflow-hidden text-2xs text-muted-foreground">
+        {node}
+      </span>
+    );
+  }
+  return (
+    <span className="flex min-w-0 max-w-28 items-center overflow-hidden whitespace-nowrap font-mono text-2xs text-muted-foreground tabular-nums [&_*]:truncate">
+      {node}
+    </span>
+  );
 }
 
 /**
@@ -74,6 +114,7 @@ export function MobileCard({
   onTouchStart,
   variant = "card",
   rightValues,
+  rightValueInteractive,
 }: MobileCardProps) {
   const borderColor = entity
     ? entities[entity].color.border
@@ -180,14 +221,16 @@ export function MobileCard({
               className="ml-auto min-w-0 max-w-[55%]"
             >
               {rightValues?.[0] !== undefined && (
-                <span className="flex min-w-0 max-w-28 items-center overflow-hidden whitespace-nowrap font-mono text-2xs text-muted-foreground tabular-nums [&_*]:truncate">
-                  {rightValues[0]}
-                </span>
+                <RightValueSlot
+                  node={rightValues[0]}
+                  interactive={rightValueInteractive?.[0]}
+                />
               )}
               {rightValues?.[1] !== undefined && (
-                <span className="flex min-w-0 max-w-28 items-center overflow-hidden whitespace-nowrap font-mono text-2xs text-muted-foreground tabular-nums [&_*]:truncate">
-                  {rightValues[1]}
-                </span>
+                <RightValueSlot
+                  node={rightValues[1]}
+                  interactive={rightValueInteractive?.[1]}
+                />
               )}
             </Row>
           </Row>

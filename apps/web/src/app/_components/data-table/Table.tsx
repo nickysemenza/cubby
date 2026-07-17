@@ -31,6 +31,7 @@ import { ENTITY_ACCENTS } from "~/entities/entity-accents";
 import type { QueryTiming } from "~/lib/query-timing";
 import { cn } from "~/lib/utils";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
+import { ColumnResizeHandle } from "./ColumnResizeHandle";
 import { DesktopDataRow as DataRow } from "./DesktopDataRow";
 import { DataTablePagination } from "./data-table-pagination";
 import { DataTableToolbar } from "./data-table-toolbar";
@@ -500,6 +501,15 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                             </>
                           );
 
+                          // User-resized width (persisted): under table-fixed,
+                          // sizing the header cell drives the whole column.
+                          const resizedWidth =
+                            table.options.meta?.columnSizing?.[
+                              header.column.id
+                            ];
+                          const isResizable =
+                            header.column.id !== "select" &&
+                            header.column.id !== "actions";
                           return (
                             <TableHead
                               key={header.id}
@@ -512,11 +522,21 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                                     : "none"
                               }
                               className={cn(
+                                "relative",
                                 styles.header,
                                 numeric && "text-right",
                                 header.column.columnDef.meta?.className,
                                 sortDirection && "bg-muted/50",
                               )}
+                              style={
+                                resizedWidth
+                                  ? {
+                                      width: resizedWidth,
+                                      minWidth: resizedWidth,
+                                      maxWidth: resizedWidth,
+                                    }
+                                  : undefined
+                              }
                             >
                               {canSort ? (
                                 <Button
@@ -544,6 +564,12 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                                 <span className="inline-flex items-center gap-1">
                                   {titleContent}
                                 </span>
+                              )}
+                              {isResizable && (
+                                <ColumnResizeHandle
+                                  columnId={header.column.id}
+                                  meta={table.options.meta}
+                                />
                               )}
                             </TableHead>
                           );
@@ -603,9 +629,11 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                 })}
               </TableHeader>
               <TableBody>{renderTableBody()}</TableBody>
-              {/* Footer aggregation row — only when data is loaded */}
+              {/* Footer aggregation row — only when data is loaded. Renders in
+                  infinite mode too: footers read server totals from table meta
+                  (see serverTotals), so they no longer depend on having every
+                  row loaded client-side. */}
               {rows.length > 0 &&
-                !infiniteScroll &&
                 (() => {
                   const footerGroups = table.getFooterGroups();
                   const hasFooter = footerGroups.some((fg) =>

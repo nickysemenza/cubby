@@ -4,7 +4,7 @@ import { Link } from "@tanstack/react-router";
 import type { ColumnFiltersState } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import { uniq } from "es-toolkit";
-import { Package, Printer } from "lucide-react";
+import { Package, Pencil, Printer } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -21,8 +21,12 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { useTRPC } from "~/integrations/trpc/react";
-import { productMutationInvalidateKeys } from "~/lib/query-keys";
+import {
+  inventoryMutationInvalidateKeys,
+  productMutationInvalidateKeys,
+} from "~/lib/query-keys";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
+import { WithLocationSearch } from "../_components/combobox/with-search-hook";
 import {
   createCurrencyColumn,
   createExternalLinkColumn,
@@ -30,6 +34,7 @@ import {
   createInventoryEntriesColumn,
   createSingleEntityInlineLinkColumn,
   createTextColumn,
+  presenceFilterOptions,
 } from "../_components/data-table/columnHelpers";
 import {
   ShelfTableToggle,
@@ -42,6 +47,8 @@ import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
+import { useCreateInventoryMutation } from "../_components/inventory/hooks";
+import { InventoryEntriesQuickEditDialog } from "../_components/inventory/inventory-entries-quick-edit-dialog";
 import { CategoryLabel } from "../_components/products/CategoryLabel";
 import { productCategoryOptionsWithTheme } from "../_components/products/product-category-icons";
 import { ProductShelf } from "../_components/products/product-shelf";
@@ -50,6 +57,22 @@ interface ProductListProps {
   initialCategory?: string;
   /** Actions to display in the table toolbar (e.g., "Create New" button) */
   actions?: ReactNode;
+}
+
+function renderNotesValue(notes: string | null): ReactNode {
+  if (!notes) return <NoneValue />;
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={<span className="block truncate text-muted-foreground" />}
+      >
+        {notes}
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-xs">
+        {notes}
+      </TooltipContent>
+    </Tooltip>
+  );
 }
 
 function ProductFoodCell({ product }: { product: ProductListItem }) {
@@ -76,6 +99,37 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
     entity: "product",
     invalidateKeys: productMutationInvalidateKeys,
   });
+
+  // Inline edit + create for the Locations column (move an entry's location,
+  // or create a new inventory entry from an empty cell).
+  const updateInventoryMutation = useUpdateMutation({
+    mutationFn: api.inventory.update.mutationOptions,
+    entity: "inventory",
+    invalidateKeys: inventoryMutationInvalidateKeys,
+  });
+  const createInventoryMutation = useCreateInventoryMutation();
+
+  // Inline name editing on the hook-prepended name column. Stable reference
+  // required (feeds the columns memo); the mutation's mutateAsync is stable.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: updateProductMutation changes every render but is functionally stable
+  const nameEditable = useMemo(
+    () => ({
+      onSave: async (newName: string, product: ProductListItem) => {
+        await updateProductMutation.mutateAsync({
+          id: product.id,
+          data: { name: newName },
+        });
+      },
+    }),
+    [],
+  );
+
+  // Quick-edit dialog for a row's inventory entries; track the id and derive
+  // the product from live list data so post-save invalidation refreshes the
+  // open dialog too.
+  const [quickEditProductId, setQuickEditProductId] = useState<string | null>(
+    null,
+  );
 
   // Build initial filter from URL params
   const initialFilter = useMemo((): ColumnFiltersState => {
@@ -108,9 +162,10 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   );
 
   // Memoize columns to prevent recreating on every render
-  // Note: updateProductMutation is NOT in dependencies because useMutation returns a new object every render
-  // The closure captures it correctly, and we only need to recreate if columnHelper changes
-  // biome-ignore lint/correctness/useExhaustiveDependencies: updateProductMutation changes every render but is functionally stable
+  // Note: updateProductMutation/updateInventoryMutation/createInventoryMutation
+  // are NOT in dependencies because useMutation returns a new object every render.
+  // The closures capture them correctly, and we only need to recreate if columnHelper changes.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mutations change every render but are functionally stable
   const columns = useMemo(
     () => [
       // Custom columns (image, name prepended; unitMappings, createdAt appended by hook)
@@ -142,8 +197,22 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
         {
           header: "Ingredient",
           className: "w-32",
-          mobile: { slot: "meta", priority: 45 },
+          mobile: { slot: "meta", priority: 45, interactive: true },
           enableSorting: true,
+          filterConfig: {
+            placeholder: "Filter ingredient...",
+            filterType: "select",
+            options: presenceFilterOptions("ingredient"),
+          },
+          editable: {
+            onSave: async (newIngredientId, product) => {
+              await updateProductMutation.mutateAsync({
+                id: product.id,
+                data: { ingredientId: newIngredientId },
+              });
+            },
+            clearable: true,
+          },
         },
       ),
       createTextColumn(columnHelper, "manufacturer", {
@@ -162,6 +231,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
       createExternalLinkColumn(columnHelper, "upc", "/usda/upc/$code", {
         header: "UPC",
         className: "w-32",
+        mobile: { interactive: true },
         filterConfig: { placeholder: "Filter UPC..." },
         editable: {
           onSave: async (newValue, product) => {
@@ -195,31 +265,22 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
           },
         },
       }),
-      columnHelper.accessor("notes", {
+      createTextColumn(columnHelper, "notes", {
         header: "Notes",
-        meta: { className: "min-w-0 w-40" },
-        cell: ({ row }) => {
-          const notes = row.original.notes;
-          if (!notes) return null;
-          return (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <span className="block truncate text-muted-foreground" />
-                }
-              >
-                {notes}
-              </TooltipTrigger>
-              <TooltipContent side="top" className="max-w-xs">
-                {notes}
-              </TooltipContent>
-            </Tooltip>
-          );
+        className: "min-w-0 w-40",
+        renderValue: renderNotesValue,
+        editable: {
+          onSave: async (newNotes, product) => {
+            await updateProductMutation.mutateAsync({
+              id: product.id,
+              data: { notes: newNotes },
+            });
+          },
         },
       }),
       createCurrencyColumn(columnHelper, "price", {
         header: "Price",
-        mobile: { slot: "trailing", priority: 10 },
+        mobile: { slot: "trailing", priority: 10, interactive: true },
         editable: {
           onSave: async (newPrice, product) => {
             await updateProductMutation.mutateAsync({
@@ -243,7 +304,33 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
         "inventoryEntry",
         "location",
         (e) => e.location,
-        { id: "location", enableSorting: true },
+        {
+          id: "location",
+          enableSorting: true,
+          mobile: { slot: "meta", priority: 40, interactive: true },
+          onQuickEdit: (product) => setQuickEditProductId(product.id),
+          filterConfig: {
+            placeholder: "Filter locations...",
+            filterType: "select",
+            options: presenceFilterOptions("inventory"),
+          },
+          inlineEdit: {
+            SearchProvider: WithLocationSearch,
+            onMoveEntry: async (entry, locationId) => {
+              await updateInventoryMutation.mutateAsync({
+                id: entry.id,
+                data: { locationId },
+              });
+            },
+            onCreateEntry: async (product, locationId) => {
+              await createInventoryMutation.mutateAsync({
+                productId: product.id,
+                locationId,
+                amount: { value: 1, unit: "each" },
+              });
+            },
+          },
+        },
       ),
     ],
     [columnHelper],
@@ -275,6 +362,8 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
       manufacturerFilter: ts.getColumnFilter("manufacturer"),
       upcFilter: ts.getColumnFilter("upc"),
       categoryFilter: ts.getColumnFilter("category"),
+      inventoryPresenceFilter: ts.getColumnFilter("location"),
+      ingredientPresenceFilter: ts.getColumnFilter("ingredient"),
     }),
     [],
   );
@@ -282,6 +371,10 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   const extraActions = useCallback(
     (row: ProductListItem) => (
       <>
+        <DropdownMenuItem onClick={() => setQuickEditProductId(row.id)}>
+          <Pencil className="mr-2 h-4 w-4" />
+          Edit locations
+        </DropdownMenuItem>
         <DropdownMenuItem render={<Link to="/inventory/session" />}>
           <Package className="mr-2 h-4 w-4" />
           Add to Inventory
@@ -348,6 +441,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
     filters,
     deletable: deletableConfig,
     extraActions,
+    nameEditable,
     infinite: true,
     initialColumnVisibility: {
       fdc_id: false,
@@ -361,6 +455,9 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
 
   const [view, setView] = useState<ShelfView>("table");
   const items = table.getRowModel().rows.map((r) => r.original);
+  const quickEditProduct = quickEditProductId
+    ? (data.find((p) => p.id === quickEditProductId) ?? null)
+    : null;
   const productIds = useMemo(() => data.map((product) => product.id), [data]);
   useEffect(() => {
     const nextIds = uniq(productIds).sort();
@@ -414,6 +511,16 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
       )}
       <PreviewSheet />
       {deleteDialog}
+      {quickEditProduct && (
+        <InventoryEntriesQuickEditDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setQuickEditProductId(null);
+          }}
+          productName={quickEditProduct.name}
+          entries={quickEditProduct.inventoryEntry}
+        />
+      )}
     </ProductFoodSummariesProvider>
   );
 }

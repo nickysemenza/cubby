@@ -59,6 +59,13 @@ interface UseStandardColumnsOptions<TData extends BaseListRow> {
    * balloon to absorb all leftover space under the fixed table layout.
    */
   nameClassName?: string;
+  /**
+   * Enable inline editing on the standard name column. MUST be referentially
+   * stable (memoized by the caller) — it feeds the columns useMemo below.
+   */
+  nameEditable?: {
+    onSave: (newValue: string, row: TData) => Promise<void>;
+  };
 }
 
 /**
@@ -81,6 +88,7 @@ export function useStandardColumns<TData extends BaseListRow>({
   mappingsMap,
   hasUnitMappings,
   nameClassName,
+  nameEditable,
 }: UseStandardColumnsOptions<TData>): AnyColumnDef<TData>[] {
   // Shift-click range selection: anchor (last clicked row id) + modifier flag.
   // Refs are stable across renders, so they don't perturb the useMemo deps below.
@@ -144,6 +152,7 @@ export function useStandardColumns<TData extends BaseListRow>({
         createNameColumn(columnHelper, entity, "name" as keyof TData, {
           ...(nameFilterConfig ? { filterConfig: nameFilterConfig } : {}),
           className: nameClassName,
+          editable: nameEditable,
         }),
       );
     }
@@ -196,5 +205,6 @@ export function useStandardColumns<TData extends BaseListRow>({
     enableRowSelection,
     combinedExtraActions,
     nameClassName,
+    nameEditable,
   ]);
 }

@@ -21,6 +21,7 @@ import {
   createSingleEntityInlineLinkColumn,
   createTextColumn,
   createTimestampColumn,
+  presenceFilterOptions,
 } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
 import type { GroupConfig } from "../_components/data-table/useGroupedList";
@@ -91,6 +92,21 @@ export function LocationList() {
         header: "Parent",
         className: "w-56",
         mobile: { slot: "subtitle", priority: 20 },
+        filterConfig: {
+          placeholder: "Filter parent...",
+          filterType: "select",
+          options: presenceFilterOptions("parent"),
+        },
+        editable: {
+          onSave: async (newParentId, location) => {
+            await updateLocationMutation.mutateAsync({
+              id: location.id,
+              data: { parentId: newParentId },
+            });
+          },
+          clearable: true,
+          filterItems: (item, row) => item.id !== row.id,
+        },
       }),
       createFilterableSelectColumn(columnHelper, "type", {
         header: "Type",
@@ -258,6 +274,10 @@ export function LocationList() {
     buildFilters: (ts) => ({
       nameFilter: ts.getColumnFilter("name"),
       itemTypeFilter: ts.getColumnFilter("type") as LocationType,
+      parentPresenceFilter: ts.getColumnFilter("parent") as
+        | "has"
+        | "none"
+        | undefined,
     }),
     columns,
     filters: [

@@ -121,6 +121,11 @@ async function globalSetup(config: FullConfig): Promise<void> {
       // via /api/auth/sign-up/email, so open it for E2E.
       "--var",
       "ALLOW_SIGNUP:true",
+      // Plain (non-Secure, unprefixed) auth cookies: Linux WebKit refuses
+      // `__Secure-`-prefixed cookies over http://localhost (cookie-prefix
+      // rule), so the WebKit smoke project could never authenticate in CI.
+      "--var",
+      "INSECURE_AUTH_COOKIES:true",
       "--var",
       `DATABASE_URL:${databaseUrl}`,
       "--var",
@@ -226,24 +231,14 @@ async function globalSetup(config: FullConfig): Promise<void> {
   // is already captured — no extra page navigations needed to "establish" it
   // (two goto + networkidle round-trips here were pure overhead every run).
   await context.storageState({ path: authFile });
-  // Better Auth correctly issues __Secure cookies. Chromium treats localhost
-  // as a secure context over HTTP, while WebKit's test runtime does not send
-  // those cookies. Only for the local E2E origin, write a WebKit state with the
-  // same signed cookie values and the transport-only secure flag disabled.
-  const webkitState = JSON.parse(readFileSync(authFile, "utf8")) as {
-    cookies: Array<Record<string, unknown> & { secure: boolean }>;
-    origins: unknown[];
-  };
-  writeFileSync(
-    webkitAuthFile,
-    JSON.stringify({
-      ...webkitState,
-      cookies: webkitState.cookies.map((cookie) => ({
-        ...cookie,
-        secure: false,
-      })),
-    }),
-  );
+  // The server runs with INSECURE_AUTH_COOKIES=true (see the wrangler --var
+  // above), so the session cookies are already plain (no Secure attribute, no
+  // `__Secure-` prefix) and WebKit — including the strict Linux port in CI —
+  // stores and replays them over http. The WebKit state is a straight copy;
+  // it exists only because playwright.config.ts points the WebKit project at
+  // its own file. (The old secure:false rewrite of `__Secure-` cookies was
+  // rejected by Linux WebKit's cookie-prefix enforcement.)
+  writeFileSync(webkitAuthFile, readFileSync(authFile, "utf8"));
 
   await browser.close();
 

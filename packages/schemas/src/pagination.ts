@@ -56,6 +56,15 @@ export const createSortParamsSchema = <
   return z.union([single, z.array(single).min(1).max(MAX_SORTS)]);
 };
 
+/**
+ * Relation-presence filter for list endpoints: "has" keeps rows with the
+ * relation, "none" keeps rows without it, unset means any. Sorting keeps the
+ * NULLS-LAST-both-directions convention, so this filter (surfaced as a header
+ * select on relation columns) is the way to find empty-relation rows.
+ */
+export const presenceFilter = z.enum(["has", "none"]).optional();
+export type PresenceFilter = z.infer<typeof presenceFilter>;
+
 const paginationParams = z.object({
   pageIndex: z.number().int().min(0).default(0),
   pageSize: z.number().int().min(1).max(MAX_PAGE_SIZE).default(10),
@@ -159,12 +168,19 @@ export function buildPaginatedResponse<T>(
   pagination: PaginationParams,
   data: T[],
   count: number,
+  /**
+   * Server-computed column aggregates over the FULL filtered set (not the
+   * page), keyed by column id — e.g. `{ price: 1234.5 }`. Surfaced so table
+   * footers can show truthful totals on server-paginated lists.
+   */
+  sums?: Record<string, number>,
 ) {
   return {
     meta: {
       pageIndex: pagination.pageIndex,
       pageSize: pagination.pageSize,
       totalCount: count,
+      ...(sums ? { sums } : {}),
     },
     items: data,
   };
@@ -178,6 +194,8 @@ export function createPaginatedResponseSchema<Entry extends z.ZodTypeAny>(
       pageIndex: z.number().int().nonnegative(),
       pageSize: z.number().int().positive().max(MAX_PAGE_SIZE),
       totalCount: z.number().int().nonnegative(),
+      // Full-filtered-set column aggregates (see buildPaginatedResponse).
+      sums: z.record(z.string(), z.number()).optional(),
     }),
     items: z.array(entrySchema),
   });
@@ -204,6 +222,8 @@ export function createPaginatedResponseSchemaWithContext<
       pageIndex: z.number().int().nonnegative(),
       pageSize: z.number().int().positive().max(MAX_PAGE_SIZE),
       totalCount: z.number().int().nonnegative(),
+      // Full-filtered-set column aggregates (see buildPaginatedResponse).
+      sums: z.record(z.string(), z.number()).optional(),
     }),
     items: z.array(z.unknown()).transform((items, ctx) => {
       const results: z.infer<Entry>[] = [];

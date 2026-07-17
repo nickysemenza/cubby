@@ -11,7 +11,7 @@ import {
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
-import { and, asc, count, desc, eq, inArray, not, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, not, sql, sum } from "drizzle-orm";
 import { computeInventoryValuation } from "~/lib/price-mapping-utils";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { inventoryEntry, location, product } from "~/server/db/schema";
@@ -286,8 +286,13 @@ export const inventoryentryList = async (
       .orderBy(...inventoryListOrderBy(sorts))
       .limit(take)
       .offset(skip),
+    // Count + valuation aggregate share the joins/filters, so the footer's
+    // valuation total covers the FULL filtered set (client only holds a page).
     getDb(db)
-      .select({ count: count() })
+      .select({
+        count: count(),
+        valuationSum: sum(inventoryEntry.valuation),
+      })
       .from(inventoryEntry)
       .innerJoin(
         product,
@@ -316,7 +321,12 @@ export const inventoryentryList = async (
     .map((id) => resultsById.get(id))
     .filter((r) => r !== undefined)
     .map((r) => dbInventoryEntryToListAPI(r));
-  return { data: inventoryEntries, count: countResult?.count ?? 0 };
+  const valuationSum = Number(countResult?.valuationSum ?? 0);
+  return {
+    data: inventoryEntries,
+    count: countResult?.count ?? 0,
+    sums: { valuation: Number.isNaN(valuationSum) ? 0 : valuationSum },
+  };
 };
 
 export const updateInventoryEntry = async (

@@ -31,6 +31,8 @@ interface MobileCellMeta {
 interface SlotValue {
   priority: number;
   value: ReactNode;
+  /** See `MobileColumnMeta.interactive`. */
+  interactive?: boolean;
 }
 
 interface MobileListRowModel<TItem> {
@@ -40,6 +42,11 @@ interface MobileListRowModel<TItem> {
   imageSlot?: ReactNode;
   actionsContent?: ReactNode;
   rightValues: ReactNode[];
+  /**
+   * Parallel array to `rightValues` — `rightValueInteractive[i]` is true when
+   * `rightValues[i]`'s source column set `meta.mobile.interactive`.
+   */
+  rightValueInteractive: boolean[];
   detailsHref?: string;
 }
 
@@ -109,14 +116,22 @@ export function useMobileListModel<TItem>({
           if (slot === "hidden") continue;
 
           // Skip empty raw values quickly to avoid rendering inert wrappers.
-          const rawValue = cell.getValue();
-          if (
-            rawValue === null ||
-            rawValue === undefined ||
-            rawValue === "" ||
-            (Array.isArray(rawValue) && rawValue.length === 0)
-          ) {
-            continue;
+          // Only applies to accessor columns — `columnHelper.display()`
+          // columns (the actions menu, the USDA-food cell) have no
+          // accessorFn, so `getValue()` always resolves undefined and would
+          // otherwise get skipped unconditionally, before ever rendering.
+          // Those fall through to the post-render `hasRenderableContent`
+          // check instead.
+          if (cell.column.accessorFn) {
+            const rawValue = cell.getValue();
+            if (
+              rawValue === null ||
+              rawValue === undefined ||
+              rawValue === "" ||
+              (Array.isArray(rawValue) && rawValue.length === 0)
+            ) {
+              continue;
+            }
           }
 
           const rendered = flexRender(
@@ -141,15 +156,16 @@ export function useMobileListModel<TItem>({
           }
 
           const priority = getPriority(meta, 50);
+          const interactive = meta?.mobile?.interactive;
           if (slot === "subtitle") {
             subtitleCandidates.push({ priority, value: rendered });
             continue;
           }
           if (slot === "trailing") {
-            trailingValues.push({ priority, value: rendered });
+            trailingValues.push({ priority, value: rendered, interactive });
             continue;
           }
-          metaValues.push({ priority, value: rendered });
+          metaValues.push({ priority, value: rendered, interactive });
         }
 
         subtitleCandidates.sort((a, b) => a.priority - b.priority);
@@ -157,9 +173,14 @@ export function useMobileListModel<TItem>({
         metaValues.sort((a, b) => a.priority - b.priority);
 
         const subtitle = subtitleCandidates[0]?.value;
-        const rightValues = [...trailingValues, ...metaValues]
-          .map((item) => item.value)
-          .slice(0, maxRightValues);
+        const rightValueSlots = [...trailingValues, ...metaValues].slice(
+          0,
+          maxRightValues,
+        );
+        const rightValues = rightValueSlots.map((item) => item.value);
+        const rightValueInteractive = rightValueSlots.map(
+          (item) => !!item.interactive,
+        );
 
         const rowData = row.original as Record<string, unknown>;
         const entityId = rowData.id as string | undefined;
@@ -173,6 +194,7 @@ export function useMobileListModel<TItem>({
           imageSlot,
           actionsContent,
           rightValues,
+          rightValueInteractive,
           detailsHref,
         };
       }),

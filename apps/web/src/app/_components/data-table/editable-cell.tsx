@@ -2,9 +2,9 @@
 
 import type { Amount } from "@cubby/schemas/codec";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
-import { Check, Pencil, X } from "lucide-react";
+import { Check, X } from "lucide-react";
 import type React from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import {
@@ -13,7 +13,13 @@ import {
 } from "~/components/ui/combobox";
 import { Input } from "~/components/ui/input";
 import { getErrorMessage } from "~/lib/error-utils";
-import { showAmountAndPrice } from "../inventory/format-amount";
+import {
+  showAmountAndPrice,
+  tryFormatAmount,
+} from "../inventory/format-amount";
+import type { CellClipboardSpec } from "./cell-clipboard";
+import { CellEditTrigger } from "./cell-edit-trigger";
+import { CellEditorOverlay } from "./cell-editor-overlay";
 
 /** Re-export for convenience */
 export type { FilterableComboboxItem };
@@ -144,6 +150,8 @@ interface EditableCellProps<T> {
   onSave: (value: T | null) => Promise<void>;
   config: EditableConfig;
   renderValue: (value: T | null) => React.ReactNode;
+  /** Enable cmd-C / cmd-V on the focused display trigger. */
+  clipboard?: CellClipboardSpec;
 }
 
 /**
@@ -158,6 +166,7 @@ export function EditableCell<T>({
   onSave,
   config,
   renderValue,
+  clipboard,
 }: EditableCellProps<T>) {
   // Select type has its own specialized implementation
   if (config.type === "select") {
@@ -168,6 +177,7 @@ export function EditableCell<T>({
         options={config.options}
         placeholder={config.placeholder}
         renderValue={renderValue as (value: string | null) => React.ReactNode}
+        clipboard={clipboard}
       />
     );
   }
@@ -179,20 +189,78 @@ export function EditableCell<T>({
       onSave={onSave}
       config={config}
       renderValue={renderValue}
+      clipboard={clipboard}
     />
   );
 }
 
-function useOptimisticDisplayValue<T>(value: T | null) {
+/**
+ * Shared display/edit shell: the CellEditTrigger stays mounted in the cell as
+ * the overlay's anchor (and clipboard/focus target); the editor renders over
+ * it. Wires the clipboard spec's isEditing guard automatically, and routes a
+ * successful paste's resolved value into `onPasted` so the hosting cell can
+ * show it optimistically (same as a Check-button save).
+ */
+export function useCellEditState(
+  clipboard: CellClipboardSpec | undefined,
+  onPasted?: (value: unknown) => void,
+) {
+  const [isEditing, setIsEditing] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const isEditingRef = useRef(false);
+  isEditingRef.current = isEditing;
+
+  const cancel = useCallback(() => {
+    setIsEditing(false);
+    triggerRef.current?.focus();
+  }, []);
+
+  const pasteThrough = clipboard?.onPasteValue;
+  const clipboardWithGuard = clipboard
+    ? {
+        ...clipboard,
+        isEditing: () => isEditingRef.current,
+        onPasteValue: pasteThrough
+          ? async (payload: { json?: unknown; text?: string }) => {
+              const saved = await pasteThrough(payload);
+              if (saved !== undefined) onPasted?.(saved);
+              return saved;
+            }
+          : undefined,
+      }
+    : undefined;
+
+  return {
+    isEditing,
+    setIsEditing,
+    triggerRef,
+    cancel,
+    clipboard: clipboardWithGuard,
+  };
+}
+
+const referenceEquals = <T,>(a: T | null, b: T | null) => a === b;
+
+/**
+ * Optimistic display value for editable cells: after a successful save the new
+ * value shows immediately, then hands back to the prop once react-query's
+ * refetch catches up. `isEqual` must be referentially stable (module-level) —
+ * pass one for object values (e.g. compare by id), where the default
+ * reference equality would never release the optimistic value.
+ */
+export function useOptimisticDisplayValue<T>(
+  value: T | null,
+  isEqual: (a: T | null, b: T | null) => boolean = referenceEquals,
+) {
   const [optimisticValue, setOptimisticValue] = useState<T | null | undefined>(
     undefined,
   );
 
   useEffect(() => {
-    if (optimisticValue !== undefined && value === optimisticValue) {
+    if (optimisticValue !== undefined && isEqual(value, optimisticValue)) {
       setOptimisticValue(undefined);
     }
-  }, [value, optimisticValue]);
+  }, [value, optimisticValue, isEqual]);
 
   return {
     displayValue: optimisticValue !== undefined ? optimisticValue : value,
@@ -205,42 +273,46 @@ function EditableInputCellInternal<T>({
   onSave,
   config,
   renderValue,
+  clipboard,
 }: {
   value: T | null;
   onSave: (value: T | null) => Promise<void>;
   config: EditableInputConfig | EditableCurrencyConfig;
   renderValue: (value: T | null) => React.ReactNode;
+  clipboard?: CellClipboardSpec;
 }) {
-  const [isEditing, setIsEditing] = useState(false);
   const { displayValue, setOptimisticValue } = useOptimisticDisplayValue(value);
-
-  if (isEditing) {
-    return (
-      <EditableInputEditor
-        value={value}
-        onSave={onSave}
-        config={config}
-        onCancel={() => setIsEditing(false)}
-        onCommit={(nextValue) => {
-          setOptimisticValue(nextValue);
-          setIsEditing(false);
-        }}
-      />
-    );
-  }
+  const edit = useCellEditState(clipboard, (saved) =>
+    setOptimisticValue(saved as T | null),
+  );
 
   return (
-    <button
-      type="button"
-      className="group inline-flex items-center gap-1 rounded px-2 py-1 text-left hover:bg-muted"
-      onClick={(e) => {
-        e.stopPropagation();
-        setIsEditing(true);
-      }}
-    >
-      {renderValue(displayValue)}
-      <Pencil className="ml-1 h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-    </button>
+    <>
+      <CellEditTrigger
+        ref={edit.triggerRef}
+        onStartEdit={() => edit.setIsEditing(true)}
+        clipboard={edit.clipboard}
+      >
+        {renderValue(displayValue)}
+      </CellEditTrigger>
+      {edit.isEditing && (
+        <CellEditorOverlay
+          anchorEl={edit.triggerRef.current}
+          onRequestCancel={edit.cancel}
+        >
+          <EditableInputEditor
+            value={value}
+            onSave={onSave}
+            config={config}
+            onCancel={edit.cancel}
+            onCommit={(nextValue) => {
+              setOptimisticValue(nextValue);
+              edit.cancel();
+            }}
+          />
+        </CellEditorOverlay>
+      )}
+    </>
   );
 }
 
@@ -349,7 +421,7 @@ function EditableInputEditor<T>({
         value={inputValue}
         onChange={(e) => setInputValue(e.target.value)}
         onKeyDown={handleKeyDown}
-        className="h-7 w-24"
+        className="h-7 w-32"
         step={step}
         placeholder={placeholder}
         autoFocus
@@ -381,44 +453,48 @@ function EditableSelectCellInternal({
   options,
   placeholder = "Select...",
   renderValue,
+  clipboard,
 }: {
   value: string | null;
   onSave: (value: string | null) => Promise<void>;
   options: FilterableComboboxItem[];
   placeholder?: string;
   renderValue: (value: string | null) => React.ReactNode;
+  clipboard?: CellClipboardSpec;
 }) {
-  const [isEditing, setIsEditing] = useState(false);
   const { displayValue, setOptimisticValue } = useOptimisticDisplayValue(value);
-
-  if (isEditing) {
-    return (
-      <EditableSelectEditor
-        value={value}
-        onSave={onSave}
-        options={options}
-        placeholder={placeholder}
-        onCancel={() => setIsEditing(false)}
-        onCommit={(nextValue) => {
-          setOptimisticValue(nextValue);
-          setIsEditing(false);
-        }}
-      />
-    );
-  }
+  const edit = useCellEditState(clipboard, (saved) =>
+    setOptimisticValue(saved as string | null),
+  );
 
   return (
-    <button
-      type="button"
-      className="group inline-flex items-center gap-1 rounded px-2 py-1 text-left hover:bg-muted"
-      onClick={(e) => {
-        e.stopPropagation();
-        setIsEditing(true);
-      }}
-    >
-      {renderValue(displayValue)}
-      <Pencil className="ml-1 h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-    </button>
+    <>
+      <CellEditTrigger
+        ref={edit.triggerRef}
+        onStartEdit={() => edit.setIsEditing(true)}
+        clipboard={edit.clipboard}
+      >
+        {renderValue(displayValue)}
+      </CellEditTrigger>
+      {edit.isEditing && (
+        <CellEditorOverlay
+          anchorEl={edit.triggerRef.current}
+          onRequestCancel={edit.cancel}
+        >
+          <EditableSelectEditor
+            value={value}
+            onSave={onSave}
+            options={options}
+            placeholder={placeholder}
+            onCancel={edit.cancel}
+            onCommit={(nextValue) => {
+              setOptimisticValue(nextValue);
+              edit.cancel();
+            }}
+          />
+        </CellEditorOverlay>
+      )}
+    </>
   );
 }
 
@@ -476,7 +552,7 @@ function EditableSelectEditor({
         onValueChange={setSelectedValue}
         placeholder={placeholder}
         disabled={isPending}
-        className="w-40"
+        className="w-48"
       />
       <Button
         size="icon"
@@ -500,47 +576,61 @@ function EditableSelectEditor({
 
 interface EditableAmountCellProps {
   amount: Amount;
+  /**
+   * Omit entirely for an amount-only display (no price line). An ARRAY (even
+   * empty) opts into the price display — showAmountAndPrice treats undefined
+   * as "mappings still loading", so hosts that load mappings async must pass
+   * `?? []`.
+   */
   unitMappings?: UnitMapping[];
   onSave: (newAmount: Amount) => Promise<void>;
+  /**
+   * Wrap the display-mode content (e.g. in a detail-page link, mirroring
+   * createNameColumn's editable renderValue). Edit mode is unaffected.
+   */
+  renderDisplay?: (content: React.ReactNode) => React.ReactNode;
+  /** Enable cmd-C / cmd-V on the focused display trigger. */
+  clipboard?: CellClipboardSpec;
 }
 
 /**
  * Editable cell for inventory amounts (value + unit).
- * Shows formatted amount with price in display mode.
- * Shows two inputs (value, unit) in edit mode.
+ * Shows formatted amount (with price when unitMappings is provided) in
+ * display mode. Shows two inputs (value, unit) in edit mode.
  */
 export function EditableAmountCell({
   amount,
   unitMappings,
   onSave,
+  renderDisplay,
+  clipboard,
 }: EditableAmountCellProps) {
-  const [isEditing, setIsEditing] = useState(false);
   const [editingValue, setEditingValue] = useState(amount.value);
   const [editingUnit, setEditingUnit] = useState(amount.unit);
   const [isPending, setIsPending] = useState(false);
   const [optimisticAmount, setOptimisticAmount] = useState<Amount | undefined>(
     undefined,
   );
+  const edit = useCellEditState(clipboard, (saved) =>
+    setOptimisticAmount(saved as Amount),
+  );
 
   const displayAmount = optimisticAmount ?? amount;
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: edit.setIsEditing is a stable setState
   const startEditing = useCallback(() => {
     const current = optimisticAmount ?? amount;
     setEditingValue(current.value);
     setEditingUnit(current.unit);
-    setIsEditing(true);
+    edit.setIsEditing(true);
   }, [amount, optimisticAmount]);
-
-  const cancel = useCallback(() => {
-    setIsEditing(false);
-  }, []);
 
   const save = useCallback(async () => {
     const newAmount = { value: editingValue, unit: editingUnit.trim() };
 
     // Skip if unchanged
     if (newAmount.value === amount.value && newAmount.unit === amount.unit) {
-      setIsEditing(false);
+      edit.cancel();
       return;
     }
 
@@ -548,13 +638,13 @@ export function EditableAmountCell({
     try {
       await onSave(newAmount);
       setOptimisticAmount(newAmount);
-      setIsEditing(false);
+      edit.cancel();
     } catch (err) {
       toast.error(getErrorMessage(err));
     } finally {
       setIsPending(false);
     }
-  }, [editingValue, editingUnit, amount, onSave]);
+  }, [editingValue, editingUnit, amount, onSave, edit.cancel]);
 
   // Clear optimistic value when real value catches up
   useEffect(() => {
@@ -573,69 +663,69 @@ export function EditableAmountCell({
         e.preventDefault();
         void save();
       } else if (e.key === "Escape") {
-        cancel();
+        edit.cancel();
       }
     },
-    [save, cancel],
+    [save, edit.cancel],
   );
 
-  if (isEditing) {
-    return (
-      // biome-ignore lint/a11y/noStaticElementInteractions: stop propagation for row click
-      <div
-        className="inline-flex items-center gap-2"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <Input
-          type="number"
-          value={editingValue}
-          onChange={(e) => setEditingValue(parseFloat(e.target.value) || 0)}
-          onKeyDown={handleKeyDown}
-          className="h-7 w-20"
-          step="any"
-          autoFocus
-          disabled={isPending}
-        />
-        <Input
-          type="text"
-          value={editingUnit}
-          onChange={(e) => setEditingUnit(e.target.value)}
-          onKeyDown={handleKeyDown}
-          className="h-7 w-20"
-          placeholder="unit"
-          disabled={isPending}
-        />
-        <Button
-          size="icon"
-          variant="ghost"
-          onClick={() => void save()}
-          disabled={isPending}
-        >
-          <Check className="h-3.5 w-3.5" />
-        </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          onClick={cancel}
-          disabled={isPending}
-        >
-          <X className="h-3.5 w-3.5" />
-        </Button>
-      </div>
-    );
-  }
-
   return (
-    <button
-      type="button"
-      className="group inline-flex items-center gap-1 rounded px-2 py-1 text-left hover:bg-muted"
-      onClick={(e) => {
-        e.stopPropagation();
-        startEditing();
-      }}
-    >
-      {showAmountAndPrice(displayAmount, unitMappings)}
-      <Pencil className="ml-1 h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-    </button>
+    <>
+      <CellEditTrigger
+        ref={edit.triggerRef}
+        onStartEdit={startEditing}
+        clipboard={edit.clipboard}
+      >
+        {(renderDisplay ?? ((content: React.ReactNode) => content))(
+          unitMappings === undefined
+            ? tryFormatAmount(displayAmount)
+            : showAmountAndPrice(displayAmount, unitMappings),
+        )}
+      </CellEditTrigger>
+      {edit.isEditing && (
+        <CellEditorOverlay
+          anchorEl={edit.triggerRef.current}
+          onRequestCancel={edit.cancel}
+        >
+          <div className="inline-flex items-center gap-2">
+            <Input
+              type="number"
+              value={editingValue}
+              onChange={(e) => setEditingValue(parseFloat(e.target.value) || 0)}
+              onKeyDown={handleKeyDown}
+              className="h-7 w-20"
+              step="any"
+              autoFocus
+              disabled={isPending}
+            />
+            <Input
+              type="text"
+              value={editingUnit}
+              onChange={(e) => setEditingUnit(e.target.value)}
+              onKeyDown={handleKeyDown}
+              className="h-7 w-20"
+              placeholder="unit"
+              disabled={isPending}
+            />
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => void save()}
+              disabled={isPending}
+            >
+              <Check className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={edit.cancel}
+              disabled={isPending}
+            >
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </CellEditorOverlay>
+      )}
+    </>
   );
 }

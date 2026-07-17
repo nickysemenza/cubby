@@ -23,6 +23,8 @@ export interface UseTableListOptions<TFilters> {
 interface UseTableListReturn<TData = unknown> {
   data: TData[];
   totalCount: number;
+  /** Server-computed full-filtered-set column sums (footer totals). */
+  sums?: Record<string, number>;
   isLoading: boolean;
   isPlaceholderData: boolean;
   error: Error | null;
@@ -86,6 +88,7 @@ export function useTableList<TFilters, TData = unknown>({
   return {
     data: dataArray,
     totalCount: response?.meta.totalCount ?? 0,
+    sums: response?.meta.sums,
     isLoading,
     isPlaceholderData,
     error: error instanceof Error ? error : null,

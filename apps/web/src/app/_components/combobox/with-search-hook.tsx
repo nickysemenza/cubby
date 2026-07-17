@@ -1,3 +1,9 @@
+import type {
+  IngredientId,
+  LocationId,
+  ProductId,
+  RecipeId,
+} from "@cubby/schemas/identifiers";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
@@ -33,19 +39,21 @@ import {
 // form's ingredient preview table), so the public import path stays stable.
 export { CreateIngredientDialog };
 
-interface WithEntitySearchProps {
+export interface WithEntitySearchProps<TId extends string = string> {
   children: (props: {
-    items: ComboboxItem[];
+    items: ComboboxItem<TId>[];
     onSearchChange: (query: string) => void;
     isLoading: boolean;
-    onCreateNew?: (name: string) => Promise<ComboboxItem>;
+    onCreateNew?: (name: string) => Promise<ComboboxItem<TId>>;
     // Wire this to the combobox's open/close so the options query stays deferred
     // until the user actually opens the picker (off the page's critical path).
     onOpenChange: (open: boolean) => void;
   }) => ReactNode;
 }
 
-export function WithIngredientSearch({ children }: WithEntitySearchProps) {
+export function WithIngredientSearch({
+  children,
+}: WithEntitySearchProps<IngredientId>) {
   const api = useTRPC();
   const {
     searchQuery,
@@ -56,7 +64,7 @@ export function WithIngredientSearch({ children }: WithEntitySearchProps) {
     openDialog,
     closeDialog,
     resolveWithEntity,
-  } = useEntitySearchWithDialog();
+  } = useEntitySearchWithDialog<IngredientId>();
   const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
 
   const { data, isLoading } = useQuery({
@@ -102,7 +110,9 @@ export function WithIngredientSearch({ children }: WithEntitySearchProps) {
   );
 }
 
-export function WithLocationSearch({ children }: WithEntitySearchProps) {
+export function WithLocationSearch({
+  children,
+}: WithEntitySearchProps<LocationId>) {
   const api = useTRPC();
   const {
     searchQuery,
@@ -113,7 +123,7 @@ export function WithLocationSearch({ children }: WithEntitySearchProps) {
     openDialog,
     closeDialog,
     resolveWithEntity,
-  } = useEntitySearchWithDialog();
+  } = useEntitySearchWithDialog<LocationId>();
   const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
 
   const { data, isLoading } = useQuery({
@@ -159,7 +169,9 @@ export function WithLocationSearch({ children }: WithEntitySearchProps) {
   );
 }
 
-export function WithProductSearch({ children }: WithEntitySearchProps) {
+export function WithProductSearch({
+  children,
+}: WithEntitySearchProps<ProductId>) {
   const api = useTRPC();
   const {
     searchQuery,
@@ -170,7 +182,7 @@ export function WithProductSearch({ children }: WithEntitySearchProps) {
     openDialog,
     closeDialog,
     resolveWithEntity,
-  } = useEntitySearchWithDialog();
+  } = useEntitySearchWithDialog<ProductId>();
   const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
 
   // `product.search` (not `.list`): the picker needs only {id, name,
@@ -223,7 +235,9 @@ export function WithProductSearch({ children }: WithEntitySearchProps) {
   );
 }
 
-export function WithRecipeSearch({ children }: WithEntitySearchProps) {
+export function WithRecipeSearch({
+  children,
+}: WithEntitySearchProps<RecipeId>) {
   const api = useTRPC();
   const { searchQuery, onSearchChange } = useEntitySearch();
   const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
