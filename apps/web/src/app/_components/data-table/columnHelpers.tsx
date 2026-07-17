@@ -243,9 +243,16 @@ export function createNameColumn<T extends BaseRow>(
       mobile: options?.mobile ?? { slot: "title", priority: 0 },
     },
     footer: (info: {
-      table: { getFilteredRowModel: () => { rows: unknown[] } };
+      table: {
+        getFilteredRowModel: () => { rows: unknown[] };
+        options: { meta?: { serverTotals?: { totalCount: number } } };
+      };
     }) => {
-      const count = info.table.getFilteredRowModel().rows.length;
+      // Prefer the server's full-filtered-set count — client rows only cover
+      // the loaded pages on server-paginated/infinite tables.
+      const count =
+        info.table.options.meta?.serverTotals?.totalCount ??
+        info.table.getFilteredRowModel().rows.length;
       return `${count} ${count === 1 ? entityConfig.label.toLowerCase() : entityConfig.pluralLabel.toLowerCase()}`;
     },
     cell: (info: CellContext<T, T[keyof T]>) => {
@@ -764,15 +771,20 @@ export function createCurrencyColumn<
       mobile: options?.mobile,
     },
     footer: (info) => {
-      const rows = info.table.getFilteredRowModel().rows;
-      const sum = rows.reduce((acc, row) => {
-        const val = row.getValue<number | null>(info.column.id);
-        return val != null ? acc + val : acc;
-      }, 0);
-      if (sum === 0) return null;
+      // Prefer the server's full-filtered-set aggregate — the client only
+      // holds loaded pages, so a row reduction under-reports.
+      const serverSum =
+        info.table.options.meta?.serverTotals?.sums?.[info.column.id];
+      const total =
+        serverSum ??
+        info.table.getFilteredRowModel().rows.reduce((acc, row) => {
+          const val = row.getValue<number | null>(info.column.id);
+          return val != null ? acc + val : acc;
+        }, 0);
+      if (total === 0) return null;
       return (
         <span className="font-mono text-positive tabular-nums">
-          {formatCurrency(sum)}
+          {formatCurrency(total)}
         </span>
       );
     },

@@ -33,6 +33,7 @@ import {
   notInArray,
   or,
   sql,
+  sum,
 } from "drizzle-orm";
 import { countBy, uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
@@ -347,23 +348,37 @@ export const productList = async (
 
   const { take, skip } = buildTakeSkip(pagination);
 
-  // Execute queries in parallel and transform results
-  const { data: results, count: totalCount } = await executeListQueryWithCount(
-    getDb(db).query.product.findMany({
-      where: whereClause,
-      orderBy: orderByArray,
-      limit: take,
-      offset: skip,
-      ...relations.product.list,
-    }),
-    countWhere(db, product, whereClause),
-  );
+  // Execute queries in parallel and transform results. The aggregate query
+  // shares whereClause, so the footer's price total covers the FULL filtered
+  // set (the client only holds a page).
+  const [{ data: results, count: totalCount }, aggregates] = await Promise.all([
+    executeListQueryWithCount(
+      getDb(db).query.product.findMany({
+        where: whereClause,
+        orderBy: orderByArray,
+        limit: take,
+        offset: skip,
+        ...relations.product.list,
+      }),
+      countWhere(db, product, whereClause),
+    ),
+    getDb(db)
+      .select({ priceSum: sum(product.price) })
+      .from(product)
+      .where(whereClause),
+  ]);
 
   const products = results.map((prod: ProductListDB) =>
     dbProductToListAPI(prod),
   );
 
-  return { data: products, count: totalCount };
+  const priceSum = Number(aggregates[0]?.priceSum ?? 0);
+
+  return {
+    data: products,
+    count: totalCount,
+    sums: { price: Number.isNaN(priceSum) ? 0 : priceSum },
+  };
 };
 
 /**

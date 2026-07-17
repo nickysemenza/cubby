@@ -4,7 +4,13 @@ import type { TableStateReturn } from "../data-table/useTableState";
 
 export interface ListQueryResponse<TData> {
   items: TData[];
-  meta: { pageIndex: number; pageSize: number; totalCount: number };
+  meta: {
+    pageIndex: number;
+    pageSize: number;
+    totalCount: number;
+    /** Full-filtered-set column aggregates (footer totals), by column id. */
+    sums?: Record<string, number>;
+  };
 }
 
 // tRPC queryOptions carries internal generics that don't map cleanly to a simple

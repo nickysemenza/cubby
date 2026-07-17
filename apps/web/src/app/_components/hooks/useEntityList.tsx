@@ -279,8 +279,15 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     enabled: !useInfiniteMode,
   });
 
-  const { data, totalCount, isLoading, error, timing, refreshControls } =
+  const { data, totalCount, sums, isLoading, error, timing, refreshControls } =
     useInfiniteMode ? infiniteResult : paginatedResult;
+
+  // Full-filtered-set totals for footer renderers — client rows only cover
+  // the loaded pages, so footers must not sum/count them.
+  const serverTotals = useMemo(
+    () => ({ totalCount, sums }),
+    [totalCount, sums],
+  );
 
   // Load unit mappings synchronously if getMappings is provided
   const mappingsMap = useMemo(() => {
@@ -338,6 +345,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     initialColumnVisibility,
     columnVisibility,
     onColumnVisibilityChange,
+    serverTotals,
   });
 
   // Build bulk action bar element if bulk actions configured

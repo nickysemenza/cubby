@@ -28,6 +28,8 @@ export interface InfiniteScrollControls {
 interface UseInfiniteTableListReturn<TData = unknown> {
   data: TData[];
   totalCount: number;
+  /** Server-computed full-filtered-set column sums (footer totals). */
+  sums?: Record<string, number>;
   isLoading: boolean;
   error: Error | null;
   tableState: TableStateReturn;
@@ -129,11 +131,15 @@ export function useInfiniteTableList<TFilters, TData = unknown>({
     [infiniteData],
   );
 
+  // Every page carries the same full-set aggregates; the latest page's are
+  // the freshest after mutations invalidate/refetch.
   const totalCount = infiniteData?.pages[0]?.meta?.totalCount ?? 0;
+  const sums = infiniteData?.pages.at(-1)?.meta?.sums;
 
   return {
     data,
     totalCount,
+    sums,
     isLoading,
     error: error instanceof Error ? error : null,
     tableState,

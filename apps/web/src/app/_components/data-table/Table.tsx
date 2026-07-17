@@ -603,9 +603,11 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                 })}
               </TableHeader>
               <TableBody>{renderTableBody()}</TableBody>
-              {/* Footer aggregation row — only when data is loaded */}
+              {/* Footer aggregation row — only when data is loaded. Renders in
+                  infinite mode too: footers read server totals from table meta
+                  (see serverTotals), so they no longer depend on having every
+                  row loaded client-side. */}
               {rows.length > 0 &&
-                !infiniteScroll &&
                 (() => {
                   const footerGroups = table.getFooterGroups();
                   const hasFooter = footerGroups.some((fg) =>
