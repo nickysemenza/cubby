@@ -10,6 +10,7 @@ import {
   PDF_CONTENT_TYPE,
 } from "@cubby/schemas/image";
 import {
+  ExternalFetchError,
   fetchExternalResponse,
   readResponseWithLimit,
   sanitizeExternalUrl,
@@ -19,7 +20,7 @@ import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import {
   assertAttachableEntityExists,
-  associateImageWithEntity,
+  createAndAssociateUploadedImage,
   createPendingImageRecord,
   createUploadedImageRecord,
   cullPendingImages,
@@ -197,21 +198,30 @@ export const attachFileToEntity = async (
   if (input.data) {
     ({ bytes, contentType } = decodeBase64File(input.data, input.contentType));
   } else if (input.url) {
-    const url = validateExternalHttpUrl(input.url);
-    const response = await fetchExternalResponse(url);
-    if (!response.ok) {
-      throw createAppError(
-        "IMAGE_ATTACH_FAILED",
-        `Failed to fetch ${sanitizeExternalUrl(url)}: ${response.status}`,
+    try {
+      const url = validateExternalHttpUrl(input.url);
+      const response = await fetchExternalResponse(url);
+      if (!response.ok) {
+        throw createAppError(
+          "IMAGE_ATTACH_FAILED",
+          `Failed to fetch ${sanitizeExternalUrl(url)}: ${response.status}`,
+        );
+      }
+      bytes = Buffer.from(
+        await readResponseWithLimit(response, MAX_IMAGE_UPLOAD_BYTES),
       );
+      contentType =
+        input.contentType ??
+        response.headers.get("content-type")?.split(";", 1)[0]?.trim();
+      sourceFilename = new URL(url).pathname.split("/").pop() || undefined;
+    } catch (error) {
+      // Bad/SSRF-blocked URL, redirect limit, oversized body — a caller error,
+      // so surface it as a 4xx instead of letting the router rewrap it as a 500.
+      if (error instanceof ExternalFetchError) {
+        throw createAppError("IMAGE_ATTACH_FAILED", error.message, error);
+      }
+      throw error;
     }
-    bytes = Buffer.from(
-      await readResponseWithLimit(response, MAX_IMAGE_UPLOAD_BYTES),
-    );
-    contentType =
-      input.contentType ??
-      response.headers.get("content-type")?.split(";", 1)[0]?.trim();
-    sourceFilename = new URL(url).pathname.split("/").pop() || undefined;
   } else {
     // Unreachable: mcpAttachFileInput.refine enforces exactly one of url/data.
     throw createAppError(
@@ -261,29 +271,23 @@ export const attachFileToEntity = async (
   await uploadToS3({ key, body: bytes, contentType });
   const url = getS3ObjectUrl(key);
 
-  let created: Awaited<ReturnType<typeof createUploadedImageRecord>>;
+  // 4. Insert the row + associate in one transaction (owned by the repo), so a
+  // failure in either step (e.g. the target was deleted since step 0) rolls back
+  // the DB write; the catch then removes the now-orphaned R2 object.
+  let created: Awaited<ReturnType<typeof createAndAssociateUploadedImage>>;
   try {
-    created = await createUploadedImageRecord(db, {
-      key,
-      url,
-      filename,
-      contentType,
-      size: bytes.length,
-    });
+    created = await createAndAssociateUploadedImage(
+      db,
+      { key, url, filename, contentType, size: bytes.length },
+      input.entityType,
+      input.entityId,
+    );
   } catch (error) {
     await deleteS3Object(key).catch((cleanupError) => {
       console.error("Failed to roll back attached file object:", cleanupError);
     });
     throw error;
   }
-
-  // 4. Associate with the target entity (existence already checked in step 0).
-  await associateImageWithEntity(
-    db,
-    input.entityType,
-    input.entityId,
-    created.id,
-  );
 
   return {
     imageId: created.id,

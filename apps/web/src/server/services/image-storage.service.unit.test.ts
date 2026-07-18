@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   generatePresignedUploadUrl: vi.fn(),
   uploadToS3: vi.fn(),
   assertAttachableEntityExists: vi.fn(),
-  associateImageWithEntity: vi.fn(),
+  createAndAssociateUploadedImage: vi.fn(),
   fetchExternalResponse: vi.fn(),
 }));
 
@@ -19,7 +19,7 @@ vi.mock("~/server/repo/image", () => ({
   cullPendingImages: vi.fn(),
   getImageByKey: mocks.getImageByKey,
   assertAttachableEntityExists: mocks.assertAttachableEntityExists,
-  associateImageWithEntity: mocks.associateImageWithEntity,
+  createAndAssociateUploadedImage: mocks.createAndAssociateUploadedImage,
 }));
 
 vi.mock("~/server/utils/s3", () => ({
@@ -42,6 +42,7 @@ vi.mock("@cubby/shared/external-fetch", async (importActual) => ({
 }));
 
 import type { McpAttachFileInput } from "@cubby/schemas/image";
+import { ExternalFetchError } from "@cubby/shared/external-fetch";
 import {
   attachFileToEntity,
   importImageFromUrl,
@@ -134,10 +135,9 @@ describe("attachFileToEntity", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.assertAttachableEntityExists.mockResolvedValue(undefined);
-    mocks.associateImageWithEntity.mockResolvedValue(undefined);
     mocks.uploadToS3.mockResolvedValue(undefined);
     mocks.deleteS3Object.mockResolvedValue(undefined);
-    mocks.createUploadedImageRecord.mockResolvedValue({ id: "img-99" });
+    mocks.createAndAssociateUploadedImage.mockResolvedValue({ id: "img-99" });
   });
 
   const base = {
@@ -160,15 +160,11 @@ describe("attachFileToEntity", () => {
         contentType: "image/png",
       }),
     );
-    expect(mocks.createUploadedImageRecord).toHaveBeenCalledWith(
+    expect(mocks.createAndAssociateUploadedImage).toHaveBeenCalledWith(
       {},
       expect.objectContaining({ contentType: "image/png", size: 70 }),
-    );
-    expect(mocks.associateImageWithEntity).toHaveBeenCalledWith(
-      {},
       "product",
       "prod-1",
-      "img-99",
     );
   });
 
@@ -238,8 +234,11 @@ describe("attachFileToEntity", () => {
     expect(mocks.uploadToS3).not.toHaveBeenCalled();
   });
 
-  it("rolls back the R2 object and skips association when the DB insert fails", async () => {
-    mocks.createUploadedImageRecord.mockRejectedValue(new Error("db down"));
+  it("rolls back the R2 object when the insert+associate transaction fails", async () => {
+    // The repo runs insert + associate in one transaction; a throw from either
+    // (DB error, or the target deleted mid-flight) rolls back the row, and the
+    // service then deletes the now-orphaned R2 object.
+    mocks.createAndAssociateUploadedImage.mockRejectedValue(new Error("gone"));
 
     await expect(
       attachFileToEntity({} as never, {
@@ -247,10 +246,23 @@ describe("attachFileToEntity", () => {
         data: PNG_BASE64,
         contentType: "image/png",
       }),
-    ).rejects.toThrow("db down");
+    ).rejects.toThrow("gone");
     expect(mocks.deleteS3Object).toHaveBeenCalledWith(
       expect.stringContaining("cubby/images/"),
     );
-    expect(mocks.associateImageWithEntity).not.toHaveBeenCalled();
+  });
+
+  it("surfaces a blocked/oversized URL fetch as a 4xx, not a 500", async () => {
+    mocks.fetchExternalResponse.mockRejectedValue(
+      new ExternalFetchError("blocked host", "blocked-url"),
+    );
+
+    await expect(
+      attachFileToEntity({} as never, {
+        ...base,
+        url: "https://internal.example/secret.png",
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(mocks.uploadToS3).not.toHaveBeenCalled();
   });
 });

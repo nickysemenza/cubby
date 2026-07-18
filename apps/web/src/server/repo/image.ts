@@ -25,7 +25,7 @@ import type {
 import { imageSortableFields } from "@cubby/schemas/image";
 import { and, asc, eq, inArray, lt } from "drizzle-orm";
 import { match } from "ts-pattern";
-import type { Database } from "~/server/db";
+import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   image,
   location,
@@ -47,6 +47,7 @@ import {
   insertAndReturn,
   isNotDeleted,
   notDeleted,
+  withTransaction,
 } from "~/server/repo/database-helpers";
 
 export const createPendingImageRecord = async (
@@ -76,7 +77,7 @@ export const createPendingImageRecord = async (
 };
 
 export const createUploadedImageRecord = async (
-  db: Database,
+  db: Database | DrizzleTransaction,
   params: {
     key: string;
     url: string;
@@ -508,15 +509,15 @@ export const assertAttachableEntityExists = async (
  * Attach an already-UPLOADED image to one of the four gallery entities by
  * dispatching to its join table. Mirrors {@link associateImagesWithProduct} for
  * the other three; `.exhaustive()` forces this to grow if `attachableImageEntity`
- * does.
+ * does. Takes a client-or-tx so it can run inside the insert transaction (see
+ * {@link createAndAssociateUploadedImage}).
  */
-export const associateImageWithEntity = async (
-  db: Database,
+const associateImageWithEntity = async (
+  dbc: DrizzleClient | DrizzleTransaction,
   entityType: AttachableImageEntity,
   entityId: string,
   imageId: string,
 ): Promise<void> => {
-  const dbc = getDb(db);
   await match(entityType)
     .with("product", () =>
       associatePendingImages(dbc, productImage, "productId", entityId, [
@@ -537,6 +538,32 @@ export const associateImageWithEntity = async (
       ]),
     )
     .exhaustive();
+};
+
+/**
+ * Insert an UPLOADED image row and associate it with its target entity in a
+ * single transaction, so a failure in either step rolls back the DB write. The
+ * caller owns removing the R2 object on failure (see attachFileToEntity) — a
+ * stranded UPLOADED row would otherwise never be reaped (cull only touches
+ * PENDING rows).
+ */
+export const createAndAssociateUploadedImage = async (
+  db: Database,
+  params: {
+    key: string;
+    url: string;
+    filename: string;
+    contentType: string;
+    size: number;
+  },
+  entityType: AttachableImageEntity,
+  entityId: string,
+): Promise<typeof image.$inferSelect> => {
+  return await withTransaction(db, async (tx) => {
+    const row = await createUploadedImageRecord(tx, params);
+    await associateImageWithEntity(tx, entityType, entityId, row.id);
+    return row;
+  });
 };
 
 /**
