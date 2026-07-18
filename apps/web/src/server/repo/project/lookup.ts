@@ -1,4 +1,3 @@
-import type { ProjectId } from "@cubby/schemas/identifiers";
 import {
   buildTakeSkip,
   type PaginationParams,
@@ -6,7 +5,7 @@ import {
 } from "@cubby/schemas/pagination";
 import type { ProjectFilters, ProjectOut } from "@cubby/schemas/project";
 import { projectSortableFields } from "@cubby/schemas/project";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { project } from "~/server/db/schema";
 import {
@@ -15,7 +14,6 @@ import {
   countWhere,
   executeListQueryWithCount,
   getDb,
-  notDeleted,
 } from "~/server/repo/database-helpers";
 import { projectDependencyIds, projectRollups } from "./analytics";
 import { dbProjectToAPI, EMPTY_PROJECT_ROLLUP } from "./helpers";
@@ -68,25 +66,4 @@ export const projectList = async (
   );
 
   return { data, count };
-};
-
-/**
- * id→name lookup for a set of projects — for lightweight name-resolution reads
- * (e.g. surfacing a project name next to a task/purchase without pulling the
- * full rollup+dependency graph).
- */
-export const listNames = async (
-  db: Database,
-  ids: ProjectId[],
-): Promise<Map<ProjectId, string>> => {
-  const out = new Map<ProjectId, string>();
-  if (ids.length === 0) return out;
-
-  const rows = await getDb(db)
-    .select({ id: project.id, name: project.name })
-    .from(project)
-    .where(and(inArray(project.id, ids), notDeleted(project)));
-
-  for (const row of rows) out.set(row.id, row.name);
-  return out;
 };

@@ -111,11 +111,6 @@ const taskReader = createEntityReader({
 export const getTaskByID = (db: Database, id: TaskId): Promise<TaskOut> =>
   taskReader.getByID(db, id);
 
-export const getTaskByIDOrNull = (
-  db: Database,
-  id: TaskId,
-): Promise<TaskOut | null> => taskReader.getByIDOrNull(db, id);
-
 export const createTask = async (
   db: Database,
   data: TaskCreateInput,

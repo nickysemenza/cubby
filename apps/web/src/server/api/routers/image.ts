@@ -1,3 +1,4 @@
+import { projectId } from "@cubby/schemas/identifiers";
 import {
   cullPendingImagesResponseSchema,
   cullPendingImagesSchema,
@@ -11,16 +12,29 @@ import {
   initiateUploadWithoutEntityResponseSchema,
   initiateUploadWithoutEntitySchema,
 } from "@cubby/schemas/image";
+import { z } from "zod";
 import { createEntityListProcedure } from "~/server/api/crud-factory";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { createAppError } from "~/server/errors/app-error";
-import { getImageById, imageList } from "~/server/repo/image";
+import {
+  getImageById,
+  getImagesByProjectIds,
+  imageList,
+} from "~/server/repo/image";
 import {
   cullPendingImageStorage,
   importImageFromUrl,
   initiateDocumentUpload,
   initiateImageUploadWithoutEntity,
 } from "~/server/services/image-storage.service";
+
+/** Minimal image shape for gallery/cover display — mirrors `MinimalImage` in
+ * EntityImageList/EntityHero (id, url, filename only). */
+const projectImageSummary = z.object({
+  id: z.string(),
+  url: z.url(),
+  filename: z.string(),
+});
 
 // List images with standard pagination, sorting, and filtering. Uses the crud
 // factory so the response carries the per-record error-context wrapper every
@@ -148,6 +162,19 @@ export const imageRouter = createTRPCRouter({
     .output(imageWithEntitySchema)
     .query(async ({ ctx, input }) => {
       return await getImageById(ctx.db, input.id);
+    }),
+
+  /**
+   * Images for a set of projects, grouped by project id and ordered
+   * cover-first — backs the projects dashboard's card covers and the project
+   * detail page's image gallery (projects have no `getByID` images field of
+   * their own; see repo/image.ts's `getImagesByProjectIds`).
+   */
+  imagesByProjectIds: protectedProcedure
+    .input(z.object({ projectIds: z.array(projectId) }))
+    .output(z.record(z.string(), z.array(projectImageSummary)))
+    .query(async ({ ctx, input }) => {
+      return await getImagesByProjectIds(ctx.db, input.projectIds);
     }),
 
   /**

@@ -1,22 +1,22 @@
+import type { TaskOut } from "@cubby/schemas/project";
 import { ResponsiveCalendar } from "@nivo/calendar";
 import { CalendarClock } from "lucide-react";
 import { useMemo, useState } from "react";
-import type { NotionTask } from "~/server/clients/notion";
 import { formatDate, StatusIcon } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
 
-export function TaskHeatmap({ tasks }: { tasks: NotionTask[] }) {
+export function TaskHeatmap({ tasks }: { tasks: TaskOut[] }) {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   const { data, from, to, itemsByDay } = useMemo(() => {
     const byDay = new Map<string, number>();
-    const itemsByDay = new Map<string, NotionTask[]>();
+    const itemsByDay = new Map<string, TaskOut[]>();
     for (const t of tasks) {
-      if (!t.due) continue;
-      byDay.set(t.due, (byDay.get(t.due) ?? 0) + 1);
-      if (!itemsByDay.has(t.due)) itemsByDay.set(t.due, []);
-      itemsByDay.get(t.due)!.push(t);
+      if (!t.dueDate) continue;
+      byDay.set(t.dueDate, (byDay.get(t.dueDate) ?? 0) + 1);
+      if (!itemsByDay.has(t.dueDate)) itemsByDay.set(t.dueDate, []);
+      itemsByDay.get(t.dueDate)!.push(t);
     }
 
     const data = Array.from(byDay.entries()).map(([day, value]) => ({
@@ -43,7 +43,7 @@ export function TaskHeatmap({ tasks }: { tasks: NotionTask[] }) {
   const yearSpan =
     new Date(to).getFullYear() - new Date(from).getFullYear() + 1;
   const chartHeight = Math.max(180, yearSpan * 160);
-  const selectedItems: NotionTask[] = selectedDay
+  const selectedItems: TaskOut[] = selectedDay
     ? (itemsByDay.get(selectedDay) ?? [])
     : [];
 
@@ -103,12 +103,9 @@ export function TaskHeatmap({ tasks }: { tasks: NotionTask[] }) {
           </div>
           <div className="space-y-1">
             {selectedItems.map((t) => (
-              <a
+              <div
                 key={t.id}
-                href={t.notionUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 rounded px-2 py-1 text-xs hover:bg-muted"
+                className="flex items-center gap-2 rounded px-2 py-1 text-xs"
               >
                 <StatusIcon status={t.status} />
                 <span className="truncate">{t.name}</span>
@@ -117,7 +114,7 @@ export function TaskHeatmap({ tasks }: { tasks: NotionTask[] }) {
                     {t.projectName}
                   </span>
                 )}
-              </a>
+              </div>
             ))}
           </div>
         </div>

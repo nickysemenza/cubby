@@ -1,31 +1,38 @@
+import type { ProjectOut, TaskOut, TaskStatus } from "@cubby/schemas/project";
 import { sum } from "es-toolkit";
 import { ListChecks } from "lucide-react";
 import { useMemo } from "react";
 import { NoneValue } from "~/components/ui/none-value";
 import { getStatusChartColor } from "~/lib/status-colors";
-import type { NotionProject, NotionTask } from "~/server/clients/notion";
+import { TASK_STATUS_LABELS } from "../shared";
 import { ChartEmpty } from "./chart-empty";
 
-const STATUS_ORDER = ["Not started", "later", "In progress", "Blocked", "Done"];
+const STATUS_ORDER: TaskStatus[] = [
+  "not_started",
+  "later",
+  "in_progress",
+  "blocked",
+  "done",
+];
 
 export function TaskStatusBoard({
   tasks,
   projects,
 }: {
-  tasks: NotionTask[];
-  projects: NotionProject[];
+  tasks: TaskOut[];
+  projects: ProjectOut[];
 }) {
   const { grid, projectRows, statuses } = useMemo(() => {
     const projectMap = new Map(projects.map((p) => [p.name, p]));
 
     // Count tasks per project × status
-    const counts = new Map<string, Map<string, number>>();
+    const counts = new Map<string, Map<TaskStatus, number>>();
     const projectSet = new Set<string>();
-    const statusSet = new Set<string>();
+    const statusSet = new Set<TaskStatus>();
 
     for (const t of tasks) {
       const project = t.projectName ?? "Unassigned";
-      const status = t.status ?? "Unknown";
+      const status = t.status;
       projectSet.add(project);
       statusSet.add(status);
 
@@ -40,8 +47,8 @@ export function TaskStatusBoard({
         const proj = projectMap.get(name);
         return {
           name,
-          date: proj?.date ?? "",
-          isDone: proj?.status === "Done",
+          date: proj?.startDate ?? "",
+          isDone: proj?.status === "done",
           total: sum(Array.from(counts.get(name)?.values() ?? [])),
         };
       })
@@ -85,7 +92,7 @@ export function TaskStatusBoard({
                 key={s}
                 className="px-2 pb-2 text-center font-medium text-muted-foreground"
               >
-                {s}
+                {TASK_STATUS_LABELS[s]}
               </th>
             ))}
           </tr>

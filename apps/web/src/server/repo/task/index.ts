@@ -18,8 +18,6 @@ export {
   createTask,
   deleteTasks,
   getTaskByID,
-  getTaskByIDOrNull,
-  taskDependencyIds,
   updateTask,
 } from "./crud";
 export { taskList } from "./lookup";

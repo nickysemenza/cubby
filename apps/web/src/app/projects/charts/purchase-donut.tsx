@@ -1,11 +1,11 @@
+import type { PurchaseOut } from "@cubby/schemas/project";
 import { ResponsivePie } from "@nivo/pie";
 import { sumBy } from "es-toolkit";
 import { ShoppingBag } from "lucide-react";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
 import { sumByKey } from "~/misc/array-helpers";
-import type { NotionPurchase } from "~/server/clients/notion";
-import { getCategoryColor } from "../shared";
+import { capitalize, getCategoryColor } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
 
@@ -21,7 +21,7 @@ export function PurchaseDonut({
   height = 350,
   centerLabel = "Total cost",
 }: {
-  purchases: NotionPurchase[];
+  purchases: PurchaseOut[];
   height?: number;
   centerLabel?: string;
 }) {
@@ -37,7 +37,7 @@ export function PurchaseDonut({
       .sort((a, b) => b[1] - a[1])
       .map(([category, value]) => ({
         id: category,
-        label: category,
+        label: capitalize(category),
         value,
         color: getCategoryColor(category),
       }));

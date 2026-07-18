@@ -1,9 +1,8 @@
+import type { ProjectOut } from "@cubby/schemas/project";
 import { ResponsiveBar } from "@nivo/bar";
 import { DollarSign } from "lucide-react";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
-import { sumByKey } from "~/misc/array-helpers";
-import type { NotionProject, NotionPurchase } from "~/server/clients/notion";
 import { nivoBarChrome, nivoChartTheme } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
@@ -14,25 +13,14 @@ type Datum = {
   estimate: number;
 };
 
-export function CostVsEstimate({
-  projects,
-  purchases,
-}: {
-  projects: NotionProject[];
-  purchases: NotionPurchase[];
-}) {
+/** Actual spend comes off `project.rollup.spent` — see BudgetHealth. */
+export function CostVsEstimate({ projects }: { projects: ProjectOut[] }) {
   const data = useMemo(() => {
-    const costByProject = sumByKey(
-      purchases.filter((p) => p.projectName && p.cost),
-      (p) => p.projectName,
-      (p) => p.cost,
-    );
-
     return projects
-      .filter((p) => costByProject.has(p.name) && (p.costEstimate ?? 0) > 0)
+      .filter((p) => p.rollup.spent > 0 && (p.costEstimate ?? 0) > 0)
       .map((p) => ({
         project: p.name,
-        actual: costByProject.get(p.name) ?? 0,
+        actual: p.rollup.spent,
         estimate: p.costEstimate ?? 0,
       }))
       .sort(
@@ -40,7 +28,7 @@ export function CostVsEstimate({
           Math.max(b.actual, b.estimate) - Math.max(a.actual, a.estimate),
       )
       .slice(0, 12) as Datum[];
-  }, [projects, purchases]);
+  }, [projects]);
 
   if (data.length === 0) {
     return <ChartEmpty icon={DollarSign} title="No cost data." />;

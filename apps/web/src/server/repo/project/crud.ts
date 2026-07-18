@@ -67,11 +67,6 @@ export const getProjectByID = (
   id: ProjectId,
 ): Promise<ProjectOut> => projectReader.getByID(db, id);
 
-export const getProjectByIDOrNull = (
-  db: Database,
-  id: ProjectId,
-): Promise<ProjectOut | null> => projectReader.getByIDOrNull(db, id);
-
 export const createProject = async (
   db: Database,
   data: ProjectCreateInput,

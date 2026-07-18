@@ -1,10 +1,10 @@
+import type { ProjectOut, PurchaseOut } from "@cubby/schemas/project";
 import { ResponsiveBar } from "@nivo/bar";
 import { useNavigate } from "@tanstack/react-router";
 import { Wallet } from "lucide-react";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
 import { sumByKey } from "~/misc/array-helpers";
-import type { NotionProject, NotionPurchase } from "~/server/clients/notion";
 import { nivoBarChrome, nivoChartTheme } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
@@ -13,8 +13,8 @@ export function SpendingByProject({
   purchases,
   projects,
 }: {
-  purchases: NotionPurchase[];
-  projects: NotionProject[];
+  purchases: PurchaseOut[];
+  projects: ProjectOut[];
 }) {
   const navigate = useNavigate();
 

@@ -93,14 +93,22 @@ export const projectCreateInput = z.object({
 });
 export type ProjectCreateInput = z.infer<typeof projectCreateInput>;
 
-export const projectUpdateData = z
-  .object({
-    ...projectFields,
-    blockedByIds: z
-      .array(projectId)
-      .describe("Full replacement set of blocking-project ids"),
-  })
-  .partial();
+export const projectUpdateData = z.object({
+  name: projectFields.name.optional(),
+  status: projectFields.status.optional(),
+  kind: projectFields.kind.optional(),
+  locations: projectFields.locations.optional(),
+  costEstimate: projectFields.costEstimate.optional(),
+  startDate: projectFields.startDate.optional(),
+  endDate: projectFields.endDate.optional(),
+  icon: projectFields.icon.optional(),
+  notes: projectFields.notes.optional(),
+  blockedByIds: z
+    .array(projectId)
+    .optional()
+    .describe("Full replacement set of blocking-project ids"),
+});
+export type ProjectUpdateData = z.infer<typeof projectUpdateData>;
 export const projectUpdateInput = z.object({
   id: projectId,
   data: projectUpdateData,
@@ -169,14 +177,19 @@ export const taskCreateInput = z.object({
 });
 export type TaskCreateInput = z.infer<typeof taskCreateInput>;
 
-export const taskUpdateData = z
-  .object({
-    ...taskFields,
-    blockedByIds: z
-      .array(taskId)
-      .describe("Full replacement set of blocking-task ids"),
-  })
-  .partial();
+export const taskUpdateData = z.object({
+  name: taskFields.name.optional(),
+  status: taskFields.status.optional(),
+  projectId: taskFields.projectId.optional(),
+  dueDate: taskFields.dueDate.optional(),
+  dueEndDate: taskFields.dueEndDate.optional(),
+  category: taskFields.category.optional(),
+  blockedByIds: z
+    .array(taskId)
+    .optional()
+    .describe("Full replacement set of blocking-task ids"),
+});
+export type TaskUpdateData = z.infer<typeof taskUpdateData>;
 export const taskUpdateInput = z.object({
   id: taskId,
   data: taskUpdateData,
@@ -243,7 +256,19 @@ export const purchaseCreateInput = z.object({
 });
 export type PurchaseCreateInput = z.infer<typeof purchaseCreateInput>;
 
-export const purchaseUpdateData = z.object(purchaseFields).partial();
+export const purchaseUpdateData = z.object({
+  name: purchaseFields.name.optional(),
+  cost: purchaseFields.cost.optional(),
+  date: purchaseFields.date.optional(),
+  category: purchaseFields.category.optional(),
+  subcategory: purchaseFields.subcategory.optional(),
+  purchaser: purchaseFields.purchaser.optional(),
+  url: purchaseFields.url.optional(),
+  notes: purchaseFields.notes.optional(),
+  future: purchaseFields.future.optional(),
+  projectId: purchaseFields.projectId.optional(),
+});
+export type PurchaseUpdateData = z.infer<typeof purchaseUpdateData>;
 export const purchaseUpdateInput = z.object({
   id: purchaseId,
   data: purchaseUpdateData,

@@ -1,12 +1,8 @@
+import type { ProjectOut, PurchaseOut, TaskOut } from "@cubby/schemas/project";
 import { AlertTriangle, CalendarClock, DollarSign } from "lucide-react";
 import { useMemo } from "react";
 import { Row, Stack } from "~/components/layout";
 import { StatusText } from "~/components/ui/status-text";
-import type {
-  NotionProject,
-  NotionPurchase,
-  NotionTask,
-} from "~/server/clients/notion";
 import { ProjectPill } from "./project-pill";
 import { formatDate } from "./shared";
 
@@ -15,9 +11,9 @@ export function NeedsAttention({
   tasks,
   purchases,
 }: {
-  projects: NotionProject[];
-  tasks: NotionTask[];
-  purchases: NotionPurchase[];
+  projects: ProjectOut[];
+  tasks: TaskOut[];
+  purchases: PurchaseOut[];
 }) {
   const projectMap = useMemo(
     () => new Map(projects.map((p) => [p.name, p])),
@@ -27,7 +23,7 @@ export function NeedsAttention({
   const { overdueTasks, stalledProjects, missingEstimates } = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
     const overdueTasks = tasks.filter(
-      (t) => t.due && t.due < today && t.status !== "Done",
+      (t) => t.dueDate && t.dueDate < today && t.status !== "done",
     );
 
     const thirtyDaysAgo = new Date();
@@ -42,7 +38,7 @@ export function NeedsAttention({
     }
 
     const activeProjects = projects.filter(
-      (p) => p.status && p.status !== "Done" && p.status !== "Not started",
+      (p) => p.status !== "done" && p.status !== "not_started",
     );
 
     const stalledProjects = activeProjects.filter(
@@ -77,18 +73,11 @@ export function NeedsAttention({
             const proj = t.projectName ? projectMap.get(t.projectName) : null;
             return (
               <Row key={t.id} align="center" gap="sm" className="text-xs">
-                <a
-                  href={t.notionUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="truncate hover:underline"
-                >
-                  {t.name}
-                </a>
+                <span className="truncate">{t.name}</span>
                 {proj && <ProjectPill project={proj} />}
-                {t.due && (
+                {t.dueDate && (
                   <StatusText tone="destructive" className="shrink-0">
-                    due {formatDate(t.due)}
+                    due {formatDate(t.dueDate)}
                   </StatusText>
                 )}
               </Row>

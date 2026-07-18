@@ -28,23 +28,21 @@ import {
 } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { ENTITY_ACCENTS } from "./entity-accents";
-import type {
-  Entity,
-  EntityDefinition,
-  EntityDetailRoute,
-  EntityListRoute,
-} from "./types";
+import type { Entity, EntityDefinition, EntityDetailRoute } from "./types";
 
-// /tasks and /purchases don't have routes yet (shipping later in this
-// migration) so they aren't in EntityDetailRoute/EntityListRoute — the
-// literal casts below are placeholders that keep those unions honest (only
-// real registered routes in them) without lying to every other `Link
-// to={entities[x].routes...}` call site in the app. Swap for real members
-// once the /tasks and /purchases routes land.
-const taskDetailRoute = "/tasks/$id" as EntityDetailRoute;
-const taskListRoute = "/tasks" as EntityListRoute;
-const purchaseDetailRoute = "/purchases/$id" as EntityDetailRoute;
-const purchaseListRoute = "/purchases" as EntityListRoute;
+// /tasks and /purchases have list routes now, but no detail page — rows are
+// shallow (edited inline in the list, not via a dedicated page), so there's no
+// genuine "/tasks/$id" route to point at. EntityDetailRoute's members are all
+// `/x/$id`-shaped (paired with a `{id}` Link param everywhere it's consumed —
+// createNameColumn, createActionsColumn, EntityPreviewLink, search results),
+// so rather than add a param-less exception to that union (which would widen
+// the param typing for every other entity's generic call sites), `detail`
+// just points at the real list route via a local cast. Any generic "View
+// Details" / name-column link consequently no-ops back to the list page — an
+// acceptable degradation until a detail page exists, and never taken in
+// practice since these two lists don't wire up row-preview/click-through.
+const taskDetailRoute = "/tasks" as EntityDetailRoute;
+const purchaseDetailRoute = "/purchases" as EntityDetailRoute;
 
 const entityColor = (
   entity: Entity,
@@ -247,16 +245,16 @@ export const entities: Record<Entity, EntityDefinition> = {
       text: "text-slate",
       border: "border-l-slate",
     }),
-    // /tasks doesn't have routes yet (shipping later in this migration) — see
-    // the taskDetailRoute/taskListRoute placeholder casts above.
+    // /tasks has a list route (RTable + quick-add dialog) but no detail page —
+    // see the taskDetailRoute cast above.
     routes: {
       detail: taskDetailRoute,
-      list: taskListRoute,
+      list: "/tasks",
     },
-    detail: { commonSections: ["history"] },
+    // No detail page, so no commonSections — see the taskDetailRoute comment.
     list: {
       defaultSort: "createdAt",
-      standardColumns: [],
+      standardColumns: ["name", "createdAt"],
       sortableFields: taskSortableFields,
     },
   },
@@ -266,16 +264,16 @@ export const entities: Record<Entity, EntityDefinition> = {
     basePath: "purchases",
     lucideIcon: ReceiptText,
     color: entityColor("purchase", { bg: "bg-primary/10" }),
-    // /purchases doesn't have routes yet (shipping later in this migration) —
-    // see the purchaseDetailRoute/purchaseListRoute placeholder casts above.
+    // /purchases has a list route (RTable + quick-add dialog) but no detail
+    // page — see the purchaseDetailRoute cast above.
     routes: {
       detail: purchaseDetailRoute,
-      list: purchaseListRoute,
+      list: "/purchases",
     },
-    detail: { commonSections: ["history"] },
+    // No detail page, so no commonSections — see the purchaseDetailRoute comment.
     list: {
-      defaultSort: "createdAt",
-      standardColumns: [],
+      defaultSort: "date",
+      standardColumns: ["name", "createdAt"],
       sortableFields: purchaseSortableFields,
     },
   },

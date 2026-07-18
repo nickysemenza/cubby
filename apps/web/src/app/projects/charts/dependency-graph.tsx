@@ -1,3 +1,4 @@
+import type { ProjectOut } from "@cubby/schemas/project";
 import { useNavigate } from "@tanstack/react-router";
 import * as d3Force from "d3-force";
 import { Network, RotateCcw } from "lucide-react";
@@ -11,7 +12,6 @@ import {
 } from "react";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import { getStatusChartColor } from "~/lib/status-colors";
-import type { NotionProject } from "~/server/clients/notion";
 import { ChartEmpty } from "./chart-empty";
 
 interface GraphNode extends d3Force.SimulationNodeDatum {
@@ -27,19 +27,19 @@ interface GraphLink extends d3Force.SimulationLinkDatum<GraphNode> {
   target: string | GraphNode;
 }
 
-export function DependencyGraph({ projects }: { projects: NotionProject[] }) {
+export function DependencyGraph({ projects }: { projects: ProjectOut[] }) {
   const { nodes, links } = useMemo(() => {
     const projectIds = new Set(projects.map((p) => p.id));
 
     const involvedIds = new Set<string>();
     for (const p of projects) {
-      for (const depId of p.blockedBy) {
+      for (const depId of p.blockedByIds) {
         if (projectIds.has(depId)) {
           involvedIds.add(p.id);
           involvedIds.add(depId);
         }
       }
-      for (const depId of p.blocking) {
+      for (const depId of p.blockingIds) {
         if (projectIds.has(depId)) {
           involvedIds.add(p.id);
           involvedIds.add(depId);
@@ -54,14 +54,14 @@ export function DependencyGraph({ projects }: { projects: NotionProject[] }) {
       name: p.name,
       icon: p.icon,
       status: p.status,
-      radius: p.status === "Done" ? 20 : 28,
+      radius: p.status === "done" ? 20 : 28,
     }));
 
     const linkSet = new Set<string>();
     const links: GraphLink[] = [];
 
     for (const p of involved) {
-      for (const blockerId of p.blockedBy) {
+      for (const blockerId of p.blockedByIds) {
         if (!involvedIds.has(blockerId)) continue;
         const key = `${blockerId}->${p.id}`;
         if (linkSet.has(key)) continue;
@@ -333,7 +333,7 @@ function ForceGraph({
         {nodePositions.map((node) => {
           const isHovered = hoveredNode === node.id;
           const color = getStatusChartColor(node.status);
-          const isDone = node.status === "Done";
+          const isDone = node.status === "done";
 
           return (
             // biome-ignore lint/a11y/noStaticElementInteractions: SVG graph node; hover/click drive the force-graph visualization, not a semantic control

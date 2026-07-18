@@ -1,5 +1,7 @@
+import type { ProjectStatus } from "@cubby/schemas/project";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
+import { capitalize, PROJECT_STATUS_LABELS } from "./shared";
 
 export type Filters = {
   statuses: Set<string>;
@@ -39,11 +41,14 @@ function FilterGroup({
   options,
   selected,
   onToggle,
+  formatLabel = (v) => v,
 }: {
   label: string;
   options: string[];
   selected: Set<string>;
   onToggle: (value: string) => void;
+  /** Human-facing label for a raw option value — defaults to identity. */
+  formatLabel?: (value: string) => string;
 }) {
   if (options.length === 0) return null;
 
@@ -55,7 +60,7 @@ function FilterGroup({
       {options.map((option) => (
         <ToggleBadge
           key={option}
-          label={option}
+          label={formatLabel(option)}
           active={selected.has(option)}
           onClick={() => onToggle(option)}
         />
@@ -100,12 +105,14 @@ export function DashboardFilters({
           options={availableStatuses}
           selected={filters.statuses}
           onToggle={(v) => toggle("statuses", v)}
+          formatLabel={(v) => PROJECT_STATUS_LABELS[v as ProjectStatus] ?? v}
         />
         <FilterGroup
           label="Kind"
           options={availableKinds}
           selected={filters.kinds}
           onToggle={(v) => toggle("kinds", v)}
+          formatLabel={capitalize}
         />
         <FilterGroup
           label="Location"

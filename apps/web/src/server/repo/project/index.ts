@@ -18,12 +18,10 @@
  * blocked-by/blocking graph. `helpers.ts` (row→API mapping) is internal.
  */
 
-export { projectDependencyIds, projectRollups } from "./analytics";
 export {
   createProject,
   deleteProjects,
   getProjectByID,
-  getProjectByIDOrNull,
   updateProject,
 } from "./crud";
-export { listNames, projectList } from "./lookup";
+export { projectList } from "./lookup";

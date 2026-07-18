@@ -70,7 +70,6 @@ const purchaseCrud = createEntityCrud({
 });
 
 export const getPurchaseByID = purchaseCrud.getByID;
-export const getPurchaseByIDOrNull = purchaseCrud.getByIDOrNull;
 export const updatePurchase = purchaseCrud.update;
 
 export const createPurchase = async (

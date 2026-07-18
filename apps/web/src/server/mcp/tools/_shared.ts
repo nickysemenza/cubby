@@ -318,23 +318,6 @@ export function toUnitMappingInput(m: z.infer<typeof mcpUnitMappingInput>) {
   return { a: m.a, b: m.b, source: m.source ?? null };
 }
 
-export function matchesFilter(value: string | null, filter: unknown): boolean {
-  if (typeof filter !== "string") return true;
-  return value?.toLowerCase().includes(filter.toLowerCase()) ?? false;
-}
-
-export function matchesArrayFilter(values: string[], filter: unknown): boolean {
-  if (typeof filter !== "string") return true;
-  const lower = filter.toLowerCase();
-  return values.some((v) => v.toLowerCase().includes(lower));
-}
-
-export function notionUnavailable() {
-  return structuredError(
-    "Notion integration is not configured. Set the NOTION_API_KEY environment variable.",
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Slim output projections
 // ---------------------------------------------------------------------------

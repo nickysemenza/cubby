@@ -31,12 +31,22 @@ Notion. The Notion **recipes** DB import path (`notion-recipe.ts`) is untouched.
 3. **Enums:** migrate option sets verbatim with emoji stripped; statuses become
    snake_case enums (projects: `planning | not_started | in_progress | done`;
    tasks: `not_started | later | in_progress | blocked | done`; purchase category:
-   `materials | tools | services`).
+   `materials | tools | services`). Task `category` and purchase `subcategory`
+   stay free-form text (organic option sets).
 4. **Self-contained module:** no FK links into Product/Location/valuation for now.
 5. **Public-repo privacy rule:** house names/addresses are **not** committed as
    code enums — project `locations` is `text[]`; filter options derive from data.
    No dollar figures or addresses in committed docs/fixtures/tests. The archive
    dump lives outside the repo.
+6. **No `person` field on tasks** (accepted loss of the Notion column).
+7. **Dependencies stay many-to-many** (`ProjectDependency`/`TaskDependency` join
+   tables) — several projects/tasks have multiple blockers, so 1:1 would lose
+   data. **Purchases have no `endDate`** (unused in Notion); tasks keep
+   `dueEndDate` (due-date ranges are used).
+8. **Single PR**, opened/merged only after the cutover is verified (dev DB is
+   prod Neon, so the import runs pre-merge).
+9. **Money columns are `double precision`**, not `real` — the import's
+   reconciliation caught float4 truncating cents on the ledger total.
 
 ## Phase 1 — Schema
 

@@ -289,14 +289,6 @@ async function downloadImage(
   }
 }
 
-const contentTypeExtension: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/gif": "gif",
-  "image/webp": "webp",
-  "image/heic": "heic",
-};
-
 /**
  * Download a Notion-hosted image, archive it locally, upload it to R2, insert
  * an Image row, and return { imageId, publicUrl } — or null on any failure.
@@ -306,30 +298,47 @@ async function importImage(
   projectSlug: string,
   index: number,
 ): Promise<{ imageId: string; publicUrl: string } | null> {
-  const downloaded = await downloadImage(sourceUrl);
-  if (!downloaded) return null;
-  const { buffer, contentType } = downloaded;
-
-  // Notion S3 paths end .../<uuid>/<original-filename>; keep the filename.
-  const pathName = new URL(sourceUrl).pathname.split("/").pop() ?? "image.jpg";
+  // Notion S3 paths end .../<file-uuid>/<original-filename>; the path is
+  // stable across runs (only the signature changes), so a key derived from the
+  // file uuid + filename is deterministic. That's what makes re-runs resolve
+  // to the SAME Image row instead of re-downloading/duplicating. (An earlier
+  // scheme keyed on a walk-order counter — nondeterministic under the parallel
+  // block walk — and duplicated 43 images; hence uuid, not position.)
+  const segments = new URL(sourceUrl).pathname.split("/").filter(Boolean);
+  const pathName = segments.pop() ?? "image.jpg";
+  const fileUuid = (segments.pop() ?? "nouuid").replace(/-/g, "").slice(0, 8);
   const safeName = decodeURIComponent(pathName).replace(
     /[^a-zA-Z0-9._-]/g,
     "_",
   );
-  const ext = contentTypeExtension[contentType] ?? "jpg";
-  const filename = safeName.includes(".") ? safeName : `${safeName}.${ext}`;
+  const filename = safeName.includes(".") ? safeName : `${safeName}.jpg`;
+  const key = `${R2_KEY_PREFIX}/images/project-${projectSlug}-${fileUuid}-${filename}`;
+  const publicUrl = `${R2_PUBLIC_URL}/${key}`;
+
+  // Already imported by a prior run → reuse without downloading.
+  if (!DRY_RUN) {
+    const existing = await db
+      .select({ id: image.id, url: image.url })
+      .from(image)
+      .where(eq(image.key, key));
+    if (existing[0]) {
+      return { imageId: existing[0].id, publicUrl: existing[0].url };
+    }
+  }
+
+  // Nothing cached and we're not allowed to fetch → drop the image reference
+  // (the next full run fills it in).
+  if (DRY_RUN || SKIP_IMAGES) return null;
+
+  const downloaded = await downloadImage(sourceUrl);
+  if (!downloaded) return null;
+  const { buffer, contentType } = downloaded;
 
   // Archive a local copy alongside the raw JSON.
   const archivePath = join(ARCHIVE_DIR, "images", projectSlug);
   await mkdir(archivePath, { recursive: true });
   await writeFile(join(archivePath, `${index}-${filename}`), buffer);
 
-  if (DRY_RUN || SKIP_IMAGES) {
-    return { imageId: "dry-run", publicUrl: `dry-run://${filename}` };
-  }
-
-  const key = `${R2_KEY_PREFIX}/images/project-${projectSlug}-${index}-${filename}`;
-  const publicUrl = `${R2_PUBLIC_URL}/${key}`;
   const put = await r2.fetch(r2ObjectUrl(key), {
     method: "PUT",
     body: new Uint8Array(buffer),
@@ -405,16 +414,16 @@ async function blockToMarkdown(
   depth: number,
 ): Promise<string[]> {
   const indent = "  ".repeat(depth);
-  const childLines = async (parent: BlockObjectResponse, nextDepth: number) =>
-    parent.has_children
-      ? (
-          await Promise.all(
-            (
-              await listChildren(parent.id)
-            ).map((child) => blockToMarkdown(child, ctx, nextDepth)),
-          )
-        ).flat()
-      : [];
+  // Sequential on purpose: markdown output is ordered, and image attachment
+  // order (projectImage.sortOrder) should follow document order.
+  const childLines = async (parent: BlockObjectResponse, nextDepth: number) => {
+    if (!parent.has_children) return [];
+    const lines: string[] = [];
+    for (const child of await listChildren(parent.id)) {
+      lines.push(...(await blockToMarkdown(child, ctx, nextDepth)));
+    }
+    return lines;
+  };
 
   switch (block.type) {
     case "paragraph": {
@@ -524,9 +533,10 @@ async function pageBodyToMarkdown(
   ctx: MarkdownContext,
 ): Promise<string | null> {
   const blocks = await listChildren(pageId);
-  const lines = (
-    await Promise.all(blocks.map((block) => blockToMarkdown(block, ctx, 0)))
-  ).flat();
+  const lines: string[] = [];
+  for (const block of blocks) {
+    lines.push(...(await blockToMarkdown(block, ctx, 0)));
+  }
   const markdown = lines
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
@@ -591,17 +601,8 @@ async function main() {
       );
     const existingId = existing[0]?.id;
 
-    // Body → markdown (+ images). Skip image/body work when the project was
-    // already imported WITH images — re-downloading would duplicate R2 objects.
-    const alreadyHasImages = existingId
-      ? (
-          await db
-            .select({ id: projectImage.id })
-            .from(projectImage)
-            .where(eq(projectImage.projectId, existingId))
-        ).length > 0
-      : false;
-
+    // Body → markdown (+ images). importImage resolves deterministic R2 keys
+    // to existing Image rows, so re-runs neither re-download nor duplicate.
     const collectedImageIds: string[] = [];
     const ctx: MarkdownContext = {
       projectSlug: slug,
@@ -619,7 +620,7 @@ async function main() {
 
     // Cover image (appended after body images).
     const coverUrl = getPageCover(page);
-    if (coverUrl && !alreadyHasImages) {
+    if (coverUrl) {
       const imported = await importImage(
         coverUrl,
         slug,
@@ -672,8 +673,8 @@ async function main() {
     }
     projectIdByNotionId.set(notionPageId, id);
 
-    // Attach newly-imported images (skipped entirely when already present).
-    if (!alreadyHasImages && collectedImageIds.length > 0) {
+    // Attach images; the (projectId, imageId) unique pair makes this idempotent.
+    if (collectedImageIds.length > 0) {
       await db
         .insert(projectImage)
         .values(
