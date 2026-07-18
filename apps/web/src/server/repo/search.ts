@@ -1,3 +1,4 @@
+import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import type {
   IngredientSearchResult,
   InventorySearchResult,
@@ -59,6 +60,7 @@ export async function globalSearch(
             WHERE pi."productId" = "Product"."id"
             AND pi."deletedAt" IS NULL
             AND i."deletedAt" IS NULL
+            AND i."contentType" <> ${PDF_CONTENT_TYPE}
             ORDER BY pi."createdAt" ASC
             LIMIT 1
           )`.as("imageUrl"),
@@ -98,6 +100,7 @@ export async function globalSearch(
             WHERE ri."recipeId" = "Recipe"."id"
             AND ri."deletedAt" IS NULL
             AND i."deletedAt" IS NULL
+            AND i."contentType" <> ${PDF_CONTENT_TYPE}
             ORDER BY ri."createdAt" ASC
             LIMIT 1
           )`.as("imageUrl"),
@@ -153,6 +156,7 @@ export async function globalSearch(
             WHERE li."locationId" = "Location"."id"
             AND li."deletedAt" IS NULL
             AND i."deletedAt" IS NULL
+            AND i."contentType" <> ${PDF_CONTENT_TYPE}
             ORDER BY li."createdAt" ASC
             LIMIT 1
           )`.as("imageUrl"),
@@ -194,6 +198,7 @@ export async function globalSearch(
             WHERE pi."productId" = "Product"."id"
             AND pi."deletedAt" IS NULL
             AND i."deletedAt" IS NULL
+            AND i."contentType" <> ${PDF_CONTENT_TYPE}
             ORDER BY pi."createdAt" ASC
             LIMIT 1
           )`.as("imageUrl"),
@@ -261,6 +266,7 @@ export async function hydrateSearchResultsByRefs(
                 WHERE pi."productId" = "Product"."id"
                 AND pi."deletedAt" IS NULL
                 AND i."deletedAt" IS NULL
+                AND i."contentType" <> ${PDF_CONTENT_TYPE}
                 ORDER BY pi."createdAt" ASC
                 LIMIT 1
               )`.as("imageUrl"),
@@ -294,6 +300,7 @@ export async function hydrateSearchResultsByRefs(
                 WHERE ri."recipeId" = "Recipe"."id"
                 AND ri."deletedAt" IS NULL
                 AND i."deletedAt" IS NULL
+                AND i."contentType" <> ${PDF_CONTENT_TYPE}
                 ORDER BY ri."createdAt" ASC
                 LIMIT 1
               )`.as("imageUrl"),
@@ -349,6 +356,7 @@ export async function hydrateSearchResultsByRefs(
                 WHERE li."locationId" = "Location"."id"
                 AND li."deletedAt" IS NULL
                 AND i."deletedAt" IS NULL
+                AND i."contentType" <> ${PDF_CONTENT_TYPE}
                 ORDER BY li."createdAt" ASC
                 LIMIT 1
               )`.as("imageUrl"),
@@ -386,6 +394,7 @@ export async function hydrateSearchResultsByRefs(
                 WHERE pi."productId" = "Product"."id"
                 AND pi."deletedAt" IS NULL
                 AND i."deletedAt" IS NULL
+                AND i."contentType" <> ${PDF_CONTENT_TYPE}
                 ORDER BY pi."createdAt" ASC
                 LIMIT 1
               )`.as("imageUrl"),
