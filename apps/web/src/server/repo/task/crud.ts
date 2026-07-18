@@ -19,14 +19,18 @@ import { task, taskDependency } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
   computeChanges,
+  diffUnorderedIdSet,
   logAuditEntries,
   logAuditEntry,
 } from "~/server/repo/audit-log";
 import {
+  buildPartialUpdateValues,
+  dependencyIdsFor,
   getDb,
   insertAndReturn,
   lockAndValidateForDelete,
   notDeleted,
+  relations,
   replaceDependencyEdges,
   updateLiveAndReturn,
   withTransaction,
@@ -47,12 +51,14 @@ const fetchTaskRow = (db: Database, id: TaskId) =>
 const fetchTaskWithProject = (db: Database, id: TaskId) =>
   getDb(db).query.task.findFirst({
     where: and(eq(task.id, id), notDeleted(task)),
-    with: { project: { columns: { name: true, deletedAt: true } } },
+    ...relations.task.withProject,
   });
 
 /**
- * Blocked-by / blocking id arrays for a set of tasks, one query each — mirrors
- * project/analytics.ts's `projectDependencyIds`.
+ * Blocked-by / blocking id arrays for a set of tasks — thin wrapper over the
+ * generic `dependencyIdsFor` (mirrors project/analytics.ts's
+ * `projectDependencyIds`). Kept as a named export since it's consumed by name
+ * elsewhere (this file's reader, task/lookup.ts's list).
  */
 export async function taskDependencyIds(
   db: Database,
@@ -61,38 +67,15 @@ export async function taskDependencyIds(
   blockedBy: Map<TaskId, TaskId[]>;
   blocking: Map<TaskId, TaskId[]>;
 }> {
-  const blockedBy = new Map<TaskId, TaskId[]>();
-  const blocking = new Map<TaskId, TaskId[]>();
-  if (taskIds.length === 0) return { blockedBy, blocking };
-
-  const [blockedByRows, blockingRows] = await Promise.all([
-    getDb(db)
-      .select({
-        taskId: taskDependency.taskId,
-        blockedByTaskId: taskDependency.blockedByTaskId,
-      })
-      .from(taskDependency)
-      .where(inArray(taskDependency.taskId, taskIds)),
-    getDb(db)
-      .select({
-        taskId: taskDependency.taskId,
-        blockedByTaskId: taskDependency.blockedByTaskId,
-      })
-      .from(taskDependency)
-      .where(inArray(taskDependency.blockedByTaskId, taskIds)),
-  ]);
-
-  for (const row of blockedByRows) {
-    const arr = blockedBy.get(row.taskId) ?? [];
-    arr.push(row.blockedByTaskId);
-    blockedBy.set(row.taskId, arr);
-  }
-  for (const row of blockingRows) {
-    const arr = blocking.get(row.blockedByTaskId) ?? [];
-    arr.push(row.taskId);
-    blocking.set(row.blockedByTaskId, arr);
-  }
-  return { blockedBy, blocking };
+  return dependencyIdsFor(
+    db,
+    taskDependency,
+    {
+      ownColumn: taskDependency.taskId,
+      blockedByColumn: taskDependency.blockedByTaskId,
+    },
+    taskIds,
+  );
 }
 
 const taskReader = createEntityReader({
@@ -161,14 +144,14 @@ export const updateTask = async (
       : undefined;
 
   await withTransaction(db, async (tx) => {
-    const updateValues = {
-      ...(data.name !== undefined ? { name: data.name } : {}),
-      ...(data.status !== undefined ? { status: data.status } : {}),
-      ...(data.projectId !== undefined ? { projectId: data.projectId } : {}),
-      ...(data.dueDate !== undefined ? { dueDate: data.dueDate } : {}),
-      ...(data.dueEndDate !== undefined ? { dueEndDate: data.dueEndDate } : {}),
-      ...(data.category !== undefined ? { category: data.category } : {}),
-    };
+    const updateValues = buildPartialUpdateValues({
+      name: data.name,
+      status: data.status,
+      projectId: data.projectId,
+      dueDate: data.dueDate,
+      dueEndDate: data.dueEndDate,
+      category: data.category,
+    });
     const updated = await updateLiveAndReturn(tx, task, updateValues, id);
 
     if (data.blockedByIds !== undefined) {
@@ -195,13 +178,12 @@ export const updateTask = async (
       ...(computeChanges(before, updated, [...AUDIT_FIELDS]) ?? {}),
     };
     if (data.blockedByIds !== undefined) {
-      const beforeSorted = [...(beforeBlockedBy ?? [])].sort();
-      const afterSorted = [...data.blockedByIds].sort();
-      if (JSON.stringify(beforeSorted) !== JSON.stringify(afterSorted)) {
-        changes.blockedByIds = {
-          from: beforeBlockedBy ?? [],
-          to: data.blockedByIds,
-        };
+      const blockedByChange = diffUnorderedIdSet(
+        beforeBlockedBy ?? [],
+        data.blockedByIds,
+      );
+      if (blockedByChange) {
+        changes.blockedByIds = blockedByChange;
       }
     }
     if (Object.keys(changes).length > 0) {

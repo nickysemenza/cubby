@@ -14,6 +14,7 @@ import {
   countWhere,
   executeListQueryWithCount,
   getDb,
+  relations,
 } from "~/server/repo/database-helpers";
 import { dbPurchaseToAPI } from "./helpers";
 
@@ -50,7 +51,7 @@ export const purchaseList = async (
       orderBy: orderByArray,
       limit: take,
       offset: skip,
-      with: { project: { columns: { name: true, deletedAt: true } } },
+      ...relations.purchase.withProject,
     }),
     countWhere(db, purchase, whereClause),
   );

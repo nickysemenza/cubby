@@ -10,8 +10,9 @@ import type { AnyColumn, InferInsertModel } from "drizzle-orm";
 import { and, eq, inArray } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
-import type { DrizzleTransaction } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
+import { getDb } from "./core";
 import { notDeleted } from "./query";
 
 /**
@@ -84,4 +85,73 @@ export async function replaceDependencyEdges<
       .insert(edgeTable)
       .values(deduped.map((blockedById) => opts.buildRow(id, blockedById)));
   }
+}
+
+/**
+ * Read-side twin of {@link replaceDependencyEdges}: batched blocked-by /
+ * blocking id lookups for a set of entities sharing one self-referencing edge
+ * table, one query per direction (never one query per entity). Mirrors the
+ * same generic-typing style (`TEdge extends PgTable`, `AnyColumn` params, the
+ * same lint-suppressed cast pattern for Drizzle's narrow `AnyColumn` typing)
+ * — takes a plain `Database` (not a transaction), since both call sites are
+ * read paths.
+ *
+ * `edgeTable` rows are directed: `ownColumn` is blocked by `blockedByColumn`.
+ * "blocking" is the reverse read of the same rows — which entities does THIS
+ * entity block.
+ */
+export async function dependencyIdsFor<
+  TEdge extends PgTable,
+  TId extends string,
+>(
+  db: Database,
+  edgeTable: TEdge,
+  opts: {
+    /** Column on `edgeTable` identifying the "owning" side (`ids`' rows). */
+    ownColumn: AnyColumn;
+    /** Column on `edgeTable` identifying the "blocked-by" side. */
+    blockedByColumn: AnyColumn;
+  },
+  ids: TId[],
+): Promise<{
+  blockedBy: Map<TId, TId[]>;
+  blocking: Map<TId, TId[]>;
+}> {
+  const blockedBy = new Map<TId, TId[]>();
+  const blocking = new Map<TId, TId[]>();
+  if (ids.length === 0) return { blockedBy, blocking };
+
+  const selectCols = {
+    // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for select()
+    own: opts.ownColumn as any,
+    // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for select()
+    blockedBy: opts.blockedByColumn as any,
+  };
+
+  const [blockedByRows, blockingRows] = await Promise.all([
+    getDb(db)
+      .select(selectCols)
+      // biome-ignore lint/suspicious/noExplicitAny: Drizzle's generic TEdge is too narrow for from()
+      .from(edgeTable as any)
+      // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for inArray()
+      .where(inArray(opts.ownColumn as any, ids)),
+    getDb(db)
+      .select(selectCols)
+      // biome-ignore lint/suspicious/noExplicitAny: Drizzle's generic TEdge is too narrow for from()
+      .from(edgeTable as any)
+      // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for inArray()
+      .where(inArray(opts.blockedByColumn as any, ids)),
+  ]);
+
+  for (const row of blockedByRows as Array<{ own: TId; blockedBy: TId }>) {
+    const arr = blockedBy.get(row.own) ?? [];
+    arr.push(row.blockedBy);
+    blockedBy.set(row.own, arr);
+  }
+  for (const row of blockingRows as Array<{ own: TId; blockedBy: TId }>) {
+    const arr = blocking.get(row.blockedBy) ?? [];
+    arr.push(row.own);
+    blocking.set(row.blockedBy, arr);
+  }
+  return { blockedBy, blocking };
 }

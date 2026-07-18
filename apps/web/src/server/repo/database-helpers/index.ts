@@ -18,8 +18,8 @@ export {
   updateAndReturn,
   updateLiveAndReturn,
 } from "./crud";
-// Dependency-edge replacement (project/task blockedByIds)
-export { replaceDependencyEdges } from "./dependency-edges";
+// Dependency-edge replacement + read (project/task blockedByIds)
+export { dependencyIdsFor, replaceDependencyEdges } from "./dependency-edges";
 // Query helpers
 export {
   assertNoDependents,
@@ -41,4 +41,5 @@ export {
   mapImages,
   mapRelation,
   parseInventoryAmount,
+  resolveLiveJoinName,
 } from "./transform";

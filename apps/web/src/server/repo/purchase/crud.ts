@@ -17,10 +17,12 @@ import type { Database } from "~/server/db";
 import { purchase } from "~/server/db/schema";
 import { logAuditEntries, logAuditEntry } from "~/server/repo/audit-log";
 import {
+  buildPartialUpdateValues,
   getDb,
   insertAndReturn,
   lockAndValidateForDelete,
   notDeleted,
+  relations,
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityCrud } from "~/server/repo/entity-crud-factory";
@@ -32,7 +34,7 @@ type PurchaseUpdateData = PurchaseUpdateInput["data"];
 const fetchPurchaseById = (db: Database, id: PurchaseId) =>
   getDb(db).query.purchase.findFirst({
     where: and(eq(purchase.id, id), notDeleted(purchase)),
-    with: { project: { columns: { name: true, deletedAt: true } } },
+    ...relations.purchase.withProject,
   });
 
 const purchaseCrud = createEntityCrud({
@@ -41,20 +43,19 @@ const purchaseCrud = createEntityCrud({
   fetchById: fetchPurchaseById,
   fromDB: (_db, row) => dbPurchaseToAPI(row),
   notFoundReason: "PURCHASE_NOT_FOUND",
-  toUpdate: (data: PurchaseUpdateData) => ({
-    ...(data.name !== undefined ? { name: data.name } : {}),
-    ...(data.cost !== undefined ? { cost: data.cost } : {}),
-    ...(data.date !== undefined ? { date: data.date } : {}),
-    ...(data.category !== undefined ? { category: data.category } : {}),
-    ...(data.subcategory !== undefined
-      ? { subcategory: data.subcategory }
-      : {}),
-    ...(data.purchaser !== undefined ? { purchaser: data.purchaser } : {}),
-    ...(data.url !== undefined ? { url: data.url } : {}),
-    ...(data.notes !== undefined ? { notes: data.notes } : {}),
-    ...(data.future !== undefined ? { future: data.future } : {}),
-    ...(data.projectId !== undefined ? { projectId: data.projectId } : {}),
-  }),
+  toUpdate: (data: PurchaseUpdateData) =>
+    buildPartialUpdateValues({
+      name: data.name,
+      cost: data.cost,
+      date: data.date,
+      category: data.category,
+      subcategory: data.subcategory,
+      purchaser: data.purchaser,
+      url: data.url,
+      notes: data.notes,
+      future: data.future,
+      projectId: data.projectId,
+    }),
   auditUpdateFields: [
     "name",
     "cost",

@@ -31,6 +31,19 @@ import {
 import { notDeleted } from "./query";
 
 /**
+ * The `{ name, deletedAt }` projection of a task/purchase's parent `project`
+ * join — just enough for `resolveLiveJoinName` (transform.ts) to derive
+ * `projectName`, without pulling the rest of the project row.
+ */
+const withProjectNameOnly = {
+  with: {
+    project: {
+      columns: { name: true, deletedAt: true },
+    },
+  },
+} as const;
+
+/**
  * Display order for recipe sections and section ingredients: explicit
  * `sortOrder` first, then createdAt/id so legacy rows (null sortOrder —
  * created before the column existed) come back in a stable, if arbitrary,
@@ -302,6 +315,14 @@ export const relations = {
         },
       },
     },
+  },
+  task: {
+    /** Task row + its parent project's `{name, deletedAt}` — see `withProjectNameOnly`. */
+    withProject: withProjectNameOnly,
+  },
+  purchase: {
+    /** Purchase row + its parent project's `{name, deletedAt}` — see `withProjectNameOnly`. */
+    withProject: withProjectNameOnly,
   },
   meal: {
     // A meal with its planned recipes (each joined to its recipe summary, incl.

@@ -13,7 +13,11 @@ import type { ProjectRollup } from "@cubby/schemas/project";
 import { and, inArray, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { projectDependency, purchase, task } from "~/server/db/schema";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import {
+  dependencyIdsFor,
+  getDb,
+  notDeleted,
+} from "~/server/repo/database-helpers";
 import { EMPTY_PROJECT_ROLLUP } from "./helpers";
 
 /**
@@ -78,7 +82,9 @@ export async function projectRollups(
  * Blocked-by / blocking id arrays for a set of projects. `projectDependency`
  * rows are directed edges (projectId is blocked by blockedByProjectId);
  * "blocking" is the reverse read of the same table — which projects does THIS
- * project block.
+ * project block. Thin wrapper over the generic `dependencyIdsFor` (mirrored by
+ * task/crud.ts's `taskDependencyIds`) — kept as a named export since it's
+ * consumed by name elsewhere (crud.ts's reader).
  */
 export async function projectDependencyIds(
   db: Database,
@@ -87,36 +93,13 @@ export async function projectDependencyIds(
   blockedBy: Map<ProjectId, ProjectId[]>;
   blocking: Map<ProjectId, ProjectId[]>;
 }> {
-  const blockedBy = new Map<ProjectId, ProjectId[]>();
-  const blocking = new Map<ProjectId, ProjectId[]>();
-  if (projectIds.length === 0) return { blockedBy, blocking };
-
-  const [blockedByRows, blockingRows] = await Promise.all([
-    getDb(db)
-      .select({
-        projectId: projectDependency.projectId,
-        blockedByProjectId: projectDependency.blockedByProjectId,
-      })
-      .from(projectDependency)
-      .where(inArray(projectDependency.projectId, projectIds)),
-    getDb(db)
-      .select({
-        projectId: projectDependency.projectId,
-        blockedByProjectId: projectDependency.blockedByProjectId,
-      })
-      .from(projectDependency)
-      .where(inArray(projectDependency.blockedByProjectId, projectIds)),
-  ]);
-
-  for (const row of blockedByRows) {
-    const arr = blockedBy.get(row.projectId) ?? [];
-    arr.push(row.blockedByProjectId);
-    blockedBy.set(row.projectId, arr);
-  }
-  for (const row of blockingRows) {
-    const arr = blocking.get(row.blockedByProjectId) ?? [];
-    arr.push(row.projectId);
-    blocking.set(row.blockedByProjectId, arr);
-  }
-  return { blockedBy, blocking };
+  return dependencyIdsFor(
+    db,
+    projectDependency,
+    {
+      ownColumn: projectDependency.projectId,
+      blockedByColumn: projectDependency.blockedByProjectId,
+    },
+    projectIds,
+  );
 }
