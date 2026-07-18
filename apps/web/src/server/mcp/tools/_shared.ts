@@ -801,6 +801,95 @@ export function registerEntityCreateTool<TInput extends ZodSchemaLike>(
   });
 }
 
+type EntityCrudToolsetConfig<TCreateInput extends ZodSchemaLike> = {
+  /** Singular slug — router key and get/create/update tool names (get_x, create_x, update_x). */
+  entity: string;
+  /** Plural slug — list/delete tool names (list_xs, delete_xs). */
+  entityPlural: string;
+  /** Capitalized singular label for id params (e.g. "Project"); lowercased for delete's entityLabel. */
+  idLabel: string;
+  createInput: TCreateInput;
+  updateShape: Record<string, z.ZodType>;
+  filterFields: Record<string, z.ZodType>;
+  mcpListOut: z.ZodType;
+  out: z.ZodType;
+  slim: Slim;
+  sort: { orderBy: string; direction?: "asc" | "desc" };
+  descriptions: {
+    list: string;
+    get: string;
+    create: string;
+    update: string;
+    delete: string;
+  };
+  create: (
+    caller: Caller,
+    params: InferSchemaLike<TCreateInput>,
+  ) => Promise<unknown>;
+};
+
+/**
+ * Register the standard 5-tool CRUD surface (list/get/create/update/delete)
+ * for one entity in a single call. Bakes in the annotation conventions shared
+ * by every entity toolset (READ_ONLY_CLOSED for reads, WRITE_CLOSED for
+ * create/update, WRITE_DESTRUCTIVE_CLOSED for delete) and the name/idLabel
+ * derivation (`list_${plural}`, `get_${entity}`, `create_${entity}`,
+ * `update_${entity}`, `delete_${plural}`).
+ */
+export function registerEntityCrudToolset<TCreateInput extends ZodSchemaLike>(
+  server: McpServer,
+  config: EntityCrudToolsetConfig<TCreateInput>,
+) {
+  registerEntityListTool(server, {
+    name: `list_${config.entityPlural}`,
+    description: config.descriptions.list,
+    router: config.entity,
+    filterFields: config.filterFields,
+    outputSchema: config.mcpListOut,
+    slim: config.slim,
+    sort: config.sort,
+    annotations: READ_ONLY_CLOSED,
+  });
+
+  registerEntityGetTool(server, {
+    name: `get_${config.entity}`,
+    description: config.descriptions.get,
+    router: config.entity,
+    idLabel: config.idLabel,
+    outputSchema: config.out,
+    slim: config.slim,
+    annotations: READ_ONLY_CLOSED,
+  });
+
+  registerEntityCreateTool(server, {
+    name: `create_${config.entity}`,
+    description: config.descriptions.create,
+    inputSchema: config.createInput,
+    outputSchema: config.out,
+    slim: config.slim,
+    annotations: WRITE_CLOSED,
+    create: config.create,
+  });
+
+  registerEntityUpdateTool(server, {
+    name: `update_${config.entity}`,
+    description: config.descriptions.update,
+    inputSchema: withIdInput(config.idLabel, config.updateShape),
+    outputSchema: config.out,
+    slim: config.slim,
+    router: config.entity,
+    annotations: WRITE_CLOSED,
+  });
+
+  registerEntityDeleteTool(server, {
+    name: `delete_${config.entityPlural}`,
+    description: config.descriptions.delete,
+    router: config.entity,
+    entityLabel: config.idLabel.toLowerCase(),
+    annotations: WRITE_DESTRUCTIVE_CLOSED,
+  });
+}
+
 /** Register a tool that calls a tRPC procedure and returns the result as-is. */
 export function registerRouterTool<
   TInput extends ZodSchemaLike = Record<string, never>,
