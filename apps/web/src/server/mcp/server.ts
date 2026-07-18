@@ -8,9 +8,9 @@ import { registerIngredientTools } from "./tools/ingredient.tools";
 import { registerInventoryTools } from "./tools/inventory.tools";
 import { registerLocationTools } from "./tools/location.tools";
 import { registerMealTools } from "./tools/meal.tools";
-import { registerNotionTools } from "./tools/notion.tools";
 import { registerProblemsTools } from "./tools/problems.tools";
 import { registerProductTools } from "./tools/product.tools";
+import { registerProjectTools } from "./tools/project.tools";
 import { registerRecipeTools } from "./tools/recipe.tools";
 import { registerSearchTools } from "./tools/search.tools";
 import { registerUsdaTools } from "./tools/usda.tools";
@@ -32,6 +32,7 @@ Workflow tips:
 - Products: usdaFdcId reflects either an explicit fdc_id or a UPC-resolved USDA link.
 - Recipes: prefer create_recipe_from_text for pasted prep sheets; use create_recipe when you already have ingredient ids.
 - Problems: list_problems countsOnly=true for cheap triage; reparse_stale_parses recovers mis-merged ingredient lines.
+- Projects: list_projects/list_tasks/list_purchases are the household project tracker (DB-backed); a project's markdown notes come back on get_project.
 - All list tools return { meta, items } paginated objects; bulk array tools return { items: [...] }.
 - structuredContent is canonical; text content mirrors the same JSON.`;
 
@@ -46,7 +47,7 @@ function registerTools(server: McpServer) {
   registerIngredientTools(server);
   registerRecipeTools(server);
   registerProblemsTools(server);
-  registerNotionTools(server);
+  registerProjectTools(server);
   registerMealTools(server);
   registerUsdaTools(server);
 }

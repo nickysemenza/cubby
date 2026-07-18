@@ -1,12 +1,12 @@
+import type { ProjectOut } from "@cubby/schemas/project";
 import { CalendarRange } from "lucide-react";
 import { useMemo, useRef } from "react";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import { getStatusChartColor } from "~/lib/status-colors";
-import type { NotionProject } from "~/server/clients/notion";
-import { formatDate } from "../shared";
+import { formatDate, PROJECT_STATUS_LABELS } from "../shared";
 import { ChartEmpty } from "./chart-empty";
 
-export function ProjectTimeline({ projects }: { projects: NotionProject[] }) {
+export function ProjectTimeline({ projects }: { projects: ProjectOut[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const { width } = useContainerDimensions(containerRef, {
     minHeight: 100,
@@ -15,11 +15,11 @@ export function ProjectTimeline({ projects }: { projects: NotionProject[] }) {
 
   const { items, minDate, maxDate } = useMemo(() => {
     const dated = projects
-      .filter((p) => p.date && p.dateEnd)
+      .filter((p) => p.startDate && p.endDate)
       .map((p) => ({
         ...p,
-        start: new Date(p.date!),
-        end: new Date(p.dateEnd!),
+        start: new Date(p.startDate!),
+        end: new Date(p.endDate!),
       }))
       .sort((a, b) => a.start.getTime() - b.start.getTime());
 
@@ -142,9 +142,9 @@ export function ProjectTimeline({ projects }: { projects: NotionProject[] }) {
                 opacity={0.85}
               >
                 <title>
-                  {item.name}: {formatDate(item.date!)}
-                  {item.dateEnd ? ` — ${formatDate(item.dateEnd)}` : ""}
-                  {` (${item.status})`}
+                  {item.name}: {formatDate(item.startDate!)}
+                  {item.endDate ? ` — ${formatDate(item.endDate)}` : ""}
+                  {` (${PROJECT_STATUS_LABELS[item.status]})`}
                 </title>
               </rect>
             </g>

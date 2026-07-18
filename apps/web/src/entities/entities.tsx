@@ -4,6 +4,11 @@ import { inventorySortableFields } from "@cubby/schemas/inventory";
 import { locationSortableFields } from "@cubby/schemas/location";
 import { mealSortableFields } from "@cubby/schemas/meal";
 import { productSortableFields } from "@cubby/schemas/product";
+import {
+  projectSortableFields,
+  purchaseSortableFields,
+  taskSortableFields,
+} from "@cubby/schemas/project";
 import { recipeSortableFields } from "@cubby/schemas/recipe";
 import { usdaFoodSortableFields } from "@cubby/schemas/usda";
 import {
@@ -13,14 +18,31 @@ import {
   CalendarDays,
   Carrot,
   ChefHat,
+  Hammer,
   Image,
+  ListChecks,
   type LucideProps,
   MapPin,
   Package,
+  ReceiptText,
 } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { ENTITY_ACCENTS } from "./entity-accents";
-import type { Entity, EntityDefinition } from "./types";
+import type { Entity, EntityDefinition, EntityDetailRoute } from "./types";
+
+// /tasks and /purchases have list routes now, but no detail page — rows are
+// shallow (edited inline in the list, not via a dedicated page), so there's no
+// genuine "/tasks/$id" route to point at. EntityDetailRoute's members are all
+// `/x/$id`-shaped (paired with a `{id}` Link param everywhere it's consumed —
+// createNameColumn, createActionsColumn, EntityPreviewLink, search results),
+// so rather than add a param-less exception to that union (which would widen
+// the param typing for every other entity's generic call sites), `detail`
+// just points at the real list route via a local cast. Any generic "View
+// Details" / name-column link consequently no-ops back to the list page — an
+// acceptable degradation until a detail page exists, and never taken in
+// practice since these two lists don't wire up row-preview/click-through.
+const taskDetailRoute = "/tasks" as EntityDetailRoute;
+const purchaseDetailRoute = "/purchases" as EntityDetailRoute;
 
 const entityColor = (
   entity: Entity,
@@ -188,6 +210,71 @@ export const entities: Record<Entity, EntityDefinition> = {
       defaultSort: "date",
       standardColumns: [],
       sortableFields: mealSortableFields,
+    },
+  },
+  project: {
+    label: "Project",
+    pluralLabel: "Projects",
+    basePath: "projects",
+    lucideIcon: Hammer,
+    color: entityColor("project", {
+      bg: "bg-plum/15",
+      text: "text-plum",
+      border: "border-l-plum",
+    }),
+    // No "new" route — projects are created from a dialog on the list page
+    // (mirrors meal), not a dedicated /projects/new form.
+    routes: {
+      detail: "/projects/$id",
+      list: "/projects",
+    },
+    detail: { commonSections: ["images", "history"] },
+    list: {
+      defaultSort: "createdAt",
+      standardColumns: [],
+      sortableFields: projectSortableFields,
+    },
+  },
+  task: {
+    label: "Task",
+    pluralLabel: "Tasks",
+    basePath: "tasks",
+    lucideIcon: ListChecks,
+    color: entityColor("task", {
+      bg: "bg-slate/20",
+      text: "text-slate",
+      border: "border-l-slate",
+    }),
+    // /tasks has a list route (RTable + quick-add dialog) but no detail page —
+    // see the taskDetailRoute cast above.
+    routes: {
+      detail: taskDetailRoute,
+      list: "/tasks",
+    },
+    // No detail page, so no commonSections — see the taskDetailRoute comment.
+    list: {
+      defaultSort: "createdAt",
+      standardColumns: ["name", "createdAt"],
+      sortableFields: taskSortableFields,
+    },
+  },
+  purchase: {
+    label: "Purchase",
+    pluralLabel: "Purchases",
+    basePath: "purchases",
+    lucideIcon: ReceiptText,
+    color: entityColor("purchase", { bg: "bg-primary/10" }),
+    // /purchases has a list route (RTable + quick-add dialog) but no detail
+    // page — see the purchaseDetailRoute cast above.
+    routes: {
+      detail: purchaseDetailRoute,
+      list: "/purchases",
+    },
+    // No detail page, so no commonSections — see the purchaseDetailRoute comment.
+    list: {
+      defaultSort: "date",
+      standardColumns: ["name", "createdAt"],
+      sortableFields: purchaseSortableFields,
     },
   },
   "usda-food": {

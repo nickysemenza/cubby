@@ -11,14 +11,16 @@
  * Storage/network orchestration lives in image-storage.service.ts.
  */
 
+import type { ProjectId } from "@cubby/schemas/identifiers";
 import type { ImageWithEntity } from "@cubby/schemas/image";
 import { imageSortableFields } from "@cubby/schemas/image";
-import { and, eq, inArray, lt } from "drizzle-orm";
+import { and, asc, eq, inArray, lt } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import {
   image,
   locationImage,
   productImage,
+  projectImage,
   recipeImage,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -89,6 +91,10 @@ type ImageWithRelations = typeof image.$inferSelect & {
   recipeImages: Array<{
     recipeId: string;
     recipe: { name: string; deletedAt: Date | null };
+  }>;
+  projectImages: Array<{
+    projectId: string;
+    project: { name: string; deletedAt: Date | null };
   }>;
 };
 
@@ -163,6 +169,27 @@ const imageWithRelationsToAPI = (
     };
   }
 
+  // Check project associations (join table filtered, but still check entity)
+  const projectAssoc = imageData.projectImages.find((assoc) =>
+    isNotDeleted(assoc.project),
+  );
+  if (projectAssoc) {
+    return {
+      id: imageData.id,
+      url: imageData.url,
+      key: imageData.key,
+      filename: imageData.filename,
+      size: imageData.size,
+      contentType: imageData.contentType,
+      status: imageData.status,
+      createdAt: imageData.createdAt,
+      updatedAt: imageData.updatedAt,
+      entityType: "PROJECT",
+      entityId: projectAssoc.projectId,
+      entityName: projectAssoc.project.name,
+    };
+  }
+
   // No entity association found
   return {
     id: imageData.id,
@@ -208,6 +235,15 @@ const imageEntityRelations = {
       },
     },
     columns: { recipeId: true },
+  },
+  projectImages: {
+    where: notDeleted(projectImage),
+    with: {
+      project: {
+        columns: { name: true, deletedAt: true },
+      },
+    },
+    columns: { projectId: true },
   },
 } as const;
 
@@ -330,17 +366,24 @@ export const cullPendingImages = async (
     .select({ imageId: recipeImage.imageId })
     .from(recipeImage);
 
+  const imagesWithProjectAssociations = dbClient
+    .select({ imageId: projectImage.imageId })
+    .from(projectImage);
+
   // Get all image IDs that have any association
-  const [productAssocs, locationAssocs, recipeAssocs] = await Promise.all([
-    imagesWithProductAssociations,
-    imagesWithLocationAssociations,
-    imagesWithRecipeAssociations,
-  ]);
+  const [productAssocs, locationAssocs, recipeAssocs, projectAssocs] =
+    await Promise.all([
+      imagesWithProductAssociations,
+      imagesWithLocationAssociations,
+      imagesWithRecipeAssociations,
+      imagesWithProjectAssociations,
+    ]);
 
   const associatedImageIds = new Set([
     ...productAssocs.map((a) => a.imageId),
     ...locationAssocs.map((a) => a.imageId),
     ...recipeAssocs.map((a) => a.imageId),
+    ...projectAssocs.map((a) => a.imageId),
   ]);
 
   // Find pending images older than the cutoff date
@@ -395,4 +438,56 @@ export const associateImagesWithProduct = async (
     productId,
     imageIds,
   );
+};
+
+/**
+ * Fetch images for a set of projects, grouped by project id and ordered
+ * cover-first (sortOrder, then createdAt). The forward-direction counterpart
+ * of `imageEntityRelations.projectImages` above (which resolves image → owning
+ * project for the generic image browser) — this resolves project → images,
+ * for the projects dashboard (card covers) and the project detail page
+ * (gallery). Projects have no dedicated repo module of their own to host this
+ * (see apps/web/src/server/repo/project/), so it lives alongside the other
+ * entity-image joins here.
+ */
+export const getImagesByProjectIds = async (
+  db: Database,
+  projectIds: ProjectId[],
+): Promise<
+  Record<string, Array<{ id: string; url: string; filename: string }>>
+> => {
+  if (projectIds.length === 0) return {};
+
+  const rows = await getDb(db)
+    .select({
+      projectId: projectImage.projectId,
+      id: image.id,
+      url: image.url,
+      filename: image.filename,
+    })
+    .from(projectImage)
+    .innerJoin(image, eq(projectImage.imageId, image.id))
+    .where(
+      and(
+        inArray(projectImage.projectId, projectIds),
+        notDeleted(projectImage),
+        notDeleted(image),
+      ),
+    )
+    .orderBy(asc(projectImage.sortOrder), asc(projectImage.createdAt));
+
+  const result: Record<
+    string,
+    Array<{ id: string; url: string; filename: string }>
+  > = {};
+  for (const row of rows) {
+    const list = result[row.projectId] ?? [];
+    list.push({
+      id: row.id,
+      url: row.url,
+      filename: row.filename,
+    });
+    result[row.projectId] = list;
+  }
+  return result;
 };

@@ -1,48 +1,63 @@
+import type { ProjectOut, TaskOut, TaskStatus } from "@cubby/schemas/project";
 import { sum } from "es-toolkit";
 import { ListChecks } from "lucide-react";
 import { useMemo } from "react";
 import { NoneValue } from "~/components/ui/none-value";
 import { getStatusChartColor } from "~/lib/status-colors";
-import type { NotionProject, NotionTask } from "~/server/clients/notion";
+import { TASK_STATUS_LABELS } from "../shared";
 import { ChartEmpty } from "./chart-empty";
 
-const STATUS_ORDER = ["Not started", "later", "In progress", "Blocked", "Done"];
+const STATUS_ORDER: TaskStatus[] = [
+  "not_started",
+  "later",
+  "in_progress",
+  "blocked",
+  "done",
+];
 
 export function TaskStatusBoard({
   tasks,
   projects,
 }: {
-  tasks: NotionTask[];
-  projects: NotionProject[];
+  tasks: TaskOut[];
+  projects: ProjectOut[];
 }) {
   const { grid, projectRows, statuses } = useMemo(() => {
-    const projectMap = new Map(projects.map((p) => [p.name, p]));
+    const projectMap = new Map<string, ProjectOut>(
+      projects.map((p) => [p.id, p]),
+    );
 
-    // Count tasks per project × status
-    const counts = new Map<string, Map<string, number>>();
-    const projectSet = new Set<string>();
-    const statusSet = new Set<string>();
+    // Count tasks per project × status — keyed by project id (falling back
+    // to a fixed "unassigned" sentinel), not name: project names aren't
+    // unique, so a name-keyed grid would merge distinct same-named projects
+    // into a single row.
+    const counts = new Map<string, Map<TaskStatus, number>>();
+    const namesByKey = new Map<string, string>();
+    const projectKeys = new Set<string>();
+    const statusSet = new Set<TaskStatus>();
 
     for (const t of tasks) {
-      const project = t.projectName ?? "Unassigned";
-      const status = t.status ?? "Unknown";
-      projectSet.add(project);
+      const key = t.projectId ?? "unassigned";
+      const status = t.status;
+      projectKeys.add(key);
+      namesByKey.set(key, t.projectName ?? "Unassigned");
       statusSet.add(status);
 
-      if (!counts.has(project)) counts.set(project, new Map());
-      const row = counts.get(project)!;
+      if (!counts.has(key)) counts.set(key, new Map());
+      const row = counts.get(key)!;
       row.set(status, (row.get(status) ?? 0) + 1);
     }
 
     // Sort projects by date (most recent first), then by name
-    const projectRows = Array.from(projectSet)
-      .map((name) => {
-        const proj = projectMap.get(name);
+    const projectRows = Array.from(projectKeys)
+      .map((key) => {
+        const proj = projectMap.get(key);
         return {
-          name,
-          date: proj?.date ?? "",
-          isDone: proj?.status === "Done",
-          total: sum(Array.from(counts.get(name)?.values() ?? [])),
+          key,
+          name: namesByKey.get(key) ?? "Unassigned",
+          date: proj?.startDate ?? "",
+          isDone: proj?.status === "done",
+          total: sum(Array.from(counts.get(key)?.values() ?? [])),
         };
       })
       .sort((a, b) => {
@@ -68,7 +83,7 @@ export function TaskStatusBoard({
   const maxCount = Math.max(
     1,
     ...projectRows.flatMap((p) =>
-      statuses.map((s) => grid.get(p.name)?.get(s) ?? 0),
+      statuses.map((s) => grid.get(p.key)?.get(s) ?? 0),
     ),
   );
 
@@ -85,21 +100,21 @@ export function TaskStatusBoard({
                 key={s}
                 className="px-2 pb-2 text-center font-medium text-muted-foreground"
               >
-                {s}
+                {TASK_STATUS_LABELS[s]}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
           {projectRows.map((row) => (
-            <tr key={row.name} className="border-border/50 border-t">
+            <tr key={row.key} className="border-border/50 border-t">
               <td
                 className={`max-w-[150px] truncate py-2 pr-2 font-medium ${row.isDone ? "text-muted-foreground line-through" : ""}`}
               >
                 {row.name}
               </td>
               {statuses.map((status) => {
-                const count = grid.get(row.name)?.get(status) ?? 0;
+                const count = grid.get(row.key)?.get(status) ?? 0;
                 const intensity = count / maxCount;
                 const color = getStatusChartColor(status);
 

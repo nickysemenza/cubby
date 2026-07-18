@@ -1,8 +1,8 @@
+import type { PurchaseOut } from "@cubby/schemas/project";
 import { ResponsiveLine } from "@nivo/line";
 import { sumBy } from "es-toolkit";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
-import type { NotionPurchase } from "~/server/clients/notion";
 import { monthKey, monthLabel, nivoChartTheme } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
 
@@ -17,7 +17,7 @@ const PROJECT_COLORS = [
   "var(--chart-8)",
 ];
 
-export function MonthlyTrend({ purchases }: { purchases: NotionPurchase[] }) {
+export function MonthlyTrend({ purchases }: { purchases: PurchaseOut[] }) {
   const data = useMemo(() => {
     const dated = purchases.filter((p) => p.date && p.cost != null);
     if (dated.length === 0) return [];

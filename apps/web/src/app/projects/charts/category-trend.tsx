@@ -1,7 +1,7 @@
+import type { PurchaseOut } from "@cubby/schemas/project";
 import { ResponsiveLine } from "@nivo/line";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
-import type { NotionPurchase } from "~/server/clients/notion";
 import {
   CATEGORY_COLORS,
   monthKey,
@@ -11,7 +11,7 @@ import {
 } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
 
-export function CategoryTrend({ purchases }: { purchases: NotionPurchase[] }) {
+export function CategoryTrend({ purchases }: { purchases: PurchaseOut[] }) {
   const data = useMemo(() => {
     // Group purchases by month and category
     const dated = purchases.filter((p) => p.date && p.cost != null);

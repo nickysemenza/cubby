@@ -72,6 +72,20 @@ export const queryKeys = {
     shoppingList: ["meal", "shoppingList"] as const,
     all: ["meal"] as const,
   },
+  project: {
+    list: ["project", "list"] as const,
+    getByID: ["project", "getByID"] as const,
+    dashboard: ["project", "dashboard"] as const,
+    all: ["project"] as const,
+  },
+  task: {
+    list: ["task", "list"] as const,
+    all: ["task"] as const,
+  },
+  purchase: {
+    list: ["purchase", "list"] as const,
+    all: ["purchase"] as const,
+  },
 } as const;
 
 export const inventoryMutationInvalidateKeys = [
@@ -171,6 +185,25 @@ export const problemsMutationInvalidateKeys = [
 
 export const mealMutationInvalidateKeys = [
   queryKeys.meal.all,
+] as const satisfies readonly QueryKey[];
+
+// Task/purchase mutations also invalidate `project.all`: the dashboard and
+// project rollups (spent/progress) aggregate over them.
+export const projectMutationInvalidateKeys = [
+  queryKeys.project.all,
+  queryKeys.dashboard.counts,
+] as const satisfies readonly QueryKey[];
+
+export const taskMutationInvalidateKeys = [
+  queryKeys.task.all,
+  queryKeys.project.all,
+  queryKeys.dashboard.counts,
+] as const satisfies readonly QueryKey[];
+
+export const purchaseMutationInvalidateKeys = [
+  queryKeys.purchase.all,
+  queryKeys.project.all,
+  queryKeys.dashboard.counts,
 ] as const satisfies readonly QueryKey[];
 
 export function normalizeTRPCQueryKey(key: QueryKey): QueryKey {

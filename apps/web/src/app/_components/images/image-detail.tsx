@@ -1,4 +1,5 @@
 import type { ImageWithEntity } from "@cubby/schemas/image";
+import { Link } from "@tanstack/react-router";
 import { ImageIcon } from "lucide-react";
 import prettyBytes from "pretty-bytes";
 import { match } from "ts-pattern";
@@ -49,6 +50,15 @@ export function ImageDetail({ image }: ImageDetailProps) {
           entity="recipe"
           data={{ id: entityId, name: entityName }}
         />
+      ))
+      .with("PROJECT", () => (
+        <Link
+          to="/projects/$id"
+          params={{ id: entityId }}
+          className="font-medium text-sm hover:underline"
+        >
+          {entityName}
+        </Link>
       ))
       .with("COOKBOOK", () => (
         // Cookbook covers are tracked by FK, not the join-table ownership this

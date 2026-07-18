@@ -19,6 +19,9 @@ export const inventoryId = z.uuid().brand("InventoryId");
 export const cookbookId = z.uuid().brand("CookbookId");
 export const mealId = z.uuid().brand("MealId");
 export const mealRecipeId = z.uuid().brand("MealRecipeId");
+export const projectId = z.uuid().brand("ProjectId");
+export const taskId = z.uuid().brand("TaskId");
+export const purchaseId = z.uuid().brand("PurchaseId");
 
 // Shortcode schemas re-exported from shared package (single source of truth)
 export {
@@ -43,6 +46,9 @@ export type InventoryId = z.infer<typeof inventoryId>;
 export type CookbookId = z.infer<typeof cookbookId>;
 export type MealId = z.infer<typeof mealId>;
 export type MealRecipeId = z.infer<typeof mealRecipeId>;
+export type ProjectId = z.infer<typeof projectId>;
+export type TaskId = z.infer<typeof taskId>;
+export type PurchaseId = z.infer<typeof purchaseId>;
 
 export const normalizedLocationShortcode = z
   .string()
@@ -93,6 +99,12 @@ export const unsafeMealId = <T extends string>(id: T & RejectBranded<T>) =>
 export const unsafeMealRecipeId = <T extends string>(
   id: T & RejectBranded<T>,
 ) => unsafeId<MealRecipeId>(id);
+export const unsafeProjectId = <T extends string>(id: T & RejectBranded<T>) =>
+  unsafeId<ProjectId>(id);
+export const unsafeTaskId = <T extends string>(id: T & RejectBranded<T>) =>
+  unsafeId<TaskId>(id);
+export const unsafePurchaseId = <T extends string>(id: T & RejectBranded<T>) =>
+  unsafeId<PurchaseId>(id);
 export const unsafeLocationShortcode = <T extends string>(
   code: T & RejectBranded<T>,
 ) => unsafeId<LocationShortcode>(code);

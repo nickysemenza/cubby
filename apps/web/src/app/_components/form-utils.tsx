@@ -322,6 +322,49 @@ export function RequiredTextareaField<
   );
 }
 
+/**
+ * A plain "YYYY-MM-DD" calendar-date field (task due date, purchase date,
+ * project start/end date) — a raw `<input type="date">` already returns that
+ * exact string, so no parsing/formatting is needed on either side. There's no
+ * shared date-picker component in the app yet (see `add-to-meal.tsx` for the
+ * same raw-input pattern).
+ */
+export function PlainDateField<TFieldValues extends FieldValues = FieldValues>({
+  form,
+  name,
+  label,
+}: {
+  form: UseFormReturn<TFieldValues>;
+  name: Path<TFieldValues>;
+  label: string;
+}) {
+  return (
+    <Controller
+      control={form.control}
+      name={name}
+      render={({ field, fieldState }) => (
+        <FormFieldGroup
+          htmlFor={name}
+          label={label}
+          invalid={fieldState.invalid}
+          error={fieldState.error}
+        >
+          <Input
+            id={name}
+            type="date"
+            value={(field.value as string | null) ?? ""}
+            onChange={(e) => {
+              const v = e.target.value;
+              field.onChange(v === "" ? null : v);
+            }}
+            aria-invalid={fieldState.invalid}
+          />
+        </FormFieldGroup>
+      )}
+    />
+  );
+}
+
 // Helper for handling nullable numeric fields with number input type
 export function NullableNumericField<
   TFieldValues extends FieldValues = FieldValues,
@@ -578,6 +621,7 @@ export function UnifiedTextField<
   placeholder,
   nullable = false,
   getIcon,
+  autoFocus = false,
 }: {
   form: UseFormReturn<TFieldValues>;
   name: Path<TFieldValues>;
@@ -585,6 +629,8 @@ export function UnifiedTextField<
   placeholder: string;
   nullable?: boolean;
   getIcon?: (value: string | null) => ReactNode;
+  /** Focus this field on mount — e.g. a quick-add dialog's name field. */
+  autoFocus?: boolean;
 }) {
   return (
     <Controller
@@ -618,6 +664,7 @@ export function UnifiedTextField<
                   icon ? "pr-10" /* tight: clears absolute icon */ : undefined
                 }
                 aria-invalid={fieldState.invalid}
+                autoFocus={autoFocus}
               />
               {icon && (
                 <span className="absolute inset-y-0 right-3 flex items-center">

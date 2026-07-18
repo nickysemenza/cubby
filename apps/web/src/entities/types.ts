@@ -12,6 +12,7 @@ export type EntityDetailRoute =
   | "/locations/$id"
   | "/inventory/$id"
   | "/meals/$id"
+  | "/projects/$id"
   | "/usda/$id"
   | "/images/$id";
 
@@ -24,6 +25,9 @@ type EntityListRoute =
   | "/locations"
   | "/inventory"
   | "/meals"
+  | "/projects"
+  | "/tasks"
+  | "/purchases"
   | "/usda"
   | "/images";
 

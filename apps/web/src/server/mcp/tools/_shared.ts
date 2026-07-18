@@ -18,6 +18,14 @@ import {
   productMcpOut,
 } from "@cubby/schemas/product";
 import {
+  type ProjectOut,
+  type PurchaseOut,
+  projectOut,
+  purchaseOut,
+  type TaskOut,
+  taskOut,
+} from "@cubby/schemas/project";
+import {
   type RecipeMcpOut,
   type RecipeTopLevel,
   recipeMcpOut,
@@ -310,23 +318,6 @@ export function toUnitMappingInput(m: z.infer<typeof mcpUnitMappingInput>) {
   return { a: m.a, b: m.b, source: m.source ?? null };
 }
 
-export function matchesFilter(value: string | null, filter: unknown): boolean {
-  if (typeof filter !== "string") return true;
-  return value?.toLowerCase().includes(filter.toLowerCase()) ?? false;
-}
-
-export function matchesArrayFilter(values: string[], filter: unknown): boolean {
-  if (typeof filter !== "string") return true;
-  const lower = filter.toLowerCase();
-  return values.some((v) => v.toLowerCase().includes(lower));
-}
-
-export function notionUnavailable() {
-  return structuredError(
-    "Notion integration is not configured. Set the NOTION_API_KEY environment variable.",
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Slim output projections
 // ---------------------------------------------------------------------------
@@ -455,6 +446,22 @@ export const slimIngredient = defineSlim(ingredientMcpOut, (iRow: Row) => {
     usdaFdcId: i.food?.fdc_id ?? null,
   };
 });
+
+// Project/task/purchase rows already match their schema exactly (no relation
+// reshaping needed) — a typed passthrough is enough. structuredSuccess
+// re-validates via outputSchema.parse, so new schema fields flow through
+// automatically without an MCP-side edit.
+export const slimProject = defineSlim(
+  projectOut,
+  (row: Row) => row as ProjectOut,
+);
+
+export const slimTask = defineSlim(taskOut, (row: Row) => row as TaskOut);
+
+export const slimPurchase = defineSlim(
+  purchaseOut,
+  (row: Row) => row as PurchaseOut,
+);
 
 export const slimMeal = defineSlim(mealMcpOut, (mRow: Row) => {
   const m = mRow as MealOut;

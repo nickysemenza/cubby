@@ -1,18 +1,14 @@
+import type { PurchaseOut } from "@cubby/schemas/project";
 import { ResponsiveCalendar } from "@nivo/calendar";
 import { groupBy, sumBy } from "es-toolkit";
 import { CalendarDays } from "lucide-react";
 import { useMemo, useState } from "react";
 import { formatCurrency } from "~/lib/utils";
-import type { NotionPurchase } from "~/server/clients/notion";
 import { formatDate } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
 
-export function SpendingHeatmap({
-  purchases,
-}: {
-  purchases: NotionPurchase[];
-}) {
+export function SpendingHeatmap({ purchases }: { purchases: PurchaseOut[] }) {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   const { data, from, to, itemsByDay } = useMemo(() => {
@@ -31,7 +27,7 @@ export function SpendingHeatmap({
         data: [],
         from: "",
         to: "",
-        itemsByDay: {} as Record<string, NotionPurchase[]>,
+        itemsByDay: {} as Record<string, PurchaseOut[]>,
       };
 
     const dates = data.map((d) => d.day).sort();
@@ -50,7 +46,7 @@ export function SpendingHeatmap({
   const yearSpan =
     new Date(to).getFullYear() - new Date(from).getFullYear() + 1;
   const chartHeight = Math.max(180, yearSpan * 160);
-  const selectedItems: NotionPurchase[] = selectedDay
+  const selectedItems: PurchaseOut[] = selectedDay
     ? (itemsByDay[selectedDay] ?? [])
     : [];
 
@@ -99,7 +95,7 @@ export function SpendingHeatmap({
               {formatDate(selectedDay)} —{" "}
               {formatCurrency(
                 selectedItems.reduce(
-                  (s: number, p: NotionPurchase) => s + (p.cost ?? 0),
+                  (s: number, p: PurchaseOut) => s + (p.cost ?? 0),
                   0,
                 ),
                 0,
@@ -117,9 +113,9 @@ export function SpendingHeatmap({
             {selectedItems.map((p) => (
               <a
                 key={p.id}
-                href={p.notionUrl}
-                target="_blank"
-                rel="noopener noreferrer"
+                href={p.url ?? undefined}
+                target={p.url ? "_blank" : undefined}
+                rel={p.url ? "noopener noreferrer" : undefined}
                 className="flex items-center justify-between gap-2 rounded px-2 py-1 text-xs hover:bg-muted"
               >
                 <span className="truncate">{p.name}</span>

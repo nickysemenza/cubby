@@ -9,7 +9,6 @@ import {
   BookOpen,
   ClipboardList,
   Equal,
-  ExternalLink,
   Hammer,
   MapPin,
   Package,
@@ -21,6 +20,10 @@ import {
 } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
+import {
+  PROJECT_STATUS_LABELS,
+  TASK_STATUS_LABELS,
+} from "~/app/projects/shared";
 import { Row, Stack } from "~/components/layout";
 import {
   CommandDialog,
@@ -89,7 +92,7 @@ export function GlobalCommandMenu({
     useGlobalSearch(search);
   const conversion = useConversionAnswer(search);
 
-  // Notion data — already cached from dashboard, filter client-side
+  // Project-tracker data — already cached from the dashboard, filter client-side
   const trpc = useTRPC();
 
   // --- Agent ("Ask Cubby") ---
@@ -113,29 +116,30 @@ export function GlobalCommandMenu({
   React.useEffect(() => {
     if (agentError) toast.error(agentError);
   }, [agentError]);
-  const { data: notionData } = useQuery({
-    ...trpc.notion.dashboard.queryOptions(),
+  const { data: trackerData } = useQuery({
+    ...trpc.project.dashboard.queryOptions(),
     staleTime: 5 * 60 * 1000,
+    enabled: search.length >= 2,
   });
 
-  const notionResults = React.useMemo(() => {
-    if (!notionData || !search || search.length < 2) return null;
+  const trackerResults = React.useMemo(() => {
+    if (!trackerData || !search || search.length < 2) return null;
     const q = search.toLowerCase();
 
-    const projects = notionData.projects
+    const projects = trackerData.projects
       .filter((p) => p.name.toLowerCase().includes(q))
       .slice(0, 5);
-    const tasks = notionData.tasks
+    const tasks = trackerData.tasks
       .filter((t) => t.name.toLowerCase().includes(q))
       .slice(0, 5);
-    const purchases = notionData.purchases
+    const purchases = trackerData.purchases
       .filter((p) => p.name.toLowerCase().includes(q))
       .slice(0, 5);
 
     if (projects.length === 0 && tasks.length === 0 && purchases.length === 0)
       return null;
     return { projects, tasks, purchases };
-  }, [notionData, search]);
+  }, [trackerData, search]);
 
   // Shortcode detection and lookup
   const parsedShortcode = parseShortcode(search);
@@ -333,7 +337,7 @@ export function GlobalCommandMenu({
             )}
 
             {/* Empty state */}
-            {isEmpty && !isLoading && !shortcodeResult && !notionResults && (
+            {isEmpty && !isLoading && !shortcodeResult && !trackerResults && (
               <CommandEmpty>Nothing matched — try another word.</CommandEmpty>
             )}
 
@@ -415,14 +419,14 @@ export function GlobalCommandMenu({
               </div>
             )}
 
-            {/* Notion results — filtered from cached dashboard data */}
-            {notionResults && !isLoading && (
+            {/* Project-tracker results — filtered from cached dashboard data */}
+            {trackerResults && !isLoading && (
               <>
-                {notionResults.projects.length > 0 && (
-                  <CommandGroup heading="Projects (Notion)">
-                    {notionResults.projects.map((p) => (
+                {trackerResults.projects.length > 0 && (
+                  <CommandGroup heading="Projects">
+                    {trackerResults.projects.map((p) => (
                       <CommandItem
-                        key={`notion-project-${p.id}`}
+                        key={`tracker-project-${p.id}`}
                         onSelect={() => {
                           navigate({
                             to: "/projects/$id",
@@ -442,20 +446,22 @@ export function GlobalCommandMenu({
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-sm">{p.name}</div>
                           <div className="truncate text-muted-foreground text-xs">
-                            {[p.status, p.kind].filter(Boolean).join(" · ")}
+                            {[PROJECT_STATUS_LABELS[p.status], p.kind]
+                              .filter(Boolean)
+                              .join(" · ")}
                           </div>
                         </div>
                       </CommandItem>
                     ))}
                   </CommandGroup>
                 )}
-                {notionResults.tasks.length > 0 && (
-                  <CommandGroup heading="Tasks (Notion)">
-                    {notionResults.tasks.map((t) => (
+                {trackerResults.tasks.length > 0 && (
+                  <CommandGroup heading="Tasks">
+                    {trackerResults.tasks.map((t) => (
                       <CommandItem
-                        key={`notion-task-${t.id}`}
+                        key={`tracker-task-${t.id}`}
                         onSelect={() => {
-                          window.open(t.notionUrl, "_blank");
+                          navigate({ to: "/tasks", search: { q: t.name } });
                           setOpen(false);
                         }}
                         className="flex items-center gap-2"
@@ -466,23 +472,25 @@ export function GlobalCommandMenu({
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-sm">{t.name}</div>
                           <div className="truncate text-muted-foreground text-xs">
-                            {[t.status, t.projectName]
+                            {[TASK_STATUS_LABELS[t.status], t.projectName]
                               .filter(Boolean)
                               .join(" · ")}
                           </div>
                         </div>
-                        <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
                       </CommandItem>
                     ))}
                   </CommandGroup>
                 )}
-                {notionResults.purchases.length > 0 && (
-                  <CommandGroup heading="Purchases (Notion)">
-                    {notionResults.purchases.map((p) => (
+                {trackerResults.purchases.length > 0 && (
+                  <CommandGroup heading="Purchases">
+                    {trackerResults.purchases.map((p) => (
                       <CommandItem
-                        key={`notion-purchase-${p.id}`}
+                        key={`tracker-purchase-${p.id}`}
                         onSelect={() => {
-                          window.open(p.notionUrl, "_blank");
+                          navigate({
+                            to: "/purchases",
+                            search: { q: p.name },
+                          });
                           setOpen(false);
                         }}
                         className="flex items-center gap-2"
@@ -501,7 +509,6 @@ export function GlobalCommandMenu({
                               .join(" · ")}
                           </div>
                         </div>
-                        <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
                       </CommandItem>
                     ))}
                   </CommandGroup>

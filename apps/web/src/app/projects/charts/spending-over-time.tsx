@@ -1,8 +1,8 @@
+import type { PurchaseOut } from "@cubby/schemas/project";
 import { ResponsiveLine } from "@nivo/line";
 import { TrendingUp } from "lucide-react";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
-import type { NotionPurchase } from "~/server/clients/notion";
 import { nivoChartTheme } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
@@ -11,7 +11,7 @@ export function SpendingOverTime({
   purchases,
   costEstimate,
 }: {
-  purchases: NotionPurchase[];
+  purchases: PurchaseOut[];
   costEstimate: number | null;
 }) {
   const data = useMemo(() => {

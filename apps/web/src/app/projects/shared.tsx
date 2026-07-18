@@ -1,3 +1,12 @@
+import {
+  type ProjectOut,
+  type ProjectStatus,
+  type PurchaseCategory,
+  type PurchaseOut,
+  projectStatusValues,
+  type TaskOut,
+  type TaskStatus,
+} from "@cubby/schemas/project";
 import { Link } from "@tanstack/react-router";
 import {
   createColumnHelper,
@@ -7,12 +16,13 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { groupBy, partition, sumBy } from "es-toolkit";
+import { partition } from "es-toolkit";
 import { ExternalLink, Hammer, ListTodo, ShoppingCart } from "lucide-react";
 import { useMemo } from "react";
 import RTable from "~/app/_components/data-table/Table";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
+import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { Description } from "~/components/ui/description";
 import {
   Empty,
@@ -20,14 +30,41 @@ import {
   EmptyIcon,
   EmptyTitle,
 } from "~/components/ui/empty";
-import { NoneValue } from "~/components/ui/none-value";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn, formatCurrency } from "~/lib/utils";
-import type {
-  NotionProject,
-  NotionPurchase,
-  NotionTask,
-} from "~/server/clients/notion";
+
+/**
+ * Human-facing labels for the raw DB enum values (`@cubby/schemas/project`).
+ * Single source of truth for status column headers, badges, and filter chips
+ * across the dashboard/detail page/charts — never string-match the raw enum
+ * value for display text.
+ */
+export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
+  planning: "Planning",
+  not_started: "Not started",
+  in_progress: "In progress",
+  done: "Done",
+};
+
+export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
+  not_started: "Not started",
+  later: "Later",
+  in_progress: "In progress",
+  blocked: "Blocked",
+  done: "Done",
+};
+
+/** Status select options for the detail page's inline `EditableCell` status field. */
+export const PROJECT_STATUS_OPTIONS: FilterableComboboxItem[] =
+  projectStatusValues.map((s) => ({
+    value: s,
+    label: PROJECT_STATUS_LABELS[s],
+  }));
+
+/** Title-cases a single lowercase enum-ish token (project kind, purchase category). */
+export function capitalize(s: string): string {
+  return s.length === 0 ? s : s.charAt(0).toUpperCase() + s.slice(1);
+}
 
 // -- Category colors (monochrome ink ladder + ultramarine accent) --
 
@@ -37,21 +74,25 @@ export const CATEGORY_COLORS: Record<string, string> = {
   services: "var(--chart-2)",
 };
 
+/**
+ * Accepts a plain string, not the strict `PurchaseCategory` enum — callers
+ * pass ad hoc bucket labels (e.g. treemap/donut group keys like
+ * "uncategorized") through here too, not just raw purchase.category values.
+ */
 export function getCategoryColor(category: string | null): string {
   if (!category) return "var(--chart-neutral)";
-  return (
-    CATEGORY_COLORS[normalizeCategoryKey(category)] ?? "var(--chart-neutral)"
-  );
+  return CATEGORY_COLORS[category] ?? "var(--chart-neutral)";
 }
 
-export function normalizeCategoryKey(category: string | null): string {
-  if (!category) return "other";
-  const key = category
-    .replace(/^[^\w]*/, "")
-    .trim()
-    .toLowerCase();
-  if (key in CATEGORY_COLORS) return key;
-  return "other";
+/**
+ * `purchase.category` is now a strict enum (no more Notion emoji prefixes to
+ * strip), so this is just a null-coalesce — kept as a named helper since every
+ * chart file already calls it as the "category or other" bucket key.
+ */
+export function normalizeCategoryKey(
+  category: PurchaseCategory | null,
+): string {
+  return category ?? "other";
 }
 
 // -- Date helpers --
@@ -72,7 +113,7 @@ export { nivoBarChrome, nivoChartTheme } from "~/lib/nivo-theme";
 
 // -- Status Icon --
 
-export function StatusIcon({ status }: { status: string | null }) {
+export function StatusIcon({ status }: { status: ProjectStatus | TaskStatus }) {
   const { icon: Icon, className } = getStatusBadgeProps("project", status);
   // Extract just the text color from the bg+text className tuple.
   const textClass =
@@ -100,9 +141,29 @@ export function formatDateRange(
   return `${formatDate(start)} — ${formatDate(end)}`;
 }
 
+// -- Project link pill (used by task/purchase tables) --
+
+function ProjectLink({
+  projectId,
+  projectName,
+}: {
+  projectId: string | null;
+  projectName: string | null;
+}) {
+  if (!projectName) return null;
+  if (!projectId) return <Badge variant="secondary">{projectName}</Badge>;
+  return (
+    <Link to="/projects/$id" params={{ id: projectId }}>
+      <Badge variant="secondary" className="cursor-pointer hover:bg-muted">
+        {projectName}
+      </Badge>
+    </Link>
+  );
+}
+
 // -- Task Table --
 
-const taskHelper = createColumnHelper<NotionTask>();
+const taskHelper = createColumnHelper<TaskOut>();
 
 const taskColumns = [
   taskHelper.accessor("status", {
@@ -113,26 +174,17 @@ const taskColumns = [
   }),
   taskHelper.accessor("name", {
     header: "Task",
-    cell: ({ row }) => (
-      <a
-        href={row.original.notionUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="flex items-center gap-1 hover:underline"
-      >
-        {row.original.name}
-        <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
-      </a>
-    ),
+    cell: ({ row }) => row.original.name,
     enableSorting: true,
   }),
   taskHelper.accessor("projectName", {
     header: "Project",
-    cell: ({ getValue }) => {
-      const name = getValue();
-      if (!name) return null;
-      return <Badge variant="secondary">{name}</Badge>;
-    },
+    cell: ({ row }) => (
+      <ProjectLink
+        projectId={row.original.projectId}
+        projectName={row.original.projectName}
+      />
+    ),
     enableSorting: true,
   }),
   taskHelper.accessor("category", {
@@ -144,7 +196,7 @@ const taskColumns = [
     },
     enableSorting: true,
   }),
-  taskHelper.accessor("due", {
+  taskHelper.accessor("dueDate", {
     header: "Due",
     cell: ({ getValue }) => {
       const due = getValue();
@@ -160,14 +212,14 @@ const taskColumns = [
   }),
 ];
 
-export function TaskList({ tasks }: { tasks: NotionTask[] }) {
+export function TaskList({ tasks }: { tasks: TaskOut[] }) {
   const sortedData = useMemo(() => {
-    const [activeTasks, done] = partition(tasks, (t) => t.status !== "Done");
+    const [activeTasks, done] = partition(tasks, (t) => t.status !== "done");
     const active = activeTasks.sort((a, b) => {
-      if (!a.due && !b.due) return 0;
-      if (!a.due) return 1;
-      if (!b.due) return -1;
-      return a.due.localeCompare(b.due);
+      if (!a.dueDate && !b.dueDate) return 0;
+      if (!a.dueDate) return 1;
+      if (!b.dueDate) return -1;
+      return a.dueDate.localeCompare(b.dueDate);
     });
     return [...active, ...done];
   }, [tasks]);
@@ -201,31 +253,36 @@ export function TaskList({ tasks }: { tasks: NotionTask[] }) {
 
 // -- Purchase Table --
 
-const purchaseHelper = createColumnHelper<NotionPurchase>();
+const purchaseHelper = createColumnHelper<PurchaseOut>();
 
 const purchaseColumns = [
   purchaseHelper.accessor("name", {
     header: "Purchase",
-    cell: ({ row }) => (
-      <a
-        href={row.original.notionUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="flex items-center gap-1 hover:underline"
-      >
-        {row.original.name}
-        <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
-      </a>
-    ),
+    cell: ({ row }) => {
+      const url = row.original.url;
+      if (!url) return row.original.name;
+      return (
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1 hover:underline"
+        >
+          {row.original.name}
+          <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+        </a>
+      );
+    },
     enableSorting: true,
   }),
   purchaseHelper.accessor("projectName", {
     header: "Project",
-    cell: ({ getValue }) => {
-      const name = getValue();
-      if (!name) return null;
-      return <Badge variant="secondary">{name}</Badge>;
-    },
+    cell: ({ row }) => (
+      <ProjectLink
+        projectId={row.original.projectId}
+        projectName={row.original.projectName}
+      />
+    ),
     enableSorting: true,
   }),
   purchaseHelper.accessor("category", {
@@ -233,7 +290,7 @@ const purchaseColumns = [
     cell: ({ getValue }) => {
       const cat = getValue();
       if (!cat) return null;
-      return <Badge variant="outline">{cat}</Badge>;
+      return <Badge variant="outline">{capitalize(cat)}</Badge>;
     },
     enableSorting: true,
   }),
@@ -271,7 +328,7 @@ const purchaseColumns = [
   }),
 ];
 
-export function PurchaseList({ purchases }: { purchases: NotionPurchase[] }) {
+export function PurchaseList({ purchases }: { purchases: PurchaseOut[] }) {
   const table = useReactTable({
     data: purchases,
     columns: purchaseColumns,
@@ -301,9 +358,7 @@ export function PurchaseList({ purchases }: { purchases: NotionPurchase[] }) {
 
 // -- Project Table --
 
-type ProjectRow = NotionProject & { actualCost: number };
-
-const projectHelper = createColumnHelper<ProjectRow>();
+const projectHelper = createColumnHelper<ProjectOut>();
 
 const projectColumns = [
   projectHelper.accessor("name", {
@@ -325,7 +380,7 @@ const projectColumns = [
     cell: ({ row }) => (
       <Row align="center" gap="sm">
         <StatusIcon status={row.original.status} />
-        <span>{row.original.status ?? <NoneValue />}</span>
+        <span>{PROJECT_STATUS_LABELS[row.original.status]}</span>
       </Row>
     ),
     enableSorting: true,
@@ -335,11 +390,11 @@ const projectColumns = [
     cell: ({ getValue }) => {
       const kind = getValue();
       if (!kind) return null;
-      return <Badge variant="secondary">{kind}</Badge>;
+      return <Badge variant="secondary">{capitalize(kind)}</Badge>;
     },
     enableSorting: true,
   }),
-  projectHelper.accessor("location", {
+  projectHelper.accessor("locations", {
     header: "Location",
     cell: ({ getValue }) => {
       const locs = getValue();
@@ -365,10 +420,11 @@ const projectColumns = [
     },
     enableSorting: true,
   }),
-  projectHelper.accessor("actualCost", {
+  projectHelper.accessor((row) => row.rollup.spent, {
+    id: "actual",
     header: "Actual",
     cell: ({ row }) => {
-      const actual = row.original.actualCost;
+      const actual = row.original.rollup.spent;
       if (actual === 0) return null;
       const est = row.original.costEstimate;
       const over = est != null && est > 0 && actual > est;
@@ -380,14 +436,14 @@ const projectColumns = [
     },
     enableSorting: true,
   }),
-  projectHelper.accessor("date", {
+  projectHelper.accessor("startDate", {
     header: "Date",
     cell: ({ row }) => {
-      const { date, dateEnd } = row.original;
-      if (!date) return null;
+      const { startDate, endDate } = row.original;
+      if (!startDate) return null;
       return (
         <Description as="span" size="xs">
-          {formatDateRange(date, dateEnd)}
+          {formatDateRange(startDate, endDate)}
         </Description>
       );
     },
@@ -396,30 +452,9 @@ const projectColumns = [
   }),
 ];
 
-export function ProjectTable({
-  projects,
-  purchases,
-}: {
-  projects: NotionProject[];
-  purchases: NotionPurchase[];
-}) {
-  const data = useMemo(() => {
-    const byProject = groupBy(
-      purchases.filter((p) => p.projectName && p.cost),
-      (p) => p.projectName as string,
-    );
-
-    return projects.map((p) => ({
-      ...p,
-      actualCost: sumBy(
-        byProject[p.name] ?? [],
-        (purchase) => purchase.cost ?? 0,
-      ),
-    }));
-  }, [projects, purchases]);
-
+export function ProjectTable({ projects }: { projects: ProjectOut[] }) {
   const table = useReactTable({
-    data,
+    data: projects,
     columns: projectColumns,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -428,7 +463,7 @@ export function ProjectTable({
     getRowId: (row) => row.id,
     initialState: {
       pagination: { pageSize: 20 },
-      sorting: [{ id: "date", desc: true }],
+      sorting: [{ id: "startDate", desc: true }],
     },
   });
 

@@ -1,8 +1,7 @@
+import type { ProjectOut } from "@cubby/schemas/project";
 import { Gauge } from "lucide-react";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
-import { sumByKey } from "~/misc/array-helpers";
-import type { NotionProject, NotionPurchase } from "~/server/clients/notion";
 import { ChartEmpty } from "./chart-empty";
 
 type ProjectBudget = {
@@ -12,31 +11,24 @@ type ProjectBudget = {
   pct: number; // percentage of estimate spent
 };
 
-export function BudgetHealth({
-  projects,
-  purchases,
-}: {
-  projects: NotionProject[];
-  purchases: NotionPurchase[];
-}) {
+/**
+ * Actual spend comes straight off `project.rollup.spent` (a SQL aggregate over
+ * live purchases including `future` ones) — no purchases prop needed anymore,
+ * since a project's own rollup already is that sum.
+ */
+export function BudgetHealth({ projects }: { projects: ProjectOut[] }) {
   const data = useMemo(() => {
-    const costByProject = sumByKey(
-      purchases.filter((p) => p.projectName && p.cost),
-      (p) => p.projectName,
-      (p) => p.cost,
-    );
-
     return projects
       .filter((p) => p.costEstimate && p.costEstimate > 0)
       .map((p) => ({
         name: p.name,
-        actual: costByProject.get(p.name) ?? 0,
+        actual: p.rollup.spent,
         estimate: p.costEstimate!,
-        pct: ((costByProject.get(p.name) ?? 0) / p.costEstimate!) * 100,
+        pct: (p.rollup.spent / p.costEstimate!) * 100,
       }))
       .sort((a, b) => b.pct - a.pct)
       .slice(0, 12) as ProjectBudget[];
-  }, [projects, purchases]);
+  }, [projects]);
 
   if (data.length === 0) {
     return <ChartEmpty icon={Gauge} title="No projects with estimates." />;

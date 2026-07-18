@@ -11,6 +11,9 @@ export const dashboardCountsOut = z.object({
   location: z.number().int(),
   inventory: z.number().int(),
   meal: z.number().int(),
+  project: z.number().int(),
+  task: z.number().int(),
+  purchase: z.number().int(),
   image: z.number().int(),
   usdaFoods: z.number().int(),
 });

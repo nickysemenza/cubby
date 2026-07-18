@@ -10,6 +10,7 @@ import { isDocumentFile } from "@cubby/schemas/image";
 import type { LocationType } from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
 import type { CellContext, ColumnHelper } from "@tanstack/react-table";
+import { format } from "date-fns";
 import { uniqBy } from "es-toolkit";
 import { Eye, ImageIcon, MoreHorizontal } from "lucide-react";
 import type { ReactNode } from "react";
@@ -242,6 +243,13 @@ export function createNameColumn<T extends BaseRow>(
     };
     /** Mobile projection metadata override */
     mobile?: MobileColumnMeta;
+    /**
+     * Skip the link to `entities[entity].routes.detail`. For entities with no
+     * dedicated detail page (task, purchase) that route points back at the
+     * list page itself — linkifying the name there is a no-op affordance, so
+     * render plain text (still inline-editable) instead of `TableLink`.
+     */
+    omitDetailLink?: boolean;
   },
 ) {
   const entityConfig = entities[entity];
@@ -283,23 +291,31 @@ export function createNameColumn<T extends BaseRow>(
               (v) => options.editable!.onSave(v ?? "", info.row.original),
             )}
             config={{ type: "text" }}
-            renderValue={(v) => (
-              <Tooltip>
-                <TooltipTrigger render={<span className="block truncate" />}>
-                  <TableLink
-                    to={entities[entity].routes.detail}
-                    params={{ id: String(info.row.original.id) }}
-                  >
+            renderValue={(v) =>
+              options?.omitDetailLink ? (
+                <span className="block truncate">{v ?? ""}</span>
+              ) : (
+                <Tooltip>
+                  <TooltipTrigger render={<span className="block truncate" />}>
+                    <TableLink
+                      to={entities[entity].routes.detail}
+                      params={{ id: String(info.row.original.id) }}
+                    >
+                      {v ?? ""}
+                    </TableLink>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-xs">
                     {v ?? ""}
-                  </TableLink>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="max-w-xs">
-                  {v ?? ""}
-                </TooltipContent>
-              </Tooltip>
-            )}
+                  </TooltipContent>
+                </Tooltip>
+              )
+            }
           />
         );
+      }
+
+      if (options?.omitDetailLink) {
+        return <span className="block truncate">{value}</span>;
       }
 
       return (
@@ -616,6 +632,12 @@ export function createInventoryEntriesColumn<
 interface ActionsColumnOptions<T> {
   /** Additional actions to render after "View Details" */
   extraActions?: (row: T) => ReactNode;
+  /**
+   * Skip the "View Details" menu item. For entities with no dedicated detail
+   * page (task, purchase), `entities[entity].routes.detail` points back at
+   * the list page itself — "View Details" there is a no-op affordance.
+   */
+  omitDetailLink?: boolean;
 }
 
 /**
@@ -629,10 +651,12 @@ export function createActionsColumn<T extends { id: string | number }>(
 ) {
   return createActionsColumnBase(
     columnHelper,
-    (row) => ({
-      to: entities[entity].routes.detail,
-      params: { id: String(row.id) },
-    }),
+    options?.omitDetailLink
+      ? () => null
+      : (row) => ({
+          to: entities[entity].routes.detail,
+          params: { id: String(row.id) },
+        }),
     options?.extraActions,
   );
 }
@@ -1309,4 +1333,100 @@ export function createEditableAmountColumn<T extends Record<string, unknown>>(
       );
     },
   });
+}
+
+/**
+ * Parse a "YYYY-MM-DD" plain-date string (no time component — a task due
+ * date, a purchase date) into a local `Date` at midnight via its components,
+ * rather than `new Date(isoString)` (which parses as UTC midnight and can
+ * shift a day back for negative UTC offsets, e.g. US timezones).
+ */
+function parsePlainDate(value: string): Date {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year ?? 0, (month ?? 1) - 1, day ?? 1);
+}
+
+/**
+ * Creates a column for a plain "YYYY-MM-DD" calendar date (task `dueDate`,
+ * purchase `date`) — an absolute "MMM d, yyyy", not the relative "5m ago" of
+ * {@link createTimestampColumn} (which is for full timestamps and reads oddly
+ * for a date that can be in the future). Display-only: there's no editable
+ * "date" input type in the shared editable-cell primitives yet.
+ */
+export function createPlainDateColumn<
+  T extends Record<string, unknown>,
+  K extends keyof T,
+>(
+  columnHelper: ColumnHelper<T>,
+  accessor: K,
+  options?: {
+    header?: string;
+    className?: string;
+    mobile?: MobileColumnMeta;
+  },
+) {
+  return columnHelper.accessor((row) => row[accessor] as string | null, {
+    id: String(accessor),
+    header: options?.header,
+    meta: {
+      className: options?.className ?? "w-28",
+      mono: true,
+      mobile: options?.mobile,
+    },
+    cell: (info) => {
+      const value = info.getValue();
+      return value ? (
+        format(parsePlainDate(value), "MMM d, yyyy")
+      ) : (
+        <NoneValue />
+      );
+    },
+  });
+}
+
+/** A row that carries a project reference as a flat id+name pair (not a
+ * nested `{id,name}` object) — the task/purchase list shape. */
+interface ProjectRefRow {
+  projectId: string | null;
+  projectName: string | null;
+}
+
+/**
+ * Creates a display-only column linking to a row's parent project (task
+ * `projectId`/`projectName`, purchase `projectId`/`projectName`). Unlike
+ * {@link createSingleEntityInlineLinkColumn}, the source data is a flat
+ * id+name pair rather than a nested relation object, and there's no inline
+ * entity-picker editor for project yet.
+ */
+export function createProjectLinkColumn<T extends ProjectRefRow>(
+  columnHelper: ColumnHelper<T>,
+  options?: {
+    header?: string;
+    className?: string;
+    mobile?: MobileColumnMeta;
+    filterConfig?: FilterConfig;
+  },
+) {
+  return columnHelper.accessor(
+    (row) => ({ id: row.projectId, name: row.projectName }),
+    {
+      id: "project",
+      header: options?.header ?? "Project",
+      enableSorting: false,
+      meta: {
+        className: options?.className,
+        mobile: options?.mobile,
+        filterConfig: options?.filterConfig,
+      },
+      cell: (info) => {
+        const { id, name } = info.getValue();
+        if (!id || !name) return <NoneValue />;
+        return (
+          <TableLink to="/projects/$id" params={{ id }} variant="muted">
+            {name}
+          </TableLink>
+        );
+      },
+    },
+  );
 }

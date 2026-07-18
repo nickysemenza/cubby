@@ -66,6 +66,13 @@ interface UseStandardColumnsOptions<TData extends BaseListRow> {
   nameEditable?: {
     onSave: (newValue: string, row: TData) => Promise<void>;
   };
+  /**
+   * Skip the standard name column's link to the entity's detail page, and the
+   * actions menu's "View Details" item. For entities with no dedicated detail
+   * page (task, purchase), `routes.detail` points back at the list page
+   * itself — both affordances would be no-ops there.
+   */
+  omitDetailLink?: boolean;
 }
 
 /**
@@ -89,6 +96,7 @@ export function useStandardColumns<TData extends BaseListRow>({
   hasUnitMappings,
   nameClassName,
   nameEditable,
+  omitDetailLink,
 }: UseStandardColumnsOptions<TData>): AnyColumnDef<TData>[] {
   // Shift-click range selection: anchor (last clicked row id) + modifier flag.
   // Refs are stable across renders, so they don't perturb the useMemo deps below.
@@ -153,6 +161,7 @@ export function useStandardColumns<TData extends BaseListRow>({
           ...(nameFilterConfig ? { filterConfig: nameFilterConfig } : {}),
           className: nameClassName,
           editable: nameEditable,
+          omitDetailLink,
         }),
       );
     }
@@ -190,6 +199,7 @@ export function useStandardColumns<TData extends BaseListRow>({
     cols.push(
       createActionsColumn(columnHelper, entity, {
         extraActions: combinedExtraActions,
+        omitDetailLink,
       }),
     );
 
@@ -206,5 +216,6 @@ export function useStandardColumns<TData extends BaseListRow>({
     combinedExtraActions,
     nameClassName,
     nameEditable,
+    omitDetailLink,
   ]);
 }

@@ -1,9 +1,9 @@
+import type { PurchaseOut } from "@cubby/schemas/project";
 import { ResponsiveBar } from "@nivo/bar";
 import { sum } from "es-toolkit";
 import { ShoppingBag } from "lucide-react";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
-import type { NotionPurchase } from "~/server/clients/notion";
 import {
   CATEGORY_COLORS,
   nivoBarChrome,
@@ -24,11 +24,7 @@ type BarDatum = {
 
 const CATEGORY_KEYS = ["materials", "tools", "services", "other"] as const;
 
-export function SubcategoryBars({
-  purchases,
-}: {
-  purchases: NotionPurchase[];
-}) {
+export function SubcategoryBars({ purchases }: { purchases: PurchaseOut[] }) {
   const data = useMemo(() => {
     // Group by subcategory, then by category within each
     const grouped = new Map<string, Record<string, number>>();

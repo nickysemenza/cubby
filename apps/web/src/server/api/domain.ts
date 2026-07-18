@@ -9,12 +9,14 @@ import { inventoryRouter } from "./routers/inventory";
 import { locationRouter } from "./routers/location";
 import { mcpRouter } from "./routers/mcp";
 import { mealRouter } from "./routers/meal";
-import { notionRouter } from "./routers/notion";
 import { problemsRouter } from "./routers/problems";
 import { productRouter } from "./routers/product";
+import { projectRouter } from "./routers/project";
+import { purchaseRouter } from "./routers/purchase";
 import { recipeRouter } from "./routers/recipe";
 import { searchRouter } from "./routers/search";
 import { suggestionsRouter } from "./routers/suggestions";
+import { taskRouter } from "./routers/task";
 import { upcRouter } from "./routers/upc";
 import { usdaRouter } from "./routers/usda";
 
@@ -29,8 +31,10 @@ export const domainRouterRecord = {
   product: productRouter,
   inventory: inventoryRouter,
   meal: mealRouter,
+  project: projectRouter,
+  task: taskRouter,
+  purchase: purchaseRouter,
   mcp: mcpRouter,
-  notion: notionRouter,
   usda: usdaRouter,
   upc: upcRouter,
   image: imageRouter,

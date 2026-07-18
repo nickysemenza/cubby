@@ -1,10 +1,12 @@
+import type { ProjectDashboardOut, ProjectOut } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { countBy, partition, sumBy, uniq } from "es-toolkit";
-import { Calendar, DollarSign, ExternalLink, Hammer } from "lucide-react";
+import { Calendar, DollarSign, Hammer } from "lucide-react";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { Grid, Row, Section, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
 import {
   Card,
   CardContent,
@@ -15,6 +17,7 @@ import {
 import { Description } from "~/components/ui/description";
 import {
   Empty,
+  EmptyActions,
   EmptyDescription,
   EmptyHeader,
   EmptyIcon,
@@ -26,13 +29,8 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
-import { useTRPC } from "~/integrations/trpc/react";
+import { type RouterOutputs, useTRPC } from "~/integrations/trpc/react";
 import { formatCurrency } from "~/lib/utils";
-import type {
-  NotionProject,
-  NotionPurchase,
-  NotionTask,
-} from "~/server/clients/notion";
 
 import {
   DashboardFilters,
@@ -40,11 +38,15 @@ import {
   type Filters,
 } from "./dashboard-filters";
 import { NeedsAttention } from "./needs-attention";
+import { ProjectActions } from "./project-actions";
 import {
+  capitalize,
   formatDateRange,
+  PROJECT_STATUS_LABELS,
   ProjectTable,
   PurchaseList,
   StatusIcon,
+  TASK_STATUS_LABELS,
   TaskList,
 } from "./shared";
 
@@ -102,55 +104,61 @@ const DASHBOARD_VIEW_OPTIONS: ViewSwitcherOption<DashboardView>[] = [
   { value: "gallery", label: "Gallery" },
 ];
 
+/** Cover image (first attached image) per project id — keyed lookup for the gallery tab. */
+type CoverImages = RouterOutputs["image"]["imagesByProjectIds"];
+
+const NO_PROJECT_IDS: string[] = [];
+
 export function ProjectsDashboard() {
   const api = useTRPC();
-  const { data, isLoading } = useQuery({
-    ...api.notion.dashboard.queryOptions(),
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    ...api.project.dashboard.queryOptions(),
     staleTime: 5 * 60 * 1000,
   });
-  // Load images lazily — doesn't block dashboard render
-  const { data: imageMap } = useQuery({
-    ...api.notion.projectImages.queryOptions(),
+
+  const projectIds = useMemo(
+    () => data?.projects.map((p) => p.id) ?? NO_PROJECT_IDS,
+    [data],
+  );
+
+  // Cover images load lazily on their own query — doesn't block dashboard render.
+  const { data: coverImages } = useQuery({
+    ...api.image.imagesByProjectIds.queryOptions({ projectIds }),
     staleTime: 5 * 60 * 1000,
+    enabled: projectIds.length > 0,
   });
+
   const [filters, setFilters] = useState<Filters>(emptyFilters);
 
-  // Merge lazily-loaded images into project data
-  const dataWithImages = useMemo(() => {
-    if (!data) return null;
-    if (!imageMap) return data;
-    return {
-      ...data,
-      projects: data.projects.map((p) => ({
-        ...p,
-        coverImage: p.coverImage ?? imageMap[p.id] ?? null,
-      })),
-    };
-  }, [data, imageMap]);
-
-  if (isLoading) {
-    return <DashboardSkeleton />;
+  if (isError) {
+    // Distinct from the loading skeleton — a fetch failure must never read as
+    // "still loading" forever.
+    return (
+      <Empty>
+        <EmptyHeader>
+          <EmptyIcon icon={Hammer} />
+          <EmptyTitle>Couldn't load the project dashboard</EmptyTitle>
+          <EmptyDescription>
+            {error.message || "Something went wrong."}
+          </EmptyDescription>
+        </EmptyHeader>
+        <EmptyActions>
+          <Button type="button" variant="outline" onClick={() => refetch()}>
+            Retry
+          </Button>
+        </EmptyActions>
+      </Empty>
+    );
   }
 
-  if (!dataWithImages) {
-    return (
-      <Card>
-        <CardContent>
-          <p className="text-muted-foreground">
-            Notion integration is not configured. Add{" "}
-            <code className="rounded bg-muted px-1 text-sm">
-              NOTION_API_KEY
-            </code>{" "}
-            to your environment variables.
-          </p>
-        </CardContent>
-      </Card>
-    );
+  if (isLoading || !data) {
+    return <DashboardSkeleton />;
   }
 
   return (
     <DashboardContent
-      data={dataWithImages}
+      data={data}
+      coverImages={coverImages}
       filters={filters}
       onFiltersChange={setFilters}
     />
@@ -159,28 +167,26 @@ export function ProjectsDashboard() {
 
 function DashboardContent({
   data,
+  coverImages,
   filters,
   onFiltersChange,
 }: {
-  data: {
-    projects: NotionProject[];
-    tasks: NotionTask[];
-    purchases: NotionPurchase[];
-  };
+  data: ProjectDashboardOut;
+  coverImages: CoverImages | undefined;
   filters: Filters;
   onFiltersChange: (f: Filters) => void;
 }) {
   const [view, setView] = useState<DashboardView>("overview");
   const availableStatuses = useMemo(
-    () => uniq(data.projects.map((p) => p.status).filter(Boolean) as string[]),
+    () => uniq(data.projects.map((p) => p.status)),
     [data.projects],
   );
   const availableKinds = useMemo(
-    () => uniq(data.projects.map((p) => p.kind).filter(Boolean) as string[]),
+    () => uniq(data.projects.map((p) => p.kind).filter((k) => k != null)),
     [data.projects],
   );
   const availableLocations = useMemo(
-    () => uniq(data.projects.flatMap((p) => p.location)),
+    () => uniq(data.projects.flatMap((p) => p.locations)),
     [data.projects],
   );
 
@@ -188,25 +194,26 @@ function DashboardContent({
     let projects = data.projects;
 
     if (filters.statuses.size > 0) {
-      projects = projects.filter(
-        (p) => p.status && filters.statuses.has(p.status),
-      );
+      projects = projects.filter((p) => filters.statuses.has(p.status));
     }
     if (filters.kinds.size > 0) {
       projects = projects.filter((p) => p.kind && filters.kinds.has(p.kind));
     }
     if (filters.locations.size > 0) {
       projects = projects.filter((p) =>
-        p.location.some((l) => filters.locations.has(l)),
+        p.locations.some((l) => filters.locations.has(l)),
       );
     }
 
-    const projectNames = new Set(projects.map((p) => p.name));
+    // Keyed by id, not name — project names aren't unique, so a name-keyed
+    // join here would cross-contaminate tasks/purchases across same-named
+    // projects.
+    const projectIds = new Set(projects.map((p) => p.id));
     const tasks = data.tasks.filter(
-      (t) => !t.projectName || projectNames.has(t.projectName),
+      (t) => !t.projectId || projectIds.has(t.projectId),
     );
     const purchases = data.purchases.filter(
-      (p) => !p.projectName || projectNames.has(p.projectName),
+      (p) => !p.projectId || projectIds.has(p.projectId),
     );
 
     return { projects, tasks, purchases };
@@ -227,12 +234,15 @@ function DashboardContent({
       <NeedsAttention projects={projects} tasks={tasks} purchases={purchases} />
 
       <Stack>
-        <ViewSwitcher
-          ariaLabel="Dashboard view"
-          options={DASHBOARD_VIEW_OPTIONS}
-          value={view}
-          onValueChange={setView}
-        />
+        <Row justify="between" align="center" wrap gap="sm">
+          <ViewSwitcher
+            ariaLabel="Dashboard view"
+            options={DASHBOARD_VIEW_OPTIONS}
+            value={view}
+            onValueChange={setView}
+          />
+          <ProjectActions />
+        </Row>
 
         {view === "overview" && (
           <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
@@ -242,13 +252,13 @@ function DashboardContent({
                   title="Cost vs Estimate"
                   description="Projects with both spending and an estimate"
                 >
-                  <CostVsEstimate projects={projects} purchases={purchases} />
+                  <CostVsEstimate projects={projects} />
                 </Section>
                 <Section
                   title="Budget Health"
                   description="Top 12 projects by % of estimate spent"
                 >
-                  <BudgetHealth projects={projects} purchases={purchases} />
+                  <BudgetHealth projects={projects} />
                 </Section>
               </Grid>
 
@@ -311,7 +321,7 @@ function DashboardContent({
           <Stack className="pt-4">
             <Stack as="section">
               <h2 className="font-heading font-semibold text-xl">Projects</h2>
-              <ProjectTable projects={projects} purchases={purchases} />
+              <ProjectTable projects={projects} />
             </Stack>
 
             <Stack as="section">
@@ -328,7 +338,7 @@ function DashboardContent({
 
         {view === "gallery" && (
           <div className="pt-4">
-            <ProjectCards projects={projects} />
+            <ProjectCards projects={projects} coverImages={coverImages} />
           </div>
         )}
       </Stack>
@@ -343,12 +353,12 @@ function SummaryCards({
   tasks,
   purchases,
 }: {
-  projects: NotionProject[];
-  tasks: NotionTask[];
-  purchases: NotionPurchase[];
+  projects: ProjectDashboardOut["projects"];
+  tasks: ProjectDashboardOut["tasks"];
+  purchases: ProjectDashboardOut["purchases"];
 }) {
-  const activeProjects = projects.filter((p) => p.status !== "Done").length;
-  const activeTasks = tasks.filter((t) => t.status !== "Done").length;
+  const activeProjects = projects.filter((p) => p.status !== "done").length;
+  const activeTasks = tasks.filter((t) => t.status !== "done").length;
   const totalSpend = sumBy(purchases, (p) => p.cost ?? 0);
 
   return (
@@ -360,10 +370,11 @@ function SummaryCards({
         </CardHeader>
         <CardContent>
           <Row wrap gap="sm">
-            {statusCounts(projects.map((p) => p.status)).map(
+            {Object.entries(countBy(projects, (p) => p.status)).map(
               ([status, count]) => (
                 <Badge key={status} variant="outline">
-                  {status}: {count}
+                  {PROJECT_STATUS_LABELS[status as ProjectOut["status"]]}:{" "}
+                  {count}
                 </Badge>
               ),
             )}
@@ -378,11 +389,18 @@ function SummaryCards({
         </CardHeader>
         <CardContent>
           <Row wrap gap="sm">
-            {statusCounts(tasks.map((t) => t.status)).map(([status, count]) => (
-              <Badge key={status} variant="outline">
-                {status}: {count}
-              </Badge>
-            ))}
+            {Object.entries(countBy(tasks, (t) => t.status)).map(
+              ([status, count]) => (
+                <Badge key={status} variant="outline">
+                  {
+                    TASK_STATUS_LABELS[
+                      status as (typeof tasks)[number]["status"]
+                    ]
+                  }
+                  : {count}
+                </Badge>
+              ),
+            )}
           </Row>
         </CardContent>
       </Card>
@@ -402,14 +420,16 @@ function SummaryCards({
   );
 }
 
-function statusCounts(statuses: (string | null)[]): [string, number][] {
-  return Object.entries(countBy(statuses, (s) => s ?? "Unknown"));
-}
-
 // -- Project Cards --
 
-function ProjectCards({ projects }: { projects: NotionProject[] }) {
-  const [active, done] = partition(projects, (p) => p.status !== "Done");
+function ProjectCards({
+  projects,
+  coverImages,
+}: {
+  projects: ProjectOut[];
+  coverImages: CoverImages | undefined;
+}) {
+  const [active, done] = partition(projects, (p) => p.status !== "done");
 
   if (active.length === 0 && done.length === 0) {
     return (
@@ -417,9 +437,7 @@ function ProjectCards({ projects }: { projects: NotionProject[] }) {
         <EmptyHeader>
           <EmptyIcon icon={Hammer} />
           <EmptyTitle>No projects found</EmptyTitle>
-          <EmptyDescription>
-            Adjust your filters or check your Notion workspace for projects.
-          </EmptyDescription>
+          <EmptyDescription>Adjust your filters.</EmptyDescription>
         </EmptyHeader>
       </Empty>
     );
@@ -430,7 +448,11 @@ function ProjectCards({ projects }: { projects: NotionProject[] }) {
       {active.length > 0 && (
         <Grid cols="cards3">
           {active.map((project) => (
-            <ProjectCard key={project.id} project={project} />
+            <ProjectCard
+              key={project.id}
+              project={project}
+              coverUrl={coverImages?.[project.id]?.[0]?.url}
+            />
           ))}
         </Grid>
       )}
@@ -441,7 +463,11 @@ function ProjectCards({ projects }: { projects: NotionProject[] }) {
           </summary>
           <Grid cols="cards3" className="mt-4">
             {done.map((project) => (
-              <ProjectCard key={project.id} project={project} />
+              <ProjectCard
+                key={project.id}
+                project={project}
+                coverUrl={coverImages?.[project.id]?.[0]?.url}
+              />
             ))}
           </Grid>
         </details>
@@ -450,17 +476,23 @@ function ProjectCards({ projects }: { projects: NotionProject[] }) {
   );
 }
 
-function ProjectCard({ project }: { project: NotionProject }) {
+function ProjectCard({
+  project,
+  coverUrl,
+}: {
+  project: ProjectOut;
+  coverUrl: string | undefined;
+}) {
   return (
     <Link to="/projects/$id" params={{ id: project.id }} className="block">
       <Card
         size="sm"
         className="overflow-hidden transition-colors hover:bg-muted/50"
       >
-        {project.coverImage && (
+        {coverUrl && (
           <div className="relative aspect-[16/9] w-full overflow-hidden">
             <Image
-              src={project.coverImage}
+              src={coverUrl}
               alt=""
               className="absolute inset-0 h-full w-full object-cover"
             />
@@ -470,25 +502,18 @@ function ProjectCard({ project }: { project: NotionProject }) {
           <CardTitle>
             {project.icon && <span>{project.icon}</span>}
             <span className="truncate">{project.name}</span>
-            <a
-              href={project.notionUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-muted-foreground hover:text-foreground"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <ExternalLink className="h-3 w-3 shrink-0" />
-            </a>
           </CardTitle>
           <CardDescription className="flex items-center gap-2">
             <StatusIcon status={project.status} />
-            {project.status ?? "No status"}
+            {PROJECT_STATUS_LABELS[project.status]}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Row wrap gap="sm">
-            {project.kind && <Badge variant="secondary">{project.kind}</Badge>}
-            {project.location.map((loc) => (
+            {project.kind && (
+              <Badge variant="secondary">{capitalize(project.kind)}</Badge>
+            )}
+            {project.locations.map((loc) => (
               <Badge key={loc} variant="outline">
                 {loc}
               </Badge>
@@ -499,10 +524,10 @@ function ProjectCard({ project }: { project: NotionProject }) {
                 {formatCurrency(project.costEstimate, 0)}
               </Badge>
             )}
-            {(project.date || project.dateEnd) && (
+            {(project.startDate || project.endDate) && (
               <Badge variant="outline">
                 <Calendar className="h-3 w-3" />
-                {formatDateRange(project.date, project.dateEnd)}
+                {formatDateRange(project.startDate, project.endDate)}
               </Badge>
             )}
           </Row>

@@ -1,9 +1,9 @@
+import type { PurchaseOut } from "@cubby/schemas/project";
 import { ResponsiveTreeMap } from "@nivo/treemap";
 import { sumBy } from "es-toolkit";
 import { ShoppingBag } from "lucide-react";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
-import type { NotionPurchase } from "~/server/clients/notion";
 import { getCategoryColor } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
@@ -15,11 +15,7 @@ type TreeNode = {
   children?: TreeNode[];
 };
 
-export function CategoryTreemap({
-  purchases,
-}: {
-  purchases: NotionPurchase[];
-}) {
+export function CategoryTreemap({ purchases }: { purchases: PurchaseOut[] }) {
   const data = useMemo(() => {
     // Build category → subcategory → cost hierarchy
     const categories = new Map<string, Map<string, number>>();

@@ -40,7 +40,8 @@
     "./ai": "./src/ai.ts",
     "./agent": "./src/agent.ts",
     "./background-jobs": "./src/background-jobs.ts",
-    "./dashboard": "./src/dashboard.ts"
+    "./dashboard": "./src/dashboard.ts",
+    "./project": "./src/project.ts"
   },
   "scripts": {
     "typecheck": "tsgo --noEmit",

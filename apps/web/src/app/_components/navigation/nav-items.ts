@@ -11,8 +11,8 @@ import {
   ChefHat,
   Database,
   FileText,
-  Hammer,
   Home,
+  House,
   ListChecks,
   MoreHorizontal,
   Network,
@@ -112,6 +112,19 @@ export const desktopNav: NavNode[] = [
     ],
   },
   {
+    label: "House",
+    icon: House,
+    children: [
+      { to: "/projects", label: "Projects", icon: entities.project.lucideIcon },
+      { to: "/tasks", label: "Tasks", icon: entities.task.lucideIcon },
+      {
+        to: "/purchases",
+        label: "Purchases",
+        icon: entities.purchase.lucideIcon,
+      },
+    ],
+  },
+  {
     // Data surfaces — the reference/admin tables behind the workflows above.
     // Pulled out of Pantry/Dev where they were miscategorized. (The old
     // Reports group is gone: Insights folded into the home dashboard,
@@ -157,7 +170,6 @@ export const desktopNav: NavNode[] = [
         label: "Equivalences",
         icon: ArrowLeftRight,
       },
-      { to: "/projects", label: "Projects", icon: Hammer },
       { to: "/design", label: "Design", icon: Palette },
       { to: "/ai-smoke-test", label: "AI smoke test", icon: Sparkles },
       { to: "/ai-usage", label: "AI usage", icon: Bot },

@@ -11,11 +11,10 @@ import { z } from "zod";
 import { getErrorMessage } from "~/lib/error-utils";
 import { TraceNames, withTrace } from "~/server/tracing";
 
-// Data source IDs from the Notion "Project Tracker" page (collection:// URLs)
+// Data source IDs (collection:// URLs). Only the Recipes database remains —
+// the projects/tasks/purchases trackers were migrated into cubby tables and
+// deleted from Notion.
 const DATA_SOURCE_IDS = {
-  projects: "359f9bad-4815-4a9a-8de9-c6072e8fb5f2",
-  tasks: "7c203038-5c1a-411a-8019-5698643c0394",
-  purchases: "85bb653f-15a5-44d7-8389-93c93202219a",
   // The "Recipes" database under Food → Recipes. Synced into Cubby recipes.
   recipes: "69f477cf-b5dd-4151-8508-8c8d1be19706",
 } as const;
@@ -24,57 +23,6 @@ const DATA_SOURCE_IDS = {
 // Zod-sourced so the procedure `.output()` schemas (api/routers/notion.ts) and
 // these types share one definition.
 
-export const notionProjectSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  status: z.string().nullable(),
-  kind: z.string().nullable(),
-  location: z.array(z.string()),
-  costEstimate: z.number().nullable(),
-  date: z.string().nullable(),
-  dateEnd: z.string().nullable(),
-  icon: z.string().nullable(),
-  coverImage: z.string().nullable(),
-  blockedBy: z.array(z.string()),
-  blocking: z.array(z.string()),
-  notionUrl: z.string(),
-});
-export type NotionProject = z.infer<typeof notionProjectSchema>;
-
-export const notionTaskSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  status: z.string().nullable(),
-  due: z.string().nullable(),
-  category: z.string().nullable(),
-  projectName: z.string().nullable(),
-  notionUrl: z.string(),
-});
-export type NotionTask = z.infer<typeof notionTaskSchema>;
-
-export const notionPurchaseSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  cost: z.number().nullable(),
-  date: z.string().nullable(),
-  category: z.string().nullable(),
-  subcategory: z.string().nullable(),
-  purchaser: z.string().nullable(),
-  projectName: z.string().nullable(),
-  url: z.string().nullable(),
-  notionUrl: z.string(),
-});
-export type NotionPurchase = z.infer<typeof notionPurchaseSchema>;
-
-// Output of the `notion.dashboard` query (null when Notion isn't configured).
-export const notionDashboardSchema = z
-  .object({
-    projects: z.array(notionProjectSchema),
-    tasks: z.array(notionTaskSchema),
-    purchases: z.array(notionPurchaseSchema),
-  })
-  .nullable();
-
 export type NotionBlock = {
   type: string;
   text?: string;
@@ -82,24 +30,6 @@ export type NotionBlock = {
   imageUrl?: string;
   children?: NotionBlock[];
 };
-
-const notionBlockSchema: z.ZodType<NotionBlock> = z.lazy(() =>
-  z.object({
-    type: z.string(),
-    text: z.string().optional(),
-    checked: z.boolean().optional(),
-    imageUrl: z.string().optional(),
-    children: z.array(notionBlockSchema).optional(),
-  }),
-);
-
-export const notionProjectImagesOut = z.record(z.string(), z.string());
-
-export const notionProjectContentInput = z.object({
-  pageId: z.string(),
-});
-
-export const notionProjectContentOut = z.array(notionBlockSchema).nullable();
 
 // One row of the Recipes database: the column metadata (the body comes from
 // `getPageContent`). `yieldText`/`servings`/`tags` are read only if those
@@ -127,20 +57,6 @@ function getTitle(prop: PropertyValue | undefined): string {
   return "";
 }
 
-function getStatus(prop: PropertyValue | undefined): string | null {
-  if (prop?.type === "status") {
-    return prop.status?.name ?? null;
-  }
-  return null;
-}
-
-function getSelect(prop: PropertyValue | undefined): string | null {
-  if (prop?.type === "select") {
-    return prop.select?.name ?? null;
-  }
-  return null;
-}
-
 function getMultiSelect(prop: PropertyValue | undefined): string[] {
   if (prop?.type === "multi_select") {
     return prop.multi_select.map((s) => s.name);
@@ -151,20 +67,6 @@ function getMultiSelect(prop: PropertyValue | undefined): string[] {
 function getNumber(prop: PropertyValue | undefined): number | null {
   if (prop?.type === "number") {
     return prop.number;
-  }
-  return null;
-}
-
-function getDateStart(prop: PropertyValue | undefined): string | null {
-  if (prop?.type === "date") {
-    return prop.date?.start ?? null;
-  }
-  return null;
-}
-
-function getDateEnd(prop: PropertyValue | undefined): string | null {
-  if (prop?.type === "date") {
-    return prop.date?.end ?? null;
   }
   return null;
 }
@@ -187,33 +89,8 @@ function getRichText(prop: PropertyValue | undefined): string | null {
   return null;
 }
 
-function getRelationIds(prop: PropertyValue | undefined): string[] {
-  if (prop?.type === "relation") {
-    return prop.relation.map((r) => r.id);
-  }
-  return [];
-}
-
-function getRelationId(prop: PropertyValue | undefined): string | null {
-  if (prop?.type === "relation" && prop.relation.length > 0) {
-    return prop.relation[0]!.id;
-  }
-  return null;
-}
-
 function getPageUrl(page: PageObjectResponse): string {
   return page.url;
-}
-
-function getPageIcon(page: PageObjectResponse): string | null {
-  if (page.icon?.type === "emoji") return page.icon.emoji;
-  return null;
-}
-
-function getPageCover(page: PageObjectResponse): string | null {
-  if (page.cover?.type === "file") return page.cover.file.url;
-  if (page.cover?.type === "external") return page.cover.external.url;
-  return null;
 }
 
 function extractPages(response: QueryDataSourceResponse): PageObjectResponse[] {
@@ -422,74 +299,6 @@ export class NotionClient {
     );
   }
 
-  async queryProjects(): Promise<NotionProject[]> {
-    return this.cachedTrace("projects", "queryProjects", async () => {
-      const pages = await this.queryAll(DATA_SOURCE_IDS.projects);
-
-      return pages.map((page) => {
-        const p = page.properties;
-        return {
-          id: page.id,
-          name: getTitle(p.Name),
-          status: getStatus(p.Status),
-          kind: getSelect(p.kind),
-          location: getMultiSelect(p.location),
-          costEstimate: getNumber(p["cost estimate"]),
-          date: getDateStart(p.Date),
-          dateEnd: getDateEnd(p.Date),
-          icon: getPageIcon(page),
-          coverImage: getPageCover(page),
-          blockedBy: getRelationIds(p["Blocked by"]),
-          blocking: getRelationIds(p.Blocking),
-          notionUrl: getPageUrl(page),
-        };
-      });
-    });
-  }
-
-  async queryTasks(): Promise<NotionTask[]> {
-    return this.cachedTrace("tasks", "queryTasks", async () => {
-      const pages = await this.queryAll(DATA_SOURCE_IDS.tasks);
-
-      return pages.map((page) => {
-        const p = page.properties;
-        return {
-          id: page.id,
-          name: getTitle(p.Name),
-          status: getStatus(p.Status),
-          due: getDateStart(p.Due),
-          category: getSelect(p.category),
-          projectName: getRelationId(p.project),
-          notionUrl: getPageUrl(page),
-        };
-      });
-    });
-  }
-
-  async queryPurchases(): Promise<NotionPurchase[]> {
-    return this.cachedTrace("purchases", "queryPurchases", async () => {
-      const pages = await this.queryAll(DATA_SOURCE_IDS.purchases, {
-        sorts: [{ property: "Date", direction: "descending" }],
-      });
-
-      return pages.map((page) => {
-        const p = page.properties;
-        return {
-          id: page.id,
-          name: getTitle(p.Name),
-          cost: getNumber(p.cost),
-          date: getDateStart(p.Date),
-          category: getSelect(p.category),
-          subcategory: getSelect(p.subcategory),
-          purchaser: getSelect(p.purchaser),
-          projectName: getRelationId(p.Project),
-          url: getUrl(p.URL),
-          notionUrl: getPageUrl(page),
-        };
-      });
-    });
-  }
-
   /** All rows of the Recipes database (column metadata only; body via getPageContent). */
   async queryRecipes(): Promise<NotionRecipeRow[]> {
     return this.cachedTrace("recipes", "queryRecipes", async () => {
@@ -508,62 +317,6 @@ export class NotionClient {
           notionUrl: getPageUrl(page),
         };
       });
-    });
-  }
-
-  /** Fetch the first image from each project's page content. */
-  async getProjectImages(pageIds: string[]): Promise<Record<string, string>> {
-    return this.traced("getProjectImages", async () => {
-      const images: Record<string, string> = {};
-
-      await Promise.all(
-        pageIds.map(async (pageId) => {
-          try {
-            const response = await this.client.blocks.children.list({
-              block_id: pageId,
-              page_size: 20,
-            });
-            for (const block of response.results) {
-              if (!("type" in block)) continue;
-              const url = getImageUrl(block as BlockObjectResponse);
-              if (url) {
-                images[pageId] = url;
-                break;
-              }
-              // Check column children for images
-              if (
-                (block as BlockObjectResponse).type === "column_list" &&
-                block.has_children
-              ) {
-                const columns = await this.client.blocks.children.list({
-                  block_id: block.id,
-                  page_size: 10,
-                });
-                for (const col of columns.results) {
-                  if (!("type" in col) || !col.has_children) continue;
-                  const colChildren = await this.client.blocks.children.list({
-                    block_id: col.id,
-                    page_size: 5,
-                  });
-                  for (const child of colChildren.results) {
-                    if (!("type" in child)) continue;
-                    const colUrl = getImageUrl(child as BlockObjectResponse);
-                    if (colUrl) {
-                      images[pageId] = colUrl;
-                      return;
-                    }
-                  }
-                }
-                if (images[pageId]) return;
-              }
-            }
-          } catch {
-            // Skip pages that fail
-          }
-        }),
-      );
-
-      return images;
     });
   }
 

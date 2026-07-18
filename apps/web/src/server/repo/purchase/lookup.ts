@@ -1,0 +1,59 @@
+import {
+  buildTakeSkip,
+  type PaginationParams,
+  type SortParams,
+} from "@cubby/schemas/pagination";
+import type { PurchaseFilters, PurchaseOut } from "@cubby/schemas/project";
+import { purchaseSortableFields } from "@cubby/schemas/project";
+import { eq } from "drizzle-orm";
+import type { Database } from "~/server/db";
+import { purchase } from "~/server/db/schema";
+import {
+  buildOrderBy,
+  buildSearchConditions,
+  countWhere,
+  executeListQueryWithCount,
+  getDb,
+} from "~/server/repo/database-helpers";
+import { dbPurchaseToAPI } from "./helpers";
+
+export const purchaseList = async (
+  db: Database,
+  filters: PurchaseFilters,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+): Promise<{ data: PurchaseOut[]; count: number }> => {
+  const whereClause = buildSearchConditions(
+    purchase,
+    [{ column: purchase.name, term: filters.search }],
+    [
+      filters.category ? eq(purchase.category, filters.category) : undefined,
+      filters.subcategory
+        ? eq(purchase.subcategory, filters.subcategory)
+        : undefined,
+      filters.purchaser ? eq(purchase.purchaser, filters.purchaser) : undefined,
+      filters.projectId ? eq(purchase.projectId, filters.projectId) : undefined,
+      filters.future !== undefined
+        ? eq(purchase.future, filters.future)
+        : undefined,
+    ],
+  );
+
+  const orderByArray = buildOrderBy(purchase, sorts, [
+    ...purchaseSortableFields,
+  ]);
+  const { take, skip } = buildTakeSkip(pagination);
+
+  const { data: rows, count } = await executeListQueryWithCount(
+    getDb(db).query.purchase.findMany({
+      where: whereClause,
+      orderBy: orderByArray,
+      limit: take,
+      offset: skip,
+      with: { project: { columns: { name: true, deletedAt: true } } },
+    }),
+    countWhere(db, purchase, whereClause),
+  );
+
+  return { data: rows.map(dbPurchaseToAPI), count };
+};
