@@ -36,6 +36,7 @@ import {
   type Filters,
 } from "./dashboard-filters";
 import { NeedsAttention } from "./needs-attention";
+import { ProjectActions } from "./project-actions";
 import {
   capitalize,
   formatDateRange,
@@ -207,12 +208,15 @@ function DashboardContent({
       <NeedsAttention projects={projects} tasks={tasks} purchases={purchases} />
 
       <Stack>
-        <ViewSwitcher
-          ariaLabel="Dashboard view"
-          options={DASHBOARD_VIEW_OPTIONS}
-          value={view}
-          onValueChange={setView}
-        />
+        <Row justify="between" align="center" wrap gap="sm">
+          <ViewSwitcher
+            ariaLabel="Dashboard view"
+            options={DASHBOARD_VIEW_OPTIONS}
+            value={view}
+            onValueChange={setView}
+          />
+          <ProjectActions />
+        </Row>
 
         {view === "overview" && (
           <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
