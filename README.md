@@ -122,6 +122,8 @@ See [CLAUDE.md](CLAUDE.md) for the prescriptive rules (branded IDs, soft delete,
 
 Products can be inventoried — an **Inventory Entry** specifies the amount of a given **Product** at a given **Location**.
 
+The household **Project Tracker** (migrated from Notion) is its own self-contained module: a **Project** groups **Tasks** and **Purchases** (the spend ledger), with blocked-by/blocking dependency edges between projects and between tasks. Spend/progress rollups are SQL aggregates — never denormalized. Project `locations` is deliberately free-form `text[]` (house names live in data, not committed enums).
+
 ```mermaid
 erDiagram
     Recipe ||--o{ RecipeSection : "has sections"
@@ -139,6 +141,12 @@ erDiagram
     Image ||--o{ Recipe : "linked to"
 
     Product }o--o| usda_food : "linked by UPC/NDB"
+
+    Project ||--o{ Task : "has"
+    Project ||--o{ Purchase : "has"
+    Project }o--o{ Project : "blocked by"
+    Task }o--o{ Task : "blocked by"
+    Image ||--o{ Project : "linked to"
 ```
 
 ## 🛠️ Development Setup
@@ -179,7 +187,7 @@ Required keys (see [apps/web/.env.example](apps/web/.env.example) for the full f
 | `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_ENDPOINT` / `R2_BUCKET_NAME` / `R2_PUBLIC_URL` | Image storage |
 | `USDA_API_URL` | USDA service URL (defaults to `http://localhost:8787/` for local Wrangler dev) |
 | `UPC_LOOKUP_API_URL` / `UPC_LOOKUP_API_KEY` | UPC lookup worker |
-| `NOTION_API_KEY` | *(optional)* Project Tracker dashboard |
+| `NOTION_API_KEY` | *(optional)* Notion recipes import |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | *(optional)* OTLP traces → Jaeger |
 
 ### Worktrees (parallel sessions)
@@ -352,6 +360,7 @@ Framed as **Now / Next / Later** (no dates — it's a personal project). Canonic
 
 ### Recently shipped
 
+- **Project tracker migration** — the household projects/tasks/purchases databases moved from Notion into first-class cubby entities (DB tables, full CRUD UI at `/projects` `/tasks` `/purchases`, MCP tools, dashboard + charts). The one-time import script was removed post-cutover (recoverable from git history).
 - **Meal planning v1** — plan recipes onto a calendar (week + table views), scale each per meal, and a display-only shopping list (aggregated need vs. on-hand inventory, with a per-meal breakdown). Cook-and-consume inventory deduction was deliberately scoped out — it lives under *Meal planning v2* below → [docs/todos.md](docs/todos.md)
 
 ### Now
