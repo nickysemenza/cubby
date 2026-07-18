@@ -565,18 +565,24 @@ jobs:
         with:
           name: cf-build
           path: apps/web/dist
+      - name: Install wrangler
+        # Pin to the repo's wrangler version (apps/web/package.json): build:cf
+        # dumps the RESOLVED config from that version, and a newer wrangler can
+        # reject resolved-only fields (4.112 started erroring on `legacy_env`,
+        # breaking every deploy). Install GLOBALLY, not via the action's
+        # `wranglerVersion` input — that input makes the action run
+        # `npm i wrangler@…` inside workingDirectory (apps/web), where npm dies
+        # on the workspace's `workspace:*` deps (this job never pnpm-installs).
+        # With wrangler pre-installed on PATH and no version input, the action
+        # detects it and skips its own install. Same pattern as preview-cf.
+        run: |
+          version=$(node -p "require('./apps/web/package.json').devDependencies.wrangler.replace(/^[^0-9]*/, '')")
+          npm install -g "wrangler@${version}"
       - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: 9f10f078d35d86c78dedece2300a6b88
-          # Pin to the repo's wrangler (apps/web/package.json — keep in sync).
-          # build:cf dumps the RESOLVED config from that version, and a newer
-          # wrangler can reject resolved-only fields (e.g. 4.112 started
-          # erroring on `legacy_env`, breaking every deploy). The action
-          # installs its own wrangler, so the old global install was both
-          # redundant and unpinned.
-          wranglerVersion: "4.110.0"
           command: deploy --config dist/server/wrangler.json
           workingDirectory: apps/web
 
