@@ -3,21 +3,11 @@ import {
   projectKindSchema,
   projectStatusSchema,
 } from "@cubby/schemas/project";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
+import { QuickAddDialog } from "~/app/_components/forms/quick-add-dialog";
 import { useTRPC } from "~/integrations/trpc/react";
 import { projectMutationInvalidateKeys } from "~/lib/query-keys";
 import {
-  FormWrapper,
   NullableNumericField,
   PlainDateField,
   SelectField,
@@ -54,57 +44,27 @@ export function CreateProjectDialog({
 }: CreateProjectDialogProps) {
   const api = useTRPC();
 
-  const form = useForm<QuickAddProjectValues>({
-    resolver: zodResolver(quickAddProjectSchema),
-    defaultValues,
-  });
-
-  const createMutation = useActionMutation({
-    mutationFn: api.project.create.mutationOptions,
-    success: (project) => `Added "${project.name}"`,
-    invalidateKeys: projectMutationInvalidateKeys,
-    onSuccess: () => {
-      form.reset(defaultValues);
-      onOpenChange(false);
-    },
-  });
-
-  const onSubmit = (values: QuickAddProjectValues) => {
-    createMutation.mutate({
-      name: values.name,
-      status: values.status,
-      kind: values.kind,
-      costEstimate: values.costEstimate,
-      startDate: values.startDate,
-    });
-  };
-
   return (
-    <Dialog
+    <QuickAddDialog
       open={open}
-      onOpenChange={(next) => {
-        if (!next) form.reset(defaultValues);
-        onOpenChange(next);
-      }}
+      onOpenChange={onOpenChange}
+      schema={quickAddProjectSchema}
+      defaultValues={defaultValues}
+      title="New Project"
+      description="Start tracking a household undertaking — tasks and purchases attach to it afterward."
+      mutationFn={api.project.create.mutationOptions}
+      successMessage={(project) => `Added "${project.name}"`}
+      invalidateKeys={projectMutationInvalidateKeys}
+      buildPayload={(values) => ({
+        name: values.name,
+        status: values.status,
+        kind: values.kind,
+        costEstimate: values.costEstimate,
+        startDate: values.startDate,
+      })}
     >
-      <DialogContent size="sm">
-        <DialogHeader>
-          <DialogTitle>New Project</DialogTitle>
-          <DialogDescription>
-            Start tracking a household undertaking — tasks and purchases attach
-            to it afterward.
-          </DialogDescription>
-        </DialogHeader>
-        <FormWrapper
-          form={form}
-          onSubmit={onSubmit}
-          isPending={createMutation.isPending}
-          error={
-            createMutation.error ? createMutation.error.message : undefined
-          }
-          onCancel={() => onOpenChange(false)}
-          submitButtonText="Create"
-        >
+      {(form) => (
+        <>
           <UnifiedTextField
             form={form}
             name="name"
@@ -134,8 +94,8 @@ export function CreateProjectDialog({
             prefix="$"
           />
           <PlainDateField form={form} name="startDate" label="Start date" />
-        </FormWrapper>
-      </DialogContent>
-    </Dialog>
+        </>
+      )}
+    </QuickAddDialog>
   );
 }

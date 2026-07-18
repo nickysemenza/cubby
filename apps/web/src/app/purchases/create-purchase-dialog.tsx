@@ -1,22 +1,12 @@
 import { unsafeProjectId } from "@cubby/schemas/identifiers";
 import { plainDate, purchaseCategorySchema } from "@cubby/schemas/project";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
-import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { QuickAddDialog } from "~/app/_components/forms/quick-add-dialog";
 import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
 import { useTRPC } from "~/integrations/trpc/react";
 import { purchaseMutationInvalidateKeys } from "~/lib/query-keys";
 import {
-  FormWrapper,
   NullableNumericField,
   PlainDateField,
   SelectField,
@@ -26,9 +16,7 @@ import { purchaseCategoryOptions } from "./purchase-options";
 
 // projectId stays a plain string here (not the branded `projectId` schema) —
 // it's the raw value out of the `SelectField` dropdown; the ProjectId brand is
-// applied at the tRPC-call boundary in onSubmit via `unsafeProjectId`. Branding
-// it here fights `zodResolver`'s input/output generic (the resolver's Input
-// type ends up mismatched against `useForm`'s form-values type).
+// applied at the tRPC-call boundary in buildPayload via `unsafeProjectId`.
 const quickAddPurchaseSchema = z.object({
   name: z.string().min(1, "Name is required"),
   cost: z.number().nullable(),
@@ -58,62 +46,32 @@ export function CreatePurchaseDialog({
   const api = useTRPC();
   const { options: projectOptions } = useProjectOptions();
 
-  const form = useForm<QuickAddPurchaseValues>({
-    resolver: zodResolver(quickAddPurchaseSchema),
-    defaultValues: buildDefaultValues(),
-  });
-
-  const createMutation = useActionMutation({
-    mutationFn: api.purchase.create.mutationOptions,
-    success: (purchase) => `Logged "${purchase.name}"`,
-    invalidateKeys: purchaseMutationInvalidateKeys,
-    onSuccess: () => {
-      form.reset(buildDefaultValues());
-      onOpenChange(false);
-    },
-  });
-
-  const onSubmit = (values: QuickAddPurchaseValues) => {
-    createMutation.mutate({
-      name: values.name,
-      cost: values.cost,
-      date: values.date,
-      projectId: values.projectId ? unsafeProjectId(values.projectId) : null,
-      category: values.category,
-      subcategory: null,
-      purchaser: null,
-      url: null,
-      notes: null,
-      future: false,
-    });
-  };
-
   return (
-    <Dialog
+    <QuickAddDialog
       open={open}
-      onOpenChange={(next) => {
-        if (!next) form.reset(buildDefaultValues());
-        onOpenChange(next);
-      }}
+      onOpenChange={onOpenChange}
+      schema={quickAddPurchaseSchema}
+      defaultValues={buildDefaultValues}
+      title="New Purchase"
+      description="Log what you bought (or plan to) — the fastest way to keep a project's cost honest."
+      mutationFn={api.purchase.create.mutationOptions}
+      successMessage={(purchase) => `Logged "${purchase.name}"`}
+      invalidateKeys={purchaseMutationInvalidateKeys}
+      buildPayload={(values) => ({
+        name: values.name,
+        cost: values.cost,
+        date: values.date,
+        projectId: values.projectId ? unsafeProjectId(values.projectId) : null,
+        category: values.category,
+        subcategory: null,
+        purchaser: null,
+        url: null,
+        notes: null,
+        future: false,
+      })}
     >
-      <DialogContent size="sm">
-        <DialogHeader>
-          <DialogTitle>New Purchase</DialogTitle>
-          <DialogDescription>
-            Log what you bought (or plan to) — the fastest way to keep a
-            project's cost honest.
-          </DialogDescription>
-        </DialogHeader>
-        <FormWrapper
-          form={form}
-          onSubmit={onSubmit}
-          isPending={createMutation.isPending}
-          error={
-            createMutation.error ? createMutation.error.message : undefined
-          }
-          onCancel={() => onOpenChange(false)}
-          submitButtonText="Create"
-        >
+      {(form) => (
+        <>
           <UnifiedTextField
             form={form}
             name="name"
@@ -144,8 +102,8 @@ export function CreatePurchaseDialog({
             options={projectOptions}
             nullable
           />
-        </FormWrapper>
-      </DialogContent>
-    </Dialog>
+        </>
+      )}
+    </QuickAddDialog>
   );
 }
