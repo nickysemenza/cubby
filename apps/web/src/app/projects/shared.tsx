@@ -66,23 +66,9 @@ export function capitalize(s: string): string {
   return s.length === 0 ? s : s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-// -- Category colors (monochrome ink ladder + ultramarine accent) --
+// -- Category colors --
 
-export const CATEGORY_COLORS: Record<string, string> = {
-  materials: "var(--chart-1)",
-  tools: "var(--chart-5)",
-  services: "var(--chart-2)",
-};
-
-/**
- * Accepts a plain string, not the strict `PurchaseCategory` enum — callers
- * pass ad hoc bucket labels (e.g. treemap/donut group keys like
- * "uncategorized") through here too, not just raw purchase.category values.
- */
-export function getCategoryColor(category: string | null): string {
-  if (!category) return "var(--chart-neutral)";
-  return CATEGORY_COLORS[category] ?? "var(--chart-neutral)";
-}
+export { getCategoryColor } from "~/lib/status-colors";
 
 /**
  * `purchase.category` is now a strict enum (no more Notion emoji prefixes to

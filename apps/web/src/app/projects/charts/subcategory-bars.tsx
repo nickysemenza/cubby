@@ -5,7 +5,7 @@ import { ShoppingBag } from "lucide-react";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
 import {
-  CATEGORY_COLORS,
+  getCategoryColor,
   nivoBarChrome,
   nivoChartTheme,
   normalizeCategoryKey,
@@ -71,10 +71,7 @@ export function SubcategoryBars({ purchases }: { purchases: PurchaseOut[] }) {
         layout="horizontal"
         margin={{ top: 10, right: 60, bottom: 40, left: 200 }}
         padding={0.25}
-        colors={(bar) => {
-          const key = bar.id as string;
-          return CATEGORY_COLORS[key] ?? "var(--chart-neutral)";
-        }}
+        colors={(bar) => getCategoryColor(bar.id as string)}
         {...nivoBarChrome}
         axisBottom={{
           format: (v: number) => formatCurrency(v, 0),

@@ -1,3 +1,8 @@
+import type {
+  ProjectStatus,
+  PurchaseCategory,
+  TaskStatus,
+} from "@cubby/schemas/project";
 import {
   CheckCircle2,
   Circle,
@@ -40,7 +45,7 @@ const auditStatus: Record<string, StatusBadgeProps> = {
  * (`PROJECT_STATUS_LABELS`/`TASK_STATUS_LABELS`) — this map is presentation
  * (icon/color) only.
  */
-const projectStatus: Record<string, StatusBadgeProps> = {
+const projectStatus: Record<ProjectStatus | TaskStatus, StatusBadgeProps> = {
   done: {
     label: "Done",
     className: "bg-secondary text-secondary-foreground",
@@ -77,7 +82,7 @@ const projectStatus: Record<string, StatusBadgeProps> = {
  * Project/task status -> chart fill color, using the warm chart tokens.
  * Single source of truth for SVG/nivo charts (which can't use Tailwind classes).
  */
-const projectStatusChartColor: Record<string, string> = {
+const projectStatusChartColor: Record<ProjectStatus | TaskStatus, string> = {
   done: "var(--chart-positive)",
   in_progress: "var(--chart-1)",
   blocked: "var(--chart-negative)",
@@ -87,7 +92,8 @@ const projectStatusChartColor: Record<string, string> = {
 };
 
 export function getStatusChartColor(value: string | null | undefined): string {
-  return (value && projectStatusChartColor[value]) || "var(--chart-neutral)";
+  const map = projectStatusChartColor as Record<string, string>;
+  return (value && map[value]) || "var(--chart-neutral)";
 }
 
 const DOMAINS = {
@@ -105,11 +111,31 @@ export function getStatusBadgeProps(
   domain: StatusDomain,
   value: string | null | undefined,
 ): StatusBadgeProps {
-  const map = DOMAINS[domain];
+  const map = DOMAINS[domain] as Record<string, StatusBadgeProps>;
   if (value && map[value]) return map[value];
   return {
     label: value ?? "Unknown",
     className: "bg-slate/20 text-slate",
     icon: Circle,
   };
+}
+
+// -- Category colors (monochrome ink ladder + ultramarine accent) --
+
+/** `purchase.category` -> chart/badge color, using the warm chart tokens. */
+const CATEGORY_COLORS: Record<PurchaseCategory, string> = {
+  materials: "var(--chart-1)",
+  tools: "var(--chart-5)",
+  services: "var(--chart-2)",
+};
+
+/**
+ * Accepts a plain string, not the strict `PurchaseCategory` enum — callers
+ * pass ad hoc bucket labels (e.g. treemap/donut group keys like
+ * "uncategorized") through here too, not just raw purchase.category values.
+ */
+export function getCategoryColor(category: string | null): string {
+  if (!category) return "var(--chart-neutral)";
+  const map = CATEGORY_COLORS as Record<string, string>;
+  return map[category] ?? "var(--chart-neutral)";
 }

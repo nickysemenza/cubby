@@ -1,6 +1,5 @@
 import { unsafeProjectId } from "@cubby/schemas/identifiers";
 import type { TaskOut, TaskStatus } from "@cubby/schemas/project";
-import type { ColumnFiltersState } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { useMemo } from "react";
@@ -17,7 +16,9 @@ import {
 import RTable from "../_components/data-table/Table";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
+import { useNameEditable } from "../_components/hooks/useNameEditable";
 import { useProjectOptions } from "../_components/hooks/useProjectOptions";
+import { useSeededFilter } from "../_components/hooks/useSeededFilter";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { taskStatusBadgeVariant, taskStatusOptions } from "./task-options";
 
@@ -43,18 +44,7 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
     invalidateKeys: taskMutationInvalidateKeys,
   });
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: updateTaskMutation changes every render but is functionally stable
-  const nameEditable = useMemo(
-    () => ({
-      onSave: async (newName: string, task: TaskOut) => {
-        await updateTaskMutation.mutateAsync({
-          id: task.id,
-          data: { name: newName },
-        });
-      },
-    }),
-    [],
-  );
+  const nameEditable = useNameEditable<TaskOut>(updateTaskMutation.mutateAsync);
 
   const deletableConfig = useDeletableConfig({
     mutationFn: api.task.delete.mutationOptions,
@@ -140,15 +130,7 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
     [projectFilterOptions],
   );
 
-  // Seed the "name" column filter from the route's `q` param (e.g. a
-  // command-palette deep link) — see the `initialFilter` pattern in
-  // productlist.tsx.
-  const initialFilter = useMemo((): ColumnFiltersState => {
-    if (!initialSearch) return [];
-    return [{ id: "name", value: initialSearch }];
-  }, [initialSearch]);
-
-  const tableStateOptions = useMemo(() => ({ initialFilter }), [initialFilter]);
+  const tableStateOptions = useSeededFilter("name", initialSearch);
 
   const {
     table,

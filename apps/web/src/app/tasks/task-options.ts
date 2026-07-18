@@ -1,7 +1,7 @@
 import type { TaskStatus } from "@cubby/schemas/project";
 import { taskStatusValues } from "@cubby/schemas/project";
 import { TASK_STATUS_LABELS } from "~/app/projects/shared";
-import type { FilterableComboboxItem } from "~/components/ui/combobox";
+import { buildSelectOptions } from "~/lib/select-options";
 
 /** Badge tone per status — warm-paper ledger semantic tokens, not raw colors. */
 export const taskStatusBadgeVariant: Record<
@@ -16,6 +16,7 @@ export const taskStatusBadgeVariant: Record<
 };
 
 /** `{value,label}` options for the status filter/inline-edit select. */
-export const taskStatusOptions: FilterableComboboxItem[] = taskStatusValues.map(
-  (value) => ({ value, label: TASK_STATUS_LABELS[value] }),
+export const taskStatusOptions = buildSelectOptions(
+  taskStatusValues,
+  TASK_STATUS_LABELS,
 );
