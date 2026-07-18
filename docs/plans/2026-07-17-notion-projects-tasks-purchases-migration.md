@@ -90,6 +90,10 @@ Plumbing that must land with the tables:
 
 ## Phase 2 — One-time import (idempotent)
 
+> **Note (2026-07-17):** the migration completed and the script was deleted from
+> the tree — recover it from git history if ever needed:
+> `git log --diff-filter=D -- apps/web/scripts/import-notion-projects.ts`.
+
 A maintenance script (`apps/web/scripts/import-notion-projects.ts`, run via tsx
 locally against Neon; **not** wired into the app) that:
 
