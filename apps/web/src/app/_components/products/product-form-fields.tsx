@@ -22,9 +22,14 @@ import { UsdaFoodSearchField } from "../combobox/with-usda-food-search";
 import {
   ComboboxFieldWithSearch,
   NullableNumericField,
+  NullableTextareaField,
   SideBySideFields,
   UnifiedTextField,
 } from "../form-utils";
+import {
+  type PendingDocument,
+  PendingDocumentUpload,
+} from "../PendingDocumentUpload";
 import { type PendingImage, PendingImageUpload } from "../PendingImageUpload";
 import { UnitMappingPairField } from "../units/unit-mapping-pair-field";
 import { CategoryFieldWithAI } from "./category-field-with-ai";
@@ -73,12 +78,18 @@ type ImageHandlers = Pick<
   | "handlePendingImagesChange"
   | "handleRemovedImagesChange"
   | "handleExistingImagesReorder"
+  | "handlePendingDocumentsChange"
+  | "handleRemovedDocumentsChange"
 >;
 
 interface ProductFormFieldsProps<TFieldValues extends FieldValues> {
   form: UseFormReturn<TFieldValues>;
   imageHandlers: ImageHandlers;
   existingImages?: PendingImage[];
+  /** Already-attached PDF manuals (edit mode). */
+  existingDocuments?: PendingDocument[];
+  /** R2 folder for new manuals — the product shortcode (edit mode only). */
+  documentFolder?: string;
   /** Pending images for AI product identification */
   pendingImages?: PendingImage[];
   /** When true, skips the Name+Model SideBySideFields row */
@@ -100,6 +111,8 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
   form,
   imageHandlers,
   existingImages = EMPTY_PENDING_IMAGES,
+  existingDocuments,
+  documentFolder,
   pendingImages = EMPTY_PENDING_IMAGES,
   hideNameField = false,
   hidePrice = false,
@@ -247,12 +260,11 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
           </SideBySideFields>
         )}
 
-        <UnifiedTextField
+        <NullableTextareaField
           form={form}
           name={"notes" as Path<TFieldValues>}
           label="Notes"
-          placeholder="Notes, URLs, etc."
-          nullable={true}
+          placeholder="Notes, URLs, etc. — Markdown supported"
         />
 
         {!isMisc && (
@@ -387,6 +399,19 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
 
         {pendingImages.length > 0 && (
           <IdentifyProductButton form={form} pendingImages={pendingImages} />
+        )}
+
+        {/* PDF manuals — hidden in compact mode (QuickInventoryAdd). */}
+        {!compact && (
+          <PendingDocumentUpload
+            entityType="PRODUCT"
+            folder={documentFolder}
+            onDocumentsChange={imageHandlers.handlePendingDocumentsChange}
+            existingDocuments={existingDocuments}
+            onExistingDocumentsRemove={
+              imageHandlers.handleRemovedDocumentsChange
+            }
+          />
         )}
       </Stack>
 

@@ -11,10 +11,7 @@
  * Storage/network orchestration lives in image-storage.service.ts.
  */
 
-import type {
-  ImageWithEntity,
-  InitiateUploadWithoutEntityInput,
-} from "@cubby/schemas/image";
+import type { ImageWithEntity } from "@cubby/schemas/image";
 import { imageSortableFields } from "@cubby/schemas/image";
 import { and, eq, inArray, lt } from "drizzle-orm";
 import type { Database } from "~/server/db";
@@ -44,7 +41,13 @@ export const createPendingImageRecord = async (
     filename,
     contentType,
     size,
-  }: InitiateUploadWithoutEntityInput & { key: string; url: string },
+  }: {
+    key: string;
+    url: string;
+    filename: string;
+    contentType: string;
+    size: number;
+  },
 ) => {
   return await insertAndReturn(db, image, {
     key,

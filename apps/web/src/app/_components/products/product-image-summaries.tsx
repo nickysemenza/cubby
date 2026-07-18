@@ -1,5 +1,5 @@
-import type { ImageOut } from "@cubby/schemas/image";
-import { createContext, type ReactNode, useContext } from "react";
+import { type ImageOut, isDocumentFile } from "@cubby/schemas/image";
+import { createContext, type ReactNode, useContext, useMemo } from "react";
 import { useChunkedRecordQuery } from "~/app/_components/hooks/useChunkedRecordQuery";
 import { useTRPC } from "~/integrations/trpc/react";
 
@@ -38,7 +38,18 @@ export function ProductImageSummariesProvider({
   const fetchedSummaries = useProductImageSummaries(
     summaries ? [] : productIds,
   );
-  const value = summaries ?? fetchedSummaries;
+  // Drop PDF manuals (they share the images relation) so every consumer's
+  // `images[0]` cover stays a real image. Memoized — a fresh map each render
+  // would destabilize downstream hooks.
+  const value = useMemo(() => {
+    const raw = summaries ?? fetchedSummaries;
+    return Object.fromEntries(
+      Object.entries(raw).map(([id, imgs]) => [
+        id,
+        imgs.filter((img) => !isDocumentFile(img)),
+      ]),
+    );
+  }, [summaries, fetchedSummaries]);
 
   return (
     <ProductImageSummariesContext.Provider value={value}>

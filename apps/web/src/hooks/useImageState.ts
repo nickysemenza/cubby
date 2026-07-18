@@ -18,6 +18,11 @@ export function useImageState() {
   // null = untouched; an array is the full display order of the existing
   // images (first = cover) after the user reordered them.
   const [imageOrder, setImageOrder] = useState<string[] | null>(null);
+  // Documents (PDF manuals) ride the same pendingImageIds/removeImageIds
+  // plumbing but are tracked separately so the image UI (cover, reorder)
+  // never sees them.
+  const [pendingDocuments, setPendingDocuments] = useState<PendingImage[]>([]);
+  const [removedDocumentIds, setRemovedDocumentIds] = useState<string[]>([]);
 
   const handlePendingImagesChange = (images: PendingImage[]) => {
     setPendingImages(images);
@@ -31,6 +36,14 @@ export function useImageState() {
     setImageOrder(orderedIds);
   };
 
+  const handlePendingDocumentsChange = (documents: PendingImage[]) => {
+    setPendingDocuments(documents);
+  };
+
+  const handleRemovedDocumentsChange = (ids: string[]) => {
+    setRemovedDocumentIds(ids);
+  };
+
   /**
    * Returns the image data in the format required by the API.
    * For create operations, pass isCreate=true and it will only include pendingImageIds.
@@ -38,14 +51,18 @@ export function useImageState() {
   const getImageData = (isCreate = false): Partial<UpdateInputImages> => {
     const imageData: Partial<UpdateInputImages> = {};
 
-    // If we have pending images, include them in the data
-    if (pendingImages.length > 0) {
-      imageData.pendingImageIds = pendingImages.map((img) => img.id);
+    // Pending documents merge into pendingImageIds — same association path.
+    const pendingIds = [...pendingImages, ...pendingDocuments].map(
+      (img) => img.id,
+    );
+    if (pendingIds.length > 0) {
+      imageData.pendingImageIds = pendingIds;
     }
 
     // If we have removed images and this is not a create operation, include them
-    if (!isCreate && removedImageIds.length > 0) {
-      imageData.removeImageIds = removedImageIds;
+    const removedIds = [...removedImageIds, ...removedDocumentIds];
+    if (!isCreate && removedIds.length > 0) {
+      imageData.removeImageIds = removedIds;
     }
 
     // If the user reordered the existing images, persist the new order.
@@ -65,6 +82,8 @@ export function useImageState() {
     return (
       pendingImages.length > 0 ||
       removedImageIds.length > 0 ||
+      pendingDocuments.length > 0 ||
+      removedDocumentIds.length > 0 ||
       imageOrder !== null
     );
   };
@@ -77,6 +96,8 @@ export function useImageState() {
     setPendingImages([]);
     setRemovedImageIds([]);
     setImageOrder(null);
+    setPendingDocuments([]);
+    setRemovedDocumentIds([]);
   };
 
   return {
@@ -85,6 +106,8 @@ export function useImageState() {
     handlePendingImagesChange,
     handleRemovedImagesChange,
     handleExistingImagesReorder,
+    handlePendingDocumentsChange,
+    handleRemovedDocumentsChange,
     getImageData,
     hasImageChanges,
     reset,

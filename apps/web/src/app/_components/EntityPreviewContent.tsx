@@ -1,3 +1,4 @@
+import { isDocumentFile } from "@cubby/schemas/image";
 import type { LocationType } from "@cubby/schemas/location";
 import { RECIPE_MACRO_KEYS } from "@cubby/schemas/recipe-shared";
 import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
@@ -315,7 +316,7 @@ export function ProductPreviewContent({ productId }: { productId: string }) {
         nutrients: data.food?.nutritionInfo.nutrientsPer100,
         price: data.price ?? undefined,
         upc: data.upc ?? undefined,
-        thumbUrl: data.images[0]?.url,
+        thumbUrl: data.images.find((img) => !isDocumentFile(img))?.url,
         // Resolved USDA food (explicit fdc_id or UPC-matched) lives on `food`.
         usdaFdcId: data.food?.fdc_id ?? data.fdc_id ?? undefined,
       })}

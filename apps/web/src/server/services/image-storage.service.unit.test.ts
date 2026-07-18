@@ -1,16 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  createPendingImageRecord: vi.fn(),
   createUploadedImageRecord: vi.fn(),
   deleteS3Object: vi.fn(),
   fetchAndStoreImage: vi.fn(),
+  getImageByKey: vi.fn(),
+  generatePresignedUploadUrl: vi.fn(),
 }));
 
 vi.mock("~/server/repo/image", () => ({
-  createPendingImageRecord: vi.fn(),
+  createPendingImageRecord: mocks.createPendingImageRecord,
   createUploadedImageRecord: mocks.createUploadedImageRecord,
   cullPendingImages: vi.fn(),
-  getImageByKey: vi.fn(),
+  getImageByKey: mocks.getImageByKey,
 }));
 
 vi.mock("~/server/utils/s3", () => ({
@@ -19,12 +22,17 @@ vi.mock("~/server/utils/s3", () => ({
   extractKeyFromUrl: vi.fn(),
   fetchAndStoreImage: mocks.fetchAndStoreImage,
   generateImageKey: vi.fn(),
-  generatePresignedUploadUrl: vi.fn(),
-  getS3ObjectUrl: vi.fn(),
+  generateDocumentKey: (filename: string, folder?: string) =>
+    `cubby/documents/${folder ? `${folder}/` : ""}${filename}`,
+  generatePresignedUploadUrl: mocks.generatePresignedUploadUrl,
+  getS3ObjectUrl: (key: string) => `https://images.example/${key}`,
   isOurBucketUrl: () => false,
 }));
 
-import { importImageFromUrl } from "./image-storage.service";
+import {
+  importImageFromUrl,
+  initiateDocumentUpload,
+} from "./image-storage.service";
 
 describe("importImageFromUrl", () => {
   beforeEach(() => {
@@ -49,5 +57,57 @@ describe("importImageFromUrl", () => {
       }),
     ).rejects.toBe(databaseError);
     expect(mocks.deleteS3Object).toHaveBeenCalledWith("imports/recipe.jpg");
+  });
+});
+
+describe("initiateDocumentUpload", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.createPendingImageRecord.mockResolvedValue({ id: "img-1" });
+    mocks.generatePresignedUploadUrl.mockResolvedValue(
+      "https://r2.example/put",
+    );
+    mocks.getImageByKey.mockResolvedValue(null);
+  });
+
+  it("preserves the original filename under the folder", async () => {
+    const result = await initiateDocumentUpload({} as never, {
+      filename: "blender-manual.pdf",
+      contentType: "application/pdf",
+      size: 1024,
+      entityType: "PRODUCT",
+      folder: "P-0123",
+    });
+
+    expect(result.key).toBe("cubby/documents/P-0123/blender-manual.pdf");
+    expect(result.imageId).toBe("img-1");
+    expect(mocks.createPendingImageRecord).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({
+        filename: "blender-manual.pdf",
+        contentType: "application/pdf",
+        key: "cubby/documents/P-0123/blender-manual.pdf",
+      }),
+    );
+  });
+
+  it("falls back to a timestamped key when the filename collides", async () => {
+    mocks.getImageByKey.mockResolvedValueOnce({
+      id: "existing",
+      url: "https://images.example/x",
+      key: "cubby/documents/P-0123/blender-manual.pdf",
+    });
+
+    const result = await initiateDocumentUpload({} as never, {
+      filename: "blender-manual.pdf",
+      contentType: "application/pdf",
+      size: 1024,
+      entityType: "PRODUCT",
+      folder: "P-0123",
+    });
+
+    expect(result.key).toMatch(
+      /^cubby\/documents\/P-0123\/blender-manual-\d+\.pdf$/,
+    );
   });
 });

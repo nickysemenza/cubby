@@ -1,3 +1,4 @@
+import { isDocumentFile } from "@cubby/schemas/image";
 import type { IngredientWithFoodOut } from "@cubby/schemas/ingredient";
 import type { FC } from "react";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
@@ -24,25 +25,28 @@ export const IngredientProductShelf: FC<{
   return (
     <ShelfGrid
       items={products}
-      renderCard={(product) => (
-        <ShelfCard
-          key={product.id}
-          to="/products/$id"
-          params={{ id: product.id }}
-          image={product.images[0]?.url}
-          extraCount={product.images.length - 1}
-          title={product.name}
-          subtitle={[
-            product.price != null ? formatCurrency(product.price) : null,
-            isUnspecifiedManufacturer(product.manufacturer)
-              ? null
-              : product.manufacturer,
-          ]
-            .filter(Boolean)
-            .join(" · ")}
-          entity="product"
-        />
-      )}
+      renderCard={(product) => {
+        const images = product.images.filter((img) => !isDocumentFile(img));
+        return (
+          <ShelfCard
+            key={product.id}
+            to="/products/$id"
+            params={{ id: product.id }}
+            image={images[0]?.url}
+            extraCount={images.length - 1}
+            title={product.name}
+            subtitle={[
+              product.price != null ? formatCurrency(product.price) : null,
+              isUnspecifiedManufacturer(product.manufacturer)
+                ? null
+                : product.manufacturer,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+            entity="product"
+          />
+        );
+      }}
     />
   );
 };

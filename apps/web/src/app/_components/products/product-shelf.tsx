@@ -1,3 +1,4 @@
+import { isDocumentFile } from "@cubby/schemas/image";
 import type { ProductListItem } from "@cubby/schemas/product";
 import { formatCurrency } from "~/lib/utils";
 import { ShelfCard, ShelfEmpty, ShelfGrid } from "../data-table/shelf";
@@ -26,7 +27,9 @@ export function ProductShelf({
       infiniteScroll={infiniteScroll}
       emptyState={<ShelfEmpty entity="product" label="No products yet" />}
       renderCard={(product) => {
-        const images = product.images ?? [];
+        const images = (product.images ?? []).filter(
+          (img) => !isDocumentFile(img),
+        );
         const subtitle =
           product.price != null
             ? formatCurrency(product.price)
