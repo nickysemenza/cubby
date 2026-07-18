@@ -503,8 +503,10 @@ async function blockToMarkdown(
       const lines: string[] = [];
       rows.forEach((row, i) => {
         if (row.type !== "table_row") return;
+        // Escape backslashes BEFORE pipes so a literal "\" in a cell can't
+        // combine with the added "\|" escapes (js/incomplete-sanitization).
         const cells = row.table_row.cells.map((cell) =>
-          richTextToMarkdown(cell).replace(/\|/g, "\\|"),
+          richTextToMarkdown(cell).replace(/\\/g, "\\\\").replace(/\|/g, "\\|"),
         );
         lines.push(`| ${cells.join(" | ")} |`);
         if (i === 0) {
