@@ -1,4 +1,6 @@
+import type { ProjectId } from "@cubby/schemas/identifiers";
 import type { ProjectOut, PurchaseOut, TaskOut } from "@cubby/schemas/project";
+import { format } from "date-fns";
 import { AlertTriangle, CalendarClock, DollarSign } from "lucide-react";
 import { useMemo } from "react";
 import { Row, Stack } from "~/components/layout";
@@ -15,25 +17,30 @@ export function NeedsAttention({
   tasks: TaskOut[];
   purchases: PurchaseOut[];
 }) {
+  // Keyed by id — project names aren't unique, so a name-keyed lookup here
+  // would attribute overdue tasks/stalled status to the wrong same-named
+  // project.
   const projectMap = useMemo(
-    () => new Map(projects.map((p) => [p.name, p])),
+    () => new Map(projects.map((p) => [p.id, p])),
     [projects],
   );
 
   const { overdueTasks, stalledProjects, missingEstimates } = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    // The LOCAL calendar day, not `toISOString().slice(0, 10)` (a UTC day —
+    // reads a same-day task as overdue after ~5pm PT).
+    const today = format(new Date(), "yyyy-MM-dd");
     const overdueTasks = tasks.filter(
       (t) => t.dueDate && t.dueDate < today && t.status !== "done",
     );
 
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const cutoff = thirtyDaysAgo.toISOString().slice(0, 10);
+    const cutoff = format(thirtyDaysAgo, "yyyy-MM-dd");
 
-    const recentPurchaseProjects = new Set<string>();
+    const recentPurchaseProjects = new Set<ProjectId>();
     for (const p of purchases) {
-      if (p.projectName && p.date && p.date >= cutoff) {
-        recentPurchaseProjects.add(p.projectName);
+      if (p.projectId && p.date && p.date >= cutoff) {
+        recentPurchaseProjects.add(p.projectId);
       }
     }
 
@@ -42,7 +49,7 @@ export function NeedsAttention({
     );
 
     const stalledProjects = activeProjects.filter(
-      (p) => !recentPurchaseProjects.has(p.name),
+      (p) => !recentPurchaseProjects.has(p.id),
     );
 
     const missingEstimates = activeProjects.filter(
@@ -70,7 +77,7 @@ export function NeedsAttention({
           title={`${overdueTasks.length} overdue task${overdueTasks.length !== 1 ? "s" : ""}`}
         >
           {overdueTasks.map((t) => {
-            const proj = t.projectName ? projectMap.get(t.projectName) : null;
+            const proj = t.projectId ? projectMap.get(t.projectId) : null;
             return (
               <Row key={t.id} align="center" gap="sm" className="text-xs">
                 <span className="truncate">{t.name}</span>

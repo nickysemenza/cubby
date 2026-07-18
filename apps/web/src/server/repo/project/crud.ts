@@ -15,10 +15,18 @@ import type {
   ProjectUpdateInput,
 } from "@cubby/schemas/project";
 import { and, eq, inArray, or } from "drizzle-orm";
+import { countBy } from "es-toolkit";
 import type { Database } from "~/server/db";
-import { project, projectDependency, purchase, task } from "~/server/db/schema";
+import {
+  project,
+  projectDependency,
+  projectImage,
+  purchase,
+  task,
+} from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
+  buildCascadeAuditEntries,
   computeChanges,
   logAuditEntries,
   logAuditEntry,
@@ -29,6 +37,7 @@ import {
   insertAndReturn,
   lockAndValidateForDelete,
   notDeleted,
+  replaceDependencyEdges,
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
@@ -140,17 +149,23 @@ export const updateProject = async (
     // Full-replacement set: clear this project's blocked-by edges and insert
     // the new ones, all inside the same transaction as the column update.
     if (data.blockedByIds !== undefined) {
-      await tx
-        .delete(projectDependency)
-        .where(eq(projectDependency.projectId, id));
-      if (data.blockedByIds.length > 0) {
-        await tx.insert(projectDependency).values(
-          data.blockedByIds.map((blockedByProjectId) => ({
-            projectId: id,
+      await replaceDependencyEdges(
+        tx,
+        projectDependency,
+        {
+          ownColumn: projectDependency.projectId,
+          blockedByColumn: projectDependency.blockedByProjectId,
+          buildRow: (projectId, blockedByProjectId) => ({
+            projectId,
             blockedByProjectId,
-          })),
-        );
-      }
+          }),
+          entityTable: project,
+          label: "Project",
+          notFoundReason: "PROJECT_NOT_FOUND",
+        },
+        id,
+        data.blockedByIds,
+      );
     }
 
     const changes: Record<string, { from: unknown; to: unknown }> = {
@@ -183,7 +198,9 @@ export const updateProject = async (
  * Soft-delete projects. Guards against orphaning live tasks/purchases (throws
  * `PROJECT_HAS_TASKS` / `PROJECT_HAS_PURCHASES`), then always hard-deletes the
  * project's dependency edges in both directions — a `projectDependency` row
- * carries no meaning once either endpoint is gone, so it isn't soft-deleted.
+ * carries no meaning once either endpoint is gone, so it isn't soft-deleted —
+ * and soft-deletes the project's images (mirrors product delete's
+ * productImage cascade).
  */
 export const deleteProjects = async (
   db: Database,
@@ -208,7 +225,7 @@ export const deleteProjects = async (
         }),
       reason: "PROJECT_HAS_TASKS",
       message: (count, names) =>
-        `Cannot delete ${count} project(s): ${names} have active tasks. Complete or remove them first.`,
+        `Cannot delete ${count} project(s): ${names} still have tasks. Delete or reassign them first.`,
     });
 
     const livePurchases = await tx.query.purchase.findMany({
@@ -224,7 +241,7 @@ export const deleteProjects = async (
         }),
       reason: "PROJECT_HAS_PURCHASES",
       message: (count, names) =>
-        `Cannot delete ${count} project(s): ${names} have purchases. Remove them first.`,
+        `Cannot delete ${count} project(s): ${names} still have purchases. Delete or reassign them first.`,
     });
 
     await tx
@@ -237,19 +254,33 @@ export const deleteProjects = async (
       );
 
     const now = new Date();
+
+    // Cascaded counts (per project) for the audit trail, gathered before the
+    // soft-delete below flips their deletedAt.
+    const cascadedImages = await tx.query.projectImage.findMany({
+      where: and(
+        inArray(projectImage.projectId, ids),
+        notDeleted(projectImage),
+      ),
+      columns: { projectId: true },
+    });
+
+    await tx
+      .update(projectImage)
+      .set({ deletedAt: now })
+      .where(
+        and(inArray(projectImage.projectId, ids), notDeleted(projectImage)),
+      );
+
     await tx
       .update(project)
       .set({ deletedAt: now })
       .where(and(inArray(project.id, ids), notDeleted(project)));
 
-    await logAuditEntries(
-      tx,
-      actor,
-      ids.map((id) => ({
-        entityType: "project" as const,
-        entityId: id,
-        action: "delete" as const,
-      })),
-    );
+    const auditEntries = buildCascadeAuditEntries("project", ids, {
+      cascadedImages: countBy(cascadedImages, (i) => i.projectId),
+    });
+
+    await logAuditEntries(tx, actor, auditEntries);
   });
 };

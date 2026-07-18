@@ -183,12 +183,6 @@ export const recipeDetailMcpOut = recipeOut;
 
 export const recipeCostingExplainMcpOut = recipeCostingExplain;
 
-export const notionListEnvelope = <T extends z.ZodTypeAny>(itemSchema: T) =>
-  z.object({
-    count: z.number().int().nonnegative(),
-    items: z.array(itemSchema),
-  });
-
 export const problemsTypeSliceOut = z.object({
   type: z.string(),
   items: z.array(z.unknown()),

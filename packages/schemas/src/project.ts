@@ -115,6 +115,17 @@ export const projectUpdateInput = z.object({
 });
 export type ProjectUpdateInput = z.infer<typeof projectUpdateInput>;
 
+/**
+ * Lightweight `{id, name}` projection for pickers/filter selects — no
+ * rollups/dependency joins, a single indexed query (see
+ * repo/project/lookup.ts's `projectNameOptions`).
+ */
+export const projectOptionsOut = z.object({
+  id: projectId,
+  name: z.string(),
+});
+export type ProjectOptionsOut = z.infer<typeof projectOptionsOut>;
+
 export const projectFilterFields = {
   status: projectStatusSchema.optional(),
   kind: projectKindSchema.optional(),

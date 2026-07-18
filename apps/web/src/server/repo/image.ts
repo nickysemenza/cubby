@@ -366,17 +366,24 @@ export const cullPendingImages = async (
     .select({ imageId: recipeImage.imageId })
     .from(recipeImage);
 
+  const imagesWithProjectAssociations = dbClient
+    .select({ imageId: projectImage.imageId })
+    .from(projectImage);
+
   // Get all image IDs that have any association
-  const [productAssocs, locationAssocs, recipeAssocs] = await Promise.all([
-    imagesWithProductAssociations,
-    imagesWithLocationAssociations,
-    imagesWithRecipeAssociations,
-  ]);
+  const [productAssocs, locationAssocs, recipeAssocs, projectAssocs] =
+    await Promise.all([
+      imagesWithProductAssociations,
+      imagesWithLocationAssociations,
+      imagesWithRecipeAssociations,
+      imagesWithProjectAssociations,
+    ]);
 
   const associatedImageIds = new Set([
     ...productAssocs.map((a) => a.imageId),
     ...locationAssocs.map((a) => a.imageId),
     ...recipeAssocs.map((a) => a.imageId),
+    ...projectAssocs.map((a) => a.imageId),
   ]);
 
   // Find pending images older than the cutoff date
@@ -464,6 +471,7 @@ export const getImagesByProjectIds = async (
       and(
         inArray(projectImage.projectId, projectIds),
         notDeleted(projectImage),
+        notDeleted(image),
       ),
     )
     .orderBy(asc(projectImage.sortOrder), asc(projectImage.createdAt));

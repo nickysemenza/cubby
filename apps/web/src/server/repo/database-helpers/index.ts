@@ -18,6 +18,8 @@ export {
   updateAndReturn,
   updateLiveAndReturn,
 } from "./crud";
+// Dependency-edge replacement (project/task blockedByIds)
+export { replaceDependencyEdges } from "./dependency-edges";
 // Query helpers
 export {
   assertNoDependents,

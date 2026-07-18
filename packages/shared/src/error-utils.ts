@@ -47,6 +47,9 @@ export const AppErrors = {
   INGREDIENT_MERGE_INVALID: "BAD_REQUEST",
   PROJECT_HAS_TASKS: "PRECONDITION_FAILED",
   PROJECT_HAS_PURCHASES: "PRECONDITION_FAILED",
+  // Generic (non-entity-specific): a blockedByIds replacement set contains
+  // the entity's own id.
+  SELF_DEPENDENCY: "BAD_REQUEST",
 
   // Conflict/duplicate
   PRODUCT_ALREADY_EXISTS: "CONFLICT",

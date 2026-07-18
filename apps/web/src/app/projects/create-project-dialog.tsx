@@ -19,10 +19,10 @@ import { projectMutationInvalidateKeys } from "~/lib/query-keys";
 import {
   FormWrapper,
   NullableNumericField,
+  PlainDateField,
   SelectField,
   UnifiedTextField,
 } from "../_components/form-utils";
-import { PlainDateField } from "./plain-date-field";
 import { projectKindOptions } from "./project-options";
 import { PROJECT_STATUS_OPTIONS } from "./shared";
 

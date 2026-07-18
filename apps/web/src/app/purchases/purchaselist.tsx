@@ -257,6 +257,10 @@ export function PurchaseList({ actions }: PurchaseListProps) {
     filters,
     deletable: deletableConfig,
     nameEditable,
+    // /purchases has no dedicated detail page — entities.purchase.routes.detail
+    // points back at this list, so the linkified name and "View Details"
+    // would both be no-ops.
+    omitDetailLink: true,
     infinite: true,
   });
 

@@ -24,4 +24,4 @@ export {
   getProjectByID,
   updateProject,
 } from "./crud";
-export { projectList } from "./lookup";
+export { projectList, projectNameOptions } from "./lookup";

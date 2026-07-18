@@ -119,6 +119,7 @@ export function GlobalCommandMenu({
   const { data: trackerData } = useQuery({
     ...trpc.project.dashboard.queryOptions(),
     staleTime: 5 * 60 * 1000,
+    enabled: search.length >= 2,
   });
 
   const trackerResults = React.useMemo(() => {

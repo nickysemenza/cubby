@@ -447,64 +447,21 @@ export const slimIngredient = defineSlim(ingredientMcpOut, (iRow: Row) => {
   };
 });
 
-export const slimProject = defineSlim(projectOut, (pRow: Row) => {
-  const p = pRow as ProjectOut;
-  return {
-    id: p.id,
-    name: p.name,
-    status: p.status,
-    kind: p.kind,
-    locations: p.locations,
-    costEstimate: p.costEstimate,
-    startDate: p.startDate,
-    endDate: p.endDate,
-    icon: p.icon,
-    notes: p.notes,
-    blockedByIds: p.blockedByIds,
-    blockingIds: p.blockingIds,
-    createdAt: p.createdAt,
-    updatedAt: p.updatedAt,
-    rollup: p.rollup,
-  };
-});
+// Project/task/purchase rows already match their schema exactly (no relation
+// reshaping needed) — a typed passthrough is enough. structuredSuccess
+// re-validates via outputSchema.parse, so new schema fields flow through
+// automatically without an MCP-side edit.
+export const slimProject = defineSlim(
+  projectOut,
+  (row: Row) => row as ProjectOut,
+);
 
-export const slimTask = defineSlim(taskOut, (tRow: Row) => {
-  const t = tRow as TaskOut;
-  return {
-    id: t.id,
-    name: t.name,
-    status: t.status,
-    projectId: t.projectId,
-    projectName: t.projectName,
-    dueDate: t.dueDate,
-    dueEndDate: t.dueEndDate,
-    category: t.category,
-    blockedByIds: t.blockedByIds,
-    blockingIds: t.blockingIds,
-    createdAt: t.createdAt,
-    updatedAt: t.updatedAt,
-  };
-});
+export const slimTask = defineSlim(taskOut, (row: Row) => row as TaskOut);
 
-export const slimPurchase = defineSlim(purchaseOut, (pRow: Row) => {
-  const p = pRow as PurchaseOut;
-  return {
-    id: p.id,
-    name: p.name,
-    cost: p.cost,
-    date: p.date,
-    category: p.category,
-    subcategory: p.subcategory,
-    purchaser: p.purchaser,
-    url: p.url,
-    notes: p.notes,
-    future: p.future,
-    projectId: p.projectId,
-    projectName: p.projectName,
-    createdAt: p.createdAt,
-    updatedAt: p.updatedAt,
-  };
-});
+export const slimPurchase = defineSlim(
+  purchaseOut,
+  (row: Row) => row as PurchaseOut,
+);
 
 export const slimMeal = defineSlim(mealMcpOut, (mRow: Row) => {
   const m = mRow as MealOut;

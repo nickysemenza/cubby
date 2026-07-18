@@ -243,6 +243,13 @@ export function createNameColumn<T extends BaseRow>(
     };
     /** Mobile projection metadata override */
     mobile?: MobileColumnMeta;
+    /**
+     * Skip the link to `entities[entity].routes.detail`. For entities with no
+     * dedicated detail page (task, purchase) that route points back at the
+     * list page itself — linkifying the name there is a no-op affordance, so
+     * render plain text (still inline-editable) instead of `TableLink`.
+     */
+    omitDetailLink?: boolean;
   },
 ) {
   const entityConfig = entities[entity];
@@ -284,23 +291,31 @@ export function createNameColumn<T extends BaseRow>(
               (v) => options.editable!.onSave(v ?? "", info.row.original),
             )}
             config={{ type: "text" }}
-            renderValue={(v) => (
-              <Tooltip>
-                <TooltipTrigger render={<span className="block truncate" />}>
-                  <TableLink
-                    to={entities[entity].routes.detail}
-                    params={{ id: String(info.row.original.id) }}
-                  >
+            renderValue={(v) =>
+              options?.omitDetailLink ? (
+                <span className="block truncate">{v ?? ""}</span>
+              ) : (
+                <Tooltip>
+                  <TooltipTrigger render={<span className="block truncate" />}>
+                    <TableLink
+                      to={entities[entity].routes.detail}
+                      params={{ id: String(info.row.original.id) }}
+                    >
+                      {v ?? ""}
+                    </TableLink>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-xs">
                     {v ?? ""}
-                  </TableLink>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="max-w-xs">
-                  {v ?? ""}
-                </TooltipContent>
-              </Tooltip>
-            )}
+                  </TooltipContent>
+                </Tooltip>
+              )
+            }
           />
         );
+      }
+
+      if (options?.omitDetailLink) {
+        return <span className="block truncate">{value}</span>;
       }
 
       return (
@@ -617,6 +632,12 @@ export function createInventoryEntriesColumn<
 interface ActionsColumnOptions<T> {
   /** Additional actions to render after "View Details" */
   extraActions?: (row: T) => ReactNode;
+  /**
+   * Skip the "View Details" menu item. For entities with no dedicated detail
+   * page (task, purchase), `entities[entity].routes.detail` points back at
+   * the list page itself — "View Details" there is a no-op affordance.
+   */
+  omitDetailLink?: boolean;
 }
 
 /**
@@ -630,10 +651,12 @@ export function createActionsColumn<T extends { id: string | number }>(
 ) {
   return createActionsColumnBase(
     columnHelper,
-    (row) => ({
-      to: entities[entity].routes.detail,
-      params: { id: String(row.id) },
-    }),
+    options?.omitDetailLink
+      ? () => null
+      : (row) => ({
+          to: entities[entity].routes.detail,
+          params: { id: String(row.id) },
+        }),
     options?.extraActions,
   );
 }

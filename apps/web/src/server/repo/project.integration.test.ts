@@ -1,3 +1,4 @@
+import { unsafeProjectId } from "@cubby/schemas/identifiers";
 import {
   projectCreateInput,
   purchaseCreateInput,
@@ -6,8 +7,8 @@ import {
 import { eq, or } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { projectDependency } from "~/server/db/schema";
-import { getDb } from "./database-helpers";
+import { image, projectDependency, projectImage } from "~/server/db/schema";
+import { getDb, insertAndReturn } from "./database-helpers";
 import {
   createProject,
   deleteProjects,
@@ -178,6 +179,95 @@ describe("project repository", () => {
     expect(projectCAfter.blockingIds).toEqual([]);
   });
 
+  it("rejects a self-reference in blockedByIds", async () => {
+    const projectA = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "test project self-ref" }),
+      ctx.actor,
+    );
+
+    await expect(
+      updateProject(
+        ctx.db,
+        projectA.id,
+        { blockedByIds: [projectA.id] },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("dedupes duplicate ids in blockedByIds down to a single edge", async () => {
+    const projectA = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "test project dedupe a" }),
+      ctx.actor,
+    );
+    const projectB = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "test project dedupe b" }),
+      ctx.actor,
+    );
+
+    const updated = await updateProject(
+      ctx.db,
+      projectA.id,
+      { blockedByIds: [projectB.id, projectB.id] },
+      ctx.actor,
+    );
+    expect(updated.blockedByIds).toEqual([projectB.id]);
+
+    const edges = await getDb(ctx.db)
+      .select()
+      .from(projectDependency)
+      .where(eq(projectDependency.projectId, projectA.id));
+    expect(edges).toHaveLength(1);
+  });
+
+  it("rejects a nonexistent id in blockedByIds with NOT_FOUND (not a raw 500)", async () => {
+    const projectA = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "test project missing dep" }),
+      ctx.actor,
+    );
+    const missingId = unsafeProjectId("00000000-0000-0000-0000-000000000000");
+
+    await expect(
+      updateProject(
+        ctx.db,
+        projectA.id,
+        { blockedByIds: [missingId] },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("soft-deletes project images when the project is deleted", async () => {
+    const projectWithImage = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "test project with image" }),
+      ctx.actor,
+    );
+    const img = await insertAndReturn(ctx.db, image, {
+      key: "test-project-image-key",
+      url: "https://example.com/test-project-image.jpg",
+      filename: "test-project-image.jpg",
+      contentType: "image/jpeg",
+      size: 100,
+      status: "UPLOADED",
+    });
+    const projImg = await insertAndReturn(ctx.db, projectImage, {
+      projectId: projectWithImage.id,
+      imageId: img.id,
+    });
+
+    await deleteProjects(ctx.db, [projectWithImage.id], ctx.actor);
+
+    const after = await getDb(ctx.db).query.projectImage.findFirst({
+      where: eq(projectImage.id, projImg.id),
+    });
+    expect(after?.deletedAt).not.toBeNull();
+  });
+
   it("blocks deletion while live tasks or purchases still reference the project", async () => {
     const projectWithTask = await createProject(
       ctx.db,
@@ -194,7 +284,7 @@ describe("project repository", () => {
     );
     await expect(
       deleteProjects(ctx.db, [projectWithTask.id], ctx.actor),
-    ).rejects.toThrow(/active tasks/);
+    ).rejects.toThrow(/still have tasks/);
 
     const projectWithPurchase = await createProject(
       ctx.db,
@@ -211,7 +301,7 @@ describe("project repository", () => {
     );
     await expect(
       deleteProjects(ctx.db, [projectWithPurchase.id], ctx.actor),
-    ).rejects.toThrow(/purchases/);
+    ).rejects.toThrow(/still have purchases/);
   });
 
   it("hard-deletes dependency edges (both directions) when a project is deleted", async () => {

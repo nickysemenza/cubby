@@ -12,15 +12,18 @@ import {
   projectCreateInput,
   projectDashboardOut,
   projectFiltersSchema,
+  projectOptionsOut,
   projectOut,
   projectSortableFields,
   projectUpdateData,
 } from "@cubby/schemas/project";
+import { z } from "zod";
 import {
   createProject,
   deleteProjects,
   getProjectByID,
   projectList,
+  projectNameOptions,
   updateProject,
 } from "~/server/repo/project";
 import { purchaseList } from "~/server/repo/purchase";
@@ -89,6 +92,15 @@ const dashboard = protectedProcedure
     };
   });
 
+/**
+ * Lightweight `{id, name}` options for pickers/filter selects (see
+ * `useProjectOptions`) — a single indexed query, no rollups/dependency joins.
+ * Replaces paging through the full `list` at pageSize 500 just for names.
+ */
+const options = protectedProcedure
+  .output(z.array(projectOptionsOut))
+  .query(({ ctx }) => projectNameOptions(ctx.db));
+
 export const projectRouter = createTRPCRouter({
   getByID,
   list,
@@ -96,4 +108,5 @@ export const projectRouter = createTRPCRouter({
   update,
   delete: deleteItem,
   dashboard,
+  options,
 });

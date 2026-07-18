@@ -6,6 +6,7 @@ import { Calendar, DollarSign, Hammer } from "lucide-react";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { Grid, Row, Section, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
 import {
   Card,
   CardContent,
@@ -16,6 +17,7 @@ import {
 import { Description } from "~/components/ui/description";
 import {
   Empty,
+  EmptyActions,
   EmptyDescription,
   EmptyHeader,
   EmptyIcon,
@@ -109,7 +111,7 @@ const NO_PROJECT_IDS: string[] = [];
 
 export function ProjectsDashboard() {
   const api = useTRPC();
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     ...api.project.dashboard.queryOptions(),
     staleTime: 5 * 60 * 1000,
   });
@@ -127,6 +129,27 @@ export function ProjectsDashboard() {
   });
 
   const [filters, setFilters] = useState<Filters>(emptyFilters);
+
+  if (isError) {
+    // Distinct from the loading skeleton — a fetch failure must never read as
+    // "still loading" forever.
+    return (
+      <Empty>
+        <EmptyHeader>
+          <EmptyIcon icon={Hammer} />
+          <EmptyTitle>Couldn't load the project dashboard</EmptyTitle>
+          <EmptyDescription>
+            {error.message || "Something went wrong."}
+          </EmptyDescription>
+        </EmptyHeader>
+        <EmptyActions>
+          <Button type="button" variant="outline" onClick={() => refetch()}>
+            Retry
+          </Button>
+        </EmptyActions>
+      </Empty>
+    );
+  }
 
   if (isLoading || !data) {
     return <DashboardSkeleton />;
@@ -182,12 +205,15 @@ function DashboardContent({
       );
     }
 
-    const projectNames = new Set(projects.map((p) => p.name));
+    // Keyed by id, not name — project names aren't unique, so a name-keyed
+    // join here would cross-contaminate tasks/purchases across same-named
+    // projects.
+    const projectIds = new Set(projects.map((p) => p.id));
     const tasks = data.tasks.filter(
-      (t) => !t.projectName || projectNames.has(t.projectName),
+      (t) => !t.projectId || projectIds.has(t.projectId),
     );
     const purchases = data.purchases.filter(
-      (p) => !p.projectName || projectNames.has(p.projectName),
+      (p) => !p.projectId || projectIds.has(p.projectId),
     );
 
     return { projects, tasks, purchases };

@@ -118,12 +118,18 @@ const normalizeUuid = (id: string): string => {
 };
 
 /**
- * "🪵 materials" → "materials"; "metal / weld" stays as-is. Emoji_Component
- * covers skin-tone modifiers, VS16, and ZWJ, so composed emoji strip fully.
+ * "🪵 materials" → "materials"; "metal / weld" stays as-is. The string must
+ * START with Extended_Pictographic — Emoji_Component alone also matches ASCII
+ * digits/#/* (keycap bases), which would corrupt labels like "3d printing".
+ * After the leading pictograph, components (skin tones, VS16, ZWJ) and further
+ * pictographs strip too, so composed emoji remove fully.
  */
 const stripEmoji = (value: string): string =>
   value
-    .replace(/^[\p{Extended_Pictographic}\p{Emoji_Component}]+/gu, "")
+    .replace(
+      /^\p{Extended_Pictographic}[\p{Extended_Pictographic}\p{Emoji_Component}]*/u,
+      "",
+    )
     .trim();
 
 const enumOrNull = <T extends string>(
@@ -611,22 +617,29 @@ async function main() {
     };
 
     let notes: string | null = null;
+    let bodyFailed = false;
     try {
       notes = await pageBodyToMarkdown(page.id, ctx);
     } catch (error) {
+      bodyFailed = true;
       failures.push(`body conversion failed for ${name}: ${String(error)}`);
     }
     archivedBodies[notionPageId] = { name, notes };
 
-    // Cover image (appended after body images).
+    // Cover image — prepended so it sorts FIRST (the dashboard card and detail
+    // hero read images[0]; the old Notion UI preferred the page cover too).
     const coverUrl = getPageCover(page);
     if (coverUrl) {
-      const imported = await importImage(
-        coverUrl,
-        slug,
-        ctx.imageCounter.value++,
-      );
-      if (imported) collectedImageIds.push(imported.imageId);
+      try {
+        const imported = await importImage(
+          coverUrl,
+          slug,
+          ctx.imageCounter.value++,
+        );
+        if (imported) collectedImageIds.unshift(imported.imageId);
+      } catch (error) {
+        failures.push(`cover import failed for ${name}: ${String(error)}`);
+      }
     }
 
     const values = {
@@ -662,7 +675,13 @@ async function main() {
 
     let id: ProjectId;
     if (existingId) {
-      await db.update(project).set(values).where(eq(project.id, existingId));
+      // On a failed body conversion, keep the previously-imported notes — a
+      // transient Notion error on a re-run must never wipe good data.
+      const { notes: newNotes, ...rest } = values;
+      await db
+        .update(project)
+        .set(bodyFailed ? rest : { ...rest, notes: newNotes })
+        .where(eq(project.id, existingId));
       id = existingId;
     } else {
       const inserted = await db
@@ -673,18 +692,19 @@ async function main() {
     }
     projectIdByNotionId.set(notionPageId, id);
 
-    // Attach images; the (projectId, imageId) unique pair makes this idempotent.
-    if (collectedImageIds.length > 0) {
-      await db
-        .insert(projectImage)
-        .values(
+    // Attach images: rebuild the join rows wholesale (like dependency edges)
+    // so re-runs also repair sortOrder — cover first, then document order.
+    if (!bodyFailed) {
+      await db.delete(projectImage).where(eq(projectImage.projectId, id));
+      if (collectedImageIds.length > 0) {
+        await db.insert(projectImage).values(
           collectedImageIds.map((imageId, sortOrder) => ({
             projectId: id,
             imageId,
             sortOrder,
           })),
-        )
-        .onConflictDoNothing();
+        );
+      }
     }
   }
   await writeFile(

@@ -27,6 +27,7 @@ import {
   insertAndReturn,
   lockAndValidateForDelete,
   notDeleted,
+  replaceDependencyEdges,
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
@@ -171,15 +172,23 @@ export const updateTask = async (
     const updated = await updateLiveAndReturn(tx, task, updateValues, id);
 
     if (data.blockedByIds !== undefined) {
-      await tx.delete(taskDependency).where(eq(taskDependency.taskId, id));
-      if (data.blockedByIds.length > 0) {
-        await tx.insert(taskDependency).values(
-          data.blockedByIds.map((blockedByTaskId) => ({
-            taskId: id,
+      await replaceDependencyEdges(
+        tx,
+        taskDependency,
+        {
+          ownColumn: taskDependency.taskId,
+          blockedByColumn: taskDependency.blockedByTaskId,
+          buildRow: (taskIdVal, blockedByTaskId) => ({
+            taskId: taskIdVal,
             blockedByTaskId,
-          })),
-        );
-      }
+          }),
+          entityTable: task,
+          label: "Task",
+          notFoundReason: "TASK_NOT_FOUND",
+        },
+        id,
+        data.blockedByIds,
+      );
     }
 
     const changes: Record<string, { from: unknown; to: unknown }> = {

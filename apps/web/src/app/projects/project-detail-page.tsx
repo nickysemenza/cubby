@@ -299,33 +299,40 @@ export function ProjectDetailPage({
       />
 
       {/* Spending/task charts scoped to this project — full-bleed, below the
-          card grid (same treatment as the dashboard's own chart panels). */}
-      {projectPurchases.length > 0 && (
+          card grid (same treatment as the dashboard's own chart panels).
+          Purchases-dependent charts and the task timeline are gated
+          independently — a project with tasks but no purchases (or vice
+          versa) must still see its own section. */}
+      {(projectPurchases.length > 0 || projectTasks.length > 0) && (
         <Stack className="pt-4">
-          <Section title="Spending Over Time">
-            <SpendingOverTime
-              purchases={projectPurchases}
-              costEstimate={project.costEstimate}
-            />
-          </Section>
+          {projectPurchases.length > 0 && (
+            <>
+              <Section title="Spending Over Time">
+                <SpendingOverTime
+                  purchases={projectPurchases}
+                  costEstimate={project.costEstimate}
+                />
+              </Section>
 
-          <Grid cols="pair">
-            <Section title="Spending by Category">
-              <PurchaseDonut purchases={projectPurchases} />
-            </Section>
-            <Section title="Spending by Subcategory">
-              <SubcategoryBars purchases={projectPurchases} />
-            </Section>
-          </Grid>
+              <Grid cols="pair">
+                <Section title="Spending by Category">
+                  <PurchaseDonut purchases={projectPurchases} />
+                </Section>
+                <Section title="Spending by Subcategory">
+                  <SubcategoryBars purchases={projectPurchases} />
+                </Section>
+              </Grid>
 
-          <Grid cols="pair">
-            <Section title="Category Treemap">
-              <CategoryTreemap purchases={projectPurchases} />
-            </Section>
-            <Section title="Category Trend">
-              <CategoryTrend purchases={projectPurchases} />
-            </Section>
-          </Grid>
+              <Grid cols="pair">
+                <Section title="Category Treemap">
+                  <CategoryTreemap purchases={projectPurchases} />
+                </Section>
+                <Section title="Category Trend">
+                  <CategoryTrend purchases={projectPurchases} />
+                </Section>
+              </Grid>
+            </>
+          )}
 
           {projectTasks.length > 0 && (
             <Section title="Task Timeline">

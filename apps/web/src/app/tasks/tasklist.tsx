@@ -3,6 +3,7 @@ import type { TaskOut, TaskStatus } from "@cubby/schemas/project";
 import { createColumnHelper } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { useMemo } from "react";
+import { TASK_STATUS_LABELS } from "~/app/projects/shared";
 import { Badge } from "~/components/ui/badge";
 import { useTRPC } from "~/integrations/trpc/react";
 import { taskMutationInvalidateKeys } from "~/lib/query-keys";
@@ -17,11 +18,7 @@ import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useProjectOptions } from "../_components/hooks/useProjectOptions";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
-import {
-  taskStatusBadgeVariant,
-  taskStatusLabels,
-  taskStatusOptions,
-} from "./task-options";
+import { taskStatusBadgeVariant, taskStatusOptions } from "./task-options";
 
 interface TaskListProps {
   /** Actions to display in the table toolbar (e.g., the "New Task" button). */
@@ -73,7 +70,7 @@ export function TaskList({ actions }: TaskListProps) {
         selectOptions: taskStatusOptions,
         renderCell: (status: TaskStatus) => (
           <Badge variant={taskStatusBadgeVariant[status]}>
-            {taskStatusLabels[status]}
+            {TASK_STATUS_LABELS[status]}
           </Badge>
         ),
         mobile: { slot: "subtitle", priority: 10 },
@@ -160,6 +157,10 @@ export function TaskList({ actions }: TaskListProps) {
     filters,
     deletable: deletableConfig,
     nameEditable,
+    // /tasks has no dedicated detail page — entities.task.routes.detail
+    // points back at this list, so the linkified name and "View Details"
+    // would both be no-ops.
+    omitDetailLink: true,
     infinite: true,
   });
 

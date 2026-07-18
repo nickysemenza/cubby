@@ -18,10 +18,10 @@ import { purchaseMutationInvalidateKeys } from "~/lib/query-keys";
 import {
   FormWrapper,
   NullableNumericField,
+  PlainDateField,
   SelectField,
   UnifiedTextField,
 } from "../_components/form-utils";
-import { PlainDateField } from "./plain-date-field";
 import { purchaseCategoryOptions } from "./purchase-options";
 
 // projectId stays a plain string here (not the branded `projectId` schema) —
