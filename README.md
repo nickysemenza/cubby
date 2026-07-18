@@ -45,7 +45,14 @@ It's three things at once: an earnest daily-use home utility, a playground for a
 
 **Images**
 - S3/R2-backed image upload with presigned URLs
-- Linked to products, locations, or recipes
+- Linked to products, locations, recipes, or projects
+
+**Project Tracker**
+- Household projects, tasks, and purchases (the spend ledger) — migrated from Notion into first-class entities
+- Blocked-by dependency edges between projects and between tasks
+- Dashboard with overview/charts/data/gallery views (spending, timelines, task heatmaps, dependency graph)
+- Detail pages with full inline editing, markdown notes, and image galleries
+- First-class inline links/hovercards, global + semantic search, full MCP CRUD
 
 **Analytics**
 - Donut, treemap, sunburst, and network visualizations across products, inventory, and ingredients
@@ -360,7 +367,7 @@ Framed as **Now / Next / Later** (no dates — it's a personal project). Canonic
 
 ### Recently shipped
 
-- **Project tracker migration** — the household projects/tasks/purchases databases moved from Notion into first-class cubby entities (DB tables, full CRUD UI at `/projects` `/tasks` `/purchases`, MCP tools, dashboard + charts). The one-time import script was removed post-cutover (recoverable from git history).
+- **Project tracker migration + maturation** — the household projects/tasks/purchases databases moved from Notion into first-class cubby entities (DB tables, full CRUD UI at `/projects` `/tasks` `/purchases`, MCP tools, dashboard + charts). Follow-ups consolidated the entities onto shared helpers and the entity manifest, added detail pages with full editing UI, wired all three into global search + semantic embeddings, and made them first-class in inline links/hovercards (with mobile dialogs). The one-time import script was removed post-cutover (recoverable from git history).
 - **Meal planning v1** — plan recipes onto a calendar (week + table views), scale each per meal, and a display-only shopping list (aggregated need vs. on-hand inventory, with a per-meal breakdown). Cook-and-consume inventory deduction was deliberately scoped out — it lives under *Meal planning v2* below → [docs/todos.md](docs/todos.md)
 
 ### Now
@@ -369,6 +376,7 @@ Framed as **Now / Next / Later** (no dates — it's a personal project). Canonic
 
 ### Next
 
+- **Household ERP** — deepen the project tracker from a Notion replacement into a planning system: ranged estimate purchases (a planned purchase carries a cost *range*, e.g. "electrical, $50–70k"), a purchase ↔ product/inventory bridge (bought tools/materials become trackable inventory + price observations), and maintenance/budgeting (recurring tasks, inbox tasks, planned-vs-actual budget views, Problems detectors) → [docs/plans/2026-07-18-household-erp-roadmap.md](docs/plans/2026-07-18-household-erp-roadmap.md)
 - **AI deepening** — smarter Ask Cubby and better photo capture, building on the shipped *"what can I make tonight?"* (`find_cookable_recipes`) tool → [docs/todos.md](docs/todos.md)
 - **Nutrition & cost intelligence** — price-per-nutrient, daily-value %, and nutrient-density comparisons via WASM conversion extensions → [docs/todos.md](docs/todos.md)
 
@@ -385,5 +393,5 @@ Framed as **Now / Next / Later** (no dates — it's a personal project). Canonic
 - [docs/style-guide.md](docs/style-guide.md) — Tailwind/CSS conventions
 - [docs/todos.md](docs/todos.md) — work list
 - [docs/plans/](docs/plans/) — design docs for in-progress / upcoming features
-- [docs/combobox-consolidation.md](docs/combobox-consolidation.md) — component consolidation notes
+- [docs/terminology.md](docs/terminology.md) — glossary disambiguating UI / code / DB names per concept
 - [docs/inventory-audit.md](docs/inventory-audit.md) — inventory audit/session flow: purpose, current behavior, known gaps, redesign direction
