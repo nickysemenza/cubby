@@ -190,7 +190,10 @@ describe("mutation side effects manifest", () => {
       "inventory",
       "location",
       "product",
+      "project",
+      "purchase",
       "recipe",
+      "task",
     ]);
     for (const handlers of Object.values(mutationSideEffectManifest)) {
       expect(handlers).toHaveProperty("onCreate");

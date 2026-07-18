@@ -4,6 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { Info, Link2 } from "lucide-react";
 import type { FC } from "react";
 import { useMemo } from "react";
+import { WithTaskSearch } from "~/app/_components/combobox/with-search-hook";
 import { formatDateRange } from "~/app/projects/shared";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row, Stack } from "~/components/layout";
@@ -12,6 +13,7 @@ import { Badge } from "~/components/ui/badge";
 import { NoneValue } from "~/components/ui/none-value";
 import { useTRPC } from "~/integrations/trpc/react";
 import { taskMutationInvalidateKeys } from "~/lib/query-keys";
+import { DependencyPicker } from "../_components/data-table/dependency-picker";
 import {
   type DetailHeroStat,
   type DetailSection,
@@ -197,38 +199,40 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
       icon: Info,
       content: <BasicInfo fields={fields} />,
     },
-    ...(blockedBy.length > 0 || blocking.length > 0
-      ? [
-          {
-            title: "Dependencies",
-            icon: Link2,
-            content: (
-              <Stack gap="sm">
-                {blockedBy.length > 0 && (
-                  <Stack gap="xs">
-                    <p className="eyebrow my-0">Blocked by</p>
-                    <Row wrap gap="sm">
-                      {blockedBy.map((t) => (
-                        <TaskDependencyBadge key={t.id} {...t} />
-                      ))}
-                    </Row>
-                  </Stack>
-                )}
-                {blocking.length > 0 && (
-                  <Stack gap="xs">
-                    <p className="eyebrow my-0">Blocks</p>
-                    <Row wrap gap="sm">
-                      {blocking.map((t) => (
-                        <TaskDependencyBadge key={t.id} {...t} />
-                      ))}
-                    </Row>
-                  </Stack>
-                )}
-              </Stack>
-            ),
-          },
-        ]
-      : []),
+    {
+      title: "Dependencies",
+      icon: Link2,
+      content: (
+        <Stack gap="sm">
+          <Stack gap="xs">
+            <p className="eyebrow my-0">Blocked by</p>
+            <DependencyPicker
+              value={blockedBy}
+              onSave={async (ids) => {
+                await updateMutation.mutateAsync({
+                  id: task.id,
+                  data: { blockedByIds: ids },
+                });
+              }}
+              SearchProvider={WithTaskSearch}
+              label="task"
+              excludeId={task.id}
+              renderReadChip={(item) => <TaskDependencyBadge {...item} />}
+            />
+          </Stack>
+          {blocking.length > 0 && (
+            <Stack gap="xs">
+              <p className="eyebrow my-0">Blocks</p>
+              <Row wrap gap="sm">
+                {blocking.map((t) => (
+                  <TaskDependencyBadge key={t.id} {...t} />
+                ))}
+              </Row>
+            </Stack>
+          )}
+        </Stack>
+      ),
+    },
     ...commonSections,
   ];
 

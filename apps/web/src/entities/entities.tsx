@@ -217,7 +217,7 @@ export const entities: Record<Entity, EntityDefinition> = {
     detail: { commonSections: ["images", "history"] },
     list: {
       defaultSort: "createdAt",
-      standardColumns: [],
+      standardColumns: ["name"],
       sortableFields: projectSortableFields,
     },
   },

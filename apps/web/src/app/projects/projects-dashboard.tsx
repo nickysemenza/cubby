@@ -321,7 +321,7 @@ function DashboardContent({
           <Stack className="pt-4">
             <Stack as="section">
               <h2 className="font-heading font-semibold text-xl">Projects</h2>
-              <ProjectTable projects={projects} />
+              <ProjectTable />
             </Stack>
 
             <Stack as="section">

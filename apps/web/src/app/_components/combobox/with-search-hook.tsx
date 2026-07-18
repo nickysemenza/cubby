@@ -2,10 +2,13 @@ import type {
   IngredientId,
   LocationId,
   ProductId,
+  ProjectId,
   RecipeId,
+  TaskId,
 } from "@cubby/schemas/identifiers";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
+import { useMemo } from "react";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useUpcAwareCreate } from "~/app/_components/products/use-upc-aware-create";
 import { useTRPC } from "~/integrations/trpc/react";
@@ -20,7 +23,9 @@ import {
   buildIngredientComboboxItem,
   buildLocationComboboxItem,
   buildProductComboboxItem,
+  buildProjectComboboxItem,
   buildRecipeComboboxItem,
+  buildTaskComboboxItem,
 } from "./combobox-builders";
 import type { ComboboxItem } from "./combobox-types";
 import {
@@ -255,6 +260,73 @@ export function WithRecipeSearch({
     <>
       {children({
         items: data?.items.map(buildRecipeComboboxItem) ?? [],
+        onSearchChange,
+        isLoading,
+        onOpenChange,
+      })}
+    </>
+  );
+}
+
+/**
+ * Client-filtered project search — projects are a small, personal household
+ * list (dozens, not thousands), so this fetches the lightweight
+ * `project.options` projection once (same query/cache as `useProjectOptions`)
+ * and filters it in-memory as the user types, instead of a server round trip
+ * per keystroke. No create-from-picker affordance (mirrors `WithRecipeSearch`).
+ */
+export function WithProjectSearch({
+  children,
+}: WithEntitySearchProps<ProjectId>) {
+  const api = useTRPC();
+  const { searchQuery, onSearchChange } = useEntitySearch();
+  const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
+
+  const { data, isLoading } = useQuery({
+    ...api.project.options.queryOptions(),
+    enabled,
+  });
+
+  const items = useMemo(() => {
+    const all = data?.map(buildProjectComboboxItem) ?? [];
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return all;
+    return all.filter((item) => item.name.toLowerCase().includes(query));
+  }, [data, searchQuery]);
+
+  return (
+    <>
+      {children({
+        items,
+        onSearchChange,
+        isLoading,
+        onOpenChange,
+      })}
+    </>
+  );
+}
+
+/**
+ * Server-searched task picker — `task.list` filtered by its `search` field,
+ * same pattern as `WithRecipeSearch`. No create-from-picker affordance.
+ */
+export function WithTaskSearch({ children }: WithEntitySearchProps<TaskId>) {
+  const api = useTRPC();
+  const { searchQuery, onSearchChange } = useEntitySearch();
+  const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
+
+  const { data, isLoading } = useQuery({
+    ...api.task.list.queryOptions({
+      filters: { search: searchQuery },
+      pagination,
+    }),
+    enabled,
+  });
+
+  return (
+    <>
+      {children({
+        items: data?.items.map(buildTaskComboboxItem) ?? [],
         onSearchChange,
         isLoading,
         onOpenChange,

@@ -1,4 +1,5 @@
 import type {
+  ProjectKind,
   ProjectOut,
   ProjectStatus,
   PurchaseOut,
@@ -12,9 +13,13 @@ import {
   Info,
   Link2,
   ListChecks,
+  Pencil,
   ShoppingCart,
 } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
+import { WithProjectSearch } from "~/app/_components/combobox/with-search-hook";
+import { DependencyPicker } from "~/app/_components/data-table/dependency-picker";
 import {
   type DetailHeroStat,
   type DetailSection,
@@ -22,13 +27,17 @@ import {
 } from "~/app/_components/data-table/detail-page";
 import { EditableCell } from "~/app/_components/data-table/editable-cell";
 import EntityImageList from "~/app/_components/EntityImageList";
+import { ChipsInput } from "~/app/_components/forms/chips-input";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Grid, Row, Section, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
 import { NoneValue } from "~/components/ui/none-value";
+import { Textarea } from "~/components/ui/textarea";
 import { useTRPC } from "~/integrations/trpc/react";
+import { getErrorMessage } from "~/lib/error-utils";
 import { projectMutationInvalidateKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import { CategoryTreemap } from "./charts/category-treemap";
@@ -38,6 +47,7 @@ import { SpendingOverTime } from "./charts/spending-over-time";
 import { SubcategoryBars } from "./charts/subcategory-bars";
 import { TaskHeatmap } from "./charts/task-heatmap";
 import { ProjectNotes } from "./project-notes";
+import { projectKindOptions } from "./project-options";
 import {
   capitalize,
   PROJECT_STATUS_LABELS,
@@ -92,6 +102,93 @@ function DependencyBadge({ id, name }: { id: string; name: string }) {
   );
 }
 
+/**
+ * Read mode: location badges + an Edit pencil. Edit mode: the generic
+ * `ChipsInput` + Save/Cancel. No suggestions — this page only has the current
+ * project's own data loaded, so a corpus of "locations used elsewhere" isn't
+ * cheaply available here (see the dashboard's `ProjectTable`/filters, which
+ * DO have the full project list, for that kind of aggregate).
+ */
+function EditableLocations({
+  locations,
+  onSave,
+}: {
+  locations: string[];
+  onSave: (locations: string[]) => Promise<void>;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [isPending, setIsPending] = useState(false);
+  const [pending, setPending] = useState<string[]>(locations);
+
+  if (!isEditing) {
+    return (
+      <Row wrap gap="xs" justify="end" align="center">
+        {locations.length === 0 ? (
+          <NoneValue />
+        ) : (
+          locations.map((loc) => (
+            <Badge key={loc} variant="outline">
+              {loc}
+            </Badge>
+          ))
+        )}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => {
+            setPending(locations);
+            setIsEditing(true);
+          }}
+          aria-label="Edit locations"
+        >
+          <Pencil className="h-3 w-3 text-muted-foreground" />
+        </Button>
+      </Row>
+    );
+  }
+
+  return (
+    <Stack gap="xs">
+      <ChipsInput
+        value={pending}
+        onChange={setPending}
+        placeholder="Add location..."
+      />
+      <Row gap="xs" justify="end">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={isPending}
+          onClick={async () => {
+            setIsPending(true);
+            try {
+              await onSave(pending);
+              setIsEditing(false);
+            } catch (err) {
+              toast.error(getErrorMessage(err));
+            } finally {
+              setIsPending(false);
+            }
+          }}
+        >
+          Save
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          disabled={isPending}
+          onClick={() => setIsEditing(false)}
+        >
+          Cancel
+        </Button>
+      </Row>
+    </Stack>
+  );
+}
+
 export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   const api = useTRPC();
 
@@ -137,7 +234,62 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   const blockedBy = resolveDependencyNames(project.blockedByIds);
   const blocking = resolveDependencyNames(project.blockingIds);
 
+  // Notes: house pattern is textarea-in → MarkdownText-out, toggled via the
+  // section's headerAction — no rich markdown editor.
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [notesDraft, setNotesDraft] = useState(project.notes ?? "");
+  const [notesPending, setNotesPending] = useState(false);
+
+  const saveNotes = async () => {
+    setNotesPending(true);
+    try {
+      const trimmed = notesDraft.trim();
+      await updateMutation.mutateAsync({
+        id: project.id,
+        data: { notes: trimmed === "" ? null : notesDraft },
+      });
+      setIsEditingNotes(false);
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    } finally {
+      setNotesPending(false);
+    }
+  };
+
   const fields: BasicInfoField[] = [
+    {
+      label: "Name",
+      value: (
+        <EditableCell
+          value={project.name}
+          config={{ type: "text" }}
+          onSave={async (name) => {
+            if (!name) return;
+            await updateMutation.mutateAsync({
+              id: project.id,
+              data: { name },
+            });
+          }}
+          renderValue={(v) => v ?? <NoneValue />}
+        />
+      ),
+    },
+    {
+      label: "Icon",
+      value: (
+        <EditableCell
+          value={project.icon}
+          config={{ type: "text", placeholder: "e.g. 🔧" }}
+          onSave={async (icon) => {
+            await updateMutation.mutateAsync({
+              id: project.id,
+              data: { icon },
+            });
+          }}
+          renderValue={(v) => v ?? <NoneValue />}
+        />
+      ),
+    },
     {
       label: "Status",
       value: (
@@ -166,7 +318,19 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     },
     {
       label: "Kind",
-      value: project.kind ? capitalize(project.kind) : undefined,
+      value: (
+        <EditableCell
+          value={project.kind}
+          config={{ type: "select", options: projectKindOptions }}
+          onSave={async (kind) => {
+            await updateMutation.mutateAsync({
+              id: project.id,
+              data: { kind: kind as ProjectKind | null },
+            });
+          }}
+          renderValue={(v) => (v ? capitalize(v) : <NoneValue />)}
+        />
+      ),
     },
     {
       label: "Start date",
@@ -228,16 +392,17 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     },
     {
       label: "Locations",
-      value:
-        project.locations.length > 0 ? (
-          <Row wrap gap="xs" justify="end">
-            {project.locations.map((loc) => (
-              <Badge key={loc} variant="outline">
-                {loc}
-              </Badge>
-            ))}
-          </Row>
-        ) : undefined,
+      value: (
+        <EditableLocations
+          locations={project.locations}
+          onSave={async (locations) => {
+            await updateMutation.mutateAsync({
+              id: project.id,
+              data: { locations },
+            });
+          }}
+        />
+      ),
     },
   ];
 
@@ -247,38 +412,40 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
       icon: Info,
       content: <BasicInfo fields={fields} />,
     },
-    ...(blockedBy.length > 0 || blocking.length > 0
-      ? [
-          {
-            title: "Dependencies",
-            icon: Link2,
-            content: (
-              <Stack gap="sm">
-                {blockedBy.length > 0 && (
-                  <Stack gap="xs">
-                    <p className="eyebrow my-0">Blocked by</p>
-                    <Row wrap gap="sm">
-                      {blockedBy.map((p) => (
-                        <DependencyBadge key={p.id} {...p} />
-                      ))}
-                    </Row>
-                  </Stack>
-                )}
-                {blocking.length > 0 && (
-                  <Stack gap="xs">
-                    <p className="eyebrow my-0">Blocks</p>
-                    <Row wrap gap="sm">
-                      {blocking.map((p) => (
-                        <DependencyBadge key={p.id} {...p} />
-                      ))}
-                    </Row>
-                  </Stack>
-                )}
-              </Stack>
-            ),
-          },
-        ]
-      : []),
+    {
+      title: "Dependencies",
+      icon: Link2,
+      content: (
+        <Stack gap="sm">
+          <Stack gap="xs">
+            <p className="eyebrow my-0">Blocked by</p>
+            <DependencyPicker
+              value={blockedBy}
+              onSave={async (ids) => {
+                await updateMutation.mutateAsync({
+                  id: project.id,
+                  data: { blockedByIds: ids },
+                });
+              }}
+              SearchProvider={WithProjectSearch}
+              label="project"
+              excludeId={project.id}
+              renderReadChip={(item) => <DependencyBadge {...item} />}
+            />
+          </Stack>
+          {blocking.length > 0 && (
+            <Stack gap="xs">
+              <p className="eyebrow my-0">Blocks</p>
+              <Row wrap gap="sm">
+                {blocking.map((p) => (
+                  <DependencyBadge key={p.id} {...p} />
+                ))}
+              </Row>
+            </Stack>
+          )}
+        </Stack>
+      ),
+    },
     {
       title: "Images",
       icon: ImageIcon,
@@ -288,7 +455,53 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
       title: "Notes",
       icon: FileText,
       zone: "main",
-      content: <ProjectNotes notes={project.notes} />,
+      headerAction: isEditingNotes ? undefined : (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setNotesDraft(project.notes ?? "");
+            setIsEditingNotes(true);
+          }}
+        >
+          <Pencil className="h-3.5 w-3.5" />
+          Edit
+        </Button>
+      ),
+      content: isEditingNotes ? (
+        <Stack gap="sm">
+          <Textarea
+            value={notesDraft}
+            onChange={(e) => setNotesDraft(e.target.value)}
+            rows={8}
+            placeholder="Freeform markdown notes..."
+            disabled={notesPending}
+            autoFocus
+          />
+          <Row gap="xs">
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => void saveNotes()}
+              disabled={notesPending}
+            >
+              Save
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => setIsEditingNotes(false)}
+              disabled={notesPending}
+            >
+              Cancel
+            </Button>
+          </Row>
+        </Stack>
+      ) : (
+        <ProjectNotes notes={project.notes} />
+      ),
     },
     {
       title: "Tasks",

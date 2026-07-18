@@ -91,6 +91,14 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
         header: "Date",
         className: "w-28",
         mobile: { slot: "subtitle", priority: 15 },
+        editable: {
+          onSave: async (newDate, purchase) => {
+            await updatePurchaseMutation.mutateAsync({
+              id: purchase.id,
+              data: { date: newDate },
+            });
+          },
+        },
       }),
       createFilterableSelectColumn(columnHelper, "category", {
         header: "Category",
@@ -146,6 +154,14 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
           placeholder: "Filter by project...",
           filterType: "select",
           options: projectFilterOptions,
+        },
+        editable: {
+          onSave: async (newProjectId, purchase) => {
+            await updatePurchaseMutation.mutateAsync({
+              id: purchase.id,
+              data: { projectId: newProjectId },
+            });
+          },
         },
       }),
       columnHelper.accessor((row) => row.future, {

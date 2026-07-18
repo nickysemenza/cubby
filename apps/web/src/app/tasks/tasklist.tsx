@@ -89,11 +89,27 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
           filterType: "select",
           options: projectFilterOptions,
         },
+        editable: {
+          onSave: async (newProjectId, task) => {
+            await updateTaskMutation.mutateAsync({
+              id: task.id,
+              data: { projectId: newProjectId },
+            });
+          },
+        },
       }),
       createPlainDateColumn(columnHelper, "dueDate", {
         header: "Due",
         className: "w-28",
-        mobile: { slot: "meta", priority: 40 },
+        mobile: { slot: "meta", priority: 40, interactive: true },
+        editable: {
+          onSave: async (newDueDate, task) => {
+            await updateTaskMutation.mutateAsync({
+              id: task.id,
+              data: { dueDate: newDueDate },
+            });
+          },
+        },
       }),
       createTextColumn(columnHelper, "category", {
         header: "Category",
