@@ -421,6 +421,9 @@ export function NullableNumericField<
         const inputProps = {
           id: name,
           type: "number" as const,
+          // iOS shows its numeric keypad only when inputMode says so — plain
+          // type="number" alone still surfaces the full keyboard on Safari.
+          inputMode: "decimal" as const,
           step,
           placeholder,
           ...field,

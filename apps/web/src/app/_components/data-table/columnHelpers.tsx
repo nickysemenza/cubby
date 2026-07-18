@@ -1490,9 +1490,7 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
 
         if (!id || !name) return <NoneValue />;
         return (
-          <TableLink to="/projects/$id" params={{ id }} variant="muted">
-            {name}
-          </TableLink>
+          <EntityInlineLink entity="project" data={{ id, name }} truncate />
         );
       },
     },

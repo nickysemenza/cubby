@@ -1,5 +1,12 @@
 import { isDocumentFile } from "@cubby/schemas/image";
 import type { LocationType } from "@cubby/schemas/location";
+import type {
+  ProjectKind,
+  ProjectStatus,
+  PurchaseCategory,
+  Purchaser,
+  TaskStatus,
+} from "@cubby/schemas/project";
 import { RECIPE_MACRO_KEYS } from "@cubby/schemas/recipe-shared";
 import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
 import type { DataType, NutrientKey } from "@cubby/usda-schemas";
@@ -8,6 +15,13 @@ import { useQuery } from "@tanstack/react-query";
 import { sumBy } from "es-toolkit";
 import { ListChecks } from "lucide-react";
 import type { ReactNode } from "react";
+import {
+  capitalize,
+  formatDate,
+  formatDateRange,
+  PROJECT_STATUS_LABELS,
+} from "~/app/projects/shared";
+import { TASK_STATUS_LABELS } from "~/app/tasks/task-options";
 import { EntityIcon } from "~/entities/entities";
 import { useTRPC } from "~/integrations/trpc/react";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
@@ -459,6 +473,240 @@ export function LocationPreviewContent({ locationId }: { locationId: string }) {
           : undefined,
         itemCount: data.totalItemCount ?? data.directItemCount ?? undefined,
         subCount: data.childCount ?? data.children?.length ?? undefined,
+      })}
+    />
+  );
+}
+
+// ── Project ─────────────────────────────────────────────────────────────────
+
+// Cross-link to a task/purchase's parent project (built identically for both).
+const projectCrossLink = (id: string, name: string): CrossLink => ({
+  to: "/projects/$id",
+  params: { id },
+  icon: <EntityIcon entity="project" size={12} colored />,
+  label: name,
+});
+
+export type ProjectPreview = {
+  id: string;
+  name: string;
+  icon?: string | null;
+  status: ProjectStatus;
+  kind: ProjectKind | null;
+  locations: string[];
+  spent: number;
+  costEstimate?: number | null;
+  taskCount: number;
+  doneTaskCount: number;
+  purchaseCount: number;
+};
+
+export function toProjectCard(vm: ProjectPreview): ManifestCardProps {
+  const identity = [
+    PROJECT_STATUS_LABELS[vm.status],
+    vm.kind ? capitalize(vm.kind) : null,
+    vm.locations.length > 0 ? vm.locations.join(", ") : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  return {
+    entity: "project",
+    routeParam: vm.id,
+    icon: vm.icon ? (
+      <span className="text-sm leading-none">{vm.icon}</span>
+    ) : (
+      <EntityIcon entity="project" size={14} colored />
+    ),
+    name: vm.name,
+    tag: "project",
+    identity,
+    body: [
+      {
+        kind: "stats",
+        stats: [
+          {
+            label: "Spent",
+            value: formatCurrency(vm.spent),
+            caption:
+              vm.costEstimate != null
+                ? `of ${formatCurrency(vm.costEstimate, 0)}`
+                : undefined,
+          },
+          { label: "Tasks", value: `${vm.doneTaskCount}/${vm.taskCount}` },
+          { label: "Purchases", value: vm.purchaseCount },
+        ],
+      },
+    ],
+  };
+}
+
+export function ProjectPreviewContent({ projectId }: { projectId: string }) {
+  const trpc = useTRPC();
+  const { data, isLoading } = useQuery(
+    trpc.project.getByID.queryOptions({ id: projectId }),
+  );
+
+  if (isLoading) return <PreviewLoading />;
+  if (!data) return <PreviewDeleted label="Project" />;
+
+  return (
+    <ManifestCard
+      {...toProjectCard({
+        id: projectId,
+        name: data.name,
+        icon: data.icon,
+        status: data.status,
+        kind: data.kind,
+        locations: data.locations,
+        spent: data.rollup.spent,
+        costEstimate: data.costEstimate,
+        taskCount: data.rollup.taskCount,
+        doneTaskCount: data.rollup.doneTaskCount,
+        purchaseCount: data.rollup.purchaseCount,
+      })}
+    />
+  );
+}
+
+// ── Task ────────────────────────────────────────────────────────────────────
+
+export type TaskPreview = {
+  id: string;
+  name: string;
+  status: TaskStatus;
+  category: string | null;
+  dueDate: string | null;
+  dueEndDate: string | null;
+  projectId?: string | null;
+  projectName?: string | null;
+};
+
+export function toTaskCard(vm: TaskPreview): ManifestCardProps {
+  const identity = [TASK_STATUS_LABELS[vm.status], vm.category]
+    .filter(Boolean)
+    .join(" · ");
+
+  return {
+    entity: "task",
+    routeParam: vm.id,
+    icon: <EntityIcon entity="task" size={14} colored />,
+    name: vm.name,
+    tag: "task",
+    identity,
+    crossLinks:
+      vm.projectId && vm.projectName
+        ? [projectCrossLink(vm.projectId, vm.projectName)]
+        : undefined,
+    body: [
+      {
+        kind: "stats",
+        stats: [
+          { label: "Status", value: TASK_STATUS_LABELS[vm.status] },
+          {
+            label: "Due",
+            value: formatDateRange(vm.dueDate, vm.dueEndDate),
+          },
+        ],
+      },
+    ],
+  };
+}
+
+export function TaskPreviewContent({ taskId }: { taskId: string }) {
+  const trpc = useTRPC();
+  const { data, isLoading } = useQuery(
+    trpc.task.getByID.queryOptions({ id: taskId }),
+  );
+
+  if (isLoading) return <PreviewLoading />;
+  if (!data) return <PreviewDeleted label="Task" />;
+
+  return (
+    <ManifestCard
+      {...toTaskCard({
+        id: taskId,
+        name: data.name,
+        status: data.status,
+        category: data.category,
+        dueDate: data.dueDate,
+        dueEndDate: data.dueEndDate,
+        projectId: data.projectId,
+        projectName: data.projectName,
+      })}
+    />
+  );
+}
+
+// ── Purchase ────────────────────────────────────────────────────────────────
+
+export type PurchasePreview = {
+  id: string;
+  name: string;
+  cost: number | null;
+  date: string | null;
+  category: PurchaseCategory | null;
+  subcategory: string | null;
+  purchaser: Purchaser | null;
+  future: boolean;
+  projectId?: string | null;
+  projectName?: string | null;
+};
+
+export function toPurchaseCard(vm: PurchasePreview): ManifestCardProps {
+  const identity =
+    [vm.category, vm.subcategory, vm.purchaser].filter(Boolean).join(" · ") +
+    (vm.future ? " · planned" : "");
+
+  return {
+    entity: "purchase",
+    routeParam: vm.id,
+    icon: <EntityIcon entity="purchase" size={14} colored />,
+    name: vm.name,
+    tag: "purchase",
+    identity: identity || undefined,
+    crossLinks:
+      vm.projectId && vm.projectName
+        ? [projectCrossLink(vm.projectId, vm.projectName)]
+        : undefined,
+    body: [
+      {
+        kind: "stats",
+        stats: [
+          {
+            label: "Cost",
+            value: vm.cost != null ? formatCurrency(vm.cost) : "—",
+          },
+          { label: "Date", value: vm.date ? formatDate(vm.date) : "—" },
+        ],
+      },
+    ],
+  };
+}
+
+export function PurchasePreviewContent({ purchaseId }: { purchaseId: string }) {
+  const trpc = useTRPC();
+  const { data, isLoading } = useQuery(
+    trpc.purchase.getByID.queryOptions({ id: purchaseId }),
+  );
+
+  if (isLoading) return <PreviewLoading />;
+  if (!data) return <PreviewDeleted label="Purchase" />;
+
+  return (
+    <ManifestCard
+      {...toPurchaseCard({
+        id: purchaseId,
+        name: data.name,
+        cost: data.cost,
+        date: data.date,
+        category: data.category,
+        subcategory: data.subcategory,
+        purchaser: data.purchaser,
+        future: data.future,
+        projectId: data.projectId,
+        projectName: data.projectName,
       })}
     />
   );
