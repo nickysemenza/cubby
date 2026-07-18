@@ -63,6 +63,16 @@ test.describe("Project tracker", () => {
     await expect(page.getByText(name).first()).toBeVisible({
       timeout: 10000,
     });
+
+    // Command-palette deep link: /tasks?q=<name> seeds the "name" filter so
+    // the matched task is visible immediately instead of buried pages deep.
+    await page.goto(`/tasks?q=${encodeURIComponent(name)}`);
+    await page.waitForLoadState("networkidle");
+
+    await expect(page.getByPlaceholder("Search tasks...")).toHaveValue(name);
+    await expect(page.getByText(name).first()).toBeVisible({
+      timeout: 10000,
+    });
   });
 
   test("purchases: quick-add creates a purchase and cost renders as currency", async ({
@@ -94,6 +104,18 @@ test.describe("Project tracker", () => {
       timeout: 10000,
     });
     await expect(page.getByText("$24.99").first()).toBeVisible({
+      timeout: 10000,
+    });
+
+    // Command-palette deep link: /purchases?q=<name> seeds the "name" filter
+    // so the matched purchase is visible immediately.
+    await page.goto(`/purchases?q=${encodeURIComponent(name)}`);
+    await page.waitForLoadState("networkidle");
+
+    await expect(page.getByPlaceholder("Search purchases...")).toHaveValue(
+      name,
+    );
+    await expect(page.getByText(name).first()).toBeVisible({
       timeout: 10000,
     });
   });

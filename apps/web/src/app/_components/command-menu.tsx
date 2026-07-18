@@ -461,7 +461,7 @@ export function GlobalCommandMenu({
                       <CommandItem
                         key={`tracker-task-${t.id}`}
                         onSelect={() => {
-                          navigate({ to: "/tasks" });
+                          navigate({ to: "/tasks", search: { q: t.name } });
                           setOpen(false);
                         }}
                         className="flex items-center gap-2"
@@ -487,7 +487,10 @@ export function GlobalCommandMenu({
                       <CommandItem
                         key={`tracker-purchase-${p.id}`}
                         onSelect={() => {
-                          navigate({ to: "/purchases" });
+                          navigate({
+                            to: "/purchases",
+                            search: { q: p.name },
+                          });
                           setOpen(false);
                         }}
                         className="flex items-center gap-2"

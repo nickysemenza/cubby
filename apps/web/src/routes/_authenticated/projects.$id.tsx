@@ -1,6 +1,10 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, notFound } from "@tanstack/react-router";
-import { ProjectDetailPage } from "~/app/projects/project-detail-page";
+import {
+  ProjectDetailPage,
+  projectPurchasesQueryParams,
+  projectTasksQueryParams,
+} from "~/app/projects/project-detail-page";
 import { Page } from "~/components/page/Page";
 import { RouteErrorComponent } from "~/components/route-error";
 import { DetailPagePending } from "~/components/route-pending";
@@ -11,22 +15,26 @@ import { useTRPC } from "~/integrations/trpc/react";
 export const Route = createFileRoute("/_authenticated/projects/$id")({
   ssr: false,
   loader: async ({ params, context }) => {
-    // Reuses the list page's `dashboard` query (same cache key) rather than a
-    // dedicated getByID — a project has no fields the dashboard shape lacks
-    // (see ProjectOut), so navigating in from /projects costs no extra fetch.
-    const options = context.trpc.project.dashboard.queryOptions();
-    const data = await context.queryClient.ensureQueryData(options);
-    if (!data.projects.some((p) => p.id === params.id)) {
-      // The ensured data can be a stale cache hit — e.g. a project created in
-      // another tab or via MCP after this client last fetched. Force one
-      // fresh fetch (bypassing staleness) before concluding the project
-      // truly doesn't exist.
-      const fresh = await context.queryClient.fetchQuery({
-        ...options,
-        staleTime: 0,
-      });
-      if (!fresh.projects.some((p) => p.id === params.id)) throw notFound();
-    }
+    const data = await context.queryClient.ensureQueryData(
+      context.trpc.project.getByID.queryOptions({ id: params.id }),
+    );
+    if (!data) throw notFound();
+
+    // Non-blocking warm of the sections rendered below the spec plate — the
+    // notFound decision above only needs `getByID`, so these don't gate it.
+    // Same params as the component's own queries (see project-detail-page.tsx)
+    // so they land in the same cache entry instead of double-fetching.
+    void context.queryClient.prefetchQuery(
+      context.trpc.task.list.queryOptions(projectTasksQueryParams(params.id)),
+    );
+    void context.queryClient.prefetchQuery(
+      context.trpc.purchase.list.queryOptions(
+        projectPurchasesQueryParams(params.id),
+      ),
+    );
+    void context.queryClient.prefetchQuery(
+      context.trpc.project.options.queryOptions(),
+    );
   },
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,
@@ -46,20 +54,11 @@ export const Route = createFileRoute("/_authenticated/projects/$id")({
 function ProjectDetailRoute() {
   const { id } = Route.useParams();
   const api = useTRPC();
-  const { data } = useSuspenseQuery(api.project.dashboard.queryOptions());
-  const project = data.projects.find((p) => p.id === id);
-
-  useDocumentTitle(project?.name ?? "Project");
-
-  // Unreachable: the loader already threw notFound() when this id is missing.
-  if (!project) return null;
-
-  return (
-    <ProjectDetailPage
-      project={project}
-      allProjects={data.projects}
-      tasks={data.tasks}
-      purchases={data.purchases}
-    />
+  const { data: project } = useSuspenseQuery(
+    api.project.getByID.queryOptions({ id }),
   );
+
+  useDocumentTitle(project.name);
+
+  return <ProjectDetailPage project={project} />;
 }

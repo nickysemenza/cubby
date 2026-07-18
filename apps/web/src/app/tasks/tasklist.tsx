@@ -1,5 +1,6 @@
 import { unsafeProjectId } from "@cubby/schemas/identifiers";
 import type { TaskOut, TaskStatus } from "@cubby/schemas/project";
+import type { ColumnFiltersState } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { useMemo } from "react";
@@ -23,9 +24,15 @@ import { taskStatusBadgeVariant, taskStatusOptions } from "./task-options";
 interface TaskListProps {
   /** Actions to display in the table toolbar (e.g., the "New Task" button). */
   actions?: ReactNode;
+  /**
+   * Seed the "name" column filter from the route's `q` search param (e.g. a
+   * command-palette deep link). Only used on mount — typing in the search
+   * box afterwards behaves normally and does not sync back to the URL.
+   */
+  initialSearch?: string;
 }
 
-export function TaskList({ actions }: TaskListProps) {
+export function TaskList({ actions, initialSearch }: TaskListProps) {
   const api = useTRPC();
   const columnHelper = useMemo(() => createColumnHelper<TaskOut>(), []);
   const { options: projectOptions } = useProjectOptions();
@@ -133,6 +140,16 @@ export function TaskList({ actions }: TaskListProps) {
     [projectFilterOptions],
   );
 
+  // Seed the "name" column filter from the route's `q` param (e.g. a
+  // command-palette deep link) — see the `initialFilter` pattern in
+  // productlist.tsx.
+  const initialFilter = useMemo((): ColumnFiltersState => {
+    if (!initialSearch) return [];
+    return [{ id: "name", value: initialSearch }];
+  }, [initialSearch]);
+
+  const tableStateOptions = useMemo(() => ({ initialFilter }), [initialFilter]);
+
   const {
     table,
     isLoading,
@@ -162,6 +179,7 @@ export function TaskList({ actions }: TaskListProps) {
     // would both be no-ops.
     omitDetailLink: true,
     infinite: true,
+    tableStateOptions,
   });
 
   return (

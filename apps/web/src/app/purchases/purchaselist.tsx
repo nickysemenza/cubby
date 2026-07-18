@@ -4,6 +4,7 @@ import type {
   PurchaseOut,
   Purchaser,
 } from "@cubby/schemas/project";
+import type { ColumnFiltersState } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import { ExternalLink } from "lucide-react";
 import type { ReactNode } from "react";
@@ -35,9 +36,15 @@ import {
 interface PurchaseListProps {
   /** Actions to display in the table toolbar (e.g., the "New Purchase" button). */
   actions?: ReactNode;
+  /**
+   * Seed the "name" column filter from the route's `q` search param (e.g. a
+   * command-palette deep link). Only used on mount — typing in the search
+   * box afterwards behaves normally and does not sync back to the URL.
+   */
+  initialSearch?: string;
 }
 
-export function PurchaseList({ actions }: PurchaseListProps) {
+export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
   const api = useTRPC();
   const columnHelper = useMemo(() => createColumnHelper<PurchaseOut>(), []);
   const { options: projectOptions } = useProjectOptions();
@@ -225,6 +232,16 @@ export function PurchaseList({ actions }: PurchaseListProps) {
     [projectFilterOptions],
   );
 
+  // Seed the "name" column filter from the route's `q` param (e.g. a
+  // command-palette deep link) — see the `initialFilter` pattern in
+  // productlist.tsx.
+  const initialFilter = useMemo((): ColumnFiltersState => {
+    if (!initialSearch) return [];
+    return [{ id: "name", value: initialSearch }];
+  }, [initialSearch]);
+
+  const tableStateOptions = useMemo(() => ({ initialFilter }), [initialFilter]);
+
   const {
     table,
     isLoading,
@@ -262,6 +279,7 @@ export function PurchaseList({ actions }: PurchaseListProps) {
     // would both be no-ops.
     omitDetailLink: true,
     infinite: true,
+    tableStateOptions,
   });
 
   return (

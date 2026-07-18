@@ -5,6 +5,7 @@ import type {
   TaskOut,
 } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import {
   FileText,
   ImageIcon,
@@ -37,7 +38,6 @@ import { SpendingOverTime } from "./charts/spending-over-time";
 import { SubcategoryBars } from "./charts/subcategory-bars";
 import { TaskHeatmap } from "./charts/task-heatmap";
 import { ProjectNotes } from "./project-notes";
-import { ProjectPill } from "./project-pill";
 import {
   capitalize,
   PROJECT_STATUS_LABELS,
@@ -48,32 +48,62 @@ import {
 } from "./shared";
 
 const NO_IMAGES: Array<{ id: string; url: string; filename: string }> = [];
+const NO_TASKS: TaskOut[] = [];
+const NO_PURCHASES: PurchaseOut[] = [];
+
+/** Cap well above any real per-project row count (dozens at most) but within
+ * the shared `MAX_PAGE_SIZE` — one page covers every task/purchase for a
+ * single project. Exported so the route loader can prefetch with the exact
+ * same params (identical query key ⇒ cache hit, no duplicate fetch). */
+const PROJECT_SCOPED_PAGE_SIZE = 500;
+
+export function projectTasksQueryParams(projectId: string) {
+  return {
+    filters: { projectId },
+    sort: { orderBy: "createdAt" as const, direction: "desc" as const },
+    pagination: { pageIndex: 0, pageSize: PROJECT_SCOPED_PAGE_SIZE },
+  };
+}
+
+export function projectPurchasesQueryParams(projectId: string) {
+  return {
+    filters: { projectId },
+    sort: { orderBy: "date" as const, direction: "desc" as const },
+    pagination: { pageIndex: 0, pageSize: PROJECT_SCOPED_PAGE_SIZE },
+  };
+}
 
 interface ProjectDetailPageProps {
   project: ProjectOut;
-  /** Every project — resolves `blockedByIds`/`blockingIds` to pills. */
-  allProjects: ProjectOut[];
-  /** All tasks/purchases (dashboard-wide) — filtered to this project below. */
-  tasks: TaskOut[];
-  purchases: PurchaseOut[];
 }
 
-export function ProjectDetailPage({
-  project,
-  allProjects,
-  tasks,
-  purchases,
-}: ProjectDetailPageProps) {
+/**
+ * A blocked-by/blocking dependency link, name-only — `project.options` (used
+ * to resolve these) is the lightweight `{id,name}` projection, so this can't
+ * carry `ProjectPill`'s status icon/tooltip (those need a full `ProjectOut`).
+ */
+function DependencyBadge({ id, name }: { id: string; name: string }) {
+  return (
+    <Link to="/projects/$id" params={{ id }}>
+      <Badge variant="outline" className="cursor-pointer hover:bg-muted">
+        {name}
+      </Badge>
+    </Link>
+  );
+}
+
+export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   const api = useTRPC();
 
-  const projectTasks = useMemo(
-    () => tasks.filter((t) => t.projectId === project.id),
-    [tasks, project.id],
+  const { data: tasksPage } = useQuery(
+    api.task.list.queryOptions(projectTasksQueryParams(project.id)),
   );
-  const projectPurchases = useMemo(
-    () => purchases.filter((p) => p.projectId === project.id),
-    [purchases, project.id],
+  const projectTasks = tasksPage?.items ?? NO_TASKS;
+
+  const { data: purchasesPage } = useQuery(
+    api.purchase.list.queryOptions(projectPurchasesQueryParams(project.id)),
   );
+  const projectPurchases = purchasesPage?.items ?? NO_PURCHASES;
 
   const { data: imageMap } = useQuery({
     ...api.image.imagesByProjectIds.queryOptions({ projectIds: [project.id] }),
@@ -87,16 +117,25 @@ export function ProjectDetailPage({
     invalidateKeys: projectMutationInvalidateKeys,
   });
 
-  const projectsById = useMemo(
-    () => new Map(allProjects.map((p) => [p.id, p])),
-    [allProjects],
-  );
-  const blockedBy = project.blockedByIds
-    .map((id) => projectsById.get(id))
-    .filter((p): p is ProjectOut => p != null);
-  const blocking = project.blockingIds
-    .map((id) => projectsById.get(id))
-    .filter((p): p is ProjectOut => p != null);
+  // Lightweight {id,name} projection (no rollups/dependency joins) — enough
+  // to resolve blockedByIds/blockingIds into linked badges. A project with a
+  // dangling reference to a deleted project (excluded from `options`) just
+  // drops out of the list, same as the old full-ProjectOut lookup did.
+  const { data: projectOptions } = useQuery(api.project.options.queryOptions());
+  const projectNamesById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const p of projectOptions ?? []) map.set(p.id, p.name);
+    return map;
+  }, [projectOptions]);
+  const resolveDependencyNames = (ids: ProjectOut["blockedByIds"]) =>
+    ids
+      .map((id) => {
+        const name = projectNamesById.get(id);
+        return name ? { id, name } : null;
+      })
+      .filter((p): p is NonNullable<typeof p> => p != null);
+  const blockedBy = resolveDependencyNames(project.blockedByIds);
+  const blocking = resolveDependencyNames(project.blockingIds);
 
   const fields: BasicInfoField[] = [
     {
@@ -220,7 +259,7 @@ export function ProjectDetailPage({
                     <p className="eyebrow my-0">Blocked by</p>
                     <Row wrap gap="sm">
                       {blockedBy.map((p) => (
-                        <ProjectPill key={p.id} project={p} />
+                        <DependencyBadge key={p.id} {...p} />
                       ))}
                     </Row>
                   </Stack>
@@ -230,7 +269,7 @@ export function ProjectDetailPage({
                     <p className="eyebrow my-0">Blocks</p>
                     <Row wrap gap="sm">
                       {blocking.map((p) => (
-                        <ProjectPill key={p.id} project={p} />
+                        <DependencyBadge key={p.id} {...p} />
                       ))}
                     </Row>
                   </Stack>
@@ -299,8 +338,8 @@ export function ProjectDetailPage({
       />
 
       {/* Spending/task charts scoped to this project — full-bleed, below the
-          card grid (same treatment as the dashboard's own chart panels).
-          Purchases-dependent charts and the task timeline are gated
+          card grid (same treatment as the /projects list page's own chart
+          panels). Purchases-dependent charts and the task timeline are gated
           independently — a project with tasks but no purchases (or vice
           versa) must still see its own section. */}
       {(projectPurchases.length > 0 || projectTasks.length > 0) && (
