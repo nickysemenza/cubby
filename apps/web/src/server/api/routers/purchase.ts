@@ -11,6 +11,7 @@ import {
   purchaseSortableFields,
   purchaseUpdateData,
 } from "@cubby/schemas/project";
+import { z } from "zod";
 import {
   createPurchase,
   deletePurchases,
@@ -23,7 +24,7 @@ import {
   createDeleteProcedure,
   createEntityCrudProcedures,
 } from "../crud-factory";
-import { createTRPCRouter } from "../trpc";
+import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 const { getByID, list, create, update } = createEntityCrudProcedures({
   schemas: {
@@ -75,10 +76,30 @@ const deleteItem = createDeleteProcedure<PurchaseId>(async (services, ids) => {
   return undefined;
 }, purchaseId);
 
+/**
+ * Every purchase matching the filters, in one round trip — chart aggregates
+ * happen client-side, and `list`'s 500-row page cap would silently truncate
+ * them (same fetch-all convention as project.dashboard).
+ */
+const FETCH_ALL = { pageIndex: 0, pageSize: 100_000 };
+const chartData = protectedProcedure
+  .input(purchaseFiltersSchema)
+  .output(z.array(purchaseOut))
+  .query(async ({ ctx, input }) => {
+    const { data } = await purchaseList(
+      ctx.db,
+      input,
+      [{ orderBy: "date", direction: "asc" }],
+      FETCH_ALL,
+    );
+    return data;
+  });
+
 export const purchaseRouter = createTRPCRouter({
   getByID,
   list,
   create,
   update,
   delete: deleteItem,
+  chartData,
 });

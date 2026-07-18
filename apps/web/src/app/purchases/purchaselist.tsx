@@ -1,6 +1,7 @@
 import { unsafeProjectId } from "@cubby/schemas/identifiers";
 import type {
   PurchaseCategory,
+  PurchaseFilters,
   PurchaseOut,
   Purchaser,
 } from "@cubby/schemas/project";
@@ -27,6 +28,7 @@ import { useNameEditable } from "../_components/hooks/useNameEditable";
 import { useProjectOptions } from "../_components/hooks/useProjectOptions";
 import { useSeededFilter } from "../_components/hooks/useSeededFilter";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
+import { PurchaseChartStrip } from "./purchase-charts";
 import {
   futureFilterOptions,
   purchaseCategoryLabels,
@@ -34,6 +36,28 @@ import {
   purchaserLabels,
   purchaserOptions,
 } from "./purchase-options";
+
+/**
+ * Column-filter state → tRPC `PurchaseFilters`. Shared by the table query and
+ * the chart strip above it so the two can never disagree about what
+ * "filtered" means.
+ */
+function buildPurchaseFilters(
+  get: (columnId: string) => string | undefined,
+): PurchaseFilters {
+  const projectFilter = get("project");
+  const futureFilter = get("future");
+  return {
+    search: get("name"),
+    category: (get("category") as PurchaseCategory | undefined) || undefined,
+    purchaser: (get("purchaser") as Purchaser | undefined) || undefined,
+    projectId: projectFilter ? unsafeProjectId(projectFilter) : undefined,
+    future:
+      futureFilter === undefined || futureFilter === ""
+        ? undefined
+        : futureFilter === "true",
+  };
+}
 
 interface PurchaseListProps {
   /** Actions to display in the table toolbar (e.g., the "New Purchase" button). */
@@ -256,22 +280,7 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
   } = useEntityList({
     entity: "purchase",
     queryOptions: api.purchase.list.queryOptions,
-    buildFilters: (ts) => {
-      const projectFilter = ts.getColumnFilter("project");
-      const futureFilter = ts.getColumnFilter("future");
-      return {
-        search: ts.getColumnFilter("name"),
-        category: ts.getColumnFilter("category") as
-          | PurchaseCategory
-          | undefined,
-        purchaser: ts.getColumnFilter("purchaser") as Purchaser | undefined,
-        projectId: projectFilter ? unsafeProjectId(projectFilter) : undefined,
-        future:
-          futureFilter === undefined || futureFilter === ""
-            ? undefined
-            : futureFilter === "true",
-      };
-    },
+    buildFilters: (ts) => buildPurchaseFilters(ts.getColumnFilter),
     columns,
     filters,
     deletable: deletableConfig,
@@ -280,8 +289,22 @@ export function PurchaseList({ actions, initialSearch }: PurchaseListProps) {
     tableStateOptions,
   });
 
+  // Mirror the table's active filters for the chart strip. Reading
+  // `table.getState()` is reactive — the table re-renders this component on
+  // every filter change.
+  const columnFilters = table.getState().columnFilters;
+  const chartFilters = useMemo(
+    () =>
+      buildPurchaseFilters(
+        (id) =>
+          columnFilters.find((f) => f.id === id)?.value as string | undefined,
+      ),
+    [columnFilters],
+  );
+
   return (
     <div>
+      <PurchaseChartStrip filters={chartFilters} />
       <RTable
         table={table}
         isLoading={isLoading}

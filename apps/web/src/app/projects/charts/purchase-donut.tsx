@@ -20,10 +20,16 @@ export function PurchaseDonut({
   purchases,
   height = 350,
   centerLabel = "Total cost",
+  selectedCategory,
+  onCategoryClick,
 }: {
   purchases: PurchaseOut[];
   height?: number;
   centerLabel?: string;
+  /** Category key to highlight (drill-down selection); center label shows its total. */
+  selectedCategory?: string | null;
+  /** When set, slices are clickable and report their category key. */
+  onCategoryClick?: (categoryKey: string) => void;
 }) {
   const { data, total } = useMemo(() => {
     const byCategory = sumByKey(
@@ -50,11 +56,29 @@ export function PurchaseDonut({
     return <ChartEmpty icon={ShoppingBag} title="No purchase data." />;
   }
 
+  const selected =
+    selectedCategory != null
+      ? data.find((d) => d.id === selectedCategory)
+      : undefined;
+  const centerValue = selected?.value ?? total;
+  const centerText = selected ? selected.label : centerLabel;
+
   return (
-    <div style={{ height }}>
+    <div
+      style={{ height }}
+      className={onCategoryClick ? "[&_path]:cursor-pointer" : undefined}
+    >
       <ResponsivePie
         data={data}
         colors={(d) => d.data.color}
+        onClick={
+          onCategoryClick ? (d) => onCategoryClick(String(d.id)) : undefined
+        }
+        // Controlled while a slice is drilled in — the selected arc stays
+        // popped out (activeOuterRadiusOffset). Uncontrolled hover otherwise.
+        // (Don't fade unselected slices via color: Nivo's color interpolator
+        // can't parse color-mix() and silently keeps the full color.)
+        activeId={selected ? selected.id : undefined}
         margin={{ top: 30, right: 100, bottom: 30, left: 100 }}
         innerRadius={0.6}
         padAngle={1}
@@ -89,7 +113,7 @@ export function PurchaseDonut({
               style={{ fill: "var(--foreground)" }}
             >
               <tspan x={centerX} dy="-0.5em" className="font-bold text-xl">
-                {formatCurrency(total, 0)}
+                {formatCurrency(centerValue, 0)}
               </tspan>
               <tspan
                 x={centerX}
@@ -97,7 +121,7 @@ export function PurchaseDonut({
                 className="text-xs"
                 style={{ fill: "var(--muted-foreground)" }}
               >
-                {centerLabel}
+                {centerText}
               </tspan>
             </text>
           ),
