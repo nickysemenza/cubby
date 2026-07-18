@@ -135,6 +135,66 @@ export function buildInventoryEmbeddingText(entry: InventorySearchTextInput) {
   ]);
 }
 
+const projectSearchTextInputSchema = z.object({
+  name: z.string(),
+  status: nullableText,
+  kind: nullableText,
+  locations: nullableTextList,
+  notes: nullableText,
+});
+type ProjectSearchTextInput = z.infer<typeof projectSearchTextInputSchema>;
+
+export function buildProjectEmbeddingText(project: ProjectSearchTextInput) {
+  const parsed = projectSearchTextInputSchema.parse(project);
+  return joinFields([
+    field("project", parsed.name),
+    field("status", parsed.status),
+    field("kind", parsed.kind),
+    listField("locations", parsed.locations),
+    field("notes", parsed.notes),
+  ]);
+}
+
+const taskSearchTextInputSchema = z.object({
+  name: z.string(),
+  status: nullableText,
+  category: nullableText,
+  projectName: nullableText,
+});
+type TaskSearchTextInput = z.infer<typeof taskSearchTextInputSchema>;
+
+export function buildTaskEmbeddingText(task: TaskSearchTextInput) {
+  const parsed = taskSearchTextInputSchema.parse(task);
+  return joinFields([
+    field("task", parsed.name),
+    field("status", parsed.status),
+    field("category", parsed.category),
+    field("project", parsed.projectName),
+  ]);
+}
+
+const purchaseSearchTextInputSchema = z.object({
+  name: z.string(),
+  category: nullableText,
+  subcategory: nullableText,
+  purchaser: nullableText,
+  notes: nullableText,
+  projectName: nullableText,
+});
+type PurchaseSearchTextInput = z.infer<typeof purchaseSearchTextInputSchema>;
+
+export function buildPurchaseEmbeddingText(purchase: PurchaseSearchTextInput) {
+  const parsed = purchaseSearchTextInputSchema.parse(purchase);
+  return joinFields([
+    field("purchase", parsed.name),
+    field("category", parsed.category),
+    field("subcategory", parsed.subcategory),
+    field("purchaser", parsed.purchaser),
+    field("project", parsed.projectName),
+    field("notes", parsed.notes),
+  ]);
+}
+
 export function normalizeSearchText(text: string): string {
   return text.trim().replace(/\s+/g, " ").toLowerCase();
 }

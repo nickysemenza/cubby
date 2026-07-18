@@ -36,6 +36,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
+import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { dbTaskToAPI } from "./helpers";
 
 /** `taskUpdateData` has no standalone type export — derive it from the input. */
@@ -224,6 +225,9 @@ export const deleteTasks = async (
       .update(task)
       .set({ deletedAt: now })
       .where(and(inArray(task.id, ids), notDeleted(task)));
+
+    // Removal-path invariant: every delete path cleans up its embeddings in-tx.
+    await softDeleteEntityEmbeddingsTx(tx, "task", ids);
 
     await logAuditEntries(
       tx,

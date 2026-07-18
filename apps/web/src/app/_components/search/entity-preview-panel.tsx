@@ -4,6 +4,8 @@ import { Link } from "@tanstack/react-router";
 import { ExternalLink } from "lucide-react";
 import { useMemo } from "react";
 import { MealDetailPage } from "~/app/meals/meal-detail-page";
+import { PurchaseDetail } from "~/app/purchases/purchase-detail";
+import { TaskDetail } from "~/app/tasks/task-detail";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { SheetHeader, SheetTitle } from "~/components/ui/sheet";
@@ -117,6 +119,16 @@ export function EntityPreviewPanel({
           ) : null
         ) : null}
         {entityType === "meal" ? <MealDetailPage mealId={id as never} /> : null}
+        {entityType === "task" ? (
+          data ? (
+            <TaskDetail task={data as never} />
+          ) : null
+        ) : null}
+        {entityType === "purchase" ? (
+          data ? (
+            <PurchaseDetail purchase={data as never} />
+          ) : null
+        ) : null}
       </div>
     </div>
   );

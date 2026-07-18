@@ -37,6 +37,9 @@ const ALL_SEARCHABLE_ENTITIES: SearchableEntity[] = [
   "ingredient",
   "location",
   "inventory",
+  "project",
+  "task",
+  "purchase",
 ];
 
 async function semanticSearchCandidates(

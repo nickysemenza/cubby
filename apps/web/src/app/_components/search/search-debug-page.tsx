@@ -25,51 +25,82 @@ import {
 import { useTRPC } from "~/integrations/trpc/react";
 
 function SearchResultEntityLink({ item }: { item: SearchResultItem }) {
-  return match(item)
-    .with({ entityType: "product" }, (i) => (
-      <EntityInlineLink
-        entity="product"
-        data={{
-          id: i.id,
-          name: i.name,
-          manufacturer: i.subtitle ?? undefined,
-        }}
-        compact
-      />
-    ))
-    .with({ entityType: "location" }, (i) => (
-      <EntityInlineLink
-        entity="location"
-        data={{
-          id: i.id,
-          name: i.name,
-          type: i.typeHint ? (i.typeHint as LocationType) : undefined,
-        }}
-        compact
-      />
-    ))
-    .with({ entityType: "recipe" }, (i) => (
-      <EntityInlineLink
-        entity="recipe"
-        data={{ id: i.id, name: i.name }}
-        compact
-      />
-    ))
-    .with({ entityType: "ingredient" }, (i) => (
-      <EntityInlineLink
-        entity="ingredient"
-        data={{ id: i.id, name: i.name }}
-        compact
-      />
-    ))
-    .with({ entityType: "inventory" }, (i) => (
-      <EntityInlineLink
-        entity="inventory"
-        data={{ id: i.id, name: i.name }}
-        compact
-      />
-    ))
-    .exhaustive();
+  return (
+    match(item)
+      .with({ entityType: "product" }, (i) => (
+        <EntityInlineLink
+          entity="product"
+          data={{
+            id: i.id,
+            name: i.name,
+            manufacturer: i.subtitle ?? undefined,
+          }}
+          compact
+        />
+      ))
+      .with({ entityType: "location" }, (i) => (
+        <EntityInlineLink
+          entity="location"
+          data={{
+            id: i.id,
+            name: i.name,
+            type: i.typeHint ? (i.typeHint as LocationType) : undefined,
+          }}
+          compact
+        />
+      ))
+      .with({ entityType: "recipe" }, (i) => (
+        <EntityInlineLink
+          entity="recipe"
+          data={{ id: i.id, name: i.name }}
+          compact
+        />
+      ))
+      .with({ entityType: "ingredient" }, (i) => (
+        <EntityInlineLink
+          entity="ingredient"
+          data={{ id: i.id, name: i.name }}
+          compact
+        />
+      ))
+      .with({ entityType: "inventory" }, (i) => (
+        <EntityInlineLink
+          entity="inventory"
+          data={{ id: i.id, name: i.name }}
+          compact
+        />
+      ))
+      // Tracker entities: plain links — EntityInlineLink's hovercard system has
+      // no project/task/purchase manifest cards (yet), and this is a debug page.
+      .with({ entityType: "project" }, (i) => (
+        <Link
+          to="/projects/$id"
+          params={{ id: i.id }}
+          className="max-w-32 truncate font-medium underline decoration-border/70 decoration-dotted underline-offset-2 hover:text-primary"
+        >
+          {i.name}
+        </Link>
+      ))
+      .with({ entityType: "task" }, (i) => (
+        <Link
+          to="/tasks/$id"
+          params={{ id: i.id }}
+          className="max-w-32 truncate font-medium underline decoration-border/70 decoration-dotted underline-offset-2 hover:text-primary"
+        >
+          {i.name}
+        </Link>
+      ))
+      .with({ entityType: "purchase" }, (i) => (
+        <Link
+          to="/purchases/$id"
+          params={{ id: i.id }}
+          className="max-w-32 truncate font-medium underline decoration-border/70 decoration-dotted underline-offset-2 hover:text-primary"
+        >
+          {i.name}
+        </Link>
+      ))
+      .exhaustive()
+  );
 }
 
 function ResultTable({

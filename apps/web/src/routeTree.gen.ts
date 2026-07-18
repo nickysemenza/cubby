@@ -46,11 +46,13 @@ import { Route as ApiTrpcSplatRouteImport } from './routes/api/trpc/$'
 import { Route as ApiDebugTimingRouteImport } from './routes/api/debug/timing'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as AuthenticatedUsdaIdRouteImport } from './routes/_authenticated/usda.$id'
+import { Route as AuthenticatedTasksIdRouteImport } from './routes/_authenticated/tasks.$id'
 import { Route as AuthenticatedSearchDebugRouteImport } from './routes/_authenticated/search.debug'
 import { Route as AuthenticatedRecipesNewRouteImport } from './routes/_authenticated/recipes.new'
 import { Route as AuthenticatedRecipesImportRouteImport } from './routes/_authenticated/recipes.import'
 import { Route as AuthenticatedRecipesCompareRouteImport } from './routes/_authenticated/recipes.compare'
 import { Route as AuthenticatedRecipesIdRouteImport } from './routes/_authenticated/recipes.$id'
+import { Route as AuthenticatedPurchasesIdRouteImport } from './routes/_authenticated/purchases.$id'
 import { Route as AuthenticatedProjectsIdRouteImport } from './routes/_authenticated/projects.$id'
 import { Route as AuthenticatedProductsNewRouteImport } from './routes/_authenticated/products.new'
 import { Route as AuthenticatedProductsIdRouteImport } from './routes/_authenticated/products.$id'
@@ -272,6 +274,11 @@ const AuthenticatedUsdaIdRoute = AuthenticatedUsdaIdRouteImport.update({
   path: '/usda/$id',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedTasksIdRoute = AuthenticatedTasksIdRouteImport.update({
+  id: '/tasks/$id',
+  path: '/tasks/$id',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedSearchDebugRoute =
   AuthenticatedSearchDebugRouteImport.update({
     id: '/search/debug',
@@ -300,6 +307,12 @@ const AuthenticatedRecipesIdRoute = AuthenticatedRecipesIdRouteImport.update({
   path: '/recipes/$id',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedPurchasesIdRoute =
+  AuthenticatedPurchasesIdRouteImport.update({
+    id: '/purchases/$id',
+    path: '/purchases/$id',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedProjectsIdRoute = AuthenticatedProjectsIdRouteImport.update({
   id: '/projects/$id',
   path: '/projects/$id',
@@ -482,11 +495,13 @@ export interface FileRoutesByFullPath {
   '/products/$id': typeof AuthenticatedProductsIdRoute
   '/products/new': typeof AuthenticatedProductsNewRoute
   '/projects/$id': typeof AuthenticatedProjectsIdRoute
+  '/purchases/$id': typeof AuthenticatedPurchasesIdRoute
   '/recipes/$id': typeof AuthenticatedRecipesIdRoute
   '/recipes/compare': typeof AuthenticatedRecipesCompareRoute
   '/recipes/import': typeof AuthenticatedRecipesImportRoute
   '/recipes/new': typeof AuthenticatedRecipesNewRoute
   '/search/debug': typeof AuthenticatedSearchDebugRoute
+  '/tasks/$id': typeof AuthenticatedTasksIdRoute
   '/usda/$id': typeof AuthenticatedUsdaIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
@@ -548,11 +563,13 @@ export interface FileRoutesByTo {
   '/products/$id': typeof AuthenticatedProductsIdRoute
   '/products/new': typeof AuthenticatedProductsNewRoute
   '/projects/$id': typeof AuthenticatedProjectsIdRoute
+  '/purchases/$id': typeof AuthenticatedPurchasesIdRoute
   '/recipes/$id': typeof AuthenticatedRecipesIdRoute
   '/recipes/compare': typeof AuthenticatedRecipesCompareRoute
   '/recipes/import': typeof AuthenticatedRecipesImportRoute
   '/recipes/new': typeof AuthenticatedRecipesNewRoute
   '/search/debug': typeof AuthenticatedSearchDebugRoute
+  '/tasks/$id': typeof AuthenticatedTasksIdRoute
   '/usda/$id': typeof AuthenticatedUsdaIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
@@ -617,11 +634,13 @@ export interface FileRoutesById {
   '/_authenticated/products/$id': typeof AuthenticatedProductsIdRoute
   '/_authenticated/products/new': typeof AuthenticatedProductsNewRoute
   '/_authenticated/projects/$id': typeof AuthenticatedProjectsIdRoute
+  '/_authenticated/purchases/$id': typeof AuthenticatedPurchasesIdRoute
   '/_authenticated/recipes/$id': typeof AuthenticatedRecipesIdRoute
   '/_authenticated/recipes/compare': typeof AuthenticatedRecipesCompareRoute
   '/_authenticated/recipes/import': typeof AuthenticatedRecipesImportRoute
   '/_authenticated/recipes/new': typeof AuthenticatedRecipesNewRoute
   '/_authenticated/search/debug': typeof AuthenticatedSearchDebugRoute
+  '/_authenticated/tasks/$id': typeof AuthenticatedTasksIdRoute
   '/_authenticated/usda/$id': typeof AuthenticatedUsdaIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
@@ -686,11 +705,13 @@ export interface FileRouteTypes {
     | '/products/$id'
     | '/products/new'
     | '/projects/$id'
+    | '/purchases/$id'
     | '/recipes/$id'
     | '/recipes/compare'
     | '/recipes/import'
     | '/recipes/new'
     | '/search/debug'
+    | '/tasks/$id'
     | '/usda/$id'
     | '/api/auth/$'
     | '/api/debug/timing'
@@ -752,11 +773,13 @@ export interface FileRouteTypes {
     | '/products/$id'
     | '/products/new'
     | '/projects/$id'
+    | '/purchases/$id'
     | '/recipes/$id'
     | '/recipes/compare'
     | '/recipes/import'
     | '/recipes/new'
     | '/search/debug'
+    | '/tasks/$id'
     | '/usda/$id'
     | '/api/auth/$'
     | '/api/debug/timing'
@@ -820,11 +843,13 @@ export interface FileRouteTypes {
     | '/_authenticated/products/$id'
     | '/_authenticated/products/new'
     | '/_authenticated/projects/$id'
+    | '/_authenticated/purchases/$id'
     | '/_authenticated/recipes/$id'
     | '/_authenticated/recipes/compare'
     | '/_authenticated/recipes/import'
     | '/_authenticated/recipes/new'
     | '/_authenticated/search/debug'
+    | '/_authenticated/tasks/$id'
     | '/_authenticated/usda/$id'
     | '/api/auth/$'
     | '/api/debug/timing'
@@ -1120,6 +1145,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedUsdaIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/tasks/$id': {
+      id: '/_authenticated/tasks/$id'
+      path: '/tasks/$id'
+      fullPath: '/tasks/$id'
+      preLoaderRoute: typeof AuthenticatedTasksIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/search/debug': {
       id: '/_authenticated/search/debug'
       path: '/search/debug'
@@ -1153,6 +1185,13 @@ declare module '@tanstack/react-router' {
       path: '/recipes/$id'
       fullPath: '/recipes/$id'
       preLoaderRoute: typeof AuthenticatedRecipesIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/purchases/$id': {
+      id: '/_authenticated/purchases/$id'
+      path: '/purchases/$id'
+      fullPath: '/purchases/$id'
+      preLoaderRoute: typeof AuthenticatedPurchasesIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/projects/$id': {
@@ -1360,11 +1399,13 @@ interface AuthenticatedRouteChildren {
   AuthenticatedProductsIdRoute: typeof AuthenticatedProductsIdRoute
   AuthenticatedProductsNewRoute: typeof AuthenticatedProductsNewRoute
   AuthenticatedProjectsIdRoute: typeof AuthenticatedProjectsIdRoute
+  AuthenticatedPurchasesIdRoute: typeof AuthenticatedPurchasesIdRoute
   AuthenticatedRecipesIdRoute: typeof AuthenticatedRecipesIdRoute
   AuthenticatedRecipesCompareRoute: typeof AuthenticatedRecipesCompareRoute
   AuthenticatedRecipesImportRoute: typeof AuthenticatedRecipesImportRoute
   AuthenticatedRecipesNewRoute: typeof AuthenticatedRecipesNewRoute
   AuthenticatedSearchDebugRoute: typeof AuthenticatedSearchDebugRoute
+  AuthenticatedTasksIdRoute: typeof AuthenticatedTasksIdRoute
   AuthenticatedUsdaIdRoute: typeof AuthenticatedUsdaIdRoute
   AuthenticatedCookbooksIndexRoute: typeof AuthenticatedCookbooksIndexRoute
   AuthenticatedImagesIndexRoute: typeof AuthenticatedImagesIndexRoute
@@ -1420,11 +1461,13 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedProductsIdRoute: AuthenticatedProductsIdRoute,
   AuthenticatedProductsNewRoute: AuthenticatedProductsNewRoute,
   AuthenticatedProjectsIdRoute: AuthenticatedProjectsIdRoute,
+  AuthenticatedPurchasesIdRoute: AuthenticatedPurchasesIdRoute,
   AuthenticatedRecipesIdRoute: AuthenticatedRecipesIdRoute,
   AuthenticatedRecipesCompareRoute: AuthenticatedRecipesCompareRoute,
   AuthenticatedRecipesImportRoute: AuthenticatedRecipesImportRoute,
   AuthenticatedRecipesNewRoute: AuthenticatedRecipesNewRoute,
   AuthenticatedSearchDebugRoute: AuthenticatedSearchDebugRoute,
+  AuthenticatedTasksIdRoute: AuthenticatedTasksIdRoute,
   AuthenticatedUsdaIdRoute: AuthenticatedUsdaIdRoute,
   AuthenticatedCookbooksIndexRoute: AuthenticatedCookbooksIndexRoute,
   AuthenticatedImagesIndexRoute: AuthenticatedImagesIndexRoute,

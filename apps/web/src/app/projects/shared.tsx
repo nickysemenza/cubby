@@ -1,4 +1,5 @@
 import {
+  type ProjectKind,
   type ProjectOut,
   type ProjectStatus,
   type PurchaseCategory,
@@ -7,7 +8,6 @@ import {
   type TaskOut,
   type TaskStatus,
 } from "@cubby/schemas/project";
-import { Link } from "@tanstack/react-router";
 import {
   createColumnHelper,
   getCoreRowModel,
@@ -18,14 +18,20 @@ import {
 } from "@tanstack/react-table";
 import { format } from "date-fns";
 import { partition } from "es-toolkit";
-import { ExternalLink, Hammer, ListTodo, ShoppingCart } from "lucide-react";
+import { ExternalLink, ListTodo, ShoppingCart } from "lucide-react";
 import { useMemo } from "react";
 import {
+  createCurrencyColumn,
   createFilterableSelectColumn,
   createPlainDateColumn,
   createProjectLinkColumn,
 } from "~/app/_components/data-table/columnHelpers";
 import RTable from "~/app/_components/data-table/Table";
+import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
+import { useEntityList } from "~/app/_components/hooks/useEntityList";
+import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
+import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
+import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import {
   purchaseCategoryLabels,
   purchaseCategoryOptions,
@@ -38,7 +44,6 @@ import {
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
-import { Description } from "~/components/ui/description";
 import {
   Empty,
   EmptyHeader,
@@ -46,9 +51,12 @@ import {
   EmptyTitle,
 } from "~/components/ui/empty";
 import { NoneValue } from "~/components/ui/none-value";
+import { useTRPC } from "~/integrations/trpc/react";
+import { projectMutationInvalidateKeys } from "~/lib/query-keys";
 import { buildSelectOptions } from "~/lib/select-options";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn, formatCurrency } from "~/lib/utils";
+import { projectKindOptions } from "./project-options";
 
 /**
  * Human-facing labels for the raw DB enum values (`@cubby/schemas/project`).
@@ -308,125 +316,236 @@ export function PurchaseList({ purchases }: { purchases: PurchaseOut[] }) {
 
 // -- Project Table --
 
-const projectHelper = createColumnHelper<ProjectOut>();
-
-const projectColumns = [
-  projectHelper.accessor("name", {
-    header: "Project",
-    cell: ({ row }) => (
-      <Link
-        to="/projects/$id"
-        params={{ id: row.original.id }}
-        className="flex items-center gap-2 font-medium hover:underline"
-      >
-        {row.original.icon && <span>{row.original.icon}</span>}
-        {row.original.name}
-      </Link>
-    ),
-    enableSorting: true,
-  }),
-  projectHelper.accessor("status", {
-    header: "Status",
-    cell: ({ row }) => (
-      <Row align="center" gap="xs">
-        <StatusIcon status={row.original.status} />
-        <span>{PROJECT_STATUS_LABELS[row.original.status]}</span>
-      </Row>
-    ),
-    enableSorting: true,
-  }),
-  projectHelper.accessor("kind", {
-    header: "Kind",
-    cell: ({ getValue }) => {
-      const kind = getValue();
-      if (!kind) return null;
-      return <Badge variant="secondary">{capitalize(kind)}</Badge>;
-    },
-    enableSorting: true,
-  }),
-  projectHelper.accessor("locations", {
-    header: "Location",
-    cell: ({ getValue }) => {
-      const locs = getValue();
-      if (locs.length === 0) return null;
-      return (
-        <Row wrap gap="xs">
-          {locs.map((loc) => (
-            <Badge key={loc} variant="outline">
-              {loc}
-            </Badge>
-          ))}
-        </Row>
-      );
-    },
-    enableSorting: false,
-  }),
-  projectHelper.accessor("costEstimate", {
-    header: "Estimate",
-    cell: ({ getValue }) => {
-      const est = getValue();
-      if (est == null) return null;
-      return <span>{formatCurrency(est, 0)}</span>;
-    },
-    enableSorting: true,
-  }),
-  projectHelper.accessor((row) => row.rollup.spent, {
-    id: "actual",
-    header: "Actual",
-    cell: ({ row }) => {
-      const actual = row.original.rollup.spent;
-      if (actual === 0) return null;
-      const est = row.original.costEstimate;
-      const over = est != null && est > 0 && actual > est;
-      return (
-        <span className={over ? "font-medium text-destructive" : ""}>
-          {formatCurrency(actual, 0)}
-        </span>
-      );
-    },
-    enableSorting: true,
-  }),
-  projectHelper.accessor("startDate", {
-    header: "Date",
-    cell: ({ row }) => {
-      const { startDate, endDate } = row.original;
-      if (!startDate) return null;
-      return (
-        <Description as="span" size="xs">
-          {formatDateRange(startDate, endDate)}
-        </Description>
-      );
-    },
-    sortingFn: "alphanumeric",
-    enableSorting: true,
-  }),
+const PROJECT_KIND_FILTER_OPTIONS: FilterableComboboxItem[] = [
+  { value: "", label: "All kinds" },
+  ...projectKindOptions,
 ];
 
-export function ProjectTable({ projects }: { projects: ProjectOut[] }) {
-  const table = useReactTable({
-    data: projects,
-    columns: projectColumns,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getRowId: (row) => row.id,
-    initialState: {
-      pagination: { pageSize: 20 },
-      sorting: [{ id: "startDate", desc: true }],
-    },
+/**
+ * Renders through `useEntityList`/`useStandardColumns` (like `TaskList`/
+ * `PurchaseList` above, and mirroring `tasklist.tsx`/`purchaselist.tsx`)
+ * rather than a client-side `useReactTable` over the dashboard's
+ * already-fetched+filtered `projects` array — it drives its own
+ * `project.list` query instead (cache-independent of the dashboard's one
+ * `project.dashboard` fetch). That's a deliberate trade against the
+ * dashboard's status/kind/location filters (this table doesn't see them; it
+ * has its own inline column filters + search), in exchange for server-backed
+ * infinite scroll, inline editing, and delete — all free from `useEntityList`.
+ * Takes no props; mounted bare from the dashboard's DATA tab.
+ */
+export function ProjectTable() {
+  const api = useTRPC();
+  const columnHelper = useMemo(() => createColumnHelper<ProjectOut>(), []);
+
+  const updateProjectMutation = useUpdateMutation({
+    mutationFn: api.project.update.mutationOptions,
+    entity: "project",
+    invalidateKeys: projectMutationInvalidateKeys,
   });
 
-  if (projects.length === 0) {
-    return (
-      <Empty variant="minimal" className="py-6">
-        <EmptyHeader>
-          <EmptyIcon icon={Hammer} />
-          <EmptyTitle>No projects found</EmptyTitle>
-        </EmptyHeader>
-      </Empty>
-    );
-  }
+  const nameEditable = useNameEditable<ProjectOut>(
+    updateProjectMutation.mutateAsync,
+  );
 
-  return <RTable table={table} />;
+  const deletableConfig = useDeletableConfig({
+    mutationFn: api.project.delete.mutationOptions,
+    entityLabel: "Project",
+    invalidateKeys: projectMutationInvalidateKeys,
+  });
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: updateProjectMutation changes every render but is functionally stable
+  const columns = useMemo(
+    () => [
+      createFilterableSelectColumn(columnHelper, "status", {
+        header: "Status",
+        className: "w-32",
+        placeholder: "Filter by status...",
+        selectOptions: PROJECT_STATUS_OPTIONS,
+        renderCell: (status: ProjectStatus) => (
+          <Row align="center" gap="xs">
+            <StatusIcon status={status} />
+            <span>{PROJECT_STATUS_LABELS[status]}</span>
+          </Row>
+        ),
+        mobile: { slot: "subtitle", priority: 10 },
+        editable: {
+          onSave: async (newStatus, project) => {
+            await updateProjectMutation.mutateAsync({
+              id: project.id,
+              data: { status: newStatus },
+            });
+          },
+        },
+      }),
+      createFilterableSelectColumn(columnHelper, "kind", {
+        header: "Kind",
+        className: "w-32",
+        placeholder: "Filter by kind...",
+        selectOptions: projectKindOptions,
+        renderCell: (kind: ProjectKind | null) =>
+          kind ? (
+            <Badge variant="secondary">{capitalize(kind)}</Badge>
+          ) : (
+            <NoneValue />
+          ),
+        mobile: { slot: "meta", priority: 20 },
+        editable: {
+          onSave: async (newKind, project) => {
+            await updateProjectMutation.mutateAsync({
+              id: project.id,
+              data: { kind: newKind },
+            });
+          },
+        },
+      }),
+      createCurrencyColumn(columnHelper, "costEstimate", {
+        header: "Estimate",
+        mobile: { slot: "meta", priority: 30, interactive: true },
+        editable: {
+          onSave: async (newEstimate, project) => {
+            await updateProjectMutation.mutateAsync({
+              id: project.id,
+              data: { costEstimate: newEstimate },
+            });
+          },
+        },
+      }),
+      columnHelper.accessor("locations", {
+        id: "locations",
+        header: "Location",
+        enableSorting: false,
+        meta: { className: "w-40", mobile: { slot: "meta", priority: 40 } },
+        cell: ({ getValue }) => {
+          const locs = getValue();
+          if (locs.length === 0) return <NoneValue />;
+          return (
+            <Row wrap gap="xs">
+              {locs.map((loc) => (
+                <Badge key={loc} variant="outline">
+                  {loc}
+                </Badge>
+              ))}
+            </Row>
+          );
+        },
+      }),
+      columnHelper.accessor((row) => row.rollup.spent, {
+        id: "actual",
+        header: "Actual",
+        enableSorting: true,
+        meta: { numeric: true, className: "w-24" },
+        cell: ({ row }) => {
+          const actual = row.original.rollup.spent;
+          if (actual === 0) return <NoneValue />;
+          const est = row.original.costEstimate;
+          const over = est != null && est > 0 && actual > est;
+          return (
+            <span
+              className={
+                over ? "font-medium text-destructive" : "text-positive"
+              }
+            >
+              {formatCurrency(actual, 0)}
+            </span>
+          );
+        },
+      }),
+      createPlainDateColumn(columnHelper, "startDate", {
+        header: "Start",
+        className: "w-28",
+        mobile: { slot: "meta", priority: 50 },
+        editable: {
+          onSave: async (newStartDate, project) => {
+            await updateProjectMutation.mutateAsync({
+              id: project.id,
+              data: { startDate: newStartDate },
+            });
+          },
+        },
+      }),
+      createPlainDateColumn(columnHelper, "endDate", {
+        header: "End",
+        className: "w-28",
+        mobile: { slot: "meta", priority: 60 },
+        editable: {
+          onSave: async (newEndDate, project) => {
+            await updateProjectMutation.mutateAsync({
+              id: project.id,
+              data: { endDate: newEndDate },
+            });
+          },
+        },
+      }),
+    ],
+    [columnHelper],
+  );
+
+  const filters = useMemo(
+    () => [
+      { id: "name", placeholder: "Search projects..." },
+      {
+        id: "status",
+        placeholder: "Filter by status...",
+        filterType: "select" as const,
+        options: PROJECT_STATUS_OPTIONS,
+      },
+      {
+        id: "kind",
+        placeholder: "Filter by kind...",
+        filterType: "select" as const,
+        options: PROJECT_KIND_FILTER_OPTIONS,
+      },
+    ],
+    [],
+  );
+
+  // defaultSortState always defaults to desc — matches the original
+  // ProjectTable's `sorting: [{ id: "startDate", desc: true }]`.
+  const tableStateOptions = useMemo(() => ({ initialSort: "startDate" }), []);
+  const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("project");
+
+  const {
+    table,
+    isLoading,
+    error,
+    timing,
+    bulkActionBar,
+    deleteDialog,
+    infiniteScroll,
+    refreshControls,
+  } = useEntityList({
+    entity: "project",
+    queryOptions: api.project.list.queryOptions,
+    buildFilters: (ts) => ({
+      search: ts.getColumnFilter("name"),
+      status: ts.getColumnFilter("status") as ProjectStatus | undefined,
+      kind: ts.getColumnFilter("kind") as ProjectKind | undefined,
+    }),
+    columns,
+    filters,
+    deletable: deletableConfig,
+    nameEditable,
+    infinite: true,
+    tableStateOptions,
+  });
+
+  return (
+    <div>
+      <RTable
+        table={table}
+        isLoading={isLoading}
+        error={error}
+        ariaLabel="Projects Table"
+        timing={timing}
+        entity="project"
+        onRowClick={onRowClick}
+        onRowHover={onRowHover}
+        bulkActionBar={bulkActionBar}
+        infiniteScroll={infiniteScroll}
+        refreshControls={refreshControls}
+      />
+      <PreviewSheet />
+      {deleteDialog}
+    </div>
+  );
 }

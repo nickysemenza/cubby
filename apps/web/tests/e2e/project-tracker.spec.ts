@@ -73,6 +73,12 @@ test.describe("Project tracker", () => {
     await expect(page.getByText(name).first()).toBeVisible({
       timeout: 10000,
     });
+
+    // The name column links to the task's detail page (/tasks/$id).
+    await page.getByRole("link", { name }).first().click();
+    await expect(page.getByRole("heading", { level: 1, name })).toBeVisible({
+      timeout: 10000,
+    });
   });
 
   test("purchases: quick-add creates a purchase and cost renders as currency", async ({
@@ -153,6 +159,24 @@ test.describe("Project tracker", () => {
     // (hidden) — use `.last()` to land on the always-visible table row.
     await page.getByRole("button", { name: "Data view" }).click();
     await expect(page.getByText(name).last()).toBeVisible({
+      timeout: 10000,
+    });
+
+    // The Data tab's project table (`shared.tsx`'s `ProjectTable`, migrated
+    // onto `useEntityList`) has an inline-editable name column, same as
+    // tasks/purchases. `ProjectPill` (Needs Attention) renders a Link, not a
+    // button, so this is unambiguous even before the edit.
+    const editedName = `${name} (edited)`;
+    await page.getByRole("button", { name }).click();
+    const nameInput = page.locator("input:focus");
+    await expect(nameInput).toBeVisible({ timeout: 5000 });
+    await nameInput.fill(editedName);
+    await nameInput.press("Enter");
+
+    // Assert the edited value renders (react-query invalidation round trip) —
+    // more stable than a full page reload, and still proves the mutation
+    // persisted (not just an optimistic client-side echo).
+    await expect(page.getByText(editedName).last()).toBeVisible({
       timeout: 10000,
     });
   });

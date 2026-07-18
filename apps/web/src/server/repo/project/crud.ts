@@ -44,6 +44,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
+import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { projectDependencyIds, projectRollups } from "./analytics";
 import { dbProjectToAPI, EMPTY_PROJECT_ROLLUP } from "./helpers";
 
@@ -275,6 +276,9 @@ export const deleteProjects = async (
       .update(project)
       .set({ deletedAt: now })
       .where(and(inArray(project.id, ids), notDeleted(project)));
+
+    // Removal-path invariant: every delete path cleans up its embeddings in-tx.
+    await softDeleteEntityEmbeddingsTx(tx, "project", ids);
 
     const auditEntries = buildCascadeAuditEntries("project", ids, {
       cascadedImages: countBy(cascadedImages, (i) => i.projectId),

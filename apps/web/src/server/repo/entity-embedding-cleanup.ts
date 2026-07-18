@@ -2,13 +2,17 @@ import type {
   IngredientId,
   LocationId,
   ProductId,
+  ProjectId,
 } from "@cubby/schemas/identifiers";
 import {
   unsafeIngredientId,
   unsafeInventoryId,
   unsafeLocationId,
   unsafeProductId,
+  unsafeProjectId,
+  unsafePurchaseId,
   unsafeRecipeId,
+  unsafeTaskId,
 } from "@cubby/schemas/identifiers";
 import type {
   SearchableEntity,
@@ -23,9 +27,12 @@ import {
   inventoryEntry,
   location,
   product,
+  project,
+  purchase,
   recipe,
   recipeSection,
   recipeSectionIngredient,
+  task,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
@@ -147,6 +154,38 @@ export async function findRecipeEmbeddingRefsForIngredients(
   return rows.map((row) => ({ entityType: "recipe", entityId: row.recipeId }));
 }
 
+/**
+ * Tasks and purchases embed their project's NAME, so a project rename must
+ * refresh every live task/purchase embedding under it.
+ */
+export async function findTrackerEmbeddingRefsForProjects(
+  db: Database,
+  projectIds: ProjectId[],
+): Promise<SearchableEntityRef[]> {
+  if (projectIds.length === 0) return [];
+  const [tasks, purchases] = await Promise.all([
+    getDb(db).query.task.findMany({
+      where: and(inArray(task.projectId, projectIds), notDeleted(task)),
+      columns: { id: true },
+    }),
+    getDb(db).query.purchase.findMany({
+      where: and(inArray(purchase.projectId, projectIds), notDeleted(purchase)),
+      columns: { id: true },
+    }),
+  ]);
+  return [
+    ...tasks.map(
+      (row): SearchableEntityRef => ({ entityType: "task", entityId: row.id }),
+    ),
+    ...purchases.map(
+      (row): SearchableEntityRef => ({
+        entityType: "purchase",
+        entityId: row.id,
+      }),
+    ),
+  ];
+}
+
 export async function findOrphanedEntityEmbeddings(
   db: Database,
 ): Promise<OrphanedEntityEmbedding[]> {
@@ -221,6 +260,39 @@ export async function findOrphanedEntityEmbeddings(
           where: and(
             inArray(inventoryEntry.id, uniqueIds.map(unsafeInventoryId)),
             notDeleted(inventoryEntry),
+          ),
+          columns: { id: true },
+        });
+        liveByType.set(type, new Set(found.map((row) => row.id)));
+        break;
+      }
+      case "project": {
+        const found = await getDb(db).query.project.findMany({
+          where: and(
+            inArray(project.id, uniqueIds.map(unsafeProjectId)),
+            notDeleted(project),
+          ),
+          columns: { id: true },
+        });
+        liveByType.set(type, new Set(found.map((row) => row.id)));
+        break;
+      }
+      case "task": {
+        const found = await getDb(db).query.task.findMany({
+          where: and(
+            inArray(task.id, uniqueIds.map(unsafeTaskId)),
+            notDeleted(task),
+          ),
+          columns: { id: true },
+        });
+        liveByType.set(type, new Set(found.map((row) => row.id)));
+        break;
+      }
+      case "purchase": {
+        const found = await getDb(db).query.purchase.findMany({
+          where: and(
+            inArray(purchase.id, uniqueIds.map(unsafePurchaseId)),
+            notDeleted(purchase),
           ),
           columns: { id: true },
         });

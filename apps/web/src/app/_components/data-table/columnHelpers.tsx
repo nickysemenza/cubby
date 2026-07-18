@@ -1,10 +1,12 @@
 import type { Amount } from "@cubby/schemas/codec";
 import type { Entity } from "@cubby/schemas/entity";
-import type {
-  IngredientId,
-  LocationId,
-  ProductId,
-  RecipeId,
+import {
+  type IngredientId,
+  type LocationId,
+  type ProductId,
+  type ProjectId,
+  type RecipeId,
+  unsafeProjectId,
 } from "@cubby/schemas/identifiers";
 import { isDocumentFile } from "@cubby/schemas/image";
 import type { LocationType } from "@cubby/schemas/location";
@@ -42,6 +44,7 @@ import {
   WithIngredientSearch,
   WithLocationSearch,
   WithProductSearch,
+  WithProjectSearch,
   WithRecipeSearch,
 } from "../combobox/with-search-hook";
 import { EntityInlineLink } from "../EntityInlineLink";
@@ -1350,8 +1353,10 @@ function parsePlainDate(value: string): Date {
  * Creates a column for a plain "YYYY-MM-DD" calendar date (task `dueDate`,
  * purchase `date`) — an absolute "MMM d, yyyy", not the relative "5m ago" of
  * {@link createTimestampColumn} (which is for full timestamps and reads oddly
- * for a date that can be in the future). Display-only: there's no editable
- * "date" input type in the shared editable-cell primitives yet.
+ * for a date that can be in the future). Read-only by default; pass
+ * `editable` for an inline `EditableCell` text input (same YYYY-MM-DD
+ * placeholder convention as the project/task detail pages' date fields — no
+ * dedicated "date" input type in the shared editable-cell primitives yet).
  */
 export function createPlainDateColumn<
   T extends Record<string, unknown>,
@@ -1363,8 +1368,15 @@ export function createPlainDateColumn<
     header?: string;
     className?: string;
     mobile?: MobileColumnMeta;
+    /** Enable inline editing */
+    editable?: {
+      onSave: (newValue: string | null, row: T) => Promise<void>;
+    };
   },
 ) {
+  const renderValue = (value: string | null) =>
+    value ? format(parsePlainDate(value), "MMM d, yyyy") : <NoneValue />;
+
   return columnHelper.accessor((row) => row[accessor] as string | null, {
     id: String(accessor),
     header: options?.header,
@@ -1375,11 +1387,26 @@ export function createPlainDateColumn<
     },
     cell: (info) => {
       const value = info.getValue();
-      return value ? (
-        format(parsePlainDate(value), "MMM d, yyyy")
-      ) : (
-        <NoneValue />
-      );
+
+      if (options?.editable) {
+        return (
+          <EditableCell
+            value={value}
+            onSave={(newVal) =>
+              options.editable!.onSave(newVal, info.row.original)
+            }
+            clipboard={textCellClipboard(
+              `${String(accessor)}:date`,
+              value,
+              (v) => options.editable!.onSave(v, info.row.original),
+            )}
+            config={{ type: "text", placeholder: "YYYY-MM-DD" }}
+            renderValue={renderValue}
+          />
+        );
+      }
+
+      return renderValue(value);
     },
   });
 }
@@ -1392,11 +1419,15 @@ interface ProjectRefRow {
 }
 
 /**
- * Creates a display-only column linking to a row's parent project (task
+ * Creates a column linking to a row's parent project (task
  * `projectId`/`projectName`, purchase `projectId`/`projectName`). Unlike
  * {@link createSingleEntityInlineLinkColumn}, the source data is a flat
- * id+name pair rather than a nested relation object, and there's no inline
- * entity-picker editor for project yet.
+ * id+name pair rather than a nested relation object — that pair doesn't fit
+ * `createSingleEntityInlineLinkColumn`'s single-object accessor shape (it
+ * would need reshaping the row type), so this gets its own small `editable`
+ * option instead of routing project through the generic single-entity helper.
+ * Pass `editable` for an inline `EditableEntityCell` project picker
+ * (`WithProjectSearch`); omit for the previous display-only behavior.
  */
 export function createProjectLinkColumn<T extends ProjectRefRow>(
   columnHelper: ColumnHelper<T>,
@@ -1405,6 +1436,11 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
     className?: string;
     mobile?: MobileColumnMeta;
     filterConfig?: FilterConfig;
+    /** Enable inline editing via an async project picker. `clearable` always
+     * on — a task/purchase's project is optional. */
+    editable?: {
+      onSave: (newProjectId: ProjectId | null, row: T) => Promise<void>;
+    };
   },
 ) {
   return columnHelper.accessor(
@@ -1420,6 +1456,38 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
       },
       cell: (info) => {
         const { id, name } = info.getValue();
+
+        if (options?.editable) {
+          const current: ComboboxItem<ProjectId> | null =
+            id && name ? { id: unsafeProjectId(id), name } : null;
+          const row = info.row.original;
+          return (
+            <EditableEntityCell
+              value={current}
+              label="project"
+              clearable
+              trigger="pencil"
+              onSave={(newId) => options.editable!.onSave(newId, row)}
+              clipboard={entityCellClipboard("project", current, (pid) =>
+                options.editable!.onSave(pid, row),
+              )}
+              SearchProvider={WithProjectSearch}
+              renderValue={(v) => {
+                if (!v) return <NoneValue />;
+                return (
+                  <TableLink
+                    to="/projects/$id"
+                    params={{ id: v.id }}
+                    variant="muted"
+                  >
+                    {v.name}
+                  </TableLink>
+                );
+              }}
+            />
+          );
+        }
+
         if (!id || !name) return <NoneValue />;
         return (
           <TableLink to="/projects/$id" params={{ id }} variant="muted">

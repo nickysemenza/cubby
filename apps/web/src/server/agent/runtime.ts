@@ -30,6 +30,11 @@ function inferEntityType(toolName: string): SearchableEntity | null {
   if (toolName.includes("location")) return "location";
   if (toolName.includes("recipe")) return "recipe";
   if (toolName.includes("ingredient")) return "ingredient";
+  // "project" after the food-domain checks: no current tool name collides,
+  // but keep the more specific matches first.
+  if (toolName.includes("project")) return "project";
+  if (toolName.includes("task")) return "task";
+  if (toolName.includes("purchase")) return "purchase";
   return null;
 }
 

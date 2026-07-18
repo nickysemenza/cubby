@@ -22,6 +22,9 @@ export const entityTypeMap: Record<SearchableEntity, Entity> = {
   ingredient: "ingredient",
   location: "location",
   inventory: "inventory",
+  project: "project",
+  task: "task",
+  purchase: "purchase",
 };
 
 type SearchResultGroup = {
@@ -183,6 +186,18 @@ export function getEnrichmentText(item: SearchResultItem): string | null {
         ? `in ${item.recipeCount} recipes`
         : null,
     )
+    .with({ entityType: "project" }, (item) =>
+      item.spent != null && item.spent > 0
+        ? `${formatCurrency(item.spent)} spent`
+        : null,
+    )
+    .with({ entityType: "task" }, (item) => item.projectName)
+    .with({ entityType: "purchase" }, (item) => {
+      const parts: string[] = [];
+      if (item.cost != null) parts.push(formatCurrency(item.cost));
+      if (item.projectName) parts.push(item.projectName);
+      return parts.length > 0 ? parts.join(" · ") : null;
+    })
     .exhaustive();
 }
 

@@ -28,21 +28,7 @@ import {
 } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { ENTITY_ACCENTS } from "./entity-accents";
-import type { Entity, EntityDefinition, EntityDetailRoute } from "./types";
-
-// /tasks and /purchases have list routes now, but no detail page — rows are
-// shallow (edited inline in the list, not via a dedicated page), so there's no
-// genuine "/tasks/$id" route to point at. EntityDetailRoute's members are all
-// `/x/$id`-shaped (paired with a `{id}` Link param everywhere it's consumed —
-// createNameColumn, createActionsColumn, EntityPreviewLink, search results),
-// so rather than add a param-less exception to that union (which would widen
-// the param typing for every other entity's generic call sites), `detail`
-// just points at the real list route via a local cast. Any generic "View
-// Details" / name-column link consequently no-ops back to the list page — an
-// acceptable degradation until a detail page exists, and never taken in
-// practice since these two lists don't wire up row-preview/click-through.
-const taskDetailRoute = "/tasks" as EntityDetailRoute;
-const purchaseDetailRoute = "/purchases" as EntityDetailRoute;
+import type { Entity, EntityDefinition } from "./types";
 
 const entityColor = (
   entity: Entity,
@@ -231,7 +217,7 @@ export const entities: Record<Entity, EntityDefinition> = {
     detail: { commonSections: ["images", "history"] },
     list: {
       defaultSort: "createdAt",
-      standardColumns: [],
+      standardColumns: ["name"],
       sortableFields: projectSortableFields,
     },
   },
@@ -245,13 +231,11 @@ export const entities: Record<Entity, EntityDefinition> = {
       text: "text-slate",
       border: "border-l-slate",
     }),
-    // /tasks has a list route (RTable + quick-add dialog) but no detail page —
-    // see the taskDetailRoute cast above.
     routes: {
-      detail: taskDetailRoute,
+      detail: "/tasks/$id",
       list: "/tasks",
     },
-    // No detail page, so no commonSections — see the taskDetailRoute comment.
+    detail: { commonSections: ["history"] },
     list: {
       defaultSort: "createdAt",
       standardColumns: ["name", "createdAt"],
@@ -264,13 +248,11 @@ export const entities: Record<Entity, EntityDefinition> = {
     basePath: "purchases",
     lucideIcon: ReceiptText,
     color: entityColor("purchase", { bg: "bg-primary/10" }),
-    // /purchases has a list route (RTable + quick-add dialog) but no detail
-    // page — see the purchaseDetailRoute cast above.
     routes: {
-      detail: purchaseDetailRoute,
+      detail: "/purchases/$id",
       list: "/purchases",
     },
-    // No detail page, so no commonSections — see the purchaseDetailRoute comment.
+    detail: { commonSections: ["history"] },
     list: {
       defaultSort: "date",
       standardColumns: ["name", "createdAt"],

@@ -26,6 +26,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityCrud } from "~/server/repo/entity-crud-factory";
+import { softDeleteEntityEmbeddingsTx } from "~/server/repo/entity-embedding-cleanup";
 import { dbPurchaseToAPI } from "./helpers";
 
 /** `purchaseUpdateData` has no standalone type export — derive it from the input. */
@@ -116,6 +117,9 @@ export const deletePurchases = async (
       .update(purchase)
       .set({ deletedAt: now })
       .where(and(inArray(purchase.id, ids), notDeleted(purchase)));
+
+    // Removal-path invariant: every delete path cleans up its embeddings in-tx.
+    await softDeleteEntityEmbeddingsTx(tx, "purchase", ids);
 
     await logAuditEntries(
       tx,

@@ -16,6 +16,7 @@ import {
 import RTable from "../_components/data-table/Table";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
+import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useNameEditable } from "../_components/hooks/useNameEditable";
 import { useProjectOptions } from "../_components/hooks/useProjectOptions";
 import { useSeededFilter } from "../_components/hooks/useSeededFilter";
@@ -88,11 +89,27 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
           filterType: "select",
           options: projectFilterOptions,
         },
+        editable: {
+          onSave: async (newProjectId, task) => {
+            await updateTaskMutation.mutateAsync({
+              id: task.id,
+              data: { projectId: newProjectId },
+            });
+          },
+        },
       }),
       createPlainDateColumn(columnHelper, "dueDate", {
         header: "Due",
         className: "w-28",
-        mobile: { slot: "meta", priority: 40 },
+        mobile: { slot: "meta", priority: 40, interactive: true },
+        editable: {
+          onSave: async (newDueDate, task) => {
+            await updateTaskMutation.mutateAsync({
+              id: task.id,
+              data: { dueDate: newDueDate },
+            });
+          },
+        },
       }),
       createTextColumn(columnHelper, "category", {
         header: "Category",
@@ -131,6 +148,7 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
   );
 
   const tableStateOptions = useSeededFilter("name", initialSearch);
+  const { onRowClick, onRowHover, PreviewSheet } = useEntityPreview("task");
 
   const {
     table,
@@ -156,10 +174,6 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
     filters,
     deletable: deletableConfig,
     nameEditable,
-    // /tasks has no dedicated detail page — entities.task.routes.detail
-    // points back at this list, so the linkified name and "View Details"
-    // would both be no-ops.
-    omitDetailLink: true,
     infinite: true,
     tableStateOptions,
   });
@@ -174,10 +188,13 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
         timing={timing}
         entity="task"
         actions={actions}
+        onRowClick={onRowClick}
+        onRowHover={onRowHover}
         bulkActionBar={bulkActionBar}
         infiniteScroll={infiniteScroll}
         refreshControls={refreshControls}
       />
+      <PreviewSheet />
       {deleteDialog}
     </div>
   );
